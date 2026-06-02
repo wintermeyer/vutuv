@@ -1,0 +1,10 @@
+# CODEOWNERS for vutuv
+#
+# @wintermeyer is the maintainer and owns the entire codebase. Listing an owner
+# here makes GitHub automatically request their review on every pull request
+# that touches the matching paths, so no contributor change merges without the
+# maintainer seeing it.
+#
+# Docs: https://docs.github.com/articles/about-code-owners
+
+* @wintermeyer
