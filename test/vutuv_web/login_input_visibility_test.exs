@@ -23,7 +23,10 @@ defmodule VutuvWeb.LoginInputVisibilityTest do
     # Grab the declaration block of the rule that targets `.imagebox__input`
     # while excluding submit buttons (which legitimately stay blue/white).
     [_, declarations] =
-      Regex.run(~r/\.imagebox__input[^{}]*:not\(\[type=["']?submit["']?\]\)[^{}]*\{([^}]*)\}/, css) ||
+      Regex.run(
+        ~r/\.imagebox__input[^{}]*:not\(\[type=["']?submit["']?\]\)[^{}]*\{([^}]*)\}/,
+        css
+      ) ||
         flunk("""
         No `.imagebox__input:not([type=submit])` rule found in #{@app_css}.
         The login/registration inputs need an explicit, visible fill so they
@@ -43,7 +46,8 @@ defmodule VutuvWeb.LoginInputVisibilityTest do
     assert declarations =~ ~r/background-color\s*:/,
            "the input rule must set a background-color"
 
-    refute declarations =~ ~r/background-color\s*:\s*(transparent|#0000\b|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))/i,
+    refute declarations =~
+             ~r/background-color\s*:\s*(transparent|#0000\b|rgba\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\))/i,
            "the input background must not be transparent (it would show the photo through it)"
   end
 
