@@ -21,7 +21,6 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   base_urls = [
     {"Facebook", "http://facebook.com/"},
     {"Twitter", "http://twitter.com/"},
-    {"Google+", "https://plus.google.com/+"},
     {"Instagram", "http://instagram.com/"},
     {"Youtube", "http://youtube.com/channel/"},
     {"Snapchat", nil},
