@@ -1180,8 +1180,8 @@ msgid "other"
 msgstr "andere"
 
 #: web/controllers/social_media_account_controller.ex:31
-msgid "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/vutuv/vutuv/"
-msgstr "Ein Social Media Account wurde erstellt. Wussten Sie, das der vutuv Source-Code auf GitHub gehostet wird? https://github.com/vutuv/vutuv/"
+msgid "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+msgstr "Ein Social Media Account wurde erstellt. Wussten Sie, das der vutuv Source-Code auf GitHub gehostet wird? https://github.com/wintermeyer/vutuv"
 
 #: web/controllers/social_media_account_controller.ex:33
 msgid "Social media account created successfully. Shameless plug: Check out the Instagram account of @wintermeyer"

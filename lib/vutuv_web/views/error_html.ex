@@ -14,7 +14,7 @@ defmodule VutuvWeb.ErrorHTML do
   end
 
   def render("500.html", _assigns) do
-    "</header> <h1 style=\"text-align:center;\">#{Gettext.gettext(VutuvWeb.Gettext, "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report.", link_open: "<a href = \"https://github.com/vutuv/vutuv/issues/new\">")}</a></h1>"
+    "</header> <h1 style=\"text-align:center;\">#{Gettext.gettext(VutuvWeb.Gettext, "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report.", link_open: "<a href = \"https://github.com/wintermeyer/vutuv/issues/new\">")}</a></h1>"
     |> Phoenix.HTML.raw()
   end
 

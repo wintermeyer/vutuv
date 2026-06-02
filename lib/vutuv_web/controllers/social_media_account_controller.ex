@@ -34,7 +34,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
             "GitHub" ->
               gettext(
-                "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/vutuv/vutuv/"
+                "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
               )
 
             "Instagram" ->

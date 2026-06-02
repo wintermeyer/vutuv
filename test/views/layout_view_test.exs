@@ -8,4 +8,12 @@ defmodule VutuvWeb.LayoutViewTest do
     assert body =~ "<nav class=\"navigation\">"
     assert body =~ ~p"/datenschutzerklaerung"
   end
+
+  test "the footer links to the current GitHub repo and its issue tracker", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+
+    assert body =~ "https://github.com/wintermeyer/vutuv"
+    assert body =~ "https://github.com/wintermeyer/vutuv/issues/new"
+    refute body =~ "github.com/vutuv/vutuv"
+  end
 end
