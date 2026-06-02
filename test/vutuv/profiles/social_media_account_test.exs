@@ -5,12 +5,19 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
 
   describe "changeset/2 provider validation" do
     test "accepts a supported provider" do
-      changeset = SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Facebook", value: "vutuv"})
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Facebook",
+          value: "vutuv"
+        })
+
       assert changeset.valid?
     end
 
     test "rejects Google+ as a provider" do
-      changeset = SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Google+", value: "vutuv"})
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Google+", value: "vutuv"})
+
       refute changeset.valid?
       assert changeset.errors[:provider]
     end
