@@ -16,4 +16,10 @@ defmodule VutuvWeb.LayoutViewTest do
     assert body =~ "https://github.com/wintermeyer/vutuv/issues/new"
     refute body =~ "github.com/vutuv/vutuv"
   end
+
+  test "the footer copyright spans from 2019 to the current year", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+
+    assert body =~ "© 2019 - #{Date.utc_today().year}"
+  end
 end
