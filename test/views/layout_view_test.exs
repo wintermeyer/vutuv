@@ -22,4 +22,11 @@ defmodule VutuvWeb.LayoutViewTest do
 
     assert body =~ "© 2019 - #{Date.utc_today().year}"
   end
+
+  test "the footer links to wintermeyer-consulting.de without the www host", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+
+    assert body =~ "https://wintermeyer-consulting.de"
+    refute body =~ "www.wintermeyer-consulting.de"
+  end
 end
