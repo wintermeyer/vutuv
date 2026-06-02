@@ -6,7 +6,7 @@
   <% end %>
   <%= if @current_user do %>
     <div class={"editform__field#{if error_tag(f, :avatar), do: " editform__field--error"}"}>
-    <%= label f, :avatar, gettext("Avater") %>
+    <%= label f, :avatar, gettext("Avatar") %>
     <div class={"editform__inputwrap#{if error_tag(f, :avatar), do: " editform__field--error"}"}>
       <%= file_input f, :avatar %>
     </div>

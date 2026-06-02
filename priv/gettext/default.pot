@@ -84,7 +84,7 @@ msgid "Are you sure?"
 msgstr ""
 
 #: web/templates/user/form.html.eex:9
-msgid "Avater"
+msgid "Avatar"
 msgstr ""
 
 #: web/templates/admin/slug/edit.html.eex:6
