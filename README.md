@@ -1,6 +1,6 @@
 # vutuv
 
-vutuv is a free, fast and open source social network service to host and share information about humans and organizations. It's hosted at https://www.vutuv.de.
+vutuv is a free, fast and open source social network service to host and share information about humans and organizations. It's hosted at https://vutuv.de.
 
 We use [MIT License](https://mit-license.org/).
 
