@@ -1,0 +1,52 @@
+<.form :let={f} for={@changeset} action={@action} class="editform">
+  <%= if @changeset.action do %>
+    <div class="alert alert-danger">
+      <p class="editform__error"><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
+    </div>
+  <% end %>
+
+  <%= hidden_input f, :country %>
+
+  <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+    <%= label f, :description %>
+    <%= text_input f, :description, autofocus: true %>
+    <%= error_tag f, :description %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :line_1), do: " editform__field--error"}"}>
+    <%= label f, :line_1 %>
+    <%= text_input f, :line_1 %>
+    <%= error_tag f, :line_1 %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :line_2), do: " editform__field--error"}"}>
+    <%= label f, :line_2 %>
+    <%= text_input f, :line_2 %>
+    <%= error_tag f, :line_2 %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :city), do: " editform__field--error"}"}>
+    <%= label f, :city %>
+    <%= text_input f, :city %>
+    <%= error_tag f, :city %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :state), do: " editform__field--error"}"}>
+    <%= label f, :state %>
+    <%= text_input f, :state %>
+    <%= error_tag f, :state %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :zip_code), do: " editform__field--error"}"}>
+    <%= label f, :zip_code %>
+    <%= text_input f, :zip_code %>
+    <%= error_tag f, :zip_code %>
+  </div>
+
+  <%= render "country_input.html", Map.put(assigns, :form, f) %>
+
+  <div class="editform__actions">
+    <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
+    <%= submit gettext("Submit"), class: "button" %>
+  </div>
+</.form>

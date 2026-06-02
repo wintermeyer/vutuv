@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+zum Einloggen bitte auf den folgenden Link klicken:
+<%= @url %>magic/login/<%=@link%>
+
+Vielen Dank das Sie vutuv benutzen!
+
+<%= render "_signature_de.text" %>
+
+PS: Der Link verfällt nach 60 Minuten. Sie können aber jederzeit einen
+neuen unter https://vutuv.de/sessions/new abrufen.
+
+<%= render "_footer.text" %>

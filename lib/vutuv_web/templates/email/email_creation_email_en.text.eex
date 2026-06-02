@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+Please use the following link to validate your
+email address:
+
+<%= @url %>magic/email/<%=@link%>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

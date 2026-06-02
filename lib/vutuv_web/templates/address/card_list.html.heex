@@ -1,0 +1,35 @@
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Description" %></th>
+      <th><%= gettext "Address" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for address <- @addresses do %>
+    <tr>
+      <td>
+      <%= link address.description, to: ~p"/users/#{@user}/addresses/#{address}" %>
+      </td>
+      <td><%= format_address address %></td>
+      <td>
+      <%= if same_user?(@user, @current_user) do %>
+        <div class="btns-right">
+        <%= button to: ~p"/users/#{@user}/addresses/#{address}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+          <i class="icon">
+            {VutuvWeb.IconHTML.close(assigns)}
+          </i>
+        <% end %>
+        <%= link to: ~p"/users/#{@user}/addresses/#{address}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+          <i class="icon">
+            {VutuvWeb.IconHTML.pencil(assigns)}
+          </i>
+        <% end %>
+        </div>
+      <% end %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>

@@ -1,0 +1,35 @@
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Number type" %></th>
+      <th><%= gettext "Phone number" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for number <- @phone_numbers do %>
+    <tr>
+      <td>
+      <%= link number.number_type, to: ~p"/users/#{@user}/phone_numbers/#{number}" %>
+      </td>
+      <td><%= number.value %></td>
+      <td>
+      <%= if same_user?(@user, @current_user) do %>
+        <div class="btns-right">
+          <%= button to: ~p"/users/#{@user}/phone_numbers/#{number}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+            <i>
+              {VutuvWeb.IconHTML.close(assigns)}
+            </i>
+          <% end %>
+          <%= link to: ~p"/users/#{@user}/phone_numbers/#{number}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+            <i>
+              {VutuvWeb.IconHTML.pencil(assigns)}
+            </i>
+          <% end %>
+        </div>
+      <% end %>
+      </td>
+    </tr>
+    <% end %>
+  </tbody>
+</table>

@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+Danke das Sie bei vutuv mitmachen. Hier ist der PIN, den Sie zum
+Einloggen benötigen:
+
+  <%=@pin%>
+
+Sie können aber jederzeit einen neuen unter der folgenden URL abrufen:
+https://vutuv.de/sessions/new
+
+Bitte erzählen Sie Ihren Freunden und Geschäftspartnern von vutuv!
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

@@ -1,0 +1,27 @@
+<h2>Listing memberships</h2>
+
+<table class="pure-table pure-table-horizontal">
+  <thead>
+    <tr>
+      <th>Connection</th>
+      <th>Group</th>
+
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+<%= for membership <- @connection.memberships do %>
+    <tr>
+      <td><%= membership.connection_id %></td>
+      <td><%= membership.group_id %></td>
+
+      <td class="text-right">
+        <%= link "Show", to: ~p"/connections/#{@connection}/memberships/#{membership}", class: "btn btn-default btn-xs" %>
+        <%= link "Delete", to: ~p"/connections/#{@connection}/memberships/#{membership}", method: :delete, data: [confirm: "Are you sure?"], class: "btn btn-danger btn-xs" %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>
+
+<%= link "New membership", to: ~p"/connections/#{@connection}/memberships/new" %>

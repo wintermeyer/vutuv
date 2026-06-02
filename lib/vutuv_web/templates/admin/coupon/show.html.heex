@@ -1,0 +1,72 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "Show coupon" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Coupons"), ~p"/admin/coupons"},
+      gettext("Show")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <div class="card__edit button__list">
+      <%= link to: ~p"/admin/coupons/#{@coupon}/edit", class: "button button-link button--icon button--small" do %>
+        <i class="icon icon--edit"></i>
+      <% end %>
+      <%= button to: ~p"/admin/coupons/#{@coupon}", method: :delete, class: "button button-link button--icon button--small" do %>
+        <i class="icon icon--delete"></i>
+      <% end %>
+    </div>
+
+      <h1>
+        <strong><%= gettext "Code" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.code %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "User" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.user_id %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "RecruiterPackage" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.recruiter_package_id %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "Amount" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.amount %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "Percentage" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.percentage %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "Ends on" %>:</strong>
+      </h1>
+      <p>
+        <%= @coupon.ends_on %>
+      </p>
+
+  </section>
+  <aside>
+    
+  </aside>
+</div>

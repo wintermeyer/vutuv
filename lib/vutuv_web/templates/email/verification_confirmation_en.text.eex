@@ -1,0 +1,9 @@
+<%= email_greeting(@user) %>,
+
+Congratulations! Your vutuv account is now listed as verified.
+
+https://vutuv.de/users/<%= @user.active_slug %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

@@ -1,0 +1,18 @@
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+    {gettext("Home"), ~p"/"},
+    gettext("Listings"), gettext("Most Followed Users")]) %>
+</div>
+
+<div class="search-results card-list">
+  <aside>
+    
+  </aside>
+  <section class="card">
+    <h1><%= gettext "The 100 Users with the most Followers" %></h1>
+
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @users, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 60})}
+
+  </section>
+</div>

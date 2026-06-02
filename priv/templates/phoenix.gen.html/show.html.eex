@@ -1,0 +1,38 @@
+<%# header tag begins in parent template %>
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= "<%= gettext \"" %>Show <%= template_singular %><%= "\" %\>" %></h1>
+    </div>
+  </div>
+</header>
+<%= "<%=" %> render Vutuv.LayoutView, "flash.html", assigns <%= "%\>" %>
+
+<div class="breadcrumbs">
+<%= "<%=" %> Vutuv.UserHelpers.gen_breadcrumbs([
+      {gettext("<%= Phoenix.Naming.humanize(plural) %>"), <%= singular %>_path(@conn, :index)},
+      gettext("Show")]) <%= "%\>" %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <div class="card__edit button__list">
+      <%= "<%=" %> link to: <%= singular %>_path(@conn, :edit, @<%= singular %>), class: "button button-link button--icon button--small" do <%= "%\>" %>
+        <i class="icon icon--edit"></i>
+      <%% end %>
+      <%= "<%=" %> button to: <%= singular %>_path(@conn, :delete, @<%= singular %>), method: :delete, class: "button button-link button--icon button--small", form: [class: "button button--icon button--small"] do <%= "%\>" %>
+        <i class="icon icon--delete"></i>
+      <%% end %>
+    </div>
+    <%= for {k, _} <- attrs do %>
+      <h1>
+        <strong><%= "<%= gettext \"" %><%= Phoenix.Naming.humanize(Atom.to_string(k)) %><%= "\" %\>" %>:</strong>
+      </h1>
+      <p>
+        <%= "<%=" %> @<%= singular %>.<%= k %> <%= "%\>" %>
+      </p>
+    <% end %>
+  </section>
+  <aside>
+    <%= "<%=" %> render Vutuv.SharedView, "_ad.html" <%= "%\>" %>
+  </aside>
+</div>

@@ -1,0 +1,35 @@
+Hallo,
+
+bitte stellen Sie eine Rechnung für folgendes Abo aus.
+
+Auftraggeber:
+<%= full_name(@user) %>
+
+<%= "https://vutuv.de/" <> @user.active_slug %>
+<%= unless @user.verified do %>
+
+Dieser User ist noch nicht verifiziert.
+<% end %>
+
+
+Rechnungsaddresse:
+<%= @recruiter_subscription.line1 %>
+<%= if @recruiter_subscription.line2 do %>
+<%= @recruiter_subscription.line2 %>
+<% end %>
+<%= @recruiter_subscription.street %>
+
+<%= "#{@recruiter_subscription.zip_code} #{@recruiter_subscription.city}" %>
+
+<%= @recruiter_subscription.country %>
+
+
+Art des Abos:
+<%= "#{@recuiter_package.name} (ID: #{@recuiter_package.id})" %>
+
+<%= "#{@recuiter_package.price} #{@recuiter_package.currency}" %>
+
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

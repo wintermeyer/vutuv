@@ -1,0 +1,40 @@
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext("About this Social Media Profile") %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"), 
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Social Media Profiles"), ~p"/users/#{@user}/social_media_accounts"},
+    gettext("More Info")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+  <%= if same_user?(@user, @current_user) do %>
+    <div class="btns-right">
+      <%= button to: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}", method: :delete, class: "pull-right btn btn-xs btn-danger btn-icon" do %>
+        <i>
+          {VutuvWeb.IconHTML.close(assigns)}
+        </i>
+      <% end %>
+      <%= link to: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}/edit", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+        <i>
+          {VutuvWeb.IconHTML.pencil(assigns)}
+        </i>
+      <% end %>
+    </div>
+  <% end %>
+    <h1><%= gettext("Provider") %></h1>
+    <p><%= @social_media_account.provider %></p>
+    <h1><%= gettext("Username") %></h1>
+    <p>@<%= @social_media_account.value %></p>
+  </section>
+
+  <aside>
+  
+  </aside>
+</div>

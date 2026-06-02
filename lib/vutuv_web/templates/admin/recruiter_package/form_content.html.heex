@@ -1,0 +1,91 @@
+<.form :let={f} for={@changeset} action={@action} class="editform">
+  <%= if @changeset.action do %>
+    <div class="alert alert-danger">
+      <p class="editform__error"><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
+    </div>
+  <% end %>
+
+<div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+  <%= label f, :name, class: "control-label" %>
+  <%= text_input f, :name, class: "form-control" %>
+  <%= error_tag f, :name %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+  <%= label f, :description, class: "control-label" %>
+  <%= textarea f, :description, class: "form-control" %>
+  <%= error_tag f, :description %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :slug), do: " editform__field--error"}"}>
+  <%= label f, :slug, class: "control-label" %>
+  <%= text_input f, :slug, class: "form-control" %>
+  <%= error_tag f, :slug %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :locale_id), do: " editform__field--error"}"}>
+  <%= label f, :locale_id, class: "control-label" %>
+  <%= select f, :locale_id, Vutuv.Accounts.Locale.locale_select_list, class: "form-control" %>
+  <%= error_tag f, :locale_id %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :price), do: " editform__field--error"}"}>
+  <%= label f, :price, class: "control-label" %>
+  <%= text_input f, :price, class: "form-control" %>
+  <%= error_tag f, :price %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :currency), do: " editform__field--error"}"}>
+  <%= label f, :currency, class: "control-label" %>
+  <%= select f, :currency, %{"€" => "euro", "$" => "dollar"}, class: "form-control" %>
+  <%= error_tag f, :currency %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :duration_in_months), do: " editform__field--error"}"}>
+  <%= label f, :duration_in_months, class: "control-label" %>
+  <%= text_input f, :duration_in_months, class: "form-control" %>
+  <%= error_tag f, :duration_in_months %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :auto_renewal), do: " editform__field--error"}"}>
+  <%= label f, :auto_renewal, class: "control-label" %>
+  <div class="editform__inputwrap">
+    <%= checkbox f, :auto_renewal %>
+  </div>
+  <%= error_tag f, :auto_renewal %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :only_with_coupon), do: " editform__field--error"}"}>
+  <%= label f, :only_with_coupon, class: "control-label" %>
+  <div class="editform__inputwrap">
+    <%= checkbox f, :only_with_coupon %>
+  </div>
+  <%= error_tag f, :only_with_coupon %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :offer_begins), do: " editform__field--error"}"}>
+  <%= label f, :offer_begins, class: "control-label" %>
+  <div class="editform__inputwrap">
+    <%= date_select f, :offer_begins, class: "form-control" %>
+  </div>
+  <%= error_tag f, :offer_begins %>
+</div>
+<div class={"editform__field#{if error_tag(f, :offer_ends), do: " editform__field--error"}"}>
+  <%= label f, :offer_ends, class: "control-label" %>
+  <div class="editform__inputwrap">
+    <%= date_select f, :offer_ends, class: "form-control" %>
+  </div>
+  <%= error_tag f, :offer_ends %>
+</div>
+
+<div class={"editform__field#{if error_tag(f, :max_job_postings), do: " editform__field--error"}"}>
+  <%= label f, :max_job_postings, class: "control-label" %>
+  <%= text_input f, :max_job_postings, class: "form-control" %>
+  <%= error_tag f, :max_job_postings %>
+</div>
+
+<div class="editform__actions">
+  <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
+  <%= submit gettext("Submit"), class: "button" %>
+</div>
+</.form>

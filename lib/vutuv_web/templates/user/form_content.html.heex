@@ -1,0 +1,111 @@
+  <.form :let={f} for={@changeset} action={@action} multipart class="editform">
+  <%= if @changeset.action do %>
+    <div class="alert alert-danger">
+      <p class="editform__error"><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
+    </div>
+  <% end %>
+  <%= if @current_user do %>
+    <div class={"editform__field#{if error_tag(f, :avatar), do: " editform__field--error"}"}>
+    <%= label f, :avatar, gettext("Avater") %>
+    <div class={"editform__inputwrap#{if error_tag(f, :avatar), do: " editform__field--error"}"}>
+      <%= file_input f, :avatar %>
+    </div>
+    <%= error_tag f, :avatar %>
+    </div>
+  <% end %>
+
+  <div class={"editform__field#{if error_tag(f, :gender), do: " editform__field--error"}"}>
+  <%= label f, :gender, gettext("Gender") %>
+  <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], id: "gender", prompt: gettext("Choose a gender") %>
+  <%= error_tag f, :gender %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :first_name), do: " editform__field--error"}"}>
+  <%= label f, :first_name, gettext("First Name") %>
+  <%= text_input f, :first_name, autofocus: true %>
+  <%= error_tag f, :first_name %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :last_name), do: " editform__field--error"}"}>
+  <%= label f, :last_name, gettext("Last Name") %>
+  <%= text_input f, :last_name %>
+  <%= error_tag f, :last_name %>
+  </div>
+
+
+  <.inputs_for :let={ef} field={f[:emails]}>
+  <%= label ef, :email_address, gettext("Email Address") %>
+  <div class={"editform__field#{if error_tag(ef, :value), do: " editform__field--error"}"}>
+    <%= email_input ef, :value %>
+    <%= error_tag ef, :value %>
+  </div>
+  <div class={"editform__field#{if error_tag(f, :public?), do: " editform__field--error"}"}>
+    <%= label ef, :public?, gettext("Is this email public or private?") %>
+    <%= select ef, :public?, ["Public": true, "Private": false] %>
+    <%= error_tag ef, :public? %>
+  </div>
+  </.inputs_for>
+
+  <%= if @current_user do %>
+    <div class={"editform__field#{if error_tag(f, :middlename), do: " editform__field--error"}"}>
+    <%= label f, :middlename, gettext("Middle Name") %>
+    <%= text_input f, :middlename %>
+    <%= error_tag f, :middlename %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :nickname), do: " editform__field--error"}"}>
+    <%= label f, :nickname, gettext("Nickname") %>
+    <%= text_input f, :nickname %>
+    <%= error_tag f, :nickname %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :honorific_prefix), do: " editform__field--error"}"}>
+    <%= label f, :honorific_prefix, gettext("Prefix") %>
+    <%= text_input f, :honorific_prefix %>
+    <%= error_tag f, :honorific_prefix %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :honorific_suffix), do: " editform__field--error"}"}>
+    <%= label f, :honorific_suffix, gettext("Suffix") %>
+    <%= text_input f, :honorific_suffix %>
+    <%= error_tag f, :honorific_suffix %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :birthdate), do: " editform__field--error"}"}>
+    <%= label f, :birthdate, gettext("Birthdate") %>
+    <div class="editform__inputwrap">
+      <%= date_select f, :birthdate, year: [options: 1900..2100] %>
+    </div>
+    <%= error_tag f, :birthdate %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :headline), do: " editform__field--error"}"}>
+    <%= label f, :headline, gettext("Headline") %>
+    <%= textarea f, :headline %>
+    <%= error_tag f, :headline %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :locale), do: " editform__field--error"}"}>
+    <%= label f, :locale, gettext("Language") %>
+    <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}] %>
+    <%= error_tag f, :locale %>
+    </div>
+  <% end %>
+
+  <div class={"editform__field#{if error_tag(f, :noindex?), do: " editform__field--error"}"}>
+    <%= label f, :noindex?, gettext("Would you like to allow search engines to index your profile?") %>
+    <%= select f, :noindex?, [{gettext("Yes"), false}, {gettext("No"), true}] %>
+    <%= error_tag f, :noindex? %>
+  </div>
+
+  <div class={"editform__field#{if error_tag(f, :noindex?), do: " editform__field--error"}"}>
+    <%= label f, :send_birthday_reminder, gettext("Would you like to receive birthday reminder emails?") %>
+    <%= select f, :send_birthday_reminder, [{gettext("Yes"), true}, {gettext("No"), false}] %>
+    <%= error_tag f, :send_birthday_reminder %>
+  </div>
+
+  <div class="editform__actions">
+    <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
+    <%= submit if((@current_user), do: gettext("Save"), else: gettext("Create Account")), class: "button" %>
+  </div>
+</.form>

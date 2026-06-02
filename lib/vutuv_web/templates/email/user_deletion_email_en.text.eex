@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+Use the following link to delete your account:
+<%= @url %>magic/delete/<%=@link%>
+
+WARNING: There is no turning back from this move.
+Your account will be deleted when you click on the link!
+
+But of course you can always create a new account.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

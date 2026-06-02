@@ -1,0 +1,6 @@
+<h2>Edit membership</h2>
+
+<%= render "form_content.html", changeset: @changeset,
+                        action: ~p"/memberships/#{@membership}" %>
+
+<%= link "Back", to: ~p"/memberships" %>

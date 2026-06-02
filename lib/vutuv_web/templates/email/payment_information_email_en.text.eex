@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+thank you for ordering a recruiter package.
+
+A human will check your data and send an invoice
+within the next 24 hours to this email address.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

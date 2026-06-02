@@ -1,0 +1,26 @@
+<ol>
+<%= for job <- @work_experience do %>
+  <li class="job">
+    <h2 class="job__title"><%= link job.title, to: ~p"/users/#{@user}/work_experiences/#{job}" %>
+      <%= if same_user?(@user, @current_user) do %>
+      <div class="btns job__edit">
+      <%= button to: ~p"/users/#{@user}/work_experiences/#{job}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+        <i class="icon">
+          {VutuvWeb.IconHTML.close(assigns)}
+        </i>
+      <% end %>
+      <%= link to: ~p"/users/#{@user}/work_experiences/#{job}/edit", class: "btn btn-sm btn-primary btn-icon"  do %>
+        <i class="icon">
+          {VutuvWeb.IconHTML.pencil(assigns)}
+        </i>
+      <% end %>
+      </div>
+      <% end %>
+    </h2>
+    <span class="job__organization"><%= job.organization %></span>
+    <span class="job__date">
+      <%= format_duration(job.start_month, job.start_year, job.end_month, job.end_year) %>
+    </span>
+  </li>
+<% end %>
+</ol>

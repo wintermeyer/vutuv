@@ -1,0 +1,23 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "Edit recruiter package" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Recruiter packages"), ~p"/admin/recruiter_packages"},
+      gettext("Edit")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card jobs">
+    <%= render "form_content.html", backlink: ~p"/admin/recruiter_packages", changeset: @changeset,
+                            action: ~p"/admin/recruiter_packages/#{@recruiter_package}" %>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

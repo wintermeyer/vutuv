@@ -1,0 +1,24 @@
+<.form :let={f} for={@changeset} action={@action} class="editform">
+  <%= if @changeset.action do %>
+    <div class="alert alert-danger">
+      <p class="editform__error"><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
+    </div>
+  <% end %>
+
+  <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
+    <%= label f, :value, gettext("Phone Number") %>
+    <%= telephone_input f, :value, placeholder: gettext("+49 30 12345678"), id: "textfield", autofocus: true %>
+    <%= error_tag f, :value %>
+  </div>
+  <div class={"editform__field#{if error_tag(f, :number_type), do: " editform__field--error"}"}>
+    <%= label f, :number_type, gettext("Type of Number") %>
+    <div class="select">
+    <%= select f, :number_type, [{gettext("Choose One"), nil}, {gettext("Work"), "Work"}, {gettext("Cell"), "Cell"}, {gettext("Home"), "Home"}, {gettext("Fax"), "Fax"}]%>
+    </div>
+    <%= error_tag f, :number_type %>
+  </div>
+  <div class="editform__actions">
+    <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
+    <%= submit gettext("Submit"), class: "button" %>
+  </div>
+</.form>

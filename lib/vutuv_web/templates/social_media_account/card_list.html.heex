@@ -1,0 +1,29 @@
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Username" %></th>
+      <th><%= gettext "Profile Provider" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for account <- @social_media_accounts do %>
+    <tr>
+      <td>
+        <%= Vutuv.Profiles.SocialMediaAccount.social_media_link account %>
+      </td>
+      <td><%= account.provider %></td>
+      <td>
+      <%= if same_user?(@user, @current_user) do %>
+      <%= link to: ~p"/users/#{@user}/social_media_accounts/#{account}/edit", class: "button button--icon button--small" do %>
+      <i class="icon icon--edit"></i>
+      <% end %>
+      <%= button to: ~p"/users/#{@user}/social_media_accounts/#{account}", method: :delete, class: "button button--icon button--small" do %>
+      <i class="icon icon--delete"></i>
+      <% end %>
+      <% end %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>

@@ -1,0 +1,17 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= @tag.name %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Tags"), ~p"/tags"},
+      gettext("Show")]) %>
+</div>
+
+<div class="card-list">
+    <%= render "single_card.html", assigns %>
+</div>

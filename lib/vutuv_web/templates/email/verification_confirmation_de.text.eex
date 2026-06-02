@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+herzlichen Glückwunsch! Ihr vutuv Account wird jetzt als 
+verified (verifiziert) angezeigt.
+
+https://vutuv.de/users/<%= @user.active_slug %>
+
+Wir wünschen Ihnen weiterhin viel Spass mit vutuv!
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

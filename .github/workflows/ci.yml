@@ -1,0 +1,56 @@
+name: CI
+
+# Runs the same checks as `mix precommit` (compile --warnings-as-errors,
+# unused-deps, format, credo --strict, tests) on every PR and on pushes to
+# main, so the deploy on main only fires for code that already passed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  precommit:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vutuv1_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    env:
+      MIX_ENV: test
+      # config/test.exs reads the DB host from DATABASE_HOST.
+      DATABASE_HOST: 127.0.0.1
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Elixir/OTP
+        uses: erlef/setup-beam@v1
+        with:
+          # Pinned to match .tool-versions.
+          otp-version: "27.3.4.8"
+          elixir-version: "1.20.0-rc.6-otp-27"
+
+      - name: Cache deps and _build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+
+      - run: mix precommit

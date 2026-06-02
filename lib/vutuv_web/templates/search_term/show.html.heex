@@ -1,0 +1,24 @@
+<div class="pure-g">
+  <div class="pure-u-1-1">
+    <h2><%= gettext "Show search term" %></h2>
+
+    <ul>
+      <li>
+        <strong>Value:</strong>
+        <%= @search_term.value %>
+      </li>
+
+      <li>
+        <strong>Score:</strong>
+        <%= @search_term.score %>
+      </li>
+
+      <li>
+        <strong>User:</strong>
+        <%= @search_term.user_id %>
+      </li>
+    </ul>
+
+    <%= link gettext("Back"), to: ~p"/users/#{@user}/search_terms", class: "pure-button" %>
+  </div>
+</div>

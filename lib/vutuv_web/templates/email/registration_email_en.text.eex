@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+Thank you for joining vutuv. Click on the following link to get started.
+<%= @url %>magic/login/<%=@link%>
+
+This link expires in 60 minutes. You can always get a new one at
+https://vutuv.de/sessions/new
+
+If you like our service, feel free to share us with your friends!
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

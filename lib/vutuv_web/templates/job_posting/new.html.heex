@@ -1,0 +1,24 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "Create a new job posting" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  {gettext("Job postings"), ~p"/users/#{@user}/job_postings"},
+  gettext("New")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= render "form_content.html", backlink: ~p"/users/#{@user}/job_postings", changeset: @changeset,
+                            action: ~p"/users/#{@user}/job_postings" %>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

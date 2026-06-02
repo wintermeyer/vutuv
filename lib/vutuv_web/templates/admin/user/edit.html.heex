@@ -1,0 +1,6 @@
+<h2><%= gettext "Edit user" %></h2>
+
+<%= render "form_content.html", changeset: @changeset,
+                        action: ~p"/users/#{@user}", current_user: @current_user %>
+
+<%= link gettext("Back"), to: ~p"/users" %>

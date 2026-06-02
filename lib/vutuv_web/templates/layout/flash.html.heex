@@ -1,0 +1,6 @@
+<%= if Phoenix.Flash.get(@flash, :info) do %>
+  <div class="message message--success"><p><%= Phoenix.Flash.get(@flash, :info) %></p></div>
+<% end %>
+<%= if Phoenix.Flash.get(@flash, :error) do %>
+  <div class="message message--error"><p><%= Phoenix.Flash.get(@flash, :error) %></p></div>
+<% end %>

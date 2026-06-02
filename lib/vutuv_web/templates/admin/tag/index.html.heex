@@ -1,0 +1,61 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "All tags" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Admin"), ~p"/admin"},
+      gettext("Tags")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "Name" %></th>
+          <th><%= gettext "Slug" %></th>
+
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+    <%= for {tag, _index} <- Enum.with_index(@tags) do %>
+        <tr>
+          <td><%= tag.name %></td>
+          <td><%= tag.slug %></td>
+
+          <td>
+            <%= link to: ~p"/admin/tags/#{tag}", class: "btn btn-sm btn-primary btn-icon" do %>
+            <i class="icon">
+              {VutuvWeb.IconHTML.search(assigns)}
+            </i>
+            <% end %>
+            <%= link to: ~p"/admin/tags/#{tag}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+            <i class="icon">
+              {VutuvWeb.IconHTML.pencil(assigns)}
+            </i>
+            <% end %>
+            <%= button to: ~p"/admin/tags/#{tag}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+            <i class="icon">
+              {VutuvWeb.IconHTML.close(assigns)}
+            </i>
+            <% end %>
+          </td>
+        </tr>
+    <% end %>
+      </tbody>
+    </table>
+
+    <p>
+      <%= link gettext("New tag"), to: ~p"/admin/tags/new", class: "card__morelink" %>
+    </p>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

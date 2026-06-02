@@ -1,0 +1,37 @@
+<ul class="thumbs">
+  <%= for url <- @urls do %>
+  <li>
+    <div class="img">
+      <a href={linkable_url(url.value)}>
+        <%= if url.screenshot do %>
+          <img src={Vutuv.Screenshot.url({url.screenshot, url}, :thumb)} alt="Screenshot" width="400" height="264" />
+        <% else %>
+          <img src="/images/screenshot.png" alt={gettext("A screenshot has not been created yet.")} width="400" height="264" />
+        <% end %>
+      </a>
+    </div>
+    <div class="text">
+      <%= if same_user?(@user, @current_user) do %>
+      	<div class="btns-right">
+        <%= button to: ~p"/users/#{@user}/links/#{url}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+          <i>
+            {VutuvWeb.IconHTML.close(assigns)}
+          </i>
+        <% end %>
+        <%= link to: ~p"/users/#{@user}/links/#{url}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+          <i class="icon">
+            {VutuvWeb.IconHTML.pencil(assigns)}
+          </i>
+        <% end %>
+        </div>
+      <% end %>
+      <div class="title">
+        <%= url.description %>
+      </div>
+      <div class="url">
+        <%= link linkable_url(url.value), to: linkable_url(url.value) %>
+      </div>
+    </div>
+  </li>
+  <% end %>
+</ul>

@@ -1,0 +1,5 @@
+<div class="subscriptions-list">
+<%= for package <- @packages do %>
+  {VutuvWeb.Admin.RecruiterPackageHTML.package_minicard(%{package: package, f: @f})}
+<% end %>
+</div>

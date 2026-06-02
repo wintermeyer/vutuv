@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+bitte klicken Sie auf den folgenen Link, um Ihren Account zu löschen:
+<%= @url %>magic/delete/<%=@link%>
+
+ACHTUNG: Diese Löschung ist unumkehrbar!
+
+Aber Sie können natürlich jederzeit einen neuen Account anlegen.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

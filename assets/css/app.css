@@ -1,0 +1,4 @@
+@import "tailwindcss" source(none);
+@source "../../lib/vutuv_web";
+
+@import "./legacy.css";

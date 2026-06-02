@@ -1,0 +1,60 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "Show locale" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Admin Home"), ~p"/admin"},
+      {gettext("Locales"), ~p"/admin/locales"},
+      gettext("Show")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    
+      <h1>
+        <strong><%= gettext "Locale Code" %>:</strong>
+      </h1>
+      <p>
+        <%= @loc.value %>
+      </p>
+
+      <h1>
+        <strong><%= gettext "Endonym" %>:</strong>
+      </h1>
+      <p>
+        <%= @loc.endonym %>
+      </p>
+
+      <.form :let={f} for={%{}} action={~p"/admin/exonyms"} as={:exonym} class="editform">
+        <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+          <%= hidden_input f, :locale_id, value: @loc.id %>
+          <%= label f, :value, gettext("Add an exonym") %>
+          <div class="editform__smallwrap">
+          <%= text_input f, :value, autofocus: true %>
+          <%= submit gettext("Add"), class: "button" %>
+          </div>
+          <%= error_tag f, :value %>
+          <%= label f, :exonym_locale_id, "Language" %>
+          <div class="editform__smallwrap">
+          <%= select f, :exonym_locale_id, Vutuv.Accounts.Locale.locale_select_list %>
+          </div>
+          <%= error_tag f, :exonym_locale_id %>
+        </div>
+      </.form>
+    
+  </section>
+
+  <section class="card">
+    <h1> Exonyms </h1>
+    {VutuvWeb.Admin.ExonymHTML.card_list(%{conn: @conn, exonyms: @loc.exonyms})}
+  </section>
+
+  <aside>
+    
+  </aside>
+</div>

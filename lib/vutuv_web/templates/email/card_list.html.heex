@@ -1,0 +1,29 @@
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Email" %></th>
+      <th><%= gettext "Visibility" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for email <- @emails do %>
+    <tr>
+      <td>
+      <%= link email.value, to: ~p"/users/#{@user}/emails/#{email}" %>
+      </td>
+      <td><%= if email.public?, do: gettext("Public"), else: gettext("Private") %></td>
+      <td>
+      <%= if same_user?(@user, @current_user) do %>
+      <%= link to: ~p"/users/#{@user}/emails/#{email}/edit", class: "button button--icon button--small" do %>
+      <i class="icon icon--edit"></i>
+      <% end %>
+      <%= button to: ~p"/users/#{@user}/emails/#{email}", method: :delete, class: "button button--icon button--small" do %>
+      <i class="icon icon--delete"></i>
+      <% end %>
+      <% end %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>

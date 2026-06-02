@@ -1,0 +1,62 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "All job postings" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  gettext("Job postings")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card jobs">
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "Title" %></th>
+          <th><%= gettext "Company" %></th>
+          <th><%= gettext "Location" %></th>
+          <th><%= gettext "Salary" %></th>
+
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+    <%= for {job_posting, _index} <- Enum.with_index(@job_postings) do %>
+        <tr>
+          <td><%= job_posting.title %></td>
+          <td><%= job_posting.company %></td>
+          <td><%= job_posting.location %></td>
+          <td><%= if job_posting.min_salary do %>
+          <%= number_to_currency(job_posting.min_salary, precision: 0, delimiter: ".", unit: "") %><%= if job_posting.max_salary do %> - <%= number_to_currency(job_posting.max_salary, precision: 0, delimiter: ".", unit: "") %><% end %>
+          <% end %></td>
+
+          <td>
+            <%= link to: ~p"/users/#{@user}/job_postings/#{job_posting}", class: "button button--icon button--small" do %>
+            <i class="icon icon--search"></i>
+            <% end %>
+            <%= link to: ~p"/users/#{@user}/job_postings/#{job_posting}/edit", class: "button button--icon button--small" do %>
+            <i class="icon icon--edit"></i>
+            <% end %>
+            <%= button to: ~p"/users/#{@user}/job_postings/#{job_posting}", method: :delete, class: "button button--icon button--small" do %>
+            <i class="icon icon--delete"></i>
+            <% end %>
+          </td>
+        </tr>
+    <% end %>
+      </tbody>
+    </table>
+
+    <p>
+      <%= link gettext("Create a new job posting"), to: ~p"/users/#{@user}/job_postings/new", class: "card__morelink" %>
+    </p>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

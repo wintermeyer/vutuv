@@ -1,0 +1,26 @@
+<ul class="button-list profiles">
+  <%= for user <- @users do %>
+    <li>
+      <div class="profile-image">
+        <%= link to: ~p"/users/#{user}" do %>
+          <img src={Vutuv.Avatar.display_url(user, :thumb)} width="50" height="50" alt={"Avatar of #{full_name(user)}"} />
+        <% end %>
+      </div>
+      <p><strong><%= link full_name(user), to: ~p"/users/#{user}" %></strong>
+      <%= work_information_string(user, @work_string_length) %>
+      </p>
+      <%= if !same_user?(@current_user, user) and @current_user do %>
+        <%= case user_follows_user?(@current_user, user) do %>
+          <% connection_id when is_integer(connection_id) -> %>
+            <%= button to: ~p"/connections/#{connection_id}", method: :delete , class: "button button--icon" do %>
+              <i class="icon icon--unfollow"></i>
+            <% end %>
+          <% _not_following -> %>
+            <%= button to: ~p"/connections?#{[connection: %{follower_id: @current_user_id, followee_id: user.id}]}", method: :post , class: "button button--icon" do %>
+              <i class="icon icon--follow"></i>
+            <% end %>
+        <% end %>
+      <% end %>
+    </li>
+  <% end %>
+</ul>

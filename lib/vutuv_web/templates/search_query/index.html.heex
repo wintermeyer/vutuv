@@ -1,0 +1,36 @@
+<h2><%= gettext "Search History" %></h2>
+
+<table class="pure-table pure-table-horizontal">
+  <thead>
+    <tr>
+      <th><%= gettext "Search Term" %></th>
+      <th><%= gettext "Requesters" %></th>
+      <th><%= gettext "Results" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+<%= for query <- @queries do %>
+    <tr>
+      <td><%= query.value %></td>
+      <td>
+        <%= for(requester <- query.search_query_requesters) do %> 
+          <%= if(requester.user_id) do %>
+            <%=VutuvWeb.UserHelpers.full_name(Vutuv.Repo.get(Vutuv.Accounts.User, requester.user_id))%><br/> 
+          <% end %>
+        <% end %>
+      </td>
+      <td>
+        <%= for(result <- query.search_query_results) do %>
+          <%= VutuvWeb.UserHelpers.full_name(Vutuv.Repo.get(Vutuv.Accounts.User, result.user_id)) %>
+        <% end %>
+      </td>
+      <td class="text-right">
+        <%= link "Show", to: ~p"/search_queries/#{query}", class: "btn btn-default btn-xs" %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>
+
+<%= link "New search", to: ~p"/search_queries/new" %>

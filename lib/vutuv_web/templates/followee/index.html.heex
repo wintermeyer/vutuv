@@ -1,0 +1,24 @@
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    gettext("Following")]) %>
+</div>
+
+<div class="search-results card-list">
+  <aside>
+    
+  </aside>
+  <section class="card">
+    <h1><%= gettext "Following" %></h1>
+
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user.followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
+    
+    <%= if(Enum.count(@user.followees) == 0) do %>
+      <h1 style="text-align:center"><strong><%= gettext "We can't find em' cap'n!" %></strong></h1>
+      <p style="text-align:center"><%= gettext "It doesn't look like you're following anyone yet. Find someone a profile of someone you know, or someone you're interested in, and click the follow button!" %></p>
+    <% end %>
+    <%= Vutuv.Pages.page_list(@conn.params, @total_followees) %>
+  </section>
+</div>

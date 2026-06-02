@@ -1,0 +1,19 @@
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Tag name" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for tag <- @tags do %>
+    <tr>
+      <td>
+      <p style="word-wrap: break-word; max-width: 600px;"><%= link tag.name, to: ~p"/tags/#{tag}" %></p>
+      </td>
+      <td>
+      </td>
+    </tr>
+    <% end %>
+  </tbody>
+</table>

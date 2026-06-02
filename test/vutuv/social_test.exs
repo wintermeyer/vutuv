@@ -1,0 +1,63 @@
+defmodule Vutuv.SocialTest do
+  use Vutuv.DataCase
+
+  alias Vutuv.Social
+
+  describe "follow/2" do
+    test "creates a connection between two users" do
+      follower = insert(:user)
+      followee = insert(:user)
+
+      assert {:ok, connection} = Social.follow(follower.id, followee.id)
+      assert connection.follower_id == follower.id
+      assert connection.followee_id == followee.id
+    end
+
+    test "prevents self-follow" do
+      user = insert(:user)
+      assert {:error, changeset} = Social.follow(user.id, user.id)
+      assert changeset.errors[:follower_id]
+    end
+  end
+
+  describe "follower_count/1 and followee_count/1" do
+    test "returns correct counts" do
+      user = insert(:user)
+      follower1 = insert(:user)
+      follower2 = insert(:user)
+
+      {:ok, _} = Social.follow(follower1.id, user.id)
+      {:ok, _} = Social.follow(follower2.id, user.id)
+
+      assert Social.follower_count(user) == 2
+      assert Social.followee_count(user) == 0
+      assert Social.followee_count(follower1) == 1
+    end
+  end
+
+  describe "user_follows_user?/2" do
+    test "returns true when following" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+      {:ok, _} = Social.follow(user1.id, user2.id)
+
+      assert Social.user_follows_user?(user1.id, user2.id)
+    end
+
+    test "returns false when not following" do
+      user1 = insert(:user)
+      user2 = insert(:user)
+
+      refute Social.user_follows_user?(user1.id, user2.id)
+    end
+  end
+
+  describe "groups" do
+    test "create_group/2 creates a group" do
+      user = insert(:user)
+      assert {:ok, group} = Social.create_group(user, %{name: "Friends"})
+      assert group.name == "Friends"
+      assert group.user_id == user.id
+    end
+  end
+end

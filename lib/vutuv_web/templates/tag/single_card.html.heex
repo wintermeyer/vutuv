@@ -1,0 +1,23 @@
+<section class="card">
+
+	<% assigns = update_assigns(assigns) %>
+	<%= if(@tag.description) do %>
+	<h1><%= gettext("Description") %></h1>
+  <p><%= @tag.description %></p>
+  <% else %>
+  <p><%= gettext("This skill doesn't have a description yet.") %></p>
+	<% end %>
+	<%= if Enum.count(@related_users) > 0 do %>
+		<h1><%= gettext("People you may know with this tag") %></h1>
+		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @related_users))}
+	<% end %>
+	<%= if Enum.count(@reccomended_users) > 0 do %>
+		<h1><%= gettext("The most endorsed users with this tag") %></h1>
+		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @reccomended_users))}
+	<% end %>
+  <%= if @conn.assigns[:current_user] && !(has_tag?(assigns[:current_user], assigns[:tag])) do %>
+  <%= button to: ~p"/users/#{@current_user}/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "link_button" do %>
+  <i class="icon icon--plus"></i> Add This tag
+  <% end %>
+  <% end %>
+</section>

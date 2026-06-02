@@ -1,0 +1,6 @@
+<h2>New group</h2>
+
+<%= render "form_content.html", changeset: @changeset,
+                        action: ~p"/users/#{@user}/groups" %>
+
+<%= link "Back", to: ~p"/users/#{@user}/groups" %>

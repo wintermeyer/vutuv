@@ -1,0 +1,27 @@
+<h2>Listing connections</h2>
+
+<table class="pure-table pure-table-horizontal">
+  <thead>
+    <tr>
+      <th>Inserted At</th>
+      <th>Follower</th>
+      <th>Followee</th>
+
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+<%= for connection <- @connections do %>
+    <tr>
+      <td>
+        <%= time_ago_in_words connection.inserted_at %> ago
+      </td>
+      <td><%= full_name(connection.follower) %></td>
+      <td><%= full_name(connection.followee) %></td>
+
+      <td class="text-right">
+        <%= link "Show", to: ~p"/connections/#{connection}", class: "btn btn-default btn-xs" %>      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>

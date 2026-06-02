@@ -1,0 +1,62 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "All coupons" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      gettext("Coupons")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "Code" %></th>
+          <th><%= gettext "User" %></th>
+          <th><%= gettext "RecruiterPackage" %></th>
+          <th><%= gettext "Amount" %></th>
+          <th><%= gettext "Percentage" %></th>
+          <th><%= gettext "Ends on" %></th>
+
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+    <%= for {coupon, _index} <- Enum.with_index(@coupons) do %>
+        <tr>
+          <td><%= coupon.code %></td>
+          <td><%= coupon.user_id %></td>
+          <td><%= coupon.recruiter_package_id %></td>
+          <td><%= coupon.amount %></td>
+          <td><%= coupon.percentage %></td>
+          <td><%= coupon.ends_on %></td>
+
+          <td>
+            <%= link to: ~p"/admin/coupons/#{coupon}", class: "button button--icon button--small" do %>
+            <i class="icon icon--search"></i>
+            <% end %>
+            <%= link to: ~p"/admin/coupons/#{coupon}/edit", class: "button button--icon button--small" do %>
+            <i class="icon icon--edit"></i>
+            <% end %>
+            <%= button to: ~p"/admin/coupons/#{coupon}", method: :delete, class: "button button--icon button--small" do %>
+            <i class="icon icon--delete"></i>
+            <% end %>
+          </td>
+        </tr>
+    <% end %>
+      </tbody>
+    </table>
+
+    <p>
+      <%= link gettext("New coupon"), to: ~p"/admin/coupons/new", class: "card__morelink" %>
+    </p>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

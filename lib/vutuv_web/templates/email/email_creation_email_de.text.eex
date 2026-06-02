@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+bitte klicken Sie auf diesen Link um Ihre
+E-Mail-Adresse zu bestätigen:
+
+<%= @url %>magic/email/<%=@link%>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

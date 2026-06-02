@@ -1,0 +1,41 @@
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext("About this Phone Number") %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"), 
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Phone Numbers"), ~p"/users/#{@user}/phone_numbers"},
+    gettext("More Info")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= if same_user?(@user, @current_user) do %>
+    <div class="btns-right">
+      <%= button to: ~p"/users/#{@user}/phone_numbers/#{@phone_number}", method: :delete, class: "pull-right btn btn-xs btn-danger btn-icon" do %>
+        <i>
+          {VutuvWeb.IconHTML.close(assigns)}
+        </i>
+      <% end %>
+      <%= link to: ~p"/users/#{@user}/phone_numbers/#{@phone_number}/edit", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+        <i>
+          {VutuvWeb.IconHTML.pencil(assigns)}
+        </i>
+      <% end %>
+    </div>
+    <% end %>
+    
+    <h1><%= gettext("Number Type") %></h1>
+    <p><%= @phone_number.number_type %></p>
+    <h1><%= gettext("Number") %></h1>
+    <p><%= @phone_number.value %></p>
+  </section>
+
+  <aside>
+  
+  </aside>
+</div>

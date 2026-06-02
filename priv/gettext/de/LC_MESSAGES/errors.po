@@ -1,0 +1,90 @@
+## `msgid`s in this file come from POT (.pot) files.
+##
+## Do not add, change, or remove `msgid`s manually here as
+## they're tied to the ones in the corresponding POT file
+## (with the same domain).
+##
+## Use `mix gettext.extract --merge` or `mix gettext.merge`
+## to merge POT files into PO files.
+msgid ""
+msgstr ""
+"Language: de\n"
+
+msgid "can't be blank"
+msgstr "darf nicht leer sein"
+
+msgid "is invalid"
+msgstr "ist ungültig"
+
+msgid "has invalid format"
+msgstr "hat ein ungültiges Format"
+
+msgid "has an invalid entry"
+msgstr "hat einen ungültigen Wert"
+
+msgid "is reserved"
+msgstr "ist reserviert"
+
+msgid "does not match confirmation"
+msgstr ""
+
+msgid "is still associated to this entry"
+msgstr ""
+
+msgid "are still associated to this entry"
+msgstr ""
+
+msgid "should be %{count} character(s)"
+msgid_plural "should be %{count} character(s)"
+msgstr[0] "sollte %{count} Zeichen lang sein"
+msgstr[1] "sollte %{count} Zeichen lang sein"
+
+msgid "should have %{count} item(s)"
+msgid_plural "should have %{count} item(s)"
+msgstr[0] "sollte %{count} Element enthalten"
+msgstr[1] "sollte %{count} Elemente enthalten"
+
+msgid "should be at least %{count} character(s)"
+msgid_plural "should be at least %{count} character(s)"
+msgstr[0] "sollte mindestens %{count} Zeichen haben"
+msgstr[1] "sollte mindestens %{count} Zeichen haben"
+
+msgid "should have at least %{count} item(s)"
+msgid_plural "should have at least %{count} item(s)"
+msgstr[0] "sollte mindestens %{count} Element enthalten"
+msgstr[1] "sollte mindestens %{count} Elemente enthalten"
+
+msgid "should be at most %{count} character(s)"
+msgid_plural "should be at most %{count} character(s)"
+msgstr[0] "sollte maximal %{count} Zeichen enthalten"
+msgstr[1] "sollte maximal %{count} Zeichen enthalten"
+
+msgid "should have at most %{count} item(s)"
+msgid_plural "should have at most %{count} item(s)"
+msgstr[0] "sollte maximal %{count} Element enthalten"
+msgstr[1] "sollte maximal %{count} Elemente enthalten"
+
+msgid "must be less than %{count}"
+msgid_plural "must be less than %{count}"
+msgstr[0] "muss weniger als %{count} sein"
+msgstr[1] "muss weniger als %{count} sein"
+
+msgid "must be greater than %{count}"
+msgid_plural "must be greater than %{count}"
+msgstr[0] "muss mehr als %{count} sein"
+msgstr[1] "muss mehr als %{count} sein"
+
+msgid "must be less than or equal to %{count}"
+msgid_plural "must be less than or equal to %{count}"
+msgstr[0] "muss weniger oder gleich %{count} sein"
+msgstr[1] "muss weniger oder gleich %{count} sein"
+
+msgid "must be greater than or equal to %{count}"
+msgid_plural "must be greater than or equal to %{count}"
+msgstr[0] "muss größer oder gleich %{count} sein"
+msgstr[1] "muss größer oder gleich %{count} sein"
+
+msgid "must be equal to %{count}"
+msgid_plural "must be equal to %{count}"
+msgstr[0] "muss gleich %{count} sein"
+msgstr[1] "muss gleich %{count} sein"

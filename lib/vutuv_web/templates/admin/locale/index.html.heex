@@ -1,0 +1,47 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "All locales" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Admin Home"), ~p"/admin"},
+      gettext("Locales")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "Endonym" %></th>
+          <th><%= gettext "Code" %></th>
+
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+    <%= for {locale, _index} <- Enum.with_index(@locales) do %>
+        <tr>
+          <td><%= locale.endonym %></td>
+          <td><%= locale.value %></td>
+
+          <td>
+            <%= link to: ~p"/admin/locales/#{locale}", class: "btn btn-sm btn-primary btn-icon" do %>
+            <i class="icon">
+              {VutuvWeb.IconHTML.search(assigns)}
+            </i>
+            <% end %>
+          </td>
+        </tr>
+    <% end %>
+      </tbody>
+    </table>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

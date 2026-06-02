@@ -1,0 +1,23 @@
+<h2><%= gettext "Slug" %></h2>
+
+<table class="pure-table pure-table-horizontal">
+  <thead>
+    <tr>
+      <th><%= gettext "Value" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+<%= for slug <- @slugs do %>
+    <tr>
+      <td><%= slug.value %></td>
+      <td class="text-right">
+        <%= link "Show", to: ~p"/users/#{@user}/slugs/#{slug}", class: "btn btn-default btn-xs" %>
+        <%= link "Activate", to: ~p"/users/#{@user}/slugs/#{slug}",method: :put, class: "btn btn-default btn-xs" %>
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>
+
+<%= link "New slug", to: ~p"/users/#{@user}/slugs/new" %>

@@ -1,0 +1,21 @@
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Addresses"), ~p"/users/#{@user}/addresses"},
+    gettext("Edit")]) %>
+</div>
+
+
+<div class="card-list">
+
+  <aside>
+    
+  </aside>
+  <section class="card">
+
+  <%= render "form_"<>@country<>".html", backlink: ~p"/users/#{@user}/addresses", changeset: @changeset, conn: @conn, action: ~p"/users/#{@user}/addresses/#{@address}" %>
+  </section>
+</div>

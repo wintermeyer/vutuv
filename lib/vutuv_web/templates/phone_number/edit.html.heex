@@ -1,0 +1,18 @@
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Phone Numbers"), ~p"/users/#{@user}/phone_numbers"},
+    gettext("Edit")]) %>
+</div>
+
+<div class="card-list">
+
+  <aside>
+    
+  </aside>
+  <section class="card">
+    <%= render "form_content.html", backlink: ~p"/users/#{@user}/phone_numbers", changeset: @changeset, action: ~p"/users/#{@user}/phone_numbers/#{@phone_number}" %>
+  </section>
+</div>

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang={@locale}>
+    <head>
+    <%= if @conn.assigns[:user] do %>
+      <%= if @user.noindex? do %>
+        <meta name="robots" content="noindex" />
+      <% end %>
+    <% end %>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+        <title><%= if @conn.assigns[:user], do: "#{full_name(@conn.assigns[:user])} - vutuv", else: "vutuv" %></title>
+        <%= if @conn.assigns[:user] do %>
+        <meta name="description" content={meta_description(@user, @conn.assigns[:user_tags])} />
+        <% else %>
+        <meta name="description" content={gettext("Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds.")} />
+        <% end %>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="shortcut icon" href="/favicon.ico" />
+        <link rel="icon" href="/favicon.ico" />
+        <meta name="theme-color" content="#ffffff" />
+        <link rel="stylesheet" href={~p"/assets/app.css"} />
+        <script defer src={~p"/assets/app.js"}></script>
+    </head>
+    <body class={@conn.assigns[:body_class]}>
+
+<header>
+  <nav class="navigation">
+    <div>
+    <%= if @conn.assigns[:current_user] do %>
+      <.link href={~p"/sessions/#{@current_user}"} method="delete" class="button button--icon navigation__icon">
+      <i title={gettext("Log Out")} class="icon icon--lock"></i>
+      </.link>
+    <% else %>
+      <.link href={~p"/sessions/new"} class="navigation__icon">
+      <i title={gettext("Log In")} class="icon icon--lock"></i>
+      </.link>
+    <% end %>
+
+      <a href="/"><img src="data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20134.35%2034.65%27%3E%3Ctitle%3Elogo%3C%2Ftitle%3E%3Cpath%20d%3D%27M10.19%2034.05q-2.56-5-5.19-11.7T0%207.75h7.9q.5%202%201.18%204.23t1.41%204.6q.73%202.32%201.46%204.52t1.43%204q.65-1.8%201.4-4t1.48-4.52q.73-2.33%201.41-4.6t1.18-4.23h7.7q-2.36%207.9-5%2014.6t-5.19%2011.7zM52.95%2033.15a41.42%2041.42%200%200%201-4.9%201%2040.27%2040.27%200%200%201-6.3.47%2014.94%2014.94%200%200%201-5.58-.9%208.46%208.46%200%200%201-3.53-2.5%209.85%209.85%200%200%201-1.85-3.88%2020.82%2020.82%200%200%201-.55-5V7.75h7.45V21.5a10.65%2010.65%200%200%200%201%205.2q.95%201.6%203.55%201.6.8%200%201.7-.08t1.6-.17V7.75h7.45zM59.7%201.2L67.15%200v7.75h9v6.2h-9v9.25a7.36%207.36%200%200%200%20.83%203.75q.82%201.4%203.32%201.4a14.2%2014.2%200%200%200%202.48-.23%2012.62%2012.62%200%200%200%202.33-.62l1%205.8a21.08%2021.08%200%200%201-3%20.95%2017.51%2017.51%200%200%201-4.05.4%2013.34%2013.34%200%200%201-5-.82%207.91%207.91%200%200%201-3.2-2.3%208.54%208.54%200%200%201-1.67-3.58%2021%2021%200%200%201-.48-4.65zM117.99%2034.05q-2.56-5-5.19-11.7t-5-14.6h7.9q.5%202%201.18%204.23t1.41%204.6q.73%202.32%201.46%204.52t1.43%204q.65-1.8%201.4-4t1.48-4.52q.73-2.33%201.41-4.6t1.17-4.23h7.7q-2.36%207.9-5%2014.6t-5.19%2011.7zM81.9%2033.15a41.38%2041.38%200%200%200%204.9%201%2040.26%2040.26%200%200%200%206.3.47%2014.94%2014.94%200%200%200%205.58-.9%208.46%208.46%200%200%200%203.53-2.52%209.84%209.84%200%200%200%201.85-3.88%2020.8%2020.8%200%200%200%20.55-5V7.75h-7.46V21.5a10.65%2010.65%200%200%201-1%205.2q-.95%201.6-3.55%201.6-.8%200-1.7-.08t-1.6-.17V7.75h-7.4z%27%20fill%3D%27%231a1918%27%2F%3E%3C%2Fsvg%3E" /></a>
+      <.link href={~p"/search_queries/new"} class="navigation__icon  navigation__icon--right">
+      <i title={gettext("Search")} class="icon icon--search"></i>
+      </.link>
+    </div>
+  </nav>
+</header>
+
+  <%= @inner_content %>
+
+  <footer>
+    <p>
+      Copyright © 2019 <a href="https://www.wintermeyer-consulting.de">Wintermeyer Consulting</a> | <a href="https://github.com/vutuv/vutuv/"> vutuv Source-Code</a> |
+      <a href="https://github.com/vutuv/vutuv/issues/new"><%= gettext "Submit a bugreport or a feature request." %></a> | <.link href={~p"/datenschutzerklaerung"}>{gettext("Datenschutzerklärung")}</.link> | <.link href={~p"/impressum"}>{gettext("About us")}</.link> | vutuv <%= Application.spec(:vutuv, :vsn) %>
+    </p>
+  </footer>
+</body>
+</html>

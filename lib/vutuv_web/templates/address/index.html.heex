@@ -1,0 +1,28 @@
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= full_name(@user) %>'s Addresses</h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    gettext("Addresses")]) %>
+</div>
+
+<div class="card-list">
+
+  <section class="card">
+
+    <%= render "card_list.html", assigns %>
+
+    <%= if same_user?(@user, @current_user) do %>
+      <%= link gettext("Add"), to: ~p"/users/#{@current_user}/addresses/new", class: "card__morelink" %>
+    <% end %>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

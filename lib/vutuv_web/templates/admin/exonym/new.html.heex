@@ -1,0 +1,24 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "New exonym" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+      {gettext("Admin Home"), ~p"/admin"},
+      {gettext("Exonyms"), ~p"/admin/exonyms"},
+      gettext("New")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= render "form_content.html", backlink: ~p"/admin/exonyms", changeset: @changeset,
+                            action: ~p"/admin/exonyms" %>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

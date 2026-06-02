@@ -1,0 +1,318 @@
+  <div class={"profile-header#{if @user.verified, do: " profile-header--verified"}"}>
+    <div class="profile-header__image profile-image">
+      <img src={Vutuv.Avatar.display_url(@user, :medium)} width="130" height="130" alt={"Avatar of #{full_name(@user)}"} />
+    </div>
+    <div class="profile-header__info">
+      <h1>
+        <%= full_name(@user) %>
+        <%= if !@user.verified and admin_visitor?(@conn) do %>
+          <%= button to: ~p"/admin/users?#{[user_id: @user.id]}", class: "button button--icon navigation__icon", method: "post" do %>
+            <i title={gettext("Verify")} class="icon icon--lock"></i>
+          <% end %>
+        <% end %>
+        <%= if same_user?(@user, @current_user) do %>
+        <%= link to: ~p"/users/#{@user}/edit", class: "profile-header__edit button button--icon button--small" do %>
+          <i class="icon icon--edit"></i>
+        <% end %>
+        <% end %>
+      </h1>
+      <h2>
+        <%= work_information_string(@user, 50) %>
+      </h2>
+    <%= if @user.verified do %>
+      <span class="screenreader">Verified profile</span>
+    <% end %>
+      <div class="profile-header__followstatus">
+        <%= if(@follower_count>0) do %>
+        <div>
+          <h3><span><%= short_name(@user) %> <%= gettext "has" %></span><strong><%= @follower_count %></strong> <%= gettext "followers" %></h3>
+        </div>
+        <% end %>
+        <%= if visitor?(@conn, @current_user) do %>
+          <%= case user_follows_user?(@current_user, @user) do %>
+            <% connection_id when is_integer(connection_id) -> %>
+              <%= button to: ~p"/connections/#{connection_id}", method: :delete , class: "button button-link button--unfollow" do %>
+                <i class="icon icon--minus"></i> Unfollow
+              <% end %>
+            <% _not_following -> %>
+              <%= button to: ~p"/connections?#{[connection: %{follower_id: @current_user_id, followee_id: @user.id}]}", method: :post, class: "button button-link" do %>
+                <i class="icon icon--plus"></i> Follow
+              <% end %>
+          <% end %>
+        <% end %>
+      </div>
+    </div>
+  </div>
+
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= gettext "Users" %> / <%= full_name @user %>
+</div>
+
+<div class="card-list">
+
+  <%= if @display_welcome_message do %>
+    <%= if same_user?(@user, @current_user) do %>
+      <%= if Enum.count(@user_tags) == 0 do %>
+        <section class="card">
+          <h1><%= gettext "Your New vutuv Profile Page" %></h1>
+          <p>
+            <%= gettext "Please take a couple of minutes to add information that might be interesting for your future followers. Why don't you start with your tags and work experiences?" %>
+          </p>
+        </section>
+      <% end %>
+    <% end %>
+  <% end %>
+
+  <%= if Enum.count(@user_tags) > 0 or same_user?(@user, @current_user) do %>
+  <section class="card">
+    <h1><%= gettext "Tags" %></h1>
+
+    <%= if Enum.count(@user_tags) > 0 do %>
+    {VutuvWeb.UserTagHTML.card_list(assigns)}
+    <% end %>
+
+    <%= if same_user?(@user, @current_user) do %>
+      <% #Form for easy tag entry %>
+      <%= if Enum.count(@user_tags) == 0 do %>
+        <.form :let={f} for={%{}} action={~p"/users/#{@user}/tags_create"} as={:tags} class="editform">
+          <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+            <%= label f, :tags, gettext("Enter comma separated tags here. Max length per tag: 45 characters") %>
+            <%= text_input f, :tags, placeholder: gettext("PHP, JavaScript, Tap Dancing, Origami, Recruiting"), autofocus: true %>
+            <%= error_tag f, :tags %>
+          </div>
+          <div class="editform__actions">
+            <%= submit gettext("Add"), class: "button button--full" %>
+          </div>
+        </.form>
+      <% end %>
+    <% end %>
+
+    <%= if Enum.count(@user_tags) > 0 && (same_user?(@user, @current_user) || @total_user_tags > 10)do %>
+      <span class="card__morelink">
+        <%= if same_user?(@user, @current_user) do %>
+          <%= link gettext("Add"), to: ~p"/users/#{@current_user}/tags/new" %>
+        <% end %>
+        <%= if same_user?(@user, @current_user) and @total_user_tags > 10 do %> | <% end %>
+        <%= if @total_user_tags > 10 do %>
+          <%= link gettext("View All"), to: ~p"/users/#{@user}/tags"%>
+        <% end %>
+      </span>
+    <% end %>
+
+  </section>
+  <% end %>
+
+  <aside>
+    
+
+    <%= if(Enum.count(@emails) > 0 or same_user?(@user, @current_user)) do %>
+    <section class="card">
+      <%= if same_user?(@user, @current_user) do %>
+        <%= link to: ~p"/users/#{@user}/emails", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+        <i>
+          {VutuvWeb.IconHTML.pencil(assigns)}
+        </i>
+        <% end %>
+      <% end %>
+      <h1><%= gettext "Contact" %></h1>
+      <%= if(Enum.count(@emails) > 0) do %>
+      <dl class="email-list">
+        <dt class="email-list"><%= if (Enum.count(@emails) == 1), do: gettext("Email"), else: gettext("Emails") %></dt>
+        <%= for email <- @emails do %>
+        <dd class="email-list"><a href={"mailto:#{email.value}"}><%= email.value %></a></dd>
+        <% end %>
+      </dl>
+      <% end %>
+      <span class="card__morelink">
+        <%= if same_user?(@user, @current_user) do %>
+          <%= link gettext("Add"), to: ~p"/users/#{@current_user}/emails/new" %>
+        <% end %>
+      </span>
+    </section>
+    <% end %>
+
+    <%= if(@user.headline || @user.birthdate || same_user?(@user, @current_user)) do %>
+      <section class="card">
+        <%= if same_user?(@user, @current_user) do %>
+        <%= link to: ~p"/users/#{@user}/edit", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+          <i>
+            {VutuvWeb.IconHTML.pencil(assigns)}
+          </i>
+        <% end %>
+        <% end %>
+        <h1><%= gettext "General Info" %></h1>
+        <%= if @user.headline || same_user?(@user, @current_user) do %>
+          <p><%= @user.headline %></p>
+        <% end %>
+        <dl>
+          <%= if(@user.gender != "other" && @user.gender) do %>
+          <dt><%= gettext "Gender" %></dt>
+          <dd><%= Vutuv.Accounts.User.gender_gettext(@user.gender) %></dd>
+          <% end %>
+          <%= if(@user.birthdate) do %>
+          <dt><%= gettext "Birthday" %></dt>
+          <dd><%= format_birthdate(@user) %></dd>
+          <% end %>
+        </dl>
+      </section>
+    <% end %>
+
+    <%= if Enum.count(@user.social_media_accounts) > 0 or same_user?(@user, @current_user) do %>
+      <section class="card">
+        <%= if same_user?(@user, @current_user) do %>
+        <%= link to: ~p"/users/#{@user}/social_media_accounts", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+          <i>
+            {VutuvWeb.IconHTML.pencil(assigns)}
+          </i>
+        <% end %>
+        <% end %>
+        <h1><%= gettext "Social Media" %></h1>
+        <%= for account <- @user.social_media_accounts do %>
+        <h2><%= account.provider %></h2>
+        <p><%= Vutuv.Profiles.SocialMediaAccount.social_media_link account %></p>
+        <% end %>
+
+        <span class="card__morelink">
+          <%= if same_user?(@user, @current_user) do %>
+            <%= link gettext("Add"), to: ~p"/users/#{@current_user}/social_media_accounts/new" %>
+          <% end %>
+        </span>
+      </section>
+    <% end %>
+
+    <section class="card">
+      <h1><%= gettext "Exports" %></h1>
+      <dl>
+        <br/>
+        <dt><%= gettext "Vcard" %></dt>
+        <dd><%= link gettext("Download"), to: ~p"/api/1.0/users/#{@user}/vcard" %></dd>
+      </dl>
+    </section>
+  </aside>
+
+  <section class={"card half#{if @follower_count == 0, do: " card--empty"}"}>
+    <h1><%= gettext "Followers" %></h1>
+    <%= if(@follower_count > 0) do %>
+
+    <%= render "card_list.html", conn: @conn, users: @user.followers, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 20 %>
+
+    <% else %>
+      <p class="card__empty"><%= gettext "No Followers yet!" %></p>
+    <% end %>
+    <%= if(@follower_count > 3) do %>
+      <%= link "#{@follower_count-3} #{gettext "More"}", to: ~p"/users/#{@user}/followers", class: "card__morelink" %>
+    <% end %>
+  </section>
+
+
+  <section class="card half last">
+    <%= if(@followee_count > 0) do %>
+      <h1><%= gettext "Following" %></h1>
+        <%= if(@followee_count > 0) do %>
+          <%= render "card_list.html", conn: @conn, users: @user.followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 20 %>
+        <% else %>
+          <p class="card__empty"><%= gettext "Not following anyone yet!" %></p>
+        <% end %>
+        <%= if(@followee_count > 3) do %>
+          <%= link "#{@followee_count-3} #{gettext "More"}", to: ~p"/users/#{@user}/followees", class: "card__morelink" %>
+        <% end %>
+      <% else %>
+        <h1><%= gettext "Recommended" %></h1>
+        {VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @reccomended_users))}
+      <% end %>
+  </section>
+
+    <%= if @total_jobs > 0 or same_user?(@user, @current_user) do %>
+    <section class="card">
+    <h1><%= gettext "Experience" %></h1>
+
+    <%= if @total_jobs > 0 do %>
+    {VutuvWeb.WorkExperienceHTML.card_list(assigns)}
+    <% end %>
+    <span class={if @total_jobs > 0, do: "card__morelink card__morelink-border", else: "card__morelink"}>
+      <%= if same_user?(@user, @current_user) do %>
+        <%= link gettext("Add"), to: ~p"/users/#{@current_user}/work_experiences/new" %>
+      <% end %>
+      <%= if same_user?(@user, @current_user) and @total_jobs > 5 do %> | <% end %>
+      <%= if @total_jobs > 5 do %>
+        <%= link gettext("View All"), to: ~p"/users/#{@user}/work_experiences" %>
+      <% end %>
+    </span>
+  </section>
+  <% end %>
+
+  <%= if @total_numbers > 0 or same_user?(@user, @current_user) do %>
+  <section class="card">
+    <h1><%= gettext "Phone Numbers" %></h1>
+
+    <%= if @total_numbers > 0 do %>
+    {VutuvWeb.PhoneNumberHTML.card_list(%{phone_numbers: @user.phone_numbers, user: @user, conn: @conn, current_user: @current_user})}
+    <% end %>
+
+    <span class="card__morelink">
+      <%= if same_user?(@user, @current_user) do %>
+        <%= link gettext("Add"), to: ~p"/users/#{@current_user}/phone_numbers/new" %>
+      <% end %>
+      <%= if same_user?(@user, @current_user) and @total_numbers > 5 do %> | <% end %>
+      <%= if @total_numbers > 5 do %>
+        <%= link gettext("View All"), to: ~p"/users/#{@user}/phone_numbers" %>
+      <% end %>
+    </span>
+  </section>
+  <% end %>
+
+  <%= if @total_links > 0 or same_user?(@user, @current_user) do %>
+  <section class="card">
+    <h1><%= gettext "Links" %></h1>
+
+    <%= if @total_links > 0 do %>
+    {VutuvWeb.UrlHTML.card_list(%{urls: @user.urls, user: @user, conn: @conn, current_user: @current_user})}
+    <% end %>
+
+    <span class="card__morelink">
+      <%= if same_user?(@user, @current_user) do %>
+        <%= link gettext("Add"), to: ~p"/users/#{@current_user}/links/new" %>
+      <% end %>
+      <%= if same_user?(@user, @current_user) and @total_links > 5 do %> | <% end %>
+      <%= if @total_links > 5 do %>
+        <%= link gettext("View All"), to: ~p"/users/#{@user}/links" %>
+      <% end %>
+    </span>
+  </section>
+  <% end %>
+
+  <%= if @total_addresses > 0 or same_user?(@user, @current_user) do %>
+  <section class="card">
+    <h1><%= gettext "Addresses" %></h1>
+
+    <%= if @total_addresses > 0 do %>
+    {VutuvWeb.AddressHTML.card_list(%{addresses: @user.addresses, user: @user, conn: @conn, current_user: @current_user})}
+    <% end %>
+
+    <span class="card__morelink">
+      <%= if same_user?(@user, @current_user) do %>
+        <%= link gettext("Add"), to: ~p"/users/#{@current_user}/addresses/new" %>
+      <% end %>
+      <%= if same_user?(@user, @current_user) and @total_addresses > 5 do %> | <% end %>
+      <%= if @total_addresses > 5 do %>
+        <%= link gettext("View All"), to: ~p"/users/#{@user}/addresses" %>
+      <% end %>
+    </span>
+
+  </section>
+  <% end %>
+</div>
+
+<script type="application/ld+json">
+<%= raw(Jason.encode!(%{
+  "@context" => "http://schema.org",
+  "@type" => "BreadcrumbList",
+  "itemListElement" => [
+    %{"@type" => "ListItem", "position" => 1, "item" => %{"@id" => "https://vutuv.de", "name" => "vutuv"}},
+    %{"@type" => "ListItem", "position" => 2, "item" => %{"@id" => "https://vutuv.de/users/", "name" => "users"}},
+    %{"@type" => "ListItem", "position" => 3, "item" => %{"@id" => "https://vutuv.de#{~p"/users/#{@user}"}", "name" => full_name(@user)}}
+  ]
+}, pretty: true)) %>
+</script>

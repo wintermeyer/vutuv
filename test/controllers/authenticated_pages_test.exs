@@ -1,0 +1,336 @@
+defmodule VutuvWeb.AuthenticatedPagesTest do
+  @moduledoc """
+  Smoke tests that log in and GET the main authenticated pages (index, show,
+  new, edit) with realistic data. They guard against query and template bugs
+  that surface only when authenticated: a controller error raises and fails the
+  GET below. `renders/2` asserts a page rendered (2xx/3xx); `no_server_error/2`
+  only asserts the page did not 5xx, for auth-gated pages that legitimately
+  redirect or 403.
+  """
+  use VutuvWeb.ConnCase
+
+  defp renders(conn, path) do
+    conn = get(conn, path)
+    assert conn.status in 200..399, "GET #{path} returned HTTP #{conn.status}"
+    conn
+  end
+
+  defp no_server_error(conn, path) do
+    conn = get(conn, path)
+    assert conn.status < 500, "GET #{path} returned HTTP #{conn.status}"
+    conn
+  end
+
+  describe "authenticated user pages" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      tag = insert(:tag)
+
+      endorse = fn u ->
+        ut = insert(:user_tag, user: u, tag: tag)
+        insert(:user_tag_endorsement, user_tag: ut, user: insert(:user))
+      end
+
+      endorse.(user)
+
+      follower = insert(:user)
+      followee = insert(:user)
+      insert(:connection, follower: follower, followee: user)
+      insert(:connection, follower: user, followee: followee)
+      endorse.(follower)
+      endorse.(followee)
+
+      email = insert(:email, user: user)
+      work = insert(:work_experience, user: user)
+      url = insert(:url, user: user)
+      phone = insert(:phone_number, user: user)
+      address = insert(:address, user: user)
+      social = insert(:social_media_account, user: user)
+      insert(:search_term, user: user)
+
+      %{
+        conn: conn,
+        user: user,
+        tag: tag,
+        email: email,
+        work: work,
+        url: url,
+        phone: phone,
+        address: address,
+        social: social
+      }
+    end
+
+    test "profile + tag pages render", %{conn: conn, user: user, tag: tag} do
+      renders(conn, ~p"/users/#{user}")
+      renders(conn, ~p"/users/#{user}/tags")
+      renders(conn, ~p"/users/#{user}/tags/#{tag}")
+      renders(conn, ~p"/users/#{user}/followers")
+      renders(conn, ~p"/users/#{user}/followees")
+    end
+
+    test "profile sub-resource index pages render", %{conn: conn, user: user} do
+      renders(conn, ~p"/users/#{user}/emails")
+      renders(conn, ~p"/users/#{user}/phone_numbers")
+      renders(conn, ~p"/users/#{user}/links")
+      renders(conn, ~p"/users/#{user}/social_media_accounts")
+      renders(conn, ~p"/users/#{user}/work_experiences")
+      renders(conn, ~p"/users/#{user}/addresses")
+      renders(conn, ~p"/users/#{user}/search_terms")
+    end
+
+    test "new forms render", %{conn: conn, user: user} do
+      renders(conn, ~p"/users/#{user}/edit")
+      renders(conn, ~p"/users/#{user}/emails/new")
+      renders(conn, ~p"/users/#{user}/phone_numbers/new")
+      renders(conn, ~p"/users/#{user}/links/new")
+      renders(conn, ~p"/users/#{user}/social_media_accounts/new")
+      renders(conn, ~p"/users/#{user}/work_experiences/new")
+      renders(conn, ~p"/users/#{user}/addresses/new")
+    end
+
+    test "show/edit for sub-resources render", %{
+      conn: conn,
+      user: user,
+      email: email,
+      phone: phone,
+      url: url,
+      address: address,
+      social: social
+    } do
+      renders(conn, ~p"/users/#{user}/emails/#{email}/edit")
+      renders(conn, ~p"/users/#{user}/phone_numbers/#{phone}/edit")
+      renders(conn, ~p"/users/#{user}/links/#{url}/edit")
+      renders(conn, ~p"/users/#{user}/addresses/#{address}/edit")
+      renders(conn, ~p"/users/#{user}/social_media_accounts/#{social}/edit")
+    end
+
+    test "auth-gated pages do not 5xx", %{conn: conn, user: user} do
+      no_server_error(conn, ~p"/users/#{user}/groups")
+      no_server_error(conn, ~p"/users/#{user}/job_postings")
+      no_server_error(conn, ~p"/users/#{user}/recruiter_subscriptions")
+    end
+
+    test "public listing and global tag pages render", %{conn: conn, tag: tag} do
+      renders(conn, ~p"/listings/most_followed_users")
+      renders(conn, ~p"/tags")
+      renders(conn, ~p"/tags/#{tag}")
+    end
+  end
+
+  describe "admin pages" do
+    setup %{conn: conn} do
+      {conn, admin} = create_and_login_admin(conn)
+      # An unverified user with no last name (the case that crashed the
+      # dashboard) plus a tag and exonym source row for the listings.
+      insert(:user, last_name: nil)
+      insert(:tag)
+      %{conn: conn, admin: admin}
+    end
+
+    test "admin pages render", %{conn: conn} do
+      renders(conn, ~p"/admin")
+      renders(conn, ~p"/admin/locales")
+      renders(conn, ~p"/admin/exonyms")
+      renders(conn, ~p"/admin/tags")
+    end
+  end
+
+  describe "authenticated write actions" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user, other: insert(:user), phone: insert(:phone_number, user: user)}
+    end
+
+    test "create a phone number", %{conn: conn, user: user} do
+      conn =
+        post(conn, ~p"/users/#{user}/phone_numbers",
+          phone_number: %{value: "+49 30 5550000", number_type: "mobile"}
+        )
+
+      assert conn.status < 500, "phone create -> #{conn.status}"
+    end
+
+    test "create a link", %{conn: conn, user: user} do
+      conn =
+        post(conn, ~p"/users/#{user}/links",
+          url: %{value: "https://example.org/", description: "Site"}
+        )
+
+      assert conn.status < 500, "link create -> #{conn.status}"
+    end
+
+    test "update a phone number", %{conn: conn, user: user, phone: phone} do
+      conn =
+        put(conn, ~p"/users/#{user}/phone_numbers/#{phone}",
+          phone_number: %{value: "+49 30 5551111"}
+        )
+
+      assert conn.status < 500, "phone update -> #{conn.status}"
+    end
+
+    test "delete a phone number", %{conn: conn, user: user, phone: phone} do
+      conn = delete(conn, ~p"/users/#{user}/phone_numbers/#{phone}")
+      assert conn.status < 500, "phone delete -> #{conn.status}"
+    end
+
+    test "follow another user", %{conn: conn, other: other} do
+      conn = post(conn, ~p"/connections", connection: %{followee_id: other.id})
+      assert conn.status < 500, "follow -> #{conn.status}"
+    end
+  end
+
+  describe "recruiter pages and write flows" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      package = insert(:recruiter_package)
+
+      insert(:recruiter_subscription,
+        user: user,
+        recruiter_package: package,
+        subscription_ends: ~D[2099-12-31],
+        paid: true
+      )
+
+      %{conn: conn, user: user, package: package, job: insert(:job_posting, user: user)}
+    end
+
+    test "recruiter pages and forms render", %{conn: conn, user: user, job: job} do
+      renders(conn, ~p"/users/#{user}/job_postings")
+      renders(conn, ~p"/users/#{user}/recruiter_subscriptions")
+      renders(conn, ~p"/users/#{user}/job_postings/new")
+      renders(conn, ~p"/users/#{user}/job_postings/#{job}")
+      renders(conn, ~p"/users/#{user}/job_postings/#{job}/edit")
+      renders(conn, ~p"/users/#{user}/recruiter_subscriptions/new")
+    end
+
+    test "create / update / delete a job posting", %{conn: conn, user: user, job: job} do
+      created =
+        post(conn, ~p"/users/#{user}/job_postings",
+          job_posting: %{title: "Engineer", description: "Build things", location: "Berlin"}
+        )
+
+      assert created.status < 500, "job posting create -> #{created.status}"
+
+      updated =
+        put(conn, ~p"/users/#{user}/job_postings/#{job}", job_posting: %{title: "Updated title"})
+
+      assert updated.status < 500, "job posting update -> #{updated.status}"
+
+      deleted = delete(conn, ~p"/users/#{user}/job_postings/#{job}")
+      assert deleted.status < 500, "job posting delete -> #{deleted.status}"
+    end
+
+    test "create a recruiter subscription", %{conn: conn, user: user, package: package} do
+      conn =
+        post(conn, ~p"/users/#{user}/recruiter_subscriptions",
+          recruiter_subscription: %{
+            recruiter_package_id: package.id,
+            subscription_begins: "2026-01-01",
+            line1: "Acme Corp",
+            zip_code: "10115",
+            city: "Berlin",
+            country: "Germany"
+          }
+        )
+
+      assert conn.status < 500, "subscription create -> #{conn.status}"
+    end
+  end
+
+  describe "admin write flows" do
+    setup %{conn: conn} do
+      {conn, admin} = create_and_login_admin(conn)
+      target = insert(:user)
+      insert(:email, user: target)
+      [locale_a, locale_b | _] = Repo.all(from(l in Vutuv.Accounts.Locale, limit: 2))
+
+      exonym =
+        Repo.insert!(%Vutuv.Accounts.Exonym{
+          value: "Beispiel",
+          locale_id: locale_a.id,
+          exonym_locale_id: locale_b.id
+        })
+
+      %{
+        conn: conn,
+        admin: admin,
+        target: target,
+        slug: insert(:slug, user: target),
+        tag: insert(:tag),
+        coupon: insert(:coupon),
+        package: insert(:recruiter_package),
+        exonym: exonym,
+        locale_a: locale_a,
+        locale_b: locale_b
+      }
+    end
+
+    test "admin new/edit forms render", %{
+      conn: conn,
+      tag: tag,
+      coupon: coupon,
+      package: package,
+      exonym: exonym
+    } do
+      renders(conn, ~p"/admin/tags/new")
+      renders(conn, ~p"/admin/tags/#{tag}/edit")
+      renders(conn, ~p"/admin/coupons/new")
+      renders(conn, ~p"/admin/coupons/#{coupon}/edit")
+      renders(conn, ~p"/admin/recruiter_packages/new")
+      renders(conn, ~p"/admin/recruiter_packages/#{package}/edit")
+      renders(conn, ~p"/admin/exonyms/new")
+      renders(conn, ~p"/admin/exonyms/#{exonym}/edit")
+    end
+
+    test "admin create tag / coupon / package / exonym", %{
+      conn: conn,
+      locale_a: locale_a,
+      locale_b: locale_b
+    } do
+      assert post(conn, ~p"/admin/tags", tag: %{name: "Admin Tag"}).status < 500
+
+      assert post(conn, ~p"/admin/coupons",
+               coupon: %{code: "SAVE10AB", percentage: 10, ends_on: "2099-12-31", valid: true}
+             ).status < 500
+
+      assert post(conn, ~p"/admin/recruiter_packages",
+               recruiter_package: %{
+                 name: "Gold",
+                 price: 199.0,
+                 currency: "EUR",
+                 duration_in_months: 12,
+                 max_job_postings: 10
+               }
+             ).status < 500
+
+      assert post(conn, ~p"/admin/exonyms",
+               exonym: %{value: "Exonym", locale_id: locale_a.id, exonym_locale_id: locale_b.id}
+             ).status < 500
+    end
+
+    test "admin update / delete tag, coupon, package", %{
+      conn: conn,
+      tag: tag,
+      coupon: coupon,
+      package: package
+    } do
+      assert put(conn, ~p"/admin/tags/#{tag}", tag: %{name: "Renamed"}).status < 500
+      assert delete(conn, ~p"/admin/tags/#{tag}").status < 500
+      assert put(conn, ~p"/admin/coupons/#{coupon}", coupon: %{percentage: 25}).status < 500
+      assert delete(conn, ~p"/admin/coupons/#{coupon}").status < 500
+
+      assert put(conn, ~p"/admin/recruiter_packages/#{package}",
+               recruiter_package: %{name: "Renamed Package"}
+             ).status < 500
+
+      assert delete(conn, ~p"/admin/recruiter_packages/#{package}").status < 500
+    end
+
+    test "admin verify user and disable slug", %{conn: conn, target: target, slug: slug} do
+      assert post(conn, ~p"/admin/users", user_id: target.id).status < 500
+      assert post(conn, ~p"/admin/slugs", slug_disable: %{value: slug.value}).status < 500
+    end
+  end
+end

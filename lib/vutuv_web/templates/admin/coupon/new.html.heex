@@ -1,0 +1,23 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "New coupon" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+        {gettext("Coupons"), ~p"/admin/coupons"},
+        gettext("New")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= render "form_content.html", backlink: ~p"/admin/coupons", changeset: @changeset,
+                            action: ~p"/admin/coupons" %>
+  </section>
+  <aside>
+    
+  </aside>
+</div>

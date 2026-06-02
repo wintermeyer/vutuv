@@ -1,0 +1,44 @@
+<%= email_greeting(@user) %>,
+
+vor <%= @days_since_inserted_at %> Tagen haben Sie einen vutuv Account
+angelegt. Sie haben mittlerweile <%= @follower_count %> Follower
+und Ihr Account wurde von uns verifiziert.
+
+Der Schlüssel für ein erfolgreiches Business Network sind die
+eingegebenen Daten. Da wir wissen wie aufwendig die Eingabe sein kann,
+suchen wir im Internet nach öffentlich zur Verfügung stehenden Daten.
+Die folgenden Informationen haben wir gefunden und Ihrem Account
+automatisch hinzugefügt:
+
+<%= if @enrichable_websites != [] do %>
+Webseiten
+<%= for website <- @enrichable_websites do %>
+- <%= website %>
+<% end %>
+
+<% end %>
+<%= if length(@enrichable_social_media_accounts) > 0 do %>
+Social Media Accounts
+<%= for social_media_account <- @enrichable_social_media_accounts do %>
+- <%= social_media_account |> Map.keys |> List.first %>: <%= social_media_account |> Map.values |> List.first %>
+<% end %>
+
+<% end %>
+<%= if @enrichable_work_experiences != nil do %>
+Lebenslauf
+<%= for work_experience <- @enrichable_work_experiences do %>
+- <%= work_experience[:organization] %><%= if work_experience[:title] do %> (<%= work_experience[:title] %>)<% end %>
+<% end %>
+
+<% end %>
+
+Sie können diese Daten unter der folgenden URL einsehen und verändern:
+https://vutuv.de/users/<%= @user.active_slug %>
+
+Bitte nehmen Sie sich einen Moment Zeit und fügen Sie noch fehlende
+Informationen hinzu (z.B. Webseiten und Social Media Accounts).
+
+Vielen Dank, das Sie beim vutuv Netzwerk mitmachen!
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

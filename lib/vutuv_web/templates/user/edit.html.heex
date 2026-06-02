@@ -1,0 +1,20 @@
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    gettext("Edit")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= render "form_content.html", changeset: @changeset, action: ~p"/users/#{@user}", conn: @conn, current_user: @current_user, backlink: ~p"/users/#{@user}" %>
+	</section>
+  <aside>
+    
+    <section class="card">
+      <h1><%= gettext "Administration" %></h1>
+      <%= button gettext("Delete Account"), to: ~p"/users/#{@user}", method: "delete", class: "link_button delete_link_button" %>
+    </section>
+  </aside>
+</div>

@@ -1,0 +1,24 @@
+<%# header tag begins in parent template %>
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= "<%= gettext \"" %>New <%= template_singular %><%= "\" %\>" %></h1>
+    </div>
+  </div>
+</header>
+<%= "<%=" %> render Vutuv.LayoutView, "flash.html", assigns <%= "%\>" %>
+
+<div class="breadcrumbs">
+  <%= "<%=" %> Vutuv.UserHelpers.gen_breadcrumbs([
+        {gettext("<%= Phoenix.Naming.humanize(plural) %>"), <%= singular %>_path(@conn, :index)},
+        gettext("New")]) <%= "%\>" %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= "<%=" %> render "form.html", backlink: <%= singular %>_path(@conn, :index), changeset: @changeset,
+                            action: <%= singular %>_path(@conn, :create) <%= "%\>" %>
+  </section>
+  <aside>
+    <%= "<%=" %> render Vutuv.SharedView, "_ad.html" <%= "%\>" %>
+  </aside>
+</div>

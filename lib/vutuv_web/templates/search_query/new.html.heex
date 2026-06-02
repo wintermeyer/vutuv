@@ -1,0 +1,55 @@
+<!-- header begins in parent template -->
+  <%= render "form_content.html", conn: @conn, changeset: @changeset,
+                            action: ~p"/search_queries" %>
+<div class="breadcrumbs">
+	<%= if(@conn.assigns[:query]) do %>
+  <%= gen_breadcrumbs([
+    {gettext("Search"), ~p"/search_queries/new"},
+    gettext("Results")]) %>
+  <% else %>
+  <%= gen_breadcrumbs([
+    gettext("Search")]) %>
+  <% end %>
+</div>
+
+<div class="search-results card-list">
+  <%= unless(@conn.assigns[:query]) do %>
+    <section class="card">
+      <h1><%= gettext "Search Tips" %></h1>
+      <p>
+        <%= gettext "You can search for a name, email, or tag." %>
+      </p>
+      <p>
+        <%= gettext "Our search will try to match similar names to your search, so don't worry about spelling." %>
+      </p>
+    </section>
+  <% end %>
+
+  <aside>
+    
+  </aside>
+<%= if @conn.assigns[:user_results] do %>
+  <section class="card card--simple">
+  <%= if(@conn.params["tags"] == "true") do %>
+  	<%= if Enum.count(@user_results) > 0 do %>
+	  <p style = "text-align: center;"><a href = "?tags=false">Show user results</a></p>
+	  <% end %>
+	<% else %>
+		<%= if Enum.count(@tag_results) > 0 do %>
+	  <p style = "text-align: center;"><a href = "?tags=true">Show tag results</a></p>
+	  <% end %>
+	<% end %>
+
+	<%= if(@conn.params["tags"] == "true") do %>
+    {VutuvWeb.TagHTML.card_list(%{conn: @conn, tags: @tag_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
+  <% else %>
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
+  <% end %>
+  <%= if Enum.count(@tag_results) == 0 and Enum.count(@user_results) == 0 do %>
+  	<h1 style = "text-align: center;">
+  		<%= gettext "No results" %>
+  	</h1>
+  <% end %>
+  </section>
+<% end %>
+</div>

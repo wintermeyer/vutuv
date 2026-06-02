@@ -1,0 +1,54 @@
+
+  <div class="profile-header">
+    <div class="profile-header__info">
+      <h1><%= gettext "Your subscription" %></h1>
+    </div>
+  </div>
+{VutuvWeb.LayoutHTML.flash(assigns)}
+
+<div class="breadcrumbs">
+  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Active Subscription"), ~p"/users/#{@user}/recruiter_subscriptions/new"},
+    gettext("Subscription History")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card jobs">
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "Package" %></th>
+          <th><%= gettext "Subscribed on" %></th>
+          <th><%= gettext "Expires on" %></th>
+          <th><%= gettext "Paid" %></th>
+          <th><%= gettext "Paid on" %></th>
+          <th><%= gettext "Invoice number" %></th>
+          <th><%= gettext "Invoiced on" %></th>
+
+        </tr>
+      </thead>
+      <tbody>
+    <%= for {recruiter_subscription, _index} <- Enum.with_index(@recruiter_subscriptions) do %>
+        <tr>
+          <td><%= recruiter_subscription.recruiter_package.name %></td>
+          <td><%= recruiter_subscription.subscription_begins %></td>
+          <td><%= recruiter_subscription.subscription_ends %></td>
+          <td><%= recruiter_subscription.paid %></td>
+          <td><%= recruiter_subscription.paid_on %></td>
+          <td><%= recruiter_subscription.invoice_number %></td>
+          <td><%= recruiter_subscription.invoiced_on %></td>
+        </tr>
+    <% end %>
+      </tbody>
+    </table>
+
+    <p>
+      <%= link gettext("Back"), to: ~p"/users/#{@user}/recruiter_subscriptions/new", class: "card__morelink" %>
+    </p>
+  </section>
+  <aside>
+    
+  </aside>
+</div>
