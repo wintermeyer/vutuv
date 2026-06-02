@@ -31,6 +31,16 @@ defmodule VutuvWeb.SearchQueryController do
   end
 
   def create(conn, %{"search_query" => search_query_params}) do
+    # Reject blank queries before running the (expensive) search, so an empty
+    # submission re-renders the form with an error instead of erroring out.
+    if blank?(search_query_params["value"]) do
+      render(conn, "new.html", changeset: blank_value_changeset(search_query_params))
+    else
+      do_create(conn, search_query_params)
+    end
+  end
+
+  defp do_create(conn, search_query_params) do
     user = conn.assigns[:current_user]
 
     search_query_params =
@@ -100,6 +110,20 @@ defmodule VutuvWeb.SearchQueryController do
 
   defp validate_email(value) do
     Regex.match?(@email_regex, value)
+  end
+
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(_value), do: true
+
+  # Build an errored changeset (with a "can't be blank" error on :value) so the
+  # form can be re-rendered for a blank query without touching the database.
+  defp blank_value_changeset(search_query_params) do
+    {:error, changeset} =
+      %SearchQuery{}
+      |> SearchQuery.changeset(Map.put(search_query_params, "is_email?", false))
+      |> Ecto.Changeset.apply_action(:insert)
+
+    changeset
   end
 
   defp insert_or_update(nil, search_query_params, requester_assoc, results_assocs) do
