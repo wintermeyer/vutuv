@@ -83,7 +83,7 @@ msgid "Are you sure?"
 msgstr "Sind Sie sicher?"
 
 #: web/templates/user/form.html.eex:9
-msgid "Avater"
+msgid "Avatar"
 msgstr "Avatar"
 
 #: web/templates/admin/slug/edit.html.eex:6
