@@ -2,3 +2,24 @@
 @source "../../lib/vutuv_web";
 
 @import "./legacy.css";
+
+/*
+ * Issue #761: keep login / registration inputs readable.
+ *
+ * Tailwind v4's Preflight resets every form control to
+ * `color: inherit; background-color: transparent`. Inside `.imagebox__form`
+ * (which sets `color: #fff`) that made the typed text white on a transparent
+ * field over the photo background — invisible in Chrome and Firefox.
+ *
+ * Restore a solid, light field with dark text. Submit buttons keep their own
+ * styling, so they are excluded.
+ */
+.imagebox__input:not([type="submit"]) {
+  background-color: #ffffff;
+  color: #1a1a1a;
+}
+
+.imagebox__input:not([type="submit"])::placeholder {
+  color: #6b7280;
+  opacity: 1;
+}
