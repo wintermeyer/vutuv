@@ -4,6 +4,10 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Accounts
   alias VutuvWeb.RateLimit
 
+  # The login page is logged-out-only, like registration. An already-logged-in
+  # visitor is redirected to their profile. :delete (logout) stays unguarded.
+  plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
+
   def new(conn, _) do
     render(conn, "new.html", body_class: "stretch")
   end
