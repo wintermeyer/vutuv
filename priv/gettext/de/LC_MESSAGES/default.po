@@ -795,8 +795,8 @@ msgid "User"
 msgstr "User"
 
 #: web/controllers/user_controller.ex:43
-msgid "User %{name} created successfully. An email has been sent with your login link."
-msgstr "Der User %{name} wurde angelegt. Eine E-Mail mit einem Login Link wurde verschickt."
+msgid "User %{name} created successfully. An email has been sent with your PIN."
+msgstr "Der User %{name} wurde angelegt. Eine E-Mail mit einem PIN wurde verschickt."
 
 #: web/controllers/user_controller.ex:212
 msgid "User deleted successfully."
@@ -1084,7 +1084,7 @@ msgstr "Geschlecht auswählen"
 
 #: lib/vutuv/emailer.ex:29
 msgid "Confirm your account deletion"
-msgstr "Link zum Löschen eines vutuv Accounts"
+msgstr "PIN zum Löschen eines vutuv Accounts"
 
 #: lib/vutuv/emailer.ex:25
 msgid "Confirm your email"
@@ -1096,7 +1096,7 @@ msgstr "vutuv Account einrichten"
 
 #: lib/vutuv/emailer.ex:12 lib/vutuv/emailer.ex:20
 msgid "Login to vutuv"
-msgstr "vutuv Login-Link"
+msgstr "vutuv Login-PIN"
 
 #: web/templates/page/most_followed_users.html.eex:6
 msgid "Listings"

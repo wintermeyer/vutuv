@@ -55,15 +55,38 @@ defmodule VutuvWeb.ConnCase do
       # `login_by_email/2` rides along when ConnTest recycles the response.
       defp login_via_pin(conn, email) do
         {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
-        post(conn, ~p"/sessions", session: %{"pin" => sent_login_pin()})
+        post(conn, ~p"/sessions", session: %{"pin" => sent_pin()})
       end
 
       # The Swoosh test adapter delivers synchronously to this process, so the
-      # login email is already waiting. The PIN is the only 6-digit run in it.
-      defp sent_login_pin do
+      # most recent email is already waiting. The PIN is the only 6-digit run
+      # in it. Works for every PIN flow (login, email change, deletion).
+      defp sent_pin do
         assert_received {:email, email}
         [pin] = Regex.run(~r/\b\d{6}\b/, email.text_body)
         pin
+      end
+
+      # Submit a form the way a browser does: carry the CSRF token rendered into
+      # `conn`'s previous response and re-enable CSRF enforcement. `ConnTest`
+      # sets `plug_skip_csrf_protection` on every test conn, which is exactly
+      # what hid the issue #759 login 403 — so any two-step PIN flow whose second
+      # step must survive CSRF should submit through this, not a plain `post/3`.
+      #
+      # Order matters: `recycle/1` (which carries the response cookies forward)
+      # also resets the skip flag, so we flip it off *after* recycling and rely
+      # on `phoenix_recycled` to stop `post/3` from recycling a second time.
+      defp submit_with_csrf(conn, path, params) do
+        conn
+        |> recycle()
+        |> Plug.Conn.put_private(:plug_skip_csrf_protection, false)
+        |> post(path, Map.put(params, "_csrf_token", csrf_token(conn)))
+      end
+
+      # Pull the hidden `_csrf_token` value out of the form in `conn`'s response.
+      defp csrf_token(conn) do
+        [_, token] = Regex.run(~r/name="_csrf_token"[^>]*value="([^"]+)"/, conn.resp_body)
+        token
       end
     end
   end

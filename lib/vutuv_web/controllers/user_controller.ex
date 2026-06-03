@@ -50,7 +50,7 @@ defmodule VutuvWeb.UserController do
               :info,
               Gettext.gettext(
                 VutuvWeb.Gettext,
-                "User %{name} created successfully. An email has been sent with your login link.",
+                "User %{name} created successfully. An email has been sent with your PIN.",
                 name: full_name(user)
               )
             )
