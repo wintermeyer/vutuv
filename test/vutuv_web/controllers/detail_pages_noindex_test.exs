@@ -1,0 +1,57 @@
+defmodule VutuvWeb.DetailPagesNoIndexTest do
+  use VutuvWeb.ConnCase, async: true
+
+  # The per-user profile detail pages (phone numbers, emails, addresses, links,
+  # social media, work history, …) expose personal data and must be kept out of
+  # search engine indexes. The `:user_pipe` pipeline stamps `X-Robots-Tag:
+  # noindex` on every such page, while the public profile page itself stays
+  # indexable. robots.txt only asks crawlers not to fetch a URL; this header
+  # also guarantees de-indexing when a detail URL is linked from elsewhere.
+
+  setup %{conn: conn} do
+    user = insert(:user, validated?: true)
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    {:ok, conn: conn, user: user}
+  end
+
+  describe "X-Robots-Tag on public profile detail pages" do
+    test "the phone numbers index is served with noindex", %{conn: conn, user: user} do
+      conn = get(conn, ~p"/users/#{user}/phone_numbers")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    end
+
+    test "a detail show page is served with noindex", %{conn: conn, user: user} do
+      phone = insert(:phone_number, user: user)
+      conn = get(conn, ~p"/users/#{user}/phone_numbers/#{phone}")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    end
+
+    test "every other public detail resource is covered too", %{conn: conn, user: user} do
+      for path <- [
+            ~p"/users/#{user}/emails",
+            ~p"/users/#{user}/links",
+            ~p"/users/#{user}/addresses",
+            ~p"/users/#{user}/social_media_accounts",
+            ~p"/users/#{user}/work_experiences"
+          ] do
+        result = get(conn, path)
+
+        assert get_resp_header(result, "x-robots-tag") == ["noindex"],
+               "expected noindex header on #{path}"
+      end
+    end
+  end
+
+  describe "the public profile page stays indexable" do
+    test "the profile itself is not marked noindex", %{conn: conn, user: user} do
+      conn = get(conn, ~p"/users/#{user}")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == []
+    end
+  end
+end

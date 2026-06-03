@@ -17,6 +17,11 @@ defmodule VutuvWeb.Router do
   end
 
   pipeline :user_pipe do
+    # Keep the per-user detail pages (phone numbers, emails, addresses, …) out
+    # of search indexes. Runs first so the header is present even when a later
+    # plug halts (e.g. an unknown slug 404s). The profile page itself does not
+    # go through this pipeline and stays crawlable.
+    plug(Plugs.NoIndex)
     plug(Plugs.UserResolveSlug)
     plug(Plugs.EnsureValidated)
   end

@@ -21,6 +21,10 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Disallow: /admin/"
       assert body =~ "Disallow: /sessions"
       assert body =~ "Disallow: /api/"
+
+      # Personal profile detail pages (phone numbers, emails, addresses, …) are
+      # off-limits, while the profile page itself stays crawlable.
+      assert body =~ "Disallow: /users/*/"
     end
   end
 end

@@ -41,6 +41,11 @@ defmodule VutuvWeb.PageController do
   Disallow: /admin/
   Disallow: /sessions
   Disallow: /api/
+
+  # Personal profile detail pages (phone numbers, emails, addresses, links,
+  # social media, work history, followers, ...) are off-limits. The profile
+  # page /users/<slug> itself stays crawlable; only its sub-pages are blocked.
+  Disallow: /users/*/
   """
 
   @doc """
