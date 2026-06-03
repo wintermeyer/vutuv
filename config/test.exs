@@ -9,6 +9,10 @@ config :vutuv, :serve_uploads_locally, true
 config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
 
+# Off by default so the suite's many logins do not share (and exhaust) one
+# process-wide counter. The dedicated rate-limit test enables it explicitly.
+config :vutuv, :rate_limit, enabled: false
+
 config :vutuv, VutuvWeb.Endpoint,
   url: [host: "localhost", port: 4001],
   http: [port: 4001],

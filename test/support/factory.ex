@@ -37,12 +37,13 @@ defmodule Vutuv.Factory do
     }
   end
 
-  def magic_link_factory do
-    %Vutuv.Accounts.MagicLink{
-      magic_link: sequence(:magic_link, &"magic-link-hash-#{&1}"),
-      magic_link_type: "login",
-      magic_link_created_at: NaiveDateTime.utc_now(),
-      pin: "123456",
+  def login_pin_factory do
+    %Vutuv.Accounts.LoginPin{
+      type: "login",
+      created_at: NaiveDateTime.utc_now(),
+      pin:
+        sequence(:login_pin_hash, &Base.encode16(:crypto.hash(:sha256, "#{&1}"), case: :lower)),
+      pin_salt: :crypto.strong_rand_bytes(16),
       pin_login_attempts: 0
     }
   end

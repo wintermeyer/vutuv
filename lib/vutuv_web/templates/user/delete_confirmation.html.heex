@@ -1,0 +1,32 @@
+{VutuvWeb.LayoutHTML.flash(assigns)}
+<div class="card-list">
+  <aside></aside>
+  <section class="card">
+    <h1><%= gettext "Confirm account deletion" %></h1>
+    <p><%= gettext "We sent a PIN to your email address. Enter it below to permanently delete your account." %></p>
+    <p><%= gettext "WARNING: There is no turning back from this. Your account is deleted as soon as you submit the PIN." %></p>
+
+    <.form
+      :let={f}
+      for={%{}}
+      as={:account_deletion}
+      action={~p"/account_deletion"}
+      id="account-deletion-form"
+      method="post"
+      class="editform"
+    >
+      <div class="editform__field">
+        <%= label f, :pin, gettext("PIN") %>
+        <%= text_input f, :pin,
+          autofocus: true,
+          autocomplete: "one-time-code",
+          inputmode: "numeric",
+          placeholder: gettext("Enter your PIN") %>
+      </div>
+      <div class="editform__actions">
+        <%= link gettext("Cancel"), to: ~p"/", class: "button button--cancel" %>
+        <%= submit gettext("Delete my account"), class: "button button--cancel" %>
+      </div>
+    </.form>
+  </section>
+</div>

@@ -10,7 +10,7 @@ defmodule Vutuv.Notifications.EmailerTest do
 
   alias Vutuv.Notifications.Emailer
 
-  @magic {"https://vutuv.de/magic", "123456"}
+  @pin "123456"
 
   defp assert_robot_headers(email) do
     assert email.headers["Auto-Submitted"] == "auto-generated"
@@ -55,7 +55,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "registration email (unvalidated user)" do
       user = insert(:user, validated?: false, locale: "en")
 
-      @magic
+      @pin
       |> Emailer.login_email("reg@example.com", user)
       |> assert_robot_headers()
     end
@@ -63,31 +63,15 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "login email (validated user)" do
       user = insert(:user, validated?: true, locale: "en")
 
-      @magic
+      @pin
       |> Emailer.login_email("login@example.com", user)
-      |> assert_robot_headers()
-    end
-
-    test "fbs registration email (unvalidated user)" do
-      user = insert(:user, validated?: false, locale: "en")
-
-      @magic
-      |> Emailer.fbs_login_email("fbsreg@example.com", user)
-      |> assert_robot_headers()
-    end
-
-    test "fbs login email (validated user)" do
-      user = insert(:user, validated?: true, locale: "en")
-
-      @magic
-      |> Emailer.fbs_login_email("fbslogin@example.com", user)
       |> assert_robot_headers()
     end
 
     test "email creation email" do
       user = insert(:user, locale: "en")
 
-      @magic
+      @pin
       |> Emailer.email_creation_email("newaddress@example.com", user)
       |> assert_robot_headers()
     end
@@ -95,7 +79,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "user deletion email" do
       user = insert(:user, locale: "en")
 
-      @magic
+      @pin
       |> Emailer.user_deletion_email("delete@example.com", user)
       |> assert_robot_headers()
     end

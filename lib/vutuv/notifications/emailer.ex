@@ -70,9 +70,8 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
 
-  def login_email({link, pin}, email, %Vutuv.Accounts.User{validated?: false} = user) do
+  def login_email(pin, email, %Vutuv.Accounts.User{validated?: false} = user) do
     gen_email(
-      link,
       pin,
       email,
       user,
@@ -81,9 +80,8 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  def login_email({link, pin}, email, user) do
+  def login_email(pin, email, user) do
     gen_email(
-      link,
       pin,
       email,
       user,
@@ -92,31 +90,8 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  def fbs_login_email({link, pin}, email, %Vutuv.Accounts.User{validated?: false} = user) do
+  def email_creation_email(pin, email, user) do
     gen_email(
-      link,
-      pin,
-      email,
-      user,
-      "fbs_registration_email_#{get_locale(user.locale)}",
-      Gettext.gettext(VutuvWeb.Gettext, "Confirm your vutuv account")
-    )
-  end
-
-  def fbs_login_email({link, pin}, email, user) do
-    gen_email(
-      link,
-      pin,
-      email,
-      user,
-      "fbs_login_email_#{get_locale(user.locale)}",
-      Gettext.gettext(VutuvWeb.Gettext, "Login to vutuv")
-    )
-  end
-
-  def email_creation_email({link, pin}, email, user) do
-    gen_email(
-      link,
       pin,
       email,
       user,
@@ -125,9 +100,8 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  def user_deletion_email({link, pin}, email, user) do
+  def user_deletion_email(pin, email, user) do
     gen_email(
-      link,
       pin,
       email,
       user,
@@ -243,7 +217,7 @@ defmodule Vutuv.Notifications.Emailer do
     nil
   end
 
-  defp gen_email(link, pin, email, user, template, email_subject) do
+  defp gen_email(pin, email, user, template, email_subject) do
     url = Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
 
     base_email()
@@ -251,7 +225,6 @@ defmodule Vutuv.Notifications.Emailer do
     |> subject(email_subject)
     |> text_body(
       VutuvWeb.EmailText.render("#{template}.text", %{
-        link: link,
         pin: pin,
         url: url,
         user: user

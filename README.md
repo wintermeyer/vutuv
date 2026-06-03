@@ -66,7 +66,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 
 | Context | Schemas | Purpose |
 |---|---|---|
-| `Vutuv.Accounts` | User, Email, Slug, SearchTerm, OAuthProvider, MagicLink, Locale, Exonym | Registration, authentication, user management |
+| `Vutuv.Accounts` | User, Email, Slug, SearchTerm, OAuthProvider, LoginPin, Locale, Exonym | Registration, PIN-based authentication, user management |
 | `Vutuv.Profiles` | Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience, UserSkill, Skill, Endorsement | User profile data |
 | `Vutuv.Social` | Connection, Group, Membership | Following, groups |
 | `Vutuv.Tags` | Tag, UserTag, UserTagEndorsement | Tagging and endorsements |

@@ -9,6 +9,7 @@ defmodule Vutuv.Application do
       Vutuv.Repo,
       {Phoenix.PubSub, name: Vutuv.PubSub},
       {Task.Supervisor, name: Vutuv.TaskSupervisor},
+      Vutuv.RateLimiter,
       VutuvWeb.Endpoint
     ]
 

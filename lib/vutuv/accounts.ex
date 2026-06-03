@@ -8,7 +8,7 @@ defmodule Vutuv.Accounts do
   require Logger
 
   alias Plug.Conn
-  alias Vutuv.Accounts.MagicLink
+  alias Vutuv.Accounts.LoginPin
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.Slug
   alias Vutuv.Accounts.User
@@ -136,21 +136,12 @@ defmodule Vutuv.Accounts do
   defp send_login_email(nil, conn, _), do: {:error, :not_found, conn}
 
   defp send_login_email(user, conn, email) do
-    case Conn.get_req_header(conn, "x-iorg-fbs") do
-      ["true"] ->
-        gen_magic_link(user, "login")
-        |> Emailer.fbs_login_email(email, user)
-        |> deliver_login_email(email)
+    user
+    |> gen_pin_for("login")
+    |> Emailer.login_email(email, user)
+    |> deliver_login_email(email)
 
-        {:ok, put_pin_cookie(conn, email)}
-
-      _ ->
-        gen_magic_link(user, "login")
-        |> Emailer.login_email(email, user)
-        |> deliver_login_email(email)
-
-        {:ok, conn}
-    end
+    {:ok, put_pin_cookie(conn, email)}
   end
 
   # Deliver a login email and never let a delivery failure pass silently:
@@ -179,81 +170,125 @@ defmodule Vutuv.Accounts do
     |> Repo.update!()
   end
 
+  # Name of the signed cookie that carries the pending login identity (the typed
+  # email) between the email-entry step and the PIN-entry step. Short-lived: it
+  # is only valid while a PIN is.
+  @pin_cookie "_vutuv_login_pin"
+  @pin_cookie_max_age 1800
+
+  # Sign/verify against the endpoint rather than the conn so the token does not
+  # depend on the conn having been through the endpoint plug (it has not yet, at
+  # the email step). Both resolve to the same `secret_key_base`.
+  @token_context VutuvWeb.Endpoint
+
   defp put_pin_cookie(conn, email) do
-    salt = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
-    payload = Phoenix.Token.sign(conn, salt, email)
+    payload = Phoenix.Token.sign(@token_context, pin_cookie_salt(), email)
 
     conn
-    |> Conn.delete_resp_cookie("_vutuv_fbs_temp", max_age: 1800)
-    |> Conn.put_resp_cookie("_vutuv_fbs_temp", payload, max_age: 1800)
+    |> Conn.delete_resp_cookie(@pin_cookie, max_age: @pin_cookie_max_age)
+    |> Conn.put_resp_cookie(@pin_cookie, payload, max_age: @pin_cookie_max_age)
   end
 
-  # ── Magic Links ──
+  @doc """
+  Reads and verifies the signed login-identity cookie, returning the email it
+  carries or `nil` when the cookie is absent, tampered with, or expired.
+  """
+  def read_pin_cookie(%{cookies: %{@pin_cookie => payload}}) do
+    case Phoenix.Token.verify(@token_context, pin_cookie_salt(), payload,
+           max_age: @pin_cookie_max_age
+         ) do
+      {:ok, email} -> email
+      _ -> nil
+    end
+  end
 
-  @magic_link_expire_time 3600
+  def read_pin_cookie(_conn), do: nil
+
+  @doc "Drops the login-identity cookie (after a successful login or lockout)."
+  def delete_pin_cookie(conn) do
+    Conn.delete_resp_cookie(conn, @pin_cookie, max_age: @pin_cookie_max_age)
+  end
+
+  defp pin_cookie_salt do
+    Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+  end
+
+  # ── Login PINs ──
+
   @pin_expire_time 1800
   @max_attempts 3
 
-  def gen_magic_link(user, type, value \\ nil) do
-    hash = gen_hash(user.id)
+  @doc """
+  Mints (or refreshes) the single one-time PIN for a `(user, type)` pair and
+  returns the **plaintext** PIN so it can be emailed. Only the peppered, salted
+  hash is persisted. `value` carries flow-specific data (e.g. the new address for
+  an email change).
+  """
+  def gen_pin_for(user, type, value \\ nil) do
     pin = gen_pin()
+    salt = :crypto.strong_rand_bytes(16)
 
-    case Repo.one(
-           from(m in MagicLink, where: m.user_id == ^user.id and m.magic_link_type == ^type)
-         ) do
-      nil -> Ecto.build_assoc(user, :magic_links)
-      magic_link -> magic_link
+    case Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type)) do
+      nil -> Ecto.build_assoc(user, :login_pins)
+      login_pin -> login_pin
     end
-    |> MagicLink.changeset(%{
-      magic_link: hash,
-      magic_link_type: type,
+    |> LoginPin.changeset(%{
+      type: type,
       value: value,
-      magic_link_created_at: NaiveDateTime.from_erl!(:calendar.universal_time()),
-      pin: pin,
+      created_at: NaiveDateTime.from_erl!(:calendar.universal_time()),
+      pin: hash_pin(pin, salt),
+      pin_salt: salt,
       pin_login_attempts: 0
     })
     |> Repo.insert_or_update!()
 
-    {hash, pin}
+    pin
   end
 
-  defp gen_hash(user_id) do
-    seconds_string =
-      :calendar.universal_time()
-      |> :calendar.datetime_to_gregorian_seconds()
-      |> Integer.to_string()
-
-    rand_string =
-      :rand.uniform()
-      |> Float.to_string()
-
-    id_string =
-      user_id
-      |> Integer.to_string()
-
-    :crypto.hash(:sha256, "#{seconds_string}#{rand_string}#{id_string}")
-    |> Base.encode16()
-    |> String.downcase()
-  end
-
+  # A 6-digit PIN drawn from cryptographically strong randomness. `:rand` is a
+  # non-cryptographic PRNG, so it must not be used here (issue #759 C.1).
   defp gen_pin do
-    :rand.uniform(1_000_000)
+    strong_uniform(1_000_000)
     |> Integer.to_string()
     |> String.pad_leading(6, "0")
   end
 
-  defp expire_magic_link(magic_link) do
-    changeset = MagicLink.changeset(magic_link, %{magic_link_created_at: nil})
-    Repo.update!(changeset)
+  # Uniform integer in `0..bound-1` from `:crypto.strong_rand_bytes`, rejection
+  # sampled so the modulo reduction adds no bias.
+  defp strong_uniform(bound) do
+    span = 0x1_0000_0000
+    limit = span - rem(span, bound)
+    n = :crypto.strong_rand_bytes(4) |> :binary.decode_unsigned()
+
+    if n < limit, do: rem(n, bound), else: strong_uniform(bound)
   end
 
-  defp link_expired?(record), do: expired?(record, @magic_link_expire_time)
+  # A 6-digit PIN has only ~20 bits of entropy, so a fast hash (even salted) is
+  # crackable offline against a leaked table in well under a second. The pepper
+  # (a 256-bit server-side secret held outside the DB) puts that brute force out
+  # of reach; the per-PIN salt kills precomputation and cross-row equality even
+  # if the pepper also leaks. See issue #759 C.2.
+  defp hash_pin(pin, salt) do
+    :crypto.mac(:hmac, :sha256, pepper(), salt <> pin)
+    |> Base.encode16(case: :lower)
+  end
 
-  defp pin_expired?(record), do: expired?(record, @pin_expire_time)
+  # Dedicated pepper derived from `secret_key_base` with domain separation, so it
+  # never equals the raw secret and lives outside the database.
+  defp pepper do
+    secret = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+    :crypto.hash(:sha256, "vutuv/login_pin/pepper/v1" <> secret)
+  end
 
-  defp expired?(%{magic_link_created_at: nil}, _threshold), do: true
+  defp expire_pin(login_pin) do
+    login_pin
+    |> LoginPin.changeset(%{created_at: nil})
+    |> Repo.update!()
+  end
 
-  defp expired?(%{magic_link_created_at: date_time}, threshold) do
+  defp pin_expired?(%{created_at: nil}), do: true
+
+  defp pin_expired?(%{created_at: date_time}) do
     time_created =
       date_time
       |> NaiveDateTime.to_erl()
@@ -263,76 +298,85 @@ defmodule Vutuv.Accounts do
       :calendar.universal_time()
       |> :calendar.datetime_to_gregorian_seconds()
 
-    now - time_created > threshold
+    now - time_created > @pin_expire_time
   end
 
-  defp expired?(_, _threshold), do: true
+  @doc """
+  Verifies a one-time PIN.
 
-  def check_magic_link(link, type) do
-    case Repo.one(
-           from(m in MagicLink, where: m.magic_link == ^link and m.magic_link_type == ^type)
-         ) do
-      nil ->
-        {:error, Gettext.gettext(VutuvWeb.Gettext, "An error occured")}
+  Two ways in: pass a `%User{}` for the authenticated email-change and
+  account-deletion flows (identity comes from the session), or pass the typed
+  email for `"login"` (identity is carried by the signed cookie).
 
-      magic_link ->
-        case link_expired?(magic_link) do
-          true ->
-            expire_magic_link(magic_link)
-            {:error, Gettext.gettext(VutuvWeb.Gettext, "Link expired")}
+  Returns `{:ok, user}` for login/delete, `{:ok, value, user}` for the
+  email-change flow (where `value` is the new address), `{:error, message}` on a
+  wrong PIN, `{:expired, message}` once the PIN has timed out, or `:lockout`
+  after too many wrong attempts.
+  """
+  def check_pin(%User{} = user, pin, type) do
+    Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type))
+    |> verify_pin(pin)
+  end
 
-          false ->
-            expire_magic_link(magic_link)
-            magic_link_response(magic_link)
-        end
+  def check_pin(email, pin, "login") when is_binary(email) do
+    Repo.one(
+      from(m in LoginPin,
+        join: u in assoc(m, :user),
+        join: e in assoc(u, :emails),
+        where: e.value == ^email and m.type == ^"login"
+      )
+    )
+    |> verify_pin(pin)
+  end
+
+  defp verify_pin(nil, _pin) do
+    {:error, Gettext.gettext(VutuvWeb.Gettext, "An error occured")}
+  end
+
+  defp verify_pin(%LoginPin{} = login_pin, pin) do
+    cond do
+      pin_expired?(login_pin) ->
+        expire_pin(login_pin)
+        {:expired, Gettext.gettext(VutuvWeb.Gettext, "PIN expired")}
+
+      valid_pin?(login_pin, pin) ->
+        expire_pin(login_pin)
+        pin_response(login_pin)
+
+      true ->
+        remove_attempt(login_pin)
     end
   end
 
-  def check_pin(email, pin, type) do
-    case Repo.one(
-           from(m in MagicLink,
-             left_join: u in assoc(m, :user),
-             left_join: e in assoc(u, :emails),
-             where: e.value == ^email and m.magic_link_type == ^type
-           )
-         ) do
-      nil ->
-        {:error, Gettext.gettext(VutuvWeb.Gettext, "An error occured")}
-
-      magic_link ->
-        cond do
-          pin_expired?(magic_link) ->
-            expire_magic_link(magic_link)
-            {:expired, Gettext.gettext(VutuvWeb.Gettext, "Link expired")}
-
-          magic_link.pin != pin ->
-            remove_attempt(magic_link)
-
-          magic_link.pin == pin ->
-            expire_magic_link(magic_link)
-            magic_link_response(magic_link)
-        end
-    end
+  # Constant-time comparison of the peppered hashes (issue #759 C.2). A plain
+  # `==` would leak timing information about the stored hash.
+  defp valid_pin?(%LoginPin{pin: stored, pin_salt: salt}, pin)
+       when is_binary(stored) and is_binary(salt) and is_binary(pin) do
+    Plug.Crypto.secure_compare(stored, hash_pin(pin, salt))
   end
 
-  defp remove_attempt(magic_link) do
-    attempts = magic_link.pin_login_attempts + 1
+  defp valid_pin?(_login_pin, _pin), do: false
+
+  defp remove_attempt(login_pin) do
+    attempts = login_pin.pin_login_attempts + 1
 
     if attempts >= @max_attempts do
-      expire_magic_link(magic_link)
+      expire_pin(login_pin)
       :lockout
     else
-      changeset = MagicLink.changeset(magic_link, %{pin_login_attempts: attempts})
-      Repo.update!(changeset)
-      {:error, "Incorrect Pin"}
+      login_pin
+      |> LoginPin.changeset(%{pin_login_attempts: attempts})
+      |> Repo.update!()
+
+      {:error, Gettext.gettext(VutuvWeb.Gettext, "Incorrect PIN")}
     end
   end
 
-  defp magic_link_response(%MagicLink{value: nil, user_id: user_id}) do
+  defp pin_response(%LoginPin{value: nil, user_id: user_id}) do
     {:ok, Repo.get(User, user_id)}
   end
 
-  defp magic_link_response(%MagicLink{value: value, user_id: user_id}) do
+  defp pin_response(%LoginPin{value: value, user_id: user_id}) do
     {:ok, value, Repo.get(User, user_id)}
   end
 

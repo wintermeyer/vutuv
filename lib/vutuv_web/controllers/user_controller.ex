@@ -1,10 +1,10 @@
 defmodule VutuvWeb.UserController do
   use VutuvWeb, :controller
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :index, :show, :tags_create])
-  plug(VutuvWeb.Plug.RequireLogin when action in [:index])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:index, :delete, :confirm_delete])
   plug(:auth when action in [:edit, :update, :tags_create])
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
-  plug(VutuvWeb.Plug.EnsureValidated when action not in [:delete, :magic_delete])
+  plug(VutuvWeb.Plug.EnsureValidated when action not in [:delete, :confirm_delete])
   import VutuvWeb.UserHelpers
 
   import Ecto.Query
@@ -21,6 +21,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Social.Connection
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.RateLimit
 
   plug(:scrub_params, "user" when action in [:create, :update])
 
@@ -93,7 +94,6 @@ defmodule VutuvWeb.UserController do
     |> assign(:reccomended_users, recommended_users(user))
     |> assign(:work_string_length, 35)
     |> assign(:new_coupon, build_coupon(user))
-    |> assign(:internet_org_connection, conn.cookies["_vutuv_fbs_temp"] != nil)
     |> render("show.html", conn: conn)
   end
 
@@ -222,22 +222,9 @@ defmodule VutuvWeb.UserController do
       conn.assigns[:user]
       |> Repo.preload([:emails, :slugs, :oauth_providers])
 
-    internet_org_connection =
-      case conn.cookies["_vutuv_fbs_temp"] do
-        nil ->
-          false
-
-        _ ->
-          true
-      end
-
     changeset = User.changeset(user)
 
-    render(conn, "edit.html",
-      user: user,
-      changeset: changeset,
-      internet_org_connection: internet_org_connection
-    )
+    render(conn, "edit.html", user: user, changeset: changeset)
   end
 
   def update(conn, %{"user" => user_params}) do
@@ -295,8 +282,43 @@ defmodule VutuvWeb.UserController do
     end
   end
 
-  def magic_delete(conn, %{"magiclink" => link}) do
-    case Vutuv.Accounts.check_magic_link(link, "delete") do
+  # Step 1: mail a PIN and render the PIN-entry form. Nothing is deleted yet.
+  def delete(conn, _params) do
+    user = conn.assigns[:current_user]
+
+    case RateLimit.check(conn, :account_deletion, email(user)) do
+      :ok ->
+        user
+        |> Vutuv.Accounts.gen_pin_for("delete")
+        |> Emailer.user_deletion_email(email(user), user)
+        |> Emailer.deliver()
+
+        render(conn, "delete_confirmation.html", body_class: "stretch")
+
+      :rate_limited ->
+        conn
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> redirect(to: ~p"/users/#{user}")
+    end
+  end
+
+  # Step 2: the PIN confirms the deletion, which is then irreversible.
+  def confirm_delete(conn, %{"account_deletion" => %{"pin" => pin}}) do
+    user = conn.assigns[:current_user]
+
+    case RateLimit.check(conn, :account_deletion_pin, email(user)) do
+      :ok ->
+        verify_deletion_pin(conn, user, pin)
+
+      :rate_limited ->
+        conn
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> redirect(to: ~p"/users/#{user}")
+    end
+  end
+
+  defp verify_deletion_pin(conn, user, pin) do
+    case Vutuv.Accounts.check_pin(user, pin, "delete") do
       {:ok, user} ->
         # Here we use delete! (with a bang) because we expect
         # it to always work (and if it does not, it will raise).
@@ -310,26 +332,18 @@ defmodule VutuvWeb.UserController do
       {:error, reason} ->
         conn
         |> put_flash(:error, reason)
-        |> redirect(to: ~p"/")
+        |> render("delete_confirmation.html", body_class: "stretch")
+
+      {:expired, message} ->
+        conn
+        |> put_flash(:error, message)
+        |> redirect(to: ~p"/users/#{user}")
+
+      :lockout ->
+        conn
+        |> put_flash(:error, gettext("Too many incorrect attempts."))
+        |> redirect(to: ~p"/users/#{user}")
     end
-  end
-
-  def delete(conn, _params) do
-    Vutuv.Accounts.gen_magic_link(conn.assigns[:current_user], "delete")
-    |> Emailer.user_deletion_email(
-      email(conn.assigns[:current_user]),
-      conn.assigns[:current_user]
-    )
-    |> Emailer.deliver()
-
-    conn
-    |> put_flash(
-      :info,
-      gettext(
-        "An email has been sent to your email address with instructions on how to delete your account."
-      )
-    )
-    |> redirect(to: ~p"/users/#{conn.assigns[:current_user]}")
   end
 
   def tags_create(conn, %{"tags" => %{"tags" => tags}}) do

@@ -17,9 +17,8 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "User-agent: *"
       assert body =~ "Allow: /"
 
-      # Sensitive, tokenized or backstage paths must never be indexed.
+      # Sensitive or backstage paths must never be indexed.
       assert body =~ "Disallow: /admin/"
-      assert body =~ "Disallow: /magic/"
       assert body =~ "Disallow: /sessions"
       assert body =~ "Disallow: /api/"
     end

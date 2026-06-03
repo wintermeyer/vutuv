@@ -1,9 +1,11 @@
 <%= email_greeting(@user) %>,
 
-bitte klicken Sie auf den folgenen Link, um Ihren Account zu löschen:
-<%= @url %>magic/delete/<%=@link%>
+bitte geben Sie den folgenden PIN ein, um Ihren Account zu löschen:
 
-ACHTUNG: Diese Löschung ist unumkehrbar!
+  <%= @pin %>
+
+ACHTUNG: Diese Löschung ist unumkehrbar! Ihr Account wird gelöscht,
+sobald Sie diesen PIN auf vutuv eingeben. Der PIN verfällt nach 30 Minuten.
 
 Aber Sie können natürlich jederzeit einen neuen Account anlegen.
 
