@@ -1,8 +1,10 @@
 This is an upgrade project to bring vutuv, a legacy Phoenix application, up to the latest Elixir and Phoenix Framework.
 
-vutuv is a classic Phoenix **controller + view + `.html.heex` template** app. It has **no LiveView**: there are no `live` routes, no `core_components.ex`, no `layouts.ex`, and no `Layouts.app`. It uses the legacy `Phoenix.View` layer (`lib/vutuv_web/views/*`). Do not reach for LiveView, `Phoenix.Component` layouts, or `core_components` patterns, and do not remove existing `Phoenix.View` usage, unless a task explicitly migrates that layer. See `README.md` for setup, architecture, and deployment.
+vutuv is mostly a classic Phoenix **controller + view + `.html.heex` template** app on the legacy `Phoenix.View` layer (`lib/vutuv_web/views/*`), and **LiveView is being adopted incrementally** on top of it. Most pages are still controller + view; do not remove existing `Phoenix.View` usage or rewrite a controller page as a LiveView unless a task explicitly asks. There is still no `core_components.ex`.
 
-Framework conventions (Elixir, Ecto, Phoenix, HEEx, LiveView, assets) live in `.claude/rules/` and load automatically only when you edit a matching file, so they stay out of context the rest of the time.
+What is already LiveView (the real-time shell, see `README.md`): the app shell `VutuvWeb.ShellLive` (top bar + mobile bottom tab bar with live unread badges) is embedded in the shared `app` layout via `live_render` and shows on every page; the **Messages** (`/messages`) and **Notifications** (`/notifications`) pages are LiveViews under a `live_session`; real-time updates flow over `Vutuv.Activity` (PubSub on `"user:<id>"`) and `VutuvWeb.Presence`. The layout is split into `root.html.heex` (document shell) + `app.html.heex` (chrome), shared by both dead and live pages. When you touch the shell, layouts, or real-time features, LiveView is expected. The email chokepoint and CSRF/PIN rules below still apply unchanged.
+
+Framework conventions (Elixir, Ecto, Phoenix, HEEx, LiveView, assets) and the **"Direction A" visual design system** (`.claude/rules/design.md`) live in `.claude/rules/` and load automatically only when you edit a matching file, so they stay out of context the rest of the time. Use that design rule, the `VutuvWeb.UI` components, and the `assets/css/components.css` reskin rather than inventing new styles; a PostToolUse hook reminds you to keep `design.md` in sync when you change the design sources.
 
 ## Project guidelines
 

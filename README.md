@@ -51,7 +51,8 @@ Admin panel: http://localhost:4000/admin
 
 ## Architecture
 
-- **Views**: Phoenix 1.8 HTML modules with `embed_templates` (no `phoenix_view` dependency)
+- **Views**: mostly Phoenix 1.8 HTML modules with `embed_templates` (no `phoenix_view` dependency); **LiveView is being adopted incrementally** for the real-time parts (see below)
+- **Real-time shell (LiveView)**: the app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with live unread badges) is embedded in the shared `app` layout via `live_render`, so the chrome and badges are live on every page. The **Messages** (`/messages`) and **Notifications** (`/notifications`) pages are LiveViews under a `live_session`. In-app updates flow over `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"`); online status and typing use `VutuvWeb.Presence`. The layout is split into `root.html.heex` (document shell) and `app.html.heex` (chrome), shared by classic controller pages and LiveViews. Messages/notifications currently use dummy data; persistence is a follow-up.
 - **Routes**: Verified routes (`~p"..."` sigils)
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
 - **Assets**: esbuild + Tailwind CSS v4
