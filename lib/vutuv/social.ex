@@ -13,11 +13,29 @@ defmodule Vutuv.Social do
 
   # ── Connections ──
 
-  def follow(follower_id, followee_id) do
-    %Connection{}
-    |> Connection.changeset(%{follower_id: follower_id, followee_id: followee_id})
-    |> Repo.insert()
+  @doc """
+  Follow a user. `follower` is a `%Vutuv.Accounts.User{}` or an id — callers
+  that already hold the session user struct pass it directly, which saves the
+  `Repo.get` otherwise needed to build the live new-follower notification.
+  """
+  def follow(follower, followee_id) do
+    result =
+      %Connection{}
+      |> Connection.changeset(%{follower_id: follower_id(follower), followee_id: followee_id})
+      |> Repo.insert()
+
+    with {:ok, _connection} <- result do
+      Vutuv.Activity.notify_new_follower(followee_id, follower_struct(follower))
+    end
+
+    result
   end
+
+  defp follower_id(%Vutuv.Accounts.User{id: id}), do: id
+  defp follower_id(id), do: id
+
+  defp follower_struct(%Vutuv.Accounts.User{} = user), do: user
+  defp follower_struct(id), do: Repo.get(Vutuv.Accounts.User, id)
 
   def unfollow!(connection_id) do
     Repo.get!(Connection, connection_id)

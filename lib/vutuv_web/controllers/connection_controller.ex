@@ -21,13 +21,12 @@ defmodule VutuvWeb.ConnectionController do
   end
 
   def create(conn, %{"connection" => connection_params}) do
-    # follower_id is set from the session user, never trusted from params,
-    # so a request cannot forge a follow edge on someone else's behalf.
-    changeset =
-      %Connection{follower_id: conn.assigns.current_user_id}
-      |> Connection.changeset(Map.delete(connection_params, "follower_id"))
-
-    case Repo.insert(changeset) do
+    # The follower is always the session user, never trusted from params, so a
+    # request cannot forge a follow edge on someone else's behalf. All follow
+    # paths go through Social.follow/2, which also pushes the live
+    # "started following you" notification to the followee (passing the loaded
+    # struct saves it a Repo.get).
+    case Vutuv.Social.follow(conn.assigns.current_user, connection_params["followee_id"]) do
       {:ok, _connection} ->
         conn
         |> put_flash(:info, gettext("Connection created successfully."))

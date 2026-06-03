@@ -18,6 +18,20 @@ defmodule Vutuv.SocialTest do
       assert {:error, changeset} = Social.follow(user.id, user.id)
       assert changeset.errors[:follower_id]
     end
+
+    test "accepts an already-loaded follower struct" do
+      # Controllers hold the session user struct; passing it avoids the
+      # redundant Repo.get that the id-based variant needs for the notification.
+      follower = insert(:user)
+      followee = insert(:user)
+
+      Vutuv.Activity.subscribe(followee.id)
+
+      assert {:ok, connection} = Social.follow(follower, followee.id)
+      assert connection.follower_id == follower.id
+
+      assert_receive {:new_notification, %{kind: "follower", actor_param: _}}
+    end
   end
 
   describe "follower_count/1 and followee_count/1" do

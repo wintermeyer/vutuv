@@ -392,13 +392,9 @@ defmodule VutuvWeb.UserController do
   def follow_back(conn, %{"id" => id}) do
     user = Repo.get!(User, id)
 
-    changeset =
-      Connection.changeset(%Connection{}, %{
-        follower_id: conn.assigns.current_user.id,
-        followee_id: user.id
-      })
-
-    case Repo.insert(changeset) do
+    # Through the Social.follow/2 chokepoint so the followee also gets the live
+    # "started following you" notification (this path skipped it before).
+    case Vutuv.Social.follow(conn.assigns.current_user, user.id) do
       {:ok, _connection} ->
         conn
         |> put_flash(
