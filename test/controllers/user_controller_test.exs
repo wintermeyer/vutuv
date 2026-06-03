@@ -69,20 +69,32 @@ defmodule Vutuv.Accounts.UserControllerTest do
     assert html_response(conn, 200) =~ "Edit"
   end
 
-  test "deletes chosen resource", %{conn: conn} do
+  test "deletes chosen resource after confirming the PIN", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
+
+    # Step 1: request deletion. Nothing is deleted yet; a PIN is mailed and the
+    # confirmation form is shown.
     conn = delete(conn, ~p"/users/#{user}")
+    assert html_response(conn, 200) =~ "PIN"
+    assert Repo.get(User, user.id)
 
-    link =
-      Repo.one(
-        from(m in Vutuv.Accounts.MagicLink,
-          where: m.user_id == ^user.id and m.magic_link_type == "delete",
-          select: m.magic_link
-        )
-      )
+    assert_received {:email, email}
+    [pin] = Regex.run(~r/\b\d{6}\b/, email.text_body)
 
-    conn = get(conn, ~p"/magic/delete/#{link}")
+    # Step 2: submit the PIN. Now the account is gone.
+    conn = post(conn, ~p"/account_deletion", account_deletion: %{pin: pin})
     assert redirected_to(conn) == ~p"/"
     refute Repo.get(User, user.id)
+  end
+
+  test "does not delete the account when the PIN is wrong", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    conn = delete(conn, ~p"/users/#{user}")
+    assert_received {:email, _email}
+
+    conn = post(conn, ~p"/account_deletion", account_deletion: %{pin: "000000"})
+    assert html_response(conn, 200) =~ "PIN"
+    assert Repo.get(User, user.id)
   end
 end

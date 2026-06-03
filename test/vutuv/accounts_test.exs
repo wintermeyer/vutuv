@@ -2,7 +2,7 @@ defmodule Vutuv.AccountsTest do
   use Vutuv.DataCase
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.MagicLink
+  alias Vutuv.Accounts.LoginPin
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
 
@@ -58,35 +58,113 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
-  describe "magic_links uniqueness" do
-    test "rejects a second magic link for the same user and type" do
+  describe "login_pins uniqueness" do
+    test "rejects a second login pin for the same user and type" do
       user = insert(:user)
 
       assert {:ok, _} =
-               %MagicLink{user_id: user.id}
-               |> MagicLink.changeset(%{magic_link: "a", magic_link_type: "login"})
+               %LoginPin{user_id: user.id}
+               |> LoginPin.changeset(%{type: "login"})
                |> Repo.insert()
 
       assert {:error, changeset} =
-               %MagicLink{user_id: user.id}
-               |> MagicLink.changeset(%{magic_link: "b", magic_link_type: "login"})
+               %LoginPin{user_id: user.id}
+               |> LoginPin.changeset(%{type: "login"})
                |> Repo.insert()
 
-      assert errors_on(changeset)[:user_id] == ["already has a magic link of this type"]
+      assert errors_on(changeset)[:user_id] == ["already has a login pin of this type"]
     end
 
-    test "allows different magic link types for the same user" do
+    test "allows different login pin types for the same user" do
       user = insert(:user)
 
       assert {:ok, _} =
-               %MagicLink{user_id: user.id}
-               |> MagicLink.changeset(%{magic_link: "a", magic_link_type: "login"})
+               %LoginPin{user_id: user.id}
+               |> LoginPin.changeset(%{type: "login"})
                |> Repo.insert()
 
       assert {:ok, _} =
-               %MagicLink{user_id: user.id}
-               |> MagicLink.changeset(%{magic_link: "b", magic_link_type: "email"})
+               %LoginPin{user_id: user.id}
+               |> LoginPin.changeset(%{type: "email"})
                |> Repo.insert()
+    end
+  end
+
+  describe "gen_pin_for/3" do
+    test "returns a fresh 6-digit PIN and never stores it in plaintext" do
+      user = insert(:user)
+
+      pin = Accounts.gen_pin_for(user, "login")
+
+      assert pin =~ ~r/\A\d{6}\z/
+
+      login_pin = Repo.one(from(m in LoginPin, where: m.user_id == ^user.id))
+      # The stored value is a 64-hex-char HMAC, a per-PIN salt is present, and
+      # neither equals the plaintext PIN.
+      assert login_pin.pin =~ ~r/\A[0-9a-f]{64}\z/
+      assert login_pin.pin != pin
+      assert byte_size(login_pin.pin_salt) == 16
+    end
+
+    test "upserts a single row per (user, type)" do
+      user = insert(:user)
+
+      Accounts.gen_pin_for(user, "login")
+      Accounts.gen_pin_for(user, "login")
+
+      assert Repo.one(from(m in LoginPin, where: m.user_id == ^user.id, select: count(m.id))) == 1
+    end
+
+    test "carries a value for the email-change flow" do
+      user = insert(:user)
+      Accounts.gen_pin_for(user, "email", "new@example.com")
+
+      assert Repo.one(from(m in LoginPin, where: m.user_id == ^user.id, select: m.value)) ==
+               "new@example.com"
+    end
+  end
+
+  describe "check_pin/3" do
+    test "accepts the correct PIN once and consumes it" do
+      user = insert(:user)
+      pin = Accounts.gen_pin_for(user, "delete")
+
+      assert {:ok, %User{id: id}} = Accounts.check_pin(user, pin, "delete")
+      assert id == user.id
+
+      # A consumed PIN is expired and cannot be replayed.
+      assert {:expired, _} = Accounts.check_pin(user, pin, "delete")
+    end
+
+    test "returns the carried value for the email-change flow" do
+      user = insert(:user)
+      pin = Accounts.gen_pin_for(user, "email", "new@example.com")
+
+      assert {:ok, "new@example.com", %User{id: id}} = Accounts.check_pin(user, pin, "email")
+      assert id == user.id
+    end
+
+    test "rejects a wrong PIN and locks out after three attempts" do
+      user = insert(:user)
+      _pin = Accounts.gen_pin_for(user, "delete")
+
+      assert {:error, _} = Accounts.check_pin(user, "000000", "delete")
+      assert {:error, _} = Accounts.check_pin(user, "000000", "delete")
+      assert :lockout = Accounts.check_pin(user, "000000", "delete")
+    end
+
+    test "verifies a login PIN by email" do
+      user = insert(:user)
+      insert(:email, user: user, value: "login@example.com")
+      pin = Accounts.gen_pin_for(user, "login")
+
+      assert {:ok, %User{id: id}} = Accounts.check_pin("login@example.com", pin, "login")
+      assert id == user.id
+    end
+
+    test "errors when no PIN exists for the identity" do
+      user = insert(:user)
+      assert {:error, _} = Accounts.check_pin(user, "123456", "delete")
     end
   end
 

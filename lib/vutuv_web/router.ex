@@ -61,6 +61,8 @@ defmodule VutuvWeb.Router do
     resources "/users", UserController, param: "slug" do
       pipe_through(:user_pipe)
       resources("/emails", EmailController)
+      # PIN-entry step for the email-change flow (issue #759).
+      post("/emails/confirmation", EmailController, :confirm)
       resources("/slugs", SlugController, only: [:index, :new, :create, :show, :update])
       resources("/groups", GroupController)
       resources("/followers", FollowerController, only: [:index])
@@ -98,11 +100,10 @@ defmodule VutuvWeb.Router do
     end
 
     post("/users/:slug/tags_create", UserController, :tags_create)
+    # PIN-entry step for the account-deletion flow (issue #759).
+    post("/account_deletion", UserController, :confirm_delete)
 
     resources("/sessions", SessionController, only: [:new, :create, :delete])
-    get("/magic/login/:magiclink", SessionController, :show)
-    get("/magic/delete/:magiclink", UserController, :magic_delete)
-    get("/magic/email/:magiclink", EmailController, :magic_create)
     get("/follow_back/:id", UserController, :follow_back)
   end
 

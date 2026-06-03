@@ -1,9 +1,11 @@
 defmodule VutuvWeb.EmailController do
   use VutuvWeb, :controller
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.Email
   alias Vutuv.Notifications.Emailer
+  alias VutuvWeb.RateLimit
 
-  plug(VutuvWeb.Plug.AuthUser when action not in [:magic_create, :index, :show])
+  plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "email" when action in [:create, :update])
 
   def index(conn, _params) do
@@ -23,23 +25,47 @@ defmodule VutuvWeb.EmailController do
     render(conn, "new.html", changeset: changeset)
   end
 
+  # Step 1: mail a PIN for the new address and render the PIN-entry form. The new
+  # address rides along in the login_pin's `value` column until it is confirmed.
   def create(conn, %{"email" => email_params}) do
+    user = conn.assigns[:current_user]
     email = email_params["value"]
 
-    Vutuv.Accounts.gen_magic_link(conn.assigns[:user], "email", email)
-    |> Emailer.email_creation_email(email, conn.assigns[:user])
-    |> Emailer.deliver()
+    case RateLimit.check(conn, :email_change, email) do
+      :ok ->
+        user
+        |> Accounts.gen_pin_for("email", email)
+        |> Emailer.email_creation_email(email, user)
+        |> Emailer.deliver()
 
-    redirect(conn, to: ~p"/")
+        render(conn, "confirm.html", user: conn.assigns[:user])
+
+      :rate_limited ->
+        conn
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+    end
   end
 
-  def magic_create(conn, %{"magiclink" => link}) do
-    Vutuv.Accounts.check_magic_link(link, "email")
-    |> case do
-      {:ok, email, user} ->
+  # Step 2: the PIN confirms the new address, which is then inserted.
+  def confirm(conn, %{"email_confirmation" => %{"pin" => pin}}) do
+    case RateLimit.check(conn, :email_pin) do
+      :ok ->
+        verify_email_pin(conn, pin)
+
+      :rate_limited ->
+        conn
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+    end
+  end
+
+  defp verify_email_pin(conn, pin) do
+    case Accounts.check_pin(conn.assigns[:current_user], pin, "email") do
+      {:ok, new_email, user} ->
         user
         |> build_assoc(:emails)
-        |> Email.changeset(%{value: email})
+        |> Email.changeset(%{value: new_email})
         |> Repo.insert()
         |> case do
           {:ok, _email} ->
@@ -48,13 +74,25 @@ defmodule VutuvWeb.EmailController do
             |> redirect(to: ~p"/")
 
           {:error, _changeset} ->
-            redirect(conn, to: ~p"/")
+            conn
+            |> put_flash(:error, gettext("That email could not be added."))
+            |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
         end
 
       {:error, reason} ->
         conn
         |> put_flash(:error, reason)
-        |> redirect(to: ~p"/")
+        |> render("confirm.html", user: conn.assigns[:user])
+
+      {:expired, message} ->
+        conn
+        |> put_flash(:error, message)
+        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+
+      :lockout ->
+        conn
+        |> put_flash(:error, gettext("Too many incorrect attempts."))
+        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
     end
   end
 

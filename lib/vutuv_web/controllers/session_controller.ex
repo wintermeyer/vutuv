@@ -1,75 +1,50 @@
 defmodule VutuvWeb.SessionController do
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts
+  alias VutuvWeb.RateLimit
+
   def new(conn, _) do
     render(conn, "new.html", body_class: "stretch")
   end
 
+  # Step 1: the visitor types their email. We mail a PIN, stash the identity in
+  # the signed cookie and render the PIN-entry form in the same tab.
   def create(conn, %{"session" => %{"email" => email}}) do
-    case Vutuv.Accounts.login_by_email(conn, email) do
-      {:ok, conn} ->
-        case conn.cookies["_vutuv_fbs_temp"] do
-          nil ->
-            conn
-            |> render("user_login.html", body_class: "stretch")
+    case RateLimit.check(conn, :login_email, email) do
+      :ok ->
+        case Accounts.login_by_email(conn, email) do
+          {:ok, conn} ->
+            render(conn, "pin_user_login.html", body_class: "stretch")
 
-          _ ->
+          {:error, _reason, conn} ->
             conn
-            |> render("pin_user_login.html", body_class: "stretch")
+            |> put_flash(:error, gettext("Invalid email"))
+            |> render("new.html", body_class: "stretch")
         end
 
-      {:error, _reason, conn} ->
+      :rate_limited ->
         conn
-        |> put_flash(:error, gettext("Invalid email"))
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
         |> render("new.html", body_class: "stretch")
     end
   end
 
+  # Step 2: the visitor types the PIN. Identity comes from the signed cookie.
   def create(conn, %{"session" => %{"pin" => pin}}) do
-    conn
-    |> unform_pin_cookie
-    |> Vutuv.Accounts.check_pin(pin, "login")
-    |> case do
-      # correct, delete cookie, login user
-      {:ok, user} ->
-        Vutuv.Accounts.login(conn, user)
-        |> delete_resp_cookie("_vutuv_fbs_temp", max_age: 1800)
-        |> put_flash(:info, gettext("Welcome back!"))
-        |> redirect(to: ~p"/users/#{user}")
-
-      # incorrect, inform user
-      {:error, reason} ->
+    with :ok <- RateLimit.check(conn, :login_pin),
+         email when is_binary(email) <- Accounts.read_pin_cookie(conn) do
+      verify_login_pin(conn, email, pin)
+    else
+      :rate_limited ->
         conn
-        |> put_flash(:error, reason)
-        |> redirect(to: ~p"/")
-
-      # locked out, delete cookie
-      {:expired, message} ->
-        conn
-        |> delete_resp_cookie("_vutuv_fbs_temp", max_age: 1800)
-        |> put_flash(:error, message)
+        |> put_flash(:error, gettext("Too many attempts. Please try again later."))
         |> redirect(to: ~p"/sessions/new")
 
-      # locked out, delete cookie
-      :lockout ->
+      nil ->
         conn
-        |> delete_resp_cookie("_vutuv_fbs_temp", max_age: 1800)
-        |> put_flash(:error, gettext("Too many incorrect attempts."))
+        |> put_flash(:error, gettext("Your login session expired. Please try again."))
         |> redirect(to: ~p"/sessions/new")
-    end
-  end
-
-  def show(conn, %{"magiclink" => link}) do
-    case Vutuv.Accounts.check_magic_link(link, "login") do
-      {:ok, user} ->
-        Vutuv.Accounts.login(conn, user)
-        |> put_flash(:info, gettext("Welcome back!"))
-        |> redirect(to: ~p"/users/#{user}")
-
-      {:error, reason} ->
-        conn
-        |> put_flash(:error, reason)
-        |> redirect(to: ~p"/")
     end
   end
 
@@ -77,13 +52,38 @@ defmodule VutuvWeb.SessionController do
     user = conn.assigns[:current_user]
 
     conn
-    |> Vutuv.Accounts.logout()
+    |> Accounts.logout()
     |> redirect(to: ~p"/users/#{user}")
   end
 
-  defp unform_pin_cookie(%{cookies: %{"_vutuv_fbs_temp" => payload}} = conn) do
-    salt = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
-    {:ok, email} = Phoenix.Token.verify(conn, salt, payload)
-    email
+  defp verify_login_pin(conn, email, pin) do
+    case Accounts.check_pin(email, pin, "login") do
+      # correct, drop cookie, log the user in
+      {:ok, user} ->
+        Accounts.login(conn, user)
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(:info, gettext("Welcome back!"))
+        |> redirect(to: ~p"/users/#{user}")
+
+      # incorrect, let them retry
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, reason)
+        |> redirect(to: ~p"/")
+
+      # expired, drop cookie
+      {:expired, message} ->
+        conn
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(:error, message)
+        |> redirect(to: ~p"/sessions/new")
+
+      # locked out, drop cookie
+      :lockout ->
+        conn
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(:error, gettext("Too many incorrect attempts."))
+        |> redirect(to: ~p"/sessions/new")
+    end
   end
 end

@@ -1,10 +1,12 @@
 <%= email_greeting(@user) %>,
 
-Use the following link to delete your account:
-<%= @url %>magic/delete/<%=@link%>
+please use the following PIN to delete your account:
 
-WARNING: There is no turning back from this move.
-Your account will be deleted when you click on the link!
+  <%= @pin %>
+
+WARNING: There is no turning back from this move. Your account will be
+deleted as soon as you enter this PIN on vutuv. The PIN expires after
+30 minutes.
 
 But of course you can always create a new account.
 

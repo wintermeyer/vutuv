@@ -40,28 +40,30 @@ defmodule VutuvWeb.ConnCase do
           |> Ecto.Changeset.change(%{administrator: true})
           |> Repo.update!()
 
-        conn = login_via_magic_link(conn, user, "admin@example.com")
+        conn = login_via_pin(conn, "admin@example.com")
         {conn, user}
       end
 
       defp create_and_login_user(conn, attrs \\ @default_login_attrs) do
         {:ok, user} = Vutuv.Accounts.register_user(conn, attrs)
-        conn = login_via_magic_link(conn, user, attrs["emails"]["0"]["value"])
+        conn = login_via_pin(conn, attrs["emails"]["0"]["value"])
         {conn, user}
       end
 
-      defp login_via_magic_link(conn, user, email) do
-        Vutuv.Accounts.login_by_email(conn, email)
+      # Drive the real PIN login: request a PIN, read it from the delivered
+      # email, then submit it. The signed identity cookie set by
+      # `login_by_email/2` rides along when ConnTest recycles the response.
+      defp login_via_pin(conn, email) do
+        {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+        post(conn, ~p"/sessions", session: %{"pin" => sent_login_pin()})
+      end
 
-        link =
-          Repo.one(
-            from(m in Vutuv.Accounts.MagicLink,
-              where: m.user_id == ^user.id and m.magic_link_type == "login",
-              select: m.magic_link
-            )
-          )
-
-        get(conn, ~p"/magic/login/#{link}")
+      # The Swoosh test adapter delivers synchronously to this process, so the
+      # login email is already waiting. The PIN is the only 6-digit run in it.
+      defp sent_login_pin do
+        assert_received {:email, email}
+        [pin] = Regex.run(~r/\b\d{6}\b/, email.text_body)
+        pin
       end
     end
   end

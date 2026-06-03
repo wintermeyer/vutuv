@@ -1,11 +1,11 @@
 <%= email_greeting(@user) %>,
 
-Danke das Sie bei vutuv mitmachen. Zum Einloggen klicken Sie bitte auf
-diesen Link:
-<%= @url %>magic/login/<%=@link%>
+Danke das Sie bei vutuv mitmachen. Hier ist der PIN, den Sie zum
+Einloggen benötigen:
 
-Der Link verfällt nach 60 Minuten. Sie können aber jederzeit einen
-neuen unter der folgenden URL abrufen:
+  <%= @pin %>
+
+Sie können aber jederzeit einen neuen unter der folgenden URL abrufen:
 https://vutuv.de/sessions/new
 
 Bitte erzählen Sie Ihren Freunden und Geschäftspartnern von vutuv!

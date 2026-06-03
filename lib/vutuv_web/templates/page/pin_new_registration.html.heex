@@ -17,7 +17,7 @@
 
       <.form :let={f} for={%{}} action={~p"/sessions"} as={:session} class="imagebox__form" method="post">
 			  <div class="editform__field">
-			    <%= text_input f, :pin, class: "imagebox__input", autofocus: true, placeholder: gettext("Enter your PIN") %>
+			    <%= text_input f, :pin, class: "imagebox__input", autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
 			  </div>
 
 			  <div class="editform__actions">

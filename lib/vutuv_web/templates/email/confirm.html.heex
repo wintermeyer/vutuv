@@ -1,0 +1,38 @@
+{VutuvWeb.LayoutHTML.flash(assigns)}
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Emails"), ~p"/users/#{@user}/emails"},
+    gettext("Confirm")]) %>
+</div>
+
+<div class="card-list">
+  <aside></aside>
+  <section class="card">
+    <h1><%= gettext "Check your inbox" %></h1>
+    <p><%= gettext "We sent a PIN to your new email address. Enter it below to confirm the address." %></p>
+
+    <.form
+      :let={f}
+      for={%{}}
+      as={:email_confirmation}
+      action={~p"/users/#{@user}/emails/confirmation"}
+      id="email-confirmation-form"
+      class="editform"
+    >
+      <div class="editform__field">
+        <%= label f, :pin, gettext("PIN") %>
+        <%= text_input f, :pin,
+          autofocus: true,
+          autocomplete: "one-time-code",
+          inputmode: "numeric",
+          placeholder: gettext("Enter your PIN") %>
+      </div>
+      <div class="editform__actions">
+        <%= link gettext("Cancel"), to: ~p"/users/#{@user}/emails", class: "button button--cancel" %>
+        <%= submit gettext("Submit"), class: "button" %>
+      </div>
+    </.form>
+  </section>
+</div>

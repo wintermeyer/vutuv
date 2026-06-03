@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-Thank you for joining vutuv. Click on the following link to get started.
-<%= @url %>magic/login/<%=@link%>
+Thank you for joining vutuv. Here is the PIN you need to log in:
 
-This link expires in 60 minutes. You can always get a new one at
-https://vutuv.de/sessions/new
+  <%= @pin %>
+
+You can always get a new one by returning to vutuv and logging in again.
 
 If you like our service, feel free to share us with your friends!
 

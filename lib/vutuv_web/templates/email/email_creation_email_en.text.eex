@@ -1,9 +1,11 @@
 <%= email_greeting(@user) %>,
 
-Please use the following link to validate your
-email address:
+please use the following PIN to confirm your new email address:
 
-<%= @url %>magic/email/<%=@link%>
+  <%= @pin %>
+
+Enter it on vutuv to finish adding this address. The PIN expires after
+30 minutes.
 
 <%= render "_signature_en.text" %>
 
