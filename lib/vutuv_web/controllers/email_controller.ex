@@ -28,7 +28,7 @@ defmodule VutuvWeb.EmailController do
 
     Vutuv.Accounts.gen_magic_link(conn.assigns[:user], "email", email)
     |> Emailer.email_creation_email(email, conn.assigns[:user])
-    |> Vutuv.Mailer.deliver()
+    |> Emailer.deliver()
 
     redirect(conn, to: ~p"/")
   end

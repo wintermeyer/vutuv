@@ -157,7 +157,7 @@ defmodule Vutuv.Accounts do
   # the user is shown "check your email", so a dropped mail must at least be
   # logged (the magic link is already persisted, so we do not roll back).
   defp deliver_login_email(mail, address) do
-    case Vutuv.Mailer.deliver(mail) do
+    case Emailer.deliver(mail) do
       {:ok, _} = ok ->
         ok
 

@@ -320,7 +320,7 @@ defmodule VutuvWeb.UserController do
       email(conn.assigns[:current_user]),
       conn.assigns[:current_user]
     )
-    |> Vutuv.Mailer.deliver()
+    |> Emailer.deliver()
 
     conn
     |> put_flash(

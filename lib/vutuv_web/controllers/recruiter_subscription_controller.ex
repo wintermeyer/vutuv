@@ -40,7 +40,7 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
           conn.assigns[:user],
           VutuvWeb.UserHelpers.email(conn.assigns[:user])
         )
-        |> Vutuv.Mailer.deliver()
+        |> Emailer.deliver()
 
         # Send an email to accounting
         accounting_email = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:accounting_email]
@@ -51,6 +51,7 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
             conn.assigns[:user],
             accounting_email
           )
+          |> Emailer.deliver()
         end
 
         conn

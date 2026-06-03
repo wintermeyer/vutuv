@@ -30,7 +30,7 @@ defmodule Vutuv.Notifications.Cronjob do
 
       unless Enum.empty?(todays_users) do
         Emailer.birthday_reminder(user, todays_users, future_users)
-        |> Vutuv.Mailer.deliver()
+        |> Emailer.deliver()
       end
     end
   end

@@ -1,5 +1,22 @@
 defmodule Vutuv.Notifications.Emailer do
-  @moduledoc false
+  @moduledoc """
+  Builds and delivers every outbound vutuv email.
+
+  All mail vutuv sends is machine-generated (login PINs, registration, email
+  confirmation, account deletion, payment info, invoices, birthday reminders),
+  so two things are guaranteed here in exactly one place:
+
+    * `base_email/0` sets the `From` and the auto-generated robot headers that
+      tell a recipient's mail system not to auto-reply (no out-of-office /
+      vacation responder bouncing back to `info@vutuv.de`).
+    * `deliver/1` is the single delivery chokepoint. It re-applies the robot
+      headers (belt and suspenders, in case a future builder forgets the base)
+      and hands the message to `Vutuv.Mailer`.
+
+  No code outside this module may call `Vutuv.Mailer.deliver/1` or Swoosh
+  directly. Every builder function returns a `%Swoosh.Email{}`; `deliver/1`
+  sends it.
+  """
 
   import Swoosh.Email
   require Ecto.Query
@@ -7,6 +24,51 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
+
+  # Always-safe headers for every message.
+  #
+  #   * Auto-Submitted: auto-generated — RFC 3834. A conforming responder
+  #     (including vacation/OOO) must not reply to a message carrying it.
+  #   * X-Auto-Response-Suppress: All — Microsoft Exchange / Outlook. Suppresses
+  #     out-of-office, auto-replies, and delivery/read receipts.
+  @robot_headers [
+    {"Auto-Submitted", "auto-generated"},
+    {"X-Auto-Response-Suppress", "All"}
+  ]
+
+  # Opt-in headers for bulk mail only (see bulk_headers/1).
+  @bulk_headers [
+    {"Precedence", "bulk"},
+    {"List-Unsubscribe", "<mailto:info@vutuv.de?subject=unsubscribe>"}
+  ]
+
+  @doc """
+  Base builder every email starts from. Sets the `From` and the auto-generated
+  robot headers, so those live in exactly one place.
+  """
+  def base_email do
+    new()
+    |> from(@from_address)
+    |> robot_headers()
+  end
+
+  @doc """
+  The single delivery chokepoint for all outbound mail. Re-applies the robot
+  headers and then hands the message to `Vutuv.Mailer`.
+  """
+  def deliver(%Swoosh.Email{} = email) do
+    email
+    |> robot_headers()
+    |> Vutuv.Mailer.deliver()
+  end
+
+  @doc """
+  Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
+  **not** safe for one-to-one transactional mail because `Precedence: bulk` can
+  hurt inbox placement, so they are opt-in and applied only to bulk mail such as
+  the birthday reminder.
+  """
+  def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
 
   def login_email({link, pin}, email, %Vutuv.Accounts.User{validated?: false} = user) do
     gen_email(
@@ -84,10 +146,9 @@ defmodule Vutuv.Notifications.Emailer do
     template = "payment_information_email_#{get_locale(user.locale)}"
     accounting_email = accounting_email()
 
-    new()
+    base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> bcc(accounting_email)
-    |> from(@from_address)
     |> subject(
       Gettext.gettext(VutuvWeb.Gettext, "Order") <>
         " \"#{recuiter_package.name}\" " <> Gettext.gettext(VutuvWeb.Gettext, "subscription")
@@ -111,9 +172,8 @@ defmodule Vutuv.Notifications.Emailer do
           recruiter_subscription.recruiter_package_id
         )
 
-      new()
+      base_email()
       |> to(accounting_email)
-      |> from(@from_address)
       |> subject("Rechnung: #{recuiter_package.name} für #{user.first_name} #{user.last_name}")
       |> text_body(
         VutuvWeb.EmailText.render("trigger_recruiter_subscription_invoice.text", %{
@@ -122,7 +182,6 @@ defmodule Vutuv.Notifications.Emailer do
           user: user
         })
       )
-      |> Vutuv.Mailer.deliver()
     end
   end
 
@@ -130,12 +189,10 @@ defmodule Vutuv.Notifications.Emailer do
     email = primary_email(user)
     template = "verification_confirmation_#{get_locale(user.locale)}"
 
-    new()
+    base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> from(@from_address)
     |> subject(Gettext.gettext(VutuvWeb.Gettext, "vutuv Account verified"))
     |> text_body(VutuvWeb.EmailText.render("#{template}.text", %{user: user}))
-    |> Vutuv.Mailer.deliver()
   end
 
   def birthday_reminder(user, birthday_childs, future_birthday_childs) do
@@ -169,9 +226,9 @@ defmodule Vutuv.Notifications.Emailer do
 
     Gettext.put_locale(VutuvWeb.Gettext, user.locale)
 
-    new()
+    base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> from(@from_address)
+    |> bulk_headers()
     |> subject("#{Gettext.gettext(VutuvWeb.Gettext, "Birthday")}: #{truncated_subject}")
     |> text_body(
       VutuvWeb.EmailText.render("#{template}.text", %{
@@ -189,9 +246,8 @@ defmodule Vutuv.Notifications.Emailer do
   defp gen_email(link, pin, email, user, template, email_subject) do
     url = Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
 
-    new()
+    base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> from(@from_address)
     |> subject(email_subject)
     |> text_body(
       VutuvWeb.EmailText.render("#{template}.text", %{
@@ -201,6 +257,12 @@ defmodule Vutuv.Notifications.Emailer do
         user: user
       })
     )
+  end
+
+  defp robot_headers(email), do: put_headers(email, @robot_headers)
+
+  defp put_headers(email, headers) do
+    Enum.reduce(headers, email, fn {name, value}, acc -> header(acc, name, value) end)
   end
 
   defp primary_email(user) do
