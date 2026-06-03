@@ -38,6 +38,8 @@ Visit http://localhost:4000.
 
 Emails are displayed in the browser via Swoosh's mailbox preview at http://localhost:4000/sent_emails.
 
+Every vutuv email is machine-generated, so all of it carries the `Auto-Submitted: auto-generated` (RFC 3834) and `X-Auto-Response-Suppress: All` headers to keep out-of-office and other auto-responders silent. Mail is built from `Vutuv.Notifications.Emailer.base_email/0` and sent through the single `Emailer.deliver/1` chokepoint, the only place allowed to call `Vutuv.Mailer.deliver/1`.
+
 ### Admin access
 
 Flag your account as admin:
@@ -54,7 +56,7 @@ Admin panel: http://localhost:4000/admin
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
 - **Assets**: esbuild + Tailwind CSS v4
 - **HTTP server**: Bandit
-- **Email**: Swoosh with compile-time EEx text templates
+- **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers
 - **Images**: avatars and URL screenshots are stored on local disk and resized with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Screenshot`
 - **URL screenshots**: rendered by local headless Chromium, wrapped in a browser window frame (`Vutuv.BrowserFrame`) and stored as WebP; see `Vutuv.PageScreenshot`. Needs a `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on `$PATH`)
 

@@ -12,7 +12,9 @@ defmodule VutuvWeb.Admin.UserController do
 
     case Repo.update(changeset) do
       {:ok, user} ->
-        Emailer.verification_notice(user)
+        user
+        |> Emailer.verification_notice()
+        |> Emailer.deliver()
 
         conn
         |> put_flash(:info, gettext("User verified successfully."))
