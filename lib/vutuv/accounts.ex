@@ -130,7 +130,19 @@ defmodule Vutuv.Accounts do
     |> join(:inner, [u], e in assoc(u, :emails))
     |> where([u, e], e.value == ^email)
     |> Repo.one()
-    |> send_login_email(logout(conn), email)
+    |> send_login_email(reset_login_session(conn), email)
+  end
+
+  # Reset the session at the start of a login attempt **without dropping it**.
+  # We renew (rotate the session id, clearing any previously logged-in user)
+  # rather than drop, because the PIN-entry form rendered next carries a CSRF
+  # token that is anchored in the session. `logout/1` drops the session, which
+  # would discard that token, so the PIN POST would fail `protect_from_forgery`
+  # with a 403 ("You are not allowed to view this page"). See issue #759.
+  defp reset_login_session(conn) do
+    conn
+    |> Conn.configure_session(renew: true)
+    |> Conn.delete_session(:user_id)
   end
 
   defp send_login_email(nil, conn, _), do: {:error, :not_found, conn}
@@ -146,7 +158,7 @@ defmodule Vutuv.Accounts do
 
   # Deliver a login email and never let a delivery failure pass silently:
   # the user is shown "check your email", so a dropped mail must at least be
-  # logged (the magic link is already persisted, so we do not roll back).
+  # logged (the PIN is already persisted, so we do not roll back).
   defp deliver_login_email(mail, address) do
     case Emailer.deliver(mail) do
       {:ok, _} = ok ->
