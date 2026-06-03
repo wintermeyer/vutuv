@@ -171,6 +171,29 @@ defmodule Vutuv.AvatarTest do
       upload = %Plug.Upload{filename: "evil.gif", path: src, content_type: "image/gif"}
       assert {:error, _} = Vutuv.Avatar.store({upload, @user})
     end
+
+    test "returns {:error, :invalid_file} for a corrupt image instead of crashing", %{tmp: tmp} do
+      src = Path.join(System.tmp_dir!(), "corrupt_#{System.unique_integer([:positive])}.png")
+      File.write!(src, "definitely not a png")
+      on_exit(fn -> File.rm(src) end)
+      upload = %Plug.Upload{filename: "corrupt.png", path: src, content_type: "image/png"}
+
+      assert {:error, :invalid_file} = Vutuv.Avatar.store({upload, @user})
+      # nothing half-written: the original is only copied after a successful decode
+      refute File.exists?(Path.join(tmp, "avatars/7/John Doe_original.png"))
+    end
+
+    test "a corrupt upload surfaces as a friendly changeset error" do
+      src = Path.join(System.tmp_dir!(), "corrupt_#{System.unique_integer([:positive])}.png")
+      File.write!(src, "definitely not a png")
+      on_exit(fn -> File.rm(src) end)
+      upload = %Plug.Upload{filename: "corrupt.png", path: src, content_type: "image/png"}
+
+      changeset = Vutuv.Accounts.User.changeset(@user, %{"avatar" => upload})
+
+      refute changeset.valid?
+      assert {"is not a valid image", _} = changeset.errors[:avatar]
+    end
   end
 
   defp dimensions(path) do
