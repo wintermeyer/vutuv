@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang={assigns[:locale] || "en"}>
+  <head>
+    <%= if assigns[:conn] && @conn.assigns[:user] && @conn.assigns[:user].noindex? do %>
+      <meta name="robots" content="noindex" />
+    <% end %>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+    <title><%= if assigns[:conn] && @conn.assigns[:user], do: "#{full_name(@conn.assigns[:user])} - vutuv", else: "vutuv" %></title>
+    <%= if assigns[:conn] && @conn.assigns[:user] do %>
+      <meta name="description" content={meta_description(@conn.assigns[:user], @conn.assigns[:user_tags])} />
+    <% else %>
+      <meta name="description" content={gettext("Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds.")} />
+    <% end %>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="theme-color" content="#ffffff" />
+    <link rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer src={~p"/assets/app.js"}></script>
+  </head>
+  <body class={assigns[:conn] && @conn.assigns[:body_class]}>
+    {@inner_content}
+  </body>
+</html>

@@ -12,6 +12,7 @@ defmodule VutuvWeb.Router do
     plug(:fetch_flash)
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
+    plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
     plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
     plug(Plugs.Locale)
   end
@@ -110,6 +111,20 @@ defmodule VutuvWeb.Router do
 
     resources("/sessions", SessionController, only: [:new, :create, :delete])
     get("/follow_back/:id", UserController, :follow_back)
+  end
+
+  # Incremental LiveView surface. `InitAssigns` assigns `:current_user` from the
+  # session so the shared layout renders the logged-in chrome over the socket.
+  live_session :default,
+    on_mount: [{VutuvWeb.Live.InitAssigns, :default}],
+    root_layout: {VutuvWeb.LayoutHTML, :root} do
+    scope "/", VutuvWeb do
+      pipe_through(:browser)
+
+      live("/notifications", NotificationLive.Index, :index)
+      live("/messages", MessageLive.Index, :index)
+      live("/messages/:id", MessageLive.Index, :show)
+    end
   end
 
   scope "/admin", VutuvWeb.Admin, as: :admin do

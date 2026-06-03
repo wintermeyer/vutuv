@@ -53,12 +53,45 @@ defmodule VutuvWeb do
       import VutuvWeb.ErrorHelpers
       use Gettext, backend: VutuvWeb.Gettext
       import VutuvWeb.CurrencyHelpers
+      # Direction A design-system components (<.card>, <.section_title>, <.chip>).
+      import VutuvWeb.UI
+    end
+  end
+
+  def live_view do
+    quote do
+      use Phoenix.LiveView, layout: {VutuvWeb.LayoutHTML, :app}
+
+      use Phoenix.VerifiedRoutes,
+        endpoint: VutuvWeb.Endpoint,
+        router: VutuvWeb.Router,
+        statics: ~w(assets fonts images favicon.ico)
+
+      import Phoenix.HTML
+      use Gettext, backend: VutuvWeb.Gettext
+      import VutuvWeb.UI
+    end
+  end
+
+  def live_component do
+    quote do
+      use Phoenix.LiveComponent
+
+      use Phoenix.VerifiedRoutes,
+        endpoint: VutuvWeb.Endpoint,
+        router: VutuvWeb.Router,
+        statics: ~w(assets fonts images favicon.ico)
+
+      import Phoenix.HTML
+      use Gettext, backend: VutuvWeb.Gettext
+      import VutuvWeb.UI
     end
   end
 
   def router do
     quote do
       use Phoenix.Router
+      import Phoenix.LiveView.Router
     end
   end
 

@@ -1,6 +1,4 @@
-<%= if Phoenix.Flash.get(@flash, :info) do %>
-  <div class="message message--success"><p><%= Phoenix.Flash.get(@flash, :info) %></p></div>
-<% end %>
-<%= if Phoenix.Flash.get(@flash, :error) do %>
-  <div class="message message--error"><p><%= Phoenix.Flash.get(@flash, :error) %></p></div>
-<% end %>
+<%!-- Flash now renders as top-right toasts in the app layout (see `#toast-tray`
+in app.html.heex). This partial is intentionally empty so the legacy pages that
+still call `VutuvWeb.LayoutHTML.flash/1` inline render nothing instead of a
+duplicate banner. Remove the inline calls as those pages migrate. --%>

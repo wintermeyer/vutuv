@@ -9,7 +9,11 @@ defmodule Vutuv.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      # Lets the dev code reloader coordinate with concurrent `mix` invocations
+      # (without it, hot reload crashes on a Mix.Sync.Lock conflict whenever
+      # another mix process compiles — e.g. `mix test` in a second terminal).
+      listeners: [Phoenix.CodeReloader]
     ]
   end
 
@@ -36,6 +40,13 @@ defmodule Vutuv.MixProject do
       {:phoenix_html_helpers, "~> 1.0"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.4", only: :dev},
+      # LiveView's test helpers (`Phoenix.LiveViewTest`) parse the rendered DOM
+      # with lazy_html; required for the connected-mount assertions.
+      {:lazy_html, ">= 0.1.0", only: :test},
+      # Chat-message markdown: Earmark renders, HtmlSanitizeEx strips anything
+      # dangerous (user input must never reach the DOM unsanitized).
+      {:earmark, "~> 1.4"},
+      {:html_sanitize_ex, "~> 1.4"},
       {:bandit, "~> 1.0"},
 
       # Database

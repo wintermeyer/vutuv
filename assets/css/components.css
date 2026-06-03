@@ -1,0 +1,334 @@
+/*
+ * Direction A component reskin of the legacy class names used across the ~138
+ * controller+view templates (`.card`, `.editform`, `.button`, `.breadcrumbs`,
+ * `.profile-header`, tables, …). Imported into the `components` layer AFTER
+ * legacy.css, so it overrides legacy but still loses to Tailwind utilities —
+ * which lets hand-written pages (profile, LiveViews) use utilities freely.
+ *
+ * Raw CSS (no @apply, per project rules). Brand colors come from the `@theme`
+ * tokens in app.css (var(--color-brand-*) / var(--color-accent)); greys are
+ * Tailwind's slate scale written as literals.
+ */
+
+/* Shared content column: a centered, readable width across subpages. */
+.profile-header,
+.breadcrumbs,
+.card-list {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ---------- Page header (title banner on subpages) ---------- */
+.profile-header {
+  display: block;
+  text-align: left;
+  margin-bottom: 0.5rem;
+  padding: 1rem 0 0;
+  overflow: visible;
+}
+.profile-header__info h1 {
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+.profile-header__info h2 {
+  font-size: 0.95rem;
+  color: #64748b;
+  font-weight: 400;
+}
+
+/* ---------- Breadcrumbs ---------- */
+.breadcrumbs {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  padding: 0;
+  margin-bottom: 1.25rem;
+}
+.breadcrumbs a {
+  color: #64748b;
+  text-decoration: none;
+}
+.breadcrumbs a:hover {
+  color: var(--color-brand-600);
+}
+
+/* ---------- Cards ---------- */
+.card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0;
+  overflow: visible;
+}
+/* Beat legacy's higher-specificity `.card-list .card` rules (float, fixed
+   width, blue top border) so the Direction A card styling below takes over. */
+.card-list .card,
+.card-list .card.half {
+  float: none;
+  width: auto;
+  max-width: none;
+  border: 0;
+  margin: 0;
+  padding: 1.5rem;
+}
+.card {
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  outline: 1px solid #e2e8f0;
+  outline-offset: -1px;
+  padding: 1.5rem;
+}
+.card h1 {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 1rem;
+}
+.card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0 0 0.25rem;
+}
+.card p {
+  color: #334155;
+}
+.card a {
+  color: var(--color-brand-600);
+  text-decoration: none;
+}
+.card a:hover {
+  color: var(--color-brand-700);
+}
+.card__morelink {
+  display: inline-block;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-brand-600);
+}
+
+/* Empty `<aside></aside>` placeholders the legacy form pages emit add a phantom
+   flex gap — hide them. */
+.card-list aside:empty {
+  display: none;
+}
+
+/* ---------- Forms ---------- */
+/* Layout only: forms are wrapped in a `.card` by the templates, so the card is
+   the surface. Centre the fields to a comfortable width inside that card. */
+.editform {
+  max-width: 34rem;
+  margin: 0 auto;
+}
+.editform__field {
+  margin-bottom: 1rem;
+}
+.editform label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+  margin-bottom: 0.375rem;
+}
+.editform input[type="text"],
+.editform input[type="email"],
+.editform input[type="password"],
+.editform input[type="number"],
+.editform input[type="tel"],
+.editform input[type="url"],
+.editform input[type="search"],
+.editform input:not([type]),
+.editform select,
+.editform textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.editform input:focus,
+.editform select:focus,
+.editform textarea:focus {
+  outline: none;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+.editform__field--error input,
+.editform__field--error select,
+.editform__field--error textarea {
+  border-color: #ef4444;
+}
+.editform__error,
+.editform .invalid-feedback,
+.editform__field--error span {
+  color: #dc2626;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+  display: block;
+}
+.alert,
+.alert-danger {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+.editform__actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 1.25rem;
+}
+
+/* ---------- Buttons ---------- */
+.button,
+button[type="submit"].button,
+input[type="submit"].button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: var(--color-brand-600);
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 0.15s ease;
+}
+.button:hover {
+  background: var(--color-brand-700);
+  color: #ffffff;
+}
+.button--cancel,
+.button--secondary {
+  background: #f1f5f9;
+  color: #334155;
+}
+.button--cancel:hover,
+.button--secondary:hover {
+  background: #e2e8f0;
+  color: #334155;
+}
+.button-link {
+  background: transparent;
+  color: var(--color-brand-600);
+  padding: 0.375rem 0.5rem;
+}
+.button-link:hover {
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+}
+.button--small {
+  padding: 0.3rem 0.6rem;
+  font-size: 0.8rem;
+}
+.button--icon {
+  padding: 0.45rem;
+  border-radius: 9999px;
+  background: transparent;
+  color: #64748b;
+}
+.button--icon:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+.btns-right,
+.btns {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+/* ---------- Tables ---------- */
+.pure-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.pure-table th,
+.pure-table td {
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.pure-table th {
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+}
+
+/* ---------- Lists / tags / badges ---------- */
+.list,
+.subscriptions-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tags,
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tags .tag,
+.badges .badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+/* ---------- Dark mode (follows system) ---------- */
+@media (prefers-color-scheme: dark) {
+  .profile-header__info h1 { color: #f1f5f9; }
+  .card,
+  .editform {
+    background: #0f172a;
+    outline-color: #1e293b;
+  }
+  .card h2 { color: #f1f5f9; }
+  .card p { color: #cbd5e1; }
+  .editform label { color: #cbd5e1; }
+  .editform input,
+  .editform select,
+  .editform textarea {
+    background: #1e293b;
+    border-color: #334155;
+    color: #f1f5f9;
+  }
+  .pure-table th { background: #1e293b; color: #cbd5e1; }
+  .pure-table th, .pure-table td { border-color: #1e293b; }
+  .alert, .alert-danger { background: rgb(127 29 29 / 0.25); border-color: rgb(153 27 27 / 0.5); color: #fca5a5; }
+  .button--cancel, .button--secondary, .button--icon:hover { background: #1e293b; color: #e2e8f0; }
+  .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
+}
+
+/* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a
+   design-language change — a PostToolUse hook reminds you to update
+   .claude/rules/design.md so the design rule stays in sync. */

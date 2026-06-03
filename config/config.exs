@@ -8,6 +8,9 @@ config :vutuv, VutuvWeb.Endpoint,
   adapter: Bandit.PhoenixAdapter,
   render_errors: [formats: [html: VutuvWeb.ErrorHTML, json: VutuvWeb.ErrorJSON], layout: false],
   pubsub_server: Vutuv.PubSub,
+  # Signs the LiveView session token exchanged over the /live socket. Distinct
+  # from secret_key_base and from the Plug.Session signing_salt.
+  live_view: [signing_salt: "PHEbY7u44Jfd3Ei0"],
   locales: ~w(en de),
   max_image_filesize: 2_000_000,
   max_page_items: 250

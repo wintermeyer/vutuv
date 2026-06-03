@@ -1,7 +1,41 @@
 @import "tailwindcss" source(none);
-@source "../../lib/vutuv_web";
 
-@import "./legacy.css";
+/*
+ * Import the legacy stylesheet into the `components` cascade layer. This MUST
+ * sit right after the Tailwind import: CSS ignores `@import` placed after other
+ * rules, so the `layer()` is only honored here. Layer order is
+ * theme < base < components < utilities, so legacy keeps winning over Preflight
+ * (base) — legacy pages look unchanged — while Tailwind utilities (flex, grid,
+ * hidden, md:*) win over legacy's unlayered `nav,section{display:block}` reset,
+ * which otherwise broke the responsive shell.
+ */
+@import "./legacy.css" layer(components);
+/* Direction A reskin of the legacy component classes. Same layer, imported
+   after legacy.css so it overrides legacy yet still loses to Tailwind utilities. */
+@import "./components.css" layer(components);
+
+@source "../../lib/vutuv_web";
+@source "../js";
+
+/*
+ * Direction A — "Corporate Trust" design tokens. Heritage vutuv blue, deepened,
+ * with a coral accent for unread badges. Dark mode follows `prefers-color-scheme`
+ * (Tailwind v4 default), so `dark:` utilities need no extra config and there is
+ * no theme toggle. These generate `bg-brand-600`, `text-accent`, etc.
+ */
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-400: #60a5fa;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+  --color-brand-800: #1e3a8a;
+  --color-brand-900: #172554;
+  --color-accent: #f97362;
+  --color-accent-dark: #e2543f;
+}
 
 /*
  * Issue #761: keep login / registration inputs readable.

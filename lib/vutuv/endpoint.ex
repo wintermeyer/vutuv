@@ -1,7 +1,22 @@
 defmodule VutuvWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :vutuv, adapter: Bandit.PhoenixAdapter
 
+  # Shared by `Plug.Session` (dead HTTP requests) and the LiveView socket below,
+  # so a logged-in session is readable over the websocket. Keep `key` and
+  # `signing_salt` identical to what lived inline on `Plug.Session` before,
+  # otherwise existing session cookies stop decoding and everyone is logged out.
+  @session_options [
+    store: :cookie,
+    key: "_vutuv_key",
+    signing_salt: "UOTk6kQ0",
+    max_age: 7_776_000
+  ]
+
   socket("/socket", VutuvWeb.UserSocket)
+
+  socket("/live", Phoenix.LiveView.Socket,
+    websocket: [connect_info: [session: @session_options]]
+  )
 
   plug(Plug.Static,
     at: "/",
@@ -42,12 +57,7 @@ defmodule VutuvWeb.Endpoint do
   plug(Plug.MethodOverride)
   plug(Plug.Head)
 
-  plug(Plug.Session,
-    store: :cookie,
-    key: "_vutuv_key",
-    signing_salt: "UOTk6kQ0",
-    max_age: 7_776_000
-  )
+  plug(Plug.Session, @session_options)
 
   plug(VutuvWeb.Router)
 end

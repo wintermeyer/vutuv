@@ -8,6 +8,8 @@ defmodule Vutuv.Application do
     children = [
       Vutuv.Repo,
       {Phoenix.PubSub, name: Vutuv.PubSub},
+      # Must start after PubSub (it depends on it) and before the Endpoint.
+      VutuvWeb.Presence,
       {Task.Supervisor, name: Vutuv.TaskSupervisor},
       Vutuv.RateLimiter,
       VutuvWeb.Endpoint
