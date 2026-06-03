@@ -796,7 +796,7 @@ msgid "User"
 msgstr ""
 
 #: web/controllers/user_controller.ex:43
-msgid "User %{name} created successfully. An email has been sent with your login link."
+msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr ""
 
 #: web/controllers/user_controller.ex:212
