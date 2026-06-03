@@ -4,6 +4,7 @@ Is is an upgrade project to get this legacy Elixir application to the latest ver
 
 - Use `mix test` alias when you are done with all changes and fix any pending issues
 - Use the already included and available `:req` (`Req`) library for HTTP requests, **avoid** `:httpoison`, `:tesla`, and `:httpc`. Req is included by default and is the preferred HTTP client for Phoenix apps
+- **Email is sent through one chokepoint.** Build every message from `Vutuv.Notifications.Emailer.base_email/0` and send it with `Emailer.deliver/1`. **Never** call `Vutuv.Mailer.deliver/1` or use `Swoosh` directly outside `Vutuv.Notifications.Emailer` — `base_email/0` stamps the `From` and the auto-generated robot headers (`Auto-Submitted`, `X-Auto-Response-Suppress`) that keep out-of-office responders silent. Builders **return** a `%Swoosh.Email{}`; the single `deliver/1` sends it. A regression test (`test/vutuv/notifications/mailer_chokepoint_test.exs`) fails the build if anything bypasses this. For bulk mail, add `Emailer.bulk_headers/1`.
 
 ### Phoenix v1.8 guidelines
 
