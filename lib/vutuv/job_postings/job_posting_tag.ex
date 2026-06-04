@@ -13,12 +13,6 @@ defmodule Vutuv.JobPostings.JobPostingTag do
     timestamps()
   end
 
-  @max_important_tags 3
-
-  @max_optional_tags 7
-
-  @max_other_tags 7
-
   @doc """
   Builds a changeset based on the `struct` and `params`.
   """
@@ -35,12 +29,8 @@ defmodule Vutuv.JobPostings.JobPostingTag do
     id = get_field(changeset, :job_posting_id)
 
     if priority && id do
-      max =
-        case priority do
-          2 -> @max_important_tags
-          1 -> @max_optional_tags
-          0 -> @max_other_tags
-        end
+      # Single source of truth for the ceilings; see JobPosting.
+      max = Vutuv.JobPostings.JobPosting.max_tags_for_priority(priority)
 
       if Vutuv.Repo.one(
            from(j in __MODULE__,

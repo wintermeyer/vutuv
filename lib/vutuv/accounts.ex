@@ -356,7 +356,7 @@ defmodule Vutuv.Accounts do
         pin_response(login_pin)
 
       true ->
-        remove_attempt(login_pin)
+        record_failed_attempt(login_pin)
     end
   end
 
@@ -369,7 +369,8 @@ defmodule Vutuv.Accounts do
 
   defp valid_pin?(_login_pin, _pin), do: false
 
-  defp remove_attempt(login_pin) do
+  # Records (increments) a failed PIN attempt and locks out at @max_attempts.
+  defp record_failed_attempt(login_pin) do
     attempts = login_pin.pin_login_attempts + 1
 
     if attempts >= @max_attempts do

@@ -31,6 +31,19 @@ defmodule Vutuv.JobPostings.JobPosting do
 
   @max_important_tags 3
   @max_optional_tags 7
+  @max_other_tags 7
+
+  @doc """
+  The per-priority tag ceiling (2 = important, 1 = optional, 0 = other).
+
+  `JobPostingTag.validate_max_tags/1` enforces these numbers as a row-level
+  guard on insert, while `changeset/2` below validates the form-level shape
+  (exactly #{@max_important_tags} important, at most #{@max_optional_tags}
+  optional). Both layers read this single definition so they cannot drift.
+  """
+  def max_tags_for_priority(2), do: @max_important_tags
+  def max_tags_for_priority(1), do: @max_optional_tags
+  def max_tags_for_priority(0), do: @max_other_tags
 
   @doc """
   Builds a changeset based on the `struct` and `params`.
