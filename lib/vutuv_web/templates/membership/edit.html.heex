@@ -1,6 +1,6 @@
 <h2>Edit membership</h2>
 
-<%= render "form_content.html", changeset: @changeset,
+<%= render "form_content.html", backlink: ~p"/memberships", changeset: @changeset,
                         action: ~p"/memberships/#{@membership}" %>
 
 <%= link "Back", to: ~p"/memberships" %>

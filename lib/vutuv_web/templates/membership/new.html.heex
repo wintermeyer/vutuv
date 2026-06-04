@@ -1,4 +1,4 @@
 <h2>New membership</h2>
 
-<%= render "form_content.html", changeset: @changeset,
+<%= render "form_content.html", backlink: ~p"/connections/#{@connection}", changeset: @changeset,
                         action: ~p"/connections/#{@connection}/memberships" %>

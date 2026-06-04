@@ -1,6 +1,10 @@
-<h2>New group</h2>
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  {gettext("Groups"), ~p"/users/#{@user}/groups"},
+  gettext("New")
+]} />
 
-<%= render "form_content.html", changeset: @changeset,
-                        action: ~p"/users/#{@user}/groups" %>
-
-<%= link "Back", to: ~p"/users/#{@user}/groups" %>
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/users/#{@user}/groups", changeset: @changeset, action: ~p"/users/#{@user}/groups" %>
+</.card_section>
