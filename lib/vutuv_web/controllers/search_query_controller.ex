@@ -48,7 +48,12 @@ defmodule VutuvWeb.SearchQueryController do
 
     results = search(search_query_params["value"], search_query_params["is_email?"])
 
-    Repo.one(from(q in SearchQuery, where: q.value == ^search_query_params["value"]))
+    # The changeset downcases the stored value, so look it up downcased too —
+    # otherwise a repeat search in another case misses the row and the insert
+    # trips the unique index ("has already been taken").
+    value = String.downcase(search_query_params["value"])
+
+    Repo.one(from(q in SearchQuery, where: q.value == ^value))
     |> insert_or_update(search_query_params, requester_assoc(user), results)
     # insert_or_update returns either a plain Repo result or an Ecto.Multi one
     |> case do
@@ -69,7 +74,9 @@ defmodule VutuvWeb.SearchQueryController do
     empty_changeset = SearchQuery.changeset(%SearchQuery{})
     tags = get_tags(query_id)
 
-    Repo.one(from(q in SearchQuery, where: q.value == ^query_id))
+    # Stored values are downcased (see do_create/2), so match the URL param
+    # case-insensitively as well.
+    Repo.one(from(q in SearchQuery, where: q.value == ^String.downcase(query_id)))
     # if query is nil, it doesn't yet exist, so create it.
     |> case do
       nil ->

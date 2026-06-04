@@ -27,6 +27,27 @@ defmodule VutuvWeb.SearchQueryControllerTest do
     end
   end
 
+  describe "repeated search with different capitalization" do
+    # The changeset downcases the stored value, so the controller must look the
+    # query up downcased too — otherwise a repeat search in another case misses
+    # the row and the insert trips the unique index ("has already been taken").
+    test "POST reuses the stored query instead of tripping the unique index", %{conn: conn} do
+      conn = post(conn, ~p"/search_queries", search_query: %{"value" => "smith"})
+      assert redirected_to(conn) == ~p"/search_queries/smith"
+
+      conn = post(conn, ~p"/search_queries", search_query: %{"value" => "Smith"})
+      assert redirected_to(conn) == ~p"/search_queries/smith"
+    end
+
+    test "GET /search_queries/:id finds the stored query case-insensitively", %{conn: conn} do
+      conn = post(conn, ~p"/search_queries", search_query: %{"value" => "smith"})
+
+      conn = get(conn, ~p"/search_queries/Smith")
+      body = html_response(conn, 200)
+      refute body =~ "already been taken"
+    end
+  end
+
   describe "GET /search_queries/new" do
     test "marks the search field as required so blank submits are blocked", %{conn: conn} do
       conn = get(conn, ~p"/search_queries/new")
