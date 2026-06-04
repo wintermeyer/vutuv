@@ -15,6 +15,8 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   alias Vutuv.Activity
 
+  @page_size 50
+
   @impl true
   def mount(_params, _session, socket) do
     user = socket.assigns[:current_user]
@@ -26,8 +28,12 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     page =
       if user,
-        do: Activity.notifications_page(user.id),
+        do: Activity.notifications_page(user.id, limit: @page_size),
         else: %{entries: [], more?: false, next_cursor: nil}
+
+    # What the "Load more" label counts down: feed events not on screen yet.
+    # Live-pushed events show up immediately, so they never touch this number.
+    total = if user, do: Activity.notifications_count(user.id), else: 0
 
     {:ok,
      socket
@@ -35,6 +41,7 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:empty?, Enum.empty?(page.entries))
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
+     |> assign(:remaining, max(total - length(page.entries), 0))
      |> stream(:notifications, page.entries, dom_id: &"notification-#{&1.id}")}
   end
 
@@ -42,6 +49,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   def handle_event("load-more", _params, socket) do
     page =
       Activity.notifications_page(socket.assigns.current_user.id,
+        limit: @page_size,
         cursor: socket.assigns.cursor
       )
 
@@ -49,6 +57,7 @@ defmodule VutuvWeb.NotificationLive.Index do
      socket
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
+     |> assign(:remaining, max(socket.assigns.remaining - length(page.entries), 0))
      |> stream(:notifications, page.entries, at: -1)}
   end
 
@@ -119,11 +128,21 @@ defmodule VutuvWeb.NotificationLive.Index do
 
       <div :if={@more?} class="mt-6 text-center">
         <.button id="load-more" variant="secondary" phx-click="load-more" phx-disable-with="…">
-          {gettext("Load more")}
+          {load_more_label(@remaining)}
         </.button>
       </div>
     </div>
     """
+  end
+
+  # "Load 50 of 80 more": the next batch size, then everything still unloaded,
+  # so the user can tell how far into the feed they are. Counts render in the
+  # site-wide compact form (exact up to 999, then 1K/5M).
+  defp load_more_label(remaining) do
+    gettext("Load %{count} of %{remaining} more",
+      count: compact_count(min(@page_size, remaining)),
+      remaining: compact_count(remaining)
+    )
   end
 
   defp kind_classes("follower"),

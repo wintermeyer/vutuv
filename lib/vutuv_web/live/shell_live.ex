@@ -20,6 +20,10 @@ defmodule VutuvWeb.ShellLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  # Only the count formatter: the shell has its own private count_badge/1
+  # (different positioning), so a full import would clash with it.
+  import VutuvWeb.UI, only: [compact_count: 1]
+
   alias Vutuv.Activity
 
   @impl true
@@ -187,7 +191,7 @@ defmodule VutuvWeb.ShellLive do
       :if={@count > 0}
       class="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
     >
-      {@count}
+      {compact_count(@count)}
     </span>
     """
   end

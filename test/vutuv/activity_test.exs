@@ -254,6 +254,26 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
+  describe "notifications_count/1" do
+    test "counts the whole derived feed regardless of the read marker" do
+      me = insert(:user)
+      insert(:connection, follower: insert(:user), followee: me)
+
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: me, tag: tag)
+      insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+
+      Activity.mark_notifications_read(me.id)
+
+      assert Activity.unread_notification_count(me.id) == 0
+      assert Activity.notifications_count(me.id) == 2
+    end
+
+    test "is zero for a logged-out visitor (nil id)" do
+      assert Activity.notifications_count(nil) == 0
+    end
+  end
+
   describe "mark_notifications_read/1 persistence" do
     test "stores the read marker and still broadcasts" do
       me = insert(:user)

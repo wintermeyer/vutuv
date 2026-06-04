@@ -194,6 +194,18 @@ defmodule VutuvWeb.UI do
   defp avatar_url_size(size) when size in ["xs", "sm"], do: :thumb
   defp avatar_url_size(_), do: :medium
 
+  @doc """
+  Compact display form for counted numbers, used site-wide wherever a count is
+  shown: exact up to 999, then `1K`, `80K`, `5M`, `2B`. Floored, so a count is
+  never overstated ("1K" means at least a thousand).
+  """
+  def compact_count(n) when is_integer(n) and n >= 1_000_000_000,
+    do: "#{div(n, 1_000_000_000)}B"
+
+  def compact_count(n) when is_integer(n) and n >= 1_000_000, do: "#{div(n, 1_000_000)}M"
+  def compact_count(n) when is_integer(n) and n >= 1_000, do: "#{div(n, 1_000)}K"
+  def compact_count(n), do: to_string(n)
+
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)
   attr(:class, :string, default: nil)
@@ -207,7 +219,7 @@ defmodule VutuvWeb.UI do
         @class
       ]}
     >
-      {@count}
+      {compact_count(@count)}
     </span>
     """
   end

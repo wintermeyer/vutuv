@@ -5,6 +5,40 @@ defmodule VutuvWeb.UITest do
 
   alias VutuvWeb.UI
 
+  describe "compact_count/1" do
+    test "shows numbers up to 999 exactly" do
+      assert UI.compact_count(0) == "0"
+      assert UI.compact_count(7) == "7"
+      assert UI.compact_count(999) == "999"
+    end
+
+    test "abbreviates thousands as K, flooring so it never overstates" do
+      assert UI.compact_count(1_000) == "1K"
+      assert UI.compact_count(1_999) == "1K"
+      assert UI.compact_count(80_000) == "80K"
+      assert UI.compact_count(999_999) == "999K"
+    end
+
+    test "abbreviates millions and billions" do
+      assert UI.compact_count(1_000_000) == "1M"
+      assert UI.compact_count(5_400_000) == "5M"
+      assert UI.compact_count(999_999_999) == "999M"
+      assert UI.compact_count(2_000_000_000) == "2B"
+    end
+  end
+
+  describe "count_badge/1" do
+    test "renders nothing for a zero count" do
+      assert render_component(&UI.count_badge/1, count: 0) |> String.trim() == ""
+    end
+
+    test "shows small counts exactly and compacts large ones" do
+      assert render_component(&UI.count_badge/1, count: 999) =~ "999"
+      assert render_component(&UI.count_badge/1, count: 1_234) =~ "1K"
+      refute render_component(&UI.count_badge/1, count: 1_234) =~ "1234"
+    end
+  end
+
   # Page size is the compile-time `max_page_items` (250 in config.exs), so
   # totals below are chosen relative to that: 600 rows -> 3 pages, etc.
   describe "pager/1" do

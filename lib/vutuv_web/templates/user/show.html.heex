@@ -43,9 +43,9 @@ routes; CSRF + method are handled by the rendered links. --%>
         </p>
 
         <div class="mt-4 flex gap-6 text-sm">
-          <span><span class="font-bold text-slate-900 dark:text-white">{@follower_count}</span>
+          <span><span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
             <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span></span>
-          <span><span class="font-bold text-slate-900 dark:text-white">{@followee_count}</span>
+          <span><span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
             <span class="text-slate-500">{gettext("following")}</span></span>
         </div>
       </div>
@@ -79,7 +79,7 @@ routes; CSRF + method are handled by the rendered links. --%>
         <div :for={user_tag <- @user_tags} class="inline-flex items-center">
           <.chip href={~p"/users/#{@user}/tags/#{user_tag}"}>
             {Vutuv.Tags.UserTag.truncated_name(user_tag)}
-            <span class="rounded bg-brand-600 px-1.5 text-xs font-semibold text-white">{Enum.count(user_tag.endorsements)}</span>
+            <span class="rounded bg-brand-600 px-1.5 text-xs font-semibold text-white">{compact_count(Enum.count(user_tag.endorsements))}</span>
           </.chip>
           <%= if @current_user && not same_user?(@user, @current_user) && not Vutuv.Tags.UserTagEndorsement.tag_endorsed?(user_tag.id, @current_user_id) do %>
             <%= button to: ~p"/users/#{@user}/user_tag_endorsements?#{[id: user_tag]}",

@@ -2,7 +2,7 @@
   <section class="card imagebox__card">
     <div class="imagebox__intro">
       <h1><%= gettext "Fast and Secure Business Networking" %></h1>
-      <p><%= gettext "Number of Members" %>: <%= @user_counter %></p>
+      <p><%= gettext "Number of Members" %>: <%= compact_count(@user_counter) %></p>
     </div>
     <.form :let={f} for={@changeset} action={~p"/new_registration"} multipart class="imagebox__form">
       <%= if @changeset.action do %>

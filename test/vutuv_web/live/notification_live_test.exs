@@ -115,20 +115,30 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "Grace Hopper"
     end
 
-    test "a long feed offers Load more, which appends the older events", %{conn: conn} do
+    test "a long feed offers a numbered Load more, which appends the older events", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
-      # One more event than the page size; they all share the same insert
-      # second, so this also exercises the tie-handling of the cursor.
-      for _ <- 1..51, do: insert(:connection, follower: insert(:user), followee: user)
+      # Two more than two page sizes; they all share the same insert second,
+      # so this also exercises the tie-handling of the cursor. 52 remaining
+      # after page one makes the batch size and the remainder differ, which
+      # pins the order of the two numbers in the button label.
+      for _ <- 1..102, do: insert(:connection, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert has_element?(live, "#load-more")
+      # The label says what the next click loads and how much is left in total.
+      assert live |> element("#load-more") |> render() =~ "Load 50 of 52 more"
       assert row_count(render(live)) == 50
 
       live |> element("#load-more") |> render_click()
 
-      assert row_count(render(live)) == 51
+      assert row_count(render(live)) == 100
+      assert live |> element("#load-more") |> render() =~ "Load 2 of 2 more"
+
+      live |> element("#load-more") |> render_click()
+
+      assert row_count(render(live)) == 102
       refute has_element?(live, "#load-more")
     end
 

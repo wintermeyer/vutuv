@@ -167,6 +167,17 @@ defmodule Vutuv.Activity do
   end
 
   @doc """
+  The size of the whole derived feed, read marker ignored. Backs the
+  "Load N of M more" label under the feed. Zero for a logged-out visitor.
+  """
+  def notifications_count(nil), do: 0
+
+  def notifications_count(user_id) do
+    count_followers(user_id, nil) +
+      count_endorsements(user_id, nil) + count_connections(user_id, nil)
+  end
+
+  @doc """
   How many feed events are newer than the user's read marker (all of them when
   the marker is NULL). Zero for a logged-out visitor.
   """

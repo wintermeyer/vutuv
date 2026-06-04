@@ -291,7 +291,7 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   defp online_label([]), do: ""
-  defp online_label(names), do: "#{length(names)} online"
+  defp online_label(names), do: "#{compact_count(length(names))} online"
 
   defp typing_label(typing_tokens) do
     case Map.keys(typing_tokens) do

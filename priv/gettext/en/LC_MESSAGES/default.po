@@ -2612,13 +2612,13 @@ msgstr ""
 msgid "Nothing here yet."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:118
+#: lib/vutuv_web/live/notification_live/index.ex:127
 #, elixir-autogen, elixir-format
 msgid "Nothing new yet."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:34
-#: lib/vutuv_web/live/notification_live/index.ex:77
+#: lib/vutuv_web/live/notification_live/index.ex:40
+#: lib/vutuv_web/live/notification_live/index.ex:86
 #: lib/vutuv_web/live/shell_live.ex:133
 #, elixir-autogen, elixir-format
 msgid "Notifications"
@@ -2772,27 +2772,27 @@ msgstr ""
 msgid "submit a bug report"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:144
+#: lib/vutuv_web/live/notification_live/index.ex:162
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tag}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:146
+#: lib/vutuv_web/live/notification_live/index.ex:164
 #, elixir-autogen, elixir-format
 msgid "is now connected with you."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:141
+#: lib/vutuv_web/live/notification_live/index.ex:159
 #, elixir-autogen, elixir-format
 msgid "started following you."
-msgstr ""
-
-#: lib/vutuv_web/live/notification_live/index.ex:122
-#, elixir-autogen, elixir-format
-msgid "Load more"
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:238
 #, elixir-autogen, elixir-format
 msgid "Pagination"
+msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:141
+#, elixir-autogen, elixir-format
+msgid "Load %{count} of %{remaining} more"
 msgstr ""
