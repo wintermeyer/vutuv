@@ -143,7 +143,7 @@ msgstr "Achtung: Ab hier benutzen wir Cookies."
 #: lib/vutuv_web/templates/social_media_account/form_content.html.heex:22
 #: lib/vutuv_web/templates/url/form_content.html.heex:21
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
-#: lib/vutuv_web/templates/user/form_content.html.heex:108
+#: lib/vutuv_web/templates/user/form_content.html.heex:102
 #: lib/vutuv_web/templates/user_tag/form_content.html.heex:17
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:57
 #, elixir-autogen
@@ -184,7 +184,7 @@ msgstr "Kontakt"
 msgid "Couldn't follow back to %{name}."
 msgstr "Konnte nicht zu %{name} zurückfolgen."
 
-#: lib/vutuv_web/templates/user/form_content.html.heex:109
+#: lib/vutuv_web/templates/user/form_content.html.heex:103
 #, elixir-autogen
 msgid "Create Account"
 msgstr "Account anlegen"
@@ -538,7 +538,6 @@ msgid "Nickname"
 msgstr "Spitzname"
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:97
-#: lib/vutuv_web/templates/user/form_content.html.heex:103
 #, elixir-autogen
 msgid "No"
 msgstr "Nein"
@@ -705,7 +704,7 @@ msgstr "Anforderer"
 msgid "Results"
 msgstr "Ergebnisse"
 
-#: lib/vutuv_web/templates/user/form_content.html.heex:109
+#: lib/vutuv_web/templates/user/form_content.html.heex:103
 #, elixir-autogen
 msgid "Save"
 msgstr "Speichern"
@@ -794,7 +793,7 @@ msgid "Slug doesn't exist."
 msgstr "Slug existiert nicht."
 
 #: lib/vutuv_web/controllers/slug_controller.ex:27
-#: lib/vutuv_web/controllers/user_controller.ex:266
+#: lib/vutuv_web/controllers/user_controller.ex:280
 #, elixir-autogen
 msgid "Slug updated successfully."
 msgstr "Slug erfolgreich aktualisiert."
@@ -905,12 +904,12 @@ msgstr "User"
 msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr "Der User %{name} wurde angelegt. Eine E-Mail mit einem PIN wurde verschickt."
 
-#: lib/vutuv_web/controllers/user_controller.ex:324
+#: lib/vutuv_web/controllers/user_controller.ex:338
 #, elixir-autogen
 msgid "User deleted successfully."
 msgstr "User wurde gelöscht."
 
-#: lib/vutuv_web/controllers/user_controller.ex:236
+#: lib/vutuv_web/controllers/user_controller.ex:250
 #, elixir-autogen
 msgid "User updated successfully."
 msgstr "Userdaten wurde geändert."
@@ -1041,7 +1040,6 @@ msgid "Would you like to allow search engines to index your profile?"
 msgstr "Möchten Sie Suchmaschinen erlauben Ihr Profil zu durchsuchen?"
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:97
-#: lib/vutuv_web/templates/user/form_content.html.heex:103
 #, elixir-autogen
 msgid "Yes"
 msgstr "Ja"
@@ -1252,11 +1250,6 @@ msgstr "100 Usern mit den meisten Followern"
 #: web/templates/page/index.html.eex:16
 msgid "Curious? Have a look at the "
 msgstr "Neugierig? Hier ist die Liste "
-
-#: lib/vutuv_web/templates/page/pin_new_registration.html.heex:18
-#, elixir-autogen
-msgid "Updates about vutuv are available at "
-msgstr "Updates zu vutuv finden Sie auf "
 
 #: lib/vutuv_web/templates/admin/exonym/edit.html.heex:10
 #: lib/vutuv_web/templates/admin/exonym/index.html.heex:10
@@ -1653,7 +1646,7 @@ msgstr "Tags"
 
 #: lib/vutuv_web/controllers/email_controller.ex:94
 #: lib/vutuv_web/controllers/session_controller.ex:89
-#: lib/vutuv_web/controllers/user_controller.ex:339
+#: lib/vutuv_web/controllers/user_controller.ex:353
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr "Zu viele fehlerhafter Versuche."
@@ -1807,11 +1800,6 @@ msgstr ""
 msgid "View related tags"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/form_content.html.heex:102
-#, elixir-autogen
-msgid "Would you like to receive birthday reminder emails?"
-msgstr "Möchten Sie Geburtstag-Erinnerungs-E-Mails erhalten?"
-
 #: lib/vutuv_web/templates/search_query/new.html.heex:20
 #, elixir-autogen
 msgid "You can search for a name, email, or tag."
@@ -1938,12 +1926,12 @@ msgstr "Eine Stellenanzeige wurde erstellt."
 msgid "Job posting deleted successfully."
 msgstr "Eine Stellenanzeige wurde gelöscht."
 
-#: lib/vutuv_web/controllers/job_posting_tag_controller.ex:39
+#: lib/vutuv_web/controllers/job_posting_tag_controller.ex:43
 #, elixir-autogen
 msgid "Job posting tag created successfully."
 msgstr "Ein Stellenanzeigen Tag wurde erstellt."
 
-#: lib/vutuv_web/controllers/job_posting_tag_controller.ex:65
+#: lib/vutuv_web/controllers/job_posting_tag_controller.ex:69
 #, elixir-autogen
 msgid "Job posting tag deleted successfully."
 msgstr "Ein Stellenanzeigen Tag wurde gelöscht."
@@ -2107,7 +2095,7 @@ msgstr "Ein Recruiter Paket wurde verändert."
 msgid "Recruiter packages"
 msgstr "Recruiter Pakete"
 
-#: lib/vutuv_web/controllers/recruiter_subscription_controller.ex:58
+#: lib/vutuv_web/controllers/recruiter_subscription_controller.ex:60
 #, elixir-autogen
 msgid "Recruiter subscription created successfully."
 msgstr "Ein Recruiter Abo wurde angelegt."
@@ -2704,8 +2692,8 @@ msgstr "Diese E-Mail-Adresse konnte nicht hinzugefügt werden."
 #: lib/vutuv_web/controllers/email_controller.ex:58
 #: lib/vutuv_web/controllers/session_controller.ex:32
 #: lib/vutuv_web/controllers/session_controller.ex:45
-#: lib/vutuv_web/controllers/user_controller.ex:295
-#: lib/vutuv_web/controllers/user_controller.ex:310
+#: lib/vutuv_web/controllers/user_controller.ex:309
+#: lib/vutuv_web/controllers/user_controller.ex:324
 #, elixir-autogen, elixir-format
 msgid "Too many attempts. Please try again later."
 msgstr "Zu viele Versuche. Bitte versuchen Sie es später erneut."
