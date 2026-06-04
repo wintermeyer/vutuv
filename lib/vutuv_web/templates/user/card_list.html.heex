@@ -1,3 +1,10 @@
+<%!-- Listing rows. Converted callers (most-followed, follower/followee index,
+search) pass @work_info_by_id (user_id => work-info string) and @following_by_id
+(followee_id => connection_id) precomputed in one query each, so this template
+runs no per-row queries. Callers that don't pass them fall back to the
+DB-backed helpers per row. --%>
+<% work_info_by_id = assigns[:work_info_by_id] || %{} %>
+<% following_by_id = assigns[:following_by_id] %>
 <ul class="button-list profiles">
   <%= for user <- @users do %>
     <li>
@@ -7,10 +14,10 @@
         <% end %>
       </div>
       <p><strong><%= link full_name(user), to: ~p"/users/#{user}" %></strong>
-      <%= work_information_string(user, @work_string_length) %>
+      <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       </p>
       <%= if !same_user?(@current_user, user) and @current_user do %>
-        <%= case user_follows_user?(@current_user, user) do %>
+        <%= case (if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)) do %>
           <% connection_id when is_integer(connection_id) -> %>
             <%= button to: ~p"/connections/#{connection_id}", method: :delete , class: "button button--icon" do %>
               <i class="icon icon--unfollow"></i>

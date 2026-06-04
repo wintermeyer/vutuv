@@ -9,7 +9,7 @@
   <section class="card">
     <h1><%= gettext "The 100 Users with the most Followers" %></h1>
 
-    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @users, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 60})}
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @users, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 60, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
 
   </section>
 </div>

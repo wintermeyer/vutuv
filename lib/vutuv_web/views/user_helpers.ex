@@ -162,7 +162,24 @@ defmodule VutuvWeb.UserHelpers do
     # Resolve the current job once; current_title/1 and current_organization/1
     # both accept a %WorkExperience{} or nil, so this avoids running the
     # current_job/1 query chain twice per call.
-    current_job = current_job(user)
+    build_work_information_string(current_job(user), len)
+  end
+
+  @doc """
+  Builds the work-information string from an already-resolved current job
+  (a `%WorkExperience{}` or `nil`), without touching the database.
+
+  Use this on listing pages that have batch-loaded each user's work
+  experiences (see `work_information_map/2`) so a 100-row list does not run the
+  per-row `current_job/1` query chain.
+  """
+  def work_information_string_for_job(job, len \\ 256)
+
+  def work_information_string_for_job(job, len) do
+    build_work_information_string(job, len)
+  end
+
+  defp build_work_information_string(current_job, len) do
     job = current_title(current_job)
     org = current_organization(current_job)
 
@@ -170,6 +187,105 @@ defmodule VutuvWeb.UserHelpers do
     |> validate_length(job, org, len)
     |> validate_backup(job, org, len)
   end
+
+  @doc """
+  In-memory equivalent of `current_job/1` for a list of work experiences that
+  has already been loaded for a single user.
+
+  Reproduces the exact precedence of the DB-backed `current_job/1` chain:
+
+    1. the first experience that has a start (month and year) and no end
+       (month and year),
+    2. otherwise the first experience that has no end (month and year),
+    3. otherwise the most recent experience ordered by `start_year` then
+       `start_month` descending (nils sort first, as Postgres orders DESC).
+
+  Steps 1 and 2 use `limit: 1` with no `order_by` in the DB version, which on
+  Postgres yields rows in physical (insertion / id) order; we mirror that by
+  preserving the list order produced by an `id`-ordered query.
+  """
+  def current_job_in_memory([]), do: nil
+
+  def current_job_in_memory(work_experiences) when is_list(work_experiences) do
+    has_start_no_end =
+      Enum.find(work_experiences, fn w ->
+        not is_nil(w.start_month) and not is_nil(w.start_year) and
+          is_nil(w.end_month) and is_nil(w.end_year)
+      end)
+
+    has_start_no_end || no_end(work_experiences) || most_recent(work_experiences)
+  end
+
+  defp no_end(work_experiences) do
+    Enum.find(work_experiences, fn w ->
+      is_nil(w.end_month) and is_nil(w.end_year)
+    end)
+  end
+
+  defp most_recent(work_experiences) do
+    # Mirror the DB-backed most_recent_job query
+    # (order_by: [desc: start_year, desc: start_month], limit: 1). Postgres
+    # orders DESC with NULLS FIRST by default, so a nil start_year/start_month
+    # sorts ahead of any integer (i.e. counts as "most recent"). We model that
+    # by ranking a present value as {0, value} and a nil as {1, 0}, so nil keys
+    # compare greater. Enum.max_by keeps the first maximal element, which on an
+    # id-ordered list matches the query's physical-order tie-break.
+    Enum.max_by(work_experiences, &most_recent_key/1)
+  end
+
+  defp most_recent_key(w) do
+    {rank(w.start_year), rank(w.start_month)}
+  end
+
+  defp rank(nil), do: {1, 0}
+  defp rank(value), do: {0, value}
+
+  @doc """
+  Batch-loads the work experiences for `users` in a single query and returns a
+  map of `user_id => work_information_string(user, len)`.
+
+  This replaces the per-row `current_job/1` query chain that
+  `work_information_string/2` runs when a listing template calls it for every
+  user in a 100-row list.
+  """
+  def work_information_map(users, len \\ 256)
+
+  def work_information_map([], _len), do: %{}
+
+  def work_information_map(users, len) do
+    ids = Enum.map(users, & &1.id)
+
+    experiences_by_user =
+      Repo.all(from(w in WorkExperience, where: w.user_id in ^ids, order_by: w.id))
+      |> Enum.group_by(& &1.user_id)
+
+    Map.new(users, fn user ->
+      job = current_job_in_memory(Map.get(experiences_by_user, user.id, []))
+      {user.id, work_information_string_for_job(job, len)}
+    end)
+  end
+
+  @doc """
+  Resolves, in a single query, which of `users` the `current_user` already
+  follows. Returns a map of `followee_id => connection_id` so a listing
+  template can render the unfollow link without a per-row
+  `user_follows_user?/2` query. An empty map when there is no `current_user`.
+  """
+  def following_map(current_user, users)
+
+  def following_map(%User{id: follower_id}, users) when users != [] do
+    ids = Enum.map(users, & &1.id)
+
+    Repo.all(
+      from(c in Connection,
+        where: c.follower_id == ^follower_id and c.followee_id in ^ids,
+        select: {c.followee_id, c.id}
+      )
+    )
+    |> Map.new()
+  end
+
+  def following_map(_, _), do: %{}
 
   defp validate_length(str, job, _org, len) do
     if String.length(str) > len do

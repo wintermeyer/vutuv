@@ -14,6 +14,12 @@ defmodule VutuvWeb.FollowerController do
       conn.assigns[:user]
       |> Repo.preload([:followers, follower_connections: {query, [:follower]}])
 
-    render(conn, "index.html", user: user, total_followers: total)
+    render(conn, "index.html",
+      user: user,
+      total_followers: total,
+      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(user.followers, 45),
+      following_by_id:
+        VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], user.followers)
+    )
   end
 end

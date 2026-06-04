@@ -22,8 +22,7 @@ defmodule Vutuv.Tags.UserTag do
   end
 
   def name(user_tag) do
-    user_tag = Vutuv.Repo.preload(user_tag, :tag)
-    user_tag.tag.name
+    tag(user_tag).name
   end
 
   def truncated_name(user_tag) do
@@ -40,9 +39,17 @@ defmodule Vutuv.Tags.UserTag do
     end
   end
 
+  # Read the already-loaded :tag association when present; only hit the database
+  # when it has not been preloaded. Callers that render many chips (the profile
+  # page, the user_tag index) preload [user_tags: :tag], so this avoids a query
+  # per chip while still working on bare structs.
+  @doc false
+  def tag(%__MODULE__{tag: %Vutuv.Tags.Tag{} = tag}), do: tag
+  def tag(%__MODULE__{} = user_tag), do: Vutuv.Repo.preload(user_tag, :tag).tag
+
   defimpl Phoenix.Param, for: Vutuv.Tags.UserTag do
     def to_param(user_tag) do
-      Vutuv.Repo.preload(user_tag, [:tag]).tag.slug
+      Vutuv.Tags.UserTag.tag(user_tag).slug
     end
   end
 end

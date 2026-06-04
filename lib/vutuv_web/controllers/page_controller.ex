@@ -114,7 +114,12 @@ defmodule VutuvWeb.PageController do
         )
       )
 
-    render(conn, "most_followed_users.html", users: users)
+    render(conn, "most_followed_users.html",
+      users: users,
+      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 60),
+      following_by_id:
+        VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
+    )
   end
 
   # If a login PIN is already in flight (the visitor entered their email, got a

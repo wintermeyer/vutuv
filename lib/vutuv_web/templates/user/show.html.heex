@@ -38,8 +38,8 @@ routes; CSRF + method are handled by the rendered links. --%>
           </span>
         </h1>
         <p :if={@user.headline} class="text-slate-500 dark:text-slate-400">{@user.headline}</p>
-        <p :if={work_information_string(@user, 60) not in [nil, ""]} class="mt-0.5 text-sm text-slate-400">
-          {work_information_string(@user, 60)}
+        <p :if={@work_info not in [nil, ""]} class="mt-0.5 text-sm text-slate-400">
+          {@work_info}
         </p>
 
         <div class="mt-4 flex gap-6 text-sm">
@@ -149,10 +149,10 @@ routes; CSRF + method are handled by the rendered links. --%>
           </.link>
           <div class="min-w-0 text-sm">
             <.link href={~p"/users/#{user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(user)}</.link>
-            <p class="truncate text-slate-400">{work_information_string(user, 24)}</p>
+            <p class="truncate text-slate-400">{Map.get(@reccomended_work_info, user.id, "")}</p>
           </div>
           <%= if @current_user && not same_user?(@current_user, user) do %>
-            <%= case user_follows_user?(@current_user, user) do %>
+            <%= case Map.get(@reccomended_following, user.id) do %>
               <% connection_id when is_integer(connection_id) -> %>
                 <%= button to: ~p"/connections/#{connection_id}", method: :delete,
                       class: "ml-auto text-sm font-semibold text-slate-400 hover:text-slate-600" do %>

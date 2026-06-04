@@ -65,8 +65,13 @@ defmodule VutuvWeb.UserController do
   def show(conn, _params) do
     totals = compute_assoc_totals(conn.assigns[:user])
     user = preload_user_for_show(conn.assigns[:user], totals)
-    job = current_job(user)
+    # Resolve the header's current job once (DB-backed, over all the user's
+    # work experiences) and reuse it for the title/organization/work-line
+    # assigns, so the template no longer runs the current_job/1 chain twice
+    # (finding [49]).
+    header_job = current_job(user)
     emails = VutuvWeb.UserHelpers.emails_for_display(user, conn.assigns[:current_user])
+    reccomended_users = recommended_users(user)
 
     conn
     |> assign(:emails, emails)
@@ -75,9 +80,10 @@ defmodule VutuvWeb.UserController do
     |> assign(:follower_count, follower_count(user))
     |> assign(:followee_count, followee_count(user))
     |> assign(:user, user)
-    |> assign(:job, job)
-    |> assign(:organization, current_organization(job))
-    |> assign(:title, current_title(job))
+    |> assign(:job, header_job)
+    |> assign(:organization, current_organization(header_job))
+    |> assign(:title, current_title(header_job))
+    |> assign(:work_info, work_information_string_for_job(header_job, 60))
     |> assign(:total_jobs, totals.jobs)
     |> assign(:total_numbers, totals.numbers)
     |> assign(:total_links, totals.links)
@@ -86,7 +92,15 @@ defmodule VutuvWeb.UserController do
     |> assign(:display_welcome_message, new_user?(user))
     |> assign(:active_subscription, active_subscription_for(conn.assigns[:current_user]))
     |> assign(:recruiter_packages, recruiter_packages_for(conn.assigns[:locale]))
-    |> assign(:reccomended_users, recommended_users(user))
+    |> assign(:reccomended_users, reccomended_users)
+    |> assign(
+      :reccomended_work_info,
+      VutuvWeb.UserHelpers.work_information_map(reccomended_users, 24)
+    )
+    |> assign(
+      :reccomended_following,
+      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], reccomended_users)
+    )
     |> assign(:work_string_length, 35)
     |> assign(:new_coupon, build_coupon(user))
     |> render("show.html", conn: conn)
@@ -124,7 +138,7 @@ defmodule VutuvWeb.UserController do
           # each user_tag has exactly one tag, so this keeps one row per user_tag.
           group_by: [u.id, t.slug],
           limit: ^user_tag_limit,
-          preload: [:endorsements]
+          preload: [:endorsements, :tag]
         ),
       followee_connections: {Connection.latest(3), [:followee]},
       follower_connections: {Connection.latest(3), [:follower]},

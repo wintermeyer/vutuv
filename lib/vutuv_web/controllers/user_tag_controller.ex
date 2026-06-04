@@ -10,7 +10,7 @@ defmodule VutuvWeb.UserTagController do
   def index(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload([:user_tags])
+      |> Repo.preload(user_tags: :tag)
 
     render(conn, "index.html", user: user, user_tags: user.user_tags)
   end
