@@ -40,7 +40,7 @@ config :swoosh, :api_client, false
 
 # Configure esbuild (the version is required)
 config :esbuild,
-  version: "0.21.5",
+  version: "0.28.0",
   vutuv: [
     args: ~w(js/app.js --bundle --target=es2017 --outdir=../priv/static/assets),
     cd: Path.expand("../assets", __DIR__),
@@ -49,7 +49,7 @@ config :esbuild,
 
 # Configure tailwind (the version is required)
 config :tailwind,
-  version: "4.0.0",
+  version: "4.3.0",
   vutuv: [
     args: ~w(
       --input=css/app.css

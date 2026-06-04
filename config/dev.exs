@@ -16,7 +16,11 @@ config :vutuv, VutuvWeb.Endpoint,
   check_origin: false,
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:vutuv, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:vutuv, ~w(--watch)]}
+    # Not `tailwind --watch`: the v4 CLI's watch mode rebuilds from a cached
+    # copy of @import'ed CSS and ignores CSS edits outright, so changes to
+    # components.css silently never reached the browser. The replacement runs
+    # a correct one-shot build per change — see VutuvWeb.TailwindWatcher.
+    tailwind: {VutuvWeb.TailwindWatcher, :watch, [:vutuv]}
   ],
   public_url: "http://localhost:4000/",
   live_reload: [

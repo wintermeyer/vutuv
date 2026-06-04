@@ -93,11 +93,12 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 layer, so it beats Preflight (base) but loses to Tailwind utilities, which lets
 hand-written pages use utilities freely. There is **no `legacy.css` anymore** — do not
 reintroduce it (a regression test enforces this). Dev serves `/assets/app.css`
-undigested, so hard-reload (Cmd+Shift+R) after a rebuild. **Watcher gotcha:** the
-Tailwind v4 watcher caches `@import`ed files, so after editing `components.css` a
-template-triggered rebuild can silently regenerate **stale** CSS — restart
-`mix phx.server` (or run `mix assets.build` while no watcher is running) and
-hard-reload before judging a components.css change in the browser.
+undigested, so hard-reload (Cmd+Shift+R) after a rebuild. **Dev does not use
+`tailwind --watch`:** the v4 CLI's watch mode rebuilds from a cached copy of
+`@import`ed CSS and ignores CSS edits outright (verified on 4.0.0 and 4.3.0), so
+`VutuvWeb.TailwindWatcher` (wired as the dev watcher) runs a correct one-shot
+build on every CSS/template/JS change instead. Edits to `components.css` reach
+the browser within ~2s; if they ever don't, suspect that watcher first.
 
 ### Don'ts
 
