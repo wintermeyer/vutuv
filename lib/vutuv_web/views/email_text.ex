@@ -2,7 +2,6 @@ defmodule VutuvWeb.EmailText do
   @moduledoc false
   require EEx
   import VutuvWeb.UserHelpers
-  import VutuvWeb.EmailHTML, only: [format_date: 2]
 
   @template_dir "lib/vutuv_web/templates/email"
 

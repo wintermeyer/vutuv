@@ -173,19 +173,6 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
   end
 
-  describe "bulk builders carry both robot and bulk headers" do
-    test "birthday reminder" do
-      user = insert(:user, locale: "en")
-      insert(:email, user: user, value: "birthday@example.com")
-      child = insert(:user, birthdate: ~D[1990-01-01])
-
-      email = Emailer.birthday_reminder(user, [child], [])
-
-      assert_robot_headers(email)
-      assert email.headers["Precedence"] == "bulk"
-    end
-  end
-
   # Temporarily set the accounting email in the endpoint config so the
   # invoice builder produces a message, then restore the previous config.
   defp with_accounting_email(value, fun) do

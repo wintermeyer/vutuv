@@ -21,7 +21,6 @@ defmodule Vutuv.Accounts.User do
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
     field(:validated?, :boolean, default: false)
-    field(:send_birthday_reminder, :boolean, default: true)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
     field(:easy_tags, :string, virtual: true)
@@ -33,7 +32,6 @@ defmodule Vutuv.Accounts.User do
     has_many(:groups, Vutuv.Social.Group)
     has_many(:emails, Vutuv.Accounts.Email)
     has_many(:user_tags, Vutuv.Tags.UserTag)
-    has_many(:user_skills, Vutuv.Profiles.UserSkill)
     has_many(:slugs, Vutuv.Accounts.Slug, on_replace: :nilify)
     has_many(:urls, Vutuv.Profiles.Url)
     has_many(:phone_numbers, Vutuv.Profiles.PhoneNumber)
@@ -42,7 +40,6 @@ defmodule Vutuv.Accounts.User do
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
     has_many(:search_terms, Vutuv.Accounts.SearchTerm, on_replace: :delete)
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
-    has_many(:skill_endorsements, Vutuv.Profiles.Endorsement)
     has_many(:job_postings, Vutuv.JobPostings.JobPosting)
     has_many(:recruiter_subscriptions, Vutuv.Recruiting.RecruiterSubscription)
     has_many(:coupons, Vutuv.Recruiting.Coupon)
@@ -58,7 +55,7 @@ defmodule Vutuv.Accounts.User do
     timestamps()
   end
 
-  @optional_fields ~w(validated? noindex? headline first_name last_name middlename nickname honorific_prefix honorific_suffix gender birthdate locale active_slug send_birthday_reminder easy_tags)a
+  @optional_fields ~w(validated? noindex? headline first_name last_name middlename nickname honorific_prefix honorific_suffix gender birthdate locale active_slug easy_tags)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

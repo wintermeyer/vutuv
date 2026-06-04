@@ -89,18 +89,6 @@ defmodule Vutuv.Factory do
     }
   end
 
-  def skill_factory do
-    %Vutuv.Profiles.Skill{
-      name: sequence(:skill_name, &"Skill #{&1}"),
-      downcase_name: sequence(:skill_downcase, &"skill #{&1}"),
-      slug: sequence(:skill_slug, &"skill-#{&1}")
-    }
-  end
-
-  def user_skill_factory do
-    %Vutuv.Profiles.UserSkill{}
-  end
-
   def connection_factory do
     %Vutuv.Social.Connection{}
   end
@@ -128,10 +116,6 @@ defmodule Vutuv.Factory do
 
   def user_tag_endorsement_factory do
     %Vutuv.Tags.UserTagEndorsement{}
-  end
-
-  def endorsement_factory do
-    %Vutuv.Profiles.Endorsement{}
   end
 
   def job_posting_factory do

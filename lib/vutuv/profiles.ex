@@ -1,7 +1,7 @@
 defmodule Vutuv.Profiles do
   @moduledoc """
   The Profiles context. Handles addresses, phone numbers,
-  social media accounts, URLs, work experiences, and skills.
+  social media accounts, URLs, and work experiences.
   """
 
   import Ecto.Query
@@ -10,7 +10,6 @@ defmodule Vutuv.Profiles do
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
-  alias Vutuv.Profiles.UserSkill
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
 
@@ -109,29 +108,4 @@ defmodule Vutuv.Profiles do
   end
 
   def delete_work_experience!(%WorkExperience{} = we), do: Repo.delete!(we)
-
-  def current_job(user) do
-    user = Repo.preload(user, :work_experiences)
-
-    case user.work_experiences do
-      [] ->
-        nil
-
-      work_experiences ->
-        Enum.find(work_experiences, fn we ->
-          we.start_year && !we.end_year
-        end) || hd(Enum.sort_by(work_experiences, & &1.start_year, :desc))
-    end
-  end
-
-  # ── Skills ──
-
-  def list_user_skills(user), do: Repo.all(Ecto.assoc(user, :user_skills))
-  def get_user_skill!(id), do: Repo.get!(UserSkill, id)
-
-  def create_user_skill(attrs) do
-    %UserSkill{} |> UserSkill.changeset(attrs) |> Repo.insert()
-  end
-
-  def delete_user_skill!(%UserSkill{} = user_skill), do: Repo.delete!(user_skill)
 end

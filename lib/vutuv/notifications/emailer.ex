@@ -3,8 +3,8 @@ defmodule Vutuv.Notifications.Emailer do
   Builds and delivers every outbound vutuv email.
 
   All mail vutuv sends is machine-generated (login PINs, registration, email
-  confirmation, account deletion, payment info, invoices, birthday reminders),
-  so two things are guaranteed here in exactly one place:
+  confirmation, account deletion, payment info, invoices), so two things are
+  guaranteed here in exactly one place:
 
     * `base_email/0` sets the `From` and the auto-generated robot headers that
       tell a recipient's mail system not to auto-reply (no out-of-office /
@@ -65,8 +65,7 @@ defmodule Vutuv.Notifications.Emailer do
   @doc """
   Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
   **not** safe for one-to-one transactional mail because `Precedence: bulk` can
-  hurt inbox placement, so they are opt-in and applied only to bulk mail such as
-  the birthday reminder.
+  hurt inbox placement, so they are opt-in and applied only to bulk mail.
   """
   def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
 
@@ -167,54 +166,6 @@ defmodule Vutuv.Notifications.Emailer do
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(Gettext.gettext(VutuvWeb.Gettext, "vutuv Account verified"))
     |> text_body(VutuvWeb.EmailText.render("#{template}.text", %{user: user}))
-  end
-
-  def birthday_reminder(user, birthday_childs, future_birthday_childs) do
-    {{today_year, _month, _day}, {_, _, _}} = :calendar.local_time()
-
-    name_list =
-      for(birthday_child <- birthday_childs) do
-        %Date{year: birthday_year} = birthday_child.birthdate
-
-        case birthday_year do
-          1900 ->
-            VutuvWeb.UserHelpers.full_name(birthday_child)
-
-          _ ->
-            "#{VutuvWeb.UserHelpers.full_name(birthday_child)} (#{today_year - birthday_year})"
-        end
-      end
-
-    full_names_with_age = Enum.join(name_list, ", ")
-
-    truncated_subject =
-      if String.length(full_names_with_age) > 50 do
-        "#{String.slice(full_names_with_age, 0..45)} ..."
-      else
-        full_names_with_age
-      end
-
-    template = "birthday_reminder_#{get_locale(user.locale)}"
-
-    email = primary_email(user)
-
-    Gettext.put_locale(VutuvWeb.Gettext, user.locale)
-
-    base_email()
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> bulk_headers()
-    |> subject("#{Gettext.gettext(VutuvWeb.Gettext, "Birthday")}: #{truncated_subject}")
-    |> text_body(
-      VutuvWeb.EmailText.render("#{template}.text", %{
-        user: user,
-        birthday_childs: birthday_childs,
-        future_birthday_childs: future_birthday_childs
-      })
-    )
-  end
-
-  def enrichment_trigger(_user) do
-    nil
   end
 
   defp gen_email(pin, email, user, template, email_subject) do

@@ -1163,8 +1163,6 @@ dl.profile dd a.badge {
   /* Bare tables (legacy sets `th{color:#444;border:#ddd}` / `td{border:#eee}`). */
   th { color: #cbd5e1; border-color: #1e293b; }
   td { border-color: #1e293b; }
-  /* Icons drawn as near-black glyphs vanish on dark cards; flip them. */
-  .icon--back, .icon--lock, .icon--menu { filter: invert(1); }
   /* The redrawn stroke icons get proper dark variants (lighter strokes). */
   .icon--edit { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E"); }
   .icon--delete { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f87171' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/%3E%3Cpath d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E"); }

@@ -21,23 +21,6 @@ defmodule Vutuv.ProfilesTest do
     end
   end
 
-  describe "work_experiences" do
-    test "current_job/1 returns the current job" do
-      user = insert(:user)
-      insert(:work_experience, user: user, start_year: 2020, end_year: nil)
-      insert(:work_experience, user: user, start_year: 2015, end_year: 2019)
-
-      job = Profiles.current_job(user)
-      assert job.start_year == 2020
-      assert job.end_year == nil
-    end
-
-    test "current_job/1 returns nil when no work experience" do
-      user = insert(:user)
-      assert Profiles.current_job(user) == nil
-    end
-  end
-
   describe "count_user_assoc/2" do
     test "returns the count of associated records" do
       user = insert(:user)

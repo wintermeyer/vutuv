@@ -73,13 +73,13 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 | Context | Schemas | Purpose |
 |---|---|---|
 | `Vutuv.Accounts` | User, Email, Slug, SearchTerm, OAuthProvider, LoginPin, Locale, Exonym | Registration, PIN-based authentication, user management |
-| `Vutuv.Profiles` | Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience, UserSkill, Skill, Endorsement | User profile data |
+| `Vutuv.Profiles` | Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience | User profile data |
 | `Vutuv.Social` | Connection, Group, Membership | Following, groups |
 | `Vutuv.Tags` | Tag, UserTag, UserTagEndorsement | Tagging and endorsements |
 | `Vutuv.Recruiting` | RecruiterPackage, RecruiterSubscription, Coupon | Recruiter subscriptions |
 | `Vutuv.JobPostings` | JobPosting, JobPostingTag | Job listings |
 | `Vutuv.Search` | SearchQuery, SearchQueryRequester, SearchQueryResult | Search functionality |
-| `Vutuv.Notifications` | Emailer, Cronjob | Email notifications |
+| `Vutuv.Notifications` | Emailer | Email notifications |
 
 ## Running tests
 

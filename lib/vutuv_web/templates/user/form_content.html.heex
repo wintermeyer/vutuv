@@ -98,12 +98,6 @@
     <%= error_tag f, :noindex? %>
   </div>
 
-  <div class={"editform__field#{if error_tag(f, :noindex?), do: " editform__field--error"}"}>
-    <%= label f, :send_birthday_reminder, gettext("Would you like to receive birthday reminder emails?") %>
-    <%= select f, :send_birthday_reminder, [{gettext("Yes"), true}, {gettext("No"), false}] %>
-    <%= error_tag f, :send_birthday_reminder %>
-  </div>
-
   <div class="editform__actions">
     <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
     <%= submit if((@current_user), do: gettext("Save"), else: gettext("Create Account")), class: "button" %>
