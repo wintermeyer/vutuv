@@ -20,6 +20,19 @@ defmodule Vutuv.AccountsTest do
     |> Plug.Test.init_test_session(%{})
   end
 
+  # Moves a user's PIN's `created_at` `seconds_ago` into the past so the
+  # private `pin_expired?/1` threshold can be exercised without sleeping.
+  defp backdate_pin(user, type, seconds_ago) do
+    created_at =
+      NaiveDateTime.utc_now()
+      |> NaiveDateTime.add(-seconds_ago, :second)
+      |> NaiveDateTime.truncate(:second)
+
+    Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type))
+    |> LoginPin.changeset(%{created_at: created_at})
+    |> Repo.update!()
+  end
+
   describe "register_user/2" do
     test "creates a user with valid attrs" do
       conn = build_conn()
@@ -165,6 +178,20 @@ defmodule Vutuv.AccountsTest do
     test "errors when no PIN exists for the identity" do
       user = insert(:user)
       assert {:error, _} = Accounts.check_pin(user, "123456", "delete")
+    end
+
+    # Guards the float/second day-arithmetic rewrite of `pin_expired?/1`: a PIN is
+    # accepted just inside the 1800s window and rejected as expired just past it.
+    test "honours the PIN expiry window (still valid before, expired after)" do
+      user = insert(:user)
+      pin = Accounts.gen_pin_for(user, "delete")
+
+      backdate_pin(user, "delete", 1799)
+      assert {:ok, %User{}} = Accounts.check_pin(user, pin, "delete")
+
+      pin = Accounts.gen_pin_for(user, "delete")
+      backdate_pin(user, "delete", 1801)
+      assert {:expired, _} = Accounts.check_pin(user, pin, "delete")
     end
   end
 

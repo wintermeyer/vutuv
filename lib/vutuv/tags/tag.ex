@@ -105,23 +105,19 @@ defmodule Vutuv.Tags.Tag do
   # redundant distinct.
   defp related_for(current_user, assoc, tag) do
     source = current_user |> Ecto.assoc(assoc) |> Ecto.Query.exclude(:distinct)
-
-    Vutuv.Repo.all(
-      from(u in source,
-        left_join: us in assoc(u, :user_tags),
-        left_join: e in assoc(us, :endorsements),
-        where: us.tag_id == ^tag.id,
-        # most endorsed
-        order_by: fragment("count(?) DESC", e.id),
-        group_by: u.id,
-        limit: 10
-      )
-    )
+    most_endorsed_in_tag(source, tag)
   end
 
-  def reccomended_users(tag) do
+  def recommended_users(tag) do
+    most_endorsed_in_tag(Vutuv.Accounts.User, tag)
+  end
+
+  # The ten users with the most endorsements for `tag`, drawn from `source`
+  # (a queryable: a plain schema or an association query). Shared by
+  # `related_for/3` and `recommended_users/1`, which differ only in that source.
+  defp most_endorsed_in_tag(source, tag) do
     Vutuv.Repo.all(
-      from(u in Vutuv.Accounts.User,
+      from(u in source,
         left_join: us in assoc(u, :user_tags),
         left_join: e in assoc(us, :endorsements),
         where: us.tag_id == ^tag.id,

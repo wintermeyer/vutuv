@@ -71,7 +71,7 @@ defmodule VutuvWeb.UserController do
     # (finding [49]).
     header_job = current_job(user)
     emails = VutuvWeb.UserHelpers.emails_for_display(user, conn.assigns[:current_user])
-    reccomended_users = recommended_users(user)
+    recommended_users = recommended_users(user)
 
     conn
     |> assign(:emails, emails)
@@ -92,14 +92,14 @@ defmodule VutuvWeb.UserController do
     |> assign(:display_welcome_message, new_user?(user))
     |> assign(:active_subscription, active_subscription_for(conn.assigns[:current_user]))
     |> assign(:recruiter_packages, recruiter_packages_for(conn.assigns[:locale]))
-    |> assign(:reccomended_users, reccomended_users)
+    |> assign(:recommended_users, recommended_users)
     |> assign(
-      :reccomended_work_info,
-      VutuvWeb.UserHelpers.work_information_map(reccomended_users, 24)
+      :recommended_work_info,
+      VutuvWeb.UserHelpers.work_information_map(recommended_users, 24)
     )
     |> assign(
-      :reccomended_following,
-      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], reccomended_users)
+      :recommended_following,
+      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], recommended_users)
     )
     |> assign(:work_string_length, 35)
     |> assign(:new_coupon, build_coupon(user))
@@ -185,7 +185,7 @@ defmodule VutuvWeb.UserController do
         default
 
       user_tag ->
-        tag_users = Tag.reccomended_users(Repo.get(Tag, user_tag.tag_id))
+        tag_users = Tag.recommended_users(Repo.get(Tag, user_tag.tag_id))
         if tag_users == [user], do: default, else: tag_users
     end
   end

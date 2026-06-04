@@ -2,6 +2,7 @@ defmodule Vutuv.Accounts.SearchTerm do
   @moduledoc false
 
   use VutuvWeb, :model
+  import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
 
   schema "search_terms" do
     field(:value, :string)
@@ -19,8 +20,6 @@ defmodule Vutuv.Accounts.SearchTerm do
 
     changeset
   end
-
-  defp downcase_value(changeset), do: Vutuv.ChangesetHelpers.downcase_value(changeset)
 
   def create_search_terms(%{"first_name" => first_name, "last_name" => last_name}) do
     terms = combine_terms(first_name, last_name)

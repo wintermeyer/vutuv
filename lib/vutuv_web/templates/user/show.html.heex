@@ -140,19 +140,19 @@ routes; CSRF + method are handled by the rendered links. --%>
 
   <%!-- Right rail --%>
   <aside class="space-y-6">
-    <.card :if={Enum.count(@reccomended_users) > 0}>
+    <.card :if={Enum.count(@recommended_users) > 0}>
       <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
       <ul class="space-y-4">
-        <li :for={user <- @reccomended_users} class="flex items-center gap-3">
+        <li :for={user <- @recommended_users} class="flex items-center gap-3">
           <.link href={~p"/users/#{user}"} class="shrink-0">
             <.avatar user={user} size="sm" alt={"Avatar of #{full_name(user)}"} />
           </.link>
           <div class="min-w-0 text-sm">
             <.link href={~p"/users/#{user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(user)}</.link>
-            <p class="truncate text-slate-400">{Map.get(@reccomended_work_info, user.id, "")}</p>
+            <p class="truncate text-slate-400">{Map.get(@recommended_work_info, user.id, "")}</p>
           </div>
           <%= if @current_user && not same_user?(@current_user, user) do %>
-            <%= case Map.get(@reccomended_following, user.id) do %>
+            <%= case Map.get(@recommended_following, user.id) do %>
               <% connection_id when is_integer(connection_id) -> %>
                 <%= button to: ~p"/connections/#{connection_id}", method: :delete,
                       class: "ml-auto text-sm font-semibold text-slate-400 hover:text-slate-600" do %>

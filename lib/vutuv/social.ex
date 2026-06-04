@@ -71,12 +71,11 @@ defmodule Vutuv.Social do
   end
 
   def user_follows_user?(follower_id, followee_id) do
-    Repo.one(
+    Repo.exists?(
       from(c in Connection,
-        where: c.follower_id == ^follower_id and c.followee_id == ^followee_id,
-        select: count(c.id)
+        where: c.follower_id == ^follower_id and c.followee_id == ^followee_id
       )
-    ) > 0
+    )
   end
 
   # ── Groups ──

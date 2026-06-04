@@ -53,9 +53,16 @@ defmodule Vutuv.JobPostings.JobPostingTag do
     end
   end
 
+  # Read the already-loaded :tag association when present; only hit the database
+  # when it has not been preloaded. Mirrors `Vutuv.Tags.UserTag.tag/1` so callers
+  # that preload the tag avoid a query per row while bare structs still resolve.
+  @doc false
+  def tag(%__MODULE__{tag: %Vutuv.Tags.Tag{} = tag}), do: tag
+  def tag(%__MODULE__{} = job_posting_tag), do: Vutuv.Repo.preload(job_posting_tag, :tag).tag
+
   defimpl Phoenix.Param, for: Vutuv.JobPostings.JobPostingTag do
     def to_param(job_posting_tag) do
-      Vutuv.Repo.preload(job_posting_tag, [:tag]).tag.slug
+      Vutuv.JobPostings.JobPostingTag.tag(job_posting_tag).slug
     end
   end
 end

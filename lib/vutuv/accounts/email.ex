@@ -2,6 +2,7 @@ defmodule Vutuv.Accounts.Email do
   @moduledoc false
 
   use VutuvWeb, :model
+  import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
 
   schema "emails" do
     field(:value, :string)
@@ -24,8 +25,6 @@ defmodule Vutuv.Accounts.Email do
     |> unique_constraint(:value)
     |> fill_md5sum
   end
-
-  defdelegate downcase_value(changeset), to: Vutuv.ChangesetHelpers
 
   def fill_md5sum(changeset) do
     if value = get_change(changeset, :value) do

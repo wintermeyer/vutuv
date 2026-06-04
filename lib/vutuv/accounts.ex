@@ -301,16 +301,7 @@ defmodule Vutuv.Accounts do
   defp pin_expired?(%{created_at: nil}), do: true
 
   defp pin_expired?(%{created_at: date_time}) do
-    time_created =
-      date_time
-      |> NaiveDateTime.to_erl()
-      |> :calendar.datetime_to_gregorian_seconds()
-
-    now =
-      :calendar.universal_time()
-      |> :calendar.datetime_to_gregorian_seconds()
-
-    now - time_created > @pin_expire_time
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), date_time, :second) > @pin_expire_time
   end
 
   @doc """

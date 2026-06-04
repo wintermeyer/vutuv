@@ -2,6 +2,7 @@ defmodule Vutuv.Accounts.Slug do
   @moduledoc false
 
   use VutuvWeb, :model
+  import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
   alias Vutuv.Accounts.Slug
 
   schema "slugs" do
@@ -24,8 +25,6 @@ defmodule Vutuv.Accounts.Slug do
     |> trim_slug_to_32
     |> can_create_slug?(model)
   end
-
-  defp downcase_value(changeset), do: Vutuv.ChangesetHelpers.downcase_value(changeset)
 
   defp trim_slug_to_32(changeset) do
     get_change(changeset, :value)
@@ -50,27 +49,26 @@ defmodule Vutuv.Accounts.Slug do
     if slug_count == 0 do
       changeset
     else
-      last_slug_inserted_days =
-        (:calendar.datetime_to_gregorian_seconds(:calendar.universal_time()) -
-           :calendar.datetime_to_gregorian_seconds(
-             NaiveDateTime.to_erl(
-               hd(
-                 Vutuv.Repo.all(
-                   from(s in Slug,
-                     where: s.user_id == ^model.user_id,
-                     order_by: [desc: s.inserted_at],
-                     select: s.inserted_at
-                   )
-                 )
-               )
-             )
-           )) / 86_400
+      now = NaiveDateTime.utc_now()
 
-      user_age_days =
-        (:calendar.datetime_to_gregorian_seconds(:calendar.universal_time()) -
-           :calendar.datetime_to_gregorian_seconds(
-             NaiveDateTime.to_erl(Vutuv.Repo.get(Vutuv.Accounts.User, model.user_id).inserted_at)
-           )) / 86_400
+      last_slug_inserted_at =
+        hd(
+          Vutuv.Repo.all(
+            from(s in Slug,
+              where: s.user_id == ^model.user_id,
+              order_by: [desc: s.inserted_at],
+              select: s.inserted_at
+            )
+          )
+        )
+
+      # Keep FLOAT day semantics (divide seconds ourselves): the thresholds below
+      # compare against 30/90 days, and NaiveDateTime.diff(_, :day) would truncate
+      # and shift those thresholds at sub-day boundaries.
+      last_slug_inserted_days = NaiveDateTime.diff(now, last_slug_inserted_at, :second) / 86_400
+
+      user_inserted_at = Vutuv.Repo.get(Vutuv.Accounts.User, model.user_id).inserted_at
+      user_age_days = NaiveDateTime.diff(now, user_inserted_at, :second) / 86_400
 
       cond do
         slug_count < 3 and user_age_days < 30 -> changeset

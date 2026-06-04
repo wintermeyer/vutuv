@@ -2,6 +2,7 @@ defmodule Vutuv.Search.SearchQuery do
   @moduledoc false
 
   use VutuvWeb, :model
+  import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
   @derive {Phoenix.Param, key: :value}
 
   schema "search_queries" do
@@ -27,6 +28,4 @@ defmodule Vutuv.Search.SearchQuery do
     |> unique_constraint(:value)
     |> downcase_value
   end
-
-  defp downcase_value(changeset), do: Vutuv.ChangesetHelpers.downcase_value(changeset)
 end

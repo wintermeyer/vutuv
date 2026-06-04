@@ -76,7 +76,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
     |> nullify_default_birthdate()
-    |> downcase_value()
+    |> downcase_active_slug()
   end
 
   defp validate_avatar(changeset, %{avatar: avatar}),
@@ -131,7 +131,7 @@ defmodule Vutuv.Accounts.User do
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")
   def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Other")
 
-  defp downcase_value(changeset) do
+  defp downcase_active_slug(changeset) do
     update_change(changeset, :active_slug, &String.downcase/1)
   end
 

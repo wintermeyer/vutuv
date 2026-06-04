@@ -29,11 +29,10 @@ defmodule Vutuv.Tags.UserTagEndorsement do
   end
 
   def tag_endorsed?(user_tag_id, user_id) do
-    Vutuv.Repo.one!(
+    Vutuv.Repo.exists?(
       from(e in Vutuv.Tags.UserTagEndorsement,
-        where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id,
-        select: count("*")
+        where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id
       )
-    ) > 0
+    )
   end
 end

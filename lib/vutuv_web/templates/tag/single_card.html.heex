@@ -11,9 +11,9 @@
 		<h1><%= gettext("People you may know with this tag") %></h1>
 		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @related_users))}
 	<% end %>
-	<%= if Enum.count(@reccomended_users) > 0 do %>
+	<%= if Enum.count(@recommended_users) > 0 do %>
 		<h1><%= gettext("The most endorsed users with this tag") %></h1>
-		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @reccomended_users))}
+		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @recommended_users))}
 	<% end %>
   <%= if @conn.assigns[:current_user] && !(has_tag?(assigns[:current_user], assigns[:tag])) do %>
   <%= button to: ~p"/users/#{@current_user}/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "link_button" do %>
