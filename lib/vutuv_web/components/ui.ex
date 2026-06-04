@@ -273,6 +273,41 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  Legacy (Track 1) changeset-error banner shared by the `editform` `form_content`
+  templates. Renders the `.alert.alert-danger` row only when `@changeset.action`
+  is set (a failed submit), nothing on a fresh form. Styled by `components.css`,
+  not Tailwind — do not swap in utilities. Use it as `<.form_error changeset={@changeset} />`.
+  """
+  attr(:changeset, :any, required: true)
+
+  def form_error(assigns) do
+    ~H"""
+    <div :if={@changeset.action} class="alert alert-danger">
+      <p class="editform__error">{gettext("Oops, something went wrong! Please check the errors below.")}</p>
+    </div>
+    """
+  end
+
+  @doc """
+  Legacy (Track 1) Cancel/Submit actions row shared by the `editform`
+  `form_content` templates. Emits the same `.editform__actions` markup the
+  `link/2` + `submit/2` helpers produced (a `.button.button--cancel` link to
+  `@backlink` and a `.button` submit button), styled by `components.css`. Use it
+  as `<.form_actions backlink={@backlink} />`. Forms with a custom submit label
+  or no Cancel keep their hand-written row.
+  """
+  attr(:backlink, :string, required: true)
+
+  def form_actions(assigns) do
+    ~H"""
+    <div class="editform__actions">
+      <a class="button button--cancel" href={@backlink}>{gettext("Cancel")}</a>
+      <button class="button" type="submit">{gettext("Submit")}</button>
+    </div>
+    """
+  end
+
   @doc "Labelled text input for hand-written forms (legacy forms are styled by components.css)."
   attr(:name, :string, required: true)
   attr(:type, :string, default: "text")

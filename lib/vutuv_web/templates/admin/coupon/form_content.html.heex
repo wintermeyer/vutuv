@@ -1,9 +1,5 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
-  <%= if @changeset.action do %>
-    <div class="alert alert-danger">
-      <p class="editform__error"><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
-    </div>
-  <% end %>
+  <.form_error changeset={@changeset} />
 
 <div class={"editform__field#{if error_tag(f, :code), do: " editform__field--error"}"}>
   <%= label f, :code, class: "control-label" %>
@@ -41,8 +37,5 @@
   <%= error_tag f, :ends_on %>
 </div>
 
-<div class="editform__actions">
-  <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
-  <%= submit gettext("Submit"), class: "button" %>
-</div>
+<.form_actions backlink={@backlink} />
 </.form>

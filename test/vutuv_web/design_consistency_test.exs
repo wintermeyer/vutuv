@@ -93,4 +93,46 @@ defmodule VutuvWeb.DesignConsistencyTest do
       assert render(view) =~ "Benachrichtigungen"
     end
   end
+
+  # The shared `<.form_error>` / `<.form_actions>` components replace markup that
+  # was copy-pasted into ~20 legacy form_content templates. They must keep the
+  # exact legacy classes (`.alert`, `.editform__error`, `.editform__actions`,
+  # `.button`, `.button--cancel`) so `components.css` keeps styling them, and the
+  # banner must stay conditional on `@changeset.action`. The phone-number form is
+  # a representative converted site: its controller re-renders the form with a
+  # failed changeset on invalid input.
+  describe "shared legacy form components" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "a fresh form hides the error banner but shows Cancel + Submit", %{
+      conn: conn,
+      user: user
+    } do
+      conn = get(conn, ~p"/users/#{user}/phone_numbers/new")
+      html = html_response(conn, 200)
+
+      refute html =~ "alert-danger"
+      refute html =~ "Oops, something went wrong"
+
+      # The Cancel link points back to the @backlink the controller passes.
+      assert html =~ ~s(class="button button--cancel" href="#{~p"/users/#{user}/phone_numbers"}")
+      assert html =~ ~s(<button class="button" type="submit">)
+    end
+
+    test "a failed submit re-renders the form with the error banner", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/users/#{user}/phone_numbers", phone_number: %{"value" => ""})
+      html = html_response(conn, 200)
+
+      assert html =~ ~s(class="alert alert-danger")
+      assert html =~ ~s(<p class="editform__error">)
+      assert html =~ "Oops, something went wrong"
+
+      # The actions row still renders on the failed re-render.
+      assert html =~ ~s(class="button button--cancel")
+      assert html =~ ~s(<button class="button" type="submit">)
+    end
+  end
 end
