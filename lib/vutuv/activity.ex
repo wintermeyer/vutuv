@@ -104,39 +104,39 @@ defmodule Vutuv.Activity do
   to the follower's profile and show their picture.
   """
   def notify_new_follower(followee_id, follower) do
-    notify(followee_id, %{
-      kind: "follower",
-      text: "started following you.",
-      actor_name: display_name(follower),
-      actor_param: actor_param(follower),
-      actor_avatar: actor_avatar(follower),
-      at: DateTime.utc_now()
-    })
+    notify(
+      followee_id,
+      Map.merge(actor_fields(follower), %{
+        kind: "follower",
+        text: "started following you.",
+        at: DateTime.utc_now()
+      })
+    )
   end
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
   def notify_endorsement(owner_id, endorser, tag_name) do
-    notify(owner_id, %{
-      kind: "endorsement",
-      tag: tag_name,
-      text: "endorsed you for #{tag_name}.",
-      actor_name: display_name(endorser),
-      actor_param: actor_param(endorser),
-      actor_avatar: actor_avatar(endorser),
-      at: DateTime.utc_now()
-    })
+    notify(
+      owner_id,
+      Map.merge(actor_fields(endorser), %{
+        kind: "endorsement",
+        tag: tag_name,
+        text: "endorsed you for #{tag_name}.",
+        at: DateTime.utc_now()
+      })
+    )
   end
 
   @doc ~S(Convenience: an "is now connected with you" notification after a mutual follow.)
   def notify_connection(user_id, other) do
-    notify(user_id, %{
-      kind: "connection",
-      text: "is now connected with you.",
-      actor_name: display_name(other),
-      actor_param: actor_param(other),
-      actor_avatar: actor_avatar(other),
-      at: DateTime.utc_now()
-    })
+    notify(
+      user_id,
+      Map.merge(actor_fields(other), %{
+        kind: "connection",
+        text: "is now connected with you.",
+        at: DateTime.utc_now()
+      })
+    )
   end
 
   ## Derived notifications feed
@@ -210,10 +210,7 @@ defmodule Vutuv.Activity do
   """
   def notifications_count(nil), do: 0
 
-  def notifications_count(user_id) do
-    count_followers(user_id, nil) +
-      count_endorsements(user_id, nil) + count_connections(user_id, nil)
-  end
+  def notifications_count(user_id), do: total_count(user_id, nil)
 
   @doc """
   How many feed events are newer than the user's read marker (all of them when
@@ -223,9 +220,23 @@ defmodule Vutuv.Activity do
 
   def unread_notification_count(user_id) do
     read_at = Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
+    total_count(user_id, read_at)
+  end
 
-    count_followers(user_id, read_at) +
-      count_endorsements(user_id, read_at) + count_connections(user_id, read_at)
+  # The three feed sources are counted in a single round trip: each count is a
+  # scalar subquery, summed in one SELECT. unread_notification_count/1 still
+  # needs one prior read for the marker, so it ends up at 2 queries (was 4);
+  # notifications_count/1 needs no marker and so runs in 1 query (was 3). The
+  # strict `> read_at` unread filter and the GREATEST-anchored mutuality
+  # timestamp are unchanged — only the round trips collapse.
+  defp total_count(user_id, read_at) do
+    Repo.one(
+      from(s in subquery(count_followers(user_id, read_at)),
+        select:
+          s.count + subquery(count_endorsements(user_id, read_at)) +
+            subquery(count_connections(user_id, read_at))
+      )
+    )
   end
 
   defp follower_items(user_id, limit, cursor) do
@@ -298,29 +309,36 @@ defmodule Vutuv.Activity do
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
   defp actor_item(id, kind, at, actor) do
+    Map.merge(actor_fields(actor), %{id: id, kind: kind, at: at})
+  end
+
+  # The actor triple (name / route param / avatar) that the live `notify_*`
+  # payloads and the derived feed items must carry identically. Both sides merge
+  # their own kind/text/at (and :tag for endorsements) onto this, so the shapes
+  # stay in lock-step. Accepts a bare map too: the activity tests pass plain
+  # maps as actors, where only the name is derivable.
+  defp actor_fields(actor) do
     %{
-      id: id,
-      kind: kind,
-      at: at,
       actor_name: display_name(actor),
       actor_param: actor_param(actor),
       actor_avatar: actor_avatar(actor)
     }
   end
 
+  # Each count helper returns a query selecting a single count, so total_count/2
+  # can fold all three into one round trip via scalar subqueries.
   defp count_followers(user_id, read_at) do
-    from(c in Connection, where: c.followee_id == ^user_id)
+    from(c in Connection, where: c.followee_id == ^user_id, select: %{count: count()})
     |> since(read_at)
-    |> Repo.aggregate(:count)
   end
 
   defp count_endorsements(user_id, read_at) do
     from(e in UserTagEndorsement,
       join: ut in assoc(e, :user_tag),
-      where: ut.user_id == ^user_id and e.user_id != ^user_id
+      where: ut.user_id == ^user_id and e.user_id != ^user_id,
+      select: %{count: count()}
     )
     |> since(read_at)
-    |> Repo.aggregate(:count)
   end
 
   defp count_connections(user_id, read_at) do
@@ -328,22 +346,20 @@ defmodule Vutuv.Activity do
       from(c in Connection,
         join: r in Connection,
         on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
-        where: c.followee_id == ^user_id
+        where: c.followee_id == ^user_id,
+        select: %{count: count()}
       )
 
-    query =
-      if read_at do
-        # The mutuality event happens at the later of the two follows.
-        where(
-          query,
-          [c, r],
-          fragment("GREATEST(?, ?) > ?", c.inserted_at, r.inserted_at, ^read_at)
-        )
-      else
-        query
-      end
-
-    Repo.aggregate(query, :count)
+    if read_at do
+      # The mutuality event happens at the later of the two follows.
+      where(
+        query,
+        [c, r],
+        fragment("GREATEST(?, ?) > ?", c.inserted_at, r.inserted_at, ^read_at)
+      )
+    else
+      query
+    end
   end
 
   defp since(query, nil), do: query
