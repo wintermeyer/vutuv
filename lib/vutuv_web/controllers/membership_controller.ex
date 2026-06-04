@@ -1,6 +1,6 @@
 defmodule VutuvWeb.MembershipController do
   use VutuvWeb, :controller
-  plug(:require_user_logged_in)
+  plug(VutuvWeb.Plug.RequireLoginOr404)
   plug(:assign_connection)
 
   alias Vutuv.Social.Connection
@@ -81,19 +81,5 @@ defmodule VutuvWeb.MembershipController do
     |> put_flash(:error, gettext("Invalid connection!"))
     |> redirect(to: ~p"/")
     |> halt
-  end
-
-  defp require_user_logged_in(conn, _opts) do
-    case conn.assigns[:current_user_id] do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      _id ->
-        conn
-    end
   end
 end

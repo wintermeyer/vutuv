@@ -1,6 +1,7 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
   alias Vutuv.Profiles.SocialMediaAccount
+  alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
@@ -56,18 +57,18 @@ defmodule VutuvWeb.SocialMediaAccountController do
   end
 
   def show(conn, %{"id" => id}) do
-    social_media_account = Repo.get!(assoc(conn.assigns[:user], :social_media_accounts), id)
+    social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     render(conn, "show.html", social_media_account: social_media_account)
   end
 
   def edit(conn, %{"id" => id}) do
-    social_media_account = Repo.get!(assoc(conn.assigns[:user], :social_media_accounts), id)
+    social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     changeset = SocialMediaAccount.changeset(social_media_account)
     render(conn, "edit.html", social_media_account: social_media_account, changeset: changeset)
   end
 
   def update(conn, %{"id" => id, "social_media_account" => social_media_account_params}) do
-    social_media_account = Repo.get!(assoc(conn.assigns[:user], :social_media_accounts), id)
+    social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     changeset = SocialMediaAccount.changeset(social_media_account, social_media_account_params)
 
     case Repo.update(changeset) do
@@ -87,7 +88,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
   end
 
   def delete(conn, %{"id" => id}) do
-    social_media_account = Repo.get!(assoc(conn.assigns[:user], :social_media_accounts), id)
+    social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
 
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).

@@ -4,7 +4,7 @@ defmodule VutuvWeb.ConnectionController do
   alias Vutuv.Social.Connection
   alias VutuvWeb.ControllerHelpers
 
-  plug(:require_user_logged_in)
+  plug(VutuvWeb.Plug.RequireLoginOr404)
   plug(:scrub_params, "connection" when action in [:create, :update])
 
   def index(conn, _params) do
@@ -70,18 +70,4 @@ defmodule VutuvWeb.ConnectionController do
 
   defp fallback_url(%Vutuv.Accounts.User{} = user), do: ~p"/users/#{user}"
   defp fallback_url(_), do: ~p"/"
-
-  defp require_user_logged_in(conn, _opts) do
-    case conn.assigns[:current_user_id] do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      _id ->
-        conn
-    end
-  end
 end

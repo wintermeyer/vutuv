@@ -4,6 +4,7 @@ defmodule VutuvWeb.Admin.ExonymController do
   plug(VutuvWeb.Plug.AuthAdmin)
 
   alias Vutuv.Accounts.Exonym
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     exonyms = Repo.all(from(e in Exonym, preload: [:locale, :exonym_locale]))
@@ -18,15 +19,11 @@ defmodule VutuvWeb.Admin.ExonymController do
   def create(conn, %{"exonym" => exonym_params}) do
     changeset = Exonym.changeset(%Exonym{}, exonym_params)
 
-    case Repo.insert(changeset) do
-      {:ok, _exonym} ->
-        conn
-        |> put_flash(:info, gettext("Exonym created successfully."))
-        |> redirect(to: ~p"/admin/exonyms")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.insert(changeset),
+      flash: gettext("Exonym created successfully."),
+      redirect_to: ~p"/admin/exonyms",
+      render: "new.html"
+    )
   end
 
   def show(conn, %{"id" => id}) do
@@ -47,15 +44,12 @@ defmodule VutuvWeb.Admin.ExonymController do
     exonym = Repo.get!(Exonym, id)
     changeset = Exonym.changeset(exonym, exonym_params)
 
-    case Repo.update(changeset) do
-      {:ok, exonym} ->
-        conn
-        |> put_flash(:info, gettext("Exonym updated successfully."))
-        |> redirect(to: ~p"/admin/exonyms/#{exonym}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html", exonym: exonym, changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Exonym updated successfully."),
+      redirect_to: &~p"/admin/exonyms/#{&1}",
+      render: "edit.html",
+      assigns: [exonym: exonym]
+    )
   end
 
   def delete(conn, %{"id" => id}) do

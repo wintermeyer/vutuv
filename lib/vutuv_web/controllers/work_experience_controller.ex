@@ -4,7 +4,14 @@ defmodule VutuvWeb.WorkExperienceController do
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "work_experience" when action in [:create, :update])
-  plug(:resolve_slug)
+
+  plug(VutuvWeb.Plug.ResolveOwnedSlug,
+    parent: :user,
+    assoc: :work_experiences,
+    slug_param: "id",
+    field: :slug,
+    assign: :job
+  )
 
   def index(conn, _params) do
     user =
@@ -97,21 +104,4 @@ defmodule VutuvWeb.WorkExperienceController do
     |> put_flash(:info, gettext("Work experience deleted successfully."))
     |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences")
   end
-
-  defp resolve_slug(%{params: %{"id" => id}} = conn, _) do
-    Repo.one(from(w in assoc(conn.assigns[:user], :work_experiences), where: w.slug == ^id))
-    |> case do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      job ->
-        assign(conn, :job, job)
-    end
-  end
-
-  defp resolve_slug(conn, _), do: conn
 end

@@ -12,7 +12,14 @@ defmodule VutuvWeb.JobPostingTagController do
   # do not own.
   plug(:resolve_job_posting)
 
-  plug(:resolve_slug)
+  plug(VutuvWeb.Plug.ResolveOwnedSlug,
+    parent: :job_posting,
+    assoc: :job_posting_tags,
+    join: :tag,
+    slug_param: "id",
+    field: :slug,
+    assign: :job_posting_tag
+  )
 
   alias Vutuv.JobPostings.JobPostingTag
   alias Vutuv.Tags.Tag
@@ -98,26 +105,4 @@ defmodule VutuvWeb.JobPostingTagController do
     |> render("404.html")
     |> halt()
   end
-
-  defp resolve_slug(%{params: %{"id" => slug}} = conn, _) do
-    Repo.one(
-      from(w in assoc(conn.assigns[:job_posting], :job_posting_tags),
-        join: t in assoc(w, :tag),
-        where: t.slug == ^slug
-      )
-    )
-    |> case do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      job_posting_tag ->
-        assign(conn, :job_posting_tag, job_posting_tag)
-    end
-  end
-
-  defp resolve_slug(conn, _), do: conn
 end

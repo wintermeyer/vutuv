@@ -1,6 +1,15 @@
 defmodule VutuvWeb.UserTagController do
   use VutuvWeb, :controller
-  plug(:resolve_slug)
+
+  plug(VutuvWeb.Plug.ResolveOwnedSlug,
+    parent: :user,
+    assoc: :user_tags,
+    join: :tag,
+    slug_param: "id",
+    field: :slug,
+    assign: :user_tag
+  )
+
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "tag_param" when action in [:create])
 
@@ -56,26 +65,4 @@ defmodule VutuvWeb.UserTagController do
     |> put_flash(:info, gettext("User tag deleted successfully."))
     |> redirect(to: ~p"/users/#{conn.assigns[:user]}/tags")
   end
-
-  defp resolve_slug(%{params: %{"id" => slug}} = conn, _) do
-    Repo.one(
-      from(w in assoc(conn.assigns[:user], :user_tags),
-        join: t in assoc(w, :tag),
-        where: t.slug == ^slug
-      )
-    )
-    |> case do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      user_tag ->
-        assign(conn, :user_tag, user_tag)
-    end
-  end
-
-  defp resolve_slug(conn, _), do: conn
 end

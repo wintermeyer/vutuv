@@ -2,6 +2,7 @@ defmodule VutuvWeb.AddressController do
   use VutuvWeb, :controller
 
   alias Vutuv.Profiles.Address
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Plug.Locale
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
@@ -25,15 +26,12 @@ defmodule VutuvWeb.AddressController do
       |> build_assoc(:addresses)
       |> Address.changeset(address_params)
 
-    case Repo.insert(changeset) do
-      {:ok, _address} ->
-        conn
-        |> put_flash(:info, gettext("Address created successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/addresses")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset, country: get_template(conn))
-    end
+    ControllerHelpers.save(conn, Repo.insert(changeset),
+      flash: gettext("Address created successfully."),
+      redirect_to: ~p"/users/#{conn.assigns[:user]}/addresses",
+      render: "new.html",
+      assigns: [country: get_template(conn)]
+    )
   end
 
   def create(conn, %{"country_select" => country_param}) do
@@ -42,18 +40,18 @@ defmodule VutuvWeb.AddressController do
   end
 
   def show(conn, %{"id" => id}) do
-    address = Repo.get!(assoc(conn.assigns[:user], :addresses), id)
+    address = ControllerHelpers.get_owned!(conn, :addresses, id)
     render(conn, "show.html", address: address)
   end
 
   def edit(conn, %{"id" => id}) do
-    address = Repo.get!(assoc(conn.assigns[:user], :addresses), id)
+    address = ControllerHelpers.get_owned!(conn, :addresses, id)
     changeset = Address.changeset(address)
     render(conn, "edit.html", address: address, changeset: changeset, country: get_template(conn))
   end
 
   def update(conn, %{"id" => id, "address" => address_params}) do
-    address = Repo.get!(assoc(conn.assigns[:user], :addresses), id)
+    address = ControllerHelpers.get_owned!(conn, :addresses, id)
     changeset = Address.changeset(address, address_params)
 
     case Repo.update(changeset) do
@@ -72,7 +70,7 @@ defmodule VutuvWeb.AddressController do
   end
 
   def delete(conn, %{"id" => id}) do
-    address = Repo.get!(assoc(conn.assigns[:user], :addresses), id)
+    address = ControllerHelpers.get_owned!(conn, :addresses, id)
 
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).

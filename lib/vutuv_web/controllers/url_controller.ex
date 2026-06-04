@@ -1,6 +1,7 @@
 defmodule VutuvWeb.UrlController do
   use VutuvWeb, :controller
   alias Vutuv.Profiles.Url
+  alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "url" when action in [:create, :update])
@@ -41,18 +42,18 @@ defmodule VutuvWeb.UrlController do
   end
 
   def show(conn, %{"id" => id}) do
-    url = Repo.get!(assoc(conn.assigns[:user], :urls), id)
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
     render(conn, "show.html", url: url)
   end
 
   def edit(conn, %{"id" => id}) do
-    url = Repo.get!(assoc(conn.assigns[:user], :urls), id)
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
     changeset = Url.changeset(url)
     render(conn, "edit.html", url: url, changeset: changeset)
   end
 
   def update(conn, %{"id" => id, "url" => url_params}) do
-    url = Repo.get!(assoc(conn.assigns[:user], :urls), id)
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
     changeset = Url.changeset(url, url_params)
 
     case Repo.update(changeset) do
@@ -71,7 +72,7 @@ defmodule VutuvWeb.UrlController do
   end
 
   def delete(conn, %{"id" => id}) do
-    url = Repo.get!(assoc(conn.assigns[:user], :urls), id)
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).
 

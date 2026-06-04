@@ -3,6 +3,7 @@ defmodule VutuvWeb.EmailController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.Email
   alias Vutuv.Notifications.Emailer
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
@@ -118,28 +119,25 @@ defmodule VutuvWeb.EmailController do
   end
 
   def edit(conn, %{"id" => id}) do
-    email = Repo.get!(assoc(conn.assigns[:user], :emails), id)
+    email = ControllerHelpers.get_owned!(conn, :emails, id)
     changeset = Email.changeset(email)
     render(conn, "edit.html", email: email, changeset: changeset)
   end
 
   def update(conn, %{"id" => id, "email" => email_params}) do
-    email = Repo.get!(assoc(conn.assigns[:user], :emails), id)
+    email = ControllerHelpers.get_owned!(conn, :emails, id)
     changeset = Email.changeset(email, email_params)
 
-    case Repo.update(changeset) do
-      {:ok, email} ->
-        conn
-        |> put_flash(:info, gettext("Email updated successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails/#{email}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html", email: email, changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Email updated successfully."),
+      redirect_to: &~p"/users/#{conn.assigns[:user]}/emails/#{&1}",
+      render: "edit.html",
+      assigns: [email: email]
+    )
   end
 
   def delete(conn, %{"id" => id}) do
-    email = Repo.get!(assoc(conn.assigns[:user], :emails), id)
+    email = ControllerHelpers.get_owned!(conn, :emails, id)
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).
     case Email.can_delete?(conn.assigns.current_user.id) do

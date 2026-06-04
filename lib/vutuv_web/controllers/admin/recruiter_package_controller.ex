@@ -4,6 +4,7 @@ defmodule VutuvWeb.Admin.RecruiterPackageController do
   plug(VutuvWeb.Plug.AuthAdmin)
 
   alias Vutuv.Recruiting.RecruiterPackage
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     recruiter_packages = Repo.all(RecruiterPackage)
@@ -28,15 +29,11 @@ defmodule VutuvWeb.Admin.RecruiterPackageController do
   def create(conn, %{"recruiter_package" => recruiter_package_params}) do
     changeset = RecruiterPackage.changeset(%RecruiterPackage{}, recruiter_package_params)
 
-    case Repo.insert(changeset) do
-      {:ok, _recruiter_package} ->
-        conn
-        |> put_flash(:info, gettext("Recruiter package created successfully."))
-        |> redirect(to: ~p"/admin/recruiter_packages")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.insert(changeset),
+      flash: gettext("Recruiter package created successfully."),
+      redirect_to: ~p"/admin/recruiter_packages",
+      render: "new.html"
+    )
   end
 
   def show(conn, %{"package_slug" => id}) do
@@ -54,15 +51,12 @@ defmodule VutuvWeb.Admin.RecruiterPackageController do
     recruiter_package = Repo.get!(RecruiterPackage, id)
     changeset = RecruiterPackage.changeset(recruiter_package, recruiter_package_params)
 
-    case Repo.update(changeset) do
-      {:ok, recruiter_package} ->
-        conn
-        |> put_flash(:info, gettext("Recruiter package updated successfully."))
-        |> redirect(to: ~p"/admin/recruiter_packages/#{recruiter_package}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html", recruiter_package: recruiter_package, changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Recruiter package updated successfully."),
+      redirect_to: &~p"/admin/recruiter_packages/#{&1}",
+      render: "edit.html",
+      assigns: [recruiter_package: recruiter_package]
+    )
   end
 
   def delete(conn, %{"package_slug" => id}) do

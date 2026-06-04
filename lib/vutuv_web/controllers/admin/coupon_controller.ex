@@ -4,6 +4,7 @@ defmodule VutuvWeb.Admin.CouponController do
   plug(VutuvWeb.Plug.AuthAdmin)
 
   alias Vutuv.Recruiting.Coupon
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     coupons = Repo.all(Coupon)
@@ -18,15 +19,11 @@ defmodule VutuvWeb.Admin.CouponController do
   def create(conn, %{"coupon" => coupon_params}) do
     changeset = Coupon.changeset(%Coupon{}, coupon_params)
 
-    case Repo.insert(changeset) do
-      {:ok, _coupon} ->
-        conn
-        |> put_flash(:info, gettext("Coupon created successfully."))
-        |> redirect(to: ~p"/admin/coupons")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.insert(changeset),
+      flash: gettext("Coupon created successfully."),
+      redirect_to: ~p"/admin/coupons",
+      render: "new.html"
+    )
   end
 
   def show(conn, %{"id" => id}) do
@@ -44,15 +41,12 @@ defmodule VutuvWeb.Admin.CouponController do
     coupon = Repo.get!(Coupon, id)
     changeset = Coupon.changeset(coupon, coupon_params)
 
-    case Repo.update(changeset) do
-      {:ok, coupon} ->
-        conn
-        |> put_flash(:info, gettext("Coupon updated successfully."))
-        |> redirect(to: ~p"/admin/coupons/#{coupon}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html", coupon: coupon, changeset: changeset)
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Coupon updated successfully."),
+      redirect_to: &~p"/admin/coupons/#{&1}",
+      render: "edit.html",
+      assigns: [coupon: coupon]
+    )
   end
 
   def delete(conn, %{"id" => id}) do

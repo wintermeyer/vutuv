@@ -1,8 +1,17 @@
 defmodule VutuvWeb.UserTagEndorsementController do
   use VutuvWeb, :controller
 
-  plug(:resolve_slug)
-  plug(:require_user_logged_in)
+  plug(VutuvWeb.Plug.ResolveOwnedSlug,
+    parent: :user,
+    assoc: :user_tags,
+    join: :tag,
+    slug_param: "id",
+    field: :slug,
+    select: :id,
+    assign: :user_tag_id
+  )
+
+  plug(VutuvWeb.Plug.RequireLoginOr404)
 
   alias VutuvWeb.ControllerHelpers
 
@@ -44,42 +53,5 @@ defmodule VutuvWeb.UserTagEndorsementController do
 
   defp referrer_url(conn) do
     ControllerHelpers.referrer_url(conn, ~p"/users/#{conn.assigns[:user]}")
-  end
-
-  defp resolve_slug(%{params: %{"id" => slug}} = conn, _) do
-    Repo.one(
-      from(w in assoc(conn.assigns[:user], :user_tags),
-        join: t in assoc(w, :tag),
-        where: t.slug == ^slug,
-        select: w.id
-      )
-    )
-    |> case do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      id ->
-        assign(conn, :user_tag_id, id)
-    end
-  end
-
-  defp resolve_slug(conn, _), do: conn
-
-  defp require_user_logged_in(conn, _) do
-    case(conn.assigns[:current_user_id]) do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      _id ->
-        conn
-    end
   end
 end
