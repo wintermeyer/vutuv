@@ -45,7 +45,7 @@ defmodule VutuvWeb.MessageLive.Index do
          |> assign(:conversations, conversations())
          |> assign(:conv_id, conv_id)
          |> assign(:typing_tokens, %{})
-         |> assign(:online, list_online())
+         |> assign(:online, list_online(user.id))
          |> stream(:messages, seed_messages(conv_id), dom_id: &"message-#{&1.id}")
          |> assign_form()}
     end
@@ -118,7 +118,7 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket) do
-    {:noreply, assign(socket, :online, list_online())}
+    {:noreply, assign(socket, :online, list_online(socket.assigns.current_user_id))}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -129,11 +129,15 @@ defmodule VutuvWeb.MessageLive.Index do
 
   defp assign_form(socket), do: assign(socket, :form, to_form(%{"body" => ""}, as: :message))
 
-  # One entry per presence key (= per user), not de-duplicated by display name,
-  # so the online count is correct even when names repeat.
-  defp list_online do
+  # Other people online: one entry per presence key (= per user), with the
+  # viewer's own key dropped so the label counts other members, not themselves.
+  # Not de-duplicated by display name, so the count is right when names repeat.
+  defp list_online(current_user_id) do
+    self_key = to_string(current_user_id)
+
     @presence_topic
     |> Presence.list()
+    |> Enum.reject(fn {key, _meta} -> key == self_key end)
     |> Enum.map(fn {_key, %{metas: [meta | _]}} -> meta.name end)
   end
 

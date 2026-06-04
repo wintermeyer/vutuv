@@ -71,6 +71,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       # must prepend, never update a derived row in place.
       |> Map.put(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
 
+    # The user is watching the event arrive, so it is already read: advance the
+    # read marker, which broadcasts :notifications_read and keeps the shell's
+    # bell badge at zero instead of bumping it for an event shown live here.
+    if user = socket.assigns[:current_user], do: Activity.mark_notifications_read(user.id)
+
     {:noreply,
      socket
      |> assign(:empty?, false)
@@ -138,6 +143,13 @@ defmodule VutuvWeb.NotificationLive.Index do
   # "Load 50 of 80 more": the next batch size, then everything still unloaded,
   # so the user can tell how far into the feed they are. Counts render in the
   # site-wide compact form (exact up to 999, then 1K/5M).
+  #
+  # `remaining` is a mount-time snapshot of the feed size, while more?/cursor
+  # follow the live database, so the snapshot can run dry (<= 0) while older
+  # pages still exist. Showing "Load 0 of 0 more" would be nonsense, so fall
+  # back to a plain label once the snapshot can no longer count down.
+  defp load_more_label(remaining) when remaining <= 0, do: gettext("Load more")
+
   defp load_more_label(remaining) do
     gettext("Load %{count} of %{remaining} more",
       count: compact_count(min(@page_size, remaining)),

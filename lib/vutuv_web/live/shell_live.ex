@@ -61,6 +61,10 @@ defmodule VutuvWeb.ShellLive do
   def handle_info({:new_notification, _n}, socket),
     do: {:noreply, update(socket, :notifications_count, &(&1 + 1))}
 
+  # Placeholder: nothing broadcasts {:new_message, ...} on the user topic yet.
+  # Messages only broadcast on the per-conversation topic (see MessageLive). It
+  # stays so the badge lights up for free once a per-user message feed pushes
+  # here, mirroring the notification clause above.
   def handle_info({:new_message, _m}, socket),
     do: {:noreply, update(socket, :messages_count, &(&1 + 1))}
 

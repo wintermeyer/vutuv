@@ -97,6 +97,28 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ "started following you."
     end
 
+    test "a live event while on the page re-marks read so the shell badge stays 0", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The shell listens on the user topic and zeroes the bell badge whenever
+      # notifications are marked read. Subscribe after mount (the mount-time
+      # mark already fired) so we only see the read triggered by the new event.
+      Vutuv.Activity.subscribe(user.id)
+
+      # A real follow lands while the user is watching: the row makes it unread,
+      # and the live broadcast renders it on the open page.
+      follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
+      insert(:connection, follower: follower, followee: user)
+      Vutuv.Activity.notify_new_follower(user.id, follower)
+      _ = :sys.get_state(live.pid)
+
+      # Showing the event live must advance the read marker, which broadcasts
+      # :notifications_read and keeps the bell badge at zero rather than +1.
+      assert_receive :notifications_read
+      assert Vutuv.Activity.unread_notification_count(user.id) == 0
+    end
+
     test "live notifications get dom ids outside the derived id namespace", %{conn: conn} do
       # Live ids carry a "live-" prefix while derived rows use "<kind>-<row id>",
       # so a live event can never update a derived row in place by id collision.
@@ -142,6 +164,36 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute has_element?(live, "#load-more")
     end
 
+    test "the Load more label falls back to plain text when the snapshot runs out", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # `remaining` is a mount-time count snapshot, while more?/cursor track the
+      # live database. Seed 51 events so the snapshot is 51 (page one shows 50,
+      # one remaining) ...
+      for i <- 1..51 do
+        c = insert(:connection, follower: insert(:user), followee: user)
+        backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
+      end
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      assert live |> element("#load-more") |> render() =~ "Load 1 of 1 more"
+
+      # ... then slip many older events in behind the snapshot. The next page
+      # pulls 50 of them, driving `remaining` to zero while more? is still true.
+      for i <- 1..60 do
+        c = insert(:connection, follower: insert(:user), followee: user)
+        backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -100 - i))
+      end
+
+      live |> element("#load-more") |> render_click()
+
+      # The button still loads more, so it must not advertise "Load 0 of 0 more".
+      assert has_element?(live, "#load-more")
+      label = live |> element("#load-more") |> render()
+      refute label =~ "0 of 0"
+      assert label =~ "Load more"
+    end
+
     test "a short feed shows no Load more button", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:connection, follower: insert(:user), followee: user)
@@ -169,4 +221,15 @@ defmodule VutuvWeb.NotificationLiveTest do
 
   # Derived follower rows carry an `id="notification-follower-<row id>"`.
   defp row_count(html), do: length(String.split(html, ~s(id="notification-follower-))) - 1
+
+  # Connection inserted_at has second precision; backdating to distinct seconds
+  # gives the feed a deterministic newest-first order to paginate through.
+  defp backdate_connection(%Vutuv.Social.Connection{id: id}, at) do
+    import Ecto.Query
+
+    Vutuv.Repo.update_all(
+      from(c in Vutuv.Social.Connection, where: c.id == ^id),
+      set: [inserted_at: at]
+    )
+  end
 end

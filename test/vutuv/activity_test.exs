@@ -288,6 +288,27 @@ defmodule Vutuv.ActivityTest do
       assert Activity.unread_notification_count(me.id) == 0
       assert Repo.get!(Vutuv.Accounts.User, me.id).notifications_read_at
     end
+
+    test "an event landing in the same second as the mark still counts as unread" do
+      me = insert(:user)
+      # Everything the user has seen so far is comfortably in the past, so the
+      # read marker should land back there, not on the current wall clock.
+      old = insert(:connection, follower: insert(:user), followee: me)
+      backdate_connection(old, ~N[2020-01-01 12:00:00])
+
+      # Capture the second the (buggy) wall-clock marker would stamp, mark read,
+      # then file a brand-new event in that very second. With a wall-clock
+      # marker plus a strict `>` comparison the new event ties the marker and is
+      # silently dropped; the marker must instead trail the last seen event.
+      now_second = NaiveDateTime.utc_now(:second)
+      Activity.mark_notifications_read(me.id)
+      assert Activity.unread_notification_count(me.id) == 0
+
+      fresh = insert(:connection, follower: insert(:user), followee: me)
+      backdate_connection(fresh, now_second)
+
+      assert Activity.unread_notification_count(me.id) == 1
+    end
   end
 
   # Walk the feed page by page until the context says there is nothing older.

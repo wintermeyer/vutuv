@@ -45,10 +45,48 @@ defmodule Vutuv.Activity do
   def mark_notifications_read(user_id) do
     Repo.update_all(
       from(u in User, where: u.id == ^user_id),
-      set: [notifications_read_at: NaiveDateTime.utc_now(:second)]
+      set: [notifications_read_at: read_marker(user_id)]
     )
 
     broadcast(user_id, :notifications_read)
+  end
+
+  # The read marker is the timestamp of the newest feed event the user has seen,
+  # not the wall clock. The event tables only keep second precision, and unread
+  # counting uses a strict `>`, so a wall-clock marker would swallow any event
+  # that happens to land in the same second the user opened the page. Anchoring
+  # the marker to the last seen event keeps such same-second arrivals unread.
+  # With no events yet there is nothing newer to miss, so the wall clock is
+  # fine (and beats a NULL marker, which would mean "never read").
+  defp read_marker(user_id) do
+    latest_event_at(user_id) || NaiveDateTime.utc_now(:second)
+  end
+
+  defp latest_event_at(user_id) do
+    follower_max =
+      from(c in Connection, where: c.followee_id == ^user_id, select: max(c.inserted_at))
+      |> Repo.one()
+
+    endorsement_max =
+      from(e in UserTagEndorsement,
+        join: ut in assoc(e, :user_tag),
+        where: ut.user_id == ^user_id and e.user_id != ^user_id,
+        select: max(e.inserted_at)
+      )
+      |> Repo.one()
+
+    connection_max =
+      from(c in Connection,
+        join: r in Connection,
+        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
+        where: c.followee_id == ^user_id,
+        select: max(fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at))
+      )
+      |> Repo.one()
+
+    [follower_max, endorsement_max, connection_max]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.max(NaiveDateTime, fn -> nil end)
   end
 
   @doc "Tell a user's shell their messages were just read (clears the badge)."
