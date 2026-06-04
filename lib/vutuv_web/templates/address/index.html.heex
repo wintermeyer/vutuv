@@ -3,7 +3,6 @@
       <h1><%= full_name(@user) %>'s Addresses</h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= gen_breadcrumbs([
@@ -22,7 +21,4 @@
       <%= link gettext("Add"), to: ~p"/users/#{@current_user}/addresses/new", class: "card__morelink" %>
     <% end %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

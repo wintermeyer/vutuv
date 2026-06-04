@@ -4,7 +4,6 @@
       <h1><%= gettext "Show job posting" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -15,18 +14,15 @@
 </div>
 
 <div class="card-list">
-  <aside>
-    
-  </aside>
   <section class="card jobs">
     <div class="card__edit button__list">
       <div class="btns-right">
-        <%= button to: ~p"/users/#{@user}/job_postings/#{@job_posting}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+        <%= button to: ~p"/users/#{@user}/job_postings/#{@job_posting}", method: :delete, class: "button button--small button--danger" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.close(assigns)}
         </i>
         <% end %>
-        <%= link to: ~p"/users/#{@user}/job_postings/#{@job_posting}/edit", class: "btn btn-icon btn-sm btn-primary" do %>
+        <%= link to: ~p"/users/#{@user}/job_postings/#{@job_posting}/edit", class: "button button--small" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.pencil(assigns)}
         </i>

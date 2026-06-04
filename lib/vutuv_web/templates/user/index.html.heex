@@ -30,9 +30,9 @@
       <td><%= user.verified %></td>
 
       <td class="text-right">
-        <%= link gettext("Show"), to: ~p"/users/#{user}", class: "btn btn-default btn-xs" %>
-        <%= link gettext("Edit"), to: ~p"/users/#{user}/edit", class: "btn btn-default btn-xs" %>
-        <%= link gettext("Delete"), to: ~p"/users/#{user}", method: :delete, data: [confirm: gettext("Are you sure?")], class: "btn btn-danger btn-xs" %>
+        <%= link gettext("Show"), to: ~p"/users/#{user}", class: "button button--small button--secondary" %>
+        <%= link gettext("Edit"), to: ~p"/users/#{user}/edit", class: "button button--small button--secondary" %>
+        <%= link gettext("Delete"), to: ~p"/users/#{user}", method: :delete, data: [confirm: gettext("Are you sure?")], class: "button button--small button--danger" %>
       </td>
     </tr>
 <% end %>

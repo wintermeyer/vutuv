@@ -4,7 +4,6 @@
       <h1><%= gettext "Edit tag" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -18,7 +17,4 @@
     <%= render "form_content.html", conn: @conn, backlink: ~p"/admin/tags", changeset: @changeset,
                             action: ~p"/admin/tags/#{@tag}" %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

@@ -16,8 +16,8 @@
       <td><%= membership.group_id %></td>
 
       <td class="text-right">
-        <%= link "Show", to: ~p"/connections/#{@connection}/memberships/#{membership}", class: "btn btn-default btn-xs" %>
-        <%= link "Delete", to: ~p"/connections/#{@connection}/memberships/#{membership}", method: :delete, data: [confirm: "Are you sure?"], class: "btn btn-danger btn-xs" %>
+        <%= link "Show", to: ~p"/connections/#{@connection}/memberships/#{membership}", class: "button button--small button--secondary" %>
+        <%= link "Delete", to: ~p"/connections/#{@connection}/memberships/#{membership}", method: :delete, data: [confirm: "Are you sure?"], class: "button button--small button--danger" %>
       </td>
     </tr>
 <% end %>

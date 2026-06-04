@@ -1,17 +1,15 @@
 @import "tailwindcss" source(none);
 
 /*
- * Import the legacy stylesheet into the `components` cascade layer. This MUST
- * sit right after the Tailwind import: CSS ignores `@import` placed after other
- * rules, so the `layer()` is only honored here. Layer order is
- * theme < base < components < utilities, so legacy keeps winning over Preflight
- * (base) — legacy pages look unchanged — while Tailwind utilities (flex, grid,
- * hidden, md:*) win over legacy's unlayered `nav,section{display:block}` reset,
- * which otherwise broke the responsive shell.
+ * The single stylesheet for the shared legacy class names (.card, .editform,
+ * .button, …) plus the Direction A look. Imported into the `components`
+ * cascade layer — the `@import … layer()` MUST sit right after the Tailwind
+ * import (CSS ignores @import after other rules). Layer order is
+ * theme < base < components < utilities, so these rules win over Preflight
+ * (base) but lose to Tailwind utilities, which lets hand-written pages
+ * (profile, LiveViews) use utilities freely. The old vendored legacy.css is
+ * gone; its still-used rules were folded into components.css.
  */
-@import "./legacy.css" layer(components);
-/* Direction A reskin of the legacy component classes. Same layer, imported
-   after legacy.css so it overrides legacy yet still loses to Tailwind utilities. */
 @import "./components.css" layer(components);
 
 @source "../../lib/vutuv_web";

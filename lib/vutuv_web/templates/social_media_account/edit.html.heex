@@ -9,9 +9,6 @@
 
 <div class="card-list">
 
-  <aside>
-    
-  </aside>
   <section class="card">
     <%= render "form_content.html", backlink: ~p"/users/#{@user}/social_media_accounts", changeset: @changeset, action: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}" %>
   </section>

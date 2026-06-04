@@ -16,17 +16,17 @@
       <td><%= exonym.exonym_locale.value %></td>
 
       <td>
-        <%= link to: ~p"/admin/exonyms/#{exonym}", class: "btn btn-sm btn-primary btn-icon" do %>
+        <%= link to: ~p"/admin/exonyms/#{exonym}", class: "button button--small" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.search(assigns)}
         </i>
         <% end %>
-        <%= link to: ~p"/admin/exonyms/#{exonym}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+        <%= link to: ~p"/admin/exonyms/#{exonym}/edit", class: "button button--small" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.pencil(assigns)}
         </i>
         <% end %>
-        <%= button to: ~p"/admin/exonyms/#{exonym}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+        <%= button to: ~p"/admin/exonyms/#{exonym}", method: :delete, class: "button button--small button--danger" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.close(assigns)}
         </i>

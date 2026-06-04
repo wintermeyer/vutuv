@@ -3,7 +3,6 @@
       <h1><%= gettext("Work Experiences") %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= gen_breadcrumbs([
@@ -23,7 +22,4 @@
       <%= link gettext("Add"), to: ~p"/users/#{@current_user}/work_experiences/new", class: "card__morelink" %>
     <% end %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

@@ -4,7 +4,6 @@
       <h1><%= gettext "All tags" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -30,17 +29,17 @@
           <td><%= tag.slug %></td>
 
           <td>
-            <%= link to: ~p"/admin/tags/#{tag}", class: "btn btn-sm btn-primary btn-icon" do %>
+            <%= link to: ~p"/admin/tags/#{tag}", class: "button button--small" do %>
             <i class="icon">
               {VutuvWeb.IconHTML.search(assigns)}
             </i>
             <% end %>
-            <%= link to: ~p"/admin/tags/#{tag}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+            <%= link to: ~p"/admin/tags/#{tag}/edit", class: "button button--small" do %>
             <i class="icon">
               {VutuvWeb.IconHTML.pencil(assigns)}
             </i>
             <% end %>
-            <%= button to: ~p"/admin/tags/#{tag}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+            <%= button to: ~p"/admin/tags/#{tag}", method: :delete, class: "button button--small button--danger" do %>
             <i class="icon">
               {VutuvWeb.IconHTML.close(assigns)}
             </i>
@@ -55,7 +54,4 @@
       <%= link gettext("New tag"), to: ~p"/admin/tags/new", class: "card__morelink" %>
     </p>
   </section>
-  <aside>
-    
-  </aside>
 </div>

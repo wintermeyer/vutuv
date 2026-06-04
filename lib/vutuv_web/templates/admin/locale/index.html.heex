@@ -4,7 +4,6 @@
       <h1><%= gettext "All locales" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -30,7 +29,7 @@
           <td><%= locale.value %></td>
 
           <td>
-            <%= link to: ~p"/admin/locales/#{locale}", class: "btn btn-sm btn-primary btn-icon" do %>
+            <%= link to: ~p"/admin/locales/#{locale}", class: "button button--small" do %>
             <i class="icon">
               {VutuvWeb.IconHTML.search(assigns)}
             </i>
@@ -41,7 +40,4 @@
       </tbody>
     </table>
   </section>
-  <aside>
-    
-  </aside>
 </div>

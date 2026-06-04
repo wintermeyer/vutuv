@@ -4,7 +4,6 @@
       <h1><%= gettext "Show locale" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -54,7 +53,4 @@
     {VutuvWeb.Admin.ExonymHTML.card_list(%{conn: @conn, exonyms: @loc.exonyms})}
   </section>
 
-  <aside>
-    
-  </aside>
 </div>

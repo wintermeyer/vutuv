@@ -16,12 +16,12 @@
       <td>
       <%= if same_user?(@user, @current_user) do %>
         <div class="btns-right">
-        <%= button to: ~p"/users/#{@user}/addresses/#{address}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+        <%= button to: ~p"/users/#{@user}/addresses/#{address}", method: :delete, class: "button button--small button--danger" do %>
           <i class="icon">
             {VutuvWeb.IconHTML.close(assigns)}
           </i>
         <% end %>
-        <%= link to: ~p"/users/#{@user}/addresses/#{address}/edit", class: "btn btn-sm btn-primary btn-icon" do %>
+        <%= link to: ~p"/users/#{@user}/addresses/#{address}/edit", class: "button button--small" do %>
           <i class="icon">
             {VutuvWeb.IconHTML.pencil(assigns)}
           </i>

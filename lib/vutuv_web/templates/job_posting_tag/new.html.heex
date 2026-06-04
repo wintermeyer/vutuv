@@ -4,7 +4,6 @@
       <h1><%= gettext "New job posting tag" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -21,7 +20,4 @@
     <%= render "form_content.html", backlink: ~p"/users/#{@user}/job_postings/#{@job_posting}/tags", changeset: @changeset,
                             action: ~p"/users/#{@user}/job_postings/#{@job_posting}/tags" %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

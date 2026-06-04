@@ -4,12 +4,12 @@
     <h2 class="job__title"><%= link job.title, to: ~p"/users/#{@user}/work_experiences/#{job}" %>
       <%= if same_user?(@user, @current_user) do %>
       <div class="btns job__edit">
-      <%= button to: ~p"/users/#{@user}/work_experiences/#{job}", method: :delete, class: "btn btn-sm btn-danger btn-icon" do %>
+      <%= button to: ~p"/users/#{@user}/work_experiences/#{job}", method: :delete, class: "button button--small button--danger" do %>
         <i class="icon">
           {VutuvWeb.IconHTML.close(assigns)}
         </i>
       <% end %>
-      <%= link to: ~p"/users/#{@user}/work_experiences/#{job}/edit", class: "btn btn-sm btn-primary btn-icon"  do %>
+      <%= link to: ~p"/users/#{@user}/work_experiences/#{job}/edit", class: "button button--small"  do %>
         <i class="icon">
           {VutuvWeb.IconHTML.pencil(assigns)}
         </i>

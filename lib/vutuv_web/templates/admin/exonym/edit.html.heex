@@ -4,7 +4,6 @@
       <h1><%= gettext "Edit exonym" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -18,7 +17,4 @@
     <%= render "form_content.html", backlink: ~p"/admin/exonyms", changeset: @changeset,
                             action: ~p"/admin/exonyms/#{@exonym}" %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

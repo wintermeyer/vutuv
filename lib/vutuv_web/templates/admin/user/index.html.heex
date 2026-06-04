@@ -14,7 +14,7 @@
       <td><%= "#{user.first_name} #{user.last_name}" %></td>
       <td><%= user.id %></td>
       <td class="text-right">
-        <%= link "Verify", to: ~p"/admin/users?#{[user_id: user.id]}", method: :post, class: "btn btn-danger btn-xs" %>
+        <%= link "Verify", to: ~p"/admin/users?#{[user_id: user.id]}", method: :post, class: "button button--small button--danger" %>
       </td>
     </tr>
 <% end %>

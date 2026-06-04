@@ -3,7 +3,6 @@
       <h1><%= gettext "All job posting tags" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -45,7 +44,4 @@
       <%= link gettext("New job posting tag"), to: ~p"/users/#{@user}/job_postings/#{@job_posting}/tags/new", class: "card__morelink" %>
     </p>
   </section>
-  <aside>
-    
-  </aside>
 </div>

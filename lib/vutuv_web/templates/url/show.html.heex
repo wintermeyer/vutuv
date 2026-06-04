@@ -3,7 +3,6 @@
       <h1><%= gettext("About this Link") %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 <div class="breadcrumbs">
   <%= gen_breadcrumbs([
     gettext("Users"),
@@ -16,12 +15,12 @@
   <section class="card">
     <%= if same_user?(@user, @current_user) do %>
     <div class="btns-right">
-      <%= button to: ~p"/users/#{@user}/links/#{@url}", method: :delete, class: "pull-right btn btn-xs btn-danger btn-icon" do %>
+      <%= button to: ~p"/users/#{@user}/links/#{@url}", method: :delete, class: "pull-right button button--small button--danger" do %>
         <i>
           {VutuvWeb.IconHTML.close(assigns)}
         </i>
       <% end %>
-      <%= link to: ~p"/users/#{@user}/links/#{@url}/edit", class: "pull-right btn btn-xs btn-primary btn-icon" do %>
+      <%= link to: ~p"/users/#{@user}/links/#{@url}/edit", class: "pull-right button button--small" do %>
         <i>
           {VutuvWeb.IconHTML.pencil(assigns)}
         </i>
@@ -35,7 +34,4 @@
     <p><%= @url.description %></p>
   </section>
 
-  <aside>
-  
-  </aside>
 </div>

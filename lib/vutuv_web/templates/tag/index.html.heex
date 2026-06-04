@@ -4,7 +4,6 @@
       <h1><%= gettext "All tags" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -38,7 +37,4 @@
     </table>
     <%= Vutuv.Pages.page_list(@conn.params, @tags_count) %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

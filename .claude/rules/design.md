@@ -16,18 +16,17 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 
 1. **Legacy controller+view pages** still use shared classes (`.card` / `.card-list`,
    `.editform` + inputs, `.button` + variants, `.breadcrumbs`, `.profile-header` page
-   title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`). They are styled
-   **centrally** in `assets/css/components.css`. **To restyle legacy pages, edit
-   `components.css` — do NOT reskin per-template.** A new legacy page that reuses these
-   classes gets the look for free. **Dark mode for legacy classes lives in the
-   `@media (prefers-color-scheme: dark)` block at the end of `components.css`** — the
-   canvas (`body`), cards, forms, tables, links, icons. Caveat: legacy declares some
-   things with stronger selectors (`.card-list .card`, `section.jobs`, `.ad`,
-   `.editform input[type=…]`), so a dark override must repeat at least that selector
-   or it silently loses; `test/vutuv_web/dark_mode_css_test.exs` guards the worst of
-   these. `components.css` also neutralizes legacy's bare `header`/`footer` element
-   rules (old white chrome bars) so the shell, layout footer and Messages header can
-   style those elements with utilities.
+   title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`, `.imagebox`,
+   `.profiles`, `.job`, `section.jobs`, `ol.tags`/`.upvote`, `ul.thumbs`, `.ad`). They
+   are styled **centrally** in `assets/css/components.css` — since the old vendored
+   `legacy.css` was removed, that file is the **single source** for these classes,
+   including element defaults (body canvas, h1/p/a, label, tables, dl) and the data-URI
+   icons. **To restyle legacy pages, edit `components.css` — do NOT reskin
+   per-template.** A new legacy page that reuses these classes gets the look for free.
+   **Dark mode for all of it lives in the `@media (prefers-color-scheme: dark)` block
+   at the end of `components.css`** — when you add a light rule with a hardcoded
+   colour, add its dark counterpart there. `test/vutuv_web/dark_mode_css_test.exs`
+   guards the canvas rule and that `legacy.css` stays deleted.
 2. **New / hand-written pages** (the shell `ShellLive`, the LiveViews, `user/show.html.heex`)
    use the **`VutuvWeb.UI` components** (see **Components** below) or, where no component
    fits, the **recipes** below. Prefer a component; fall back to a recipe. Reach for a
@@ -70,17 +69,18 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 ### Shell & layout facts (don't re-implement)
 
 - The chrome — sticky top bar + mobile bottom tab bar with the live unread badges — is `VutuvWeb.ShellLive`, embedded in `app.html.heex`. Pages render **inside** it; never add their own nav.
-- **Flash = top-right toasts** (`#toast-tray` in `app.html.heex`). Never add inline flash banners and never call `VutuvWeb.LayoutHTML.flash/1` (it is intentionally a no-op).
+- **Flash = top-right toasts** (`#toast-tray` in `app.html.heex`). Never add inline flash banners; `VutuvWeb.LayoutHTML.flash/1` and its empty partial were deleted along with the last inline calls.
 - In-app real-time events go through `Vutuv.Activity` (PubSub on `"user:<id>"`) and `VutuvWeb.Presence`.
 
 ### CSS architecture (don't break it)
 
-`app.css` order: `@import "tailwindcss"` → `@import "./legacy.css" layer(components)` →
-`@import "./components.css" layer(components)`, **all at the top** before `@source`/`@theme`.
-Both legacy and the reskin live in the `components` layer so Tailwind utilities win and
-legacy's `nav,section,header{display:block}` reset can't break the responsive shell. The
-`@import … layer()` only works at the top — CSS ignores `@import` after other rules.
-Dev serves `/assets/app.css` undigested, so hard-reload (Cmd+Shift+R) after a rebuild.
+`app.css` order: `@import "tailwindcss"` → `@import "./components.css" layer(components)`,
+**at the top** before `@source`/`@theme` — the `@import … layer()` only works there
+(CSS ignores `@import` after other rules). `components.css` lives in the `components`
+layer, so it beats Preflight (base) but loses to Tailwind utilities, which lets
+hand-written pages use utilities freely. There is **no `legacy.css` anymore** — do not
+reintroduce it (a regression test enforces this). Dev serves `/assets/app.css`
+undigested, so hard-reload (Cmd+Shift+R) after a rebuild.
 
 ### Don'ts
 

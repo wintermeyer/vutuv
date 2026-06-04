@@ -4,7 +4,6 @@
       <h1><%= gettext "Your subscription" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -48,7 +47,4 @@
       <%= link gettext("Back"), to: ~p"/users/#{@user}/recruiter_subscriptions/new", class: "card__morelink" %>
     </p>
   </section>
-  <aside>
-    
-  </aside>
 </div>

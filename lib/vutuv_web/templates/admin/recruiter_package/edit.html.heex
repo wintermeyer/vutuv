@@ -4,7 +4,6 @@
       <h1><%= gettext "Edit recruiter package" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
 <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -17,7 +16,4 @@
     <%= render "form_content.html", backlink: ~p"/admin/recruiter_packages", changeset: @changeset,
                             action: ~p"/admin/recruiter_packages/#{@recruiter_package}" %>
   </section>
-  <aside>
-    
-  </aside>
 </div>

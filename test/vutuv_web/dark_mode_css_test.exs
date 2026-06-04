@@ -83,25 +83,15 @@ defmodule VutuvWeb.DarkModeCssTest do
     assert declarations =~ ~r/background\s*:/
   end
 
-  test "legacy bare <header>/<footer> white bars are neutralized for the shell" do
-    css = components_css()
+  test "the legacy stylesheet stays deleted" do
+    # legacy.css was removed after its still-used rules were folded into
+    # components.css. It painted bare <header>/<footer> as white bars and
+    # hardcoded a light-only canvas; nothing may re-import it.
+    legacy = Path.expand("../../assets/css/legacy.css", __DIR__)
+    refute File.exists?(legacy), "assets/css/legacy.css must not come back"
 
-    header_decl =
-      rule(css, ~r/(?:^|[,}\s])header\s*(?:,[^{}]*)?/.source) ||
-        flunk("components.css must neutralize legacy's bare `header` rule")
-
-    assert header_decl =~ ~r/background\s*:\s*transparent/,
-           "bare <header> must not keep legacy's white background"
-
-    footer_decl =
-      rule(css, ~r/(?:^|[,}\s])footer\s*(?:,[^{}]*)?/.source) ||
-        flunk("components.css must neutralize legacy's bare `footer` rule")
-
-    assert footer_decl =~ ~r/background\s*:\s*transparent/,
-           "bare <footer> must not keep legacy's white background"
-
-    assert footer_decl =~ ~r/position\s*:\s*static/,
-           "bare <footer> must not stay absolutely positioned over content"
+    refute File.read!(@app_css) =~ ~r/@import\s+"[^"]*legacy/,
+           "app.css must not import legacy.css"
   end
 
   test "the browser is told both color schemes are supported" do

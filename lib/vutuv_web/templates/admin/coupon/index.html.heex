@@ -4,7 +4,6 @@
       <h1><%= gettext "All coupons" %></h1>
     </div>
   </div>
-{VutuvWeb.LayoutHTML.flash(assigns)}
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -56,7 +55,4 @@
       <%= link gettext("New coupon"), to: ~p"/admin/coupons/new", class: "card__morelink" %>
     </p>
   </section>
-  <aside>
-    
-  </aside>
 </div>
