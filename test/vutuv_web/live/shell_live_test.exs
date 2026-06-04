@@ -29,7 +29,9 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, "span.bg-accent", "4")
   end
 
-  test "the badge for the page being viewed starts at zero (no read-broadcast race)", %{conn: conn} do
+  test "the badge for the page being viewed starts at zero (no read-broadcast race)", %{
+    conn: conn
+  } do
     session = Map.put(@session, "path", "/notifications")
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 

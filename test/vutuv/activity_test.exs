@@ -14,7 +14,8 @@ defmodule Vutuv.ActivityTest do
     Activity.notify_new_follower(7, %{first_name: "José", last_name: "Daniel"})
 
     assert_receive {:new_notification,
-                    %{kind: "follower", actor_name: "José Daniel", text: "started following you."} = n}
+                    %{kind: "follower", actor_name: "José Daniel", text: "started following you."} =
+                      n}
 
     # A bare map (not a %User{}) has no profile to link or avatar to show.
     assert n.actor_param == nil

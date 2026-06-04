@@ -14,9 +14,7 @@ defmodule VutuvWeb.Endpoint do
 
   socket("/socket", VutuvWeb.UserSocket)
 
-  socket("/live", Phoenix.LiveView.Socket,
-    websocket: [connect_info: [session: @session_options]]
-  )
+  socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
   plug(Plug.Static,
     at: "/",

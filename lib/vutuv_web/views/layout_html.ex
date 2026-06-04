@@ -32,6 +32,7 @@ defmodule VutuvWeb.LayoutHTML do
   defp current_path(%{conn: conn}) when not is_nil(conn), do: conn.request_path
   defp current_path(%{socket: %{view: VutuvWeb.NotificationLive.Index}}), do: "/notifications"
   defp current_path(%{socket: %{view: VutuvWeb.MessageLive.Index}}), do: "/messages"
+
   defp current_path(_assigns) do
     nil
   end

@@ -29,6 +29,7 @@ defmodule Vutuv.Activity do
 
   @doc "Push a new in-app notification to `user_id`."
   def notify(nil, _notification), do: :ok
+
   def notify(user_id, %{} = notification),
     do: broadcast(user_id, {:new_notification, notification})
 

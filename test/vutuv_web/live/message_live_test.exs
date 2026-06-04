@@ -25,7 +25,9 @@ defmodule VutuvWeb.MessageLiveTest do
     assert html =~ "Loved your Phoenix talk"
   end
 
-  test "a message sent in one session appears live in another on the same conversation", %{conn: conn} do
+  test "a message sent in one session appears live in another on the same conversation", %{
+    conn: conn
+  } do
     {conn, _user} = create_and_login_user(conn)
 
     {:ok, sender, _} = live(conn, ~p"/messages/1")
@@ -87,7 +89,10 @@ defmodule VutuvWeb.MessageLiveTest do
 
     sender
     |> form("#message-form",
-      message: %{body: "**bold** <script>alert(1)</script> https://example.com/a/very/long/path/that/keeps/going/and/going"}
+      message: %{
+        body:
+          "**bold** <script>alert(1)</script> https://example.com/a/very/long/path/that/keeps/going/and/going"
+      }
     )
     |> render_submit()
 

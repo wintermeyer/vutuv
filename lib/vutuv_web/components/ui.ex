@@ -14,9 +14,9 @@ defmodule VutuvWeb.UI do
   use Gettext, backend: VutuvWeb.Gettext
 
   @doc "The Direction A card surface (white, rounded, ring, soft shadow; dark-aware)."
-  attr :class, :string, default: nil
-  attr :rest, :global
-  slot :inner_block, required: true
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
 
   def card(assigns) do
     ~H"""
@@ -33,8 +33,8 @@ defmodule VutuvWeb.UI do
   end
 
   @doc "Uppercase muted section heading used inside cards."
-  attr :class, :string, default: nil
-  slot :inner_block, required: true
+  attr(:class, :string, default: nil)
+  slot(:inner_block, required: true)
 
   def section_title(assigns) do
     ~H"""
@@ -50,9 +50,9 @@ defmodule VutuvWeb.UI do
   `add_href={owner? && ~p"/…/new"}` reads naturally), or use the `:action` slot
   for a custom action.
   """
-  attr :title, :string, required: true
-  attr :add_href, :any, default: nil
-  slot :action
+  attr(:title, :string, required: true)
+  attr(:add_href, :any, default: nil)
+  slot(:action)
 
   def section_header(assigns) do
     ~H"""
@@ -67,11 +67,11 @@ defmodule VutuvWeb.UI do
   end
 
   @doc "Skill/tag chip (brand tint). Pass `navigate`/`href` to render it as a link."
-  attr :navigate, :string, default: nil
-  attr :href, :string, default: nil
-  attr :class, :string, default: nil
-  attr :rest, :global
-  slot :inner_block, required: true
+  attr(:navigate, :string, default: nil)
+  attr(:href, :string, default: nil)
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
 
   def chip(assigns) do
     ~H"""
@@ -99,18 +99,19 @@ defmodule VutuvWeb.UI do
   `method` for POST/DELETE actions), otherwise a `<button>` (set `type`). Variants:
   `primary` (default), `secondary`, `ghost`, `danger`.
   """
-  attr :variant, :string, default: "primary", values: ~w(primary secondary ghost danger)
-  attr :navigate, :string, default: nil
-  attr :patch, :string, default: nil
-  attr :href, :string, default: nil
-  attr :method, :string, default: nil
-  attr :type, :string, default: nil
-  attr :class, :string, default: nil
+  attr(:variant, :string, default: "primary", values: ~w(primary secondary ghost danger))
+  attr(:navigate, :string, default: nil)
+  attr(:patch, :string, default: nil)
+  attr(:href, :string, default: nil)
+  attr(:method, :string, default: nil)
+  attr(:type, :string, default: nil)
+  attr(:class, :string, default: nil)
 
-  attr :rest, :global,
+  attr(:rest, :global,
     include: ~w(download name value disabled form title phx-click phx-value-id phx-disable-with)
+  )
 
-  slot :inner_block, required: true
+  slot(:inner_block, required: true)
 
   def button(assigns) do
     ~H"""
@@ -138,10 +139,12 @@ defmodule VutuvWeb.UI do
 
   @button_base "inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold"
   defp button_class("secondary"),
-    do: "#{@button_base} bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+    do:
+      "#{@button_base} bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
 
   defp button_class("ghost"),
-    do: "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-slate-800"
+    do:
+      "#{@button_base} text-brand-600 hover:bg-brand-50 hover:text-brand-700 dark:hover:bg-slate-800"
 
   defp button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
   defp button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
@@ -150,12 +153,12 @@ defmodule VutuvWeb.UI do
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)
   or a raw `src`. Sizes `xs|sm|md|lg`; `shape` `circle` (default) or `square`.
   """
-  attr :user, :any, default: nil
-  attr :src, :string, default: nil
-  attr :alt, :string, default: ""
-  attr :size, :string, default: "md", values: ~w(xs sm md lg)
-  attr :shape, :string, default: "circle", values: ~w(circle square)
-  attr :class, :string, default: nil
+  attr(:user, :any, default: nil)
+  attr(:src, :string, default: nil)
+  attr(:alt, :string, default: "")
+  attr(:size, :string, default: "md", values: ~w(xs sm md lg))
+  attr(:shape, :string, default: "circle", values: ~w(circle square))
+  attr(:class, :string, default: nil)
 
   # Neutral placeholder so a call with neither `user` nor `src` still renders a
   # valid <img> instead of a broken one.
@@ -192,8 +195,8 @@ defmodule VutuvWeb.UI do
   defp avatar_url_size(_), do: :medium
 
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
-  attr :count, :integer, default: 0
-  attr :class, :string, default: nil
+  attr(:count, :integer, default: 0)
+  attr(:class, :string, default: nil)
 
   def count_badge(assigns) do
     ~H"""
@@ -210,15 +213,17 @@ defmodule VutuvWeb.UI do
   end
 
   @doc "Labelled text input for hand-written forms (legacy forms are styled by components.css)."
-  attr :name, :string, required: true
-  attr :type, :string, default: "text"
-  attr :label, :string, default: nil
-  attr :value, :string, default: nil
-  attr :error, :string, default: nil
-  attr :class, :string, default: nil
+  attr(:name, :string, required: true)
+  attr(:type, :string, default: "text")
+  attr(:label, :string, default: nil)
+  attr(:value, :string, default: nil)
+  attr(:error, :string, default: nil)
+  attr(:class, :string, default: nil)
 
-  attr :rest, :global,
-    include: ~w(id placeholder required autofocus autocomplete readonly disabled min max step inputmode)
+  attr(:rest, :global,
+    include:
+      ~w(id placeholder required autofocus autocomplete readonly disabled min max step inputmode)
+  )
 
   def input(assigns) do
     ~H"""
