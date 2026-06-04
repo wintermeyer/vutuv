@@ -1,17 +1,12 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "Your subscription" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
+<.page_header
+  title={gettext("Your subscription")}
+  crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/users/#{@user}"},
     {gettext("Active Subscription"), ~p"/users/#{@user}/recruiter_subscriptions/new"},
-    gettext("Subscription History")]) %>
-</div>
+    gettext("Subscription History")
+  ]}
+/>
 
 <div class="card-list">
   <section class="card jobs">

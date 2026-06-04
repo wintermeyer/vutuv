@@ -1,17 +1,12 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "Show job posting" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-  gettext("Users"),
-  {full_name(@user), ~p"/users/#{@user}"},
-  {gettext("Job postings"), ~p"/users/#{@user}/job_postings"},
-  @job_posting.title]) %>
-</div>
+<.page_header
+  title={gettext("Show job posting")}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Job postings"), ~p"/users/#{@user}/job_postings"},
+    @job_posting.title
+  ]}
+/>
 
 <div class="card-list">
   <section class="card jobs">

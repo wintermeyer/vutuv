@@ -274,6 +274,40 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Legacy (Track 1) page top shared by the controller pages: the `.profile-header`
+  h1 block and/or the `.breadcrumbs` row. This is the boilerplate that opened ~47
+  page templates (and the breadcrumbs row ~65). Styled by `components.css`, not
+  Tailwind — do not swap in utilities.
+
+  Pass `title` to render the `<div class="profile-header"><div class="profile-header__info"><h1>…</h1></div></div>`
+  block (the title is a plain string the call site already builds, e.g.
+  `gettext("Emails belonging to ") <> full_name(@user)` or
+  `gettext("Tags of %{name}", name: full_name(@user))`); omit it on the new/edit
+  pages that only carry breadcrumbs. Pass `crumbs` (the list you used to hand to
+  `gen_breadcrumbs/1`) to render the `.breadcrumbs` row; `gen_breadcrumbs/1` is
+  called **fully qualified** here because `VutuvWeb.UI` does not import
+  `UserHelpers`. Pages whose header carries more than the single h1 (avatar,
+  buttons, …) keep their hand-written markup.
+
+  Use it as `<.page_header title={…} crumbs={[gettext("Users"), {full_name(@user), ~p"/…"}, gettext("Emails")]} />`.
+  """
+  attr(:title, :string, default: nil)
+  attr(:crumbs, :list, default: nil)
+
+  def page_header(assigns) do
+    ~H"""
+    <div :if={@title} class="profile-header">
+      <div class="profile-header__info">
+        <h1>{@title}</h1>
+      </div>
+    </div>
+    <div :if={@crumbs} class="breadcrumbs">
+      {VutuvWeb.UserHelpers.gen_breadcrumbs(@crumbs)}
+    </div>
+    """
+  end
+
+  @doc """
   Legacy (Track 1) changeset-error banner shared by the `editform` `form_content`
   templates. Renders the `.alert.alert-danger` row only when `@changeset.action`
   is set (a failed submit), nothing on a fresh form. Styled by `components.css`,

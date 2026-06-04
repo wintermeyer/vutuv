@@ -1,15 +1,10 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "Edit coupon" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      {gettext("Coupons"), ~p"/admin/coupons"},
-      gettext("Edit")]) %>
-</div>
+<.page_header
+  title={gettext("Edit coupon")}
+  crumbs={[
+    {gettext("Coupons"), ~p"/admin/coupons"},
+    gettext("Edit")
+  ]}
+/>
 
 <.card_section>
   <%= render "form_content.html", backlink: ~p"/admin/coupons", changeset: @changeset,

@@ -1,15 +1,12 @@
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext("About this Social Media Profile") %></h1>
-    </div>
-  </div>
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
-    gettext("Users"), 
+<.page_header
+  title={gettext("About this Social Media Profile")}
+  crumbs={[
+    gettext("Users"),
     {full_name(@user), ~p"/users/#{@user}"},
     {gettext("Social Media Profiles"), ~p"/users/#{@user}/social_media_accounts"},
-    gettext("More Info")]) %>
-</div>
+    gettext("More Info")
+  ]}
+/>
 
 <div class="card-list">
   <section class="card">

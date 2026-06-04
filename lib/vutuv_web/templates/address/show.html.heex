@@ -1,15 +1,12 @@
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext("About this Address") %></h1>
-    </div>
-  </div>
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
-    gettext("Users"), 
+<.page_header
+  title={gettext("About this Address")}
+  crumbs={[
+    gettext("Users"),
     {full_name(@user), ~p"/users/#{@user}"},
     {gettext("Addresses"), ~p"/users/#{@user}/addresses"},
-    gettext("Show")]) %>
-</div>
+    gettext("Show")
+  ]}
+/>
 
 <div class="card-list">
 

@@ -1,12 +1,4 @@
-<div class="profile-header">
-  <div class="profile-header__info">
-    <h1><%= gettext("Admin control panel") %></h1>
-  </div>
-</div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([gettext("Admin")]) %>
-</div>
+<.page_header title={gettext("Admin control panel")} crumbs={[gettext("Admin")]} />
 
 <div class="card-list">
   {VutuvWeb.Admin.SlugHTML.index(%{conn: @conn})}

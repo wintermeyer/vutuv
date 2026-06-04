@@ -1,15 +1,12 @@
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= Vutuv.Tags.UserTag.name(@user_tag) %></h1>
-    </div>
-  </div>
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
+<.page_header
+  title={Vutuv.Tags.UserTag.name(@user_tag)}
+  crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/users/#{@user}"},
     {gettext("Tags"), ~p"/users/#{@user}/tags"},
-    gettext("Show")]) %>
-</div>
+    gettext("Show")
+  ]}
+/>
 
 <div class="card-list">
 

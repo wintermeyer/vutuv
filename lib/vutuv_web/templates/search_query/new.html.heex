@@ -1,13 +1,10 @@
-<div class="breadcrumbs">
-  <%= if @conn.assigns[:query] do %>
-    <%= gen_breadcrumbs([
-      {gettext("Search"), ~p"/search_queries/new"},
-      gettext("Results")]) %>
-  <% else %>
-    <%= gen_breadcrumbs([
-      gettext("Search")]) %>
-  <% end %>
-</div>
+<.page_header crumbs={
+  if @conn.assigns[:query] do
+    [{gettext("Search"), ~p"/search_queries/new"}, gettext("Results")]
+  else
+    [gettext("Search")]
+  end
+} />
 
 <%= render "form_content.html", conn: @conn, changeset: @changeset,
                           action: ~p"/search_queries" %>

@@ -1,14 +1,4 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "All recruiter packages" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      gettext("Recruiter packages")]) %>
-</div>
+<.page_header title={gettext("All recruiter packages")} crumbs={[gettext("Recruiter packages")]} />
 
 <div class="card-list">
   <section class="card jobs">

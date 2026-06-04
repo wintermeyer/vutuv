@@ -1,14 +1,4 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "All coupons" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      gettext("Coupons")]) %>
-</div>
+<.page_header title={gettext("All coupons")} crumbs={[gettext("Coupons")]} />
 
 <div class="card-list">
   <section class="card">

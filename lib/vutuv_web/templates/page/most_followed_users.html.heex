@@ -1,9 +1,8 @@
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-    {gettext("Home"), ~p"/"},
-    gettext("Listings"), gettext("Most Followed Users")]) %>
-</div>
+<.page_header crumbs={[
+  {gettext("Home"), ~p"/"},
+  gettext("Listings"),
+  gettext("Most Followed Users")
+]} />
 
 <div class="search-results card-list">
   <section class="card">

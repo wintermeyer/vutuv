@@ -1,11 +1,9 @@
-
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
-    gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Phone Numbers"), ~p"/users/#{@user}/phone_numbers"},
-    gettext("Edit")]) %>
-</div>
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  {gettext("Phone Numbers"), ~p"/users/#{@user}/phone_numbers"},
+  gettext("Edit")
+]} />
 
 <.card_section>
   <%= render "form_content.html", backlink: ~p"/users/#{@user}/phone_numbers", changeset: @changeset, action: ~p"/users/#{@user}/phone_numbers/#{@phone_number}" %>

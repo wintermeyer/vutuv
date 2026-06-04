@@ -1,16 +1,11 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "Edit tag" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      {gettext("Admin"), ~p"/admin"},
-      {gettext("Tags"), ~p"/admin/tags"},
-      gettext("Edit")]) %>
-</div>
+<.page_header
+  title={gettext("Edit tag")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Tags"), ~p"/admin/tags"},
+    gettext("Edit")
+  ]}
+/>
 
 <.card_section>
   <%= render "form_content.html", conn: @conn, backlink: ~p"/admin/tags", changeset: @changeset,

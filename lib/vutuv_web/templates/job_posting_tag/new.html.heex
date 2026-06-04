@@ -1,19 +1,14 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "New job posting tag" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-  gettext("Users"),
-  {full_name(@user), ~p"/users/#{@user}"},
-  {gettext("Job postings"), ~p"/users/#{@user}/job_postings"},
-  {@job_posting.title, ~p"/users/#{@user}/job_postings/#{@job_posting}"},
-  {gettext("Job posting tags"), ~p"/users/#{@user}/job_postings/#{@job_posting}/tags"},
-  gettext("New")]) %>
-</div>
+<.page_header
+  title={gettext("New job posting tag")}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Job postings"), ~p"/users/#{@user}/job_postings"},
+    {@job_posting.title, ~p"/users/#{@user}/job_postings/#{@job_posting}"},
+    {gettext("Job posting tags"), ~p"/users/#{@user}/job_postings/#{@job_posting}/tags"},
+    gettext("New")
+  ]}
+/>
 
 <.card_section>
   <%= render "form_content.html", backlink: ~p"/users/#{@user}/job_postings/#{@job_posting}/tags", changeset: @changeset,

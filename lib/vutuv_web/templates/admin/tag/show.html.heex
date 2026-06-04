@@ -1,16 +1,11 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "Show tag" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-<%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      {gettext("Admin"), ~p"/admin"},
-      {gettext("Tags"), ~p"/admin/tags"},
-      gettext("Show")]) %>
-</div>
+<.page_header
+  title={gettext("Show tag")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Tags"), ~p"/admin/tags"},
+    gettext("Show")
+  ]}
+/>
 
 <div class="card-list">
   <section class="card">

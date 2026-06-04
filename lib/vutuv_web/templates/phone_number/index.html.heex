@@ -1,15 +1,11 @@
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext("Phone Numbers Belonging to ") %><%= full_name(@user) %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
+<.page_header
+  title={gettext("Phone Numbers Belonging to ") <> full_name(@user)}
+  crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/users/#{@user}"},
-    gettext("Phone Numbers")]) %>
-</div>
+    gettext("Phone Numbers")
+  ]}
+/>
 
 
 <.card_section

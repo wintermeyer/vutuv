@@ -1,24 +1,20 @@
-<div class="pure-g">
-  <div class="pure-u-1-1">
-    <h2><%= gettext "Show search term" %></h2>
+<.page_header
+  title={gettext("Show search term")}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    {gettext("Search terms"), ~p"/users/#{@user}/search_terms"},
+    gettext("Show")
+  ]}
+/>
 
-    <ul>
-      <li>
-        <strong>Value:</strong>
-        <%= @search_term.value %>
-      </li>
+<.card_section>
+  <h1><%= gettext("Value") %></h1>
+  <p><%= @search_term.value %></p>
+  <h1><%= gettext("Score") %></h1>
+  <p><%= @search_term.score %></p>
+  <h1><%= gettext("User") %></h1>
+  <p><%= @search_term.user_id %></p>
 
-      <li>
-        <strong>Score:</strong>
-        <%= @search_term.score %>
-      </li>
-
-      <li>
-        <strong>User:</strong>
-        <%= @search_term.user_id %>
-      </li>
-    </ul>
-
-    <%= link gettext("Back"), to: ~p"/users/#{@user}/search_terms", class: "pure-button" %>
-  </div>
-</div>
+  <%= link gettext("Back"), to: ~p"/users/#{@user}/search_terms", class: "button" %>
+</.card_section>

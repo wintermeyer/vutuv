@@ -1,15 +1,10 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "All exonyms" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      {gettext("Admin Home"), ~p"/admin"},
-      gettext("Exonyms")]) %>
-</div>
+<.page_header
+  title={gettext("All exonyms")}
+  crumbs={[
+    {gettext("Admin Home"), ~p"/admin"},
+    gettext("Exonyms")
+  ]}
+/>
 
 <div class="card-list">
   <section class="card">

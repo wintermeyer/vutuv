@@ -1,10 +1,9 @@
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
-    gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Emails"), ~p"/users/#{@user}/emails"},
-    gettext("Confirm")]) %>
-</div>
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  {gettext("Emails"), ~p"/users/#{@user}/emails"},
+  gettext("Confirm")
+]} />
 
 <div class="card-list">
   <section class="card">

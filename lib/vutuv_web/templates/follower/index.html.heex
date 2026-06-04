@@ -1,10 +1,8 @@
-
-<div class="breadcrumbs">
-  <%= gen_breadcrumbs([
-    gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    gettext("Followers")]) %>
-</div>
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/users/#{@user}"},
+  gettext("Followers")
+]} />
 
 <div class="search-results card-list">
 <%= if @user.follower_connections do %>

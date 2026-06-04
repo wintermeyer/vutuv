@@ -1,16 +1,11 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "New exonym" %></h1>
-    </div>
-  </div>
-
-<div class="breadcrumbs">
-  <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
-      {gettext("Admin Home"), ~p"/admin"},
-      {gettext("Exonyms"), ~p"/admin/exonyms"},
-      gettext("New")]) %>
-</div>
+<.page_header
+  title={gettext("New exonym")}
+  crumbs={[
+    {gettext("Admin Home"), ~p"/admin"},
+    {gettext("Exonyms"), ~p"/admin/exonyms"},
+    gettext("New")
+  ]}
+/>
 
 <.card_section>
   <%= render "form_content.html", backlink: ~p"/admin/exonyms", changeset: @changeset,
