@@ -27,29 +27,39 @@ defmodule Vutuv.Recruiting.RecruiterSubscription do
   end
 
   @doc """
-  Builds a changeset based on the `struct` and `params`.
+  Builds a changeset from client-supplied params.
+
+  Only fields the subscriber may set are cast here. The privileged payment and
+  billing fields (`:paid`, `:paid_on`, `:invoice_number`, `:invoiced_on`) are
+  set server-side via `payment_changeset/2`, and the subscription dates are
+  derived from the chosen package in `set_dates/1` — none of them are cast from
+  user input, so a crafted request cannot grant itself free recruiter access.
   """
   def changeset(struct, params \\ %{}) do
     struct
     |> cast(params, [
-      :user_id,
       :recruiter_package_id,
-      :subscription_begins,
       :line1,
       :line2,
       :street,
       :zip_code,
       :city,
       :country,
-      :invoice_number,
-      :invoiced_on,
-      :paid,
-      :paid_on,
       :coupon_code
     ])
     |> validate_required([:recruiter_package_id, :line1, :zip_code, :city, :country])
     |> foreign_key_constraint(:recruiter_package)
     |> set_dates()
+  end
+
+  @doc """
+  Server-only changeset for the privileged payment / billing fields.
+
+  Used when the server itself records a payment (e.g. redeeming a 100% coupon or
+  an admin marking an invoice paid). Never build this from raw request params.
+  """
+  def payment_changeset(struct, params \\ %{}) do
+    cast(struct, params, [:invoice_number, :invoiced_on, :paid, :paid_on])
   end
 
   defp set_dates(changeset) do

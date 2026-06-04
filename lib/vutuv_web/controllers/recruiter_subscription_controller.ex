@@ -6,6 +6,8 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
   alias Vutuv.Recruiting.Coupon
   alias Vutuv.Recruiting.RecruiterSubscription
 
+  plug(VutuvWeb.Plug.AuthUser)
+
   def index(conn, _params) do
     user = Repo.preload(conn.assigns[:user], recruiter_subscriptions: :recruiter_package)
     render(conn, "index.html", recruiter_subscriptions: user.recruiter_subscriptions)
@@ -102,7 +104,7 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
       if redeemed_coupon.percentage == 100 do
         today = Date.utc_today()
 
-        RecruiterSubscription.changeset(recruiter_subscription, %{
+        RecruiterSubscription.payment_changeset(recruiter_subscription, %{
           paid: true,
           paid_on: today
         })
