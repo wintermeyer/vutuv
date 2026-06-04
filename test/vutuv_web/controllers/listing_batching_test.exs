@@ -86,7 +86,9 @@ defmodule VutuvWeb.ListingBatchingTest do
       assert followers_body =~ "Fan"
       assert followers_body =~ "Scout @ Talent Co"
 
-      followees_body = conn |> recycle() |> get(~p"/users/#{owner}/followees") |> html_response(200)
+      followees_body =
+        conn |> recycle() |> get(~p"/users/#{owner}/followees") |> html_response(200)
+
       assert followees_body =~ "Idol"
       assert followees_body =~ "Star @ Fame Inc"
     end
@@ -102,8 +104,8 @@ defmodule VutuvWeb.ListingBatchingTest do
       recommended = validated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
       insert(:connection, follower: viewer, followee: recommended)
 
-      # The profile being viewed; default_recommended_users orders by follower
-      # count, so give the recommended user a follower to surface them.
+      # The profile being viewed; Social.most_followed_users/1 orders by
+      # follower count, so give the recommended user a follower to surface them.
       owner = validated_user(first_name: "Owner")
       insert(:connection, follower: owner, followee: recommended)
 

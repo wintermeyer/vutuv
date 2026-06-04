@@ -5,16 +5,14 @@
 ]} />
 
 <div class="search-results card-list">
-<%= if @user.follower_connections do %>
   <section class="card">
     <h1><%= gettext "Followers" %></h1>
-    
-    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user.followers, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
 
-    <%= if(Enum.count(@user.followers) == 0) do %>
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @followers, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
+
+    <%= if(Enum.count(@followers) == 0) do %>
       <p class="card__empty"><%= gettext "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites." %></p>
     <% end %>
     <.pager params={@conn.params} total={@total_followers} />
   </section>
-<% end %>
 </div>

@@ -3,7 +3,6 @@ defmodule VutuvWeb.Plug.ResolveSlug do
 
   import Plug.Conn
   import Ecto.Query
-  import Phoenix.Controller
   alias Vutuv.Repo
 
   def init(slug: slug_variable_name, model: model, assign: assign_name, field: field) do
@@ -36,10 +35,6 @@ defmodule VutuvWeb.Plug.ResolveSlug do
   end
 
   defp invalid_slug(conn) do
-    conn
-    |> put_status(:not_found)
-    |> put_view(html: VutuvWeb.ErrorHTML)
-    |> render("404.html")
-    |> halt
+    VutuvWeb.ControllerHelpers.render_error(conn, 404)
   end
 end

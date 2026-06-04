@@ -86,23 +86,12 @@ defmodule VutuvWeb.JobPostingTagController do
       )
     )
     |> case do
-      nil ->
-        conn
-        |> put_status(:not_found)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      job_posting ->
-        assign(conn, :job_posting, job_posting)
+      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
+      job_posting -> assign(conn, :job_posting, job_posting)
     end
   end
 
   defp resolve_job_posting(conn, _) do
-    conn
-    |> put_status(:not_found)
-    |> put_view(html: VutuvWeb.ErrorHTML)
-    |> render("404.html")
-    |> halt()
+    VutuvWeb.ControllerHelpers.render_error(conn, 404)
   end
 end

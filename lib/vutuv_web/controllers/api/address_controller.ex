@@ -1,5 +1,6 @@
 defmodule VutuvWeb.Api.AddressController do
   use VutuvWeb, :controller
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     user =
@@ -10,7 +11,7 @@ defmodule VutuvWeb.Api.AddressController do
   end
 
   def show(conn, %{"id" => id}) do
-    address = Repo.get!(assoc(conn.assigns[:user], :addresses), id)
+    address = ControllerHelpers.get_owned!(conn, :addresses, id)
     render(conn, "show.json", address: address)
   end
 end

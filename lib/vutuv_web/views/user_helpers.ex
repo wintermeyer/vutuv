@@ -41,20 +41,6 @@ defmodule VutuvWeb.UserHelpers do
     |> String.replace("  ", " ")
   end
 
-  def short_name(%User{first_name: nil, last_name: nil}), do: ""
-
-  def short_name(%User{first_name: nil, last_name: last_name}) do
-    String.capitalize(last_name)
-  end
-
-  def short_name(%User{first_name: first_name}) do
-    String.capitalize(first_name)
-  end
-
-  def email(%User{id: id}) do
-    Repo.one(from(e in Vutuv.Accounts.Email, where: e.user_id == ^id, limit: 1, select: e.value))
-  end
-
   def emails_for_display(user, visitor) do
     if user_has_permissions?(user, visitor) do
       Repo.all(assoc(user, :emails))
@@ -327,26 +313,6 @@ defmodule VutuvWeb.UserHelpers do
 
   def current_title(%WorkExperience{title: org}), do: org
 
-  def follower_count(user) do
-    Repo.one(
-      from(c in Connection,
-        join: u in assoc(c, :follower),
-        where: (is_nil(u.validated?) or u.validated? == true) and c.followee_id == ^user.id,
-        select: count("follower_id")
-      )
-    )
-  end
-
-  def followee_count(user) do
-    Repo.one(
-      from(c in Connection,
-        join: u in assoc(c, :followee),
-        where: (is_nil(u.validated?) or u.validated? == true) and c.follower_id == ^user.id,
-        select: count("followee_id")
-      )
-    )
-  end
-
   def locale(conn, %User{locale: nil}) do
     conn.assigns[:locale]
   end
@@ -355,13 +321,10 @@ defmodule VutuvWeb.UserHelpers do
     locale
   end
 
+  # Returns the connection id (or nil), not a boolean — templates use the id
+  # to render the unfollow link. The query lives in the Social context.
   def user_follows_user?(%User{id: follower_id}, %User{id: followee_id}) do
-    Repo.one(
-      from(c in Vutuv.Social.Connection,
-        where: c.follower_id == ^follower_id and c.followee_id == ^followee_id,
-        select: c.id
-      )
-    )
+    Vutuv.Social.follow_connection_id(follower_id, followee_id)
   end
 
   def user_follows_user?(_, _), do: false
@@ -441,33 +404,6 @@ defmodule VutuvWeb.UserHelpers do
     value
   end
 
-  def format_birthdate(%User{locale: "de", birthdate: birthdate}) do
-    format_pyramid(birthdate)
-  end
-
-  def format_birthdate(%User{locale: "en", birthdate: birthdate}) do
-    format_usa(birthdate)
-  end
-
-  # Legacy/pre-existing rows can carry a nil or otherwise-unrecognized locale
-  # (the column has no default and no validate_inclusion); fall back to the
-  # USA format instead of raising FunctionClauseError on the profile page.
-  def format_birthdate(%User{birthdate: birthdate}) do
-    format_usa(birthdate)
-  end
-
-  defp format_pyramid(%Date{year: year, month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(day), 2, "0")}.#{String.pad_leading(Integer.to_string(month), 2, "0")}.#{year}"
-  end
-
-  defp format_pyramid(_), do: ""
-
-  defp format_usa(%Date{year: year, month: month, day: day}) do
-    "#{String.pad_leading(Integer.to_string(month), 2, "0")}/#{String.pad_leading(Integer.to_string(day), 2, "0")}/#{year}"
-  end
-
-  defp format_usa(_), do: ""
-
   def email_greeting(%User{locale: "de", last_name: nil}), do: "#{greeting("de")}"
 
   def email_greeting(%User{locale: "de", gender: "male", last_name: last_name}) do
@@ -500,14 +436,6 @@ defmodule VutuvWeb.UserHelpers do
   def greeting(_) do
     "Hi"
   end
-
-  def admin_visitor?(conn) do
-    admin?(conn.assigns[:current_user])
-  end
-
-  defp admin?(%User{administrator: admin}), do: admin
-
-  defp admin?(_), do: false
 
   def has_tag?(%User{id: user_id}, %Tag{id: tag_id}) do
     !is_nil(Repo.one(from(u in UserTag, where: u.user_id == ^user_id and u.tag_id == ^tag_id)))

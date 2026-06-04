@@ -15,7 +15,11 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
     opts
   end
 
-  def call(%{params: %{"user_slug" => slug}} = conn, _opts) do
+  def call(%{params: %{"user_slug" => slug}} = conn, _opts), do: resolve(conn, slug)
+  def call(%{params: %{"slug" => slug}} = conn, _opts), do: resolve(conn, slug)
+  def call(conn, _opts), do: invalid_slug(conn)
+
+  defp resolve(conn, slug) do
     Repo.one(
       from(s in Vutuv.Accounts.Slug,
         join: u in assoc(s, :user),
@@ -24,26 +28,13 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
       )
     )
     |> eval_slug(conn)
-  end
-
-  def call(%{params: %{"slug" => slug}} = conn, _opts) do
-    Repo.one(
-      from(s in Vutuv.Accounts.Slug,
-        join: u in assoc(s, :user),
-        where: s.value == ^slug and not is_nil(u.id),
-        preload: [:user]
-      )
-    )
-    |> eval_slug(conn)
-  end
-
-  def call(conn, _params) do
-    invalid_slug(conn)
   end
 
   defp eval_slug(%{disabled: false, user: user, value: slug}, conn) do
     if user.active_slug != slug do
-      redirect(conn, to: ~p"/users/#{user}")
+      conn
+      |> redirect(to: ~p"/users/#{user}")
+      |> halt()
     else
       conn
       |> assign(:user_id, user.id)
@@ -56,10 +47,6 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   end
 
   defp invalid_slug(conn) do
-    conn
-    |> put_status(:not_found)
-    |> put_view(html: VutuvWeb.ErrorHTML)
-    |> render("404.html")
-    |> halt
+    VutuvWeb.ControllerHelpers.render_error(conn, 404)
   end
 end

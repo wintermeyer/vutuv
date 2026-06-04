@@ -4,7 +4,7 @@ defmodule VutuvWeb.FolloweeController do
   alias Vutuv.Social.Connection
 
   def index(conn, _params) do
-    total = VutuvWeb.UserHelpers.followee_count(conn.assigns[:user])
+    total = Vutuv.Social.followee_count(conn.assigns[:user])
 
     query =
       Connection.latest(100)
@@ -12,14 +12,18 @@ defmodule VutuvWeb.FolloweeController do
 
     user =
       conn.assigns[:user]
-      |> Repo.preload([:followees, followee_connections: {query, [:followee]}])
+      |> Repo.preload(followee_connections: {query, [:followee]})
+
+    # Render only the current page of followees (the paginated connections),
+    # not the full :followees association.
+    followees = Enum.map(user.followee_connections, & &1.followee)
 
     render(conn, "index.html",
       user: user,
+      followees: followees,
       total_followees: total,
-      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(user.followees, 45),
-      following_by_id:
-        VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], user.followees)
+      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followees, 45),
+      following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees)
     )
   end
 end

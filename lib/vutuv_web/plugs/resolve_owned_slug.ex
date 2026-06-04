@@ -69,10 +69,6 @@ defmodule VutuvWeb.Plug.ResolveOwnedSlug do
   defp maybe_select(query, field), do: from(m in query, select: field(m, ^field))
 
   defp invalid_slug(conn) do
-    conn
-    |> put_status(:not_found)
-    |> Phoenix.Controller.put_view(html: VutuvWeb.ErrorHTML)
-    |> Phoenix.Controller.render("404.html")
-    |> halt()
+    VutuvWeb.ControllerHelpers.render_error(conn, 404)
   end
 end

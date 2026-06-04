@@ -1,9 +1,6 @@
 defmodule VutuvWeb.Plug.AuthRecruiter do
   @moduledoc false
 
-  import Plug.Conn
-  import Phoenix.Controller
-
   alias Vutuv.Recruiting.RecruiterSubscription
 
   def init(opts) do
@@ -32,10 +29,6 @@ defmodule VutuvWeb.Plug.AuthRecruiter do
   end
 
   defp forbidden(conn) do
-    conn
-    |> put_status(403)
-    |> put_view(html: VutuvWeb.ErrorHTML)
-    |> render("403.html")
-    |> halt
+    VutuvWeb.ControllerHelpers.render_error(conn, 403)
   end
 end

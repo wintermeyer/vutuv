@@ -4,6 +4,7 @@ defmodule VutuvWeb.SlugController do
   plug(VutuvWeb.Plug.All404)
 
   alias Vutuv.Accounts.Slug
+  alias VutuvWeb.ControllerHelpers
   import Ecto, only: [assoc: 2, build_assoc: 2]
 
   def index(conn, _params) do
@@ -33,12 +34,12 @@ defmodule VutuvWeb.SlugController do
   end
 
   def show(conn, %{"id" => id}) do
-    slug = Repo.get!(assoc(conn.assigns[:user], :slugs), id)
+    slug = ControllerHelpers.get_owned!(conn, :slugs, id)
     render(conn, "show.html", slug: slug)
   end
 
   def update(conn, %{"id" => id}) do
-    slug = Repo.get!(assoc(conn.assigns[:user], :slugs), id)
+    slug = ControllerHelpers.get_owned!(conn, :slugs, id)
 
     changeset =
       Ecto.Changeset.cast(conn.assigns[:current_user], %{active_slug: slug.value}, [:active_slug])

@@ -76,6 +76,20 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get_by(User, @update_attrs)
   end
 
+  test "renders 403 when editing or updating another user's profile", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    other = insert(:user, validated?: true)
+    insert(:slug, value: other.active_slug, disabled: false, user: other)
+
+    assert conn |> get(~p"/users/#{other}/edit") |> html_response(403)
+
+    assert conn
+           |> recycle()
+           |> put(~p"/users/#{other}", user: @update_attrs)
+           |> html_response(403)
+  end
+
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = put(conn, ~p"/users/#{user}", user: @invalid_update_attrs)

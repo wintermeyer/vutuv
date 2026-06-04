@@ -1,5 +1,6 @@
 defmodule VutuvWeb.GroupController do
   use VutuvWeb, :controller
+  alias Vutuv.Social
   alias Vutuv.Social.Group
   alias VutuvWeb.ControllerHelpers
 
@@ -7,11 +8,7 @@ defmodule VutuvWeb.GroupController do
   plug(:scrub_params, "group" when action in [:create, :update])
 
   def index(conn, _params) do
-    user =
-      Repo.get!(Vutuv.Accounts.User, conn.assigns[:user].id)
-      |> Repo.preload([:groups])
-
-    render(conn, "index.html", groups: user.groups)
+    render(conn, "index.html", groups: Social.list_groups(conn.assigns[:user]))
   end
 
   def new(conn, _params) do
@@ -20,12 +17,7 @@ defmodule VutuvWeb.GroupController do
   end
 
   def create(conn, %{"group" => group_params}) do
-    changeset =
-      conn.assigns[:user]
-      |> build_assoc(:groups)
-      |> Group.changeset(group_params)
-
-    ControllerHelpers.save(conn, Repo.insert(changeset),
+    ControllerHelpers.save(conn, Social.create_group(conn.assigns[:user], group_params),
       flash: gettext("Group created successfully."),
       redirect_to: ~p"/users/#{conn.assigns[:user]}/groups",
       render: "new.html"
@@ -45,9 +37,8 @@ defmodule VutuvWeb.GroupController do
 
   def update(conn, %{"id" => id, "group" => group_params}) do
     group = ControllerHelpers.get_owned!(conn, :groups, id)
-    changeset = Group.changeset(group, group_params)
 
-    ControllerHelpers.save(conn, Repo.update(changeset),
+    ControllerHelpers.save(conn, Social.update_group(group, group_params),
       flash: gettext("Group updated successfully."),
       redirect_to: &~p"/users/#{conn.assigns[:user]}/groups/#{&1}",
       render: "edit.html",
@@ -60,7 +51,7 @@ defmodule VutuvWeb.GroupController do
 
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).
-    Repo.delete!(group)
+    Social.delete_group!(group)
 
     conn
     |> put_flash(:info, gettext("Group deleted successfully."))

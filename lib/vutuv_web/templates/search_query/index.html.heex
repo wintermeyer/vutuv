@@ -23,13 +23,13 @@
           <td>
             <%= for(requester <- query.search_query_requesters) do %>
               <%= if(requester.user_id) do %>
-                <%= VutuvWeb.UserHelpers.full_name(Vutuv.Repo.get(Vutuv.Accounts.User, requester.user_id)) %><br/>
+                <%= VutuvWeb.UserHelpers.full_name(requester.user) %><br/>
               <% end %>
             <% end %>
           </td>
           <td>
             <%= for(result <- query.search_query_results) do %>
-              <%= VutuvWeb.UserHelpers.full_name(Vutuv.Repo.get(Vutuv.Accounts.User, result.user_id)) %>
+              <%= VutuvWeb.UserHelpers.full_name(result.user) %>
             <% end %>
           </td>
           <td class="text-right">

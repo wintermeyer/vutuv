@@ -11,7 +11,7 @@ defmodule VutuvWeb.PageController do
       |> Ecto.Changeset.put_assoc(:emails, [%Email{}])
 
     prefetch = "/listings/most_followed_users"
-    user_counter = Repo.one(from(u in "users", select: count(u.id)))
+    user_counter = Vutuv.Accounts.count_users()
 
     render(conn, "index.html",
       changeset: changeset,
@@ -83,7 +83,7 @@ defmodule VutuvWeb.PageController do
         handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
-        user_counter = Repo.one(from(u in "users", select: count(u.id)))
+        user_counter = Vutuv.Accounts.count_users()
 
         render(conn, "index.html",
           changeset: changeset,
@@ -104,21 +104,12 @@ defmodule VutuvWeb.PageController do
   end
 
   def most_followed_users(conn, _params) do
-    users =
-      Repo.all(
-        from(u in User,
-          left_join: f in assoc(u, :followers),
-          group_by: u.id,
-          order_by: [fragment("count(?) DESC", f.id), u.first_name, u.last_name],
-          limit: 100
-        )
-      )
+    users = Vutuv.Social.most_followed_users(100)
 
     render(conn, "most_followed_users.html",
       users: users,
       work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 60),
-      following_by_id:
-        VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
+      following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
     )
   end
 

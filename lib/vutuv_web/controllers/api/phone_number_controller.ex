@@ -1,5 +1,6 @@
 defmodule VutuvWeb.Api.PhoneNumberController do
   use VutuvWeb, :controller
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     user =
@@ -10,7 +11,7 @@ defmodule VutuvWeb.Api.PhoneNumberController do
   end
 
   def show(conn, %{"id" => id}) do
-    phone_number = Repo.get!(assoc(conn.assigns[:user], :phone_numbers), id)
+    phone_number = ControllerHelpers.get_owned!(conn, :phone_numbers, id)
     render(conn, "show.json", phone_number: phone_number)
   end
 end

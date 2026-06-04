@@ -107,14 +107,8 @@ defmodule VutuvWeb.EmailController do
       Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
     end
     |> case do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-
-      email ->
-        render(conn, "show.html", email: email)
+      nil -> ControllerHelpers.render_error(conn, 404)
+      email -> render(conn, "show.html", email: email)
     end
   end
 
@@ -138,20 +132,19 @@ defmodule VutuvWeb.EmailController do
 
   def delete(conn, %{"id" => id}) do
     email = ControllerHelpers.get_owned!(conn, :emails, id)
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    case Email.can_delete?(conn.assigns.current_user.id) do
-      true ->
-        Repo.delete!(email)
 
-        conn
-        |> put_flash(:info, gettext("Email deleted successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+    if Email.can_delete?(conn.assigns.current_user.id) do
+      # Here we use delete! (with a bang) because we expect
+      # it to always work (and if it does not, it will raise).
+      Repo.delete!(email)
 
-      false ->
-        conn
-        |> put_flash(:error, gettext("Cannot delete final email."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+      conn
+      |> put_flash(:info, gettext("Email deleted successfully."))
+      |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+    else
+      conn
+      |> put_flash(:error, gettext("Cannot delete final email."))
+      |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
     end
   end
 end

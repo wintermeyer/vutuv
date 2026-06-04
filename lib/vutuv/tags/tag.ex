@@ -56,10 +56,7 @@ defmodule Vutuv.Tags.Tag do
   def edit_changeset(struct, params \\ %{}) do
     struct
     |> cast(params, [:slug, :name, :description])
-    |> validate_required([:slug, :name])
-    |> validate_length(:slug, max: 60)
-    |> validate_length(:name, max: 255)
-    |> unique_constraint(:slug)
+    |> shared_validations()
   end
 
   def gen_slug(changeset, value) do

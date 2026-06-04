@@ -8,11 +8,7 @@ defmodule VutuvWeb.ConnectionController do
   plug(:scrub_params, "connection" when action in [:create, :update])
 
   def index(conn, _params) do
-    connections =
-      Repo.all(Connection)
-      |> Repo.preload([:follower, :followee])
-
-    render(conn, "index.html", connections: connections)
+    render(conn, "index.html", connections: Vutuv.Social.list_connections())
   end
 
   def new(conn, _params) do
@@ -40,21 +36,14 @@ defmodule VutuvWeb.ConnectionController do
   end
 
   def show(conn, %{"id" => id}) do
-    connection =
-      Repo.get!(Connection, id)
-      |> Repo.preload([:groups, :follower, :followee])
-
+    connection = Vutuv.Social.get_connection!(id, [:groups, :follower, :followee])
     render(conn, "show.html", connection: connection)
   end
 
   def delete(conn, %{"id" => id}) do
-    # Scope the lookup to the current user so a caller can only delete
-    # their own follow edges, never an arbitrary connection by id.
-    connection = Repo.get_by!(Connection, id: id, follower_id: conn.assigns.current_user_id)
-
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(connection)
+    # Social.unfollow!/2 scopes the lookup to the current user, so a caller can
+    # only delete their own follow edges, never an arbitrary connection by id.
+    Vutuv.Social.unfollow!(conn.assigns.current_user_id, id)
 
     conn
     |> put_flash(:info, gettext("Connection deleted successfully."))

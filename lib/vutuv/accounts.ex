@@ -8,6 +8,7 @@ defmodule Vutuv.Accounts do
   require Logger
 
   alias Plug.Conn
+  alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.LoginPin
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.Slug
@@ -399,4 +400,12 @@ defmodule Vutuv.Accounts do
   end
 
   # ── Emails ──
+
+  @doc """
+  The user's first email address value (public or not) — the address the
+  account-level mails (deletion PIN, payment information) go to.
+  """
+  def first_email_value(%User{id: id}) do
+    Repo.one(from(e in Email, where: e.user_id == ^id, limit: 1, select: e.value))
+  end
 end

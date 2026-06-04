@@ -112,15 +112,15 @@ routes; CSRF + method are handled by the rendered links. --%>
     </.card>
 
     <%!-- Experience --%>
-    <.card :if={@total_jobs > 0 or same_user?(@user, @current_user)}>
+    <.card :if={@work_experience != [] or same_user?(@user, @current_user)}>
       <.section_header
         title={gettext("Experience")}
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/work_experiences/new"}
       />
 
-      <p :if={@total_jobs == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <p :if={@work_experience == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
 
-      <div :if={@total_jobs > 0} class="space-y-5">
+      <div :if={@work_experience != []} class="space-y-5">
         <div :for={job <- @work_experience} class="flex gap-4">
           <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-500 dark:bg-slate-800">
             {String.upcase(String.slice(job.organization || "•", 0, 1))}

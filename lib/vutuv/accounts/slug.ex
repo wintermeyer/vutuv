@@ -26,16 +26,9 @@ defmodule Vutuv.Accounts.Slug do
     |> can_create_slug?(model)
   end
 
+  # update_change/3 is a no-op when :value has no change, so no nil-check needed.
   defp trim_slug_to_32(changeset) do
-    get_change(changeset, :value)
-    |> case do
-      nil -> changeset
-      _value -> update_change(changeset, :value, &slice_32/1)
-    end
-  end
-
-  defp slice_32(string) do
-    String.slice(string, 0, 32)
+    update_change(changeset, :value, &String.slice(&1, 0, 32))
   end
 
   defp can_create_slug?(changeset, model) do

@@ -6,22 +6,12 @@ defmodule VutuvWeb.Plug.RequireLoginOr404 do
   from anonymous callers instead of inviting a login.
   """
 
-  import Plug.Conn
-  import Phoenix.Controller
-
   def init(opts), do: opts
 
   def call(conn, _opts) do
     case conn.assigns[:current_user_id] do
-      nil ->
-        conn
-        |> put_status(404)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("404.html")
-        |> halt()
-
-      _id ->
-        conn
+      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
+      _id -> conn
     end
   end
 end

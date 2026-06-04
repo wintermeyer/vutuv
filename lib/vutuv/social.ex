@@ -45,17 +45,33 @@ defmodule Vutuv.Social do
   defp follower_struct(%Vutuv.Accounts.User{} = user), do: user
   defp follower_struct(id), do: Repo.get(Vutuv.Accounts.User, id)
 
-  def unfollow!(connection_id) do
-    Repo.get!(Connection, connection_id)
+  @doc """
+  Deletes a follow edge. The lookup is scoped to `follower_id`, so a caller can
+  only remove their own connections, never an arbitrary one by id.
+  """
+  def unfollow!(follower_id, connection_id) do
+    Repo.get_by!(Connection, id: connection_id, follower_id: follower_id)
     |> Repo.delete!()
   end
 
-  def get_connection!(id), do: Repo.get!(Connection, id)
+  def list_connections do
+    Connection
+    |> Repo.all()
+    |> Repo.preload([:follower, :followee])
+  end
+
+  def get_connection!(id, preloads \\ []) do
+    Repo.get!(Connection, id) |> Repo.preload(preloads)
+  end
+
+  # The public pages only count/show follows from validated accounts (nil
+  # covers legacy rows that predate the flag), matching Connection.latest/1.
 
   def follower_count(user) do
     Repo.one(
       from(c in Connection,
-        where: c.followee_id == ^user.id,
+        join: u in assoc(c, :follower),
+        where: (is_nil(u.validated?) or u.validated? == true) and c.followee_id == ^user.id,
         select: count(c.id)
       )
     )
@@ -64,7 +80,8 @@ defmodule Vutuv.Social do
   def followee_count(user) do
     Repo.one(
       from(c in Connection,
-        where: c.follower_id == ^user.id,
+        join: u in assoc(c, :followee),
+        where: (is_nil(u.validated?) or u.validated? == true) and c.follower_id == ^user.id,
         select: count(c.id)
       )
     )
@@ -74,6 +91,34 @@ defmodule Vutuv.Social do
     Repo.exists?(
       from(c in Connection,
         where: c.follower_id == ^follower_id and c.followee_id == ^followee_id
+      )
+    )
+  end
+
+  @doc """
+  The id of the `follower → followee` connection, or `nil` when there is no
+  follow edge. Templates use the id to render the unfollow link.
+  """
+  def follow_connection_id(follower_id, followee_id) do
+    Repo.one(
+      from(c in Connection,
+        where: c.follower_id == ^follower_id and c.followee_id == ^followee_id,
+        select: c.id
+      )
+    )
+  end
+
+  @doc """
+  The `limit` users with the most followers, ties broken by name. Backs both
+  the public listing page and the profile's default "who to follow" rail.
+  """
+  def most_followed_users(limit) do
+    Repo.all(
+      from(u in Vutuv.Accounts.User,
+        left_join: f in assoc(u, :followers),
+        group_by: u.id,
+        order_by: [fragment("count(?) DESC", f.id), u.first_name, u.last_name],
+        limit: ^limit
       )
     )
   end
@@ -105,8 +150,17 @@ defmodule Vutuv.Social do
 
   def get_membership!(id), do: Repo.get!(Membership, id)
 
-  def create_membership(attrs) do
-    %Membership{}
+  @doc """
+  Fetches a membership scoped to `connection`, so a caller can only reach
+  memberships of a connection they actually own.
+  """
+  def get_membership!(%Connection{} = connection, id) do
+    Repo.get!(Ecto.assoc(connection, :memberships), id)
+  end
+
+  def create_membership(%Connection{} = connection, attrs) do
+    connection
+    |> Ecto.build_assoc(:memberships)
     |> Membership.changeset(attrs)
     |> Repo.insert()
   end

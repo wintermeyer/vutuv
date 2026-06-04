@@ -14,10 +14,10 @@ defmodule VutuvWeb.SearchQueryController do
           from(q in SearchQuery,
             join: r in assoc(q, :search_query_requesters),
             where: r.user_id == ^conn.assigns[:current_user].id,
-            preload: [search_query_requesters: r]
+            preload: [search_query_requesters: {r, :user}]
           )
         )
-        |> Repo.preload([:search_query_results])
+        |> Repo.preload(search_query_results: :user)
 
       render(conn, "index.html", queries: queries)
     else
@@ -50,24 +50,19 @@ defmodule VutuvWeb.SearchQueryController do
 
     Repo.one(from(q in SearchQuery, where: q.value == ^search_query_params["value"]))
     |> insert_or_update(search_query_params, requester_assoc(user), results)
-    # Multiple possible transaction results are covered by 4 different cases
+    # insert_or_update returns either a plain Repo result or an Ecto.Multi one
     |> case do
-      {:ok, %{search_query: query, search_query_requester: _search_query_requester}} ->
-        conn
-        |> put_flash(:info, gettext("Search query executed successfully."))
-        |> redirect(to: ~p"/search_queries/#{query}")
-
-      {:ok, query} ->
-        conn
-        |> put_flash(:info, gettext("Search query executed successfully."))
-        |> redirect(to: ~p"/search_queries/#{query}")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-
-      {:error, _failure, changeset, _} ->
-        render(conn, "new.html", changeset: changeset)
+      {:ok, %{search_query: query}} -> query_created(conn, query)
+      {:ok, query} -> query_created(conn, query)
+      {:error, changeset} -> render(conn, "new.html", changeset: changeset)
+      {:error, _failure, changeset, _} -> render(conn, "new.html", changeset: changeset)
     end
+  end
+
+  defp query_created(conn, query) do
+    conn
+    |> put_flash(:info, gettext("Search query executed successfully."))
+    |> redirect(to: ~p"/search_queries/#{query}")
   end
 
   def show(conn, %{"id" => query_id}) do

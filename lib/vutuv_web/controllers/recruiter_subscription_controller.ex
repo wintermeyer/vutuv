@@ -40,7 +40,7 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
         Emailer.payment_information_email(
           recruiter_subscription,
           conn.assigns[:user],
-          VutuvWeb.UserHelpers.email(conn.assigns[:user])
+          Vutuv.Accounts.first_email_value(conn.assigns[:user])
         )
         |> Emailer.deliver()
 
@@ -72,18 +72,6 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
         )
     end
   end
-
-  # def delete(conn, %{"id" => id}) do
-  #   recruiter_subscription = Repo.get!(RecruiterSubscription, id)
-
-  #   # Here we use delete! (with a bang) because we expect
-  #   # it to always work (and if it does not, it will raise).
-  #   Repo.delete!(recruiter_subscription)
-
-  #   conn
-  #   |> put_flash(:info, gettext("Recruiter subscription deleted successfully."))
-  #   |> redirect(to: user_recruiter_subscription_path(conn, :index, conn.assigns[:user]))
-  # end
 
   defp maybe_redeem_coupon(%{coupon_code: nil}), do: :ok
 
@@ -127,7 +115,7 @@ defmodule VutuvWeb.RecruiterSubscriptionController do
         )
       )
 
-    Enum.uniq(List.flatten(recruiter_packages ++ recruiter_packages_available_with_coupon(user)))
+    Enum.uniq(recruiter_packages ++ recruiter_packages_available_with_coupon(user))
   end
 
   defp has_valid_coupons(user) do

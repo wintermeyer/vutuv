@@ -67,25 +67,13 @@ defmodule Vutuv.Profiles.WorkExperience do
     end
   end
 
+  # A month without a year is the only invalid combination.
   defp presence_correct?(year, month) do
-    cond do
-      year && month -> true
-      year -> true
-      month -> false
-      true -> true
-    end
+    not is_nil(year) or is_nil(month)
   end
 
-  defp date_range_correct?(start, finish) do
-    if start && finish do
-      cond do
-        start > finish -> false
-        start <= finish -> true
-      end
-    else
-      true
-    end
-  end
+  defp date_range_correct?(start, finish) when is_nil(start) or is_nil(finish), do: true
+  defp date_range_correct?(start, finish), do: start <= finish
 
   defp create_slug(changeset) do
     if get_change(changeset, :title) || get_change(changeset, :organization) do

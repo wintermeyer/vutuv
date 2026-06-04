@@ -22,12 +22,7 @@ defmodule VutuvWeb.MembershipController do
   end
 
   def create(conn, %{"membership" => membership_params}) do
-    changeset =
-      conn.assigns[:connection]
-      |> build_assoc(:memberships)
-      |> Membership.changeset(membership_params)
-
-    case Repo.insert(changeset) do
+    case Vutuv.Social.create_membership(conn.assigns[:connection], membership_params) do
       {:ok, _membership} ->
         conn
         |> put_flash(:info, gettext("Membership created successfully."))
@@ -39,18 +34,18 @@ defmodule VutuvWeb.MembershipController do
   end
 
   def show(conn, %{"id" => id}) do
-    membership = Repo.get!(Membership, id)
+    membership = Vutuv.Social.get_membership!(id)
     render(conn, "show.html", membership: membership)
   end
 
   def delete(conn, %{"id" => id}) do
-    # Scope the membership to the (ownership-checked) connection so a caller
-    # can only delete memberships of a connection they actually own.
-    membership = Repo.get!(assoc(conn.assigns[:connection], :memberships), id)
+    # Scoped to the (ownership-checked) connection so a caller can only delete
+    # memberships of a connection they actually own.
+    membership = Vutuv.Social.get_membership!(conn.assigns[:connection], id)
 
     # Here we use delete! (with a bang) because we expect
     # it to always work (and if it does not, it will raise).
-    Repo.delete!(membership)
+    Vutuv.Social.delete_membership!(membership)
 
     conn
     |> put_flash(:info, gettext("Membership deleted successfully."))

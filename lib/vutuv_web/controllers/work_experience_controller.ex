@@ -26,8 +26,7 @@ defmodule VutuvWeb.WorkExperienceController do
 
   def new(conn, _params) do
     changeset = WorkExperience.changeset(%WorkExperience{})
-    current_year = DateTime.utc_now() |> Map.fetch!(:year)
-    render(conn, "new.html", changeset: changeset, current_year: current_year)
+    render(conn, "new.html", changeset: changeset, current_year: current_year())
   end
 
   def create(conn, %{"work_experience" => work_experience_params}) do
@@ -43,8 +42,7 @@ defmodule VutuvWeb.WorkExperienceController do
         |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences")
 
       {:error, changeset} ->
-        current_year = DateTime.utc_now() |> Map.fetch!(:year)
-        render(conn, "new.html", changeset: changeset, current_year: current_year)
+        render(conn, "new.html", changeset: changeset, current_year: current_year())
     end
   end
 
@@ -65,12 +63,11 @@ defmodule VutuvWeb.WorkExperienceController do
   def edit(conn, _params) do
     work_experience = conn.assigns[:job]
     changeset = WorkExperience.changeset(work_experience)
-    current_year = DateTime.utc_now() |> Map.fetch!(:year)
 
     render(conn, "edit.html",
       work_experience: work_experience,
       changeset: changeset,
-      current_year: current_year
+      current_year: current_year()
     )
   end
 
@@ -85,15 +82,15 @@ defmodule VutuvWeb.WorkExperienceController do
         |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences/#{work_experience}")
 
       {:error, changeset} ->
-        current_year = DateTime.utc_now() |> Map.fetch!(:year)
-
         render(conn, "edit.html",
           work_experience: work_experience,
           changeset: changeset,
-          current_year: current_year
+          current_year: current_year()
         )
     end
   end
+
+  defp current_year, do: Date.utc_today().year
 
   def delete(conn, _params) do
     # Here we use delete! (with a bang) because we expect

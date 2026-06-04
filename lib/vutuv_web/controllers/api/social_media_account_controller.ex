@@ -1,5 +1,6 @@
 defmodule VutuvWeb.Api.SocialMediaAccountController do
   use VutuvWeb, :controller
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     user =
@@ -10,7 +11,7 @@ defmodule VutuvWeb.Api.SocialMediaAccountController do
   end
 
   def show(conn, %{"id" => id}) do
-    social_media_account = Repo.get!(assoc(conn.assigns[:user], :social_media_accounts), id)
+    social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     render(conn, "show.json", social_media_account: social_media_account)
   end
 end

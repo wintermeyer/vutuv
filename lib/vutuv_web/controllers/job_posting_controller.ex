@@ -16,22 +16,17 @@ defmodule VutuvWeb.JobPostingController do
   alias Vutuv.Recruiting.RecruiterSubscription
 
   def index(conn, _params) do
-    user = Repo.preload(conn.assigns[:user], :job_postings)
-    render(conn, "index.html", job_postings: user.job_postings)
+    # validate_package (always run for :index) has already preloaded
+    # :job_postings into the assign.
+    render(conn, "index.html", job_postings: conn.assigns[:user].job_postings)
   end
 
   def new(conn, _params) do
     today = Date.utc_today()
-    {{current_year, current_month, current_day}, {_hour, _min, _sec}} = :erlang.localtime()
 
-    {year, month, day} =
-      :calendar.gregorian_days_to_date(
-        :calendar.date_to_gregorian_days({current_year, current_month, current_day}) + 90
-      )
+    changeset =
+      JobPosting.changeset(%JobPosting{open_on: today, closed_on: Date.add(today, 90)})
 
-    in_nity_days = Date.new!(year, month, day)
-
-    changeset = JobPosting.changeset(%JobPosting{open_on: today, closed_on: in_nity_days})
     render(conn, "new.html", changeset: changeset)
   end
 
@@ -95,15 +90,8 @@ defmodule VutuvWeb.JobPostingController do
 
   defp validate_recruiter(conn, _opts) do
     case RecruiterSubscription.active_subscription(conn.assigns[:user_id]) do
-      nil ->
-        conn
-        |> put_status(403)
-        |> put_view(html: VutuvWeb.ErrorHTML)
-        |> render("403.html")
-        |> halt
-
-      subscription ->
-        assign(conn, :active_subscription, subscription)
+      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 403)
+      subscription -> assign(conn, :active_subscription, subscription)
     end
   end
 
@@ -120,7 +108,7 @@ defmodule VutuvWeb.JobPostingController do
       |> render("index.html", job_postings: user.job_postings)
       |> halt
     else
-      conn
+      assign(conn, :user, user)
     end
   end
 end

@@ -4,7 +4,7 @@ defmodule VutuvWeb.FollowerController do
   alias Vutuv.Social.Connection
 
   def index(conn, _params) do
-    total = VutuvWeb.UserHelpers.follower_count(conn.assigns[:user])
+    total = Vutuv.Social.follower_count(conn.assigns[:user])
 
     query =
       Connection.latest(100)
@@ -12,14 +12,18 @@ defmodule VutuvWeb.FollowerController do
 
     user =
       conn.assigns[:user]
-      |> Repo.preload([:followers, follower_connections: {query, [:follower]}])
+      |> Repo.preload(follower_connections: {query, [:follower]})
+
+    # Render only the current page of followers (the paginated connections),
+    # not the full :followers association.
+    followers = Enum.map(user.follower_connections, & &1.follower)
 
     render(conn, "index.html",
       user: user,
+      followers: followers,
       total_followers: total,
-      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(user.followers, 45),
-      following_by_id:
-        VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], user.followers)
+      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followers, 45),
+      following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followers)
     )
   end
 end

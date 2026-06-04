@@ -66,9 +66,9 @@ defmodule Vutuv.SocialTest do
 
   describe "follower_count/1 and followee_count/1" do
     test "returns correct counts" do
-      user = insert(:user)
-      follower1 = insert(:user)
-      follower2 = insert(:user)
+      user = insert(:user, validated?: true)
+      follower1 = insert(:user, validated?: true)
+      follower2 = insert(:user, validated?: true)
 
       {:ok, _} = Social.follow(follower1.id, user.id)
       {:ok, _} = Social.follow(follower2.id, user.id)
@@ -76,6 +76,16 @@ defmodule Vutuv.SocialTest do
       assert Social.follower_count(user) == 2
       assert Social.followee_count(user) == 0
       assert Social.followee_count(follower1) == 1
+    end
+
+    test "ignores follows from unvalidated accounts" do
+      user = insert(:user, validated?: true)
+      unvalidated = insert(:user)
+
+      {:ok, _} = Social.follow(unvalidated.id, user.id)
+
+      assert Social.follower_count(user) == 0
+      assert Social.followee_count(unvalidated) == 1
     end
   end
 

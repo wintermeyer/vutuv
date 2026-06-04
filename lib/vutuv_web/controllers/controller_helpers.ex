@@ -31,6 +31,19 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
+  every auth/resolve plug and the controller-side guards use to refuse a
+  request.
+  """
+  def render_error(%Conn{} = conn, status) when status in [403, 404] do
+    conn
+    |> Conn.put_status(status)
+    |> Phoenix.Controller.put_view(html: VutuvWeb.ErrorHTML)
+    |> Phoenix.Controller.render("#{status}.html")
+    |> Conn.halt()
+  end
+
+  @doc """
   Folds the plain "insert/update then flash+redirect or re-render" case shared
   by the straightforward create/update actions.
 
