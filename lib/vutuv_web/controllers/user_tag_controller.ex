@@ -70,6 +70,7 @@ defmodule VutuvWeb.UserTagController do
         |> put_status(404)
         |> put_view(html: VutuvWeb.ErrorHTML)
         |> render("404.html")
+        |> halt()
 
       user_tag ->
         assign(conn, :user_tag, user_tag)
