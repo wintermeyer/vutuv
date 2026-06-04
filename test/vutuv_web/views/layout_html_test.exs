@@ -1,4 +1,4 @@
-defmodule VutuvWeb.LayoutViewTest do
+defmodule VutuvWeb.LayoutHTMLTest do
   use VutuvWeb.ConnCase, async: true
 
   test "the app layout wraps page content with the shared shell nav and footer", %{conn: conn} do

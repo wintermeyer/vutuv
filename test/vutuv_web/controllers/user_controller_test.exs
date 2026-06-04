@@ -1,4 +1,4 @@
-defmodule Vutuv.Accounts.UserControllerTest do
+defmodule VutuvWeb.UserControllerTest do
   use VutuvWeb.ConnCase
 
   alias Vutuv.Accounts.User

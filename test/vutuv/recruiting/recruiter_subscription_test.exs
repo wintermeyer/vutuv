@@ -1,7 +1,5 @@
 defmodule Vutuv.Recruiting.RecruiterSubscriptionTest do
-  use Vutuv.ModelCase
-
-  import Vutuv.Factory
+  use Vutuv.DataCase
 
   alias Vutuv.Recruiting.RecruiterSubscription
 

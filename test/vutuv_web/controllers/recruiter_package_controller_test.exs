@@ -1,4 +1,4 @@
-defmodule Vutuv.Recruiting.RecruiterPackageControllerTest do
+defmodule VutuvWeb.RecruiterPackageControllerTest do
   use VutuvWeb.ConnCase
 
   alias Vutuv.Recruiting.RecruiterPackage

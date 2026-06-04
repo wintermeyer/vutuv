@@ -1,4 +1,4 @@
-defmodule Vutuv.Recruiting.CouponControllerTest do
+defmodule VutuvWeb.CouponControllerTest do
   use VutuvWeb.ConnCase
 
   alias Vutuv.Recruiting.Coupon

@@ -1,5 +1,5 @@
 defmodule Vutuv.JobPostings.JobPostingTagTest do
-  use Vutuv.ModelCase
+  use Vutuv.DataCase
 
   alias Vutuv.JobPostings.JobPostingTag
 

@@ -1,5 +1,5 @@
 defmodule Vutuv.Recruiting.CouponTest do
-  use Vutuv.ModelCase
+  use Vutuv.DataCase
 
   alias Vutuv.Recruiting.Coupon
 

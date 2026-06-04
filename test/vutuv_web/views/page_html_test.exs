@@ -1,4 +1,4 @@
-defmodule VutuvWeb.PageViewTest do
+defmodule VutuvWeb.PageHTMLTest do
   use VutuvWeb.ConnCase, async: true
 
   test "GET /impressum renders the about-us page", %{conn: conn} do

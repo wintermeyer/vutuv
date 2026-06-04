@@ -1,4 +1,4 @@
-defmodule Vutuv.Profiles.UrlControllerTest do
+defmodule VutuvWeb.UrlControllerTest do
   use VutuvWeb.ConnCase, async: true
 
   import Vutuv.Factory

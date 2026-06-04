@@ -1,5 +1,5 @@
 defmodule Vutuv.Recruiting.RecruiterPackageTest do
-  use Vutuv.ModelCase
+  use Vutuv.DataCase
 
   alias Vutuv.Recruiting.RecruiterPackage
 

@@ -1,5 +1,5 @@
-defmodule Vutuv.UserTest do
-  use Vutuv.ModelCase
+defmodule Vutuv.Accounts.UserTest do
+  use Vutuv.DataCase
 
   alias Vutuv.Accounts.User
 

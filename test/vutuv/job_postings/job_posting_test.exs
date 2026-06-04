@@ -1,7 +1,5 @@
 defmodule Vutuv.JobPostings.JobPostingTest do
-  use Vutuv.ModelCase
-
-  import Vutuv.Factory
+  use Vutuv.DataCase
 
   alias Vutuv.JobPostings.JobPosting
 
