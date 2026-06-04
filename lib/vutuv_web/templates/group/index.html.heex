@@ -11,39 +11,31 @@
     gettext("Groups")]) %>
 </div>
 
-<div class="card-list">
-  <section class="card">
-    <%= if Enum.empty?(@groups) do %>
-      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
-    <% else %>
-      <table>
-        <thead>
-          <tr>
-            <th><%= gettext "Name" %></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <%= for group <- @groups do %>
-            <tr>
-              <td>
-                <%= link group.name, to: ~p"/users/#{@user}/groups/#{group}" %>
-              </td>
-              <td class="text-right">
-                <.edit_delete_actions
-                  edit_to={~p"/users/#{@user}/groups/#{group}/edit"}
-                  delete_to={~p"/users/#{@user}/groups/#{group}"}
-                  confirm={gettext("Are you sure?")}
-                  title_edit={gettext("Edit")}
-                  title_delete={gettext("Delete")}
-                />
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    <% end %>
-
-    <%= link gettext("Add"), to: ~p"/users/#{@user}/groups/new", class: "card__morelink" %>
-  </section>
-</div>
+<.card_section empty={Enum.empty?(@groups)} add_href={~p"/users/#{@user}/groups/new"}>
+  <table>
+    <thead>
+      <tr>
+        <th><%= gettext "Name" %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for group <- @groups do %>
+        <tr>
+          <td>
+            <%= link group.name, to: ~p"/users/#{@user}/groups/#{group}" %>
+          </td>
+          <td class="text-right">
+            <.edit_delete_actions
+              edit_to={~p"/users/#{@user}/groups/#{group}/edit"}
+              delete_to={~p"/users/#{@user}/groups/#{group}"}
+              confirm={gettext("Are you sure?")}
+              title_edit={gettext("Edit")}
+              title_delete={gettext("Delete")}
+            />
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</.card_section>

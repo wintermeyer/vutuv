@@ -8,10 +8,6 @@
 </div>
 
 
-<div class="card-list">
-
-  <section class="card">
-
+<.card_section>
   <%= render "form_content.html", backlink: ~p"/users/#{@user}/work_experiences", changeset: @changeset, action: ~p"/users/#{@user}/work_experiences", current_year: @current_year %>
-  </section>
-</div>
+</.card_section>

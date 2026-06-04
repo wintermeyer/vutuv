@@ -14,9 +14,7 @@
   gettext("Edit")]) %>
 </div>
 
-<div class="card-list">
-  <section class="card">
-    <%= render "form_content.html", backlink: ~p"/users/#{@user}/job_postings", changeset: @changeset,
-                            action: ~p"/users/#{@user}/job_postings/#{@job_posting}", edit: true %>
-  </section>
-</div>
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/users/#{@user}/job_postings", changeset: @changeset,
+                          action: ~p"/users/#{@user}/job_postings/#{@job_posting}", edit: true %>
+</.card_section>

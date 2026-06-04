@@ -136,6 +136,60 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
+  # The shared `<.card_section>` component replaces the copy-pasted
+  # `<div class="card-list"><section class="card">…</section></div>` shell that
+  # wrapped every owned-resource index (with its `card__empty` empty-state and an
+  # owner-guarded `card__morelink` "Add" link) and ~20 new/edit form wrappers. It
+  # must keep the exact legacy classes (`.card-list`, `.card`, `.card__empty`,
+  # `.card__morelink`) so `components.css` keeps styling them, the empty line must
+  # stay gated on the collection, and the Add link must stay owner-only where the
+  # call site guards it. The phone-number index is a representative converted
+  # site: it starts empty and guards its Add link with `same_user?/2`.
+  describe "shared legacy card section" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "an empty owned index shows the empty line and an owner Add link", %{
+      conn: conn,
+      user: user
+    } do
+      conn = get(conn, ~p"/users/#{user}/phone_numbers")
+      html = html_response(conn, 200)
+
+      # The legacy card shell and empty-state line.
+      assert html =~ ~s(class="card-list")
+      assert html =~ ~s(<section class="card">)
+      assert html =~ ~s(<p class="card__empty">)
+      assert html =~ "Nothing here yet."
+
+      # The owner sees the Add link into the new-route.
+      assert html =~ ~s(class="card__morelink")
+      assert html =~ ~p"/users/#{user}/phone_numbers/new"
+    end
+
+    test "a non-owner sees no Add link on someone else's empty index", %{conn: conn} do
+      other = insert(:user, validated?: true)
+      insert(:slug, value: other.active_slug, disabled: false, user: other)
+      conn = get(conn, ~p"/users/#{other}/phone_numbers")
+      html = html_response(conn, 200)
+
+      assert html =~ ~s(<p class="card__empty">)
+      refute html =~ ~s(class="card__morelink")
+    end
+
+    test "a new page wraps its form in the card section shell", %{conn: conn, user: user} do
+      conn = get(conn, ~p"/users/#{user}/phone_numbers/new")
+      html = html_response(conn, 200)
+
+      assert html =~ ~s(class="card-list")
+      assert html =~ ~s(<section class="card">)
+      # The form_content is rendered inside the shell (its submit button is present).
+      assert html =~ ~s(<button class="button" type="submit">)
+    end
+  end
+
   # The shared `<.edit_delete_actions>` component replaces ~16 hand-written
   # edit/delete icon-button pairs that had drifted into two icon flavors and two
   # button orders. It renders the canonical legacy anatomy from design.md: a

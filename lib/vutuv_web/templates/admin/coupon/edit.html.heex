@@ -11,9 +11,7 @@
       gettext("Edit")]) %>
 </div>
 
-<div class="card-list">
-  <section class="card">
-    <%= render "form_content.html", backlink: ~p"/admin/coupons", changeset: @changeset,
-                            action: ~p"/admin/coupons/#{@coupon}" %>
-  </section>
-</div>
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/admin/coupons", changeset: @changeset,
+                          action: ~p"/admin/coupons/#{@coupon}" %>
+</.card_section>

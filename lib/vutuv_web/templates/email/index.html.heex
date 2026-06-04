@@ -12,18 +12,9 @@
 </div>
 
 
-<div class="card-list">
-  <section class="card">
-
-    <%= if Enum.empty?(@emails) do %>
-      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
-    <% else %>
-      <%= render "card_list.html", assigns %>
-    <% end %>
-
-    <%= if same_user?(@user, @current_user) do %>
-      <%= link gettext("Add"), to: ~p"/users/#{@current_user}/emails/new", class: "card__morelink" %>
-    <% end %>
-  </section>
-
-</div>
+<.card_section
+  empty={Enum.empty?(@emails)}
+  add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/emails/new"}
+>
+  <%= render "card_list.html", assigns %>
+</.card_section>

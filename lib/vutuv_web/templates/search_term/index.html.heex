@@ -11,31 +11,25 @@
     gettext("Search terms")]) %>
 </div>
 
-<div class="card-list">
-  <section class="card">
-    <%= if Enum.empty?(@search_terms) do %>
-      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
-    <% else %>
-      <table>
-        <thead>
-          <tr>
-            <th><%= gettext("Value") %></th>
-            <th><%= gettext("Score") %></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <%= for search_term <- @search_terms do %>
-            <tr>
-              <td><%= link search_term.value, to: ~p"/users/#{@user}/search_terms/#{search_term}" %></td>
-              <td><%= search_term.score %></td>
-              <td class="text-right">
-                <%= link gettext("Show"), to: ~p"/users/#{@user}/search_terms/#{search_term}", class: "button-link button--small" %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    <% end %>
-  </section>
-</div>
+<.card_section empty={Enum.empty?(@search_terms)}>
+  <table>
+    <thead>
+      <tr>
+        <th><%= gettext("Value") %></th>
+        <th><%= gettext("Score") %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for search_term <- @search_terms do %>
+        <tr>
+          <td><%= link search_term.value, to: ~p"/users/#{@user}/search_terms/#{search_term}" %></td>
+          <td><%= search_term.score %></td>
+          <td class="text-right">
+            <%= link gettext("Show"), to: ~p"/users/#{@user}/search_terms/#{search_term}", class: "button-link button--small" %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</.card_section>

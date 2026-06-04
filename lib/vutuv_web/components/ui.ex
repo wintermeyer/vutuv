@@ -362,6 +362,42 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  Legacy (Track 1) card shell shared by the owned-resource index pages and the
+  new/edit form wrappers: the `<div class="card-list"><section class="card">…</section></div>`
+  boilerplate that used to be copy-pasted into ~30 templates, styled by
+  `components.css` (not Tailwind — do not swap in utilities). The `inner_block`
+  goes inside the `.card`.
+
+  Pass `add_href` for the canonical owner "Add" link (a `.card__morelink`; a falsy
+  value hides it, so `add_href={same_user?(@user, @current_user) && ~p"/…/new"}`
+  reads naturally), `add_label` to override its text. Set `empty` to render the
+  `<p class="card__empty">` empty-state line (text from `empty_text`) **instead of**
+  the inner block. Use it as `<.card_section empty={…} add_href={…}>…</.card_section>`.
+  """
+  attr(:add_href, :any, default: nil)
+  attr(:add_label, :string, default: nil)
+  attr(:empty, :boolean, default: false)
+  attr(:empty_text, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def card_section(assigns) do
+    ~H"""
+    <div class="card-list">
+      <section class="card">
+        <%= if @empty do %>
+          <p class="card__empty">{@empty_text || gettext("Nothing here yet.")}</p>
+        <% else %>
+          {render_slot(@inner_block)}
+        <% end %>
+        <.link :if={@add_href} href={@add_href} class="card__morelink">
+          {@add_label || gettext("Add")}
+        </.link>
+      </section>
+    </div>
+    """
+  end
+
   @doc "Labelled text input for hand-written forms (legacy forms are styled by components.css)."
   attr(:name, :string, required: true)
   attr(:type, :string, default: "text")

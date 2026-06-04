@@ -5,9 +5,6 @@
     gettext("New")]) %>
 </div>
 
-<div class="card-list">
-
-  <section class="card">
-    <%= render "form_content.html", backlink: ~p"/", changeset: @changeset, current_user: @current_user, action: ~p"/users" %>
-  </section>
-</div>
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/", changeset: @changeset, current_user: @current_user, action: ~p"/users" %>
+</.card_section>

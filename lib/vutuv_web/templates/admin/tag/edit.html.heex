@@ -12,9 +12,7 @@
       gettext("Edit")]) %>
 </div>
 
-<div class="card-list">
-  <section class="card">
-    <%= render "form_content.html", conn: @conn, backlink: ~p"/admin/tags", changeset: @changeset,
-                            action: ~p"/admin/tags/#{@tag}" %>
-  </section>
-</div>
+<.card_section>
+  <%= render "form_content.html", conn: @conn, backlink: ~p"/admin/tags", changeset: @changeset,
+                          action: ~p"/admin/tags/#{@tag}" %>
+</.card_section>
