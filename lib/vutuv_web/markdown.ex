@@ -63,8 +63,8 @@ defmodule VutuvWeb.Markdown do
     Enum.count(graphemes, &(&1 == ")")) > Enum.count(graphemes, &(&1 == "("))
   end
 
-  @doc "Scheme-less display text for a URL, truncated to #{@url_display_max} chars."
-  def truncate_url(url) do
+  # Scheme-less display text for a URL, truncated to @url_display_max chars.
+  defp truncate_url(url) do
     display =
       url
       |> String.replace_prefix("https://", "")

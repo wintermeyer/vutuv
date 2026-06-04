@@ -37,7 +37,7 @@
       <%= if @conn.params["tags"] == "true" do %>
         {VutuvWeb.TagHTML.card_list(%{conn: @conn, tags: @tag_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
       <% else %>
-        {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
+        {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
       <% end %>
       <%= if Enum.count(@tag_results) == 0 and Enum.count(@user_results) == 0 do %>
         <p class="search-results__empty"><%= gettext "No results" %></p>

@@ -54,16 +54,6 @@ defmodule Vutuv.Social do
     |> Repo.delete!()
   end
 
-  def list_connections do
-    Connection
-    |> Repo.all()
-    |> Repo.preload([:follower, :followee])
-  end
-
-  def get_connection!(id, preloads \\ []) do
-    Repo.get!(Connection, id) |> Repo.preload(preloads)
-  end
-
   # The public pages only count/show follows from validated accounts (nil
   # covers legacy rows that predate the flag), matching Connection.latest/1.
 

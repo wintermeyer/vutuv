@@ -52,7 +52,6 @@ defmodule VutuvWeb do
 
       import VutuvWeb.ErrorHelpers
       use Gettext, backend: VutuvWeb.Gettext
-      import VutuvWeb.CurrencyHelpers
       # Direction A design-system components (<.card>, <.section_title>, <.chip>).
       import VutuvWeb.UI
     end

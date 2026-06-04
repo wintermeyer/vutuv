@@ -29,13 +29,9 @@ defmodule VutuvWeb.LayoutHTML do
 
   # The current path lets the shell zero the matching unread badge at mount —
   # relying only on the page's read-broadcast races the shell's subscribe on
-  # full page loads. Dead pages have @conn; LiveView layouts only have @socket,
-  # so the badge-clearing pages are mapped from their view module.
+  # full page loads. Dead pages have @conn; live pages get `:shell_path`
+  # assigned from the URI by the `Live.InitAssigns` handle_params hook.
   defp current_path(%{conn: conn}) when not is_nil(conn), do: conn.request_path
-  defp current_path(%{socket: %{view: VutuvWeb.NotificationLive.Index}}), do: "/notifications"
-  defp current_path(%{socket: %{view: VutuvWeb.MessageLive.Index}}), do: "/messages"
-
-  defp current_path(_assigns) do
-    nil
-  end
+  defp current_path(%{shell_path: path}), do: path
+  defp current_path(_assigns), do: nil
 end

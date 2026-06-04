@@ -49,20 +49,6 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
-  describe "get_user!/1" do
-    test "returns user when exists" do
-      user = insert(:user)
-      found = Accounts.get_user!(user.id)
-      assert found.id == user.id
-    end
-
-    test "raises when user does not exist" do
-      assert_raise Ecto.NoResultsError, fn ->
-        Accounts.get_user!(0)
-      end
-    end
-  end
-
   describe "update_user/2" do
     test "updates with valid attrs" do
       user = insert(:user)

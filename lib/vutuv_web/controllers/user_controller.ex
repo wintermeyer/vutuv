@@ -12,7 +12,6 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.SearchTerm
-  alias Vutuv.Accounts.Slug
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.WorkExperience
@@ -168,7 +167,7 @@ defmodule VutuvWeb.UserController do
     end
   end
 
-  def update_search_terms(changeset, params) do
+  defp update_search_terms(changeset, params) do
     first_name = Ecto.Changeset.get_change(changeset, :first_name)
     last_name = Ecto.Changeset.get_change(changeset, :last_name)
     # if first or last name is changed, update search terms
@@ -180,27 +179,6 @@ defmodule VutuvWeb.UserController do
       )
     else
       changeset
-    end
-  end
-
-  def insert_slug(conn, %{"id" => id, "params" => params}) do
-    user = Repo.get!(User, id)
-    slug_changeset = Slug.changeset(%Slug{user_id: id}, params)
-
-    case Repo.insert(slug_changeset) do
-      {:ok, _slug} ->
-        conn
-        |> put_flash(:info, gettext("Slug updated successfully."))
-        |> redirect(to: ~p"/users/#{user}")
-
-      {:error, _changeset} ->
-        changeset = User.changeset(user)
-
-        render(conn, "edit.html",
-          user: user,
-          changeset: changeset,
-          slug_changeset: slug_changeset
-        )
     end
   end
 

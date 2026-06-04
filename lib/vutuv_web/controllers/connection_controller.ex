@@ -1,20 +1,10 @@
 defmodule VutuvWeb.ConnectionController do
   use VutuvWeb, :controller
 
-  alias Vutuv.Social.Connection
   alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.RequireLoginOr404)
-  plug(:scrub_params, "connection" when action in [:create, :update])
-
-  def index(conn, _params) do
-    render(conn, "index.html", connections: Vutuv.Social.list_connections())
-  end
-
-  def new(conn, _params) do
-    changeset = Connection.changeset(%Connection{})
-    render(conn, "new.html", changeset: changeset)
-  end
+  plug(:scrub_params, "connection" when action in [:create])
 
   def create(conn, %{"connection" => connection_params}) do
     # The follower is always the session user, never trusted from params, so a
@@ -33,11 +23,6 @@ defmodule VutuvWeb.ConnectionController do
         |> put_flash(:error, gettext("Something went wrong"))
         |> redirect(to: referrer_url(conn))
     end
-  end
-
-  def show(conn, %{"id" => id}) do
-    connection = Vutuv.Social.get_connection!(id, [:groups, :follower, :followee])
-    render(conn, "show.html", connection: connection)
   end
 
   def delete(conn, %{"id" => id}) do

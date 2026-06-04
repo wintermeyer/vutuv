@@ -124,23 +124,13 @@ defmodule VutuvWeb.PageController do
   end
 
   defp check_pin_session(conn, email) do
-    Vutuv.Repo.one(
-      from(m in Vutuv.Accounts.LoginPin,
-        join: u in assoc(m, :user),
-        join: e in assoc(u, :emails),
-        where: e.value == ^email and m.type == ^"login",
-        select: m.created_at
-      )
-    )
-    |> case do
-      nil ->
-        Vutuv.Accounts.delete_pin_cookie(conn)
-
-      _ ->
-        conn
-        |> put_view(VutuvWeb.SessionHTML)
-        |> render("pin_user_login.html", body_class: "stretch")
-        |> halt
+    if Vutuv.Accounts.login_pin_pending?(email) do
+      conn
+      |> put_view(VutuvWeb.SessionHTML)
+      |> render("pin_user_login.html", body_class: "stretch")
+      |> halt
+    else
+      Vutuv.Accounts.delete_pin_cookie(conn)
     end
   end
 end

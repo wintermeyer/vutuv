@@ -3,6 +3,10 @@ defmodule VutuvWeb.Api.VCardJSON do
   import VutuvWeb.UserHelpers
 
   def vcard(v_card) do
+    # Resolve the current job once; current_organization/1 and current_title/1
+    # would otherwise each run the current_job/1 query chain.
+    current_job = current_job(v_card)
+
     "BEGIN:VCARD\nVERSION:3.0" <>
       "\nN:" <>
       sanitize(v_card.last_name) <>
@@ -16,8 +20,8 @@ defmodule VutuvWeb.Api.VCardJSON do
       sanitize(v_card.first_name) <>
       " " <>
       sanitize(v_card.last_name) <>
-      "\nORG:#{current_organization(v_card)}" <>
-      "\nTITLE:#{current_title(v_card)}" <>
+      "\nORG:#{current_organization(current_job)}" <>
+      "\nTITLE:#{current_title(current_job)}" <>
       "\n" <>
       vcard_photo(v_card) <>
       Enum.reduce(v_card.phone_numbers, "", fn f, acc ->

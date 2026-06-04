@@ -422,7 +422,7 @@ defmodule VutuvWeb.UserHelpers do
 
   def email_greeting(_), do: "Hi"
 
-  def greeting("de") do
+  defp greeting("de") do
     {{_, _, _}, {hour, _, _}} = :calendar.local_time()
 
     cond do
@@ -433,7 +433,7 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
-  def greeting(_) do
+  defp greeting(_) do
     "Hi"
   end
 

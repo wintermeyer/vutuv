@@ -3,7 +3,10 @@ defmodule VutuvWeb.Api.VCardController do
   import Ecto.Query
   alias VutuvWeb.Api.VCardJSON
 
-  plug(:assign_user)
+  # The :api pipeline does not fetch the session, so do it here, then reuse
+  # the shared session-user plug instead of re-implementing it.
+  plug(:fetch_session)
+  plug(VutuvWeb.Plug.ConfigureSession, repo: Vutuv.Repo)
   plug(:headers)
 
   def get(conn, _params) do
@@ -31,15 +34,6 @@ defmodule VutuvWeb.Api.VCardController do
     else
       user
     end
-  end
-
-  defp assign_user(conn, _opts) do
-    conn = fetch_session(conn)
-    user_id = get_session(conn, :user_id)
-    user = user_id && Vutuv.Repo.get(Vutuv.Accounts.User, user_id)
-
-    conn
-    |> assign(:current_user, user)
   end
 
   defp headers(conn, _opts) do

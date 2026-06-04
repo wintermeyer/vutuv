@@ -28,12 +28,6 @@ defmodule Vutuv.Accounts.Locale do
     end
   end
 
-  def locale_id(nil), do: locale_id("en")
-
-  def locale_id(code) do
-    Vutuv.Repo.one(from(l in __MODULE__, where: l.value == ^code, select: l.id))
-  end
-
   defimpl String.Chars, for: Vutuv.Accounts.Locale do
     def to_string(locale), do: String.upcase("#{locale.value}")
   end

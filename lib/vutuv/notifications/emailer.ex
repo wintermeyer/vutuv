@@ -3,7 +3,7 @@ defmodule Vutuv.Notifications.Emailer do
   Builds and delivers every outbound vutuv email.
 
   All mail vutuv sends is machine-generated (login PINs, registration, email
-  confirmation, account deletion, payment info, invoices), so two things are
+  confirmation, account deletion, verification notices), so two things are
   guaranteed here in exactly one place:
 
     * `base_email/0` sets the `From` and the auto-generated robot headers that
@@ -19,8 +19,6 @@ defmodule Vutuv.Notifications.Emailer do
   """
 
   import Swoosh.Email
-  require Ecto.Query
-  alias Vutuv.Repo
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
@@ -110,7 +108,7 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   def verification_notice(user) do
-    email = primary_email(user)
+    email = Vutuv.Accounts.first_email_value(user)
     template = "verification_confirmation_#{get_locale(user.locale)}"
 
     base_email()
@@ -138,16 +136,6 @@ defmodule Vutuv.Notifications.Emailer do
 
   defp put_headers(email, headers) do
     Enum.reduce(headers, email, fn {name, value}, acc -> header(acc, name, value) end)
-  end
-
-  defp primary_email(user) do
-    Repo.one(
-      Ecto.Query.from(e in Vutuv.Accounts.Email,
-        where: e.user_id == ^user.id,
-        limit: 1,
-        select: e.value
-      )
-    )
   end
 
   defp get_locale(nil), do: "en"

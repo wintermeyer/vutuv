@@ -14,7 +14,20 @@ defmodule VutuvWeb.Live.InitAssigns do
   def on_mount(:default, _params, session, socket) do
     user = session |> Map.get("user_id") |> load_user()
     VutuvWeb.LiveLocale.put_locale(user, session)
-    {:cont, assign(socket, :current_user, user)}
+
+    # Mirror `conn.request_path` for live pages: the shared layout hands the
+    # current path to the embedded ShellLive so it can zero the matching
+    # unread badge at mount, without enumerating view modules.
+    socket =
+      socket
+      |> assign(:current_user, user)
+      |> Phoenix.LiveView.attach_hook(:shell_path, :handle_params, &assign_shell_path/3)
+
+    {:cont, socket}
+  end
+
+  defp assign_shell_path(_params, uri, socket) do
+    {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end
 
   defp load_user(nil), do: nil

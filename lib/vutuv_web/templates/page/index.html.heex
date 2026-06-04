@@ -5,11 +5,7 @@
       <p><%= gettext "Number of Members" %>: <%= compact_count(@user_counter) %></p>
     </div>
     <.form :let={f} for={@changeset} action={~p"/new_registration"} multipart class="imagebox__form">
-      <%= if @changeset.action do %>
-        <div class="alert alert-danger">
-          <p><%= gettext "Oops, something went wrong! Please check the errors below." %></p>
-        </div>
-      <% end %>
+      <.form_error changeset={@changeset} />
       <p>
       <%= select f, :gender, [{gettext("male"), "male"},
         {gettext("female"), "female"}, {gettext("other"), "other"}], class: "imagebox__input", prompt: gettext("Choose a gender"), autofocus: true %>

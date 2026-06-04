@@ -142,22 +142,18 @@ defmodule Vutuv.Activity do
   ## Derived notifications feed
 
   @doc """
-  The user's notification feed, newest first: followers (`connections`),
-  endorsements (`user_tag_endorsements`, with the tag's name) and mutual
-  connections (a reciprocal pair of `connections` rows, timestamped at the
-  later of the two). Derived straight from those tables, so it includes
-  events from before this feature existed. Items mirror the live
-  `notify_*` payload shape; ids are `"<kind>-<row id>"` strings, which keeps
-  them out of the `"live-"` id namespace the LiveView uses for pushed events.
-  """
-  def recent_notifications(user_id, limit \\ @default_limit) do
-    notifications_page(user_id, limit: limit).entries
-  end
+  One page of the user's notification feed (newest first) plus pagination
+  state for a "Load more" UI: `%{entries: [...], more?: boolean,
+  next_cursor: cursor | nil}`. Pass the returned cursor back as `cursor:` to
+  get the next-older page.
 
-  @doc """
-  One page of the feed plus pagination state for a "Load more" UI:
-  `%{entries: [...], more?: boolean, next_cursor: cursor | nil}`. Pass the
-  returned cursor back as `cursor:` to get the next-older page.
+  The feed is derived straight from its source tables — followers
+  (`connections`), endorsements (`user_tag_endorsements`, with the tag's
+  name) and mutual connections (a reciprocal pair of `connections` rows,
+  timestamped at the later of the two) — so it includes events from before
+  this feature existed. Items mirror the live `notify_*` payload shape; ids
+  are `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
+  namespace the LiveView uses for pushed events.
 
   The cursor is `%{at: timestamp, ids: [...]}` — the boundary timestamp plus
   every already-shown event id *at* that timestamp. Timestamps have second

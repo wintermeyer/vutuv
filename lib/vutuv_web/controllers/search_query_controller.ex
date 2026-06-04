@@ -88,7 +88,10 @@ defmodule VutuvWeb.SearchQueryController do
           user_results: query.user_results,
           tag_results: tags,
           changeset: empty_changeset,
-          value: query.value
+          value: query.value,
+          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(query.user_results, 45),
+          following_by_id:
+            VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], query.user_results)
         )
     end
   end

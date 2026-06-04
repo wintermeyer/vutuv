@@ -65,13 +65,13 @@ defmodule Vutuv.ActivityTest do
     assert_receive :messages_read
   end
 
-  describe "recent_notifications/2" do
+  describe "notification feed entries" do
     test "derives follower events retroactively from existing connections" do
       me = insert(:user)
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
       connection = insert(:connection, follower: follower, followee: me)
 
-      assert [n] = Activity.recent_notifications(me.id)
+      assert [n] = recent_notifications(me.id)
       assert n.kind == "follower"
       assert n.id == "follower-#{connection.id}"
       assert n.actor_name == "Grace Hopper"
@@ -86,7 +86,7 @@ defmodule Vutuv.ActivityTest do
       user_tag = insert(:user_tag, user: me, tag: tag)
       insert(:user_tag_endorsement, user: endorser, user_tag: user_tag)
 
-      assert [n] = Activity.recent_notifications(me.id)
+      assert [n] = recent_notifications(me.id)
       assert n.kind == "endorsement"
       assert n.tag == "Phoenix"
       assert n.actor_name == "Ada Lovelace"
@@ -101,7 +101,7 @@ defmodule Vutuv.ActivityTest do
       user_tag = insert(:user_tag, user: me, tag: tag)
       insert(:user_tag_endorsement, user: me, user_tag: user_tag)
 
-      assert Activity.recent_notifications(me.id) == []
+      assert recent_notifications(me.id) == []
     end
 
     test "derives a connection event when the follow is mutual" do
@@ -110,7 +110,7 @@ defmodule Vutuv.ActivityTest do
       insert(:connection, follower: other, followee: me)
       insert(:connection, follower: me, followee: other)
 
-      kinds = me.id |> Activity.recent_notifications() |> Enum.map(& &1.kind)
+      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
       # The incoming follow shows up as usual, plus the mutuality event.
       assert "follower" in kinds
       assert "connection" in kinds
@@ -120,7 +120,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
       insert(:connection, follower: insert(:user), followee: me)
 
-      kinds = me.id |> Activity.recent_notifications() |> Enum.map(& &1.kind)
+      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
       refute "connection" in kinds
     end
 
@@ -142,9 +142,9 @@ defmodule Vutuv.ActivityTest do
       backdate_connection(c2, ~N[2026-01-01 12:00:00])
 
       assert [%{kind: "follower"}, %{kind: "endorsement"}, %{kind: "follower"}] =
-               Activity.recent_notifications(me.id)
+               recent_notifications(me.id)
 
-      assert [%{id: id1}, %{id: id2}] = Activity.recent_notifications(me.id, 2)
+      assert [%{id: id1}, %{id: id2}] = recent_notifications(me.id, 2)
       assert id1 == "follower-#{c2.id}"
       assert id2 == "endorsement-#{e.id}"
     end
@@ -154,7 +154,7 @@ defmodule Vutuv.ActivityTest do
       somebody_else = insert(:user)
       insert(:connection, follower: insert(:user), followee: somebody_else)
 
-      assert Activity.recent_notifications(me.id) == []
+      assert recent_notifications(me.id) == []
     end
   end
 
@@ -297,7 +297,7 @@ defmodule Vutuv.ActivityTest do
       insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
 
       sources =
-        me.id |> Activity.recent_notifications() |> Enum.frequencies_by(& &1.kind)
+        me.id |> recent_notifications() |> Enum.frequencies_by(& &1.kind)
 
       assert sources == %{"follower" => 2, "endorsement" => 1, "connection" => 1}
       # The collapsed single-query count must still equal that source total (4).
@@ -375,6 +375,11 @@ defmodule Vutuv.ActivityTest do
 
       assert Activity.unread_notification_count(me.id) == 1
     end
+  end
+
+  # Test shorthand for the first page's entries.
+  defp recent_notifications(user_id, limit \\ 50) do
+    Activity.notifications_page(user_id, limit: limit).entries
   end
 
   # Walk the feed page by page until the context says there is nothing older.

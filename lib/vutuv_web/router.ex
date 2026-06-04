@@ -27,6 +27,13 @@ defmodule VutuvWeb.Router do
     plug(Plugs.EnsureValidated)
   end
 
+  # Gates the whole /admin scope in one place, so a new admin controller
+  # cannot forget the auth plugs and ship world-accessible.
+  pipeline :admin do
+    plug(Plugs.RequireLogin)
+    plug(Plugs.AuthAdmin)
+  end
+
   pipeline :api do
     plug(:accepts, ["json-api"])
     plug(Plugs.PutAPIHeaders)
@@ -119,7 +126,7 @@ defmodule VutuvWeb.Router do
   end
 
   scope "/admin", VutuvWeb.Admin, as: :admin do
-    pipe_through(:browser)
+    pipe_through([:browser, :admin])
     resources("/", AdminController, only: [:index])
     post("/slugs", SlugController, :update)
     post("/users", UserController, :update)

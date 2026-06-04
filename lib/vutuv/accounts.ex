@@ -306,6 +306,21 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
+  Whether a login PIN is in flight for `email` (minted, and its `created_at`
+  not yet cleared by consumption or lockout), i.e. the visitor should be
+  offered the PIN-entry form instead of the sign-up page.
+  """
+  def login_pin_pending?(email) do
+    Repo.exists?(
+      from(m in LoginPin,
+        join: u in assoc(m, :user),
+        join: e in assoc(u, :emails),
+        where: e.value == ^email and m.type == "login" and not is_nil(m.created_at)
+      )
+    )
+  end
+
+  @doc """
   Verifies a one-time PIN.
 
   Two ways in: pass a `%User{}` for the authenticated email-change and
@@ -387,8 +402,6 @@ defmodule Vutuv.Accounts do
 
   # ── User CRUD ──
 
-  def get_user!(id), do: Repo.get!(User, id)
-
   def count_users do
     Repo.one(from(u in User, select: count(u.id)))
   end
@@ -403,7 +416,7 @@ defmodule Vutuv.Accounts do
 
   @doc """
   The user's first email address value (public or not) — the address the
-  account-level mails (deletion PIN, payment information) go to.
+  account-level mails (deletion PIN, verification notice) go to.
   """
   def first_email_value(%User{id: id}) do
     Repo.one(from(e in Email, where: e.user_id == ^id, limit: 1, select: e.value))

@@ -9,7 +9,8 @@ defmodule VutuvWeb.MembershipController do
   plug(:scrub_params, "membership" when action in [:create, :update])
 
   def index(conn, _params) do
-    render(conn, "index.html", connection: conn.assigns[:connection])
+    connection = Repo.preload(conn.assigns[:connection], :memberships)
+    render(conn, "index.html", connection: connection)
   end
 
   def new(conn, _params) do
@@ -57,8 +58,7 @@ defmodule VutuvWeb.MembershipController do
 
     case conn.params do
       %{"connection_id" => connection_id} ->
-        case Repo.get(Connection, connection_id)
-             |> Repo.preload([:memberships, :groups, :follower, :followee]) do
+        case Repo.get(Connection, connection_id) do
           %Connection{follower_id: ^current_user_id} = connection ->
             assign(conn, :connection, connection)
 

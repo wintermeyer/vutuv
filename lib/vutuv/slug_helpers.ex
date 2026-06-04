@@ -6,7 +6,7 @@ defmodule Vutuv.SlugHelpers do
 
   @short_sha_length 8
 
-  def gen_slug(resource) do
+  defp gen_slug(resource) do
     resource
     |> to_string()
     |> slugify_downcase()
@@ -44,7 +44,7 @@ defmodule Vutuv.SlugHelpers do
 
   defp ensure_slug(_, slug, _), do: "#{slug}.#{short_sha()}"
 
-  def short_sha do
+  defp short_sha do
     string =
       :calendar.universal_time()
       |> :calendar.datetime_to_gregorian_seconds()

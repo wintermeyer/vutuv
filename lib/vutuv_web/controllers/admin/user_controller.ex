@@ -1,7 +1,5 @@
 defmodule VutuvWeb.Admin.UserController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.RequireLogin)
-  plug(VutuvWeb.Plug.AuthAdmin)
 
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer

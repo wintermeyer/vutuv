@@ -1,7 +1,5 @@
 defmodule VutuvWeb.Admin.ExonymController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.RequireLogin)
-  plug(VutuvWeb.Plug.AuthAdmin)
 
   alias Vutuv.Accounts.Exonym
   alias VutuvWeb.ControllerHelpers

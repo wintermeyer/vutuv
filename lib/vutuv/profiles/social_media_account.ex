@@ -71,11 +71,11 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   # This generates special display rule matches
   for {provider, pretext} <- display_rules do
-    def get_display(%__MODULE__{provider: unquote(provider), value: value}),
+    defp get_display(%__MODULE__{provider: unquote(provider), value: value}),
       do: unquote(pretext) <> value
   end
 
-  def get_display(_), do: ""
+  defp get_display(_), do: ""
 
   # This generates special url rule matches
   for url <- base_urls do
@@ -91,15 +91,4 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   def social_media_link(_), do: ""
-
-  # defp unique_constraint_error(%{"value" => value}) do
-  #   unique_constraint_error(%{value: value})
-  # end
-
-  # defp unique_constraint_error(%{value: value}) do
-  #   #account = Vutuv.Repo.one!(from s in __MODULE__, where: s.value == ^value, preload: [:user])
-  #   "Someone has already claimed this account"
-  # end
-
-  # defp unique_constraint_error(_), do: ""
 end

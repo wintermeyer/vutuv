@@ -1,7 +1,5 @@
 defmodule VutuvWeb.Admin.TagController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.RequireLogin)
-  plug(VutuvWeb.Plug.AuthAdmin)
 
   plug(VutuvWeb.Plug.ResolveSlug,
     slug: "slug",

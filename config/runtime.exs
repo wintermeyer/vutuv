@@ -43,10 +43,7 @@ if config_env() == :prod do
     http: [ip: {127, 0, 0, 1}, port: port],
     secret_key_base: secret_key_base,
     check_origin: ["https://#{host}", "https://www.vutuv.de"],
-    public_url: "https://#{host}/",
-    # Optional feature keys, previously held in the gitignored secret file.
-    # Read off the Endpoint config at runtime; absent ones default to nil.
-    fullcontact_api_key: System.get_env("FULLCONTACT_API_KEY")
+    public_url: "https://#{host}/"
 
   # Avatars and URL screenshots are written under this root and served by
   # nginx (location /avatars/, /screenshots/). Override with UPLOADS_DIR_PREFIX;

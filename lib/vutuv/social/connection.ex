@@ -2,7 +2,6 @@ defmodule Vutuv.Social.Connection do
   @moduledoc false
 
   use VutuvWeb, :model
-  import Ecto.Query
 
   schema "connections" do
     belongs_to(:follower, Vutuv.Accounts.User)
@@ -46,24 +45,5 @@ defmodule Vutuv.Social.Connection do
       order_by: [desc: :inserted_at],
       limit: ^n
     )
-  end
-
-  def latest_with_avatars(n) do
-    query =
-      Ecto.Query.from(u in __MODULE__,
-        join: f in assoc(u, :followee),
-        join: f2 in assoc(u, :follower),
-        where:
-          (is_nil(f.validated?) or (f.validated? == true and not is_nil(f.avatar))) and
-            (is_nil(f2.validated?) or (f2.validated? == true and not is_nil(f2.avatar))),
-        order_by: [desc: :inserted_at],
-        limit: ^n
-      )
-
-    if Vutuv.Repo.one!(query |> select(count("*"))) < 3 do
-      latest(n)
-    else
-      query
-    end
   end
 end

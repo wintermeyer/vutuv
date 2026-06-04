@@ -18,21 +18,4 @@ defmodule Vutuv.Tags.UserTagEndorsement do
     |> cast(params, [:user_id, :user_tag_id])
     |> unique_constraint(:user_id_user_tag_id)
   end
-
-  def count(user_tag_id) do
-    Vutuv.Repo.one!(
-      from(e in Vutuv.Tags.UserTagEndorsement,
-        where: e.user_tag_id == ^user_tag_id,
-        select: count("*")
-      )
-    )
-  end
-
-  def tag_endorsed?(user_tag_id, user_id) do
-    Vutuv.Repo.exists?(
-      from(e in Vutuv.Tags.UserTagEndorsement,
-        where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id
-      )
-    )
-  end
 end
