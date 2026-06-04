@@ -193,5 +193,5 @@ routes; CSRF + method are handled by the rendered links. --%>
     %{"@type" => "ListItem", "position" => 2, "item" => %{"@id" => "https://vutuv.de/users/", "name" => "users"}},
     %{"@type" => "ListItem", "position" => 3, "item" => %{"@id" => "https://vutuv.de#{~p"/users/#{@user}"}", "name" => full_name(@user)}}
   ]
-}, pretty: true)) %>
+}, escape: :html_safe, pretty: true)) %>
 </script>
