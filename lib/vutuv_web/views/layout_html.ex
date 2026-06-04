@@ -7,8 +7,9 @@ defmodule VutuvWeb.LayoutHTML do
 
   @doc """
   Minimal, serializable session map handed to the embedded `ShellLive` so it can
-  render the logged-in chrome (name, avatar initials, profile link) over both a
-  dead request and a LiveView socket. Empty map when logged out.
+  render the logged-in chrome (name, avatar, profile link) over both a dead
+  request and a LiveView socket. `"user_avatar"` is `nil` when the user has no
+  picture - the shell then falls back to initials. Empty map when logged out.
   """
   def shell_session(assigns) do
     case assigns[:current_user] do
@@ -17,6 +18,7 @@ defmodule VutuvWeb.LayoutHTML do
           "user_id" => user.id,
           "user_name" => full_name(user),
           "user_param" => Phoenix.Param.to_param(user),
+          "user_avatar" => Vutuv.Avatar.user_url(user, :thumb),
           "path" => current_path(assigns)
         }
 

@@ -27,6 +27,6 @@
         <% end %>
       </tbody>
     </table>
-    <%= Vutuv.Pages.page_list(@conn.params, @tags_count) %>
+    <.pager params={@conn.params} total={@tags_count} />
   </section>
 </div>

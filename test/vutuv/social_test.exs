@@ -32,6 +32,36 @@ defmodule Vutuv.SocialTest do
 
       assert_receive {:new_notification, %{kind: "follower", actor_param: _}}
     end
+
+    test "a one-way follow does not emit a connection event" do
+      follower = insert(:user)
+      followee = insert(:user)
+
+      Vutuv.Activity.subscribe(follower.id)
+      Vutuv.Activity.subscribe(followee.id)
+
+      assert {:ok, _} = Social.follow(follower, followee.id)
+
+      assert_receive {:new_notification, %{kind: "follower"}}
+      refute_receive {:new_notification, %{kind: "connection"}}
+    end
+
+    test "a follow-back notifies both users of the new mutual connection" do
+      a = insert(:user, first_name: "Anna", last_name: "A")
+      b = insert(:user, first_name: "Ben", last_name: "B")
+      {:ok, _} = Social.follow(a, b.id)
+
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+
+      assert {:ok, _} = Social.follow(b, a.id)
+
+      # a gets the regular follower event plus the mutuality event ...
+      assert_receive {:new_notification, %{kind: "follower", actor_name: "Ben B"}}
+      assert_receive {:new_notification, %{kind: "connection", actor_name: "Ben B"}}
+      # ... and b (who just followed back) learns the connection is now mutual.
+      assert_receive {:new_notification, %{kind: "connection", actor_name: "Anna A"}}
+    end
   end
 
   describe "follower_count/1 and followee_count/1" do

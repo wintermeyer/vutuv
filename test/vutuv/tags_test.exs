@@ -98,6 +98,35 @@ defmodule Vutuv.TagsTest do
       assert endorsement.user_tag_id == user_tag.id
     end
 
+    test "create_endorsement/1 pushes a live notification to the tag's owner" do
+      endorser = insert(:user, first_name: "Ada", last_name: "Lovelace")
+      tag_owner = insert(:user)
+      tag = insert(:tag, name: "Phoenix")
+      user_tag = insert(:user_tag, user: tag_owner, tag: tag)
+
+      Vutuv.Activity.subscribe(tag_owner.id)
+
+      assert {:ok, _} = Tags.create_endorsement(%{user_id: endorser.id, user_tag_id: user_tag.id})
+
+      assert_receive {:new_notification,
+                      %{kind: "endorsement", tag: "Phoenix", actor_name: "Ada Lovelace"} = n}
+
+      assert n.actor_param == endorser.active_slug
+    end
+
+    test "create_endorsement/1 does not notify on a self-endorsement" do
+      tag_owner = insert(:user)
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: tag_owner, tag: tag)
+
+      Vutuv.Activity.subscribe(tag_owner.id)
+
+      assert {:ok, _} =
+               Tags.create_endorsement(%{user_id: tag_owner.id, user_tag_id: user_tag.id})
+
+      refute_receive {:new_notification, _}
+    end
+
     test "tag_endorsed?/2 returns true when endorsed" do
       user = insert(:user)
       tag_owner = insert(:user)

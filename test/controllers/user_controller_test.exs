@@ -39,6 +39,19 @@ defmodule Vutuv.Accounts.UserControllerTest do
     assert html_response(conn, 200) =~ "Sign up"
   end
 
+  test "there is no public user directory (GET /users does not route)", %{conn: conn} do
+    # The index action was dead code (its slug plug 404'd it) and its template
+    # offered per-row Edit/Delete it could never authorize, so it was removed
+    # outright. Admins list users at /admin; everyone else searches. Without
+    # the route, /users falls into the catch-all vanity-slug redirect and
+    # ends up a 404, like any other unknown path.
+    {conn, _user} = create_and_login_user(conn)
+
+    conn = get(conn, "/users")
+    assert redirected_to(conn, 301) == "/users/users"
+    assert conn |> recycle() |> get("/users/users") |> html_response(404)
+  end
+
   test "shows chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = get(conn, ~p"/users/#{user}")

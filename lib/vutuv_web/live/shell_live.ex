@@ -7,7 +7,9 @@ defmodule VutuvWeb.ShellLive do
   `"user:<id>"`).
 
   Uses `Phoenix.LiveView` directly (no `app` layout) to avoid wrapping itself.
-  Counts are dummy for now; real counts arrive with persistence.
+  The notification badge is the real unread count (events newer than the
+  user's read marker, via `Vutuv.Activity.unread_notification_count/1`); the
+  messages badge stays dummy until messages get persistence.
   """
   use Phoenix.LiveView
 
@@ -39,12 +41,16 @@ defmodule VutuvWeb.ShellLive do
      |> assign(:user_id, user_id)
      |> assign(:user_name, session["user_name"])
      |> assign(:user_param, session["user_param"])
-     |> assign(:messages_count, initial_count(path, "/messages", user_id, 2))
-     |> assign(:notifications_count, initial_count(path, "/notifications", user_id, 3))}
+     |> assign(:user_avatar, session["user_avatar"])
+     |> assign(:messages_count, initial_count(path, "/messages", user_id, &dummy_messages/1))
+     |> assign(
+       :notifications_count,
+       initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
+     )}
   end
 
-  defp initial_count(path, prefix, user_id, dummy) do
-    if String.starts_with?(path, prefix), do: 0, else: dummy_count(user_id, dummy)
+  defp initial_count(path, prefix, user_id, counter) do
+    if String.starts_with?(path, prefix), do: 0, else: counter.(user_id)
   end
 
   @impl true
@@ -62,8 +68,10 @@ defmodule VutuvWeb.ShellLive do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  defp dummy_count(nil, _n), do: 0
-  defp dummy_count(_user_id, n), do: n
+  # Messages have no persistence yet (see MessageLive); seed the badge with a
+  # fixed value for logged-in users until they do.
+  defp dummy_messages(nil), do: 0
+  defp dummy_messages(_user_id), do: 2
 
   defp initials(nil), do: "?"
 
@@ -128,12 +136,14 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_bell />
                 <.count_badge count={@notifications_count} />
               </.link>
-              <.link
-                href={~p"/users/#{@user_param}"}
-                title={@user_name}
-                class="ml-1 flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white"
-              >
-                {initials(@user_name)}
+              <.link href={~p"/users/#{@user_param}"} title={@user_name} class="ml-1 shrink-0">
+                <%= if @user_avatar do %>
+                  <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
+                <% else %>
+                  <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
+                    {initials(@user_name)}
+                  </span>
+                <% end %>
               </.link>
               <.link
                 href={~p"/sessions/#{@user_param}"}

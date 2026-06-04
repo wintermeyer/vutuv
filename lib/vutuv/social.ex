@@ -25,7 +25,15 @@ defmodule Vutuv.Social do
       |> Repo.insert()
 
     with {:ok, _connection} <- result do
-      Vutuv.Activity.notify_new_follower(followee_id, follower_struct(follower))
+      follower = follower_struct(follower)
+      Vutuv.Activity.notify_new_follower(followee_id, follower)
+
+      # A follow-back turns the pair into a mutual connection - tell both.
+      if user_follows_user?(followee_id, follower.id) do
+        followee = Repo.get(Vutuv.Accounts.User, followee_id)
+        Vutuv.Activity.notify_connection(follower.id, followee)
+        Vutuv.Activity.notify_connection(followee_id, follower)
+      end
     end
 
     result

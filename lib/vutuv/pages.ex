@@ -1,9 +1,11 @@
 defmodule Vutuv.Pages do
-  @moduledoc false
-
-  import Phoenix.HTML, only: [raw: 1]
-
-  alias PhoenixHTMLHelpers.Link, as: HTMLLink
+  @moduledoc """
+  Offset pagination math for browse-style pages (followers, tags, users):
+  `paginate/3` bounds an Ecto query from the `?page` param, and
+  `effective_page/2` / `total_pages/1` feed the `VutuvWeb.UI.pager/1`
+  component that renders the numbered page links. Feed-style LiveView pages
+  use cursor pagination instead (see `Vutuv.Activity.notifications_page/2`).
+  """
 
   require Ecto.Query
 
@@ -31,51 +33,14 @@ defmodule Vutuv.Pages do
     div(total - 1, @max_page_items) + 1
   end
 
-  def page_list(%{"page" => page}, total) do
-    gen_page_links(
-      sanitize_page(page),
-      total_pages(total)
-    )
-  end
-
-  def page_list(_, total) do
-    page_list(%{"page" => 1}, total)
-  end
-
-  defp gen_page_links(page, max) when max > 1 do
-    links =
-      for(num <- (page - 5)..(page + 5)) do
-        cond do
-          num > max -> nil
-          num < 1 -> nil
-          num == page -> page
-          true -> page_link(num)
-        end
-      end
-      |> Enum.filter(& &1)
-      |> Enum.join(" | ")
-
-    "<div class=\"card__morelink card__morelink-border\">#{pre(page)}#{links}#{post(page, max)}</div>"
-    |> raw()
-  end
-
-  defp gen_page_links(_, _), do: ""
-
-  defp pre(page) when page - 5 > 1 do
-    "... | "
-  end
-
-  defp pre(_), do: ""
-
-  defp post(page, max) when page + 5 < max do
-    " | ..."
-  end
-
-  defp post(_, _), do: ""
-
-  defp page_link(page) do
-    HTMLLink.link("#{page}", to: "?page=#{page}")
-    |> Phoenix.HTML.safe_to_string()
+  @doc """
+  The page whose rows `paginate/3` actually returns for these params: the
+  sanitized `?page`, except that an out-of-range page falls back to 1 (same
+  fallback as `offset/3`), so the pager highlights what is really shown.
+  """
+  def effective_page(params, total) do
+    page = params |> Map.get("page", 1) |> sanitize_page()
+    if (page - 1) * @max_page_items < total, do: page, else: 1
   end
 
   defp sanitize_page(page) when is_binary(page) do

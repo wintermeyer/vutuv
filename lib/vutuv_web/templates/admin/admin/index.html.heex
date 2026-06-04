@@ -10,5 +10,5 @@
 
 <div class="card-list">
   {VutuvWeb.Admin.SlugHTML.index(%{conn: @conn})}
-  {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users})}
+  {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

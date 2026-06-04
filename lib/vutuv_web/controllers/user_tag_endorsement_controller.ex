@@ -4,17 +4,15 @@ defmodule VutuvWeb.UserTagEndorsementController do
   plug(:resolve_slug)
   plug(:require_user_logged_in)
 
-  alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.ControllerHelpers
 
   def create(conn, _params) do
-    changeset =
-      UserTagEndorsement.changeset(
-        %UserTagEndorsement{},
-        %{user_tag_id: conn.assigns[:user_tag_id], user_id: conn.assigns[:current_user_id]}
-      )
-
-    case Repo.insert(changeset) do
+    # Through the Tags.create_endorsement/1 chokepoint so the tag's owner also
+    # gets the live in-app notification.
+    case Vutuv.Tags.create_endorsement(%{
+           user_tag_id: conn.assigns[:user_tag_id],
+           user_id: conn.assigns[:current_user_id]
+         }) do
       {:ok, _user_tag_endorsement} ->
         conn
         |> put_flash(:info, gettext("Endorsement successful."))

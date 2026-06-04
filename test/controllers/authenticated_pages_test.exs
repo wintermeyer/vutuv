@@ -135,6 +135,29 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/admin/exonyms")
       renders(conn, ~p"/admin/tags")
     end
+
+    test "the verification queue lists newest registrations first", %{conn: conn} do
+      older = insert(:user, first_name: "Older", verified: false)
+      insert(:user, first_name: "Newer", verified: false)
+
+      Repo.update_all(
+        from(u in Vutuv.Accounts.User, where: u.id == ^older.id),
+        set: [inserted_at: ~N[2020-01-01 12:00:00]]
+      )
+
+      body = conn |> get(~p"/admin") |> html_response(200)
+
+      {newer_pos, _} = :binary.match(body, "Newer")
+      {older_pos, _} = :binary.match(body, "Older")
+      assert newer_pos < older_pos
+    end
+
+    test "the verification queue survives garbage page params", %{conn: conn} do
+      insert(:user, first_name: "Pending", verified: false)
+
+      assert conn |> get(~p"/admin?page=banana") |> html_response(200) =~ "Pending"
+      assert conn |> get(~p"/admin?page=999") |> html_response(200) =~ "Pending"
+    end
   end
 
   describe "authenticated write actions" do

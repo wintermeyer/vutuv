@@ -16,7 +16,7 @@
     <%= if(Enum.count(@user.followers) == 0) do %>
       <p class="card__empty"><%= gettext "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites." %></p>
     <% end %>
-    <%= Vutuv.Pages.page_list(@conn.params, @total_followers) %>
+    <.pager params={@conn.params} total={@total_followers} />
   </section>
 <% end %>
 </div>

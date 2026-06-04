@@ -8,7 +8,7 @@ defmodule VutuvWeb.UI do
   Imported into every HTML view and LiveView via `VutuvWeb` (`html`, `live_view`,
   `live_component`), so all of these are available everywhere with no explicit
   import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.chip>`,
-  `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`.
+  `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`, `<.pager>`.
   """
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
@@ -209,6 +209,55 @@ defmodule VutuvWeb.UI do
     >
       {@count}
     </span>
+    """
+  end
+
+  @doc """
+  Numbered pagination for offset-paginated browse pages (followers, tags,
+  users). Pass the conn params (for the current `?page`) and the total row
+  count; page size and windowing come from `Vutuv.Pages`. Renders nothing
+  when one page fits everything. Feed pages use a "Load more" button instead.
+  """
+  attr(:params, :map, required: true)
+  attr(:total, :integer, required: true)
+
+  def pager(assigns) do
+    total_pages = Vutuv.Pages.total_pages(assigns.total)
+    current = Vutuv.Pages.effective_page(assigns.params, assigns.total)
+    window = Enum.filter((current - 5)..(current + 5), &(&1 in 1..total_pages))
+
+    assigns =
+      assigns
+      |> assign(:total_pages, total_pages)
+      |> assign(:current, current)
+      |> assign(:window, window)
+
+    ~H"""
+    <nav
+      :if={@total_pages > 1}
+      aria-label={gettext("Pagination")}
+      class="mt-6 flex items-center justify-center gap-1 text-sm font-semibold"
+    >
+      <span :if={List.first(@window) > 1} class="px-1 text-slate-400">…</span>
+      <%= for num <- @window do %>
+        <%= if num == @current do %>
+          <span
+            aria-current="page"
+            class="flex h-9 min-w-9 items-center justify-center rounded-lg bg-brand-600 px-2 text-white"
+          >
+            {num}
+          </span>
+        <% else %>
+          <a
+            href={"?page=#{num}"}
+            class="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            {num}
+          </a>
+        <% end %>
+      <% end %>
+      <span :if={List.last(@window) < @total_pages} class="px-1 text-slate-400">…</span>
+    </nav>
     """
   end
 

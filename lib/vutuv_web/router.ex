@@ -64,7 +64,9 @@ defmodule VutuvWeb.Router do
 
     resources("/search_queries", SearchQueryController, only: [:create, :new, :show])
 
-    resources "/users", UserController, param: "slug" do
+    # No :index — there is no public user directory; the admin panel lists
+    # unverified users and search covers discovery.
+    resources "/users", UserController, param: "slug", except: [:index] do
       pipe_through(:user_pipe)
       resources("/emails", EmailController)
       # PIN-entry step for the email-change flow (issue #759).

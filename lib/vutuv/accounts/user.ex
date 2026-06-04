@@ -22,6 +22,8 @@ defmodule Vutuv.Accounts.User do
     field(:noindex?, :boolean, default: false)
     field(:validated?, :boolean, default: false)
     field(:send_birthday_reminder, :boolean, default: true)
+    # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
+    field(:notifications_read_at, :naive_datetime)
     field(:easy_tags, :string, virtual: true)
 
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)

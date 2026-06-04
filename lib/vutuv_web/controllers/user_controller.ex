@@ -1,7 +1,7 @@
 defmodule VutuvWeb.UserController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :index, :show, :tags_create])
-  plug(VutuvWeb.Plug.RequireLogin when action in [:index, :delete, :confirm_delete])
+  plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :show, :tags_create])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :confirm_delete])
   plug(:auth when action in [:edit, :update, :tags_create])
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
   plug(VutuvWeb.Plug.EnsureValidated when action not in [:delete, :confirm_delete])
@@ -24,11 +24,6 @@ defmodule VutuvWeb.UserController do
   alias VutuvWeb.RateLimit
 
   plug(:scrub_params, "user" when action in [:create, :update])
-
-  def index(conn, _params) do
-    users = Repo.all(User)
-    render(conn, "index.html", users: users)
-  end
 
   def new(conn, _params) do
     changeset =

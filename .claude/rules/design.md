@@ -66,6 +66,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - `<.chip>` — skill/tag chip; pass `navigate`/`href` to render it as a link.
 - `<.count_badge count={n} class="…" />` — coral unread badge; renders nothing when 0; `class` positions it. Add `ring-2 ring-white dark:ring-slate-900` via `class` when it overlaps an icon/avatar (the shell does this).
 - `<.input name=… label=… type=… value=… error=… />` — labelled input for hand-written **vertical** forms. Inline/pill inputs use the raw input recipe above. (Legacy controller forms are styled by `components.css` — leave their `.editform` markup.)
+- `<.pager params={@conn.params} total={@row_count} />` — numbered pagination for offset-paginated **browse** pages (followers, tags, users); the math lives in `Vutuv.Pages` (`paginate/3` on the query, 250/page). Renders nothing when one page fits. **Feed** LiveViews (notifications) paginate with a cursor + "Load more" button appended into the stream instead (`Vutuv.Activity.notifications_page/2`) — don't mix the two styles.
 
 ### Shell & layout facts (don't re-implement)
 

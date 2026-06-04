@@ -3,16 +3,75 @@ defmodule VutuvWeb.ShellLiveTest do
 
   import Phoenix.LiveViewTest
 
-  @session %{"user_id" => 1, "user_name" => "Stefan Wintermeyer", "user_param" => "stefan"}
+  @bell_badge ~s(a[title="Notifications"] span.bg-accent)
+  @mail_badge ~s(a[title="Messages"] span.bg-accent)
 
-  test "renders the shell nav with dummy badges for a logged-in user", %{conn: conn} do
-    {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: @session)
+  defp session_for(user, extra \\ %{}) do
+    Map.merge(
+      %{
+        "user_id" => user.id,
+        "user_name" => "Stefan Wintermeyer",
+        "user_param" => "stefan"
+      },
+      extra
+    )
+  end
+
+  defp user_with_unread_notification do
+    user = insert(:user)
+    insert(:connection, follower: insert(:user), followee: user)
+    user
+  end
+
+  test "renders the shell nav with the real unread notification count", %{conn: conn} do
+    user = user_with_unread_notification()
+    {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     assert html =~ "vutuv"
     assert has_element?(view, "#app-shell")
-    # dummy seed: messages 2, notifications 3
-    assert has_element?(view, "span.bg-accent", "2")
-    assert has_element?(view, "span.bg-accent", "3")
+    # one unread follower event; the messages badge is still the dummy seed (2)
+    assert has_element?(view, @bell_badge, "1")
+    assert has_element?(view, @mail_badge, "2")
+  end
+
+  test "already-read events don't count toward the badge", %{conn: conn} do
+    user = user_with_unread_notification()
+    Vutuv.Activity.mark_notifications_read(user.id)
+
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    refute has_element?(view, @bell_badge)
+  end
+
+  test "shows the user's avatar in the top bar when they have one", %{conn: conn} do
+    user = insert(:user)
+    session = session_for(user, %{"user_avatar" => "/avatars/#{user.id}/Stefan%20W_thumb.jpg"})
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+
+    assert has_element?(view, ~s(a[title="Stefan Wintermeyer"] img))
+    refute has_element?(view, ~s(a[title="Stefan Wintermeyer"]), "SW")
+  end
+
+  test "falls back to initials when the user has no avatar", %{conn: conn} do
+    user = insert(:user)
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    assert has_element?(view, ~s(a[title="Stefan Wintermeyer"]), "SW")
+    refute has_element?(view, ~s(a[title="Stefan Wintermeyer"] img))
+  end
+
+  test "a logged-in dead render carries the avatar through shell_session", %{conn: conn} do
+    # End to end through the app layout: LayoutHTML.shell_session/1 must hand
+    # the avatar URL to the embedded shell on classic controller pages too.
+    {conn, user} = create_and_login_user(conn)
+
+    {:ok, user} =
+      Vutuv.Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg"))
+
+    # The search page renders no avatars of its own, so the only avatar URL in
+    # the response is the one the shell chrome puts in the top bar.
+    response = conn |> get(~p"/search_queries/new") |> html_response(200)
+    assert response =~ ~s(/avatars/#{user.id}/)
   end
 
   test "shows a Log in button when logged out", %{conn: conn} do
@@ -22,31 +81,34 @@ defmodule VutuvWeb.ShellLiveTest do
   end
 
   test "a new-notification event bumps the bell badge", %{conn: conn} do
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: @session)
+    user = user_with_unread_notification()
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     send(view.pid, {:new_notification, %{text: "hi"}})
 
-    assert has_element?(view, "span.bg-accent", "4")
+    assert has_element?(view, @bell_badge, "2")
   end
 
   test "the badge for the page being viewed starts at zero (no read-broadcast race)", %{
     conn: conn
   } do
-    session = Map.put(@session, "path", "/notifications")
+    user = user_with_unread_notification()
+    session = session_for(user, %{"path" => "/notifications"})
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
-    refute has_element?(view, "span.bg-accent", "3")
+    refute has_element?(view, @bell_badge)
     # the messages badge is unaffected
-    assert has_element?(view, "span.bg-accent", "2")
+    assert has_element?(view, @mail_badge, "2")
   end
 
   test "marking notifications read clears the notification badge", %{conn: conn} do
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: @session)
+    user = user_with_unread_notification()
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     send(view.pid, :notifications_read)
 
-    refute has_element?(view, "span.bg-accent", "3")
+    refute has_element?(view, @bell_badge)
     # the messages badge (2) is untouched
-    assert has_element?(view, "span.bg-accent", "2")
+    assert has_element?(view, @mail_badge, "2")
   end
 end

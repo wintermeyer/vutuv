@@ -1,16 +1,31 @@
 defmodule Vutuv.Activity do
   @moduledoc """
-  In-app real-time activity bus.
+  In-app activity: the real-time bus plus the derived notifications feed.
 
-  Thin wrapper over `Phoenix.PubSub` (`Vutuv.PubSub`) used to push live updates
-  to a user's open sessions: new follower / endorsement / connection bump the
-  notification badge, new messages bump the message badge. This is **not** email
-  — outbound mail still goes through `Vutuv.Notifications.Emailer`.
+  The bus is a thin wrapper over `Phoenix.PubSub` (`Vutuv.PubSub`) used to push
+  live updates to a user's open sessions: new follower / endorsement /
+  connection bump the notification badge, new messages bump the message badge.
+  This is **not** email — outbound mail still goes through
+  `Vutuv.Notifications.Emailer`. Topic per user is `"user:<id>"`. The shell
+  (`VutuvWeb.ShellLive`) and the notification / message LiveViews subscribe.
 
-  Topic per user is `"user:<id>"`. The shell (`VutuvWeb.ShellLive`) and the
-  notification / message LiveViews subscribe to it.
+  The feed is **derived at read time** from the event tables that already exist
+  (`connections`, `user_tag_endorsements`) instead of being persisted per
+  notification — which makes it automatically retroactive. The only stored
+  state is `users.notifications_read_at`, the read marker behind the unread
+  badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
+  reached via `notifications_page/2`, a timestamp-cursor pagination that backs
+  the "Load more" button.
   """
+  import Ecto.Query
+
+  alias Vutuv.Accounts.User
+  alias Vutuv.Repo
+  alias Vutuv.Social.Connection
+  alias Vutuv.Tags.UserTagEndorsement
+
   @pubsub Vutuv.PubSub
+  @default_limit 50
 
   def topic(user_id), do: "user:#{user_id}"
 
@@ -21,8 +36,20 @@ defmodule Vutuv.Activity do
   def broadcast(nil, _event), do: :ok
   def broadcast(user_id, event), do: Phoenix.PubSub.broadcast(@pubsub, topic(user_id), event)
 
-  @doc "Tell a user's shell their notifications were just read (clears the badge)."
-  def mark_notifications_read(user_id), do: broadcast(user_id, :notifications_read)
+  @doc """
+  Persist the read marker (`users.notifications_read_at`) and tell the user's
+  shell their notifications were just read (clears the badge).
+  """
+  def mark_notifications_read(nil), do: :ok
+
+  def mark_notifications_read(user_id) do
+    Repo.update_all(
+      from(u in User, where: u.id == ^user_id),
+      set: [notifications_read_at: NaiveDateTime.utc_now(:second)]
+    )
+
+    broadcast(user_id, :notifications_read)
+  end
 
   @doc "Tell a user's shell their messages were just read (clears the badge)."
   def mark_messages_read(user_id), do: broadcast(user_id, :messages_read)
@@ -49,10 +76,234 @@ defmodule Vutuv.Activity do
     })
   end
 
-  defp actor_param(%Vutuv.Accounts.User{} = user), do: Phoenix.Param.to_param(user)
+  @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
+  def notify_endorsement(owner_id, endorser, tag_name) do
+    notify(owner_id, %{
+      kind: "endorsement",
+      tag: tag_name,
+      text: "endorsed you for #{tag_name}.",
+      actor_name: display_name(endorser),
+      actor_param: actor_param(endorser),
+      actor_avatar: actor_avatar(endorser),
+      at: DateTime.utc_now()
+    })
+  end
+
+  @doc ~S(Convenience: an "is now connected with you" notification after a mutual follow.)
+  def notify_connection(user_id, other) do
+    notify(user_id, %{
+      kind: "connection",
+      text: "is now connected with you.",
+      actor_name: display_name(other),
+      actor_param: actor_param(other),
+      actor_avatar: actor_avatar(other),
+      at: DateTime.utc_now()
+    })
+  end
+
+  ## Derived notifications feed
+
+  @doc """
+  The user's notification feed, newest first: followers (`connections`),
+  endorsements (`user_tag_endorsements`, with the tag's name) and mutual
+  connections (a reciprocal pair of `connections` rows, timestamped at the
+  later of the two). Derived straight from those tables, so it includes
+  events from before this feature existed. Items mirror the live
+  `notify_*` payload shape; ids are `"<kind>-<row id>"` strings, which keeps
+  them out of the `"live-"` id namespace the LiveView uses for pushed events.
+  """
+  def recent_notifications(user_id, limit \\ @default_limit) do
+    notifications_page(user_id, limit: limit).entries
+  end
+
+  @doc """
+  One page of the feed plus pagination state for a "Load more" UI:
+  `%{entries: [...], more?: boolean, next_cursor: cursor | nil}`. Pass the
+  returned cursor back as `cursor:` to get the next-older page.
+
+  The cursor is `%{at: timestamp, ids: [...]}` — the boundary timestamp plus
+  every already-shown event id *at* that timestamp. Timestamps have second
+  precision, so several events (across all three source tables) can tie at a
+  page boundary; filtering by `<= at` and rejecting the seen ids means ties
+  neither skip events nor repeat them. Treat the cursor as opaque.
+  """
+  def notifications_page(user_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @default_limit)
+    cursor = Keyword.get(opts, :cursor)
+    seen = if cursor, do: cursor.ids, else: []
+
+    # Over-fetch per source so that, after dropping the already-shown
+    # boundary events, at least `limit + 1` candidates remain — the +1 is
+    # what tells us whether another page exists.
+    fetch = limit + length(seen) + 1
+
+    candidates =
+      (follower_items(user_id, fetch, cursor) ++
+         endorsement_items(user_id, fetch, cursor) ++ connection_items(user_id, fetch, cursor))
+      |> Enum.reject(&(&1.id in seen))
+      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
+
+    entries = Enum.take(candidates, limit)
+    more? = length(candidates) > limit
+
+    %{entries: entries, more?: more?, next_cursor: if(more?, do: next_cursor(entries, cursor))}
+  end
+
+  defp next_cursor([], _prev), do: nil
+
+  defp next_cursor(entries, prev) do
+    %{at: at} = List.last(entries)
+
+    boundary_ids =
+      entries
+      |> Enum.filter(&(NaiveDateTime.compare(&1.at, at) == :eq))
+      |> Enum.map(& &1.id)
+
+    # When the boundary timestamp spans pages, carry the previous page's ids
+    # at that timestamp along — they are still "already shown".
+    carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
+
+    %{at: at, ids: carried ++ boundary_ids}
+  end
+
+  @doc """
+  How many feed events are newer than the user's read marker (all of them when
+  the marker is NULL). Zero for a logged-out visitor.
+  """
+  def unread_notification_count(nil), do: 0
+
+  def unread_notification_count(user_id) do
+    read_at = Repo.one(from(u in User, where: u.id == ^user_id, select: u.notifications_read_at))
+
+    count_followers(user_id, read_at) +
+      count_endorsements(user_id, read_at) + count_connections(user_id, read_at)
+  end
+
+  defp follower_items(user_id, limit, cursor) do
+    from(c in Connection,
+      where: c.followee_id == ^user_id,
+      join: f in assoc(c, :follower),
+      order_by: [desc: c.inserted_at, desc: c.id],
+      limit: ^limit,
+      select: {c.id, c.inserted_at, f}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, follower} ->
+      actor_item("follower-#{id}", "follower", at, follower)
+    end)
+  end
+
+  defp endorsement_items(user_id, limit, cursor) do
+    from(e in UserTagEndorsement,
+      join: ut in assoc(e, :user_tag),
+      join: t in assoc(ut, :tag),
+      join: endorser in assoc(e, :user),
+      # Self-endorsements are possible in old data; they are not news.
+      where: ut.user_id == ^user_id and e.user_id != ^user_id,
+      order_by: [desc: e.inserted_at, desc: e.id],
+      limit: ^limit,
+      select: {e.id, e.inserted_at, endorser, t.name}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, endorser, tag_name} ->
+      "endorsement-#{id}"
+      |> actor_item("endorsement", at, endorser)
+      |> Map.put(:tag, tag_name)
+    end)
+  end
+
+  defp connection_items(user_id, limit, cursor) do
+    query =
+      from(c in Connection,
+        join: r in Connection,
+        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
+        where: c.followee_id == ^user_id,
+        join: f in assoc(c, :follower),
+        order_by: [desc: fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at), desc: c.id],
+        limit: ^limit,
+        select: {c.id, fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at), f}
+      )
+
+    query =
+      if cursor do
+        # The mutuality event happens at the later of the two follows.
+        where(
+          query,
+          [c, r],
+          fragment("GREATEST(?, ?) <= ?", c.inserted_at, r.inserted_at, ^cursor.at)
+        )
+      else
+        query
+      end
+
+    query
+    |> Repo.all()
+    |> Enum.map(fn {id, at, friend} ->
+      actor_item("connection-#{id}", "connection", at, friend)
+    end)
+  end
+
+  defp at_or_before(query, nil), do: query
+  defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
+
+  defp actor_item(id, kind, at, actor) do
+    %{
+      id: id,
+      kind: kind,
+      at: at,
+      actor_name: display_name(actor),
+      actor_param: actor_param(actor),
+      actor_avatar: actor_avatar(actor)
+    }
+  end
+
+  defp count_followers(user_id, read_at) do
+    from(c in Connection, where: c.followee_id == ^user_id)
+    |> since(read_at)
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_endorsements(user_id, read_at) do
+    from(e in UserTagEndorsement,
+      join: ut in assoc(e, :user_tag),
+      where: ut.user_id == ^user_id and e.user_id != ^user_id
+    )
+    |> since(read_at)
+    |> Repo.aggregate(:count)
+  end
+
+  defp count_connections(user_id, read_at) do
+    query =
+      from(c in Connection,
+        join: r in Connection,
+        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
+        where: c.followee_id == ^user_id
+      )
+
+    query =
+      if read_at do
+        # The mutuality event happens at the later of the two follows.
+        where(
+          query,
+          [c, r],
+          fragment("GREATEST(?, ?) > ?", c.inserted_at, r.inserted_at, ^read_at)
+        )
+      else
+        query
+      end
+
+    Repo.aggregate(query, :count)
+  end
+
+  defp since(query, nil), do: query
+  defp since(query, read_at), do: where(query, [event], event.inserted_at > ^read_at)
+
+  defp actor_param(%User{} = user), do: Phoenix.Param.to_param(user)
   defp actor_param(_), do: nil
 
-  defp actor_avatar(%Vutuv.Accounts.User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
+  defp actor_avatar(%User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
   defp actor_avatar(_), do: nil
 
   defp display_name(%{first_name: first, last_name: last}) do
