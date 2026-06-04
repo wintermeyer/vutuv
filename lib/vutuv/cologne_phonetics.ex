@@ -31,7 +31,6 @@ defmodule Vutuv.ColognePhonetics do
       {?c, ~c"4", %{before: ?q}},
       {?c, ~c"4", %{before: ?u}},
       {?c, ~c"4", %{before: ?x}},
-      {?c, ~c"8", %{first: true}},
       {?d, ~c"8", %{before: ?c}},
       {?d, ~c"8", %{before: ?s}},
       {?d, ~c"8", %{before: ?z}},
@@ -94,7 +93,7 @@ defmodule Vutuv.ColognePhonetics do
     |> to_string
   end
 
-  defp encode_string(""), do: ""
+  defp encode_string(""), do: ~c""
 
   defp encode_string(string) do
     [head | tail] = String.to_charlist(string)
