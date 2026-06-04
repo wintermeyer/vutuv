@@ -40,6 +40,9 @@ defmodule Vutuv.MixProject do
       {:phoenix_html_helpers, "~> 1.0"},
       {:phoenix_live_view, "~> 1.0"},
       {:phoenix_live_reload, "~> 1.4", only: :dev},
+      # AI-assisted dev tooling: mounts an MCP endpoint at /tidewave/mcp in
+      # the dev server so coding agents can inspect the running app.
+      {:tidewave, "~> 0.5", only: :dev},
       # LiveView's test helpers (`Phoenix.LiveViewTest`) parse the rendered DOM
       # with lazy_html; required for the connected-mount assertions.
       {:lazy_html, ">= 0.1.0", only: :test},

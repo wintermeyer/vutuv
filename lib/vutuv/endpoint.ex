@@ -39,6 +39,13 @@ defmodule VutuvWeb.Endpoint do
     )
   end
 
+  # Tidewave (dev-only dep) exposes an MCP endpoint at /tidewave/mcp so AI
+  # coding agents can inspect the running app (eval code, query Ecto, read
+  # logs). The guard keeps the plug out of test and prod builds.
+  if Code.ensure_loaded?(Tidewave) do
+    plug(Tidewave)
+  end
+
   if code_reloading? do
     socket("/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket)
     plug(Phoenix.LiveReloader)
