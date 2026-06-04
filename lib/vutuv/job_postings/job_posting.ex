@@ -37,8 +37,11 @@ defmodule Vutuv.JobPostings.JobPosting do
   """
   def changeset(struct, params \\ %{}) do
     struct
+    # `user_id` is intentionally NOT cast: it is set programmatically via
+    # `Ecto.build_assoc(user, :job_postings)` in the controller. Casting it
+    # would let a recruiter smuggle `job_posting[user_id]` and attribute a
+    # posting to another user. It stays required and is satisfied by the assoc.
     |> cast(params, [
-      :user_id,
       :title,
       :description,
       :location,

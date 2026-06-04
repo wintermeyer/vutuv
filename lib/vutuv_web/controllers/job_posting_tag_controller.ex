@@ -1,12 +1,16 @@
 defmodule VutuvWeb.JobPostingTagController do
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.ResolveSlug,
-    slug: "job_posting_job_slug",
-    model: Vutuv.JobPostings.JobPosting,
-    assign: :job_posting,
-    field: :slug
-  )
+  # Gate writes the same way the parent JobPostingController does: only the
+  # logged-in owner with a paid recruiter subscription may add/remove tags.
+  # :index/:show stay public intentionally.
+  plug(VutuvWeb.Plug.AuthRecruiter when action in [:new, :create, :delete])
+
+  # Scope the job posting to the path user instead of resolving its globally
+  # unique slug on its own. Otherwise a paid recruiter could pass their own
+  # user slug together with another user's posting slug and tag a posting they
+  # do not own.
+  plug(:resolve_job_posting)
 
   plug(:resolve_slug)
 
@@ -66,6 +70,33 @@ defmodule VutuvWeb.JobPostingTagController do
     |> redirect(
       to: ~p"/users/#{conn.assigns[:user]}/job_postings/#{conn.assigns[:job_posting]}/tags"
     )
+  end
+
+  defp resolve_job_posting(%{params: %{"job_posting_job_slug" => slug}} = conn, _) do
+    Repo.one(
+      from(j in Vutuv.JobPostings.JobPosting,
+        where: j.slug == ^slug and j.user_id == ^conn.assigns[:user_id]
+      )
+    )
+    |> case do
+      nil ->
+        conn
+        |> put_status(:not_found)
+        |> put_view(html: VutuvWeb.ErrorHTML)
+        |> render("404.html")
+        |> halt()
+
+      job_posting ->
+        assign(conn, :job_posting, job_posting)
+    end
+  end
+
+  defp resolve_job_posting(conn, _) do
+    conn
+    |> put_status(:not_found)
+    |> put_view(html: VutuvWeb.ErrorHTML)
+    |> render("404.html")
+    |> halt()
   end
 
   defp resolve_slug(%{params: %{"id" => slug}} = conn, _) do
