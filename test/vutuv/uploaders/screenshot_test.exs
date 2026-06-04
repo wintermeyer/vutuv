@@ -74,6 +74,18 @@ defmodule Vutuv.ScreenshotTest do
       assert {Image.width(thumb), Image.height(thumb)} == {800, 528}
     end
 
+    test "accepts whitelisted extensions regardless of case", %{src: src} do
+      for filename <- ~w(shot.WEBP shot.PNG shot.JPG) do
+        upload = %Plug.Upload{filename: filename, path: src, content_type: "image/png"}
+        assert {:ok, _stored} = Vutuv.Screenshot.store({upload, @url})
+      end
+    end
+
+    test "rejects files whose extension is not whitelisted", %{src: src} do
+      upload = %Plug.Upload{filename: "shot.gif", path: src, content_type: "image/gif"}
+      assert {:error, :invalid_file} = Vutuv.Screenshot.store({upload, @url})
+    end
+
     test "regenerating with new content replaces the previous files", %{tmp: tmp, src: src} do
       up1 = %Plug.Upload{filename: "shot.png", path: src, content_type: "image/png"}
       assert {:ok, _first} = Vutuv.Screenshot.store({up1, @url})

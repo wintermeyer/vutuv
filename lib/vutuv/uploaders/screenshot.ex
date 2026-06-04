@@ -107,6 +107,7 @@ defmodule Vutuv.Screenshot do
     do: value |> Vutuv.Uploads.strip_query() |> Path.extname()
 
   defp valid_extension?(file_name) do
-    Path.extname(file_name) in @extension_whitelist
+    extension = file_name |> Path.extname() |> String.downcase()
+    extension in @extension_whitelist
   end
 end

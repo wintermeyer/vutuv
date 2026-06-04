@@ -20,14 +20,24 @@ defmodule VutuvWeb.CurrencyHelpers do
 
     [integer_part | decimal_parts] = String.split(formatted, ".")
 
-    integer_with_delimiter =
-      integer_part
+    # Split the leading sign off before grouping so the "-" is not treated as a
+    # digit (which would yield a stray delimiter, e.g. "$-,999.00").
+    {sign, digits} =
+      case integer_part do
+        "-" <> rest -> {"-", rest}
+        rest -> {"", rest}
+      end
+
+    grouped_digits =
+      digits
       |> String.graphemes()
       |> Enum.reverse()
       |> Enum.chunk_every(3)
       |> Enum.map(&Enum.reverse/1)
       |> Enum.reverse()
       |> Enum.map_join(delimiter, &Enum.join/1)
+
+    integer_with_delimiter = sign <> grouped_digits
 
     result =
       if precision > 0 do
