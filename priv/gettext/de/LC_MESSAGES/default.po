@@ -383,8 +383,8 @@ msgstr "Gruppen"
 msgid "Headline"
 msgstr "Headline"
 
-#: lib/vutuv_web/live/shell_live.ex:102
-#: lib/vutuv_web/live/shell_live.ex:170
+#: lib/vutuv_web/live/shell_live.ex:110
+#: lib/vutuv_web/live/shell_live.ex:178
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:4
 #: lib/vutuv_web/templates/phone_number/form_content.html.heex:16
 #, elixir-autogen
@@ -472,7 +472,7 @@ msgstr "Einloggen"
 msgid "Log Out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/shell_live.ex:161
+#: lib/vutuv_web/live/shell_live.ex:169
 #: lib/vutuv_web/templates/session/new.html.heex:8
 #, elixir-autogen
 msgid "Log in"
@@ -715,8 +715,8 @@ msgstr "Speichern"
 msgid "Score"
 msgstr "Score"
 
-#: lib/vutuv_web/live/shell_live.ex:116
-#: lib/vutuv_web/live/shell_live.ex:171
+#: lib/vutuv_web/live/shell_live.ex:124
+#: lib/vutuv_web/live/shell_live.ex:179
 #: lib/vutuv_web/templates/search_query/form_content.html.heex:10
 #: lib/vutuv_web/templates/search_query/new.html.heex:4
 #: lib/vutuv_web/templates/search_query/new.html.heex:8
@@ -2482,7 +2482,7 @@ msgstr "Adressen von %{name}"
 msgid "Admin control panel"
 msgstr "Admin-Bereich"
 
-#: lib/vutuv_web/live/shell_live.ex:174
+#: lib/vutuv_web/live/shell_live.ex:182
 #, elixir-autogen, elixir-format
 msgid "Alerts"
 msgstr "Mitteilungen"
@@ -2559,18 +2559,18 @@ msgstr "Falls das ein Fehler ist, bitte"
 msgid "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!"
 msgstr "Es sieht so aus, als würden Sie noch niemandem folgen. Öffnen Sie das Profil von jemandem, den Sie kennen oder interessant finden, und klicken Sie auf Folgen!"
 
-#: lib/vutuv_web/live/shell_live.ex:110
-#: lib/vutuv_web/live/shell_live.ex:172
+#: lib/vutuv_web/live/shell_live.ex:118
+#: lib/vutuv_web/live/shell_live.ex:180
 #, elixir-autogen, elixir-format
 msgid "Jobs"
 msgstr "Jobs"
 
-#: lib/vutuv_web/live/shell_live.ex:151
+#: lib/vutuv_web/live/shell_live.ex:159
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/message_live/index.ex:142
+#: lib/vutuv_web/live/message_live/index.ex:146
 #, elixir-autogen, elixir-format
 msgid "Member"
 msgstr "Mitglied"
@@ -2581,13 +2581,13 @@ msgid "Message"
 msgstr "Nachricht"
 
 #: lib/vutuv_web/live/message_live/index.ex:42
-#: lib/vutuv_web/live/shell_live.ex:125
-#: lib/vutuv_web/live/shell_live.ex:173
+#: lib/vutuv_web/live/shell_live.ex:133
+#: lib/vutuv_web/live/shell_live.ex:181
 #, elixir-autogen, elixir-format
 msgid "Messages"
 msgstr "Nachrichten"
 
-#: lib/vutuv_web/live/shell_live.ex:108
+#: lib/vutuv_web/live/shell_live.ex:116
 #, elixir-autogen, elixir-format
 msgid "Network"
 msgstr "Netzwerk"
@@ -2612,14 +2612,14 @@ msgstr "Keine öffentliche E-Mail-Adresse."
 msgid "Nothing here yet."
 msgstr "Hier gibt es noch nichts."
 
-#: lib/vutuv_web/live/notification_live/index.ex:127
+#: lib/vutuv_web/live/notification_live/index.ex:132
 #, elixir-autogen, elixir-format
 msgid "Nothing new yet."
 msgstr "Noch nichts Neues."
 
 #: lib/vutuv_web/live/notification_live/index.ex:40
-#: lib/vutuv_web/live/notification_live/index.ex:86
-#: lib/vutuv_web/live/shell_live.ex:133
+#: lib/vutuv_web/live/notification_live/index.ex:91
+#: lib/vutuv_web/live/shell_live.ex:141
 #, elixir-autogen, elixir-format
 msgid "Notifications"
 msgstr "Benachrichtigungen"
@@ -2655,7 +2655,7 @@ msgstr "Suchbegriffe"
 msgid "Search terms of %{name}"
 msgstr "Suchbegriffe von %{name}"
 
-#: lib/vutuv_web/live/message_live/index.ex:276
+#: lib/vutuv_web/live/message_live/index.ex:280
 #, elixir-autogen, elixir-format
 msgid "Send"
 msgstr "Senden"
@@ -2740,7 +2740,7 @@ msgstr "Wir haben einen PIN an Ihre neue E-Mail-Adresse geschickt. Geben Sie ihn
 msgid "Who to follow"
 msgstr "Empfohlene Profile"
 
-#: lib/vutuv_web/live/message_live/index.ex:272
+#: lib/vutuv_web/live/message_live/index.ex:276
 #, elixir-autogen, elixir-format
 msgid "Write a message…"
 msgstr "Nachricht schreiben…"
@@ -2772,27 +2772,32 @@ msgstr "folgt"
 msgid "submit a bug report"
 msgstr "einen Fehlerbericht erstellen"
 
-#: lib/vutuv_web/live/notification_live/index.ex:162
+#: lib/vutuv_web/live/notification_live/index.ex:175
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tag}."
 msgstr "hat Sie für %{tag} bestätigt."
 
-#: lib/vutuv_web/live/notification_live/index.ex:164
+#: lib/vutuv_web/live/notification_live/index.ex:177
 #, elixir-autogen, elixir-format
 msgid "is now connected with you."
 msgstr "ist jetzt mit Ihnen vernetzt."
 
-#: lib/vutuv_web/live/notification_live/index.ex:159
+#: lib/vutuv_web/live/notification_live/index.ex:172
 #, elixir-autogen, elixir-format
 msgid "started following you."
 msgstr "folgt Ihnen jetzt."
 
-#: lib/vutuv_web/components/ui.ex:238
+#: lib/vutuv_web/components/ui.ex:250
 #, elixir-autogen, elixir-format
 msgid "Pagination"
 msgstr "Seitennavigation"
 
-#: lib/vutuv_web/live/notification_live/index.ex:141
+#: lib/vutuv_web/live/notification_live/index.ex:154
 #, elixir-autogen, elixir-format
 msgid "Load %{count} of %{remaining} more"
 msgstr "%{count} von %{remaining} mehr laden"
+
+#: lib/vutuv_web/live/notification_live/index.ex:151
+#, elixir-autogen, elixir-format
+msgid "Load more"
+msgstr "Mehr laden"
