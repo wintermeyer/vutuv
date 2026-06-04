@@ -10,6 +10,26 @@
  * Tailwind's slate scale written as literals.
  */
 
+/* ---------- Legacy element resets the new shell must not inherit ---------- */
+/* legacy.css paints bare <header>/<footer> as the white bars of the old
+   chrome (and clips them to 55px/50px on `body.stretch` pages). The
+   Direction A shell, the layout footer and the Messages thread header style
+   these elements with utilities, so neutralize the element rules here. */
+header,
+body.stretch header {
+  background: transparent;
+  border-bottom: 0;
+  max-height: none;
+}
+footer,
+body.stretch footer {
+  position: static;
+  height: auto;
+  max-height: none;
+  background: transparent;
+  color: inherit;
+}
+
 /* Shared content column: a centered, readable width across subpages. */
 .profile-header,
 .breadcrumbs,
@@ -256,6 +276,26 @@ input[type="submit"].button {
   justify-content: flex-end;
 }
 
+/* ---------- Search form (top bar on /search_queries/new) ---------- */
+/* Tailwind Preflight strips the input to a transparent, borderless box;
+   give it the standard Direction A input look. The submit already renders
+   through `.button`. */
+.search-form input:not([type="submit"]) {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #0f172a;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-right: 0.5rem;
+}
+.search-form input:not([type="submit"]):focus {
+  outline: none;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+
 /* ---------- Tables ---------- */
 .pure-table {
   width: 100%;
@@ -306,27 +346,70 @@ input[type="submit"].button {
 
 /* ---------- Dark mode (follows system) ---------- */
 @media (prefers-color-scheme: dark) {
+  /* Page canvas + base text: legacy.css hardcodes `#eee`/`#333` on body. */
+  body {
+    background: #020617;
+    color: #cbd5e1;
+  }
   .profile-header__info h1 { color: #f1f5f9; }
+  .profile-header__info h2 { color: #94a3b8; }
+  .breadcrumbs { color: #64748b; }
+  .breadcrumbs a { color: #94a3b8; }
+  .breadcrumbs a:hover { color: #60a5fa; }
+  /* `.card-list .card`, `section.jobs` and `.ad` must be listed too:
+     legacy gives them `background:#fff` with selectors that outrank a
+     bare `.card` override. */
   .card,
-  .editform {
+  .card-list .card,
+  section.jobs,
+  .ad {
     background: #0f172a;
     outline-color: #1e293b;
   }
+  .card h1 { color: #94a3b8; }
   .card h2 { color: #f1f5f9; }
   .card p { color: #cbd5e1; }
+  .card a,
+  .card__morelink,
+  .button-link { color: #60a5fa; }
+  .card a:hover,
+  .card__morelink:hover { color: #93c5fd; }
   .editform label { color: #cbd5e1; }
-  .editform input,
+  /* Mirror the light-mode selector list above: its `[type=…]` attribute
+     selectors outrank a plain `.editform input`, which would leave the
+     fields white in dark mode. */
+  .editform input[type="text"],
+  .editform input[type="email"],
+  .editform input[type="password"],
+  .editform input[type="number"],
+  .editform input[type="tel"],
+  .editform input[type="url"],
+  .editform input[type="search"],
+  .editform input:not([type]),
   .editform select,
-  .editform textarea {
+  .editform textarea,
+  .search-form input:not([type="submit"]),
+  select {
     background: #1e293b;
     border-color: #334155;
     color: #f1f5f9;
   }
+  hr { background: #1e293b; }
   .pure-table th { background: #1e293b; color: #cbd5e1; }
   .pure-table th, .pure-table td { border-color: #1e293b; }
+  /* Bare tables (legacy sets `th{color:#444;border:#ddd}` / `td{border:#eee}`). */
+  th { color: #cbd5e1; border-color: #1e293b; }
+  td { border-color: #1e293b; }
+  /* Icons drawn as near-black glyphs vanish on dark cards; flip them.
+     Colored icons (edit/delete/follow…) stay readable as-is. */
+  .icon--back, .icon--lock, .icon--menu, .icon--search { filter: invert(1); }
   .alert, .alert-danger { background: rgb(127 29 29 / 0.25); border-color: rgb(153 27 27 / 0.5); color: #fca5a5; }
   .button--cancel, .button--secondary, .button--icon:hover { background: #1e293b; color: #e2e8f0; }
+  .button--icon { color: #94a3b8; }
+  .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
+  /* Impressum / Datenschutz / login intro text sits on the dark card. */
+  .imagebox h2, .imagebox p { color: #cbd5e1; }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

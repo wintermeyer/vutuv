@@ -55,7 +55,7 @@ Admin panel: http://localhost:4000/admin
 - **Real-time shell (LiveView)**: the app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with live unread badges) is embedded in the shared `app` layout via `live_render`, so the chrome and badges are live on every page. The **Messages** (`/messages`) and **Notifications** (`/notifications`) pages are LiveViews under a `live_session`. In-app updates flow over `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"`); online status and typing use `VutuvWeb.Presence`. The layout is split into `root.html.heex` (document shell) and `app.html.heex` (chrome), shared by classic controller pages and LiveViews. Messages/notifications currently use dummy data; persistence is a follow-up.
 - **Routes**: Verified routes (`~p"..."` sigils)
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
-- **Assets**: esbuild + Tailwind CSS v4
+- **Assets**: esbuild + Tailwind CSS v4; dark mode follows the system (`prefers-color-scheme`, no toggle) — legacy pages get their dark styles centrally from `assets/css/components.css`
 - **HTTP server**: Bandit
 - **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers
 - **Images**: avatars and URL screenshots are stored on local disk and resized with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Screenshot`

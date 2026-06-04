@@ -16,7 +16,8 @@
     <meta name="csrf-token" content={get_csrf_token()} />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="icon" href="/favicon.ico" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
     <link rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer src={~p"/assets/app.js"}></script>
   </head>

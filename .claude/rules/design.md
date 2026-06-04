@@ -16,10 +16,18 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 
 1. **Legacy controller+view pages** still use shared classes (`.card` / `.card-list`,
    `.editform` + inputs, `.button` + variants, `.breadcrumbs`, `.profile-header` page
-   title, `.pure-table`, `.alert`, `.tags`/`.badges`). They are styled **centrally** in
-   `assets/css/components.css`. **To restyle legacy pages, edit `components.css` — do
-   NOT reskin per-template.** A new legacy page that reuses these classes gets the look
-   for free.
+   title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`). They are styled
+   **centrally** in `assets/css/components.css`. **To restyle legacy pages, edit
+   `components.css` — do NOT reskin per-template.** A new legacy page that reuses these
+   classes gets the look for free. **Dark mode for legacy classes lives in the
+   `@media (prefers-color-scheme: dark)` block at the end of `components.css`** — the
+   canvas (`body`), cards, forms, tables, links, icons. Caveat: legacy declares some
+   things with stronger selectors (`.card-list .card`, `section.jobs`, `.ad`,
+   `.editform input[type=…]`), so a dark override must repeat at least that selector
+   or it silently loses; `test/vutuv_web/dark_mode_css_test.exs` guards the worst of
+   these. `components.css` also neutralizes legacy's bare `header`/`footer` element
+   rules (old white chrome bars) so the shell, layout footer and Messages header can
+   style those elements with utilities.
 2. **New / hand-written pages** (the shell `ShellLive`, the LiveViews, `user/show.html.heex`)
    use the **`VutuvWeb.UI` components** (see **Components** below) or, where no component
    fits, the **recipes** below. Prefer a component; fall back to a recipe. Reach for a
@@ -31,7 +39,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - **Brand blue:** `bg-brand-600` (primary), hover `bg-brand-700`; text `text-brand-700` / `text-brand-800`; tint `bg-brand-50`. Full scale `brand-50…900`.
 - **Accent (unread counts / CTAs highlight):** `bg-accent` / `text-accent` (coral `#f97362`).
 - **Surfaces:** page is grey (`slate-50`/`slate-100`); cards `bg-white`; borders `ring-slate-200`; text `text-slate-900 / 700 / 500 / 400`.
-- **Dark:** `dark:bg-slate-900` (cards) / `slate-950` (page), `dark:ring-slate-800`, `dark:text-slate-100 / 300 / 400`.
+- **Dark:** `dark:bg-slate-900` (cards) / `slate-950` (page), `dark:ring-slate-800`, `dark:text-slate-100 / 300 / 400`. `app.css` sets `html { color-scheme: light dark }` and `root.html.heex` ships a `theme-color` meta per scheme (`#ffffff` / `#020617`).
 
 ### Canonical recipes (copy these exactly)
 

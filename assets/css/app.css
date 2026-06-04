@@ -37,6 +37,13 @@
   --color-accent-dark: #e2543f;
 }
 
+/* Native form controls, scrollbars and the default canvas follow the system
+   scheme (dark mode has no toggle; `dark:` utilities key off the same media
+   query). */
+html {
+  color-scheme: light dark;
+}
+
 /*
  * Issue #761: keep login / registration inputs readable.
  *
