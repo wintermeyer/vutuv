@@ -29,7 +29,7 @@ config :vutuv, Vutuv.Repo,
   adapter: Ecto.Adapters.Postgres,
   username: "postgres",
   password: "postgres",
-  database: "vutuv1_test",
+  database: "vutuv1_test#{System.get_env("MIX_TEST_PARTITION")}",
   hostname: System.get_env("DATABASE_HOST", "localhost"),
   pool: Ecto.Adapters.SQL.Sandbox
 
