@@ -58,9 +58,10 @@ defmodule VutuvWeb.NotificationLive.Index do
           id={dom_id}
           class="flex items-start gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
         >
-          <%!-- Real events carry the actor: show their avatar linked to the
-          profile. Dummy/seed items have no actor and keep the kind glyph. --%>
-          <%= if n[:actor_param] do %>
+          <%!-- Show the actor's avatar (linked) when we have a picture. Dummy/seed
+          items have a name but no avatar, so they keep the colored kind glyph; the
+          name itself still links to the profile via the branch below. --%>
+          <%= if n[:actor_avatar] do %>
             <.link href={~p"/users/#{n.actor_param}"} class="mt-0.5 shrink-0">
               <.avatar src={n[:actor_avatar]} size="sm" alt={"Avatar of #{n.actor_name}"} />
             </.link>
@@ -103,11 +104,33 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("endorsement"), do: "★"
   defp kind_glyph(_), do: "•"
 
+  # Seed/demo rows. They mirror the real-notification shape (actor_name +
+  # actor_param) so the actor's name renders as a profile link, but carry no
+  # actor_avatar, so they keep the colored kind glyph instead of a picture.
+  # The name renders first, so the text is phrased name-first.
   defp dummy_notifications do
     [
-      %{id: 1, kind: "follower", text: "José Daniel started following you."},
-      %{id: 2, kind: "endorsement", text: "Chris McCord endorsed you for Phoenix."},
-      %{id: 3, kind: "connection", text: "You are now connected with Wojtek Mach."}
+      %{
+        id: 1,
+        kind: "follower",
+        actor_name: "José Daniel",
+        actor_param: "jose-daniel",
+        text: "started following you."
+      },
+      %{
+        id: 2,
+        kind: "endorsement",
+        actor_name: "Chris McCord",
+        actor_param: "chris-mccord",
+        text: "endorsed you for Phoenix."
+      },
+      %{
+        id: 3,
+        kind: "connection",
+        actor_name: "Wojtek Mach",
+        actor_param: "wojtek-mach",
+        text: "is now connected with you."
+      }
     ]
   end
 end

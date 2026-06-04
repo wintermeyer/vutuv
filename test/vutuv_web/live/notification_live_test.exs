@@ -16,6 +16,9 @@ defmodule VutuvWeb.NotificationLiveTest do
       # Connected render goes through the /live socket + InitAssigns on_mount.
       assert render(live) =~ "endorsed you for Phoenix"
       assert has_element?(live, "#notification-3")
+
+      # The actor's name links to their profile.
+      assert render(live) =~ ~s(href="/users/chris-mccord")
     end
 
     test "renders for a logged-out visitor too", %{conn: conn} do
@@ -50,7 +53,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ ~s(id="notification-live-)
       # all three dummy rows survive the insert
       assert html =~ "endorsed you for Phoenix"
-      assert html =~ "connected with Wojtek Mach"
+      assert html =~ "Wojtek Mach"
     end
 
     test "a real follower is rendered with a profile link and avatar", %{conn: conn} do
