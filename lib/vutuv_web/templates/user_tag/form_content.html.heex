@@ -6,8 +6,8 @@
   <% end %>
 
 <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
-  <%= label f, :value, class: "control-label" %>
-  <%= text_input f, :value, class: "form-control" %>
+  <%= label f, :value, gettext("Tag name"), class: "control-label" %>
+  <%= text_input f, :value, class: "form-control", placeholder: gettext("e.g. JavaScript") %>
   <%= error_tag f, :value %>
   <%= error_tag @changeset, :user_id_tag_id %>
 

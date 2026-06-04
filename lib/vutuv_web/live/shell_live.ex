@@ -25,6 +25,10 @@ defmodule VutuvWeb.ShellLive do
     user_id = session["user_id"]
     if connected?(socket), do: Activity.subscribe(user_id)
 
+    # The shell mounts outside the `live_session` (embedded via live_render),
+    # so InitAssigns never runs for it — apply the session locale here.
+    VutuvWeb.LiveLocale.put_locale(session)
+
     # When the shell mounts ON the messages/notifications page itself, that
     # badge starts at zero. Relying only on the page's read-broadcast races the
     # shell's subscribe on full page loads (the broadcast can fire first).
@@ -67,8 +71,7 @@ defmodule VutuvWeb.ShellLive do
     name
     |> String.split(~r/\s+/, trim: true)
     |> Enum.take(2)
-    |> Enum.map(&String.first/1)
-    |> Enum.join()
+    |> Enum.map_join(&String.first/1)
     |> String.upcase()
     |> case do
       "" -> "?"
@@ -166,7 +169,7 @@ defmodule VutuvWeb.ShellLive do
 
   ## Components
 
-  attr :count, :integer, default: 0
+  attr(:count, :integer, default: 0)
 
   defp count_badge(assigns) do
     ~H"""
@@ -179,10 +182,10 @@ defmodule VutuvWeb.ShellLive do
     """
   end
 
-  attr :href, :string, required: true
-  attr :label, :string, required: true
-  attr :count, :integer, default: 0
-  slot :inner_block, required: true
+  attr(:href, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:count, :integer, default: 0)
+  slot(:inner_block, required: true)
 
   defp tab(assigns) do
     ~H"""

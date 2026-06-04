@@ -39,7 +39,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
         {:ok,
          socket
-         |> assign(:page_title, "Messages")
+         |> assign(:page_title, gettext("Messages"))
          |> assign(:current_user_id, user.id)
          |> assign(:user_name, user_name)
          |> assign(:conversations, conversations())
@@ -72,7 +72,11 @@ defmodule VutuvWeb.MessageLive.Index do
 
       # Plain broadcast: every subscriber — including the sender — appends the
       # message via handle_info, so all sessions render the same thing.
-      Phoenix.PubSub.broadcast(Vutuv.PubSub, convo_topic(socket.assigns.conv_id), {:new_message, msg})
+      Phoenix.PubSub.broadcast(
+        Vutuv.PubSub,
+        convo_topic(socket.assigns.conv_id),
+        {:new_message, msg}
+      )
 
       {:noreply, assign_form(socket)}
     end

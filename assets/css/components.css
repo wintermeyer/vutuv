@@ -171,6 +171,9 @@ body.stretch {
 }
 body.stretch main {
   flex-grow: 1;
+  /* As a flex item, <main>'s `mx-auto` would otherwise shrink-wrap it to its
+     content width, clipping the .imagebox photo to a narrow strip. */
+  width: 100%;
 }
 
 /* ---------- Float helpers still used by the legacy show pages ---------- */
@@ -288,11 +291,50 @@ body.stretch main {
   font-weight: 600;
   color: var(--color-brand-600);
 }
+/* Empty-state line inside a card ("Nothing here yet."). */
+.card__empty {
+  color: #94a3b8;
+  font-size: 0.875rem;
+  margin: 0;
+}
 
 /* Empty `<aside></aside>` placeholders the legacy form pages emit add a phantom
    flex gap — hide them. */
 .card-list aside:empty {
   display: none;
+}
+
+/* ---------- Error pages (404 / 403 / 500) ---------- */
+.error-page {
+  max-width: 28rem;
+  margin: 4rem auto;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  background: #ffffff;
+  border-radius: 1rem;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  outline: 1px solid #e2e8f0;
+  outline-offset: -1px;
+}
+.error-page__code {
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #cbd5e1;
+  margin: 0 0 0.75rem;
+}
+.error-page__title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.5rem;
+}
+.error-page__hint {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.error-page__actions {
+  margin-top: 1.5rem;
 }
 
 /* ---------- Forms ---------- */
@@ -533,14 +575,24 @@ i.icon svg {
   background-repeat: no-repeat;
   background-size: contain;
 }
-.icon--follow { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2016%2016%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Ctitle%3EArtboard%3C%2Ftitle%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Crect%20fill%3D%27%23EEE%27%20width%3D%2716%27%20height%3D%2716%27%20rx%3D%273.636%27%2F%3E%3Cpath%20d%3D%27M6.545%209.225c.567%200%201.05-.2%201.452-.602.4-.4.6-.884.6-1.45%200-.568-.2-1.052-.6-1.453-.4-.4-.885-.6-1.452-.6-.566%200-1.05.2-1.45.6-.402.4-.603.885-.603%201.452s.2%201.05.602%201.45c.4.402.885.603%201.45.603z%27%20fill%3D%27%23777%27%2F%3E%3Cpath%20d%3D%27M10.29%2011.393c-.012-.18-.037-.375-.075-.583-.037-.21-.084-.402-.14-.58-.058-.178-.135-.352-.23-.52-.097-.17-.208-.315-.333-.434-.125-.12-.277-.215-.457-.286-.18-.072-.38-.107-.596-.107-.033%200-.108.038-.225.115-.118.076-.25.162-.4.256-.147.095-.34.18-.576.257-.238.077-.476.116-.715.116-.24%200-.476-.04-.713-.115-.237-.076-.43-.16-.578-.256-.148-.094-.28-.18-.398-.256-.118-.077-.193-.115-.225-.115-.216%200-.415.035-.595.107-.18.07-.332.166-.457.286-.125.12-.235.263-.33.433-.097.168-.174.342-.23.52-.058.178-.105.37-.143.58-.037.208-.062.403-.075.583-.012.18-.018.364-.018.553%200%20.428.13.765.39%201.013.26.247.606.37%201.037.37H8.88c.43%200%20.777-.123%201.037-.37.26-.25.39-.586.39-1.014%200-.19-.007-.373-.02-.553zM11.797%204.73V2.836h-.59V4.73H9.322v.59h1.888v1.896h.59V5.32h1.886v-.59%27%20fill%3D%27%23777%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E); }
-.icon--unfollow { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2016%2016%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Ctitle%3EArtboard%3C%2Ftitle%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Crect%20fill%3D%27%234E91DE%27%20width%3D%2716%27%20height%3D%2716%27%20rx%3D%273.636%27%2F%3E%3Cpath%20d%3D%27M6.545%209.225c.567%200%201.05-.2%201.452-.602.4-.4.6-.884.6-1.45%200-.568-.2-1.052-.6-1.453-.4-.4-.885-.6-1.452-.6-.566%200-1.05.2-1.45.6-.402.4-.603.885-.603%201.452s.2%201.05.602%201.45c.4.402.885.603%201.45.603z%27%20fill%3D%27%23FFF%27%2F%3E%3Cpath%20d%3D%27M10.29%2011.393c-.012-.18-.037-.375-.075-.583-.037-.21-.084-.402-.14-.58-.058-.178-.135-.352-.23-.52-.097-.17-.208-.315-.333-.434-.125-.12-.277-.215-.457-.286-.18-.072-.38-.107-.596-.107-.033%200-.108.038-.225.115-.118.076-.25.162-.4.256-.147.095-.34.18-.576.257-.238.077-.476.116-.715.116-.24%200-.476-.04-.713-.115-.237-.076-.43-.16-.578-.256-.148-.094-.28-.18-.398-.256-.118-.077-.193-.115-.225-.115-.216%200-.415.035-.595.107-.18.07-.332.166-.457.286-.125.12-.235.263-.33.433-.097.168-.174.342-.23.52-.058.178-.105.37-.143.58-.037.208-.062.403-.075.583-.012.18-.018.364-.018.553%200%20.428.13.765.39%201.013.26.247.606.37%201.037.37H8.88c.43%200%20.777-.123%201.037-.37.26-.25.39-.586.39-1.014%200-.19-.007-.373-.02-.553zM11.92%205.025l1.34-1.34-.417-.417-1.34%201.34-1.335-1.334-.416.417%201.334%201.335-1.34%201.34.416.417%201.34-1.34%201.335%201.334.416-.416%27%20fill%3D%27%23FFF%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E); }
+.icon--follow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M19 8v6M22 11h-6'/%3E%3C/svg%3E"); }
+.icon--unfollow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='m16 11 2 2 4-4'/%3E%3C/svg%3E"); }
 .icon--plus { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2016%2016%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Ctitle%3E%2B%3C%2Ftitle%3E%3Cpath%20d%3D%27M9.333%206.667V0H6.667v6.667H0v2.666h6.667V16h2.666V9.333H16V6.667%27%20fill%3D%27%23FFF%27%20fill-rule%3D%27evenodd%27%2F%3E%3C%2Fsvg%3E); }
-.icon--edit { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cg%20fill%3D%27%234A90E2%27%20fill-rule%3D%27evenodd%27%3E%3Cpath%20d%3D%27M15.07.93c-.58-.584-1.283-.876-2.104-.876H3.034C2.214.054%201.51.346.93.93.345%201.51.053%202.212.053%203.033v9.932c0%20.82.292%201.523.875%202.105.58.584%201.283.876%202.104.876h9.932c.82%200%201.523-.292%202.105-.875.584-.58.875-1.283.875-2.104V3.034c0-.82-.29-1.523-.874-2.105zM5.684%2013.296h-2.98v-2.98L8.33%204.69l2.98%202.98-5.627%205.627zm7.242-7.242l-.952.952-2.98-2.98.952-.952c.193-.193.427-.29.704-.29.274%200%20.51.097.702.29l1.573%201.573c.193.193.29.428.29.703%200%20.277-.097.512-.29.705z%27%2F%3E%3Cpath%20d%3D%27M3.696%2010.73v.58h.993v.994h.58l.537-.538-1.573-1.573M5.196%209.2c-.117.117-.127.22-.03.31.09.097.192.087.31-.03l3.01-3.01c.118-.118.128-.222.03-.312-.088-.096-.192-.086-.31.03L5.197%209.2z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E); }
-.icon--delete { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Crect%20fill%3D%27%23FF7061%27%20width%3D%2716%27%20height%3D%2716%27%20rx%3D%273%27%2F%3E%3Cpath%20fill%3D%27%23FFF%27%20d%3D%27M2%204l2-2%2010%2010-2%202z%27%2F%3E%3Cpath%20fill%3D%27%23FFF%27%20d%3D%27M12%202l2%202L4%2014l-2-2z%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E); }
-.icon--search { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2720%27%20height%3D%2720%27%20viewBox%3D%270%200%2020%2020%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Ctitle%3EArtboard%3C%2Ftitle%3E%3Cpath%20d%3D%27M18.6%2016.642l-3.71-3.71c.894-1.29%201.34-2.73%201.34-4.316%200-1.032-.2-2.018-.6-2.96-.4-.94-.94-1.75-1.622-2.433C13.326%202.54%2012.515%202%2011.574%201.6c-.94-.4-1.927-.6-2.96-.6-1.03%200-2.016.2-2.957.6-.94.4-1.753.94-2.434%201.623C2.54%203.905%202%204.716%201.6%205.657c-.4.94-.6%201.927-.6%202.96%200%201.03.2%202.016.6%202.957.4.94.94%201.752%201.623%202.434.68.682%201.493%201.222%202.434%201.623.94.4%201.927.6%202.958.6%201.587%200%203.026-.446%204.317-1.34l3.71%203.7c.26.273.584.41.973.41.375%200%20.7-.137.974-.41.273-.275.41-.6.41-.975%200-.382-.133-.706-.4-.973zm-6.56-4.603c-.95.948-2.09%201.422-3.425%201.422-1.334%200-2.475-.475-3.423-1.423-.95-.95-1.423-2.09-1.423-3.425%200-1.334.474-2.475%201.422-3.423.948-.95%202.09-1.423%203.423-1.423%201.335%200%202.476.474%203.424%201.422s1.422%202.09%201.422%203.423c0%201.335-.475%202.476-1.423%203.424z%27%20fill%3D%27%231A1919%27%20fill-rule%3D%27evenodd%27%2F%3E%3C%2Fsvg%3E); }
+.icon--edit { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E"); }
+.icon--delete { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dc2626' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/%3E%3Cpath d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
+.icon--search { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"); }
 /* Dropdown arrow on the legacy `<div class="select">` wrapper. */
 .select { background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2744%27%20height%3D%2744%27%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Cpath%20fill%3D%27%23FFF%27%20d%3D%27M0%200h44v44H0z%27%2F%3E%3Cpath%20fill%3D%27%231A1918%27%20d%3D%27M22%2027l-7-8h14%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E) no-repeat right center; }
+
+/* Centered helper rows in the search results card. */
+.search-results__toggle,
+.search-results__empty {
+  text-align: center;
+}
+.search-results__empty {
+  color: #94a3b8;
+  font-weight: 600;
+}
 
 /* ---------- Search form (top bar on /search_queries/new) ---------- */
 /* Flex row: input grows, submit (a `.button`) keeps its size. */
@@ -583,6 +635,13 @@ i.icon svg {
   font-weight: 600;
   color: #475569;
   background: #f8fafc;
+}
+/* Trailing action cells (edit / delete / show buttons): keep the buttons on
+   one line instead of wrapping into a ragged stack. */
+.pure-table td:last-child,
+.card table td:last-child,
+td.text-right {
+  white-space: nowrap;
 }
 
 /* ---------- Lists / tags / badges ---------- */
@@ -628,9 +687,17 @@ i.icon svg {
   text-align: center;
   min-height: calc(100% - 55px);
 }
+/* The hero headline on login / registration / legal cards. Outranks the
+   `.card h1` section-title look (uppercase, muted) which made these pages
+   open with a washed-out grey label instead of a headline. */
 .imagebox h1 {
   padding-top: 10px;
-  font-size: 21px;
+  font-size: 1.375rem;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+  color: #0f172a;
 }
 .imagebox h2 {
   font-size: 16px;
@@ -674,6 +741,12 @@ i.icon svg {
 .imagebox__input + .imagebox__input,
 .imagebox__input + .imagebox__label {
   margin-top: 11px;
+}
+/* Breathing room between the last input and the submit button (the login
+   card rendered them touching). */
+.imagebox__form .imagebox__input + .button,
+.imagebox__form input + .button {
+  margin-top: 12px;
 }
 .imagebox__alreadymember {
   margin-top: 10px;
@@ -1090,16 +1163,27 @@ dl.profile dd a.badge {
   /* Bare tables (legacy sets `th{color:#444;border:#ddd}` / `td{border:#eee}`). */
   th { color: #cbd5e1; border-color: #1e293b; }
   td { border-color: #1e293b; }
-  /* Icons drawn as near-black glyphs vanish on dark cards; flip them.
-     Colored icons (edit/delete/follow…) stay readable as-is. */
-  .icon--back, .icon--lock, .icon--menu, .icon--search { filter: invert(1); }
+  /* Icons drawn as near-black glyphs vanish on dark cards; flip them. */
+  .icon--back, .icon--lock, .icon--menu { filter: invert(1); }
+  /* The redrawn stroke icons get proper dark variants (lighter strokes). */
+  .icon--edit { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E"); }
+  .icon--delete { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f87171' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/%3E%3Cpath d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
+  .icon--search { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"); }
+  .icon--follow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M19 8v6M22 11h-6'/%3E%3C/svg%3E"); }
+  .icon--unfollow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='m16 11 2 2 4-4'/%3E%3C/svg%3E"); }
   .alert, .alert-danger { background: rgb(127 29 29 / 0.25); border-color: rgb(153 27 27 / 0.5); color: #fca5a5; }
   .button--cancel, .button--secondary, .button--icon:hover { background: #1e293b; color: #e2e8f0; }
   .button--icon { color: #94a3b8; }
   .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
   /* Impressum / Datenschutz / login intro text sits on the dark card. */
+  .imagebox h1 { color: #f1f5f9; }
   .imagebox h2, .imagebox p { color: #cbd5e1; }
+  .card__empty { color: #64748b; }
+  .error-page { background: #0f172a; outline-color: #1e293b; }
+  .error-page__code { color: #334155; }
+  .error-page__title { color: #f1f5f9; }
+  .error-page__hint { color: #94a3b8; }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

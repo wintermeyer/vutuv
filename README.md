@@ -8,8 +8,8 @@ We use [MIT License](https://mit-license.org/).
 
 vutuv is a [Phoenix Framework](https://www.phoenixframework.org/) 1.8 application. Install the following prerequisites using [mise](https://mise.jdx.dev/) (see `.tool-versions`):
 
-- Erlang 27.3.4.8
-- Elixir 1.20.0-rc.6-otp-27
+- Erlang 28.5.0.1
+- Elixir 1.20.0-otp-28
 - [PostgreSQL](https://www.postgresql.org/) 17
 
 ### Secret config

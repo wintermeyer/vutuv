@@ -3,7 +3,8 @@ defmodule VutuvWeb.Live.InitAssigns do
   LiveView `on_mount` hook that mirrors `VutuvWeb.Plug.ConfigureSession` for the
   socket: it reads `:user_id` from the session and assigns `:current_user`, so
   LiveViews and the shared `app` layout can render the logged-in chrome the same
-  way classic controller pages do.
+  way classic controller pages do. It also mirrors `VutuvWeb.Plug.Locale`, so
+  gettext speaks the visitor's language in the LiveView process too.
   """
   import Phoenix.Component, only: [assign: 3]
 
@@ -12,6 +13,7 @@ defmodule VutuvWeb.Live.InitAssigns do
 
   def on_mount(:default, _params, session, socket) do
     user = session |> Map.get("user_id") |> load_user()
+    VutuvWeb.LiveLocale.put_locale(user, session)
     {:cont, assign(socket, :current_user, user)}
   end
 

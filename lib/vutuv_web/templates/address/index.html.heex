@@ -1,6 +1,6 @@
   <div class="profile-header">
     <div class="profile-header__info">
-      <h1><%= full_name(@user) %>'s Addresses</h1>
+      <h1><%= gettext("Addresses of %{name}", name: full_name(@user)) %></h1>
     </div>
   </div>
 
@@ -15,7 +15,11 @@
 
   <section class="card">
 
-    <%= render "card_list.html", assigns %>
+    <%= if Enum.empty?(@addresses) do %>
+      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
+    <% else %>
+      <%= render "card_list.html", assigns %>
+    <% end %>
 
     <%= if same_user?(@user, @current_user) do %>
       <%= link gettext("Add"), to: ~p"/users/#{@current_user}/addresses/new", class: "card__morelink" %>

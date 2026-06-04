@@ -1,28 +1,41 @@
-<div class="pure-g">
-  <div class="pure-u-1-1">
-    <h2><%= gettext "Listing search terms" %></h2>
-
-    <table class="pure-table pure-table-horizontal">
-      <thead>
-        <tr>
-    
-          <th><%= gettext("Value") %></th>
-          <th><%= gettext("Score") %></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-    <%= for {search_term, index} <- Enum.with_index(@search_terms) do %>
-        
-        <tr class={if rem(index, 2) == 1, do: "pure-table-odd"}>
-          <td> <%= search_term.value %> </td>
-          <td> <%= search_term.score %> </td>
-          <td class="text-right">
-            <%= link gettext("Show"), to: ~p"/users/#{@user}/search_terms/#{search_term}", class: "pure-button" %>
-          </td>
-        </tr>
-    <% end %>
-      </tbody>
-    </table>
+<div class="profile-header">
+  <div class="profile-header__info">
+    <h1><%= gettext("Search terms of %{name}", name: full_name(@user)) %></h1>
   </div>
+</div>
+
+<div class="breadcrumbs">
+  <%= gen_breadcrumbs([
+    gettext("Users"),
+    {full_name(@user), ~p"/users/#{@user}"},
+    gettext("Search terms")]) %>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= if Enum.empty?(@search_terms) do %>
+      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th><%= gettext("Value") %></th>
+            <th><%= gettext("Score") %></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for search_term <- @search_terms do %>
+            <tr>
+              <td><%= link search_term.value, to: ~p"/users/#{@user}/search_terms/#{search_term}" %></td>
+              <td><%= search_term.score %></td>
+              <td class="text-right">
+                <%= link gettext("Show"), to: ~p"/users/#{@user}/search_terms/#{search_term}", class: "button-link button--small" %>
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    <% end %>
+  </section>
 </div>

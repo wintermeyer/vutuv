@@ -44,7 +44,7 @@ routes; CSRF + method are handled by the rendered links. --%>
 
         <div class="mt-4 flex gap-6 text-sm">
           <span><span class="font-bold text-slate-900 dark:text-white">{@follower_count}</span>
-            <span class="text-slate-500">{gettext("followers")}</span></span>
+            <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span></span>
           <span><span class="font-bold text-slate-900 dark:text-white">{@followee_count}</span>
             <span class="text-slate-500">{gettext("following")}</span></span>
         </div>
@@ -64,9 +64,15 @@ routes; CSRF + method are handled by the rendered links. --%>
 
     <%!-- Skills & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
+      <%!-- While the inline quick-add form below is showing (no tags yet), the
+      header "Add" link would duplicate its submit button — show it only once
+      the form has made way for the chip list. --%>
       <.section_header
         title={gettext("Skills & endorsements")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/tags/new"}
+        add_href={
+          same_user?(@user, @current_user) and Enum.count(@user_tags) > 0 &&
+            ~p"/users/#{@current_user}/tags/new"
+        }
       />
 
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">

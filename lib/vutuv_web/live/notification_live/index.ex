@@ -23,7 +23,7 @@ defmodule VutuvWeb.NotificationLive.Index do
 
     {:ok,
      socket
-     |> assign(:page_title, "Notifications")
+     |> assign(:page_title, gettext("Notifications"))
      |> assign(:empty?, Enum.empty?(items))
      |> stream(:notifications, items, dom_id: &"notification-#{&1.id}")}
   end
@@ -93,7 +93,9 @@ defmodule VutuvWeb.NotificationLive.Index do
     """
   end
 
-  defp kind_classes("follower"), do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  defp kind_classes("follower"),
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
   defp kind_classes("endorsement"), do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 

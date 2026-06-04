@@ -4,7 +4,7 @@ zum Einloggen bitte den folgenden PIN eingeben:
 
   <%= @pin %>
 
-Vielen Dank das Sie vutuv benutzen!
+Vielen Dank, dass Sie vutuv benutzen!
 
 <%= render "_signature_de.text" %>
 

@@ -189,7 +189,7 @@ defmodule Vutuv.AvatarTest do
       on_exit(fn -> File.rm(src) end)
       upload = %Plug.Upload{filename: "corrupt.png", path: src, content_type: "image/png"}
 
-      changeset = Vutuv.Accounts.User.changeset(@user, %{"avatar" => upload})
+      changeset = User.changeset(@user, %{"avatar" => upload})
 
       refute changeset.valid?
       assert {"is not a valid image", _} = changeset.errors[:avatar]

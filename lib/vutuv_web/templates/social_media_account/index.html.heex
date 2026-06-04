@@ -15,7 +15,11 @@
 <div class="card-list">
   <section class="card">
 
-    <%= render "card_list.html", assigns %>
+    <%= if Enum.empty?(@social_media_accounts) do %>
+      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
+    <% else %>
+      <%= render "card_list.html", assigns %>
+    <% end %>
 
     <%= if same_user?(@user, @current_user) do %>
       <%= link gettext("Add"), to: ~p"/users/#{@current_user}/social_media_accounts/new", class: "card__morelink" %>

@@ -13,8 +13,7 @@
     {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user.followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45})}
     
     <%= if(Enum.count(@user.followees) == 0) do %>
-      <h1 style="text-align:center"><strong><%= gettext "We can't find em' cap'n!" %></strong></h1>
-      <p style="text-align:center"><%= gettext "It doesn't look like you're following anyone yet. Find someone a profile of someone you know, or someone you're interested in, and click the follow button!" %></p>
+      <p class="card__empty"><%= gettext "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!" %></p>
     <% end %>
     <%= Vutuv.Pages.page_list(@conn.params, @total_followees) %>
   </section>

@@ -1,8 +1,8 @@
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= full_name(@user) %>'s tags</h1>
-    </div>
+<div class="profile-header">
+  <div class="profile-header__info">
+    <h1><%= gettext("Tags of %{name}", name: full_name(@user)) %></h1>
   </div>
+</div>
 
 <div class="breadcrumbs">
   <%= gen_breadcrumbs([
@@ -12,34 +12,35 @@
 </div>
 
 <div class="card-list">
-
   <section class="card">
-    <h1>tags</h1>
-
-    <table>
-      <thead>
-        <tr>
-          <th><%= gettext "tag name" %></th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <%= for user_tag <- @user_tags do %>
-        <tr>
-          <td>
-          <p style="word-wrap: break-word; max-width: 600px;"><%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/users/#{@user}/tags/#{user_tag}" %></p>
-          </td>
-          <td>
-          <%= if @current_user && same_user?(@user, @current_user) do %>
-          <%= button to: ~p"/users/#{@user}/tags/#{user_tag}", method: :delete, class: "delete button button--icon button--small", style: "height:25px;margin-right:-5px;" do %>
-          <i class="icon icon--delete"></i>
+    <%= if Enum.empty?(@user_tags) do %>
+      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
+    <% else %>
+      <table>
+        <thead>
+          <tr>
+            <th><%= gettext "Tag name" %></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for user_tag <- @user_tags do %>
+            <tr>
+              <td>
+                <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/users/#{@user}/tags/#{user_tag}" %>
+              </td>
+              <td class="text-right">
+                <%= if @current_user && same_user?(@user, @current_user) do %>
+                  <%= button to: ~p"/users/#{@user}/tags/#{user_tag}", method: :delete, class: "button button--icon button--small", title: gettext("Delete") do %>
+                    <i class="icon icon--delete"></i>
+                  <% end %>
+                <% end %>
+              </td>
+            </tr>
           <% end %>
-          <% end %>
-          </td>
-        </tr>
-        <% end %>
-      </tbody>
-    </table>
+        </tbody>
+      </table>
+    <% end %>
 
     <%= if same_user?(@user, @current_user) do %>
       <%= link gettext("Add"), to: ~p"/users/#{@current_user}/tags/new", class: "card__morelink" %>

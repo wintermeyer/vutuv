@@ -41,7 +41,7 @@
   </div>
   <div class={"editform__field#{if error_tag(f, :public?), do: " editform__field--error"}"}>
     <%= label ef, :public?, gettext("Is this email public or private?") %>
-    <%= select ef, :public?, ["Public": true, "Private": false] %>
+    <%= select ef, :public?, [{gettext("Public"), true}, {gettext("Private"), false}] %>
     <%= error_tag ef, :public? %>
   </div>
   </.inputs_for>

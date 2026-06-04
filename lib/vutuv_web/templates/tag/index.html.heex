@@ -1,9 +1,8 @@
-
-  <div class="profile-header">
-    <div class="profile-header__info">
-      <h1><%= gettext "All tags" %></h1>
-    </div>
+<div class="profile-header">
+  <div class="profile-header__info">
+    <h1><%= gettext "All tags" %></h1>
   </div>
+</div>
 
 <div class="breadcrumbs">
   <%= VutuvWeb.UserHelpers.gen_breadcrumbs([
@@ -12,27 +11,20 @@
 
 <div class="card-list">
   <section class="card">
-  <h1> <%= gettext("Tags") %> </h1>
     <table>
       <thead>
         <tr>
+          <th><%= gettext "Tag name" %></th>
           <th><%= gettext "Slug" %></th>
-
-          <th></th>
         </tr>
       </thead>
       <tbody>
-    <%= for {tag, _index} <- Enum.with_index(@tags) do %>
-        <tr>
-          <td><%= tag.slug %></td>
-
-          <td>
-            <%= link to: ~p"/tags/#{tag}", class: "button button--icon button--small" do %>
-            <i class="icon icon--search"></i>
-            <% end %>
-          </td>
-        </tr>
-    <% end %>
+        <%= for tag <- @tags do %>
+          <tr>
+            <td><%= link tag.name || tag.slug, to: ~p"/tags/#{tag}" %></td>
+            <td class="text-left text-slate-500"><%= tag.slug %></td>
+          </tr>
+        <% end %>
       </tbody>
     </table>
     <%= Vutuv.Pages.page_list(@conn.params, @tags_count) %>

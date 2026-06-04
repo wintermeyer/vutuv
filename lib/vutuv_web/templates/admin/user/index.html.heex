@@ -1,22 +1,28 @@
-<h2>Unverified Users</h2>
+<section class="card">
+  <h1><%= gettext("Unverified users") %></h1>
 
-<table class="pure-table pure-table-horizontal">
-  <thead>
-    <tr>
-      <th><%= gettext "User" %></th>
-      <th><%= gettext "ID" %></th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody>
-<%= for user <- @users do %>
-    <tr>
-      <td><%= "#{user.first_name} #{user.last_name}" %></td>
-      <td><%= user.id %></td>
-      <td class="text-right">
-        <%= link "Verify", to: ~p"/admin/users?#{[user_id: user.id]}", method: :post, class: "button button--small button--danger" %>
-      </td>
-    </tr>
-<% end %>
-  </tbody>
-</table>
+  <%= if Enum.empty?(@users) do %>
+    <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
+  <% else %>
+    <table>
+      <thead>
+        <tr>
+          <th><%= gettext "User" %></th>
+          <th><%= gettext "ID" %></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <%= for user <- @users do %>
+          <tr>
+            <td><%= [user.first_name, user.last_name] |> Enum.reject(&is_nil/1) |> Enum.join(" ") %></td>
+            <td><%= user.id %></td>
+            <td class="text-right">
+              <%= link gettext("Verify"), to: ~p"/admin/users?#{[user_id: user.id]}", method: :post, class: "button button--small" %>
+            </td>
+          </tr>
+        <% end %>
+      </tbody>
+    </table>
+  <% end %>
+</section>

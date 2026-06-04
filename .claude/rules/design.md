@@ -17,7 +17,8 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 1. **Legacy controller+view pages** still use shared classes (`.card` / `.card-list`,
    `.editform` + inputs, `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`, `.imagebox`,
-   `.profiles`, `.job`, `section.jobs`, `ol.tags`/`.upvote`, `ul.thumbs`, `.ad`). They
+   `.profiles`, `.job`, `section.jobs`, `ol.tags`/`.upvote`, `ul.thumbs`, `.ad`,
+   `.card__empty` empty-state line, `.error-page` 404/403/500 card). They
    are styled **centrally** in `assets/css/components.css` — since the old vendored
    `legacy.css` was removed, that file is the **single source** for these classes,
    including element defaults (body canvas, h1/p/a, label, tables, dl) and the data-URI
@@ -71,6 +72,18 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - The chrome — sticky top bar + mobile bottom tab bar with the live unread badges — is `VutuvWeb.ShellLive`, embedded in `app.html.heex`. Pages render **inside** it; never add their own nav.
 - **Flash = top-right toasts** (`#toast-tray` in `app.html.heex`). Never add inline flash banners; `VutuvWeb.LayoutHTML.flash/1` and its empty partial were deleted along with the last inline calls.
 - In-app real-time events go through `Vutuv.Activity` (PubSub on `"user:<id>"`) and `VutuvWeb.Presence`.
+- **Gettext locale must be set per process.** `VutuvWeb.Plug.Locale` resolves it per
+  request and stores it in the session; LiveViews re-apply it on mount via
+  `VutuvWeb.LiveLocale` (called from `Live.InitAssigns` and `ShellLive.mount`).
+  A new LiveView mounted outside the `live_session` must call it too, or its copy
+  (and the whole shared chrome) silently falls back to English.
+- **Legacy page anatomy:** `.profile-header` h1 → `.breadcrumbs` → `.card-list` >
+  `.card`; tables inside cards get edit/delete via
+  `.button.button--icon.button--small > i.icon.icon--edit|--delete` in a
+  `td.text-right`; empty collections render `<p class="card__empty">` +
+  gettext("Nothing here yet."). Copy this from `email/index` + `group/index`.
+- Error pages (`VutuvWeb.ErrorHTML`) render the `.error-page` card (code, message,
+  "Back to the start page") and must work with and without the app layout.
 
 ### CSS architecture (don't break it)
 
@@ -80,7 +93,11 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 layer, so it beats Preflight (base) but loses to Tailwind utilities, which lets
 hand-written pages use utilities freely. There is **no `legacy.css` anymore** — do not
 reintroduce it (a regression test enforces this). Dev serves `/assets/app.css`
-undigested, so hard-reload (Cmd+Shift+R) after a rebuild.
+undigested, so hard-reload (Cmd+Shift+R) after a rebuild. **Watcher gotcha:** the
+Tailwind v4 watcher caches `@import`ed files, so after editing `components.css` a
+template-triggered rebuild can silently regenerate **stale** CSS — restart
+`mix phx.server` (or run `mix assets.build` while no watcher is running) and
+hard-reload before judging a components.css change in the browser.
 
 ### Don'ts
 

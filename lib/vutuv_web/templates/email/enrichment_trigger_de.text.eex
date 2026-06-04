@@ -38,7 +38,7 @@ https://vutuv.de/users/<%= @user.active_slug %>
 Bitte nehmen Sie sich einen Moment Zeit und fügen Sie noch fehlende
 Informationen hinzu (z.B. Webseiten und Social Media Accounts).
 
-Vielen Dank, das Sie beim vutuv Netzwerk mitmachen!
+Vielen Dank, dass Sie beim vutuv-Netzwerk mitmachen!
 <%= render "_signature_en.text" %>
 
 <%= render "_footer.text" %>
