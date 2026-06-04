@@ -109,55 +109,6 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  def payment_information_email(recruiter_subscription, user, email) do
-    recuiter_package =
-      Vutuv.Repo.get(
-        Vutuv.Recruiting.RecruiterPackage,
-        recruiter_subscription.recruiter_package_id
-      )
-
-    template = "payment_information_email_#{get_locale(user.locale)}"
-    accounting_email = accounting_email()
-
-    base_email()
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> bcc(accounting_email)
-    |> subject(
-      Gettext.gettext(VutuvWeb.Gettext, "Order") <>
-        " \"#{recuiter_package.name}\" " <> Gettext.gettext(VutuvWeb.Gettext, "subscription")
-    )
-    |> text_body(
-      VutuvWeb.EmailText.render("#{template}.text", %{
-        recuiter_package: recuiter_package,
-        recruiter_subscription: recruiter_subscription,
-        user: user
-      })
-    )
-  end
-
-  def issue_invoice(recruiter_subscription, user, _email) do
-    accounting_email = accounting_email()
-
-    if accounting_email do
-      recuiter_package =
-        Vutuv.Repo.get(
-          Vutuv.Recruiting.RecruiterPackage,
-          recruiter_subscription.recruiter_package_id
-        )
-
-      base_email()
-      |> to(accounting_email)
-      |> subject("Rechnung: #{recuiter_package.name} für #{user.first_name} #{user.last_name}")
-      |> text_body(
-        VutuvWeb.EmailText.render("trigger_recruiter_subscription_invoice.text", %{
-          recruiter_subscription: recruiter_subscription,
-          recuiter_package: recuiter_package,
-          user: user
-        })
-      )
-    end
-  end
-
   def verification_notice(user) do
     email = primary_email(user)
     template = "verification_confirmation_#{get_locale(user.locale)}"
@@ -197,10 +148,6 @@ defmodule Vutuv.Notifications.Emailer do
         select: e.value
       )
     )
-  end
-
-  defp accounting_email do
-    Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:accounting_email]
   end
 
   defp get_locale(nil), do: "en"

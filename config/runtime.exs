@@ -46,7 +46,6 @@ if config_env() == :prod do
     public_url: "https://#{host}/",
     # Optional feature keys, previously held in the gitignored secret file.
     # Read off the Endpoint config at runtime; absent ones default to nil.
-    accounting_email: System.get_env("ACCOUNTING_EMAIL"),
     fullcontact_api_key: System.get_env("FULLCONTACT_API_KEY")
 
   # Avatars and URL screenshots are written under this root and served by

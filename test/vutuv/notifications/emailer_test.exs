@@ -92,28 +92,6 @@ defmodule Vutuv.Notifications.EmailerTest do
       |> Emailer.verification_notice()
       |> assert_robot_headers()
     end
-
-    test "payment information email" do
-      user = insert(:user, locale: "en")
-      package = insert(:recruiter_package)
-      subscription = insert(:recruiter_subscription, user: user, recruiter_package: package)
-
-      subscription
-      |> Emailer.payment_information_email(user, "pay@example.com")
-      |> assert_robot_headers()
-    end
-
-    test "invoice email" do
-      with_accounting_email("accounting@vutuv.de", fn ->
-        user = insert(:user, locale: "en")
-        package = insert(:recruiter_package)
-        subscription = insert(:recruiter_subscription, user: user, recruiter_package: package)
-
-        subscription
-        |> Emailer.issue_invoice(user, "accounting@vutuv.de")
-        |> assert_robot_headers()
-      end)
-    end
   end
 
   describe "PIN emails name a PIN, never a link (issue #759)" do
@@ -170,24 +148,6 @@ defmodule Vutuv.Notifications.EmailerTest do
       user = insert(:user, validated?: true, locale: "de")
 
       assert Emailer.login_email(@pin, "login@example.com", user).subject == "vutuv Login-PIN"
-    end
-  end
-
-  # Temporarily set the accounting email in the endpoint config so the
-  # invoice builder produces a message, then restore the previous config.
-  defp with_accounting_email(value, fun) do
-    config = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)
-
-    Application.put_env(
-      :vutuv,
-      VutuvWeb.Endpoint,
-      Keyword.put(config, :accounting_email, value)
-    )
-
-    try do
-      fun.()
-    after
-      Application.put_env(:vutuv, VutuvWeb.Endpoint, config)
     end
   end
 end

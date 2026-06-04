@@ -14,7 +14,7 @@ defmodule VutuvWeb.Api.IdorScopingTest do
   #   * The other show actions use `Repo.get!(assoc(...), id)`, which raises
   #     `Ecto.NoResultsError`. `Plug.Exception` maps that to 404 in production;
   #     in the test env the exception propagates, so we assert via
-  #     `assert_error_sent/2` (same convention as the coupon controller test).
+  #     `assert_error_sent/2`.
 
   setup do
     owner = insert(:user, active_slug: "owner-slug", validated?: true)

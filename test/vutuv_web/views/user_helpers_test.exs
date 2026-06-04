@@ -88,6 +88,7 @@ defmodule VutuvWeb.UserHelpersTest do
       we(user, title: "CTO", organization: "Acme", end_month: nil, end_year: nil)
 
       job = UserHelpers.current_job(user)
+
       assert UserHelpers.work_information_string(user, 60) ==
                UserHelpers.work_information_string_for_job(job, 60)
 

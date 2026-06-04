@@ -115,7 +115,6 @@ defmodule VutuvWeb.ShellLive do
             >
               {gettext("Network")}
             </.link>
-            <a href="#" class="rounded-md px-3 py-2 text-slate-400 dark:text-slate-500">{gettext("Jobs")}</a>
           </nav>
 
           <div class="ml-auto flex items-center gap-1">
@@ -174,10 +173,9 @@ defmodule VutuvWeb.ShellLive do
       </header>
 
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
-      <nav class="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-5 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
+      <nav class="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
         <.tab href={~p"/"} label={gettext("Home")}><.icon_home /></.tab>
         <.tab href={~p"/search_queries/new"} label={gettext("Search")}><.icon_search /></.tab>
-        <.tab href="#" label={gettext("Jobs")}><.icon_briefcase /></.tab>
         <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
         <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
       </nav>
@@ -245,14 +243,6 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.5a.75.75 0 0 0 .75.75h4.5v-6h4.5v6h4.5a.75.75 0 0 0 .75-.75V9.75" />
-    </svg>
-    """
-  end
-
-  defp icon_briefcase(assigns) do
-    ~H"""
-    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 14.15v4.25a2.18 2.18 0 0 1-1.87 2.18 48 48 0 0 1-12.76 0 2.18 2.18 0 0 1-1.87-2.18v-4.25M21 8.71v3.78A48 48 0 0 1 3 12.49V8.71a2.18 2.18 0 0 1 1.84-2.18A48 48 0 0 1 12 6c2.4 0 4.76.18 7.16.53A2.18 2.18 0 0 1 21 8.71ZM15.75 6V5.25A2.25 2.25 0 0 0 13.5 3h-3a2.25 2.25 0 0 0-2.25 2.25V6" />
     </svg>
     """
   end

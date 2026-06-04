@@ -12,7 +12,7 @@ defmodule VutuvWeb.Plug.ResolveOwnedSlug do
 
   Options:
 
-    * `:parent` — assign holding the loaded parent (e.g. `:user`, `:job_posting`)
+    * `:parent` — assign holding the loaded parent (e.g. `:user`)
     * `:assoc` — the parent's association to scope through (e.g. `:work_experiences`)
     * `:slug_param` — the request param carrying the slug (e.g. `"id"`)
     * `:field` — the column the slug is matched against (e.g. `:slug`)

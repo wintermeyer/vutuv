@@ -40,9 +40,6 @@ defmodule Vutuv.Accounts.User do
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
     has_many(:search_terms, Vutuv.Accounts.SearchTerm, on_replace: :delete)
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
-    has_many(:job_postings, Vutuv.JobPostings.JobPosting)
-    has_many(:recruiter_subscriptions, Vutuv.Recruiting.RecruiterSubscription)
-    has_many(:coupons, Vutuv.Recruiting.Coupon)
 
     has_many(:tags, through: [:user_tags, :tag])
 

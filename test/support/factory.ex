@@ -118,57 +118,6 @@ defmodule Vutuv.Factory do
     %Vutuv.Tags.UserTagEndorsement{}
   end
 
-  def job_posting_factory do
-    %Vutuv.JobPostings.JobPosting{
-      title: sequence(:job_title, &"Job #{&1}"),
-      slug: sequence(:job_slug, &"job-#{&1}"),
-      open_on: ~D[2025-01-01],
-      closed_on: ~D[2025-12-31]
-    }
-  end
-
-  def job_posting_tag_factory do
-    %Vutuv.JobPostings.JobPostingTag{
-      priority: 1
-    }
-  end
-
-  def recruiter_package_factory do
-    %Vutuv.Recruiting.RecruiterPackage{
-      name: "Basic Package",
-      description: "A basic recruiting package",
-      slug: sequence(:package_slug, &"package-#{&1}"),
-      price: 99.99,
-      currency: "euro",
-      duration_in_months: 12,
-      auto_renewal: true,
-      offer_begins: ~D[2025-01-01],
-      offer_ends: ~D[2025-12-31],
-      max_job_postings: 5,
-      only_with_coupon: false
-    }
-  end
-
-  def recruiter_subscription_factory do
-    %Vutuv.Recruiting.RecruiterSubscription{
-      subscription_begins: ~D[2025-01-01],
-      subscription_ends: ~D[2025-12-31],
-      line1: "Acme Corp",
-      zip_code: "10115",
-      city: "Berlin",
-      country: "Germany"
-    }
-  end
-
-  def coupon_factory do
-    %Vutuv.Recruiting.Coupon{
-      code: sequence(:coupon_code, &String.slice("ABCDEFGH#{&1}KLMNPRST", 0, 8)),
-      percentage: 10,
-      ends_on: Date.add(Date.utc_today(), 30),
-      valid: true
-    }
-  end
-
   def o_auth_provider_factory do
     %Vutuv.Accounts.OAuthProvider{
       provider: "google",

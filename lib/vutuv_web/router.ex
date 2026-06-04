@@ -94,17 +94,6 @@ defmodule VutuvWeb.Router do
         only: [:new, :create, :show, :delete, :index],
         as: :tag
       )
-
-      resources "/job_postings", JobPostingController, param: "job_slug" do
-        resources("/tags", JobPostingTagController,
-          as: :tag,
-          only: [:index, :new, :create, :delete]
-        )
-      end
-
-      resources("/recruiter_subscriptions", RecruiterSubscriptionController,
-        only: [:index, :new, :create]
-      )
     end
 
     post("/users/:slug/tags_create", UserController, :tags_create)
@@ -138,9 +127,6 @@ defmodule VutuvWeb.Router do
     resources("/exonyms", ExonymController)
 
     resources("/tags", TagController, param: "slug")
-
-    resources("/recruiter_packages", RecruiterPackageController, param: "package_slug")
-    resources("/coupons", CouponController)
   end
 
   scope "/api/1.0/", as: :api do

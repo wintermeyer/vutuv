@@ -108,8 +108,6 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "auth-gated pages do not 5xx", %{conn: conn, user: user} do
       no_server_error(conn, ~p"/users/#{user}/groups")
-      no_server_error(conn, ~p"/users/#{user}/job_postings")
-      no_server_error(conn, ~p"/users/#{user}/recruiter_subscriptions")
     end
 
     test "public listing and global tag pages render", %{conn: conn, tag: tag} do
@@ -204,64 +202,6 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
   end
 
-  describe "recruiter pages and write flows" do
-    setup %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      package = insert(:recruiter_package)
-
-      insert(:recruiter_subscription,
-        user: user,
-        recruiter_package: package,
-        subscription_ends: ~D[2099-12-31],
-        paid: true
-      )
-
-      %{conn: conn, user: user, package: package, job: insert(:job_posting, user: user)}
-    end
-
-    test "recruiter pages and forms render", %{conn: conn, user: user, job: job} do
-      renders(conn, ~p"/users/#{user}/job_postings")
-      renders(conn, ~p"/users/#{user}/recruiter_subscriptions")
-      renders(conn, ~p"/users/#{user}/job_postings/new")
-      renders(conn, ~p"/users/#{user}/job_postings/#{job}")
-      renders(conn, ~p"/users/#{user}/job_postings/#{job}/edit")
-      renders(conn, ~p"/users/#{user}/recruiter_subscriptions/new")
-    end
-
-    test "create / update / delete a job posting", %{conn: conn, user: user, job: job} do
-      created =
-        post(conn, ~p"/users/#{user}/job_postings",
-          job_posting: %{title: "Engineer", description: "Build things", location: "Berlin"}
-        )
-
-      assert created.status < 500, "job posting create -> #{created.status}"
-
-      updated =
-        put(conn, ~p"/users/#{user}/job_postings/#{job}", job_posting: %{title: "Updated title"})
-
-      assert updated.status < 500, "job posting update -> #{updated.status}"
-
-      deleted = delete(conn, ~p"/users/#{user}/job_postings/#{job}")
-      assert deleted.status < 500, "job posting delete -> #{deleted.status}"
-    end
-
-    test "create a recruiter subscription", %{conn: conn, user: user, package: package} do
-      conn =
-        post(conn, ~p"/users/#{user}/recruiter_subscriptions",
-          recruiter_subscription: %{
-            recruiter_package_id: package.id,
-            subscription_begins: "2026-01-01",
-            line1: "Acme Corp",
-            zip_code: "10115",
-            city: "Berlin",
-            country: "Germany"
-          }
-        )
-
-      assert conn.status < 500, "subscription create -> #{conn.status}"
-    end
-  end
-
   describe "admin write flows" do
     setup %{conn: conn} do
       {conn, admin} = create_and_login_admin(conn)
@@ -282,8 +222,6 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
         target: target,
         slug: insert(:slug, user: target),
         tag: insert(:tag),
-        coupon: insert(:coupon),
-        package: insert(:recruiter_package),
         exonym: exonym,
         locale_a: locale_a,
         locale_b: locale_b
@@ -293,62 +231,29 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     test "admin new/edit forms render", %{
       conn: conn,
       tag: tag,
-      coupon: coupon,
-      package: package,
       exonym: exonym
     } do
       renders(conn, ~p"/admin/tags/new")
       renders(conn, ~p"/admin/tags/#{tag}/edit")
-      renders(conn, ~p"/admin/coupons/new")
-      renders(conn, ~p"/admin/coupons/#{coupon}/edit")
-      renders(conn, ~p"/admin/recruiter_packages/new")
-      renders(conn, ~p"/admin/recruiter_packages/#{package}/edit")
       renders(conn, ~p"/admin/exonyms/new")
       renders(conn, ~p"/admin/exonyms/#{exonym}/edit")
     end
 
-    test "admin create tag / coupon / package / exonym", %{
+    test "admin create tag / exonym", %{
       conn: conn,
       locale_a: locale_a,
       locale_b: locale_b
     } do
       assert post(conn, ~p"/admin/tags", tag: %{name: "Admin Tag"}).status < 500
 
-      assert post(conn, ~p"/admin/coupons",
-               coupon: %{code: "SAVE10AB", percentage: 10, ends_on: "2099-12-31", valid: true}
-             ).status < 500
-
-      assert post(conn, ~p"/admin/recruiter_packages",
-               recruiter_package: %{
-                 name: "Gold",
-                 price: 199.0,
-                 currency: "EUR",
-                 duration_in_months: 12,
-                 max_job_postings: 10
-               }
-             ).status < 500
-
       assert post(conn, ~p"/admin/exonyms",
                exonym: %{value: "Exonym", locale_id: locale_a.id, exonym_locale_id: locale_b.id}
              ).status < 500
     end
 
-    test "admin update / delete tag, coupon, package", %{
-      conn: conn,
-      tag: tag,
-      coupon: coupon,
-      package: package
-    } do
+    test "admin update / delete tag", %{conn: conn, tag: tag} do
       assert put(conn, ~p"/admin/tags/#{tag}", tag: %{name: "Renamed"}).status < 500
       assert delete(conn, ~p"/admin/tags/#{tag}").status < 500
-      assert put(conn, ~p"/admin/coupons/#{coupon}", coupon: %{percentage: 25}).status < 500
-      assert delete(conn, ~p"/admin/coupons/#{coupon}").status < 500
-
-      assert put(conn, ~p"/admin/recruiter_packages/#{package}",
-               recruiter_package: %{name: "Renamed Package"}
-             ).status < 500
-
-      assert delete(conn, ~p"/admin/recruiter_packages/#{package}").status < 500
     end
 
     test "admin verify user and disable slug", %{conn: conn, target: target, slug: slug} do

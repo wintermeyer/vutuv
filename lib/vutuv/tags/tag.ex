@@ -10,7 +10,6 @@ defmodule Vutuv.Tags.Tag do
     field(:description, :string)
 
     has_many(:user_tags, Vutuv.Tags.UserTag)
-    has_many(:job_posting_tags, Vutuv.JobPostings.JobPostingTag)
 
     timestamps()
   end

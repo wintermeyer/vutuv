@@ -25,7 +25,7 @@ defmodule VutuvWeb.SearchTermControllerTest do
     # The scoped `Repo.get_by!` raises `Ecto.NoResultsError` for a foreign id,
     # which `Plug.Exception` maps to a 404 response. In the test env the
     # exception propagates rather than rendering, so assert the sent status with
-    # `assert_error_sent/2` (matching the coupon/recruiter controller tests).
+    # `assert_error_sent/2`.
     test "404s when the id belongs to another user", %{conn: conn, user: user} do
       other = insert(:user, validated?: true)
       insert(:slug, value: other.active_slug, disabled: false, user: other)
