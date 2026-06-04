@@ -15,18 +15,10 @@
       <td><%= number.value %></td>
       <td>
       <%= if same_user?(@user, @current_user) do %>
-        <div class="btns-right">
-          <%= button to: ~p"/users/#{@user}/phone_numbers/#{number}", method: :delete, class: "button button--small button--danger" do %>
-            <i>
-              {VutuvWeb.IconHTML.close(assigns)}
-            </i>
-          <% end %>
-          <%= link to: ~p"/users/#{@user}/phone_numbers/#{number}/edit", class: "button button--small" do %>
-            <i>
-              {VutuvWeb.IconHTML.pencil(assigns)}
-            </i>
-          <% end %>
-        </div>
+        <.edit_delete_actions
+          edit_to={~p"/users/#{@user}/phone_numbers/#{number}/edit"}
+          delete_to={~p"/users/#{@user}/phone_numbers/#{number}"}
+        />
       <% end %>
       </td>
     </tr>

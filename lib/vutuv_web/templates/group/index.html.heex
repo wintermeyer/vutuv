@@ -30,12 +30,13 @@
                 <%= link group.name, to: ~p"/users/#{@user}/groups/#{group}" %>
               </td>
               <td class="text-right">
-                <%= link to: ~p"/users/#{@user}/groups/#{group}/edit", class: "button button--icon button--small", title: gettext("Edit") do %>
-                  <i class="icon icon--edit"></i>
-                <% end %>
-                <%= button to: ~p"/users/#{@user}/groups/#{group}", method: :delete, data: [confirm: gettext("Are you sure?")], class: "button button--icon button--small", title: gettext("Delete") do %>
-                  <i class="icon icon--delete"></i>
-                <% end %>
+                <.edit_delete_actions
+                  edit_to={~p"/users/#{@user}/groups/#{group}/edit"}
+                  delete_to={~p"/users/#{@user}/groups/#{group}"}
+                  confirm={gettext("Are you sure?")}
+                  title_edit={gettext("Edit")}
+                  title_delete={gettext("Delete")}
+                />
               </td>
             </tr>
           <% end %>

@@ -15,12 +15,10 @@
       <td><%= account.provider %></td>
       <td>
       <%= if same_user?(@user, @current_user) do %>
-      <%= link to: ~p"/users/#{@user}/social_media_accounts/#{account}/edit", class: "button button--icon button--small" do %>
-      <i class="icon icon--edit"></i>
-      <% end %>
-      <%= button to: ~p"/users/#{@user}/social_media_accounts/#{account}", method: :delete, class: "button button--icon button--small" do %>
-      <i class="icon icon--delete"></i>
-      <% end %>
+        <.edit_delete_actions
+          edit_to={~p"/users/#{@user}/social_media_accounts/#{account}/edit"}
+          delete_to={~p"/users/#{@user}/social_media_accounts/#{account}"}
+        />
       <% end %>
       </td>
     </tr>

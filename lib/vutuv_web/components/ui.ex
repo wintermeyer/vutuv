@@ -308,6 +308,60 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  Legacy (Track 1) edit/delete (and optional view) icon-button group. Renders the
+  canonical legacy anatomy from `design.md`: a `.btns-right` wrapper holding
+  `.button.button--icon.button--small` controls with CSS-glyph icons
+  (`i.icon.icon--edit|--delete|--search`), in **view → edit → delete** source
+  order. Delete is rendered through Phoenix's `delete` method (so the
+  `phoenix_html` JS issues a CSRF-protected DELETE, the same way the legacy
+  `button to:, method: :delete` did) and additionally carries `button--danger`.
+
+  Each control is optional — omit `edit_to`/`delete_to`/`show_to` to skip that
+  button. The guard (`same_user?/2`, admin scoping, …) stays at the **call site**;
+  this component is purely presentational. Pass `confirm` for a delete
+  `data-confirm` prompt, `title_*` for tooltips, `class` for extra wrapper
+  classes, and the optional `:extra` slot for a bespoke trailing button.
+
+  Use it as e.g.
+  `<.edit_delete_actions edit_to={~p"/…/edit"} delete_to={~p"/…"} confirm={gettext("Are you sure?")} />`.
+  """
+  attr(:show_to, :string, default: nil)
+  attr(:edit_to, :string, default: nil)
+  attr(:delete_to, :string, default: nil)
+  attr(:confirm, :string, default: nil)
+  attr(:title_show, :string, default: nil)
+  attr(:title_edit, :string, default: nil)
+  attr(:title_delete, :string, default: nil)
+  attr(:class, :any, default: nil)
+  slot(:extra)
+
+  def edit_delete_actions(assigns) do
+    assigns = assign(assigns, :wrapper_class, String.trim("btns-right #{assigns.class}"))
+
+    ~H"""
+    <div class={@wrapper_class}>
+      <.link :if={@show_to} href={@show_to} title={@title_show} class="button button--icon button--small">
+        <i class="icon icon--search"></i>
+      </.link>
+      <.link :if={@edit_to} href={@edit_to} title={@title_edit} class="button button--icon button--small">
+        <i class="icon icon--edit"></i>
+      </.link>
+      <.link
+        :if={@delete_to}
+        href={@delete_to}
+        method="delete"
+        data-confirm={@confirm}
+        title={@title_delete}
+        class="button button--icon button--small button--danger"
+      >
+        <i class="icon icon--delete"></i>
+      </.link>
+      {render_slot(@extra)}
+    </div>
+    """
+  end
+
   @doc "Labelled text input for hand-written forms (legacy forms are styled by components.css)."
   attr(:name, :string, required: true)
   attr(:type, :string, default: "text")

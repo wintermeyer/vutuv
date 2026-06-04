@@ -69,6 +69,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - `<.input name=… label=… type=… value=… error=… />` — labelled input for hand-written **vertical** forms. Inline/pill inputs use the raw input recipe above. (Legacy controller forms are styled by `components.css` — leave their `.editform` markup.)
 - `<.form_error changeset={@changeset} />` — **legacy Track 1** changeset-error banner (`.alert.alert-danger` + `.editform__error`, styled by `components.css`, not utilities); renders only when `@changeset.action` is set. Shared by the `editform` `form_content` templates so the banner is written once.
 - `<.form_actions backlink={@backlink} />` — **legacy Track 1** Cancel/Submit actions row (`.editform__actions` with a `.button.button--cancel` Cancel link to `@backlink` and a `.button` Submit). Shared by the `editform` `form_content` templates. Forms with a custom submit label or no Cancel keep their own hand-written row.
+- `<.edit_delete_actions edit_to=… delete_to=… show_to=… confirm=… class=… />` — **legacy Track 1** edit/delete (optional view) icon-button group: the canonical `.btns-right` wrapper + `.button.button--icon.button--small` controls with CSS-glyph icons (`i.icon.icon--edit|--delete|--search`), in view → edit → delete order, delete via the `delete` method (CSRF) + `button--danger`. Each `*_to` is optional (omit to skip that button); `title_show/edit/delete` set tooltips, the `:extra` slot adds a bespoke trailing button. Keep the owner/admin guard at the call site. Replaces the ~16 hand-written pairs across the profile card_lists/shows and the group/job_posting/admin index tables.
 - `<.pager params={@conn.params} total={@row_count} />` — numbered pagination for offset-paginated **browse** pages (followers, tags, users); the math lives in `Vutuv.Pages` (`paginate/3` on the query, 250/page). Renders nothing when one page fits. **Feed** LiveViews (notifications) paginate with a cursor + "Load more" button appended into the stream instead (`Vutuv.Activity.notifications_page/2`) — don't mix the two styles.
 
 ### Shell & layout facts (don't re-implement)
@@ -82,9 +83,10 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
   A new LiveView mounted outside the `live_session` must call it too, or its copy
   (and the whole shared chrome) silently falls back to English.
 - **Legacy page anatomy:** `.profile-header` h1 → `.breadcrumbs` → `.card-list` >
-  `.card`; tables inside cards get edit/delete via
-  `.button.button--icon.button--small > i.icon.icon--edit|--delete` in a
-  `td.text-right`; empty collections render `<p class="card__empty">` +
+  `.card`; tables inside cards get edit/delete via the `<.edit_delete_actions>`
+  component (canonical `.btns-right` + `.button.button--icon.button--small >
+  i.icon.icon--edit|--delete`), placed in the `td` (`td.text-right` for table
+  rows); empty collections render `<p class="card__empty">` +
   gettext("Nothing here yet."). Copy this from `email/index` + `group/index`.
 - Error pages (`VutuvWeb.ErrorHTML`) render the `.error-page` card (code, message,
   "Back to the start page") and must work with and without the app layout.

@@ -36,15 +36,11 @@
           <% end %></td>
 
           <td>
-            <%= link to: ~p"/users/#{@user}/job_postings/#{job_posting}", class: "button button--icon button--small" do %>
-            <i class="icon icon--search"></i>
-            <% end %>
-            <%= link to: ~p"/users/#{@user}/job_postings/#{job_posting}/edit", class: "button button--icon button--small" do %>
-            <i class="icon icon--edit"></i>
-            <% end %>
-            <%= button to: ~p"/users/#{@user}/job_postings/#{job_posting}", method: :delete, class: "button button--icon button--small" do %>
-            <i class="icon icon--delete"></i>
-            <% end %>
+            <.edit_delete_actions
+              show_to={~p"/users/#{@user}/job_postings/#{job_posting}"}
+              edit_to={~p"/users/#{@user}/job_postings/#{job_posting}/edit"}
+              delete_to={~p"/users/#{@user}/job_postings/#{job_posting}"}
+            />
           </td>
         </tr>
     <% end %>

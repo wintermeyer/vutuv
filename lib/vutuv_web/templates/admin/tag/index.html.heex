@@ -23,27 +23,17 @@
         </tr>
       </thead>
       <tbody>
-    <%= for {tag, _index} <- Enum.with_index(@tags) do %>
+    <%= for tag <- @tags do %>
         <tr>
           <td><%= tag.name %></td>
           <td><%= tag.slug %></td>
 
           <td>
-            <%= link to: ~p"/admin/tags/#{tag}", class: "button button--small" do %>
-            <i class="icon">
-              {VutuvWeb.IconHTML.search(assigns)}
-            </i>
-            <% end %>
-            <%= link to: ~p"/admin/tags/#{tag}/edit", class: "button button--small" do %>
-            <i class="icon">
-              {VutuvWeb.IconHTML.pencil(assigns)}
-            </i>
-            <% end %>
-            <%= button to: ~p"/admin/tags/#{tag}", method: :delete, class: "button button--small button--danger" do %>
-            <i class="icon">
-              {VutuvWeb.IconHTML.close(assigns)}
-            </i>
-            <% end %>
+            <.edit_delete_actions
+              show_to={~p"/admin/tags/#{tag}"}
+              edit_to={~p"/admin/tags/#{tag}/edit"}
+              delete_to={~p"/admin/tags/#{tag}"}
+            />
           </td>
         </tr>
     <% end %>

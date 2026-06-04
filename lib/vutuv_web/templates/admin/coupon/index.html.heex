@@ -26,7 +26,7 @@
         </tr>
       </thead>
       <tbody>
-    <%= for {coupon, _index} <- Enum.with_index(@coupons) do %>
+    <%= for coupon <- @coupons do %>
         <tr>
           <td><%= coupon.code %></td>
           <td><%= coupon.user_id %></td>
@@ -36,15 +36,11 @@
           <td><%= coupon.ends_on %></td>
 
           <td>
-            <%= link to: ~p"/admin/coupons/#{coupon}", class: "button button--icon button--small" do %>
-            <i class="icon icon--search"></i>
-            <% end %>
-            <%= link to: ~p"/admin/coupons/#{coupon}/edit", class: "button button--icon button--small" do %>
-            <i class="icon icon--edit"></i>
-            <% end %>
-            <%= button to: ~p"/admin/coupons/#{coupon}", method: :delete, class: "button button--icon button--small" do %>
-            <i class="icon icon--delete"></i>
-            <% end %>
+            <.edit_delete_actions
+              show_to={~p"/admin/coupons/#{coupon}"}
+              edit_to={~p"/admin/coupons/#{coupon}/edit"}
+              delete_to={~p"/admin/coupons/#{coupon}"}
+            />
           </td>
         </tr>
     <% end %>

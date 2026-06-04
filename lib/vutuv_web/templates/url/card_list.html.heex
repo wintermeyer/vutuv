@@ -12,18 +12,10 @@
     </div>
     <div class="text">
       <%= if same_user?(@user, @current_user) do %>
-      	<div class="btns-right">
-        <%= button to: ~p"/users/#{@user}/links/#{url}", method: :delete, class: "button button--small button--danger" do %>
-          <i>
-            {VutuvWeb.IconHTML.close(assigns)}
-          </i>
-        <% end %>
-        <%= link to: ~p"/users/#{@user}/links/#{url}/edit", class: "button button--small" do %>
-          <i class="icon">
-            {VutuvWeb.IconHTML.pencil(assigns)}
-          </i>
-        <% end %>
-        </div>
+        <.edit_delete_actions
+          edit_to={~p"/users/#{@user}/links/#{url}/edit"}
+          delete_to={~p"/users/#{@user}/links/#{url}"}
+        />
       <% end %>
       <div class="title">
         <%= url.description %>

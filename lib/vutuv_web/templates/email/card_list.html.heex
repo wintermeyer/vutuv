@@ -15,12 +15,10 @@
       <td><%= if email.public?, do: gettext("Public"), else: gettext("Private") %></td>
       <td>
       <%= if same_user?(@user, @current_user) do %>
-      <%= link to: ~p"/users/#{@user}/emails/#{email}/edit", class: "button button--icon button--small" do %>
-      <i class="icon icon--edit"></i>
-      <% end %>
-      <%= button to: ~p"/users/#{@user}/emails/#{email}", method: :delete, class: "button button--icon button--small" do %>
-      <i class="icon icon--delete"></i>
-      <% end %>
+        <.edit_delete_actions
+          edit_to={~p"/users/#{@user}/emails/#{email}/edit"}
+          delete_to={~p"/users/#{@user}/emails/#{email}"}
+        />
       <% end %>
       </td>
     </tr>

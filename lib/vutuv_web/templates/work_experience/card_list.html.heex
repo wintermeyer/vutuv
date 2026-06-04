@@ -3,18 +3,11 @@
   <li class="job">
     <h2 class="job__title"><%= link job.title, to: ~p"/users/#{@user}/work_experiences/#{job}" %>
       <%= if same_user?(@user, @current_user) do %>
-      <div class="btns job__edit">
-      <%= button to: ~p"/users/#{@user}/work_experiences/#{job}", method: :delete, class: "button button--small button--danger" do %>
-        <i class="icon">
-          {VutuvWeb.IconHTML.close(assigns)}
-        </i>
-      <% end %>
-      <%= link to: ~p"/users/#{@user}/work_experiences/#{job}/edit", class: "button button--small"  do %>
-        <i class="icon">
-          {VutuvWeb.IconHTML.pencil(assigns)}
-        </i>
-      <% end %>
-      </div>
+        <.edit_delete_actions
+          class="job__edit"
+          edit_to={~p"/users/#{@user}/work_experiences/#{job}/edit"}
+          delete_to={~p"/users/#{@user}/work_experiences/#{job}"}
+        />
       <% end %>
     </h2>
     <span class="job__organization"><%= job.organization %></span>

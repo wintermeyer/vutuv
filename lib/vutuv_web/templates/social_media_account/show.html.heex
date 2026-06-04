@@ -14,18 +14,10 @@
 <div class="card-list">
   <section class="card">
   <%= if same_user?(@user, @current_user) do %>
-    <div class="btns-right">
-      <%= button to: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}", method: :delete, class: "pull-right button button--small button--danger" do %>
-        <i>
-          {VutuvWeb.IconHTML.close(assigns)}
-        </i>
-      <% end %>
-      <%= link to: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}/edit", class: "pull-right button button--small" do %>
-        <i>
-          {VutuvWeb.IconHTML.pencil(assigns)}
-        </i>
-      <% end %>
-    </div>
+    <.edit_delete_actions
+      edit_to={~p"/users/#{@user}/social_media_accounts/#{@social_media_account}/edit"}
+      delete_to={~p"/users/#{@user}/social_media_accounts/#{@social_media_account}"}
+    />
   <% end %>
     <h1><%= gettext("Provider") %></h1>
     <p><%= @social_media_account.provider %></p>

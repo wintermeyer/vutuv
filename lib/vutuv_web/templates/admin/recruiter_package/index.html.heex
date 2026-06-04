@@ -40,15 +40,11 @@
           <td><%= recruiter_package.max_job_postings %></td>
 
           <td>
-            <%= link to: ~p"/admin/recruiter_packages/#{recruiter_package}", class: "button button--icon button--small" do %>
-            <i class="icon icon--search"></i>
-            <% end %>
-            <%= link to: ~p"/admin/recruiter_packages/#{recruiter_package}/edit", class: "button button--icon button--small" do %>
-            <i class="icon icon--edit"></i>
-            <% end %>
-            <%= button to: ~p"/admin/recruiter_packages/#{recruiter_package}", method: :delete, class: "button button--icon button--small" do %>
-            <i class="icon icon--delete"></i>
-            <% end %>
+            <.edit_delete_actions
+              show_to={~p"/admin/recruiter_packages/#{recruiter_package}"}
+              edit_to={~p"/admin/recruiter_packages/#{recruiter_package}/edit"}
+              delete_to={~p"/admin/recruiter_packages/#{recruiter_package}"}
+            />
           </td>
         </tr>
     <% end %>

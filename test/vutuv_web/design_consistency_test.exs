@@ -135,4 +135,64 @@ defmodule VutuvWeb.DesignConsistencyTest do
       assert html =~ ~s(<button class="button" type="submit">)
     end
   end
+
+  # The shared `<.edit_delete_actions>` component replaces ~16 hand-written
+  # edit/delete icon-button pairs that had drifted into two icon flavors and two
+  # button orders. It renders the canonical legacy anatomy from design.md: a
+  # `.btns-right` wrapper holding `.button.button--icon.button--small` controls
+  # with CSS-glyph icons (`i.icon.icon--edit|--delete|--search`), edit before
+  # delete, delete rendered through the `delete` method so CSRF applies. The
+  # email card_list (owner view) and the address show page are representative
+  # converted sites; the address show test is also the regression for the bug
+  # where its delete button defaulted to POST (no POST route exists), so the
+  # control silently failed to delete.
+  describe "shared edit/delete icon-button actions" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "the email card_list renders the canonical edit-then-delete glyph group",
+         %{conn: conn, user: user} do
+      [email | _] = user.emails
+      conn = get(conn, ~p"/users/#{user}/emails")
+      html = html_response(conn, 200)
+
+      # Canonical wrapper and CSS-glyph icons (not the IconHTML svg flavor).
+      assert html =~ ~s(class="btns-right")
+      assert html =~ ~s(<i class="icon icon--edit"></i>)
+      assert html =~ ~s(<i class="icon icon--delete"></i>)
+
+      # The edit link points at the edit route.
+      assert html =~ ~s(href="#{~p"/users/#{user}/emails/#{email}/edit"}")
+
+      # The delete control carries the delete method + danger class and renders
+      # before nothing else (edit comes first in the source order).
+      assert html =~ ~s(data-method="delete")
+      assert html =~ "button--danger"
+
+      edit_pos = :binary.match(html, ~s(icon--edit)) |> elem(0)
+      delete_pos = :binary.match(html, ~s(icon--delete)) |> elem(0)
+      assert edit_pos < delete_pos, "edit icon must come before delete icon"
+    end
+
+    test "the address show page deletes via the delete method, not POST",
+         %{conn: conn, user: user} do
+      address = insert(:address, user: user)
+      conn = get(conn, ~p"/users/#{user}/addresses/#{address}")
+      html = html_response(conn, 200)
+
+      # Regression: the old delete button had no `method`, so it defaulted to
+      # POST against a path that has no POST route. The component always emits
+      # the delete method.
+      assert html =~ ~s(data-method="delete")
+      assert html =~ ~s(data-to="#{~p"/users/#{user}/addresses/#{address}"}")
+      assert html =~ "button--danger"
+
+      # Edit link and canonical glyph icons are present.
+      assert html =~ ~s(href="#{~p"/users/#{user}/addresses/#{address}/edit"}")
+      assert html =~ ~s(<i class="icon icon--edit"></i>)
+      assert html =~ ~s(<i class="icon icon--delete"></i>)
+    end
+  end
 end
