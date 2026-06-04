@@ -1,8 +1,6 @@
 defmodule VutuvWeb.Api.GroupController do
   use VutuvWeb, :controller
 
-  alias Vutuv.Social.Group
-
   def index(conn, _params) do
     user =
       conn.assigns[:user]
@@ -28,7 +26,7 @@ defmodule VutuvWeb.Api.GroupController do
   # end
 
   def show(conn, %{"id" => id}) do
-    group = Repo.get!(Group, id)
+    group = Repo.get!(assoc(conn.assigns[:user], :groups), id)
     render(conn, "show.json", group: group)
   end
 

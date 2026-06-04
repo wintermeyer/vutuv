@@ -16,7 +16,9 @@ defmodule VutuvWeb.SearchTermController do
   end
 
   def show(conn, %{"id" => id}) do
-    search_term = Repo.get!(SearchTerm, id)
+    search_term =
+      Repo.get_by!(SearchTerm, id: id, user_id: conn.assigns[:current_user].id)
+
     render(conn, "show.html", search_term: search_term, user: conn.assigns[:current_user])
   end
 end

@@ -1,8 +1,6 @@
 defmodule VutuvWeb.Api.WorkExperienceController do
   use VutuvWeb, :controller
 
-  alias Vutuv.Profiles.WorkExperience
-
   def index(conn, _params) do
     user =
       conn.assigns[:user]
@@ -28,7 +26,7 @@ defmodule VutuvWeb.Api.WorkExperienceController do
   # end
 
   def show(conn, %{"id" => id}) do
-    work_experience = Repo.get!(WorkExperience, id)
+    work_experience = Repo.get!(assoc(conn.assigns[:user], :work_experiences), id)
     render(conn, "show.json", work_experience: work_experience)
   end
 

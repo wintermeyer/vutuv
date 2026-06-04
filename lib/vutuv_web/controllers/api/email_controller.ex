@@ -1,8 +1,6 @@
 defmodule VutuvWeb.Api.EmailController do
   use VutuvWeb, :controller
 
-  alias Vutuv.Accounts.Email
-
   def index(conn, _params) do
     emails =
       Repo.all(from(e in assoc(conn.assigns[:user], :emails), where: e.public?))
@@ -27,7 +25,10 @@ defmodule VutuvWeb.Api.EmailController do
   # end
 
   def show(conn, %{"id" => id}) do
-    case Repo.one(from(e in Email, where: e.id == ^id and e.public?)) do
+    query =
+      from(e in assoc(conn.assigns[:user], :emails), where: e.id == ^id and e.public?)
+
+    case Repo.one(query) do
       nil ->
         conn
         |> put_status(:not_found)
