@@ -7,5 +7,12 @@
       <%= text_input f, :email, class: "imagebox__input", placeholder: gettext("Enter your email address"), autofocus: true %>
       <%= submit gettext("Log in"), class: "button button--block" %>
     </.form>
+    <%= if dev_mailbox?() do %>
+      <p class="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
+        <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
+          Open the dev email inbox
+        </a>
+      </p>
+    <% end %>
   </section>
 </div>

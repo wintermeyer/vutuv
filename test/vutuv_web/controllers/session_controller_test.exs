@@ -23,6 +23,27 @@ defmodule VutuvWeb.SessionControllerTest do
     end
   end
 
+  describe "dev email inbox link" do
+    # In dev, login PINs land in the Swoosh local mailbox at /sent_emails.
+    # The login page links there as a convenience, but only when the
+    # :dev_mailbox flag is set (true in config/dev.exs, off everywhere else),
+    # so the link never leaks into production where the route does not exist.
+    test "is hidden by default", %{conn: conn} do
+      conn = get(conn, ~p"/sessions/new")
+
+      refute html_response(conn, 200) =~ "/sent_emails"
+    end
+
+    test "links to the dev mailbox when enabled", %{conn: conn} do
+      Application.put_env(:vutuv, :dev_mailbox, true)
+      on_exit(fn -> Application.delete_env(:vutuv, :dev_mailbox) end)
+
+      conn = get(conn, ~p"/sessions/new")
+
+      assert html_response(conn, 200) =~ ~s(href="/sent_emails")
+    end
+  end
+
   describe "POST /sessions" do
     test "does not start a login for an already-logged-in user", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

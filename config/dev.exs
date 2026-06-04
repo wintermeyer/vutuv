@@ -42,3 +42,7 @@ config :vutuv, Vutuv.Repo,
   pool_size: 10
 
 config :vutuv, Vutuv.Mailer, adapter: Swoosh.Adapters.Local
+
+# Show a link to the Swoosh local mailbox (/sent_emails, forwarded only in dev)
+# on the login pages so PINs are one click away while developing.
+config :vutuv, :dev_mailbox, true

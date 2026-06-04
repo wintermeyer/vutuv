@@ -13,6 +13,14 @@
 			  </div>
 			</.form>
 
+      <%= if dev_mailbox?() do %>
+        <p class="text-sm text-slate-500 dark:text-slate-400">
+          <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
+            Open the dev email inbox
+          </a>
+        </p>
+      <% end %>
+
       <p><%= gettext "Please check your spam folder in case you don't find the email in your inbox." %></p>
       <p><%= gettext "Updates about vutuv are available at " %><a href="https://twitter.com/vutuv">https://twitter.com/vutuv</a></p>
     </div>
