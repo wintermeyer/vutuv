@@ -171,6 +171,54 @@ routes; CSRF + method are handled by the rendered links. --%>
       </.link>
     </.card>
 
+    <%!-- Links: preview cards built from the page screenshots that
+    Vutuv.PageScreenshot captures on link create/update. Lives in the wide
+    main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
+    to the bundled placeholder while a screenshot is still missing. --%>
+    <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
+      <.section_header
+        title={gettext("Links")}
+        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
+      />
+      <div :if={@user.urls != []} class="grid gap-4 sm:grid-cols-2">
+        <div :for={url <- @user.urls}>
+          <a
+            href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+            class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+          >
+            <img
+              src={Vutuv.Screenshot.url({url.screenshot, url}, :thumb)}
+              alt={url.description || url.value}
+              width="400"
+              height="264"
+              loading="lazy"
+              class="aspect-[400/264] w-full object-cover"
+            />
+          </a>
+          <div class="mt-2 flex items-start justify-between gap-2">
+            <div class="min-w-0 text-sm">
+              <p :if={url.description} class="truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
+              <a
+                href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+                class="block truncate font-medium text-brand-600 hover:text-brand-700"
+              >
+                {url.value}
+              </a>
+            </div>
+            <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/links/#{url}/edit"} />
+          </div>
+        </div>
+      </div>
+      <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.link
+        :if={@totals.links > 3 or (same_user?(@user, @current_user) and @totals.links > 0)}
+        href={~p"/users/#{@user}/links"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.links)})
+      </.link>
+    </.card>
+
     <%!-- Follower / following previews (latest 3 each, full lists behind "View All") --%>
     <.card :if={@follower_count > 0} id="profile-followers">
       <.section_title class="mb-4">{gettext("Followers")}</.section_title>
@@ -309,35 +357,6 @@ routes; CSRF + method are handled by the rendered links. --%>
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")}
-      </.link>
-    </.card>
-
-    <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
-      <.section_header
-        title={gettext("Links")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
-      />
-      <ul class="space-y-3 text-sm">
-        <li :for={url <- @user.urls} class="flex items-start justify-between gap-2">
-          <div>
-            <p :if={url.description} class="text-slate-400">{url.description}</p>
-            <a
-              href={VutuvWeb.UrlHTML.linkable_url(url.value)}
-              class="break-all font-medium text-brand-600 hover:text-brand-700"
-            >
-              {url.value}
-            </a>
-          </div>
-          <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/links/#{url}/edit"} />
-        </li>
-      </ul>
-      <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
-      <.link
-        :if={@totals.links > 3 or (same_user?(@user, @current_user) and @totals.links > 0)}
-        href={~p"/users/#{@user}/links"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.links)})
       </.link>
     </.card>
 
