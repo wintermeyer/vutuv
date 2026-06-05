@@ -141,18 +141,47 @@ the resulting ~200px rail width. --%>
 
       <p :if={@work_experience == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
 
-      <div :if={@work_experience != []} class="space-y-5">
-        <div :for={job <- @work_experience} class="flex gap-4">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 font-bold text-slate-500 dark:bg-slate-800">
-            {String.upcase(String.slice(job.organization || "•", 0, 1))}
+      <%!-- The single-letter "organization initial" boxes were dropped: one
+      letter says nothing about a job. Each role shows a year-led date range (the
+      full month/year rides along as a hover tooltip when the role spans several
+      years), the title and organization on a rail, and a duration circle on the
+      right whose size (sqrt of its length, so the gaps stay legible) ranks the
+      roles by how long they ran. The circle column is a fixed width and the
+      circle is centred in it, so every circle shares one horizontal centre.
+      Work experiences arrive newest-first (WorkExperience.order_by_date). --%>
+      <div :if={@work_experience != []}>
+        <div
+          :for={circle <- VutuvWeb.WorkExperienceHTML.circle_durations(@work_experience, :compact)}
+          class="grid grid-cols-[6.5rem_1fr_4rem] items-start gap-3"
+        >
+          <% dates =
+            VutuvWeb.WorkExperienceHTML.duration_with_detail(
+              circle.job.start_month,
+              circle.job.start_year,
+              circle.job.end_month,
+              circle.job.end_year
+            ) %>
+          <div
+            class="pt-0.5 text-right text-xs font-semibold leading-tight text-slate-500 dark:text-slate-400 tabular-nums"
+            title={dates.detail}
+          >
+            {dates.label}
           </div>
-          <div>
-            <.link href={~p"/users/#{@user}/work_experiences/#{job}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
-              {job.title}
+          <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
+            <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
+            <.link href={~p"/users/#{@user}/work_experiences/#{circle.job}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
+              {circle.job.title}
             </.link>
             <p class="text-sm text-slate-500">
-              {job.organization} · {VutuvWeb.WorkExperienceHTML.format_duration(job.start_month, job.start_year, job.end_month, job.end_year)}
+              {circle.job.organization}<%= if circle.length do %> · {circle.length}<% end %>
             </p>
+          </div>
+          <div
+            class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold tabular-nums leading-none text-white"
+            style={"width: #{circle.size}rem; height: #{circle.size}rem"}
+            title={gettext("Time in this role")}
+          >
+            <span class="text-[11px]">{circle.label}</span>
           </div>
         </div>
       </div>
