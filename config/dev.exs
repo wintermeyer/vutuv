@@ -43,7 +43,9 @@ config :vutuv, Vutuv.Repo,
   password: "postgres",
   database: "vutuv1_dev",
   hostname: "localhost",
-  pool_size: 10
+  pool_size: 10,
+  # Keep the dev log readable: don't echo every SQL query.
+  log: false
 
 config :vutuv, Vutuv.Mailer, adapter: Swoosh.Adapters.Local
 
