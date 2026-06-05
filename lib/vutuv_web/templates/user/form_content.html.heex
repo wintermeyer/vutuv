@@ -69,9 +69,7 @@
 
     <div class={"editform__field#{if error_tag(f, :birthdate), do: " editform__field--error"}"}>
     <%= label f, :birthdate, gettext("Birthdate") %>
-    <div class="editform__inputwrap">
-      <%= date_select f, :birthdate, year: [options: 1900..2100] %>
-    </div>
+    <%= date_input f, :birthdate, max: Date.to_iso8601(Date.utc_today()) %>
     <%= error_tag f, :birthdate %>
     </div>
 

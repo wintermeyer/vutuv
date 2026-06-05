@@ -361,6 +361,7 @@ body.stretch main {
 .editform input[type="tel"],
 .editform input[type="url"],
 .editform input[type="search"],
+.editform input[type="date"],
 .editform input:not([type]),
 .editform select,
 .editform textarea {
@@ -942,6 +943,7 @@ ul.thumbs li .text .title {
   .editform input[type="tel"],
   .editform input[type="url"],
   .editform input[type="search"],
+  .editform input[type="date"],
   .editform input:not([type]),
   .editform select,
   .editform textarea,

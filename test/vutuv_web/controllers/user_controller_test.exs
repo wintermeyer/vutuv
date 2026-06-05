@@ -159,6 +159,16 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get_by(User, @update_attrs)
   end
 
+  test "updates the birthdate from the single native date field", %{conn: conn} do
+    # The edit form now renders <input type="date">, which submits the date as a
+    # single ISO 8601 string rather than the old date_select year/month/day map.
+    {conn, user} = create_and_login_user(conn)
+
+    conn = put(conn, ~p"/users/#{user}", user: %{"birthdate" => "1990-04-15"})
+    assert redirected_to(conn) == ~p"/users/#{user}"
+    assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
+  end
+
   test "renders 403 when editing or updating another user's profile", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
