@@ -179,7 +179,12 @@ the resulting ~200px rail width. --%>
           </.card_menu>
         </:action>
       </.section_header>
-      <div :if={@user.urls != []} class="grid gap-4 sm:grid-cols-2">
+      <%!-- sm:gap-x-18 widens only the desktop column gutter to 72px so both
+      thumbnail columns line up edge-for-edge with the Followers/Following
+      cards below. That row is two p-6 cards in a gap-6 grid, so its content
+      channel is 24 + 24 + 24 = 72px. Row + mobile gap stay gap-4 (these are
+      one card's thumbnails, not two cards stacking). --%>
+      <div :if={@user.urls != []} class="grid gap-4 sm:grid-cols-2 sm:gap-x-18">
         <div :for={url <- @user.urls}>
           <a
             href={VutuvWeb.UrlHTML.linkable_url(url.value)}
@@ -215,48 +220,51 @@ the resulting ~200px rail width. --%>
       </.link>
     </.card>
 
-    <%!-- Follower / following previews (latest 3 each, full lists behind "View All") --%>
-    <.card :if={@follower_count > 0} id="profile-followers">
-      <.section_title class="mb-4">{gettext("Followers")}</.section_title>
-      <ul class="space-y-4">
-        <.user_row
-          :for={user <- @followers}
-          user={user}
-          current_user={@current_user}
-          current_user_id={@current_user_id}
-          work_info_by_id={@work_info_by_id}
-          following_by_id={@following_by_id}
-        />
-      </ul>
-      <.link
-        :if={@follower_count > 3}
-        href={~p"/users/#{@user}/followers"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@follower_count)})
-      </.link>
-    </.card>
+    <%!-- Follower / following previews (latest 3 each, full lists behind "View All").
+    Side by side in two columns on sm+, stacked on mobile. --%>
+    <div class="grid gap-6 sm:grid-cols-2">
+      <.card :if={@follower_count > 0} id="profile-followers">
+        <.section_title class="mb-4">{gettext("Followers")}</.section_title>
+        <ul class="space-y-4">
+          <.user_row
+            :for={user <- @followers}
+            user={user}
+            current_user={@current_user}
+            current_user_id={@current_user_id}
+            work_info_by_id={@work_info_by_id}
+            following_by_id={@following_by_id}
+          />
+        </ul>
+        <.link
+          :if={@follower_count > 3}
+          href={~p"/users/#{@user}/followers"}
+          class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("View All")} ({compact_count(@follower_count)})
+        </.link>
+      </.card>
 
-    <.card :if={@followee_count > 0} id="profile-following">
-      <.section_title class="mb-4">{gettext("Following")}</.section_title>
-      <ul class="space-y-4">
-        <.user_row
-          :for={user <- @followees}
-          user={user}
-          current_user={@current_user}
-          current_user_id={@current_user_id}
-          work_info_by_id={@work_info_by_id}
-          following_by_id={@following_by_id}
-        />
-      </ul>
-      <.link
-        :if={@followee_count > 3}
-        href={~p"/users/#{@user}/followees"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@followee_count)})
-      </.link>
-    </.card>
+      <.card :if={@followee_count > 0} id="profile-following">
+        <.section_title class="mb-4">{gettext("Following")}</.section_title>
+        <ul class="space-y-4">
+          <.user_row
+            :for={user <- @followees}
+            user={user}
+            current_user={@current_user}
+            current_user_id={@current_user_id}
+            work_info_by_id={@work_info_by_id}
+            following_by_id={@following_by_id}
+          />
+        </ul>
+        <.link
+          :if={@followee_count > 3}
+          href={~p"/users/#{@user}/followees"}
+          class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("View All")} ({compact_count(@followee_count)})
+        </.link>
+      </.card>
+    </div>
   </div>
 
   <%!-- Right rail --%>

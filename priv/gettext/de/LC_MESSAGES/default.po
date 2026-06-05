@@ -909,7 +909,7 @@ msgstr "Vcard"
 #: lib/vutuv_web/templates/user/show.html.heex:386
 #, elixir-autogen
 msgid "View All"
-msgstr "Alles anzeigen"
+msgstr "Alle anzeigen"
 
 #: lib/vutuv_web/templates/email/card_list.html.heex:5
 #: lib/vutuv_web/templates/email/show.html.heex:21
