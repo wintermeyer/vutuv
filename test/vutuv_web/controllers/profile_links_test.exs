@@ -39,4 +39,29 @@ defmodule VutuvWeb.ProfileLinksTest do
     {aside_pos, _} = :binary.match(html, "<aside")
     assert links_pos < aside_pos, "expected #profile-links before the <aside> right rail"
   end
+
+  # "View All" is content navigation, not management chrome: it must only
+  # appear when there really is more than the profile already shows (the
+  # profile lists the latest 3). Management lives in the owner's card menu.
+  describe "View All" do
+    test "absent when every link is already on the page", %{conn: conn} do
+      user = insert(:user, validated?: true)
+      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      insert_list(2, :url, user: user)
+
+      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+
+      refute html =~ ~s(href="#{~p"/users/#{user}/links"}")
+    end
+
+    test "present when more links exist than are shown", %{conn: conn} do
+      user = insert(:user, validated?: true)
+      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      insert_list(5, :url, user: user)
+
+      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+
+      assert html =~ ~s(href="#{~p"/users/#{user}/links"}")
+    end
+  end
 end

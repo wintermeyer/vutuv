@@ -3,10 +3,11 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
   import Vutuv.Factory
 
-  # The profile page must make editing discoverable for the owner: every
-  # section entry carries a pencil link straight to its edit form, and the
-  # Skills header links to the tag management page. Visitors get none of
-  # these affordances. Deletion lives on the edit forms (see the second
+  # The owner's add/edit functionality lives in one quiet ⋯ menu per section
+  # (a native <details data-menu> dropdown) instead of always-visible links
+  # and per-row pencils: "Add entry" goes to the new-form, "Manage entries"
+  # to the management page that carries per-row edit/delete. Visitors get
+  # none of this markup. Deletion stays on the edit forms (see the second
   # describe block), one deliberate step away from the profile.
 
   defp insert_profile_data(user) do
@@ -20,26 +21,43 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
     }
   end
 
-  describe "profile section edit pencils" do
-    test "owner sees an edit link on every section entry", %{conn: conn} do
+  @menu_ids ~w(profile-skills-menu profile-experience-menu profile-links-menu
+               profile-contact-menu profile-about-menu profile-social-media-menu
+               profile-phone-numbers-menu profile-addresses-menu)
+
+  describe "profile section card menus" do
+    test "owner gets a card menu per section with add and manage entries", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       data = insert_profile_data(user)
-      email = Repo.get_by(Vutuv.Accounts.Email, user_id: user.id)
 
       html = conn |> get(~p"/users/#{user}") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/users/#{user}/work_experiences/#{data.job}/edit"}")
-      assert html =~ ~s(href="#{~p"/users/#{user}/emails/#{email}/edit"}")
-      assert html =~ ~s(href="#{~p"/users/#{user}/links/#{data.url}/edit"}")
-      assert html =~ ~s(href="#{~p"/users/#{user}/phone_numbers/#{data.phone}/edit"}")
-      assert html =~ ~s(href="#{~p"/users/#{user}/addresses/#{data.address}/edit"}")
-      assert html =~ ~s(href="#{~p"/users/#{user}/social_media_accounts/#{data.social}/edit"}")
-      # Tags have no edit action; the Skills header pencil leads to the
-      # management page where tags can be removed.
-      assert html =~ ~s(href="#{~p"/users/#{user}/tags"}")
+      for id <- @menu_ids do
+        assert html =~ ~s(id="#{id}"), "expected menu ##{id}"
+      end
+
+      # Add entry + manage entries per section (General Info edits the user).
+      for path <- [
+            ~p"/users/#{user}/work_experiences",
+            ~p"/users/#{user}/links",
+            ~p"/users/#{user}/emails",
+            ~p"/users/#{user}/phone_numbers",
+            ~p"/users/#{user}/addresses",
+            ~p"/users/#{user}/social_media_accounts",
+            ~p"/users/#{user}/tags"
+          ] do
+        assert html =~ ~s(href="#{path}/new"), "expected add link for #{path}"
+        assert html =~ ~s(href="#{path}"), "expected manage link for #{path}"
+      end
+
+      assert html =~ ~s(href="#{~p"/users/#{user}/edit"}")
+
+      # The per-row pencils are gone; editing goes through the manage pages.
+      refute html =~ ~s(href="#{~p"/users/#{user}/work_experiences/#{data.job}/edit"}")
+      refute html =~ ~s(href="#{~p"/users/#{user}/links/#{data.url}/edit"}")
     end
 
-    test "a logged-in visitor sees the sections but no edit links", %{conn: conn} do
+    test "a logged-in visitor sees the sections but no card menus", %{conn: conn} do
       {conn, _visitor} = create_and_login_user(conn)
 
       user = insert(:user, validated?: true)
@@ -53,14 +71,16 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       assert html =~ data.job.title
       assert html =~ email.value
 
-      # ...but none of the owner-only edit affordances do.
-      refute html =~ ~s(href="#{~p"/users/#{user}/work_experiences/#{data.job}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/emails/#{email}/edit"}")
+      # ...but no menu and none of the owner-only management links.
+      refute html =~ "data-menu"
+
+      for id <- @menu_ids do
+        refute html =~ ~s(id="#{id}")
+      end
+
+      refute html =~ ~s(href="#{~p"/users/#{user}/work_experiences/new"}")
+      refute html =~ ~s(href="#{~p"/users/#{user}/emails"}")
       refute html =~ ~s(href="#{~p"/users/#{user}/links/#{data.url}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/phone_numbers/#{data.phone}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/addresses/#{data.address}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/social_media_accounts/#{data.social}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/tags"}")
     end
   end
 

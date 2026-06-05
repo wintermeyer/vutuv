@@ -68,23 +68,15 @@ routes; CSRF + method are handled by the rendered links. --%>
 
     <%!-- Skills & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
-      <%!-- While the inline quick-add form below is showing (no tags yet), the
-      header "Add" link would duplicate its submit button — show it only once
-      the form has made way for the chip list. --%>
-      <.section_header
-        title={gettext("Skills & endorsements")}
-        add_href={
-          same_user?(@user, @current_user) and Enum.count(@user_tags) > 0 &&
-            ~p"/users/#{@current_user}/tags/new"
-        }
-      >
-        <%!-- Tags have no edit action; the pencil leads to the management
-        page where individual tags can be removed. --%>
-        <:action>
-          <.row_edit_link edit_to={
-            same_user?(@user, @current_user) and Enum.count(@user_tags) > 0 &&
-              ~p"/users/#{@user}/tags"
-          } />
+      <%!-- Owner actions live in the quiet ⋯ card menu; tags have no edit
+      action, so "Manage entries" leads to the page where they can be
+      removed. --%>
+      <.section_header title={gettext("Skills & endorsements")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-skills-menu">
+            <:item href={~p"/users/#{@user}/tags/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/tags"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
         </:action>
       </.section_header>
 
@@ -135,10 +127,14 @@ routes; CSRF + method are handled by the rendered links. --%>
 
     <%!-- Experience --%>
     <.card :if={@work_experience != [] or same_user?(@user, @current_user)} id="profile-experience">
-      <.section_header
-        title={gettext("Experience")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/work_experiences/new"}
-      />
+      <.section_header title={gettext("Experience")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-experience-menu">
+            <:item href={~p"/users/#{@user}/work_experiences/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/work_experiences"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
 
       <p :if={@work_experience == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
 
@@ -155,10 +151,6 @@ routes; CSRF + method are handled by the rendered links. --%>
               {job.organization} · {VutuvWeb.WorkExperienceHTML.format_duration(job.start_month, job.start_year, job.end_month, job.end_year)}
             </p>
           </div>
-          <.row_edit_link
-            class="ml-auto"
-            edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/work_experiences/#{job}/edit"}
-          />
         </div>
       </div>
 
@@ -176,10 +168,14 @@ routes; CSRF + method are handled by the rendered links. --%>
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
     to the bundled placeholder while a screenshot is still missing. --%>
     <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
-      <.section_header
-        title={gettext("Links")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
-      />
+      <.section_header title={gettext("Links")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-links-menu">
+            <:item href={~p"/users/#{@user}/links/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/links"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
       <div :if={@user.urls != []} class="grid gap-4 sm:grid-cols-2">
         <div :for={url <- @user.urls}>
           <a
@@ -195,23 +191,20 @@ routes; CSRF + method are handled by the rendered links. --%>
               class="aspect-[400/264] w-full object-cover"
             />
           </a>
-          <div class="mt-2 flex items-start justify-between gap-2">
-            <div class="min-w-0 text-sm">
-              <p :if={url.description} class="truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
-              <a
-                href={VutuvWeb.UrlHTML.linkable_url(url.value)}
-                class="block truncate font-medium text-brand-600 hover:text-brand-700"
-              >
-                {url.value}
-              </a>
-            </div>
-            <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/links/#{url}/edit"} />
+          <div class="mt-2 min-w-0 text-sm">
+            <p :if={url.description} class="truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
+            <a
+              href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+              class="block truncate font-medium text-brand-600 hover:text-brand-700"
+            >
+              {url.value}
+            </a>
           </div>
         </div>
       </div>
       <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
-        :if={@totals.links > 3 or (same_user?(@user, @current_user) and @totals.links > 0)}
+        :if={@totals.links > 3}
         href={~p"/users/#{@user}/links"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
@@ -280,24 +273,20 @@ routes; CSRF + method are handled by the rendered links. --%>
     </.card>
 
     <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)} id="profile-contact">
-      <.section_header
-        title={gettext("Contact")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/emails/new"}
-      />
+      <.section_header title={gettext("Contact")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-contact-menu">
+            <:item href={~p"/users/#{@user}/emails/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/emails"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
       <ul class="space-y-1">
-        <li :for={email <- @emails} class="flex items-center justify-between gap-2">
+        <li :for={email <- @emails}>
           <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
-          <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/emails/#{email}/edit"} />
         </li>
       </ul>
       <p :if={Enum.count(@emails) == 0} class="text-sm text-slate-400">{gettext("No public email.")}</p>
-      <.link
-        :if={same_user?(@user, @current_user) and Enum.count(@emails) > 0}
-        href={~p"/users/#{@user}/emails"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")}
-      </.link>
     </.card>
 
     <%!-- General info: gender + birthday; the headline already lives in the header --%>
@@ -306,14 +295,10 @@ routes; CSRF + method are handled by the rendered links. --%>
       id="profile-about"
     >
       <.section_header title={gettext("General Info")}>
-        <:action>
-          <.link
-            :if={same_user?(@user, @current_user)}
-            href={~p"/users/#{@user}/edit"}
-            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-          >
-            {gettext("Edit")}
-          </.link>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-about-menu">
+            <:item href={~p"/users/#{@user}/edit"}>{gettext("Edit")}</:item>
+          </.card_menu>
         </:action>
       </.section_header>
       <dl class="space-y-3 text-sm">
@@ -335,50 +320,41 @@ routes; CSRF + method are handled by the rendered links. --%>
       :if={Enum.count(@user.social_media_accounts) > 0 or same_user?(@user, @current_user)}
       id="profile-social-media"
     >
-      <.section_header
-        title={gettext("Social Media")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/social_media_accounts/new"}
-      />
+      <.section_header title={gettext("Social Media")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-social-media-menu">
+            <:item href={~p"/users/#{@user}/social_media_accounts/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/social_media_accounts"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
       <ul class="space-y-3 text-sm">
-        <li :for={account <- @user.social_media_accounts} class="flex items-start justify-between gap-2">
-          <div>
-            <p class="text-slate-400">{account.provider}</p>
-            <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
-          </div>
-          <.row_edit_link edit_to={
-            same_user?(@user, @current_user) && ~p"/users/#{@user}/social_media_accounts/#{account}/edit"
-          } />
+        <li :for={account <- @user.social_media_accounts}>
+          <p class="text-slate-400">{account.provider}</p>
+          <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
         </li>
       </ul>
       <p :if={Enum.count(@user.social_media_accounts) == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
-      <.link
-        :if={same_user?(@user, @current_user) and Enum.count(@user.social_media_accounts) > 0}
-        href={~p"/users/#{@user}/social_media_accounts"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")}
-      </.link>
     </.card>
 
     <.card :if={@totals.numbers > 0 or same_user?(@user, @current_user)} id="profile-phone-numbers">
-      <.section_header
-        title={gettext("Phone Numbers")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/phone_numbers/new"}
-      />
+      <.section_header title={gettext("Phone Numbers")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-phone-numbers-menu">
+            <:item href={~p"/users/#{@user}/phone_numbers/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/phone_numbers"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
       <ul class="space-y-3 text-sm">
-        <li :for={number <- @user.phone_numbers} class="flex items-start justify-between gap-2">
-          <div>
-            <p class="text-slate-400">{number.number_type}</p>
-            <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
-          </div>
-          <.row_edit_link edit_to={
-            same_user?(@user, @current_user) && ~p"/users/#{@user}/phone_numbers/#{number}/edit"
-          } />
+        <li :for={number <- @user.phone_numbers}>
+          <p class="text-slate-400">{number.number_type}</p>
+          <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
         </li>
       </ul>
       <p :if={@totals.numbers == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
-        :if={@totals.numbers > 3 or (same_user?(@user, @current_user) and @totals.numbers > 0)}
+        :if={@totals.numbers > 3}
         href={~p"/users/#{@user}/phone_numbers"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
@@ -387,24 +363,23 @@ routes; CSRF + method are handled by the rendered links. --%>
     </.card>
 
     <.card :if={@totals.addresses > 0 or same_user?(@user, @current_user)} id="profile-addresses">
-      <.section_header
-        title={gettext("Addresses")}
-        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/addresses/new"}
-      />
+      <.section_header title={gettext("Addresses")}>
+        <:action :if={same_user?(@user, @current_user)}>
+          <.card_menu id="profile-addresses-menu">
+            <:item href={~p"/users/#{@user}/addresses/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/users/#{@user}/addresses"}>{gettext("Manage entries")}</:item>
+          </.card_menu>
+        </:action>
+      </.section_header>
       <ul class="space-y-3 text-sm">
-        <li :for={address <- @user.addresses} class="flex items-start justify-between gap-2">
-          <div>
-            <p class="text-slate-400">{address.description}</p>
-            <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
-          </div>
-          <.row_edit_link edit_to={
-            same_user?(@user, @current_user) && ~p"/users/#{@user}/addresses/#{address}/edit"
-          } />
+        <li :for={address <- @user.addresses}>
+          <p class="text-slate-400">{address.description}</p>
+          <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
         </li>
       </ul>
       <p :if={@totals.addresses == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
-        :if={@totals.addresses > 3 or (same_user?(@user, @current_user) and @totals.addresses > 0)}
+        :if={@totals.addresses > 3}
         href={~p"/users/#{@user}/addresses"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >

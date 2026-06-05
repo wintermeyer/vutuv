@@ -7,7 +7,7 @@ defmodule VutuvWeb.UI do
 
   Imported into every HTML view and LiveView via `VutuvWeb` (`html`, `live_view`,
   `live_component`), so all of these are available everywhere with no explicit
-  import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.row_edit_link>`,
+  import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.card_menu>`,
   `<.chip>`, `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`, `<.pager>`.
   """
   use Phoenix.Component
@@ -69,40 +69,58 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Per-row pencil link for hand-written (Track 2) profile sections — the
-  discoverable "this entry is yours, edit it" affordance. Renders nothing when
-  `edit_to` is falsy, so call sites guard inline:
-  `<.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/…/edit"} />`.
-  Kept always visible (muted slate, brand on hover) rather than hover-revealed
-  so owners can discover editing on touch screens too; visitors get no markup
-  at all. Deletion intentionally does not live on the row — every edit form
-  carries it via `<.form_actions delete_to={…} />`.
-  """
-  attr(:edit_to, :any, default: nil)
-  attr(:title, :string, default: nil)
-  attr(:class, :string, default: nil)
+  Per-card ⋯ menu for hand-written (Track 2) profile sections — the quiet
+  home for the owner's rare actions (add entry, manage entries) so they are
+  not always in the viewer's face. A native `<details data-menu>` dropdown:
+  no JS framework, keyboard-accessible out of the box; `app.js` closes any
+  open menu on outside click and Escape. Items render via the `:item` slot
+  (`href` required, optional `method`); the owner guard stays at the call
+  site, e.g. inside `<.section_header>`'s `:action` slot:
 
-  def row_edit_link(assigns) do
+      <:action :if={owner?}>
+        <.card_menu id="profile-links-menu">
+          <:item href={~p"/…/new"}>{gettext("Add entry")}</:item>
+          <:item href={~p"/…"}>{gettext("Manage entries")}</:item>
+        </.card_menu>
+      </:action>
+
+  Deletion intentionally does not live here — the manage pages carry per-row
+  edit/delete and every edit form has `<.form_actions delete_to={…} />`.
+  """
+  attr(:id, :string, required: true)
+
+  slot :item, required: true do
+    attr(:href, :any, required: true)
+    attr(:method, :string)
+  end
+
+  def card_menu(assigns) do
     ~H"""
-    <.link
-      :if={@edit_to}
-      href={@edit_to}
-      title={@title || gettext("Edit")}
-      class={[
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400",
-        "hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800",
-        @class
-      ]}
-    >
-      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L7.125 19.65a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Zm0 0L19.5 7.125"
-        />
-      </svg>
-      <span class="sr-only">{@title || gettext("Edit")}</span>
-    </.link>
+    <details data-menu class="relative" id={@id}>
+      <summary
+        title={gettext("Options")}
+        class={[
+          "flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full text-slate-400",
+          "hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300",
+          "[&::-webkit-details-marker]:hidden"
+        ]}
+      >
+        <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6.75 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+        </svg>
+        <span class="sr-only">{gettext("Options")}</span>
+      </summary>
+      <div class="absolute right-0 z-20 mt-1 w-52 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+        <.link
+          :for={item <- @item}
+          href={item.href}
+          method={item[:method]}
+          class="block px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+        >
+          {render_slot(item)}
+        </.link>
+      </div>
+    </details>
     """
   end
 

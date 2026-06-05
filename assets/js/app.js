@@ -98,3 +98,20 @@ function setupToasts() {
 
 window.addEventListener("DOMContentLoaded", setupToasts)
 window.addEventListener("phx:page-loading-stop", setupToasts)
+
+// Card ⋯ menus (<details data-menu>, see VutuvWeb.UI.card_menu): the native
+// <details> toggle does everything except light-dismiss, so close any open
+// menu when clicking outside it or pressing Escape. Event delegation keeps
+// this working for menus added to the DOM later.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details[data-menu][open]").forEach((menu) => {
+    if (!menu.contains(e.target)) menu.removeAttribute("open")
+  })
+})
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return
+  document
+    .querySelectorAll("details[data-menu][open]")
+    .forEach((menu) => menu.removeAttribute("open"))
+})
