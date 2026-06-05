@@ -43,10 +43,14 @@ routes; CSRF + method are handled by the rendered links. --%>
         </p>
 
         <div class="mt-4 flex gap-6 text-sm">
-          <span><span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
-            <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span></span>
-          <span><span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
-            <span class="text-slate-500">{gettext("following")}</span></span>
+          <.link href={~p"/users/#{@user}/followers"} class="hover:underline">
+            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
+            <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span>
+          </.link>
+          <.link href={~p"/users/#{@user}/followees"} class="hover:underline">
+            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
+            <span class="text-slate-500">{gettext("following")}</span>
+          </.link>
         </div>
       </div>
     </section>
@@ -110,10 +114,18 @@ routes; CSRF + method are handled by the rendered links. --%>
         />
         <.button type="submit">{gettext("Add")}</.button>
       </.form>
+
+      <.link
+        :if={@totals.user_tags > 10}
+        href={~p"/users/#{@user}/tags"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.user_tags)})
+      </.link>
     </.card>
 
     <%!-- Experience --%>
-    <.card :if={@work_experience != [] or same_user?(@user, @current_user)}>
+    <.card :if={@work_experience != [] or same_user?(@user, @current_user)} id="profile-experience">
       <.section_header
         title={gettext("Experience")}
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/work_experiences/new"}
@@ -136,6 +148,57 @@ routes; CSRF + method are handled by the rendered links. --%>
           </div>
         </div>
       </div>
+
+      <.link
+        :if={@totals.jobs > 3}
+        href={~p"/users/#{@user}/work_experiences"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.jobs)})
+      </.link>
+    </.card>
+
+    <%!-- Follower / following previews (latest 3 each, full lists behind "View All") --%>
+    <.card :if={@follower_count > 0} id="profile-followers">
+      <.section_title class="mb-4">{gettext("Followers")}</.section_title>
+      <ul class="space-y-4">
+        <.user_row
+          :for={user <- @followers}
+          user={user}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+        />
+      </ul>
+      <.link
+        :if={@follower_count > 3}
+        href={~p"/users/#{@user}/followers"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@follower_count)})
+      </.link>
+    </.card>
+
+    <.card :if={@followee_count > 0} id="profile-following">
+      <.section_title class="mb-4">{gettext("Following")}</.section_title>
+      <ul class="space-y-4">
+        <.user_row
+          :for={user <- @followees}
+          user={user}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+        />
+      </ul>
+      <.link
+        :if={@followee_count > 3}
+        href={~p"/users/#{@user}/followees"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@followee_count)})
+      </.link>
     </.card>
   </div>
 
@@ -144,33 +207,18 @@ routes; CSRF + method are handled by the rendered links. --%>
     <.card :if={Enum.count(@recommended_users) > 0}>
       <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
       <ul class="space-y-4">
-        <li :for={user <- @recommended_users} class="flex items-center gap-3">
-          <.link href={~p"/users/#{user}"} class="shrink-0">
-            <.avatar user={user} size="sm" alt={"Avatar of #{full_name(user)}"} />
-          </.link>
-          <div class="min-w-0 text-sm">
-            <.link href={~p"/users/#{user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(user)}</.link>
-            <p class="truncate text-slate-400">{Map.get(@recommended_work_info, user.id, "")}</p>
-          </div>
-          <%= if @current_user && not same_user?(@current_user, user) do %>
-            <%= case Map.get(@recommended_following, user.id) do %>
-              <% connection_id when is_integer(connection_id) -> %>
-                <%= button to: ~p"/connections/#{connection_id}", method: :delete,
-                      class: "ml-auto text-sm font-semibold text-slate-400 hover:text-slate-600" do %>
-                  {gettext("Following")}
-                <% end %>
-              <% _ -> %>
-                <%= button to: ~p"/connections?#{[connection: %{follower_id: @current_user_id, followee_id: user.id}]}", method: :post,
-                      class: "ml-auto text-sm font-semibold text-brand-600 hover:text-brand-700" do %>
-                  {gettext("Follow")}
-                <% end %>
-            <% end %>
-          <% end %>
-        </li>
+        <.user_row
+          :for={user <- @recommended_users}
+          user={user}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+        />
       </ul>
     </.card>
 
-    <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)}>
+    <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)} id="profile-contact">
       <.section_header
         title={gettext("Contact")}
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/emails/new"}
@@ -181,6 +229,146 @@ routes; CSRF + method are handled by the rendered links. --%>
         </li>
       </ul>
       <p :if={Enum.count(@emails) == 0} class="text-sm text-slate-400">{gettext("No public email.")}</p>
+      <.link
+        :if={same_user?(@user, @current_user) and Enum.count(@emails) > 0}
+        href={~p"/users/#{@user}/emails"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")}
+      </.link>
+    </.card>
+
+    <%!-- General info: gender + birthday; the headline already lives in the header --%>
+    <.card
+      :if={@user.birthdate || (@user.gender && @user.gender != "other") || same_user?(@user, @current_user)}
+      id="profile-about"
+    >
+      <.section_header title={gettext("General Info")}>
+        <:action>
+          <.link
+            :if={same_user?(@user, @current_user)}
+            href={~p"/users/#{@user}/edit"}
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            {gettext("Edit")}
+          </.link>
+        </:action>
+      </.section_header>
+      <dl class="space-y-3 text-sm">
+        <div :if={@user.gender && @user.gender != "other"}>
+          <dt class="text-slate-400">{gettext("Gender")}</dt>
+          <dd class="font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
+        </div>
+        <div :if={@user.birthdate}>
+          <dt class="text-slate-400">{gettext("Birthday")}</dt>
+          <dd class="font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
+        </div>
+      </dl>
+      <p :if={!@user.birthdate and (!@user.gender or @user.gender == "other")} class="text-sm text-slate-400">
+        {gettext("Nothing here yet.")}
+      </p>
+    </.card>
+
+    <.card
+      :if={Enum.count(@user.social_media_accounts) > 0 or same_user?(@user, @current_user)}
+      id="profile-social-media"
+    >
+      <.section_header
+        title={gettext("Social Media")}
+        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/social_media_accounts/new"}
+      />
+      <ul class="space-y-3 text-sm">
+        <li :for={account <- @user.social_media_accounts}>
+          <p class="text-slate-400">{account.provider}</p>
+          <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
+        </li>
+      </ul>
+      <p :if={Enum.count(@user.social_media_accounts) == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.link
+        :if={same_user?(@user, @current_user) and Enum.count(@user.social_media_accounts) > 0}
+        href={~p"/users/#{@user}/social_media_accounts"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")}
+      </.link>
+    </.card>
+
+    <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
+      <.section_header
+        title={gettext("Links")}
+        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
+      />
+      <ul class="space-y-3 text-sm">
+        <li :for={url <- @user.urls}>
+          <p :if={url.description} class="text-slate-400">{url.description}</p>
+          <a
+            href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+            class="break-all font-medium text-brand-600 hover:text-brand-700"
+          >
+            {url.value}
+          </a>
+        </li>
+      </ul>
+      <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.link
+        :if={@totals.links > 3 or (same_user?(@user, @current_user) and @totals.links > 0)}
+        href={~p"/users/#{@user}/links"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.links)})
+      </.link>
+    </.card>
+
+    <.card :if={@totals.numbers > 0 or same_user?(@user, @current_user)} id="profile-phone-numbers">
+      <.section_header
+        title={gettext("Phone Numbers")}
+        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/phone_numbers/new"}
+      />
+      <ul class="space-y-3 text-sm">
+        <li :for={number <- @user.phone_numbers}>
+          <p class="text-slate-400">{number.number_type}</p>
+          <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
+        </li>
+      </ul>
+      <p :if={@totals.numbers == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.link
+        :if={@totals.numbers > 3 or (same_user?(@user, @current_user) and @totals.numbers > 0)}
+        href={~p"/users/#{@user}/phone_numbers"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.numbers)})
+      </.link>
+    </.card>
+
+    <.card :if={@totals.addresses > 0 or same_user?(@user, @current_user)} id="profile-addresses">
+      <.section_header
+        title={gettext("Addresses")}
+        add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/addresses/new"}
+      />
+      <ul class="space-y-3 text-sm">
+        <li :for={address <- @user.addresses}>
+          <p class="text-slate-400">{address.description}</p>
+          <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
+        </li>
+      </ul>
+      <p :if={@totals.addresses == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.link
+        :if={@totals.addresses > 3 or (same_user?(@user, @current_user) and @totals.addresses > 0)}
+        href={~p"/users/#{@user}/addresses"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View All")} ({compact_count(@totals.addresses)})
+      </.link>
+    </.card>
+
+    <.card id="profile-exports">
+      <.section_title class="mb-4">{gettext("Exports")}</.section_title>
+      <.link
+        href={~p"/api/1.0/users/#{@user}/vcard"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("Vcard")}: {gettext("Download")}
+      </.link>
     </.card>
   </aside>
 </div>

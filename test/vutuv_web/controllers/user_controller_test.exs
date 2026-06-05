@@ -58,6 +58,89 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ user.first_name
   end
 
+  test "lists the user's full profile information to visitors", %{conn: conn} do
+    user =
+      insert(:user,
+        validated?: true,
+        gender: "female",
+        birthdate: ~D[1990-04-15],
+        headline: "Hello world"
+      )
+
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    insert(:email, user: user, value: "public.contact@example.com")
+    insert(:phone_number, user: user, value: "+49 30 5551234")
+    insert(:url, user: user, value: "https://example.org/my-site", description: "My Site")
+    insert(:address, user: user, city: "Berlin")
+    insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+
+    follower = insert(:user, validated?: true, first_name: "Fanny")
+    insert(:connection, follower: follower, followee: user)
+    followee = insert(:user, validated?: true, first_name: "Heidi")
+    insert(:connection, follower: user, followee: followee)
+
+    conn = get(conn, ~p"/users/#{user}")
+    html = html_response(conn, 200)
+
+    # Contact, phone numbers, links, addresses, social media
+    assert html =~ ~s(id="profile-contact")
+    assert html =~ "public.contact@example.com"
+    assert html =~ ~s(id="profile-phone-numbers")
+    assert html =~ "+49 30 5551234"
+    assert html =~ ~s(id="profile-links")
+    assert html =~ "https://example.org/my-site"
+    assert html =~ ~s(id="profile-addresses")
+    assert html =~ "Berlin"
+    assert html =~ ~s(id="profile-social-media")
+    assert html =~ "octocat"
+
+    # General info (gender, birthday in the en format)
+    assert html =~ ~s(id="profile-about")
+    assert html =~ "Female"
+    assert html =~ "04/15/1990"
+
+    # Follower / following previews and the vCard export
+    assert html =~ ~s(id="profile-followers")
+    assert html =~ "Fanny"
+    assert html =~ ~s(id="profile-following")
+    assert html =~ "Heidi"
+    assert html =~ ~p"/api/1.0/users/#{user}/vcard"
+  end
+
+  test "hides empty profile sections from visitors", %{conn: conn} do
+    user = insert(:user, validated?: true)
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+
+    conn = get(conn, ~p"/users/#{user}")
+    html = html_response(conn, 200)
+
+    refute html =~ ~s(id="profile-contact")
+    refute html =~ ~s(id="profile-phone-numbers")
+    refute html =~ ~s(id="profile-links")
+    refute html =~ ~s(id="profile-addresses")
+    refute html =~ ~s(id="profile-social-media")
+    refute html =~ ~s(id="profile-about")
+    refute html =~ ~s(id="profile-followers")
+    refute html =~ ~s(id="profile-following")
+  end
+
+  test "the owner sees add links for every profile section", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    conn = get(conn, ~p"/users/#{user}")
+    html = html_response(conn, 200)
+
+    for path <- [
+          ~p"/users/#{user}/emails/new",
+          ~p"/users/#{user}/phone_numbers/new",
+          ~p"/users/#{user}/links/new",
+          ~p"/users/#{user}/social_media_accounts/new",
+          ~p"/users/#{user}/addresses/new",
+          ~p"/users/#{user}/work_experiences/new"
+        ] do
+      assert html =~ path
+    end
+  end
+
   test "renders page not found when id is nonexistent", %{conn: conn} do
     conn = get(conn, ~p"/users/#{%User{active_slug: "1"}}")
     assert html_response(conn, :not_found)

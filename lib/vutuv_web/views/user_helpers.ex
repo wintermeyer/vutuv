@@ -388,6 +388,33 @@ defmodule VutuvWeb.UserHelpers do
     |> HTMLFormat.text_to_html()
   end
 
+  def format_birthdate(%User{locale: "de", birthdate: birthdate}) do
+    format_pyramid(birthdate)
+  end
+
+  def format_birthdate(%User{locale: "en", birthdate: birthdate}) do
+    format_usa(birthdate)
+  end
+
+  # Legacy/pre-existing rows can carry a nil or otherwise-unrecognized locale
+  # (the column has no default and no validate_inclusion); fall back to the
+  # USA format instead of raising FunctionClauseError on the profile page.
+  def format_birthdate(%User{birthdate: birthdate}) do
+    format_usa(birthdate)
+  end
+
+  defp format_pyramid(%Date{year: year, month: month, day: day}) do
+    "#{String.pad_leading(Integer.to_string(day), 2, "0")}.#{String.pad_leading(Integer.to_string(month), 2, "0")}.#{year}"
+  end
+
+  defp format_pyramid(_), do: ""
+
+  defp format_usa(%Date{year: year, month: month, day: day}) do
+    "#{String.pad_leading(Integer.to_string(month), 2, "0")}/#{String.pad_leading(Integer.to_string(day), 2, "0")}/#{year}"
+  end
+
+  defp format_usa(_), do: ""
+
   def gen_breadcrumbs(args) do
     Enum.reduce(tl(args), gen_breadcrumb(hd(args)), fn f, acc ->
       "#{acc} / #{gen_breadcrumb(f)}"

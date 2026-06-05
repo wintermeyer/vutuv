@@ -15,6 +15,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.Social.Connection
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.RateLimit
@@ -59,6 +60,9 @@ defmodule VutuvWeb.UserController do
   end
 
   def show(conn, _params) do
+    # The totals drive the "View all" links for the sections whose preloads
+    # below are cut off after a few entries.
+    totals = assoc_totals(conn.assigns[:user])
     user = preload_user_for_show(conn.assigns[:user])
     # Resolve the header's current job once (DB-backed, over all the user's
     # work experiences) and derive the work line from it, so the template
@@ -66,6 +70,11 @@ defmodule VutuvWeb.UserController do
     header_job = current_job(user)
     emails = VutuvWeb.UserHelpers.emails_for_display(user, conn.assigns[:current_user])
     recommended_users = recommended_users(user)
+    followers = Enum.map(user.follower_connections, & &1.follower)
+    followees = Enum.map(user.followee_connections, & &1.followee)
+    # One work-info and one follow-state query for all the small user lists on
+    # the page (the "Who to follow" rail plus both follow previews).
+    preview_users = Enum.uniq_by(recommended_users ++ followers ++ followees, & &1.id)
 
     conn
     |> assign(:emails, emails)
@@ -77,22 +86,27 @@ defmodule VutuvWeb.UserController do
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
     |> assign(:display_welcome_message, new_user?(user))
     |> assign(:recommended_users, recommended_users)
+    |> assign(:followers, followers)
+    |> assign(:followees, followees)
+    |> assign(:totals, totals)
     |> assign(
-      :recommended_work_info,
-      VutuvWeb.UserHelpers.work_information_map(recommended_users, 24)
+      :work_info_by_id,
+      VutuvWeb.UserHelpers.work_information_map(preview_users, 24)
     )
     |> assign(
-      :recommended_following,
-      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], recommended_users)
+      :following_by_id,
+      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], preview_users)
     )
     |> render("show.html", conn: conn)
   end
 
   # Only what show.html.heex (and the root layout's meta description) actually
-  # renders: the first 10 tags, the latest 3 work experiences.
+  # renders: the first 10 tags, the latest 3 of each list-like association,
+  # all social media accounts (there can be at most one per provider).
   defp preload_user_for_show(user) do
     user
-    |> Repo.preload(
+    |> Repo.preload([
+      :social_media_accounts,
       user_tags:
         from(u in Vutuv.Tags.UserTag,
           left_join: e in assoc(u, :endorsements),
@@ -106,9 +120,27 @@ defmodule VutuvWeb.UserController do
         ),
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
-        |> WorkExperience.order_by_date()
-    )
+        |> WorkExperience.order_by_date(),
+      phone_numbers:
+        from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at], limit: 3),
+      urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at], limit: 3),
+      addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at], limit: 3),
+      follower_connections: {Connection.latest(3), [:follower]},
+      followee_connections: {Connection.latest(3), [:followee]}
+    ])
   end
+
+  defp assoc_totals(user) do
+    %{
+      user_tags: count_assoc(user, :user_tags),
+      jobs: count_assoc(user, :work_experiences),
+      numbers: count_assoc(user, :phone_numbers),
+      links: count_assoc(user, :urls),
+      addresses: count_assoc(user, :addresses)
+    }
+  end
+
+  defp count_assoc(user, assoc), do: Repo.aggregate(Ecto.assoc(user, assoc), :count)
 
   defp new_user?(user) do
     inserted_at = :calendar.datetime_to_gregorian_seconds(NaiveDateTime.to_erl(user.inserted_at))
