@@ -77,13 +77,26 @@ defmodule Vutuv.BrowserFrame do
 
     with true <- pill_width > 0,
          {:ok, pill} <- Image.new(pill_width, @pill_height, color: @pill_color),
-         {:ok, pill} <- Image.rounded(pill, radius: @pill_radius),
+         {:ok, pill} <- round_pill(pill),
          {:ok, bar} <- Image.compose(bar, pill, x: @pill_left, y: @pill_top) do
       compose_url(bar, url, pill_width)
     else
       false -> {:ok, bar}
       other -> other
     end
+  end
+
+  # Rounded corners are drawn through libvips' SVG loader (Image.rounded builds
+  # an SVG mask). Where that loader is unavailable, e.g. a hardened libvips with
+  # VIPS_BLOCK_UNTRUSTED set, it raises; fall back to the square pill rather than
+  # let a 6px corner radius sink the whole screenshot.
+  defp round_pill(pill) do
+    case Image.rounded(pill, radius: @pill_radius) do
+      {:ok, rounded} -> {:ok, rounded}
+      _ -> {:ok, pill}
+    end
+  rescue
+    _ -> {:ok, pill}
   end
 
   # The URL text sits inside the pill, left-padded and vertically centred.
@@ -99,6 +112,11 @@ defmodule Vutuv.BrowserFrame do
       _ ->
         {:ok, bar}
     end
+  rescue
+    # Image.Text renders its background through the SVG loader, which raises
+    # where libvips blocks it (VIPS_BLOCK_UNTRUSTED); drop the URL text, keep
+    # the frame. Same intent as the clause above, for the raising path.
+    _ -> {:ok, bar}
   end
 
   defp render_url(url, max_width) when max_width > 0 do
