@@ -58,6 +58,16 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ user.first_name
   end
 
+  test "profile uses the content+rail columns from tablet widths up", %{conn: conn} do
+    # md (768px), not lg: portrait iPads (768-834px CSS width) should get the
+    # desktop column layout too, not the single phone column.
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+
+    assert html =~ "md:grid-cols-3"
+    assert html =~ "md:col-span-2"
+  end
+
   test "lists the user's full profile information to visitors", %{conn: conn} do
     user =
       insert(:user,

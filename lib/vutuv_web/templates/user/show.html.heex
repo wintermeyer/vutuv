@@ -2,8 +2,11 @@
 Built from the VutuvWeb.UI kit (<.card>, <.button>, <.avatar>, <.chip>,
 <.section_title>). Follow / unfollow / endorse hit the existing POST/DELETE
 routes; CSRF + method are handled by the rendered links. --%>
-<div class="grid gap-6 py-6 lg:grid-cols-3">
-  <div class="space-y-6 lg:col-span-2">
+<%!-- md, not lg: portrait iPads (768-834px CSS width) get the desktop
+content+rail columns too; user_row and the rail cards truncate cleanly at
+the resulting ~200px rail width. --%>
+<div class="grid gap-6 py-6 md:grid-cols-3">
+  <div class="space-y-6 md:col-span-2">
     <%!-- Header card (custom: gradient cover + overlapping avatar) --%>
     <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
       <div class="h-28 bg-gradient-to-r from-brand-700 to-brand-500"></div>

@@ -43,7 +43,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 
 ### Canonical recipes (copy these exactly)
 
-- **Page root:** `<main>` already gives `mx-auto max-w-6xl px-4`. A page's own wrapper is e.g. `py-6` (+ `grid gap-6 lg:grid-cols-3` for a content+rail layout). Don't add another `max-w`/`px` unless intentional.
+- **Page root:** `<main>` already gives `mx-auto max-w-6xl px-4`. A page's own wrapper is e.g. `py-6` (+ `grid gap-6 md:grid-cols-3` for a content+rail layout — `md`, not `lg`, so portrait iPads get the columns too). Don't add another `max-w`/`px` unless intentional.
 - **Card:** `rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800` — or `<.card>`.
 - **Section title:** `text-sm font-semibold uppercase tracking-wide text-slate-500` — or `<.section_title>`.
 - **Primary button:** `rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700`.
