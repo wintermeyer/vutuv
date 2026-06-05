@@ -6,5 +6,5 @@
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/users/#{@user}/social_media_accounts", changeset: @changeset, action: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}" %>
+  <%= render "form_content.html", backlink: ~p"/users/#{@user}/social_media_accounts", changeset: @changeset, action: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}", delete_to: ~p"/users/#{@user}/social_media_accounts/#{@social_media_account}" %>
 </.card_section>

@@ -7,5 +7,5 @@
 
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/users/#{@user}/work_experiences", changeset: @changeset, action: ~p"/users/#{@user}/work_experiences/#{@work_experience}", current_year: @current_year %>
+  <%= render "form_content.html", backlink: ~p"/users/#{@user}/work_experiences", changeset: @changeset, action: ~p"/users/#{@user}/work_experiences/#{@work_experience}", delete_to: ~p"/users/#{@user}/work_experiences/#{@work_experience}", current_year: @current_year %>
 </.card_section>

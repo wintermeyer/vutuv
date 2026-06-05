@@ -77,7 +77,16 @@ routes; CSRF + method are handled by the rendered links. --%>
           same_user?(@user, @current_user) and Enum.count(@user_tags) > 0 &&
             ~p"/users/#{@current_user}/tags/new"
         }
-      />
+      >
+        <%!-- Tags have no edit action; the pencil leads to the management
+        page where individual tags can be removed. --%>
+        <:action>
+          <.row_edit_link edit_to={
+            same_user?(@user, @current_user) and Enum.count(@user_tags) > 0 &&
+              ~p"/users/#{@user}/tags"
+          } />
+        </:action>
+      </.section_header>
 
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
         <div :for={user_tag <- @user_tags} class="inline-flex items-center">
@@ -146,6 +155,10 @@ routes; CSRF + method are handled by the rendered links. --%>
               {job.organization} · {VutuvWeb.WorkExperienceHTML.format_duration(job.start_month, job.start_year, job.end_month, job.end_year)}
             </p>
           </div>
+          <.row_edit_link
+            class="ml-auto"
+            edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/work_experiences/#{job}/edit"}
+          />
         </div>
       </div>
 
@@ -224,8 +237,9 @@ routes; CSRF + method are handled by the rendered links. --%>
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/emails/new"}
       />
       <ul class="space-y-1">
-        <li :for={email <- @emails}>
-          <a href={"mailto:#{email.value}"} class="text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
+        <li :for={email <- @emails} class="flex items-center justify-between gap-2">
+          <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
+          <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/emails/#{email}/edit"} />
         </li>
       </ul>
       <p :if={Enum.count(@emails) == 0} class="text-sm text-slate-400">{gettext("No public email.")}</p>
@@ -278,9 +292,14 @@ routes; CSRF + method are handled by the rendered links. --%>
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/social_media_accounts/new"}
       />
       <ul class="space-y-3 text-sm">
-        <li :for={account <- @user.social_media_accounts}>
-          <p class="text-slate-400">{account.provider}</p>
-          <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
+        <li :for={account <- @user.social_media_accounts} class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-slate-400">{account.provider}</p>
+            <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
+          </div>
+          <.row_edit_link edit_to={
+            same_user?(@user, @current_user) && ~p"/users/#{@user}/social_media_accounts/#{account}/edit"
+          } />
         </li>
       </ul>
       <p :if={Enum.count(@user.social_media_accounts) == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
@@ -299,14 +318,17 @@ routes; CSRF + method are handled by the rendered links. --%>
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
       />
       <ul class="space-y-3 text-sm">
-        <li :for={url <- @user.urls}>
-          <p :if={url.description} class="text-slate-400">{url.description}</p>
-          <a
-            href={VutuvWeb.UrlHTML.linkable_url(url.value)}
-            class="break-all font-medium text-brand-600 hover:text-brand-700"
-          >
-            {url.value}
-          </a>
+        <li :for={url <- @user.urls} class="flex items-start justify-between gap-2">
+          <div>
+            <p :if={url.description} class="text-slate-400">{url.description}</p>
+            <a
+              href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+              class="break-all font-medium text-brand-600 hover:text-brand-700"
+            >
+              {url.value}
+            </a>
+          </div>
+          <.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/users/#{@user}/links/#{url}/edit"} />
         </li>
       </ul>
       <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
@@ -325,9 +347,14 @@ routes; CSRF + method are handled by the rendered links. --%>
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/phone_numbers/new"}
       />
       <ul class="space-y-3 text-sm">
-        <li :for={number <- @user.phone_numbers}>
-          <p class="text-slate-400">{number.number_type}</p>
-          <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
+        <li :for={number <- @user.phone_numbers} class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-slate-400">{number.number_type}</p>
+            <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
+          </div>
+          <.row_edit_link edit_to={
+            same_user?(@user, @current_user) && ~p"/users/#{@user}/phone_numbers/#{number}/edit"
+          } />
         </li>
       </ul>
       <p :if={@totals.numbers == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
@@ -346,9 +373,14 @@ routes; CSRF + method are handled by the rendered links. --%>
         add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/addresses/new"}
       />
       <ul class="space-y-3 text-sm">
-        <li :for={address <- @user.addresses}>
-          <p class="text-slate-400">{address.description}</p>
-          <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
+        <li :for={address <- @user.addresses} class="flex items-start justify-between gap-2">
+          <div>
+            <p class="text-slate-400">{address.description}</p>
+            <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
+          </div>
+          <.row_edit_link edit_to={
+            same_user?(@user, @current_user) && ~p"/users/#{@user}/addresses/#{address}/edit"
+          } />
         </li>
       </ul>
       <p :if={@totals.addresses == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>

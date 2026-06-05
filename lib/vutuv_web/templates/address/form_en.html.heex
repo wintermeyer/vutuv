@@ -41,5 +41,5 @@
 
   <%= render "country_input.html", Map.put(assigns, :form, f) %>
 
-  <.form_actions backlink={@backlink} />
+  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

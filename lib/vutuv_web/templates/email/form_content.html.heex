@@ -22,5 +22,5 @@
       <%= error_tag f, :value %>
     </div>
   <% end %>
-  <.form_actions backlink={@backlink} />
+  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

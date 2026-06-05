@@ -7,8 +7,8 @@ defmodule VutuvWeb.UI do
 
   Imported into every HTML view and LiveView via `VutuvWeb` (`html`, `live_view`,
   `live_component`), so all of these are available everywhere with no explicit
-  import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.chip>`,
-  `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`, `<.pager>`.
+  import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.row_edit_link>`,
+  `<.chip>`, `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`, `<.pager>`.
   """
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
@@ -45,10 +45,10 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Card header row: a `<.section_title>` with an optional right-aligned action.
+  Card header row: a `<.section_title>` with optional right-aligned actions.
   Pass `add_href` for the canonical "Add" link (a falsy value hides it, so
-  `add_href={owner? && ~p"/…/new"}` reads naturally), or use the `:action` slot
-  for a custom action.
+  `add_href={owner? && ~p"/…/new"}` reads naturally), and/or use the `:action`
+  slot for a custom action; multiple actions sit together in one group.
   """
   attr(:title, :string, required: true)
   attr(:add_href, :any, default: nil)
@@ -58,11 +58,51 @@ defmodule VutuvWeb.UI do
     ~H"""
     <div class="mb-4 flex items-center justify-between">
       <.section_title>{@title}</.section_title>
-      <.link :if={@add_href} href={@add_href} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
-        {gettext("Add")}
-      </.link>
-      {render_slot(@action)}
+      <div class="flex items-center gap-2">
+        <.link :if={@add_href} href={@add_href} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+          {gettext("Add")}
+        </.link>
+        {render_slot(@action)}
+      </div>
     </div>
+    """
+  end
+
+  @doc """
+  Per-row pencil link for hand-written (Track 2) profile sections — the
+  discoverable "this entry is yours, edit it" affordance. Renders nothing when
+  `edit_to` is falsy, so call sites guard inline:
+  `<.row_edit_link edit_to={same_user?(@user, @current_user) && ~p"/…/edit"} />`.
+  Kept always visible (muted slate, brand on hover) rather than hover-revealed
+  so owners can discover editing on touch screens too; visitors get no markup
+  at all. Deletion intentionally does not live on the row — every edit form
+  carries it via `<.form_actions delete_to={…} />`.
+  """
+  attr(:edit_to, :any, default: nil)
+  attr(:title, :string, default: nil)
+  attr(:class, :string, default: nil)
+
+  def row_edit_link(assigns) do
+    ~H"""
+    <.link
+      :if={@edit_to}
+      href={@edit_to}
+      title={@title || gettext("Edit")}
+      class={[
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-slate-400",
+        "hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800",
+        @class
+      ]}
+    >
+      <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L7.125 19.65a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487Zm0 0L19.5 7.125"
+        />
+      </svg>
+      <span class="sr-only">{@title || gettext("Edit")}</span>
+    </.link>
     """
   end
 
@@ -330,14 +370,33 @@ defmodule VutuvWeb.UI do
   `@backlink` and a `.button` submit button), styled by `components.css`. Use it
   as `<.form_actions backlink={@backlink} />`. Forms with a custom submit label
   or no Cancel keep their hand-written row.
+
+  Pass `delete_to` on **edit** forms to append the canonical delete control
+  (`id="delete-entry"`, a `.button--danger` link sending a CSRF-protected
+  DELETE behind a `data-confirm` prompt) — deletion lives on the edit form,
+  one deliberate step away from the profile. The shared `form_content`
+  templates thread it through as `delete_to={assigns[:delete_to]}` so the
+  new-forms render without it.
   """
   attr(:backlink, :string, required: true)
+  attr(:delete_to, :any, default: nil)
+  attr(:confirm, :string, default: nil)
 
   def form_actions(assigns) do
     ~H"""
     <div class="editform__actions">
       <a class="button button--cancel" href={@backlink}>{gettext("Cancel")}</a>
       <button class="button" type="submit">{gettext("Submit")}</button>
+      <.link
+        :if={@delete_to}
+        id="delete-entry"
+        href={@delete_to}
+        method="delete"
+        data-confirm={@confirm || gettext("Are you sure?")}
+        class="button button--danger"
+      >
+        {gettext("Delete entry")}
+      </.link>
     </div>
     """
   end

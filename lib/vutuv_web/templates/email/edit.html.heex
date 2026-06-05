@@ -7,5 +7,5 @@
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/users/#{@user}/emails", changeset: @changeset, action: ~p"/users/#{@user}/emails/#{@email}", edit: true %>
+  <%= render "form_content.html", backlink: ~p"/users/#{@user}/emails", changeset: @changeset, action: ~p"/users/#{@user}/emails/#{@email}", delete_to: ~p"/users/#{@user}/emails/#{@email}", edit: true %>
 </.card_section>
