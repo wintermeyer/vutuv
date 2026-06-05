@@ -1,7 +1,7 @@
 defmodule VutuvWeb.UserControllerTest do
   use VutuvWeb.ConnCase
 
-  alias Vutuv.Accounts.User
+  alias Vutuv.Accounts.{Email, User}
 
   @valid_attrs %{
     "emails" => %{"0" => %{"value" => "email@example.com"}},
@@ -167,6 +167,44 @@ defmodule VutuvWeb.UserControllerTest do
     conn = put(conn, ~p"/users/#{user}", user: %{"birthdate" => "1990-04-15"})
     assert redirected_to(conn) == ~p"/users/#{user}"
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
+  end
+
+  test "profile update ignores email params (emails change only via the PIN flow)", %{conn: conn} do
+    # Adding an address goes through EmailController.create, which mails a PIN
+    # to the new address and only inserts it after confirmation (issue #759).
+    # The profile update must not offer a way around that: neither rewriting an
+    # existing address nor smuggling in a new one may stick.
+    {conn, user} = create_and_login_user(conn)
+    %{emails: [email]} = Repo.preload(user, :emails)
+
+    conn =
+      put(conn, ~p"/users/#{user}",
+        user: %{
+          "first_name" => "Updated",
+          "emails" => %{
+            "0" => %{"id" => email.id, "value" => "hijacked@example.com"},
+            "1" => %{"value" => "injected@example.com"}
+          }
+        }
+      )
+
+    assert redirected_to(conn) == ~p"/users/#{user}"
+    assert Repo.get(Email, email.id).value == email.value
+    refute Repo.get_by(Email, value: "injected@example.com")
+  end
+
+  test "edit form has no email inputs, just a link to the email management page", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    conn = get(conn, ~p"/users/#{user}/edit")
+    html = html_response(conn, 200)
+
+    refute html =~ "user[emails]"
+    assert html =~ ~p"/users/#{user}/emails"
+  end
+
+  test "the landing-page registration form still asks for the email address", %{conn: conn} do
+    conn = get(conn, ~p"/")
+    assert html_response(conn, 200) =~ "user[emails][0][value]"
   end
 
   test "renders 403 when editing or updating another user's profile", %{conn: conn} do

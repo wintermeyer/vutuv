@@ -72,8 +72,10 @@ defmodule VutuvWeb.Router do
     resources("/search_queries", SearchQueryController, only: [:create, :new, :show])
 
     # No :index — there is no public user directory; the admin panel lists
-    # unverified users and search covers discovery.
-    resources "/users", UserController, param: "slug", except: [:index] do
+    # unverified users and search covers discovery. No :new/:create either —
+    # registration is the landing-page form (POST /new_registration); the
+    # UserController versions were unreachable (EnsureValidated 404'd them).
+    resources "/users", UserController, param: "slug", except: [:index, :new, :create] do
       pipe_through(:user_pipe)
       resources("/emails", EmailController)
       # PIN-entry step for the email-change flow (issue #759).

@@ -62,11 +62,15 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
 
     test "the email visibility select is translated", %{conn: conn, user: user} do
+      # The select moved off the profile form when email editing was reduced
+      # to the public? flag; it now lives only on the email edit page.
+      %{emails: [email]} = Repo.preload(user, :emails)
+
       conn =
         conn
         |> recycle()
         |> put_req_header("accept-language", "de")
-        |> get(~p"/users/#{user}/edit")
+        |> get(~p"/users/#{user}/emails/#{email}/edit")
 
       html = html_response(conn, 200)
       assert html =~ "Öffentlich"

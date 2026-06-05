@@ -26,6 +26,12 @@ defmodule Vutuv.Accounts.Email do
     |> fill_md5sum
   end
 
+  # The address itself is an identity and may only be set through the
+  # PIN-verified create/confirm flow, so editing is limited to the public? flag.
+  def update_changeset(model, params \\ %{}) do
+    cast(model, params, [:public?])
+  end
+
   def fill_md5sum(changeset) do
     if value = get_change(changeset, :value) do
       md5sum =

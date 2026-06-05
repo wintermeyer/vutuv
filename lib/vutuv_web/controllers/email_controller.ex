@@ -112,15 +112,17 @@ defmodule VutuvWeb.EmailController do
     end
   end
 
+  # Editing is limited to the public? flag: changing the address itself would
+  # bypass the PIN verification above, so a new address means create + delete.
   def edit(conn, %{"id" => id}) do
     email = ControllerHelpers.get_owned!(conn, :emails, id)
-    changeset = Email.changeset(email)
+    changeset = Email.update_changeset(email)
     render(conn, "edit.html", email: email, changeset: changeset)
   end
 
   def update(conn, %{"id" => id, "email" => email_params}) do
     email = ControllerHelpers.get_owned!(conn, :emails, id)
-    changeset = Email.changeset(email, email_params)
+    changeset = Email.update_changeset(email, email_params)
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Email updated successfully."),

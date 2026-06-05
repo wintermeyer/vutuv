@@ -49,7 +49,7 @@ defmodule Vutuv.Accounts do
     search_terms = SearchTerm.create_search_terms(user_params)
 
     changeset =
-      User.changeset(%User{}, user_params)
+      User.registration_changeset(%User{}, user_params)
       |> Ecto.Changeset.put_assoc(:slugs, [slug_changeset])
       |> Ecto.Changeset.put_assoc(:search_terms, search_terms)
       |> Ecto.Changeset.put_change(:active_slug, slug_changeset.changes[:value])

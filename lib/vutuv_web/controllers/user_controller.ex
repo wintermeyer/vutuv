@@ -3,14 +3,12 @@ defmodule VutuvWeb.UserController do
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :show, :tags_create])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :confirm_delete])
   plug(VutuvWeb.Plug.AuthUser when action in [:edit, :update, :tags_create])
-  plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
   plug(VutuvWeb.Plug.EnsureValidated when action not in [:delete, :confirm_delete])
   import VutuvWeb.UserHelpers
 
   import Ecto.Query
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
@@ -20,44 +18,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.RateLimit
 
-  plug(:scrub_params, "user" when action in [:create, :update])
-
-  def new(conn, _params) do
-    changeset =
-      User.changeset(%User{})
-      |> Ecto.Changeset.put_assoc(:emails, [%Email{}])
-
-    render(conn, "new.html", changeset: changeset, conn: conn)
-  end
-
-  def create(conn, %{"user" => user_params}) do
-    email = user_params["emails"]["0"]["value"]
-
-    case Vutuv.Accounts.register_user(conn, user_params) do
-      {:ok, user} ->
-        case Vutuv.Accounts.login_by_email(conn, email) do
-          {:ok, conn} ->
-            conn
-            |> put_flash(
-              :info,
-              Gettext.gettext(
-                VutuvWeb.Gettext,
-                "User %{name} created successfully. An email has been sent with your PIN.",
-                name: full_name(user)
-              )
-            )
-            |> redirect(to: ~p"/new_registration")
-
-          {:error, _reason, conn} ->
-            conn
-            |> put_flash(:error, gettext("There was an error"))
-            |> redirect(to: ~p"/")
-        end
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
-  end
+  plug(:scrub_params, "user" when action in [:update])
 
   def show(conn, _params) do
     # The totals drive the "View all" links for the sections whose preloads
@@ -173,7 +134,7 @@ defmodule VutuvWeb.UserController do
   def edit(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload([:emails, :slugs, :oauth_providers])
+      |> Repo.preload([:slugs, :oauth_providers])
 
     changeset = User.changeset(user)
 
@@ -184,7 +145,7 @@ defmodule VutuvWeb.UserController do
     user = conn.assigns[:user]
 
     user
-    |> Repo.preload([:emails, :slugs, :oauth_providers, :search_terms])
+    |> Repo.preload([:slugs, :oauth_providers, :search_terms])
     |> User.changeset(user_params)
     |> update_search_terms(user_params)
     |> Repo.update()

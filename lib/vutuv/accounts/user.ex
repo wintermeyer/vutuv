@@ -56,11 +56,14 @@ defmodule Vutuv.Accounts.User do
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 
+  # Deliberately does NOT cast :emails: an address is an identity that must be
+  # PIN-verified before it is attached (EmailController.create/confirm, issue
+  # #759). Only registration_changeset/2 accepts the initial address, which the
+  # login PIN then verifies.
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @optional_fields)
     |> validate_avatar(params)
-    |> cast_assoc(:emails)
     |> cast_assoc(:slugs)
     |> cast_assoc(:oauth_providers)
     |> validate_first_name_or_last_name_or_nickname(params)
@@ -74,6 +77,14 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:headline, max: 255)
     |> nullify_default_birthdate()
     |> downcase_active_slug()
+  end
+
+  # Registration is the one place where an email address may ride along with
+  # the user: the address is verified right afterwards by the login PIN.
+  def registration_changeset(model, params \\ %{}) do
+    model
+    |> changeset(params)
+    |> cast_assoc(:emails)
   end
 
   defp validate_avatar(changeset, %{avatar: avatar}),
