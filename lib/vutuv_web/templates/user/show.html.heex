@@ -67,7 +67,16 @@ the resulting ~200px rail width. --%>
             <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z"/></svg>
           </span>
         </h1>
-        <p :if={@user.headline} class="text-slate-500 dark:text-slate-400">{@user.headline}</p>
+        <%!-- Headline is user-written Markdown, rendered through the same safe
+        VutuvWeb.Markdown pipeline as chat messages. Earmark wraps the output in
+        a <p>, so the host is a <div>; the arbitrary-variant classes flatten that
+        paragraph and style inline links/code to match the muted sub-line. --%>
+        <div
+          :if={@user.headline}
+          class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
+        >
+          {VutuvWeb.Markdown.render(@user.headline)}
+        </div>
         <p :if={@work_info not in [nil, ""]} class="mt-0.5 text-sm text-slate-400">
           {@work_info}
         </p>

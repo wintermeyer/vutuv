@@ -162,6 +162,26 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ~p"/api/1.0/users/#{user}/vcard"
   end
 
+  test "renders the headline as Markdown", %{conn: conn} do
+    user =
+      insert(:user,
+        validated?: true,
+        headline: "**Senior** dev, see [my site](https://example.org)"
+      )
+
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    # Inline Markdown becomes real markup, not literal asterisks.
+    assert html =~ "<strong>Senior</strong>"
+    refute html =~ "**Senior**"
+    # Links go through VutuvWeb.Markdown, which opens them in a new tab.
+    assert html =~ ~s(href="https://example.org")
+    assert html =~ ~s(target="_blank")
+    assert html =~ ">my site</a>"
+  end
+
   test "hides empty profile sections from visitors", %{conn: conn} do
     user = insert(:user, validated?: true)
     insert(:slug, value: user.active_slug, disabled: false, user: user)

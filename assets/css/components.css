@@ -394,6 +394,13 @@ body.stretch main {
   margin-top: 0.25rem;
   display: block;
 }
+/* Muted helper line under a field (e.g. "Markdown is supported"). */
+.editform__hint {
+  color: #64748b;
+  font-size: 0.8rem;
+  margin: 0.25rem 0 0;
+  display: block;
+}
 .alert,
 .alert-danger {
   background: #fef2f2;
@@ -960,6 +967,7 @@ ul.thumbs li .text .title {
   .card dl dt { border-color: #1e293b; }
   .editform__actions { border-color: #1e293b; }
   .editform__inputwrap { background: #1e293b; }
+  .editform__hint { color: #94a3b8; }
   .imagebox__form { border-color: #1e293b; }
   .profiles li strong { color: #f1f5f9; }
   .profiles li p { color: #94a3b8; }
