@@ -175,18 +175,14 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "create a link", %{conn: conn, user: user} do
       conn =
-        post(conn, ~p"/#{user}/links",
-          url: %{value: "https://example.org/", description: "Site"}
-        )
+        post(conn, ~p"/#{user}/links", url: %{value: "https://example.org/", description: "Site"})
 
       assert conn.status < 500, "link create -> #{conn.status}"
     end
 
     test "update a phone number", %{conn: conn, user: user, phone: phone} do
       conn =
-        put(conn, ~p"/#{user}/phone_numbers/#{phone}",
-          phone_number: %{value: "+49 30 5551111"}
-        )
+        put(conn, ~p"/#{user}/phone_numbers/#{phone}", phone_number: %{value: "+49 30 5551111"})
 
       assert conn.status < 500, "phone update -> #{conn.status}"
     end

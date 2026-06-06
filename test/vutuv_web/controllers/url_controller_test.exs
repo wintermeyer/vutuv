@@ -67,9 +67,7 @@ defmodule VutuvWeb.UrlControllerTest do
     url = insert(:url, user: user)
 
     conn =
-      put(conn, ~p"/#{user}/links/#{url}",
-        url: %{"value" => url_value, "description" => "test"}
-      )
+      put(conn, ~p"/#{user}/links/#{url}", url: %{"value" => url_value, "description" => "test"})
 
     {conn, user, url}
   end

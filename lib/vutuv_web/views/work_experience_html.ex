@@ -55,7 +55,10 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
     cond do
       same_year?(start_year, end_year) ->
-        %{label: Integer.to_string(start_year), detail: month_detail(start_month, end_month, full)}
+        %{
+          label: Integer.to_string(start_year),
+          detail: month_detail(start_month, end_month, full)
+        }
 
       multi_year?(start_year, end_year) ->
         %{label: years_span(start_year, end_year), detail: IO.iodata_to_binary(full)}

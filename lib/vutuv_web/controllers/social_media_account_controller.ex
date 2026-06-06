@@ -75,9 +75,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
       {:ok, social_media_account} ->
         conn
         |> put_flash(:info, gettext("Social media account updated successfully."))
-        |> redirect(
-          to: ~p"/#{conn.assigns[:user]}/social_media_accounts/#{social_media_account}"
-        )
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts/#{social_media_account}")
 
       {:error, changeset} ->
         render(conn, "edit.html",
