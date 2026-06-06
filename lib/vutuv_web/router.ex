@@ -215,11 +215,14 @@ defmodule VutuvWeb.Router do
       )
     end
 
-    # The author's post archive and the post permalinks
-    # (/:slug/2026/06/05/0001). Defined after the nested resources, so their
-    # fixed segments (/emails, /followers, …) always win; the permalink
-    # controller 404s anything that does not parse as a date + counter.
+    # The author's post archive — whole, or scoped to a year / month / day —
+    # and the post permalinks (/:slug/posts/2026/06/05/0001). Everything
+    # post-related lives under the fixed /posts segment; the controller 404s
+    # date segments that do not parse.
     get("/:slug/posts", PostController, :index)
-    get("/:slug/:year/:month/:day/:seq", PostController, :show)
+    get("/:slug/posts/:year", PostController, :index)
+    get("/:slug/posts/:year/:month", PostController, :index)
+    get("/:slug/posts/:year/:month/:day", PostController, :index)
+    get("/:slug/posts/:year/:month/:day/:seq", PostController, :show)
   end
 end

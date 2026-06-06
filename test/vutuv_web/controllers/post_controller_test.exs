@@ -30,6 +30,8 @@ defmodule VutuvWeb.PostControllerTest do
     Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
   end
 
+  defp pad(int), do: String.pad_leading(Integer.to_string(int), 2, "0")
+
   describe "GET the permalink" do
     test "renders a public post to anonymous visitors, indexable", %{conn: conn} do
       user = author()
@@ -47,7 +49,7 @@ defmodule VutuvWeb.PostControllerTest do
       post = create_post!(user, %{body: "x"})
       date = post.published_on
 
-      sloppy = "/#{user.active_slug}/#{date.year}/#{date.month}/#{date.day}/#{post.seq}"
+      sloppy = "/#{user.active_slug}/posts/#{date.year}/#{date.month}/#{date.day}/#{post.seq}"
       conn = get(conn, sloppy)
 
       assert redirected_to(conn) == Posts.path(post)
@@ -56,9 +58,9 @@ defmodule VutuvWeb.PostControllerTest do
     test "404s for unknown posts and unparseable dates", %{conn: conn} do
       user = author()
 
-      assert get(conn, "/#{user.active_slug}/2026/06/05/0001").status == 404
-      assert get(conn, "/#{user.active_slug}/abcd/06/05/0001").status == 404
-      assert get(conn, "/#{user.active_slug}/2026/13/05/0001").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/2026/06/05/0001").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/abcd/06/05/0001").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/2026/13/05/0001").status == 404
     end
 
     test "restricted post: 404 for denied readers, 200 + noindex for permitted", %{conn: conn} do
@@ -159,6 +161,56 @@ defmodule VutuvWeb.PostControllerTest do
     test "404s for unknown authors", %{conn: conn} do
       assert get(conn, "/no-such-user/posts").status == 404
     end
+
+    test "scopes the archive to a year, month or day", %{conn: conn} do
+      user = author()
+      {:ok, old} = Posts.create_post(user, %{body: "from last year"})
+      {:ok, current} = Posts.create_post(user, %{body: "from today"})
+
+      # Posts are stamped with today's UTC date; backdate one for the test.
+      Repo.update_all(
+        from(p in Vutuv.Posts.Post, where: p.id == ^old.id),
+        set: [published_on: ~D[2025-12-31]]
+      )
+
+      today = current.published_on
+
+      year_view = get(conn, "/#{user.active_slug}/posts/2025")
+      assert html_response(year_view, 200) =~ "from last year"
+      refute year_view.resp_body =~ "from today"
+
+      month_view = get(conn, "/#{user.active_slug}/posts/#{today.year}/#{pad(today.month)}")
+      assert month_view.resp_body =~ "from today"
+      refute month_view.resp_body =~ "from last year"
+
+      day_view = get(conn, "/#{user.active_slug}/posts/2025/12/31")
+      assert day_view.resp_body =~ "from last year"
+      refute day_view.resp_body =~ "from today"
+
+      empty_view = get(conn, "/#{user.active_slug}/posts/2024")
+      assert html_response(empty_view, 200) =~ "Nothing here yet."
+    end
+
+    test "scoped pages carry the trail back up the hierarchy", %{conn: conn} do
+      user = author()
+      {:ok, post} = Posts.create_post(user, %{body: "crumbed"})
+      date = post.published_on
+
+      conn = get(conn, "/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}/#{pad(date.day)}")
+
+      assert conn.resp_body =~ "All posts"
+      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts")
+      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts/#{date.year}")
+      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}")
+    end
+
+    test "404s for nonsense period segments", %{conn: conn} do
+      user = author()
+
+      assert get(conn, "/#{user.active_slug}/posts/abcd").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/2026/13").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/2026/02/30").status == 404
+    end
   end
 
   describe "the profile's View all link" do
@@ -166,12 +218,17 @@ defmodule VutuvWeb.PostControllerTest do
       user = author()
       for n <- 1..3, do: {:ok, _} = Posts.create_post(user, %{body: "post #{n}"})
 
+      # The exact archive href (closing quote included): permalinks also
+      # start with /posts/ but continue with the date segments.
+      archive_href = ~s(href="/#{user.active_slug}/posts")
+
       conn_without = get(conn, "/#{user.active_slug}")
-      refute conn_without.resp_body =~ "/#{user.active_slug}/posts"
+      refute conn_without.resp_body =~ archive_href
 
       {:ok, _} = Posts.create_post(user, %{body: "post 4"})
       conn_with = get(conn, "/#{user.active_slug}")
-      assert conn_with.resp_body =~ "/#{user.active_slug}/posts"
+      assert conn_with.resp_body =~ archive_href
+      assert conn_with.resp_body =~ "View all"
     end
   end
 

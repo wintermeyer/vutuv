@@ -16,10 +16,11 @@ defmodule Vutuv.Posts do
   All four read paths (feed, profile, permalink, image proxy) must go through
   `visible_to?/2` or the composable `scope_visible/2` — never filter by hand.
 
-  **Permalinks** are `/:slug/:year/:month/:day/:seq`: `published_on` is the
-  UTC date at insert time and `seq` a per-author-per-day counter, generated
-  under a unique index with retry (`create_post/2`), and never changed by
-  edits.
+  **Permalinks** are `/:slug/posts/:year/:month/:day/:seq`: `published_on`
+  is the UTC date at insert time and `seq` a per-author-per-day counter,
+  generated under a unique index with retry (`create_post/2`), and never
+  changed by edits. Stripping trailing segments yields the day/month/year
+  archive index pages.
 
   **Images** upload eagerly while composing (`create_pending_image/3`), so
   inline markdown can reference them before the post exists; submit attaches
@@ -486,10 +487,11 @@ defmodule Vutuv.Posts do
   @doc """
   One offset page of `author`'s posts visible to `viewer` — the author
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).
-  Returns `{posts, total}`.
+  An optional `period` (`{from, to}` dates, inclusive) scopes it to the
+  year/month/day index pages. Returns `{posts, total}`.
   """
-  def author_posts_page(%User{} = author, viewer, params) do
-    query = author_posts_query(author, viewer)
+  def author_posts_page(%User{} = author, viewer, params, period \\ nil) do
+    query = author |> author_posts_query(viewer) |> scope_period(period)
     total = Repo.aggregate(query, :count)
 
     posts =
@@ -499,6 +501,12 @@ defmodule Vutuv.Posts do
       |> Repo.preload(post_preloads())
 
     {posts, total}
+  end
+
+  defp scope_period(query, nil), do: query
+
+  defp scope_period(query, {%Date{} = from, %Date{} = to}) do
+    where(query, [p], p.published_on >= ^from and p.published_on <= ^to)
   end
 
   defp author_posts_query(%User{id: author_id}, viewer) do
@@ -538,13 +546,14 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  The root-relative permalink path, e.g. `/stefan/2026/06/05/0001`.
-  Requires `:user` to be preloaded.
+  The root-relative permalink path, e.g. `/stefan/posts/2026/06/05/0001`.
+  Lives under the author archive, so stripping trailing segments yields the
+  day/month/year index pages. Requires `:user` to be preloaded.
   """
   def path(%Post{user: %User{} = user, published_on: date} = post) do
     month = String.pad_leading(Integer.to_string(date.month), 2, "0")
     day = String.pad_leading(Integer.to_string(date.day), 2, "0")
-    "/#{user.active_slug}/#{date.year}/#{month}/#{day}/#{Post.seq_string(post.seq)}"
+    "/#{user.active_slug}/posts/#{date.year}/#{month}/#{day}/#{Post.seq_string(post.seq)}"
   end
 
   ## Images

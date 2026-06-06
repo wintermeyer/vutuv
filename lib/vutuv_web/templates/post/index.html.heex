@@ -3,6 +3,7 @@
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
         {gettext("Posts by %{name}", name: full_name(@author))}
+        <span :if={@period_label} class="font-normal text-slate-400">· {@period_label}</span>
       </h1>
       <.link
         href={~p"/#{@author}"}
@@ -11,6 +12,17 @@
         {gettext("View profile")}
       </.link>
     </div>
+
+    <%!-- The trail back up a scoped archive: All posts / 2026 / 06 / 06. --%>
+    <p :if={@period_crumbs != []} class="text-sm text-slate-500">
+      <span :for={{{label, href}, index} <- Enum.with_index(@period_crumbs)}>
+        <span :if={index > 0}>/</span>
+        <.link :if={href} href={href} class="font-semibold text-brand-600 hover:text-brand-700">
+          {label}
+        </.link>
+        <span :if={is_nil(href)}>{label}</span>
+      </span>
+    </p>
 
     <.post_card :for={post <- @posts} post={post} viewer={@current_user} mode={:preview} />
 
