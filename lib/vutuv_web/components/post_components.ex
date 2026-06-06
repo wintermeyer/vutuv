@@ -29,6 +29,13 @@ defmodule VutuvWeb.PostComponents do
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
   attr(:mode, :atom, default: :preview, values: [:preview, :full])
+
+  attr(:surface, :atom,
+    default: :card,
+    values: [:card, :flat],
+    doc: ":card stands alone; :flat embeds inside an existing card (profile Posts section)"
+  )
+
   attr(:class, :string, default: nil)
   slot(:menu, doc: "owner actions, rendered top-right")
 
@@ -52,8 +59,48 @@ defmodule VutuvWeb.PostComponents do
       )
 
     ~H"""
-    <.card class={@class}>
-      <div class="flex items-start gap-3">
+    <.card :if={@surface == :card} class={@class}>
+      <.post_card_body
+        post={@post}
+        mode={@mode}
+        body_html={@body_html}
+        truncated?={@truncated?}
+        restricted?={@restricted?}
+        permalink={@permalink}
+        gallery={@gallery}
+        edited?={@edited?}
+        menu={@menu}
+      />
+    </.card>
+    <div :if={@surface == :flat} class={@class}>
+      <.post_card_body
+        post={@post}
+        mode={@mode}
+        body_html={@body_html}
+        truncated?={@truncated?}
+        restricted?={@restricted?}
+        permalink={@permalink}
+        gallery={@gallery}
+        edited?={@edited?}
+        menu={@menu}
+      />
+    </div>
+    """
+  end
+
+  attr(:post, :any, required: true)
+  attr(:mode, :atom, required: true)
+  attr(:body_html, :any, required: true)
+  attr(:truncated?, :boolean, required: true)
+  attr(:restricted?, :boolean, required: true)
+  attr(:permalink, :string, required: true)
+  attr(:gallery, :list, required: true)
+  attr(:edited?, :boolean, required: true)
+  attr(:menu, :list, default: [])
+
+  defp post_card_body(assigns) do
+    ~H"""
+    <div class="flex items-start gap-3">
         <.link href={~p"/#{@post.user}"} class="shrink-0">
           <.avatar user={@post.user} size="sm" />
         </.link>
@@ -143,7 +190,6 @@ defmodule VutuvWeb.PostComponents do
           {render_slot(@menu)}
         </div>
       </div>
-    </.card>
     """
   end
 

@@ -121,13 +121,27 @@ the resulting ~200px rail width. --%>
       </p>
     </section>
 
-    <%!-- Posts (latest visible to this viewer; full feed lives at /feed) --%>
-    <section :if={@posts != []} id="profile-posts" class="space-y-3">
-      <h2 class="px-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
-        {gettext("Posts")}
-      </h2>
-      <.post_card :for={post <- @posts} post={post} viewer={@current_user} mode={:preview} />
-    </section>
+    <%!-- Posts (latest visible to this viewer; writing happens in the /feed
+    composer, which the owner's "Add" link points to) --%>
+    <.card :if={@posts != [] or same_user?(@user, @current_user)} id="profile-posts">
+      <.section_header
+        title={gettext("Posts")}
+        add_href={same_user?(@user, @current_user) && ~p"/feed"}
+      />
+
+      <div :if={@posts != []} class="divide-y divide-slate-100 dark:divide-slate-800">
+        <.post_card
+          :for={post <- @posts}
+          post={post}
+          viewer={@current_user}
+          mode={:preview}
+          surface={:flat}
+          class="py-4 first:pt-0 last:pb-0"
+        />
+      </div>
+
+      <p :if={@posts == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+    </.card>
 
     <%!-- Skills & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>

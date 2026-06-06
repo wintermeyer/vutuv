@@ -23,6 +23,16 @@ defmodule VutuvWeb.UserProfilePostsTest do
     assert conn.resp_body =~ "profile post"
   end
 
+  test "the owner sees the card with an Add link even when empty", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    conn = get(conn, "/#{user.active_slug}")
+
+    assert html_response(conn, 200) =~ "profile-posts"
+    assert conn.resp_body =~ ~s(href="/feed")
+    assert conn.resp_body =~ "Nothing here yet."
+  end
+
   test "filters restricted posts per viewer and omits the empty section", %{conn: conn} do
     user = author()
 
