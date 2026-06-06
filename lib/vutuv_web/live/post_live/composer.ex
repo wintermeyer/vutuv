@@ -109,6 +109,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:alts, params["alts"] || socket.assigns.alts)
       |> assign(:preset, preset)
       |> assign(:error, nil)
+      |> sweep_rejected_uploads()
 
     socket =
       if preset == "custom" do
@@ -250,6 +251,40 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_alt(image, alt) do
     if String.trim(alt) != image.alt, do: Posts.update_image_alt(image, alt)
+  end
+
+  # Files refused at selection time (over the size limit, type not in the
+  # accept list — e.g. HEIC photos on builds without an HEVC decoder) used to
+  # sit as silently-erroring entries: the message only flashed in the
+  # transient upload row, so a multi-photo selection looked like files just
+  # vanished. Cancel them and say which file was refused and why, durably.
+  defp sweep_rejected_uploads(socket) do
+    rejected =
+      Enum.filter(
+        socket.assigns.uploads.images.entries,
+        &(upload_errors(socket.assigns.uploads.images, &1) != [])
+      )
+
+    case rejected do
+      [] ->
+        socket
+
+      rejected ->
+        messages =
+          Enum.map_join(rejected, " ", fn entry ->
+            reason =
+              socket.assigns.uploads.images
+              |> upload_errors(entry)
+              |> List.first()
+              |> upload_error_message()
+
+            "#{entry.client_name}: #{reason}"
+          end)
+
+        rejected
+        |> Enum.reduce(socket, &cancel_upload(&2, :images, &1.ref))
+        |> assign(:error, messages)
+    end
   end
 
   defp handle_progress(:images, entry, socket) do
@@ -652,8 +687,16 @@ defmodule VutuvWeb.PostLive.Composer do
     """
   end
 
-  defp upload_error_message(:too_large), do: gettext("File is larger than 6 MB.")
-  defp upload_error_message(:not_accepted), do: gettext("File type not supported.")
+  defp upload_error_message(:too_large) do
+    gettext("File is larger than %{mb} MB.", mb: div(Posts.max_image_filesize(), 1_000_000))
+  end
+
+  defp upload_error_message(:not_accepted) do
+    gettext("File type not supported (allowed: %{types}).",
+      types: Enum.join(Vutuv.PostImageStore.extension_whitelist(), ", ")
+    )
+  end
+
   defp upload_error_message(:too_many_files), do: gettext("Too many files.")
   defp upload_error_message(_), do: gettext("Upload failed.")
 end

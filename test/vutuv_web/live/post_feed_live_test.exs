@@ -159,6 +159,43 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "/post_images/#{attached.token}/feed.webp"
     end
 
+    test "a refused file is named in a persistent error and the composer recovers", %{
+      conn: conn
+    } do
+      # Shrink the size limit so a tiny test file is "too large". Must be set
+      # before mount — allow_upload reads it when the composer initializes.
+      prev = Application.get_env(:vutuv, :post_images)
+      Application.put_env(:vutuv, :post_images, max_filesize: 1_000, max_per_post: 10)
+      on_exit(fn -> Application.put_env(:vutuv, :post_images, prev) end)
+
+      {conn, user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      upload =
+        file_input(live, "#composer-form", :images, [
+          %{name: "huge-photo.png", content: String.duplicate("x", 2_000), type: "image/png"}
+        ])
+
+      # The preflight refuses the file (client-side rule, enforced server-side
+      # in tests). The next form change sweeps it into a visible error.
+      assert {:error, _} = render_upload(upload, "huge-photo.png")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => ""}})
+      |> render_change()
+
+      assert has_element?(live, "#composer-error")
+      assert render(live) =~ "huge-photo.png"
+
+      # The rejected entry was cancelled: posting still works.
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "text without the photo"}})
+      |> render_submit()
+
+      assert [post] = Posts.profile_posts(user, user)
+      assert post.images == []
+    end
+
     test "rejects an empty post with an inline error", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")

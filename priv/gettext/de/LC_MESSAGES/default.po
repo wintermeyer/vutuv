@@ -626,7 +626,7 @@ msgstr "Profile von "
 msgid "Provider"
 msgstr "Provider"
 
-#: lib/vutuv_web/live/post_live/composer.ex:505
+#: lib/vutuv_web/live/post_live/composer.ex:540
 #: lib/vutuv_web/templates/email/card_list.html.heex:15
 #: lib/vutuv_web/templates/email/form_content.html.heex:15
 #: lib/vutuv_web/templates/email/show.html.heex:22
@@ -650,7 +650,7 @@ msgstr "Anforderer"
 msgid "Results"
 msgstr "Ergebnisse"
 
-#: lib/vutuv_web/live/post_live/composer.ex:522
+#: lib/vutuv_web/live/post_live/composer.ex:557
 #: lib/vutuv_web/templates/user/form_content.html.heex:88
 #, elixir-autogen
 msgid "Save"
@@ -2259,56 +2259,56 @@ msgstr "September"
 msgid "Markdown is supported: bold, italics, links and lists."
 msgstr "Markdown wird unterstützt: Fett, Kursiv, Links und Listen."
 
-#: lib/vutuv_web/live/post_live/composer.ex:483
+#: lib/vutuv_web/live/post_live/composer.ex:518
 #, elixir-autogen, elixir-format
 msgid "Add images"
 msgstr "Bilder hinzufügen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:636
+#: lib/vutuv_web/live/post_live/composer.ex:671
 #, elixir-autogen, elixir-format
 msgid "As soon as anything is hidden, the post is also invisible to logged-out visitors and search engines."
 msgstr "Sobald etwas verborgen wird, ist der Beitrag auch für nicht eingeloggte Besucher und Suchmaschinen unsichtbar."
 
-#: lib/vutuv_web/live/post_live/composer.ex:497
+#: lib/vutuv_web/live/post_live/composer.ex:532
 #, elixir-autogen, elixir-format
 msgid "Audience"
 msgstr "Sichtbarkeit"
 
 #: lib/vutuv_web/live/post_live/edit.ex:53
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Back to the post"
-msgstr "Zur Startseite"
+msgstr "Zurück zum Beitrag"
 
-#: lib/vutuv_web/live/post_live/composer.ex:472
-#, elixir-autogen, elixir-format, fuzzy
+#: lib/vutuv_web/live/post_live/composer.ex:507
+#, elixir-autogen, elixir-format
 msgid "Cancel upload"
-msgstr "Abbrechen"
+msgstr "Upload abbrechen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:513
+#: lib/vutuv_web/live/post_live/composer.ex:548
 #, elixir-autogen, elixir-format
 msgid "Custom…"
 msgstr "Eigene Auswahl…"
 
 #: lib/vutuv_web/live/post_live/edit.ex:63
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Delete post"
-msgstr "Löschen"
+msgstr "Beitrag löschen"
 
 #: lib/vutuv_web/live/post_live/edit.ex:61
 #, elixir-autogen, elixir-format
 msgid "Delete this post permanently?"
 msgstr "Diesen Beitrag endgültig löschen?"
 
-#: lib/vutuv_web/live/post_live/composer.ex:437
+#: lib/vutuv_web/live/post_live/composer.ex:472
 #, elixir-autogen, elixir-format
 msgid "Describe this image (alt text)"
 msgstr "Beschreiben Sie dieses Bild (Alt-Text)"
 
 #: lib/vutuv_web/live/post_live/edit.ex:22
 #: lib/vutuv_web/live/post_live/edit.ex:38
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Edit post"
-msgstr "Ändern"
+msgstr "Beitrag bearbeiten"
 
 #: lib/vutuv_web/live/post_live/feed.ex:39
 #: lib/vutuv_web/live/post_live/feed.ex:108
@@ -2318,52 +2318,42 @@ msgstr "Ändern"
 msgid "Feed"
 msgstr "Feed"
 
-#: lib/vutuv_web/live/post_live/composer.ex:655
-#, elixir-autogen, elixir-format
-msgid "File is larger than 6 MB."
-msgstr "Die Datei ist größer als 6 MB."
-
-#: lib/vutuv_web/live/post_live/composer.ex:656
-#, elixir-autogen, elixir-format
-msgid "File type not supported."
-msgstr "Dateityp wird nicht unterstützt."
-
 #: lib/vutuv_web/templates/post/teaser.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Follow %{name} to read it."
 msgstr "Folgen Sie %{name}, um ihn zu lesen."
 
-#: lib/vutuv_web/live/post_live/composer.ex:507
-#, elixir-autogen, elixir-format, fuzzy
+#: lib/vutuv_web/live/post_live/composer.ex:542
+#, elixir-autogen, elixir-format
 msgid "Followers only"
-msgstr "Follower"
+msgstr "Nur Follower"
 
 #: lib/vutuv_web/templates/post/show.html.heex:14
 #, elixir-autogen, elixir-format
 msgid "Hidden from:"
 msgstr "Verborgen vor:"
 
-#: lib/vutuv_web/live/post_live/composer.ex:363
+#: lib/vutuv_web/live/post_live/composer.ex:398
 #, elixir-autogen, elixir-format
 msgid "Hidden from: %{list}. Also hidden from logged-out visitors."
 msgstr "Verborgen vor: %{list}. Außerdem verborgen vor nicht eingeloggten Besuchern."
 
-#: lib/vutuv_web/live/post_live/composer.ex:612
+#: lib/vutuv_web/live/post_live/composer.ex:647
 #, elixir-autogen, elixir-format
 msgid "Hide from a specific person…"
 msgstr "Vor einer bestimmten Person verbergen…"
 
-#: lib/vutuv_web/live/post_live/composer.ex:533
+#: lib/vutuv_web/live/post_live/composer.ex:568
 #, elixir-autogen, elixir-format
 msgid "Hide this post from…"
 msgstr "Diesen Beitrag verbergen vor…"
 
-#: lib/vutuv_web/live/post_live/composer.ex:448
+#: lib/vutuv_web/live/post_live/composer.ex:483
 #, elixir-autogen, elixir-format
 msgid "Insert"
 msgstr "Einfügen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:445
+#: lib/vutuv_web/live/post_live/composer.ex:480
 #, elixir-autogen, elixir-format
 msgid "Insert into text"
 msgstr "In den Text einfügen"
@@ -2374,13 +2364,13 @@ msgstr "In den Text einfügen"
 msgid "Limited audience"
 msgstr "Eingeschränkte Sichtbarkeit"
 
-#: lib/vutuv_web/live/post_live/composer.ex:582
+#: lib/vutuv_web/live/post_live/composer.ex:617
 #, elixir-autogen, elixir-format
 msgid "Logged-out visitors"
 msgstr "Nicht eingeloggte Besucher"
 
-#: lib/vutuv_web/live/post_live/composer.ex:240
-#: lib/vutuv_web/live/post_live/composer.ex:266
+#: lib/vutuv_web/live/post_live/composer.ex:241
+#: lib/vutuv_web/live/post_live/composer.ex:301
 #, elixir-autogen, elixir-format
 msgid "No more than %{max} images per post."
 msgstr "Höchstens %{max} Bilder pro Beitrag."
@@ -2390,40 +2380,40 @@ msgstr "Höchstens %{max} Bilder pro Beitrag."
 msgid "Nothing here yet. Follow people to fill your feed, or write your first post."
 msgstr "Hier ist noch nichts. Folgen Sie anderen, um Ihren Feed zu füllen, oder schreiben Sie Ihren ersten Beitrag."
 
-#: lib/vutuv_web/live/post_live/composer.ex:237
+#: lib/vutuv_web/live/post_live/composer.ex:238
 #, elixir-autogen, elixir-format
 msgid "One of the images could not be attached."
 msgstr "Eines der Bilder konnte nicht angehängt werden."
 
-#: lib/vutuv_web/live/post_live/composer.ex:512
+#: lib/vutuv_web/live/post_live/composer.ex:547
 #, elixir-autogen, elixir-format
 msgid "Only me"
 msgstr "Nur ich"
 
-#: lib/vutuv_web/live/post_live/composer.ex:572
+#: lib/vutuv_web/live/post_live/composer.ex:607
 #, elixir-autogen, elixir-format
 msgid "People I don't follow"
 msgstr "Personen, denen ich nicht folge"
 
-#: lib/vutuv_web/live/post_live/composer.ex:510
+#: lib/vutuv_web/live/post_live/composer.ex:545
 #, elixir-autogen, elixir-format
 msgid "People I follow"
 msgstr "Personen, denen ich folge"
 
-#: lib/vutuv_web/live/post_live/composer.ex:562
+#: lib/vutuv_web/live/post_live/composer.ex:597
 #, elixir-autogen, elixir-format
 msgid "People who don't follow me"
 msgstr "Personen, die mir nicht folgen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:522
+#: lib/vutuv_web/live/post_live/composer.ex:557
 #, elixir-autogen, elixir-format
 msgid "Post"
 msgstr "Posten"
 
 #: lib/vutuv_web/controllers/post_controller.ex:65
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Post deleted successfully."
-msgstr "User wurde gelöscht."
+msgstr "Beitrag erfolgreich gelöscht."
 
 #: lib/vutuv_web/templates/user/show.html.heex:128
 #, elixir-autogen, elixir-format
@@ -2431,16 +2421,16 @@ msgid "Posts"
 msgstr "Beiträge"
 
 #: lib/vutuv_web/components/post_components.ex:144
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "Read more"
-msgstr "Mehr laden"
+msgstr "Weiterlesen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:598
+#: lib/vutuv_web/live/post_live/composer.ex:633
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr "Entfernen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:455
+#: lib/vutuv_web/live/post_live/composer.ex:490
 #, elixir-autogen, elixir-format
 msgid "Remove image"
 msgstr "Bild entfernen"
@@ -2450,7 +2440,7 @@ msgstr "Bild entfernen"
 msgid "Restricted posts are also hidden from logged-out visitors and search engines."
 msgstr "Eingeschränkte Beiträge sind auch für nicht eingeloggte Besucher und Suchmaschinen unsichtbar."
 
-#: lib/vutuv_web/live/post_live/composer.ex:520
+#: lib/vutuv_web/live/post_live/composer.ex:555
 #, elixir-autogen, elixir-format
 msgid "Saving…"
 msgstr "Wird gespeichert…"
@@ -2467,12 +2457,12 @@ msgstr[1] "Zeige %{count} neue Beiträge"
 msgid "Sorry, that page could not be found."
 msgstr "Diese Seite konnte leider nicht gefunden werden."
 
-#: lib/vutuv_web/live/post_live/composer.ex:281
-#, elixir-autogen, elixir-format, fuzzy
+#: lib/vutuv_web/live/post_live/composer.ex:316
+#, elixir-autogen, elixir-format
 msgid "That file could not be processed."
-msgstr "Diese E-Mail-Adresse konnte nicht hinzugefügt werden."
+msgstr "Diese Datei konnte nicht verarbeitet werden."
 
-#: lib/vutuv_web/live/post_live/composer.ex:234
+#: lib/vutuv_web/live/post_live/composer.ex:235
 #, elixir-autogen, elixir-format
 msgid "The audience selection is not valid."
 msgstr "Die Sichtbarkeitsauswahl ist ungültig."
@@ -2487,48 +2477,48 @@ msgstr "Diese Gruppe schränkt die Sichtbarkeit bestehender Beiträge ein. Ände
 msgid "This post is for followers of %{name}"
 msgstr "Dieser Beitrag ist für Follower von %{name}"
 
-#: lib/vutuv_web/live/post_live/composer.ex:657
+#: lib/vutuv_web/live/post_live/composer.ex:700
 #, elixir-autogen, elixir-format
 msgid "Too many files."
 msgstr "Zu viele Dateien."
 
-#: lib/vutuv_web/live/post_live/composer.ex:658
+#: lib/vutuv_web/live/post_live/composer.ex:701
 #, elixir-autogen, elixir-format
 msgid "Upload failed."
 msgstr "Upload fehlgeschlagen."
 
 #: lib/vutuv_web/templates/post/teaser.html.heex:38
-#, elixir-autogen, elixir-format, fuzzy
+#, elixir-autogen, elixir-format
 msgid "View profile"
-msgstr "Profil bearbeiten"
+msgstr "Profil ansehen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:349
+#: lib/vutuv_web/live/post_live/composer.ex:384
 #, elixir-autogen, elixir-format
 msgid "Visible only to people who follow you."
 msgstr "Nur sichtbar für Personen, die Ihnen folgen."
 
-#: lib/vutuv_web/live/post_live/composer.ex:352
+#: lib/vutuv_web/live/post_live/composer.ex:387
 #, elixir-autogen, elixir-format
 msgid "Visible only to people you follow."
 msgstr "Nur sichtbar für Personen, denen Sie folgen."
 
-#: lib/vutuv_web/live/post_live/composer.ex:355
+#: lib/vutuv_web/live/post_live/composer.ex:390
 #, elixir-autogen, elixir-format
 msgid "Visible only to you."
 msgstr "Nur für Sie sichtbar."
 
-#: lib/vutuv_web/live/post_live/composer.ex:346
-#: lib/vutuv_web/live/post_live/composer.ex:361
+#: lib/vutuv_web/live/post_live/composer.ex:381
+#: lib/vutuv_web/live/post_live/composer.ex:396
 #, elixir-autogen, elixir-format
 msgid "Visible to everyone."
 msgstr "Für alle sichtbar."
 
-#: lib/vutuv_web/live/post_live/composer.ex:410
+#: lib/vutuv_web/live/post_live/composer.ex:445
 #, elixir-autogen, elixir-format
 msgid "What's new?"
 msgstr "Was gibt's Neues?"
 
-#: lib/vutuv_web/live/post_live/composer.ex:415
+#: lib/vutuv_web/live/post_live/composer.ex:450
 #, elixir-autogen, elixir-format
 msgid "What's new? Markdown is supported."
 msgstr "Was gibt's Neues? Markdown wird unterstützt."
@@ -2538,25 +2528,25 @@ msgstr "Was gibt's Neues? Markdown wird unterstützt."
 msgid "edited"
 msgstr "bearbeitet"
 
-#: lib/vutuv_web/live/post_live/composer.ex:386
+#: lib/vutuv_web/live/post_live/composer.ex:421
 #: lib/vutuv_web/views/post_html.ex:17
 #, elixir-autogen, elixir-format
 msgid "everyone else"
 msgstr "alle anderen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:389
+#: lib/vutuv_web/live/post_live/composer.ex:424
 #: lib/vutuv_web/views/post_html.ex:20
 #, elixir-autogen, elixir-format
 msgid "logged-out visitors"
 msgstr "nicht eingeloggte Besucher"
 
-#: lib/vutuv_web/live/post_live/composer.ex:387
+#: lib/vutuv_web/live/post_live/composer.ex:422
 #: lib/vutuv_web/views/post_html.ex:18
 #, elixir-autogen, elixir-format
 msgid "people who don't follow you"
 msgstr "Personen, die Ihnen nicht folgen"
 
-#: lib/vutuv_web/live/post_live/composer.ex:388
+#: lib/vutuv_web/live/post_live/composer.ex:423
 #: lib/vutuv_web/views/post_html.ex:19
 #, elixir-autogen, elixir-format
 msgid "people you don't follow"
@@ -2567,7 +2557,17 @@ msgstr "Personen, denen Sie nicht folgen"
 msgid "unknown"
 msgstr "unbekannt"
 
-#: lib/vutuv_web/live/post_live/composer.ex:492
+#: lib/vutuv_web/live/post_live/composer.ex:527
 #, elixir-autogen, elixir-format
 msgid "Tags, comma-separated (max. %{max})"
 msgstr "Tags, durch Komma getrennt (max. %{max})"
+
+#: lib/vutuv_web/live/post_live/composer.ex:691
+#, elixir-autogen, elixir-format
+msgid "File is larger than %{mb} MB."
+msgstr "Die Datei ist größer als %{mb} MB."
+
+#: lib/vutuv_web/live/post_live/composer.ex:695
+#, elixir-autogen, elixir-format
+msgid "File type not supported (allowed: %{types})."
+msgstr "Dateityp wird nicht unterstützt (erlaubt: %{types})."
