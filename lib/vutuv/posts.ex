@@ -546,7 +546,7 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  The root-relative permalink path, e.g. `/stefan/posts/2026/06/05/0001`.
+  The root-relative permalink path, e.g. `/stefan/posts/2026/06/05/1`.
   Lives under the author archive, so stripping trailing segments yields the
   day/month/year index pages. Requires `:user` to be preloaded.
   """

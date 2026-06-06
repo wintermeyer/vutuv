@@ -44,15 +44,23 @@ defmodule VutuvWeb.PostControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == []
     end
 
-    test "redirects non-canonical URLs to the padded canonical", %{conn: conn} do
+    test "redirects non-canonical URLs to the canonical form", %{conn: conn} do
       user = author()
       post = create_post!(user, %{body: "x"})
       date = post.published_on
 
+      # Unpadded date segments and the legacy zero-padded counter both
+      # resolve and 302 to the canonical (padded date, plain counter).
       sloppy = "/#{user.active_slug}/posts/#{date.year}/#{date.month}/#{date.day}/#{post.seq}"
-      conn = get(conn, sloppy)
+      legacy = Posts.path(post) |> String.replace(~r{/(\d+)$}, "/000\\1")
 
-      assert redirected_to(conn) == Posts.path(post)
+      assert Posts.path(post) =~ ~r|/\d{4}/\d{2}/\d{2}/#{post.seq}$|
+
+      if sloppy != Posts.path(post) do
+        assert redirected_to(get(conn, sloppy)) == Posts.path(post)
+      end
+
+      assert redirected_to(get(conn, legacy)) == Posts.path(post)
     end
 
     test "404s for unknown posts and unparseable dates", %{conn: conn} do

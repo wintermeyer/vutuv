@@ -216,7 +216,7 @@ defmodule VutuvWeb.Router do
     end
 
     # The author's post archive — whole, or scoped to a year / month / day —
-    # and the post permalinks (/:slug/posts/2026/06/05/0001). Everything
+    # and the post permalinks (/:slug/posts/2026/06/05/1). Everything
     # post-related lives under the fixed /posts segment; the controller 404s
     # date segments that do not parse.
     get("/:slug/posts", PostController, :index)
