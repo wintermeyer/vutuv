@@ -136,6 +136,45 @@ defmodule VutuvWeb.PostControllerTest do
     end
   end
 
+  describe "GET /:slug/posts (the author archive)" do
+    test "lists the author's posts, visibility-filtered per viewer", %{conn: conn} do
+      user = author()
+      {:ok, _} = Posts.create_post(user, %{body: "open words"})
+
+      {:ok, _} =
+        Posts.create_post(user, %{body: "members words", denials: [%{"wildcard" => "logged_out"}]})
+
+      # Anonymous: only the public post.
+      anonymous = get(conn, "/#{user.active_slug}/posts")
+      assert html_response(anonymous, 200) =~ "open words"
+      refute anonymous.resp_body =~ "members words"
+
+      # A logged-in member sees both.
+      {member_conn, _member} = create_and_login_user(conn)
+      member_view = get(member_conn, "/#{user.active_slug}/posts")
+      assert member_view.resp_body =~ "open words"
+      assert member_view.resp_body =~ "members words"
+    end
+
+    test "404s for unknown authors", %{conn: conn} do
+      assert get(conn, "/no-such-user/posts").status == 404
+    end
+  end
+
+  describe "the profile's View all link" do
+    test "appears only when more posts exist than the profile shows", %{conn: conn} do
+      user = author()
+      for n <- 1..3, do: {:ok, _} = Posts.create_post(user, %{body: "post #{n}"})
+
+      conn_without = get(conn, "/#{user.active_slug}")
+      refute conn_without.resp_body =~ "/#{user.active_slug}/posts"
+
+      {:ok, _} = Posts.create_post(user, %{body: "post 4"})
+      conn_with = get(conn, "/#{user.active_slug}")
+      assert conn_with.resp_body =~ "/#{user.active_slug}/posts"
+    end
+  end
+
   describe "DELETE /posts/:id" do
     test "the author deletes their post", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

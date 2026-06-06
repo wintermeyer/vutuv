@@ -40,6 +40,7 @@ defmodule VutuvWeb.UserController do
     conn
     |> assign(:emails, emails)
     |> assign(:posts, Vutuv.Posts.profile_posts(user, conn.assigns[:current_user]))
+    |> assign(:posts_total, Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user]))
     |> assign(:user_tags, user.user_tags)
     |> assign(:work_experience, user.work_experiences)
     |> assign(:follower_count, Vutuv.Social.follower_count(user))

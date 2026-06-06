@@ -141,6 +141,15 @@ the resulting ~200px rail width. --%>
       </div>
 
       <p :if={@posts == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+
+      <%!-- Content navigation: only when there is more than the profile shows. --%>
+      <.link
+        :if={@posts_total > length(@posts)}
+        href={~p"/#{@user}/posts"}
+        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View all %{count} posts", count: compact_count(@posts_total))}
+      </.link>
     </.card>
 
     <%!-- Skills & endorsements --%>

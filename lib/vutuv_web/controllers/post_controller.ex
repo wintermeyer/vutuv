@@ -15,12 +15,27 @@ defmodule VutuvWeb.PostController do
 
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.UserResolveSlug when action in [:show])
-  plug(VutuvWeb.Plug.EnsureValidated when action in [:show])
+  plug(VutuvWeb.Plug.UserResolveSlug when action in [:show, :index])
+  plug(VutuvWeb.Plug.EnsureValidated when action in [:show, :index])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete])
 
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+
+  # The author archive: /:slug/posts, offset-paginated like the other
+  # browse pages. Lists only what the viewer may see, so it is as crawlable
+  # as the permalinks it links to.
+  def index(conn, params) do
+    author = conn.assigns[:user]
+    {posts, total} = Posts.author_posts_page(author, conn.assigns[:current_user], params)
+
+    render(conn, "index.html",
+      author: author,
+      posts: posts,
+      total: total,
+      page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
+    )
+  end
 
   def show(conn, %{"year" => year, "month" => month, "day" => day, "seq" => seq}) do
     author = conn.assigns[:user]

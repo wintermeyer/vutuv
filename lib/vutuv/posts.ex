@@ -468,17 +468,45 @@ defmodule Vutuv.Posts do
   @doc """
   The newest posts of `author` that `viewer` may see (profile page section).
   """
-  def profile_posts(%User{id: author_id}, viewer, opts \\ []) do
+  def profile_posts(%User{} = author, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_profile_limit)
 
-    from(p in Post,
-      where: p.user_id == ^author_id,
-      order_by: [desc: p.inserted_at, desc: p.id],
-      limit: ^limit
-    )
-    |> scope_visible(viewer)
+    author
+    |> author_posts_query(viewer)
+    |> limit(^limit)
     |> Repo.all()
     |> Repo.preload(post_preloads())
+  end
+
+  @doc "How many of `author`'s posts `viewer` may see (the \"View all\" label)."
+  def count_author_posts(%User{} = author, viewer) do
+    author |> author_posts_query(viewer) |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  One offset page of `author`'s posts visible to `viewer` — the author
+  archive at `/:slug/posts` (browse-style pagination, like followers/tags).
+  Returns `{posts, total}`.
+  """
+  def author_posts_page(%User{} = author, viewer, params) do
+    query = author_posts_query(author, viewer)
+    total = Repo.aggregate(query, :count)
+
+    posts =
+      query
+      |> Vutuv.Pages.paginate(params, total)
+      |> Repo.all()
+      |> Repo.preload(post_preloads())
+
+    {posts, total}
+  end
+
+  defp author_posts_query(%User{id: author_id}, viewer) do
+    from(p in Post,
+      where: p.user_id == ^author_id,
+      order_by: [desc: p.inserted_at, desc: p.id]
+    )
+    |> scope_visible(viewer)
   end
 
   @doc "The permalink lookup: a preloaded post of `author`, or `nil`."
