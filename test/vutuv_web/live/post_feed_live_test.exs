@@ -117,6 +117,47 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert Enum.any?(post.denials, &(&1.denied_user_id == target.id))
     end
 
+    test "publishes a photo-only post (upload, no text)", %{conn: conn} do
+      # Real files land on disk: isolate the uploads root per test.
+      tmp = Path.join(System.tmp_dir!(), "vutuv_feed_upload_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(tmp)
+      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
+      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+      on_exit(fn ->
+        File.rm_rf(tmp)
+
+        if prev,
+          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
+          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+      end)
+
+      {conn, user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      {:ok, image} = Image.new(64, 64, color: [10, 100, 200])
+      {:ok, png} = Image.write(image, :memory, suffix: ".png")
+
+      live
+      |> file_input("#composer-form", :images, [
+        %{name: "photo.png", content: png, type: "image/png"}
+      ])
+      |> render_upload("photo.png")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => ""}})
+      |> render_submit()
+
+      refute has_element?(live, "#composer-error")
+
+      assert [post] = Posts.profile_posts(user, user)
+      assert post.body == ""
+      assert [attached] = post.images
+
+      # The feed shows the photo-only post as its thumbnail row.
+      assert render(live) =~ "/post_images/#{attached.token}/thumb.webp"
+    end
+
     test "rejects an empty post with an inline error", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
