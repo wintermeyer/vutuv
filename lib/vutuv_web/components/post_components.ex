@@ -145,15 +145,28 @@ defmodule VutuvWeb.PostComponents do
           </.link>
 
           <%= if @mode == :preview do %>
-            <div :if={@post.images != []} class="mt-3 flex flex-wrap gap-2">
+            <%!-- A single image keeps its aspect ratio at column width
+            (height-capped) — square micro-thumbs would crop a panorama down
+            to its middle sliver. Multiple images tile in a 2-up grid. --%>
+            <.link :if={length(@post.images) == 1} href={@permalink} class="mt-3 block">
+              <img
+                src={PostImage.url(hd(@post.images), "feed")}
+                alt={hd(@post.images).alt}
+                width={hd(@post.images).width}
+                height={hd(@post.images).height}
+                loading="lazy"
+                class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+              />
+            </.link>
+            <div :if={length(@post.images) > 1} class="mt-3 grid grid-cols-2 gap-2">
               <.link :for={image <- @post.images} href={@permalink} class="block">
                 <img
-                  src={PostImage.url(image, "thumb")}
+                  src={PostImage.url(image, "feed")}
                   alt={image.alt}
-                  width="320"
-                  height="320"
+                  width={image.width}
+                  height={image.height}
                   loading="lazy"
-                  class="h-24 w-24 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+                  class="aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
                 />
               </.link>
             </div>

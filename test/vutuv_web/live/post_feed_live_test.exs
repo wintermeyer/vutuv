@@ -154,8 +154,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert post.body == ""
       assert [attached] = post.images
 
-      # The feed shows the photo-only post as its thumbnail row.
-      assert render(live) =~ "/post_images/#{attached.token}/thumb.webp"
+      # The feed shows a single image at column width (feed version, aspect
+      # preserved) — not a square micro-thumbnail.
+      assert render(live) =~ "/post_images/#{attached.token}/feed.webp"
     end
 
     test "rejects an empty post with an inline error", %{conn: conn} do
