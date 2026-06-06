@@ -125,6 +125,18 @@ defmodule Vutuv.PostsTest do
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
+    test "keeps at most #{Vutuv.Posts.max_tags_per_post()} tags, in input order" do
+      tags = Enum.map_join(1..7, ", ", &"tag-number-#{&1}")
+
+      post = create_post!(user(), %{body: "tagged", tags: tags})
+
+      assert length(post.tags) == Posts.max_tags_per_post()
+
+      kept = post.tags |> Enum.map(& &1.name) |> Enum.sort()
+      expected = Enum.map(1..Posts.max_tags_per_post(), &"tag-number-#{&1}") |> Enum.sort()
+      assert kept == expected
+    end
+
     test "stores wildcard, group and per-user denials" do
       author = user()
       denied = user()

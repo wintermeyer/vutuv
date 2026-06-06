@@ -43,10 +43,11 @@ defmodule Vutuv.Posts do
   @default_profile_limit 3
   @seq_attempts 3
   @pending_max_age_hours 24
-  @max_tags 10
+  @max_tags 5
 
   def max_images_per_post, do: Keyword.fetch!(config(), :max_per_post)
   def max_image_filesize, do: Keyword.fetch!(config(), :max_filesize)
+  def max_tags_per_post, do: @max_tags
   defp config, do: Application.fetch_env!(:vutuv, :post_images)
 
   ## Creating / updating / deleting
@@ -61,7 +62,8 @@ defmodule Vutuv.Posts do
     * `:denials` — list of `%{"group_id" => id}` / `%{"denied_user_id" => id}`
       / `%{"wildcard" => w}` maps (see `Vutuv.Posts.PostDenial`)
     * `:tags` — comma-separated string or list of tag names (find-or-create,
-      case-insensitive; invalid values are skipped)
+      case-insensitive; invalid values are skipped, at most
+      `max_tags_per_post/0` are kept)
     * `:image_ids` — pending image ids of the author, in display order
 
   Returns `{:ok, post}` (preloaded), `{:error, changeset}`,
