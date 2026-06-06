@@ -10,6 +10,7 @@ defmodule Vutuv.Accounts do
   alias Plug.Conn
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.LoginPin
+  alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.Slug
   alias Vutuv.Accounts.User
@@ -37,7 +38,8 @@ defmodule Vutuv.Accounts do
   defp slug_changeset(user_params) do
     if user_params["first_name"] != nil or user_params["last_name"] != nil do
       struct = %User{first_name: user_params["first_name"], last_name: user_params["last_name"]}
-      slug_value = Vutuv.SlugHelpers.gen_slug_unique(struct, Slug, :value)
+      slug_value =
+        Vutuv.SlugHelpers.gen_slug_unique(struct, Slug, :value, ReservedSlugs.list())
       Slug.changeset(%Slug{}, %{value: slug_value})
     else
       Slug.changeset(%Slug{}, %{value: "invalid"})

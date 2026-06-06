@@ -16,7 +16,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "GET show returns a clean 404 instead of falling through", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}/tags/does-not-exist")
+      conn = get(conn, ~p"/#{user}/tags/does-not-exist")
 
       assert conn.status == 404
       assert conn.halted
@@ -30,7 +30,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "DELETE returns a clean 404 instead of crashing", %{conn: conn, user: user} do
-      conn = delete(conn, ~p"/users/#{user}/tags/does-not-exist")
+      conn = delete(conn, ~p"/#{user}/tags/does-not-exist")
 
       assert conn.status == 404
       assert conn.halted

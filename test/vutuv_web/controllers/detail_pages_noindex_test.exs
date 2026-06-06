@@ -16,7 +16,7 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
 
   describe "X-Robots-Tag on public profile detail pages" do
     test "the phone numbers index is served with noindex", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}/phone_numbers")
+      conn = get(conn, ~p"/#{user}/phone_numbers")
 
       assert conn.status == 200
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
@@ -24,7 +24,7 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
 
     test "a detail show page is served with noindex", %{conn: conn, user: user} do
       phone = insert(:phone_number, user: user)
-      conn = get(conn, ~p"/users/#{user}/phone_numbers/#{phone}")
+      conn = get(conn, ~p"/#{user}/phone_numbers/#{phone}")
 
       assert conn.status == 200
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
@@ -32,11 +32,11 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
 
     test "every other public detail resource is covered too", %{conn: conn, user: user} do
       for path <- [
-            ~p"/users/#{user}/emails",
-            ~p"/users/#{user}/links",
-            ~p"/users/#{user}/addresses",
-            ~p"/users/#{user}/social_media_accounts",
-            ~p"/users/#{user}/work_experiences"
+            ~p"/#{user}/emails",
+            ~p"/#{user}/links",
+            ~p"/#{user}/addresses",
+            ~p"/#{user}/social_media_accounts",
+            ~p"/#{user}/work_experiences"
           ] do
         result = get(conn, path)
 
@@ -48,7 +48,7 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
 
   describe "the public profile page stays indexable" do
     test "the profile itself is not marked noindex", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}")
+      conn = get(conn, ~p"/#{user}")
 
       assert conn.status == 200
       assert get_resp_header(conn, "x-robots-tag") == []

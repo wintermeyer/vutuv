@@ -9,11 +9,11 @@ DB-backed helpers per row. --%>
   <%= for user <- @users do %>
     <li>
       <div class="profile-image">
-        <%= link to: ~p"/users/#{user}" do %>
+        <%= link to: ~p"/#{user}" do %>
           <img src={Vutuv.Avatar.display_url(user, :thumb)} width="50" height="50" alt={"Avatar of #{full_name(user)}"} />
         <% end %>
       </div>
-      <p><strong><%= link full_name(user), to: ~p"/users/#{user}" %></strong>
+      <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       </p>
       <%= if !same_user?(@current_user, user) and @current_user do %>

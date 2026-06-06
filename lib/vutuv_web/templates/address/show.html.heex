@@ -2,8 +2,8 @@
   title={gettext("About this Address")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Addresses"), ~p"/users/#{@user}/addresses"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Addresses"), ~p"/#{@user}/addresses"},
     gettext("Show")
   ]}
 />
@@ -13,8 +13,8 @@
   <section class="card">
     <%= if same_user?(@user, @current_user) do %>
       <.edit_delete_actions
-        edit_to={~p"/users/#{@user}/addresses/#{@address}/edit"}
-        delete_to={~p"/users/#{@user}/addresses/#{@address}"}
+        edit_to={~p"/#{@user}/addresses/#{@address}/edit"}
+        delete_to={~p"/#{@user}/addresses/#{@address}"}
       />
     <% end %>
 

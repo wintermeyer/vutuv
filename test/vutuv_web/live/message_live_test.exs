@@ -13,7 +13,7 @@ defmodule VutuvWeb.MessageLiveTest do
   end
 
   test "redirects logged-out visitors to the login page", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/sessions/new"}}} = live(conn, ~p"/messages")
+    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/messages")
   end
 
   test "an unknown conversation id falls back to the default conversation", %{conn: conn} do

@@ -43,18 +43,16 @@ defmodule VutuvWeb.UserControllerTest do
     # The index action was dead code (its slug plug 404'd it) and its template
     # offered per-row Edit/Delete it could never authorize, so it was removed
     # outright. Admins list users at /admin; everyone else searches. Without
-    # the route, /users falls into the catch-all vanity-slug redirect and
-    # ends up a 404, like any other unknown path.
+    # the route, /users falls into the root-level slug catch-all and 404s
+    # ("users" is a reserved slug nobody can claim).
     {conn, _user} = create_and_login_user(conn)
 
-    conn = get(conn, "/users")
-    assert redirected_to(conn, 301) == "/users/users"
-    assert conn |> recycle() |> get("/users/users") |> html_response(404)
+    assert conn |> get("/users") |> html_response(404)
   end
 
   test "shows chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/users/#{user}")
+    conn = get(conn, ~p"/#{user}")
     assert html_response(conn, 200) =~ user.first_name
   end
 
@@ -64,7 +62,7 @@ defmodule VutuvWeb.UserControllerTest do
     user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
     insert(:slug, value: user.active_slug, disabled: false, user: user)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
     assert html =~ "Member since 2008"
     refute html =~ "Member since February 2008"
   end
@@ -75,7 +73,7 @@ defmodule VutuvWeb.UserControllerTest do
     user = insert(:user, validated?: true, inserted_at: inserted_at)
     insert(:slug, value: user.active_slug, disabled: false, user: user)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
     month = Calendar.strftime(today, "%B")
     assert html =~ "Member since #{month} #{today.year}"
   end
@@ -87,10 +85,10 @@ defmodule VutuvWeb.UserControllerTest do
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     insert(:connection, follower: insert(:user, validated?: true), followee: user)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
-    assert html =~ ~p"/users/#{user}/followers"
-    refute html =~ ~p"/users/#{user}/followees"
+    assert html =~ ~p"/#{user}/followers"
+    refute html =~ ~p"/#{user}/following"
   end
 
   test "with no followers or following, the counts row is gone and Member since moves up",
@@ -98,10 +96,10 @@ defmodule VutuvWeb.UserControllerTest do
     user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
     insert(:slug, value: user.active_slug, disabled: false, user: user)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
-    refute html =~ ~p"/users/#{user}/followers"
-    refute html =~ ~p"/users/#{user}/followees"
+    refute html =~ ~p"/#{user}/followers"
+    refute html =~ ~p"/#{user}/following"
     assert html =~ "Member since 2008"
   end
 
@@ -109,7 +107,7 @@ defmodule VutuvWeb.UserControllerTest do
     # md (768px), not lg: portrait iPads (768-834px CSS width) should get the
     # desktop column layout too, not the single phone column.
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
     assert html =~ "md:grid-cols-3"
     assert html =~ "md:col-span-2"
@@ -136,7 +134,7 @@ defmodule VutuvWeb.UserControllerTest do
     followee = insert(:user, validated?: true, first_name: "Heidi")
     insert(:connection, follower: user, followee: followee)
 
-    conn = get(conn, ~p"/users/#{user}")
+    conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
 
     # Contact, phone numbers, links, addresses, social media
@@ -168,7 +166,7 @@ defmodule VutuvWeb.UserControllerTest do
     user = insert(:user, validated?: true)
     insert(:slug, value: user.active_slug, disabled: false, user: user)
 
-    conn = get(conn, ~p"/users/#{user}")
+    conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
 
     refute html =~ ~s(id="profile-contact")
@@ -183,36 +181,36 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "the owner sees add links for every profile section", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/users/#{user}")
+    conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
 
     for path <- [
-          ~p"/users/#{user}/emails/new",
-          ~p"/users/#{user}/phone_numbers/new",
-          ~p"/users/#{user}/links/new",
-          ~p"/users/#{user}/social_media_accounts/new",
-          ~p"/users/#{user}/addresses/new",
-          ~p"/users/#{user}/work_experiences/new"
+          ~p"/#{user}/emails/new",
+          ~p"/#{user}/phone_numbers/new",
+          ~p"/#{user}/links/new",
+          ~p"/#{user}/social_media_accounts/new",
+          ~p"/#{user}/addresses/new",
+          ~p"/#{user}/work_experiences/new"
         ] do
       assert html =~ path
     end
   end
 
   test "renders page not found when id is nonexistent", %{conn: conn} do
-    conn = get(conn, ~p"/users/#{%User{active_slug: "1"}}")
+    conn = get(conn, ~p"/#{%User{active_slug: "1"}}")
     assert html_response(conn, :not_found)
   end
 
   test "renders form for editing chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/users/#{user}/edit")
+    conn = get(conn, ~p"/#{user}/edit")
     assert html_response(conn, 200) =~ "Edit"
   end
 
   test "updates chosen resource and redirects when data is valid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = put(conn, ~p"/users/#{user}", user: @update_attrs)
-    assert redirected_to(conn) == ~p"/users/#{user}"
+    conn = put(conn, ~p"/#{user}", user: @update_attrs)
+    assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get_by(User, @update_attrs)
   end
 
@@ -221,8 +219,8 @@ defmodule VutuvWeb.UserControllerTest do
     # single ISO 8601 string rather than the old date_select year/month/day map.
     {conn, user} = create_and_login_user(conn)
 
-    conn = put(conn, ~p"/users/#{user}", user: %{"birthdate" => "1990-04-15"})
-    assert redirected_to(conn) == ~p"/users/#{user}"
+    conn = put(conn, ~p"/#{user}", user: %{"birthdate" => "1990-04-15"})
+    assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
   end
 
@@ -235,7 +233,7 @@ defmodule VutuvWeb.UserControllerTest do
     %{emails: [email]} = Repo.preload(user, :emails)
 
     conn =
-      put(conn, ~p"/users/#{user}",
+      put(conn, ~p"/#{user}",
         user: %{
           "first_name" => "Updated",
           "emails" => %{
@@ -245,18 +243,18 @@ defmodule VutuvWeb.UserControllerTest do
         }
       )
 
-    assert redirected_to(conn) == ~p"/users/#{user}"
+    assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get(Email, email.id).value == email.value
     refute Repo.get_by(Email, value: "injected@example.com")
   end
 
   test "edit form has no email inputs, just a link to the email management page", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/users/#{user}/edit")
+    conn = get(conn, ~p"/#{user}/edit")
     html = html_response(conn, 200)
 
     refute html =~ "user[emails]"
-    assert html =~ ~p"/users/#{user}/emails"
+    assert html =~ ~p"/#{user}/emails"
   end
 
   test "the landing-page registration form still asks for the email address", %{conn: conn} do
@@ -270,17 +268,17 @@ defmodule VutuvWeb.UserControllerTest do
     other = insert(:user, validated?: true)
     insert(:slug, value: other.active_slug, disabled: false, user: other)
 
-    assert conn |> get(~p"/users/#{other}/edit") |> html_response(403)
+    assert conn |> get(~p"/#{other}/edit") |> html_response(403)
 
     assert conn
            |> recycle()
-           |> put(~p"/users/#{other}", user: @update_attrs)
+           |> put(~p"/#{other}", user: @update_attrs)
            |> html_response(403)
   end
 
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = put(conn, ~p"/users/#{user}", user: @invalid_update_attrs)
+    conn = put(conn, ~p"/#{user}", user: @invalid_update_attrs)
     assert html_response(conn, 200) =~ "Edit"
   end
 
@@ -289,7 +287,7 @@ defmodule VutuvWeb.UserControllerTest do
 
     # Step 1: request deletion. Nothing is deleted yet; a PIN is mailed and the
     # confirmation form is shown.
-    conn = delete(conn, ~p"/users/#{user}")
+    conn = delete(conn, ~p"/#{user}")
     assert html_response(conn, 200) =~ "PIN"
     assert Repo.get(User, user.id)
 
@@ -305,7 +303,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "does not delete the account when the PIN is wrong", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    conn = delete(conn, ~p"/users/#{user}")
+    conn = delete(conn, ~p"/#{user}")
     assert_received {:email, _email}
 
     conn = post(conn, ~p"/account_deletion", account_deletion: %{pin: "000000"})

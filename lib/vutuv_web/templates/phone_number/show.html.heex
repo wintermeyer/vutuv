@@ -2,8 +2,8 @@
   title={gettext("About this Phone Number")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Phone Numbers"), ~p"/users/#{@user}/phone_numbers"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Phone Numbers"), ~p"/#{@user}/phone_numbers"},
     gettext("More Info")
   ]}
 />
@@ -12,8 +12,8 @@
   <section class="card">
     <%= if same_user?(@user, @current_user) do %>
       <.edit_delete_actions
-        edit_to={~p"/users/#{@user}/phone_numbers/#{@phone_number}/edit"}
-        delete_to={~p"/users/#{@user}/phone_numbers/#{@phone_number}"}
+        edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
+        delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
       />
     <% end %>
     

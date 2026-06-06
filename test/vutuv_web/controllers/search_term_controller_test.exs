@@ -17,7 +17,7 @@ defmodule VutuvWeb.SearchTermControllerTest do
     test "shows the owner's own search term", %{conn: conn, user: user} do
       term = insert(:search_term, user: user)
 
-      conn = get(conn, ~p"/users/#{user}/search_terms/#{term}")
+      conn = get(conn, ~p"/#{user}/search_terms/#{term}")
 
       assert html_response(conn, 200) =~ term.value
     end
@@ -32,7 +32,7 @@ defmodule VutuvWeb.SearchTermControllerTest do
       foreign_term = insert(:search_term, user: other)
 
       assert_error_sent(404, fn ->
-        get(conn, ~p"/users/#{user}/search_terms/#{foreign_term}")
+        get(conn, ~p"/#{user}/search_terms/#{foreign_term}")
       end)
     end
   end

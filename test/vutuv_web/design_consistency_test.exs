@@ -18,7 +18,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
     test "groups index uses the standard page chrome", %{conn: conn, user: user} do
       insert(:group, user: user)
-      conn = get(conn, ~p"/users/#{user}/groups")
+      conn = get(conn, ~p"/#{user}/groups")
       html = html_response(conn, 200)
 
       assert html =~ "profile-header"
@@ -28,7 +28,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
 
     test "search terms index uses the standard page chrome", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}/search_terms")
+      conn = get(conn, ~p"/#{user}/search_terms")
       html = html_response(conn, 200)
 
       assert html =~ "profile-header"
@@ -46,7 +46,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     # (the page h1) and `crumbs` (a list ending at "Emails", with a linked name
     # crumb in the middle).
     test "the email index renders the page_header h1 and breadcrumbs", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}/emails")
+      conn = get(conn, ~p"/#{user}/emails")
       html = html_response(conn, 200)
 
       # The profile-header h1 block carries the page title.
@@ -57,7 +57,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       # The breadcrumbs row holds gen_breadcrumbs output: a linked middle crumb
       # (the user's name) and the trailing leaf label "Emails".
       assert html =~ ~s(<div class="breadcrumbs">)
-      assert html =~ ~s(class="breadcrumbs__link" href="#{~p"/users/#{user}"}")
+      assert html =~ ~s(class="breadcrumbs__link" href="#{~p"/#{user}"}")
       assert html =~ "/ Emails\n</div>"
     end
 
@@ -70,7 +70,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
         conn
         |> recycle()
         |> put_req_header("accept-language", "de")
-        |> get(~p"/users/#{user}/emails/#{email}/edit")
+        |> get(~p"/#{user}/emails/#{email}/edit")
 
       html = html_response(conn, 200)
       assert html =~ "Öffentlich"
@@ -92,7 +92,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
     test "uses the standard chrome and card shell, not pure.css", %{conn: conn, user: user} do
       search_term = insert(:search_term, user: user)
-      conn = get(conn, ~p"/users/#{user}/search_terms/#{search_term}")
+      conn = get(conn, ~p"/#{user}/search_terms/#{search_term}")
       html = html_response(conn, 200)
 
       # Standard legacy chrome + card shell instead of the pure.css grid.
@@ -117,7 +117,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
         conn
         |> recycle()
         |> put_req_header("accept-language", "de")
-        |> get(~p"/users/#{user}/search_terms/#{search_term}")
+        |> get(~p"/#{user}/search_terms/#{search_term}")
 
       html = html_response(conn, 200)
 
@@ -150,7 +150,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     test "the 404 page is styled and links back home", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       # The slugs feature is intentionally disabled via Plug.All404.
-      conn = get(conn, ~p"/users/#{user}/slugs")
+      conn = get(conn, ~p"/#{user}/slugs")
       html = html_response(conn, 404)
 
       assert html =~ "error-page"
@@ -189,19 +189,19 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn: conn,
       user: user
     } do
-      conn = get(conn, ~p"/users/#{user}/phone_numbers/new")
+      conn = get(conn, ~p"/#{user}/phone_numbers/new")
       html = html_response(conn, 200)
 
       refute html =~ "alert-danger"
       refute html =~ "Oops, something went wrong"
 
       # The Cancel link points back to the @backlink the controller passes.
-      assert html =~ ~s(class="button button--cancel" href="#{~p"/users/#{user}/phone_numbers"}")
+      assert html =~ ~s(class="button button--cancel" href="#{~p"/#{user}/phone_numbers"}")
       assert html =~ ~s(<button class="button" type="submit">)
     end
 
     test "a failed submit re-renders the form with the error banner", %{conn: conn, user: user} do
-      conn = post(conn, ~p"/users/#{user}/phone_numbers", phone_number: %{"value" => ""})
+      conn = post(conn, ~p"/#{user}/phone_numbers", phone_number: %{"value" => ""})
       html = html_response(conn, 200)
 
       assert html =~ ~s(class="alert alert-danger")
@@ -233,7 +233,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn: conn,
       user: user
     } do
-      conn = get(conn, ~p"/users/#{user}/phone_numbers")
+      conn = get(conn, ~p"/#{user}/phone_numbers")
       html = html_response(conn, 200)
 
       # The legacy card shell and empty-state line.
@@ -244,13 +244,13 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
       # The owner sees the Add link into the new-route.
       assert html =~ ~s(class="card__morelink")
-      assert html =~ ~p"/users/#{user}/phone_numbers/new"
+      assert html =~ ~p"/#{user}/phone_numbers/new"
     end
 
     test "a non-owner sees no Add link on someone else's empty index", %{conn: conn} do
       other = insert(:user, validated?: true)
       insert(:slug, value: other.active_slug, disabled: false, user: other)
-      conn = get(conn, ~p"/users/#{other}/phone_numbers")
+      conn = get(conn, ~p"/#{other}/phone_numbers")
       html = html_response(conn, 200)
 
       assert html =~ ~s(<p class="card__empty">)
@@ -258,7 +258,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
 
     test "a new page wraps its form in the card section shell", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/users/#{user}/phone_numbers/new")
+      conn = get(conn, ~p"/#{user}/phone_numbers/new")
       html = html_response(conn, 200)
 
       assert html =~ ~s(class="card-list")
@@ -287,7 +287,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     test "the email card_list renders the canonical edit-then-delete glyph group",
          %{conn: conn, user: user} do
       [email | _] = user.emails
-      conn = get(conn, ~p"/users/#{user}/emails")
+      conn = get(conn, ~p"/#{user}/emails")
       html = html_response(conn, 200)
 
       # Canonical wrapper and CSS-glyph icons (not the IconHTML svg flavor).
@@ -296,7 +296,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       assert html =~ ~s(<i class="icon icon--delete"></i>)
 
       # The edit link points at the edit route.
-      assert html =~ ~s(href="#{~p"/users/#{user}/emails/#{email}/edit"}")
+      assert html =~ ~s(href="#{~p"/#{user}/emails/#{email}/edit"}")
 
       # The delete control carries the delete method + danger class and renders
       # before nothing else (edit comes first in the source order).
@@ -311,18 +311,18 @@ defmodule VutuvWeb.DesignConsistencyTest do
     test "the address show page deletes via the delete method, not POST",
          %{conn: conn, user: user} do
       address = insert(:address, user: user)
-      conn = get(conn, ~p"/users/#{user}/addresses/#{address}")
+      conn = get(conn, ~p"/#{user}/addresses/#{address}")
       html = html_response(conn, 200)
 
       # Regression: the old delete button had no `method`, so it defaulted to
       # POST against a path that has no POST route. The component always emits
       # the delete method.
       assert html =~ ~s(data-method="delete")
-      assert html =~ ~s(data-to="#{~p"/users/#{user}/addresses/#{address}"}")
+      assert html =~ ~s(data-to="#{~p"/#{user}/addresses/#{address}"}")
       assert html =~ "button--danger"
 
       # Edit link and canonical glyph icons are present.
-      assert html =~ ~s(href="#{~p"/users/#{user}/addresses/#{address}/edit"}")
+      assert html =~ ~s(href="#{~p"/#{user}/addresses/#{address}/edit"}")
       assert html =~ ~s(<i class="icon icon--edit"></i>)
       assert html =~ ~s(<i class="icon icon--delete"></i>)
     end

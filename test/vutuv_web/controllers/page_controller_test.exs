@@ -19,12 +19,17 @@ defmodule VutuvWeb.PageControllerTest do
 
       # Sensitive or backstage paths must never be indexed.
       assert body =~ "Disallow: /admin/"
+      assert body =~ "Disallow: /login"
       assert body =~ "Disallow: /sessions"
       assert body =~ "Disallow: /api/"
 
       # Personal profile detail pages (phone numbers, emails, addresses, …) are
-      # off-limits, while the profile page itself stays crawlable.
-      assert body =~ "Disallow: /users/*/"
+      # off-limits, while the profile page /<slug> itself stays crawlable.
+      assert body =~ "Disallow: /*/emails"
+      assert body =~ "Disallow: /*/addresses"
+
+      # The legacy /users/... URLs are redirects now; crawlers can skip them.
+      assert body =~ "Disallow: /users/"
     end
   end
 

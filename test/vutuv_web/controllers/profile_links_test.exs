@@ -13,7 +13,7 @@ defmodule VutuvWeb.ProfileLinksTest do
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     url = insert(:url, user: user, screenshot: "b0efec47a6e9.webp")
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
     assert html =~ ~s(src="/screenshots/#{url.id}/thumb-b0efec47a6e9.webp")
   end
@@ -23,7 +23,7 @@ defmodule VutuvWeb.ProfileLinksTest do
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     insert(:url, user: user, screenshot: nil)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
     assert html =~ ~s(src="/images/screenshot.png")
   end
@@ -33,7 +33,7 @@ defmodule VutuvWeb.ProfileLinksTest do
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     insert(:url, user: user)
 
-    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
 
     {links_pos, _} = :binary.match(html, ~s(id="profile-links"))
     {aside_pos, _} = :binary.match(html, "<aside")
@@ -49,9 +49,9 @@ defmodule VutuvWeb.ProfileLinksTest do
       insert(:slug, value: user.active_slug, disabled: false, user: user)
       insert_list(2, :url, user: user)
 
-      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+      html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      refute html =~ ~s(href="#{~p"/users/#{user}/links"}")
+      refute html =~ ~s(href="#{~p"/#{user}/links"}")
     end
 
     test "present when more links exist than are shown", %{conn: conn} do
@@ -59,9 +59,9 @@ defmodule VutuvWeb.ProfileLinksTest do
       insert(:slug, value: user.active_slug, disabled: false, user: user)
       insert_list(5, :url, user: user)
 
-      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+      html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/users/#{user}/links"}")
+      assert html =~ ~s(href="#{~p"/#{user}/links"}")
     end
   end
 end

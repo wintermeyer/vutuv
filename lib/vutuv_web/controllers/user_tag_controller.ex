@@ -39,7 +39,7 @@ defmodule VutuvWeb.UserTagController do
       {:ok, _user_tag} ->
         conn
         |> put_flash(:info, gettext("User tag created successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/tags")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
 
       {:error, changeset} ->
         render(conn, "new.html", changeset: changeset)
@@ -63,6 +63,6 @@ defmodule VutuvWeb.UserTagController do
 
     conn
     |> put_flash(:info, gettext("User tag deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/tags")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
   end
 end

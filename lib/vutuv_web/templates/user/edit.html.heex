@@ -1,24 +1,24 @@
 <.page_header crumbs={[
   gettext("Users"),
-  {full_name(@user), ~p"/users/#{@user}"},
+  {full_name(@user), ~p"/#{@user}"},
   gettext("Edit")
 ]} />
 
 <div class="card-list">
   <section class="card">
-    <%= render "form_content.html", changeset: @changeset, action: ~p"/users/#{@user}", backlink: ~p"/users/#{@user}" %>
+    <%= render "form_content.html", changeset: @changeset, action: ~p"/#{@user}", backlink: ~p"/#{@user}" %>
 	</section>
   <aside>
     <section class="card">
       <h1><%= gettext "Emails" %></h1>
       <%!-- Addresses are managed on their own page: adding one is a
             PIN-verified two-step flow, so it cannot live in this form. --%>
-      <p><%= link gettext("Manage your email addresses"), to: ~p"/users/#{@user}/emails" %></p>
+      <p><%= link gettext("Manage your email addresses"), to: ~p"/#{@user}/emails" %></p>
     </section>
 
     <section class="card">
       <h1><%= gettext "Administration" %></h1>
-      <%= button gettext("Delete Account"), to: ~p"/users/#{@user}", method: "delete", class: "link_button delete_link_button" %>
+      <%= button gettext("Delete Account"), to: ~p"/#{@user}", method: "delete", class: "link_button delete_link_button" %>
     </section>
   </aside>
 </div>

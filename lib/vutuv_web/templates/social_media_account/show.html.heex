@@ -2,8 +2,8 @@
   title={gettext("About this Social Media Profile")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Social Media Profiles"), ~p"/users/#{@user}/social_media_accounts"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Social Media Profiles"), ~p"/#{@user}/social_media_accounts"},
     gettext("More Info")
   ]}
 />
@@ -12,8 +12,8 @@
   <section class="card">
   <%= if same_user?(@user, @current_user) do %>
     <.edit_delete_actions
-      edit_to={~p"/users/#{@user}/social_media_accounts/#{@social_media_account}/edit"}
-      delete_to={~p"/users/#{@user}/social_media_accounts/#{@social_media_account}"}
+      edit_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}/edit"}
+      delete_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}"}
     />
   <% end %>
     <h1><%= gettext("Provider") %></h1>

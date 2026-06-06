@@ -43,12 +43,12 @@ defmodule VutuvWeb.SessionController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/sessions/new")
+        |> redirect(to: ~p"/login")
 
       nil ->
         conn
         |> put_flash(:error, gettext("Your login session expired. Please try again."))
-        |> redirect(to: ~p"/sessions/new")
+        |> redirect(to: ~p"/login")
     end
   end
 
@@ -57,7 +57,7 @@ defmodule VutuvWeb.SessionController do
 
     conn
     |> Accounts.logout()
-    |> redirect(to: ~p"/users/#{user}")
+    |> redirect(to: ~p"/#{user}")
   end
 
   defp verify_login_pin(conn, email, pin) do
@@ -67,7 +67,7 @@ defmodule VutuvWeb.SessionController do
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
         |> put_flash(:info, gettext("Welcome back!"))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
 
       # incorrect, let them retry
       {:error, reason} ->
@@ -80,14 +80,14 @@ defmodule VutuvWeb.SessionController do
         conn
         |> Accounts.delete_pin_cookie()
         |> put_flash(:error, message)
-        |> redirect(to: ~p"/sessions/new")
+        |> redirect(to: ~p"/login")
 
       # locked out, drop cookie
       :lockout ->
         conn
         |> Accounts.delete_pin_cookie()
         |> put_flash(:error, gettext("Too many incorrect attempts."))
-        |> redirect(to: ~p"/sessions/new")
+        |> redirect(to: ~p"/login")
     end
   end
 end

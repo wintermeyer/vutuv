@@ -39,7 +39,7 @@ defmodule VutuvWeb.WorkExperienceController do
       {:ok, _work_experience} ->
         conn
         |> put_flash(:info, gettext("Work experience created successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences")
 
       {:error, changeset} ->
         render(conn, "new.html", changeset: changeset, current_year: current_year())
@@ -55,7 +55,7 @@ defmodule VutuvWeb.WorkExperienceController do
       render(conn, "show.html", work_experience: work_experience)
     else
       redirect(conn,
-        to: ~p"/users/#{work_experience.user}/work_experiences/#{work_experience}"
+        to: ~p"/#{work_experience.user}/work_experiences/#{work_experience}"
       )
     end
   end
@@ -79,7 +79,7 @@ defmodule VutuvWeb.WorkExperienceController do
       {:ok, work_experience} ->
         conn
         |> put_flash(:info, gettext("Work experience updated successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences/#{work_experience}")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences/#{work_experience}")
 
       {:error, changeset} ->
         render(conn, "edit.html",
@@ -99,6 +99,6 @@ defmodule VutuvWeb.WorkExperienceController do
 
     conn
     |> put_flash(:info, gettext("Work experience deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/work_experiences")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences")
   end
 end

@@ -44,7 +44,7 @@ defmodule VutuvWeb.EmailController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
     end
   end
 
@@ -57,7 +57,7 @@ defmodule VutuvWeb.EmailController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
     end
   end
 
@@ -77,7 +77,7 @@ defmodule VutuvWeb.EmailController do
           {:error, _changeset} ->
             conn
             |> put_flash(:error, gettext("That email could not be added."))
-            |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+            |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
         end
 
       {:error, reason} ->
@@ -88,12 +88,12 @@ defmodule VutuvWeb.EmailController do
       {:expired, message} ->
         conn
         |> put_flash(:error, message)
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
 
       :lockout ->
         conn
         |> put_flash(:error, gettext("Too many incorrect attempts."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
     end
   end
 
@@ -126,7 +126,7 @@ defmodule VutuvWeb.EmailController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Email updated successfully."),
-      redirect_to: &~p"/users/#{conn.assigns[:user]}/emails/#{&1}",
+      redirect_to: &~p"/#{conn.assigns[:user]}/emails/#{&1}",
       render: "edit.html",
       assigns: [email: email]
     )
@@ -142,11 +142,11 @@ defmodule VutuvWeb.EmailController do
 
       conn
       |> put_flash(:info, gettext("Email deleted successfully."))
-      |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+      |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
     else
       conn
       |> put_flash(:error, gettext("Cannot delete final email."))
-      |> redirect(to: ~p"/users/#{conn.assigns[:user]}/emails")
+      |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
     end
   end
 end

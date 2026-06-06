@@ -42,6 +42,6 @@ defmodule VutuvWeb.ConnectionController do
     ControllerHelpers.referrer_url(conn, fallback_url(conn.assigns[:current_user]))
   end
 
-  defp fallback_url(%Vutuv.Accounts.User{} = user), do: ~p"/users/#{user}"
+  defp fallback_url(%Vutuv.Accounts.User{} = user), do: ~p"/#{user}"
   defp fallback_url(_), do: ~p"/"
 end

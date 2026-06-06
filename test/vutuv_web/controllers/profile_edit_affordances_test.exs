@@ -30,7 +30,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       data = insert_profile_data(user)
 
-      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+      html = conn |> get(~p"/#{user}") |> html_response(200)
 
       for id <- @menu_ids do
         assert html =~ ~s(id="#{id}"), "expected menu ##{id}"
@@ -38,23 +38,23 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       # Add entry + manage entries per section (General Info edits the user).
       for path <- [
-            ~p"/users/#{user}/work_experiences",
-            ~p"/users/#{user}/links",
-            ~p"/users/#{user}/emails",
-            ~p"/users/#{user}/phone_numbers",
-            ~p"/users/#{user}/addresses",
-            ~p"/users/#{user}/social_media_accounts",
-            ~p"/users/#{user}/tags"
+            ~p"/#{user}/work_experiences",
+            ~p"/#{user}/links",
+            ~p"/#{user}/emails",
+            ~p"/#{user}/phone_numbers",
+            ~p"/#{user}/addresses",
+            ~p"/#{user}/social_media_accounts",
+            ~p"/#{user}/tags"
           ] do
         assert html =~ ~s(href="#{path}/new"), "expected add link for #{path}"
         assert html =~ ~s(href="#{path}"), "expected manage link for #{path}"
       end
 
-      assert html =~ ~s(href="#{~p"/users/#{user}/edit"}")
+      assert html =~ ~s(href="#{~p"/#{user}/edit"}")
 
       # The per-row pencils are gone; editing goes through the manage pages.
-      refute html =~ ~s(href="#{~p"/users/#{user}/work_experiences/#{data.job}/edit"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/links/#{data.url}/edit"}")
+      refute html =~ ~s(href="#{~p"/#{user}/work_experiences/#{data.job}/edit"}")
+      refute html =~ ~s(href="#{~p"/#{user}/links/#{data.url}/edit"}")
     end
 
     test "a logged-in visitor sees the sections but no card menus", %{conn: conn} do
@@ -65,7 +65,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       data = insert_profile_data(user)
       email = insert(:email, user: user, public?: true)
 
-      html = conn |> get(~p"/users/#{user}") |> html_response(200)
+      html = conn |> get(~p"/#{user}") |> html_response(200)
 
       # The entries themselves render for visitors...
       assert html =~ data.job.title
@@ -78,9 +78,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
         refute html =~ ~s(id="#{id}")
       end
 
-      refute html =~ ~s(href="#{~p"/users/#{user}/work_experiences/new"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/emails"}")
-      refute html =~ ~s(href="#{~p"/users/#{user}/links/#{data.url}/edit"}")
+      refute html =~ ~s(href="#{~p"/#{user}/work_experiences/new"}")
+      refute html =~ ~s(href="#{~p"/#{user}/emails"}")
+      refute html =~ ~s(href="#{~p"/#{user}/links/#{data.url}/edit"}")
     end
   end
 
@@ -108,10 +108,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       job = insert(:work_experience, user: user)
 
-      html = conn |> get(~p"/users/#{user}/work_experiences/#{job}/edit") |> html_response(200)
-      assert_delete_control(html, ~p"/users/#{user}/work_experiences/#{job}")
+      html = conn |> get(~p"/#{user}/work_experiences/#{job}/edit") |> html_response(200)
+      assert_delete_control(html, ~p"/#{user}/work_experiences/#{job}")
 
-      html = conn |> recycle() |> get(~p"/users/#{user}/work_experiences/new") |> html_response(200)
+      html = conn |> recycle() |> get(~p"/#{user}/work_experiences/new") |> html_response(200)
       refute delete_control(html)
     end
 
@@ -119,10 +119,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       url = insert(:url, user: user)
 
-      html = conn |> get(~p"/users/#{user}/links/#{url}/edit") |> html_response(200)
-      assert_delete_control(html, ~p"/users/#{user}/links/#{url}")
+      html = conn |> get(~p"/#{user}/links/#{url}/edit") |> html_response(200)
+      assert_delete_control(html, ~p"/#{user}/links/#{url}")
 
-      html = conn |> recycle() |> get(~p"/users/#{user}/links/new") |> html_response(200)
+      html = conn |> recycle() |> get(~p"/#{user}/links/new") |> html_response(200)
       refute delete_control(html)
     end
 
@@ -130,10 +130,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       phone = insert(:phone_number, user: user)
 
-      html = conn |> get(~p"/users/#{user}/phone_numbers/#{phone}/edit") |> html_response(200)
-      assert_delete_control(html, ~p"/users/#{user}/phone_numbers/#{phone}")
+      html = conn |> get(~p"/#{user}/phone_numbers/#{phone}/edit") |> html_response(200)
+      assert_delete_control(html, ~p"/#{user}/phone_numbers/#{phone}")
 
-      html = conn |> recycle() |> get(~p"/users/#{user}/phone_numbers/new") |> html_response(200)
+      html = conn |> recycle() |> get(~p"/#{user}/phone_numbers/new") |> html_response(200)
       refute delete_control(html)
     end
 
@@ -143,13 +143,13 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       html =
         conn
-        |> get(~p"/users/#{user}/social_media_accounts/#{account}/edit")
+        |> get(~p"/#{user}/social_media_accounts/#{account}/edit")
         |> html_response(200)
 
-      assert_delete_control(html, ~p"/users/#{user}/social_media_accounts/#{account}")
+      assert_delete_control(html, ~p"/#{user}/social_media_accounts/#{account}")
 
       html =
-        conn |> recycle() |> get(~p"/users/#{user}/social_media_accounts/new") |> html_response(200)
+        conn |> recycle() |> get(~p"/#{user}/social_media_accounts/new") |> html_response(200)
 
       refute delete_control(html)
     end
@@ -158,10 +158,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       address = insert(:address, user: user)
 
-      html = conn |> get(~p"/users/#{user}/addresses/#{address}/edit") |> html_response(200)
-      assert_delete_control(html, ~p"/users/#{user}/addresses/#{address}")
+      html = conn |> get(~p"/#{user}/addresses/#{address}/edit") |> html_response(200)
+      assert_delete_control(html, ~p"/#{user}/addresses/#{address}")
 
-      html = conn |> recycle() |> get(~p"/users/#{user}/addresses/new") |> html_response(200)
+      html = conn |> recycle() |> get(~p"/#{user}/addresses/new") |> html_response(200)
       refute delete_control(html)
     end
 
@@ -169,8 +169,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {conn, user} = create_and_login_user(conn)
       email = Repo.get_by(Vutuv.Accounts.Email, user_id: user.id)
 
-      html = conn |> get(~p"/users/#{user}/emails/#{email}/edit") |> html_response(200)
-      assert_delete_control(html, ~p"/users/#{user}/emails/#{email}")
+      html = conn |> get(~p"/#{user}/emails/#{email}/edit") |> html_response(200)
+      assert_delete_control(html, ~p"/#{user}/emails/#{email}")
     end
   end
 end

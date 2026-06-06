@@ -1,6 +1,6 @@
 <h2>New URL</h2>
 
-<%= render "form_content.html", backlink: ~p"/users/#{@user}/slugs", changeset: @changeset,
-                        action: ~p"/users/#{@user}/slugs" %>
+<%= render "form_content.html", backlink: ~p"/#{@user}/slugs", changeset: @changeset,
+                        action: ~p"/#{@user}/slugs" %>
 
-<%= link "Back", to: ~p"/users/#{@user}/slugs" %>
+<%= link "Back", to: ~p"/#{@user}/slugs" %>

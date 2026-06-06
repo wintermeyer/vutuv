@@ -39,13 +39,33 @@ defmodule VutuvWeb.PageController do
 
   # ...but these are backstage. No autographs, no peeking.
   Disallow: /admin/
+  Disallow: /login
+  Disallow: /logout
   Disallow: /sessions
   Disallow: /api/
 
+  # Search results are an endless hall of mirrors; don't get lost in there.
+  Disallow: /search
+
+  # The old /users/... URLs are permanent redirects now; skip the detour.
+  Disallow: /users/
+
   # Personal profile detail pages (phone numbers, emails, addresses, links,
   # social media, work history, followers, ...) are off-limits. The profile
-  # page /users/<slug> itself stays crawlable; only its sub-pages are blocked.
-  Disallow: /users/*/
+  # page /<slug> itself stays crawlable; only its sub-pages are blocked.
+  Disallow: /*/addresses
+  Disallow: /*/edit
+  Disallow: /*/emails
+  Disallow: /*/followers
+  Disallow: /*/following
+  Disallow: /*/groups
+  Disallow: /*/links
+  Disallow: /*/phone_numbers
+  Disallow: /*/search_terms
+  Disallow: /*/slugs
+  Disallow: /*/social_media_accounts
+  Disallow: /*/tags
+  Disallow: /*/work_experiences
   """
 
   @doc """
@@ -59,12 +79,6 @@ defmodule VutuvWeb.PageController do
     conn
     |> put_resp_content_type("text/plain")
     |> send_resp(200, @robots_txt)
-  end
-
-  def redirect_user(conn, %{"slug" => slug}) do
-    conn
-    |> put_status(301)
-    |> redirect(to: ~p"/users/#{slug}")
   end
 
   def impressum(conn, _params) do

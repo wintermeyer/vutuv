@@ -33,7 +33,7 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   defp eval_slug(%{disabled: false, user: user, value: slug}, conn) do
     if user.active_slug != slug do
       conn
-      |> redirect(to: ~p"/users/#{user}")
+      |> redirect(to: ~p"/#{user}")
       |> halt()
     else
       conn

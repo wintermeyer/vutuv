@@ -2,13 +2,13 @@
   title={gettext("New tag")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("User tags"), ~p"/users/#{@conn.assigns[:user]}/tags"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("User tags"), ~p"/#{@conn.assigns[:user]}/tags"},
     gettext("New")
   ]}
 />
 
 <.card_section>
-  <%= render "form_content.html", conn: @conn, backlink: ~p"/users/#{@conn.assigns[:user]}/tags", changeset: @changeset,
-                          action: ~p"/users/#{@conn.assigns[:user]}/tags" %>
+  <%= render "form_content.html", conn: @conn, backlink: ~p"/#{@conn.assigns[:user]}/tags", changeset: @changeset,
+                          action: ~p"/#{@conn.assigns[:user]}/tags" %>
 </.card_section>

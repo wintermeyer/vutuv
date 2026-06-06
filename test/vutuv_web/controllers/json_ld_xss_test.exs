@@ -22,7 +22,7 @@ defmodule VutuvWeb.JsonLdXssTest do
 
   test "a malicious name cannot break out of the JSON-LD script tag",
        %{conn: conn, user: user, payload: payload} do
-    conn = get(conn, ~p"/users/#{user}")
+    conn = get(conn, ~p"/#{user}")
     body = html_response(conn, 200)
 
     # The raw closing-tag injection must never appear literally in the markup.

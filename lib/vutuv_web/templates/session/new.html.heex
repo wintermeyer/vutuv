@@ -3,7 +3,7 @@
     <div class="imagebox__intro">
       <h1>Login</h1>
     </div>
-    <.form :let={f} for={%{}} action={~p"/sessions"} as={:session} class="imagebox__form">
+    <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="imagebox__form">
       <%= text_input f, :email, class: "imagebox__input", placeholder: gettext("Enter your email address"), autofocus: true %>
       <%= submit gettext("Log in"), class: "button button--block" %>
     </.form>

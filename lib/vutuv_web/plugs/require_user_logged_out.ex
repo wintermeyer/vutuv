@@ -24,7 +24,7 @@ defmodule VutuvWeb.Plug.RequireUserLoggedOut do
 
   defp redirect(conn, user) do
     conn
-    |> Phoenix.Controller.redirect(to: ~p"/users/#{user}")
+    |> Phoenix.Controller.redirect(to: ~p"/#{user}")
     |> halt
   end
 end

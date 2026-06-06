@@ -70,7 +70,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
     # The search page renders no avatars of its own, so the only avatar URL in
     # the response is the one the shell chrome puts in the top bar.
-    response = conn |> get(~p"/search_queries/new") |> html_response(200)
+    response = conn |> get(~p"/search") |> html_response(200)
     assert response =~ ~s(/avatars/#{user.id}/)
   end
 

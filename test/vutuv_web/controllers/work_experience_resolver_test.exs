@@ -23,7 +23,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
   describe "show on an unknown work-experience slug" do
     test "returns a clean 404 instead of falling through", %{conn: conn} do
       user = validated_user_with_slug()
-      conn = get(conn, ~p"/users/#{user}/work_experiences/does-not-exist")
+      conn = get(conn, ~p"/#{user}/work_experiences/does-not-exist")
       assert conn.status == 404
       assert conn.halted
     end
@@ -35,7 +35,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
       other = validated_user_with_slug()
       foreign = insert(:work_experience, user: other)
 
-      conn = get(conn, ~p"/users/#{owner}/work_experiences/#{foreign}")
+      conn = get(conn, ~p"/#{owner}/work_experiences/#{foreign}")
       assert conn.status == 404
       assert conn.halted
     end
@@ -44,7 +44,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
       user = validated_user_with_slug()
       own = insert(:work_experience, user: user)
 
-      conn = get(conn, ~p"/users/#{user}/work_experiences/#{own}")
+      conn = get(conn, ~p"/#{user}/work_experiences/#{own}")
       assert conn.status == 200
     end
   end
@@ -52,7 +52,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
   describe "index (no id param)" do
     test "passes through cleanly and renders the listing", %{conn: conn} do
       user = validated_user_with_slug()
-      conn = get(conn, ~p"/users/#{user}/work_experiences")
+      conn = get(conn, ~p"/#{user}/work_experiences")
       assert conn.status == 200
     end
   end

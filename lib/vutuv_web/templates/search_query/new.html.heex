@@ -1,13 +1,13 @@
 <.page_header crumbs={
   if @conn.assigns[:query] do
-    [{gettext("Search"), ~p"/search_queries/new"}, gettext("Results")]
+    [{gettext("Search"), ~p"/search"}, gettext("Results")]
   else
     [gettext("Search")]
   end
 } />
 
 <%= render "form_content.html", conn: @conn, changeset: @changeset,
-                          action: ~p"/search_queries" %>
+                          action: ~p"/search" %>
 
 <div class="search-results card-list">
   <%= unless @conn.assigns[:query] do %>

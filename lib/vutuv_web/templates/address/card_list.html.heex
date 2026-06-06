@@ -10,14 +10,14 @@
     <%= for address <- @addresses do %>
     <tr>
       <td>
-      <%= link address.description, to: ~p"/users/#{@user}/addresses/#{address}" %>
+      <%= link address.description, to: ~p"/#{@user}/addresses/#{address}" %>
       </td>
       <td><%= format_address address %></td>
       <td>
       <%= if same_user?(@user, @current_user) do %>
         <.edit_delete_actions
-          edit_to={~p"/users/#{@user}/addresses/#{address}/edit"}
-          delete_to={~p"/users/#{@user}/addresses/#{address}"}
+          edit_to={~p"/#{@user}/addresses/#{address}/edit"}
+          delete_to={~p"/#{@user}/addresses/#{address}"}
         />
       <% end %>
       </td>

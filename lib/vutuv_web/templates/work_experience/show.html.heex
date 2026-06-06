@@ -2,8 +2,8 @@
   title={gettext("About this Experience")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Experience"), ~p"/users/#{@user}/work_experiences"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Experience"), ~p"/#{@user}/work_experiences"},
     gettext("Show")
   ]}
 />
@@ -12,8 +12,8 @@
   <section class="card">
     <%= if same_user?(@user, @current_user) do %>
       <.edit_delete_actions
-        edit_to={~p"/users/#{@user}/work_experiences/#{@work_experience}/edit"}
-        delete_to={~p"/users/#{@user}/work_experiences/#{@work_experience}"}
+        edit_to={~p"/#{@user}/work_experiences/#{@work_experience}/edit"}
+        delete_to={~p"/#{@user}/work_experiences/#{@work_experience}"}
       />
     <% end %>
     <h1><%= gettext("Job Title") %></h1>

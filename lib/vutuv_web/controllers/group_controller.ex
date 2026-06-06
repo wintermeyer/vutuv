@@ -19,7 +19,7 @@ defmodule VutuvWeb.GroupController do
   def create(conn, %{"group" => group_params}) do
     ControllerHelpers.save(conn, Social.create_group(conn.assigns[:user], group_params),
       flash: gettext("Group created successfully."),
-      redirect_to: ~p"/users/#{conn.assigns[:user]}/groups",
+      redirect_to: ~p"/#{conn.assigns[:user]}/groups",
       render: "new.html"
     )
   end
@@ -40,7 +40,7 @@ defmodule VutuvWeb.GroupController do
 
     ControllerHelpers.save(conn, Social.update_group(group, group_params),
       flash: gettext("Group updated successfully."),
-      redirect_to: &~p"/users/#{conn.assigns[:user]}/groups/#{&1}",
+      redirect_to: &~p"/#{conn.assigns[:user]}/groups/#{&1}",
       render: "edit.html",
       assigns: [group: group]
     )
@@ -55,6 +55,6 @@ defmodule VutuvWeb.GroupController do
 
     conn
     |> put_flash(:info, gettext("Group deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/groups")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/groups")
   end
 end

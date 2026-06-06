@@ -20,8 +20,8 @@ defmodule VutuvWeb.Router do
   pipeline :user_pipe do
     # Keep the per-user detail pages (phone numbers, emails, addresses, …) out
     # of search indexes. Runs first so the header is present even when a later
-    # plug halts (e.g. an unknown slug 404s). The profile page itself does not
-    # go through this pipeline and stays crawlable.
+    # plug halts (e.g. an unknown slug 404s). The profile page itself (/:slug)
+    # does not go through this pipeline and stays crawlable.
     plug(Plugs.NoIndex)
     plug(Plugs.UserResolveSlug)
     plug(Plugs.EnsureValidated)
@@ -69,48 +69,33 @@ defmodule VutuvWeb.Router do
       resources("/memberships", MembershipController, only: [:create, :delete])
     end
 
-    resources("/search_queries", SearchQueryController, only: [:create, :new, :show])
+    # Search lives at /search: GET renders the form, POST runs a query, and
+    # /search/:id shows a stored query (the id is the query value itself).
+    get("/search", SearchQueryController, :new)
+    post("/search", SearchQueryController, :create)
+    get("/search/:id", SearchQueryController, :show)
 
-    # No :index — there is no public user directory; the admin panel lists
-    # unverified users and search covers discovery. No :new/:create either —
-    # registration is the landing-page form (POST /new_registration); the
-    # UserController versions were unreachable (EnsureValidated 404'd them).
-    resources "/users", UserController, param: "slug", except: [:index, :new, :create] do
-      pipe_through(:user_pipe)
-      resources("/emails", EmailController)
-      # PIN-entry step for the email-change flow (issue #759).
-      post("/emails/confirmation", EmailController, :confirm)
-      resources("/slugs", SlugController, only: [:index, :new, :create, :show, :update])
-      resources("/groups", GroupController)
-      resources("/followers", FollowerController, only: [:index])
-      resources("/followees", FolloweeController, only: [:index])
+    # Login/logout under the names humans type. The controller still speaks
+    # "session": POST /login handles both PIN steps, DELETE /logout signs out.
+    get("/login", SessionController, :new)
+    post("/login", SessionController, :create)
+    delete("/logout", SessionController, :delete)
 
-      resources("/user_tag_endorsements", UserTagEndorsementController,
-        only: [:create, :delete],
-        as: :tag_endorsement
-      )
-
-      resources("/phone_numbers", PhoneNumberController)
-      # resources "/dates", DateController  # Controller does not exist
-      resources("/links", UrlController)
-      resources("/social_media_accounts", SocialMediaAccountController)
-      resources("/work_experiences", WorkExperienceController)
-      resources("/addresses", AddressController)
-      # resources "/oauth_providers", OAuthProviderController  # Controller does not exist
-      resources("/search_terms", SearchTermController, only: [:show, :index])
-
-      resources("/tags", UserTagController,
-        only: [:new, :create, :show, :delete, :index],
-        as: :tag
-      )
-    end
-
-    post("/users/:slug/tags_create", UserController, :tags_create)
     # PIN-entry step for the account-deletion flow (issue #759).
     post("/account_deletion", UserController, :confirm_delete)
-
-    resources("/sessions", SessionController, only: [:new, :create, :delete])
     get("/follow_back/:id", UserController, :follow_back)
+  end
+
+  # Legacy URLs from before profiles moved to the root (and before the
+  # /sessions and /search_queries renames). GET-only 301s; see the controller.
+  scope "/", VutuvWeb do
+    pipe_through(:browser)
+
+    get("/sessions/new", LegacyRedirectController, :login)
+    get("/search_queries/new", LegacyRedirectController, :search)
+    get("/search_queries/:id", LegacyRedirectController, :search_query)
+    get("/users/:slug", LegacyRedirectController, :user)
+    get("/users/:slug/*rest", LegacyRedirectController, :user_subpage)
   end
 
   # Incremental LiveView surface. `InitAssigns` assigns `:current_user` from the
@@ -173,8 +158,47 @@ defmodule VutuvWeb.Router do
     pipe_through(:render_404)
   end
 
-  scope "/", as: :default do
+  # Profiles live at the URL root: /:slug is the profile page, /:slug/... the
+  # per-user sub-pages. This scope must stay LAST — every route above wins by
+  # definition order, and Vutuv.Accounts.ReservedSlugs keeps users from
+  # claiming those path words as slugs.
+  scope "/", VutuvWeb do
     pipe_through(:browser)
-    get("/:slug", VutuvWeb.PageController, :redirect_user)
+
+    post("/:slug/tags_create", UserController, :tags_create)
+
+    # No :index — there is no public user directory; the admin panel lists
+    # unverified users and search covers discovery. No :new/:create either —
+    # registration is the landing-page form (POST /new_registration); the
+    # UserController versions were unreachable (EnsureValidated 404'd them).
+    resources "/", UserController, param: "slug", except: [:index, :new, :create] do
+      pipe_through(:user_pipe)
+      resources("/emails", EmailController)
+      # PIN-entry step for the email-change flow (issue #759).
+      post("/emails/confirmation", EmailController, :confirm)
+      resources("/slugs", SlugController, only: [:index, :new, :create, :show, :update])
+      resources("/groups", GroupController)
+      resources("/followers", FollowerController, only: [:index])
+      resources("/following", FolloweeController, only: [:index])
+
+      resources("/user_tag_endorsements", UserTagEndorsementController,
+        only: [:create, :delete],
+        as: :tag_endorsement
+      )
+
+      resources("/phone_numbers", PhoneNumberController)
+      # resources "/dates", DateController  # Controller does not exist
+      resources("/links", UrlController)
+      resources("/social_media_accounts", SocialMediaAccountController)
+      resources("/work_experiences", WorkExperienceController)
+      resources("/addresses", AddressController)
+      # resources "/oauth_providers", OAuthProviderController  # Controller does not exist
+      resources("/search_terms", SearchTermController, only: [:show, :index])
+
+      resources("/tags", UserTagController,
+        only: [:new, :create, :show, :delete, :index],
+        as: :tag
+      )
+    end
   end
 end

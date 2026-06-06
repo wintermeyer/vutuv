@@ -3,7 +3,7 @@
     <div class="imagebox__intro">
       <h1><%= gettext "Please check your INBOX." %></h1>
       <p><%= gettext "An email has been sent with your PIN. Once you enter your PIN below, you'll be logged in for the next 90 days on this device, or until you log out." %></p>
-      <.form :let={f} for={%{}} action={~p"/sessions"} as={:session} class="imagebox__form" method="post">
+      <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="imagebox__form" method="post">
 			  <div class="editform__field">
 			    <%= text_input f, :pin, class: "imagebox__input", autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
 			  </div>

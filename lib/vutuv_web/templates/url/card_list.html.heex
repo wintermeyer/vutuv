@@ -13,8 +13,8 @@
     <div class="text">
       <%= if same_user?(@user, @current_user) do %>
         <.edit_delete_actions
-          edit_to={~p"/users/#{@user}/links/#{url}/edit"}
-          delete_to={~p"/users/#{@user}/links/#{url}"}
+          edit_to={~p"/#{@user}/links/#{url}/edit"}
+          delete_to={~p"/#{@user}/links/#{url}"}
         />
       <% end %>
       <div class="title">

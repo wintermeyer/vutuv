@@ -28,7 +28,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Phone number created successfully."),
-      redirect_to: ~p"/users/#{conn.assigns[:user]}/phone_numbers",
+      redirect_to: ~p"/#{conn.assigns[:user]}/phone_numbers",
       render: "new.html"
     )
   end
@@ -50,7 +50,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Phone number updated successfully."),
-      redirect_to: &~p"/users/#{conn.assigns[:user]}/phone_numbers/#{&1}",
+      redirect_to: &~p"/#{conn.assigns[:user]}/phone_numbers/#{&1}",
       render: "edit.html",
       assigns: [phone_number: phone_number]
     )
@@ -64,6 +64,6 @@ defmodule VutuvWeb.PhoneNumberController do
 
     conn
     |> put_flash(:info, gettext("Phone number deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/phone_numbers")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/phone_numbers")
   end
 end

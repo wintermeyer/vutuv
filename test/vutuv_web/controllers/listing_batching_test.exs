@@ -73,7 +73,7 @@ defmodule VutuvWeb.ListingBatchingTest do
     end
   end
 
-  describe "GET /users/:id/followers and /users/:id/followees" do
+  describe "GET /:slug/followers and /:slug/following" do
     test "render the follower/followee job lines", %{conn: conn} do
       owner = validated_user(first_name: "Owner")
       follower = validated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
@@ -82,12 +82,12 @@ defmodule VutuvWeb.ListingBatchingTest do
       insert(:connection, follower: follower, followee: owner)
       insert(:connection, follower: owner, followee: followee)
 
-      followers_body = conn |> get(~p"/users/#{owner}/followers") |> html_response(200)
+      followers_body = conn |> get(~p"/#{owner}/followers") |> html_response(200)
       assert followers_body =~ "Fan"
       assert followers_body =~ "Scout @ Talent Co"
 
       followees_body =
-        conn |> recycle() |> get(~p"/users/#{owner}/followees") |> html_response(200)
+        conn |> recycle() |> get(~p"/#{owner}/following") |> html_response(200)
 
       assert followees_body =~ "Idol"
       assert followees_body =~ "Star @ Fame Inc"
@@ -109,7 +109,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       owner = validated_user(first_name: "Owner")
       insert(:connection, follower: owner, followee: recommended)
 
-      body = conn |> get(~p"/users/#{owner}") |> html_response(200)
+      body = conn |> get(~p"/#{owner}") |> html_response(200)
 
       assert body =~ "Recommendo"
       assert body =~ "Advisor @ Guild"

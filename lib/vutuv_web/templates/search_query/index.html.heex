@@ -1,7 +1,7 @@
 <.page_header
   title={gettext("Search History")}
   crumbs={[
-    {gettext("Search"), ~p"/search_queries/new"},
+    {gettext("Search"), ~p"/search"},
     gettext("Search History")
   ]}
 />
@@ -33,12 +33,12 @@
             <% end %>
           </td>
           <td class="text-right">
-            <%= link gettext("Show"), to: ~p"/search_queries/#{query}", class: "button button--small button--secondary" %>
+            <%= link gettext("Show"), to: ~p"/search/#{query}", class: "button button--small button--secondary" %>
           </td>
         </tr>
       <% end %>
     </tbody>
   </table>
 
-  <%= link gettext("New search"), to: ~p"/search_queries/new", class: "card__morelink" %>
+  <%= link gettext("New search"), to: ~p"/search", class: "card__morelink" %>
 </.card_section>

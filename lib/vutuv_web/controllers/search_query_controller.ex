@@ -21,7 +21,7 @@ defmodule VutuvWeb.SearchQueryController do
 
       render(conn, "index.html", queries: queries)
     else
-      redirect(conn, to: ~p"/search_queries/new")
+      redirect(conn, to: ~p"/search")
     end
   end
 
@@ -67,7 +67,7 @@ defmodule VutuvWeb.SearchQueryController do
   defp query_created(conn, query) do
     conn
     |> put_flash(:info, gettext("Search query executed successfully."))
-    |> redirect(to: ~p"/search_queries/#{query}")
+    |> redirect(to: ~p"/search/#{query}")
   end
 
   def show(conn, %{"id" => query_id}) do

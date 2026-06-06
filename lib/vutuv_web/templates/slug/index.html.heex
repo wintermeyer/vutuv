@@ -12,12 +12,12 @@
     <tr>
       <td><%= slug.value %></td>
       <td class="text-right">
-        <%= link "Show", to: ~p"/users/#{@user}/slugs/#{slug}", class: "button button--small button--secondary" %>
-        <%= link "Activate", to: ~p"/users/#{@user}/slugs/#{slug}",method: :put, class: "button button--small button--secondary" %>
+        <%= link "Show", to: ~p"/#{@user}/slugs/#{slug}", class: "button button--small button--secondary" %>
+        <%= link "Activate", to: ~p"/#{@user}/slugs/#{slug}",method: :put, class: "button button--small button--secondary" %>
       </td>
     </tr>
 <% end %>
   </tbody>
 </table>
 
-<%= link "New slug", to: ~p"/users/#{@user}/slugs/new" %>
+<%= link "New slug", to: ~p"/#{@user}/slugs/new" %>

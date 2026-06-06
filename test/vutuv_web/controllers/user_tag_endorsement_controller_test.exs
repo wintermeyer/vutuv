@@ -24,7 +24,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
       user = validated_user_with_slug()
 
       conn =
-        post(conn, ~p"/users/#{user}/user_tag_endorsements", id: "does-not-exist")
+        post(conn, ~p"/#{user}/user_tag_endorsements", id: "does-not-exist")
 
       assert conn.status == 404
       assert conn.halted
@@ -40,7 +40,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
       insert(:user_tag, user: other, tag: tag)
 
       conn =
-        post(conn, ~p"/users/#{user}/user_tag_endorsements", id: tag.slug)
+        post(conn, ~p"/#{user}/user_tag_endorsements", id: tag.slug)
 
       assert conn.status == 404
       assert conn.halted
@@ -55,7 +55,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
       insert(:user_tag, user: user, tag: tag)
 
       conn =
-        post(conn, ~p"/users/#{user}/user_tag_endorsements", id: tag.slug)
+        post(conn, ~p"/#{user}/user_tag_endorsements", id: tag.slug)
 
       assert conn.status == 404
       assert conn.halted

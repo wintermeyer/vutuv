@@ -9,7 +9,7 @@ defmodule VutuvWeb.Plug.EnsureValidatedTest do
     user = insert(:user, active_slug: "unvalidated-user", validated?: false)
     insert(:slug, value: "unvalidated-user", user: user, disabled: false)
 
-    conn = get(build_conn(), "/users/unvalidated-user")
+    conn = get(build_conn(), "/unvalidated-user")
 
     assert conn.status == 404
     assert conn.resp_body =~ ~r/not found/i

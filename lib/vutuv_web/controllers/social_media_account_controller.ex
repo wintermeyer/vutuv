@@ -49,7 +49,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
         conn
         |> put_flash(:info, info)
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/social_media_accounts")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts")
 
       {:error, changeset} ->
         render(conn, "new.html", changeset: changeset)
@@ -76,7 +76,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
         conn
         |> put_flash(:info, gettext("Social media account updated successfully."))
         |> redirect(
-          to: ~p"/users/#{conn.assigns[:user]}/social_media_accounts/#{social_media_account}"
+          to: ~p"/#{conn.assigns[:user]}/social_media_accounts/#{social_media_account}"
         )
 
       {:error, changeset} ->
@@ -96,6 +96,6 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     conn
     |> put_flash(:info, gettext("Social media account deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/social_media_accounts")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts")
   end
 end

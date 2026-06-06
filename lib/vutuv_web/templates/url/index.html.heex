@@ -2,7 +2,7 @@
   title={gettext("Links belonging to ") <> full_name(@user)}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
+    {full_name(@user), ~p"/#{@user}"},
     gettext("Links")
   ]}
 />
@@ -10,7 +10,7 @@
 
 <.card_section
   empty={Enum.empty?(@urls)}
-  add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/links/new"}
+  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/links/new"}
 >
   <%= render "card_list.html", assigns %>
 </.card_section>

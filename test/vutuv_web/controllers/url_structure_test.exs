@@ -1,0 +1,106 @@
+defmodule VutuvWeb.UrlStructureTest do
+  @moduledoc """
+  Pins the root-level URL scheme: profiles live at /:slug (GitHub-style) with
+  all per-user sub-pages under /:slug/..., while the legacy /users/:slug URLs,
+  /sessions/new and /search_queries/... 301 to their new homes. The catch-all
+  user scope sits last in the router, so every static route must keep winning
+  over a slug lookup.
+  """
+  use VutuvWeb.ConnCase
+
+  defp create_user do
+    user = insert(:user, validated?: true)
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user
+  end
+
+  describe "profiles at the URL root" do
+    test "GET /:slug renders the profile", %{conn: conn} do
+      user = create_user()
+      conn = get(conn, "/#{user.active_slug}")
+      assert html_response(conn, 200) =~ user.first_name
+    end
+
+    test "sub-pages render under /:slug/...", %{conn: conn} do
+      user = create_user()
+
+      assert conn |> get("/#{user.active_slug}/followers") |> html_response(200)
+      assert conn |> get("/#{user.active_slug}/following") |> html_response(200)
+    end
+
+    test "static routes keep winning over the slug catch-all", %{conn: conn} do
+      # "tags" and "login" are valid slug shapes; the routes must win.
+      assert conn |> get("/tags") |> html_response(200)
+      assert conn |> get("/login") |> html_response(200)
+    end
+
+    test "an unknown slug 404s", %{conn: conn} do
+      assert conn |> get("/no-such-user") |> html_response(404)
+    end
+
+    test "GET /users (no slug) 404s like any unknown path", %{conn: conn} do
+      assert conn |> get("/users") |> html_response(404)
+    end
+  end
+
+  describe "legacy /users/:slug URLs" do
+    test "the profile URL 301s to /:slug", %{conn: conn} do
+      user = create_user()
+      conn = get(conn, "/users/#{user.active_slug}")
+      assert redirected_to(conn, 301) == "/#{user.active_slug}"
+    end
+
+    test "sub-page URLs 301 to /:slug/... and keep the query string", %{conn: conn} do
+      user = create_user()
+      conn = get(conn, "/users/#{user.active_slug}/links?page=2")
+      assert redirected_to(conn, 301) == "/#{user.active_slug}/links?page=2"
+    end
+
+    test "the renamed followees page redirects to /:slug/following", %{conn: conn} do
+      user = create_user()
+      conn = get(conn, "/users/#{user.active_slug}/followees")
+      assert redirected_to(conn, 301) == "/#{user.active_slug}/following"
+    end
+  end
+
+  describe "login and logout" do
+    test "GET /login renders the login form", %{conn: conn} do
+      assert html_response(get(conn, "/login"), 200) =~ ~s(action="/login")
+    end
+
+    test "GET /sessions/new 301s to /login", %{conn: conn} do
+      assert redirected_to(get(conn, "/sessions/new"), 301) == "/login"
+    end
+
+    test "DELETE /logout signs the user out", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      conn = delete(conn, "/logout")
+      assert redirected_to(conn) == "/#{user.active_slug}"
+      refute get_session(conn, :user_id)
+    end
+  end
+
+  describe "search" do
+    test "GET /search renders the search form", %{conn: conn} do
+      assert html_response(get(conn, "/search"), 200) =~ ~s(action="/search")
+    end
+
+    test "the legacy /search_queries URLs 301 to /search", %{conn: conn} do
+      assert redirected_to(get(conn, "/search_queries/new"), 301) == "/search"
+      assert redirected_to(get(conn, "/search_queries/elixir"), 301) == "/search/elixir"
+    end
+  end
+
+  describe "robots.txt" do
+    test "blocks the user sub-pages but not the profile itself", %{conn: conn} do
+      body = conn |> get("/robots.txt") |> response(200)
+
+      assert body =~ "Disallow: /*/emails"
+      assert body =~ "Disallow: /*/phone_numbers"
+      assert body =~ "Disallow: /users/"
+      assert body =~ "Disallow: /login"
+      assert body =~ "Disallow: /search"
+      assert body =~ "Allow: /"
+    end
+  end
+end

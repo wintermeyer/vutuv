@@ -13,7 +13,7 @@ defmodule VutuvWeb.EmailControllerTest do
       {conn, user} = create_and_login_user(conn)
       %{emails: [email]} = Repo.preload(user, :emails)
 
-      conn = get(conn, ~p"/users/#{user}/emails/#{email}/edit")
+      conn = get(conn, ~p"/#{user}/emails/#{email}/edit")
       html = html_response(conn, 200)
 
       assert html =~ email.value
@@ -28,11 +28,11 @@ defmodule VutuvWeb.EmailControllerTest do
       assert email.public?
 
       conn =
-        put(conn, ~p"/users/#{user}/emails/#{email}",
+        put(conn, ~p"/#{user}/emails/#{email}",
           email: %{"value" => "hijacked@example.com", "public?" => "false"}
         )
 
-      assert redirected_to(conn) == ~p"/users/#{user}/emails/#{email}"
+      assert redirected_to(conn) == ~p"/#{user}/emails/#{email}"
       reloaded = Repo.get(Email, email.id)
       assert reloaded.value == email.value
       refute reloaded.public?

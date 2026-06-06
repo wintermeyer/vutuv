@@ -16,8 +16,8 @@
       <td>
       <%= if same_user?(@user, @current_user) do %>
         <.edit_delete_actions
-          edit_to={~p"/users/#{@user}/social_media_accounts/#{account}/edit"}
-          delete_to={~p"/users/#{@user}/social_media_accounts/#{account}"}
+          edit_to={~p"/#{@user}/social_media_accounts/#{account}/edit"}
+          delete_to={~p"/#{@user}/social_media_accounts/#{account}"}
         />
       <% end %>
       </td>

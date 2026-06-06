@@ -10,14 +10,14 @@
     <%= for number <- @phone_numbers do %>
     <tr>
       <td>
-      <%= link number.number_type, to: ~p"/users/#{@user}/phone_numbers/#{number}" %>
+      <%= link number.number_type, to: ~p"/#{@user}/phone_numbers/#{number}" %>
       </td>
       <td><%= number.value %></td>
       <td>
       <%= if same_user?(@user, @current_user) do %>
         <.edit_delete_actions
-          edit_to={~p"/users/#{@user}/phone_numbers/#{number}/edit"}
-          delete_to={~p"/users/#{@user}/phone_numbers/#{number}"}
+          edit_to={~p"/#{@user}/phone_numbers/#{number}/edit"}
+          delete_to={~p"/#{@user}/phone_numbers/#{number}"}
         />
       <% end %>
       </td>

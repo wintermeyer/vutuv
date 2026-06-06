@@ -1,11 +1,11 @@
 <.page_header crumbs={[
   gettext("Users"),
-  {full_name(@user), ~p"/users/#{@user}"},
-  {gettext("Experience"), ~p"/users/#{@user}/work_experiences"},
+  {full_name(@user), ~p"/#{@user}"},
+  {gettext("Experience"), ~p"/#{@user}/work_experiences"},
   gettext("Edit")
 ]} />
 
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/users/#{@user}/work_experiences", changeset: @changeset, action: ~p"/users/#{@user}/work_experiences/#{@work_experience}", delete_to: ~p"/users/#{@user}/work_experiences/#{@work_experience}", current_year: @current_year %>
+  <%= render "form_content.html", backlink: ~p"/#{@user}/work_experiences", changeset: @changeset, action: ~p"/#{@user}/work_experiences/#{@work_experience}", delete_to: ~p"/#{@user}/work_experiences/#{@work_experience}", current_year: @current_year %>
 </.card_section>

@@ -27,7 +27,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, "#notification-follower-#{connection.id}")
 
       # The actor's name links to their profile.
-      assert render(live) =~ ~s(href="/users/#{follower.active_slug}")
+      assert render(live) =~ ~s(href="/#{follower.active_slug}")
     end
 
     test "a derived row shows the actor's real avatar when they have one", %{conn: conn} do
@@ -215,7 +215,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render(live)
       assert html =~ "Grace Hopper"
-      assert html =~ ~s(href="/users/#{follower.active_slug}")
+      assert html =~ ~s(href="/#{follower.active_slug}")
     end
   end
 

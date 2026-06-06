@@ -2,7 +2,7 @@
   title={gettext("Phone Numbers Belonging to ") <> full_name(@user)}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
+    {full_name(@user), ~p"/#{@user}"},
     gettext("Phone Numbers")
   ]}
 />
@@ -10,7 +10,7 @@
 
 <.card_section
   empty={Enum.empty?(@phone_numbers)}
-  add_href={same_user?(@user, @current_user) && ~p"/users/#{@current_user}/phone_numbers/new"}
+  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/phone_numbers/new"}
 >
   <%= render "card_list.html", assigns %>
 </.card_section>

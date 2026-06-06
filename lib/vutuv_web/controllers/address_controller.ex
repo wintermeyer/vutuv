@@ -28,7 +28,7 @@ defmodule VutuvWeb.AddressController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Address created successfully."),
-      redirect_to: ~p"/users/#{conn.assigns[:user]}/addresses",
+      redirect_to: ~p"/#{conn.assigns[:user]}/addresses",
       render: "new.html",
       assigns: [country: get_template(conn)]
     )
@@ -58,7 +58,7 @@ defmodule VutuvWeb.AddressController do
       {:ok, address} ->
         conn
         |> put_flash(:info, gettext("Address updated successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/addresses/#{address}")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/addresses/#{address}")
 
       {:error, changeset} ->
         render(conn, "edit.html",
@@ -78,7 +78,7 @@ defmodule VutuvWeb.AddressController do
 
     conn
     |> put_flash(:info, gettext("Address deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/addresses")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/addresses")
   end
 
   defp get_template(conn) do

@@ -1,11 +1,11 @@
 
 <.page_header crumbs={[
   gettext("Users"),
-  {full_name(@user), ~p"/users/#{@user}"},
-  {gettext("Emails"), ~p"/users/#{@user}/emails"},
+  {full_name(@user), ~p"/#{@user}"},
+  {gettext("Emails"), ~p"/#{@user}/emails"},
   gettext("New")
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/users/#{@user}/emails", changeset: @changeset, action: ~p"/users/#{@user}/emails" %>
+  <%= render "form_content.html", backlink: ~p"/#{@user}/emails", changeset: @changeset, action: ~p"/#{@user}/emails" %>
 </.card_section>

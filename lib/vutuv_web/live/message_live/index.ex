@@ -24,7 +24,7 @@ defmodule VutuvWeb.MessageLive.Index do
         {:ok,
          socket
          |> put_flash(:error, gettext("Please log in to read your messages."))
-         |> redirect(to: ~p"/sessions/new")}
+         |> redirect(to: ~p"/login")}
 
       user ->
         conv_id = valid_conv_id(params["id"])

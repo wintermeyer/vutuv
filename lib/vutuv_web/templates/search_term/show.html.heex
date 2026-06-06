@@ -2,8 +2,8 @@
   title={gettext("Show search term")}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
-    {gettext("Search terms"), ~p"/users/#{@user}/search_terms"},
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Search terms"), ~p"/#{@user}/search_terms"},
     gettext("Show")
   ]}
 />
@@ -16,5 +16,5 @@
   <h1><%= gettext("User") %></h1>
   <p><%= @search_term.user_id %></p>
 
-  <%= link gettext("Back"), to: ~p"/users/#{@user}/search_terms", class: "button" %>
+  <%= link gettext("Back"), to: ~p"/#{@user}/search_terms", class: "button" %>
 </.card_section>

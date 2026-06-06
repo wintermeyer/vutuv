@@ -52,6 +52,6 @@ defmodule VutuvWeb.UserTagEndorsementController do
   end
 
   defp referrer_url(conn) do
-    ControllerHelpers.referrer_url(conn, ~p"/users/#{conn.assigns[:user]}")
+    ControllerHelpers.referrer_url(conn, ~p"/#{conn.assigns[:user]}")
   end
 end

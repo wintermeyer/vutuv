@@ -22,7 +22,7 @@ the resulting ~200px rail width. --%>
         <% end %>
         <.link
           :if={same_user?(@user, @current_user)}
-          href={~p"/users/#{@user}/edit"}
+          href={~p"/#{@user}/edit"}
           title={if cover_url, do: gettext("Change cover photo"), else: gettext("Add a cover photo")}
           class="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/50"
         >
@@ -43,7 +43,7 @@ the resulting ~200px rail width. --%>
           <div class="ml-auto flex gap-2 pb-1">
             <%= cond do %>
               <% same_user?(@user, @current_user) -> %>
-                <.button href={~p"/users/#{@user}/edit"}>{gettext("Edit profile")}</.button>
+                <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
               <% visitor?(@conn, @current_user) -> %>
                 <%= case user_follows_user?(@current_user, @user) do %>
                   <% connection_id when is_integer(connection_id) -> %>
@@ -87,11 +87,11 @@ the resulting ~200px rail width. --%>
         wraps on a narrow screen. --%>
         <div :if={has_counts} class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
           <div class="flex gap-6">
-            <.link :if={@follower_count > 0} href={~p"/users/#{@user}/followers"} class="hover:underline">
+            <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class="hover:underline">
               <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
               <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span>
             </.link>
-            <.link :if={@followee_count > 0} href={~p"/users/#{@user}/followees"} class="hover:underline">
+            <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class="hover:underline">
               <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
               <span class="text-slate-500">{gettext("following")}</span>
             </.link>
@@ -120,21 +120,21 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Skills & endorsements")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-skills-menu">
-            <:item href={~p"/users/#{@user}/tags/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/tags"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/tags/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/tags"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
 
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
         <div :for={user_tag <- @user_tags} class="inline-flex items-center">
-          <.chip href={~p"/users/#{@user}/tags/#{user_tag}"}>
+          <.chip href={~p"/#{@user}/tags/#{user_tag}"}>
             {Vutuv.Tags.UserTag.truncated_name(user_tag)}
             <span class="rounded bg-brand-600 px-1.5 text-xs font-semibold text-white">{compact_count(Enum.count(user_tag.endorsements))}</span>
           </.chip>
           <%!-- Endorsements are preloaded, so check in memory (no per-tag query). --%>
           <%= if @current_user && not same_user?(@user, @current_user) && not Enum.any?(user_tag.endorsements, &(&1.user_id == @current_user_id)) do %>
-            <%= button to: ~p"/users/#{@user}/user_tag_endorsements?#{[id: user_tag]}",
+            <%= button to: ~p"/#{@user}/user_tag_endorsements?#{[id: user_tag]}",
                   method: :post,
                   title: gettext("Endorse"),
                   class: "ml-1 flex h-7 w-7 items-center justify-center rounded-full text-slate-400 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800" do %>
@@ -149,7 +149,7 @@ the resulting ~200px rail width. --%>
         :if={same_user?(@user, @current_user) and Enum.count(@user_tags) == 0}
         for={%{}}
         as={:tags}
-        action={~p"/users/#{@user}/tags_create"}
+        action={~p"/#{@user}/tags_create"}
         class="mt-2 flex gap-2"
       >
         <input
@@ -164,7 +164,7 @@ the resulting ~200px rail width. --%>
 
       <.link
         :if={@totals.user_tags > 10}
-        href={~p"/users/#{@user}/tags"}
+        href={~p"/#{@user}/tags"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")} ({compact_count(@totals.user_tags)})
@@ -176,8 +176,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Experience")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-experience-menu">
-            <:item href={~p"/users/#{@user}/work_experiences/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/work_experiences"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/work_experiences/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/work_experiences"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -212,7 +212,7 @@ the resulting ~200px rail width. --%>
           </div>
           <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
             <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
-            <.link href={~p"/users/#{@user}/work_experiences/#{circle.job}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
+            <.link href={~p"/#{@user}/work_experiences/#{circle.job}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
               {circle.job.title}
             </.link>
             <p class="text-sm text-slate-500">
@@ -231,7 +231,7 @@ the resulting ~200px rail width. --%>
 
       <.link
         :if={@totals.jobs > 3}
-        href={~p"/users/#{@user}/work_experiences"}
+        href={~p"/#{@user}/work_experiences"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")} ({compact_count(@totals.jobs)})
@@ -246,8 +246,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Links")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-links-menu">
-            <:item href={~p"/users/#{@user}/links/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/links"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/links/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/links"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -285,7 +285,7 @@ the resulting ~200px rail width. --%>
       <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
         :if={@totals.links > 3}
-        href={~p"/users/#{@user}/links"}
+        href={~p"/#{@user}/links"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")} ({compact_count(@totals.links)})
@@ -309,7 +309,7 @@ the resulting ~200px rail width. --%>
         </ul>
         <.link
           :if={@follower_count > 3}
-          href={~p"/users/#{@user}/followers"}
+          href={~p"/#{@user}/followers"}
           class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
         >
           {gettext("View All")} ({compact_count(@follower_count)})
@@ -330,7 +330,7 @@ the resulting ~200px rail width. --%>
         </ul>
         <.link
           :if={@followee_count > 3}
-          href={~p"/users/#{@user}/followees"}
+          href={~p"/#{@user}/following"}
           class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
         >
           {gettext("View All")} ({compact_count(@followee_count)})
@@ -359,8 +359,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Contact")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-contact-menu">
-            <:item href={~p"/users/#{@user}/emails/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/emails"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/emails/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/emails"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -380,7 +380,7 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("General Info")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-about-menu">
-            <:item href={~p"/users/#{@user}/edit"}>{gettext("Edit")}</:item>
+            <:item href={~p"/#{@user}/edit"}>{gettext("Edit")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -406,8 +406,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Social Media")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-social-media-menu">
-            <:item href={~p"/users/#{@user}/social_media_accounts/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/social_media_accounts"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/social_media_accounts/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/social_media_accounts"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -424,8 +424,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Phone Numbers")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-phone-numbers-menu">
-            <:item href={~p"/users/#{@user}/phone_numbers/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/phone_numbers"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/phone_numbers/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/phone_numbers"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -438,7 +438,7 @@ the resulting ~200px rail width. --%>
       <p :if={@totals.numbers == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
         :if={@totals.numbers > 3}
-        href={~p"/users/#{@user}/phone_numbers"}
+        href={~p"/#{@user}/phone_numbers"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")} ({compact_count(@totals.numbers)})
@@ -449,8 +449,8 @@ the resulting ~200px rail width. --%>
       <.section_header title={gettext("Addresses")}>
         <:action :if={same_user?(@user, @current_user)}>
           <.card_menu id="profile-addresses-menu">
-            <:item href={~p"/users/#{@user}/addresses/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/users/#{@user}/addresses"}>{gettext("Manage entries")}</:item>
+            <:item href={~p"/#{@user}/addresses/new"}>{gettext("Add entry")}</:item>
+            <:item href={~p"/#{@user}/addresses"}>{gettext("Manage entries")}</:item>
           </.card_menu>
         </:action>
       </.section_header>
@@ -463,7 +463,7 @@ the resulting ~200px rail width. --%>
       <p :if={@totals.addresses == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
       <.link
         :if={@totals.addresses > 3}
-        href={~p"/users/#{@user}/addresses"}
+        href={~p"/#{@user}/addresses"}
         class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
       >
         {gettext("View All")} ({compact_count(@totals.addresses)})
@@ -488,8 +488,7 @@ the resulting ~200px rail width. --%>
   "@type" => "BreadcrumbList",
   "itemListElement" => [
     %{"@type" => "ListItem", "position" => 1, "item" => %{"@id" => "https://vutuv.de", "name" => "vutuv"}},
-    %{"@type" => "ListItem", "position" => 2, "item" => %{"@id" => "https://vutuv.de/users/", "name" => "users"}},
-    %{"@type" => "ListItem", "position" => 3, "item" => %{"@id" => "https://vutuv.de#{~p"/users/#{@user}"}", "name" => full_name(@user)}}
+    %{"@type" => "ListItem", "position" => 2, "item" => %{"@id" => "https://vutuv.de#{~p"/#{@user}"}", "name" => full_name(@user)}}
   ]
 }, escape: :html_safe, pretty: true)) %>
 </script>

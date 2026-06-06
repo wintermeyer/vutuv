@@ -20,13 +20,13 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
       user = insert(:user, validated?: true)
       insert(:email, value: "pin-login@example.com", user: user)
 
-      conn = post(build_conn(), ~p"/sessions", session: %{"email" => "pin-login@example.com"})
+      conn = post(build_conn(), ~p"/login", session: %{"email" => "pin-login@example.com"})
       assert html_response(conn, 200) =~ "_csrf_token"
       pin = sent_pin()
 
-      conn = submit_with_csrf(conn, ~p"/sessions", %{"session" => %{"pin" => pin}})
+      conn = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
 
-      assert redirected_to(conn) == ~p"/users/#{user}"
+      assert redirected_to(conn) == ~p"/#{user}"
       assert get_session(conn, :user_id) == user.id
     end
   end
@@ -35,14 +35,14 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
     test "completes the two-step email confirmation with CSRF enforced", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = post(conn, ~p"/users/#{user}/emails", email: %{"value" => "added@example.com"})
+      conn = post(conn, ~p"/#{user}/emails", email: %{"value" => "added@example.com"})
       assert html_response(conn, 200) =~ "_csrf_token"
       pin = sent_pin()
 
       conn =
         submit_with_csrf(
           conn,
-          ~p"/users/#{user}/emails/confirmation",
+          ~p"/#{user}/emails/confirmation",
           %{"email_confirmation" => %{"pin" => pin}}
         )
 
@@ -55,7 +55,7 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
     test "completes the two-step account deletion with CSRF enforced", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = delete(conn, ~p"/users/#{user}")
+      conn = delete(conn, ~p"/#{user}")
       assert html_response(conn, 200) =~ "_csrf_token"
       pin = sent_pin()
 

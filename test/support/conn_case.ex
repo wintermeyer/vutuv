@@ -55,7 +55,7 @@ defmodule VutuvWeb.ConnCase do
       # `login_by_email/2` rides along when ConnTest recycles the response.
       defp login_via_pin(conn, email) do
         {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
-        post(conn, ~p"/sessions", session: %{"pin" => sent_pin()})
+        post(conn, ~p"/login", session: %{"pin" => sent_pin()})
       end
 
       # The Swoosh test adapter delivers synchronously to this process, so the

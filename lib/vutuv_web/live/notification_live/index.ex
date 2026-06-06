@@ -100,7 +100,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           whose payload carries no user struct (e.g. a bare-map broadcast) keep
           the colored kind glyph. --%>
           <%= if n[:actor_avatar] do %>
-            <.link href={~p"/users/#{n.actor_param}"} class="mt-0.5 shrink-0">
+            <.link href={~p"/#{n.actor_param}"} class="mt-0.5 shrink-0">
               <.avatar src={n[:actor_avatar]} size="sm" alt={"Avatar of #{n.actor_name}"} />
             </.link>
           <% else %>
@@ -114,7 +114,7 @@ defmodule VutuvWeb.NotificationLive.Index do
           <div>
             <p class="text-slate-800 dark:text-slate-100">
               <%= if n[:actor_param] do %>
-                <.link href={~p"/users/#{n.actor_param}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
+                <.link href={~p"/#{n.actor_param}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
                   {n.actor_name}
                 </.link>
               <% else %>

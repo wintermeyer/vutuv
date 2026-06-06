@@ -16,12 +16,12 @@ defmodule VutuvWeb.Admin.UserController do
 
         conn
         |> put_flash(:info, gettext("User verified successfully."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
 
       {:error, _changeset} ->
         conn
         |> put_flash(:error, gettext("An error occurred"))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
     end
   end
 end

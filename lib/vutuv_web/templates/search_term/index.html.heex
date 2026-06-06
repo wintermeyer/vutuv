@@ -2,7 +2,7 @@
   title={gettext("Search terms of %{name}", name: full_name(@user))}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
+    {full_name(@user), ~p"/#{@user}"},
     gettext("Search terms")
   ]}
 />
@@ -19,10 +19,10 @@
     <tbody>
       <%= for search_term <- @search_terms do %>
         <tr>
-          <td><%= link search_term.value, to: ~p"/users/#{@user}/search_terms/#{search_term}" %></td>
+          <td><%= link search_term.value, to: ~p"/#{@user}/search_terms/#{search_term}" %></td>
           <td><%= search_term.score %></td>
           <td class="text-right">
-            <%= link gettext("Show"), to: ~p"/users/#{@user}/search_terms/#{search_term}", class: "button-link button--small" %>
+            <%= link gettext("Show"), to: ~p"/#{@user}/search_terms/#{search_term}", class: "button-link button--small" %>
           </td>
         </tr>
       <% end %>

@@ -23,17 +23,25 @@ defmodule Vutuv.SlugHelpers do
   def gen_slug_unique(resource, slug_field),
     do: gen_slug_unique(resource, resource.__struct__, slug_field)
 
-  def gen_slug_unique(resource, model, slug_field) do
+  # `reserved` words (e.g. route prefixes, for user slugs) are treated like a
+  # database collision: the generated slug gets the short-sha suffix.
+  def gen_slug_unique(resource, model, slug_field, reserved \\ []) do
     slug = gen_slug(resource)
 
-    Repo.one(
-      from(s in model,
-        where: field(s, ^slug_field) == ^slug,
-        limit: 1,
-        select: field(s, ^slug_field)
-      )
-    )
-    |> ensure_slug(slug, resource)
+    taken =
+      if slug in reserved do
+        slug
+      else
+        Repo.one(
+          from(s in model,
+            where: field(s, ^slug_field) == ^slug,
+            limit: 1,
+            select: field(s, ^slug_field)
+          )
+        )
+      end
+
+    ensure_slug(taken, slug, resource)
   end
 
   defp ensure_slug(nil, "", resource), do: to_string(resource)

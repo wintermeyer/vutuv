@@ -32,7 +32,7 @@ defmodule VutuvWeb.UrlController do
 
         conn
         |> put_flash(:info, gettext("Link created successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/links")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/links")
 
       {:error, changeset} ->
         conn
@@ -62,7 +62,7 @@ defmodule VutuvWeb.UrlController do
 
         conn
         |> put_flash(:info, gettext("Link updated successfully."))
-        |> redirect(to: ~p"/users/#{conn.assigns[:user]}/links/#{url}")
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/links/#{url}")
 
       {:error, changeset} ->
         conn
@@ -80,7 +80,7 @@ defmodule VutuvWeb.UrlController do
 
     conn
     |> put_flash(:info, gettext("Link deleted successfully."))
-    |> redirect(to: ~p"/users/#{conn.assigns[:user]}/links")
+    |> redirect(to: ~p"/#{conn.assigns[:user]}/links")
   end
 
   # Capture the page screenshot off the request path. Supervised by

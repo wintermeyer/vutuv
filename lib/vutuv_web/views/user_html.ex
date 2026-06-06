@@ -20,11 +20,11 @@ defmodule VutuvWeb.UserHTML do
   def user_row(assigns) do
     ~H"""
     <li class="flex items-center gap-3">
-      <.link href={~p"/users/#{@user}"} class="shrink-0">
+      <.link href={~p"/#{@user}"} class="shrink-0">
         <.avatar user={@user} size="sm" alt={"Avatar of #{full_name(@user)}"} />
       </.link>
       <div class="min-w-0 text-sm">
-        <.link href={~p"/users/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(@user)}</.link>
+        <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(@user)}</.link>
         <%!-- Always render a line (non-breaking space when empty) so rows keep a
         uniform height and the side-by-side follower/following cards stay aligned.
         Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom

@@ -26,7 +26,7 @@ defmodule VutuvWeb.SlugController do
       {:ok, %{user: user, slug: _slug}} ->
         conn
         |> put_flash(:info, gettext("Slug updated successfully."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
 
       {:error, _failure, changeset, _} ->
         render(conn, "new.html", changeset: changeset)
@@ -48,10 +48,10 @@ defmodule VutuvWeb.SlugController do
       {:ok, user} ->
         conn
         |> put_flash(:info, gettext("Slug activated successfully"))
-        |> redirect(to: ~p"/users/#{user}/slugs")
+        |> redirect(to: ~p"/#{user}/slugs")
 
       {:error, _changeset} ->
-        redirect(conn, to: ~p"/users/#{conn.assigns[:current_user]}/slugs")
+        redirect(conn, to: ~p"/#{conn.assigns[:current_user]}/slugs")
     end
   end
 

@@ -2,7 +2,7 @@
   title={gettext("Addresses of %{name}", name: full_name(@user))}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
+    {full_name(@user), ~p"/#{@user}"},
     gettext("Addresses")
   ]}
 />
@@ -18,7 +18,7 @@
     <% end %>
 
     <%= if same_user?(@user, @current_user) do %>
-      <%= link gettext("Add"), to: ~p"/users/#{@current_user}/addresses/new", class: "card__morelink" %>
+      <%= link gettext("Add"), to: ~p"/#{@current_user}/addresses/new", class: "card__morelink" %>
     <% end %>
   </section>
 </div>

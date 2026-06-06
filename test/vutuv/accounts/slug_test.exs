@@ -40,6 +40,42 @@ defmodule Vutuv.Accounts.SlugTest do
     assert "Reached max new slugs in time period." in errors_on(new_slug_changeset(old)).value
   end
 
+  describe "reserved slugs" do
+    test "route and asset path words cannot be claimed as slugs" do
+      # Profiles live at the URL root, so a slug equal to a route prefix
+      # would shadow that user's profile forever.
+      for value <- ["tags", "login", "messages", "assets", "robots.txt", "users"] do
+        changeset = Slug.changeset(%Slug{}, %{value: value})
+        refute changeset.valid?, "expected #{value} to be rejected"
+        assert "is reserved" in errors_on(changeset).value
+      end
+    end
+
+    test "generated slugs skip reserved words by appending a suffix" do
+      reserved = Vutuv.Accounts.ReservedSlugs.list()
+      user = %Vutuv.Accounts.User{first_name: "Login", last_name: nil}
+
+      slug = Vutuv.SlugHelpers.gen_slug_unique(user, Slug, :value, reserved)
+
+      assert slug =~ ~r/^login\.[0-9a-f]{8}$/
+      refute Vutuv.Accounts.ReservedSlugs.reserved?(slug)
+    end
+
+    test "registration around a reserved name still succeeds" do
+      # register_user/2 generates the slug from the name; "Tags" slugifies to
+      # the reserved word "tags" and must come out suffixed, not rejected.
+      conn = %Plug.Conn{assigns: %{locale: "en"}}
+
+      {:ok, user} =
+        Vutuv.Accounts.register_user(conn, %{
+          "first_name" => "Tags",
+          "emails" => %{"0" => %{"value" => "tags@example.com"}}
+        })
+
+      assert user.active_slug =~ ~r/^tags\.[0-9a-f]{8}$/
+    end
+  end
+
   test "with three or more slugs a new one needs the last slug to be over 90 days old" do
     user = insert(:user, inserted_at: days_ago(200))
 

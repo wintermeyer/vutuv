@@ -23,6 +23,9 @@ defmodule Vutuv.Accounts.Slug do
     |> unique_constraint(:value)
     |> validate_length(:value, min: 3)
     |> trim_slug_to_32
+    # Profiles live at the URL root, so a slug must never equal a route
+    # prefix or static path (it would shadow that route forever).
+    |> validate_exclusion(:value, Vutuv.Accounts.ReservedSlugs.list(), message: "is reserved")
     |> can_create_slug?(model)
   end
 

@@ -119,7 +119,7 @@ defmodule VutuvWeb.ShellLive do
 
           <div class="ml-auto flex items-center gap-1">
             <.link
-              href={~p"/search_queries/new"}
+              href={~p"/search"}
               title={gettext("Search")}
               class="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 sm:flex dark:text-slate-400 dark:hover:bg-slate-800"
             >
@@ -143,7 +143,7 @@ defmodule VutuvWeb.ShellLive do
                 <.icon_bell />
                 <.count_badge count={@notifications_count} />
               </.link>
-              <.link href={~p"/users/#{@user_param}"} title={@user_name} class="ml-1 shrink-0">
+              <.link href={~p"/#{@user_param}"} title={@user_name} class="ml-1 shrink-0">
                 <%= if @user_avatar do %>
                   <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
                 <% else %>
@@ -153,7 +153,7 @@ defmodule VutuvWeb.ShellLive do
                 <% end %>
               </.link>
               <.link
-                href={~p"/sessions/#{@user_param}"}
+                href={~p"/logout"}
                 method="delete"
                 title={gettext("Log out")}
                 class="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -162,7 +162,7 @@ defmodule VutuvWeb.ShellLive do
               </.link>
             <% else %>
               <.link
-                href={~p"/sessions/new"}
+                href={~p"/login"}
                 class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
               >
                 {gettext("Log in")}
@@ -175,7 +175,7 @@ defmodule VutuvWeb.ShellLive do
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
       <nav class="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
         <.tab href={~p"/"} label={gettext("Home")}><.icon_home /></.tab>
-        <.tab href={~p"/search_queries/new"} label={gettext("Search")}><.icon_search /></.tab>
+        <.tab href={~p"/search"} label={gettext("Search")}><.icon_search /></.tab>
         <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
         <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
       </nav>

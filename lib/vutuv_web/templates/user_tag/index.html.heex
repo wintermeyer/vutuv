@@ -2,7 +2,7 @@
   title={gettext("Tags of %{name}", name: full_name(@user))}
   crumbs={[
     gettext("Users"),
-    {full_name(@user), ~p"/users/#{@user}"},
+    {full_name(@user), ~p"/#{@user}"},
     gettext("Tags")
   ]}
 />
@@ -23,11 +23,11 @@
           <%= for user_tag <- @user_tags do %>
             <tr>
               <td>
-                <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/users/#{@user}/tags/#{user_tag}" %>
+                <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
               </td>
               <td class="text-right">
                 <%= if @current_user && same_user?(@user, @current_user) do %>
-                  <%= button to: ~p"/users/#{@user}/tags/#{user_tag}", method: :delete, class: "button button--icon button--small", title: gettext("Delete") do %>
+                  <%= button to: ~p"/#{@user}/tags/#{user_tag}", method: :delete, class: "button button--icon button--small", title: gettext("Delete") do %>
                     <i class="icon icon--delete"></i>
                   <% end %>
                 <% end %>
@@ -39,7 +39,7 @@
     <% end %>
 
     <%= if same_user?(@user, @current_user) do %>
-      <%= link gettext("Add"), to: ~p"/users/#{@current_user}/tags/new", class: "card__morelink" %>
+      <%= link gettext("Add"), to: ~p"/#{@current_user}/tags/new", class: "card__morelink" %>
     <% end %>
   </section>
 </div>

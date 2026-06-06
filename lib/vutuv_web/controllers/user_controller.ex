@@ -153,7 +153,7 @@ defmodule VutuvWeb.UserController do
       {:ok, user} ->
         conn
         |> put_flash(:info, gettext("User updated successfully."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
 
       {:error, changeset} ->
         render(conn, "edit.html", user: user, changeset: changeset)
@@ -192,7 +192,7 @@ defmodule VutuvWeb.UserController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
     end
   end
 
@@ -207,7 +207,7 @@ defmodule VutuvWeb.UserController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
     end
   end
 
@@ -231,12 +231,12 @@ defmodule VutuvWeb.UserController do
       {:expired, message} ->
         conn
         |> put_flash(:error, message)
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
 
       :lockout ->
         conn
         |> put_flash(:error, gettext("Too many incorrect attempts."))
-        |> redirect(to: ~p"/users/#{user}")
+        |> redirect(to: ~p"/#{user}")
     end
   end
 
@@ -280,7 +280,7 @@ defmodule VutuvWeb.UserController do
         failures: failures
       )
     )
-    |> redirect(to: ~p"/users/#{user}")
+    |> redirect(to: ~p"/#{user}")
   end
 
   def follow_back(conn, %{"id" => id}) do
@@ -295,7 +295,7 @@ defmodule VutuvWeb.UserController do
           :info,
           Gettext.gettext(VutuvWeb.Gettext, "You follow back %{name}.", name: full_name(user))
         )
-        |> redirect(to: ~p"/users/#{conn.assigns.current_user}")
+        |> redirect(to: ~p"/#{conn.assigns.current_user}")
 
       {:error, _changeset} ->
         conn
@@ -305,7 +305,7 @@ defmodule VutuvWeb.UserController do
             name: full_name(user)
           )
         )
-        |> redirect(to: ~p"/users/#{conn.assigns.current_user}")
+        |> redirect(to: ~p"/#{conn.assigns.current_user}")
     end
   end
 end

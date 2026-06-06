@@ -12,11 +12,11 @@ defmodule VutuvWeb.GroupControllerTest do
   end
 
   test "GET new renders the group form", %{conn: conn, user: user} do
-    conn = get(conn, ~p"/users/#{user}/groups/new")
+    conn = get(conn, ~p"/#{user}/groups/new")
 
     assert html = html_response(conn, 200)
     assert html =~ "editform__actions"
-    assert html =~ ~p"/users/#{user}/groups"
+    assert html =~ ~p"/#{user}/groups"
   end
 
   test "GET edit renders the group form", %{conn: conn, user: user} do
@@ -26,7 +26,7 @@ defmodule VutuvWeb.GroupControllerTest do
       |> Vutuv.Social.Group.changeset(%{"name" => "Mountain bikers"})
       |> Vutuv.Repo.insert()
 
-    conn = get(conn, ~p"/users/#{user}/groups/#{group}/edit")
+    conn = get(conn, ~p"/#{user}/groups/#{group}/edit")
 
     assert html = html_response(conn, 200)
     assert html =~ "Mountain bikers"
