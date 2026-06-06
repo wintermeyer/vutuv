@@ -49,12 +49,24 @@ defmodule VutuvWeb.GroupController do
   def delete(conn, %{"id" => id}) do
     group = ControllerHelpers.get_owned!(conn, :groups, id)
 
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Social.delete_group!(group)
+    # Not delete!: posts may deny this group (post_denials.group_id is
+    # RESTRICT — dropping a denial would silently widen old posts'
+    # audiences), in which case the user must change those posts first.
+    case Social.delete_group(group) do
+      {:ok, _group} ->
+        conn
+        |> put_flash(:info, gettext("Group deleted successfully."))
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/groups")
 
-    conn
-    |> put_flash(:info, gettext("Group deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/groups")
+      {:error, _changeset} ->
+        conn
+        |> put_flash(
+          :error,
+          gettext(
+            "This group limits the audience of existing posts. Change those posts' audiences first."
+          )
+        )
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/groups")
+    end
   end
 end

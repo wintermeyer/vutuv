@@ -121,6 +121,14 @@ the resulting ~200px rail width. --%>
       </p>
     </section>
 
+    <%!-- Posts (latest visible to this viewer; full feed lives at /feed) --%>
+    <section :if={@posts != []} id="profile-posts" class="space-y-3">
+      <h2 class="px-1 text-sm font-semibold uppercase tracking-wide text-slate-500">
+        {gettext("Posts")}
+      </h2>
+      <.post_card :for={post <- @posts} post={post} viewer={@current_user} mode={:preview} />
+    </section>
+
     <%!-- Skills & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
       <%!-- Owner actions live in the quiet ⋯ card menu; tags have no edit

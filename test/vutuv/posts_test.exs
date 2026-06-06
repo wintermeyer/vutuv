@@ -1,0 +1,573 @@
+defmodule Vutuv.PostsTest do
+  use Vutuv.DataCase
+
+  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostDenial
+  alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostTag
+
+  # Feed authors must be validated (consistent with follower counts etc.), so
+  # the default test user is.
+  defp user(attrs \\ []), do: insert(:user, Keyword.merge([validated?: true], attrs))
+
+  # A bare connection row (no notifications side effects like Social.follow/2).
+  defp follow!(follower, followee),
+    do: insert(:connection, follower: follower, followee: followee)
+
+  defp group_with_member(author, member) do
+    group = insert(:group, user: author)
+    connection = follow!(author, member)
+    insert(:membership, connection: connection, group: group)
+    group
+  end
+
+  defp create_post!(author, attrs) do
+    {:ok, post} = Posts.create_post(author, attrs)
+    post
+  end
+
+  describe "create_post/2" do
+    test "creates a public post with today's date and seq 1" do
+      author = user()
+
+      assert {:ok, %Post{} = post} = Posts.create_post(author, %{body: "Hello **world**"})
+      assert post.body == "Hello **world**"
+      assert post.published_on == Date.utc_today()
+      assert post.seq == 1
+      assert post.denials == []
+      assert post.user.id == author.id
+    end
+
+    test "seq counts up per author and day, independently per author" do
+      author = user()
+      other = user()
+
+      assert create_post!(author, %{body: "one"}).seq == 1
+      assert create_post!(author, %{body: "two"}).seq == 2
+      assert create_post!(other, %{body: "first"}).seq == 1
+    end
+
+    test "trims the body" do
+      assert create_post!(user(), %{body: "  hi  \n"}).body == "hi"
+    end
+
+    test "rejects a body over the length limit" do
+      body = String.duplicate("x", Post.max_body_length() + 1)
+      assert {:error, %Ecto.Changeset{} = changeset} = Posts.create_post(user(), %{body: body})
+      assert %{body: [_]} = errors_on(changeset)
+    end
+
+    test "rejects an empty post (no body, no images)" do
+      assert {:error, %Ecto.Changeset{} = changeset} = Posts.create_post(user(), %{body: "   "})
+      assert %{body: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "allows an empty body when images are attached" do
+      author = user()
+      image = insert(:post_image, user: author, post: nil)
+
+      assert {:ok, post} = Posts.create_post(author, %{body: "", image_ids: [image.id]})
+      assert [attached] = post.images
+      assert attached.id == image.id
+      assert attached.position == 0
+    end
+
+    test "attaches pending images in the given order" do
+      author = user()
+      [a, b, c] = for _ <- 1..3, do: insert(:post_image, user: author, post: nil)
+
+      post = create_post!(author, %{body: "pics", image_ids: [c.id, a.id, b.id]})
+
+      assert Enum.map(post.images, & &1.id) == [c.id, a.id, b.id]
+      assert Enum.map(post.images, & &1.position) == [0, 1, 2]
+    end
+
+    test "rejects attaching someone else's image" do
+      author = user()
+      foreign = insert(:post_image, user: user(), post: nil)
+
+      assert {:error, :invalid_images} =
+               Posts.create_post(author, %{body: "x", image_ids: [foreign.id]})
+
+      # Nothing was inserted.
+      refute Repo.exists?(from(p in Post, where: p.user_id == ^author.id))
+    end
+
+    test "rejects attaching an image that already belongs to a post" do
+      author = user()
+      old_post = create_post!(author, %{body: "old"})
+      taken = insert(:post_image, user: author, post: old_post)
+
+      assert {:error, :invalid_images} =
+               Posts.create_post(author, %{body: "x", image_ids: [taken.id]})
+    end
+
+    test "rejects more images than the limit" do
+      author = user()
+
+      images =
+        for _ <- 1..(Posts.max_images_per_post() + 1) do
+          insert(:post_image, user: author, post: nil)
+        end
+
+      assert {:error, :too_many_images} =
+               Posts.create_post(author, %{body: "x", image_ids: Enum.map(images, & &1.id)})
+    end
+
+    test "creates tags from a comma list and reuses existing tags case-insensitively" do
+      existing = insert(:tag, name: "Elixir", slug: "elixir")
+
+      post = create_post!(user(), %{body: "tagged", tags: "elixir, Phoenix Framework"})
+
+      tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
+      assert tag_names == ["Elixir", "Phoenix Framework"]
+      assert Enum.any?(post.tags, &(&1.id == existing.id))
+    end
+
+    test "stores wildcard, group and per-user denials" do
+      author = user()
+      denied = user()
+      group = insert(:group, user: author)
+
+      post =
+        create_post!(author, %{
+          body: "restricted",
+          denials: [
+            %{"wildcard" => "non_followers"},
+            %{"group_id" => group.id},
+            %{"denied_user_id" => denied.id}
+          ]
+        })
+
+      assert length(post.denials) == 3
+      assert Enum.any?(post.denials, &(&1.wildcard == "non_followers"))
+      assert Enum.any?(post.denials, &(&1.group_id == group.id))
+      assert Enum.any?(post.denials, &(&1.denied_user_id == denied.id))
+    end
+
+    test "rejects a denial naming another user's group" do
+      foreign_group = insert(:group, user: user())
+
+      assert {:error, :invalid_denials} =
+               Posts.create_post(user(), %{
+                 body: "x",
+                 denials: [%{"group_id" => foreign_group.id}]
+               })
+    end
+
+    test "rejects denying yourself and unknown wildcards" do
+      author = user()
+
+      assert {:error, :invalid_denials} =
+               Posts.create_post(author, %{body: "x", denials: [%{"denied_user_id" => author.id}]})
+
+      assert {:error, :invalid_denials} =
+               Posts.create_post(author, %{body: "x", denials: [%{"wildcard" => "nonsense"}]})
+    end
+
+    test "broadcasts the new post to followers and the author" do
+      author = user()
+      follower = user()
+      follow!(follower, author)
+
+      Vutuv.Activity.subscribe(follower.id)
+      Vutuv.Activity.subscribe(author.id)
+
+      post = create_post!(author, %{body: "news"})
+      post_id = post.id
+      author_id = author.id
+
+      assert_receive {:new_post, %{post_id: ^post_id, author_id: ^author_id}}
+      assert_receive {:new_post, %{post_id: ^post_id, author_id: ^author_id}}
+    end
+  end
+
+  describe "visible_to?/2" do
+    test "a post without denials is visible to everyone" do
+      author = user()
+      post = create_post!(author, %{body: "public"})
+
+      assert Posts.visible_to?(post, nil)
+      assert Posts.visible_to?(post, user())
+      assert Posts.visible_to?(post, author)
+    end
+
+    test "wildcard everyone: only the author" do
+      author = user()
+      follower = user()
+      follow!(follower, author)
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "everyone"}]})
+
+      assert Posts.visible_to?(post, author)
+      refute Posts.visible_to?(post, follower)
+      refute Posts.visible_to?(post, user())
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "wildcard non_followers: only people who follow the author" do
+      author = user()
+      follower = user()
+      followee = user()
+      follow!(follower, author)
+      follow!(author, followee)
+
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_followers"}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, follower)
+      refute Posts.visible_to?(post, followee)
+      refute Posts.visible_to?(post, user())
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "wildcard non_followees: only people the author follows" do
+      author = user()
+      followee = user()
+      follower = user()
+      follow!(author, followee)
+      follow!(follower, author)
+
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_followees"}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, followee)
+      refute Posts.visible_to?(post, follower)
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "wildcard logged_out: any member, but no anonymous visitors" do
+      author = user()
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, user())
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "group denial: hides from current group members, evaluated live" do
+      author = user()
+      member = user()
+      outside_follower = user()
+      group = group_with_member(author, member)
+      follow!(author, outside_follower)
+
+      post = create_post!(author, %{body: "x", denials: [%{"group_id" => group.id}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, outside_follower)
+      refute Posts.visible_to?(post, member)
+      # Any denial closes anonymous access (an anonymous reader cannot be
+      # proven not-denied).
+      refute Posts.visible_to?(post, nil)
+
+      # Live semantics: adding someone to the denied group hides the old post.
+      late_member = user()
+      connection = follow!(author, late_member)
+      insert(:membership, connection: connection, group: group)
+      refute Posts.visible_to?(post, late_member)
+    end
+
+    test "per-user denial: hides from exactly that person" do
+      author = user()
+      denied = user()
+      post = create_post!(author, %{body: "x", denials: [%{"denied_user_id" => denied.id}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, user())
+      refute Posts.visible_to?(post, denied)
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "denials are a union: matching any one of them denies" do
+      author = user()
+      follower_in_group = user()
+      follower_outside = user()
+      group = group_with_member(author, follower_in_group)
+      follow!(follower_in_group, author)
+      follow!(follower_outside, author)
+
+      post =
+        create_post!(author, %{
+          body: "x",
+          denials: [%{"wildcard" => "non_followers"}, %{"group_id" => group.id}]
+        })
+
+      assert Posts.visible_to?(post, follower_outside)
+      refute Posts.visible_to?(post, follower_in_group)
+      refute Posts.visible_to?(post, user())
+    end
+  end
+
+  describe "profile_posts/3 (the SQL visibility scope)" do
+    test "matches visible_to?/2 across the denial matrix" do
+      author = user()
+      follower = user()
+      followee = user()
+      member = user()
+      denied = user()
+      stranger = user()
+      group = group_with_member(author, member)
+      follow!(follower, author)
+      follow!(author, followee)
+
+      public = create_post!(author, %{body: "public"})
+      only_me = create_post!(author, %{body: "me", denials: [%{"wildcard" => "everyone"}]})
+
+      followers_only =
+        create_post!(author, %{body: "f", denials: [%{"wildcard" => "non_followers"}]})
+
+      followees_only =
+        create_post!(author, %{body: "g", denials: [%{"wildcard" => "non_followees"}]})
+
+      members_only = create_post!(author, %{body: "m", denials: [%{"wildcard" => "logged_out"}]})
+      no_group = create_post!(author, %{body: "h", denials: [%{"group_id" => group.id}]})
+      not_you = create_post!(author, %{body: "n", denials: [%{"denied_user_id" => denied.id}]})
+
+      all = [public, only_me, followers_only, followees_only, members_only, no_group, not_you]
+
+      for viewer <- [nil, author, follower, followee, member, denied, stranger] do
+        expected =
+          all
+          |> Enum.filter(&Posts.visible_to?(&1, viewer))
+          |> Enum.map(& &1.id)
+          |> Enum.sort()
+
+        actual =
+          author
+          |> Posts.profile_posts(viewer, limit: 100)
+          |> Enum.map(& &1.id)
+          |> Enum.sort()
+
+        assert actual == expected, "scope mismatch for viewer #{inspect(viewer && viewer.id)}"
+      end
+    end
+
+    test "returns newest first and respects the limit" do
+      author = user()
+      [_one, two, three] = for n <- 1..3, do: create_post!(author, %{body: "post #{n}"})
+
+      assert [latest, previous] = Posts.profile_posts(author, nil, limit: 2)
+      assert latest.id == three.id
+      assert previous.id == two.id
+    end
+  end
+
+  describe "feed_page/2" do
+    test "shows own and followees' posts, not strangers'" do
+      viewer = user()
+      friend = user()
+      stranger = user()
+      follow!(viewer, friend)
+
+      mine = create_post!(viewer, %{body: "mine"})
+      theirs = create_post!(friend, %{body: "theirs"})
+      create_post!(stranger, %{body: "unrelated"})
+
+      %{entries: entries} = Posts.feed_page(viewer)
+      assert Enum.map(entries, & &1.id) |> Enum.sort() == Enum.sort([mine.id, theirs.id])
+    end
+
+    test "applies denials inside the feed query" do
+      viewer = user()
+      friend = user()
+      aloof = user()
+      follow!(viewer, friend)
+      # Putting the viewer in a group makes friend follow the viewer, so the
+      # non_followees case needs a second author who does NOT follow back.
+      follow!(viewer, aloof)
+      group = group_with_member(friend, viewer)
+
+      create_post!(friend, %{body: "hidden", denials: [%{"group_id" => group.id}]})
+      create_post!(aloof, %{body: "circle", denials: [%{"wildcard" => "non_followees"}]})
+
+      visible =
+        create_post!(friend, %{body: "visible", denials: [%{"wildcard" => "non_followers"}]})
+
+      %{entries: entries} = Posts.feed_page(viewer)
+      assert Enum.map(entries, & &1.id) == [visible.id]
+    end
+
+    test "hides posts from unvalidated authors but always shows own" do
+      viewer = user(validated?: false)
+      unvalidated = user(validated?: false)
+      follow!(viewer, unvalidated)
+
+      mine = create_post!(viewer, %{body: "mine"})
+      create_post!(unvalidated, %{body: "ghost"})
+
+      %{entries: entries} = Posts.feed_page(viewer)
+      assert Enum.map(entries, & &1.id) == [mine.id]
+    end
+
+    test "paginates with a cursor, newest first" do
+      viewer = user()
+      posts = for n <- 1..5, do: create_post!(viewer, %{body: "post #{n}"})
+      expected_ids = posts |> Enum.map(& &1.id) |> Enum.reverse()
+
+      page1 = Posts.feed_page(viewer, limit: 2)
+      assert page1.more?
+      page2 = Posts.feed_page(viewer, limit: 2, cursor: page1.next_cursor)
+      assert page2.more?
+      page3 = Posts.feed_page(viewer, limit: 2, cursor: page2.next_cursor)
+      refute page3.more?
+      assert page3.next_cursor == nil
+
+      walked = Enum.map(page1.entries ++ page2.entries ++ page3.entries, & &1.id)
+      assert walked == expected_ids
+    end
+  end
+
+  describe "update_post/2" do
+    test "updates the body and replaces denials and tags" do
+      author = user()
+      stranger = user()
+
+      post =
+        create_post!(author, %{
+          body: "v1",
+          tags: "elixir",
+          denials: [%{"wildcard" => "everyone"}]
+        })
+
+      assert {:ok, updated} =
+               Posts.update_post(post, %{
+                 body: "v2",
+                 tags: "phoenix",
+                 denials: [%{"wildcard" => "logged_out"}]
+               })
+
+      assert updated.body == "v2"
+      assert [%PostDenial{wildcard: "logged_out"}] = updated.denials
+      assert [%{name: "phoenix"}] = updated.tags
+      # The everyone denial is gone: members can see it now.
+      assert Posts.visible_to?(updated, stranger)
+      # Permalink coordinates never change on edit.
+      assert updated.published_on == post.published_on
+      assert updated.seq == post.seq
+    end
+
+    test "clears denials when given an empty list" do
+      author = user()
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "everyone"}]})
+
+      assert {:ok, updated} = Posts.update_post(post, %{body: "x", denials: []})
+      assert updated.denials == []
+      assert Repo.aggregate(PostDenial, :count) == 0
+    end
+
+    test "removes detached images and attaches new pending ones" do
+      author = user()
+      keep = insert(:post_image, user: author, post: nil)
+      drop = insert(:post_image, user: author, post: nil)
+      post = create_post!(author, %{body: "x", image_ids: [keep.id, drop.id]})
+
+      fresh = insert(:post_image, user: author, post: nil)
+
+      assert {:ok, updated} =
+               Posts.update_post(post, %{body: "x", image_ids: [fresh.id, keep.id]})
+
+      assert Enum.map(updated.images, & &1.id) == [fresh.id, keep.id]
+      assert Enum.map(updated.images, & &1.position) == [0, 1]
+      refute Repo.get(PostImage, drop.id)
+    end
+  end
+
+  describe "delete_post/1" do
+    test "deletes the post and its dependent rows" do
+      author = user()
+      image = insert(:post_image, user: author, post: nil)
+
+      post =
+        create_post!(author, %{
+          body: "bye",
+          tags: "elixir",
+          image_ids: [image.id],
+          denials: [%{"wildcard" => "everyone"}]
+        })
+
+      assert {:ok, _} = Posts.delete_post(post)
+      refute Repo.get(Post, post.id)
+      assert Repo.aggregate(PostDenial, :count) == 0
+      assert Repo.aggregate(PostTag, :count) == 0
+      refute Repo.get(PostImage, image.id)
+    end
+  end
+
+  describe "permalink lookup" do
+    test "get_post/3 finds by author, date and seq" do
+      author = user()
+      post = create_post!(author, %{body: "find me"})
+
+      found = Posts.get_post(author, post.published_on, post.seq)
+      assert found.id == post.id
+      assert found.user.id == author.id
+
+      refute Posts.get_post(author, post.published_on, post.seq + 1)
+      refute Posts.get_post(user(), post.published_on, post.seq)
+    end
+  end
+
+  describe "restricted?/1" do
+    test "is true exactly when the post has denials" do
+      author = user()
+      refute Posts.restricted?(create_post!(author, %{body: "open"}))
+
+      assert Posts.restricted?(
+               create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
+             )
+    end
+  end
+
+  describe "pending images" do
+    test "update_image_alt/2 stores trimmed alt text" do
+      image = insert(:post_image, user: user(), post: nil)
+      assert {:ok, updated} = Posts.update_image_alt(image, "  Sunset over the Rhine ")
+      assert updated.alt == "Sunset over the Rhine"
+    end
+
+    test "image_visible_to?/2: pending images only for their uploader" do
+      uploader = user()
+      image = insert(:post_image, user: uploader, post: nil)
+
+      assert Posts.image_visible_to?(image, uploader)
+      refute Posts.image_visible_to?(image, user())
+      refute Posts.image_visible_to?(image, nil)
+    end
+
+    test "image_visible_to?/2 follows the post's audience" do
+      author = user()
+      image = insert(:post_image, user: author, post: nil)
+
+      create_post!(author, %{
+        body: "x",
+        image_ids: [image.id],
+        denials: [%{"wildcard" => "logged_out"}]
+      })
+
+      image = Repo.get(PostImage, image.id)
+      assert Posts.image_visible_to?(image, user())
+      refute Posts.image_visible_to?(image, nil)
+    end
+
+    test "sweep_pending_images/0 removes stale unattached images only" do
+      author = user()
+      stale = insert(:post_image, user: author, post: nil)
+      fresh = insert(:post_image, user: author, post: nil)
+      attached = insert(:post_image, user: author, post: nil)
+      create_post!(author, %{body: "x", image_ids: [attached.id]})
+
+      old = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -2 * 24 * 3600)
+
+      Repo.update_all(
+        from(i in PostImage, where: i.id in ^[stale.id, attached.id]),
+        set: [inserted_at: old]
+      )
+
+      assert Posts.sweep_pending_images() == 1
+      refute Repo.get(PostImage, stale.id)
+      assert Repo.get(PostImage, fresh.id)
+      assert Repo.get(PostImage, attached.id)
+    end
+  end
+end

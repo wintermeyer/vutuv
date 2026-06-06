@@ -56,7 +56,9 @@ Admin panel: http://localhost:4000/admin
 ## Architecture
 
 - **Views**: mostly Phoenix 1.8 HTML modules with `embed_templates` (no `phoenix_view` dependency); **LiveView is being adopted incrementally** for the real-time parts (see below)
-- **Real-time shell (LiveView)**: the app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with live unread badges) is embedded in the shared `app` layout via `live_render`, so the chrome and badges are live on every page. The **Messages** (`/messages`) and **Notifications** (`/notifications`) pages are LiveViews under a `live_session`. In-app updates flow over `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"`); online status and typing use `VutuvWeb.Presence`. The layout is split into `root.html.heex` (document shell) and `app.html.heex` (chrome), shared by classic controller pages and LiveViews. Notifications are real data **derived at read time** from the existing event tables (followers, endorsements, mutual connections — retroactively, no notifications table); the only stored state is the `users.notifications_read_at` read marker behind the unread badge. Messages still use dummy data; persistence is a follow-up.
+- **Real-time shell (LiveView)**: the app shell `VutuvWeb.ShellLive` (sticky top bar + mobile bottom tab bar, with live unread badges) is embedded in the shared `app` layout via `live_render`, so the chrome and badges are live on every page. The **Messages** (`/messages`), **Notifications** (`/notifications`) and **Feed** (`/feed`) pages are LiveViews under a `live_session`. In-app updates flow over `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"`); online status and typing use `VutuvWeb.Presence`. The layout is split into `root.html.heex` (document shell) and `app.html.heex` (chrome), shared by classic controller pages and LiveViews. Notifications are real data **derived at read time** from the existing event tables (followers, endorsements, mutual connections — retroactively, no notifications table); the only stored state is the `users.notifications_read_at` read marker behind the unread badge. Messages still use dummy data; persistence is a follow-up.
+- **Posts + newsfeed**: Markdown posts (up to 20k chars) with images and tags. Permalinks are date-stamped, blog-style: `/:slug/2026/06/05/0001` (UTC date + per-author-per-day counter; non-canonical URLs redirect). The feed at `/feed` is a LiveView: composer on top, pull-model feed (own + followed authors' posts) with cursor "Load more", and a *"Show N new posts"* pill fed by `{:new_post, …}` broadcasts. The profile page shows the latest visible posts. Audiences are **deny-based** (`Vutuv.Posts`): a post with no denials is public; denials exclude groups of the author's connections, single users, or wildcards (`non_followers`, `non_followees`, `logged_out`, `everyone`) — the composer offers presets (public / followers / following / only me) plus a custom "Hide from…" sheet with a person typeahead. Any denial also hides the post from logged-out visitors and noindexes it; a followers-only post shows a follow teaser to denied readers, every other denial 404s. Deleting a group that posts deny is refused (it would silently widen audiences).
+- **Post images**: uploaded eagerly in the composer (so inline `![](…)` references work before submitting; abandoned uploads are swept after a day), up to 10 per post, 6 MB each (`jpg/png/webp`, plus `heic` when the libvips build can decode it — capability-detected via `priv/heic_probe.heic`). All served versions are WebP, EXIF-autorotated and **metadata-stripped** (no GPS leaks); the original keeps its metadata, stays private on disk and is never served. Every image byte goes through the authorizing proxy `GET /post_images/:token/:version` (`VutuvWeb.PostImageController`), so a post's audience guards its images too — in production via nginx `X-Accel-Redirect` (see Deployment), in dev via `send_file`.
 - **Routes**: Verified routes (`~p"..."` sigils). Profiles live at the URL root, GitHub-style: `/:slug` is the profile and all per-user sub-pages hang off it (`/:slug/links`, `/:slug/followers`, `/:slug/following`, ...). The legacy `/users/:slug/...` URLs, `/sessions/new` and `/search_queries/...` 301 to their new homes (`/login`, `/logout`, `/search`). The user scope is the **last** in the router, so static routes always win; `Vutuv.Accounts.ReservedSlugs` keeps users from registering a slug that equals a route prefix. The JSON API stays under `/api/1.0/users/:slug/...`
 - **Pagination**: browse pages (followers, tags, the admin verification queue) use offset pagination — `Vutuv.Pages.paginate/3` on the query plus the `<.pager>` component for the numbered links; feed LiveViews (notifications) use cursor pagination instead — `Vutuv.Activity.notifications_page/2` behind a numbered "Load 50 of 80 more" button that appends to the stream. Displayed counts (badges, follower numbers, the member counter) are compacted site-wide via `VutuvWeb.UI.compact_count/1`: exact up to 999, then 1K/80K/5M
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
@@ -75,6 +77,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 | `Vutuv.Accounts` | User, Email, Slug, SearchTerm, OAuthProvider, LoginPin, Locale, Exonym | Registration, PIN-based authentication, user management |
 | `Vutuv.Profiles` | Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience | User profile data |
 | `Vutuv.Social` | Connection, Group, Membership | Following, groups |
+| `Vutuv.Posts` | Post, PostDenial, PostImage, PostTag | Posts, deny-model audiences, the feed |
 | `Vutuv.Tags` | Tag, UserTag, UserTagEndorsement | Tagging and endorsements |
 | `Vutuv.Search` | SearchQuery, SearchQueryRequester, SearchQueryResult | Search functionality |
 | `Vutuv.Notifications` | Emailer | Email notifications |
@@ -93,6 +96,22 @@ Deployment is automatic. Two GitHub Actions workflows drive it:
 - **Deploy** (`.github/workflows/deploy.yml`) runs on every push to `main`. So **merging or pushing anything to `main` ships it to production**; there is no separate deploy command.
 
 The Deploy job runs on the self-hosted `vutuv3` runner (on bremen2) and executes `scripts/deploy.sh`, which builds a `prod` release, runs migrations against `vutuv3_prod`, atomically flips the `current` symlink, and restarts the `vutuv3` systemd service. A `deploy-production` concurrency group ensures two production deploys never overlap. nginx is not touched by the script.
+
+### nginx for post images (one-time setup)
+
+Post images are auth-proxied: the app checks the post's audience and answers with `X-Accel-Redirect`; nginx streams the file from an `internal` location (config `:post_image_serving` is `:accel_redirect` in prod). Unlike `/avatars/` and `/covers/` there must be **no public alias** for post images. Add to the vhost:
+
+```nginx
+# Post images: only reachable via X-Accel-Redirect from the app. The ~ *.webp
+# pattern means originals (which keep their EXIF/GPS metadata) can never be
+# served even if a path leaked.
+location ~ ^/internal_post_images/(?<token>[A-Za-z0-9_-]+)/(?<version>thumb|feed|large)\.webp$ {
+    internal;
+    alias /srv/legacy-vutuv/post_images/$token/$version.webp;
+}
+```
+
+Uploads run over the LiveView websocket (no `client_max_body_size` change needed for the 6 MB images unless the websocket location caps buffers unusually small).
 
 ## Maintenance / ops tasks
 

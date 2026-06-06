@@ -134,7 +134,39 @@ defmodule Vutuv.Social do
     |> Repo.update()
   end
 
+  @doc """
+  Deletes a group — unless posts deny it. `post_denials.group_id` is
+  RESTRICT on purpose: silently dropping a denial would widen the audience
+  of old posts, so the deletion fails with a changeset error instead and the
+  UI tells the user to update those posts first.
+  """
+  def delete_group(%Group{} = group) do
+    group
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.foreign_key_constraint(:id,
+      name: :post_denials_group_id_fkey,
+      message: "this group limits the audience of existing posts"
+    )
+    |> Repo.delete()
+  end
+
   def delete_group!(%Group{} = group), do: Repo.delete!(group)
+
+  @doc """
+  The user's groups with their member counts, for the composer's audience
+  sheet (`[{group, member_count}]`, sorted by name).
+  """
+  def groups_with_member_counts(user) do
+    Repo.all(
+      from(g in Group,
+        where: g.user_id == ^user.id,
+        left_join: m in assoc(g, :memberships),
+        group_by: g.id,
+        order_by: g.name,
+        select: {g, count(m.id)}
+      )
+    )
+  end
 
   # ── Memberships ──
 

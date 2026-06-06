@@ -84,6 +84,15 @@ defmodule VutuvWeb.Router do
     # PIN-entry step for the account-deletion flow (issue #759).
     post("/account_deletion", UserController, :confirm_delete)
     get("/follow_back/:id", UserController, :follow_back)
+
+    # The authorizing post-image proxy: every post-image byte goes through
+    # the app so the post's audience guards its images too. `:version` is
+    # e.g. "feed.webp"; nginx only streams what this controller approves.
+    get("/post_images/:token/:version", PostImageController, :show)
+
+    # Post deletion (the permalink lives in the profile scope below; "posts"
+    # is in ReservedSlugs).
+    delete("/posts/:id", PostController, :delete)
   end
 
   # Legacy URLs from before profiles moved to the root (and before the
@@ -109,6 +118,11 @@ defmodule VutuvWeb.Router do
       live("/notifications", NotificationLive.Index, :index)
       live("/messages", MessageLive.Index, :index)
       live("/messages/:id", MessageLive.Index, :show)
+
+      # The newsfeed and the post editor ("feed"/"posts" are in
+      # ReservedSlugs). Auth is checked in the mounts.
+      live("/feed", PostLive.Feed, :index)
+      live("/posts/:id/edit", PostLive.Edit, :edit)
     end
   end
 
@@ -200,5 +214,10 @@ defmodule VutuvWeb.Router do
         as: :tag
       )
     end
+
+    # Post permalinks: /:slug/2026/06/05/0001. Defined after the nested
+    # resources, so their fixed segments (/emails, /followers, …) always win;
+    # the controller 404s anything that does not parse as a date + counter.
+    get("/:slug/:year/:month/:day/:seq", PostController, :show)
   end
 end

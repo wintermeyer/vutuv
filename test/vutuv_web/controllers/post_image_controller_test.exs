@@ -1,0 +1,127 @@
+defmodule VutuvWeb.PostImageControllerTest do
+  @moduledoc """
+  The authorizing image proxy: a post's audience must guard its image bytes,
+  pending uploads must stay private to their uploader, and the original must
+  never be resolvable. Denied and unknown both answer 404 (no existence
+  leak).
+  """
+  use VutuvWeb.ConnCase
+
+  alias Vutuv.Posts
+
+  @other_login_attrs %{
+    "emails" => %{"0" => %{"value" => "other@example.com"}},
+    "first_name" => "other"
+  }
+
+  setup do
+    tmp = Path.join(System.tmp_dir!(), "vutuv_proxy_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
+    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+    on_exit(fn ->
+      File.rm_rf(tmp)
+
+      if prev,
+        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
+        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+    end)
+
+    {:ok, tmp: tmp}
+  end
+
+  defp pending_image!(user, tmp) do
+    src = Path.join(tmp, "src-#{System.unique_integer([:positive])}.jpg")
+    {:ok, img} = Image.new(64, 64, color: [10, 200, 100])
+    {:ok, _} = Image.write(img, src)
+    {:ok, image} = Posts.create_pending_image(user, src, "photo.jpg")
+    image
+  end
+
+  defp post_with_image!(author, tmp, attrs \\ %{}) do
+    image = pending_image!(author, tmp)
+
+    {:ok, post} =
+      Posts.create_post(author, Map.merge(%{body: "pic", image_ids: [image.id]}, attrs))
+
+    {post, image}
+  end
+
+  describe "a public post's image" do
+    test "is served to anonymous visitors with immutable private caching", %{conn: conn, tmp: tmp} do
+      author = insert(:user, validated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      conn = get(conn, "/post_images/#{image.token}/feed.webp")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/webp"
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+    end
+  end
+
+  describe "denied requests" do
+    test "unknown token is a 404", %{conn: conn} do
+      assert get(conn, "/post_images/nosuchtoken/feed.webp").status == 404
+    end
+
+    test "only <version>.webp resolves — the original never does", %{conn: conn, tmp: tmp} do
+      author = insert(:user, validated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      assert get(conn, "/post_images/#{image.token}/original.jpg").status == 404
+      assert get(conn, "/post_images/#{image.token}/original.webp").status == 404
+      assert get(conn, "/post_images/#{image.token}/feed.png").status == 404
+    end
+
+    test "a restricted post's image is hidden from anonymous, served to members", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, validated?: true)
+
+      {_post, image} =
+        post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
+
+      assert get(conn, "/post_images/#{image.token}/feed.webp").status == 404
+
+      {member_conn, _member} = create_and_login_user(conn)
+      assert get(member_conn, "/post_images/#{image.token}/feed.webp").status == 200
+    end
+
+    test "a pending image is visible to its uploader alone", %{conn: conn, tmp: tmp} do
+      {uploader_conn, uploader} = create_and_login_user(conn)
+      image = pending_image!(uploader, tmp)
+
+      assert get(uploader_conn, "/post_images/#{image.token}/thumb.webp").status == 200
+
+      other_conn =
+        Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
+
+      {other_conn, _other} = create_and_login_user(other_conn, @other_login_attrs)
+      assert get(other_conn, "/post_images/#{image.token}/thumb.webp").status == 404
+
+      anonymous = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
+      assert get(anonymous, "/post_images/#{image.token}/thumb.webp").status == 404
+    end
+  end
+
+  describe "production serving mode" do
+    test "answers with X-Accel-Redirect instead of the file", %{conn: conn, tmp: tmp} do
+      Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
+      on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
+
+      author = insert(:user, validated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      conn = get(conn, "/post_images/#{image.token}/large.webp")
+
+      assert conn.status == 200
+      assert conn.resp_body == ""
+
+      assert get_resp_header(conn, "x-accel-redirect") ==
+               ["/internal_post_images/#{image.token}/large.webp"]
+    end
+  end
+end

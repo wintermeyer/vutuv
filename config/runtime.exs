@@ -53,4 +53,9 @@ if config_env() == :prod do
   # URL screenshots are rendered by local headless Chromium. Set CHROMIUM_PATH
   # if the binary is not on $PATH under one of the usual names.
   config :vutuv, :chromium_path, System.get_env("CHROMIUM_PATH")
+
+  # Post images are auth-proxied: the app checks the post's audience, nginx
+  # streams the bytes via X-Accel-Redirect from an `internal` location
+  # (see README deploy notes). Dev/test use the send_file fallback instead.
+  config :vutuv, :post_image_serving, :accel_redirect
 end

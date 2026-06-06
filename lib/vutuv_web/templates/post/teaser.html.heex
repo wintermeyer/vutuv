@@ -1,0 +1,43 @@
+<%!-- Rendered to readers denied solely by the non_followers wildcard:
+following is actionable, so invite it. Every other denial renders a plain
+404 in the controller (no teaser, no reason — the deny list must not leak). --%>
+<div class="py-6">
+  <div class="mx-auto max-w-2xl">
+    <.card>
+      <div class="flex flex-col items-center gap-4 py-6 text-center">
+        <.link href={~p"/#{@author}"}>
+          <.avatar user={@author} size="lg" />
+        </.link>
+
+        <div>
+          <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+            {gettext("This post is for followers of %{name}", name: full_name(@author))}
+          </h1>
+          <p class="mt-1 text-slate-500 dark:text-slate-400">
+            {gettext("Follow %{name} to read it.", name: full_name(@author))}
+          </p>
+        </div>
+
+        <.button
+          :if={@current_user && @current_user.id != @author.id}
+          href={
+            ~p"/connections?#{[connection: %{follower_id: @current_user.id, followee_id: @author.id}]}"
+          }
+          method="post"
+        >
+          {gettext("Follow")}
+        </.button>
+        <.button :if={is_nil(@current_user)} href={~p"/login"}>
+          {gettext("Log in")}
+        </.button>
+
+        <.link
+          href={~p"/#{@author}"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("View profile")}
+        </.link>
+      </div>
+    </.card>
+  </div>
+</div>

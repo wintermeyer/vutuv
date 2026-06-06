@@ -118,6 +118,30 @@ defmodule Vutuv.Factory do
     %Vutuv.Tags.UserTagEndorsement{}
   end
 
+  def post_factory do
+    %Vutuv.Posts.Post{
+      body: sequence(:post_body, &"Post body #{&1}"),
+      published_on: Date.utc_today(),
+      # Globally unique, so explicit factory posts never collide on the
+      # (user_id, published_on, seq) index. Context-created posts count from 1.
+      seq: sequence(:post_seq, &(&1 + 1_000)),
+      user: build(:user)
+    }
+  end
+
+  def post_image_factory do
+    %Vutuv.Posts.PostImage{
+      token: Vutuv.Posts.PostImage.gen_token(),
+      alt: "",
+      position: 0,
+      width: 800,
+      height: 600,
+      content_type: "image/jpeg",
+      size_bytes: 123_456,
+      user: build(:user)
+    }
+  end
+
   def o_auth_provider_factory do
     %Vutuv.Accounts.OAuthProvider{
       provider: "google",

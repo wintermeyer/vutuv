@@ -8,6 +8,7 @@ config :vutuv, :serve_uploads_locally, true
 # under async tests) and make a live HTTP request / launch headless Chromium.
 config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
+config :vutuv, :sweep_pending_images, false
 
 # Off by default so the suite's many logins do not share (and exhaust) one
 # process-wide counter. The dedicated rate-limit test enables it explicitly.

@@ -110,6 +110,13 @@ defmodule VutuvWeb.ShellLive do
               {gettext("Home")}
             </.link>
             <.link
+              :if={@user_id}
+              href={~p"/feed"}
+              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {gettext("Feed")}
+            </.link>
+            <.link
               href={~p"/listings/most_followed_users"}
               class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
             >
@@ -173,8 +180,14 @@ defmodule VutuvWeb.ShellLive do
       </header>
 
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
-      <nav class="fixed inset-x-0 bottom-0 z-30 grid h-16 grid-cols-4 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95">
+      <nav class={[
+        "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
+        if(@user_id, do: "grid-cols-5", else: "grid-cols-4")
+      ]}>
         <.tab href={~p"/"} label={gettext("Home")}><.icon_home /></.tab>
+        <%= if @user_id do %>
+          <.tab href={~p"/feed"} label={gettext("Feed")}><.icon_feed /></.tab>
+        <% end %>
         <.tab href={~p"/search"} label={gettext("Search")}><.icon_search /></.tab>
         <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
         <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
@@ -235,6 +248,18 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+    </svg>
+    """
+  end
+
+  defp icon_feed(assigns) do
+    ~H"""
+    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 0 1-2.25 2.25M16.5 7.5V18a2.25 2.25 0 0 0 2.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 0 0 2.25 2.25h13.5M6 7.5h3v3H6v-3Z"
+      />
     </svg>
     """
   end

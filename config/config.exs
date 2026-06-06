@@ -34,6 +34,10 @@ config :vutuv, ecto_repos: [Vutuv.Repo]
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# Post images: larger than avatars (6 MB), capped per post. Derived versions
+# are WebP; originals stay private on disk (see Vutuv.PostImageStore).
+config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
+
 # Mail is delivered via SMTP (prod) and the Local/Test adapters elsewhere, none
 # of which need an HTTP API client. Disabling it avoids pulling in hackney.
 config :swoosh, :api_client, false
