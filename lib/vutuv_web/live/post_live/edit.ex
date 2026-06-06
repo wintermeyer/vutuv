@@ -2,9 +2,9 @@ defmodule VutuvWeb.PostLive.Edit do
   @moduledoc """
   Edit page for a post — the same composer as the feed, prefilled. Only the
   author may open it; everyone else is sent away with the same flash an
-  unknown id gets (no existence leak). Deletion lives here (not in the
-  permalink's ⋯ menu), following the house rule that destructive actions
-  sit on the edit surface.
+  unknown id gets (no existence leak). The post card's ⋯ menu carries
+  Edit/Delete wherever the post renders; this page keeps its own delete
+  button so the destructive action also sits on the edit surface.
   """
 
   use VutuvWeb, :live_view

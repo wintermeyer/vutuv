@@ -119,7 +119,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
     test "publishes a photo-only post (upload, no text)", %{conn: conn} do
       # Real files land on disk: isolate the uploads root per test.
-      tmp = Path.join(System.tmp_dir!(), "vutuv_feed_upload_#{System.unique_integer([:positive])}")
+      tmp =
+        Path.join(System.tmp_dir!(), "vutuv_feed_upload_#{System.unique_integer([:positive])}")
+
       File.mkdir_p!(tmp)
       prev = Application.get_env(:vutuv, :uploads_dir_prefix)
       Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
@@ -205,6 +207,23 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> render_submit()
 
       assert has_element?(live, "#composer-error")
+    end
+  end
+
+  describe "owner menu" do
+    test "own posts carry the ⋯ menu with Edit and Delete, others' posts do not", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:connection, follower: user, followee: friend)
+
+      {:ok, mine} = Posts.create_post(user, %{body: "my words"})
+      {:ok, theirs} = Posts.create_post(friend, %{body: "friend words"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, "#post-menu-#{mine.id} a[href='/posts/#{mine.id}/edit']")
+      assert has_element?(live, "#post-menu-#{mine.id} a[data-method='delete']")
+      refute has_element?(live, "#post-menu-#{theirs.id}")
     end
   end
 

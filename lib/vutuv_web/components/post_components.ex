@@ -37,7 +37,6 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:class, :string, default: nil)
-  slot(:menu, doc: "owner actions, rendered top-right")
 
   def post_card(assigns) do
     {body_html, truncated?} =
@@ -54,6 +53,10 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
       |> assign(
+        :author?,
+        assigns.viewer != nil && assigns.viewer.id == assigns.post.user_id
+      )
+      |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
       )
@@ -69,7 +72,7 @@ defmodule VutuvWeb.PostComponents do
         permalink={@permalink}
         gallery={@gallery}
         edited?={@edited?}
-        menu={@menu}
+        author?={@author?}
       />
     </.card>
     <div :if={@surface == :flat} class={@class}>
@@ -82,7 +85,7 @@ defmodule VutuvWeb.PostComponents do
         permalink={@permalink}
         gallery={@gallery}
         edited?={@edited?}
-        menu={@menu}
+        author?={@author?}
       />
     </div>
     """
@@ -96,7 +99,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:permalink, :string, required: true)
   attr(:gallery, :list, required: true)
   attr(:edited?, :boolean, required: true)
-  attr(:menu, :list, default: [])
+  attr(:author?, :boolean, required: true)
 
   defp post_card_body(assigns) do
     ~H"""
@@ -199,8 +202,19 @@ defmodule VutuvWeb.PostComponents do
           </div>
         </div>
 
-        <div :if={@menu != []} class="shrink-0">
-          {render_slot(@menu)}
+        <%!-- The author's quiet ⋯ menu, on every rendering of their post. --%>
+        <div :if={@author?} class="shrink-0">
+          <.card_menu id={"post-menu-#{@post.id}"}>
+            <:item href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
+            <:item
+              href={~p"/posts/#{@post.id}"}
+              method="delete"
+              confirm={gettext("Delete this post permanently?")}
+              danger
+            >
+              {gettext("Delete")}
+            </:item>
+          </.card_menu>
         </div>
       </div>
     """

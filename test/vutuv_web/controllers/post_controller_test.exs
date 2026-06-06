@@ -146,6 +146,34 @@ defmodule VutuvWeb.PostControllerTest do
     end
   end
 
+  describe "the author's ⋯ menu on the post card" do
+    test "the author sees Edit and Delete on the permalink and in the archive" do
+      {author_conn, author} = create_and_login_user(fresh_conn())
+      post = create_post!(author, %{body: "my words"})
+
+      for path <- [Posts.path(post), "/#{author.active_slug}/posts"] do
+        html = html_response(get(author_conn, path), 200)
+
+        assert html =~ ~s(id="post-menu-#{post.id}")
+        assert html =~ ~s(href="/posts/#{post.id}/edit")
+        assert html =~ ~s(data-method="delete")
+        assert html =~ "Delete this post permanently?"
+      end
+    end
+
+    test "anonymous visitors and other readers get no menu", %{conn: conn} do
+      user = author()
+      post = create_post!(user, %{body: "public words"})
+
+      anonymous = get(conn, Posts.path(post))
+      refute html_response(anonymous, 200) =~ "post-menu-#{post.id}"
+
+      {reader_conn, _reader} = create_and_login_user(fresh_conn(), @other_login_attrs)
+      reader_view = get(reader_conn, Posts.path(post))
+      refute html_response(reader_view, 200) =~ "post-menu-#{post.id}"
+    end
+  end
+
   describe "GET /:slug/posts (the author archive)" do
     test "lists the author's posts, visibility-filtered per viewer", %{conn: conn} do
       user = author()
@@ -204,12 +232,15 @@ defmodule VutuvWeb.PostControllerTest do
       {:ok, post} = Posts.create_post(user, %{body: "crumbed"})
       date = post.published_on
 
-      conn = get(conn, "/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}/#{pad(date.day)}")
+      conn =
+        get(conn, "/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}/#{pad(date.day)}")
 
       assert conn.resp_body =~ "All posts"
       assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts")
       assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts/#{date.year}")
-      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}")
+
+      assert conn.resp_body =~
+               ~s(href="/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}")
     end
 
     test "404s for nonsense period segments", %{conn: conn} do

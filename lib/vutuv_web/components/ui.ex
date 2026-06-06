@@ -84,14 +84,19 @@ defmodule VutuvWeb.UI do
         </.card_menu>
       </:action>
 
-  Deletion intentionally does not live here — the manage pages carry per-row
-  edit/delete and every edit form has `<.form_actions delete_to={…} />`.
+  Profile-section deletion intentionally does not live here — the manage
+  pages carry per-row edit/delete and every edit form has
+  `<.form_actions delete_to={…} />`. The post card's author menu is the
+  exception: its Delete item (`method="delete"` + `confirm` + `danger`)
+  is the post's primary delete affordance.
   """
   attr(:id, :string, required: true)
 
   slot :item, required: true do
     attr(:href, :any, required: true)
     attr(:method, :string)
+    attr(:confirm, :string, doc: "data-confirm prompt for destructive items")
+    attr(:danger, :boolean, doc: "style the item red")
   end
 
   def card_menu(assigns) do
@@ -115,7 +120,14 @@ defmodule VutuvWeb.UI do
           :for={item <- @item}
           href={item.href}
           method={item[:method]}
-          class="block px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+          data-confirm={item[:confirm]}
+          class={[
+            "block px-4 py-2 text-sm font-medium",
+            if(item[:danger],
+              do: "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40",
+              else: "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+            )
+          ]}
         >
           {render_slot(item)}
         </.link>
