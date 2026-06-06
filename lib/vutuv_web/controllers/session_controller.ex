@@ -35,10 +35,12 @@ defmodule VutuvWeb.SessionController do
   end
 
   # Step 2: the visitor types the PIN. Identity comes from the signed cookie.
-  def create(conn, %{"session" => %{"pin" => pin}}) do
+  # The post-registration confirmation form marks itself with a context so the
+  # greeting fits a first-time member (cosmetic only, so client-set is fine).
+  def create(conn, %{"session" => %{"pin" => pin} = session}) do
     with :ok <- RateLimit.check(conn, :login_pin),
          email when is_binary(email) <- Accounts.read_pin_cookie(conn) do
-      verify_login_pin(conn, email, pin)
+      verify_login_pin(conn, email, pin, session["context"])
     else
       :rate_limited ->
         conn
@@ -60,13 +62,13 @@ defmodule VutuvWeb.SessionController do
     |> redirect(to: ~p"/#{user}")
   end
 
-  defp verify_login_pin(conn, email, pin) do
+  defp verify_login_pin(conn, email, pin, context) do
     case Accounts.check_pin(email, pin, "login") do
       # correct, drop cookie, log the user in
       {:ok, user} ->
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
-        |> put_flash(:info, gettext("Welcome back!"))
+        |> put_flash(:info, welcome_flash(context))
         |> redirect(to: ~p"/#{user}")
 
       # incorrect, let them retry
@@ -90,4 +92,7 @@ defmodule VutuvWeb.SessionController do
         |> redirect(to: ~p"/login")
     end
   end
+
+  defp welcome_flash("registration"), do: gettext("Welcome to vutuv!")
+  defp welcome_flash(_), do: gettext("Welcome back!")
 end

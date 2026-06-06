@@ -83,5 +83,22 @@ defmodule VutuvWeb.PageControllerTest do
       refute body =~ "twitter.com/vutuv"
       refute body =~ "Updates about vutuv are available at"
     end
+
+    # A brand-new member must not be greeted with the returning-user
+    # "Welcome back!" that the plain login flow uses. The confirmation page
+    # marks its PIN form with a registration context for this.
+    test "the first PIN login after sign-up greets the newcomer", %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: @valid_attrs)
+      body = html_response(conn, 200)
+      assert body =~ ~s(name="session[context]")
+      pin = sent_pin()
+
+      conn =
+        submit_with_csrf(conn, ~p"/login", %{
+          "session" => %{"pin" => pin, "context" => "registration"}
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome to vutuv!"
+    end
   end
 end

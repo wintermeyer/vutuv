@@ -5,6 +5,8 @@
       <p><%= gettext "Your account has been created, and an email with a PIN has been sent. No passwords to remember! Once you enter your PIN below, you'll be logged in on this device for the next 90 days, or until you log out." %></p>
 
       <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="imagebox__form" method="post">
+			  <%!-- Greet first-time members as new, not with "Welcome back!". --%>
+			  <%= hidden_input f, :context, value: "registration" %>
 			  <div class="editform__field">
 			    <%= text_input f, :pin, class: "imagebox__input", autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
 			  </div>

@@ -28,6 +28,8 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
 
       assert redirected_to(conn) == ~p"/#{user}"
       assert get_session(conn, :user_id) == user.id
+      # The returning-user greeting; first-time sign-ups get their own.
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome back!"
     end
   end
 
