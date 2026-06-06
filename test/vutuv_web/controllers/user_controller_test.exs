@@ -58,6 +58,53 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ user.first_name
   end
 
+  test "profile shows how long the account has been a member", %{conn: conn} do
+    # Older account: just the year (the join month adds nothing once a profile
+    # is a few years old).
+    user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+
+    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    assert html =~ "Member since 2008"
+    refute html =~ "Member since February 2008"
+  end
+
+  test "profile spells out the join month for accounts created this year", %{conn: conn} do
+    today = Date.utc_today()
+    inserted_at = NaiveDateTime.new!(today.year, today.month, 1, 12, 0, 0)
+    user = insert(:user, validated?: true, inserted_at: inserted_at)
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+
+    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+    month = Calendar.strftime(today, "%B")
+    assert html =~ "Member since #{month} #{today.year}"
+  end
+
+  test "profile hides a zero follower/following counter", %{conn: conn} do
+    # One follower, nobody followed back: the followers counter shows, the
+    # following counter is gone (a bare "0 following" says nothing).
+    user = insert(:user, validated?: true)
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    insert(:connection, follower: insert(:user, validated?: true), followee: user)
+
+    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+
+    assert html =~ ~p"/users/#{user}/followers"
+    refute html =~ ~p"/users/#{user}/followees"
+  end
+
+  test "with no followers or following, the counts row is gone and Member since moves up",
+       %{conn: conn} do
+    user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+
+    html = conn |> get(~p"/users/#{user}") |> html_response(200)
+
+    refute html =~ ~p"/users/#{user}/followers"
+    refute html =~ ~p"/users/#{user}/followees"
+    assert html =~ "Member since 2008"
+  end
+
   test "profile uses the content+rail columns from tablet widths up", %{conn: conn} do
     # md (768px), not lg: portrait iPads (768-834px CSS width) should get the
     # desktop column layout too, not the single phone column.

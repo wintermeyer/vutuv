@@ -8,6 +8,14 @@
   <%= error_tag f, :avatar %>
   </div>
 
+  <div class={"editform__field#{if error_tag(f, :cover_photo), do: " editform__field--error"}"}>
+  <%= label f, :cover_photo, gettext("Cover photo") %>
+  <div class={"editform__inputwrap#{if error_tag(f, :cover_photo), do: " editform__field--error"}"}>
+    <%= file_input f, :cover_photo %>
+  </div>
+  <%= error_tag f, :cover_photo %>
+  </div>
+
   <div class={"editform__field#{if error_tag(f, :gender), do: " editform__field--error"}"}>
   <%= label f, :gender, gettext("Gender") %>
   <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], id: "gender", prompt: gettext("Choose a gender") %>

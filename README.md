@@ -63,7 +63,7 @@ Admin panel: http://localhost:4000/admin
 - **Assets**: esbuild + Tailwind CSS v4; dark mode follows the system (`prefers-color-scheme`, no toggle) — legacy pages get their dark styles centrally from `assets/css/components.css`
 - **HTTP server**: Bandit
 - **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers
-- **Images**: avatars and URL screenshots are stored on local disk and resized with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Screenshot`
+- **Images**: avatars, profile cover photos and URL screenshots are stored on local disk and resized with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Cover` / `Vutuv.Screenshot`. Cover photos are uploaded via the Edit profile form and served from `<UPLOADS_DIR_PREFIX>/covers/` (nginx needs a `location /covers/` alias in production, mirroring `/avatars/`)
 - **URL screenshots**: rendered by local headless Chromium, wrapped in a browser window frame (`Vutuv.BrowserFrame`) and stored as WebP; see `Vutuv.PageScreenshot`. Needs a `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on `$PATH`)
 
 ### Context modules

@@ -16,6 +16,7 @@ defmodule Vutuv.Accounts.User do
     field(:locale, :string)
     field(:verified, :boolean, default: false)
     field(:avatar, :string)
+    field(:cover_photo, :string)
     field(:active_slug, :string)
     field(:administrator, :boolean)
     field(:headline, :string)
@@ -64,6 +65,7 @@ defmodule Vutuv.Accounts.User do
     model
     |> cast(params, @optional_fields)
     |> validate_avatar(params)
+    |> validate_cover_photo(params)
     |> cast_assoc(:slugs)
     |> cast_assoc(:oauth_providers)
     |> validate_first_name_or_last_name_or_nickname(params)
@@ -117,6 +119,37 @@ defmodule Vutuv.Accounts.User do
   end
 
   defp cast_avatar_attachment(changeset, _params), do: changeset
+
+  defp validate_cover_photo(changeset, %{cover_photo: cover_photo}),
+    do: validate_cover_photo(changeset, %{"cover_photo" => cover_photo})
+
+  defp validate_cover_photo(changeset, %{"cover_photo" => cover_photo} = params) do
+    stat = File.stat!(cover_photo.path)
+
+    if stat.size > @max_image_filesize do
+      add_error(
+        changeset,
+        :cover_photo,
+        "Cover photo filesize is greater than 2MB. Please upload a smaller image."
+      )
+    else
+      cast_cover_photo_attachment(changeset, params)
+    end
+  end
+
+  defp validate_cover_photo(changeset, %{}), do: changeset
+
+  # The scope passed to the uploader must reflect any name/id changes in this
+  # same changeset, because the on-disk file name is derived from it (mirrors
+  # cast_avatar_attachment/2).
+  defp cast_cover_photo_attachment(changeset, %{"cover_photo" => %Plug.Upload{} = upload}) do
+    case Vutuv.Cover.store({upload, Ecto.Changeset.apply_changes(changeset)}) do
+      {:ok, file_name} -> put_change(changeset, :cover_photo, file_name)
+      {:error, _reason} -> add_error(changeset, :cover_photo, "is not a valid image")
+    end
+  end
+
+  defp cast_cover_photo_attachment(changeset, _params), do: changeset
 
   defp validate_first_name_or_last_name_or_nickname(changeset, %{}) do
     first_name = get_field(changeset, :first_name)

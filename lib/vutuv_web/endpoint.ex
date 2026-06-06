@@ -29,6 +29,7 @@ defmodule VutuvWeb.Endpoint do
   if Application.compile_env(:vutuv, :serve_uploads_locally, false) do
     @uploads_root Application.compile_env(:vutuv, :uploads_dir_prefix, "")
     plug(Plug.Static, at: "/avatars", from: Path.join(@uploads_root, "avatars"), gzip: false)
+    plug(Plug.Static, at: "/covers", from: Path.join(@uploads_root, "covers"), gzip: false)
 
     plug(Plug.Static,
       at: "/screenshots",

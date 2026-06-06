@@ -8,6 +8,7 @@ defmodule VutuvWeb.UploadsServingTest do
 
   # Mirrors the endpoint's compile-time `from:` (empty prefix -> project dir).
   @avatars_dir Path.join(Application.compile_env(:vutuv, :uploads_dir_prefix, ""), "avatars")
+  @covers_dir Path.join(Application.compile_env(:vutuv, :uploads_dir_prefix, ""), "covers")
 
   test "serves an uploaded avatar file from disk", %{conn: conn} do
     id = System.unique_integer([:positive])
@@ -25,6 +26,25 @@ defmodule VutuvWeb.UploadsServingTest do
 
   test "returns 404 for a missing avatar", %{conn: conn} do
     conn = get(conn, "/avatars/0/does-not-exist.jpg")
+    assert conn.status == 404
+  end
+
+  test "serves an uploaded cover photo file from disk", %{conn: conn} do
+    id = System.unique_integer([:positive])
+    dir = Path.join(@covers_dir, Integer.to_string(id))
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(40, 20, color: [10, 120, 200])
+    {:ok, _} = Image.write(img, Path.join(dir, "Ada King_wide.jpg"))
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    conn = get(conn, "/covers/#{id}/Ada%20King_wide.jpg")
+
+    assert conn.status == 200
+    assert byte_size(conn.resp_body) > 0
+  end
+
+  test "returns 404 for a missing cover photo", %{conn: conn} do
+    conn = get(conn, "/covers/0/does-not-exist.jpg")
     assert conn.status == 404
   end
 end

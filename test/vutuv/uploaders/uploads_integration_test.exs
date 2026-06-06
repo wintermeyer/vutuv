@@ -68,6 +68,31 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert "is not a valid image" in errors_on(changeset).avatar
   end
 
+  test "uploading a cover photo stores the file name and writes files to disk", %{tmp: tmp} do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+    upload = %Plug.Upload{filename: "banner.png", path: png_fixture(), content_type: "image/png"}
+
+    assert {:ok, updated} =
+             user
+             |> User.changeset(%{cover_photo: upload})
+             |> Repo.update()
+
+    assert updated.cover_photo == "banner.png"
+    assert File.exists?(Path.join(tmp, "covers/#{user.id}/Ada King_wide.png"))
+  end
+
+  test "an invalid cover photo extension is rejected with a changeset error" do
+    user = insert(:user)
+    upload = %Plug.Upload{filename: "evil.gif", path: png_fixture(), content_type: "image/gif"}
+
+    assert {:error, changeset} =
+             user
+             |> User.changeset(%{cover_photo: upload})
+             |> Repo.update()
+
+    assert "is not a valid image" in errors_on(changeset).cover_photo
+  end
+
   test "a legacy screenshot value resolves and uploads store a fingerprint", %{tmp: tmp} do
     user = insert(:user)
     legacy = insert(:url, user: user, screenshot: "shot.png?63876543210")

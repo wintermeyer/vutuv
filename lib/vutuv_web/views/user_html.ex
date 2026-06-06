@@ -58,4 +58,59 @@ defmodule VutuvWeb.UserHTML do
       info -> info
     end
   end
+
+  @doc """
+  How long the account has been on vutuv, derived from `inserted_at`.
+
+  "Member since 2008" for an older account; "Member since February 2026" when
+  the account was created in the current year, where a bare year reads oddly
+  for a fresh profile so the month is spelled out. Follows the viewer's locale
+  via gettext. Returns nil for an unsaved struct with no `inserted_at`.
+  """
+  def member_since(%Vutuv.Accounts.User{inserted_at: %NaiveDateTime{} = inserted_at}) do
+    joined = NaiveDateTime.to_date(inserted_at)
+
+    if joined.year == Date.utc_today().year do
+      gettext("Member since %{month} %{year}",
+        month: month_name(joined.month),
+        year: joined.year
+      )
+    else
+      gettext("Member since %{year}", year: joined.year)
+    end
+  end
+
+  def member_since(_user), do: nil
+
+  @doc """
+  The "Member since" line (calendar icon + label). Rendered in two spots on the
+  profile: right-aligned on the counts row, or moved up under the work line
+  when the account has no followers and no following. `class` positions it.
+  """
+  attr(:value, :string, required: true)
+  attr(:class, :string, default: nil)
+
+  def member_since_line(assigns) do
+    ~H"""
+    <p class={["flex items-center gap-1.5 text-sm text-slate-400 dark:text-slate-500", @class]}>
+      <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+      </svg>
+      {@value}
+    </p>
+    """
+  end
+
+  defp month_name(1), do: gettext("January")
+  defp month_name(2), do: gettext("February")
+  defp month_name(3), do: gettext("March")
+  defp month_name(4), do: gettext("April")
+  defp month_name(5), do: gettext("May")
+  defp month_name(6), do: gettext("June")
+  defp month_name(7), do: gettext("July")
+  defp month_name(8), do: gettext("August")
+  defp month_name(9), do: gettext("September")
+  defp month_name(10), do: gettext("October")
+  defp month_name(11), do: gettext("November")
+  defp month_name(12), do: gettext("December")
 end
