@@ -27,6 +27,14 @@ defmodule Vutuv.PostsTest do
     post
   end
 
+  # Timeline ordering ties at second precision; shift a post into the past so
+  # order assertions stay deterministic.
+  defp backdate_post!(post, seconds) do
+    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
+    Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [inserted_at: at])
+    %{post | inserted_at: at}
+  end
+
   describe "create_post/2" do
     test "creates a public post with today's date and seq 1" do
       author = user()
@@ -348,7 +356,7 @@ defmodule Vutuv.PostsTest do
         actual =
           author
           |> Posts.profile_posts(viewer, limit: 100)
-          |> Enum.map(& &1.id)
+          |> Enum.map(& &1.post.id)
           |> Enum.sort()
 
         assert actual == expected, "scope mismatch for viewer #{inspect(viewer && viewer.id)}"
@@ -360,8 +368,26 @@ defmodule Vutuv.PostsTest do
       [_one, two, three] = for n <- 1..3, do: create_post!(author, %{body: "post #{n}"})
 
       assert [latest, previous] = Posts.profile_posts(author, nil, limit: 2)
-      assert latest.id == three.id
-      assert previous.id == two.id
+      assert latest.post.id == three.id
+      assert previous.post.id == two.id
+    end
+
+    test "includes the author's reposts, stamped with the repost time" do
+      author = user()
+      original_author = user()
+      original = create_post!(original_author, %{body: "carried"})
+      own = create_post!(author, %{body: "own"})
+      backdate_post!(own, 60)
+      :ok = Posts.repost_post(author, original)
+
+      assert [repost_entry, own_entry] = Posts.profile_posts(author, nil, limit: 10)
+      assert repost_entry.post.id == original.id
+      assert repost_entry.reposted_by.id == author.id
+      assert String.starts_with?(repost_entry.id, "repost-")
+      assert own_entry.post.id == own.id
+      assert own_entry.reposted_by == nil
+
+      assert Posts.count_author_posts(author, nil) == 2
     end
   end
 
@@ -377,7 +403,7 @@ defmodule Vutuv.PostsTest do
       create_post!(stranger, %{body: "unrelated"})
 
       %{entries: entries} = Posts.feed_page(viewer)
-      assert Enum.map(entries, & &1.id) |> Enum.sort() == Enum.sort([mine.id, theirs.id])
+      assert Enum.map(entries, & &1.post.id) |> Enum.sort() == Enum.sort([mine.id, theirs.id])
     end
 
     test "applies denials inside the feed query" do
@@ -397,7 +423,7 @@ defmodule Vutuv.PostsTest do
         create_post!(friend, %{body: "visible", denials: [%{"wildcard" => "non_followers"}]})
 
       %{entries: entries} = Posts.feed_page(viewer)
-      assert Enum.map(entries, & &1.id) == [visible.id]
+      assert Enum.map(entries, & &1.post.id) == [visible.id]
     end
 
     test "hides posts from unvalidated authors but always shows own" do
@@ -409,7 +435,7 @@ defmodule Vutuv.PostsTest do
       create_post!(unvalidated, %{body: "ghost"})
 
       %{entries: entries} = Posts.feed_page(viewer)
-      assert Enum.map(entries, & &1.id) == [mine.id]
+      assert Enum.map(entries, & &1.post.id) == [mine.id]
     end
 
     test "paginates with a cursor, newest first" do
@@ -425,8 +451,132 @@ defmodule Vutuv.PostsTest do
       refute page3.more?
       assert page3.next_cursor == nil
 
-      walked = Enum.map(page1.entries ++ page2.entries ++ page3.entries, & &1.id)
+      walked = Enum.map(page1.entries ++ page2.entries ++ page3.entries, & &1.post.id)
       assert walked == expected_ids
+    end
+
+    test "carries followees' reposts into the feed, stamped with the repost time" do
+      viewer = user()
+      friend = user()
+      stranger = user()
+      follow!(viewer, friend)
+
+      old = create_post!(stranger, %{body: "old but gold"})
+      backdate_post!(old, 120)
+      mine = create_post!(viewer, %{body: "mine"})
+      backdate_post!(mine, 60)
+      :ok = Posts.repost_post(friend, old)
+
+      %{entries: [repost_entry, own_entry]} = Posts.feed_page(viewer)
+
+      assert repost_entry.post.id == old.id
+      assert repost_entry.reposted_by.id == friend.id
+      assert own_entry.post.id == mine.id
+      assert own_entry.reposted_by == nil
+    end
+
+    test "ignores reposts by strangers and by unvalidated reposters" do
+      viewer = user()
+      unvalidated = user(validated?: false)
+      stranger = user()
+      follow!(viewer, unvalidated)
+
+      post = create_post!(user(), %{body: "x"})
+      :ok = Posts.repost_post(unvalidated, post)
+      :ok = Posts.repost_post(stranger, post)
+
+      assert %{entries: []} = Posts.feed_page(viewer)
+    end
+
+    test "paginates a mixed posts-and-reposts timeline without gaps or repeats" do
+      viewer = user()
+      friend = user()
+      follow!(viewer, friend)
+
+      for n <- 1..3, do: create_post!(viewer, %{body: "post #{n}"})
+
+      for _ <- 1..3 do
+        post = create_post!(user(), %{body: "elsewhere"})
+        :ok = Posts.repost_post(friend, post)
+      end
+
+      page1 = Posts.feed_page(viewer, limit: 4)
+      assert page1.more?
+      page2 = Posts.feed_page(viewer, limit: 4, cursor: page1.next_cursor)
+      refute page2.more?
+
+      walked = Enum.map(page1.entries ++ page2.entries, & &1.id)
+      assert length(walked) == 6
+      assert Enum.uniq(walked) == walked
+    end
+  end
+
+  describe "author_posts_page/4 with reposts" do
+    test "pages posts and reposts together and scopes the period by event date" do
+      author = user()
+      original = create_post!(user(), %{body: "shared"})
+      own = create_post!(author, %{body: "own"})
+      :ok = Posts.repost_post(author, original)
+
+      {entries, total} = Posts.author_posts_page(author, nil, %{})
+      assert total == 2
+      assert Enum.map(entries, & &1.post.id) |> Enum.sort() == Enum.sort([original.id, own.id])
+
+      today = Date.utc_today()
+      {entries, total} = Posts.author_posts_page(author, nil, %{}, {today, today})
+      assert total == 2
+      assert length(entries) == 2
+
+      # A period before the repost excludes both entries.
+      past = Date.add(today, -7)
+      assert {[], 0} = Posts.author_posts_page(author, nil, %{}, {past, past})
+    end
+  end
+
+  describe "liked and bookmarked posts pages" do
+    test "lists liked posts newest-liked-first with cursor pagination" do
+      reader = user()
+      posts = for n <- 1..3, do: create_post!(user(), %{body: "post #{n}"})
+
+      for {post, index} <- Enum.with_index(posts) do
+        :ok = Posts.like_post(reader, post)
+        # Spread the like times so the order is deterministic.
+        at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), index - 10)
+
+        Repo.update_all(
+          from(l in Vutuv.Posts.PostLike, where: l.post_id == ^post.id),
+          set: [inserted_at: at]
+        )
+      end
+
+      page1 = Posts.liked_posts_page(reader, limit: 2)
+      assert page1.more?
+      assert Enum.map(page1.entries, & &1.body) == ["post 3", "post 2"]
+
+      page2 = Posts.liked_posts_page(reader, limit: 2, cursor: page1.next_cursor)
+      refute page2.more?
+      assert Enum.map(page2.entries, & &1.body) == ["post 1"]
+    end
+
+    test "hides liked posts that are no longer visible to the user" do
+      reader = user()
+      author = user()
+      post = create_post!(author, %{body: "was public"})
+      :ok = Posts.like_post(reader, post)
+
+      {:ok, _} =
+        Posts.update_post(post, %{body: "was public", denials: [%{"wildcard" => "everyone"}]})
+
+      assert %{entries: []} = Posts.liked_posts_page(reader)
+    end
+
+    test "lists bookmarked posts" do
+      reader = user()
+      post = create_post!(user(), %{body: "keep this"})
+      :ok = Posts.bookmark_post(reader, post)
+
+      assert %{entries: [%Post{id: id}], more?: false} = Posts.bookmarked_posts_page(reader)
+      assert id == post.id
     end
   end
 
@@ -580,6 +730,180 @@ defmodule Vutuv.PostsTest do
       refute Repo.get(PostImage, stale.id)
       assert Repo.get(PostImage, fresh.id)
       assert Repo.get(PostImage, attached.id)
+    end
+  end
+
+  describe "likes and bookmarks" do
+    test "like_post/2 likes once, idempotently" do
+      reader = user()
+      post = create_post!(user(), %{body: "likeable"})
+
+      assert :ok = Posts.like_post(reader, post)
+      assert :ok = Posts.like_post(reader, post)
+      assert %{likes: 1, bookmarks: 0, reposts: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "unlike_post/2 removes the like" do
+      reader = user()
+      post = create_post!(user(), %{body: "x"})
+
+      :ok = Posts.like_post(reader, post)
+      assert :ok = Posts.unlike_post(reader, post)
+      assert :ok = Posts.unlike_post(reader, post)
+      assert %{likes: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "a denied viewer cannot like or bookmark the post" do
+      denied = user()
+
+      post =
+        create_post!(user(), %{body: "x", denials: [%{"denied_user_id" => denied.id}]})
+
+      assert {:error, :not_visible} = Posts.like_post(denied, post)
+      assert {:error, :not_visible} = Posts.bookmark_post(denied, post)
+      assert %{likes: 0, bookmarks: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "bookmark_post/2 and unbookmark_post/2 toggle the bookmark" do
+      reader = user()
+      post = create_post!(user(), %{body: "x"})
+
+      assert :ok = Posts.bookmark_post(reader, post)
+      assert :ok = Posts.bookmark_post(reader, post)
+      assert %{bookmarks: 1} = Posts.engagement_counts(post.id)
+
+      assert :ok = Posts.unbookmark_post(reader, post)
+      assert %{bookmarks: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "post_engagement/2 reports counts, viewer flags and restriction" do
+      reader = user()
+      other = user()
+      post = create_post!(user(), %{body: "x"})
+
+      :ok = Posts.like_post(reader, post)
+      :ok = Posts.like_post(other, post)
+      :ok = Posts.bookmark_post(reader, post)
+      :ok = Posts.repost_post(other, post)
+
+      assert %{
+               likes: 2,
+               bookmarks: 1,
+               reposts: 1,
+               liked?: true,
+               bookmarked?: true,
+               reposted?: false,
+               restricted?: false
+             } = Posts.post_engagement(post.id, reader)
+
+      assert %{liked?: false, bookmarked?: false, reposted?: false} =
+               Posts.post_engagement(post.id, nil)
+
+      refute Posts.post_engagement(post.id + 1000, reader)
+    end
+
+    test "toggles broadcast {:post_counters, …} with absolute counts" do
+      reader = user()
+      post = create_post!(user(), %{body: "x"})
+      Posts.subscribe_post(post.id)
+
+      :ok = Posts.like_post(reader, post)
+      post_id = post.id
+      assert_receive {:post_counters, %{post_id: ^post_id, likes: 1, bookmarks: 0, reposts: 0}}
+
+      :ok = Posts.unlike_post(reader, post)
+      assert_receive {:post_counters, %{post_id: ^post_id, likes: 0}}
+
+      # A no-op toggle does not rebroadcast.
+      :ok = Posts.unlike_post(reader, post)
+      refute_receive {:post_counters, _}
+    end
+  end
+
+  describe "repost_post/2" do
+    test "reposts a public post once, idempotently" do
+      reader = user()
+      post = create_post!(user(), %{body: "spread me"})
+
+      assert :ok = Posts.repost_post(reader, post)
+      assert :ok = Posts.repost_post(reader, post)
+      assert %{reposts: 1} = Posts.engagement_counts(post.id)
+    end
+
+    test "refuses restricted posts" do
+      reader = user()
+      author = user()
+      follow!(reader, author)
+
+      post =
+        create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
+
+      assert {:error, :restricted} = Posts.repost_post(reader, post)
+      assert %{reposts: 0} = Posts.engagement_counts(post.id)
+    end
+
+    test "broadcasts {:new_repost, …} to the reposter and followers, once" do
+      reposter = user()
+      follower = user()
+      follow!(follower, reposter)
+      post = create_post!(user(), %{body: "x"})
+
+      Vutuv.Activity.subscribe(follower.id)
+
+      :ok = Posts.repost_post(reposter, post)
+      post_id = post.id
+      reposter_id = reposter.id
+
+      assert_receive {:new_repost, %{post_id: ^post_id, reposter_id: ^reposter_id}}
+
+      # Reposting again is a no-op and must not redistribute.
+      :ok = Posts.repost_post(reposter, post)
+      refute_receive {:new_repost, _}
+    end
+
+    test "unrepost_post/2 removes the repost" do
+      reader = user()
+      post = create_post!(user(), %{body: "x"})
+
+      :ok = Posts.repost_post(reader, post)
+      assert :ok = Posts.unrepost_post(reader, post)
+      assert %{reposts: 0} = Posts.engagement_counts(post.id)
+    end
+  end
+
+  describe "visibility lock" do
+    test "update_post/2 refuses audience changes while reposts exist" do
+      author = user()
+      post = create_post!(author, %{body: "public"})
+      :ok = Posts.repost_post(user(), post)
+
+      assert {:error, :visibility_locked} =
+               Posts.update_post(post, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      # Body edits that keep the post public still work, and so does delete.
+      assert {:ok, updated} = Posts.update_post(post, %{body: "edited", denials: []})
+      assert updated.body == "edited"
+      assert {:ok, _} = Posts.delete_post(post)
+    end
+
+    test "the lock lifts when the last repost is undone" do
+      author = user()
+      reposter = user()
+      post = create_post!(author, %{body: "public"})
+
+      :ok = Posts.repost_post(reposter, post)
+      :ok = Posts.unrepost_post(reposter, post)
+
+      assert {:ok, updated} =
+               Posts.update_post(post, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      assert [%PostDenial{wildcard: "everyone"}] = updated.denials
     end
   end
 end

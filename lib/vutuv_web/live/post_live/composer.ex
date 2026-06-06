@@ -44,6 +44,9 @@ defmodule VutuvWeb.PostLive.Composer do
 
     socket
     |> assign(:composer_ready?, true)
+    # Reposted posts carry other people's shares: the audience is pinned to
+    # public (Posts.update_post/2 enforces it; the select disappears).
+    |> assign(:reposts_lock?, post != nil and Posts.has_reposts?(post))
     |> assign(:body, (post && post.body) || "")
     |> assign(:tags_value, tags_value(post))
     |> assign(:images, (post && post.images) || [])
@@ -233,6 +236,9 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   defp save_error_message(:invalid_denials), do: gettext("The audience selection is not valid.")
+
+  defp save_error_message(:visibility_locked),
+    do: gettext("The audience cannot be restricted while reposts exist.")
 
   defp save_error_message(:invalid_images),
     do: gettext("One of the images could not be attached.")
@@ -529,24 +535,36 @@ defmodule VutuvWeb.PostLive.Composer do
               class={[input_class(), "max-w-56 flex-1"]}
             />
 
-            <label for={"#{@id}-preset"} class="sr-only">{gettext("Audience")}</label>
-            <%!-- Not input_class(): its w-full would stretch the chip-like
-            select across the whole row. --%>
-            <select
-              id={"#{@id}-preset"}
-              name="post[preset]"
-              class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >
-              <option value="public" selected={@preset == "public"}>🌐 {gettext("Public")}</option>
-              <option value="followers" selected={@preset == "followers"}>
-                👥 {gettext("Followers only")}
-              </option>
-              <option value="following" selected={@preset == "following"}>
-                🤝 {gettext("People I follow")}
-              </option>
-              <option value="only_me" selected={@preset == "only_me"}>🔒 {gettext("Only me")}</option>
-              <option value="custom" selected={@preset == "custom"}>⚙️ {gettext("Custom…")}</option>
-            </select>
+            <%= if @reposts_lock? do %>
+              <span
+                id={"#{@id}-audience-locked"}
+                title={gettext("The audience cannot be restricted while reposts exist.")}
+                class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
+              >
+                🌐 {gettext("Public")}
+              </span>
+            <% else %>
+              <label for={"#{@id}-preset"} class="sr-only">{gettext("Audience")}</label>
+              <%!-- Not input_class(): its w-full would stretch the chip-like
+              select across the whole row. --%>
+              <select
+                id={"#{@id}-preset"}
+                name="post[preset]"
+                class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+              >
+                <option value="public" selected={@preset == "public"}>🌐 {gettext("Public")}</option>
+                <option value="followers" selected={@preset == "followers"}>
+                  👥 {gettext("Followers only")}
+                </option>
+                <option value="following" selected={@preset == "following"}>
+                  🤝 {gettext("People I follow")}
+                </option>
+                <option value="only_me" selected={@preset == "only_me"}>
+                  🔒 {gettext("Only me")}
+                </option>
+                <option value="custom" selected={@preset == "custom"}>⚙️ {gettext("Custom…")}</option>
+              </select>
+            <% end %>
 
             <.button
               type="submit"
@@ -676,6 +694,12 @@ defmodule VutuvWeb.PostLive.Composer do
 
           <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" id={"#{@id}-audience-summary"}>
             {audience_summary(assigns)}
+          </p>
+
+          <p :if={@reposts_lock?} class="mt-1 text-xs text-slate-400" id={"#{@id}-reposts-lock-hint"}>
+            {gettext(
+              "This post has been reposted. Its audience stays public while reposts exist; you can still delete the post."
+            )}
           </p>
 
           <p :if={@error} class="mt-2 text-sm font-medium text-red-600" id={"#{@id}-error"}>

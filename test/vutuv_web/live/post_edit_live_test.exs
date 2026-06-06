@@ -49,6 +49,28 @@ defmodule VutuvWeb.PostEditLiveTest do
       assert updated.published_on == post.published_on
     end
 
+    test "locks the audience while reposts exist", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "carried by others"})
+      :ok = Posts.repost_post(insert(:user, validated?: true), post)
+
+      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      # No audience select; the locked chip and the explanation instead.
+      refute has_element?(live, "#composer-preset")
+      assert has_element?(live, "#composer-audience-locked")
+      assert html =~ "reposted"
+
+      # Body edits still save (and the post stays public).
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "still editable"}})
+      |> render_submit()
+
+      assert_redirect(live, Posts.path(post))
+      assert Posts.get_post(post.id).body == "still editable"
+      assert Posts.get_post(post.id).denials == []
+    end
+
     test "sends non-authors away without confirming existence", %{conn: conn} do
       author = insert(:user, validated?: true)
       {:ok, post} = Posts.create_post(author, %{body: "not yours"})

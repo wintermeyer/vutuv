@@ -60,7 +60,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       })
       |> render_submit()
 
-      [post] = Posts.profile_posts(user, user)
+      [%{post: post}] = Posts.profile_posts(user, user)
       assert [%{wildcard: "non_followers"}] = post.denials
 
       # The preset sticks for the next post (last-used default).
@@ -110,7 +110,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       })
       |> render_submit()
 
-      [post] = Posts.profile_posts(user, user)
+      [%{post: post}] = Posts.profile_posts(user, user)
       assert length(post.denials) == 3
       assert Enum.any?(post.denials, &(&1.group_id == group.id))
       assert Enum.any?(post.denials, &(&1.wildcard == "logged_out"))
@@ -152,7 +152,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       refute has_element?(live, "#composer-error")
 
-      assert [post] = Posts.profile_posts(user, user)
+      assert [%{post: post}] = Posts.profile_posts(user, user)
       assert post.body == ""
       assert [attached] = post.images
 
@@ -194,7 +194,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> form("#composer-form", %{"post" => %{"body" => "text without the photo"}})
       |> render_submit()
 
-      assert [post] = Posts.profile_posts(user, user)
+      assert [%{post: post}] = Posts.profile_posts(user, user)
       assert post.images == []
     end
 
@@ -221,9 +221,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      assert has_element?(live, "#post-menu-#{mine.id} a[href='/posts/#{mine.id}/edit']")
-      assert has_element?(live, "#post-menu-#{mine.id} a[data-method='delete']")
-      refute has_element?(live, "#post-menu-#{theirs.id}")
+      assert has_element?(live, "#post-menu-post-#{mine.id} a[href='/posts/#{mine.id}/edit']")
+      assert has_element?(live, "#post-menu-post-#{mine.id} a[data-method='delete']")
+      refute has_element?(live, "#post-menu-post-#{theirs.id}")
     end
   end
 

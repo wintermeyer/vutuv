@@ -1,7 +1,7 @@
 <div class="py-6">
   <div class="mx-auto max-w-2xl">
     <%!-- The author's Edit/Delete live in the card's own ⋯ menu. --%>
-    <.post_card post={@post} viewer={@current_user} mode={:full} />
+    <.post_card post={@post} viewer={@current_user} mode={:full} conn_or_socket={@conn} />
 
     <%!-- The deny list is the author's private configuration — never shown
     to other viewers (the card shows them only the generic lock). --%>

@@ -36,6 +36,23 @@ defmodule VutuvWeb.PostComponents do
     doc: ":card stands alone; :flat embeds inside an existing card (profile Posts section)"
   )
 
+  attr(:conn_or_socket, :any,
+    required: true,
+    doc: "@conn (dead pages) or @socket (LiveViews) — anchors the embedded live action bar"
+  )
+
+  attr(:reposted_by, :any,
+    default: nil,
+    doc: "%User{} who carried this post into the timeline — renders the \"Reposted by\" line"
+  )
+
+  attr(:entry_id, :string,
+    default: nil,
+    doc:
+      "timeline entry id (\"post-<id>\" / \"repost-<id>\") — keeps embedded LiveView ids " <>
+        "unique when the same post renders more than once on a page"
+  )
+
   attr(:class, :string, default: nil)
 
   def post_card(assigns) do
@@ -52,6 +69,11 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:restricted?, assigns.post.denials != [])
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
+      # Both ids derive from the timeline entry when there is one: the same
+      # post can render twice on a page (original + repost), and DOM ids
+      # must stay unique.
+      |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
+      |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
       |> assign(
         :author?,
         assigns.viewer != nil && assigns.viewer.id == assigns.post.user_id
@@ -73,6 +95,10 @@ defmodule VutuvWeb.PostComponents do
         gallery={@gallery}
         edited?={@edited?}
         author?={@author?}
+        reposted_by={@reposted_by}
+        conn_or_socket={@conn_or_socket}
+        actions_id={@actions_id}
+        menu_id={@menu_id}
       />
     </.card>
     <div :if={@surface == :flat} class={@class}>
@@ -86,6 +112,10 @@ defmodule VutuvWeb.PostComponents do
         gallery={@gallery}
         edited?={@edited?}
         author?={@author?}
+        reposted_by={@reposted_by}
+        conn_or_socket={@conn_or_socket}
+        actions_id={@actions_id}
+        menu_id={@menu_id}
       />
     </div>
     """
@@ -100,10 +130,32 @@ defmodule VutuvWeb.PostComponents do
   attr(:gallery, :list, required: true)
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
+  attr(:reposted_by, :any, required: true)
+  attr(:conn_or_socket, :any, required: true)
+  attr(:actions_id, :string, required: true)
+  attr(:menu_id, :string, required: true)
 
   defp post_card_body(assigns) do
     ~H"""
-    <div class="flex items-start gap-3">
+    <div>
+      <p
+        :if={@reposted_by}
+        class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+        data-reposted-by={@reposted_by.id}
+      >
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"
+          />
+        </svg>
+        <.link href={~p"/#{@reposted_by}"} class="hover:text-brand-700">
+          {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
+        </.link>
+      </p>
+
+      <div class="flex items-start gap-3">
         <.link href={~p"/#{@post.user}"} class="shrink-0">
           <.avatar user={@post.user} size="sm" />
         </.link>
@@ -200,11 +252,20 @@ defmodule VutuvWeb.PostComponents do
           <div :if={@post.tags != []} class="mt-3 flex flex-wrap gap-2">
             <.chip :for={tag <- @post.tags} navigate={~p"/tags/#{tag}"}>{tag.name}</.chip>
           </div>
+
+          <%!-- The live action bar (like / repost / bookmark + counters): its
+          own embedded LiveView per card, so the counters tick on dead pages
+          too. The id derives from the timeline entry, not the post — the same
+          post can render twice on one page (original + repost). --%>
+          {live_render(@conn_or_socket, VutuvWeb.PostLive.Actions,
+            id: @actions_id,
+            session: %{"post_id" => @post.id, "id" => @actions_id}
+          )}
         </div>
 
         <%!-- The author's quiet ⋯ menu, on every rendering of their post. --%>
         <div :if={@author?} class="shrink-0">
-          <.card_menu id={"post-menu-#{@post.id}"}>
+          <.card_menu id={@menu_id}>
             <:item href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
             <:item
               href={~p"/posts/#{@post.id}"}
@@ -217,6 +278,7 @@ defmodule VutuvWeb.PostComponents do
           </.card_menu>
         </div>
       </div>
+    </div>
     """
   end
 

@@ -135,6 +135,13 @@ defmodule VutuvWeb.ShellLive do
 
             <%= if @user_id do %>
               <.link
+                href={~p"/bookmarks"}
+                title={gettext("Bookmarks")}
+                class="hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
+              >
+                <.icon_bookmark />
+              </.link>
+              <.link
                 href={~p"/messages"}
                 title={gettext("Messages")}
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
@@ -232,6 +239,18 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+    </svg>
+    """
+  end
+
+  defp icon_bookmark(assigns) do
+    ~H"""
+    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M17.593 3.322c.1.128.157.288.157.456v16.444a.75.75 0 0 1-1.218.585L12 17.21l-4.532 3.597A.75.75 0 0 1 6.25 20.222V3.778c0-.168.057-.328.157-.456A2.25 2.25 0 0 1 8.25 2.5h7.5a2.25 2.25 0 0 1 1.843.822Z"
+      />
     </svg>
     """
   end

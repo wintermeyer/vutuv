@@ -38,13 +38,13 @@ defmodule VutuvWeb.UserProfilePostsTest do
     {:ok, post} = Vutuv.Posts.create_post(user, %{body: "my post"})
 
     owner_view = get(owner_conn, "/#{user.active_slug}")
-    assert html_response(owner_view, 200) =~ ~s(id="post-menu-#{post.id}")
+    assert html_response(owner_view, 200) =~ ~s(id="post-menu-post-#{post.id}")
     assert owner_view.resp_body =~ ~s(href="/posts/#{post.id}/edit")
     assert owner_view.resp_body =~ ~s(data-method="delete")
 
     # The original conn never logged in: a plain visitor.
     visitor_view = get(conn, "/#{user.active_slug}")
-    refute html_response(visitor_view, 200) =~ "post-menu-#{post.id}"
+    refute html_response(visitor_view, 200) =~ "post-menu-post-#{post.id}"
   end
 
   test "filters restricted posts per viewer and omits the empty section", %{conn: conn} do

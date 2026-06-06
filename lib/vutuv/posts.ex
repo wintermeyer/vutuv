@@ -25,6 +25,13 @@ defmodule Vutuv.Posts do
   **Images** upload eagerly while composing (`create_pending_image/3`), so
   inline markdown can reference them before the post exists; submit attaches
   them (`image_ids`). Unattached leftovers are swept after a day.
+
+  **Engagement**: likes, bookmarks and reposts are one row per (post, user),
+  toggled idempotently; counters are counted live from the rows and every
+  change broadcasts `{:post_counters, …}` on the post's topic
+  (`subscribe_post/1`). Reposts work on **public** posts only, distribute
+  into the reposter's followers' feeds and pin the post's audience open
+  while any exist (the author can still delete).
   """
 
   import Ecto.Query
@@ -32,8 +39,11 @@ defmodule Vutuv.Posts do
   alias Vutuv.Accounts.User
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostBookmark
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostTag
   alias Vutuv.Repo
   alias Vutuv.Social.Connection
@@ -100,6 +110,7 @@ defmodule Vutuv.Posts do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
     with {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
+         :ok <- check_visibility_lock(post, denials),
          :ok <- check_image_count(image_ids),
          {:ok, changeset} <- build_changeset(post, attrs, denials, image_ids) do
       removed = Enum.reject(post.images, &(&1.id in image_ids))
@@ -422,99 +433,448 @@ defmodule Vutuv.Posts do
     Repo.exists?(from(d in PostDenial, where: d.post_id == ^id))
   end
 
+  ## Likes, bookmarks, reposts
+
+  # Likes/bookmarks/reposts are one row per (post, user); toggles are
+  # idempotent (unique index + ON CONFLICT DO NOTHING). Every real change
+  # broadcasts the post's fresh absolute counters to its topic, so open
+  # action bars update live; the actor's own sessions additionally get an
+  # {:engagement_changed, …} on their activity topic (multi-tab sync for
+  # the likes/bookmarks pages).
+
+  @doc "Likes `post` as `user` (idempotent). Only visible posts can be liked."
+  def like_post(%User{} = user, %Post{} = post) do
+    with {:ok, _} <- engage(PostLike, :like, user, post), do: :ok
+  end
+
+  @doc "Removes `user`'s like (idempotent)."
+  def unlike_post(%User{} = user, %Post{} = post), do: disengage(PostLike, :like, user, post)
+
+  @doc "Bookmarks `post` for `user` (idempotent). Only visible posts."
+  def bookmark_post(%User{} = user, %Post{} = post) do
+    with {:ok, _} <- engage(PostBookmark, :bookmark, user, post), do: :ok
+  end
+
+  @doc "Removes `user`'s bookmark (idempotent)."
+  def unbookmark_post(%User{} = user, %Post{} = post),
+    do: disengage(PostBookmark, :bookmark, user, post)
+
+  @doc """
+  Reposts `post` as `user` (idempotent). Only **public** posts (no denials)
+  can be reposted — `{:error, :restricted}` otherwise. A new repost is
+  distributed like a new post: `{:new_repost, %{repost_id:, post_id:,
+  reposter_id:}}` goes to the reposter's and every follower's activity
+  topic. While reposts exist the author cannot restrict the post's audience
+  (see `update_post/2`), only delete it.
+  """
+  def repost_post(%User{} = user, %Post{} = post) do
+    if restricted?(post) do
+      {:error, :restricted}
+    else
+      case engage(PostRepost, :repost, user, post) do
+        {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
+        {:ok, :noop} -> :ok
+        {:error, _} = error -> error
+      end
+    end
+  end
+
+  @doc "Removes `user`'s repost (idempotent). The last one lifts the audience lock."
+  def unrepost_post(%User{} = user, %Post{} = post),
+    do: disengage(PostRepost, :repost, user, post)
+
+  @doc "Whether any reposts of this post exist (the audience lock)."
+  def has_reposts?(%Post{id: id}), do: has_reposts?(id)
+
+  def has_reposts?(post_id) when is_integer(post_id) do
+    Repo.exists?(from(r in PostRepost, where: r.post_id == ^post_id))
+  end
+
+  # A repost pins the audience open: someone else now carries the post, so
+  # narrowing it would silently break their share. Deleting stays possible.
+  defp check_visibility_lock(%Post{} = post, denials) do
+    if denials != [] and has_reposts?(post) do
+      {:error, :visibility_locked}
+    else
+      :ok
+    end
+  end
+
+  defp engage(schema, kind, %User{} = user, %Post{} = post) do
+    if visible_to?(post, user) do
+      case Repo.insert(struct(schema, user_id: user.id, post_id: post.id),
+             on_conflict: :nothing,
+             conflict_target: [:post_id, :user_id]
+           ) do
+        # No RETURNING row: the pair already existed — nothing changed.
+        {:ok, %{id: nil}} ->
+          {:ok, :noop}
+
+        {:ok, row} ->
+          broadcast_engagement(kind, user.id, post.id, true)
+          {:ok, row}
+      end
+    else
+      {:error, :not_visible}
+    end
+  end
+
+  # Removing your own engagement needs no visibility check.
+  defp disengage(schema, kind, %User{} = user, %Post{} = post) do
+    {count, _} =
+      Repo.delete_all(from(e in schema, where: e.post_id == ^post.id and e.user_id == ^user.id))
+
+    if count > 0, do: broadcast_engagement(kind, user.id, post.id, false)
+    :ok
+  end
+
+  @doc "Like / bookmark / repost counts of a post, in one round trip."
+  def engagement_counts(post_id) do
+    Repo.one(
+      from(p in Post,
+        where: p.id == ^post_id,
+        select: %{
+          likes: fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", p.id),
+          bookmarks:
+            fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
+          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id)
+        }
+      )
+    ) || %{likes: 0, bookmarks: 0, reposts: 0}
+  end
+
+  @doc """
+  Everything the action bar needs in one round trip: the three counts,
+  the viewer's own flags (`liked?` / `bookmarked?` / `reposted?`), whether
+  the post is restricted (restricted posts cannot be reposted) and the
+  author id. The viewer is a `%User{}`, a user id, or `nil` (anonymous).
+  `nil` when the post is gone.
+  """
+  def post_engagement(post_id, viewer) do
+    viewer_id =
+      case viewer do
+        %User{id: id} -> id
+        id when is_integer(id) -> id
+        nil -> 0
+      end
+
+    Repo.one(
+      from(p in Post,
+        where: p.id == ^post_id,
+        select: %{
+          likes: fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", p.id),
+          bookmarks:
+            fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
+          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id),
+          liked?:
+            fragment(
+              "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
+              p.id,
+              ^viewer_id
+            ),
+          bookmarked?:
+            fragment(
+              "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
+              p.id,
+              ^viewer_id
+            ),
+          reposted?:
+            fragment(
+              "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
+              p.id,
+              ^viewer_id
+            ),
+          restricted?:
+            fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
+          author_id: p.user_id
+        }
+      )
+    )
+  end
+
+  @doc "Subscribes the caller to a post's `{:post_counters, …}` updates."
+  def subscribe_post(post_id) do
+    Phoenix.PubSub.subscribe(Vutuv.PubSub, post_topic(post_id))
+  end
+
+  defp post_topic(post_id), do: "post:#{post_id}"
+
+  defp broadcast_engagement(kind, user_id, post_id, active?) do
+    payload = Map.put(engagement_counts(post_id), :post_id, post_id)
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), {:post_counters, payload})
+
+    Vutuv.Activity.broadcast(
+      user_id,
+      {:engagement_changed, %{kind: kind, post_id: post_id, active?: active?}}
+    )
+  end
+
   ## Reading
 
   @doc """
-  One page of `viewer`'s newsfeed: own posts plus posts of followed
-  (validated) authors, visibility-filtered, newest first. Returns
-  `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the next
-  older page. Entries are preloaded for rendering.
+  One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
+  followed (validated) authors, visibility-filtered, newest first.
+
+  Entries are maps `%{id:, post:, reposted_by:, at:}` — `id` is
+  `"post-<id>"` / `"repost-<id>"` (unique per entry, the stream DOM id),
+  `reposted_by` the carrying user (or `nil` for original posts), `at` the
+  feed timestamp (publication or repost time). Posts are preloaded for
+  rendering.
+
+  Returns `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the
+  next older page. The cursor is `%{at:, ids:}` (the boundary timestamp plus
+  the already-shown entry ids at it — timestamps tie at second precision
+  across both sources), the same scheme as
+  `Vutuv.Activity.notifications_page/2`. Treat it as opaque.
   """
-  def feed_page(%User{id: viewer_id} = viewer, opts \\ []) do
+  def feed_page(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_feed_limit)
     cursor = Keyword.get(opts, :cursor)
+    seen = if cursor, do: cursor.ids, else: []
 
-    followees = from(c in Connection, where: c.follower_id == ^viewer_id, select: c.followee_id)
+    # Over-fetch per source so that, after dropping the already-shown
+    # boundary entries, at least `limit + 1` candidates remain — the +1 is
+    # what tells us whether another page exists.
+    fetch_n = limit + length(seen) + 1
 
-    posts =
-      from(p in Post,
-        join: u in assoc(p, :user),
-        where: p.user_id == ^viewer_id or p.user_id in subquery(followees),
-        where: p.user_id == ^viewer_id or is_nil(u.validated?) or u.validated? == true,
-        order_by: [desc: p.inserted_at, desc: p.id],
-        limit: ^(limit + 1)
-      )
-      |> scope_visible(viewer)
-      |> before_cursor(cursor)
-      |> Repo.all()
-      |> Repo.preload(post_preloads())
+    candidates =
+      (feed_post_items(viewer, fetch_n, cursor) ++ feed_repost_items(viewer, fetch_n, cursor))
+      |> Enum.reject(&(&1.id in seen))
+      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
 
-    entries = Enum.take(posts, limit)
-    more? = length(posts) > limit
+    entries = candidates |> Enum.take(limit) |> hydrate_posts()
+    more? = length(candidates) > limit
 
-    %{entries: entries, more?: more?, next_cursor: if(more?, do: cursor_for(entries))}
+    %{entries: entries, more?: more?, next_cursor: if(more?, do: feed_cursor(entries, cursor))}
   end
 
-  defp before_cursor(query, nil), do: query
-
-  defp before_cursor(query, %{at: at, id: id}) do
-    where(query, [p], p.inserted_at < ^at or (p.inserted_at == ^at and p.id < ^id))
+  defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    from(p in Post,
+      join: u in assoc(p, :user),
+      where: p.user_id == ^viewer_id or p.user_id in subquery(followees_of(viewer_id)),
+      where: p.user_id == ^viewer_id or is_nil(u.validated?) or u.validated? == true,
+      order_by: [desc: p.inserted_at, desc: p.id],
+      limit: ^fetch_n
+    )
+    |> scope_visible(viewer)
+    |> posts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(&%{id: "post-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
   end
 
-  defp cursor_for(entries) do
-    last = List.last(entries)
-    %{at: last.inserted_at, id: last.id}
+  # Reposts distribute through the reposter: their followers see the post,
+  # stamped with the repost time. Both the reposter and the original author
+  # must be validated (a repost must not amplify a hidden author), and the
+  # post itself passes the viewer's visibility scope as usual.
+  defp feed_repost_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    from(p in Post,
+      join: r in PostRepost,
+      as: :repost,
+      on: r.post_id == p.id,
+      join: reposter in User,
+      on: reposter.id == r.user_id,
+      join: u in assoc(p, :user),
+      where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
+      where:
+        r.user_id == ^viewer_id or is_nil(reposter.validated?) or reposter.validated? == true,
+      where: p.user_id == ^viewer_id or is_nil(u.validated?) or u.validated? == true,
+      order_by: [desc: r.inserted_at, desc: r.id],
+      limit: ^fetch_n,
+      select: {r.id, r.inserted_at, p, reposter}
+    )
+    |> scope_visible(viewer)
+    |> reposts_at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, post, reposter} ->
+      %{id: "repost-#{id}", post: post, reposted_by: reposter, at: at}
+    end)
+  end
+
+  defp followees_of(viewer_id) do
+    from(c in Connection, where: c.follower_id == ^viewer_id, select: c.followee_id)
+  end
+
+  defp posts_at_or_before(query, nil), do: query
+  defp posts_at_or_before(query, %{at: at}), do: where(query, [p], p.inserted_at <= ^at)
+
+  defp reposts_at_or_before(query, nil), do: query
+
+  defp reposts_at_or_before(query, %{at: at}),
+    do: where(query, [repost: r], r.inserted_at <= ^at)
+
+  defp feed_cursor([], _prev), do: nil
+
+  defp feed_cursor(entries, prev) do
+    %{at: at} = List.last(entries)
+
+    boundary_ids =
+      entries
+      |> Enum.filter(&(NaiveDateTime.compare(&1.at, at) == :eq))
+      |> Enum.map(& &1.id)
+
+    # When the boundary timestamp spans pages, carry the previous page's ids
+    # at that timestamp along — they are still "already shown".
+    carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
+
+    %{at: at, ids: carried ++ boundary_ids}
+  end
+
+  # Batch-preloads the posts inside a list of timeline entries.
+  defp hydrate_posts(entries) do
+    posts = entries |> Enum.map(& &1.post) |> Repo.preload(post_preloads())
+    Enum.zip_with(entries, posts, &%{&1 | post: &2})
   end
 
   @doc """
-  The newest posts of `author` that `viewer` may see (profile page section).
+  The newest timeline entries of `author` that `viewer` may see (profile
+  page section): own posts plus reposts, same entry shape as `feed_page/2`
+  (`reposted_by` is the author for repost entries).
   """
   def profile_posts(%User{} = author, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_profile_limit)
 
     author
-    |> author_posts_query(viewer)
+    |> author_timeline_query(viewer)
+    |> order_by([t], desc: t.at, desc: t.ref_id)
     |> limit(^limit)
     |> Repo.all()
-    |> Repo.preload(post_preloads())
+    |> author_entries(author)
   end
 
-  @doc "How many of `author`'s posts `viewer` may see (the \"View all\" label)."
+  @doc "How many timeline entries of `author` `viewer` may see (the \"View all\" label)."
   def count_author_posts(%User{} = author, viewer) do
-    author |> author_posts_query(viewer) |> Repo.aggregate(:count)
+    author |> author_timeline_query(viewer) |> Repo.aggregate(:count)
   end
 
   @doc """
-  One offset page of `author`'s posts visible to `viewer` — the author
+  One offset page of `author`'s timeline visible to `viewer` — the author
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).
   An optional `period` (`{from, to}` dates, inclusive) scopes it to the
-  year/month/day index pages. Returns `{posts, total}`.
+  year/month/day index pages; reposts date by the repost, not the original
+  publication. Returns `{entries, total}` (entry shape as in `feed_page/2`).
   """
   def author_posts_page(%User{} = author, viewer, params, period \\ nil) do
-    query = author |> author_posts_query(viewer) |> scope_period(period)
+    query = author |> author_timeline_query(viewer) |> scope_period(period)
     total = Repo.aggregate(query, :count)
 
-    posts =
+    entries =
       query
+      |> order_by([t], desc: t.at, desc: t.ref_id)
       |> Vutuv.Pages.paginate(params, total)
       |> Repo.all()
-      |> Repo.preload(post_preloads())
+      |> author_entries(author)
 
-    {posts, total}
+    {entries, total}
   end
 
   defp scope_period(query, nil), do: query
 
   defp scope_period(query, {%Date{} = from, %Date{} = to}) do
-    where(query, [p], p.published_on >= ^from and p.published_on <= ^to)
+    where(query, [t], t.on_date >= ^from and t.on_date <= ^to)
   end
 
-  defp author_posts_query(%User{id: author_id}, viewer) do
-    from(p in Post,
-      where: p.user_id == ^author_id,
-      order_by: [desc: p.inserted_at, desc: p.id]
+  # The author's timeline rows — own posts (dated by publication) and own
+  # reposts (dated by the repost) — as one subquery the callers count,
+  # period-scope and page like a plain table.
+  defp author_timeline_query(%User{id: author_id}, viewer) do
+    originals =
+      from(p in Post,
+        where: p.user_id == ^author_id,
+        select: %{
+          kind: type(^"post", :string),
+          ref_id: p.id,
+          post_id: p.id,
+          at: p.inserted_at,
+          on_date: p.published_on
+        }
+      )
+      |> scope_visible(viewer)
+
+    reposts =
+      from(p in Post,
+        join: r in PostRepost,
+        on: r.post_id == p.id,
+        where: r.user_id == ^author_id,
+        select: %{
+          kind: type(^"repost", :string),
+          ref_id: r.id,
+          post_id: p.id,
+          at: r.inserted_at,
+          on_date: fragment("(?)::date", r.inserted_at)
+        }
+      )
+      |> scope_visible(viewer)
+
+    from(t in subquery(union_all(originals, ^reposts)))
+  end
+
+  defp author_entries(rows, %User{} = author) do
+    posts =
+      from(p in Post, where: p.id in ^Enum.uniq(Enum.map(rows, & &1.post_id)))
+      |> Repo.all()
+      |> Repo.preload(post_preloads())
+      |> Map.new(&{&1.id, &1})
+
+    for row <- rows, post = posts[row.post_id] do
+      %{
+        id: "#{row.kind}-#{row.ref_id}",
+        post: post,
+        reposted_by: if(row.kind == "repost", do: author),
+        at: row.at
+      }
+    end
+  end
+
+  @doc """
+  One page of the posts `user` liked, newest like first, visibility-filtered
+  at read time (a since-restricted post drops out). Cursor-paginated like
+  the feed; entries are plain preloaded posts.
+  """
+  def liked_posts_page(%User{} = user, opts \\ []), do: engaged_posts_page(PostLike, user, opts)
+
+  @doc "One page of the posts `user` bookmarked — see `liked_posts_page/2`."
+  def bookmarked_posts_page(%User{} = user, opts \\ []),
+    do: engaged_posts_page(PostBookmark, user, opts)
+
+  defp engaged_posts_page(schema, %User{id: user_id} = user, opts) do
+    limit = Keyword.get(opts, :limit, @default_feed_limit)
+    cursor = Keyword.get(opts, :cursor)
+
+    rows =
+      from(p in Post,
+        join: e in ^schema,
+        as: :engagement,
+        on: e.post_id == p.id,
+        where: e.user_id == ^user_id,
+        order_by: [desc: e.inserted_at, desc: e.id],
+        limit: ^(limit + 1),
+        select: {p, e.inserted_at, e.id}
+      )
+      |> scope_visible(user)
+      |> engaged_before(cursor)
+      |> Repo.all()
+
+    taken = Enum.take(rows, limit)
+    posts = taken |> Enum.map(&elem(&1, 0)) |> Repo.preload(post_preloads())
+    more? = length(rows) > limit
+
+    next_cursor =
+      if more? do
+        {_post, at, id} = List.last(taken)
+        %{at: at, id: id}
+      end
+
+    %{entries: posts, more?: more?, next_cursor: next_cursor}
+  end
+
+  defp engaged_before(query, nil), do: query
+
+  defp engaged_before(query, %{at: at, id: id}) do
+    where(
+      query,
+      [engagement: e],
+      e.inserted_at < ^at or (e.inserted_at == ^at and e.id < ^id)
     )
-    |> scope_visible(viewer)
   end
 
   @doc "The permalink lookup: a preloaded post of `author`, or `nil`."
@@ -734,13 +1094,23 @@ defmodule Vutuv.Posts do
 
   defp broadcast_new_post(%Post{} = post) do
     event = {:new_post, %{post_id: post.id, author_id: post.user_id}}
+    broadcast_to_followers(post.user_id, event)
+  end
 
+  # A fresh repost distributes like a fresh post — to the reposter's own
+  # sessions and their followers' feeds.
+  defp broadcast_new_repost(%PostRepost{} = repost) do
+    event =
+      {:new_repost, %{repost_id: repost.id, post_id: repost.post_id, reposter_id: repost.user_id}}
+
+    broadcast_to_followers(repost.user_id, event)
+  end
+
+  defp broadcast_to_followers(user_id, event) do
     follower_ids =
-      Repo.all(
-        from(c in Connection, where: c.followee_id == ^post.user_id, select: c.follower_id)
-      )
+      Repo.all(from(c in Connection, where: c.followee_id == ^user_id, select: c.follower_id))
 
-    Enum.each([post.user_id | follower_ids], &Vutuv.Activity.broadcast(&1, event))
+    Enum.each([user_id | follower_ids], &Vutuv.Activity.broadcast(&1, event))
   end
 
   ## Param helpers (attrs arrive with atom keys from code, string keys from forms)

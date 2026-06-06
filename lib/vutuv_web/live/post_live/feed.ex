@@ -1,11 +1,15 @@
 defmodule VutuvWeb.PostLive.Feed do
   @moduledoc """
-  The newsfeed: the composer on top, then own + followed authors' posts
-  (visibility-filtered pull model, `Vutuv.Posts.feed_page/2`), cursor "Load
-  more" at the bottom — the same pagination style as notifications.
+  The newsfeed: the composer on top, then the viewer's timeline — own posts
+  plus posts *and reposts* of followed authors (visibility-filtered pull
+  model, `Vutuv.Posts.feed_page/2`), cursor "Load more" at the bottom — the
+  same pagination style as notifications. Entries are
+  `%{id:, post:, reposted_by:, at:}` maps; repost entries render the
+  "Reposted by X" line on the card.
 
-  Real-time: `Vutuv.Posts.create_post/2` broadcasts `{:new_post, …}` to the
-  author and every follower over `Vutuv.Activity`. The author's own posts
+  Real-time: `Vutuv.Posts.create_post/2` broadcasts `{:new_post, …}` and
+  `Vutuv.Posts.repost_post/2` `{:new_repost, …}` to the author/reposter and
+  every follower over `Vutuv.Activity`. The viewer's own posts and reposts
   prepend immediately; everyone else's accumulate behind a *"Show N new
   posts"* pill (auto-inserting posts under a reading user is hostile), each
   checked against `visible_to?/2` server-side before it is even counted —
@@ -41,6 +45,7 @@ defmodule VutuvWeb.PostLive.Feed do
          |> assign(:cursor, page.next_cursor)
          |> assign(:empty?, page.entries == [])
          |> assign(:pending_posts, [])
+         |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
          |> stream(:posts, page.entries)}
     end
   end
@@ -65,8 +70,8 @@ defmodule VutuvWeb.PostLive.Feed do
       socket.assigns.pending_posts
       # Oldest pending first, so the newest ends up on top.
       |> Enum.reverse()
-      |> Enum.reduce(socket, fn post, socket ->
-        stream_insert(socket, :posts, post, at: 0)
+      |> Enum.reduce(socket, fn entry, socket ->
+        stream_insert(socket, :posts, entry, at: 0)
       end)
       |> assign(:pending_posts, [])
       |> assign(:empty?, false)
@@ -76,36 +81,72 @@ defmodule VutuvWeb.PostLive.Feed do
 
   @impl true
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
-    user = socket.assigns.current_user
     post = Posts.get_post(post_id)
+    entry = post && %{id: "post-#{post.id}", post: post, reposted_by: nil, at: post.inserted_at}
+    insert_entry(socket, entry, author_id)
+  end
+
+  def handle_info(
+        {:new_repost, %{repost_id: repost_id, post_id: post_id, reposter_id: reposter_id}},
+        socket
+      ) do
+    post = Posts.get_post(post_id)
+    reposter = Vutuv.Repo.get(Vutuv.Accounts.User, reposter_id)
+
+    entry =
+      post && reposter &&
+        %{
+          id: "repost-#{repost_id}",
+          post: post,
+          reposted_by: reposter,
+          at: NaiveDateTime.utc_now(:second)
+        }
+
+    insert_entry(socket, entry, reposter_id)
+  end
+
+  def handle_info(_other, socket), do: {:noreply, socket}
+
+  # Own activity (this or another session) appears immediately; other
+  # people's waits behind the pill — and only when the post is visible.
+  defp insert_entry(socket, entry, actor_id) do
+    user = socket.assigns.current_user
 
     cond do
-      is_nil(post) ->
+      is_nil(entry) ->
         {:noreply, socket}
 
-      author_id == user.id ->
-        # Own posts (this or another session) appear immediately.
+      actor_id == user.id ->
         {:noreply,
          socket
          |> assign(:empty?, false)
-         |> stream_insert(:posts, post, at: 0)}
+         |> stream_insert(:posts, entry, at: 0)}
 
-      Posts.visible_to?(post, user) ->
-        {:noreply, update(socket, :pending_posts, &[post | &1])}
+      Posts.visible_to?(entry.post, user) ->
+        {:noreply, update(socket, :pending_posts, &[entry | &1])}
 
       true ->
         {:noreply, socket}
     end
   end
 
-  def handle_info(_other, socket), do: {:noreply, socket}
-
   @impl true
   def render(assigns) do
     ~H"""
     <div id="feed" class="py-6">
       <div class="mx-auto max-w-2xl space-y-4">
-        <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
+          <p class="text-sm font-semibold">
+            <.link navigate={~p"/likes"} class="text-brand-600 hover:text-brand-700">
+              {gettext("Likes")}
+            </.link>
+            <span class="text-slate-300 dark:text-slate-600">·</span>
+            <.link navigate={~p"/bookmarks"} class="text-brand-600 hover:text-brand-700">
+              {gettext("Bookmarks")}
+            </.link>
+          </p>
+        </div>
 
         <.live_component
           module={VutuvWeb.PostLive.Composer}
@@ -123,8 +164,15 @@ defmodule VutuvWeb.PostLive.Feed do
         </div>
 
         <div id="feed-posts" phx-update="stream" class="space-y-4">
-          <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>
-            <.post_card post={post} viewer={@current_user} mode={:preview} />
+          <div :for={{dom_id, entry} <- @streams.posts} id={dom_id}>
+            <.post_card
+              post={entry.post}
+              viewer={@current_user}
+              mode={:preview}
+              reposted_by={entry.reposted_by}
+              entry_id={entry.id}
+              conn_or_socket={@socket}
+            />
           </div>
         </div>
 

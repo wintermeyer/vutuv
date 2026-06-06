@@ -24,7 +24,15 @@
       </span>
     </p>
 
-    <.post_card :for={post <- @posts} post={post} viewer={@current_user} mode={:preview} />
+    <.post_card
+      :for={entry <- @posts}
+      post={entry.post}
+      reposted_by={entry.reposted_by}
+      entry_id={entry.id}
+      conn_or_socket={@conn}
+      viewer={@current_user}
+      mode={:preview}
+    />
 
     <p :if={@posts == []} class="text-slate-400">{gettext("Nothing here yet.")}</p>
 

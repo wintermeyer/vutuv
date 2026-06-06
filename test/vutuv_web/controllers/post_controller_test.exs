@@ -151,14 +151,43 @@ defmodule VutuvWeb.PostControllerTest do
       {author_conn, author} = create_and_login_user(fresh_conn())
       post = create_post!(author, %{body: "my words"})
 
-      for path <- [Posts.path(post), "/#{author.active_slug}/posts"] do
+      # The archive renders timeline entries, so its card ids carry the
+      # entry id; the permalink shows the bare post.
+      for {path, menu_id} <- [
+            {Posts.path(post), "post-menu-#{post.id}"},
+            {"/#{author.active_slug}/posts", "post-menu-post-#{post.id}"}
+          ] do
         html = html_response(get(author_conn, path), 200)
 
-        assert html =~ ~s(id="post-menu-#{post.id}")
+        assert html =~ ~s(id="#{menu_id}")
         assert html =~ ~s(href="/posts/#{post.id}/edit")
         assert html =~ ~s(data-method="delete")
         assert html =~ "Delete this post permanently?"
       end
+    end
+
+    test "the permalink shows the action bar with counters to anonymous readers", %{conn: conn} do
+      user = author()
+      post = create_post!(user, %{body: "counted"})
+      for fan <- [insert(:user), insert(:user)], do: :ok = Posts.like_post(fan, post)
+      :ok = Posts.repost_post(insert(:user), post)
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      assert html =~ ~s(id="post-actions-#{post.id}-like")
+      assert html =~ ~r/data-count="like">\s*2\s*</
+      assert html =~ ~r/data-count="repost">\s*1\s*</
+    end
+
+    test "the archive lists the author's reposts with the reposted-by line", %{conn: conn} do
+      reposter = author(first_name: "Renate", last_name: "Repost")
+      original = create_post!(author(), %{body: "originally elsewhere"})
+      :ok = Posts.repost_post(reposter, original)
+
+      html = html_response(get(conn, "/#{reposter.active_slug}/posts"), 200)
+
+      assert html =~ "originally elsewhere"
+      assert html =~ "Reposted by Renate Repost"
     end
 
     test "anonymous visitors and other readers get no menu", %{conn: conn} do

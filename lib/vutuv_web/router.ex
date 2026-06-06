@@ -123,6 +123,10 @@ defmodule VutuvWeb.Router do
       # ReservedSlugs). Auth is checked in the mounts.
       live("/feed", PostLive.Feed, :index)
       live("/posts/:id/edit", PostLive.Edit, :edit)
+
+      # The private likes / bookmarks lists (reserved slugs too).
+      live("/likes", PostLive.Saved, :likes)
+      live("/bookmarks", PostLive.Saved, :bookmarks)
     end
   end
 

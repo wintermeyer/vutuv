@@ -131,8 +131,11 @@ the resulting ~200px rail width. --%>
 
       <div :if={@posts != []} class="divide-y divide-slate-100 dark:divide-slate-800">
         <.post_card
-          :for={post <- @posts}
-          post={post}
+          :for={entry <- @posts}
+          post={entry.post}
+          reposted_by={entry.reposted_by}
+          entry_id={entry.id}
+          conn_or_socket={@conn}
           viewer={@current_user}
           mode={:preview}
           surface={:flat}
