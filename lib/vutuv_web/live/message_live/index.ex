@@ -17,38 +17,32 @@ defmodule VutuvWeb.MessageLive.Index do
   @presence_topic "messages:online"
   @typing_clear_ms 2500
 
+  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+
   @impl true
   def mount(params, _session, socket) do
-    case socket.assigns[:current_user] do
-      nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, gettext("Please log in to read your messages."))
-         |> redirect(to: ~p"/login")}
+    user = socket.assigns.current_user
+    conv_id = valid_conv_id(params["id"])
+    user_name = display_name(user)
 
-      user ->
-        conv_id = valid_conv_id(params["id"])
-        user_name = display_name(user)
-
-        if connected?(socket) do
-          Phoenix.PubSub.subscribe(Vutuv.PubSub, convo_topic(conv_id))
-          Phoenix.PubSub.subscribe(Vutuv.PubSub, @presence_topic)
-          Presence.track(self(), @presence_topic, to_string(user.id), %{name: user_name})
-          Activity.mark_messages_read(user.id)
-        end
-
-        {:ok,
-         socket
-         |> assign(:page_title, gettext("Messages"))
-         |> assign(:current_user_id, user.id)
-         |> assign(:user_name, user_name)
-         |> assign(:conversations, conversations())
-         |> assign(:conv_id, conv_id)
-         |> assign(:typing_tokens, %{})
-         |> assign(:online, list_online(user.id))
-         |> stream(:messages, seed_messages(conv_id), dom_id: &"message-#{&1.id}")
-         |> assign_form()}
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(Vutuv.PubSub, convo_topic(conv_id))
+      Phoenix.PubSub.subscribe(Vutuv.PubSub, @presence_topic)
+      Presence.track(self(), @presence_topic, to_string(user.id), %{name: user_name})
+      Activity.mark_messages_read(user.id)
     end
+
+    {:ok,
+     socket
+     |> assign(:page_title, gettext("Messages"))
+     |> assign(:current_user_id, user.id)
+     |> assign(:user_name, user_name)
+     |> assign(:conversations, conversations())
+     |> assign(:conv_id, conv_id)
+     |> assign(:typing_tokens, %{})
+     |> assign(:online, list_online(user.id))
+     |> stream(:messages, seed_messages(conv_id), dom_id: &"message-#{&1.id}")
+     |> assign_form()}
   end
 
   @impl true

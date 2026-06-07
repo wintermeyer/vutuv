@@ -5,8 +5,20 @@ defmodule VutuvWeb.Live.InitAssigns do
   LiveViews and the shared `app` layout can render the logged-in chrome the same
   way classic controller pages do. It also mirrors `VutuvWeb.Plug.Locale`, so
   gettext speaks the visitor's language in the LiveView process too.
+
+  The `:require_login` stage mirrors `VutuvWeb.Plug.RequireLogin` for LiveViews:
+  declare it module-level (`on_mount {VutuvWeb.Live.InitAssigns, :require_login}`)
+  on any LiveView in the `live_session` that must not render for anonymous
+  visitors, instead of hand-rolling the gate in `mount/3`.
   """
   import Phoenix.Component, only: [assign: 3]
+
+  use Gettext, backend: VutuvWeb.Gettext
+
+  use Phoenix.VerifiedRoutes,
+    endpoint: VutuvWeb.Endpoint,
+    router: VutuvWeb.Router,
+    statics: ~w(assets fonts images favicon.ico robots.txt)
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -24,6 +36,22 @@ defmodule VutuvWeb.Live.InitAssigns do
       |> Phoenix.LiveView.attach_hook(:shell_path, :handle_params, &assign_shell_path/3)
 
     {:cont, socket}
+  end
+
+  def on_mount(:require_login, _params, _session, socket) do
+    if socket.assigns.current_user do
+      {:cont, socket}
+    else
+      socket =
+        socket
+        |> Phoenix.LiveView.put_flash(
+          :error,
+          gettext("You must be logged in to access that page")
+        )
+        |> Phoenix.LiveView.redirect(to: ~p"/login")
+
+      {:halt, socket}
+    end
   end
 
   defp assign_shell_path(_params, uri, socket) do

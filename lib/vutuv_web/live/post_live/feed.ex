@@ -24,30 +24,24 @@ defmodule VutuvWeb.PostLive.Feed do
 
   @page_size 20
 
+  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+
   @impl true
   def mount(_params, _session, socket) do
-    case socket.assigns[:current_user] do
-      nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, gettext("You must be logged in to access that page"))
-         |> redirect(to: ~p"/login")}
+    user = socket.assigns.current_user
+    if connected?(socket), do: Vutuv.Activity.subscribe(user.id)
 
-      user ->
-        if connected?(socket), do: Vutuv.Activity.subscribe(user.id)
+    page = Posts.feed_page(user, limit: @page_size)
 
-        page = Posts.feed_page(user, limit: @page_size)
-
-        {:ok,
-         socket
-         |> assign(:page_title, gettext("Feed"))
-         |> assign(:more?, page.more?)
-         |> assign(:cursor, page.next_cursor)
-         |> assign(:empty?, page.entries == [])
-         |> assign(:pending_posts, [])
-         |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
-         |> stream(:posts, page.entries)}
-    end
+    {:ok,
+     socket
+     |> assign(:page_title, gettext("Feed"))
+     |> assign(:more?, page.more?)
+     |> assign(:cursor, page.next_cursor)
+     |> assign(:empty?, page.entries == [])
+     |> assign(:pending_posts, [])
+     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
+     |> stream(:posts, page.entries)}
   end
 
   @impl true
@@ -180,11 +174,7 @@ defmodule VutuvWeb.PostLive.Feed do
           {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
         </p>
 
-        <div :if={@more?} class="text-center">
-          <.button id="load-more" variant="secondary" phx-click="load-more" phx-disable-with="…">
-            {gettext("Load more")}
-          </.button>
-        </div>
+        <.load_more :if={@more?} />
       </div>
     </div>
     """

@@ -19,19 +19,12 @@ defmodule VutuvWeb.PostLive.Saved do
 
   @page_size 20
 
+  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+
   @impl true
   def mount(_params, _session, socket) do
-    case socket.assigns[:current_user] do
-      nil ->
-        {:ok,
-         socket
-         |> put_flash(:error, gettext("You must be logged in to access that page"))
-         |> redirect(to: ~p"/login")}
-
-      user ->
-        if connected?(socket), do: Vutuv.Activity.subscribe(user.id)
-        {:ok, socket}
-    end
+    if connected?(socket), do: Vutuv.Activity.subscribe(socket.assigns.current_user.id)
+    {:ok, socket}
   end
 
   @impl true
@@ -125,11 +118,7 @@ defmodule VutuvWeb.PostLive.Saved do
           </div>
         </div>
 
-        <div :if={@more?} class="text-center">
-          <.button id="load-more" variant="secondary" phx-click="load-more" phx-disable-with="…">
-            {gettext("Load more")}
-          </.button>
-        </div>
+        <.load_more :if={@more?} />
       </div>
     </div>
     """
