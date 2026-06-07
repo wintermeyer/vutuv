@@ -325,6 +325,13 @@ defmodule Vutuv.Posts do
   ## Visibility
 
   @doc """
+  Whether `viewer` (a `%User{}` or `nil`) is the post's author — the one
+  predicate gating the Edit/Delete affordances wherever a post renders.
+  """
+  def author?(%Post{user_id: author_id}, %User{id: author_id}), do: true
+  def author?(%Post{}, _viewer), do: false
+
+  @doc """
   Whether `viewer` (a `%User{}` or `nil` for anonymous) may see `post`.
 
   The single source of truth for post access — the permalink page, the
@@ -622,30 +629,21 @@ defmodule Vutuv.Posts do
   rendering.
 
   Returns `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the
-  next older page. The cursor is `%{at:, ids:}` (the boundary timestamp plus
-  the already-shown entry ids at it — timestamps tie at second precision
-  across both sources), the same scheme as
-  `Vutuv.Activity.notifications_page/2`. Treat it as opaque.
+  next older page. The cursor (and the merge across the two sources) is the
+  shared `Vutuv.FeedPage` scheme. Treat it as opaque.
   """
   def feed_page(%User{} = viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_feed_limit)
     cursor = Keyword.get(opts, :cursor)
-    seen = if cursor, do: cursor.ids, else: []
 
-    # Over-fetch per source so that, after dropping the already-shown
-    # boundary entries, at least `limit + 1` candidates remain — the +1 is
-    # what tells us whether another page exists.
-    fetch_n = limit + length(seen) + 1
+    page =
+      Vutuv.FeedPage.paginate(
+        [&feed_post_items(viewer, &1, &2), &feed_repost_items(viewer, &1, &2)],
+        limit,
+        cursor
+      )
 
-    candidates =
-      (feed_post_items(viewer, fetch_n, cursor) ++ feed_repost_items(viewer, fetch_n, cursor))
-      |> Enum.reject(&(&1.id in seen))
-      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
-
-    entries = candidates |> Enum.take(limit) |> hydrate_posts()
-    more? = length(candidates) > limit
-
-    %{entries: entries, more?: more?, next_cursor: if(more?, do: feed_cursor(entries, cursor))}
+    %{page | entries: hydrate_posts(page.entries)}
   end
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
@@ -701,23 +699,6 @@ defmodule Vutuv.Posts do
 
   defp reposts_at_or_before(query, %{at: at}),
     do: where(query, [repost: r], r.inserted_at <= ^at)
-
-  defp feed_cursor([], _prev), do: nil
-
-  defp feed_cursor(entries, prev) do
-    %{at: at} = List.last(entries)
-
-    boundary_ids =
-      entries
-      |> Enum.filter(&(NaiveDateTime.compare(&1.at, at) == :eq))
-      |> Enum.map(& &1.id)
-
-    # When the boundary timestamp spans pages, carry the previous page's ids
-    # at that timestamp along — they are still "already shown".
-    carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
-
-    %{at: at, ids: carried ++ boundary_ids}
-  end
 
   # Batch-preloads the posts inside a list of timeline entries.
   defp hydrate_posts(entries) do

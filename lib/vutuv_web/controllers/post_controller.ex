@@ -143,7 +143,7 @@ defmodule VutuvWeb.PostController do
     current_user = conn.assigns[:current_user]
     post = Posts.get_post(id)
 
-    if post && post.user_id == current_user.id do
+    if post && Posts.author?(post, current_user) do
       {:ok, _} = Posts.delete_post(post)
 
       conn
@@ -162,7 +162,7 @@ defmodule VutuvWeb.PostController do
     |> render("show.html",
       post: post,
       author: author,
-      owner?: viewer && viewer.id == post.user_id,
+      owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
       page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{Post.slug(post)}"
     )
@@ -180,12 +180,10 @@ defmodule VutuvWeb.PostController do
   end
 
   defp parse_date(year, month, day) do
-    with {year, ""} when year >= 1000 <- Integer.parse(year),
-         {month, ""} <- Integer.parse(month),
-         {day, ""} <- Integer.parse(day) do
+    with {:ok, year} <- parse_int(year, 1000, 9999),
+         {:ok, month} <- parse_int(month, 1, 12),
+         {:ok, day} <- parse_int(day, 1, 31) do
       Date.new(year, month, day)
-    else
-      _ -> :error
     end
   end
 

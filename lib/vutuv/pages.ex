@@ -4,7 +4,7 @@ defmodule Vutuv.Pages do
   `paginate/3` bounds an Ecto query from the `?page` param, and
   `effective_page/2` / `total_pages/1` feed the `VutuvWeb.UI.pager/1`
   component that renders the numbered page links. Feed-style LiveView pages
-  use cursor pagination instead (see `Vutuv.Activity.notifications_page/2`).
+  use cursor pagination instead (see `Vutuv.FeedPage`).
   """
 
   require Ecto.Query

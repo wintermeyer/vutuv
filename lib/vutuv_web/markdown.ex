@@ -20,12 +20,7 @@ defmodule VutuvWeb.Markdown do
   @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
   def render(text) when is_binary(text) do
     text
-    |> String.replace("<", "&lt;")
-    |> autolink_bare_urls()
-    |> Earmark.as_html!(breaks: true, pure_links: false)
-    # Earmark escapes the ampersand of our pre-escaped `&lt;` — undo the double.
-    |> String.replace("&amp;lt;", "&lt;")
-    |> HtmlSanitizeEx.markdown_html()
+    |> render_pipeline()
     |> open_links_in_new_tab()
     |> Phoenix.HTML.raw()
   end
@@ -52,11 +47,7 @@ defmodule VutuvWeb.Markdown do
     {prepared, replacements} = extract_inline_images(text, images)
 
     prepared
-    |> String.replace("<", "&lt;")
-    |> autolink_bare_urls()
-    |> Earmark.as_html!(breaks: true, pure_links: false)
-    |> String.replace("&amp;lt;", "&lt;")
-    |> HtmlSanitizeEx.markdown_html()
+    |> render_pipeline()
     |> strip_img_tags()
     |> open_links_in_new_tab()
     |> inject_inline_images(replacements)
@@ -64,6 +55,18 @@ defmodule VutuvWeb.Markdown do
   end
 
   def render_post(_, _), do: Phoenix.HTML.raw("")
+
+  # The shared core both renderers run: escape raw HTML, autolink bare URLs,
+  # render the Markdown, undo the double-escape, sanitize.
+  defp render_pipeline(text) do
+    text
+    |> String.replace("<", "&lt;")
+    |> autolink_bare_urls()
+    |> Earmark.as_html!(breaks: true, pure_links: false)
+    # Earmark escapes the ampersand of our pre-escaped `&lt;` — undo the double.
+    |> String.replace("&amp;lt;", "&lt;")
+    |> HtmlSanitizeEx.markdown_html()
+  end
 
   @doc """
   Render a feed preview: the Markdown source is cut at a block boundary

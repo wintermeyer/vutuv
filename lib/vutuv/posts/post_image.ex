@@ -48,11 +48,22 @@ defmodule Vutuv.Posts.PostImage do
 
   @doc "Root-relative proxy URL for a version of this image."
   def url(%__MODULE__{token: token}, version) when version in @versions do
-    "/post_images/#{token}/#{version}.webp"
+    "#{token_prefix(token)}#{version}.webp"
   end
 
   @doc "URLs for every served version as a `%{version => url}` map."
   def urls(%__MODULE__{} = image) do
     %{thumb: url(image, "thumb"), feed: url(image, "feed"), large: url(image, "large")}
   end
+
+  @doc """
+  Whether `body` references this image's proxy URL (any version) inline.
+  Keeps the URL scheme knowledge next to `url/2` — used to decide which
+  attachments render inline vs. in the gallery below the post.
+  """
+  def referenced_in?(%__MODULE__{token: token}, body) when is_binary(body) do
+    String.contains?(body, token_prefix(token))
+  end
+
+  defp token_prefix(token), do: "/post_images/#{token}/"
 end

@@ -16,7 +16,7 @@ defmodule VutuvWeb.PostLive.Edit do
     user = socket.assigns[:current_user]
     post = Posts.get_post(id)
 
-    if user && post && post.user_id == user.id do
+    if post && Posts.author?(post, user) do
       {:ok,
        socket
        |> assign(:page_title, gettext("Edit post"))

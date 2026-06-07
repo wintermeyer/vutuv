@@ -66,7 +66,7 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:body_html, body_html)
       |> assign(:truncated?, truncated?)
-      |> assign(:restricted?, assigns.post.denials != [])
+      |> assign(:restricted?, Posts.restricted?(assigns.post))
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
       # Both ids derive from the timeline entry when there is one: the same
@@ -74,10 +74,7 @@ defmodule VutuvWeb.PostComponents do
       # must stay unique.
       |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
       |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
-      |> assign(
-        :author?,
-        assigns.viewer != nil && assigns.viewer.id == assigns.post.user_id
-      )
+      |> assign(:author?, Posts.author?(assigns.post, assigns.viewer))
       |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
@@ -143,13 +140,7 @@ defmodule VutuvWeb.PostComponents do
         class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
         data-reposted-by={@reposted_by.id}
       >
-        <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"
-          />
-        </svg>
+        <.icon_repost class="h-4 w-4" />
         <.link href={~p"/#{@reposted_by}"} class="hover:text-brand-700">
           {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
         </.link>
@@ -287,6 +278,17 @@ defmodule VutuvWeb.PostComponents do
   defp gallery(post, :preview), do: post.images
 
   defp gallery(post, :full) do
-    Enum.reject(post.images, &String.contains?(post.body, "/post_images/#{&1.token}/"))
+    Enum.reject(post.images, &PostImage.referenced_in?(&1, post.body))
   end
+
+  @doc """
+  Author-facing label for a post-denial wildcard — the one wording for "who
+  can't see this", shared by the composer's audience sheet and the permalink
+  page's audience summary (`VutuvWeb.PostHTML.denial_labels/1`).
+  """
+  def wildcard_label("everyone"), do: gettext("everyone else")
+  def wildcard_label("non_followers"), do: gettext("people who don't follow you")
+  def wildcard_label("non_followees"), do: gettext("people you don't follow")
+  def wildcard_label("logged_out"), do: gettext("logged-out visitors")
+  def wildcard_label(other) when is_binary(other), do: other
 end

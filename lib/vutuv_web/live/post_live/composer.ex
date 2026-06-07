@@ -424,11 +424,7 @@ defmodule VutuvWeb.PostLive.Composer do
     group_labels ++ wildcard_labels ++ user_labels
   end
 
-  defp wildcard_label("everyone"), do: gettext("everyone else")
-  defp wildcard_label("non_followers"), do: gettext("people who don't follow you")
-  defp wildcard_label("non_followees"), do: gettext("people you don't follow")
-  defp wildcard_label("logged_out"), do: gettext("logged-out visitors")
-  defp wildcard_label(other), do: other
+  defp wildcard_label(wildcard), do: VutuvWeb.PostComponents.wildcard_label(wildcard)
 
   defp full_name(user), do: VutuvWeb.UserHelpers.full_name(user)
 

@@ -27,7 +27,7 @@ defmodule Vutuv.Activity do
   @pubsub Vutuv.PubSub
   @default_limit 50
 
-  def topic(user_id), do: "user:#{user_id}"
+  defp topic(user_id), do: "user:#{user_id}"
 
   def subscribe(nil), do: :ok
   def subscribe(user_id), do: Phoenix.PubSub.subscribe(@pubsub, topic(user_id))
@@ -155,49 +155,22 @@ defmodule Vutuv.Activity do
   are `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
   namespace the LiveView uses for pushed events.
 
-  The cursor is `%{at: timestamp, ids: [...]}` — the boundary timestamp plus
-  every already-shown event id *at* that timestamp. Timestamps have second
-  precision, so several events (across all three source tables) can tie at a
-  page boundary; filtering by `<= at` and rejecting the seen ids means ties
-  neither skip events nor repeat them. Treat the cursor as opaque.
+  The cursor (and the merge across the three sources) is the shared
+  `Vutuv.FeedPage` scheme. Treat it as opaque.
   """
   def notifications_page(user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_limit)
     cursor = Keyword.get(opts, :cursor)
-    seen = if cursor, do: cursor.ids, else: []
 
-    # Over-fetch per source so that, after dropping the already-shown
-    # boundary events, at least `limit + 1` candidates remain — the +1 is
-    # what tells us whether another page exists.
-    fetch = limit + length(seen) + 1
-
-    candidates =
-      (follower_items(user_id, fetch, cursor) ++
-         endorsement_items(user_id, fetch, cursor) ++ connection_items(user_id, fetch, cursor))
-      |> Enum.reject(&(&1.id in seen))
-      |> Enum.sort_by(& &1.at, {:desc, NaiveDateTime})
-
-    entries = Enum.take(candidates, limit)
-    more? = length(candidates) > limit
-
-    %{entries: entries, more?: more?, next_cursor: if(more?, do: next_cursor(entries, cursor))}
-  end
-
-  defp next_cursor([], _prev), do: nil
-
-  defp next_cursor(entries, prev) do
-    %{at: at} = List.last(entries)
-
-    boundary_ids =
-      entries
-      |> Enum.filter(&(NaiveDateTime.compare(&1.at, at) == :eq))
-      |> Enum.map(& &1.id)
-
-    # When the boundary timestamp spans pages, carry the previous page's ids
-    # at that timestamp along — they are still "already shown".
-    carried = if prev && NaiveDateTime.compare(prev.at, at) == :eq, do: prev.ids, else: []
-
-    %{at: at, ids: carried ++ boundary_ids}
+    Vutuv.FeedPage.paginate(
+      [
+        &follower_items(user_id, &1, &2),
+        &endorsement_items(user_id, &1, &2),
+        &connection_items(user_id, &1, &2)
+      ],
+      limit,
+      cursor
+    )
   end
 
   @doc """
