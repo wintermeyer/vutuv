@@ -12,8 +12,6 @@ defmodule VutuvWeb.Endpoint do
     max_age: 7_776_000
   ]
 
-  socket("/socket", VutuvWeb.UserSocket)
-
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
   plug(Plug.Static,

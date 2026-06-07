@@ -79,8 +79,6 @@ defmodule Vutuv.MixProject do
       # PubSub
       {:phoenix_pubsub, "~> 2.1"},
 
-      # Utilities
-
       # Asset pipeline
       {:esbuild, "~> 0.8", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.2", runtime: Mix.env() == :dev},

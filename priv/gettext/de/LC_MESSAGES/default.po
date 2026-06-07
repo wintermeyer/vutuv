@@ -1927,11 +1927,6 @@ msgstr "PIN"
 msgid "Pardon us! Something went wrong."
 msgstr "Entschuldigung! Etwas ist schiefgelaufen."
 
-#: lib/vutuv_web/live/message_live/index.ex:26
-#, elixir-autogen, elixir-format
-msgid "Please log in to read your messages."
-msgstr "Bitte loggen Sie sich ein, um Ihre Nachrichten zu lesen."
-
 #: lib/vutuv_web/templates/search_term/index.html.heex:6
 #: lib/vutuv_web/templates/search_term/show.html.heex:6
 #, elixir-autogen, elixir-format

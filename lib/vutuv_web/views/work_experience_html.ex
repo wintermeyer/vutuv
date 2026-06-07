@@ -22,7 +22,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
     end
   end
 
-  def display_date(month, year, order \\ :month_first) do
+  defp display_date(month, year, order) do
     case {month, year} do
       {nil, year} when is_integer(year) ->
         Integer.to_string(year)
@@ -92,82 +92,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
   defp years_span(start_year, end_year),
     do: [Integer.to_string(start_year), " - ", Integer.to_string(end_year)]
 
-  @doc """
-  Builds a lane-packed layout for the horizontal experience timeline.
-
-  Each role becomes a bar on a shared month axis. Roles whose date ranges
-  overlap are pushed into separate lanes (greedy interval partitioning) so two
-  concurrent jobs never sit on top of each other. Roles still open (no end
-  date) run to the current month and are flagged `present: true`.
-
-  Returns `%{empty: true, lanes: [], ticks: []}` when no role carries enough
-  date information to place, otherwise:
-
-      %{
-        empty: false,
-        lanes: [[%{job, left, width, present}], ...],  # one inner list per lane
-        ticks: [%{year, left}]                          # year gridlines, 0..100%
-      }
-
-  `left` and `width` are percentages of the axis span; `width` is clamped so a
-  single-month role stays visible.
-  """
-  def timeline_layout(work_experiences) do
-    today = Date.utc_today()
-    current_idx = today.year * 12 + (today.month - 1)
-
-    placed =
-      work_experiences
-      |> Enum.map(fn job ->
-        start = start_index(job)
-        finish = end_index(job)
-        ongoing? = is_nil(finish) and not is_nil(start)
-        finish = finish || if(not is_nil(start), do: current_idx)
-        {job, start, finish, ongoing?}
-      end)
-      |> Enum.filter(fn {_job, start, finish, _o} -> not is_nil(start) or not is_nil(finish) end)
-      |> Enum.map(fn {job, start, finish, ongoing?} ->
-        start = start || finish
-        finish = finish || start
-        {job, min(start, finish), max(start, finish), ongoing?}
-      end)
-
-    case placed do
-      [] ->
-        %{empty: true, lanes: [], ticks: []}
-
-      placed ->
-        min_idx = placed |> Enum.map(&elem(&1, 1)) |> Enum.min() |> floor_to_year()
-        max_idx = placed |> Enum.map(&elem(&1, 2)) |> Enum.max() |> ceil_to_year()
-        span = max(max_idx - min_idx, 12)
-
-        {bars, _lane_ends} =
-          placed
-          |> Enum.sort_by(&elem(&1, 1))
-          |> Enum.reduce({[], []}, fn {job, start, finish, ongoing?}, {acc, lane_ends} ->
-            {lane, lane_ends} = assign_lane(lane_ends, start, finish)
-
-            bar = %{
-              job: job,
-              lane: lane,
-              left: (start - min_idx) / span * 100,
-              width: max((finish - start) / span * 100, 1.5),
-              present: ongoing?
-            }
-
-            {[bar | acc], lane_ends}
-          end)
-
-        lanes =
-          bars
-          |> Enum.group_by(& &1.lane)
-          |> Enum.sort_by(&elem(&1, 0))
-          |> Enum.map(fn {_lane, lane_bars} -> Enum.sort_by(lane_bars, & &1.left) end)
-
-        %{empty: false, lanes: lanes, ticks: year_ticks(min_idx, max_idx, span)}
-    end
-  end
-
   # Month axis index (year * 12 + month-1); nil when there is no year to anchor.
   # Start defaults to January, end to December of the given year.
   defp start_index(%{start_year: year, start_month: month}) when is_integer(year),
@@ -179,37 +103,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
     do: year * 12 + ((month || 12) - 1)
 
   defp end_index(_job), do: nil
-
-  # Greedy interval partitioning: drop the role into the first lane whose last
-  # bar ends no later than this one starts, else open a new lane.
-  defp assign_lane(lane_ends, start, finish), do: assign_lane(lane_ends, start, finish, 0, [])
-
-  defp assign_lane([lane_end | rest], start, finish, idx, seen) when lane_end <= start,
-    do: {idx, Enum.reverse(seen, [finish | rest])}
-
-  defp assign_lane([lane_end | rest], start, finish, idx, seen),
-    do: assign_lane(rest, start, finish, idx + 1, [lane_end | seen])
-
-  defp assign_lane([], _start, finish, idx, seen), do: {idx, Enum.reverse(seen, [finish])}
-
-  defp floor_to_year(idx), do: div(idx, 12) * 12
-  defp ceil_to_year(idx), do: if(rem(idx, 12) == 0, do: idx, else: (div(idx, 12) + 1) * 12)
-
-  defp year_ticks(min_idx, max_idx, span) do
-    min_year = div(min_idx, 12)
-    max_year = div(max_idx, 12)
-
-    step =
-      cond do
-        max_year - min_year <= 8 -> 1
-        max_year - min_year <= 20 -> 2
-        true -> 5
-      end
-
-    Enum.map(min_year..max_year//step, fn year ->
-      %{year: year, left: (year * 12 - min_idx) / span * 100}
-    end)
-  end
 
   @doc """
   Per-role circle sizing for the "duration circles" layout. Each role gets a

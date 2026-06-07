@@ -58,7 +58,7 @@ defmodule Vutuv.Accounts.SlugTest do
       slug = Vutuv.SlugHelpers.gen_slug_unique(user, Slug, :value, reserved)
 
       assert slug =~ ~r/^login\.[0-9a-f]{8}$/
-      refute Vutuv.Accounts.ReservedSlugs.reserved?(slug)
+      refute slug in reserved
     end
 
     test "registration around a reserved name still succeeds" do

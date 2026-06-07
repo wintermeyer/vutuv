@@ -119,8 +119,6 @@ defmodule Vutuv.Social do
     Repo.all(Ecto.assoc(user, :groups))
   end
 
-  def get_group!(id), do: Repo.get!(Group, id)
-
   def create_group(user, attrs) do
     user
     |> Ecto.build_assoc(:groups)
@@ -150,8 +148,6 @@ defmodule Vutuv.Social do
     |> Repo.delete()
   end
 
-  def delete_group!(%Group{} = group), do: Repo.delete!(group)
-
   @doc """
   The user's groups with their member counts, for the composer's audience
   sheet (`[{group, member_count}]`, sorted by name).
@@ -169,8 +165,6 @@ defmodule Vutuv.Social do
   end
 
   # ── Memberships ──
-
-  def get_membership!(id), do: Repo.get!(Membership, id)
 
   @doc """
   Fetches a membership scoped to `connection`, so a caller can only reach

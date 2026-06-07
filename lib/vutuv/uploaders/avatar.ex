@@ -15,15 +15,14 @@ defmodule Vutuv.Avatar do
   (`/avatars/<id>/...`) and URI-encoded.
   """
 
-  @versions [:original, :thumb, :medium, :large]
   @extension_whitelist ~w(.jpg .jpeg .png)
-  @dimensions %{thumb: 50, medium: 130, large: 512}
+  @dimensions %{thumb: 50, medium: 130}
   @default_avatar ~s"data:image/svg+xml,%3Csvg%20width%3D%27200%27%20height%3D%27200%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20xmlns%3Axlink%3D%27http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%27%3E%3Cdefs%3E%3Ccircle%20id%3D%27a%27%20cx%3D%27100%27%20cy%3D%27100%27%20r%3D%27100%27%2F%3E%3C%2Fdefs%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Cmask%20id%3D%27b%27%20fill%3D%27%23fff%27%3E%3Cuse%20xlink%3Ahref%3D%27%23a%27%2F%3E%3C%2Fmask%3E%3Cuse%20fill%3D%27%23EEE%27%20xlink%3Ahref%3D%27%23a%27%2F%3E%3Cpath%20d%3D%27M88.96%20154c-6.357-12.418-12.81-26.952-19.355-43.597C63.06%2093.76%2056.858%2075.626%2051%2056h29.437c1.247%204.844%202.714%2010.093%204.4%2015.743%201.682%205.653%203.428%2011.365%205.24%2017.143%201.808%205.772%203.615%2011.394%205.425%2016.86%201.81%205.466%203.59%2010.434%205.336%2014.904%201.618-4.47%203.365-9.438%205.234-14.905%201.87-5.465%203.71-11.087%205.518-16.86%201.807-5.777%203.554-11.49%205.237-17.142%201.682-5.65%203.15-10.9%204.395-15.743h28.71c-5.857%2019.626-12.055%2037.76-18.594%2054.403C124.8%20127.048%20118.352%20141.583%20112%20154H88.96z%27%20fill%3D%27%231A1918%27%20opacity%3D%27.1%27%20mask%3D%27url(%23b)%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
 
   # Resized versions first: they decode the image, so a corrupt or truncated
   # file fails before anything is written; the original is only copied after a
   # successful decode.
-  @store_order [:thumb, :medium, :large, :original]
+  @store_order [:thumb, :medium, :original]
 
   @doc """
   Stores every avatar version for `{upload, user}` and returns
@@ -69,11 +68,6 @@ defmodule Vutuv.Avatar do
     "/"
     |> Path.join(local_path)
     |> URI.encode()
-  end
-
-  @doc "URLs for every version as a `%{version => url}` map."
-  def urls(file_and_scope) do
-    Map.new(@versions, &{&1, url(file_and_scope, &1)})
   end
 
   def user_url(user, version) do

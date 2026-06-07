@@ -8,16 +8,8 @@ defmodule VutuvWeb.Api.FolloweeJSON do
     %{data: Enum.map(followees, &followee/1)}
   end
 
-  def render("index_lite.json", %{followees: followees}) do
-    %{data: Enum.map(followees, &followee_lite/1)}
-  end
-
   def followee(followee) do
-    followee_lite(followee)
-    |> put_attributes(followee, @attributes)
-  end
-
-  def followee_lite(followee) do
     %{id: followee.id, type: "user"}
+    |> put_attributes(followee, @attributes)
   end
 end

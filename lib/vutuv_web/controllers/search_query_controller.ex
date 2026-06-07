@@ -7,24 +7,6 @@ defmodule VutuvWeb.SearchQueryController do
 
   @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
 
-  def index(conn, _params) do
-    if conn.assigns[:current_user] do
-      queries =
-        Repo.all(
-          from(q in SearchQuery,
-            join: r in assoc(q, :search_query_requesters),
-            where: r.user_id == ^conn.assigns[:current_user].id,
-            preload: [search_query_requesters: {r, :user}]
-          )
-        )
-        |> Repo.preload(search_query_results: :user)
-
-      render(conn, "index.html", queries: queries)
-    else
-      redirect(conn, to: ~p"/search")
-    end
-  end
-
   def new(conn, _params) do
     changeset = SearchQuery.changeset(%SearchQuery{})
     render(conn, "new.html", conn: conn, changeset: changeset)

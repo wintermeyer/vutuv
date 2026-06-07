@@ -25,6 +25,4 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   )
 
   def list, do: @reserved
-
-  def reserved?(value), do: value in @reserved
 end

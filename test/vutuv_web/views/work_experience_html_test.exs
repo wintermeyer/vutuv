@@ -1,8 +1,7 @@
 defmodule VutuvWeb.WorkExperienceHTMLTest do
   @moduledoc """
-  Pins the horizontal-timeline layout helper. The behaviour the profile relies
-  on is overlap handling: two roles whose date ranges intersect must land in
-  separate lanes so their bars never stack on top of each other.
+  Pins the profile experience-rail helpers: duration circles and the
+  year-range labels with their month tooltips.
   """
   use ExUnit.Case, async: true
 
@@ -11,90 +10,6 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
 
   defp job(attrs) do
     struct(WorkExperience, Map.merge(%{title: "Role", organization: "Org"}, Map.new(attrs)))
-  end
-
-  defp lane_titles(layout) do
-    Enum.map(layout.lanes, fn lane -> Enum.map(lane, & &1.job.title) end)
-  end
-
-  describe "timeline_layout/1 lane packing" do
-    test "non-overlapping roles share a single lane" do
-      jobs = [
-        job(title: "First", start_year: 2010, end_year: 2012),
-        job(title: "Second", start_year: 2013, end_year: 2015)
-      ]
-
-      layout = WorkExperienceHTML.timeline_layout(jobs)
-
-      assert layout.empty == false
-      assert length(layout.lanes) == 1
-      assert lane_titles(layout) == [["First", "Second"]]
-    end
-
-    test "overlapping roles are pushed into separate lanes" do
-      jobs = [
-        job(title: "Engineer", start_year: 2018, start_month: 3, end_year: 2021, end_month: 6),
-        job(title: "Advisor", start_year: 2019, start_month: 1, end_year: 2023, end_month: 1)
-      ]
-
-      layout = WorkExperienceHTML.timeline_layout(jobs)
-
-      assert length(layout.lanes) == 2
-      # Each lane holds exactly one of the two overlapping roles.
-      assert Enum.sort(List.flatten(lane_titles(layout))) == ["Advisor", "Engineer"]
-      assert Enum.all?(layout.lanes, &(length(&1) == 1))
-    end
-
-    test "touching ranges (one ends as the next begins) still share a lane" do
-      jobs = [
-        job(title: "Before", start_year: 2010, start_month: 1, end_year: 2012, end_month: 6),
-        job(title: "After", start_year: 2012, start_month: 6, end_year: 2014, end_month: 1)
-      ]
-
-      assert length(WorkExperienceHTML.timeline_layout(jobs).lanes) == 1
-    end
-  end
-
-  describe "timeline_layout/1 bar geometry" do
-    test "open-ended role is flagged present" do
-      [bar] =
-        [job(title: "Current", start_year: 2020, end_year: nil)]
-        |> WorkExperienceHTML.timeline_layout()
-        |> Map.fetch!(:lanes)
-        |> List.flatten()
-
-      assert bar.present == true
-    end
-
-    test "bars carry a visible width and sit within the axis" do
-      layout =
-        WorkExperienceHTML.timeline_layout([
-          job(start_year: 2015, end_year: 2016),
-          job(start_year: 2018, end_year: 2020)
-        ])
-
-      bars = List.flatten(layout.lanes)
-      assert Enum.all?(bars, &(&1.width >= 1.5))
-      assert Enum.all?(bars, &(&1.left >= 0 and &1.left <= 100))
-    end
-
-    test "year ticks run from the first to the last year of the span" do
-      layout =
-        WorkExperienceHTML.timeline_layout([job(start_year: 2010, end_year: 2014)])
-
-      years = Enum.map(layout.ticks, & &1.year)
-      assert List.first(years) == 2010
-      assert List.last(layout.ticks).left == 100.0
-      assert List.first(layout.ticks).left == 0.0
-    end
-  end
-
-  describe "timeline_layout/1 with no placeable dates" do
-    test "roles without any year are dropped, yielding an empty layout" do
-      layout = WorkExperienceHTML.timeline_layout([job(start_year: nil, end_year: nil)])
-
-      assert layout == %{empty: true, lanes: [], ticks: []}
-    end
   end
 
   describe "circle_durations/1" do

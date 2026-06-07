@@ -4,39 +4,18 @@ defmodule VutuvWeb.MembershipController do
   plug(:assign_connection)
 
   alias Vutuv.Social.Connection
-  alias Vutuv.Social.Membership
+  alias VutuvWeb.ControllerHelpers
 
-  plug(:scrub_params, "membership" when action in [:create, :update])
-
-  def index(conn, _params) do
-    connection = Repo.preload(conn.assigns[:connection], :memberships)
-    render(conn, "index.html", connection: connection)
-  end
-
-  def new(conn, _params) do
-    changeset =
-      conn.assigns[:connection]
-      |> build_assoc(:memberships)
-      |> Membership.changeset()
-
-    render(conn, "new.html", changeset: changeset)
-  end
+  plug(:scrub_params, "membership" when action in [:create])
 
   def create(conn, %{"membership" => membership_params}) do
-    case Vutuv.Social.create_membership(conn.assigns[:connection], membership_params) do
-      {:ok, _membership} ->
-        conn
-        |> put_flash(:info, gettext("Membership created successfully."))
-        |> redirect(to: ~p"/connections/#{conn.assigns[:connection]}/memberships")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
-  end
-
-  def show(conn, %{"id" => id}) do
-    membership = Vutuv.Social.get_membership!(id)
-    render(conn, "show.html", membership: membership)
+    ControllerHelpers.save(
+      conn,
+      Vutuv.Social.create_membership(conn.assigns[:connection], membership_params),
+      flash: gettext("Membership created successfully."),
+      redirect_to: ~p"/connections/#{conn.assigns[:connection]}/memberships",
+      render: "new.html"
+    )
   end
 
   def delete(conn, %{"id" => id}) do

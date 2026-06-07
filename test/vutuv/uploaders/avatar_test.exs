@@ -46,9 +46,6 @@ defmodule Vutuv.AvatarTest do
 
       assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
                "/avatars/7/John%20Doe_medium.jpg"
-
-      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :large) ==
-               "/avatars/7/John%20Doe_large.jpg"
     end
 
     test "preserves the original extension verbatim (incl. case)" do
@@ -71,17 +68,9 @@ defmodule Vutuv.AvatarTest do
     end
   end
 
-  test "urls/1 returns every version" do
-    urls = Vutuv.Avatar.urls({"selfie.jpg", @user})
-    assert urls[:original] == "/avatars/7/John%20Doe_original.jpg"
-    assert urls[:thumb] == "/avatars/7/John%20Doe_thumb.jpg"
-    assert urls[:medium] == "/avatars/7/John%20Doe_medium.jpg"
-    assert urls[:large] == "/avatars/7/John%20Doe_large.jpg"
-  end
-
   test "user_url/2 reads the avatar field off the user" do
     user = %{@user | avatar: "selfie.jpg"}
-    assert Vutuv.Avatar.user_url(user, :large) == "/avatars/7/John%20Doe_large.jpg"
+    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/John%20Doe_medium.jpg"
   end
 
   describe "binary/2 (base64 fallback used by vCard and dev)" do
@@ -149,12 +138,12 @@ defmodule Vutuv.AvatarTest do
 
       dir = Path.join(tmp, "avatars/7")
 
-      for v <- ~w(original thumb medium large) do
+      for v <- ~w(original thumb medium) do
         assert File.exists?(Path.join(dir, "John Doe_#{v}.jpg")), "missing #{v}"
       end
     end
 
-    test "thumb/medium/large are cropped to the configured square dimensions", %{
+    test "thumb/medium are cropped to the configured square dimensions", %{
       tmp: tmp,
       src: src
     } do
@@ -164,7 +153,6 @@ defmodule Vutuv.AvatarTest do
       dir = Path.join(tmp, "avatars/7")
       assert dimensions(Path.join(dir, "John Doe_thumb.jpg")) == {50, 50}
       assert dimensions(Path.join(dir, "John Doe_medium.jpg")) == {130, 130}
-      assert dimensions(Path.join(dir, "John Doe_large.jpg")) == {512, 512}
     end
 
     test "rejects files whose extension is not whitelisted", %{src: src} do

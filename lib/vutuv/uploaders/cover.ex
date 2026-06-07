@@ -17,7 +17,6 @@ defmodule Vutuv.Cover do
   them when `:serve_uploads_locally` is set.
   """
 
-  @versions [:original, :wide]
   @extension_whitelist ~w(.jpg .jpeg .png)
   # The banner is shown at most ~768px wide (the profile's main column) but on a
   # HiDPI screen, so we cap the long edge at 1600px. Aspect ratio is preserved;
@@ -73,11 +72,6 @@ defmodule Vutuv.Cover do
     "/"
     |> Path.join(local_path)
     |> URI.encode()
-  end
-
-  @doc "URLs for every version as a `%{version => url}` map."
-  def urls(file_and_scope) do
-    Map.new(@versions, &{&1, url(file_and_scope, &1)})
   end
 
   @doc """

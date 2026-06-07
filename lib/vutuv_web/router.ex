@@ -154,8 +154,6 @@ defmodule VutuvWeb.Router do
 
       resources("/emails", VutuvWeb.Api.EmailController, only: [:index, :show])
 
-      # resources "/slugs", VutuvWeb.Api.SlugController, only: [:index, :show]  # Controller does not exist
-
       resources("/groups", VutuvWeb.Api.GroupController, only: [:index, :show])
       resources("/followers", VutuvWeb.Api.FollowerController, only: [:index])
       resources("/followees", VutuvWeb.Api.FolloweeController, only: [:index])
@@ -169,8 +167,6 @@ defmodule VutuvWeb.Router do
 
       resources("/work_experiences", VutuvWeb.Api.WorkExperienceController, only: [:index, :show])
       resources("/addresses", VutuvWeb.Api.AddressController, only: [:index, :show])
-
-      # resources "/search_terms", VutuvWeb.Api.SearchTermController, only: [:index, :show]  # Controller does not exist
     end
 
     pipe_through(:render_404)
@@ -205,12 +201,10 @@ defmodule VutuvWeb.Router do
       )
 
       resources("/phone_numbers", PhoneNumberController)
-      # resources "/dates", DateController  # Controller does not exist
       resources("/links", UrlController)
       resources("/social_media_accounts", SocialMediaAccountController)
       resources("/work_experiences", WorkExperienceController)
       resources("/addresses", AddressController)
-      # resources "/oauth_providers", OAuthProviderController  # Controller does not exist
       resources("/search_terms", SearchTermController, only: [:show, :index])
 
       resources("/tags", UserTagController,
