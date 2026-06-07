@@ -43,13 +43,13 @@ defmodule VutuvWeb.Api.VCardControllerTest do
         else: Application.delete_env(:vutuv, :uploads_dir_prefix)
     end)
 
-    # Record the uploaded avatar and place the thumb where Vutuv.Avatar expects
-    # it: <prefix>/avatars/<id>/<First Last>_thumb.jpg
+    # Record the uploaded avatar and place the original where Vutuv.Avatar
+    # derives the vCard JPEG from: <prefix>/originals/avatars/<id>/original.jpg
     user = user |> Ecto.Changeset.change(avatar: "selfie.jpg") |> Repo.update!()
-    dir = Path.join(tmp, "avatars/#{user.id}")
+    dir = Path.join(tmp, "originals/avatars/#{user.id}")
     File.mkdir_p!(dir)
-    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
-    {:ok, _} = Image.write(img, Path.join(dir, "#{user}_thumb.jpg"))
+    {:ok, img} = Image.new(300, 200, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, "original.jpg"))
 
     conn = get(build_conn(), "/api/1.0/users/vcard-tester/vcard")
 

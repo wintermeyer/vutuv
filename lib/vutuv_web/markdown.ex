@@ -12,6 +12,8 @@ defmodule VutuvWeb.Markdown do
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
   """
 
+  alias Vutuv.Posts.PostImage
+
   @url_display_max 40
   @trailing_punct ~w(. , ; : ! ?)
   @preview_limit 1000
@@ -153,18 +155,24 @@ defmodule VutuvWeb.Markdown do
         nil ->
           {text, replacements}
 
-        image ->
+        {image, canonical_src} ->
           marker = "VUTUVIMG#{nonce}N#{length(replacements)}END"
 
           {String.replace(text, full, marker, global: false),
-           [{marker, inline_img_html(src, alt, image)} | replacements]}
+           [{marker, inline_img_html(canonical_src, alt, image)} | replacements]}
       end
     end)
   end
 
+  # Every URL form an old or new body may carry (`PostImage.url_forms/2`,
+  # incl. the pre-AVIF `.webp` form) maps to the image and its **canonical**
+  # URL — the rendered <img> always points at the current format.
   defp allowed_srcs(images) do
-    for image <- images, version <- Vutuv.Posts.PostImage.versions(), into: %{} do
-      {Vutuv.Posts.PostImage.url(image, version), image}
+    for image <- images,
+        version <- PostImage.versions(),
+        src <- PostImage.url_forms(image, version),
+        into: %{} do
+      {src, {image, PostImage.url(image, version)}}
     end
   end
 

@@ -30,15 +30,22 @@ defmodule Vutuv.UploadsIntegrationTest do
     {:ok, tmp: tmp}
   end
 
-  test "a legacy avatar value with a ?timestamp suffix still resolves", %{} do
-    # Simulate a row written by the old Waffle.Ecto type.
+  test "a legacy avatar value with a ?timestamp suffix still resolves", %{tmp: tmp} do
+    # Simulate a row written by the old Waffle.Ecto type, whose derived file
+    # is still the pre-AVIF .jpg on disk.
     user = insert(:user, avatar: "selfie.jpg?63876543210", first_name: "Ada", last_name: "King")
+    dir = Path.join(tmp, "avatars/#{user.id}")
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, "Ada King_thumb.jpg"))
+
     reloaded = Repo.get!(User, user.id)
 
     # The column is now a plain string, returned verbatim.
     assert reloaded.avatar == "selfie.jpg?63876543210"
 
-    # ...and the URL ignores the legacy timestamp, keeping the original extension.
+    # ...and the URL ignores the legacy timestamp, falling back to the
+    # not-yet-regenerated legacy file.
     assert Vutuv.Avatar.url({reloaded.avatar, reloaded}, :thumb) ==
              "/avatars/#{user.id}/Ada%20King_thumb.jpg"
   end
@@ -53,7 +60,8 @@ defmodule Vutuv.UploadsIntegrationTest do
              |> Repo.update()
 
     assert updated.avatar == "me.png"
-    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/Ada King_thumb.png"))
+    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/Ada King_thumb.avif"))
+    assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.png"))
   end
 
   test "an invalid avatar extension is rejected with a changeset error" do
@@ -78,7 +86,8 @@ defmodule Vutuv.UploadsIntegrationTest do
              |> Repo.update()
 
     assert updated.cover_photo == "banner.png"
-    assert File.exists?(Path.join(tmp, "covers/#{user.id}/Ada King_wide.png"))
+    assert File.exists?(Path.join(tmp, "covers/#{user.id}/Ada King_wide.avif"))
+    assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.png"))
   end
 
   test "an invalid cover photo extension is rejected with a changeset error" do
@@ -96,8 +105,14 @@ defmodule Vutuv.UploadsIntegrationTest do
   test "a legacy screenshot value resolves and uploads store a fingerprint", %{tmp: tmp} do
     user = insert(:user)
     legacy = insert(:url, user: user, screenshot: "shot.png?63876543210")
+    dir = Path.join(tmp, "screenshots/#{legacy.id}")
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+    {:ok, _} = Image.write(img, Path.join(dir, "thumb-shot.webp"))
+
     assert Repo.get!(Url, legacy.id).screenshot == "shot.png?63876543210"
 
+    # The not-yet-regenerated legacy .webp thumb keeps resolving.
     assert Vutuv.Screenshot.url({legacy.screenshot, legacy}, :thumb) ==
              "/screenshots/#{legacy.id}/thumb-shot.webp"
 
@@ -111,15 +126,16 @@ defmodule Vutuv.UploadsIntegrationTest do
 
     assert updated.screenshot =~ ~r/^[0-9a-f]{12}\.png$/
     hash = Path.rootname(updated.screenshot)
-    assert File.exists?(Path.join(tmp, "screenshots/#{fresh.id}/thumb-#{hash}.webp"))
+    assert File.exists?(Path.join(tmp, "screenshots/#{fresh.id}/thumb-#{hash}.avif"))
+    assert File.exists?(Path.join(tmp, "originals/screenshots/#{fresh.id}/original.png"))
   end
 
   test "the vCard embeds a real avatar as a JPEG PHOTO line", %{tmp: tmp} do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "me.jpg")
-    dir = Path.join(tmp, "avatars/#{user.id}")
+    dir = Path.join(tmp, "originals/avatars/#{user.id}")
     File.mkdir_p!(dir)
-    {:ok, img} = Image.new(50, 50, color: [10, 120, 200])
-    {:ok, _} = Image.write(img, Path.join(dir, "Ada King_thumb.jpg"))
+    {:ok, img} = Image.new(300, 200, color: [10, 120, 200])
+    {:ok, _} = Image.write(img, Path.join(dir, "original.jpg"))
 
     vcf = render_vcard(user)
 

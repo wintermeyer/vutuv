@@ -10,6 +10,9 @@ config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
 config :vutuv, :sweep_pending_images, false
 
+# Keep the Regenerator's stdout progress lines out of the test output.
+config :vutuv, :regenerator_quiet, true
+
 # Off by default so the suite's many logins do not share (and exhaust) one
 # process-wide counter. The dedicated rate-limit test enables it explicitly.
 config :vutuv, :rate_limit, enabled: false

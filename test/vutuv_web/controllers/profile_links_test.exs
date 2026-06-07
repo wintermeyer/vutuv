@@ -14,7 +14,7 @@ defmodule VutuvWeb.ProfileLinksTest do
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
-    assert html =~ ~s(src="/screenshots/#{url.id}/thumb-b0efec47a6e9.webp")
+    assert html =~ ~s(src="/screenshots/#{url.id}/thumb-b0efec47a6e9.avif")
   end
 
   test "links without a screenshot fall back to the placeholder image", %{conn: conn} do

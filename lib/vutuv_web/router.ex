@@ -87,7 +87,7 @@ defmodule VutuvWeb.Router do
 
     # The authorizing post-image proxy: every post-image byte goes through
     # the app so the post's audience guards its images too. `:version` is
-    # e.g. "feed.webp"; nginx only streams what this controller approves.
+    # e.g. "feed.avif"; nginx only streams what this controller approves.
     get("/post_images/:token/:version", PostImageController, :show)
 
     # Post deletion (the permalink lives in the profile scope below; "posts"

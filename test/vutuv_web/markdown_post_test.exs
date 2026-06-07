@@ -22,24 +22,32 @@ defmodule VutuvWeb.MarkdownPostTest do
   describe "render_post/2 — inline images" do
     test "renders an own-attachment reference as an <img> with stored alt" do
       html =
-        render_post("Look:\n\n![](/post_images/tok123/large.webp)", [image("tok123", "A sunset")])
+        render_post("Look:\n\n![](/post_images/tok123/large.avif)", [image("tok123", "A sunset")])
 
-      assert html =~ ~s(src="/post_images/tok123/large.webp")
+      assert html =~ ~s(src="/post_images/tok123/large.avif")
       assert html =~ ~s(alt="A sunset")
       assert html =~ ~s(loading="lazy")
       assert html =~ ~s(width="800")
     end
 
+    test "a legacy .webp reference in an old body renders with the canonical src" do
+      html =
+        render_post("Look:\n\n![](/post_images/tok123/large.webp)", [image("tok123", "A sunset")])
+
+      assert html =~ ~s(src="/post_images/tok123/large.avif")
+      refute html =~ "large.webp"
+    end
+
     test "an explicit markdown alt wins over the stored one" do
       html =
-        render_post("![Inline alt](/post_images/tok123/feed.webp)", [image("tok123", "DB alt")])
+        render_post("![Inline alt](/post_images/tok123/feed.avif)", [image("tok123", "DB alt")])
 
       assert html =~ ~s(alt="Inline alt")
       refute html =~ "DB alt"
     end
 
     test "the same attachment can be referenced twice" do
-      text = "![](/post_images/t/large.webp)\n\n![](/post_images/t/large.webp)"
+      text = "![](/post_images/t/large.avif)\n\n![](/post_images/t/large.avif)"
       html = render_post(text, [image("t")])
 
       assert length(String.split(html, "<img")) == 3
@@ -55,7 +63,7 @@ defmodule VutuvWeb.MarkdownPostTest do
     end
 
     test "drops references to images of other posts" do
-      html = render_post("![](/post_images/foreign/large.webp)", [image("mine")])
+      html = render_post("![](/post_images/foreign/large.avif)", [image("mine")])
 
       refute html =~ "<img"
     end
@@ -67,7 +75,7 @@ defmodule VutuvWeb.MarkdownPostTest do
     end
 
     test "raw <img> HTML typed by the author stays escaped text" do
-      html = render_post(~s(<img src="/post_images/t/large.webp">), [image("t")])
+      html = render_post(~s(<img src="/post_images/t/large.avif">), [image("t")])
 
       refute html =~ "<img "
       assert html =~ "&lt;img"
@@ -75,14 +83,14 @@ defmodule VutuvWeb.MarkdownPostTest do
 
     test "escapes hostile stored alt text" do
       hostile = ~s["><script>alert(1)</script>"]
-      html = render_post("![](/post_images/t/large.webp)", [image("t", hostile)])
+      html = render_post("![](/post_images/t/large.avif)", [image("t", hostile)])
 
       refute html =~ "<script>"
       assert html =~ "&lt;script&gt;"
     end
 
     test "the rest of the markdown still renders" do
-      html = render_post("**bold** and ![](/post_images/t/feed.webp)", [image("t")])
+      html = render_post("**bold** and ![](/post_images/t/feed.avif)", [image("t")])
 
       assert html =~ "<strong>bold</strong>"
       assert html =~ "<img"

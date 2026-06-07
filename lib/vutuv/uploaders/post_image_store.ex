@@ -2,22 +2,25 @@ defmodule Vutuv.PostImageStore do
   @moduledoc """
   On-disk storage for post images.
 
-  Unlike avatars/covers there is **no public tree**: every byte is served
-  through the authorizing proxy (`VutuvWeb.PostImageController`), so all
-  versions live together in one private directory per image, keyed by the
-  image's URL token:
+  Unlike avatars/covers there is **no public tree**: every served byte goes
+  through the authorizing proxy (`VutuvWeb.PostImageController`). The derived
+  versions live in one directory per image, keyed by the image's URL token;
+  the uploaded original sits in the shared private `originals/` tree
+  (`Vutuv.Uploads.Originals`) like every other uploader's:
 
-      <uploads_dir_prefix>/post_images/<token>/thumb.webp
-                                              /feed.webp
-                                              /large.webp
-                                              /original.<ext>
+      <uploads_dir_prefix>/post_images/<token>/thumb.avif
+                                              /feed.avif
+                                              /large.avif
+      <uploads_dir_prefix>/originals/post_images/<token>/original.<ext>
 
-  The derived versions are WebP, EXIF-autorotated first and then metadata-
-  stripped (orientation is itself EXIF data — stripping before rotating would
-  render every portrait phone photo sideways). The original keeps its
-  metadata (that is the point of keeping it: re-deriving better formats
-  later) and is **never** served; in production the nginx `internal` location
-  only matches `*.webp`, and the proxy never redirects to it.
+  Resolution, format and quality of the served versions come from
+  `Vutuv.Uploads.Spec`: AVIF, EXIF-autorotated first and then metadata-
+  stripped. The original keeps its metadata (that is the point of keeping it:
+  re-deriving better formats later) and is **never** served; in production the
+  nginx `internal` location only matches the served version filenames, and the
+  proxy never redirects to an original. Pre-AVIF `.webp` versions keep
+  resolving through a transitional fallback in `version_path/2`/`accel_path/2`
+  until `Vutuv.Uploads.Regenerator` has converted them.
 
   HEIC/HEIF input is **capability-detected**: the precompiled vix libvips
   ships libheif without an HEVC decoder (patent licensing), so a `.heic`
@@ -30,15 +33,11 @@ defmodule Vutuv.PostImageStore do
   """
 
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Uploads.Originals
+  alias Vutuv.Uploads.Spec
 
   @base_extension_whitelist ~w(.jpg .jpeg .png .webp)
   @heic_extensions ~w(.heic .heif)
-  # thumb: square feed-grid cell; feed: single-image feed width; large:
-  # permalink/lightbox. feed/large fit within the box (no upscale), thumb is
-  # a center crop.
-  @fit_dimensions %{feed: 1200, large: 1600}
-  @thumb_size 320
-  @quality 80
 
   def extension_whitelist do
     if heic_supported?() do
@@ -94,7 +93,7 @@ defmodule Vutuv.PostImageStore do
       dir = dir(token)
       File.mkdir_p!(dir)
 
-      case write_versions(path, ext, dir) do
+      case write_versions(path, ext, dir, token) do
         {:ok, meta} ->
           {:ok, Map.merge(meta, %{content_type: MIME.from_path(filename)})}
 
@@ -109,14 +108,11 @@ defmodule Vutuv.PostImageStore do
 
   # Decode + rotate once, then derive all versions from the rotated image.
   # The derived writes go first: they prove the file decodes before the
-  # original is copied (house pattern from Vutuv.Avatar).
-  defp write_versions(path, ext, dir) do
-    with {:ok, image} <- Image.open(path),
-         {:ok, {rotated, _flags}} <- Image.autorotate(image),
-         :ok <- write_thumb(rotated, dir),
-         :ok <- write_fitted(rotated, dir, :feed),
-         :ok <- write_fitted(rotated, dir, :large) do
-      File.cp!(path, Path.join(dir, "original#{ext}"))
+  # original is copied (house pattern shared with Vutuv.Avatar/Cover).
+  defp write_versions(path, ext, dir, token) do
+    with {:ok, rotated} <- Spec.open_rotated(path),
+         :ok <- write_derived_versions(rotated, dir) do
+      :ok = Originals.store(storage_dir(token), path, ext)
 
       {:ok,
        %{
@@ -127,33 +123,37 @@ defmodule Vutuv.PostImageStore do
     end
   end
 
-  defp write_thumb(image, dir) do
-    with {:ok, thumb} <- Image.thumbnail(image, "#{@thumb_size}x#{@thumb_size}", crop: :center) do
-      write_webp(thumb, Path.join(dir, "thumb.webp"))
-    end
+  defp write_derived_versions(rotated, dir) do
+    Enum.reduce_while(Spec.versions(:post_image), :ok, fn spec, :ok ->
+      dest = Path.join(dir, "#{spec.name}#{Spec.served_ext()}")
+
+      case Spec.write_derived(spec, rotated, dest) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
-  defp write_fitted(image, dir, version) do
-    size = Map.fetch!(@fit_dimensions, version)
+  @doc """
+  Re-derives every served version from the original per the current
+  `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
+  which this configures with the post-image layout (the legacy original
+  lived inside the token dir itself). Used by `Vutuv.Uploads.Regenerator`.
+  """
+  def regenerate(%PostImage{token: token}, opts \\ []) do
+    dir = dir(token)
 
-    # resize: :down so a smaller upload keeps its native size instead of
-    # being blurrily upscaled.
-    with {:ok, fitted} <- Image.thumbnail(image, "#{size}x#{size}", resize: :down) do
-      write_webp(fitted, Path.join(dir, "#{version}.webp"))
-    end
+    Vutuv.Uploads.regenerate_from_original(storage_dir(token), dir,
+      canonical: canonical_filenames(),
+      stale_glob: "*",
+      legacy_candidates: [Path.join(dir, "original.*")],
+      derive: &write_derived_versions(&1, dir),
+      opts: opts
+    )
   end
 
-  # Straight to vix: `Image.write(..., strip_metadata: true)` maps to the
-  # legacy `strip` saver param, which current libvips builds accept and
-  # silently ignore — EXIF (incl. GPS) survived into the WebP. The modern
-  # `keep` flags strip reliably; `keep: []` keeps nothing. The store test
-  # asserts the absence of EXIF fields so a regression fails loudly.
-  defp write_webp(image, dest) do
-    case Vix.Vips.Operation.webpsave(image, dest, keep: [], Q: @quality) do
-      :ok -> :ok
-      {:ok, _} -> :ok
-      {:error, reason} -> {:error, reason}
-    end
+  defp canonical_filenames do
+    for spec <- Spec.versions(:post_image), do: "#{spec.name}#{Spec.served_ext()}"
   end
 
   @doc """
@@ -161,30 +161,52 @@ defmodule Vutuv.PostImageStore do
   or `nil` when the file is missing. Never resolves the original.
   """
   def version_path(%PostImage{token: token}, version) do
-    if version in PostImage.versions() do
-      path = Path.join(dir(token), "#{version}.webp")
-      if File.exists?(path), do: path
+    if filename = version_filename(token, version) do
+      Path.join(dir(token), filename)
     end
   end
 
   @doc """
-  The path nginx resolves inside its `internal` alias location
-  (production X-Accel-Redirect target).
+  The path nginx resolves inside its `internal` alias location (production
+  X-Accel-Redirect target), pointing at the resolved on-disk file so
+  not-yet-regenerated `.webp` versions keep streaming. Defaults to the
+  canonical `.avif` name when nothing is stored (nginx then 404s).
   """
   def accel_path(%PostImage{token: token}, version) when is_binary(version) do
-    "/internal_post_images/#{token}/#{version}.webp"
+    filename = version_filename(token, version) || "#{version}#{Spec.served_ext()}"
+    "/internal_post_images/#{token}/#{filename}"
+  end
+
+  # The .avif is authoritative; until the regeneration has run, a pre-AVIF
+  # `.webp` version keeps resolving. Transitional — remove together with
+  # `Spec.legacy_exts/0`.
+  defp version_filename(token, version) do
+    if version in PostImage.versions() do
+      dir = dir(token)
+      avif = "#{version}#{Spec.served_ext()}"
+      webp = "#{version}.webp"
+
+      cond do
+        File.exists?(Path.join(dir, avif)) -> avif
+        File.exists?(Path.join(dir, webp)) -> webp
+        true -> nil
+      end
+    end
   end
 
   @doc "Removes every stored file of `token`. A no-op when nothing is stored."
   def delete(token) when is_binary(token) do
     File.rm_rf(dir(token))
+    Originals.delete(storage_dir(token))
     :ok
   end
 
-  defp dir(token) do
+  defp storage_dir(token) do
     # The token is Base64-URL ([A-Za-z0-9_-]) by construction, but never
     # trust a stored value enough to build paths with separators in it.
     false = String.contains?(token, ["/", ".."])
-    Vutuv.Uploads.disk_dir(Path.join("post_images", token))
+    Path.join("post_images", token)
   end
+
+  defp dir(token), do: Vutuv.Uploads.disk_dir(storage_dir(token))
 end

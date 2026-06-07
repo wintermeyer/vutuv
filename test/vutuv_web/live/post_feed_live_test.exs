@@ -158,7 +158,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       # The feed shows a single image at column width (feed version, aspect
       # preserved) — not a square micro-thumbnail.
-      assert render(live) =~ "/post_images/#{attached.token}/feed.webp"
+      assert render(live) =~ "/post_images/#{attached.token}/feed.avif"
     end
 
     test "a refused file is named in a persistent error and the composer recovers", %{

@@ -55,6 +55,14 @@ ln -sfn "$dest" "$APP_ROOT/current"
 # Restart via scoped sudoers (see /etc/sudoers.d/vutuv3).
 sudo systemctl restart "$SERVICE"
 
+# Re-derive any image whose served versions predate the current
+# Vutuv.Uploads.Spec (format/resolution/quality), relocating legacy public
+# originals into the private originals/ tree. Idempotent and cheap when
+# there is nothing to do; runs after the restart so new uploads are already
+# on the current spec (a not-yet-converted file keeps serving through the
+# transitional legacy fallback in the meantime).
+"$dest/bin/$RELEASE" eval "Vutuv.Release.regenerate_images()"
+
 # Keep only the most recent releases.
 cd "$RELEASES_DIR"
 ls -1dt */ 2>/dev/null | tail -n "+$((KEEP_RELEASES + 1))" | xargs -r rm -rf

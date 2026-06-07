@@ -1,10 +1,14 @@
 defmodule Vutuv.PostImageStoreTest do
   @moduledoc """
-  Locks the post-image pipeline contract: every served version is WebP,
-  EXIF-autorotated **before** metadata stripping (orientation is EXIF — strip
-  first and portrait phone photos render sideways), and fully stripped (GPS
-  data must never reach a served file). The original keeps its metadata and
-  stays in the same private directory, which is never exposed directly.
+  Locks the post-image pipeline contract: every served version is AVIF (per
+  `Vutuv.Uploads.Spec`), EXIF-autorotated **before** metadata stripping
+  (orientation is EXIF — strip first and portrait phone photos render
+  sideways), and fully stripped (GPS data must never reach a served file).
+  The original keeps its metadata in the shared private `originals/` tree
+  (`Vutuv.Uploads.Originals`), which is never exposed.
+
+  Pre-AVIF `.webp` versions keep resolving through a transitional fallback in
+  `version_path/2` until `Vutuv.Uploads.Regenerator` has converted them.
 
   HEIC is capability-detected (the precompiled vix libvips lacks an HEVC
   decoder): the test asserts whichever behavior the running build must have,
@@ -67,19 +71,23 @@ defmodule Vutuv.PostImageStoreTest do
   end
 
   describe "store/3" do
-    test "writes three WebP versions plus the private original", %{tmp: tmp} do
+    test "writes three AVIF versions publicly and the original privately", %{tmp: tmp} do
       token = PostImage.gen_token()
 
       assert {:ok, meta} = PostImageStore.store(exif_jpeg!(tmp), "photo.jpg", token)
 
       dir = Path.join([tmp, "post_images", token])
-      assert File.exists?(Path.join(dir, "thumb.webp"))
-      assert File.exists?(Path.join(dir, "feed.webp"))
-      assert File.exists?(Path.join(dir, "large.webp"))
-      assert File.exists?(Path.join(dir, "original.jpg"))
+      assert File.exists?(Path.join(dir, "thumb.avif"))
+      assert File.exists?(Path.join(dir, "feed.avif"))
+      assert File.exists?(Path.join(dir, "large.avif"))
+
+      original = Path.join([tmp, "originals", "post_images", token, "original.jpg"])
+      assert File.exists?(original)
+      # Nothing original may stay in the proxy-served directory.
+      assert dir |> File.ls!() |> Enum.filter(&String.contains?(&1, "original")) == []
 
       assert meta.content_type == "image/jpeg"
-      assert meta.size_bytes == File.stat!(Path.join(dir, "original.jpg")).size
+      assert meta.size_bytes == File.stat!(original).size
     end
 
     test "autorotates before deriving: dimensions and pixels are post-rotation", %{tmp: tmp} do
@@ -90,7 +98,7 @@ defmodule Vutuv.PostImageStoreTest do
       # The 80x40 landscape carries orientation 6, so it *displays* as 40x80
       # portrait — and must be stored that way.
       assert {meta.width, meta.height} == {40, 80}
-      large = Path.join([tmp, "post_images", token, "large.webp"])
+      large = Path.join([tmp, "post_images", token, "large.avif"])
       assert dims(large) == {40, 80}
     end
 
@@ -100,11 +108,13 @@ defmodule Vutuv.PostImageStoreTest do
       assert {:ok, _meta} = PostImageStore.store(exif_jpeg!(tmp), "photo.jpg", token)
 
       dir = Path.join([tmp, "post_images", token])
-      assert exif_fields(Path.join(dir, "thumb.webp")) == []
-      assert exif_fields(Path.join(dir, "feed.webp")) == []
-      assert exif_fields(Path.join(dir, "large.webp")) == []
+      assert exif_fields(Path.join(dir, "thumb.avif")) == []
+      assert exif_fields(Path.join(dir, "feed.avif")) == []
+      assert exif_fields(Path.join(dir, "large.avif")) == []
 
-      original_fields = exif_fields(Path.join(dir, "original.jpg"))
+      original_fields =
+        exif_fields(Path.join([tmp, "originals", "post_images", token, "original.jpg"]))
+
       assert "exif-ifd0-Make" in original_fields
     end
 
@@ -113,7 +123,7 @@ defmodule Vutuv.PostImageStoreTest do
       {:ok, _} = PostImageStore.store(exif_jpeg!(tmp), "photo.jpg", token)
 
       # Source displays at 40x80 — far below the 1200/1600 boxes.
-      assert dims(Path.join([tmp, "post_images", token, "feed.webp"])) == {40, 80}
+      assert dims(Path.join([tmp, "post_images", token, "feed.avif"])) == {40, 80}
     end
 
     test "HEIC follows the build's actual decode capability", %{tmp: tmp} do
@@ -125,9 +135,8 @@ defmodule Vutuv.PostImageStoreTest do
         assert meta.content_type == "image/heic"
         assert {meta.width, meta.height} == {400, 300}
 
-        dir = Path.join([tmp, "post_images", token])
-        assert File.exists?(Path.join(dir, "large.webp"))
-        assert File.exists?(Path.join(dir, "original.heic"))
+        assert File.exists?(Path.join([tmp, "post_images", token, "large.avif"]))
+        assert File.exists?(Path.join([tmp, "originals", "post_images", token, "original.heic"]))
       else
         # No HEVC decoder in this libvips: HEIC must be refused up front
         # (whitelist) and the store must reject it cleanly, leaving no files.
@@ -154,6 +163,7 @@ defmodule Vutuv.PostImageStoreTest do
 
       assert {:error, :invalid_file} = PostImageStore.store(path, "fake.jpg", token)
       refute File.exists?(Path.join([tmp, "post_images", token]))
+      refute File.exists?(Path.join([tmp, "originals", "post_images", token]))
     end
   end
 
@@ -164,21 +174,63 @@ defmodule Vutuv.PostImageStoreTest do
       image = %PostImage{token: token}
 
       assert PostImageStore.version_path(image, "large") ==
-               Path.join([tmp, "post_images", token, "large.webp"])
+               Path.join([tmp, "post_images", token, "large.avif"])
 
       # The original is never resolvable through the serving API.
       assert PostImageStore.version_path(image, "original") == nil
       assert PostImageStore.version_path(%PostImage{token: PostImage.gen_token()}, "large") == nil
     end
+
+    test "falls back to a not-yet-regenerated legacy .webp version", %{tmp: tmp} do
+      token = PostImage.gen_token()
+      dir = Path.join([tmp, "post_images", token])
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "feed.webp"))
+      image = %PostImage{token: token}
+
+      assert PostImageStore.version_path(image, "feed") == Path.join(dir, "feed.webp")
+
+      # Once the .avif exists it wins over the legacy file.
+      {:ok, _} = Image.write(img, Path.join(dir, "feed.avif"))
+      assert PostImageStore.version_path(image, "feed") == Path.join(dir, "feed.avif")
+    end
+  end
+
+  describe "accel_path/2" do
+    test "targets the resolved on-disk file, defaulting to .avif", %{tmp: tmp} do
+      token = PostImage.gen_token()
+      image = %PostImage{token: token}
+
+      # Nothing on disk yet: the canonical target (nginx will 404).
+      assert PostImageStore.accel_path(image, "feed") ==
+               "/internal_post_images/#{token}/feed.avif"
+
+      dir = Path.join([tmp, "post_images", token])
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "feed.webp"))
+
+      assert PostImageStore.accel_path(image, "feed") ==
+               "/internal_post_images/#{token}/feed.webp"
+
+      {:ok, _} = Image.write(img, Path.join(dir, "feed.avif"))
+
+      assert PostImageStore.accel_path(image, "feed") ==
+               "/internal_post_images/#{token}/feed.avif"
+    end
   end
 
   describe "delete/1" do
-    test "removes all stored files and tolerates absence", %{tmp: tmp} do
+    test "removes all stored files (incl. the private original) and tolerates absence", %{
+      tmp: tmp
+    } do
       token = PostImage.gen_token()
       {:ok, _} = PostImageStore.store(exif_jpeg!(tmp), "photo.jpg", token)
 
       assert :ok = PostImageStore.delete(token)
       refute File.exists?(Path.join([tmp, "post_images", token]))
+      refute File.exists?(Path.join([tmp, "originals", "post_images", token]))
       assert :ok = PostImageStore.delete(token)
     end
 

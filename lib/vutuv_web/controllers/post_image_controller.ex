@@ -32,30 +32,41 @@ defmodule VutuvWeb.PostImageController do
     end
   end
 
-  # Only "<served version>.webp" resolves; "original.*" never does.
+  # Only "<served version>.<served ext>" resolves; "original.*" never does.
+  # The legacy ".webp" extension stays accepted (old stored post bodies and
+  # bookmarked URLs carry it) — the response is whatever file is on disk,
+  # with the matching content type.
   defp parse_version(version_file) do
     case String.split(version_file, ".") do
-      [version, "webp"] -> if version in Vutuv.Posts.PostImage.versions(), do: version
-      _ -> nil
+      [version, ext] when ext in ["avif", "webp"] ->
+        if version in Vutuv.Posts.PostImage.versions(), do: version
+
+      _ ->
+        nil
     end
   end
 
   defp serve(conn, image, version) do
-    conn =
-      conn
-      |> put_resp_content_type("image/webp")
-      |> put_resp_header("cache-control", @cache_control)
+    conn = put_resp_header(conn, "cache-control", @cache_control)
 
     case Application.get_env(:vutuv, :post_image_serving, :send_file) do
       :accel_redirect ->
+        accel_path = Vutuv.PostImageStore.accel_path(image, version)
+
         conn
-        |> put_resp_header("x-accel-redirect", Vutuv.PostImageStore.accel_path(image, version))
+        |> put_resp_content_type(MIME.from_path(accel_path))
+        |> put_resp_header("x-accel-redirect", accel_path)
         |> send_resp(200, "")
 
       _send_file ->
         case Vutuv.PostImageStore.version_path(image, version) do
-          nil -> not_found(conn)
-          path -> send_file(conn, 200, path)
+          nil ->
+            not_found(conn)
+
+          path ->
+            conn
+            |> put_resp_content_type(MIME.from_path(path))
+            |> send_file(200, path)
         end
     end
   end

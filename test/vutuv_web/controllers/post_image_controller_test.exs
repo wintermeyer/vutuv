@@ -53,24 +53,39 @@ defmodule VutuvWeb.PostImageControllerTest do
       author = insert(:user, validated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
+      conn = get(conn, "/post_images/#{image.token}/feed.avif")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+    end
+
+    test "a legacy .webp URL (old post bodies, bookmarks) still serves the stored file", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, validated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
       conn = get(conn, "/post_images/#{image.token}/feed.webp")
 
       assert conn.status == 200
-      assert get_resp_header(conn, "content-type") |> hd() =~ "image/webp"
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+      # The on-disk file is AVIF; the content type follows the bytes, not the URL.
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
     end
   end
 
   describe "denied requests" do
     test "unknown token is a 404", %{conn: conn} do
-      assert get(conn, "/post_images/nosuchtoken/feed.webp").status == 404
+      assert get(conn, "/post_images/nosuchtoken/feed.avif").status == 404
     end
 
-    test "only <version>.webp resolves — the original never does", %{conn: conn, tmp: tmp} do
+    test "only served versions resolve — the original never does", %{conn: conn, tmp: tmp} do
       author = insert(:user, validated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       assert get(conn, "/post_images/#{image.token}/original.jpg").status == 404
+      assert get(conn, "/post_images/#{image.token}/original.avif").status == 404
       assert get(conn, "/post_images/#{image.token}/original.webp").status == 404
       assert get(conn, "/post_images/#{image.token}/feed.png").status == 404
     end
@@ -84,26 +99,26 @@ defmodule VutuvWeb.PostImageControllerTest do
       {_post, image} =
         post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
 
-      assert get(conn, "/post_images/#{image.token}/feed.webp").status == 404
+      assert get(conn, "/post_images/#{image.token}/feed.avif").status == 404
 
       {member_conn, _member} = create_and_login_user(conn)
-      assert get(member_conn, "/post_images/#{image.token}/feed.webp").status == 200
+      assert get(member_conn, "/post_images/#{image.token}/feed.avif").status == 200
     end
 
     test "a pending image is visible to its uploader alone", %{conn: conn, tmp: tmp} do
       {uploader_conn, uploader} = create_and_login_user(conn)
       image = pending_image!(uploader, tmp)
 
-      assert get(uploader_conn, "/post_images/#{image.token}/thumb.webp").status == 200
+      assert get(uploader_conn, "/post_images/#{image.token}/thumb.avif").status == 200
 
       other_conn =
         Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
 
       {other_conn, _other} = create_and_login_user(other_conn, @other_login_attrs)
-      assert get(other_conn, "/post_images/#{image.token}/thumb.webp").status == 404
+      assert get(other_conn, "/post_images/#{image.token}/thumb.avif").status == 404
 
       anonymous = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
-      assert get(anonymous, "/post_images/#{image.token}/thumb.webp").status == 404
+      assert get(anonymous, "/post_images/#{image.token}/thumb.avif").status == 404
     end
   end
 
@@ -115,13 +130,31 @@ defmodule VutuvWeb.PostImageControllerTest do
       author = insert(:user, validated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
-      conn = get(conn, "/post_images/#{image.token}/large.webp")
+      conn = get(conn, "/post_images/#{image.token}/large.avif")
 
       assert conn.status == 200
       assert conn.resp_body == ""
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
 
       assert get_resp_header(conn, "x-accel-redirect") ==
-               ["/internal_post_images/#{image.token}/large.webp"]
+               ["/internal_post_images/#{image.token}/large.avif"]
+    end
+
+    test "a legacy .webp URL accel-redirects to the resolved on-disk file", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
+      on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
+
+      author = insert(:user, validated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      # The store wrote .avif files, so the legacy URL redirects to those.
+      conn = get(conn, "/post_images/#{image.token}/large.webp")
+
+      assert get_resp_header(conn, "x-accel-redirect") ==
+               ["/internal_post_images/#{image.token}/large.avif"]
     end
   end
 end

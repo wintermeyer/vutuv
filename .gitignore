@@ -25,13 +25,14 @@ erl_crash.dump
 /secrets/
 
 # attachments in local storage (avatars, covers, post images + url
-# screenshots); in production these live under
-# config :vutuv, :uploads_dir_prefix (/srv/legacy-vutuv)
+# screenshots, plus the private originals tree); in production these live
+# under config :vutuv, :uploads_dir_prefix (/srv/legacy-vutuv)
 #
 /avatars
 /covers
 /post_images
 /screenshots
+/originals
 
 # OS X stuff
 #

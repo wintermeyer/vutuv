@@ -3,31 +3,26 @@ defmodule Vutuv.Cover do
   Profile cover-photo storage and URL generation.
 
   The wide banner behind the avatar at the top of the profile page. Mirrors
-  `Vutuv.Avatar` (explicit local-disk storage + libvips via `Image`), but stores
-  a single wide version instead of square crops, because the banner is displayed
-  full-bleed with CSS `object-cover`:
+  `Vutuv.Avatar` (explicit local-disk storage + libvips, versions from
+  `Vutuv.Uploads.Spec`), but stores a single wide version instead of square
+  crops, because the banner is displayed full-bleed with CSS `object-cover`:
 
-      <uploads_dir_prefix>/covers/<user.id>/<First Last>_<version><ext>
+      <uploads_dir_prefix>/covers/<user.id>/<First Last>_wide.avif
+      <uploads_dir_prefix>/originals/covers/<user.id>/original<ext>
 
-  `uploads_dir_prefix` is the absolute storage root, configured per environment
-  (`config :vutuv, :uploads_dir_prefix`); it is empty in dev/test and
-  `/srv/legacy-vutuv` in production. URLs are always root-relative
-  (`/covers/<id>/...`) and URI-encoded. In production nginx serves them with a
-  `location /covers/` alias (mirroring `/avatars/`); locally the endpoint serves
-  them when `:serve_uploads_locally` is set.
+  The served version is AVIF in the public tree (nginx `location /covers/`,
+  mirroring `/avatars/`; locally the endpoint serves it when
+  `:serve_uploads_locally` is set). The uploaded original is kept verbatim in
+  the private `originals/` tree (`Vutuv.Uploads.Originals`) and never served.
+  URLs are root-relative (`/covers/<id>/...`) and URI-encoded; pre-AVIF
+  derived files keep resolving through a transitional fallback in `url/2`
+  until the one-shot regeneration has converted them.
   """
 
-  @extension_whitelist ~w(.jpg .jpeg .png)
-  # The banner is shown at most ~768px wide (the profile's main column) but on a
-  # HiDPI screen, so we cap the long edge at 1600px. Aspect ratio is preserved;
-  # the display crop is done in CSS (object-cover), so important parts of a tall
-  # photo are never baked away here.
-  @wide_width 1600
+  alias Vutuv.Uploads.Originals
+  alias Vutuv.Uploads.Spec
 
-  # The resized version first: it decodes the image, so a corrupt or truncated
-  # file fails before anything is written; the original is only copied after a
-  # successful decode.
-  @store_order [:wide, :original]
+  @extension_whitelist ~w(.jpg .jpeg .png)
 
   @doc """
   Stores every cover version for `{upload, user}` and returns
@@ -50,9 +45,21 @@ defmodule Vutuv.Cover do
     end
   end
 
+  # The derived versions go first: they decode the image, so a corrupt or
+  # truncated file fails before anything is written; the original is only
+  # copied (privately) after a successful decode.
   defp write_versions(upload, scope, ext, dir) do
-    Enum.reduce_while(@store_order, :ok, fn version, :ok ->
-      case write_version(version, upload, scope, ext, dir) do
+    with {:ok, rotated} <- Spec.open_rotated(upload.path),
+         :ok <- write_derived_versions(rotated, scope, dir) do
+      Originals.store(storage_dir(scope), upload.path, ext)
+    end
+  end
+
+  defp write_derived_versions(rotated, scope, dir) do
+    Enum.reduce_while(Spec.versions(:cover), :ok, fn spec, :ok ->
+      dest = Path.join(dir, version_filename(scope, spec.name, Spec.served_ext()))
+
+      case Spec.write_derived(spec, rotated, dest) do
         :ok -> {:cont, :ok}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -60,14 +67,39 @@ defmodule Vutuv.Cover do
   end
 
   @doc """
-  Root-relative, URI-encoded URL for a given `{cover_photo, user}` and version.
-  Returns `nil` when the user has no cover photo.
+  Re-derives the served version from the original per the current
+  `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
+  which this configures with the cover layout. Used by
+  `Vutuv.Uploads.Regenerator`.
+  """
+  def regenerate(user, opts \\ []) do
+    dir = disk_dir(user)
+
+    Vutuv.Uploads.regenerate_from_original(storage_dir(user), dir,
+      canonical: canonical_filenames(user),
+      stale_glob: "*_{wide,original}.*",
+      legacy_candidates: [Path.join(dir, "*_original.*")],
+      derive: &write_derived_versions(&1, user, dir),
+      opts: opts
+    )
+  end
+
+  defp canonical_filenames(scope) do
+    for spec <- Spec.versions(:cover),
+        do: version_filename(scope, spec.name, Spec.served_ext())
+  end
+
+  @doc """
+  Root-relative, URI-encoded URL for a given `{cover_photo, user}` and served
+  version. Returns `nil` when the user has no cover photo or for `:original`
+  (the original is never URL-addressable).
   """
   def url(file_and_scope, version \\ :wide)
   def url({nil, _scope}, _version), do: nil
+  def url({_cover, _scope}, :original), do: nil
 
   def url({cover, scope}, version) do
-    local_path = Path.join(storage_dir(scope), version_filename(scope, version, extname(cover)))
+    local_path = Path.join(storage_dir(scope), served_filename(scope, version, cover))
 
     "/"
     |> Path.join(local_path)
@@ -81,20 +113,22 @@ defmodule Vutuv.Cover do
   def display_url(%{cover_photo: nil}, _version), do: nil
   def display_url(user, version), do: url({user.cover_photo, user}, version)
 
-  defp write_version(:original, upload, scope, ext, dir) do
-    File.cp!(upload.path, Path.join(dir, version_filename(scope, :original, ext)))
-    :ok
+  # The .avif is authoritative; until the regeneration has run, a pre-AVIF
+  # derived file with the stored filename's extension keeps resolving.
+  # Transitional — remove together with `Spec.legacy_exts/0`.
+  defp served_filename(scope, version, cover) do
+    avif = version_filename(scope, version, Spec.served_ext())
+
+    if File.exists?(Path.join(disk_dir(scope), avif)) do
+      avif
+    else
+      legacy_filename(scope, version, cover) || avif
+    end
   end
 
-  defp write_version(:wide, upload, scope, ext, dir) do
-    # resize: :down so a smaller upload is stored at its native size rather than
-    # blurrily upscaled to @wide_width.
-    with {:ok, image} <- Image.thumbnail(upload.path, "#{@wide_width}", resize: :down),
-         {:ok, _} <- Image.write(image, Path.join(dir, version_filename(scope, :wide, ext))) do
-      :ok
-    else
-      {:error, reason} -> {:error, reason}
-    end
+  defp legacy_filename(scope, version, cover) do
+    candidate = version_filename(scope, version, extname(cover))
+    if File.exists?(Path.join(disk_dir(scope), candidate)), do: candidate
   end
 
   defp storage_dir(scope), do: "covers/#{scope.id}"

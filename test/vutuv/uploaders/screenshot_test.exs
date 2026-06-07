@@ -1,9 +1,10 @@
 defmodule Vutuv.ScreenshotTest do
   @moduledoc """
-  Locks the on-disk and URL conventions for URL screenshots after the Waffle
-  removal. Screenshots live at `screenshots/<url.id>/<version>-<hash><ext>`
-  under the storage root (served by nginx `location /screenshots/`); filenames
-  are content-fingerprinted and the thumb is always a WebP.
+  Locks the on-disk and URL conventions for URL screenshots. The served thumb
+  is AVIF (per `Vutuv.Uploads.Spec`) at `screenshots/<url.id>/thumb-<hash>.avif`
+  (nginx `location /screenshots/`); the filename stays content-fingerprinted so
+  it can be cached forever. The captured original is kept privately at
+  `originals/screenshots/<url.id>/original<ext>` and is never served.
   """
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
@@ -31,14 +32,13 @@ defmodule Vutuv.ScreenshotTest do
   end
 
   describe "url/2" do
-    test "thumb filename is fingerprinted from the stored hash" do
+    test "thumb filename is fingerprinted from the stored hash, served as .avif" do
       assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.webp", @url}, :thumb) ==
-               "/screenshots/42/thumb-a1b2c3d4e5f6.webp"
+               "/screenshots/42/thumb-a1b2c3d4e5f6.avif"
     end
 
-    test "original keeps its own extension, also fingerprinted" do
-      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.jpg", @url}, :original) ==
-               "/screenshots/42/original-a1b2c3d4e5f6.jpg"
+    test "the original is not URL-addressable" do
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.jpg", @url}, :original) == nil
     end
 
     test "falls back to the local placeholder when there is no screenshot" do
@@ -47,7 +47,23 @@ defmodule Vutuv.ScreenshotTest do
 
     test "tolerates a legacy '?<timestamp>' suffix in the stored value" do
       assert Vutuv.Screenshot.url({"shot.png?63876543210", @url}, :thumb) ==
-               "/screenshots/42/thumb-shot.webp"
+               "/screenshots/42/thumb-shot.avif"
+    end
+
+    test "falls back to a not-yet-regenerated legacy .webp thumb", %{tmp: tmp} do
+      dir = Path.join(tmp, "screenshots/42")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(20, 20, color: [1, 2, 3])
+      {:ok, _} = Image.write(img, Path.join(dir, "thumb-a1b2c3d4e5f6.webp"))
+
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.png", @url}, :thumb) ==
+               "/screenshots/42/thumb-a1b2c3d4e5f6.webp"
+
+      # Once the .avif exists it wins over the legacy file.
+      {:ok, _} = Image.write(img, Path.join(dir, "thumb-a1b2c3d4e5f6.avif"))
+
+      assert Vutuv.Screenshot.url({"a1b2c3d4e5f6.png", @url}, :thumb) ==
+               "/screenshots/42/thumb-a1b2c3d4e5f6.avif"
     end
   end
 
@@ -60,17 +76,23 @@ defmodule Vutuv.ScreenshotTest do
       {:ok, src: src}
     end
 
-    test "writes a fingerprinted original + 800x528 webp thumb", %{tmp: tmp, src: src} do
+    test "writes an 800x528 AVIF thumb publicly and the original privately", %{
+      tmp: tmp,
+      src: src
+    } do
       upload = %Plug.Upload{filename: "shot.png", path: src, content_type: "image/png"}
       assert {:ok, stored} = Vutuv.Screenshot.store({upload, @url})
       assert stored =~ ~r/^[0-9a-f]{12}\.png$/
 
       hash = Path.rootname(stored)
       dir = Path.join(tmp, "screenshots/42")
-      assert File.exists?(Path.join(dir, "original-#{hash}.png"))
-      assert File.exists?(Path.join(dir, "thumb-#{hash}.webp"))
+      assert File.exists?(Path.join(dir, "thumb-#{hash}.avif"))
+      assert File.exists?(Path.join(tmp, "originals/screenshots/42/original.png"))
 
-      {:ok, thumb} = Image.open(Path.join(dir, "thumb-#{hash}.webp"))
+      # Nothing original may land in the publicly served tree.
+      assert dir |> File.ls!() |> Enum.filter(&String.contains?(&1, "original")) == []
+
+      {:ok, thumb} = Image.open(Path.join(dir, "thumb-#{hash}.avif"))
       assert {Image.width(thumb), Image.height(thumb)} == {800, 528}
     end
 
@@ -99,8 +121,24 @@ defmodule Vutuv.ScreenshotTest do
       assert {:ok, _second} = Vutuv.Screenshot.store({up2, @url})
 
       dir = Path.join(tmp, "screenshots/42")
-      assert length(Path.wildcard(Path.join(dir, "thumb-*.webp"))) == 1
-      assert length(Path.wildcard(Path.join(dir, "original-*"))) == 1
+      assert length(Path.wildcard(Path.join(dir, "thumb-*.avif"))) == 1
+      assert length(Path.wildcard(Path.join(tmp, "originals/screenshots/42/original*"))) == 1
+    end
+
+    test "regeneration also sweeps legacy public files (webp thumbs, public originals)", %{
+      tmp: tmp,
+      src: src
+    } do
+      dir = Path.join(tmp, "screenshots/42")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "thumb-deadbeef0000.webp"), "legacy thumb")
+      File.write!(Path.join(dir, "original-deadbeef0000.png"), "legacy public original")
+
+      upload = %Plug.Upload{filename: "shot.png", path: src, content_type: "image/png"}
+      assert {:ok, stored} = Vutuv.Screenshot.store({upload, @url})
+      hash = Path.rootname(stored)
+
+      assert File.ls!(dir) == ["thumb-#{hash}.avif"]
     end
   end
 end

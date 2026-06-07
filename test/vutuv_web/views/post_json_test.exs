@@ -36,7 +36,7 @@ defmodule VutuvWeb.PostJSONTest do
     assert [img] = json.images
     assert img.alt == "Sunset"
     assert {img.width, img.height} == {400, 300}
-    assert img.urls.feed == "/post_images/#{image.token}/feed.webp"
+    assert img.urls.feed == "/post_images/#{image.token}/feed.avif"
 
     assert %{default: "allow", deny: deny} = json.audience
     assert %{type: "group", name: "Inner circle"} = Enum.find(deny, &(&1.type == "group"))

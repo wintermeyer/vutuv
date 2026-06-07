@@ -6,6 +6,8 @@ defmodule Vutuv.Release do
 
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
+  alias Vutuv.Uploads.Regenerator
+
   @app :vutuv
 
   def migrate do
@@ -22,6 +24,27 @@ defmodule Vutuv.Release do
 
     {:ok, _, _} =
       Ecto.Migrator.with_repo(repo, &Ecto.Migrator.run(&1, :down, to: version))
+  end
+
+  @doc """
+  Re-derives every served image version from the private originals per the
+  current `Vutuv.Uploads.Spec` (see `Vutuv.Uploads.Regenerator`). Safe to run
+  while the app serves traffic (only the repo is started — no port binding):
+
+      bin/vutuv eval "Vutuv.Release.regenerate_images()"
+      bin/vutuv eval "Vutuv.Release.regenerate_images(dry_run: true)"
+      bin/vutuv eval "Vutuv.Release.regenerate_images(only: :avatars)"
+  """
+  def regenerate_images(opts \\ []) do
+    load_app()
+    {:ok, _} = Application.ensure_all_started(:image)
+
+    [repo] = repos()
+
+    {:ok, summary, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> Regenerator.run(opts) end)
+
+    summary
   end
 
   defp repos do

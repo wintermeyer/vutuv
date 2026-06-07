@@ -7,13 +7,16 @@ defmodule Vutuv.Posts.PostImage do
   `post_id` stays `nil` until the post is submitted. Unattached rows older
   than a day are swept (`Vutuv.Posts.sweep_pending_images/0`).
 
-  All derived versions (`thumb`/`feed`/`large`) are metadata-stripped WebP;
-  the original keeps its metadata and is never served. Serving always goes
-  through the authorizing proxy (`/post_images/:token/:version`) — `token`
-  is the lookup key and on-disk directory name, never the row id.
+  All derived versions (`thumb`/`feed`/`large`) are metadata-stripped AVIF
+  (`Vutuv.Uploads.Spec`); the original keeps its metadata in the private
+  `originals/` tree and is never served. Serving always goes through the
+  authorizing proxy (`/post_images/:token/:version`) — `token` is the lookup
+  key and on-disk directory name, never the row id.
   """
 
   use VutuvWeb, :model
+
+  alias Vutuv.Uploads.Spec
 
   @versions ~w(thumb feed large)
 
@@ -48,7 +51,16 @@ defmodule Vutuv.Posts.PostImage do
 
   @doc "Root-relative proxy URL for a version of this image."
   def url(%__MODULE__{token: token}, version) when version in @versions do
-    "#{token_prefix(token)}#{version}.webp"
+    "#{token_prefix(token)}#{version}#{Spec.served_ext()}"
+  end
+
+  @doc """
+  Every URL form that may reference this version in a stored post body: the
+  canonical URL plus the pre-AVIF `.webp` form old bodies still carry.
+  Transitional — remove together with `Vutuv.Uploads.Spec.legacy_exts/0`.
+  """
+  def url_forms(%__MODULE__{token: token} = image, version) when version in @versions do
+    [url(image, version), "#{token_prefix(token)}#{version}.webp"]
   end
 
   @doc "URLs for every served version as a `%{version => url}` map."

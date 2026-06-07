@@ -21,9 +21,14 @@ defmodule VutuvWeb.Endpoint do
     only: ~w(assets css fonts images js favicon.ico)
   )
 
-  # In production, avatars and screenshots are served directly by nginx from
+  # In production, avatars/covers/screenshots are served directly by nginx from
   # config :vutuv, :uploads_dir_prefix. Locally there is no nginx, so optionally
   # serve them from the same directory the uploaders write to.
+  #
+  # The `originals/` subtree (Vutuv.Uploads.Originals) holds every uploaded
+  # original and is deliberately NOT mounted — neither here nor as an nginx
+  # alias. Nobody may download a full-resolution original (with its EXIF/GPS
+  # data); see test/vutuv_web/uploads_serving_test.exs.
   if Application.compile_env(:vutuv, :serve_uploads_locally, false) do
     @uploads_root Application.compile_env(:vutuv, :uploads_dir_prefix, "")
     plug(Plug.Static, at: "/avatars", from: Path.join(@uploads_root, "avatars"), gzip: false)
