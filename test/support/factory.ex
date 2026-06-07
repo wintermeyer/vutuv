@@ -30,6 +30,16 @@ defmodule Vutuv.Factory do
     }
   end
 
+  @doc """
+  Inserts a validated user plus the enabled `Slug` row matching `active_slug` —
+  the shape every slug-routed page needs to resolve the user.
+  """
+  def insert_validated_user(attrs \\ []) do
+    user = insert(:user, Keyword.merge([validated?: true], attrs))
+    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user
+  end
+
   def search_term_factory do
     %Vutuv.Accounts.SearchTerm{
       value: sequence(:search_term_value, &"term-#{&1}"),

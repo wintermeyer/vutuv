@@ -10,8 +10,7 @@ defmodule VutuvWeb.UserTagControllerTest do
 
   describe "resolve_slug on an unknown user-tag slug" do
     setup %{conn: conn} do
-      user = insert(:user, validated?: true)
-      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      user = insert_validated_user()
       {:ok, conn: conn, user: user}
     end
 

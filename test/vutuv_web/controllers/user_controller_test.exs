@@ -59,8 +59,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "profile shows how long the account has been a member", %{conn: conn} do
     # Older account: just the year (the join month adds nothing once a profile
     # is a few years old).
-    user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user(inserted_at: ~N[2008-02-15 10:00:00])
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
     assert html =~ "Member since 2008"
@@ -70,8 +69,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "profile spells out the join month for accounts created this year", %{conn: conn} do
     today = Date.utc_today()
     inserted_at = NaiveDateTime.new!(today.year, today.month, 1, 12, 0, 0)
-    user = insert(:user, validated?: true, inserted_at: inserted_at)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user(inserted_at: inserted_at)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
     month = Calendar.strftime(today, "%B")
@@ -81,8 +79,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "profile hides a zero follower/following counter", %{conn: conn} do
     # One follower, nobody followed back: the followers counter shows, the
     # following counter is gone (a bare "0 following" says nothing).
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
     insert(:connection, follower: insert(:user, validated?: true), followee: user)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -93,8 +90,7 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "with no followers or following, the counts row is gone and Member since moves up",
        %{conn: conn} do
-    user = insert(:user, validated?: true, inserted_at: ~N[2008-02-15 10:00:00])
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user(inserted_at: ~N[2008-02-15 10:00:00])
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -115,14 +111,12 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "lists the user's full profile information to visitors", %{conn: conn} do
     user =
-      insert(:user,
-        validated?: true,
+      insert_validated_user(
         gender: "female",
         birthdate: ~D[1990-04-15],
         headline: "Hello world"
       )
 
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
     insert(:email, user: user, value: "public.contact@example.com")
     insert(:phone_number, user: user, value: "+49 30 5551234")
     insert(:url, user: user, value: "https://example.org/my-site", description: "My Site")
@@ -164,12 +158,7 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "renders the headline as Markdown", %{conn: conn} do
     user =
-      insert(:user,
-        validated?: true,
-        headline: "**Senior** dev, see [my site](https://example.org)"
-      )
-
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+      insert_validated_user(headline: "**Senior** dev, see [my site](https://example.org)")
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -183,8 +172,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "hides empty profile sections from visitors", %{conn: conn} do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
 
     conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
@@ -285,8 +273,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "renders 403 when editing or updating another user's profile", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
-    other = insert(:user, validated?: true)
-    insert(:slug, value: other.active_slug, disabled: false, user: other)
+    other = insert_validated_user()
 
     assert conn |> get(~p"/#{other}/edit") |> html_response(403)
 

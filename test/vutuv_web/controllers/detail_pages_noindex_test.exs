@@ -9,8 +9,7 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
   # also guarantees de-indexing when a detail URL is linked from elsewhere.
 
   setup %{conn: conn} do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
     {:ok, conn: conn, user: user}
   end
 

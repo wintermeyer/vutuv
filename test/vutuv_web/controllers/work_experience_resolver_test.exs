@@ -14,15 +14,9 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
   # The collection actions (:index, :new) carry no `:id`, so the resolver must
   # pass through there.
 
-  defp validated_user_with_slug do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
-    user
-  end
-
   describe "show on an unknown work-experience slug" do
     test "returns a clean 404 instead of falling through", %{conn: conn} do
-      user = validated_user_with_slug()
+      user = insert_validated_user()
       conn = get(conn, ~p"/#{user}/work_experiences/does-not-exist")
       assert conn.status == 404
       assert conn.halted
@@ -31,8 +25,8 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
   describe "owner-scoping" do
     test "another user's work-experience slug does not resolve under this user", %{conn: conn} do
-      owner = validated_user_with_slug()
-      other = validated_user_with_slug()
+      owner = insert_validated_user()
+      other = insert_validated_user()
       foreign = insert(:work_experience, user: other)
 
       conn = get(conn, ~p"/#{owner}/work_experiences/#{foreign}")
@@ -41,7 +35,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
     end
 
     test "the user's own work experience resolves and renders", %{conn: conn} do
-      user = validated_user_with_slug()
+      user = insert_validated_user()
       own = insert(:work_experience, user: user)
 
       conn = get(conn, ~p"/#{user}/work_experiences/#{own}")
@@ -51,7 +45,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
   describe "index (no id param)" do
     test "passes through cleanly and renders the listing", %{conn: conn} do
-      user = validated_user_with_slug()
+      user = insert_validated_user()
       conn = get(conn, ~p"/#{user}/work_experiences")
       assert conn.status == 200
     end

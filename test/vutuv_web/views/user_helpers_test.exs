@@ -9,6 +9,7 @@ defmodule VutuvWeb.UserHelpersTest do
   alias VutuvWeb.UserHelpers
 
   import Vutuv.Factory
+  import Vutuv.QueryCounter
 
   # A work experience with explicit dates; ExMachina's factory always sets a
   # start_month/start_year, so override them per case.
@@ -174,37 +175,5 @@ defmodule VutuvWeb.UserHelpersTest do
     Repo.all(
       from(w in Vutuv.Profiles.WorkExperience, where: w.user_id == ^user.id, order_by: w.id)
     )
-  end
-
-  defp count_queries(fun) do
-    parent = self()
-    ref = make_ref()
-    handler_id = {__MODULE__, ref}
-
-    :telemetry.attach(
-      handler_id,
-      [:vutuv, :repo, :query],
-      fn _event, _measurements, _metadata, _config ->
-        # Telemetry is global; under async tests, only count queries emitted
-        # from this test process (Ecto runs the handler in the caller).
-        if self() == parent, do: send(parent, {ref, :query})
-      end,
-      nil
-    )
-
-    try do
-      result = fun.()
-      {result, drain_queries(ref, 0)}
-    after
-      :telemetry.detach(handler_id)
-    end
-  end
-
-  defp drain_queries(ref, acc) do
-    receive do
-      {^ref, :query} -> drain_queries(ref, acc + 1)
-    after
-      0 -> acc
-    end
   end
 end

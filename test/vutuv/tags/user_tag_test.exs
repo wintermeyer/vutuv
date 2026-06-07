@@ -10,6 +10,7 @@ defmodule Vutuv.Tags.UserTagTest do
   alias Vutuv.Tags.UserTag
 
   import Vutuv.Factory
+  import Vutuv.QueryCounter
 
   setup do
     user = insert(:user)
@@ -66,38 +67,6 @@ defmodule Vutuv.Tags.UserTagTest do
       {result, count} = count_queries(fn -> Phoenix.Param.to_param(preloaded) end)
       assert result == "elixir"
       assert count == 0
-    end
-  end
-
-  defp count_queries(fun) do
-    parent = self()
-    ref = make_ref()
-    handler_id = {__MODULE__, ref}
-
-    :telemetry.attach(
-      handler_id,
-      [:vutuv, :repo, :query],
-      fn _event, _measurements, _metadata, _config ->
-        # Telemetry is global; under async tests, only count queries emitted
-        # from this test process (Ecto runs the handler in the caller).
-        if self() == parent, do: send(parent, {ref, :query})
-      end,
-      nil
-    )
-
-    try do
-      result = fun.()
-      {result, drain_queries(ref, 0)}
-    after
-      :telemetry.detach(handler_id)
-    end
-  end
-
-  defp drain_queries(ref, acc) do
-    receive do
-      {^ref, :query} -> drain_queries(ref, acc + 1)
-    after
-      0 -> acc
     end
   end
 end

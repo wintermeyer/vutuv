@@ -60,8 +60,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
     test "a logged-in visitor sees the sections but no card menus", %{conn: conn} do
       {conn, _visitor} = create_and_login_user(conn)
 
-      user = insert(:user, validated?: true)
-      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      user = insert_validated_user()
       data = insert_profile_data(user)
       email = insert(:email, user: user, public?: true)
 

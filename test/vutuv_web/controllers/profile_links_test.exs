@@ -9,8 +9,7 @@ defmodule VutuvWeb.ProfileLinksTest do
   # card with its thumbnail.
 
   test "links render their screenshot thumbnails as preview cards", %{conn: conn} do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
     url = insert(:url, user: user, screenshot: "b0efec47a6e9.webp")
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -19,8 +18,7 @@ defmodule VutuvWeb.ProfileLinksTest do
   end
 
   test "links without a screenshot fall back to the placeholder image", %{conn: conn} do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
     insert(:url, user: user, screenshot: nil)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -29,8 +27,7 @@ defmodule VutuvWeb.ProfileLinksTest do
   end
 
   test "the links section sits in the main column, not the right rail", %{conn: conn} do
-    user = insert(:user, validated?: true)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
+    user = insert_validated_user()
     insert(:url, user: user)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -45,8 +42,7 @@ defmodule VutuvWeb.ProfileLinksTest do
   # profile lists the latest 3). Management lives in the owner's card menu.
   describe "View All" do
     test "absent when every link is already on the page", %{conn: conn} do
-      user = insert(:user, validated?: true)
-      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      user = insert_validated_user()
       insert_list(2, :url, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -55,8 +51,7 @@ defmodule VutuvWeb.ProfileLinksTest do
     end
 
     test "present when more links exist than are shown", %{conn: conn} do
-      user = insert(:user, validated?: true)
-      insert(:slug, value: user.active_slug, disabled: false, user: user)
+      user = insert_validated_user()
       insert_list(5, :url, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)

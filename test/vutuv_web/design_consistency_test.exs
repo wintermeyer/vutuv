@@ -248,8 +248,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
 
     test "a non-owner sees no Add link on someone else's empty index", %{conn: conn} do
-      other = insert(:user, validated?: true)
-      insert(:slug, value: other.active_slug, disabled: false, user: other)
+      other = insert_validated_user()
       conn = get(conn, ~p"/#{other}/phone_numbers")
       html = html_response(conn, 200)
 
