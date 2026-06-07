@@ -8,7 +8,9 @@ defmodule VutuvWeb.Plug.ConfigureSession do
   end
 
   def call(conn, repo) do
-    user_id = get_session(conn, :user_id)
+    # cast_or_nil: cookies from before the UUID v7 cutover hold integer user
+    # ids — treat them as logged out instead of raising a CastError.
+    user_id = conn |> get_session(:user_id) |> Vutuv.UUIDv7.cast_or_nil()
     user = user_id && repo.get(Vutuv.Accounts.User, user_id)
 
     conn

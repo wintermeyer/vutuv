@@ -5,6 +5,10 @@ defmodule VutuvWeb do
     quote do
       use Ecto.Schema
 
+      # Every id in this system is a UUID v7 (see test/vutuv/schema_uuid_chokepoint_test.exs).
+      @primary_key {:id, Vutuv.UUIDv7, autogenerate: true}
+      @foreign_key_type Vutuv.UUIDv7
+
       import Ecto, only: [assoc: 2, build_assoc: 2, build_assoc: 3]
       import Ecto.Changeset
       import Ecto.Query, only: [from: 1, from: 2]

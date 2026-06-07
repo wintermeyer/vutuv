@@ -28,7 +28,9 @@ defmodule VutuvWeb.ShellLive do
 
   @impl true
   def mount(_params, session, socket) do
-    user_id = session["user_id"]
+    # cast_or_nil: pre-UUID-cutover cookies hold integer ids — render the
+    # anonymous shell for them instead of crashing every page's chrome.
+    user_id = Vutuv.UUIDv7.cast_or_nil(session["user_id"])
     if connected?(socket), do: Activity.subscribe(user_id)
 
     # The shell mounts outside the `live_session` (embedded via live_render),

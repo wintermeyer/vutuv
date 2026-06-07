@@ -800,7 +800,7 @@ defmodule Vutuv.PostsTest do
       assert %{liked?: false, bookmarked?: false, reposted?: false} =
                Posts.post_engagement(post.id, nil)
 
-      refute Posts.post_engagement(post.id + 1000, reader)
+      refute Posts.post_engagement(Vutuv.UUIDv7.generate(), reader)
     end
 
     test "toggles broadcast {:post_counters, …} with absolute counts" do

@@ -18,7 +18,7 @@ DB-backed helpers per row. --%>
       </p>
       <%= if !same_user?(@current_user, user) and @current_user do %>
         <%= case (if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)) do %>
-          <% connection_id when is_integer(connection_id) -> %>
+          <% connection_id when is_binary(connection_id) -> %>
             <%= button to: ~p"/connections/#{connection_id}", method: :delete , class: "button button--icon" do %>
               <i class="icon icon--unfollow"></i>
             <% end %>

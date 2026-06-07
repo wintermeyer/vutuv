@@ -92,6 +92,10 @@ defmodule VutuvWeb.PostEditLiveTest do
       {conn, _other} = create_and_login_user(conn)
 
       assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/#{post.id}/edit")
+      # A valid-but-absent id and a garbage id both redirect (no 500, no probe).
+      assert {:error, {:redirect, %{to: "/"}}} =
+               live(conn, ~p"/posts/#{Vutuv.UUIDv7.generate()}/edit")
+
       assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/999999/edit")
     end
   end

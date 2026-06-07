@@ -58,6 +58,12 @@ defmodule VutuvWeb.Live.InitAssigns do
     {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end
 
-  defp load_user(nil), do: nil
-  defp load_user(user_id), do: Repo.get(User, user_id)
+  # cast_or_nil: pre-UUID-cutover cookies hold integer ids — anonymous, not a
+  # CastError (mirrors VutuvWeb.Plug.ConfigureSession).
+  defp load_user(user_id) do
+    case Vutuv.UUIDv7.cast_or_nil(user_id) do
+      nil -> nil
+      user_id -> Repo.get(User, user_id)
+    end
+  end
 end

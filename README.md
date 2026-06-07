@@ -12,6 +12,8 @@ vutuv is a [Phoenix Framework](https://www.phoenixframework.org/) 1.8 applicatio
 - Elixir 1.20.0-otp-28
 - [PostgreSQL](https://www.postgresql.org/) 17
 
+All database ids are UUID v7 (`Vutuv.UUIDv7`): time-ordered, minted in the app, never integers or UUID v4.
+
 ### Secret config
 
 Create `config/dev.secret.exs`:

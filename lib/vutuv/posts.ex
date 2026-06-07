@@ -57,6 +57,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Social.Connection
   alias Vutuv.Social.Group
   alias Vutuv.Tags.Tag
+  alias Vutuv.UUIDv7
 
   @default_feed_limit 20
   @default_profile_limit 3
@@ -425,14 +426,14 @@ defmodule Vutuv.Posts do
           (d.wildcard == "non_followers" and
              fragment(
                "NOT EXISTS (SELECT 1 FROM connections c WHERE c.follower_id = ? AND c.followee_id = ?)",
-               ^viewer_id,
-               ^author_id
+               type(^viewer_id, UUIDv7),
+               type(^author_id, UUIDv7)
              )) or
           (d.wildcard == "non_followees" and
              fragment(
                "NOT EXISTS (SELECT 1 FROM connections c WHERE c.follower_id = ? AND c.followee_id = ?)",
-               ^author_id,
-               ^viewer_id
+               type(^author_id, UUIDv7),
+               type(^viewer_id, UUIDv7)
              )) or
           (not is_nil(d.group_id) and
              fragment(
@@ -442,8 +443,8 @@ defmodule Vutuv.Posts do
                        WHERE m.group_id = ? AND c.follower_id = ? AND c.followee_id = ?)
                """,
                d.group_id,
-               ^author_id,
-               ^viewer_id
+               type(^author_id, UUIDv7),
+               type(^viewer_id, UUIDv7)
              ))
     )
   end
@@ -485,13 +486,13 @@ defmodule Vutuv.Posts do
             )
             """,
             p.id,
-            ^viewer_id,
-            ^viewer_id,
+            type(^viewer_id, UUIDv7),
+            type(^viewer_id, UUIDv7),
             p.user_id,
             p.user_id,
-            ^viewer_id,
+            type(^viewer_id, UUIDv7),
             p.user_id,
-            ^viewer_id
+            type(^viewer_id, UUIDv7)
           )
     )
   end
@@ -559,14 +560,14 @@ defmodule Vutuv.Posts do
   @doc "Whether any reposts of this post exist (the audience lock)."
   def has_reposts?(%Post{id: id}), do: has_reposts?(id)
 
-  def has_reposts?(post_id) when is_integer(post_id) do
+  def has_reposts?(post_id) when is_binary(post_id) do
     Repo.exists?(from(r in PostRepost, where: r.post_id == ^post_id))
   end
 
   @doc "Whether any replies to this post exist (the audience lock, like reposts)."
   def has_replies?(%Post{id: id}), do: has_replies?(id)
 
-  def has_replies?(post_id) when is_integer(post_id) do
+  def has_replies?(post_id) when is_binary(post_id) do
     Repo.exists?(from(r in PostReply, where: r.parent_post_id == ^post_id))
   end
 
@@ -583,15 +584,27 @@ defmodule Vutuv.Posts do
 
   defp engage(schema, kind, %User{} = user, %Post{} = post) do
     if visible_to?(post, user) do
-      case Repo.insert(struct(schema, user_id: user.id, post_id: post.id),
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      row = %{
+        id: UUIDv7.generate(),
+        user_id: user.id,
+        post_id: post.id,
+        inserted_at: now,
+        updated_at: now
+      }
+
+      # Ids are minted client-side, so a returned id no longer signals whether
+      # the insert happened — insert_all's row count does (0 on conflict).
+      case Repo.insert_all(schema, [row],
              on_conflict: :nothing,
-             conflict_target: [:post_id, :user_id]
+             conflict_target: [:post_id, :user_id],
+             returning: true
            ) do
-        # No RETURNING row: the pair already existed — nothing changed.
-        {:ok, %{id: nil}} ->
+        {0, _} ->
           {:ok, :noop}
 
-        {:ok, row} ->
+        {1, [row]} ->
           broadcast_engagement(kind, user.id, post.id, true)
           {:ok, row}
       end
@@ -642,8 +655,9 @@ defmodule Vutuv.Posts do
     viewer_id =
       case viewer do
         %User{id: id} -> id
-        id when is_integer(id) -> id
-        nil -> 0
+        id when is_binary(id) -> id
+        # The nil UUID can never match a row: "anonymous" without a NULL arm.
+        nil -> "00000000-0000-0000-0000-000000000000"
       end
 
     Repo.one(
@@ -660,19 +674,19 @@ defmodule Vutuv.Posts do
             fragment(
               "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
               p.id,
-              ^viewer_id
+              type(^viewer_id, UUIDv7)
             ),
           bookmarked?:
             fragment(
               "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
               p.id,
-              ^viewer_id
+              type(^viewer_id, UUIDv7)
             ),
           reposted?:
             fragment(
               "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
               p.id,
-              ^viewer_id
+              type(^viewer_id, UUIDv7)
             ),
           restricted?:
             fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
@@ -972,7 +986,11 @@ defmodule Vutuv.Posts do
 
   @doc "A preloaded post by id, or `nil` (live-feed pill, edit page)."
   def get_post(id) do
-    Post |> Repo.get(id) |> preload_post()
+    # cast_or_nil: a garbage id in /posts/:id/edit is a nil (404), not a 500.
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      id -> Post |> Repo.get(id) |> preload_post()
+    end
   end
 
   defp preload_post(nil), do: nil
@@ -1220,13 +1238,7 @@ defmodule Vutuv.Posts do
   defp parse_ids(ids) when is_list(ids),
     do: ids |> Enum.map(&parse_id/1) |> Enum.reject(&is_nil/1)
 
-  defp parse_id(nil), do: nil
-  defp parse_id(id) when is_integer(id), do: id
-
-  defp parse_id(id) when is_binary(id) do
-    case Integer.parse(id) do
-      {int, ""} -> int
-      _ -> nil
-    end
-  end
+  # Ids are UUID strings; anything that does not cast (stale form payloads,
+  # tampering) is dropped rather than raising in the changeset cast.
+  defp parse_id(id), do: Vutuv.UUIDv7.cast_or_nil(id)
 end

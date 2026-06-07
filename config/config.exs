@@ -23,9 +23,15 @@ config :phoenix, :json_library, Jason
 
 config :phoenix, :generators,
   migration: true,
-  binary_id: false
+  binary_id: true
 
 config :vutuv, ecto_repos: [Vutuv.Repo]
+
+# Every id is a UUID v7 (Vutuv.UUIDv7); new migrations default to binary_id
+# columns so `create table` / `references` need no per-call type overrides.
+config :vutuv, Vutuv.Repo,
+  migration_primary_key: [type: :binary_id],
+  migration_foreign_key: [type: :binary_id]
 
 # Best-effort background work spawned from request handling. Both run under
 # Vutuv.TaskSupervisor; the flags let tests disable them so the SQL Sandbox

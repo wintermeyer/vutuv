@@ -1,3 +1,27 @@
+# Production cutover: UUID v7 ids
+
+One-time steps for the first production deploy that includes the
+`convert_ids_to_uuid_v7` migration (every PK/FK becomes a UUID v7; the dead
+legacy skill tables are dropped first). The migration runs in one
+transaction and aborts itself if any parent/child link would be lost, but
+its `down/0` raises — **the dump below is the only rollback**.
+
+## Before the deploy (manual, on the server)
+
+- [ ] `pg_dump -Fc -d vutuv3_prod -f ~/vutuv3_prod_pre_uuid_$(date +%Y%m%d).dump`
+  immediately before the deploy. Keep it until the cutover is verified.
+
+## After the deploy
+
+- [ ] Migration log shows `== Migrated … convert_ids_to_uuid_v7` (a raised
+  `UUID conversion would lose …` means it rolled back — investigate, the data
+  is untouched).
+- [ ] All pre-cutover sessions are invalid by design (the cookie stores an
+  integer user id): spot-check that a stale session renders pages logged-out
+  without a 500 and that a fresh PIN login works.
+- [ ] Spot-check a user profile: posts, followers, tags and emails still
+  hang together (relationships were re-keyed, not re-created).
+
 # Production cutover: AVIF images + private originals
 
 One-time steps for the first production deploy that includes commit

@@ -124,7 +124,7 @@ defmodule VutuvWeb.PostLive.Composer do
     socket =
       if preset == "custom" do
         socket
-        |> assign(:deny_groups, checked_ids(params["deny_groups"]))
+        |> assign(:deny_groups, checked_keys(params["deny_groups"]))
         |> assign(:deny_wildcards, checked_keys(params["deny_wildcards"]))
         |> run_user_search(params["user_search"] || "")
       else
@@ -152,15 +152,11 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   def handle_event("undeny-user", %{"id" => id}, socket) do
-    {id, _} = Integer.parse(id)
-
     {:noreply,
      assign(socket, :denied_users, Enum.reject(socket.assigns.denied_users, &(&1.id == id)))}
   end
 
   def handle_event("insert-inline", %{"id" => id}, socket) do
-    {id, _} = Integer.parse(id)
-
     case Enum.find(socket.assigns.images, &(&1.id == id)) do
       nil ->
         {:noreply, socket}
@@ -172,8 +168,6 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   def handle_event("remove-image", %{"id" => id}, socket) do
-    {id, _} = Integer.parse(id)
-
     case Enum.find(socket.assigns.images, &(&1.id == id)) do
       nil ->
         {:noreply, socket}
@@ -200,7 +194,7 @@ defmodule VutuvWeb.PostLive.Composer do
     socket =
       socket
       |> assign(:preset, if(params["preset"] in @presets, do: params["preset"], else: "public"))
-      |> assign(:deny_groups, checked_ids(params["deny_groups"]))
+      |> assign(:deny_groups, checked_keys(params["deny_groups"]))
       |> assign(:deny_wildcards, checked_keys(params["deny_wildcards"]))
 
     attrs = %{
@@ -265,7 +259,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_alts(images, alts) do
     Enum.each(images, fn image ->
-      save_alt(image, Map.get(alts, Integer.to_string(image.id)))
+      save_alt(image, Map.get(alts, image.id))
     end)
   end
 
@@ -357,12 +351,8 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:user_results, results)
   end
 
-  defp checked_ids(nil), do: MapSet.new()
-
-  defp checked_ids(map) when is_map(map) do
-    for {id, "true"} <- map, {int, ""} = Integer.parse(id), into: MapSet.new(), do: int
-  end
-
+  # Group ids arrive as the UUID strings the checkbox names carry — keep them
+  # as-is; they compare directly against group.id.
   defp checked_keys(nil), do: MapSet.new()
 
   defp checked_keys(map) when is_map(map) do
@@ -486,7 +476,7 @@ defmodule VutuvWeb.PostLive.Composer do
               <input
                 type="text"
                 name={"post[alts][#{image.id}]"}
-                value={Map.get(@alts, Integer.to_string(image.id), image.alt)}
+                value={Map.get(@alts, image.id, image.alt)}
                 placeholder={gettext("Describe this image (alt text)")}
                 class={[input_class(), "flex-1"]}
               />

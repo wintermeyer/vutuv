@@ -46,7 +46,7 @@ the resulting ~200px rail width. --%>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
               <% visitor?(@conn, @current_user) -> %>
                 <%= case user_follows_user?(@current_user, @user) do %>
-                  <% connection_id when is_integer(connection_id) -> %>
+                  <% connection_id when is_binary(connection_id) -> %>
                     <.button variant="secondary" href={~p"/connections/#{connection_id}"} method="delete">
                       {gettext("Following")}
                     </.button>

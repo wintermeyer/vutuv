@@ -59,9 +59,10 @@ defmodule Vutuv.ActivityTest do
   end
 
   test "mark_notifications_read / mark_messages_read broadcast read events" do
-    Activity.subscribe(9)
-    Activity.mark_notifications_read(9)
-    Activity.mark_messages_read(9)
+    user_id = Vutuv.UUIDv7.generate()
+    Activity.subscribe(user_id)
+    Activity.mark_notifications_read(user_id)
+    Activity.mark_messages_read(user_id)
     assert_receive :notifications_read
     assert_receive :messages_read
   end
