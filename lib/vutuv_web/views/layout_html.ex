@@ -6,6 +6,23 @@ defmodule VutuvWeb.LayoutHTML do
   embed_templates("../templates/layout/*")
 
   @doc """
+  The `<title>` content, sans the site-name suffix: an explicit `:page_title`
+  assign wins (the post pages and the LiveViews set one), a page about a user
+  (`:user` in the conn assigns) falls back to the user's name, and everything
+  else gets `nil` so `live_title`'s default (the bare site name) applies.
+  """
+  def page_title(%{page_title: title}) when is_binary(title), do: title
+
+  def page_title(%{conn: conn}) when not is_nil(conn) do
+    case conn.assigns[:user] do
+      %Vutuv.Accounts.User{} = user -> full_name(user)
+      _ -> nil
+    end
+  end
+
+  def page_title(_assigns), do: nil
+
+  @doc """
   Minimal, serializable session map handed to the embedded `ShellLive` so it can
   render the logged-in chrome (name, avatar, profile link) over both a dead
   request and a LiveView socket. `"user_avatar"` is `nil` when the user has no

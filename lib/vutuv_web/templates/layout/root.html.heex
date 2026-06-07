@@ -6,7 +6,9 @@
     <% end %>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
-    <title><%= if assigns[:conn] && @conn.assigns[:user], do: "#{full_name(@conn.assigns[:user])} - vutuv", else: "vutuv" %></title>
+    <%!-- live_title so client-side page_title updates (live navigation, tab
+    patches) keep the suffix; no suffix on the bare site name. --%>
+    <.live_title default="vutuv" suffix={page_title(assigns) && " - vutuv"}>{page_title(assigns)}</.live_title>
     <%= if assigns[:conn] && @conn.assigns[:user] do %>
       <meta name="description" content={meta_description(@conn.assigns[:user], @conn.assigns[:user_tags], @conn.assigns[:header_job])} />
     <% else %>
