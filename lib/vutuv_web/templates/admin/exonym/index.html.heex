@@ -11,6 +11,8 @@
     
     <%= render "card_list.html", assigns %>
 
+    <.pager params={@conn.params} total={@exonyms_count} />
+
     <p>
       <%= link gettext("New exonym"), to: ~p"/admin/exonyms/new", class: "card__morelink" %>
     </p>

@@ -18,6 +18,19 @@ defmodule VutuvWeb.Admin.TagControllerTest do
       conn = get(conn, ~p"/admin/tags")
       assert conn.status == 200
     end
+
+    test "paginates: rows past the first page land on page 2", %{conn: conn} do
+      # 250/page (max_page_items); the slug-ordered listing puts the marker last.
+      insert_list(250, :tag)
+      insert(:tag, name: "Zzz Marker", slug: "zzz-marker")
+
+      page1 = conn |> get(~p"/admin/tags") |> html_response(200)
+      refute page1 =~ "zzz-marker"
+      assert page1 =~ "page=2"
+
+      page2 = conn |> recycle() |> get(~p"/admin/tags?page=2") |> html_response(200)
+      assert page2 =~ "zzz-marker"
+    end
   end
 
   describe "show" do

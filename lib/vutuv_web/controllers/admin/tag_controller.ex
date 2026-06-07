@@ -12,8 +12,14 @@ defmodule VutuvWeb.Admin.TagController do
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
-    tags = Repo.all(Tag)
-    render(conn, "index.html", tags: tags)
+    tags_count = Repo.one(from(t in Tag, select: count(t.id)))
+
+    tags =
+      from(t in Tag, order_by: t.slug)
+      |> Vutuv.Pages.paginate(conn.params, tags_count)
+      |> Repo.all()
+
+    render(conn, "index.html", tags: tags, tags_count: tags_count)
   end
 
   def new(conn, _params) do

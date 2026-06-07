@@ -35,6 +35,8 @@
       </tbody>
     </table>
 
+    <.pager params={@conn.params} total={@tags_count} />
+
     <p>
       <%= link gettext("New tag"), to: ~p"/admin/tags/new", class: "card__morelink" %>
     </p>

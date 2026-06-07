@@ -5,8 +5,14 @@ defmodule VutuvWeb.Admin.ExonymController do
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
-    exonyms = Repo.all(from(e in Exonym, preload: [:locale, :exonym_locale]))
-    render(conn, "index.html", exonyms: exonyms)
+    exonyms_count = Repo.one(from(e in Exonym, select: count(e.id)))
+
+    exonyms =
+      from(e in Exonym, order_by: e.value, preload: [:locale, :exonym_locale])
+      |> Vutuv.Pages.paginate(conn.params, exonyms_count)
+      |> Repo.all()
+
+    render(conn, "index.html", exonyms: exonyms, exonyms_count: exonyms_count)
   end
 
   def new(conn, _params) do
