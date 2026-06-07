@@ -187,11 +187,15 @@ defmodule Vutuv.Accounts do
     |> Repo.update!()
   end
 
+  # How long a login PIN stays valid (also used further down by check_pin/3).
+  @pin_expire_time 1800
+
   # Name of the signed cookie that carries the pending login identity (the typed
   # email) between the email-entry step and the PIN-entry step. Short-lived: it
-  # is only valid while a PIN is.
+  # is only valid while a PIN is, so it shares the PIN's expiry window — bumping
+  # one without the other would break step 2 of the login flow mid-window.
   @pin_cookie "_vutuv_login_pin"
-  @pin_cookie_max_age 1800
+  @pin_cookie_max_age @pin_expire_time
 
   # Sign/verify against the endpoint rather than the conn so the token does not
   # depend on the conn having been through the endpoint plug (it has not yet, at
@@ -231,8 +235,9 @@ defmodule Vutuv.Accounts do
   end
 
   # ── Login PINs ──
+  # (@pin_expire_time is defined next to the PIN cookie above — they share
+  # one validity window.)
 
-  @pin_expire_time 1800
   @max_attempts 3
 
   @doc """
