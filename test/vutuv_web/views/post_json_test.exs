@@ -43,6 +43,35 @@ defmodule VutuvWeb.PostJSONTest do
     assert %{type: "wildcard", value: "non_followers"} = Enum.find(deny, &(&1.type == "wildcard"))
   end
 
+  test "serializes the reply reference through its three states" do
+    parent_author = insert(:user, validated?: true, first_name: "Petra", last_name: "Parent")
+    replier = insert(:user, validated?: true)
+
+    {:ok, parent} = Posts.create_post(parent_author, %{body: "the root"})
+    {:ok, reply} = Posts.create_reply(replier, parent, %{body: "the answer"})
+
+    assert PostJSON.post(parent, nil).in_reply_to == nil
+    assert PostJSON.post(parent, nil).reply_count == 1
+
+    json = PostJSON.post(reply, nil)
+    assert json.reply_count == 0
+    assert json.in_reply_to.post_id == parent.id
+    assert String.ends_with?(json.in_reply_to.url, Posts.path(parent))
+    assert json.in_reply_to.author == %{slug: parent_author.active_slug, name: "Petra Parent"}
+
+    # Parent deleted, account alive: no post left, the author still named.
+    {:ok, _} = Posts.delete_post(parent)
+    json = PostJSON.post(Posts.get_post(reply.id), nil)
+    assert json.in_reply_to.post_id == nil
+    assert json.in_reply_to.url == nil
+    assert json.in_reply_to.author.slug == parent_author.active_slug
+
+    # Account gone too (the real cascade): nothing nameable remains.
+    Repo.delete!(parent_author)
+    json = PostJSON.post(Posts.get_post(reply.id), nil)
+    assert json.in_reply_to == %{post_id: nil, url: nil, author: nil}
+  end
+
   test "the deny array never serializes for other viewers" do
     author = insert(:user, validated?: true)
 

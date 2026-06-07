@@ -5,6 +5,7 @@ defmodule Vutuv.PostsTest do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostTag
 
   # Feed authors must be validated (consistent with follower counts etc.), so
@@ -871,6 +872,182 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "create_reply/3" do
+    test "creates a normal post that references the parent" do
+      author = user()
+      replier = user()
+      parent = create_post!(author, %{body: "original"})
+
+      assert {:ok, %Post{} = reply} = Posts.create_reply(replier, parent, %{body: "an answer"})
+      assert reply.body == "an answer"
+      assert reply.published_on == Date.utc_today()
+      assert reply.seq == 1
+      assert reply.reply_ref.parent_post_id == parent.id
+      assert reply.reply_ref.parent_author_id == author.id
+      assert reply.reply_ref.parent_post.id == parent.id
+      assert reply.reply_ref.parent_author.id == author.id
+    end
+
+    test "the reply shows up in the replier's feed like any post" do
+      replier = user()
+      parent = create_post!(user(), %{body: "original"})
+      {:ok, reply} = Posts.create_reply(replier, parent, %{body: "answer"})
+
+      assert [entry] = Posts.feed_page(replier).entries
+      assert entry.id == "post-#{reply.id}"
+    end
+
+    test "replies to replies form threads, each naming its direct parent" do
+      a = user()
+      b = user()
+      parent = create_post!(a, %{body: "root"})
+
+      {:ok, reply} = Posts.create_reply(b, parent, %{body: "first"})
+      {:ok, nested} = Posts.create_reply(a, reply, %{body: "second"})
+
+      assert nested.reply_ref.parent_post_id == reply.id
+      assert nested.reply_ref.parent_author_id == b.id
+    end
+
+    test "refuses a restricted parent" do
+      replier = user()
+      author = user()
+      follow!(replier, author)
+      parent = create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
+
+      assert {:error, :restricted} = Posts.create_reply(replier, parent, %{body: "y"})
+      assert Posts.reply_count(parent.id) == 0
+    end
+
+    test "refuses a parent the replier cannot see" do
+      replier = user()
+
+      parent =
+        create_post!(user(), %{body: "x", denials: [%{"denied_user_id" => replier.id}]})
+
+      assert {:error, :not_visible} = Posts.create_reply(replier, parent, %{body: "y"})
+    end
+
+    test "rejects an empty reply like an empty post" do
+      parent = create_post!(user(), %{body: "x"})
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Posts.create_reply(user(), parent, %{body: "   "})
+
+      assert %{body: ["can't be blank"]} = errors_on(changeset)
+    end
+
+    test "broadcasts {:new_post, …} and the parent's fresh counters" do
+      author = user()
+      replier = user()
+      parent = create_post!(author, %{body: "original"})
+
+      Vutuv.Activity.subscribe(replier.id)
+      Posts.subscribe_post(parent.id)
+
+      {:ok, reply} = Posts.create_reply(replier, parent, %{body: "answer"})
+      reply_id = reply.id
+      parent_id = parent.id
+
+      assert_receive {:new_post, %{post_id: ^reply_id}}
+      assert_receive {:post_counters, %{post_id: ^parent_id, replies: 1}}
+    end
+
+    test "notifies the parent author, but not on self-replies" do
+      author = user()
+      parent = create_post!(author, %{body: "original"})
+
+      Vutuv.Activity.subscribe(author.id)
+
+      {:ok, _} = Posts.create_reply(user(), parent, %{body: "answer"})
+      assert_receive {:new_notification, %{kind: "reply"}}
+
+      {:ok, _} = Posts.create_reply(author, parent, %{body: "my own follow-up"})
+      refute_receive {:new_notification, _}
+    end
+  end
+
+  describe "reply tombstones" do
+    test "a reply survives parent deletion, keeping the author reference" do
+      author = user()
+      parent = create_post!(author, %{body: "original"})
+      {:ok, reply} = Posts.create_reply(user(), parent, %{body: "answer"})
+
+      {:ok, _} = Posts.delete_post(parent)
+
+      reply = Posts.get_post(reply.id)
+      assert %PostReply{} = reply.reply_ref
+      assert reply.reply_ref.parent_post_id == nil
+      assert reply.reply_ref.parent_post == nil
+      assert reply.reply_ref.parent_author.id == author.id
+    end
+
+    test "deleting the parent author's account clears both references" do
+      author = user()
+      parent = create_post!(author, %{body: "original"})
+      {:ok, reply} = Posts.create_reply(user(), parent, %{body: "answer"})
+
+      # The real account-deletion path: the DB cascade hard-deletes the
+      # author's posts, so both parent references nilify together.
+      Repo.delete!(author)
+
+      reply = Posts.get_post(reply.id)
+      assert %PostReply{} = reply.reply_ref
+      assert reply.reply_ref.parent_post_id == nil
+      assert reply.reply_ref.parent_author_id == nil
+    end
+
+    test "deleting the reply removes its reference row" do
+      parent = create_post!(user(), %{body: "original"})
+      {:ok, reply} = Posts.create_reply(user(), parent, %{body: "answer"})
+
+      {:ok, _} = Posts.delete_post(reply)
+
+      refute Repo.exists?(from(r in PostReply, where: r.post_id == ^reply.id))
+      assert Posts.reply_count(parent.id) == 0
+    end
+  end
+
+  describe "list_replies/3 and reply_count/1" do
+    test "lists visible replies oldest first" do
+      viewer = user()
+      parent = create_post!(user(), %{body: "root"})
+
+      {:ok, old} = Posts.create_reply(user(), parent, %{body: "older"})
+      old = backdate_post!(old, 60)
+      {:ok, new} = Posts.create_reply(user(), parent, %{body: "newer"})
+
+      assert Enum.map(Posts.list_replies(parent, viewer), & &1.id) == [old.id, new.id]
+    end
+
+    test "filters replies by viewer visibility; the raw count does not" do
+      viewer = user()
+      parent = create_post!(user(), %{body: "root"})
+      hidden_author = user()
+
+      {:ok, _hidden} =
+        Posts.create_reply(hidden_author, parent, %{
+          body: "secret",
+          denials: [%{"wildcard" => "everyone"}]
+        })
+
+      {:ok, open} = Posts.create_reply(user(), parent, %{body: "open"})
+
+      assert Enum.map(Posts.list_replies(parent, viewer), & &1.id) == [open.id]
+      # The author of the hidden reply still sees both.
+      assert length(Posts.list_replies(parent, hidden_author)) == 2
+      assert Posts.reply_count(parent.id) == 2
+    end
+
+    test "reply counts appear in the engagement counters" do
+      parent = create_post!(user(), %{body: "root"})
+      {:ok, _} = Posts.create_reply(user(), parent, %{body: "a"})
+
+      assert %{replies: 1} = Posts.engagement_counts(parent.id)
+      assert %{replies: 1} = Posts.post_engagement(parent.id, nil)
+    end
+  end
+
   describe "visibility lock" do
     test "update_post/2 refuses audience changes while reposts exist" do
       author = user()
@@ -896,6 +1073,29 @@ defmodule Vutuv.PostsTest do
 
       :ok = Posts.repost_post(reposter, post)
       :ok = Posts.unrepost_post(reposter, post)
+
+      assert {:ok, updated} =
+               Posts.update_post(post, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      assert [%PostDenial{wildcard: "everyone"}] = updated.denials
+    end
+
+    test "update_post/2 refuses audience changes while replies exist" do
+      author = user()
+      post = create_post!(author, %{body: "public"})
+      {:ok, reply} = Posts.create_reply(user(), post, %{body: "answer"})
+
+      assert {:error, :visibility_locked} =
+               Posts.update_post(post, %{
+                 body: "public",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      # Deleting the reply lifts the lock.
+      {:ok, _} = Posts.delete_post(reply)
 
       assert {:ok, updated} =
                Posts.update_post(post, %{

@@ -1,6 +1,8 @@
 defmodule VutuvWeb.PostLive.Composer do
   @moduledoc """
-  The post composer, used by the feed (new posts) and the edit page.
+  The post composer, used by the feed (new posts), the edit page and the
+  reply page (pass `parent` to create the post as a reply via
+  `Vutuv.Posts.create_reply/3`).
 
   **Images upload eagerly**: the moment a file is picked it is processed
   (`Vutuv.Posts.create_pending_image/3` — WebP versions, private original)
@@ -26,7 +28,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   @impl true
   def update(assigns, socket) do
-    socket = assign(socket, Map.take(assigns, [:id, :current_user, :post]))
+    socket = assign(socket, Map.take(assigns, [:id, :current_user, :post, :parent]))
 
     socket =
       if socket.assigns[:composer_ready?] do
@@ -44,9 +46,14 @@ defmodule VutuvWeb.PostLive.Composer do
 
     socket
     |> assign(:composer_ready?, true)
-    # Reposted posts carry other people's shares: the audience is pinned to
-    # public (Posts.update_post/2 enforces it; the select disappears).
-    |> assign(:reposts_lock?, post != nil and Posts.has_reposts?(post))
+    |> assign_new(:parent, fn -> nil end)
+    # Reposted or answered posts carry other people's shares and replies:
+    # the audience is pinned to public (Posts.update_post/2 enforces it; the
+    # select disappears).
+    |> assign(
+      :audience_locked?,
+      post != nil and (Posts.has_reposts?(post) or Posts.has_replies?(post))
+    )
     |> assign(:body, (post && post.body) || "")
     |> assign(:tags_value, tags_value(post))
     |> assign(:images, (post && post.images) || [])
@@ -204,26 +211,35 @@ defmodule VutuvWeb.PostLive.Composer do
     }
 
     socket.assigns.post
-    |> save_post(socket.assigns.current_user, attrs)
+    |> save_post(socket.assigns.current_user, attrs, socket.assigns.parent)
     |> handle_save_result(socket)
   end
 
-  defp save_post(nil, author, attrs), do: Posts.create_post(author, attrs)
-  defp save_post(post, _author, attrs), do: Posts.update_post(post, attrs)
+  defp save_post(nil, author, attrs, %Post{} = parent),
+    do: Posts.create_reply(author, parent, attrs)
+
+  defp save_post(nil, author, attrs, nil), do: Posts.create_post(author, attrs)
+  defp save_post(post, _author, attrs, _parent), do: Posts.update_post(post, attrs)
 
   defp handle_save_result({:ok, post}, socket) do
-    if socket.assigns.post do
-      {:noreply, push_navigate(socket, to: Posts.path(post))}
-    else
-      # The feed prepends the new post via its own {:new_post, …} broadcast;
-      # the composer just resets (audience choice sticks).
-      {:noreply,
-       socket
-       |> assign(:body, "")
-       |> assign(:tags_value, "")
-       |> assign(:images, [])
-       |> assign(:alts, %{})
-       |> assign(:error, nil)}
+    cond do
+      socket.assigns.post ->
+        {:noreply, push_navigate(socket, to: Posts.path(post))}
+
+      socket.assigns.parent ->
+        # Back to the conversation: the thread under the parent now shows it.
+        {:noreply, push_navigate(socket, to: Posts.path(socket.assigns.parent))}
+
+      true ->
+        # The feed prepends the new post via its own {:new_post, …} broadcast;
+        # the composer just resets (audience choice sticks).
+        {:noreply,
+         socket
+         |> assign(:body, "")
+         |> assign(:tags_value, "")
+         |> assign(:images, [])
+         |> assign(:alts, %{})
+         |> assign(:error, nil)}
     end
   end
 
@@ -238,7 +254,7 @@ defmodule VutuvWeb.PostLive.Composer do
   defp save_error_message(:invalid_denials), do: gettext("The audience selection is not valid.")
 
   defp save_error_message(:visibility_locked),
-    do: gettext("The audience cannot be restricted while reposts exist.")
+    do: gettext("The audience cannot be restricted while reposts or replies exist.")
 
   defp save_error_message(:invalid_images),
     do: gettext("One of the images could not be attached.")
@@ -531,10 +547,10 @@ defmodule VutuvWeb.PostLive.Composer do
               class={[input_class(), "max-w-56 flex-1"]}
             />
 
-            <%= if @reposts_lock? do %>
+            <%= if @audience_locked? do %>
               <span
                 id={"#{@id}-audience-locked"}
-                title={gettext("The audience cannot be restricted while reposts exist.")}
+                title={gettext("The audience cannot be restricted while reposts or replies exist.")}
                 class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
               >
                 🌐 {gettext("Public")}
@@ -692,9 +708,9 @@ defmodule VutuvWeb.PostLive.Composer do
             {audience_summary(assigns)}
           </p>
 
-          <p :if={@reposts_lock?} class="mt-1 text-xs text-slate-400" id={"#{@id}-reposts-lock-hint"}>
+          <p :if={@audience_locked?} class="mt-1 text-xs text-slate-400" id={"#{@id}-audience-lock-hint"}>
             {gettext(
-              "This post has been reposted. Its audience stays public while reposts exist; you can still delete the post."
+              "This post has been reposted or answered. Its audience stays public while reposts or replies exist; you can still delete the post."
             )}
           </p>
 

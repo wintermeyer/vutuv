@@ -300,6 +300,74 @@ defmodule VutuvWeb.PostControllerTest do
     end
   end
 
+  describe "the reply banner and thread" do
+    test "a reply's page shows the banner with the @handle, linking the parent", %{conn: conn} do
+      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent = create_post!(parent_author, %{body: "original question"})
+      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "an answer"})
+
+      html = conn |> get(Posts.path(reply)) |> html_response(200)
+
+      # The banner names the account handle, not the clear name.
+      assert html =~ "Replying to @#{parent_author.active_slug}"
+      refute html =~ "Replying to Petra Parent"
+      assert html =~ Posts.path(parent)
+    end
+
+    test "after parent deletion the banner names the author's @handle and profile", %{conn: conn} do
+      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent = create_post!(parent_author, %{body: "soon gone"})
+      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "still here"})
+
+      {:ok, _} = Posts.delete_post(parent)
+
+      html = conn |> get(Posts.path(reply)) |> html_response(200)
+
+      assert html =~ "Reply to a now-deleted post by @#{parent_author.active_slug}"
+      refute html =~ "by Petra Parent"
+      assert html =~ ~s(href="/#{parent_author.active_slug}")
+    end
+
+    test "after the parent author's account deletion the banner is nameless", %{conn: conn} do
+      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent = create_post!(parent_author, %{body: "soon gone"})
+      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "still here"})
+
+      # The real account-deletion path: the cascade removes the post too.
+      Vutuv.Repo.delete!(parent_author)
+
+      html = conn |> get(Posts.path(reply)) |> html_response(200)
+
+      assert html =~ "Reply to a deleted post"
+      refute html =~ "Petra Parent"
+    end
+
+    test "the parent's page lists visible replies oldest first", %{conn: conn} do
+      parent = create_post!(author(), %{body: "the root post"})
+      replier = author()
+
+      {:ok, _old} = Posts.create_reply(replier, parent, %{body: "older answer"})
+
+      {:ok, _hidden} =
+        Posts.create_reply(author(), parent, %{
+          body: "secret answer",
+          denials: [%{"wildcard" => "everyone"}]
+        })
+
+      {:ok, _new} = Posts.create_reply(replier, parent, %{body: "newer answer"})
+
+      html = conn |> get(Posts.path(parent)) |> html_response(200)
+
+      assert html =~ "older answer"
+      assert html =~ "newer answer"
+      refute html =~ "secret answer"
+
+      {i_old, _} = :binary.match(html, "older answer")
+      {i_new, _} = :binary.match(html, "newer answer")
+      assert i_old < i_new
+    end
+  end
+
   describe "DELETE /posts/:id" do
     test "the author deletes their post", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

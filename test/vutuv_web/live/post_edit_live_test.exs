@@ -71,6 +71,20 @@ defmodule VutuvWeb.PostEditLiveTest do
       assert Posts.get_post(post.id).denials == []
     end
 
+    test "locks the audience while replies exist", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "carried by a thread"})
+
+      {:ok, _} =
+        Posts.create_reply(insert(:user, validated?: true), post, %{body: "the answer"})
+
+      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      refute has_element?(live, "#composer-preset")
+      assert has_element?(live, "#composer-audience-locked")
+      assert html =~ "replies"
+    end
+
     test "sends non-authors away without confirming existence", %{conn: conn} do
       author = insert(:user, validated?: true)
       {:ok, post} = Posts.create_post(author, %{body: "not yours"})

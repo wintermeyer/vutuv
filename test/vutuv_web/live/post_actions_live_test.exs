@@ -81,6 +81,36 @@ defmodule VutuvWeb.PostActionsLiveTest do
                Posts.update_post(post, %{body: "spread", denials: [%{"wildcard" => "everyone"}]})
     end
 
+    test "the reply button links to the reply page and counts live", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "discussable"})
+      %{view: actions} = feed_actions(conn, post)
+
+      reply_button = "#post-actions-post-#{post.id}-reply"
+
+      html = actions |> element(reply_button) |> render()
+      assert html =~ ~s(href="/posts/#{post.id}/reply")
+      refute html =~ ~s(data-count="reply")
+
+      # Render once so the child is fully joined before the broadcast.
+      assert render(actions) =~ "post-actions-post-#{post.id}-reply"
+
+      {:ok, _} = Posts.create_reply(other_user(), post, %{body: "an answer"})
+
+      html = actions |> element(reply_button) |> render()
+      assert html =~ ~r/data-count="reply">\s*1\s*</
+    end
+
+    test "the reply button is disabled on restricted posts", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "private", denials: [%{"wildcard" => "everyone"}]})
+      %{view: actions} = feed_actions(conn, post)
+
+      assert actions
+             |> element("#post-actions-post-#{post.id}-reply")
+             |> render() =~ "disabled"
+    end
+
     test "the repost button is disabled on restricted posts", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "private", denials: [%{"wildcard" => "everyone"}]})

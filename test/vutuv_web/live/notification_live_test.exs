@@ -56,6 +56,34 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ "is now connected with you"
     end
 
+    test "shows a reply as a reply event, but not a self-reply", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      replier = insert(:user, first_name: "Joe", last_name: "Armstrong")
+      parent = insert(:post, user: user)
+
+      ref =
+        insert(:post_reply,
+          post: insert(:post, user: replier),
+          parent_post: parent,
+          parent_author: user
+        )
+
+      insert(:post_reply,
+        post: insert(:post, user: user),
+        parent_post: parent,
+        parent_author: user
+      )
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "replied to your post"
+      assert render(live) =~ "Joe Armstrong"
+      assert has_element?(live, "#notification-reply-#{ref.id}")
+      # The self-reply derives no row.
+      assert row_count(render(live), "reply") == 1
+    end
+
     test "shows the empty state when nothing happened yet", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
@@ -219,8 +247,9 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
-  # Derived follower rows carry an `id="notification-follower-<row id>"`.
-  defp row_count(html), do: length(String.split(html, ~s(id="notification-follower-))) - 1
+  # Derived rows carry an `id="notification-<kind>-<row id>"`.
+  defp row_count(html, kind \\ "follower"),
+    do: length(String.split(html, ~s(id="notification-#{kind}-))) - 1
 
   # Connection inserted_at has second precision; backdating to distinct seconds
   # gives the feed a deterministic newest-first order to paginate through.

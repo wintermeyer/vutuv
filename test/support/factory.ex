@@ -139,6 +139,14 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def post_reply_factory do
+    %Vutuv.Posts.PostReply{
+      post: build(:post),
+      parent_post: build(:post),
+      parent_author: build(:user)
+    }
+  end
+
   def post_image_factory do
     %Vutuv.Posts.PostImage{
       token: Vutuv.Posts.PostImage.gen_token(),

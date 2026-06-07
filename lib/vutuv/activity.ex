@@ -10,8 +10,8 @@ defmodule Vutuv.Activity do
   (`VutuvWeb.ShellLive`) and the notification / message LiveViews subscribe.
 
   The feed is **derived at read time** from the event tables that already exist
-  (`connections`, `user_tag_endorsements`) instead of being persisted per
-  notification — which makes it automatically retroactive. The only stored
+  (`connections`, `user_tag_endorsements`, `post_replies`) instead of being
+  persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
   reached via `notifications_page/2`, a timestamp-cursor pagination that backs
@@ -20,6 +20,7 @@ defmodule Vutuv.Activity do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
   alias Vutuv.Social.Connection
   alias Vutuv.Tags.UserTagEndorsement
@@ -84,7 +85,15 @@ defmodule Vutuv.Activity do
       )
       |> Repo.one()
 
-    [follower_max, endorsement_max, connection_max]
+    reply_max =
+      from(r in PostReply,
+        join: reply in assoc(r, :post),
+        where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+        select: max(r.inserted_at)
+      )
+      |> Repo.one()
+
+    [follower_max, endorsement_max, connection_max, reply_max]
     |> Enum.reject(&is_nil/1)
     |> Enum.max(NaiveDateTime, fn -> nil end)
   end
@@ -127,6 +136,18 @@ defmodule Vutuv.Activity do
     )
   end
 
+  @doc ~S(Convenience: a "replied to your post" notification for the parent post's author.)
+  def notify_reply(parent_author_id, replier) do
+    notify(
+      parent_author_id,
+      Map.merge(actor_fields(replier), %{
+        kind: "reply",
+        text: "replied to your post.",
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
   @doc ~S(Convenience: an "is now connected with you" notification after a mutual follow.)
   def notify_connection(user_id, other) do
     notify(
@@ -149,13 +170,14 @@ defmodule Vutuv.Activity do
 
   The feed is derived straight from its source tables — followers
   (`connections`), endorsements (`user_tag_endorsements`, with the tag's
-  name) and mutual connections (a reciprocal pair of `connections` rows,
-  timestamped at the later of the two) — so it includes events from before
-  this feature existed. Items mirror the live `notify_*` payload shape; ids
-  are `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
+  name), mutual connections (a reciprocal pair of `connections` rows,
+  timestamped at the later of the two) and replies (`post_replies`, minus
+  self-replies) — so it includes events from before this feature existed.
+  Items mirror the live `notify_*` payload shape; ids are
+  `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
   namespace the LiveView uses for pushed events.
 
-  The cursor (and the merge across the three sources) is the shared
+  The cursor (and the merge across the sources) is the shared
   `Vutuv.FeedPage` scheme. Treat it as opaque.
   """
   def notifications_page(user_id, opts \\ []) do
@@ -166,7 +188,8 @@ defmodule Vutuv.Activity do
       [
         &follower_items(user_id, &1, &2),
         &endorsement_items(user_id, &1, &2),
-        &connection_items(user_id, &1, &2)
+        &connection_items(user_id, &1, &2),
+        &reply_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -192,10 +215,10 @@ defmodule Vutuv.Activity do
     total_count(user_id, read_at)
   end
 
-  # The three feed sources are counted in a single round trip: each count is a
+  # The feed sources are counted in a single round trip: each count is a
   # scalar subquery, summed in one SELECT. unread_notification_count/1 still
-  # needs one prior read for the marker, so it ends up at 2 queries (was 4);
-  # notifications_count/1 needs no marker and so runs in 1 query (was 3). The
+  # needs one prior read for the marker, so it ends up at 2 queries;
+  # notifications_count/1 needs no marker and so runs in 1 query. The
   # strict `> read_at` unread filter and the GREATEST-anchored mutuality
   # timestamp are unchanged — only the round trips collapse.
   defp total_count(user_id, read_at) do
@@ -203,7 +226,8 @@ defmodule Vutuv.Activity do
       from(s in subquery(count_followers(user_id, read_at)),
         select:
           s.count + subquery(count_endorsements(user_id, read_at)) +
-            subquery(count_connections(user_id, read_at))
+            subquery(count_connections(user_id, read_at)) +
+            subquery(count_replies(user_id, read_at))
       )
     )
   end
@@ -274,6 +298,23 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  defp reply_items(user_id, limit, cursor) do
+    from(r in PostReply,
+      join: reply in assoc(r, :post),
+      join: replier in assoc(reply, :user),
+      # Self-replies (threading your own post) are not news.
+      where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      order_by: [desc: r.inserted_at, desc: r.id],
+      limit: ^limit,
+      select: {r.id, r.inserted_at, replier}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, replier} ->
+      actor_item("reply-#{id}", "reply", at, replier)
+    end)
+  end
+
   defp at_or_before(query, nil), do: query
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
@@ -329,6 +370,15 @@ defmodule Vutuv.Activity do
     else
       query
     end
+  end
+
+  defp count_replies(user_id, read_at) do
+    from(r in PostReply,
+      join: reply in assoc(r, :post),
+      where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      select: %{count: count()}
+    )
+    |> since(read_at)
   end
 
   defp since(query, nil), do: query

@@ -15,6 +15,9 @@ defmodule Vutuv.Posts.Post do
 
     belongs_to(:user, Vutuv.Accounts.User)
 
+    # Present iff this post is a reply; survives parent deletion (see PostReply).
+    has_one(:reply_ref, Vutuv.Posts.PostReply, foreign_key: :post_id)
+
     has_many(:denials, Vutuv.Posts.PostDenial, on_replace: :delete)
     has_many(:images, Vutuv.Posts.PostImage, preload_order: [asc: :position])
     has_many(:post_tags, Vutuv.Posts.PostTag, on_replace: :delete)

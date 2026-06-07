@@ -23,8 +23,11 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UI
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReply
 
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
@@ -75,6 +78,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
       |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
       |> assign(:author?, Posts.author?(assigns.post, assigns.viewer))
+      |> assign(:reply_banner, reply_banner(assigns.post))
       |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
@@ -93,6 +97,7 @@ defmodule VutuvWeb.PostComponents do
         edited?={@edited?}
         author?={@author?}
         reposted_by={@reposted_by}
+        reply_banner={@reply_banner}
         conn_or_socket={@conn_or_socket}
         actions_id={@actions_id}
         menu_id={@menu_id}
@@ -110,6 +115,7 @@ defmodule VutuvWeb.PostComponents do
         edited?={@edited?}
         author?={@author?}
         reposted_by={@reposted_by}
+        reply_banner={@reply_banner}
         conn_or_socket={@conn_or_socket}
         actions_id={@actions_id}
         menu_id={@menu_id}
@@ -128,6 +134,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
   attr(:reposted_by, :any, required: true)
+  attr(:reply_banner, :any, required: true)
   attr(:conn_or_socket, :any, required: true)
   attr(:actions_id, :string, required: true)
   attr(:menu_id, :string, required: true)
@@ -145,6 +152,41 @@ defmodule VutuvWeb.PostComponents do
           {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
         </.link>
       </p>
+
+      <%!-- The reply banner: the live parent links its permalink; a deleted
+      parent degrades to the author's profile, a deleted account to a
+      nameless notice (no name retained past account deletion). --%>
+      <%= case @reply_banner do %>
+        <% {:parent, parent_author, parent_path} -> %>
+          <p
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            data-reply-banner="parent"
+          >
+            <.icon_reply class="h-4 w-4" />
+            <.link href={parent_path} class="hover:text-brand-700">
+              {gettext("Replying to %{handle}", handle: handle(parent_author))}
+            </.link>
+          </p>
+        <% {:author_only, parent_author} -> %>
+          <p
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            data-reply-banner="author-only"
+          >
+            <.icon_reply class="h-4 w-4" />
+            <.link href={~p"/#{parent_author}"} class="hover:text-brand-700">
+              {gettext("Reply to a now-deleted post by %{handle}", handle: handle(parent_author))}
+            </.link>
+          </p>
+        <% :gone -> %>
+          <p
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            data-reply-banner="gone"
+          >
+            <.icon_reply class="h-4 w-4" />
+            {gettext("Reply to a deleted post")}
+          </p>
+        <% nil -> %>
+      <% end %>
 
       <div class="flex items-start gap-3">
         <.link href={~p"/#{@post.user}"} class="shrink-0">
@@ -272,6 +314,28 @@ defmodule VutuvWeb.PostComponents do
     </div>
     """
   end
+
+  # The three banner states a reply card can be in, resolved from the
+  # preloaded reply_ref (one level deep — `Vutuv.Posts.post_preloads/0`).
+  # Pattern-match the structs: an un-preloaded has_one is a truthy
+  # %Ecto.Association.NotLoaded{}.
+  defp reply_banner(%Post{reply_ref: %PostReply{} = ref}) do
+    cond do
+      match?(%Post{}, ref.parent_post) ->
+        {:parent, ref.parent_post.user, Posts.path(ref.parent_post)}
+
+      match?(%User{}, ref.parent_author) ->
+        {:author_only, ref.parent_author}
+
+      true ->
+        :gone
+    end
+  end
+
+  defp reply_banner(_post), do: nil
+
+  # Reply system messages name the account handle, never the clear name.
+  defp handle(%User{active_slug: slug}), do: "@" <> slug
 
   # Full mode: attachments the body references inline render in place; the
   # rest form the gallery. Preview mode handles images separately (thumbs).

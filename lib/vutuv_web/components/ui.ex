@@ -559,6 +559,20 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The outline reply arrow icon (24×24 stroke), shared by the post card's
+  "Replying to" banner and the action bar. Size it via `class`.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+
+  def icon_reply(assigns) do
+    ~H"""
+    <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 15 3 9m0 0 6-6M3 9h12a6 6 0 0 1 0 12h-3" />
+    </svg>
+    """
+  end
+
+  @doc """
   The outline bookmark icon (24×24 stroke), shared by the shell's saved-pages
   entry and the action bar; `filled?` switches to the solid fill. Size it via
   `class`.

@@ -10,9 +10,11 @@ defmodule VutuvWeb.PostJSON do
   this level — they are UI sugar over the deny array.
   """
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReply
 
   @doc "Serializes a preloaded post for `viewer` (a `%User{}` or `nil`)."
   def post(%Post{} = post, viewer) do
@@ -20,10 +22,7 @@ defmodule VutuvWeb.PostJSON do
       id: post.id,
       slug: Post.slug(post),
       url: VutuvWeb.Endpoint.url() <> Posts.path(post),
-      author: %{
-        slug: post.user.active_slug,
-        name: VutuvWeb.UserHelpers.full_name(post.user)
-      },
+      author: author_ref(post.user),
       body_markdown: post.body,
       body_html:
         post.body
@@ -32,8 +31,36 @@ defmodule VutuvWeb.PostJSON do
       published_at: post.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601(),
       tags: Enum.map(post.tags, & &1.name),
       images: Enum.map(post.images, &image/1),
+      reply_count: Posts.reply_count(post.id),
+      in_reply_to: in_reply_to(post),
       audience: audience(post, viewer)
     }
+  end
+
+  # The reply reference mirrors the card banner's three states: a live
+  # parent, a deleted post whose author still exists, or nothing nameable
+  # once the account is gone too. `nil` when the post is not a reply.
+  defp in_reply_to(%Post{reply_ref: %PostReply{} = ref}) do
+    cond do
+      match?(%Post{}, ref.parent_post) ->
+        %{
+          post_id: ref.parent_post.id,
+          url: VutuvWeb.Endpoint.url() <> Posts.path(ref.parent_post),
+          author: author_ref(ref.parent_post.user)
+        }
+
+      match?(%User{}, ref.parent_author) ->
+        %{post_id: nil, url: nil, author: author_ref(ref.parent_author)}
+
+      true ->
+        %{post_id: nil, url: nil, author: nil}
+    end
+  end
+
+  defp in_reply_to(_post), do: nil
+
+  defp author_ref(%User{} = user) do
+    %{slug: user.active_slug, name: VutuvWeb.UserHelpers.full_name(user)}
   end
 
   defp image(%PostImage{} = image) do

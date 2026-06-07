@@ -164,6 +164,7 @@ defmodule VutuvWeb.PostController do
       author: author,
       owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
+      replies: Posts.list_replies(post, viewer),
       page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{Post.slug(post)}"
     )
   end

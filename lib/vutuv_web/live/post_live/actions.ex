@@ -1,7 +1,8 @@
 defmodule VutuvWeb.PostLive.Actions do
   @moduledoc """
-  The per-card action bar: like / repost / bookmark buttons with live
-  counters.
+  The per-card action bar: like / reply / repost / bookmark with live
+  counters (the reply control navigates to the reply page instead of
+  toggling).
 
   One small LiveView per rendered post card, embedded via `live_render`
   from `VutuvWeb.PostComponents.post_card/1` — on the LiveView feed *and*
@@ -26,7 +27,7 @@ defmodule VutuvWeb.PostLive.Actions do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [compact_count: 1, icon_repost: 1, icon_bookmark: 1]
+  import VutuvWeb.UI, only: [compact_count: 1, icon_repost: 1, icon_reply: 1, icon_bookmark: 1]
 
   alias Vutuv.Posts
 
@@ -101,7 +102,8 @@ defmodule VutuvWeb.PostLive.Actions do
 
   @impl true
   def handle_info(
-        {:post_counters, %{likes: likes, bookmarks: bookmarks, reposts: reposts}},
+        {:post_counters,
+         %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies}},
         socket
       ) do
     case socket.assigns.engagement do
@@ -114,7 +116,8 @@ defmodule VutuvWeb.PostLive.Actions do
            engagement
            | likes: likes,
              bookmarks: bookmarks,
-             reposts: reposts
+             reposts: reposts,
+             replies: replies
          })}
     end
   end
@@ -146,6 +149,13 @@ defmodule VutuvWeb.PostLive.Actions do
         <:icon><.icon_heart filled?={@engagement.liked?} /></:icon>
       </.action_button>
 
+      <.reply_link
+        id={"#{@id}-reply"}
+        post_id={@post_id}
+        count={@engagement.replies}
+        disabled={@engagement.restricted?}
+      />
+
       <.action_button
         id={"#{@id}-repost"}
         kind="repost"
@@ -170,6 +180,53 @@ defmodule VutuvWeb.PostLive.Actions do
         <:icon><.icon_bookmark filled?={@engagement.bookmarked?} /></:icon>
       </.action_button>
     </div>
+    """
+  end
+
+  # The reply control is a navigation, not a toggle: it leads to the reply
+  # page (which requires login itself). Restricted posts cannot be answered,
+  # mirroring the disabled repost button.
+  attr(:id, :string, required: true)
+  attr(:post_id, :integer, required: true)
+  attr(:count, :integer, required: true)
+  attr(:disabled, :boolean, required: true)
+
+  defp reply_link(assigns) do
+    ~H"""
+    <.link
+      :if={!@disabled}
+      id={@id}
+      href={~p"/posts/#{@post_id}/reply"}
+      aria-label={gettext("Reply")}
+      title={gettext("Reply")}
+      class={[
+        "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm",
+        "hover:bg-slate-100 dark:hover:bg-slate-800",
+        # components.css colors bare `a, button` brand-600, which beats the
+        # wrapper's inherited slate — so the muted color sits on the link.
+        "text-slate-500 dark:text-slate-400"
+      ]}
+    >
+      <.icon_reply />
+      <span
+        class={["font-medium tabular-nums", @count == 0 && "invisible"]}
+        data-count={@count > 0 && "reply"}
+      >
+        {compact_count(@count)}
+      </span>
+    </.link>
+    <span
+      :if={@disabled}
+      id={@id}
+      aria-disabled="true"
+      title={gettext("Only public posts can be answered.")}
+      class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-500 opacity-40 dark:text-slate-400"
+    >
+      <.icon_reply />
+      <span class={["font-medium tabular-nums", @count == 0 && "invisible"]}>
+        {compact_count(@count)}
+      </span>
+    </span>
     """
   end
 

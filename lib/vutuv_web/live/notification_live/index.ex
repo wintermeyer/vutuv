@@ -157,10 +157,15 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
   defp kind_classes("endorsement"), do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"
+
+  defp kind_classes("reply"),
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 
   defp kind_glyph("follower"), do: "+"
   defp kind_glyph("endorsement"), do: "★"
+  defp kind_glyph("reply"), do: "↩"
   defp kind_glyph(_), do: "•"
 
   # The event text is rendered from the kind (not stored), so it translates
@@ -171,6 +176,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: gettext("endorsed you for %{tag}.", tag: tag)
 
   defp notification_text(%{kind: "connection"}), do: gettext("is now connected with you.")
+  defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
   defp notification_text(n), do: n[:text]
 
   defp format_at(%mod{} = at) when mod in [NaiveDateTime, DateTime],

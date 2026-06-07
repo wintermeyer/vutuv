@@ -32,6 +32,13 @@ defmodule Vutuv.Posts do
   (`subscribe_post/1`). Reposts work on **public** posts only, distribute
   into the reposter's followers' feeds and pin the post's audience open
   while any exist (the author can still delete).
+
+  **Replies** (`create_reply/3`) are normal posts plus a
+  `Vutuv.Posts.PostReply` row naming the parent. Only public parents accept
+  replies, and replies pin the parent's audience open like reposts do. A
+  reply outlives its parent: the parent references nilify on deletion, so
+  the banner can degrade from a link to "a now-deleted post by X" to a
+  nameless notice once the account is gone too.
   """
 
   import Ecto.Query
@@ -43,6 +50,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostLike
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostTag
   alias Vutuv.Repo
@@ -52,6 +60,7 @@ defmodule Vutuv.Posts do
 
   @default_feed_limit 20
   @default_profile_limit 3
+  @default_thread_limit 100
   @seq_attempts 3
   @pending_max_age_hours 24
   @max_tags 5
@@ -97,6 +106,48 @@ defmodule Vutuv.Posts do
         {:error, _} = error ->
           error
       end
+    end
+  end
+
+  @doc """
+  Creates a reply to `parent` for `author` — a normal post (same attrs,
+  validations and broadcasts as `create_post/2`) plus a
+  `Vutuv.Posts.PostReply` row naming the parent. Only **public** parents
+  (no denials) accept replies — `{:error, :restricted}` otherwise — and the
+  parent must be visible to the author (`{:error, :not_visible}`). While
+  replies exist the parent's audience is pinned open, like with reposts.
+
+  Additionally broadcasts the parent's fresh `{:post_counters, …}` on its
+  post topic and notifies the parent's author (unless they reply to
+  themselves). The reply outlives its parent: on parent deletion the post
+  reference nilifies, on account deletion the author reference too (see
+  `Vutuv.Posts.PostReply`).
+  """
+  def create_reply(%User{} = author, %Post{} = parent, attrs) do
+    image_ids = parse_ids(fetch(attrs, :image_ids) || [])
+
+    with :ok <- check_reply_allowed(author, parent),
+         {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []),
+         :ok <- check_image_count(image_ids),
+         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
+      case insert_with_seq(author, changeset, image_ids, @seq_attempts, parent) do
+        {:ok, post} ->
+          post = preload_post(post)
+          broadcast_new_post(post)
+          broadcast_reply(parent, post)
+          {:ok, post}
+
+        {:error, _} = error ->
+          error
+      end
+    end
+  end
+
+  defp check_reply_allowed(%User{} = author, %Post{} = parent) do
+    cond do
+      not visible_to?(parent, author) -> {:error, :not_visible}
+      restricted?(parent) -> {:error, :restricted}
+      true -> :ok
     end
   end
 
@@ -186,10 +237,14 @@ defmodule Vutuv.Posts do
 
   # The per-day counter races under a unique index: compute max+1, insert,
   # and on a seq collision recompute and retry (each attempt in its own
-  # transaction, so the aborted insert never poisons the next one).
-  defp insert_with_seq(_author, _changeset, _image_ids, 0), do: {:error, :seq_conflict}
+  # transaction, so the aborted insert never poisons the next one). For a
+  # reply, `parent` adds the PostReply row inside the same transaction, so
+  # post and reference commit (and retry) together.
+  defp insert_with_seq(author, changeset, image_ids, attempts, parent \\ nil)
 
-  defp insert_with_seq(author, changeset, image_ids, attempts) do
+  defp insert_with_seq(_author, _changeset, _image_ids, 0, _parent), do: {:error, :seq_conflict}
+
+  defp insert_with_seq(author, changeset, image_ids, attempts, parent) do
     today = Date.utc_today()
 
     result =
@@ -202,6 +257,7 @@ defmodule Vutuv.Posts do
         |> case do
           {:ok, post} ->
             attach_images!(post, image_ids)
+            insert_reply_ref!(post, parent)
             post
 
           {:error, changeset} ->
@@ -217,7 +273,7 @@ defmodule Vutuv.Posts do
         if Keyword.has_key?(errors, :seq) do
           # Lost the per-day counter race — recompute and retry with the
           # original (pre-insert) changeset.
-          insert_with_seq(author, changeset, image_ids, attempts - 1)
+          insert_with_seq(author, changeset, image_ids, attempts - 1, parent)
         else
           {:error, errored}
         end
@@ -225,6 +281,16 @@ defmodule Vutuv.Posts do
       {:error, _} = error ->
         error
     end
+  end
+
+  defp insert_reply_ref!(_post, nil), do: :ok
+
+  defp insert_reply_ref!(%Post{} = post, %Post{} = parent) do
+    Repo.insert!(%PostReply{
+      post_id: post.id,
+      parent_post_id: parent.id,
+      parent_author_id: parent.user_id
+    })
   end
 
   defp next_seq(user_id, date) do
@@ -497,10 +563,18 @@ defmodule Vutuv.Posts do
     Repo.exists?(from(r in PostRepost, where: r.post_id == ^post_id))
   end
 
-  # A repost pins the audience open: someone else now carries the post, so
-  # narrowing it would silently break their share. Deleting stays possible.
+  @doc "Whether any replies to this post exist (the audience lock, like reposts)."
+  def has_replies?(%Post{id: id}), do: has_replies?(id)
+
+  def has_replies?(post_id) when is_integer(post_id) do
+    Repo.exists?(from(r in PostReply, where: r.parent_post_id == ^post_id))
+  end
+
+  # A repost or reply pins the audience open: someone else now carries or
+  # answers the post, so narrowing it would silently break their share or
+  # strand their reply's context. Deleting stays possible.
   defp check_visibility_lock(%Post{} = post, denials) do
-    if denials != [] and has_reposts?(post) do
+    if denials != [] and (has_reposts?(post) or has_replies?(post)) do
       {:error, :visibility_locked}
     else
       :ok
@@ -535,7 +609,7 @@ defmodule Vutuv.Posts do
     :ok
   end
 
-  @doc "Like / bookmark / repost counts of a post, in one round trip."
+  @doc "Like / bookmark / repost / reply counts of a post, in one round trip."
   def engagement_counts(post_id) do
     Repo.one(
       from(p in Post,
@@ -544,10 +618,17 @@ defmodule Vutuv.Posts do
           likes: fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", p.id),
           bookmarks:
             fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
-          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id)
+          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id),
+          replies:
+            fragment("(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)", p.id)
         }
       )
-    ) || %{likes: 0, bookmarks: 0, reposts: 0}
+    ) || %{likes: 0, bookmarks: 0, reposts: 0, replies: 0}
+  end
+
+  @doc "How many replies a post has (raw row count, like the other counters)."
+  def reply_count(post_id) do
+    Repo.aggregate(from(r in PostReply, where: r.parent_post_id == ^post_id), :count)
   end
 
   @doc """
@@ -573,6 +654,8 @@ defmodule Vutuv.Posts do
           bookmarks:
             fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
           reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id),
+          replies:
+            fragment("(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)", p.id),
           liked?:
             fragment(
               "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
@@ -807,6 +890,26 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The direct replies to `post` that `viewer` may see, oldest first — the
+  thread under the permalink page. Plain preloaded posts, capped at
+  `:limit` (default #{@default_thread_limit}).
+  """
+  def list_replies(%Post{id: parent_id}, viewer, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @default_thread_limit)
+
+    from(p in Post,
+      join: r in PostReply,
+      on: r.post_id == p.id,
+      where: r.parent_post_id == ^parent_id,
+      order_by: [asc: p.inserted_at, asc: p.id],
+      limit: ^limit
+    )
+    |> scope_visible(viewer)
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+  end
+
+  @doc """
   One page of the posts `user` liked, newest like first, visibility-filtered
   at read time (a since-restricted post drops out). Cursor-paginated like
   the feed; entries are plain preloaded posts.
@@ -877,12 +980,15 @@ defmodule Vutuv.Posts do
 
   defp post_preloads do
     # denials with group/denied_user: the author-facing audience display
-    # names them (never shown to other viewers).
+    # names them (never shown to other viewers). reply_ref goes exactly one
+    # level deep (the banner names the direct parent only) — preloading the
+    # parent's own reply_ref would recurse.
     [
       :user,
       :images,
       denials: [:group, :denied_user],
-      tags: from(t in Tag, order_by: t.name)
+      tags: from(t in Tag, order_by: t.name),
+      reply_ref: [:parent_author, parent_post: :user]
     ]
   end
 
@@ -1085,6 +1191,17 @@ defmodule Vutuv.Posts do
       {:new_repost, %{repost_id: repost.id, post_id: repost.post_id, reposter_id: repost.user_id}}
 
     broadcast_to_followers(repost.user_id, event)
+  end
+
+  # A new reply ticks the parent's open action bars and notifies its author
+  # (self-replies are not news).
+  defp broadcast_reply(%Post{} = parent, %Post{} = reply) do
+    payload = Map.put(engagement_counts(parent.id), :post_id, parent.id)
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(parent.id), {:post_counters, payload})
+
+    if parent.user_id != reply.user_id do
+      Vutuv.Activity.notify_reply(parent.user_id, reply.user)
+    end
   end
 
   defp broadcast_to_followers(user_id, event) do

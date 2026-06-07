@@ -2,6 +2,7 @@ defmodule Vutuv.ActivityTest do
   use Vutuv.DataCase
 
   alias Vutuv.Activity
+  alias Vutuv.Posts.PostReply
   alias Vutuv.Social.Connection
   alias Vutuv.Tags.UserTagEndorsement
 
@@ -156,6 +157,38 @@ defmodule Vutuv.ActivityTest do
 
       assert recent_notifications(me.id) == []
     end
+
+    test "derives reply events from post reply rows" do
+      me = insert(:user)
+      replier = insert(:user, first_name: "Joe", last_name: "Armstrong")
+      parent = insert(:post, user: me)
+      reply = insert(:post, user: replier)
+      ref = insert(:post_reply, post: reply, parent_post: parent, parent_author: me)
+
+      assert [n] = recent_notifications(me.id)
+      assert n.kind == "reply"
+      assert n.id == "reply-#{ref.id}"
+      assert n.actor_name == "Joe Armstrong"
+      assert n.actor_param == replier.active_slug
+      assert %NaiveDateTime{} = n.at
+    end
+
+    test "a self-reply produces no notification" do
+      me = insert(:user)
+      parent = insert(:post, user: me)
+      reply = insert(:post, user: me)
+      insert(:post_reply, post: reply, parent_post: parent, parent_author: me)
+
+      assert recent_notifications(me.id) == []
+    end
+
+    test "a reply to a since-deleted post still notifies its author" do
+      me = insert(:user)
+      reply = insert(:post, user: insert(:user))
+      insert(:post_reply, post: reply, parent_post: nil, parent_author: me)
+
+      assert [%{kind: "reply"}] = recent_notifications(me.id)
+    end
   end
 
   describe "notifications_page/2" do
@@ -304,12 +337,41 @@ defmodule Vutuv.ActivityTest do
       assert Activity.unread_notification_count(me.id) == 4
     end
 
-    test "folds the marker read and the three counts into two queries" do
+    test "folds the marker read and the source counts into two queries" do
       me = insert(:user)
       insert(:connection, follower: insert(:user), followee: me)
 
       # One read for the notifications_read_at marker, one combined count query.
       assert count_repo_queries(fn -> Activity.unread_notification_count(me.id) end) == 2
+    end
+
+    test "counts reply events, except self-replies" do
+      me = insert(:user)
+      parent = insert(:post, user: me)
+      insert(:post_reply, post: insert(:post), parent_post: parent, parent_author: me)
+      insert(:post_reply, post: insert(:post, user: me), parent_post: parent, parent_author: me)
+
+      assert Activity.unread_notification_count(me.id) == 1
+    end
+
+    test "the read marker anchors to reply events too" do
+      me = insert(:user)
+      parent = insert(:post, user: me)
+
+      old = insert(:post_reply, post: insert(:post), parent_post: parent, parent_author: me)
+      backdate_reply(old, ~N[2020-01-01 12:00:00])
+
+      # Like the same-second connection test above: with only a reply in the
+      # feed the marker must anchor to it, not the wall clock, or a reply
+      # landing in the marking second would be swallowed.
+      now_second = NaiveDateTime.utc_now(:second)
+      Activity.mark_notifications_read(me.id)
+      assert Activity.unread_notification_count(me.id) == 0
+
+      fresh = insert(:post_reply, post: insert(:post), parent_post: parent, parent_author: me)
+      backdate_reply(fresh, now_second)
+
+      assert Activity.unread_notification_count(me.id) == 1
     end
   end
 
@@ -401,6 +463,10 @@ defmodule Vutuv.ActivityTest do
 
   defp backdate_endorsement(%UserTagEndorsement{id: id}, at) do
     Repo.update_all(from(e in UserTagEndorsement, where: e.id == ^id), set: [inserted_at: at])
+  end
+
+  defp backdate_reply(%PostReply{id: id}, at) do
+    Repo.update_all(from(r in PostReply, where: r.id == ^id), set: [inserted_at: at])
   end
 
   # Count the SQL queries the repo runs while `fun` executes, via Ecto's
