@@ -54,13 +54,7 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   def current_job(user) do
-    if Repo.one(
-         from(w in WorkExperience,
-           join: u in assoc(w, :user),
-           where: u.id == ^user.id,
-           select: count("*")
-         )
-       ) > 0 do
+    if Repo.exists?(from(w in WorkExperience, where: w.user_id == ^user.id)) do
       user
       |> has_start_no_end
       |> no_start_no_end(user)
@@ -71,12 +65,9 @@ defmodule VutuvWeb.UserHelpers do
   defp has_start_no_end(user) do
     Repo.one(
       from(w in WorkExperience,
-        join: u in assoc(w, :user),
-        # belongs to user
-        # has a start date
-        # has no end date
+        # has a start date, no end date
         where:
-          u.id == ^user.id and
+          w.user_id == ^user.id and
             (not is_nil(w.start_month) and not is_nil(w.start_year)) and
             is_nil(w.end_month) and is_nil(w.end_year),
         limit: 1
@@ -87,11 +78,9 @@ defmodule VutuvWeb.UserHelpers do
   defp no_start_no_end(nil, user) do
     Repo.one(
       from(w in WorkExperience,
-        join: u in assoc(w, :user),
-        # belongs to user
         # has no end date
         where:
-          u.id == ^user.id and
+          w.user_id == ^user.id and
             is_nil(w.end_month) and is_nil(w.end_year),
         limit: 1
       )
@@ -103,9 +92,7 @@ defmodule VutuvWeb.UserHelpers do
   defp most_recent_job(nil, user) do
     Repo.one(
       from(w in WorkExperience,
-        join: u in assoc(w, :user),
-        # belongs to user
-        where: u.id == ^user.id,
+        where: w.user_id == ^user.id,
         limit: 1,
         order_by: [desc: w.start_year, desc: w.start_month]
       )
@@ -114,11 +101,18 @@ defmodule VutuvWeb.UserHelpers do
 
   defp most_recent_job(job, _), do: job
 
-  def meta_description(nil, _), do: ""
-  def meta_description(_, nil), do: ""
+  @doc """
+  The profile page's meta description: the work line plus the tag list.
 
-  def meta_description(user, tags) do
-    case {work_information_string(user), tags_to_string(tags)} do
+  Takes the controller's already-resolved current job (`:header_job`) so the
+  layout does not re-run the `current_job/1` query chain the profile action
+  just ran.
+  """
+  def meta_description(nil, _tags, _job), do: ""
+  def meta_description(_user, nil, _job), do: ""
+
+  def meta_description(_user, tags, job) do
+    case {work_information_string_for_job(job), tags_to_string(tags)} do
       {"", ""} ->
         []
 
@@ -133,7 +127,7 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
-  def tags_to_string(tags) do
+  defp tags_to_string(tags) do
     for(tag <- tags) do
       UserTag.name(tag)
     end

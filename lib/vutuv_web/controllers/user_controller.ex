@@ -46,6 +46,7 @@ defmodule VutuvWeb.UserController do
     |> assign(:follower_count, Vutuv.Social.follower_count(user))
     |> assign(:followee_count, Vutuv.Social.followee_count(user))
     |> assign(:user, user)
+    |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
     |> assign(:display_welcome_message, new_user?(user))
     |> assign(:recommended_users, recommended_users)

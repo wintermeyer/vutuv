@@ -9,19 +9,9 @@ defmodule VutuvWeb.ListingBatchingTest do
   """
   use VutuvWeb.ConnCase, async: true
 
+  import Vutuv.QueryCounter
+
   alias Vutuv.Repo
-
-  defp validated_user(attrs) do
-    insert(:user, Keyword.merge([validated?: true], attrs))
-    |> with_active_slug()
-  end
-
-  # The slug plug resolves /users/<slug>; the factory's active_slug needs a
-  # matching, enabled Slug row.
-  defp with_active_slug(user) do
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
-    user
-  end
 
   defp with_job(user, title, org) do
     insert(:work_experience,
@@ -37,8 +27,8 @@ defmodule VutuvWeb.ListingBatchingTest do
 
   describe "GET /listings/most_followed_users" do
     test "renders each user's name and current-job line", %{conn: conn} do
-      alice = validated_user(first_name: "Alice") |> with_job("Captain", "Acme")
-      bob = validated_user(first_name: "Bob")
+      alice = insert_validated_user(first_name: "Alice") |> with_job("Captain", "Acme")
+      bob = insert_validated_user(first_name: "Bob")
       # Give Alice a follower so she sorts to the top, exercising the listing.
       insert(:connection, follower: bob, followee: alice)
 
@@ -52,7 +42,7 @@ defmodule VutuvWeb.ListingBatchingTest do
 
     test "query count stays constant as the user count grows", %{conn: conn} do
       for n <- 1..15 do
-        validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert_validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
       end
 
       conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
@@ -60,7 +50,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       {_, few} = count_queries(fn -> conn_for.() end)
 
       for n <- 16..40 do
-        validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert_validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
       end
 
       {_, many} = count_queries(fn -> conn_for.() end)
@@ -75,9 +65,9 @@ defmodule VutuvWeb.ListingBatchingTest do
 
   describe "GET /:slug/followers and /:slug/following" do
     test "render the follower/followee job lines", %{conn: conn} do
-      owner = validated_user(first_name: "Owner")
-      follower = validated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
-      followee = validated_user(first_name: "Idol") |> with_job("Star", "Fame Inc")
+      owner = insert_validated_user(first_name: "Owner")
+      follower = insert_validated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
+      followee = insert_validated_user(first_name: "Idol") |> with_job("Star", "Fame Inc")
 
       insert(:connection, follower: follower, followee: owner)
       insert(:connection, follower: owner, followee: followee)
@@ -101,12 +91,14 @@ defmodule VutuvWeb.ListingBatchingTest do
 
       # The recommended user the viewer already follows; their work line and the
       # unfollow control both come from the batched assigns.
-      recommended = validated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
+      recommended =
+        insert_validated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
+
       insert(:connection, follower: viewer, followee: recommended)
 
       # The profile being viewed; Social.most_followed_users/1 orders by
       # follower count, so give the recommended user a follower to surface them.
-      owner = validated_user(first_name: "Owner")
+      owner = insert_validated_user(first_name: "Owner")
       insert(:connection, follower: owner, followee: recommended)
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
@@ -119,37 +111,33 @@ defmodule VutuvWeb.ListingBatchingTest do
     end
   end
 
-  # Telemetry handlers are global, so under async tests a parallel test's query
-  # would also fire ours. Ecto runs the handler synchronously in the process
-  # that called Repo, and ConnTest dispatches in this very test process, so we
-  # only count events emitted from `parent`.
-  defp count_queries(fun) do
-    parent = self()
-    ref = make_ref()
-    handler_id = {__MODULE__, ref}
+  describe "GET /tags/:slug (related/recommended user lists)" do
+    test "renders the job lines and stays at a constant query count as users grow", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      tag = insert(:tag)
 
-    :telemetry.attach(
-      handler_id,
-      [:vutuv, :repo, :query],
-      fn _event, _measurements, _metadata, _config ->
-        if self() == parent, do: send(parent, {ref, :query})
-      end,
-      nil
-    )
+      tag_user = fn n ->
+        user = insert_validated_user(first_name: "Tagged#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert(:user_tag, user: user, tag: tag)
+      end
 
-    try do
-      result = fun.()
-      {result, drain_queries(ref, 0)}
-    after
-      :telemetry.detach(handler_id)
-    end
-  end
+      for n <- 1..5, do: tag_user.(n)
 
-  defp drain_queries(ref, acc) do
-    receive do
-      {^ref, :query} -> drain_queries(ref, acc + 1)
-    after
-      0 -> acc
+      body = conn |> get(~p"/tags/#{tag}") |> html_response(200)
+      assert body =~ "Tagged1"
+      # The batched work-info string renders for the recommended users.
+      assert body =~ "Eng1 @ Org1"
+
+      {_, few} = count_queries(fn -> conn |> recycle() |> get(~p"/tags/#{tag}") end)
+
+      for n <- 6..15, do: tag_user.(n)
+
+      {_, many} = count_queries(fn -> conn |> recycle() |> get(~p"/tags/#{tag}") end)
+
+      # Doubling the rendered rows must not add per-row work-info/follow
+      # queries (the old cost was ~4 queries per row).
+      assert many <= few + 2,
+             "query count grew from #{few} to #{many}; the tag page lists are not batched"
     end
   end
 end

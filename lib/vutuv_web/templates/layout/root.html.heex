@@ -8,7 +8,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
     <title><%= if assigns[:conn] && @conn.assigns[:user], do: "#{full_name(@conn.assigns[:user])} - vutuv", else: "vutuv" %></title>
     <%= if assigns[:conn] && @conn.assigns[:user] do %>
-      <meta name="description" content={meta_description(@conn.assigns[:user], @conn.assigns[:user_tags])} />
+      <meta name="description" content={meta_description(@conn.assigns[:user], @conn.assigns[:user_tags], @conn.assigns[:header_job])} />
     <% else %>
       <meta name="description" content={gettext("Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds.")} />
     <% end %>
