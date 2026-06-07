@@ -54,19 +54,12 @@ defmodule VutuvWeb.AddressController do
     address = ControllerHelpers.get_owned!(conn, :addresses, id)
     changeset = Address.changeset(address, address_params)
 
-    case Repo.update(changeset) do
-      {:ok, address} ->
-        conn
-        |> put_flash(:info, gettext("Address updated successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/addresses/#{address}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html",
-          address: address,
-          changeset: changeset,
-          country: get_template(conn)
-        )
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Address updated successfully."),
+      redirect_to: &~p"/#{conn.assigns[:user]}/addresses/#{&1}",
+      render: "edit.html",
+      assigns: [address: address, country: get_template(conn)]
+    )
   end
 
   def delete(conn, %{"id" => id}) do

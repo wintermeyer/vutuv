@@ -15,6 +15,7 @@ defmodule VutuvWeb.UserTagController do
 
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
     user =
@@ -30,20 +31,18 @@ defmodule VutuvWeb.UserTagController do
   end
 
   def create(conn, %{"tag_param" => tag_param}) do
-    conn.assigns[:current_user]
-    |> Ecto.build_assoc(:user_tags, %{})
-    |> UserTag.changeset()
-    |> Tag.create_or_link_tag(tag_param)
-    |> Repo.insert()
-    |> case do
-      {:ok, _user_tag} ->
-        conn
-        |> put_flash(:info, gettext("User tag created successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
+    result =
+      conn.assigns[:current_user]
+      |> Ecto.build_assoc(:user_tags, %{})
+      |> UserTag.changeset()
+      |> Tag.create_or_link_tag(tag_param)
+      |> Repo.insert()
 
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
-    end
+    ControllerHelpers.save(conn, result,
+      flash: gettext("User tag created successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/tags",
+      render: "new.html"
+    )
   end
 
   def show(conn, %{"id" => _id}) do

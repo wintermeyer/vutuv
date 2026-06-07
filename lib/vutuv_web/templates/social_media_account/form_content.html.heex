@@ -3,7 +3,7 @@
 
   <div class={"editform__field#{if error_tag(f, :provider), do: " editform__field--error"}"}>
     <%= label f, :provider %>
-    <%= select f, :provider, ["Facebook", "Twitter", "Instagram", "Youtube", "Snapchat", "LinkedIn", "XING", "GitHub"], prompt: "Select a Social Media Provider", autofocus: true, class: "form-control" %>
+    <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(), prompt: "Select a Social Media Provider", autofocus: true, class: "form-control" %>
     <%= error_tag f, :provider %>
   </div>
 

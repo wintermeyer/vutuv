@@ -71,18 +71,12 @@ defmodule VutuvWeb.SocialMediaAccountController do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     changeset = SocialMediaAccount.changeset(social_media_account, social_media_account_params)
 
-    case Repo.update(changeset) do
-      {:ok, social_media_account} ->
-        conn
-        |> put_flash(:info, gettext("Social media account updated successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts/#{social_media_account}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html",
-          social_media_account: social_media_account,
-          changeset: changeset
-        )
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Social media account updated successfully."),
+      redirect_to: &~p"/#{conn.assigns[:user]}/social_media_accounts/#{&1}",
+      render: "edit.html",
+      assigns: [social_media_account: social_media_account]
+    )
   end
 
   def delete(conn, %{"id" => id}) do

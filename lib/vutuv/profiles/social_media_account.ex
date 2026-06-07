@@ -18,6 +18,12 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   @accepted_providers ~w(Facebook Twitter Instagram Youtube Snapchat LinkedIn XING GitHub)
 
+  @doc """
+  The providers `changeset/2` accepts. The form's provider dropdown renders
+  from this list so the two can never drift apart.
+  """
+  def accepted_providers, do: @accepted_providers
+
   base_urls = [
     {"Facebook", "http://facebook.com/"},
     {"Twitter", "http://twitter.com/"},

@@ -1,6 +1,8 @@
 defmodule VutuvWeb.WorkExperienceController do
   use VutuvWeb, :controller
+
   alias Vutuv.Profiles.WorkExperience
+  alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "work_experience" when action in [:create, :update])
@@ -35,15 +37,12 @@ defmodule VutuvWeb.WorkExperienceController do
       |> build_assoc(:work_experiences)
       |> WorkExperience.changeset(work_experience_params)
 
-    case Repo.insert(changeset) do
-      {:ok, _work_experience} ->
-        conn
-        |> put_flash(:info, gettext("Work experience created successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences")
-
-      {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset, current_year: current_year())
-    end
+    ControllerHelpers.save(conn, Repo.insert(changeset),
+      flash: gettext("Work experience created successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/work_experiences",
+      render: "new.html",
+      assigns: [current_year: current_year()]
+    )
   end
 
   def show(conn, _params) do
@@ -75,19 +74,12 @@ defmodule VutuvWeb.WorkExperienceController do
     work_experience = conn.assigns[:job]
     changeset = WorkExperience.changeset(work_experience, work_experience_params)
 
-    case Repo.update(changeset) do
-      {:ok, work_experience} ->
-        conn
-        |> put_flash(:info, gettext("Work experience updated successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences/#{work_experience}")
-
-      {:error, changeset} ->
-        render(conn, "edit.html",
-          work_experience: work_experience,
-          changeset: changeset,
-          current_year: current_year()
-        )
-    end
+    ControllerHelpers.save(conn, Repo.update(changeset),
+      flash: gettext("Work experience updated successfully."),
+      redirect_to: &~p"/#{conn.assigns[:user]}/work_experiences/#{&1}",
+      render: "edit.html",
+      assigns: [work_experience: work_experience, current_year: current_year()]
+    )
   end
 
   defp current_year, do: Date.utc_today().year
