@@ -9,6 +9,6 @@ Vielen Dank, dass Sie vutuv benutzen!
 <%= render "_signature_de.text" %>
 
 PS: Der PIN verfällt nach 30 Minuten. Sie können aber jederzeit einen
-neuen unter https://vutuv.de/sessions/new abrufen.
+neuen unter <%= @url %>login abrufen.
 
 <%= render "_footer.text" %>

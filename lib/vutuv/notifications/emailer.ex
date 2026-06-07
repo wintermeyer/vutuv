@@ -68,68 +68,72 @@ defmodule Vutuv.Notifications.Emailer do
   def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
 
   def login_email(pin, email, %Vutuv.Accounts.User{validated?: false} = user) do
-    gen_email(
-      pin,
-      email,
-      user,
-      "registration_email_#{get_locale(user.locale)}",
+    gen_email(pin, email, user, "registration_email", fn ->
       Gettext.gettext(VutuvWeb.Gettext, "Confirm your vutuv account")
-    )
+    end)
   end
 
   def login_email(pin, email, user) do
-    gen_email(
-      pin,
-      email,
-      user,
-      "login_email_#{get_locale(user.locale)}",
+    gen_email(pin, email, user, "login_email", fn ->
       Gettext.gettext(VutuvWeb.Gettext, "Login to vutuv")
-    )
+    end)
   end
 
   def email_creation_email(pin, email, user) do
-    gen_email(
-      pin,
-      email,
-      user,
-      "email_creation_email_#{get_locale(user.locale)}",
+    gen_email(pin, email, user, "email_creation_email", fn ->
       Gettext.gettext(VutuvWeb.Gettext, "Confirm your email")
-    )
+    end)
   end
 
   def user_deletion_email(pin, email, user) do
-    gen_email(
-      pin,
-      email,
-      user,
-      "user_deletion_email_#{get_locale(user.locale)}",
+    gen_email(pin, email, user, "user_deletion_email", fn ->
       Gettext.gettext(VutuvWeb.Gettext, "Confirm your account deletion")
-    )
+    end)
   end
 
   def verification_notice(user) do
     email = Vutuv.Accounts.first_email_value(user)
-    template = "verification_confirmation_#{get_locale(user.locale)}"
+    locale = get_locale(user.locale)
 
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> subject(Gettext.gettext(VutuvWeb.Gettext, "vutuv Account verified"))
-    |> text_body(VutuvWeb.EmailText.render("#{template}.text", %{user: user}))
+    |> subject(
+      recipient_subject(locale, fn ->
+        Gettext.gettext(VutuvWeb.Gettext, "vutuv Account verified")
+      end)
+    )
+    |> text_body(
+      VutuvWeb.EmailText.render("verification_confirmation_#{locale}.text", %{
+        user: user,
+        url: public_url()
+      })
+    )
   end
 
-  defp gen_email(pin, email, user, template, email_subject) do
-    url = Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
+  defp gen_email(pin, email, user, template_base, subject_fun) do
+    locale = get_locale(user.locale)
 
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> subject(email_subject)
+    |> subject(recipient_subject(locale, subject_fun))
     |> text_body(
-      VutuvWeb.EmailText.render("#{template}.text", %{
+      VutuvWeb.EmailText.render("#{template_base}_#{locale}.text", %{
         pin: pin,
-        url: url,
+        url: public_url(),
         user: user
       })
     )
+  end
+
+  # The configured canonical host (with a trailing slash), e.g.
+  # "https://www.vutuv.de/" — every URL an email names builds on it.
+  defp public_url, do: Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
+
+  # The body template is selected by the recipient's locale; render the
+  # subject in that same locale, not the ambient process locale (which is the
+  # *sender's* — e.g. the admin verifying another member).
+  defp recipient_subject(locale, subject_fun) do
+    Gettext.with_locale(VutuvWeb.Gettext, locale, subject_fun)
   end
 
   defp robot_headers(email), do: put_headers(email, @robot_headers)

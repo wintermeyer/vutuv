@@ -97,8 +97,8 @@ defmodule Vutuv.Notifications.EmailerTest do
   describe "PIN emails name a PIN, never a link (issue #759)" do
     # These four emails carry a 6-digit PIN. The German subjects used to say
     # "Login-Link" / "Link zum Löschen ...", which sent recipients hunting for a
-    # link that is not there. The subject is rendered with the ambient Gettext
-    # locale and the body from the user's locale, so each is checked under both.
+    # link that is not there. Subject and body both follow the recipient's
+    # locale, so each is checked under both locales.
 
     test "every PIN email carries the PIN and mentions no link, in en and de" do
       builders = [
@@ -148,6 +148,57 @@ defmodule Vutuv.Notifications.EmailerTest do
       user = insert(:user, validated?: true, locale: "de")
 
       assert Emailer.login_email(@pin, "login@example.com", user).subject == "vutuv Login-PIN"
+    end
+  end
+
+  describe "emails follow the recipient's locale, not the sender's" do
+    # The subject used to render in the ambient process locale — the locale of
+    # whoever triggered the send (e.g. an admin verifying another member) —
+    # while the body template came from the recipient's stored locale.
+
+    test "a German recipient gets a German subject from an English sender" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      user = insert(:user, validated?: true, locale: "de")
+
+      assert Emailer.login_email(@pin, "login@example.com", user).subject == "vutuv Login-PIN"
+    end
+
+    test "the English verification notice is English throughout (incl. the signature)" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      user = insert(:user, locale: "en")
+      insert(:email, user: user, value: "verify@example.com")
+
+      email = Emailer.verification_notice(user)
+
+      assert email.subject == "vutuv Account verified"
+      # Regression: the EN template used to render the German signature partial.
+      assert email.text_body =~ "Regards"
+      refute email.text_body =~ "Mit freundlichen Grüßen"
+    end
+  end
+
+  describe "emails link the configured host, not hardcoded legacy URLs" do
+    # public_url is "http://localhost:4000/" in the test env. The templates
+    # used to hardcode https://vutuv.de plus the legacy /users/<slug> and
+    # /sessions/new paths, which only still work via 301 redirects.
+
+    test "the verification notice links the recipient's profile at the root path" do
+      user = insert(:user, locale: "en", active_slug: "verified-user")
+      insert(:email, user: user, value: "verify@example.com")
+
+      body = Emailer.verification_notice(user).text_body
+
+      assert body =~ "http://localhost:4000/verified-user"
+      refute body =~ "vutuv.de/users/"
+    end
+
+    test "the login email points PIN renewal at the configured login URL" do
+      user = insert(:user, validated?: true, locale: "en")
+
+      body = Emailer.login_email(@pin, "login@example.com", user).text_body
+
+      assert body =~ "http://localhost:4000/login"
+      refute body =~ "vutuv.de/sessions/new"
     end
   end
 end

@@ -2,8 +2,8 @@
 
 Congratulations! Your vutuv account is now listed as verified.
 
-https://vutuv.de/users/<%= @user.active_slug %>
+<%= @url %><%= @user.active_slug %>
 
-<%= render "_signature_de.text" %>
+<%= render "_signature_en.text" %>
 
 <%= render "_footer.text" %>

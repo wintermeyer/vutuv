@@ -10,6 +10,6 @@ with your friends!
 <%= render "_signature_en.text" %>
 
 PS: The PIN expires after 30 minutes. You can always get a new one at
-https://vutuv.de/sessions/new
+<%= @url %>login
 
 <%= render "_footer.text" %>
