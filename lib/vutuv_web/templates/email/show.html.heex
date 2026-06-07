@@ -8,18 +8,16 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
+<.card_section>
   <%= if same_user?(@user, @current_user) do %>
     <.edit_delete_actions
       edit_to={~p"/#{@user}/emails/#{@email}/edit"}
       delete_to={~p"/#{@user}/emails/#{@email}"}
     />
   <% end %>
-    <h1><%= gettext("Email") %></h1>
-    <p><%= @email.value %></p>
-    <h1><%= gettext("Visibility") %></h1>
-    <p><%= if @email.public?, do: gettext("Public"), else: gettext("Private") %></p>
-  </section>
 
-</div>
+  <h1><%= gettext("Email") %></h1>
+  <p><%= @email.value %></p>
+  <h1><%= gettext("Visibility") %></h1>
+  <p><%= if @email.public?, do: gettext("Public"), else: gettext("Private") %></p>
+</.card_section>

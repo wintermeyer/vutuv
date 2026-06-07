@@ -8,19 +8,16 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <%= if same_user?(@user, @current_user) do %>
-      <.edit_delete_actions
-        edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
-        delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
-      />
-    <% end %>
-    
-    <h1><%= gettext("Number Type") %></h1>
-    <p><%= @phone_number.number_type %></p>
-    <h1><%= gettext("Number") %></h1>
-    <p><%= @phone_number.value %></p>
-  </section>
+<.card_section>
+  <%= if same_user?(@user, @current_user) do %>
+    <.edit_delete_actions
+      edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
+      delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
+    />
+  <% end %>
 
-</div>
+  <h1><%= gettext("Number Type") %></h1>
+  <p><%= @phone_number.number_type %></p>
+  <h1><%= gettext("Number") %></h1>
+  <p><%= @phone_number.value %></p>
+</.card_section>

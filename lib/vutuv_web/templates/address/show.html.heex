@@ -8,19 +8,15 @@
   ]}
 />
 
-<div class="card-list">
+<.card_section>
+  <%= if same_user?(@user, @current_user) do %>
+    <.edit_delete_actions
+      edit_to={~p"/#{@user}/addresses/#{@address}/edit"}
+      delete_to={~p"/#{@user}/addresses/#{@address}"}
+    />
+  <% end %>
 
-  <section class="card">
-    <%= if same_user?(@user, @current_user) do %>
-      <.edit_delete_actions
-        edit_to={~p"/#{@user}/addresses/#{@address}/edit"}
-        delete_to={~p"/#{@user}/addresses/#{@address}"}
-      />
-    <% end %>
-
-    <h1><%= @address.description %></h1>
-    <p><%= format_address @address %></p>
-  </section>
-
-</div>
+  <h1><%= @address.description %></h1>
+  <p><%= format_address @address %></p>
+</.card_section>
 

@@ -8,7 +8,7 @@ defmodule VutuvWeb.UI do
   Imported into every HTML view and LiveView via `VutuvWeb` (`html`, `live_view`,
   `live_component`), so all of these are available everywhere with no explicit
   import: `<.card>`, `<.section_title>`, `<.section_header>`, `<.card_menu>`,
-  `<.chip>`, `<.button>`, `<.avatar>`, `<.count_badge>`, `<.input>`, `<.pager>`.
+  `<.chip>`, `<.button>`, `<.avatar>`, `<.count_badge>`, `<.pager>`.
   """
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
@@ -521,38 +521,66 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc "Labelled text input for hand-written forms (legacy forms are styled by components.css)."
-  attr(:name, :string, required: true)
-  attr(:type, :string, default: "text")
-  attr(:label, :string, default: nil)
-  attr(:value, :string, default: nil)
-  attr(:error, :string, default: nil)
-  attr(:class, :string, default: nil)
+  @doc """
+  The cursor-pagination "Load more" control shared by the feed-style LiveViews
+  (feed, likes/bookmarks, notifications): a centered secondary button that
+  emits the `"load-more"` event. Render it with `:if={@more?}`; the inner block
+  overrides the default label (the notifications page shows a remaining count).
+  """
+  attr(:class, :any, default: nil)
+  slot(:inner_block)
 
-  attr(:rest, :global,
-    include:
-      ~w(id placeholder required autofocus autocomplete readonly disabled min max step inputmode)
-  )
-
-  def input(assigns) do
+  def load_more(assigns) do
     ~H"""
-    <div>
-      <label :if={@label} class="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">
-        {@label}
-      </label>
-      <input
-        type={@type}
-        name={@name}
-        value={@value}
-        class={[
-          "w-full rounded-lg border bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none dark:bg-slate-800 dark:text-slate-100",
-          if(@error, do: "border-red-400", else: "border-slate-300 dark:border-slate-700"),
-          @class
-        ]}
-        {@rest}
-      />
-      <p :if={@error} class="mt-1 text-xs text-red-600">{@error}</p>
+    <div class={["text-center", @class]}>
+      <.button id="load-more" variant="secondary" phx-click="load-more" phx-disable-with="…">
+        {render_slot(@inner_block) || gettext("Load more")}
+      </.button>
     </div>
+    """
+  end
+
+  @doc """
+  The outline repost-arrows icon (24×24 stroke), shared by the post card's
+  "Reposted by" line and the action bar. Size it via `class`.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+
+  def icon_repost(assigns) do
+    ~H"""
+    <svg class={@class} fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M19.5 12c0-1.232-.046-2.453-.138-3.662a4.006 4.006 0 0 0-3.7-3.7 48.678 48.678 0 0 0-7.324 0 4.006 4.006 0 0 0-3.7 3.7c-.017.22-.032.441-.046.662M19.5 12l3-3m-3 3-3-3m-12 3c0 1.232.046 2.453.138 3.662a4.006 4.006 0 0 0 3.7 3.7 48.656 48.656 0 0 0 7.324 0 4.006 4.006 0 0 0 3.7-3.7c.017-.22.032-.441.046-.662M4.5 12l3 3m-3-3-3 3"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The outline bookmark icon (24×24 stroke), shared by the shell's saved-pages
+  entry and the action bar; `filled?` switches to the solid fill. Size it via
+  `class`.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+  attr(:filled?, :boolean, default: false)
+
+  def icon_bookmark(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill={if(@filled?, do: "currentColor", else: "none")}
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M17.593 3.322c.1.128.157.288.157.456v16.444a.75.75 0 0 1-1.218.585L12 17.21l-4.532 3.597A.75.75 0 0 1 6.25 20.222V3.778c0-.168.057-.328.157-.456A2.25 2.25 0 0 1 8.25 2.5h7.5a2.25 2.25 0 0 1 1.843.822Z"
+      />
+    </svg>
     """
   end
 end

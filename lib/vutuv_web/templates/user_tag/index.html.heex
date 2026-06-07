@@ -7,39 +7,33 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <%= if Enum.empty?(@user_tags) do %>
-      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
-    <% else %>
-      <table>
-        <thead>
-          <tr>
-            <th><%= gettext "Tag name" %></th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <%= for user_tag <- @user_tags do %>
-            <tr>
-              <td>
-                <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
-              </td>
-              <td class="text-right">
-                <%= if @current_user && same_user?(@user, @current_user) do %>
-                  <%= button to: ~p"/#{@user}/tags/#{user_tag}", method: :delete, class: "button button--icon button--small", title: gettext("Delete") do %>
-                    <i class="icon icon--delete"></i>
-                  <% end %>
-                <% end %>
-              </td>
-            </tr>
-          <% end %>
-        </tbody>
-      </table>
-    <% end %>
-
-    <%= if same_user?(@user, @current_user) do %>
-      <%= link gettext("Add"), to: ~p"/#{@current_user}/tags/new", class: "card__morelink" %>
-    <% end %>
-  </section>
-</div>
+<.card_section
+  empty={Enum.empty?(@user_tags)}
+  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/tags/new"}
+>
+  <table>
+    <thead>
+      <tr>
+        <th><%= gettext "Tag name" %></th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for user_tag <- @user_tags do %>
+        <tr>
+          <td>
+            <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
+          </td>
+          <td class="text-right">
+            <%= if @current_user && same_user?(@user, @current_user) do %>
+              <.edit_delete_actions
+                delete_to={~p"/#{@user}/tags/#{user_tag}"}
+                title_delete={gettext("Delete")}
+              />
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+</.card_section>

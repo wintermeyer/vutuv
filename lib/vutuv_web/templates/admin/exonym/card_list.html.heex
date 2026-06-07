@@ -9,30 +9,20 @@
     </tr>
   </thead>
   <tbody>
-<%= for {exonym, _index} <- Enum.with_index(@exonyms) do %>
-    <tr>
-      <td><%= exonym.value %></td>
-      <td><%= exonym.locale.endonym %></td>
-      <td><%= exonym.exonym_locale.value %></td>
+    <%= for exonym <- @exonyms do %>
+      <tr>
+        <td><%= exonym.value %></td>
+        <td><%= exonym.locale.endonym %></td>
+        <td><%= exonym.exonym_locale.value %></td>
 
-      <td>
-        <%= link to: ~p"/admin/exonyms/#{exonym}", class: "button button--small" do %>
-        <i class="icon">
-          {VutuvWeb.IconHTML.search(assigns)}
-        </i>
-        <% end %>
-        <%= link to: ~p"/admin/exonyms/#{exonym}/edit", class: "button button--small" do %>
-        <i class="icon">
-          {VutuvWeb.IconHTML.pencil(assigns)}
-        </i>
-        <% end %>
-        <%= button to: ~p"/admin/exonyms/#{exonym}", method: :delete, class: "button button--small button--danger" do %>
-        <i class="icon">
-          {VutuvWeb.IconHTML.close(assigns)}
-        </i>
-        <% end %>
-      </td>
-    </tr>
-  <% end %>
-    </tbody>
+        <td class="text-right">
+          <.edit_delete_actions
+            show_to={~p"/admin/exonyms/#{exonym}"}
+            edit_to={~p"/admin/exonyms/#{exonym}/edit"}
+            delete_to={~p"/admin/exonyms/#{exonym}"}
+          />
+        </td>
+      </tr>
+    <% end %>
+  </tbody>
 </table>

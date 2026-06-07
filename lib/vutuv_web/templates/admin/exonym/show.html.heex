@@ -7,39 +7,28 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <div class="btns-right">
-      <%= button to: ~p"/admin/exonyms/#{@exonym}", method: :delete, class: "pull-right button button--small button--danger" do %>
-        <i>
-          {VutuvWeb.IconHTML.close(assigns)}
-        </i>
-      <% end %>
-      <%= link to: ~p"/admin/exonyms/#{@exonym}/edit", class: "pull-right button button--small" do %>
-        <i>
-          {VutuvWeb.IconHTML.pencil(assigns)}
-        </i>
-      <% end %>
-    </div>
-    
-      <h1>
-        <strong><%= gettext "Value" %>:</strong>
-      </h1>
-      <p>
-        <%= @exonym.value %>
-      </p>
-      <h1>
-      <strong><%= gettext "Language Endonym" %>:</strong>
-      </h1>
-      <p>
-        <%= @exonym.locale.endonym %>
-      </p>
-      <h1>
-      <strong><%= gettext "Exonym Locale" %>:</strong>
-      </h1>
-      <p>
-        <%= @exonym.exonym_locale.value %>
-      </p>
-    
-  </section>
-</div>
+<.card_section>
+  <.edit_delete_actions
+    edit_to={~p"/admin/exonyms/#{@exonym}/edit"}
+    delete_to={~p"/admin/exonyms/#{@exonym}"}
+  />
+
+  <h1>
+    <strong><%= gettext "Value" %>:</strong>
+  </h1>
+  <p>
+    <%= @exonym.value %>
+  </p>
+  <h1>
+    <strong><%= gettext "Language Endonym" %>:</strong>
+  </h1>
+  <p>
+    <%= @exonym.locale.endonym %>
+  </p>
+  <h1>
+    <strong><%= gettext "Exonym Locale" %>:</strong>
+  </h1>
+  <p>
+    <%= @exonym.exonym_locale.value %>
+  </p>
+</.card_section>

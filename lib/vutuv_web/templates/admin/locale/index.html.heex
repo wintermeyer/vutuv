@@ -6,33 +6,27 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <table>
-      <thead>
-        <tr>
-          <th><%= gettext "Endonym" %></th>
-          <th><%= gettext "Code" %></th>
+<.card_section>
+  <table>
+    <thead>
+      <tr>
+        <th><%= gettext "Endonym" %></th>
+        <th><%= gettext "Code" %></th>
 
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-    <%= for {locale, _index} <- Enum.with_index(@locales) do %>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <%= for locale <- @locales do %>
         <tr>
           <td><%= locale.endonym %></td>
           <td><%= locale.value %></td>
 
-          <td>
-            <%= link to: ~p"/admin/locales/#{locale}", class: "button button--small" do %>
-            <i class="icon">
-              {VutuvWeb.IconHTML.search(assigns)}
-            </i>
-            <% end %>
+          <td class="text-right">
+            <.edit_delete_actions show_to={~p"/admin/locales/#{locale}"} />
           </td>
         </tr>
-    <% end %>
-      </tbody>
-    </table>
-  </section>
-</div>
+      <% end %>
+    </tbody>
+  </table>
+</.card_section>

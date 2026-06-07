@@ -8,22 +8,20 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <%= if same_user?(@user, @current_user) do %>
-      <.edit_delete_actions
-        edit_to={~p"/#{@user}/work_experiences/#{@work_experience}/edit"}
-        delete_to={~p"/#{@user}/work_experiences/#{@work_experience}"}
-      />
-    <% end %>
-    <h1><%= gettext("Job Title") %></h1>
-    <p><%= @work_experience.title %></p>
-    <h1><%= gettext("Organization") %></h1>
-    <p><%= @work_experience.organization %></p>
-    <h1><%= gettext("Time Period") %></h1>
-    <p>
-      <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>
-    </p>
-  </section>
+<.card_section>
+  <%= if same_user?(@user, @current_user) do %>
+    <.edit_delete_actions
+      edit_to={~p"/#{@user}/work_experiences/#{@work_experience}/edit"}
+      delete_to={~p"/#{@user}/work_experiences/#{@work_experience}"}
+    />
+  <% end %>
 
-</div>
+  <h1><%= gettext("Job Title") %></h1>
+  <p><%= @work_experience.title %></p>
+  <h1><%= gettext("Organization") %></h1>
+  <p><%= @work_experience.organization %></p>
+  <h1><%= gettext("Time Period") %></h1>
+  <p>
+    <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>
+  </p>
+</.card_section>

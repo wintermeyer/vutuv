@@ -7,42 +7,32 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <div class="btns-right">
-      <%= button to: ~p"/admin/tags/#{@tag}", method: :delete, class: "pull-right button button--small button--danger" do %>
-        <i>
-          {VutuvWeb.IconHTML.close(assigns)}
-        </i>
-      <% end %>
-      <%= link to: ~p"/admin/tags/#{@tag}/edit", class: "pull-right button button--small" do %>
-        <i>
-          {VutuvWeb.IconHTML.pencil(assigns)}
-        </i>
-      <% end %>
-    </div>
+<.card_section>
+  <.edit_delete_actions
+    edit_to={~p"/admin/tags/#{@tag}/edit"}
+    delete_to={~p"/admin/tags/#{@tag}"}
+  />
 
-      <h1>
-        <strong><%= gettext "Name" %>:</strong>
-      </h1>
-      <p>
-        <%= @tag.name %>
-      </p>
+  <h1>
+    <strong><%= gettext "Name" %>:</strong>
+  </h1>
+  <p>
+    <%= @tag.name %>
+  </p>
 
-      <h1>
-        <strong><%= gettext "Slug" %>:</strong>
-      </h1>
-      <p>
-        <%= @tag.slug %>
-      </p>
+  <h1>
+    <strong><%= gettext "Slug" %>:</strong>
+  </h1>
+  <p>
+    <%= @tag.slug %>
+  </p>
 
-      <%= if @tag.description do %>
-        <h1>
-          <strong><%= gettext "Description" %>:</strong>
-        </h1>
-        <p style="word-wrap: break-word; max-width: 600px;">
-          <%= @tag.description %>
-        </p>
-      <% end %>
-  </section>
-</div>
+  <%= if @tag.description do %>
+    <h1>
+      <strong><%= gettext "Description" %>:</strong>
+    </h1>
+    <p style="word-wrap: break-word; max-width: 600px;">
+      <%= @tag.description %>
+    </p>
+  <% end %>
+</.card_section>

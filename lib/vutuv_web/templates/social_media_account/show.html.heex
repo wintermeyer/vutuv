@@ -8,18 +8,16 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
+<.card_section>
   <%= if same_user?(@user, @current_user) do %>
     <.edit_delete_actions
       edit_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}/edit"}
       delete_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}"}
     />
   <% end %>
-    <h1><%= gettext("Provider") %></h1>
-    <p><%= @social_media_account.provider %></p>
-    <h1><%= gettext("Username") %></h1>
-    <p>@<%= @social_media_account.value %></p>
-  </section>
 
-</div>
+  <h1><%= gettext("Provider") %></h1>
+  <p><%= @social_media_account.provider %></p>
+  <h1><%= gettext("Username") %></h1>
+  <p>@<%= @social_media_account.value %></p>
+</.card_section>

@@ -8,19 +8,16 @@
   ]}
 />
 
-<div class="card-list">
-  <section class="card">
-    <%= if same_user?(@user, @current_user) do %>
-      <.edit_delete_actions
-        edit_to={~p"/#{@user}/links/#{@url}/edit"}
-        delete_to={~p"/#{@user}/links/#{@url}"}
-      />
-    <% end %>
+<.card_section>
+  <%= if same_user?(@user, @current_user) do %>
+    <.edit_delete_actions
+      edit_to={~p"/#{@user}/links/#{@url}/edit"}
+      delete_to={~p"/#{@user}/links/#{@url}"}
+    />
+  <% end %>
 
-    <h1><%= gettext("URL") %></h1>
-    <p><%= link @url.value, to: @url.value %></p>
-    <h1><%= gettext("Description") %></h1>
-    <p><%= @url.description %></p>
-  </section>
-
-</div>
+  <h1><%= gettext("URL") %></h1>
+  <p><%= link @url.value, to: @url.value %></p>
+  <h1><%= gettext("Description") %></h1>
+  <p><%= @url.description %></p>
+</.card_section>

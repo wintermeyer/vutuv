@@ -176,23 +176,6 @@ body.stretch main {
   width: 100%;
 }
 
-/* ---------- Float helpers still used by the legacy show pages ---------- */
-.pull-right {
-  float: right;
-  margin: 0 0 0 10px;
-}
-.pull-left {
-  float: left;
-  margin: 0 10px 0 0;
-}
-.clearfix {
-  display: block;
-  overflow: hidden;
-}
-.card__edit {
-  float: right;
-}
-
 /* Shared content column: a centered, readable width across subpages. */
 .profile-header,
 .breadcrumbs,
@@ -387,7 +370,6 @@ body.stretch main {
   border-color: #ef4444;
 }
 .editform__error,
-.editform .invalid-feedback,
 .editform__field--error span {
   color: #dc2626;
   font-size: 0.8rem;
@@ -744,8 +726,7 @@ td.text-right {
 .imagebox__input {
   width: 100%;
 }
-.imagebox__input + .imagebox__input,
-.imagebox__input + .imagebox__label {
+.imagebox__input + .imagebox__input {
   margin-top: 11px;
 }
 /* Breathing room between the last input and the submit button (the login
