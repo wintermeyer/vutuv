@@ -91,6 +91,9 @@ mix test
 
 ## Deployment
 
+> **One-time cutover pending:** see [`DEPLOY_TODO.md`](DEPLOY_TODO.md) before
+> the first production deploy of the AVIF image pipeline (nginx edit required).
+
 Deployment is automatic. Two GitHub Actions workflows drive it:
 
 - **CI** (`.github/workflows/ci.yml`) runs `mix precommit` (compile with `--warnings-as-errors`, unused-deps, format, `credo --strict`, tests) on every pull request and on pushes to `main`.
