@@ -132,9 +132,6 @@ defmodule Vutuv.Factory do
     %Vutuv.Posts.Post{
       body: sequence(:post_body, &"Post body #{&1}"),
       published_on: Date.utc_today(),
-      # Globally unique, so explicit factory posts never collide on the
-      # (user_id, published_on, seq) index. Context-created posts count from 1.
-      seq: sequence(:post_seq, &(&1 + 1_000)),
       user: build(:user)
     }
   end

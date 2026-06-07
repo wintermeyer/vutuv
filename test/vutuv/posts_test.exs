@@ -37,24 +37,14 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "create_post/2" do
-    test "creates a public post with today's date and seq 1" do
+    test "creates a public post stamped with today's UTC date" do
       author = user()
 
       assert {:ok, %Post{} = post} = Posts.create_post(author, %{body: "Hello **world**"})
       assert post.body == "Hello **world**"
       assert post.published_on == Date.utc_today()
-      assert post.seq == 1
       assert post.denials == []
       assert post.user.id == author.id
-    end
-
-    test "seq counts up per author and day, independently per author" do
-      author = user()
-      other = user()
-
-      assert create_post!(author, %{body: "one"}).seq == 1
-      assert create_post!(author, %{body: "two"}).seq == 2
-      assert create_post!(other, %{body: "first"}).seq == 1
     end
 
     test "trims the body" do
@@ -605,9 +595,8 @@ defmodule Vutuv.PostsTest do
       assert [%{name: "phoenix"}] = updated.tags
       # The everyone denial is gone: members can see it now.
       assert Posts.visible_to?(updated, stranger)
-      # Permalink coordinates never change on edit.
+      # The publication date (the archive coordinate) never changes on edit.
       assert updated.published_on == post.published_on
-      assert updated.seq == post.seq
     end
 
     test "clears denials when given an empty list" do
@@ -658,16 +647,19 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "permalink lookup" do
-    test "get_post/3 finds by author, date and seq" do
+    test "get_post/2 finds by author and id" do
       author = user()
       post = create_post!(author, %{body: "find me"})
 
-      found = Posts.get_post(author, post.published_on, post.seq)
+      found = Posts.get_post(author, post.id)
       assert found.id == post.id
       assert found.user.id == author.id
 
-      refute Posts.get_post(author, post.published_on, post.seq + 1)
-      refute Posts.get_post(user(), post.published_on, post.seq)
+      # Another author's slug never resolves the post; garbage ids are a
+      # nil, not a CastError.
+      refute Posts.get_post(user(), post.id)
+      refute Posts.get_post(author, Vutuv.UUIDv7.generate())
+      refute Posts.get_post(author, "not-a-uuid")
     end
   end
 
@@ -881,7 +873,6 @@ defmodule Vutuv.PostsTest do
       assert {:ok, %Post{} = reply} = Posts.create_reply(replier, parent, %{body: "an answer"})
       assert reply.body == "an answer"
       assert reply.published_on == Date.utc_today()
-      assert reply.seq == 1
       assert reply.reply_ref.parent_post_id == parent.id
       assert reply.reply_ref.parent_author_id == author.id
       assert reply.reply_ref.parent_post.id == parent.id

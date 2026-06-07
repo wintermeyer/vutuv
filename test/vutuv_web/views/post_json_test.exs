@@ -24,7 +24,6 @@ defmodule VutuvWeb.PostJSONTest do
     json = PostJSON.post(post, author)
 
     assert json.id == post.id
-    assert json.slug == Vutuv.Posts.Post.slug(post)
     assert json.url =~ "/#{author.active_slug}/"
     assert String.ends_with?(json.url, Posts.path(post))
     assert json.author.slug == author.active_slug

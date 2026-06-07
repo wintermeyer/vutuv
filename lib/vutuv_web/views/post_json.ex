@@ -20,7 +20,6 @@ defmodule VutuvWeb.PostJSON do
   def post(%Post{} = post, viewer) do
     %{
       id: post.id,
-      slug: Post.slug(post),
       url: VutuvWeb.Endpoint.url() <> Posts.path(post),
       author: author_ref(post.user),
       body_markdown: post.body,

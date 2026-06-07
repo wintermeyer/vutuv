@@ -47,28 +47,25 @@ defmodule VutuvWeb.PostControllerTest do
     test "redirects non-canonical URLs to the canonical form", %{conn: conn} do
       user = author()
       post = create_post!(user, %{body: "x"})
-      date = post.published_on
 
-      # Unpadded date segments and the legacy zero-padded counter both
-      # resolve and 302 to the canonical (padded date, plain counter).
-      sloppy = "/#{user.active_slug}/posts/#{date.year}/#{date.month}/#{date.day}/#{post.seq}"
-      legacy = Posts.path(post) |> String.replace(~r{/(\d+)$}, "/000\\1")
+      # The permalink is the post id under the author archive.
+      assert Posts.path(post) == "/#{user.active_slug}/posts/#{post.id}"
 
-      assert Posts.path(post) =~ ~r|/\d{4}/\d{2}/\d{2}/#{post.seq}$|
-
-      if sloppy != Posts.path(post) do
-        assert redirected_to(get(conn, sloppy)) == Posts.path(post)
-      end
-
-      assert redirected_to(get(conn, legacy)) == Posts.path(post)
+      # An uppercase UUID still resolves and 302s to the canonical
+      # (lowercase) form.
+      shouty = "/#{user.active_slug}/posts/#{String.upcase(post.id)}"
+      assert redirected_to(get(conn, shouty)) == Posts.path(post)
     end
 
-    test "404s for unknown posts and unparseable dates", %{conn: conn} do
+    test "404s for unknown ids, garbage segments and other authors' posts", %{conn: conn} do
       user = author()
+      other = author()
+      post = create_post!(other, %{body: "not under this slug"})
 
-      assert get(conn, "/#{user.active_slug}/posts/2026/06/05/0001").status == 404
-      assert get(conn, "/#{user.active_slug}/posts/abcd/06/05/0001").status == 404
-      assert get(conn, "/#{user.active_slug}/posts/2026/13/05/0001").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/#{Vutuv.UUIDv7.generate()}").status == 404
+      assert get(conn, "/#{user.active_slug}/posts/not-a-uuid-or-year").status == 404
+      # A post resolves only under its author's slug.
+      assert get(conn, "/#{user.active_slug}/posts/#{post.id}").status == 404
     end
 
     test "restricted post: 404 for denied readers, 200 + noindex for permitted", %{conn: conn} do
@@ -287,7 +284,7 @@ defmodule VutuvWeb.PostControllerTest do
       for n <- 1..3, do: {:ok, _} = Posts.create_post(user, %{body: "post #{n}"})
 
       # The exact archive href (closing quote included): permalinks also
-      # start with /posts/ but continue with the date segments.
+      # start with /posts/ but continue with the post id.
       archive_href = ~s(href="/#{user.active_slug}/posts")
 
       conn_without = get(conn, "/#{user.active_slug}")

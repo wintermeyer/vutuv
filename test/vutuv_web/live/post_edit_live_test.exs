@@ -45,7 +45,6 @@ defmodule VutuvWeb.PostEditLiveTest do
       updated = Posts.get_post(post.id)
       assert updated.body == "after"
       assert [%{wildcard: "everyone"}] = updated.denials
-      assert updated.seq == post.seq
       assert updated.published_on == post.published_on
     end
 

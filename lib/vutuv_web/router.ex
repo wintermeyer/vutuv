@@ -215,13 +215,14 @@ defmodule VutuvWeb.Router do
     end
 
     # The author's post archive — whole, or scoped to a year / month / day —
-    # and the post permalinks (/:slug/posts/2026/06/05/1). Everything
-    # post-related lives under the fixed /posts segment; the controller 404s
-    # date segments that do not parse.
+    # and the post permalinks (/:slug/posts/<uuid-v7>). Everything
+    # post-related lives under the fixed /posts segment. The router cannot
+    # tell a year from a post id, so the single extra segment is one route
+    # and the controller dispatches on its shape (UUID = permalink, anything
+    # else = year archive or 404).
     get("/:slug/posts", PostController, :index)
-    get("/:slug/posts/:year", PostController, :index)
+    get("/:slug/posts/:id", PostController, :show)
     get("/:slug/posts/:year/:month", PostController, :index)
     get("/:slug/posts/:year/:month/:day", PostController, :index)
-    get("/:slug/posts/:year/:month/:day/:seq", PostController, :show)
   end
 end

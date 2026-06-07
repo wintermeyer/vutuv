@@ -16,11 +16,10 @@ defmodule Vutuv.Posts do
   All four read paths (feed, profile, permalink, image proxy) must go through
   `visible_to?/2` or the composable `scope_visible/2` — never filter by hand.
 
-  **Permalinks** are `/:slug/posts/:year/:month/:day/:seq`: `published_on`
-  is the UTC date at insert time and `seq` a per-author-per-day counter,
-  generated under a unique index with retry (`create_post/2`), and never
-  changed by edits. Stripping trailing segments yields the day/month/year
-  archive index pages.
+  **Permalinks** are `/:slug/posts/:id` — the post's UUID v7 is the whole
+  coordinate. `published_on` (the UTC date at insert time, never changed by
+  edits) scopes the day/month/year archive index pages under the same
+  `/:slug/posts` prefix.
 
   **Images** upload eagerly while composing (`create_pending_image/3`), so
   inline markdown can reference them before the post exists; submit attaches
@@ -62,7 +61,6 @@ defmodule Vutuv.Posts do
   @default_feed_limit 20
   @default_profile_limit 3
   @default_thread_limit 100
-  @seq_attempts 3
   @pending_max_age_hours 24
   @max_tags 5
 
@@ -98,7 +96,7 @@ defmodule Vutuv.Posts do
     with {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []),
          :ok <- check_image_count(image_ids),
          {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
-      case insert_with_seq(author, changeset, image_ids, @seq_attempts) do
+      case insert_post(changeset, image_ids) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -131,7 +129,7 @@ defmodule Vutuv.Posts do
          {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []),
          :ok <- check_image_count(image_ids),
          {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
-      case insert_with_seq(author, changeset, image_ids, @seq_attempts, parent) do
+      case insert_post(changeset, image_ids, parent) do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
@@ -155,7 +153,8 @@ defmodule Vutuv.Posts do
   @doc """
   Updates a post: body, denials, tags and the attached-image set are replaced
   by what `attrs` carries (same keys as `create_post/2`). Detached images are
-  deleted, rows and files. The permalink coordinates never change.
+  deleted, rows and files. The publication date (the archive coordinate)
+  never changes.
   """
   def update_post(%Post{} = post, attrs) do
     post = Repo.preload(post, [:denials, :post_tags, :images])
@@ -236,52 +235,24 @@ defmodule Vutuv.Posts do
     end
   end
 
-  # The per-day counter races under a unique index: compute max+1, insert,
-  # and on a seq collision recompute and retry (each attempt in its own
-  # transaction, so the aborted insert never poisons the next one). For a
-  # reply, `parent` adds the PostReply row inside the same transaction, so
-  # post and reference commit (and retry) together.
-  defp insert_with_seq(author, changeset, image_ids, attempts, parent \\ nil)
+  # Stamps the UTC publication date (the archive coordinate) and commits the
+  # post, its image claims and — for a reply — the PostReply row in one
+  # transaction, so post and reference land (or roll back) together.
+  defp insert_post(changeset, image_ids, parent \\ nil) do
+    Repo.transaction(fn ->
+      changeset
+      |> Ecto.Changeset.change(published_on: Date.utc_today())
+      |> Repo.insert()
+      |> case do
+        {:ok, post} ->
+          attach_images!(post, image_ids)
+          insert_reply_ref!(post, parent)
+          post
 
-  defp insert_with_seq(_author, _changeset, _image_ids, 0, _parent), do: {:error, :seq_conflict}
-
-  defp insert_with_seq(author, changeset, image_ids, attempts, parent) do
-    today = Date.utc_today()
-
-    result =
-      Repo.transaction(fn ->
-        seq = next_seq(author.id, today)
-
-        changeset
-        |> Ecto.Changeset.change(published_on: today, seq: seq)
-        |> Repo.insert()
-        |> case do
-          {:ok, post} ->
-            attach_images!(post, image_ids)
-            insert_reply_ref!(post, parent)
-            post
-
-          {:error, changeset} ->
-            Repo.rollback(changeset)
-        end
-      end)
-
-    case result do
-      {:ok, post} ->
-        {:ok, post}
-
-      {:error, %Ecto.Changeset{errors: errors} = errored} ->
-        if Keyword.has_key?(errors, :seq) do
-          # Lost the per-day counter race — recompute and retry with the
-          # original (pre-insert) changeset.
-          insert_with_seq(author, changeset, image_ids, attempts - 1, parent)
-        else
-          {:error, errored}
-        end
-
-      {:error, _} = error ->
-        error
-    end
+        {:error, changeset} ->
+          Repo.rollback(changeset)
+      end
+    end)
   end
 
   defp insert_reply_ref!(_post, nil), do: :ok
@@ -292,18 +263,6 @@ defmodule Vutuv.Posts do
       parent_post_id: parent.id,
       parent_author_id: parent.user_id
     })
-  end
-
-  defp next_seq(user_id, date) do
-    max =
-      Repo.one(
-        from(p in Post,
-          where: p.user_id == ^user_id and p.published_on == ^date,
-          select: max(p.seq)
-        )
-      )
-
-    (max || 0) + 1
   end
 
   # Claims each image row for the post (ownership and pending state are
@@ -975,13 +934,17 @@ defmodule Vutuv.Posts do
     )
   end
 
-  @doc "The permalink lookup: a preloaded post of `author`, or `nil`."
-  def get_post(%User{id: author_id}, %Date{} = date, seq) when is_integer(seq) do
-    from(p in Post,
-      where: p.user_id == ^author_id and p.published_on == ^date and p.seq == ^seq
-    )
-    |> Repo.one()
-    |> preload_post()
+  @doc "The permalink lookup: `author`'s preloaded post by id, or `nil`."
+  def get_post(%User{id: author_id}, id) do
+    case UUIDv7.cast_or_nil(id) do
+      nil ->
+        nil
+
+      id ->
+        from(p in Post, where: p.user_id == ^author_id and p.id == ^id)
+        |> Repo.one()
+        |> preload_post()
+    end
   end
 
   @doc "A preloaded post by id, or `nil` (live-feed pill, edit page)."
@@ -1011,14 +974,13 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  The root-relative permalink path, e.g. `/stefan/posts/2026/06/05/1`.
-  Lives under the author archive, so stripping trailing segments yields the
-  day/month/year index pages. Requires `:user` to be preloaded.
+  The root-relative permalink path, e.g.
+  `/stefan/posts/019748c8-1a2b-7c3d-8e4f-5a6b7c8d9e0f`. Lives under the
+  author archive (`/:slug/posts`), whose year/month/day pages stay
+  date-scoped index views. Requires `:user` to be preloaded.
   """
-  def path(%Post{user: %User{} = user, published_on: date} = post) do
-    month = String.pad_leading(Integer.to_string(date.month), 2, "0")
-    day = String.pad_leading(Integer.to_string(date.day), 2, "0")
-    "/#{user.active_slug}/posts/#{date.year}/#{month}/#{day}/#{Post.seq_string(post.seq)}"
+  def path(%Post{user: %User{} = user, id: id}) do
+    "/#{user.active_slug}/posts/#{id}"
   end
 
   ## Images
