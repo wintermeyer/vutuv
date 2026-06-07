@@ -581,21 +581,39 @@ defmodule Vutuv.Posts do
     :ok
   end
 
+  # The four engagement counters (likes / bookmarks / reposts / replies),
+  # counted live from the rows. Defined once here so both `engagement_counts/1`
+  # and `post_engagement/2` select the exact same fragments; pass the post
+  # binding so the correlated subqueries reference its id. Keep the map keys in
+  # sync with the zero-count fallback in `engagement_counts/1`.
+  defmacrop engagement_count_select(post) do
+    quote do
+      %{
+        likes:
+          fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", unquote(post).id),
+        bookmarks:
+          fragment(
+            "(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)",
+            unquote(post).id
+          ),
+        reposts:
+          fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", unquote(post).id),
+        replies:
+          fragment(
+            "(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)",
+            unquote(post).id
+          )
+      }
+    end
+  end
+
   @doc "Like / bookmark / repost / reply counts of a post, in one round trip."
   def engagement_counts(post_id) do
-    Repo.one(
-      from(p in Post,
-        where: p.id == ^post_id,
-        select: %{
-          likes: fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", p.id),
-          bookmarks:
-            fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
-          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id),
-          replies:
-            fragment("(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)", p.id)
-        }
-      )
-    ) || %{likes: 0, bookmarks: 0, reposts: 0, replies: 0}
+    query =
+      from(p in Post, where: p.id == ^post_id)
+      |> select([p], engagement_count_select(p))
+
+    Repo.one(query) || %{likes: 0, bookmarks: 0, reposts: 0, replies: 0}
   end
 
   @doc "How many replies a post has (raw row count, like the other counters)."
@@ -619,40 +637,33 @@ defmodule Vutuv.Posts do
         nil -> "00000000-0000-0000-0000-000000000000"
       end
 
-    Repo.one(
-      from(p in Post,
-        where: p.id == ^post_id,
-        select: %{
-          likes: fragment("(SELECT count(*) FROM post_likes l WHERE l.post_id = ?)", p.id),
-          bookmarks:
-            fragment("(SELECT count(*) FROM post_bookmarks b WHERE b.post_id = ?)", p.id),
-          reposts: fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", p.id),
-          replies:
-            fragment("(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)", p.id),
-          liked?:
-            fragment(
-              "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
-              p.id,
-              type(^viewer_id, UUIDv7)
-            ),
-          bookmarked?:
-            fragment(
-              "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
-              p.id,
-              type(^viewer_id, UUIDv7)
-            ),
-          reposted?:
-            fragment(
-              "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
-              p.id,
-              type(^viewer_id, UUIDv7)
-            ),
-          restricted?:
-            fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
-          author_id: p.user_id
-        }
-      )
-    )
+    query =
+      from(p in Post, where: p.id == ^post_id)
+      |> select([p], engagement_count_select(p))
+      |> select_merge([p], %{
+        liked?:
+          fragment(
+            "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
+            p.id,
+            type(^viewer_id, UUIDv7)
+          ),
+        bookmarked?:
+          fragment(
+            "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
+            p.id,
+            type(^viewer_id, UUIDv7)
+          ),
+        reposted?:
+          fragment(
+            "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
+            p.id,
+            type(^viewer_id, UUIDv7)
+          ),
+        restricted?: fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
+        author_id: p.user_id
+      })
+
+    Repo.one(query)
   end
 
   @doc "Subscribes the caller to a post's `{:post_counters, …}` updates."

@@ -18,49 +18,33 @@ server-side flash. --%>
   aria-live="polite"
 >
   <%= if msg = Phoenix.Flash.get(@flash, :info) do %>
-    <div
-      class="toast pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+    <.toast
+      kind="info"
+      msg={msg}
       role="status"
-      data-toast-autodismiss
+      class="toast pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+      badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
+      autodismiss
     >
-      <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+      <:icon>
         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
         </svg>
-      </span>
-      <p class="text-sm text-slate-700 dark:text-slate-200">{msg}</p>
-      <button
-        type="button"
-        class="ml-auto shrink-0 text-slate-400 hover:text-slate-600"
-        data-toast-close
-        phx-click="lv:clear-flash"
-        phx-value-key="info"
-        aria-label={gettext("Close")}
-      >
-        ✕
-      </button>
-    </div>
+      </:icon>
+    </.toast>
   <% end %>
   <%= if msg = Phoenix.Flash.get(@flash, :error) do %>
-    <div
-      class="toast toast--error pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-red-200 dark:bg-slate-800 dark:ring-red-900/60"
+    <.toast
+      kind="error"
+      msg={msg}
       role="alert"
+      class="toast toast--error pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-red-200 dark:bg-slate-800 dark:ring-red-900/60"
+      badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-600"
     >
-      <span class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-600">
+      <:icon>
         !
-      </span>
-      <p class="text-sm text-slate-700 dark:text-slate-200">{msg}</p>
-      <button
-        type="button"
-        class="ml-auto shrink-0 text-slate-400 hover:text-slate-600"
-        data-toast-close
-        phx-click="lv:clear-flash"
-        phx-value-key="error"
-        aria-label={gettext("Close")}
-      >
-        ✕
-      </button>
-    </div>
+      </:icon>
+    </.toast>
   <% end %>
 </div>
 

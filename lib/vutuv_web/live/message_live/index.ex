@@ -1,95 +1,235 @@
 defmodule VutuvWeb.MessageLive.Index do
   @moduledoc """
-  Messages page. Dummy conversations and seeded history for now, but the live
-  plumbing is real: messages sent in one session appear instantly in every other
-  session on the same conversation (PubSub), online status and typing indicators
-  use `Phoenix.Presence`, and opening the page clears the unread message badge in
-  the shell. Requires login; conversation ids are validated against the dummy
-  list so nobody can subscribe to arbitrary topics. Messages are a LiveView
-  stream, so long sessions don't accumulate them in process memory.
-  Persistence comes later.
+  Messages page, backed by `Vutuv.Chat` (persisted 1:1 conversations).
+
+  The sidebar lists the member's conversations plus incoming message requests
+  (pending conversations from strangers) with Accept/Decline. The thread is a
+  cursor-paginated LiveView stream (latest page on open, older on demand);
+  messages sent in one session appear instantly in every other session on the
+  same conversation (PubSub on `"conversation:<id>"`), online dots and typing
+  indicators run on `Phoenix.Presence`, and opening a thread persists the read
+  marker, which also clears the unread badge in the shell. On small screens
+  `/messages` shows the list and `/messages/:id` the thread with a back link.
+
+  Authorization is real: the topic is only subscribed after
+  `Chat.get_conversation/2` confirms the viewer is a participant, so nobody
+  can subscribe to (or read) someone else's conversation.
   """
   use VutuvWeb, :live_view
 
-  alias Vutuv.Activity
+  alias Vutuv.Chat
+  alias Vutuv.Chat.{Conversation, Message}
   alias VutuvWeb.Presence
 
   @presence_topic "messages:online"
   @typing_clear_ms 2500
+  @page_size 30
 
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
   @impl true
-  def mount(params, _session, socket) do
+  def mount(_params, _session, socket) do
     user = socket.assigns.current_user
-    conv_id = valid_conv_id(params["id"])
-    user_name = display_name(user)
 
     if connected?(socket) do
-      Phoenix.PubSub.subscribe(Vutuv.PubSub, convo_topic(conv_id))
+      # The activity topic carries {:new_message, %{conversation_id: ...}}
+      # for conversations other than the open one — it keeps the sidebar live.
+      Vutuv.Activity.subscribe(user.id)
       Phoenix.PubSub.subscribe(Vutuv.PubSub, @presence_topic)
-      Presence.track(self(), @presence_topic, to_string(user.id), %{name: user_name})
-      Activity.mark_messages_read(user.id)
+      Presence.track(self(), @presence_topic, to_string(user.id), %{})
     end
 
     {:ok,
      socket
      |> assign(:page_title, gettext("Messages"))
-     |> assign(:current_user_id, user.id)
-     |> assign(:user_name, user_name)
-     |> assign(:conversations, conversations())
-     |> assign(:conv_id, conv_id)
+     |> assign(:user_name, display_name(user))
      |> assign(:typing_tokens, %{})
-     |> assign(:online, list_online(user.id))
-     |> stream(:messages, seed_messages(conv_id), dom_id: &"message-#{&1.id}")
+     |> assign(:online_ids, list_online())
+     |> assign(:conversation, nil)
+     |> assign(:other, nil)
+     |> assign(:more?, false)
+     |> assign(:cursor, nil)
+     |> assign_lists()
+     |> stream(:messages, [], dom_id: &"message-#{&1.id}")
      |> assign_form()}
   end
+
+  @impl true
+  def handle_params(params, _uri, socket) do
+    {:noreply, apply_action(socket, socket.assigns.live_action, params)}
+  end
+
+  defp apply_action(socket, :index, _params) do
+    socket |> assign(:conversation, nil) |> assign(:other, nil)
+  end
+
+  defp apply_action(socket, :show, %{"id" => id}) do
+    user = socket.assigns.current_user
+
+    case Chat.get_conversation(user, id) do
+      nil ->
+        push_navigate(socket, to: ~p"/messages")
+
+      %Conversation{} = conversation ->
+        if connected?(socket) do
+          Chat.subscribe(conversation.id)
+          Chat.mark_read(user, conversation.id)
+        end
+
+        page = Chat.messages_page(user, conversation.id, limit: @page_size)
+
+        socket
+        |> assign(:conversation, conversation)
+        |> assign(:other, Chat.other_user(conversation, user.id))
+        |> assign(:more?, page.more?)
+        |> assign(:cursor, page.next_cursor)
+        |> stream(:messages, Enum.reverse(page.entries), reset: true)
+        # Re-list so this conversation's unread badge zeroes right away.
+        |> assign_lists()
+    end
+  end
+
+  # Entry point for the profile "Message" button: find or create the
+  # conversation with that member, then land in its thread.
+  defp apply_action(socket, :new, %{"slug" => slug}) do
+    case Vutuv.Accounts.get_user_by_slug(slug) do
+      nil ->
+        socket
+        |> put_flash(:error, gettext("Member not found."))
+        |> push_navigate(to: ~p"/messages")
+
+      other ->
+        case Chat.find_or_create_conversation(socket.assigns.current_user, other) do
+          {:ok, conversation} ->
+            push_navigate(socket, to: ~p"/messages/#{conversation.id}")
+
+          {:error, :rate_limited} ->
+            socket
+            |> put_flash(:error, gettext("Too many new conversations. Please try again later."))
+            |> push_navigate(to: ~p"/messages")
+
+          {:error, _reason} ->
+            socket
+            |> put_flash(:error, gettext("This member cannot receive messages."))
+            |> push_navigate(to: ~p"/messages")
+        end
+    end
+  end
+
+  ## Events
 
   @impl true
   def handle_event("send", %{"message" => %{"body" => body}}, socket) do
     body = String.trim(body)
 
-    if body == "" do
+    if body == "" or is_nil(socket.assigns.conversation) do
       {:noreply, socket}
     else
-      msg = %{
-        # Globally unique so two senders can't collide on stream DOM ids. The
-        # "live-" prefix keeps it out of the seed id namespace: the counter
-        # starts at 1 on a fresh node, and a bare integer id would collide with
-        # a seeded message and replace it in the stream instead of appending.
-        id: "live-#{System.unique_integer([:positive, :monotonic])}",
-        from_id: socket.assigns.current_user_id,
-        from_name: socket.assigns.user_name,
-        body: body,
-        at: DateTime.utc_now()
-      }
+      case Chat.send_message(socket.assigns.current_user, socket.assigns.conversation.id, body) do
+        # The echo arrives via the conversation topic broadcast, so all
+        # sessions (including this one) render it the same way.
+        {:ok, %Message{}} ->
+          {:noreply, socket |> refresh_conversation() |> assign_form()}
 
-      # Plain broadcast: every subscriber — including the sender — appends the
-      # message via handle_info, so all sessions render the same thing.
-      Phoenix.PubSub.broadcast(
-        Vutuv.PubSub,
-        convo_topic(socket.assigns.conv_id),
-        {:new_message, msg}
-      )
+        # Declined conversation: drop silently — for the sender everything
+        # looks exactly like an unanswered request.
+        {:ok, :dropped} ->
+          {:noreply, assign_form(socket)}
 
-      {:noreply, assign_form(socket)}
+        {:error, :pending_limit} ->
+          {:noreply, socket |> refresh_conversation()}
+
+        {:error, %Ecto.Changeset{}} ->
+          {:noreply, put_flash(socket, :error, gettext("This message could not be sent."))}
+
+        {:error, :not_participant} ->
+          {:noreply, push_navigate(socket, to: ~p"/messages")}
+      end
     end
   end
 
   def handle_event("typing", _params, socket) do
-    Phoenix.PubSub.broadcast_from(
-      Vutuv.PubSub,
-      self(),
-      convo_topic(socket.assigns.conv_id),
-      {:typing, socket.assigns.user_name}
-    )
+    if socket.assigns.conversation do
+      Chat.broadcast_typing(socket.assigns.conversation.id, socket.assigns.user_name)
+    end
 
     {:noreply, socket}
   end
 
+  def handle_event("accept", %{"id" => id}, socket) do
+    case Chat.accept_request(socket.assigns.current_user, id) do
+      {:ok, %Conversation{} = conversation} ->
+        socket = assign_lists(socket)
+
+        socket =
+          if active?(socket, conversation.id),
+            do: assign(socket, :conversation, conversation),
+            else: socket
+
+        {:noreply, socket}
+
+      {:error, :not_recipient} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("decline", %{"id" => id}, socket) do
+    case Chat.decline_request(socket.assigns.current_user, id) do
+      {:ok, %Conversation{} = conversation} ->
+        if active?(socket, conversation.id) do
+          {:noreply, push_navigate(socket, to: ~p"/messages")}
+        else
+          {:noreply, assign_lists(socket)}
+        end
+
+      {:error, :not_recipient} ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("load-older", _params, socket) do
+    page =
+      Chat.messages_page(socket.assigns.current_user, socket.assigns.conversation.id,
+        limit: @page_size,
+        cursor: socket.assigns.cursor
+      )
+
+    {:noreply,
+     socket
+     |> assign(:more?, page.more?)
+     |> assign(:cursor, page.next_cursor)
+     |> stream(:messages, Enum.reverse(page.entries), at: 0)}
+  end
+
+  ## PubSub
+
   @impl true
-  def handle_info({:new_message, msg}, socket) do
-    {:noreply, stream_insert(socket, :messages, msg)}
+  # Full message on the open conversation's topic (sender or recipient side).
+  def handle_info({:new_message, %Message{} = message}, socket) do
+    user = socket.assigns.current_user
+
+    # The member is watching the message arrive, so it is already read; this
+    # also broadcasts :messages_read, keeping the shell badge at zero.
+    if message.sender_id != user.id && socket.assigns.conversation do
+      Chat.mark_read(user, socket.assigns.conversation.id)
+    end
+
+    {:noreply,
+     socket
+     |> stream_insert(:messages, message)
+     |> refresh_conversation()
+     |> assign_lists()}
+  end
+
+  # Activity event: a message arrived in some conversation of mine. The open
+  # conversation's own topic already delivered its copy above, so only
+  # messages landing elsewhere need a sidebar refresh.
+  def handle_info({:new_message, %{conversation_id: conversation_id}}, socket) do
+    if active?(socket, conversation_id) do
+      {:noreply, socket}
+    else
+      {:noreply, assign_lists(socket)}
+    end
   end
 
   def handle_info({:typing, name}, socket) do
@@ -112,28 +252,48 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket) do
-    {:noreply, assign(socket, :online, list_online(socket.assigns.current_user_id))}
+    {:noreply, assign(socket, :online_ids, list_online())}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  ## helpers
+  ## Helpers
 
-  defp convo_topic(conv_id), do: "conversation:#{conv_id}"
+  defp assign_lists(socket) do
+    user = socket.assigns.current_user
+
+    socket
+    |> assign(:conversations, Chat.list_conversations(user))
+    |> assign(:requests, Chat.list_requests(user))
+  end
+
+  # The active conversation's status and last_message_at drive the composer
+  # (waiting hint, request banner), so re-read them after sends and accepts.
+  defp refresh_conversation(socket) do
+    case socket.assigns.conversation do
+      nil ->
+        socket
+
+      %Conversation{id: id} ->
+        case Chat.get_conversation(socket.assigns.current_user, id) do
+          nil -> socket
+          conversation -> assign(socket, :conversation, conversation)
+        end
+    end
+  end
+
+  defp active?(socket, conversation_id),
+    do: match?(%Conversation{id: ^conversation_id}, socket.assigns.conversation)
 
   defp assign_form(socket), do: assign(socket, :form, to_form(%{"body" => ""}, as: :message))
 
-  # Other people online: one entry per presence key (= per user), with the
-  # viewer's own key dropped so the label counts other members, not themselves.
-  # Not de-duplicated by display name, so the count is right when names repeat.
-  defp list_online(current_user_id) do
-    self_key = to_string(current_user_id)
-
-    @presence_topic
-    |> Presence.list()
-    |> Enum.reject(fn {key, _meta} -> key == self_key end)
-    |> Enum.map(fn {_key, %{metas: [meta | _]}} -> meta.name end)
+  defp list_online do
+    @presence_topic |> Presence.list() |> Map.keys() |> MapSet.new()
   end
+
+  defp online?(online_ids, user_id), do: MapSet.member?(online_ids, to_string(user_id))
+
+  defp display_name(nil), do: gettext("Deleted account")
 
   defp display_name(user) do
     case VutuvWeb.UserHelpers.full_name(user) do
@@ -142,111 +302,179 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
-  defp valid_conv_id(id) do
-    if Enum.any?(conversations(), &(&1.id == id)), do: id, else: "1"
+  defp mine?(%Message{sender_id: sender_id}, user_id),
+    do: not is_nil(sender_id) and sender_id == user_id
+
+  # The Accept/Decline pair, shared by the sidebar request rows and the
+  # in-thread request banner.
+  attr(:id, :string, required: true)
+  attr(:class, :string, default: nil)
+
+  defp request_actions(assigns) do
+    ~H"""
+    <div class={["flex gap-2", @class]}>
+      <button
+        phx-click="accept"
+        phx-value-id={@id}
+        class="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+      >
+        {gettext("Accept")}
+      </button>
+      <button
+        phx-click="decline"
+        phx-value-id={@id}
+        class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+      >
+        {gettext("Decline")}
+      </button>
+    </div>
+    """
   end
 
-  defp conversations do
-    [
-      %{id: "1", name: "José Daniel", last: "Loved your Phoenix talk.", online: true},
-      %{id: "2", name: "Chris McCord", last: "Let's pair on LiveView.", online: true},
-      %{id: "3", name: "Wojtek Mach", last: "Req 1.0 is out!", online: false}
-    ]
+  defp typing_label(typing_tokens) do
+    case Map.keys(typing_tokens) do
+      [] -> nil
+      [name] -> gettext("%{name} is typing…", name: name)
+      names -> gettext("%{names} are typing…", names: Enum.join(names, ", "))
+    end
   end
 
-  defp seed_messages("1"),
-    do: [
-      %{
-        id: 1,
-        from_id: 999,
-        from_name: "José Daniel",
-        body: "Hey! Loved your Phoenix talk. 👏",
-        at: DateTime.add(DateTime.utc_now(), -7200, :second)
-      }
-    ]
-
-  defp seed_messages("2"),
-    do: [
-      %{
-        id: 1,
-        from_id: 998,
-        from_name: "Chris McCord",
-        body: "Want to pair on a LiveView this week?",
-        at: DateTime.add(DateTime.utc_now(), -10_800, :second)
-      }
-    ]
-
-  defp seed_messages(_), do: []
+  ## Render
 
   @impl true
   def render(assigns) do
     ~H"""
     <div id="messages" class="flex h-[calc(100vh-9rem)] gap-4 py-6 md:h-[calc(100vh-7rem)]">
-      <%!-- Conversation list (hidden on small screens) --%>
-      <aside class="hidden w-64 shrink-0 overflow-y-auto rounded-2xl bg-white ring-1 ring-slate-200 md:block dark:bg-slate-900 dark:ring-slate-800">
+      <%!-- Conversation list. Full-width on mobile while no thread is open;
+            once one is, the thread takes over and the list moves behind the
+            back link (md+ always shows both). --%>
+      <aside class={[
+        "w-full shrink-0 overflow-y-auto rounded-2xl bg-white ring-1 ring-slate-200 md:block md:w-64 dark:bg-slate-900 dark:ring-slate-800",
+        @conversation && "hidden"
+      ]}>
+        <div :if={@requests != []} id="requests" class="border-b border-slate-200 dark:border-slate-800">
+          <h2 class="px-4 pt-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {gettext("Requests")}
+          </h2>
+          <ul>
+            <li :for={entry <- @requests} class="px-4 py-3">
+              <.link navigate={~p"/messages/#{entry.conversation.id}"} class="flex items-center gap-3">
+                <.avatar user={entry.other} size="sm" />
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                    {display_name(entry.other)}
+                  </span>
+                  <span class="block truncate text-xs text-slate-400">{entry.last_body}</span>
+                </span>
+              </.link>
+              <.request_actions id={entry.conversation.id} class="mt-2" />
+            </li>
+          </ul>
+        </div>
+
         <ul>
-          <li :for={c <- @conversations}>
+          <li :for={entry <- @conversations}>
             <.link
-              href={~p"/messages/#{c.id}"}
+              navigate={~p"/messages/#{entry.conversation.id}"}
               class={[
                 "flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800",
-                c.id == @conv_id && "bg-brand-50 dark:bg-brand-900/30"
+                @conversation && @conversation.id == entry.conversation.id &&
+                  "bg-brand-50 dark:bg-brand-900/30"
               ]}
             >
-              <span class="relative flex h-10 w-10 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
-                {String.first(c.name)}
-                <span :if={c.online} class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+              <span class="relative shrink-0">
+                <.avatar user={entry.other} size="sm" />
+                <span
+                  :if={online?(@online_ids, entry.other.id)}
+                  class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"
+                />
               </span>
-              <span class="min-w-0">
-                <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">{c.name}</span>
-                <span class="block truncate text-xs text-slate-400">{c.last}</span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                  {display_name(entry.other)}
+                </span>
+                <span class="block truncate text-xs text-slate-400">{entry.last_body}</span>
               </span>
+              <.count_badge count={entry.unread} />
             </.link>
           </li>
         </ul>
+
+        <p :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-400">
+          {gettext("No conversations yet.")}
+        </p>
       </aside>
 
       <%!-- Active thread --%>
-      <section class="flex min-w-0 flex-1 flex-col rounded-2xl bg-white ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+      <section
+        :if={@conversation}
+        class="flex min-w-0 flex-1 flex-col rounded-2xl bg-white ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+      >
         <header class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-          <h1 class="font-semibold text-slate-800 dark:text-slate-100">{active_name(@conversations, @conv_id)}</h1>
+          <div class="flex min-w-0 items-center gap-3">
+            <.link
+              id="back-to-list"
+              navigate={~p"/messages"}
+              class="shrink-0 text-slate-400 hover:text-slate-600 md:hidden dark:hover:text-slate-200"
+              aria-label={gettext("Back to conversations")}
+            >
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </.link>
+            <.link navigate={~p"/#{@other}"} class="flex min-w-0 items-center gap-2">
+              <.avatar user={@other} size="sm" />
+              <h1 class="truncate font-semibold text-slate-800 dark:text-slate-100">
+                {display_name(@other)}
+              </h1>
+            </.link>
+          </div>
           <%= if typing_label(@typing_tokens) do %>
             <span class="text-xs font-medium text-brand-600 dark:text-brand-400">{typing_label(@typing_tokens)}</span>
           <% else %>
-            <span class="text-xs text-slate-400">{online_label(@online)}</span>
+            <span :if={online?(@online_ids, @other.id)} class="text-xs text-emerald-600 dark:text-emerald-400">
+              {gettext("Online")}
+            </span>
           <% end %>
         </header>
+
+        <div :if={@more?} class="border-b border-slate-200 py-2 text-center dark:border-slate-800">
+          <button id="load-older" phx-click="load-older" class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+            {gettext("Load older messages")}
+          </button>
+        </div>
 
         <div id="message-thread" phx-update="stream" phx-hook="ScrollBottom" class="flex-1 space-y-2 overflow-y-auto p-4">
           <div
             :for={{dom_id, m} <- @streams.messages}
             id={dom_id}
-            class={["flex", mine?(m, @current_user_id) && "justify-end"]}
+            class={["flex", mine?(m, @current_user.id) && "justify-end"]}
           >
             <div class={[
               "max-w-[75%] break-words rounded-2xl px-3 py-2 text-sm",
               "[&_a]:underline [&_a]:break-all [&_blockquote]:border-l-2 [&_blockquote]:pl-2",
               "[&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]",
               "[&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4",
-              if(mine?(m, @current_user_id),
+              if(mine?(m, @current_user.id),
                 do: "bg-brand-600 text-white [&_a]:text-white [&_code]:bg-white/20",
                 else:
                   "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100 [&_a]:text-brand-700 dark:[&_a]:text-brand-300 [&_code]:bg-black/10 dark:[&_code]:bg-white/10"
               )
             ]}>
-              <span :if={not mine?(m, @current_user_id)} class="mb-0.5 block text-xs font-semibold text-brand-700 dark:text-brand-300">{m.from_name}</span>
+              <span :if={not mine?(m, @current_user.id)} class="mb-0.5 block text-xs font-semibold text-brand-700 dark:text-brand-300">
+                {display_name(m.sender)}
+              </span>
               {VutuvWeb.Markdown.render(m.body)}
               <time
-                :if={m[:at]}
                 id={"#{dom_id}-at"}
                 phx-hook="LocalTime"
-                datetime={DateTime.to_iso8601(m.at)}
-                title={DateTime.to_iso8601(m.at)}
+                datetime={NaiveDateTime.to_iso8601(m.inserted_at) <> "Z"}
+                title={NaiveDateTime.to_iso8601(m.inserted_at) <> "Z"}
                 class={[
                   "mt-1 block text-right text-[10px] leading-none",
-                  if(mine?(m, @current_user_id), do: "text-white/70", else: "text-slate-400")
+                  if(mine?(m, @current_user.id), do: "text-white/70", else: "text-slate-400")
                 ]}
-              >{Calendar.strftime(m.at, "%d.%m.%Y %H:%M")}</time>
+              >{Calendar.strftime(m.inserted_at, "%d.%m.%Y %H:%M")}</time>
             </div>
           </div>
         </div>
@@ -261,7 +489,24 @@ defmodule VutuvWeb.MessageLive.Index do
           <p class="mt-1 text-xs italic text-slate-400">{typing_label(@typing_tokens)}</p>
         </div>
 
-        <.form for={@form} id="message-form" phx-hook="ClearOnSubmit" phx-submit="send" phx-change="typing" class="flex gap-2 border-t border-slate-200 p-3 dark:border-slate-800">
+        <div
+          :if={Chat.request_recipient?(@conversation, @current_user.id)}
+          id="request-banner"
+          class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
+        >
+          <span>{gettext("@%{slug} wants to message you.", slug: @other.active_slug)}</span>
+          <.request_actions id={@conversation.id} />
+        </div>
+
+        <.form
+          :if={Chat.can_send?(@conversation, @current_user.id)}
+          for={@form}
+          id="message-form"
+          phx-hook="ClearOnSubmit"
+          phx-submit="send"
+          phx-change="typing"
+          class="flex gap-2 border-t border-slate-200 p-3 dark:border-slate-800"
+        >
           <input
             type="text"
             name="message[body]"
@@ -274,28 +519,27 @@ defmodule VutuvWeb.MessageLive.Index do
             {gettext("Send")}
           </button>
         </.form>
+
+        <p
+          :if={
+            not Chat.can_send?(@conversation, @current_user.id) and
+              not Chat.request_recipient?(@conversation, @current_user.id)
+          }
+          id="awaiting-acceptance"
+          class="border-t border-slate-200 p-4 text-center text-sm text-slate-400 dark:border-slate-800"
+        >
+          {gettext("@%{slug} has not accepted your message request yet.", slug: @other.active_slug)}
+        </p>
+      </section>
+
+      <%!-- Desktop placeholder while no conversation is selected --%>
+      <section
+        :if={is_nil(@conversation)}
+        class="hidden min-w-0 flex-1 items-center justify-center rounded-2xl bg-white ring-1 ring-slate-200 md:flex dark:bg-slate-900 dark:ring-slate-800"
+      >
+        <p class="text-sm text-slate-400">{gettext("Select a conversation.")}</p>
       </section>
     </div>
     """
-  end
-
-  defp mine?(%{from_id: from_id}, user_id), do: not is_nil(user_id) and from_id == user_id
-
-  defp active_name(conversations, conv_id) do
-    case Enum.find(conversations, &(&1.id == conv_id)) do
-      nil -> "Conversation"
-      c -> c.name
-    end
-  end
-
-  defp online_label([]), do: ""
-  defp online_label(names), do: "#{compact_count(length(names))} online"
-
-  defp typing_label(typing_tokens) do
-    case Map.keys(typing_tokens) do
-      [] -> nil
-      [name] -> "#{name} is typing…"
-      names -> "#{Enum.join(names, ", ")} are typing…"
-    end
   end
 end

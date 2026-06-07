@@ -33,20 +33,13 @@ defmodule VutuvWeb.UserHTML do
         push the avatar off-centre against the name/work-line group. --%>
         <p class="mb-0 truncate text-sm text-slate-400">{work_line(@work_info_by_id, @user.id)}</p>
       </div>
-      <%= if @current_user && not same_user?(@current_user, @user) do %>
-        <%= case Map.get(@following_by_id, @user.id) do %>
-          <% connection_id when is_binary(connection_id) -> %>
-            <%= button to: ~p"/connections/#{connection_id}", method: :delete,
-                  class: "ml-auto self-start text-sm font-semibold text-slate-400 hover:text-slate-600" do %>
-              {gettext("Following")}
-            <% end %>
-          <% _ -> %>
-            <%= button to: ~p"/connections?#{[connection: %{follower_id: @current_user_id, followee_id: @user.id}]}", method: :post,
-                  class: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700" do %>
-              {gettext("Follow")}
-            <% end %>
-        <% end %>
-      <% end %>
+      <.follow_button
+        :if={@current_user && not same_user?(@current_user, @user)}
+        variant="text"
+        follower_id={@current_user_id}
+        followee_id={@user.id}
+        connection_id={Map.get(@following_by_id, @user.id)}
+      />
     </li>
     """
   end

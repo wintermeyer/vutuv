@@ -3,139 +3,308 @@ defmodule VutuvWeb.MessageLiveTest do
 
   import Phoenix.LiveViewTest
 
-  test "mounts and shows the seeded conversation", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+  alias Vutuv.Chat
 
-    {:ok, _view, html} = live(conn, ~p"/messages")
+  # A second browser session for another member.
+  defp login_other_user(name \\ "Other") do
+    conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
 
-    assert html =~ "José Daniel"
-    assert html =~ "Write a message"
+    create_and_login_user(conn, %{
+      "emails" => %{"0" => %{"value" => "#{String.downcase(name)}@example.com"}},
+      "first_name" => name
+    })
   end
 
-  test "redirects logged-out visitors to the login page", %{conn: conn} do
-    assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/messages")
+  describe "authentication and authorization" do
+    test "redirects logged-out visitors to the login page", %{conn: conn} do
+      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/messages")
+    end
+
+    test "an unknown conversation id redirects to the conversation list", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      assert {:error, {:live_redirect, %{to: "/messages"}}} =
+               live(conn, ~p"/messages/#{Vutuv.UUIDv7.generate()}")
+    end
+
+    test "someone else's conversation redirects to the conversation list", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      conversation = insert_conversation_between(insert_validated_user(), insert_validated_user())
+
+      assert {:error, {:live_redirect, %{to: "/messages"}}} =
+               live(conn, ~p"/messages/#{conversation.id}")
+    end
   end
 
-  test "an unknown conversation id falls back to the default conversation", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+  describe "conversation list" do
+    test "shows real conversations with the other member's name and preview", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_validated_user(first_name: "Berta", last_name: "Beispiel")
+      conversation = insert_conversation_between(me, other)
+      {:ok, _} = Chat.send_message(other, conversation.id, "Hello there")
 
-    {:ok, _view, html} = live(conn, ~p"/messages/999")
+      {:ok, _view, html} = live(conn, ~p"/messages")
 
-    # Conversation 1 is the fallback; its seeded message is shown.
-    assert html =~ "Loved your Phoenix talk"
+      assert html =~ "Berta Beispiel"
+      assert html =~ "Hello there"
+    end
+
+    test "shows an empty state without any conversations", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+
+      {:ok, _view, html} = live(conn, ~p"/messages")
+
+      assert html =~ "No conversations yet"
+    end
   end
 
-  test "a message sent in one session appears live in another on the same conversation", %{
-    conn: conn
-  } do
-    {conn, _user} = create_and_login_user(conn)
+  describe "sending" do
+    test "a sent message is persisted and survives a reload", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_validated_user())
 
-    {:ok, sender, _} = live(conn, ~p"/messages/1")
-    {:ok, receiver, _} = live(conn, ~p"/messages/1")
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-    sender
-    |> form("#message-form", message: %{body: "Real-time hello"})
-    |> render_submit()
+      view
+      |> form("#message-form", message: %{body: "For the record"})
+      |> render_submit()
 
-    # The broadcast to the other session is async; force it to be processed.
-    _ = :sys.get_state(receiver.pid)
+      # Let the sender's own echo broadcast finish before the test exits.
+      _ = :sys.get_state(view.pid)
 
-    assert render(receiver) =~ "Real-time hello"
+      {:ok, _view, html} = live(conn, ~p"/messages/#{conversation.id}")
+      assert html =~ "For the record"
+    end
+
+    test "a message appears live in the other member's session", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {other_conn, other} = login_other_user()
+      conversation = insert_conversation_between(me, other)
+
+      {:ok, sender, _} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, receiver, _} = live(other_conn, ~p"/messages/#{conversation.id}")
+
+      sender
+      |> form("#message-form", message: %{body: "Real-time hello"})
+      |> render_submit()
+
+      # The broadcast to the other session is async; force it to be processed
+      # (and the sender's own echo too, so nothing runs after the test exits).
+      _ = :sys.get_state(receiver.pid)
+      _ = :sys.get_state(sender.pid)
+
+      assert render(receiver) =~ "Real-time hello"
+    end
+
+    test "messages render markdown safely with a timestamp", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_validated_user())
+
+      {:ok, sender, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      sender
+      |> form("#message-form",
+        message: %{
+          body:
+            "**bold** <script>alert(1)</script> https://example.com/a/very/long/path/that/keeps/going/and/going"
+        }
+      )
+      |> render_submit()
+
+      # The echo comes back to the sender via PubSub; force it to be processed.
+      _ = :sys.get_state(sender.pid)
+      html = render(sender)
+
+      assert html =~ "<strong>bold</strong>"
+      refute html =~ "<script"
+      # bare URL became a truncated link
+      assert html =~ ~s(href="https://example.com/a/very/long/path/that/keeps/going/and/going")
+      assert html =~ "…"
+      # timestamp is rendered
+      assert html =~ "<time"
+    end
+
+    test "typing in one session shows the animated typing bubble in the other", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {other_conn, other} = login_other_user()
+      conversation = insert_conversation_between(me, other)
+
+      {:ok, typer, _} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, watcher, _} = live(other_conn, ~p"/messages/#{conversation.id}")
+
+      typer
+      |> form("#message-form", message: %{body: "typ"})
+      |> render_change()
+
+      _ = :sys.get_state(watcher.pid)
+
+      assert has_element?(watcher, "#typing-bubble")
+      assert render(watcher) =~ "is typing"
+    end
   end
 
-  test "typing in one session shows the animated typing bubble in another", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+  describe "message requests" do
+    test "a stranger's message lands as a request the recipient can accept", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      stranger = insert_validated_user(first_name: "Sam", last_name: "Stranger")
+      conversation = insert_conversation_between(stranger, me, status: "pending")
+      {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
 
-    {:ok, typer, _} = live(conn, ~p"/messages/1")
-    {:ok, watcher, _} = live(conn, ~p"/messages/1")
+      {:ok, view, html} = live(conn, ~p"/messages")
 
-    typer
-    |> form("#message-form", message: %{body: "typ"})
-    |> render_change()
+      assert html =~ "Sam Stranger"
+      assert html =~ "May I?"
+      assert has_element?(view, "#requests")
 
-    _ = :sys.get_state(watcher.pid)
+      view |> element("#requests button", "Accept") |> render_click()
 
-    assert has_element?(watcher, "#typing-bubble")
-    assert render(watcher) =~ "is typing"
+      # Accepted: out of the requests block, into the conversation list.
+      refute has_element?(view, "#requests")
+      assert render(view) =~ "Sam Stranger"
+      assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, conversation.id).status == "accepted"
+    end
+
+    test "declining silently removes the request", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      stranger = insert_validated_user()
+      conversation = insert_conversation_between(stranger, me, status: "pending")
+      {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
+
+      {:ok, view, _} = live(conn, ~p"/messages")
+
+      view |> element("#requests button", "Decline") |> render_click()
+
+      refute has_element?(view, "#requests")
+      refute render(view) =~ "May I?"
+      assert Chat.list_requests(me) == []
+    end
+
+    test "the requester sees a waiting hint instead of the composer", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_validated_user()
+      conversation = insert_conversation_between(me, other, status: "pending", initiator: me)
+      {:ok, _} = Chat.send_message(me, conversation.id, "hello-out-there")
+
+      {:ok, view, html} = live(conn, ~p"/messages/#{conversation.id}")
+
+      refute has_element?(view, "#message-form")
+      assert html =~ "hello-out-there"
+    end
+
+    test "the recipient of a request gets a composer; replying accepts", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      stranger = insert_validated_user()
+      conversation = insert_conversation_between(stranger, me, status: "pending")
+      {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      view
+      |> form("#message-form", message: %{body: "Sure!"})
+      |> render_submit()
+
+      _ = :sys.get_state(view.pid)
+
+      assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, conversation.id).status == "accepted"
+    end
   end
 
-  test "live messages get dom ids outside the seed id namespace", %{conn: conn} do
-    # Regression: live ids came from System.unique_integer, which starts at 1 on
-    # a fresh node — colliding with the seeded message's id 1, so the first sent
-    # message silently REPLACED the seed row in the stream instead of appending.
-    {conn, _user} = create_and_login_user(conn)
+  describe "thread pagination" do
+    test "older messages load on demand", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_validated_user()
+      conversation = insert_conversation_between(me, other)
 
-    {:ok, sender, _} = live(conn, ~p"/messages/1")
+      for i <- 1..35 do
+        at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), i - 40)
 
-    sender
-    |> form("#message-form", message: %{body: "No collision please"})
-    |> render_submit()
+        insert(:message,
+          conversation: conversation,
+          sender: other,
+          body: "numbered message #{String.pad_leading("#{i}", 2, "0")}",
+          inserted_at: at
+        )
+      end
 
-    # The message comes back to the sender via PubSub; force it to be processed.
-    _ = :sys.get_state(sender.pid)
-    html = render(sender)
+      {:ok, view, html} = live(conn, ~p"/messages/#{conversation.id}")
 
-    assert html =~ ~s(id="message-live-)
-    # the seeded message must still be there alongside the new one
-    assert html =~ "Loved your Phoenix talk"
-    assert html =~ "No collision please"
+      assert html =~ "numbered message 35"
+      refute html =~ "numbered message 05"
+      assert has_element?(view, "#load-older")
+
+      view |> element("#load-older") |> render_click()
+
+      html = render(view)
+      assert html =~ "numbered message 01"
+      refute has_element?(view, "#load-older")
+    end
   end
 
-  test "a lone viewer is not counted in the online label", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+  describe "new conversation entry" do
+    test "/messages/new/:slug opens the conversation with that member", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+      other = insert_validated_user()
 
-    {:ok, view, _} = live(conn, ~p"/messages/1")
+      assert {:error, {:live_redirect, %{to: "/messages/" <> id}}} =
+               live(conn, ~p"/messages/new/#{other.active_slug}")
 
-    # The viewer's own presence must not count: with nobody else around there
-    # is no "online" line at all, rather than a misleading "1 online".
-    refute render(view) =~ "online"
+      assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, id)
+    end
+
+    test "an unknown slug redirects to the conversation list", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+
+      assert {:error, {:live_redirect, %{to: "/messages"}}} =
+               live(conn, ~p"/messages/new/nobody-here")
+    end
+
+    test "the profile Message button points at the new-conversation route", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+      other = insert_validated_user()
+
+      html = conn |> get(~p"/#{other.active_slug}") |> html_response(200)
+
+      assert html =~ ~s(href="/messages/new/#{other.active_slug}")
+    end
   end
 
-  test "another logged-in member shows up as 1 online", %{conn: conn} do
-    {conn, _me} = create_and_login_user(conn)
+  describe "mobile layout" do
+    test "the index shows the list full-width; a thread shows a back link", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_validated_user())
 
-    other_conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
+      {:ok, index_view, _} = live(conn, ~p"/messages")
+      # No active conversation: the list is visible on mobile (not hidden).
+      refute has_element?(index_view, "aside.hidden")
 
-    {other_conn, _other} =
-      create_and_login_user(other_conn, %{
-        "emails" => %{"0" => %{"value" => "other@example.com"}},
-        "first_name" => "Other"
-      })
-
-    {:ok, view, _} = live(conn, ~p"/messages/1")
-    {:ok, _other_view, _} = live(other_conn, ~p"/messages/1")
-
-    # The presence join reaches the first view asynchronously; flush it.
-    _ = :sys.get_state(view.pid)
-
-    # One other person online; the viewer themselves stays out of the count.
-    assert render(view) =~ "1 online"
+      {:ok, show_view, _} = live(conn, ~p"/messages/#{conversation.id}")
+      assert has_element?(show_view, "aside.hidden")
+      assert has_element?(show_view, "#back-to-list")
+    end
   end
 
-  test "messages render markdown safely with a timestamp", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
+  describe "presence" do
+    test "a lone viewer sees no online indicator", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_validated_user())
 
-    {:ok, sender, _} = live(conn, ~p"/messages/1")
-    {:ok, receiver, _} = live(conn, ~p"/messages/1")
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-    sender
-    |> form("#message-form",
-      message: %{
-        body:
-          "**bold** <script>alert(1)</script> https://example.com/a/very/long/path/that/keeps/going/and/going"
-      }
-    )
-    |> render_submit()
+      refute render(view) =~ "Online"
+    end
 
-    _ = :sys.get_state(receiver.pid)
-    html = render(receiver)
+    test "the other member on the page shows as online", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {other_conn, other} = login_other_user()
+      conversation = insert_conversation_between(me, other)
 
-    assert html =~ "<strong>bold</strong>"
-    refute html =~ "<script"
-    # bare URL became a truncated link
-    assert html =~ ~s(href="https://example.com/a/very/long/path/that/keeps/going/and/going")
-    assert html =~ "…"
-    # timestamp is rendered
-    assert html =~ "<time"
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, _other_view, _} = live(other_conn, ~p"/messages")
+
+      # The presence join reaches the first view asynchronously; flush it.
+      _ = :sys.get_state(view.pid)
+
+      assert render(view) =~ "Online"
+    end
   end
 end

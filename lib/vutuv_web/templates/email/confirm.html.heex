@@ -26,10 +26,7 @@
           inputmode: "numeric",
           placeholder: gettext("Enter your PIN") %>
       </div>
-      <div class="editform__actions">
-        <%= link gettext("Cancel"), to: ~p"/#{@user}/emails", class: "button button--cancel" %>
-        <%= submit gettext("Submit"), class: "button" %>
-      </div>
+      <.form_actions backlink={~p"/#{@user}/emails"} />
     </.form>
   </section>
 </div>

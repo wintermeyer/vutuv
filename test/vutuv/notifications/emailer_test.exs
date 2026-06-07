@@ -92,6 +92,20 @@ defmodule Vutuv.Notifications.EmailerTest do
       |> Emailer.verification_notice()
       |> assert_robot_headers()
     end
+
+    test "unread messages email" do
+      user = insert(:user, locale: "en")
+      other = insert(:user, active_slug: "the-sender")
+
+      email =
+        Emailer.unread_messages_email("unread@example.com", user, other, Vutuv.UUIDv7.generate())
+
+      assert_robot_headers(email)
+      # System text names accounts by their @handle, never the clear name.
+      assert email.subject =~ "@the-sender"
+      assert email.text_body =~ "@the-sender"
+      refute email.text_body =~ other.first_name
+    end
   end
 
   describe "PIN emails name a PIN, never a link (issue #759)" do

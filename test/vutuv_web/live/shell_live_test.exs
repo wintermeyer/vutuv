@@ -23,15 +23,48 @@ defmodule VutuvWeb.ShellLiveTest do
     user
   end
 
+  # An accepted conversation holding one message the user has not read.
+  defp with_unread_message(user) do
+    other = insert(:user)
+    conversation = insert_conversation_between(other, user)
+    {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "unread ping")
+    user
+  end
+
   test "renders the shell nav with the real unread notification count", %{conn: conn} do
     user = user_with_unread_notification()
     {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     assert html =~ "vutuv"
     assert has_element?(view, "#app-shell")
-    # one unread follower event; the messages badge is still the dummy seed (2)
+    # one unread follower event; no conversations, so no messages badge
     assert has_element?(view, @bell_badge, "1")
+    refute has_element?(view, @mail_badge)
+  end
+
+  test "renders the real unread conversation count", %{conn: conn} do
+    user = with_unread_message(insert(:user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    assert has_element?(view, @mail_badge, "1")
+  end
+
+  test "a new-message event bumps the messages badge", %{conn: conn} do
+    user = with_unread_message(insert(:user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    send(view.pid, {:new_message, %{conversation_id: "x"}})
+
     assert has_element?(view, @mail_badge, "2")
+  end
+
+  test "marking messages read clears the messages badge", %{conn: conn} do
+    user = with_unread_message(insert(:user))
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    send(view.pid, :messages_read)
+
+    refute has_element?(view, @mail_badge)
   end
 
   test "already-read events don't count toward the badge", %{conn: conn} do
@@ -92,23 +125,23 @@ defmodule VutuvWeb.ShellLiveTest do
   test "the badge for the page being viewed starts at zero (no read-broadcast race)", %{
     conn: conn
   } do
-    user = user_with_unread_notification()
+    user = with_unread_message(user_with_unread_notification())
     session = session_for(user, %{"path" => "/notifications"})
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
     refute has_element?(view, @bell_badge)
     # the messages badge is unaffected
-    assert has_element?(view, @mail_badge, "2")
+    assert has_element?(view, @mail_badge, "1")
   end
 
   test "marking notifications read clears the notification badge", %{conn: conn} do
-    user = user_with_unread_notification()
+    user = with_unread_message(user_with_unread_notification())
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
     send(view.pid, :notifications_read)
 
     refute has_element?(view, @bell_badge)
-    # the messages badge (2) is untouched
-    assert has_element?(view, @mail_badge, "2")
+    # the messages badge is untouched
+    assert has_element?(view, @mail_badge, "1")
   end
 end

@@ -46,17 +46,8 @@ defmodule VutuvWeb.WorkExperienceController do
   end
 
   def show(conn, _params) do
-    work_experience =
-      conn.assigns[:job]
-      |> Repo.preload([:user])
-
-    if work_experience.user.id == conn.assigns[:user].id do
-      render(conn, "show.html", work_experience: work_experience)
-    else
-      redirect(conn,
-        to: ~p"/#{work_experience.user}/work_experiences/#{work_experience}"
-      )
-    end
+    # ResolveOwnedSlug scopes :job to conn.assigns[:user], so no ownership re-check.
+    render(conn, "show.html", work_experience: conn.assigns[:job])
   end
 
   def edit(conn, _params) do

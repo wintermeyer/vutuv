@@ -289,19 +289,11 @@ defmodule VutuvWeb.UserHelpers do
 
   def current_organization(nil), do: ""
 
-  def current_organization(%User{} = user) do
-    current_organization(current_job(user))
-  end
-
   def current_organization(%WorkExperience{organization: nil}), do: ""
 
   def current_organization(%WorkExperience{organization: org}), do: org
 
   def current_title(nil), do: ""
-
-  def current_title(%User{} = user) do
-    current_title(current_job(user))
-  end
 
   def current_title(%WorkExperience{title: nil}), do: ""
 

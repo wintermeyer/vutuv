@@ -13,6 +13,15 @@ defmodule VutuvWeb.UI do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
+  # `<.follow_button>` owns the ~p"/connections…" route shapes, so it needs the
+  # verified-route sigil and the `button/2` helper for its icon/text variants.
+  use Phoenix.VerifiedRoutes,
+    endpoint: VutuvWeb.Endpoint,
+    router: VutuvWeb.Router,
+    statics: ~w(assets fonts images favicon.ico)
+
+  import PhoenixHTMLHelpers.Link, only: [button: 2]
+
   @doc "The Direction A card surface (white, rounded, ring, soft shadow; dark-aware)."
   attr(:class, :string, default: nil)
   attr(:rest, :global)
@@ -218,6 +227,80 @@ defmodule VutuvWeb.UI do
 
   defp button_class("danger"), do: "#{@button_base} bg-red-600 text-white hover:bg-red-700"
   defp button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
+
+  @doc """
+  Follow / unfollow control — the single owner of the two `~p"/connections…"`
+  route shapes: a CSRF-protected **DELETE** `/connections/<connection_id>` to
+  unfollow, or a **POST** `/connections?connection[follower_id][followee_id]` to
+  follow, branched on whether `connection_id` is set (`nil` = not following). The
+  following-state lookup (`following_by_id` / `user_follows_user?/2`) stays at the
+  call site; this component just consumes its result via `connection_id`.
+
+  Pass `follower_id` (the viewer's id) and `followee_id` (the target's id) plus
+  the resolved `connection_id`. The owner/visitor/logged-in guards stay at the
+  call site too. Three visual variants reproduce the four hand-written call
+  sites byte-for-byte:
+
+    * `"icon"` — the `button button--icon` icon-glyph track (`card_list`):
+      `i.icon.icon--unfollow` / `i.icon.icon--follow`, rendered through
+      `button/2` (a `<button>` with `data-method`).
+    * `"text"` — the bespoke text-button track (`user_row`): a `button/2`
+      `<button>` reading gettext("Following") / gettext("Follow") with the
+      muted/brand link classes.
+    * `"button"` — the `<.button>` track (`show`, `teaser`): a secondary
+      `<.button>` "Following" / a primary `<.button>` "Follow". `teaser` renders
+      only the follow half — pass `connection_id={nil}` (a non-follower can only
+      follow) and it emits exactly that one button.
+  """
+  attr(:variant, :string, required: true, values: ~w(icon text button))
+  attr(:follower_id, :any, required: true)
+  attr(:followee_id, :any, required: true)
+  attr(:connection_id, :any, default: nil, doc: "the connection id, or nil when not following")
+
+  def follow_button(%{variant: "icon"} = assigns) do
+    ~H"""
+    <%= if is_binary(@connection_id) do %>
+      <%= button to: ~p"/connections/#{@connection_id}", method: :delete, class: "button button--icon" do %>
+        <i class="icon icon--unfollow"></i>
+      <% end %>
+    <% else %>
+      <%= button to: ~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: "button button--icon" do %>
+        <i class="icon icon--follow"></i>
+      <% end %>
+    <% end %>
+    """
+  end
+
+  def follow_button(%{variant: "text"} = assigns) do
+    ~H"""
+    <%= if is_binary(@connection_id) do %>
+      <%= button to: ~p"/connections/#{@connection_id}", method: :delete,
+            class: "ml-auto self-start text-sm font-semibold text-slate-400 hover:text-slate-600" do %>
+        {gettext("Following")}
+      <% end %>
+    <% else %>
+      <%= button to: ~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post,
+            class: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700" do %>
+        {gettext("Follow")}
+      <% end %>
+    <% end %>
+    """
+  end
+
+  def follow_button(%{variant: "button"} = assigns) do
+    ~H"""
+    <.button :if={is_binary(@connection_id)} variant="secondary" href={~p"/connections/#{@connection_id}"} method="delete">
+      {gettext("Following")}
+    </.button>
+    <.button
+      :if={!is_binary(@connection_id)}
+      href={~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
+      method="post"
+    >
+      {gettext("Follow")}
+    </.button>
+    """
+  end
 
   @doc """
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)

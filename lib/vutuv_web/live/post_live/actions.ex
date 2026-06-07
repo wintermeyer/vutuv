@@ -208,12 +208,7 @@ defmodule VutuvWeb.PostLive.Actions do
       ]}
     >
       <.icon_reply />
-      <span
-        class={["font-medium tabular-nums", @count == 0 && "invisible"]}
-        data-count={@count > 0 && "reply"}
-      >
-        {compact_count(@count)}
-      </span>
+      <.count_pill count={@count} kind="reply" />
     </.link>
     <span
       :if={@disabled}
@@ -223,9 +218,7 @@ defmodule VutuvWeb.PostLive.Actions do
       class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-500 opacity-40 dark:text-slate-400"
     >
       <.icon_reply />
-      <span class={["font-medium tabular-nums", @count == 0 && "invisible"]}>
-        {compact_count(@count)}
-      </span>
+      <.count_pill count={@count} />
     </span>
     """
   end
@@ -263,13 +256,26 @@ defmodule VutuvWeb.PostLive.Actions do
       {render_slot(@icon)}
       <%!-- Always mounted (invisible at zero) so an arriving first count
             doesn't shift the neighbouring buttons under the pointer. --%>
-      <span
-        class={["font-medium tabular-nums", @count == 0 && "invisible"]}
-        data-count={@count > 0 && @kind}
-      >
-        {compact_count(@count)}
-      </span>
+      <.count_pill count={@count} kind={@kind} />
     </button>
+    """
+  end
+
+  # The shared count pill: invisible (but mounted) at zero so an arriving
+  # first count doesn't shift neighbours, formatted through compact_count.
+  # `kind` is the data-count token (nil omits the attribute, as the disabled
+  # reply branch does).
+  attr(:count, :integer, required: true)
+  attr(:kind, :string, default: nil)
+
+  defp count_pill(assigns) do
+    ~H"""
+    <span
+      class={["font-medium tabular-nums", @count == 0 && "invisible"]}
+      data-count={@kind && @count > 0 && @kind}
+    >
+      {compact_count(@count)}
+    </span>
     """
   end
 

@@ -1,0 +1,11 @@
+<%= email_greeting(@user) %>,
+
+Sie haben eine neue Nachricht von @<%= @other_slug %> auf vutuv.
+
+Hier können Sie sie lesen und beantworten:
+
+<%= @url %>messages/<%= @conversation_id %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

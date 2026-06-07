@@ -1,6 +1,8 @@
 defmodule Vutuv.PostsTest do
   use Vutuv.DataCase
 
+  import Vutuv.PostsHelpers
+
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
@@ -10,22 +12,13 @@ defmodule Vutuv.PostsTest do
 
   # Feed authors must be validated (consistent with follower counts etc.), so
   # the default test user is.
-  defp user(attrs \\ []), do: insert(:user, Keyword.merge([validated?: true], attrs))
-
-  # A bare connection row (no notifications side effects like Social.follow/2).
-  defp follow!(follower, followee),
-    do: insert(:connection, follower: follower, followee: followee)
+  defp user(attrs \\ []), do: insert(:validated_user, attrs)
 
   defp group_with_member(author, member) do
     group = insert(:group, user: author)
     connection = follow!(author, member)
     insert(:membership, connection: connection, group: group)
     group
-  end
-
-  defp create_post!(author, attrs) do
-    {:ok, post} = Posts.create_post(author, attrs)
-    post
   end
 
   # Timeline ordering ties at second precision; shift a post into the past so

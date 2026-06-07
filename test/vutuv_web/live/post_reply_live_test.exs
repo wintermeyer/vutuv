@@ -7,15 +7,11 @@ defmodule VutuvWeb.PostReplyLiveTest do
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+  import Vutuv.PostsHelpers
 
   alias Vutuv.Posts
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([validated?: true], attrs))
-
-  defp create_post!(author, attrs) do
-    {:ok, post} = Posts.create_post(author, attrs)
-    post
-  end
 
   describe "GET /posts/:id/reply" do
     test "shows the parent post and the composer", %{conn: conn} do

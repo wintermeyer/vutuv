@@ -110,6 +110,34 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
+  @doc """
+  The debounced "you have an unread message" notice (see
+  `Vutuv.Chat.send_unread_notifications/0`). Names the sender by @handle only
+  — system text never uses clear names. The caller passes the recipient's
+  address (it already looked it up to decide whether to send at all).
+  """
+  def unread_messages_email(email, user, other, conversation_id) do
+    locale = get_locale(user.locale)
+
+    base_email()
+    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> subject(
+      recipient_subject(locale, fn ->
+        Gettext.gettext(VutuvWeb.Gettext, "New message from @%{slug} on vutuv",
+          slug: other.active_slug
+        )
+      end)
+    )
+    |> text_body(
+      VutuvWeb.EmailText.render("unread_messages_#{locale}.text", %{
+        user: user,
+        other_slug: other.active_slug,
+        conversation_id: conversation_id,
+        url: public_url()
+      })
+    )
+  end
+
   defp gen_email(pin, email, user, template_base, subject_fun) do
     locale = get_locale(user.locale)
 

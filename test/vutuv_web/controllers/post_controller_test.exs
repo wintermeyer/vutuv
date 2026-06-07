@@ -6,25 +6,14 @@ defmodule VutuvWeb.PostControllerTest do
   """
   use VutuvWeb.ConnCase
 
+  import Vutuv.PostsHelpers
+
   alias Vutuv.Posts
 
   @other_login_attrs %{
     "emails" => %{"0" => %{"value" => "other@example.com"}},
     "first_name" => "other"
   }
-
-  # Permalinks resolve through the slugs table (UserResolveSlug), so factory
-  # authors need a slug row matching their active_slug.
-  defp author(attrs \\ []) do
-    user = insert(:user, Keyword.merge([validated?: true], attrs))
-    insert(:slug, user: user, value: user.active_slug, disabled: false)
-    user
-  end
-
-  defp create_post!(author, attrs) do
-    {:ok, post} = Posts.create_post(author, attrs)
-    post
-  end
 
   defp fresh_conn do
     Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
@@ -34,7 +23,7 @@ defmodule VutuvWeb.PostControllerTest do
 
   describe "GET the permalink" do
     test "renders a public post to anonymous visitors, indexable", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       post = create_post!(user, %{body: "Hello **world**", tags: "elixir"})
 
       conn = get(conn, Posts.path(post))
@@ -45,7 +34,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "redirects non-canonical URLs to the canonical form", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       post = create_post!(user, %{body: "x"})
 
       # The permalink is the post id under the author archive.
@@ -58,8 +47,8 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "404s for unknown ids, garbage segments and other authors' posts", %{conn: conn} do
-      user = author()
-      other = author()
+      user = insert_validated_user()
+      other = insert_validated_user()
       post = create_post!(other, %{body: "not under this slug"})
 
       assert get(conn, "/#{user.active_slug}/posts/#{Vutuv.UUIDv7.generate()}").status == 404
@@ -69,7 +58,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "restricted post: 404 for denied readers, 200 + noindex for permitted", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       post = create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
 
       assert get(conn, Posts.path(post)).status == 404
@@ -82,7 +71,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "followers-only post: teaser for non-followers, post for followers", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
 
       post =
         create_post!(user, %{
@@ -110,7 +99,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "every other denial shape is a plain 404, never a teaser", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       group = insert(:group, user: user, name: "Geheimbund")
 
       post =
@@ -164,7 +153,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "the permalink shows the action bar with counters to anonymous readers", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       post = create_post!(user, %{body: "counted"})
       for fan <- [insert(:user), insert(:user)], do: :ok = Posts.like_post(fan, post)
       :ok = Posts.repost_post(insert(:user), post)
@@ -177,8 +166,8 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "the archive lists the author's reposts with the reposted-by line", %{conn: conn} do
-      reposter = author(first_name: "Renate", last_name: "Repost")
-      original = create_post!(author(), %{body: "originally elsewhere"})
+      reposter = insert_validated_user(first_name: "Renate", last_name: "Repost")
+      original = create_post!(insert_validated_user(), %{body: "originally elsewhere"})
       :ok = Posts.repost_post(reposter, original)
 
       html = html_response(get(conn, "/#{reposter.active_slug}/posts"), 200)
@@ -188,7 +177,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "anonymous visitors and other readers get no menu", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       post = create_post!(user, %{body: "public words"})
 
       anonymous = get(conn, Posts.path(post))
@@ -202,7 +191,7 @@ defmodule VutuvWeb.PostControllerTest do
 
   describe "GET /:slug/posts (the author archive)" do
     test "lists the author's posts, visibility-filtered per viewer", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       {:ok, _} = Posts.create_post(user, %{body: "open words"})
 
       {:ok, _} =
@@ -225,7 +214,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "scopes the archive to a year, month or day", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       {:ok, old} = Posts.create_post(user, %{body: "from last year"})
       {:ok, current} = Posts.create_post(user, %{body: "from today"})
 
@@ -254,7 +243,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "scoped pages carry the trail back up the hierarchy", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       {:ok, post} = Posts.create_post(user, %{body: "crumbed"})
       date = post.published_on
 
@@ -270,7 +259,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "404s for nonsense period segments", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
 
       assert get(conn, "/#{user.active_slug}/posts/abcd").status == 404
       assert get(conn, "/#{user.active_slug}/posts/2026/13").status == 404
@@ -280,7 +269,7 @@ defmodule VutuvWeb.PostControllerTest do
 
   describe "the profile's View all link" do
     test "appears only when more posts exist than the profile shows", %{conn: conn} do
-      user = author()
+      user = insert_validated_user()
       for n <- 1..3, do: {:ok, _} = Posts.create_post(user, %{body: "post #{n}"})
 
       # The exact archive href (closing quote included): permalinks also
@@ -299,9 +288,9 @@ defmodule VutuvWeb.PostControllerTest do
 
   describe "the reply banner and thread" do
     test "a reply's page shows the banner with the @handle, linking the parent", %{conn: conn} do
-      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent_author = insert_validated_user(first_name: "Petra", last_name: "Parent")
       parent = create_post!(parent_author, %{body: "original question"})
-      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "an answer"})
+      {:ok, reply} = Posts.create_reply(insert_validated_user(), parent, %{body: "an answer"})
 
       html = conn |> get(Posts.path(reply)) |> html_response(200)
 
@@ -312,9 +301,9 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "after parent deletion the banner names the author's @handle and profile", %{conn: conn} do
-      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent_author = insert_validated_user(first_name: "Petra", last_name: "Parent")
       parent = create_post!(parent_author, %{body: "soon gone"})
-      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "still here"})
+      {:ok, reply} = Posts.create_reply(insert_validated_user(), parent, %{body: "still here"})
 
       {:ok, _} = Posts.delete_post(parent)
 
@@ -326,9 +315,9 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "after the parent author's account deletion the banner is nameless", %{conn: conn} do
-      parent_author = author(first_name: "Petra", last_name: "Parent")
+      parent_author = insert_validated_user(first_name: "Petra", last_name: "Parent")
       parent = create_post!(parent_author, %{body: "soon gone"})
-      {:ok, reply} = Posts.create_reply(author(), parent, %{body: "still here"})
+      {:ok, reply} = Posts.create_reply(insert_validated_user(), parent, %{body: "still here"})
 
       # The real account-deletion path: the cascade removes the post too.
       Vutuv.Repo.delete!(parent_author)
@@ -340,13 +329,13 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "the parent's page lists visible replies oldest first", %{conn: conn} do
-      parent = create_post!(author(), %{body: "the root post"})
-      replier = author()
+      parent = create_post!(insert_validated_user(), %{body: "the root post"})
+      replier = insert_validated_user()
 
       {:ok, _old} = Posts.create_reply(replier, parent, %{body: "older answer"})
 
       {:ok, _hidden} =
-        Posts.create_reply(author(), parent, %{
+        Posts.create_reply(insert_validated_user(), parent, %{
           body: "secret answer",
           denials: [%{"wildcard" => "everyone"}]
         })
@@ -377,7 +366,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "someone else's post 404s and survives", %{conn: conn} do
-      other = author()
+      other = insert_validated_user()
       post = create_post!(other, %{body: "not yours"})
 
       {conn, _user} = create_and_login_user(conn)
@@ -386,7 +375,7 @@ defmodule VutuvWeb.PostControllerTest do
     end
 
     test "logged out is redirected away", %{conn: conn} do
-      post = create_post!(author(), %{body: "x"})
+      post = create_post!(insert_validated_user(), %{body: "x"})
 
       conn = delete(conn, "/posts/#{post.id}")
       assert redirected_to(conn) == "/"

@@ -7,9 +7,10 @@ defmodule VutuvWeb.ShellLive do
   `"user:<id>"`).
 
   Uses `Phoenix.LiveView` directly (no `app` layout) to avoid wrapping itself.
-  The notification badge is the real unread count (events newer than the
-  user's read marker, via `Vutuv.Activity.unread_notification_count/1`); the
-  messages badge stays dummy until messages get persistence.
+  Both badges are real unread counts: notifications via
+  `Vutuv.Activity.unread_notification_count/1` (events newer than the user's
+  read marker), messages via `Vutuv.Chat.unread_conversations_count/1`
+  (conversations holding unread messages).
   """
   use Phoenix.LiveView
 
@@ -20,9 +21,7 @@ defmodule VutuvWeb.ShellLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  # Only the count formatter: the shell has its own private count_badge/1
-  # (different positioning), so a full import would clash with it.
-  import VutuvWeb.UI, only: [compact_count: 1, icon_bookmark: 1]
+  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1]
 
   alias Vutuv.Activity
 
@@ -48,7 +47,10 @@ defmodule VutuvWeb.ShellLive do
      |> assign(:user_name, session["user_name"])
      |> assign(:user_param, session["user_param"])
      |> assign(:user_avatar, session["user_avatar"])
-     |> assign(:messages_count, initial_count(path, "/messages", user_id, &dummy_messages/1))
+     |> assign(
+       :messages_count,
+       initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
+     )
      |> assign(
        :notifications_count,
        initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
@@ -63,10 +65,9 @@ defmodule VutuvWeb.ShellLive do
   def handle_info({:new_notification, _n}, socket),
     do: {:noreply, update(socket, :notifications_count, &(&1 + 1))}
 
-  # Placeholder: nothing broadcasts {:new_message, ...} on the user topic yet.
-  # Messages only broadcast on the per-conversation topic (see MessageLive). It
-  # stays so the badge lights up for free once a per-user message feed pushes
-  # here, mirroring the notification clause above.
+  # Vutuv.Chat broadcasts this to the recipient on every delivered message;
+  # MessageLive's mark_read broadcasts :messages_read below to zero it again
+  # while the member is looking at the conversation.
   def handle_info({:new_message, _m}, socket),
     do: {:noreply, update(socket, :messages_count, &(&1 + 1))}
 
@@ -77,11 +78,6 @@ defmodule VutuvWeb.ShellLive do
     do: {:noreply, assign(socket, :messages_count, 0)}
 
   def handle_info(_other, socket), do: {:noreply, socket}
-
-  # Messages have no persistence yet (see MessageLive); seed the badge with a
-  # fixed value for logged-in users until they do.
-  defp dummy_messages(nil), do: 0
-  defp dummy_messages(_user_id), do: 2
 
   defp initials(nil), do: "?"
 
@@ -149,7 +145,10 @@ defmodule VutuvWeb.ShellLive do
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 <.icon_envelope />
-                <.count_badge count={@messages_count} />
+                <.count_badge
+                  count={@messages_count}
+                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                />
               </.link>
               <.link
                 href={~p"/notifications"}
@@ -157,7 +156,10 @@ defmodule VutuvWeb.ShellLive do
                 class="relative hidden h-10 w-10 items-center justify-center rounded-full text-slate-500 hover:bg-slate-100 md:flex dark:text-slate-400 dark:hover:bg-slate-800"
               >
                 <.icon_bell />
-                <.count_badge count={@notifications_count} />
+                <.count_badge
+                  count={@notifications_count}
+                  class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+                />
               </.link>
               <.link href={~p"/#{@user_param}"} title={@user_name} class="ml-1 shrink-0">
                 <%= if @user_avatar do %>
@@ -207,19 +209,6 @@ defmodule VutuvWeb.ShellLive do
 
   ## Components
 
-  attr(:count, :integer, default: 0)
-
-  defp count_badge(assigns) do
-    ~H"""
-    <span
-      :if={@count > 0}
-      class="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-accent px-1 text-[11px] font-bold text-white ring-2 ring-white dark:ring-slate-900"
-    >
-      {compact_count(@count)}
-    </span>
-    """
-  end
-
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
@@ -230,7 +219,10 @@ defmodule VutuvWeb.ShellLive do
     <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-500 dark:text-slate-400">
       <span class="relative">
         {render_slot(@inner_block)}
-        <.count_badge count={@count} />
+        <.count_badge
+          count={@count}
+          class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
+        />
       </span>
       <span class="text-[10px]">{@label}</span>
     </.link>

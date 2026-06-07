@@ -16,18 +16,13 @@ DB-backed helpers per row. --%>
       <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       </p>
-      <%= if !same_user?(@current_user, user) and @current_user do %>
-        <%= case (if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)) do %>
-          <% connection_id when is_binary(connection_id) -> %>
-            <%= button to: ~p"/connections/#{connection_id}", method: :delete , class: "button button--icon" do %>
-              <i class="icon icon--unfollow"></i>
-            <% end %>
-          <% _not_following -> %>
-            <%= button to: ~p"/connections?#{[connection: %{follower_id: @current_user_id, followee_id: user.id}]}", method: :post , class: "button button--icon" do %>
-              <i class="icon icon--follow"></i>
-            <% end %>
-        <% end %>
-      <% end %>
+      <.follow_button
+        :if={!same_user?(@current_user, user) and @current_user}
+        variant="icon"
+        follower_id={@current_user_id}
+        followee_id={user.id}
+        connection_id={if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)}
+      />
     </li>
   <% end %>
 </ul>

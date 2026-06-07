@@ -415,6 +415,15 @@ defmodule Vutuv.Accounts do
     Repo.one(from(u in User, select: count(u.id)))
   end
 
+  @doc """
+  The user behind a current profile slug, or nil. Only resolves the *active*
+  slug (links rendered now), not retired ones — those stay a controller-plug
+  concern (`VutuvWeb.Plug.ResolveSlug`).
+  """
+  def get_user_by_slug(slug) when is_binary(slug) do
+    Repo.get_by(User, active_slug: slug)
+  end
+
   def update_user(%User{} = user, attrs) do
     user
     |> User.changeset(attrs)

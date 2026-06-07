@@ -18,15 +18,12 @@ following is actionable, so invite it. Every other denial renders a plain
           </p>
         </div>
 
-        <.button
+        <.follow_button
           :if={@current_user && @current_user.id != @author.id}
-          href={
-            ~p"/connections?#{[connection: %{follower_id: @current_user.id, followee_id: @author.id}]}"
-          }
-          method="post"
-        >
-          {gettext("Follow")}
-        </.button>
+          variant="button"
+          follower_id={@current_user.id}
+          followee_id={@author.id}
+        />
         <.button :if={is_nil(@current_user)} href={~p"/login"}>
           {gettext("Log in")}
         </.button>

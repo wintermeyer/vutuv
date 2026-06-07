@@ -13,24 +13,18 @@ defmodule VutuvWeb.PageTitleTest do
     title
   end
 
-  defp author do
-    user = insert(:user, validated?: true, first_name: "Tina", last_name: "Titel")
-    insert(:slug, user: user, value: user.active_slug, disabled: false)
-    user
-  end
-
   test "the landing page gets the bare site name", %{conn: conn} do
     assert conn |> get("/") |> title() == "vutuv"
   end
 
   test "a user page without an explicit title names the user", %{conn: conn} do
-    user = author()
+    user = insert_validated_user(first_name: "Tina", last_name: "Titel")
 
     assert conn |> get("/#{user.active_slug}") |> title() == "Tina Titel - vutuv"
   end
 
   test "an explicit page_title wins over the user fallback", %{conn: conn} do
-    user = author()
+    user = insert_validated_user(first_name: "Tina", last_name: "Titel")
     {:ok, post} = Posts.create_post(user, %{body: "titled"})
 
     assert conn |> get(Posts.path(post)) |> title() ==

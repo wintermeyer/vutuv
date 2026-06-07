@@ -85,45 +85,29 @@ defmodule VutuvWeb.PostComponents do
       )
 
     ~H"""
-    <.card :if={@surface == :card} class={@class}>
-      <.post_card_body
-        post={@post}
-        mode={@mode}
-        body_html={@body_html}
-        truncated?={@truncated?}
-        restricted?={@restricted?}
-        permalink={@permalink}
-        gallery={@gallery}
-        edited?={@edited?}
-        author?={@author?}
-        reposted_by={@reposted_by}
-        reply_banner={@reply_banner}
-        conn_or_socket={@conn_or_socket}
-        actions_id={@actions_id}
-        menu_id={@menu_id}
-      />
-    </.card>
-    <div :if={@surface == :flat} class={@class}>
-      <.post_card_body
-        post={@post}
-        mode={@mode}
-        body_html={@body_html}
-        truncated?={@truncated?}
-        restricted?={@restricted?}
-        permalink={@permalink}
-        gallery={@gallery}
-        edited?={@edited?}
-        author?={@author?}
-        reposted_by={@reposted_by}
-        reply_banner={@reply_banner}
-        conn_or_socket={@conn_or_socket}
-        actions_id={@actions_id}
-        menu_id={@menu_id}
-      />
-    </div>
+    <.post_card_body
+      surface={@surface}
+      class={@class}
+      post={@post}
+      mode={@mode}
+      body_html={@body_html}
+      truncated?={@truncated?}
+      restricted?={@restricted?}
+      permalink={@permalink}
+      gallery={@gallery}
+      edited?={@edited?}
+      author?={@author?}
+      reposted_by={@reposted_by}
+      reply_banner={@reply_banner}
+      conn_or_socket={@conn_or_socket}
+      actions_id={@actions_id}
+      menu_id={@menu_id}
+    />
     """
   end
 
+  attr(:surface, :atom, required: true)
+  attr(:class, :string, default: nil)
   attr(:post, :any, required: true)
   attr(:mode, :atom, required: true)
   attr(:body_html, :any, required: true)
@@ -140,6 +124,17 @@ defmodule VutuvWeb.PostComponents do
   attr(:menu_id, :string, required: true)
 
   defp post_card_body(assigns) do
+    ~H"""
+    <.card :if={@surface == :card} class={@class}>
+      {render_post_card_inner(assigns)}
+    </.card>
+    <div :if={@surface == :flat} class={@class}>
+      {render_post_card_inner(assigns)}
+    </div>
+    """
+  end
+
+  defp render_post_card_inner(assigns) do
     ~H"""
     <div>
       <p

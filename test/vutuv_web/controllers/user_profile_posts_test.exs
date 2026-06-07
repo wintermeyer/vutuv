@@ -7,14 +7,8 @@ defmodule VutuvWeb.UserProfilePostsTest do
 
   alias Vutuv.Posts
 
-  defp author(attrs \\ []) do
-    user = insert(:user, Keyword.merge([validated?: true], attrs))
-    insert(:slug, user: user, value: user.active_slug, disabled: false)
-    user
-  end
-
   test "shows the latest posts as previews", %{conn: conn} do
-    user = author()
+    user = insert_validated_user()
     {:ok, _} = Posts.create_post(user, %{body: "profile post"})
 
     conn = get(conn, "/#{user.active_slug}")
@@ -48,7 +42,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
   end
 
   test "filters restricted posts per viewer and omits the empty section", %{conn: conn} do
-    user = author()
+    user = insert_validated_user()
 
     {:ok, _} =
       Posts.create_post(user, %{body: "members club", denials: [%{"wildcard" => "logged_out"}]})

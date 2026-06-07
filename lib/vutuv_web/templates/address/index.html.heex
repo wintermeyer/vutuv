@@ -7,18 +7,9 @@
   ]}
 />
 
-<div class="card-list">
-
-  <section class="card">
-
-    <%= if Enum.empty?(@addresses) do %>
-      <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
-    <% else %>
-      <%= render "card_list.html", assigns %>
-    <% end %>
-
-    <%= if same_user?(@user, @current_user) do %>
-      <%= link gettext("Add"), to: ~p"/#{@current_user}/addresses/new", class: "card__morelink" %>
-    <% end %>
-  </section>
-</div>
+<.card_section
+  empty={Enum.empty?(@addresses)}
+  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/addresses/new"}
+>
+  <%= render "card_list.html", assigns %>
+</.card_section>

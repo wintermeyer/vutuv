@@ -1,6 +1,8 @@
 defmodule Vutuv.ActivityTest do
   use Vutuv.DataCase
 
+  import Vutuv.QueryCounter
+
   alias Vutuv.Activity
   alias Vutuv.Posts.PostReply
   alias Vutuv.Social.Connection
@@ -343,7 +345,7 @@ defmodule Vutuv.ActivityTest do
       insert(:connection, follower: insert(:user), followee: me)
 
       # One read for the notifications_read_at marker, one combined count query.
-      assert count_repo_queries(fn -> Activity.unread_notification_count(me.id) end) == 2
+      assert {_, 2} = count_queries(fn -> Activity.unread_notification_count(me.id) end)
     end
 
     test "counts reply events, except self-replies" do
@@ -399,7 +401,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
       insert(:connection, follower: insert(:user), followee: me)
 
-      assert count_repo_queries(fn -> Activity.notifications_count(me.id) end) == 1
+      assert {_, 1} = count_queries(fn -> Activity.notifications_count(me.id) end)
     end
   end
 
@@ -468,36 +470,5 @@ defmodule Vutuv.ActivityTest do
 
   defp backdate_reply(%PostReply{id: id}, at) do
     Repo.update_all(from(r in PostReply, where: r.id == ^id), set: [inserted_at: at])
-  end
-
-  # Count the SQL queries the repo runs while `fun` executes, via Ecto's
-  # `[:vutuv, :repo, :query]` telemetry. Pins the round-trip collapse so a future
-  # refactor that re-splits the counts is caught.
-  defp count_repo_queries(fun) do
-    test_pid = self()
-    handler_id = {:query_counter, make_ref()}
-
-    :telemetry.attach(
-      handler_id,
-      [:vutuv, :repo, :query],
-      fn _event, _measurements, _metadata, _config -> send(test_pid, :repo_query) end,
-      nil
-    )
-
-    try do
-      fun.()
-    after
-      :telemetry.detach(handler_id)
-    end
-
-    drain_query_events(0)
-  end
-
-  defp drain_query_events(count) do
-    receive do
-      :repo_query -> drain_query_events(count + 1)
-    after
-      0 -> count
-    end
   end
 end

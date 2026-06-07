@@ -23,7 +23,7 @@
   <% end %>
 
   <%= if @conn.assigns[:user_results] do %>
-    <section class="card card--simple">
+    <section class="card">
       <%= if @conn.params["tags"] == "true" do %>
         <%= if Enum.count(@user_results) > 0 do %>
           <p class="search-results__toggle"><a href="?tags=false"><%= gettext("Show user results") %></a></p>

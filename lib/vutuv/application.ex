@@ -14,20 +14,20 @@ defmodule Vutuv.Application do
         {Task.Supervisor, name: Vutuv.TaskSupervisor},
         Vutuv.RateLimiter,
         VutuvWeb.Endpoint
-      ] ++ sweeper()
+      ] ++
+        optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++
+        optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier)
 
     opts = [strategy: :one_for_one, name: Vutuv.Supervisor]
     Supervisor.start_link(children, opts)
   end
 
-  # Off in tests: the sweep would use the SQL Sandbox connection from a
-  # process that does not own it (same reasoning as :generate_screenshots).
-  defp sweeper do
-    if Application.get_env(:vutuv, :sweep_pending_images, true) do
-      [Vutuv.Posts.PendingImageSweeper]
-    else
-      []
-    end
+  # The periodic jobs, each behind a config flag so tests can turn them off:
+  # their DB work would use the SQL Sandbox connection from a process that
+  # does not own it (same reasoning as :generate_screenshots). Tests call the
+  # underlying functions directly instead.
+  defp optional_child(env_key, module) do
+    if Application.get_env(:vutuv, env_key, true), do: [module], else: []
   end
 
   @impl true

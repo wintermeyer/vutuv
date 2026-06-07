@@ -12,6 +12,13 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # A validated user without the matching `Slug` row. Many context tests just
+  # need an account that passes the validated gate; only slug-routed pages also
+  # need the `Slug` row that `insert_validated_user/1` adds.
+  def validated_user_factory do
+    struct!(user_factory(), validated?: true)
+  end
+
   def email_factory do
     %Vutuv.Accounts.Email{
       value: sequence(:email_value, &"user#{&1}@example.com"),
@@ -35,7 +42,7 @@ defmodule Vutuv.Factory do
   the shape every slug-routed page needs to resolve the user.
   """
   def insert_validated_user(attrs \\ []) do
-    user = insert(:user, Keyword.merge([validated?: true], attrs))
+    user = insert(:validated_user, attrs)
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     user
   end
@@ -103,6 +110,14 @@ defmodule Vutuv.Factory do
     %Vutuv.Social.Connection{}
   end
 
+  @doc """
+  Inserts a bare `Connection` row (a follow) without the notification side
+  effects of `Social.follow/2`.
+  """
+  def follow!(follower, followee) do
+    insert(:connection, follower: follower, followee: followee)
+  end
+
   def group_factory do
     %Vutuv.Social.Group{
       name: sequence(:group_name, &"Group #{&1}")
@@ -162,5 +177,42 @@ defmodule Vutuv.Factory do
       provider: "google",
       provider_id: sequence(:provider_id, &"google-id-#{&1}")
     }
+  end
+
+  def conversation_factory do
+    %Vutuv.Chat.Conversation{}
+  end
+
+  def conversation_participant_factory do
+    %Vutuv.Chat.Participant{}
+  end
+
+  def message_factory do
+    %Vutuv.Chat.Message{
+      body: sequence(:message_body, &"Message body #{&1}")
+    }
+  end
+
+  @doc """
+  Inserts a conversation between the two users with both participant rows,
+  taking care of the sorted-pair invariant. `initiator` defaults to `a`.
+  """
+  def insert_conversation_between(a, b, attrs \\ []) do
+    {status, attrs} = Keyword.pop(attrs, :status, "accepted")
+    {initiator, attrs} = Keyword.pop(attrs, :initiator, a)
+    {user_a, user_b} = if a.id < b.id, do: {a, b}, else: {b, a}
+
+    conversation =
+      insert(
+        :conversation,
+        Keyword.merge(
+          [user_a: user_a, user_b: user_b, initiator: initiator, status: status],
+          attrs
+        )
+      )
+
+    insert(:conversation_participant, conversation: conversation, user: a)
+    insert(:conversation_participant, conversation: conversation, user: b)
+    conversation
   end
 end
