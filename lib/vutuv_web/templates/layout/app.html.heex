@@ -52,14 +52,31 @@ server-side flash. --%>
   {@inner_content}
 </main>
 
-<footer class="hidden border-t border-slate-200 py-6 md:block dark:border-slate-800">
-  <p class="mx-auto max-w-6xl px-4 text-xs text-slate-400">
-    © 2019 - {Date.utc_today().year}
-    <a href="https://wintermeyer-consulting.de" class="hover:text-slate-600 dark:hover:text-slate-300">Wintermeyer Consulting</a>
-    · <a href="https://github.com/wintermeyer/vutuv" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Source")}</a>
-    · <a href="https://github.com/wintermeyer/vutuv/issues/new" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Submit a bug report or feature request")}</a>
-    · <.link href={~p"/datenschutzerklaerung"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Datenschutzerklärung")}</.link>
-    · <.link href={~p"/impressum"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("About us")}</.link>
-    · vutuv {Application.spec(:vutuv, :vsn)}
-  </p>
+<%!-- Centered, two-tier footer that shows on every screen. The extra `pb-24`
+on mobile clears the fixed bottom tab bar (`ShellLive`, h-16); `md:pb-8` drops
+it on desktop where that bar is hidden. Links wrap into a centered row. --%>
+<footer class="border-t border-slate-200 pt-8 pb-24 md:pb-8 dark:border-slate-800">
+  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-400">
+    <%!-- Links separated by middots to match the credit line below; the dots are
+          decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
+          of each dot. --%>
+    <nav class="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+      <a href="https://github.com/wintermeyer/vutuv" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Source")}</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://github.com/wintermeyer/vutuv/issues/new" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Submit a bug report or feature request")}</a>
+      <span aria-hidden="true">·</span>
+      <.link href={~p"/datenschutzerklaerung"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Datenschutzerklärung")}</.link>
+      <span aria-hidden="true">·</span>
+      <.link href={~p"/impressum"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("About us")}</.link>
+    </nav>
+    <%!-- One dotted line, every segment on the same middot rhythm. `text-xs`
+          re-asserts the footer's 12px size to match the nav above; without it
+          the legacy `p { font-size: 15px }` in components.css would render this
+          line larger. --%>
+    <p class="text-xs">
+      © 2019 - {Date.utc_today().year} ·
+      <a href="https://wintermeyer-consulting.de" class="hover:text-slate-600 dark:hover:text-slate-300">Wintermeyer Consulting</a>
+      · vutuv {Application.spec(:vutuv, :vsn)}
+    </p>
+  </div>
 </footer>

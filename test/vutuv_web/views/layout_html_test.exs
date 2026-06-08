@@ -30,4 +30,31 @@ defmodule VutuvWeb.LayoutHTMLTest do
     assert body =~ "https://wintermeyer-consulting.de"
     refute body =~ "www.wintermeyer-consulting.de"
   end
+
+  test "the footer is shown on mobile and centered, not hidden behind a breakpoint", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+    footer = footer_html(body)
+
+    # It used to be `hidden md:block` (mobile-hidden). The <footer> element itself
+    # must no longer be gated behind a breakpoint, so it renders on mobile too.
+    # Scope this to the opening tag's classes (inner content may use `hidden` for
+    # unrelated reasons).
+    [footer_tag] = Regex.run(~r/<footer[^>]*>/, footer)
+    refute footer_tag =~ "hidden"
+    # Centered, with the links laid out as a wrapping, centered row.
+    assert footer =~ "text-center"
+    assert footer =~ "justify-center"
+  end
+
+  test "the footer nav separates its links with middots, like the credit line", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+    [nav] = Regex.run(~r{<nav.*?</nav>}s, footer_html(body))
+
+    assert nav =~ "·"
+  end
+
+  defp footer_html(body) do
+    [footer] = Regex.run(~r{<footer.*?</footer>}s, body)
+    footer
+  end
 end
