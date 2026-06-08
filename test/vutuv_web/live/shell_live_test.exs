@@ -113,6 +113,24 @@ defmodule VutuvWeb.ShellLiveTest do
     refute has_element?(view, "span.bg-accent")
   end
 
+  test "renders the anonymous shell for a stale cookie user_id with no profile data", %{
+    conn: conn
+  } do
+    # Phoenix.LiveView.Static merges the raw browser session UNDER the curated
+    # :session (LayoutHTML.shell_session/1). A cookie pointing at a
+    # since-deleted or UUID-re-keyed account makes shell_session/1 return %{}
+    # (no current_user), but the browser session's bare `user_id` still leaks
+    # in here without the profile fields. The shell must treat that as logged
+    # out, not render the logged-in chrome — which needs the `user_param` only
+    # shell_session supplies — and crash on ~p"/#{nil}".
+    stale = %{"user_id" => Vutuv.UUIDv7.generate()}
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: stale)
+
+    assert has_element?(view, "a", "Log in")
+    refute has_element?(view, ~s(a[title] img))
+    refute has_element?(view, "span.bg-accent")
+  end
+
   test "a new-notification event bumps the bell badge", %{conn: conn} do
     user = user_with_unread_notification()
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))

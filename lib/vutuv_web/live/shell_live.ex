@@ -27,9 +27,17 @@ defmodule VutuvWeb.ShellLive do
 
   @impl true
   def mount(_params, session, socket) do
-    # cast_or_nil: pre-UUID-cutover cookies hold integer ids — render the
-    # anonymous shell for them instead of crashing every page's chrome.
-    user_id = Vutuv.UUIDv7.cast_or_nil(session["user_id"])
+    # LayoutHTML.shell_session/1 (the curated :session) only carries the
+    # profile fields (user_param/name/avatar) for a current, valid user.
+    # Phoenix.LiveView.Static merges the raw browser session UNDER it, so a
+    # cookie pointing at a since-deleted or UUID-re-keyed account (every
+    # pre-cutover session is now one) leaks its bare `user_id` here with no
+    # profile fields. Key "logged in" off `user_param`, which only
+    # shell_session sets, so such a session renders the anonymous shell instead
+    # of the logged-in chrome that would crash on `~p"/#{nil}"`. cast_or_nil
+    # also tolerates the integer ids in cookies from before the UUID cutover.
+    user_param = session["user_param"]
+    user_id = user_param && Vutuv.UUIDv7.cast_or_nil(session["user_id"])
     if connected?(socket), do: Activity.subscribe(user_id)
 
     # The shell mounts outside the `live_session` (embedded via live_render),
@@ -45,7 +53,7 @@ defmodule VutuvWeb.ShellLive do
      socket
      |> assign(:user_id, user_id)
      |> assign(:user_name, session["user_name"])
-     |> assign(:user_param, session["user_param"])
+     |> assign(:user_param, user_param)
      |> assign(:user_avatar, session["user_avatar"])
      |> assign(
        :messages_count,
