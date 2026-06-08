@@ -1,6 +1,7 @@
 defmodule VutuvWeb.UITest do
   use ExUnit.Case, async: true
 
+  import Phoenix.Component, only: [sigil_H: 2]
   import Phoenix.LiveViewTest
 
   alias VutuvWeb.UI
@@ -57,6 +58,18 @@ defmodule VutuvWeb.UITest do
       assert render_component(&UI.count_badge/1, count: 999) =~ "999"
       assert render_component(&UI.count_badge/1, count: 1_234) =~ "1K"
       refute render_component(&UI.count_badge/1, count: 1_234) =~ "1234"
+    end
+  end
+
+  describe "button/1" do
+    test "the secondary variant darkens its hover in dark mode" do
+      assigns = %{}
+      html = rendered_to_string(~H|<UI.button variant="secondary">Go</UI.button>|)
+
+      # Without a dark hover, hovering in dark mode flips bg-slate-800 to the
+      # light bg-slate-200 (the regression that prompted this test).
+      assert html =~ "dark:bg-slate-800"
+      assert html =~ "dark:hover:bg-slate-700"
     end
   end
 

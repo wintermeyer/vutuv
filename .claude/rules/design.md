@@ -49,7 +49,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - **Card:** `rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800` — or `<.card>`.
 - **Section title:** `text-sm font-semibold uppercase tracking-wide text-slate-500` — or `<.section_title>`.
 - **Primary button:** `rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700`.
-- **Secondary button:** `rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200`.
+- **Secondary button:** `rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700`. The `dark:hover:` is required: without it the dark `slate-800` flips to the light `slate-200` on hover.
 - **Text link / "Add" action:** `text-sm font-semibold text-brand-600 hover:text-brand-700`.
 - **Input / select / textarea:** `w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100`. This exact string is `VutuvWeb.UI.input_class/0` (imported everywhere) — call it in HEEx as `class={input_class()}` (compose with utilities via `class={[input_class(), "resize-y"]}`) on green-field forms (the post composer, the auth pages) instead of re-typing it.
 - **Skill/tag chip:** `inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100` — or `<.chip>`.

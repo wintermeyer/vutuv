@@ -334,7 +334,7 @@ defmodule VutuvWeb.MessageLive.Index do
       <button
         phx-click="decline"
         phx-value-id={@id}
-        class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200"
+        class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
       >
         {gettext("Decline")}
       </button>
