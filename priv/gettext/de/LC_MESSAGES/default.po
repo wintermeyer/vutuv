@@ -83,7 +83,7 @@ msgstr "Eine Adresse wurde geändert."
 msgid "Addresses"
 msgstr "Adressen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:81
+#: lib/vutuv_web/templates/page/index.html.heex:84
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr "Schon ein Mitglied? Einloggen."
@@ -692,7 +692,7 @@ msgstr "Anzeigen"
 msgid "Show search term"
 msgstr "Suchbegriff anzeigen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:78
+#: lib/vutuv_web/templates/page/index.html.heex:81
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr "Gratis Account erstellen"
@@ -899,7 +899,7 @@ msgstr "Sichtbarkeit"
 msgid "We can't find em' cap'n!"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:84
+#: lib/vutuv_web/templates/page/index.html.heex:87
 #, elixir-autogen
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr "Wir behalten uns das Recht vor, Accounts ohne Warnung zu löschen oder den Dienst einzustellen."
@@ -989,11 +989,6 @@ msgstr "Ihr neues vutuv Profil"
 #, elixir-autogen
 msgid "Allow others to view your email address"
 msgstr "Diese E-Mail-Adresse darf jeder sehen"
-
-#: lib/vutuv_web/templates/page/index.html.heex:74
-#, elixir-autogen
-msgid "Prevent search engines from indexing your profile"
-msgstr "Suchmaschinen sollen dieses Profil nicht indizieren"
 
 #: web/templates/session/user_login.html.eex:16
 msgid "An email has been sent with your login link. Once you login, you'll be logged in for the next 90 days on this device, or until you log out."
@@ -2768,7 +2763,7 @@ msgstr "Zu viele neue Unterhaltungen. Bitte versuchen Sie es später erneut."
 #: lib/vutuv_web/templates/page/index.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Create your free account"
-msgstr "Erstellen Sie Ihren kostenlosen Account"
+msgstr "Erstellen Sie Ihren Account"
 
 #: lib/vutuv_web/templates/session/new.html.heex:15
 #, elixir-autogen, elixir-format
@@ -2814,3 +2809,8 @@ msgstr "Herzlich willkommen!“"
 #, elixir-autogen, elixir-format
 msgid "“Tired of LinkedIn, Facebook, or X? Same here."
 msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso."
+
+#: lib/vutuv_web/templates/page/index.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "Allow search engines to index your profile"
+msgstr "Suchmaschinen dürfen dieses Profil indizieren"

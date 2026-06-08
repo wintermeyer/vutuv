@@ -1,6 +1,8 @@
 defmodule VutuvWeb.PageControllerTest do
   use VutuvWeb.ConnCase, async: true
 
+  import Ecto.Query, only: [from: 2]
+
   describe "GET /robots.txt" do
     test "is served as plain text with a 200" do
       conn = get(build_conn(), "/robots.txt")
@@ -62,11 +64,59 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET / sign-up opt-in checkboxes" do
+    # Both opt-in boxes on the sign-up form are framed positively (you grant a
+    # permission by checking) and start checked, so the friendly defaults
+    # (public email, search-indexable profile) are visible and on by default.
+    # The indexing box is wired to the inverted `noindex?` field: checked means
+    # "allow indexing" (noindex? = false), unchecked means "prevent" (true).
+    test "are positively framed and checked by default", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      # Positive, parallel phrasing; the old negative "Prevent ..." copy is gone.
+      assert body =~ "Allow others to view your email address"
+      assert body =~ "Allow search engines to index your profile"
+      refute body =~ "Prevent search engines from indexing your profile"
+
+      # Both checkboxes render checked.
+      assert checkbox_checked?(body, "user[emails][0][public?]")
+      assert checkbox_checked?(body, "user[noindex?]")
+    end
+  end
+
   describe "POST /new_registration" do
     @valid_attrs %{
       "emails" => %{"0" => %{"value" => "newcomer@example.com"}},
       "first_name" => "Newcomer"
     }
+
+    # Checking the (inverted) indexing box submits "false", which must land as a
+    # search-indexable profile.
+    test "checking the indexing box stores an indexable profile", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "indexed@example.com"}},
+          "noindex?" => "false"
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      assert user_by_email("indexed@example.com").noindex? == false
+    end
+
+    # Unchecking it submits the hidden "true", flipping the profile to
+    # not-indexable. This proves the box drives `noindex?` the inverted way.
+    test "unchecking the indexing box stores a non-indexable profile", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "hidden@example.com"}},
+          "noindex?" => "true"
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      assert user_by_email("hidden@example.com").noindex? == true
+    end
 
     # The PIN-entry confirmation page shown right after sign-up used to point at
     # the dead @vutuv Twitter account. The whole "Updates about vutuv" line is
@@ -100,5 +150,25 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome to vutuv!"
     end
+  end
+
+  # True when the <input type="checkbox" name=name> in `html` is checked,
+  # regardless of attribute order.
+  defp checkbox_checked?(html, name) do
+    regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
+
+    case Regex.run(regex, html) do
+      [tag] -> tag =~ "checked"
+      _ -> false
+    end
+  end
+
+  defp user_by_email(value) do
+    Vutuv.Repo.one(
+      from(u in Vutuv.Accounts.User,
+        join: e in assoc(u, :emails),
+        where: e.value == ^value
+      )
+    )
   end
 end

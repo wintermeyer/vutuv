@@ -84,7 +84,7 @@ msgstr ""
 msgid "Addresses"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:81
+#: lib/vutuv_web/templates/page/index.html.heex:84
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr ""
@@ -693,7 +693,7 @@ msgstr ""
 msgid "Show search term"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:78
+#: lib/vutuv_web/templates/page/index.html.heex:81
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr ""
@@ -900,7 +900,7 @@ msgstr ""
 msgid "We can't find em' cap'n!"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:84
+#: lib/vutuv_web/templates/page/index.html.heex:87
 #, elixir-autogen
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr ""
@@ -989,11 +989,6 @@ msgstr ""
 #: lib/vutuv_web/templates/page/index.html.heex:67
 #, elixir-autogen
 msgid "Allow others to view your email address"
-msgstr ""
-
-#: lib/vutuv_web/templates/page/index.html.heex:74
-#, elixir-autogen
-msgid "Prevent search engines from indexing your profile"
 msgstr ""
 
 #: web/templates/session/user_login.html.eex:16
@@ -2814,4 +2809,9 @@ msgstr ""
 #: lib/vutuv_web/templates/page/index.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "“Tired of LinkedIn, Facebook, or X? Same here."
+msgstr ""
+
+#: lib/vutuv_web/templates/page/index.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "Allow search engines to index your profile"
 msgstr ""
