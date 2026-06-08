@@ -6,6 +6,7 @@ defmodule Vutuv.Release do
 
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
+  alias Vutuv.Uploads.LegacyRelabel
   alias Vutuv.Uploads.Regenerator
 
   @app :vutuv
@@ -45,6 +46,28 @@ defmodule Vutuv.Release do
       Ecto.Migrator.with_repo(repo, fn _repo -> Regenerator.run(opts) end)
 
     summary
+  end
+
+  @doc """
+  Renames the on-disk image directories from their legacy integer id to the new
+  UUID after the `convert_ids_to_uuid_v7` migration, using the `legacy_id_map`
+  table that migration leaves behind (see `Vutuv.Uploads.LegacyRelabel`). Run
+  this **once, before `regenerate_images/1`**, on the UUID cutover deploy:
+
+      bin/vutuv eval "Vutuv.Release.relabel_image_dirs()"
+      bin/vutuv eval "Vutuv.Release.relabel_image_dirs(dry_run: true)"
+
+  Returns `{:ok, summary}` or `{:error, :no_mapping}` (table absent/empty).
+  """
+  def relabel_image_dirs(opts \\ []) do
+    load_app()
+
+    [repo] = repos()
+
+    {:ok, result, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> LegacyRelabel.run(opts) end)
+
+    result
   end
 
   defp repos do

@@ -55,6 +55,13 @@ ln -sfn "$dest" "$APP_ROOT/current"
 # Restart via scoped sudoers (see /etc/sudoers.d/vutuv3).
 sudo systemctl restart "$SERVICE"
 
+# UUID cutover only: rename the image directories from their old integer id to
+# the new UUID (avatars/covers/screenshots + their originals/ mirrors), using
+# the legacy_id_map the convert_ids_to_uuid_v7 migration leaves behind. Must run
+# before regenerate_images so the originals are found at their new UUID paths.
+# Idempotent and a no-op once the map is cleaned up after the cutover.
+"$dest/bin/$RELEASE" eval "Vutuv.Release.relabel_image_dirs()"
+
 # Re-derive any image whose served versions predate the current
 # Vutuv.Uploads.Spec (format/resolution/quality), relocating legacy public
 # originals into the private originals/ tree. Idempotent and cheap when

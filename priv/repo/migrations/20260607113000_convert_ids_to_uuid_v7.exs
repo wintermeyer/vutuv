@@ -188,6 +188,44 @@ defmodule Vutuv.Repo.Migrations.ConvertIdsToUuidV7 do
       execute("ALTER TABLE #{child} ALTER COLUMN #{column}_new SET NOT NULL")
     end
 
+    # 3b. Capture the integer -> UUID map for the image trees keyed on a DB id
+    #     (avatars/covers on users.id, screenshots on urls.id) BEFORE the
+    #     integer ids are dropped below. Image directories are named for the id,
+    #     so without this they would be orphaned the instant the id type
+    #     changes. `Vutuv.Uploads.LegacyRelabel` renames them from this table;
+    #     the cutover deploy runs it before `regenerate_images`. Kept as an
+    #     audit record — the post-cutover cleanup (DEPLOY_TODO) drops it.
+    #     post_images need no entry: they are keyed on an opaque token, not an id.
+    #
+    #     Only meaningful on a real upgrade, where the ids are still integers. A
+    #     from-scratch build (CI, fresh dev DB) already has UUID ids — the repo
+    #     defaults new tables to :binary_id — so there are no integer-named
+    #     directories to map and nothing to capture; skip it there.
+    %{rows: [[id_type]]} =
+      repo().query!(
+        "SELECT data_type FROM information_schema.columns " <>
+          "WHERE table_name = 'users' AND column_name = 'id'"
+      )
+
+    if id_type == "bigint" do
+      execute("""
+      CREATE TABLE legacy_id_map (
+        entity text NOT NULL,
+        legacy_id bigint NOT NULL,
+        uuid uuid NOT NULL,
+        PRIMARY KEY (entity, legacy_id)
+      )
+      """)
+
+      execute(
+        "INSERT INTO legacy_id_map (entity, legacy_id, uuid) SELECT 'users', id, id_new FROM users"
+      )
+
+      execute(
+        "INSERT INTO legacy_id_map (entity, legacy_id, uuid) SELECT 'urls', id, id_new FROM urls"
+      )
+    end
+
     # 4. Tear down the integer ids. FK constraints must go before the parent
     #    id columns they reference; dropping a column then auto-drops its
     #    PK constraint, bigserial sequence and any index using it.
@@ -232,9 +270,7 @@ defmodule Vutuv.Repo.Migrations.ConvertIdsToUuidV7 do
       unique = if unique?, do: " UNIQUE", else: ""
       where = if predicate, do: " WHERE #{predicate}", else: ""
 
-      execute(
-        "CREATE#{unique} INDEX #{name} ON #{table} (#{Enum.join(columns, ", ")})#{where}"
-      )
+      execute("CREATE#{unique} INDEX #{name} ON #{table} (#{Enum.join(columns, ", ")})#{where}")
     end
 
     execute(

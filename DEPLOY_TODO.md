@@ -22,6 +22,28 @@ its `down/0` raises — **the dump below is the only rollback**.
 - [ ] Spot-check a user profile: posts, followers, tags and emails still
   hang together (relationships were re-keyed, not re-created).
 
+## Image directories (named for the id, so they must be re-keyed too)
+
+The image trees are named for a DB id (`avatars/<user.id>`, `covers/<user.id>`,
+`screenshots/<url.id>` + their `originals/` mirrors), so the integer -> UUID
+switch orphans every one of them. The migration leaves a `legacy_id_map` table
+behind for exactly this; `scripts/deploy.sh` runs
+`Vutuv.Release.relabel_image_dirs()` (which reads it) **before**
+`regenerate_images()`. post_images are token-keyed and unaffected.
+
+- [ ] Relabel log shows a large `renamed` count and `0 conflict` (a rehearsal
+  first is `bin/vutuv eval "Vutuv.Release.relabel_image_dirs(dry_run: true)"`).
+  `unmapped` is deleted/renamed rows the regenerator's orphan pass then handles.
+- [ ] Spot-check in a browser that a profile **avatar and cover load** (the file
+  now lives at its UUID path). This is the cutover's most visible failure mode.
+
+## After the cutover is verified
+
+- [ ] Drop the one-time map table:
+  `bin/vutuv eval "Vutuv.Repo.query!(\"DROP TABLE legacy_id_map\")"`.
+  After this `relabel_image_dirs()` is a no-op (`{:error, :no_mapping}`); the
+  deploy line can stay (harmless) or be removed in the cleanup commit below.
+
 # Production cutover: AVIF images + private originals
 
 One-time steps for the first production deploy that includes commit
