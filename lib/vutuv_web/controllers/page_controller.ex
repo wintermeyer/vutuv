@@ -11,11 +11,11 @@ defmodule VutuvWeb.PageController do
       |> Ecto.Changeset.put_assoc(:emails, [%Email{}])
 
     prefetch = "/listings/most_followed_users"
-    user_counter = Vutuv.Accounts.count_users()
 
+    # The member count is rendered by the embedded VutuvWeb.MemberCountLive (it
+    # ticks up live), so the controller no longer fetches it here.
     render(conn, "index.html",
       changeset: changeset,
-      user_counter: user_counter,
       prefetch: prefetch
     )
   end
@@ -96,12 +96,7 @@ defmodule VutuvWeb.PageController do
         handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
-        user_counter = Vutuv.Accounts.count_users()
-
-        render(conn, "index.html",
-          changeset: changeset,
-          user_counter: user_counter
-        )
+        render(conn, "index.html", changeset: changeset)
     end
   end
 

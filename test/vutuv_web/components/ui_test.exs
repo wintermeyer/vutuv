@@ -27,6 +27,27 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "delimited_count/1" do
+    test "shows small numbers without a separator" do
+      assert UI.delimited_count(0) == "0"
+      assert UI.delimited_count(7) == "7"
+      assert UI.delimited_count(999) == "999"
+    end
+
+    test "groups thousands exactly, never flooring" do
+      assert UI.delimited_count(1_000) == "1,000"
+      assert UI.delimited_count(60_123) == "60,123"
+      assert UI.delimited_count(1_000_000) == "1,000,000"
+      assert UI.delimited_count(12_345_678) == "12,345,678"
+    end
+
+    test "uses a dot separator under the German locale" do
+      # Each ExUnit test runs in its own process, so this locale set is isolated.
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      assert UI.delimited_count(60_123) == "60.123"
+    end
+  end
+
   describe "count_badge/1" do
     test "renders nothing for a zero count" do
       assert render_component(&UI.count_badge/1, count: 0) |> String.trim() == ""

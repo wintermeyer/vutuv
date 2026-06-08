@@ -28,6 +28,9 @@ defmodule Vutuv.Accounts do
       {:ok, user} ->
         user = Repo.preload(user, user_tags: [:tag])
         maybe_fetch_gravatar(user)
+        # Lock-free bump of the live "number of members" counter shown on the
+        # landing page; never a per-sign-up COUNT, so it stays cheap in a spike.
+        Vutuv.Accounts.MemberCounter.increment()
         {:ok, user}
 
       error ->

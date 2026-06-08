@@ -40,6 +40,11 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# The live member counter (Vutuv.Accounts.MemberCounter) re-reads the
+# authoritative user count from the database on a slow timer. Tests turn this
+# off so its process never uses the SQL Sandbox connection it does not own.
+config :vutuv, :reconcile_member_count, true
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

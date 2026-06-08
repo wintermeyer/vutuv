@@ -407,6 +407,28 @@ defmodule VutuvWeb.UI do
   def compact_count(n) when is_integer(n) and n >= 1_000, do: "#{div(n, 1_000)}K"
   def compact_count(n), do: to_string(n)
 
+  @doc """
+  Exact, thousands-grouped form of a count (`60123` -> `"60,123"`, or
+  `"60.123"` under the German locale), for the rare place that wants the full
+  number rather than the floored `compact_count/1` — the live member counter on
+  the landing page. Grouping separator follows the active Gettext locale.
+  """
+  def delimited_count(n) when is_integer(n) do
+    separator = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: ".", else: ","
+
+    digits =
+      n
+      |> abs()
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.graphemes()
+      |> Enum.chunk_every(3)
+      |> Enum.map_join(separator, &Enum.join/1)
+      |> String.reverse()
+
+    if n < 0, do: "-" <> digits, else: digits
+  end
+
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)
   attr(:class, :string, default: nil)

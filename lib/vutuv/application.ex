@@ -9,6 +9,9 @@ defmodule Vutuv.Application do
       [
         Vutuv.Repo,
         {Phoenix.PubSub, name: Vutuv.PubSub},
+        # Owns the live member counter behind the landing page. Starts after the
+        # Repo (it seeds from it) and PubSub (it broadcasts over it).
+        Vutuv.Accounts.MemberCounter,
         # Must start after PubSub (it depends on it) and before the Endpoint.
         VutuvWeb.Presence,
         {Task.Supervisor, name: Vutuv.TaskSupervisor},

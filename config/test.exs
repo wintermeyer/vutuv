@@ -10,6 +10,7 @@ config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
 config :vutuv, :sweep_pending_images, false
 config :vutuv, :send_unread_message_emails, false
+config :vutuv, :reconcile_member_count, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

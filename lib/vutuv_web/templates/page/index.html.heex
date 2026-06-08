@@ -1,11 +1,10 @@
-<.auth_layout
-  title={gettext("Fast and Secure Business Networking")}
-  subtitle={gettext("Your fast, free and ad-free career network.")}
->
+<.auth_layout title={gettext("“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”")}>
   <:hero>
-    <p class="mt-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur">
-      {gettext("Number of Members")}: {compact_count(@user_counter)}
+    <p class="mt-5 text-base font-semibold text-white">
+      Stefan Wintermeyer
+      <span class="font-normal text-brand-100">({gettext("Founder of vutuv")})</span>
     </p>
+    {live_render(@conn, VutuvWeb.MemberCountLive, id: "member-count-lv")}
   </:hero>
 
   <h2 class="text-xl font-bold text-slate-900 dark:text-white">

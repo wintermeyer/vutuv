@@ -27,6 +27,11 @@ defmodule VutuvWeb.AuthPagesRedesignTest do
       # The new branded hero (brand-blue gradient) is present.
       assert body =~ "from-brand-"
 
+      # The hero leads with the founder's quote + attribution ("LinkedIn"
+      # appears in the quote in both locales; the name is never translated).
+      assert body =~ "LinkedIn"
+      assert body =~ "Stefan Wintermeyer"
+
       # The legacy photo panel is gone for good.
       refute body =~ "imagebox"
     end
