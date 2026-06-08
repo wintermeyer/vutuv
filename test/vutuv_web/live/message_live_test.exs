@@ -261,12 +261,12 @@ defmodule VutuvWeb.MessageLiveTest do
   end
 
   describe "new conversation entry" do
-    test "/messages/new/:slug opens the conversation with that member", %{conn: conn} do
+    test "/messages/with/:slug opens the conversation with that member", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       other = insert_validated_user()
 
       assert {:error, {:live_redirect, %{to: "/messages/" <> id}}} =
-               live(conn, ~p"/messages/new/#{other.active_slug}")
+               live(conn, ~p"/messages/with/#{other.active_slug}")
 
       assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, id)
     end
@@ -275,16 +275,16 @@ defmodule VutuvWeb.MessageLiveTest do
       {conn, _me} = create_and_login_user(conn)
 
       assert {:error, {:live_redirect, %{to: "/messages"}}} =
-               live(conn, ~p"/messages/new/nobody-here")
+               live(conn, ~p"/messages/with/nobody-here")
     end
 
-    test "the profile Message button points at the new-conversation route", %{conn: conn} do
+    test "the profile Message button points at the conversation-with route", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       other = insert_validated_user()
 
       html = conn |> get(~p"/#{other.active_slug}") |> html_response(200)
 
-      assert html =~ ~s(href="/messages/new/#{other.active_slug}")
+      assert html =~ ~s(href="/messages/with/#{other.active_slug}")
     end
   end
 

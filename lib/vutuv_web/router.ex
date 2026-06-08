@@ -117,8 +117,9 @@ defmodule VutuvWeb.Router do
 
       live("/notifications", NotificationLive.Index, :index)
       live("/messages", MessageLive.Index, :index)
-      # The profile "Message" button: find-or-create, then land in the thread.
-      live("/messages/new/:slug", MessageLive.Index, :new)
+      # The profile "Message" button: open my conversation with that member
+      # (find-or-create), then land in the thread.
+      live("/messages/with/:slug", MessageLive.Index, :new)
       live("/messages/:id", MessageLive.Index, :show)
 
       # The newsfeed and the post editor ("feed"/"posts" are in

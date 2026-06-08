@@ -51,7 +51,7 @@ the resulting ~200px rail width. --%>
                   followee_id={@user.id}
                   connection_id={user_follows_user?(@current_user, @user)}
                 />
-                <.button variant="secondary" href={~p"/messages/new/#{@user}"}>{gettext("Message")}</.button>
+                <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
               <% true -> %>
             <% end %>
           </div>
