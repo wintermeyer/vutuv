@@ -60,6 +60,22 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "avatar/1" do
+    test "marks the <img> with data-avatar so the JS fallback can bind to it" do
+      html = render_component(&UI.avatar/1, src: "/avatars/x/Jane%20Doe_thumb.avif")
+
+      assert html =~ "data-avatar"
+      assert html =~ ~s(src="/avatars/x/Jane%20Doe_thumb.avif")
+    end
+
+    test "resolves the neutral SVG for a user with no avatar, still marked" do
+      html = render_component(&UI.avatar/1, user: %Vutuv.Accounts.User{avatar: nil})
+
+      assert html =~ "data-avatar"
+      assert html =~ "data:image/svg+xml"
+    end
+  end
+
   # Page size is the compile-time `max_page_items` (250 in config.exs), so
   # totals below are chosen relative to that: 600 rows -> 3 pages, etc.
   describe "pager/1" do

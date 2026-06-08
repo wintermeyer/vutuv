@@ -385,6 +385,7 @@ defmodule VutuvWeb.UI do
 
     ~H"""
     <img
+      data-avatar
       src={@resolved_src}
       alt={@alt}
       class={[
