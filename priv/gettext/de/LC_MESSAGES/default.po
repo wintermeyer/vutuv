@@ -83,7 +83,7 @@ msgstr "Eine Adresse wurde geändert."
 msgid "Addresses"
 msgstr "Adressen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:124
+#: lib/vutuv_web/templates/page/index.html.heex:81
 #, elixir-autogen
 msgid "Already a member? Sign in here."
 msgstr "Schon ein Mitglied? Einloggen."
@@ -115,11 +115,6 @@ msgstr "Geburtstag"
 #, elixir-autogen
 msgid "Birthday"
 msgstr "Geburtstag"
-
-#: lib/vutuv_web/templates/page/index.html.heex:119
-#, elixir-autogen
-msgid "By signing up you agree that we set a cookie in your browser."
-msgstr "Achtung: Ab hier benutzen wir Cookies."
 
 #: lib/vutuv_web/components/ui.ex:581
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
@@ -269,18 +264,18 @@ msgstr "Endorsement konnte nicht eingetragen werden."
 msgid "English"
 msgstr "Englisch"
 
-#: lib/vutuv_web/templates/page/index.html.heex:102
+#: lib/vutuv_web/templates/page/index.html.heex:61
 #: lib/vutuv_web/templates/session/new.html.heex:10
 #, elixir-autogen
 msgid "Enter your email address"
 msgstr "E-Mail-Adresse eingeben"
 
-#: lib/vutuv_web/templates/page/index.html.heex:86
+#: lib/vutuv_web/templates/page/index.html.heex:45
 #, elixir-autogen
 msgid "Enter your first name"
 msgstr "Vorname eingeben"
 
-#: lib/vutuv_web/templates/page/index.html.heex:91
+#: lib/vutuv_web/templates/page/index.html.heex:50
 #, elixir-autogen
 msgid "Enter your last name"
 msgstr "Nachname eingeben"
@@ -697,7 +692,7 @@ msgstr "Anzeigen"
 msgid "Show search term"
 msgstr "Suchbegriff anzeigen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:121
+#: lib/vutuv_web/templates/page/index.html.heex:78
 #, elixir-autogen
 msgid "Sign up for a free account"
 msgstr "Gratis Account erstellen"
@@ -904,7 +899,7 @@ msgstr "Sichtbarkeit"
 msgid "We can't find em' cap'n!"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:127
+#: lib/vutuv_web/templates/page/index.html.heex:84
 #, elixir-autogen
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr "Wir behalten uns das Recht vor, Accounts ohne Warnung zu löschen oder den Dienst einzustellen."
@@ -990,12 +985,12 @@ msgstr "Account (User-Konto) löschen"
 msgid "Your New vutuv Profile Page"
 msgstr "Ihr neues vutuv Profil"
 
-#: lib/vutuv_web/templates/page/index.html.heex:108
+#: lib/vutuv_web/templates/page/index.html.heex:67
 #, elixir-autogen
 msgid "Allow others to view your email address"
 msgstr "Diese E-Mail-Adresse darf jeder sehen"
 
-#: lib/vutuv_web/templates/page/index.html.heex:115
+#: lib/vutuv_web/templates/page/index.html.heex:74
 #, elixir-autogen
 msgid "Prevent search engines from indexing your profile"
 msgstr "Suchmaschinen sollen dieses Profil nicht indizieren"
@@ -1108,7 +1103,7 @@ msgstr "Allgemeines"
 msgid "Verify"
 msgstr "Verifizieren"
 
-#: lib/vutuv_web/templates/page/index.html.heex:82
+#: lib/vutuv_web/templates/page/index.html.heex:41
 #: lib/vutuv_web/templates/user/form_content.html.heex:21
 #, elixir-autogen
 msgid "Choose a gender"
@@ -1204,19 +1199,19 @@ msgstr "Die Suche nach Vor- und Nachnamen ist fuzzy (unscharf)."
 msgid "Search Tips"
 msgstr "Hilfe bei der Suche"
 
-#: lib/vutuv_web/templates/page/index.html.heex:82
+#: lib/vutuv_web/templates/page/index.html.heex:41
 #: lib/vutuv_web/templates/user/form_content.html.heex:21
 #, elixir-autogen
 msgid "female"
 msgstr "weiblich"
 
-#: lib/vutuv_web/templates/page/index.html.heex:81
+#: lib/vutuv_web/templates/page/index.html.heex:40
 #: lib/vutuv_web/templates/user/form_content.html.heex:21
 #, elixir-autogen
 msgid "male"
 msgstr "männlich"
 
-#: lib/vutuv_web/templates/page/index.html.heex:82
+#: lib/vutuv_web/templates/page/index.html.heex:41
 #: lib/vutuv_web/templates/user/form_content.html.heex:21
 #, elixir-autogen
 msgid "other"
@@ -1709,7 +1704,7 @@ msgstr "Tag Name"
 msgid "vutuv Account verified"
 msgstr "verifizierter Account"
 
-#: lib/vutuv_web/templates/page/index.html.heex:96
+#: lib/vutuv_web/templates/page/index.html.heex:55
 #, elixir-autogen
 msgid "Your tags (e.g. JavaScript, Ruby on Rails, Cooking, Origami)"
 msgstr "Ihre Tags (z.B. JavaScript, Ruby on Rails, Kochen, Origami)"
@@ -2770,7 +2765,7 @@ msgstr "Diese Nachricht konnte nicht gesendet werden."
 msgid "Too many new conversations. Please try again later."
 msgstr "Zu viele neue Unterhaltungen. Bitte versuchen Sie es später erneut."
 
-#: lib/vutuv_web/templates/page/index.html.heex:67
+#: lib/vutuv_web/templates/page/index.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Create your free account"
 msgstr "Erstellen Sie Ihren kostenlosen Account"
