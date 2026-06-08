@@ -40,14 +40,14 @@ msgstr "Über diese Telefonnummer"
 msgid "About this Social Media Profile"
 msgstr "Über diesen Social Media Account"
 
-#: lib/vutuv_web/templates/layout/app.html.heex:62
+#: lib/vutuv_web/templates/layout/app.html.heex:70
 #: lib/vutuv_web/templates/page/impressum.html.heex:2
 #, elixir-autogen
 msgid "About us"
 msgstr "Impressum"
 
 #: lib/vutuv_web/components/ui.ex:130
-#: lib/vutuv_web/components/ui.ex:680
+#: lib/vutuv_web/components/ui.ex:681
 #: lib/vutuv_web/templates/admin/locale/show.html.heex:33
 #: lib/vutuv_web/templates/user/show.html.heex:201
 #, elixir-autogen
@@ -88,7 +88,7 @@ msgstr "Adressen"
 msgid "Already a member? Sign in here."
 msgstr "Schon ein Mitglied? Einloggen."
 
-#: lib/vutuv_web/components/ui.ex:588
+#: lib/vutuv_web/components/ui.ex:589
 #: lib/vutuv_web/templates/group/index.html.heex:28
 #, elixir-autogen
 msgid "Are you sure?"
@@ -116,7 +116,7 @@ msgstr "Geburtstag"
 msgid "Birthday"
 msgstr "Geburtstag"
 
-#: lib/vutuv_web/components/ui.ex:581
+#: lib/vutuv_web/components/ui.ex:582
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
 #: lib/vutuv_web/templates/user/form_content.html.heex:87
 #, elixir-autogen
@@ -357,8 +357,8 @@ msgstr "Gruppen"
 msgid "Headline"
 msgstr "Headline"
 
-#: lib/vutuv_web/live/shell_live.ex:108
-#: lib/vutuv_web/live/shell_live.ex:198
+#: lib/vutuv_web/live/shell_live.ex:116
+#: lib/vutuv_web/live/shell_live.ex:206
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:2
 #: lib/vutuv_web/templates/phone_number/form_content.html.heex:12
 #, elixir-autogen
@@ -375,7 +375,7 @@ msgstr "ID"
 msgid "Invalid connection!"
 msgstr "Ungültige Verbindung!"
 
-#: lib/vutuv_web/controllers/session_controller.ex:26
+#: lib/vutuv_web/controllers/session_controller.ex:28
 #, elixir-autogen
 msgid "Invalid email"
 msgstr "Ungültige E-Mail-Adresse"
@@ -442,7 +442,7 @@ msgstr "Einloggen"
 msgid "Log Out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/shell_live.ex:186
+#: lib/vutuv_web/live/shell_live.ex:194
 #: lib/vutuv_web/templates/post/teaser.html.heex:28
 #: lib/vutuv_web/templates/session/new.html.heex:11
 #, elixir-autogen
@@ -538,7 +538,7 @@ msgstr "Typ"
 msgid "Number type"
 msgstr "Typ"
 
-#: lib/vutuv_web/components/ui.ex:554
+#: lib/vutuv_web/components/ui.ex:555
 #, elixir-autogen
 msgid "Oops, something went wrong! Please check the errors below."
 msgstr "Ups, es gab einen Validierungsfehler! Bitte überprüfen Sie Ihre Eingaben."
@@ -655,8 +655,8 @@ msgstr "Speichern"
 msgid "Score"
 msgstr "Score"
 
-#: lib/vutuv_web/live/shell_live.ex:128
-#: lib/vutuv_web/live/shell_live.ex:202
+#: lib/vutuv_web/live/shell_live.ex:136
+#: lib/vutuv_web/live/shell_live.ex:210
 #: lib/vutuv_web/templates/search_query/form_content.html.heex:6
 #: lib/vutuv_web/templates/search_query/new.html.heex:3
 #: lib/vutuv_web/templates/search_query/new.html.heex:5
@@ -762,7 +762,7 @@ msgstr "Ein Social Media Account wurde geändert."
 msgid "Something went wrong"
 msgstr "Etwas ist schiefgelaufen"
 
-#: lib/vutuv_web/components/ui.ex:582
+#: lib/vutuv_web/components/ui.ex:583
 #: lib/vutuv_web/templates/admin/user/form_content.html.heex:10
 #, elixir-autogen
 msgid "Submit"
@@ -904,7 +904,7 @@ msgstr ""
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr "Wir behalten uns das Recht vor, Accounts ohne Warnung zu löschen oder den Dienst einzustellen."
 
-#: lib/vutuv_web/controllers/session_controller.ex:97
+#: lib/vutuv_web/controllers/session_controller.ex:114
 #, elixir-autogen
 msgid "Welcome back!"
 msgstr "Willkommen zurück!"
@@ -1531,7 +1531,7 @@ msgid "Tags"
 msgstr "Tags"
 
 #: lib/vutuv_web/controllers/email_controller.ex:95
-#: lib/vutuv_web/controllers/session_controller.ex:91
+#: lib/vutuv_web/controllers/session_controller.ex:93
 #: lib/vutuv_web/controllers/user_controller.ex:241
 #, elixir-autogen
 msgid "Too many incorrect attempts."
@@ -1741,7 +1741,7 @@ msgstr "Adressen von %{name}"
 msgid "Admin control panel"
 msgstr "Admin-Bereich"
 
-#: lib/vutuv_web/live/shell_live.ex:204
+#: lib/vutuv_web/live/shell_live.ex:212
 #, elixir-autogen, elixir-format
 msgid "Alerts"
 msgstr "Mitteilungen"
@@ -1771,7 +1771,7 @@ msgstr "Bestätigen"
 msgid "Confirm account deletion"
 msgstr "Kontolöschung bestätigen"
 
-#: lib/vutuv_web/templates/layout/app.html.heex:61
+#: lib/vutuv_web/templates/layout/app.html.heex:68
 #: lib/vutuv_web/templates/page/datenschutzerklaerung.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Datenschutzerklärung"
@@ -1818,7 +1818,7 @@ msgstr "Falls das ein Fehler ist, bitte"
 msgid "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!"
 msgstr "Es sieht so aus, als würden Sie noch niemandem folgen. Öffnen Sie das Profil von jemandem, den Sie kennen oder interessant finden, und klicken Sie auf Folgen!"
 
-#: lib/vutuv_web/live/shell_live.ex:176
+#: lib/vutuv_web/live/shell_live.ex:184
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr "Ausloggen"
@@ -1834,13 +1834,13 @@ msgid "Message"
 msgstr "Nachricht"
 
 #: lib/vutuv_web/live/message_live/index.ex:44
-#: lib/vutuv_web/live/shell_live.ex:144
-#: lib/vutuv_web/live/shell_live.ex:203
+#: lib/vutuv_web/live/shell_live.ex:152
+#: lib/vutuv_web/live/shell_live.ex:211
 #, elixir-autogen, elixir-format
 msgid "Messages"
 msgstr "Nachrichten"
 
-#: lib/vutuv_web/live/shell_live.ex:121
+#: lib/vutuv_web/live/shell_live.ex:129
 #, elixir-autogen, elixir-format
 msgid "Network"
 msgstr "Netzwerk"
@@ -1850,7 +1850,7 @@ msgstr "Netzwerk"
 msgid "No public email."
 msgstr "Keine öffentliche E-Mail-Adresse."
 
-#: lib/vutuv_web/components/ui.ex:675
+#: lib/vutuv_web/components/ui.ex:676
 #: lib/vutuv_web/templates/admin/user/index.html.heex:5
 #: lib/vutuv_web/templates/post/index.html.heex:37
 #: lib/vutuv_web/templates/user/show.html.heex:142
@@ -1871,7 +1871,7 @@ msgstr "Noch nichts Neues."
 
 #: lib/vutuv_web/live/notification_live/index.ex:40
 #: lib/vutuv_web/live/notification_live/index.ex:91
-#: lib/vutuv_web/live/shell_live.ex:155
+#: lib/vutuv_web/live/shell_live.ex:163
 #, elixir-autogen, elixir-format
 msgid "Notifications"
 msgstr "Benachrichtigungen"
@@ -1928,12 +1928,12 @@ msgstr "Fähigkeiten & Bestätigungen"
 msgid "Slug name"
 msgstr "Slug-Name"
 
-#: lib/vutuv_web/templates/layout/app.html.heex:59
+#: lib/vutuv_web/templates/layout/app.html.heex:64
 #, elixir-autogen, elixir-format
 msgid "Source"
 msgstr "Quellcode"
 
-#: lib/vutuv_web/templates/layout/app.html.heex:60
+#: lib/vutuv_web/templates/layout/app.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "Submit a bug report or feature request"
 msgstr "Fehler melden oder Feature vorschlagen"
@@ -1950,8 +1950,8 @@ msgstr "Diese E-Mail-Adresse konnte nicht hinzugefügt werden."
 
 #: lib/vutuv_web/controllers/email_controller.ex:46
 #: lib/vutuv_web/controllers/email_controller.ex:59
-#: lib/vutuv_web/controllers/session_controller.ex:32
-#: lib/vutuv_web/controllers/session_controller.ex:47
+#: lib/vutuv_web/controllers/session_controller.ex:34
+#: lib/vutuv_web/controllers/session_controller.ex:49
 #: lib/vutuv_web/controllers/user_controller.ex:197
 #: lib/vutuv_web/controllers/user_controller.ex:212
 #, elixir-autogen, elixir-format
@@ -1993,7 +1993,7 @@ msgstr "Empfohlene Profile"
 msgid "Write a message…"
 msgstr "Nachricht schreiben…"
 
-#: lib/vutuv_web/controllers/session_controller.ex:52
+#: lib/vutuv_web/controllers/session_controller.ex:54
 #, elixir-autogen, elixir-format
 msgid "Your login session expired. Please try again."
 msgstr "Ihre Anmeldung ist abgelaufen. Bitte versuchen Sie es erneut."
@@ -2035,7 +2035,7 @@ msgstr "ist jetzt mit Ihnen vernetzt."
 msgid "started following you."
 msgstr "folgt Ihnen jetzt."
 
-#: lib/vutuv_web/components/ui.ex:483
+#: lib/vutuv_web/components/ui.ex:484
 #, elixir-autogen, elixir-format
 msgid "Pagination"
 msgstr "Seitennavigation"
@@ -2045,7 +2045,7 @@ msgstr "Seitennavigation"
 msgid "Load %{count} of %{remaining} more"
 msgstr "%{count} von %{remaining} mehr laden"
 
-#: lib/vutuv_web/components/ui.ex:700
+#: lib/vutuv_web/components/ui.ex:701
 #: lib/vutuv_web/live/notification_live/index.ex:147
 #, elixir-autogen, elixir-format
 msgid "Load more"
@@ -2061,7 +2061,7 @@ msgstr "Verwalten Sie Ihre E-Mail-Adressen"
 msgid "The address itself cannot be changed. To use a different one, add it as a new email address and delete this one."
 msgstr "Die Adresse selbst kann nicht geändert werden. Um eine andere zu verwenden, legen Sie sie als neue E-Mail-Adresse an und löschen Sie diese hier."
 
-#: lib/vutuv_web/components/ui.ex:591
+#: lib/vutuv_web/components/ui.ex:592
 #, elixir-autogen, elixir-format
 msgid "Delete entry"
 msgstr "Eintrag löschen"
@@ -2273,8 +2273,8 @@ msgstr "Beitrag bearbeiten"
 
 #: lib/vutuv_web/live/post_live/feed.ex:38
 #: lib/vutuv_web/live/post_live/feed.ex:133
-#: lib/vutuv_web/live/shell_live.ex:115
-#: lib/vutuv_web/live/shell_live.ex:200
+#: lib/vutuv_web/live/shell_live.ex:123
+#: lib/vutuv_web/live/shell_live.ex:208
 #, elixir-autogen, elixir-format
 msgid "Feed"
 msgstr "Feed"
@@ -2555,7 +2555,7 @@ msgstr "Lesezeichen setzen"
 #: lib/vutuv_web/live/post_live/feed.ex:140
 #: lib/vutuv_web/live/post_live/saved.ex:53
 #: lib/vutuv_web/live/post_live/saved.ex:108
-#: lib/vutuv_web/live/shell_live.ex:137
+#: lib/vutuv_web/live/shell_live.ex:145
 #, elixir-autogen, elixir-format
 msgid "Bookmarks"
 msgstr "Lesezeichen"
@@ -2617,7 +2617,7 @@ msgstr "Repost zurücknehmen"
 msgid "Unlike"
 msgstr "Gefällt mir entfernen"
 
-#: lib/vutuv_web/controllers/session_controller.ex:96
+#: lib/vutuv_web/controllers/session_controller.ex:102
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv!"
 msgstr "Willkommen bei vutuv!"
@@ -2814,3 +2814,15 @@ msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso."
 #, elixir-autogen, elixir-format
 msgid "Allow search engines to index your profile"
 msgstr "Suchmaschinen dürfen dieses Profil indizieren"
+
+#: lib/vutuv_web/controllers/session_controller.ex:111
+#, elixir-autogen, elixir-format
+msgid "Welcome back, %{name}!"
+msgstr "Willkommen zurück, %{name}!"
+
+#: lib/vutuv_web/controllers/session_controller.ex:122
+#, elixir-autogen, elixir-format
+msgid "You have %{count} new message."
+msgid_plural "You have %{count} new messages."
+msgstr[0] "Du hast %{count} neue Nachricht."
+msgstr[1] "Du hast %{count} neue Nachrichten."

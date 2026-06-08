@@ -2,6 +2,8 @@ defmodule VutuvWeb.SessionController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
+  alias Vutuv.Chat
   alias VutuvWeb.RateLimit
 
   # The login page is logged-out-only, like registration. An already-logged-in
@@ -68,7 +70,7 @@ defmodule VutuvWeb.SessionController do
       {:ok, user} ->
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
-        |> put_flash(:info, welcome_flash(context))
+        |> put_flash(:info, welcome_flash(context, user))
         |> redirect(to: ~p"/#{user}")
 
       # incorrect, let them retry
@@ -93,6 +95,35 @@ defmodule VutuvWeb.SessionController do
     end
   end
 
-  defp welcome_flash("registration"), do: gettext("Welcome to vutuv!")
-  defp welcome_flash(_), do: gettext("Welcome back!")
+  # First-time sign-ups get their own greeting; returning members get a
+  # personal one with their name and, when they have any, a nudge about the
+  # conversations waiting for them (the same count the shell's message badge
+  # shows, so the two never disagree).
+  defp welcome_flash("registration", _user), do: gettext("Welcome to vutuv!")
+
+  defp welcome_flash(_context, %User{} = user) do
+    [greeting(user), unread_note(user)]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+  end
+
+  defp greeting(%User{first_name: name}) when is_binary(name) and name != "" do
+    gettext("Welcome back, %{name}!", name: name)
+  end
+
+  defp greeting(_user), do: gettext("Welcome back!")
+
+  defp unread_note(%User{} = user) do
+    case Chat.unread_conversations_count(user) do
+      0 ->
+        nil
+
+      count ->
+        ngettext(
+          "You have %{count} new message.",
+          "You have %{count} new messages.",
+          count
+        )
+    end
+  end
 end

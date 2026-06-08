@@ -28,8 +28,28 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
 
       assert redirected_to(conn) == ~p"/#{user}"
       assert get_session(conn, :user_id) == user.id
-      # The returning-user greeting; first-time sign-ups get their own.
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome back!"
+      # The returning-user greeting is personal; first-time sign-ups get their
+      # own. No unread conversations here, so no message count is appended.
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "Welcome back, #{user.first_name}!"
+    end
+
+    test "greets a returning member by name and counts their unread conversations" do
+      user = insert(:user, validated?: true)
+      insert(:email, value: "greet@example.com", user: user)
+
+      # One conversation holding a message the member has not read — the same
+      # count the shell's message badge shows.
+      other = insert(:user)
+      conversation = insert_conversation_between(other, user)
+      {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "ping")
+
+      conn = post(build_conn(), ~p"/login", session: %{"email" => "greet@example.com"})
+      pin = sent_pin()
+      conn = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "Welcome back, #{user.first_name}! You have 1 new message."
     end
   end
 
