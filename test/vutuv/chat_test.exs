@@ -234,6 +234,22 @@ defmodule Vutuv.ChatTest do
       assert id == conversation.id
     end
 
+    test "accepting broadcasts a conversation update so the sender's open thread can refresh",
+         %{b: b, conversation: conversation} do
+      Chat.subscribe(conversation.id)
+      conversation_id = conversation.id
+
+      assert {:ok, %Conversation{status: "accepted"}} = Chat.accept_request(b, conversation.id)
+      assert_receive {:conversation_updated, ^conversation_id}
+    end
+
+    test "declining stays silent on the conversation topic", %{b: b, conversation: conversation} do
+      Chat.subscribe(conversation.id)
+
+      assert {:ok, %Conversation{status: "declined"}} = Chat.decline_request(b, conversation.id)
+      refute_receive {:conversation_updated, _}
+    end
+
     test "accepting or declining a non-pending conversation fails", %{b: b} do
       [c, d] = [user(), user()]
       accepted = insert_conversation_between(c, d, status: "accepted")

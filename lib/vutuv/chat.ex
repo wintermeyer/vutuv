@@ -244,7 +244,15 @@ defmodule Vutuv.Chat do
         {:error, :not_recipient}
 
       conversation ->
-        conversation |> Conversation.changeset(%{status: status}) |> Repo.update()
+        with {:ok, updated} <-
+               conversation |> Conversation.changeset(%{status: status}) |> Repo.update() do
+          # Accepting flips the initiator's open thread from its "not accepted
+          # yet" placeholder to a live composer, so nudge that thread to
+          # re-read. Declines never broadcast: the initiator must stay unable to
+          # tell a decline from being ignored.
+          if status == "accepted", do: broadcast_conversation_update(updated.id)
+          {:ok, updated}
+        end
     end
   end
 
@@ -555,4 +563,15 @@ defmodule Vutuv.Chat do
     recipient_id = other_user_id(conversation, message.sender_id)
     Activity.broadcast(recipient_id, {:new_message, %{conversation_id: conversation.id}})
   end
+
+  # A request was accepted: nudge the conversation's open threads (the
+  # initiator's especially) to re-read their now-accepted state. Plain
+  # broadcast, so the accepting session simply re-reads harmlessly too.
+  defp broadcast_conversation_update(conversation_id),
+    do:
+      Phoenix.PubSub.broadcast(
+        @pubsub,
+        topic(conversation_id),
+        {:conversation_updated, conversation_id}
+      )
 end

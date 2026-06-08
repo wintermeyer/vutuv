@@ -232,6 +232,17 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # A request was accepted: the initiator's open thread must swap its "not
+  # accepted yet" placeholder for a live composer, so re-read the conversation
+  # it is viewing. (Declines never broadcast — see Vutuv.Chat.)
+  def handle_info({:conversation_updated, conversation_id}, socket) do
+    if active?(socket, conversation_id) do
+      {:noreply, socket |> refresh_conversation() |> assign_lists()}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info({:typing, name}, socket) do
     # Token-guarded clear: every keystroke refreshes the token, and only the
     # newest scheduled clear wins — otherwise the first timer would hide the

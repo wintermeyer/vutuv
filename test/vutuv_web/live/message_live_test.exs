@@ -191,6 +191,26 @@ defmodule VutuvWeb.MessageLiveTest do
       assert html =~ "hello-out-there"
     end
 
+    test "accepting live-swaps the requester's open thread to a composer", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {other_conn, other} = login_other_user()
+      conversation = insert_conversation_between(me, other, status: "pending", initiator: me)
+      {:ok, _} = Chat.send_message(me, conversation.id, "May I?")
+
+      # The requester sits in the open thread with the waiting hint, no composer.
+      {:ok, requester, _} = live(conn, ~p"/messages/#{conversation.id}")
+      refute has_element?(requester, "#message-form")
+
+      # The recipient accepts from their own session.
+      {:ok, recipient, _} = live(other_conn, ~p"/messages")
+      recipient |> element("#requests button", "Accept") |> render_click()
+
+      # The accept broadcast reaches the requester's open thread; flush it.
+      _ = :sys.get_state(requester.pid)
+
+      assert has_element?(requester, "#message-form")
+    end
+
     test "the recipient of a request gets a composer; replying accepts", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       stranger = insert_validated_user()
