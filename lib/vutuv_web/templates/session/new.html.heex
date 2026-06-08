@@ -1,18 +1,26 @@
-<div class="imagebox imagebox--welcome">
-  <section class="card imagebox__card">
-    <div class="imagebox__intro">
-      <h1>Login</h1>
-    </div>
-    <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="imagebox__form">
-      <%= text_input f, :email, class: "imagebox__input", placeholder: gettext("Enter your email address"), autofocus: true %>
-      <%= submit gettext("Log in"), class: "button button--block" %>
-    </.form>
-    <%= if dev_mailbox?() do %>
-      <p class="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
-        <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
-          Open the dev email inbox
-        </a>
-      </p>
-    <% end %>
-  </section>
-</div>
+<.auth_layout
+  title={gettext("Welcome back")}
+  subtitle={gettext("Sign in with your email and we'll send you a one-time PIN. No password to remember.")}
+>
+  <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+    {gettext("Sign in to vutuv")}
+  </h2>
+
+  <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="mt-5 space-y-4" id="login-form">
+    <%= email_input f, :email, class: input_class(), placeholder: gettext("Enter your email address"), autofocus: true %>
+    <.button type="submit" class="w-full">{gettext("Log in")}</.button>
+  </.form>
+
+  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    {gettext("No account yet?")}
+    <a href={~p"/"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Sign up here.")}</a>
+  </p>
+
+  <%= if dev_mailbox?() do %>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+      <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
+        Open the dev email inbox
+      </a>
+    </p>
+  <% end %>
+</.auth_layout>

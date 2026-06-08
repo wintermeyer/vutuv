@@ -29,7 +29,8 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    at the end of `components.css`** — when you add a light rule with a hardcoded
    colour, add its dark counterpart there. `test/vutuv_web/dark_mode_css_test.exs`
    guards the canvas rule and that `legacy.css` stays deleted.
-2. **New / hand-written pages** (the shell `ShellLive`, the LiveViews, `user/show.html.heex`)
+2. **New / hand-written pages** (the shell `ShellLive`, the LiveViews, `user/show.html.heex`,
+   the logged-out auth/welcome pages via `<.auth_layout>`)
    use the **`VutuvWeb.UI` components** (see **Components** below) or, where no component
    fits, the **recipes** below. Prefer a component; fall back to a recipe. Reach for a
    green-field rewrite only when a page's UX needs rethinking (like the profile) —
@@ -50,7 +51,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 - **Primary button:** `rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700`.
 - **Secondary button:** `rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200`.
 - **Text link / "Add" action:** `text-sm font-semibold text-brand-600 hover:text-brand-700`.
-- **Input / select / textarea:** `w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100`.
+- **Input / select / textarea:** `w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100`. This exact string is `VutuvWeb.UI.input_class/0` (imported everywhere) — call it in HEEx as `class={input_class()}` (compose with utilities via `class={[input_class(), "resize-y"]}`) on green-field forms (the post composer, the auth pages) instead of re-typing it.
 - **Skill/tag chip:** `inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100` — or `<.chip>`.
 - **Unread count badge:** small `rounded-full bg-accent px-1 text-[11px] font-bold text-white`; add `ring-2 ring-white dark:ring-slate-900` when it overlaps an icon or avatar.
 - **Avatar:** `Vutuv.Avatar.display_url(user, :medium|:thumb)` in an `<img>`, `rounded-2xl` (tile) or `rounded-full` (list) + `object-cover`.
@@ -61,6 +62,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 `lib/vutuv_web/templates/user/show.html.heex` is the canonical example of the kit.
 
 - `<.card class="…">…</.card>` — the card surface.
+- `<.auth_layout title=… subtitle=…>…</.auth_layout>` — the logged-out **welcome/auth shell**: a brand-gradient hero panel (`from-brand-700 to-brand-500`, soft white decorative rings, white headline + `subtitle` + optional `:hero` slot for a member-count pill) beside a `<.card>` form (the default slot), stacking to one column under `md`. Used by the sign-up landing (`page/index`), `/login` and the two PIN screens so the logged-out entry flow matches the app instead of the old full-bleed photo "imagebox" (now deleted). The legal pages (impressum, datenschutz) are plain `<.page_header>` + `<.card>` content (no hero).
 - `<.section_title>…</.section_title>` — uppercase muted heading inside a card.
 - `<.section_header title={…} add_href={owner? && ~p"/…/new"} />` — card header row: section title + optional right-aligned actions (falsy `add_href` hides the "Add" link); the `:action` slot adds a custom action, and multiple actions sit together in one right-aligned flex group. On the profile the `:action` slot holds the owner's `<.card_menu>` (no `add_href`).
 - `<.card_menu id="…"><:item href={…}>…</:item></.card_menu>` — **Track 2** per-card ⋯ owner menu, the quiet home for rare actions so they are not always in the viewer's face (profile sections: "Add entry" → new-form, "Manage entries" → the Track 1 management page with per-row edit/delete; General Info: "Edit"). A native `<details data-menu>` dropdown — no JS framework; `app.js` closes open menus on outside click and Escape. The owner guard sits on the slot at the call site (`<:action :if={owner?}>`); visitors get no markup. Per-entry chrome (pencils, owner-only "View All") was deliberately removed from profile rows — "View All" is content navigation and renders only when more entries exist than the profile shows. Profile-section deletion stays on the edit forms via `<.form_actions delete_to={…} />`; the post card's author menu is the exception and carries Delete directly — `:item` supports `method`, `confirm` (data-confirm) and `danger` (red item) for such destructive entries.

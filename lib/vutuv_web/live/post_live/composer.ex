@@ -434,9 +434,8 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp full_name(user), do: VutuvWeb.UserHelpers.full_name(user)
 
-  defp input_class do
-    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-  end
+  # `input_class/0` is the shared Direction A field recipe, imported from
+  # `VutuvWeb.UI` (also used by the auth pages) so the look stays in one place.
 
   @impl true
   def render(assigns) do

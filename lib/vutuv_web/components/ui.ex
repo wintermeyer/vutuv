@@ -22,6 +22,54 @@ defmodule VutuvWeb.UI do
 
   import PhoenixHTMLHelpers.Link, only: [button: 2]
 
+  @doc """
+  Shared input class for hand-written (Track 2) form fields — the Direction A
+  input recipe (full width, rounded, slate border, brand focus ring, dark-aware).
+  The single source for the post composer, the auth pages and any green-field
+  form, so the field look stays consistent. Compose with utilities via a list,
+  e.g. `class={[input_class(), "resize-y"]}`.
+  """
+  def input_class do
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+  end
+
+  @doc """
+  Logged-out auth / welcome shell (Direction A): a brand-gradient hero panel
+  beside a white form card, stacking to a single column on mobile. Shared by the
+  sign-up, login and PIN screens so the logged-out entry flow matches the rest
+  of the app instead of the old full-bleed photo "imagebox".
+
+  Pass `title` (the hero headline) and optionally `subtitle`; the `:hero` slot
+  adds extra hero content (a member count, say) and the default slot is the form
+  card body.
+  """
+  attr(:title, :string, required: true)
+  attr(:subtitle, :string, default: nil)
+  slot(:hero)
+  slot(:inner_block, required: true)
+
+  def auth_layout(assigns) do
+    ~H"""
+    <div class="mx-auto grid max-w-5xl items-stretch gap-6 py-8 md:grid-cols-2 md:gap-8 md:py-12">
+      <section class="relative isolate overflow-hidden rounded-2xl bg-gradient-to-br from-brand-700 to-brand-500 p-8 text-white shadow-sm md:p-10 dark:from-brand-800 dark:to-brand-700">
+        <%!-- Soft decorative rings — the signature flourish, purely cosmetic. --%>
+        <div aria-hidden="true" class="pointer-events-none absolute -right-16 -top-20 -z-10 h-60 w-60 rounded-full bg-white/10"></div>
+        <div aria-hidden="true" class="pointer-events-none absolute -bottom-24 -left-12 -z-10 h-52 w-52 rounded-full bg-white/5"></div>
+        <div class="flex h-full flex-col justify-center">
+          <h1 class="text-2xl font-bold leading-tight md:text-3xl">{@title}</h1>
+          <p :if={@subtitle} class="mt-4 max-w-sm text-base leading-relaxed text-brand-50">
+            {@subtitle}
+          </p>
+          {render_slot(@hero)}
+        </div>
+      </section>
+      <.card class="flex flex-col justify-center">
+        {render_slot(@inner_block)}
+      </.card>
+    </div>
+    """
+  end
+
   @doc "The Direction A card surface (white, rounded, ring, soft shadow; dark-aware)."
   attr(:class, :string, default: nil)
   attr(:rest, :global)

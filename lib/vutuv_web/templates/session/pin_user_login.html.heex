@@ -1,27 +1,25 @@
-<div class="imagebox imagebox--pin">
-  <section class="card imagebox__card">
-    <div class="imagebox__intro">
-      <h1><%= gettext "Please check your INBOX." %></h1>
-      <p><%= gettext "An email has been sent with your PIN. Once you enter your PIN below, you'll be logged in for the next 90 days on this device, or until you log out." %></p>
-      <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="imagebox__form" method="post">
-			  <div class="editform__field">
-			    <%= text_input f, :pin, class: "imagebox__input", autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
-			  </div>
+<.auth_layout
+  title={gettext("Please check your INBOX.")}
+  subtitle={gettext("An email has been sent with your PIN. Once you enter your PIN below, you'll be logged in for the next 90 days on this device, or until you log out.")}
+>
+  <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+    {gettext("Enter your PIN")}
+  </h2>
 
-			  <div class="editform__actions">
-			    <%= submit gettext("submit"), class: "button button--block" %>
-			  </div>
-			</.form>
+  <.form :let={f} for={%{}} action={~p"/login"} as={:session} class="mt-5 space-y-4" id="pin-form" method="post">
+    <%= text_input f, :pin, class: input_class(), autofocus: true, autocomplete: "one-time-code", inputmode: "numeric", placeholder: gettext("Enter your PIN") %>
+    <.button type="submit" class="w-full">{gettext("submit")}</.button>
+  </.form>
 
-      <%= if dev_mailbox?() do %>
-        <p class="text-sm text-slate-500 dark:text-slate-400">
-          <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
-            Open the dev email inbox
-          </a>
-        </p>
-      <% end %>
+  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+    {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
+  </p>
 
-      <p><%= gettext "Please check your spam folder in case you don't find the email in your inbox." %></p>
-    </div>
-  </section>
-</div>
+  <%= if dev_mailbox?() do %>
+    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+      <a href="/sent_emails" class="font-semibold text-brand-600 hover:text-brand-700">
+        Open the dev email inbox
+      </a>
+    </p>
+  <% end %>
+</.auth_layout>

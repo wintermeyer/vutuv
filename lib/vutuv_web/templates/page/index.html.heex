@@ -1,59 +1,77 @@
-<div class="imagebox imagebox--welcome">
-  <section class="card imagebox__card">
-    <div class="imagebox__intro">
-      <h1><%= gettext "Fast and Secure Business Networking" %></h1>
-      <p><%= gettext "Number of Members" %>: <%= compact_count(@user_counter) %></p>
-    </div>
-    <.form :let={f} for={@changeset} action={~p"/new_registration"} multipart class="imagebox__form">
-      <.form_error changeset={@changeset} />
-      <p>
+<.auth_layout
+  title={gettext("Fast and Secure Business Networking")}
+  subtitle={gettext("Your fast, free and ad-free career network.")}
+>
+  <:hero>
+    <p class="mt-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur">
+      {gettext("Number of Members")}: {compact_count(@user_counter)}
+    </p>
+  </:hero>
+
+  <h2 class="text-xl font-bold text-slate-900 dark:text-white">
+    {gettext("Create your free account")}
+  </h2>
+
+  <.form
+    :let={f}
+    for={@changeset}
+    action={~p"/new_registration"}
+    multipart
+    class="mt-5 space-y-4"
+    id="registration-form"
+  >
+    <.form_error changeset={@changeset} />
+
+    <div>
       <%= select f, :gender, [{gettext("male"), "male"},
-        {gettext("female"), "female"}, {gettext("other"), "other"}], class: "imagebox__input", prompt: gettext("Choose a gender"), autofocus: true %>
-      </p>
-      <p>
-      <%= text_input f, :first_name, class: "imagebox__input", placeholder: gettext("Enter your first name") %>
+        {gettext("female"), "female"}, {gettext("other"), "other"}], class: input_class(), prompt: gettext("Choose a gender"), autofocus: true %>
+    </div>
+
+    <div>
+      <%= text_input f, :first_name, class: input_class(), placeholder: gettext("Enter your first name") %>
       <%= error_tag f, :first_name %>
-      </p>
-      <p>
-      <%= text_input f, :last_name, class: "imagebox__input", placeholder: gettext "Enter your last name" %>
+    </div>
+
+    <div>
+      <%= text_input f, :last_name, class: input_class(), placeholder: gettext("Enter your last name") %>
       <%= error_tag f, :last_name %>
-      </p>
+    </div>
 
-      <p>
-      <%= text_input f, :easy_tags, class: "imagebox__input", placeholder: gettext "Your tags (e.g. JavaScript, Ruby on Rails, Cooking, Origami)" %>
+    <div>
+      <%= text_input f, :easy_tags, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Ruby on Rails, Cooking, Origami)") %>
       <%= error_tag f, :easy_tags %>
-      </p>
+    </div>
 
-      <.inputs_for :let={ef} field={f[:emails]}>
-      <p>
-        <%= email_input ef, :value, class: "imagebox__input" , placeholder: gettext "Enter your email address" %>
+    <.inputs_for :let={ef} field={f[:emails]}>
+      <div>
+        <%= email_input ef, :value, class: input_class(), placeholder: gettext("Enter your email address") %>
         <%= error_tag ef, :value %>
-      </p>
+      </div>
 
-	  	<label>
-  	  	<span class="checkbox">
-    	    <%= checkbox ef, :public? %>
-    	    <%= error_tag ef, :public? %>
-        </span>
-  	  	<%= gettext("Allow others to view your email address") %>
+      <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+        <%= checkbox ef, :public?, class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+        <span>{gettext("Allow others to view your email address")}</span>
+        <%= error_tag ef, :public? %>
       </label>
-      </.inputs_for>
-      <label>
-        <span class="checkbox">
-        <%= checkbox f, :noindex?, style: "margin-left:5%" %>
-        <%= error_tag f, :noindex? %>
-        </span>
-      	<%= gettext("Prevent search engines from indexing your profile") %>
-      </label>
-      <p><%= gettext "By signing up you agree that we set a cookie in your browser." %></p>
-      <p>
-      <%= submit gettext("Sign up for a free account"), class: "button button--block" %>
-      </p>
-      <p><a href={~p"/login"} class="imagebox__alreadymember"><%= gettext "Already a member? Sign in here." %></a></p>
-      <p><%= gettext "We reserve the right to stop this service or delete your account anytime without warning." %></p>
-    </.form>
-  </section>
-</div>
+    </.inputs_for>
+
+    <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+      <%= checkbox f, :noindex?, class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+      <span>{gettext("Prevent search engines from indexing your profile")}</span>
+      <%= error_tag f, :noindex? %>
+    </label>
+
+    <p class="text-xs text-slate-400">{gettext("By signing up you agree that we set a cookie in your browser.")}</p>
+
+    <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
+
+    <p class="text-center text-sm">
+      <a href={~p"/login"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Already a member? Sign in here.")}</a>
+    </p>
+
+    <p class="text-xs text-slate-400">{gettext("We reserve the right to stop this service or delete your account anytime without warning.")}</p>
+  </.form>
+</.auth_layout>
 
 <script type="application/ld+json">
 {

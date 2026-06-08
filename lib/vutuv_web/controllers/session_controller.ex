@@ -9,7 +9,7 @@ defmodule VutuvWeb.SessionController do
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
 
   def new(conn, _) do
-    render(conn, "new.html", body_class: "stretch")
+    render(conn, "new.html")
   end
 
   # Step 1: the visitor types their email. We mail a PIN, stash the identity in
@@ -19,18 +19,18 @@ defmodule VutuvWeb.SessionController do
       :ok ->
         case Accounts.login_by_email(conn, email) do
           {:ok, conn} ->
-            render(conn, "pin_user_login.html", body_class: "stretch")
+            render(conn, "pin_user_login.html")
 
           {:error, _reason, conn} ->
             conn
             |> put_flash(:error, gettext("Invalid email"))
-            |> render("new.html", body_class: "stretch")
+            |> render("new.html")
         end
 
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> render("new.html", body_class: "stretch")
+        |> render("new.html")
     end
   end
 

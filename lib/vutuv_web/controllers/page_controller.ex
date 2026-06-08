@@ -16,7 +16,6 @@ defmodule VutuvWeb.PageController do
     render(conn, "index.html",
       changeset: changeset,
       user_counter: user_counter,
-      body_class: "stretch",
       prefetch: prefetch
     )
   end
@@ -82,11 +81,11 @@ defmodule VutuvWeb.PageController do
   end
 
   def impressum(conn, _params) do
-    render(conn, "impressum.html", conn: conn, body_class: "stretch")
+    render(conn, "impressum.html")
   end
 
   def datenschutzerklaerung(conn, _params) do
-    render(conn, "datenschutzerklaerung.html", conn: conn, body_class: "stretch")
+    render(conn, "datenschutzerklaerung.html")
   end
 
   def new_registration(conn, %{"user" => user_params}) do
@@ -101,8 +100,7 @@ defmodule VutuvWeb.PageController do
 
         render(conn, "index.html",
           changeset: changeset,
-          user_counter: user_counter,
-          body_class: "stretch"
+          user_counter: user_counter
         )
     end
   end
@@ -110,7 +108,7 @@ defmodule VutuvWeb.PageController do
   defp handle_post_registration_login(conn, email) do
     case Vutuv.Accounts.login_by_email(conn, email) do
       {:ok, conn} ->
-        render(conn, "pin_new_registration.html", body_class: "stretch")
+        render(conn, "pin_new_registration.html")
 
       {:error, _reason, conn} ->
         redirect(conn, to: ~p"/")
@@ -141,7 +139,7 @@ defmodule VutuvWeb.PageController do
     if Vutuv.Accounts.login_pin_pending?(email) do
       conn
       |> put_view(VutuvWeb.SessionHTML)
-      |> render("pin_user_login.html", body_class: "stretch")
+      |> render("pin_user_login.html")
       |> halt
     else
       Vutuv.Accounts.delete_pin_cookie(conn)
