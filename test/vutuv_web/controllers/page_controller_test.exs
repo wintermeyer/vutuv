@@ -36,18 +36,51 @@ defmodule VutuvWeb.PageControllerTest do
   end
 
   describe "GET /datenschutzerklaerung" do
+    test "renders the vutuv-specific privacy policy", %{conn: conn} do
+      body = conn |> get(~p"/datenschutzerklaerung") |> html_response(200)
+
+      # The honest, upfront note leads the page: vutuv only works if people
+      # show something of themselves.
+      assert body =~ "Ein ehrliches Wort vorab"
+      # Our core promises live near the top: own servers in Germany, nothing
+      # handed to third parties.
+      assert body =~ "eigene Server in Deutschland"
+      assert body =~ "keine Weitergabe an Dritte"
+      # The responsible party stays Wintermeyer Consulting (same as the Impressum).
+      assert body =~ "Wintermeyer Consulting"
+
+      # vutuv describes itself generically as a social network, not a
+      # profession-specific contact network.
+      assert body =~ "soziales Netzwerk"
+      refute body =~ "berufliches Kontaktnetzwerk"
+
+      # Trust-building: the policy points at the open-source code so claims can
+      # be verified.
+      assert body =~ "Open Source"
+      assert body =~ ~s(href="https://github.com/wintermeyer/vutuv")
+
+      # The persisted, behaviour-related processing must be disclosed: the
+      # per-user search history, the slug (profile-address) history and the live
+      # online status. Usage/dwell tracking is only planned, not active, so it
+      # must NOT be described here yet (it gets added when the feature ships).
+      assert body =~ "Such-Verlauf"
+      assert body =~ "Verlauf Ihrer Profil-Adressen"
+      assert body =~ "Online-Status"
+      refute body =~ "Verweildauer"
+
+      # The old generic shop/e-commerce boilerplate is gone for good: vutuv has
+      # no shopping cart, ships no goods and runs no third-party transport.
+      refute body =~ "Warenkorb"
+      refute body =~ "Transportunternehmen"
+    end
+
     # External target="_blank" links leak window.opener to the destination and
-    # can be abused for reverse tabnabbing. Both external references on the
-    # privacy page must carry rel="noopener noreferrer".
-    test "external target=_blank links carry rel=noopener noreferrer" do
+    # can be abused for reverse tabnabbing. The page no longer carries any such
+    # links, but should one ever return it must keep rel="noopener noreferrer".
+    test "any external target=_blank links carry rel=noopener noreferrer" do
       body = build_conn() |> get(~p"/datenschutzerklaerung") |> html_response(200)
 
-      # Every external link that opens a new tab.
-      blank_anchors = Regex.scan(~r/<a[^>]*target="_blank"[^>]*>/, body)
-
-      assert length(blank_anchors) == 2
-
-      for [anchor] <- blank_anchors do
+      for [anchor] <- Regex.scan(~r/<a[^>]*target="_blank"[^>]*>/, body) do
         assert anchor =~ ~s(rel="noopener noreferrer"),
                "expected rel=noopener noreferrer on #{anchor}"
       end
