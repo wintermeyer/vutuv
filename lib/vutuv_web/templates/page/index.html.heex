@@ -1,9 +1,24 @@
 <.auth_layout title={gettext("“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”")}>
+  <:headline>
+    <% founder_quote_main = gettext("“Tired of LinkedIn, Facebook, or X? Same here.") %>
+    <% founder_welcome = gettext("Welcome aboard!”") %>
+    <% founder_name = "Stefan Wintermeyer" %>
+    <% founder_role = gettext("Founder of vutuv") %>
+    <%!-- Founder hero: the whole quote in one heading at a single size (setup
+          and "Welcome aboard!" flow together), then a right-aligned signature
+          with the name above the role, set snug. The member-count pill below
+          is shared from the :hero slot. --%>
+    <div>
+      <h1 class="text-2xl font-bold leading-tight md:text-3xl">
+        {founder_quote_main} {founder_welcome}
+      </h1>
+      <div class="mt-6 text-right">
+        <p class="font-serif text-2xl leading-none text-white">{founder_name}</p>
+        <p class="-mt-2 text-sm text-brand-100">{founder_role}</p>
+      </div>
+    </div>
+  </:headline>
   <:hero>
-    <p class="mt-5 text-base font-semibold text-white">
-      Stefan Wintermeyer
-      <span class="font-normal text-brand-100">({gettext("Founder of vutuv")})</span>
-    </p>
     {live_render(@conn, VutuvWeb.MemberCountLive, id: "member-count-lv")}
   </:hero>
 

@@ -42,9 +42,15 @@ defmodule VutuvWeb.UI do
   Pass `title` (the hero headline) and optionally `subtitle`; the `:hero` slot
   adds extra hero content (a member count, say) and the default slot is the form
   card body.
+
+  For a hero that needs full control over its heading typography (a founder
+  quote with an attribution block, say), pass a `:headline` slot instead — it
+  replaces the default `<h1>{@title}` + subtitle. `title` is still required and
+  serves as the plain-text fallback.
   """
   attr(:title, :string, required: true)
   attr(:subtitle, :string, default: nil)
+  slot(:headline)
   slot(:hero)
   slot(:inner_block, required: true)
 
@@ -56,10 +62,14 @@ defmodule VutuvWeb.UI do
         <div aria-hidden="true" class="pointer-events-none absolute -right-16 -top-20 -z-10 h-60 w-60 rounded-full bg-white/10"></div>
         <div aria-hidden="true" class="pointer-events-none absolute -bottom-24 -left-12 -z-10 h-52 w-52 rounded-full bg-white/5"></div>
         <div class="flex h-full flex-col justify-center">
-          <h1 class="text-2xl font-bold leading-tight md:text-3xl">{@title}</h1>
-          <p :if={@subtitle} class="mt-4 max-w-sm text-base leading-relaxed text-brand-50">
-            {@subtitle}
-          </p>
+          <%= if @headline != [] do %>
+            {render_slot(@headline)}
+          <% else %>
+            <h1 class="text-2xl font-bold leading-tight md:text-3xl">{@title}</h1>
+            <p :if={@subtitle} class="mt-4 max-w-sm text-base leading-relaxed text-brand-50">
+              {@subtitle}
+            </p>
+          <% end %>
           {render_slot(@hero)}
         </div>
       </section>
