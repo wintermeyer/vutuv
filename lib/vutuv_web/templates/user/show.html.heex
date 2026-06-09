@@ -355,20 +355,6 @@ the resulting ~200px rail width. --%>
 
   <%!-- Right rail --%>
   <aside class="space-y-6">
-    <.card :if={Enum.count(@recommended_users) > 0}>
-      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
-      <ul class="space-y-4">
-        <.user_row
-          :for={user <- @recommended_users}
-          user={user}
-          current_user={@current_user}
-          current_user_id={@current_user_id}
-          work_info_by_id={@work_info_by_id}
-          following_by_id={@following_by_id}
-        />
-      </ul>
-    </.card>
-
     <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)} id="profile-contact">
       <.section_header title={gettext("Contact")} />
       <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
@@ -483,6 +469,23 @@ the resulting ~200px rail width. --%>
         <li>{gettext("Text only")}</li>
         <li>{gettext("Markdown")}</li>
         <li>{gettext("PDF")}</li>
+      </ul>
+    </.card>
+
+    <%!-- "Who to follow" sits at the foot of the rail on purpose: the profile's
+    own details (contact, info, links) lead, and discovery of other people
+    follows after them rather than above them. --%>
+    <.card :if={Enum.count(@recommended_users) > 0}>
+      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
+      <ul class="space-y-4">
+        <.user_row
+          :for={user <- @recommended_users}
+          user={user}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+        />
       </ul>
     </.card>
   </aside>
