@@ -159,6 +159,13 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ~s(id="download-vcard")
     assert html =~ ~p"/api/1.0/users/#{user}/vcard"
     refute html =~ ~s(id="profile-exports")
+
+    # Placeholder "Other formats" card (real downloads land here later).
+    assert html =~ ~s(id="profile-other-formats")
+    assert html =~ "Other formats"
+    assert html =~ "Text only"
+    assert html =~ "Markdown"
+    assert html =~ "PDF"
   end
 
   test "renders the headline as Markdown", %{conn: conn} do

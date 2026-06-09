@@ -475,6 +475,16 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- Placeholder: other download formats. The list is static for now;
+    real export links (plain text, Markdown, PDF) land here later. --%>
+    <.card id="profile-other-formats">
+      <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
+      <ul class="space-y-2 text-sm text-slate-500 dark:text-slate-400">
+        <li>{gettext("Text only")}</li>
+        <li>{gettext("Markdown")}</li>
+        <li>{gettext("PDF")}</li>
+      </ul>
+    </.card>
   </aside>
 </div>
 
