@@ -139,7 +139,7 @@ the resulting ~200px rail width. --%>
         />
       </div>
 
-      <p :if={@posts == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={@posts == []} href={~p"/feed"}>{gettext("Write your first post")}</.empty_add>
 
       <%!-- Content navigation: only when there is more than the profile shows. --%>
       <.link
@@ -221,7 +221,9 @@ the resulting ~200px rail width. --%>
         </:action>
       </.section_header>
 
-      <p :if={@work_experience == []} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={@work_experience == []} href={~p"/#{@user}/work_experiences/new"}>
+        {gettext("Add work experience")}
+      </.empty_add>
 
       <%!-- The single-letter "organization initial" boxes were dropped: one
       letter says nothing about a job. Each role shows a year-led date range (the
@@ -321,7 +323,7 @@ the resulting ~200px rail width. --%>
           </div>
         </div>
       </div>
-      <p :if={@totals.links == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={@totals.links == 0} href={~p"/#{@user}/links/new"}>{gettext("Add a link")}</.empty_add>
       <.link
         :if={@totals.links > 3}
         href={~p"/#{@user}/links"}
@@ -408,7 +410,9 @@ the resulting ~200px rail width. --%>
           <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
         </li>
       </ul>
-      <p :if={Enum.count(@emails) == 0} class="text-sm text-slate-400">{gettext("No public email.")}</p>
+      <.empty_add :if={Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
+        {gettext("Add an email address")}
+      </.empty_add>
     </.card>
 
     <%!-- General info: gender + birthday; the headline already lives in the header --%>
@@ -433,9 +437,12 @@ the resulting ~200px rail width. --%>
           <dd class="font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
         </div>
       </dl>
-      <p :if={!@user.birthdate and (!@user.gender or @user.gender == "other")} class="text-sm text-slate-400">
-        {gettext("Nothing here yet.")}
-      </p>
+      <.empty_add
+        :if={!@user.birthdate and (!@user.gender or @user.gender == "other")}
+        href={~p"/#{@user}/edit"}
+      >
+        {gettext("Add personal details")}
+      </.empty_add>
     </.card>
 
     <.card
@@ -456,7 +463,9 @@ the resulting ~200px rail width. --%>
           <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
         </li>
       </ul>
-      <p :if={Enum.count(@user.social_media_accounts) == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
+        {gettext("Add a social media account")}
+      </.empty_add>
     </.card>
 
     <.card :if={@totals.numbers > 0 or same_user?(@user, @current_user)} id="profile-phone-numbers">
@@ -474,7 +483,9 @@ the resulting ~200px rail width. --%>
           <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
         </li>
       </ul>
-      <p :if={@totals.numbers == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={@totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
+        {gettext("Add a phone number")}
+      </.empty_add>
       <.link
         :if={@totals.numbers > 3}
         href={~p"/#{@user}/phone_numbers"}
@@ -499,7 +510,9 @@ the resulting ~200px rail width. --%>
           <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
         </li>
       </ul>
-      <p :if={@totals.addresses == 0} class="text-sm text-slate-400">{gettext("Nothing here yet.")}</p>
+      <.empty_add :if={@totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
+        {gettext("Add an address")}
+      </.empty_add>
       <.link
         :if={@totals.addresses > 3}
         href={~p"/#{@user}/addresses"}

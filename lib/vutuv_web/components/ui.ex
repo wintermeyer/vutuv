@@ -240,6 +240,43 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  Owner-facing empty-state call to action for a profile section. Replaces the
+  dead "Nothing here yet." line on the owner's own still-empty card with a
+  full-width, dashed-outline "add" tile (a plus glyph + a clear label) that
+  links straight to the new-entry form, so a non-technical owner sees an obvious
+  place to click instead of having to discover the quiet ⋯ menu. Once the
+  section has content the tile is gone and the ⋯ menu carries the add action.
+
+  Points at the same route the card menu's "Add entry" item uses; pass the
+  call-to-action label as the inner block (e.g. `gettext("Add work experience")`).
+  Visitors never see empty owner cards, so the owner guard already sits on the
+  card's `:if` — keep the `:if={collection == []}` empty guard at the call site.
+  """
+  attr(:href, :any, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def empty_add(assigns) do
+    ~H"""
+    <.link
+      href={@href}
+      data-empty-add
+      class={[
+        "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition",
+        "hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700",
+        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300"
+      ]}
+      {@rest}
+    >
+      <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
   @doc "Skill/tag chip (brand tint). Pass `navigate`/`href` to render it as a link."
   attr(:navigate, :string, default: nil)
   attr(:href, :string, default: nil)

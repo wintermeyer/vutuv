@@ -204,6 +204,36 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
+  test "empty sections invite the owner to add information instead of dead-ending", %{conn: conn} do
+    # A brand-new account lands on a profile full of empty cards. Rather than a
+    # muted "Nothing here yet." that hides the next step behind the quiet ⋯
+    # menu, each empty section shows a clear add prompt the owner can click.
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    for label <- [
+          "Add work experience",
+          "Add a link",
+          "Add a phone number",
+          "Add an address",
+          "Add a social media account"
+        ] do
+      assert html =~ label
+    end
+
+    # The dead-end empty-state line is gone from the owner's own view.
+    refute html =~ "Nothing here yet."
+  end
+
+  test "the add prompts are owner-only and never shown to visitors", %{conn: conn} do
+    user = insert_activated_user()
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    refute html =~ "Add work experience"
+    refute html =~ "Add a link"
+    refute html =~ "Add a phone number"
+  end
+
   test "renders page not found when id is nonexistent", %{conn: conn} do
     conn = get(conn, ~p"/#{%User{active_slug: "1"}}")
     assert html_response(conn, :not_found)

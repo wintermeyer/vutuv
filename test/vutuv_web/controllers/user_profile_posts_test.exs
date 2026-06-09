@@ -24,7 +24,8 @@ defmodule VutuvWeb.UserProfilePostsTest do
 
     assert html_response(conn, 200) =~ "profile-posts"
     assert conn.resp_body =~ ~s(href="/feed")
-    assert conn.resp_body =~ "Nothing here yet."
+    # The empty card invites the owner to write rather than dead-ending.
+    assert conn.resp_body =~ "Write your first post"
   end
 
   test "the owner gets the ⋯ menu on each post, visitors do not", %{conn: conn} do
