@@ -137,7 +137,13 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def render(assigns) do
     ~H"""
-    <div :if={@engagement} class="-ml-2 mt-3 flex items-center gap-1 text-slate-500 dark:text-slate-400">
+    <%!-- justify-between spreads the four controls across the column's full
+          width (X-style); -mx-2 cancels the outer buttons' px-2 so the first
+          and last glyphs line up with the column edges. --%>
+    <div
+      :if={@engagement}
+      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400"
+    >
       <.action_button
         id={"#{@id}-like"}
         kind="like"
