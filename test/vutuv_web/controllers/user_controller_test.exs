@@ -148,12 +148,17 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Female"
     assert html =~ "04/15/1990"
 
-    # Follower / following previews and the vCard export
+    # Follower / following previews
     assert html =~ ~s(id="profile-followers")
     assert html =~ "Fanny"
     assert html =~ ~s(id="profile-following")
     assert html =~ "Heidi"
+
+    # The vCard download now lives in the profile header, not a separate
+    # "Exports" rail card.
+    assert html =~ ~s(id="download-vcard")
     assert html =~ ~p"/api/1.0/users/#{user}/vcard"
+    refute html =~ ~s(id="profile-exports")
   end
 
   test "renders the headline as Markdown", %{conn: conn} do

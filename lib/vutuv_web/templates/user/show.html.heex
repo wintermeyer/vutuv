@@ -103,6 +103,25 @@ the resulting ~200px rail width. --%>
           </div>
           <.member_since_line :if={member_since} value={member_since} class="ml-auto" />
         </div>
+
+        <%!-- Footer action: download this profile as a vCard (.vcf). Pinned to
+        the bottom-right of the header card on its own hairline-divided row, so
+        it never collides with the counts/member-since line above (which is
+        right-aligned when counts are present). Shown to everyone, including the
+        owner. Replaces the old standalone "Exports" rail card. --%>
+        <div class="mt-4 flex justify-end border-t border-slate-100 pt-3 dark:border-slate-800">
+          <.link
+            id="download-vcard"
+            href={~p"/api/1.0/users/#{@user}/vcard"}
+            title={gettext("Download")}
+            class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+            {gettext("Vcard")}
+          </.link>
+        </div>
       </div>
     </section>
 
@@ -456,15 +475,6 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
-    <.card id="profile-exports">
-      <.section_title class="mb-4">{gettext("Exports")}</.section_title>
-      <.link
-        href={~p"/api/1.0/users/#{@user}/vcard"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("Vcard")}: {gettext("Download")}
-      </.link>
-    </.card>
   </aside>
 </div>
 
