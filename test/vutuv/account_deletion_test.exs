@@ -1,0 +1,178 @@
+defmodule Vutuv.AccountDeletionTest do
+  @moduledoc """
+  Deleting a user must be clean and complete: every row that belongs to the
+  account goes (DB cascade), the records that deliberately outlive their author
+  survive in a degraded form (replies to the account's posts, the conversation
+  membership), and the on-disk files the cascade cannot touch — post images,
+  avatar, cover — are removed too.
+
+  This pins the two gaps `Vutuv.Accounts.delete_user/1` closes: a membership
+  on the account's group/follow used to abort the whole cascade (the
+  `memberships` FKs were NO ACTION), and the image files were orphaned on disk
+  because the cascade only drops the rows that name them.
+  """
+  # Not async: sets the global :uploads_dir_prefix and plants files on disk.
+  use Vutuv.DataCase, async: false
+
+  import Ecto.Query
+  import Vutuv.PostsHelpers, only: [create_post!: 2]
+
+  alias Vutuv.Accounts
+  alias Vutuv.Accounts.{Email, Slug, User}
+  alias Vutuv.Chat.{Conversation, Message}
+  alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
+  alias Vutuv.Repo
+  alias Vutuv.Social
+  alias Vutuv.Social.{Connection, Follow, Group, Membership}
+  alias Vutuv.Tags.{UserTag, UserTagEndorsement}
+  alias Vutuv.Uploads
+  alias Vutuv.Uploads.Originals
+
+  setup do
+    tmp = Path.join(System.tmp_dir!(), "vutuv_del_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(tmp)
+    prev = Application.get_env(:vutuv, :uploads_dir_prefix)
+    Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+    on_exit(fn ->
+      File.rm_rf(tmp)
+
+      if prev,
+        do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
+        else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+    end)
+
+    :ok
+  end
+
+  # Plant a real file in `storage_dir` (served tree) and its private original,
+  # so the test can assert both are removed.
+  defp plant_files(storage_dir) do
+    served = Uploads.disk_dir(storage_dir)
+    original = Originals.dir(storage_dir)
+
+    for dir <- [served, original] do
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "marker"), "x")
+    end
+
+    {served, original}
+  end
+
+  defp count(queryable), do: Repo.aggregate(queryable, :count)
+
+  test "delete_user wipes the account, all its rows, and its on-disk files" do
+    user = insert(:activated_user, avatar: "a.jpg", cover_photo: "c.jpg")
+    other = insert(:activated_user)
+    third = insert(:activated_user)
+    fourth = insert(:activated_user)
+
+    # --- Profile data (every direct user-owned table) ---
+    insert(:email, user: user)
+    insert(:slug, user: user)
+    insert(:work_experience, user: user)
+    insert(:address, user: user)
+    insert(:phone_number, user: user)
+    url = insert(:url, user: user)
+    insert(:social_media_account, user: user)
+    insert(:o_auth_provider, user: user)
+    insert(:login_pin, user: user)
+    insert(:search_term, user: user)
+
+    # --- Tags + endorsements (given by and received by the account) ---
+    tag = insert(:tag)
+    user_tag = insert(:user_tag, user: user, tag: tag)
+    insert(:user_tag_endorsement, user: other, user_tag: user_tag)
+    other_tag = insert(:user_tag, user: other, tag: tag)
+    given_endorsement = insert(:user_tag_endorsement, user: user, user_tag: other_tag)
+
+    # --- Social graph ---
+    follow!(third, user)
+    connect!(user, other)
+    {:ok, _} = Social.request_connection(user, fourth)
+    {:ok, _} = Social.request_connection(third, user)
+
+    # --- Group + membership on the account's own follow edge (the cascade
+    #     wall this fix removes). ---
+    group = insert(:group, user: user)
+    user_other_follow = Repo.get_by!(Follow, follower_id: user.id, followee_id: other.id)
+    insert(:membership, follow: user_other_follow, group: group)
+
+    # --- A group-denied post (exercises the RESTRICT on post_denials.group_id),
+    #     an attached image, and a pending (unattached) image. ---
+    post = create_post!(user, %{body: "private", denials: [%{"group_id" => group.id}]})
+    attached = insert(:post_image, user: user, post: post)
+    pending = insert(:post_image, user: user)
+
+    # --- A reply by someone else to the account's post: it must outlive the
+    #     account, with its parent links nilified. ---
+    reply_post = create_post!(other, %{body: "re: private"})
+    reply = insert(:post_reply, post: reply_post, parent_post: post, parent_author: user)
+
+    # --- A conversation with messages the account sent. ---
+    conversation = insert_conversation_between(user, other)
+    message = insert(:message, conversation: conversation, sender: user)
+
+    # --- Plant on-disk files for the avatar, cover and both images. ---
+    {avatar_served, avatar_orig} = plant_files("avatars/#{user.id}")
+    {cover_served, cover_orig} = plant_files("covers/#{user.id}")
+    {attached_served, attached_orig} = plant_files("post_images/#{attached.token}")
+    {pending_served, pending_orig} = plant_files("post_images/#{pending.token}")
+    {screenshot_served, screenshot_orig} = plant_files("screenshots/#{url.id}")
+
+    # === Delete ===
+    assert {:ok, _} = Accounts.delete_user(user)
+
+    # --- The account is gone; the other parties survive. ---
+    refute Repo.get(User, user.id)
+    assert Repo.get(User, other.id)
+    assert Repo.get(User, third.id)
+    assert Repo.get(User, fourth.id)
+
+    # --- No orphaned rows anywhere the account reached. ---
+    assert count(from(e in Email, where: e.user_id == ^user.id)) == 0
+    assert count(from(s in Slug, where: s.user_id == ^user.id)) == 0
+
+    assert count(from(f in Follow, where: f.follower_id == ^user.id or f.followee_id == ^user.id)) ==
+             0
+
+    assert count(from(c in Connection, where: c.user_a_id == ^user.id or c.user_b_id == ^user.id)) ==
+             0
+
+    assert count(from(g in Group, where: g.user_id == ^user.id)) == 0
+    assert count(Membership) == 0
+    assert count(from(p in Post, where: p.user_id == ^user.id)) == 0
+    assert count(from(i in PostImage, where: i.user_id == ^user.id)) == 0
+    assert count(from(d in PostDenial, where: d.group_id == ^group.id)) == 0
+    assert count(from(t in UserTag, where: t.user_id == ^user.id)) == 0
+    assert count(from(e in UserTagEndorsement, where: e.user_id == ^user.id)) == 0
+    refute Repo.get(UserTagEndorsement, given_endorsement.id)
+    refute Repo.get(Conversation, conversation.id)
+    refute Repo.get(Message, message.id)
+
+    # --- The other party's own data is untouched. ---
+    assert Repo.get(UserTag, other_tag.id)
+
+    # --- The reply outlives the deleted parent and author, degraded to nil. ---
+    assert Repo.get(Post, reply_post.id)
+    reply = Repo.get!(PostReply, reply.id)
+    assert reply.parent_post_id == nil
+    assert reply.parent_author_id == nil
+
+    # --- Every planted file is gone (served + private original). ---
+    for dir <- [
+          avatar_served,
+          avatar_orig,
+          cover_served,
+          cover_orig,
+          attached_served,
+          attached_orig,
+          pending_served,
+          pending_orig,
+          screenshot_served,
+          screenshot_orig
+        ] do
+      refute File.exists?(dir), "expected #{dir} to be removed"
+    end
+  end
+end

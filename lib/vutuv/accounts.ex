@@ -342,6 +342,53 @@ defmodule Vutuv.Accounts do
   # astronomically smaller than the years-apart gap of any legacy account.
   @registration_pin_window_seconds 300
 
+  @doc """
+  Deletes `user` and everything that belongs to them — a clean, complete
+  teardown, the single entry point both the confirmed account-deletion flow
+  and the unconfirmed-registration sweep go through.
+
+  Most rows are removed by the database `ON DELETE` cascade (or `SET NULL` for
+  the records that deliberately outlive their author: sent messages and
+  replies to a now-deleted post). Two things the cascade cannot do are handled
+  here:
+
+    * **On-disk files.** Post-image files and the avatar / cover trees live on
+      disk, not in a table, so the cascade never touches them. Their tokens
+      and paths are collected *before* the delete and removed *after* it
+      commits, so a rolled-back delete never strands the account without its
+      files.
+    * **Cascade ordering.** A connections-/group-only post denies one of the
+      user's own groups through `post_denials.group_id`, which is RESTRICT on
+      purpose (deleting a group must not silently widen a post's audience).
+      The user's posts are deleted first, inside the transaction, so those
+      denials are gone before the `groups` cascade reaches that constraint.
+
+  Returns `{:ok, user}`.
+  """
+  def delete_user(%User{} = user) do
+    image_tokens =
+      Repo.all(from(i in Vutuv.Posts.PostImage, where: i.user_id == ^user.id, select: i.token))
+
+    # The user's link previews: the urls rows cascade with the account, but
+    # their screenshot files (keyed by url id) would be orphaned otherwise.
+    # Only the id is needed — Screenshot.delete/1 keys its dirs off it.
+    url_ids =
+      Repo.all(from(u in Vutuv.Profiles.Url, where: u.user_id == ^user.id, select: %{id: u.id}))
+
+    {:ok, _} =
+      Repo.transaction(fn ->
+        Repo.delete_all(from(p in Vutuv.Posts.Post, where: p.user_id == ^user.id))
+        Repo.delete!(user)
+      end)
+
+    Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
+    Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
+    Vutuv.Avatar.delete(user)
+    Vutuv.Cover.delete(user)
+
+    {:ok, user}
+  end
+
   # How long after sign-up an unconfirmed registration is swept.
   @unconfirmed_registration_max_age_minutes 60
 
@@ -357,7 +404,9 @@ defmodule Vutuv.Accounts do
   cascading `Repo.delete!/1` the confirmed account-deletion flow uses. Returns
   the number of accounts deleted.
   """
-  def delete_unconfirmed_registrations(max_age_minutes \\ @unconfirmed_registration_max_age_minutes) do
+  def delete_unconfirmed_registrations(
+        max_age_minutes \\ @unconfirmed_registration_max_age_minutes
+      ) do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -max_age_minutes * 60)
     window = @registration_pin_window_seconds
 
@@ -378,7 +427,7 @@ defmodule Vutuv.Accounts do
   defp delete_if_still_unconfirmed(%User{id: id}) do
     case Repo.get(User, id) do
       %User{activated?: false} = user ->
-        Repo.delete!(user)
+        delete_user(user)
         true
 
       _ ->

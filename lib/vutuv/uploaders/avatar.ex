@@ -79,6 +79,12 @@ defmodule Vutuv.Avatar do
   end
 
   @doc """
+  Removes the user's avatar files — the served versions and the private
+  original. A no-op when none. Called when an account is deleted.
+  """
+  def delete(user), do: Uploads.delete(user, @config)
+
+  @doc """
   The value templates put in an `<img src>`: the nginx-served URL when the user
   has an avatar, otherwise the default avatar (an inline SVG data URI).
   """

@@ -229,9 +229,10 @@ defmodule VutuvWeb.UserController do
   defp verify_deletion_pin(conn, user, pin) do
     case Vutuv.Accounts.check_pin(user, pin, "delete") do
       {:ok, user} ->
-        # Here we use delete! (with a bang) because we expect
-        # it to always work (and if it does not, it will raise).
-        Repo.delete!(user)
+        # Clean, complete teardown: DB cascade for the rows, plus the on-disk
+        # files (post images, avatar, cover, link-preview screenshots) the
+        # cascade can't reach.
+        {:ok, _} = Vutuv.Accounts.delete_user(user)
 
         conn
         |> Vutuv.Accounts.logout()

@@ -67,4 +67,10 @@ defmodule Vutuv.Cover do
   """
   def display_url(%{cover_photo: nil}, _version), do: nil
   def display_url(user, version), do: url({user.cover_photo, user}, version)
+
+  @doc """
+  Removes the user's cover-photo files — the served version and the private
+  original. A no-op when none. Called when an account is deleted.
+  """
+  def delete(user), do: Uploads.delete(user, @config)
 end

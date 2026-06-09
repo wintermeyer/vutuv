@@ -91,6 +91,17 @@ defmodule Vutuv.Screenshot do
     |> URI.encode()
   end
 
+  @doc """
+  Removes the screenshot files for `url` — the served thumb and the private
+  original. A no-op when none. Called when a URL or its owner's account is
+  deleted (the DB cascade drops the `urls` row but never its files).
+  """
+  def delete(url) do
+    File.rm_rf(disk_dir(url))
+    Originals.delete(storage_dir(url))
+    :ok
+  end
+
   defp content_hash(path) do
     :sha256
     |> :crypto.hash(File.read!(path))

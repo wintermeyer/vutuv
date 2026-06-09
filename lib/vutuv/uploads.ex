@@ -109,6 +109,19 @@ defmodule Vutuv.Uploads do
     )
   end
 
+  @doc """
+  Removes every stored file for `scope` per `config`: both the served tree
+  (`<prefix>/<id>`) and the private original (`originals/<prefix>/<id>`). A
+  no-op when nothing is stored. Used when an account is deleted — the DB
+  cascade drops the row that names the file, but never the file itself.
+  """
+  def delete(scope, config) do
+    storage_dir = storage_dir(scope, config)
+    File.rm_rf(disk_dir(storage_dir))
+    Originals.delete(storage_dir)
+    :ok
+  end
+
   defp served_url(file, scope, version, config) do
     local_path =
       Path.join(storage_dir(scope, config), served_filename(scope, version, file, config))
