@@ -13,13 +13,12 @@
         <%= Vutuv.Profiles.SocialMediaAccount.social_media_link account %>
       </td>
       <td><%= account.provider %></td>
-      <td>
-      <%= if same_user?(@user, @current_user) do %>
-        <.edit_delete_actions
+      <td class="text-right">
+        <.row_actions
+          :if={same_user?(@user, @current_user)}
           edit_to={~p"/#{@user}/social_media_accounts/#{account}/edit"}
           delete_to={~p"/#{@user}/social_media_accounts/#{account}"}
         />
-      <% end %>
       </td>
     </tr>
 <% end %>

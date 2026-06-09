@@ -9,12 +9,12 @@
 />
 
 <.card_section>
-  <%= if same_user?(@user, @current_user) do %>
-    <.edit_delete_actions
-      edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
-      delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
-    />
-  <% end %>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
+    delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
+  />
 
   <h1><%= gettext("Number Type") %></h1>
   <p><%= @phone_number.number_type %></p>

@@ -9,12 +9,12 @@
 />
 
 <.card_section>
-  <%= if same_user?(@user, @current_user) do %>
-    <.edit_delete_actions
-      edit_to={~p"/#{@user}/emails/#{@email}/edit"}
-      delete_to={~p"/#{@user}/emails/#{@email}"}
-    />
-  <% end %>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/#{@user}/emails/#{@email}/edit"}
+    delete_to={~p"/#{@user}/emails/#{@email}"}
+  />
 
   <h1><%= gettext("Email") %></h1>
   <p><%= @email.value %></p>

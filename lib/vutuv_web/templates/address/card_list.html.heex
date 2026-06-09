@@ -13,13 +13,12 @@
       <%= link address.description, to: ~p"/#{@user}/addresses/#{address}" %>
       </td>
       <td><%= format_address address %></td>
-      <td>
-      <%= if same_user?(@user, @current_user) do %>
-        <.edit_delete_actions
+      <td class="text-right">
+        <.row_actions
+          :if={same_user?(@user, @current_user)}
           edit_to={~p"/#{@user}/addresses/#{address}/edit"}
           delete_to={~p"/#{@user}/addresses/#{address}"}
         />
-      <% end %>
       </td>
     </tr>
 <% end %>

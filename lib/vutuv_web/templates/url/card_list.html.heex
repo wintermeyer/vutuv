@@ -11,12 +11,11 @@
       </a>
     </div>
     <div class="text">
-      <%= if same_user?(@user, @current_user) do %>
-        <.edit_delete_actions
-          edit_to={~p"/#{@user}/links/#{url}/edit"}
-          delete_to={~p"/#{@user}/links/#{url}"}
-        />
-      <% end %>
+      <.row_actions
+        :if={same_user?(@user, @current_user)}
+        edit_to={~p"/#{@user}/links/#{url}/edit"}
+        delete_to={~p"/#{@user}/links/#{url}"}
+      />
       <div class="title">
         <%= url.description %>
       </div>

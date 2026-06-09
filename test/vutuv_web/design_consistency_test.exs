@@ -214,45 +214,47 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
-  # The shared `<.card_section>` component replaces the copy-pasted
-  # `<div class="card-list"><section class="card">…</section></div>` shell that
-  # wrapped every owned-resource index (with its `card__empty` empty-state and an
-  # owner-guarded `card__morelink` "Add" link) and ~20 new/edit form wrappers. It
-  # must keep the exact legacy classes (`.card-list`, `.card`, `.card__empty`,
-  # `.card__morelink`) so `components.css` keeps styling them, the empty line must
-  # stay gated on the collection, and the Add link must stay owner-only where the
-  # call site guards it. The phone-number index is a representative converted
-  # site: it starts empty and guards its Add link with `same_user?/2`.
+  # The shared `<.card_section>` component still wraps every owned-resource index
+  # in the legacy `.card-list`/`.card` shell (so `components.css` keeps styling
+  # it). Under the unified card UX its "Add" now follows the profile: an EMPTY
+  # owner card shows the prominent dashed `<.empty_add>` tile (data-empty-add)
+  # into the new-route instead of the old `card__empty` + bottom `card__morelink`
+  # (a populated card shows the visible `<.add_action>` header button instead). A
+  # visitor on someone else's empty index has no add affordance, so it falls back
+  # to the plain `.card__empty` line. The phone-number index is a representative
+  # converted site: it starts empty and guards its add affordance with `same_user?/2`.
   describe "shared legacy card section" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       %{conn: conn, user: user}
     end
 
-    test "an empty owned index shows the empty line and an owner Add link", %{
+    test "an empty owned index shows the owner a dashed add tile into the new-route", %{
       conn: conn,
       user: user
     } do
       conn = get(conn, ~p"/#{user}/phone_numbers")
       html = html_response(conn, 200)
 
-      # The legacy card shell and empty-state line.
+      # The legacy card shell still wraps it.
       assert html =~ ~s(class="card-list")
       assert html =~ ~s(<section class="card">)
-      assert html =~ ~s(<p class="card__empty">)
-      assert html =~ "Nothing here yet."
 
-      # The owner sees the Add link into the new-route.
-      assert html =~ ~s(class="card__morelink")
+      # The empty owner card is the dashed add tile linking into the new-route,
+      # not the old card__empty line + bottom card__morelink.
+      assert html =~ "data-empty-add"
       assert html =~ ~p"/#{user}/phone_numbers/new"
+      refute html =~ ~s(class="card__morelink")
     end
 
-    test "a non-owner sees no Add link on someone else's empty index", %{conn: conn} do
+    test "a non-owner sees no add affordance on someone else's empty index", %{conn: conn} do
       other = insert_activated_user()
       conn = get(conn, ~p"/#{other}/phone_numbers")
       html = html_response(conn, 200)
 
+      # No add affordance for a visitor: the plain empty line, no dashed tile.
       assert html =~ ~s(<p class="card__empty">)
+      refute html =~ "data-empty-add"
       refute html =~ ~s(class="card__morelink")
     end
 
@@ -267,44 +269,36 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
-  # The shared `<.edit_delete_actions>` component replaces ~16 hand-written
-  # edit/delete icon-button pairs that had drifted into two icon flavors and two
-  # button orders. It renders the canonical legacy anatomy from design.md: a
-  # `.btns-right` wrapper holding `.button.button--icon.button--small` controls
-  # with CSS-glyph icons (`i.icon.icon--edit|--delete|--search`), edit before
-  # delete, delete rendered through the `delete` method so CSRF applies. The
-  # email card_list (owner view) and the address show page are representative
-  # converted sites; the address show test is also the regression for the bug
-  # where its delete button defaulted to POST (no POST route exists), so the
-  # control silently failed to delete.
-  describe "shared edit/delete icon-button actions" do
+  # The shared `<.row_actions>` component renders the calm, labeled per-entry
+  # Edit/Delete actions on every management list and entry show page — the
+  # unified replacement for the loud `.btns-right` pencil + red trash-circle
+  # pair (`<.edit_delete_actions>`, still used by the admin tables). Edit is a
+  # brand text link, Delete a muted-red text link that deletes through the
+  # `delete` method (CSRF) behind a confirm prompt — never POST. The email
+  # card_list (owner view) and the address show page are representative converted
+  # sites; the address show test is also the regression for the bug where the old
+  # delete control defaulted to POST (no POST route exists) and silently failed.
+  describe "shared row actions (edit/delete)" do
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       %{conn: conn, user: user}
     end
 
-    test "the email card_list renders the canonical edit-then-delete glyph group",
+    test "the email card_list renders calm labeled Edit and Delete actions",
          %{conn: conn, user: user} do
       [email | _] = user.emails
       conn = get(conn, ~p"/#{user}/emails")
       html = html_response(conn, 200)
 
-      # Canonical wrapper and CSS-glyph icons (not the IconHTML svg flavor).
-      assert html =~ ~s(class="btns-right")
-      assert html =~ ~s(<i class="icon icon--edit"></i>)
-      assert html =~ ~s(<i class="icon icon--delete"></i>)
+      # Calm labeled text actions, not the loud icon-glyph button pair.
+      refute html =~ ~s(class="btns-right")
+      refute html =~ ~s(<i class="icon icon--delete"></i>)
+      refute html =~ "button--danger"
 
-      # The edit link points at the edit route.
+      # Edit links to the edit route; Delete deletes via the delete method
+      # (edit-before-delete order is guaranteed by the row_actions component).
       assert html =~ ~s(href="#{~p"/#{user}/emails/#{email}/edit"}")
-
-      # The delete control carries the delete method + danger class and renders
-      # before nothing else (edit comes first in the source order).
       assert html =~ ~s(data-method="delete")
-      assert html =~ "button--danger"
-
-      edit_pos = :binary.match(html, ~s(icon--edit)) |> elem(0)
-      delete_pos = :binary.match(html, ~s(icon--delete)) |> elem(0)
-      assert edit_pos < delete_pos, "edit icon must come before delete icon"
     end
 
     test "the address show page deletes via the delete method, not POST",
@@ -313,17 +307,16 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn = get(conn, ~p"/#{user}/addresses/#{address}")
       html = html_response(conn, 200)
 
-      # Regression: the old delete button had no `method`, so it defaulted to
-      # POST against a path that has no POST route. The component always emits
-      # the delete method.
+      # Regression: the old delete control had no `method`, so it defaulted to
+      # POST against a path that has no POST route. The calm Delete link still
+      # emits the delete method (CSRF) against the entry path.
       assert html =~ ~s(data-method="delete")
       assert html =~ ~s(data-to="#{~p"/#{user}/addresses/#{address}"}")
-      assert html =~ "button--danger"
 
-      # Edit link and canonical glyph icons are present.
+      # Edit link present; the loud icon glyphs and danger button are gone.
       assert html =~ ~s(href="#{~p"/#{user}/addresses/#{address}/edit"}")
-      assert html =~ ~s(<i class="icon icon--edit"></i>)
-      assert html =~ ~s(<i class="icon icon--delete"></i>)
+      refute html =~ ~s(<i class="icon icon--delete"></i>)
+      refute html =~ "button--danger"
     end
   end
 end

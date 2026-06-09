@@ -13,13 +13,12 @@
       <%= link email.value, to: ~p"/#{@user}/emails/#{email}" %>
       </td>
       <td><%= if email.public?, do: gettext("Public"), else: gettext("Private") %></td>
-      <td>
-      <%= if same_user?(@user, @current_user) do %>
-        <.edit_delete_actions
+      <td class="text-right">
+        <.row_actions
+          :if={same_user?(@user, @current_user)}
           edit_to={~p"/#{@user}/emails/#{email}/edit"}
           delete_to={~p"/#{@user}/emails/#{email}"}
         />
-      <% end %>
       </td>
     </tr>
 <% end %>

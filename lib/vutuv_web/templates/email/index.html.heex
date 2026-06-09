@@ -11,6 +11,7 @@
 <.card_section
   empty={Enum.empty?(@emails)}
   add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/emails/new"}
+  add_label={gettext("Add an email address")}
 >
   <%= render "card_list.html", assigns %>
 </.card_section>

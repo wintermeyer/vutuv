@@ -25,12 +25,10 @@
             <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
           </td>
           <td class="text-right">
-            <%= if @current_user && same_user?(@user, @current_user) do %>
-              <.edit_delete_actions
-                delete_to={~p"/#{@user}/tags/#{user_tag}"}
-                title_delete={gettext("Delete")}
-              />
-            <% end %>
+            <.row_actions
+              :if={@current_user && same_user?(@user, @current_user)}
+              delete_to={~p"/#{@user}/tags/#{user_tag}"}
+            />
           </td>
         </tr>
       <% end %>

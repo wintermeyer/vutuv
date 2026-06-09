@@ -149,23 +149,21 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Card header row: a `<.section_title>` with optional right-aligned actions.
-  Pass `add_href` for the canonical "Add" link (a falsy value hides it, so
-  `add_href={owner? && ~p"/…/new"}` reads naturally), and/or use the `:action`
-  slot for a custom action; multiple actions sit together in one group.
+  Card header row: a `<.section_title>` plus an optional right-aligned `:action`
+  slot. Under the unified card UX the owner's **Add** is no longer a header
+  button — it is the dashed `<.empty_add>` tile in the card body, shown the same
+  way whether the card is empty or already has entries (the whole point: one add
+  affordance, never two). So most call sites pass just `title`; the `:action`
+  slot remains for the rare non-add header control.
   """
   attr(:title, :string, required: true)
-  attr(:add_href, :any, default: nil)
   slot(:action)
 
   def section_header(assigns) do
     ~H"""
-    <div class="mb-4 flex items-center justify-between">
+    <div class="mb-4 flex items-center justify-between gap-3">
       <.section_title>{@title}</.section_title>
-      <div class="flex items-center gap-2">
-        <.link :if={@add_href} href={@add_href} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
-          {gettext("Add")}
-        </.link>
+      <div :if={@action != []} class="flex items-center gap-3">
         {render_slot(@action)}
       </div>
     </div>
@@ -241,19 +239,24 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Owner-facing empty-state call to action for a profile section. Replaces the
-  dead "Nothing here yet." line on the owner's own still-empty card with a
-  full-width, dashed-outline "add" tile (a plus glyph + a clear label) that
-  links straight to the new-entry form, so a non-technical owner sees an obvious
-  place to click instead of having to discover the quiet ⋯ menu. Once the
-  section has content the tile is gone and the ⋯ menu carries the add action.
+  The owner's **add tile** — the single, consistent add affordance for every
+  owner card on both tracks: a full-width dashed-outline tile (plus glyph + a
+  clear label) that links straight to the new-entry form. It is shown the same
+  way whether the card is **empty** or already has entries (rendered below the
+  entries when populated), so a non-technical owner sees one obvious place to
+  click everywhere — no separate header button, no hidden ⋯ menu. `<.card_section>`
+  renders it automatically on the legacy management pages; on the profile keep
+  the `:if={same_user?(…)}` owner guard at the call site (and pass
+  `class="mt-4"` when entries sit above it for spacing).
 
-  Points at the same route the card menu's "Add entry" item uses; pass the
-  call-to-action label as the inner block (e.g. `gettext("Add work experience")`).
-  Visitors never see empty owner cards, so the owner guard already sits on the
-  card's `:if` — keep the `:if={collection == []}` empty guard at the call site.
+  Pass the call-to-action label as the inner block (e.g. `gettext("Add work
+  experience")`). `icon` switches the glyph: `"plus"` (default) for add, or
+  `"pencil"` for the rare edit-not-add card (General Info → the profile form).
+  Carries a `data-empty-add` hook for tests.
   """
   attr(:href, :any, required: true)
+  attr(:icon, :string, default: "plus", values: ~w(plus pencil))
+  attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
@@ -265,12 +268,16 @@ defmodule VutuvWeb.UI do
       class={[
         "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition",
         "hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700",
-        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300"
+        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300",
+        @class
       ]}
       {@rest}
     >
-      <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <svg :if={@icon == "plus"} class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+      </svg>
+      <svg :if={@icon == "pencil"} class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
       </svg>
       {render_slot(@inner_block)}
     </.link>
@@ -724,17 +731,85 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Calm, labeled per-entry actions for the management list/table rows — the
+  unified replacement for the loud pencil + red trash-circle icon pair
+  (`<.edit_delete_actions>`). Editing/removing an entry now reads the same on
+  every management page and matches the calm Direction A surface instead of
+  shouting. Renders a right-aligned "Edit" (brand link) and "Delete" (muted red,
+  CSRF DELETE behind a `data-confirm` prompt) text link; omit `edit_to` for
+  delete-only rows (tags). Keep the owner guard at the call site.
+  """
+  attr(:edit_to, :string, default: nil)
+  attr(:delete_to, :string, default: nil)
+  attr(:confirm, :string, default: nil)
+  attr(:class, :any, default: nil)
+
+  def row_actions(assigns) do
+    ~H"""
+    <div class={["flex items-center justify-end gap-4 text-sm font-semibold", @class]}>
+      <.link :if={@edit_to} href={@edit_to} class="text-brand-600 hover:text-brand-700">
+        {gettext("Edit")}
+      </.link>
+      <.link
+        :if={@delete_to}
+        href={@delete_to}
+        method="delete"
+        data-confirm={@confirm || gettext("Are you sure?")}
+        class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+      >
+        {gettext("Delete")}
+      </.link>
+    </div>
+    """
+  end
+
+  @doc """
+  The owner's visible path from a profile section card to its dedicated
+  management page, folded together with the public "View all" link — so swapping
+  the quiet ⋯ menu for a visible `<.add_action>` does not strand the owner with
+  no way to edit or remove existing entries. Renders one brand text link to
+  `href` (the management index): "View All (N)" once there are more entries than
+  the profile previews (`total > preview`, shown to everyone), otherwise a plain
+  "Manage" shown to the owner only when at least one entry exists. Renders
+  nothing for a visitor who already sees everything.
+  """
+  attr(:href, :any, required: true)
+  attr(:total, :integer, required: true)
+  attr(:preview, :integer, required: true)
+  attr(:owner, :boolean, default: false)
+
+  def manage_footer(assigns) do
+    ~H"""
+    <.link
+      :if={@total > @preview or (@owner and @total >= 1)}
+      href={@href}
+      class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+    >
+      <%= if @total > @preview do %>
+        {gettext("View All")} ({compact_count(@total)})
+      <% else %>
+        {gettext("Manage")}
+      <% end %>
+    </.link>
+    """
+  end
+
+  @doc """
   Legacy (Track 1) card shell shared by the owned-resource index pages and the
   new/edit form wrappers: the `<div class="card-list"><section class="card">…</section></div>`
   boilerplate that used to be copy-pasted into ~30 templates, styled by
   `components.css` (not Tailwind — do not swap in utilities). The `inner_block`
   goes inside the `.card`.
 
-  Pass `add_href` for the canonical owner "Add" link (a `.card__morelink`; a falsy
-  value hides it, so `add_href={same_user?(@user, @current_user) && ~p"/…/new"}`
-  reads naturally), `add_label` to override its text. Set `empty` to render the
-  `<p class="card__empty">` empty-state line (text from `empty_text`) **instead of**
-  the inner block. Use it as `<.card_section empty={…} add_href={…}>…</.card_section>`.
+  Pass `add_href` for the owner "Add" affordance (a falsy value hides it, so
+  `add_href={same_user?(@user, @current_user) && ~p"/…/new"}` reads naturally)
+  and `add_label` to override its label. The add now follows the **unified card
+  UX**: when the section has content it is the visible `<.add_action>` in a top
+  header row (same look and spot as the profile's `<.section_header>`); when the
+  section is empty it becomes the prominent dashed `<.empty_add>` tile instead of
+  the old bottom `.card__morelink`. Set `empty` to switch to the empty state
+  (a dashed add tile when `add_href` is set, otherwise the `<p class="card__empty">`
+  line from `empty_text`). Use it as `<.card_section empty={…} add_href={…}>…</.card_section>`.
   """
   attr(:add_href, :any, default: nil)
   attr(:add_label, :string, default: nil)
@@ -746,14 +821,17 @@ defmodule VutuvWeb.UI do
     ~H"""
     <div class="card-list">
       <section class="card">
-        <%= if @empty do %>
-          <p class="card__empty">{@empty_text || gettext("Nothing here yet.")}</p>
-        <% else %>
-          {render_slot(@inner_block)}
+        <%= cond do %>
+          <% @empty and @add_href -> %>
+            <.empty_add href={@add_href}>{@add_label || gettext("Add")}</.empty_add>
+          <% @empty -> %>
+            <p class="card__empty">{@empty_text || gettext("Nothing here yet.")}</p>
+          <% true -> %>
+            <.empty_add :if={@add_href} href={@add_href} class="mb-4">
+              {@add_label || gettext("Add")}
+            </.empty_add>
+            {render_slot(@inner_block)}
         <% end %>
-        <.link :if={@add_href} href={@add_href} class="card__morelink">
-          {@add_label || gettext("Add")}
-        </.link>
       </section>
     </div>
     """

@@ -10,6 +10,7 @@
 <.card_section
   empty={Enum.empty?(@work_experience)}
   add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/work_experiences/new"}
+  add_label={gettext("Add work experience")}
 >
   <%= render "card_list.html", assigns %>
 </.card_section>

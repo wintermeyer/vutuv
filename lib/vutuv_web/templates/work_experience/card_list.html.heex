@@ -1,19 +1,17 @@
 <ol>
 <%= for job <- @work_experience do %>
   <li class="job">
-    <h2 class="job__title"><%= link job.title, to: ~p"/#{@user}/work_experiences/#{job}" %>
-      <%= if same_user?(@user, @current_user) do %>
-        <.edit_delete_actions
-          class="job__edit"
-          edit_to={~p"/#{@user}/work_experiences/#{job}/edit"}
-          delete_to={~p"/#{@user}/work_experiences/#{job}"}
-        />
-      <% end %>
-    </h2>
+    <h2 class="job__title"><%= link job.title, to: ~p"/#{@user}/work_experiences/#{job}" %></h2>
     <span class="job__organization"><%= job.organization %></span>
     <span class="job__date">
       <%= format_duration(job.start_month, job.start_year, job.end_month, job.end_year) %>
     </span>
+    <.row_actions
+      :if={same_user?(@user, @current_user)}
+      class="mt-2"
+      edit_to={~p"/#{@user}/work_experiences/#{job}/edit"}
+      delete_to={~p"/#{@user}/work_experiences/#{job}"}
+    />
   </li>
 <% end %>
 </ol>

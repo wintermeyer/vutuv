@@ -9,12 +9,12 @@
 />
 
 <.card_section>
-  <%= if same_user?(@user, @current_user) do %>
-    <.edit_delete_actions
-      edit_to={~p"/#{@user}/links/#{@url}/edit"}
-      delete_to={~p"/#{@user}/links/#{@url}"}
-    />
-  <% end %>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/#{@user}/links/#{@url}/edit"}
+    delete_to={~p"/#{@user}/links/#{@url}"}
+  />
 
   <h1><%= gettext("URL") %></h1>
   <p><%= link @url.value, to: @url.value %></p>

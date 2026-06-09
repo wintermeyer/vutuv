@@ -120,10 +120,13 @@ the resulting ~200px rail width. --%>
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed
     composer, which the owner's "Add" link points to) --%>
     <.card :if={@posts != [] or same_user?(@user, @current_user)} id="profile-posts">
-      <.section_header
-        title={gettext("Posts")}
-        add_href={same_user?(@user, @current_user) && ~p"/feed"}
-      />
+      <.section_header title={gettext("Posts")} />
+
+      <%!-- Compose affordance on top, the convention everywhere (the feed opens
+      in the /feed composer). --%>
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/feed"} class={@posts != [] && "mb-4"}>
+        {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
+      </.empty_add>
 
       <div :if={@posts != []} class="divide-y divide-slate-100 dark:divide-slate-800">
         <.post_card
@@ -139,8 +142,6 @@ the resulting ~200px rail width. --%>
         />
       </div>
 
-      <.empty_add :if={@posts == []} href={~p"/feed"}>{gettext("Write your first post")}</.empty_add>
-
       <%!-- Content navigation: only when there is more than the profile shows. --%>
       <.link
         :if={@posts_total > length(@posts)}
@@ -153,17 +154,14 @@ the resulting ~200px rail width. --%>
 
     <%!-- Skills & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
-      <%!-- Owner actions live in the quiet ⋯ card menu; tags have no edit
-      action, so "Manage entries" leads to the page where they can be
-      removed. --%>
-      <.section_header title={gettext("Skills & endorsements")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-skills-menu">
-            <:item href={~p"/#{@user}/tags/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/tags"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <%!-- Skills use the same dashed add tile as every other card; "Manage"
+      (manage_footer) leads to the page where tags can be removed (tags have no
+      edit form). --%>
+      <.section_header title={gettext("Skills & endorsements")} />
+
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/tags/new"} class={Enum.count(@user_tags) > 0 && "mb-4"}>
+        {gettext("Add a skill")}
+      </.empty_add>
 
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
         <div :for={user_tag <- @user_tags} class="inline-flex items-center">
@@ -183,45 +181,23 @@ the resulting ~200px rail width. --%>
         </div>
       </div>
 
-      <%!-- Quick add form for brand-new profiles (inline flex → raw input per the recipe) --%>
-      <.form
-        :if={same_user?(@user, @current_user) and Enum.count(@user_tags) == 0}
-        for={%{}}
-        as={:tags}
-        action={~p"/#{@user}/tags_create"}
-        class="mt-2 flex gap-2"
-      >
-        <input
-          type="text"
-          name="tags[tags]"
-          id="tags_tags"
-          placeholder={gettext("PHP, JavaScript, Tap Dancing, Origami, Recruiting")}
-          class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-        />
-        <.button type="submit">{gettext("Add")}</.button>
-      </.form>
-
-      <.link
-        :if={@totals.user_tags > 10}
+      <.manage_footer
         href={~p"/#{@user}/tags"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.user_tags)})
-      </.link>
+        total={@totals.user_tags}
+        preview={10}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <%!-- Experience --%>
     <.card :if={@work_experience != [] or same_user?(@user, @current_user)} id="profile-experience">
-      <.section_header title={gettext("Experience")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-experience-menu">
-            <:item href={~p"/#{@user}/work_experiences/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/work_experiences"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Experience")} />
 
-      <.empty_add :if={@work_experience == []} href={~p"/#{@user}/work_experiences/new"}>
+      <.empty_add
+        :if={same_user?(@user, @current_user)}
+        href={~p"/#{@user}/work_experiences/new"}
+        class={@work_experience != [] && "mb-4"}
+      >
         {gettext("Add work experience")}
       </.empty_add>
 
@@ -270,13 +246,12 @@ the resulting ~200px rail width. --%>
         </div>
       </div>
 
-      <.link
-        :if={@totals.jobs > 3}
+      <.manage_footer
         href={~p"/#{@user}/work_experiences"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.jobs)})
-      </.link>
+        total={@totals.jobs}
+        preview={3}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <%!-- Links: preview cards built from the page screenshots that
@@ -284,14 +259,10 @@ the resulting ~200px rail width. --%>
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
     to the bundled placeholder while a screenshot is still missing. --%>
     <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
-      <.section_header title={gettext("Links")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-links-menu">
-            <:item href={~p"/#{@user}/links/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/links"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Links")} />
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/links/new"} class={@totals.links > 0 && "mb-4"}>
+        {gettext("Add a link")}
+      </.empty_add>
       <%!-- sm:gap-x-18 widens only the desktop column gutter to 72px so both
       thumbnail columns line up edge-for-edge with the Followers/Following
       cards below. That row is two p-6 cards in a gap-6 grid, so its content
@@ -323,14 +294,12 @@ the resulting ~200px rail width. --%>
           </div>
         </div>
       </div>
-      <.empty_add :if={@totals.links == 0} href={~p"/#{@user}/links/new"}>{gettext("Add a link")}</.empty_add>
-      <.link
-        :if={@totals.links > 3}
+      <.manage_footer
         href={~p"/#{@user}/links"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.links)})
-      </.link>
+        total={@totals.links}
+        preview={3}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <%!-- Follower / following previews (latest 3 each, full lists behind "View All").
@@ -397,22 +366,21 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)} id="profile-contact">
-      <.section_header title={gettext("Contact")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-contact-menu">
-            <:item href={~p"/#{@user}/emails/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/emails"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Contact")} />
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/emails/new"} class={Enum.count(@emails) > 0 && "mb-4"}>
+        {gettext("Add an email address")}
+      </.empty_add>
       <ul class="space-y-1">
         <li :for={email <- @emails}>
           <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
         </li>
       </ul>
-      <.empty_add :if={Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
-        {gettext("Add an email address")}
-      </.empty_add>
+      <.manage_footer
+        href={~p"/#{@user}/emails"}
+        total={Enum.count(@emails)}
+        preview={Enum.count(@emails)}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <%!-- General info: gender + birthday; the headline already lives in the header --%>
@@ -420,13 +388,20 @@ the resulting ~200px rail width. --%>
       :if={@user.birthdate || (@user.gender && @user.gender != "other") || same_user?(@user, @current_user)}
       id="profile-about"
     >
-      <.section_header title={gettext("General Info")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-about-menu">
-            <:item href={~p"/#{@user}/edit"}>{gettext("Edit")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <%!-- General Info has no list to add to — it edits the profile form — so
+      its dashed tile carries the pencil glyph and reads "Edit personal details"
+      once gender/birthday are set, and the plus glyph + "Add personal details"
+      while still empty. Same tile, same spot as every other card. --%>
+      <% has_general_info = @user.birthdate || (@user.gender && @user.gender != "other") %>
+      <.section_header title={gettext("General Info")} />
+      <.empty_add
+        :if={same_user?(@user, @current_user)}
+        href={~p"/#{@user}/edit"}
+        icon={if has_general_info, do: "pencil", else: "plus"}
+        class={has_general_info && "mb-4"}
+      >
+        {if has_general_info, do: gettext("Edit personal details"), else: gettext("Add personal details")}
+      </.empty_add>
       <dl class="space-y-3 text-sm">
         <div :if={@user.gender && @user.gender != "other"}>
           <dt class="text-slate-400">{gettext("Gender")}</dt>
@@ -437,89 +412,66 @@ the resulting ~200px rail width. --%>
           <dd class="font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
         </div>
       </dl>
-      <.empty_add
-        :if={!@user.birthdate and (!@user.gender or @user.gender == "other")}
-        href={~p"/#{@user}/edit"}
-      >
-        {gettext("Add personal details")}
-      </.empty_add>
     </.card>
 
     <.card
       :if={Enum.count(@user.social_media_accounts) > 0 or same_user?(@user, @current_user)}
       id="profile-social-media"
     >
-      <.section_header title={gettext("Social Media")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-social-media-menu">
-            <:item href={~p"/#{@user}/social_media_accounts/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/social_media_accounts"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Social Media")} />
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/social_media_accounts/new"} class={Enum.count(@user.social_media_accounts) > 0 && "mb-4"}>
+        {gettext("Add a social media account")}
+      </.empty_add>
       <ul class="space-y-3 text-sm">
         <li :for={account <- @user.social_media_accounts}>
           <p class="text-slate-400">{account.provider}</p>
           <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
         </li>
       </ul>
-      <.empty_add :if={Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
-        {gettext("Add a social media account")}
-      </.empty_add>
+      <.manage_footer
+        href={~p"/#{@user}/social_media_accounts"}
+        total={Enum.count(@user.social_media_accounts)}
+        preview={Enum.count(@user.social_media_accounts)}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <.card :if={@totals.numbers > 0 or same_user?(@user, @current_user)} id="profile-phone-numbers">
-      <.section_header title={gettext("Phone Numbers")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-phone-numbers-menu">
-            <:item href={~p"/#{@user}/phone_numbers/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/phone_numbers"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Phone Numbers")} />
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/phone_numbers/new"} class={@totals.numbers > 0 && "mb-4"}>
+        {gettext("Add a phone number")}
+      </.empty_add>
       <ul class="space-y-3 text-sm">
         <li :for={number <- @user.phone_numbers}>
           <p class="text-slate-400">{number.number_type}</p>
           <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
         </li>
       </ul>
-      <.empty_add :if={@totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
-        {gettext("Add a phone number")}
-      </.empty_add>
-      <.link
-        :if={@totals.numbers > 3}
+      <.manage_footer
         href={~p"/#{@user}/phone_numbers"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.numbers)})
-      </.link>
+        total={@totals.numbers}
+        preview={3}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <.card :if={@totals.addresses > 0 or same_user?(@user, @current_user)} id="profile-addresses">
-      <.section_header title={gettext("Addresses")}>
-        <:action :if={same_user?(@user, @current_user)}>
-          <.card_menu id="profile-addresses-menu">
-            <:item href={~p"/#{@user}/addresses/new"}>{gettext("Add entry")}</:item>
-            <:item href={~p"/#{@user}/addresses"}>{gettext("Manage entries")}</:item>
-          </.card_menu>
-        </:action>
-      </.section_header>
+      <.section_header title={gettext("Addresses")} />
+      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/#{@user}/addresses/new"} class={@totals.addresses > 0 && "mb-4"}>
+        {gettext("Add an address")}
+      </.empty_add>
       <ul class="space-y-3 text-sm">
         <li :for={address <- @user.addresses}>
           <p class="text-slate-400">{address.description}</p>
           <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
         </li>
       </ul>
-      <.empty_add :if={@totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
-        {gettext("Add an address")}
-      </.empty_add>
-      <.link
-        :if={@totals.addresses > 3}
+      <.manage_footer
         href={~p"/#{@user}/addresses"}
-        class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-      >
-        {gettext("View All")} ({compact_count(@totals.addresses)})
-      </.link>
+        total={@totals.addresses}
+        preview={3}
+        owner={same_user?(@user, @current_user)}
+      />
     </.card>
 
     <.card id="profile-exports">
