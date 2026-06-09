@@ -534,7 +534,7 @@ defmodule VutuvWeb.PostLive.Composer do
               placeholder={
                 gettext("Tags, comma-separated (max. %{max})", max: Posts.max_tags_per_post())
               }
-              class={[input_class(), "max-w-56 flex-1"]}
+              class={[input_class(), "min-w-56 flex-1"]}
             />
 
             <%= if @audience_locked? do %>

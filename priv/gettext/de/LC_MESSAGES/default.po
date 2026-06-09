@@ -2058,12 +2058,12 @@ msgstr "Dauer in dieser Position"
 #: lib/vutuv_web/templates/user/show.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Add a cover photo"
-msgstr ""
+msgstr "Titelbild hinzufügen"
 
 #: lib/vutuv_web/templates/user/show.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "Add cover photo"
-msgstr ""
+msgstr "Titelbild hinzufügen"
 
 #: lib/vutuv_web/views/user_html.ex:101
 #, elixir-autogen, elixir-format
@@ -2078,22 +2078,22 @@ msgstr "August"
 #: lib/vutuv_web/templates/user/show.html.heex:33
 #, elixir-autogen, elixir-format
 msgid "Change cover"
-msgstr ""
+msgstr "Titelbild ändern"
 
 #: lib/vutuv_web/templates/user/show.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Change cover photo"
-msgstr ""
+msgstr "Titelbild ändern"
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:12
 #, elixir-autogen, elixir-format
 msgid "Cover photo"
-msgstr ""
+msgstr "Titelbild"
 
 #: lib/vutuv_web/templates/user/show.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Cover photo of %{name}"
-msgstr ""
+msgstr "Titelbild von %{name}"
 
 #: lib/vutuv_web/views/user_html.ex:109
 #, elixir-autogen, elixir-format
@@ -2946,7 +2946,7 @@ msgstr "Ungültig!"
 #: lib/vutuv_web/templates/user/show.html.heex:485
 #, elixir-autogen, elixir-format
 msgid "Markdown"
-msgstr ""
+msgstr "Markdown"
 
 #: lib/vutuv_web/templates/connection/index.html.heex:86
 #, elixir-autogen, elixir-format
@@ -2956,12 +2956,12 @@ msgstr "Noch keine Kontakte."
 #: lib/vutuv_web/templates/user/show.html.heex:482
 #, elixir-autogen, elixir-format
 msgid "Other formats"
-msgstr ""
+msgstr "Andere Formate"
 
 #: lib/vutuv_web/templates/user/show.html.heex:486
 #, elixir-autogen, elixir-format
 msgid "PDF"
-msgstr ""
+msgstr "PDF"
 
 #: lib/vutuv_web/components/ui.ex:474
 #, elixir-autogen, elixir-format
@@ -2986,7 +2986,7 @@ msgstr "Gesendete Anfragen"
 #: lib/vutuv_web/templates/user/show.html.heex:484
 #, elixir-autogen, elixir-format
 msgid "Text only"
-msgstr ""
+msgstr "Nur Text"
 
 #: lib/vutuv_web/templates/post/teaser.html.heex:17
 #, elixir-autogen, elixir-format
