@@ -28,43 +28,43 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
                profile-phone-numbers-menu profile-addresses-menu)
 
   describe "profile section owner affordances" do
-    test "owner gets the dashed add tile and a Manage link per section", %{conn: conn} do
+    test "full sections show a Manage link; empty sections show the dashed add tile", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      data = insert_profile_data(user)
+      # Fill experience + links; leave phone/address/social/tags empty.
+      job = insert(:work_experience, user: user)
+      url = insert(:url, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      # The add affordance is the visible dashed tile, not a hidden ⋯ menu.
-      assert html =~ "data-empty-add"
+      # No quiet ⋯ menu anywhere; the empty cards still carry the visible tile.
       refute html =~ "data-menu"
+      assert html =~ "data-empty-add"
 
       for id <- @menu_ids do
         refute html =~ ~s(id="#{id}"), "the quiet ⋯ menu ##{id} is gone"
       end
 
-      # Every populated list section — Skills included — shows the same dashed
-      # add tile (a link to the new-entry form) and a "Manage" link to the page
-      # that carries per-row edit/delete.
+      # A full section is a clean showcase: a "Manage" link to its page, and the
+      # inline add tile is gone (adding more happens on the management page).
+      for path <- [~p"/#{user}/work_experiences", ~p"/#{user}/links"] do
+        assert html =~ ~s(href="#{path}"), "expected manage link for #{path}"
+        refute html =~ ~s(href="#{path}/new"), "the add tile is gone once #{path} has entries"
+      end
+
+      # An empty section keeps the dashed add tile (onboarding) to the new form.
       for path <- [
-            ~p"/#{user}/work_experiences",
-            ~p"/#{user}/links",
-            ~p"/#{user}/emails",
             ~p"/#{user}/phone_numbers",
             ~p"/#{user}/addresses",
             ~p"/#{user}/social_media_accounts",
             ~p"/#{user}/tags"
           ] do
-        assert html =~ ~s(href="#{path}/new"), "expected add tile for #{path}"
-        assert html =~ ~s(href="#{path}"), "expected manage link for #{path}"
+        assert html =~ ~s(href="#{path}/new"), "expected add tile for empty #{path}"
       end
 
-      # General Info edits the user via /edit (its tile + the General Info card).
+      # General Info edits the user via /edit; per-row pencils stay off the profile.
       assert html =~ ~s(href="#{~p"/#{user}/edit"}")
-
-      # The per-row pencils stay off the profile; editing goes through the
-      # manage pages.
-      refute html =~ ~s(href="#{~p"/#{user}/work_experiences/#{data.job}/edit"}")
-      refute html =~ ~s(href="#{~p"/#{user}/links/#{data.url}/edit"}")
+      refute html =~ ~s(href="#{~p"/#{user}/work_experiences/#{job}/edit"}")
+      refute html =~ ~s(href="#{~p"/#{user}/links/#{url}/edit"}")
     end
 
     test "a logged-in visitor sees the sections but no card menus", %{conn: conn} do

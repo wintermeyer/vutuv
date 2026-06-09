@@ -239,23 +239,21 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The owner's **add tile** — the single, consistent add affordance for every
-  owner card on both tracks: a full-width dashed-outline tile (plus glyph + a
-  clear label) that links straight to the new-entry form. It is shown the same
-  way whether the card is **empty** or already has entries (rendered below the
-  entries when populated), so a non-technical owner sees one obvious place to
-  click everywhere — no separate header button, no hidden ⋯ menu. `<.card_section>`
-  renders it automatically on the legacy management pages; on the profile keep
-  the `:if={same_user?(…)}` owner guard at the call site (and pass
-  `class="mt-4"` when entries sit above it for spacing).
+  The owner's **add tile** / onboarding scaffold: a full-width dashed-outline
+  tile (plus glyph + a clear label) that links straight to the new-entry form, so
+  a non-technical owner sees an obvious place to start filling a section — no
+  header button, no hidden ⋯ menu.
 
-  Pass the call-to-action label as the inner block (e.g. `gettext("Add work
-  experience")`). `icon` switches the glyph: `"plus"` (default) for add, or
-  `"pencil"` for the rare edit-not-add card (General Info → the profile form).
-  Carries a `data-empty-add` hook for tests.
+  On the **profile** it shows only while the card is **empty** (guard with
+  `:if={same_user?(…) and <collection empty>}`); once there are entries the card
+  is a clean showcase with a `<.card_footer_link>` "Verwalten ›" instead. The
+  exceptions are Beiträge (compose tile stays always) and General Info (empty
+  tile graduates to an "Ändern ›" footer). On the legacy **management pages**
+  `<.card_section>` renders it above the list, empty or populated (those are the
+  editor). Pass the call-to-action label as the inner block (e.g.
+  `gettext("Add work experience")`); carries a `data-empty-add` hook for tests.
   """
   attr(:href, :any, required: true)
-  attr(:icon, :string, default: "plus", values: ~w(plus pencil))
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
@@ -273,11 +271,8 @@ defmodule VutuvWeb.UI do
       ]}
       {@rest}
     >
-      <svg :if={@icon == "plus"} class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-      <svg :if={@icon == "pencil"} class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Z" />
       </svg>
       {render_slot(@inner_block)}
     </.link>
@@ -764,14 +759,46 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The quiet card **footer link** — the "View all (N)" / "Manage" / "View all N
+  posts" navigation that sits below a card's entries. A centered, muted text
+  link (slate → brand on hover) with a hairline top divider and a trailing
+  chevron, so it reads as a calm footer subordinate to the prominent dashed
+  `<.empty_add>` tile up top. Defining the look once keeps every card *aus einem
+  Guss* instead of pairing the styled add tile with a bare brand link. Pass
+  `href` and the label as the inner block; guard rendering with `:if` at the call
+  site. `<.manage_footer>` wraps it with the owner/visitor label logic.
+  """
+  attr(:href, :any, required: true)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def card_footer_link(assigns) do
+    ~H"""
+    <.link
+      href={@href}
+      class={[
+        "mt-4 flex items-center justify-center gap-1 border-t border-slate-100 pt-3 text-sm font-medium text-slate-500 transition",
+        "hover:text-brand-600 dark:border-slate-800 dark:text-slate-400 dark:hover:text-brand-400"
+      ]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+      <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+      </svg>
+    </.link>
+    """
+  end
+
+  @doc """
   The owner's visible path from a profile section card to its dedicated
   management page, folded together with the public "View all" link — so swapping
   the quiet ⋯ menu for a visible `<.add_action>` does not strand the owner with
-  no way to edit or remove existing entries. Renders one brand text link to
-  `href` (the management index): "View All (N)" once there are more entries than
-  the profile previews (`total > preview`, shown to everyone), otherwise a plain
-  "Manage" shown to the owner only when at least one entry exists. Renders
-  nothing for a visitor who already sees everything.
+  no way to edit or remove existing entries. A `<.card_footer_link>` reading
+  "View All (N)" once there are more entries than the profile previews
+  (`total > preview`, shown to everyone), otherwise a plain "Manage" shown to the
+  owner only when at least one entry exists. Renders nothing for a visitor who
+  already sees everything.
   """
   attr(:href, :any, required: true)
   attr(:total, :integer, required: true)
@@ -780,17 +807,13 @@ defmodule VutuvWeb.UI do
 
   def manage_footer(assigns) do
     ~H"""
-    <.link
-      :if={@total > @preview or (@owner and @total >= 1)}
-      href={@href}
-      class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
-    >
+    <.card_footer_link :if={@total > @preview or (@owner and @total >= 1)} href={@href}>
       <%= if @total > @preview do %>
         {gettext("View All")} ({compact_count(@total)})
       <% else %>
         {gettext("Manage")}
       <% end %>
-    </.link>
+    </.card_footer_link>
     """
   end
 

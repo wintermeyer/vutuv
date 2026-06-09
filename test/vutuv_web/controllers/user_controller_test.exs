@@ -187,18 +187,21 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ ~s(id="profile-following")
   end
 
-  test "the owner sees add links for every profile section", %{conn: conn} do
+  test "the owner sees the add tile on each still-empty profile section", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
 
+    # A brand-new account's empty sections each carry the dashed add tile into
+    # their new-entry form. (Contact already holds the registration email, so it
+    # shows the "Manage" footer instead of the tile.)
     for path <- [
-          ~p"/#{user}/emails/new",
           ~p"/#{user}/phone_numbers/new",
           ~p"/#{user}/links/new",
           ~p"/#{user}/social_media_accounts/new",
           ~p"/#{user}/addresses/new",
-          ~p"/#{user}/work_experiences/new"
+          ~p"/#{user}/work_experiences/new",
+          ~p"/#{user}/tags/new"
         ] do
       assert html =~ path
     end
