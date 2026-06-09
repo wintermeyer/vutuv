@@ -2,8 +2,9 @@
   <.form_error changeset={@changeset} />
 
 <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
-  <%= label f, :value, gettext("Tag name"), class: "control-label" %>
-  <%= text_input f, :value, class: "form-control", placeholder: gettext("e.g. JavaScript") %>
+  <%= label f, :value, gettext("Tags"), class: "control-label" %>
+  <%= text_input f, :value, class: "form-control", placeholder: gettext("PHP, JavaScript, Tap Dancing, Origami, Recruiting") %>
+  <p class="editform__hint"><%= gettext("Separate multiple tags with commas.") %></p>
   <%= error_tag f, :value %>
   <%= error_tag @changeset, :user_id_tag_id %>
 

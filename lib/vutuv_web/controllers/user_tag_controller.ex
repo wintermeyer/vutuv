@@ -30,18 +30,66 @@ defmodule VutuvWeb.UserTagController do
     render(conn, "new.html", changeset: changeset)
   end
 
+  # Accepts a single tag or several comma-separated ones ("PHP, JavaScript, Go").
+  # This is the one place tags are added — the old non-RESTful
+  # `POST /:slug/tags_create` quick-add endpoint folded into it. A single tag
+  # keeps the inline-error re-render (a duplicate / invalid name shown on the
+  # form); a batch redirects with a count of how many were added.
   def create(conn, %{"tag_param" => tag_param}) do
-    result =
-      conn.assigns[:current_user]
-      |> Ecto.build_assoc(:user_tags, %{})
-      |> UserTag.changeset()
-      |> Tag.create_or_link_tag(tag_param)
-      |> Repo.insert()
+    user = conn.assigns[:current_user]
 
-    ControllerHelpers.save(conn, result,
+    names =
+      (tag_param["value"] || "")
+      |> String.split(",")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    case names do
+      # Nothing usable typed: re-render the form with the error banner. (Never
+      # hand a nil/blank value to create_or_link_tag — it would crash on
+      # String.downcase/1.)
+      [] ->
+        changeset = %UserTag{} |> UserTag.changeset(%{}) |> Map.put(:action, :insert)
+        render(conn, "new.html", changeset: changeset)
+
+      [single] ->
+        create_single(conn, user, single)
+
+      many ->
+        results = Enum.map(many, &insert_tag(user, &1))
+        failures = Enum.count(results, &match?({:error, _}, &1))
+
+        conn
+        |> put_flash(:info, tags_added_flash(length(results) - failures, failures))
+        |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
+    end
+  end
+
+  defp create_single(conn, user, value) do
+    ControllerHelpers.save(conn, insert_tag(user, value),
       flash: gettext("User tag created successfully."),
       redirect_to: ~p"/#{conn.assigns[:user]}/tags",
       render: "new.html"
+    )
+  end
+
+  defp insert_tag(user, value) do
+    user
+    |> Ecto.build_assoc(:user_tags, %{})
+    |> UserTag.changeset()
+    |> Tag.create_or_link_tag(%{"value" => value})
+    |> Repo.insert()
+  end
+
+  defp tags_added_flash(successes, 0) do
+    ngettext("Added %{count} tag.", "Added %{count} tags.", successes, count: successes)
+  end
+
+  defp tags_added_flash(successes, failures) do
+    gettext(
+      "Added %{successes} of %{total} tags (the rest were duplicates or invalid).",
+      successes: successes,
+      total: successes + failures
     )
   end
 

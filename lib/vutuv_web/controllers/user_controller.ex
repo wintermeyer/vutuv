@@ -1,8 +1,8 @@
 defmodule VutuvWeb.UserController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :show, :tags_create])
+  plug(VutuvWeb.Plug.UserResolveSlug when action in [:edit, :update, :show])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :confirm_delete])
-  plug(VutuvWeb.Plug.AuthUser when action in [:edit, :update, :tags_create])
+  plug(VutuvWeb.Plug.AuthUser when action in [:edit, :update])
   plug(VutuvWeb.Plug.EnsureActivated when action not in [:delete, :confirm_delete])
   import VutuvWeb.UserHelpers
 
@@ -15,7 +15,6 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Social.Connection
   alias Vutuv.Tags.Tag
-  alias Vutuv.Tags.UserTag
   alias VutuvWeb.RateLimit
 
   plug(:scrub_params, "user" when action in [:update])
@@ -243,48 +242,6 @@ defmodule VutuvWeb.UserController do
     end
   end
 
-  def tags_create(conn, %{"tags" => %{"tags" => tags}}) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(user_tags: [:tag])
-
-    tag_list =
-      tags
-      |> String.split(",")
-
-    results =
-      for(tag <- tag_list) do
-        capitalized_tag =
-          tag
-          |> String.trim()
-
-        user
-        |> Ecto.build_assoc(:user_tags, %{})
-        |> UserTag.changeset()
-        |> Tag.create_or_link_tag(%{"value" => capitalized_tag})
-        |> Repo.insert()
-      end
-
-    failures =
-      Enum.reduce(results, 0, fn {result, _}, acc ->
-        case result do
-          :error -> acc + 1
-          :ok -> acc
-        end
-      end)
-
-    conn
-    |> put_flash(
-      :info,
-      Gettext.gettext(
-        VutuvWeb.Gettext,
-        "Successfully added %{successes} tags with %{failures} failures.",
-        successes: Enum.count(tag_list) - failures,
-        failures: failures
-      )
-    )
-    |> redirect(to: ~p"/#{user}")
-  end
 
   def follow_back(conn, %{"id" => id}) do
     user = Repo.get!(User, id)

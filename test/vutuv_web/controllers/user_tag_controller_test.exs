@@ -1,6 +1,47 @@
 defmodule VutuvWeb.UserTagControllerTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias Vutuv.Tags.UserTag
+
+  defp tag_count(user),
+    do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
+
+  describe "create (the one place tags are added — single or comma-separated)" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, conn: conn, user: user}
+    end
+
+    test "adds a single tag and redirects to the tags page", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir"})
+
+      assert redirected_to(conn) == ~p"/#{user}/tags"
+      assert tag_count(user) == 1
+    end
+
+    test "adds several comma-separated tags at once", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, Phoenix , Ruby on Rails"})
+
+      assert redirected_to(conn) == ~p"/#{user}/tags"
+      # The blank-padded middle entry is trimmed, not dropped.
+      assert tag_count(user) == 3
+    end
+
+    test "ignores empty segments between commas", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, , Ruby,"})
+
+      assert redirected_to(conn) == ~p"/#{user}/tags"
+      assert tag_count(user) == 2
+    end
+
+    test "re-renders the form with an error when nothing usable is typed", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: ""})
+
+      assert html_response(conn, 200) =~ "editform"
+      assert tag_count(user) == 0
+    end
+  end
+
   # `UserTagController.resolve_slug` is a plug that runs before every action.
   # When the slug does not resolve to a user tag it must render a clean 404 and
   # *halt*: without the halt the pipeline falls through into `show/2` / `delete/2`

@@ -187,8 +187,6 @@ defmodule VutuvWeb.Router do
   scope "/", VutuvWeb do
     pipe_through(:browser)
 
-    post("/:slug/tags_create", UserController, :tags_create)
-
     # No :index — there is no public user directory; the admin panel lists
     # unverified users and search covers discovery. No :new/:create either —
     # registration is the landing-page form (POST /new_registration); the
