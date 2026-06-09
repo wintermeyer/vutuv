@@ -12,11 +12,11 @@ defmodule Vutuv.Factory do
     }
   end
 
-  # A validated user without the matching `Slug` row. Many context tests just
-  # need an account that passes the validated gate; only slug-routed pages also
-  # need the `Slug` row that `insert_validated_user/1` adds.
-  def validated_user_factory do
-    struct!(user_factory(), validated?: true)
+  # A activated user without the matching `Slug` row. Many context tests just
+  # need an account that passes the activated gate; only slug-routed pages also
+  # need the `Slug` row that `insert_activated_user/1` adds.
+  def activated_user_factory do
+    struct!(user_factory(), activated?: true)
   end
 
   def email_factory do
@@ -38,11 +38,11 @@ defmodule Vutuv.Factory do
   end
 
   @doc """
-  Inserts a validated user plus the enabled `Slug` row matching `active_slug` —
+  Inserts a activated user plus the enabled `Slug` row matching `active_slug` —
   the shape every slug-routed page needs to resolve the user.
   """
-  def insert_validated_user(attrs \\ []) do
-    user = insert(:validated_user, attrs)
+  def insert_activated_user(attrs \\ []) do
+    user = insert(:activated_user, attrs)
     insert(:slug, value: user.active_slug, disabled: false, user: user)
     user
   end

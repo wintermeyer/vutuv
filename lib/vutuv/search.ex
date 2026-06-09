@@ -19,7 +19,7 @@ defmodule Vutuv.Search do
           from(t in SearchTerm,
             left_join: u in assoc(t, :user),
             where:
-              (is_nil(u.validated?) or u.validated? == true) and
+              (is_nil(u.activated?) or u.activated? == true) and
                 (like(t.value, ^"#{value}%") or ^cologne_fuzzy_value == t.value or
                    ^soundex_fuzzy_value == t.value)
           )
@@ -47,7 +47,7 @@ defmodule Vutuv.Search do
     Repo.all(
       from(u in User,
         join: e in assoc(u, :emails),
-        where: (is_nil(u.validated?) or u.validated? == true) and ^value == e.value
+        where: (is_nil(u.activated?) or u.activated? == true) and ^value == e.value
       )
     )
     # Filters duplicates

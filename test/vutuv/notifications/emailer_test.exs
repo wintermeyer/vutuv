@@ -52,16 +52,16 @@ defmodule Vutuv.Notifications.EmailerTest do
   end
 
   describe "transactional builders carry the robot headers" do
-    test "registration email (unvalidated user)" do
-      user = insert(:user, validated?: false, locale: "en")
+    test "registration email (unactivated user)" do
+      user = insert(:user, activated?: false, locale: "en")
 
       @pin
       |> Emailer.login_email("reg@example.com", user)
       |> assert_robot_headers()
     end
 
-    test "login email (validated user)" do
-      user = insert(:user, validated?: true, locale: "en")
+    test "login email (activated user)" do
+      user = insert(:user, activated?: true, locale: "en")
 
       @pin
       |> Emailer.login_email("login@example.com", user)
@@ -121,7 +121,7 @@ defmodule Vutuv.Notifications.EmailerTest do
            Emailer.login_email(
              @pin,
              "u@example.com",
-             insert(:user, validated?: true, locale: loc)
+             insert(:user, activated?: true, locale: loc)
            )
          end},
         {"registration",
@@ -129,7 +129,7 @@ defmodule Vutuv.Notifications.EmailerTest do
            Emailer.login_email(
              @pin,
              "u@example.com",
-             insert(:user, validated?: false, locale: loc)
+             insert(:user, activated?: false, locale: loc)
            )
          end},
         {"email creation",
@@ -159,7 +159,7 @@ defmodule Vutuv.Notifications.EmailerTest do
 
     test "the German login subject names a PIN, not a link" do
       Gettext.put_locale(VutuvWeb.Gettext, "de")
-      user = insert(:user, validated?: true, locale: "de")
+      user = insert(:user, activated?: true, locale: "de")
 
       assert Emailer.login_email(@pin, "login@example.com", user).subject == "vutuv Login-PIN"
     end
@@ -172,7 +172,7 @@ defmodule Vutuv.Notifications.EmailerTest do
 
     test "a German recipient gets a German subject from an English sender" do
       Gettext.put_locale(VutuvWeb.Gettext, "en")
-      user = insert(:user, validated?: true, locale: "de")
+      user = insert(:user, activated?: true, locale: "de")
 
       assert Emailer.login_email(@pin, "login@example.com", user).subject == "vutuv Login-PIN"
     end
@@ -207,7 +207,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
 
     test "the login email points PIN renewal at the configured login URL" do
-      user = insert(:user, validated?: true, locale: "en")
+      user = insert(:user, activated?: true, locale: "en")
 
       body = Emailer.login_email(@pin, "login@example.com", user).text_body
 

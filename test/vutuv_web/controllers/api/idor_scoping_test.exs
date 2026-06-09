@@ -17,8 +17,8 @@ defmodule VutuvWeb.Api.IdorScopingTest do
   #     `assert_error_sent/2`.
 
   setup do
-    owner = insert_validated_user(active_slug: "owner-slug")
-    other = insert_validated_user(active_slug: "other-slug")
+    owner = insert_activated_user(active_slug: "owner-slug")
+    other = insert_activated_user(active_slug: "other-slug")
 
     %{owner: owner, other: other}
   end

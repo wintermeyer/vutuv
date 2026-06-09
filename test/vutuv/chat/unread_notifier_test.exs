@@ -13,9 +13,9 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
   alias Vutuv.Chat
   alias Vutuv.Chat.{Message, Participant}
 
-  # A validated user with an email row (the unread notifier mails the recipient).
+  # A activated user with an email row (the unread notifier mails the recipient).
   defp user(attrs \\ []) do
-    user = insert(:validated_user, attrs)
+    user = insert(:activated_user, attrs)
     insert(:email, user: user)
     user
   end

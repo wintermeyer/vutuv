@@ -37,7 +37,7 @@ defmodule VutuvWeb.ConnCase do
 
         user =
           user
-          |> Ecto.Changeset.change(%{administrator: true})
+          |> Ecto.Changeset.change(%{admin?: true})
           |> Repo.update!()
 
         conn = login_via_pin(conn, "admin@example.com")

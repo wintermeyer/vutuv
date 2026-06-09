@@ -54,14 +54,14 @@ defmodule Vutuv.Social do
     |> Repo.delete!()
   end
 
-  # The public pages only count/show follows from validated accounts (nil
+  # The public pages only count/show follows from activated accounts (nil
   # covers legacy rows that predate the flag), matching Connection.latest/1.
 
   def follower_count(user) do
     Repo.one(
       from(c in Connection,
         join: u in assoc(c, :follower),
-        where: (is_nil(u.validated?) or u.validated? == true) and c.followee_id == ^user.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and c.followee_id == ^user.id,
         select: count(c.id)
       )
     )
@@ -71,7 +71,7 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Connection,
         join: u in assoc(c, :followee),
-        where: (is_nil(u.validated?) or u.validated? == true) and c.follower_id == ^user.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and c.follower_id == ^user.id,
         select: count(c.id)
       )
     )

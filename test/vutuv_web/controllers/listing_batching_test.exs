@@ -27,8 +27,8 @@ defmodule VutuvWeb.ListingBatchingTest do
 
   describe "GET /listings/most_followed_users" do
     test "renders each user's name and current-job line", %{conn: conn} do
-      alice = insert_validated_user(first_name: "Alice") |> with_job("Captain", "Acme")
-      bob = insert_validated_user(first_name: "Bob")
+      alice = insert_activated_user(first_name: "Alice") |> with_job("Captain", "Acme")
+      bob = insert_activated_user(first_name: "Bob")
       # Give Alice a follower so she sorts to the top, exercising the listing.
       insert(:connection, follower: bob, followee: alice)
 
@@ -42,7 +42,7 @@ defmodule VutuvWeb.ListingBatchingTest do
 
     test "query count stays constant as the user count grows", %{conn: conn} do
       for n <- 1..15 do
-        insert_validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
       end
 
       conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
@@ -50,7 +50,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       {_, few} = count_queries(fn -> conn_for.() end)
 
       for n <- 16..40 do
-        insert_validated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
       end
 
       {_, many} = count_queries(fn -> conn_for.() end)
@@ -65,9 +65,9 @@ defmodule VutuvWeb.ListingBatchingTest do
 
   describe "GET /:slug/followers and /:slug/following" do
     test "render the follower/followee job lines", %{conn: conn} do
-      owner = insert_validated_user(first_name: "Owner")
-      follower = insert_validated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
-      followee = insert_validated_user(first_name: "Idol") |> with_job("Star", "Fame Inc")
+      owner = insert_activated_user(first_name: "Owner")
+      follower = insert_activated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
+      followee = insert_activated_user(first_name: "Idol") |> with_job("Star", "Fame Inc")
 
       insert(:connection, follower: follower, followee: owner)
       insert(:connection, follower: owner, followee: followee)
@@ -92,13 +92,13 @@ defmodule VutuvWeb.ListingBatchingTest do
       # The recommended user the viewer already follows; their work line and the
       # unfollow control both come from the batched assigns.
       recommended =
-        insert_validated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
+        insert_activated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
 
       insert(:connection, follower: viewer, followee: recommended)
 
       # The profile being viewed; Social.most_followed_users/1 orders by
       # follower count, so give the recommended user a follower to surface them.
-      owner = insert_validated_user(first_name: "Owner")
+      owner = insert_activated_user(first_name: "Owner")
       insert(:connection, follower: owner, followee: recommended)
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
@@ -117,7 +117,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       tag = insert(:tag)
 
       tag_user = fn n ->
-        user = insert_validated_user(first_name: "Tagged#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        user = insert_activated_user(first_name: "Tagged#{n}") |> with_job("Eng#{n}", "Org#{n}")
         insert(:user_tag, user: user, tag: tag)
       end
 

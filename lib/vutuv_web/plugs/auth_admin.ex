@@ -9,7 +9,7 @@ defmodule VutuvWeb.Plug.AuthAdmin do
     admin?(conn, conn.assigns[:current_user])
   end
 
-  defp admin?(conn, %Vutuv.Accounts.User{administrator: true}), do: conn
+  defp admin?(conn, %Vutuv.Accounts.User{admin?: true}), do: conn
 
   defp admin?(conn, _), do: VutuvWeb.ControllerHelpers.render_error(conn, 403)
 end

@@ -24,7 +24,7 @@ defmodule VutuvWeb.Router do
     # does not go through this pipeline and stays crawlable.
     plug(Plugs.NoIndex)
     plug(Plugs.UserResolveSlug)
-    plug(Plugs.EnsureValidated)
+    plug(Plugs.EnsureActivated)
   end
 
   # Gates the whole /admin scope in one place, so a new admin controller
@@ -77,8 +77,12 @@ defmodule VutuvWeb.Router do
 
     # Login/logout under the names humans type. The controller still speaks
     # "session": POST /login handles both PIN steps, DELETE /logout signs out.
+    # /login/resend mails a fresh PIN; /login/cancel abandons a pending login so
+    # the visitor is no longer pinned to the PIN-entry form.
     get("/login", SessionController, :new)
     post("/login", SessionController, :create)
+    post("/login/resend", SessionController, :resend)
+    post("/login/cancel", SessionController, :cancel)
     delete("/logout", SessionController, :delete)
 
     # PIN-entry step for the account-deletion flow (issue #759).
@@ -188,7 +192,7 @@ defmodule VutuvWeb.Router do
     # No :index — there is no public user directory; the admin panel lists
     # unverified users and search covers discovery. No :new/:create either —
     # registration is the landing-page form (POST /new_registration); the
-    # UserController versions were unreachable (EnsureValidated 404'd them).
+    # UserController versions were unreachable (EnsureActivated 404'd them).
     resources "/", UserController, param: "slug", except: [:index, :new, :create] do
       pipe_through(:user_pipe)
       resources("/emails", EmailController)

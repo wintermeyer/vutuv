@@ -12,7 +12,7 @@ defmodule VutuvWeb.JsonLdXssTest do
   setup %{conn: conn} do
     payload = "</script><script>alert(1)</script>"
 
-    user = insert_validated_user(first_name: "Eve", last_name: payload)
+    user = insert_activated_user(first_name: "Eve", last_name: payload)
 
     {:ok, conn: conn, user: user, payload: payload}
   end

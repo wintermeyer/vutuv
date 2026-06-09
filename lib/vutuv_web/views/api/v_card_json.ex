@@ -13,7 +13,7 @@ defmodule VutuvWeb.Api.VCardJSON do
       ";" <>
       sanitize(v_card.first_name) <>
       ";" <>
-      sanitize(v_card.middlename) <>
+      sanitize(v_card.middle_name) <>
       ";" <>
       sanitize(v_card.honorific_prefix) <>
       "\nFN:" <>

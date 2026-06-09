@@ -6,7 +6,7 @@ defmodule VutuvWeb.Admin.UserController do
 
   def update(conn, %{"user_id" => user_id}) do
     user = Repo.get!(User, user_id)
-    changeset = Ecto.Changeset.cast(user, %{verified: true}, [:verified])
+    changeset = Ecto.Changeset.cast(user, %{identity_verified?: true}, [:identity_verified?])
 
     case Repo.update(changeset) do
       {:ok, user} ->

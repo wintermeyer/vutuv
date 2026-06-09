@@ -12,7 +12,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
 
   alias Vutuv.Posts
 
-  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([validated?: true], attrs))
+  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
 
   defp feed_actions(conn, post) do
     {:ok, feed, _html} = live(conn, ~p"/feed")
@@ -155,6 +155,16 @@ defmodule VutuvWeb.PostActionsLiveTest do
       html = actions |> element(like) |> render()
       assert html =~ ~s(data-count="like")
       refute html =~ "invisible"
+    end
+
+    # The four controls spread across the full column width (X-style) rather
+    # than clumping on the left, so the tap targets sit far apart.
+    test "the action row spreads the buttons across the full width", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "spread wide"})
+      %{view: actions} = feed_actions(conn, post)
+
+      assert render(actions) =~ "justify-between"
     end
 
     test "your own like in another session fills the heart here too", %{conn: conn} do

@@ -15,7 +15,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
 
   describe "resolve_slug on an unknown user-tag slug" do
     test "create returns a clean 404 and stores nothing", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
 
       conn =
         post(conn, ~p"/#{user}/user_tag_endorsements", id: "does-not-exist")
@@ -28,8 +28,8 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
 
   describe "owner-scoping of the user-tag slug" do
     test "a tag belonging to another user does not resolve under this user", %{conn: conn} do
-      user = insert_validated_user()
-      other = insert_validated_user()
+      user = insert_activated_user()
+      other = insert_activated_user()
       tag = insert(:tag, name: "Elixir", slug: "elixir")
       insert(:user_tag, user: other, tag: tag)
 
@@ -44,7 +44,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
 
   describe "require_user_logged_in" do
     test "create on a resolvable tag 404s when logged out (does not redirect)", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       tag = insert(:tag, name: "Elixir", slug: "elixir")
       insert(:user_tag, user: user, tag: tag)
 

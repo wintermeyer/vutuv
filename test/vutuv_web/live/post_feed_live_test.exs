@@ -10,7 +10,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   alias Vutuv.Posts
 
-  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([validated?: true], attrs))
+  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
 
   describe "mount" do
     test "redirects logged-out visitors to the login page", %{conn: conn} do

@@ -1,7 +1,7 @@
 defmodule VutuvWeb.ErrorHTML do
   @moduledoc """
   Styled error pages. Rendered inside the app layout when a plug halts a
-  request (`Plug.All404`, `EnsureValidated`, authorization checks), and bare
+  request (`Plug.All404`, `EnsureActivated`, authorization checks), and bare
   (config `render_errors` has `layout: false`) when Phoenix itself rescues an
   exception — the markup must read fine either way, so it leans on the
   `.error-page` classes from `components.css` and stays sensible without them.

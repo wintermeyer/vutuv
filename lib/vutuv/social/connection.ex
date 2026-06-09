@@ -40,8 +40,8 @@ defmodule Vutuv.Social.Connection do
       join: f in assoc(u, :followee),
       join: f2 in assoc(u, :follower),
       where:
-        (is_nil(f.validated?) or f.validated? == true) and
-          (is_nil(f2.validated?) or f2.validated? == true),
+        (is_nil(f.activated?) or f.activated? == true) and
+          (is_nil(f2.activated?) or f2.activated? == true),
       order_by: [desc: :inserted_at],
       limit: ^n
     )

@@ -27,7 +27,7 @@ defmodule VutuvWeb.SearchTermControllerTest do
     # exception propagates rather than rendering, so assert the sent status with
     # `assert_error_sent/2`.
     test "404s when the id belongs to another user", %{conn: conn, user: user} do
-      other = insert_validated_user()
+      other = insert_activated_user()
       foreign_term = insert(:search_term, user: other)
 
       assert_error_sent(404, fn ->

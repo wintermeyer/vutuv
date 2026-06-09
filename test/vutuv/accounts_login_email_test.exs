@@ -7,7 +7,7 @@ defmodule Vutuv.AccountsLoginEmailTest do
   end
 
   test "login_by_email delivers a login email to a known address", %{conn: conn} do
-    user = insert(:user, validated?: true)
+    user = insert(:user, activated?: true)
     insert(:email, value: "login-flow@example.com", user: user)
 
     assert {:ok, _conn} = Vutuv.Accounts.login_by_email(conn, "login-flow@example.com")

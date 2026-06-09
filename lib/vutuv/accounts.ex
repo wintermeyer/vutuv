@@ -123,7 +123,7 @@ defmodule Vutuv.Accounts do
   # ── Authentication ──
 
   def login(conn, user) do
-    user = validate_user(user)
+    user = activate_user(user)
 
     conn
     |> Conn.assign(:current_user, user)
@@ -184,9 +184,9 @@ defmodule Vutuv.Accounts do
     |> Conn.delete_session(:user_id)
   end
 
-  defp validate_user(user) do
+  defp activate_user(user) do
     user
-    |> Ecto.Changeset.cast(%{validated?: true}, [:validated?])
+    |> Ecto.Changeset.cast(%{activated?: true}, [:activated?])
     |> Repo.update!()
   end
 
@@ -330,6 +330,60 @@ defmodule Vutuv.Accounts do
         where: e.value == ^email and m.type == "login" and not is_nil(m.created_at)
       )
     )
+  end
+
+  # A registration mints the account and its first "login" PIN in the same
+  # request, so their `inserted_at` land within seconds of each other. A plain
+  # login by an existing (e.g. legacy) member also mints a "login" PIN, but
+  # against an account created long before — so requiring the PIN to have been
+  # created *alongside* the account is what tells an abandoned registration
+  # apart from an established member who merely failed to log in. We must never
+  # delete the latter. The window is generous against request latency yet still
+  # astronomically smaller than the years-apart gap of any legacy account.
+  @registration_pin_window_seconds 300
+
+  # How long after sign-up an unconfirmed registration is swept.
+  @unconfirmed_registration_max_age_minutes 60
+
+  @doc """
+  Deletes accounts that registered but never confirmed their PIN (so they are
+  still `activated?: false`) once they are older than `max_age_minutes`.
+
+  Only accounts whose first "login" PIN was minted alongside the account itself
+  are touched, so this never reaps a legacy member who only ever failed a login
+  (see `@registration_pin_window_seconds`), nor an unconfirmed account that
+  never went through the new sign-up form (it would have no such PIN). Each row
+  is re-checked as still unconfirmed at delete time and removed with the same
+  cascading `Repo.delete!/1` the confirmed account-deletion flow uses. Returns
+  the number of accounts deleted.
+  """
+  def delete_unconfirmed_registrations(max_age_minutes \\ @unconfirmed_registration_max_age_minutes) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -max_age_minutes * 60)
+    window = @registration_pin_window_seconds
+
+    from(u in User,
+      join: p in LoginPin,
+      on: p.user_id == u.id and p.type == "login",
+      where:
+        u.activated? == false and u.inserted_at < ^cutoff and
+          p.inserted_at >= datetime_add(u.inserted_at, ^(-window), "second") and
+          p.inserted_at <= datetime_add(u.inserted_at, ^window, "second")
+    )
+    |> Repo.all()
+    |> Enum.count(&delete_if_still_unconfirmed/1)
+  end
+
+  # Re-load and guard before deleting: a login could have confirmed the account
+  # between the sweep's read and now, so only delete while still unactivated.
+  defp delete_if_still_unconfirmed(%User{id: id}) do
+    case Repo.get(User, id) do
+      %User{activated?: false} = user ->
+        Repo.delete!(user)
+        true
+
+      _ ->
+        false
+    end
   end
 
   @doc """

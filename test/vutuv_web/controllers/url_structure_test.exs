@@ -10,13 +10,13 @@ defmodule VutuvWeb.UrlStructureTest do
 
   describe "profiles at the URL root" do
     test "GET /:slug renders the profile", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, "/#{user.active_slug}")
       assert html_response(conn, 200) =~ user.first_name
     end
 
     test "sub-pages render under /:slug/...", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
 
       assert conn |> get("/#{user.active_slug}/followers") |> html_response(200)
       assert conn |> get("/#{user.active_slug}/following") |> html_response(200)
@@ -39,19 +39,19 @@ defmodule VutuvWeb.UrlStructureTest do
 
   describe "legacy /users/:slug URLs" do
     test "the profile URL 301s to /:slug", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, "/users/#{user.active_slug}")
       assert redirected_to(conn, 301) == "/#{user.active_slug}"
     end
 
     test "sub-page URLs 301 to /:slug/... and keep the query string", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, "/users/#{user.active_slug}/links?page=2")
       assert redirected_to(conn, 301) == "/#{user.active_slug}/links?page=2"
     end
 
     test "the renamed followees page redirects to /:slug/following", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, "/users/#{user.active_slug}/followees")
       assert redirected_to(conn, 301) == "/#{user.active_slug}/following"
     end

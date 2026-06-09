@@ -9,6 +9,7 @@ config :vutuv, :serve_uploads_locally, true
 config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
 config :vutuv, :sweep_pending_images, false
+config :vutuv, :sweep_unconfirmed_registrations, false
 config :vutuv, :send_unread_message_emails, false
 config :vutuv, :reconcile_member_count, false
 

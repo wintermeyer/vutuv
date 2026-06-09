@@ -6,7 +6,7 @@ defmodule Vutuv.ChatTest do
   alias Vutuv.Chat
   alias Vutuv.Chat.{Conversation, Message, Participant}
 
-  defp user(attrs \\ []), do: insert(:validated_user, attrs)
+  defp user(attrs \\ []), do: insert(:activated_user, attrs)
 
   # Message ordering ties at second precision; shift a message into the past so
   # order assertions stay deterministic.
@@ -69,15 +69,15 @@ defmodule Vutuv.ChatTest do
       assert {:error, :self} = Chat.find_or_create_conversation(me, me)
     end
 
-    test "rejects unvalidated accounts on either side" do
-      validated = user()
-      unvalidated = insert(:user, validated?: false)
+    test "rejects unactivated accounts on either side" do
+      activated = user()
+      unactivated = insert(:user, activated?: false)
 
-      assert {:error, :not_validated} =
-               Chat.find_or_create_conversation(unvalidated, validated)
+      assert {:error, :not_activated} =
+               Chat.find_or_create_conversation(unactivated, activated)
 
-      assert {:error, :not_validated} =
-               Chat.find_or_create_conversation(validated, unvalidated)
+      assert {:error, :not_activated} =
+               Chat.find_or_create_conversation(activated, unactivated)
     end
 
     test "rate-limits opening new pending conversations, but not accepted ones" do

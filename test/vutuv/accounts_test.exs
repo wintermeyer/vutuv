@@ -33,6 +33,28 @@ defmodule Vutuv.AccountsTest do
     |> Repo.update!()
   end
 
+  # Builds an account exactly as a sign-up does — user + a "login" PIN minted
+  # alongside it — then ages both `minutes` into the past so the sweep threshold
+  # can be exercised without sleeping.
+  defp pending_registration(opts) do
+    minutes = Keyword.get(opts, :age_minutes, 0)
+    activated? = Keyword.get(opts, :activated?, false)
+
+    user = insert(:user, activated?: activated?)
+    Accounts.gen_pin_for(user, "login")
+    set_inserted_at(from(u in User, where: u.id == ^user.id), minutes)
+    set_inserted_at(from(p in LoginPin, where: p.user_id == ^user.id), minutes)
+    user
+  end
+
+  defp set_inserted_at(query, minutes_ago) do
+    ts =
+      NaiveDateTime.utc_now(:second)
+      |> NaiveDateTime.add(-minutes_ago * 60)
+
+    Repo.update_all(query, set: [inserted_at: ts])
+  end
+
   describe "register_user/2" do
     test "creates a user with valid attrs" do
       conn = build_conn()
@@ -186,6 +208,51 @@ defmodule Vutuv.AccountsTest do
       insert(:user)
       insert(:user)
       assert Accounts.count_users() >= 2
+    end
+  end
+
+  describe "delete_unconfirmed_registrations/1" do
+    test "deletes a registration that never confirmed its PIN once it is over an hour old" do
+      user = pending_registration(age_minutes: 61)
+
+      assert Accounts.delete_unconfirmed_registrations() == 1
+      refute Repo.get(User, user.id)
+    end
+
+    test "spares a registration younger than the threshold" do
+      user = pending_registration(age_minutes: 30)
+
+      assert Accounts.delete_unconfirmed_registrations() == 0
+      assert Repo.get(User, user.id)
+    end
+
+    test "spares an account that has been activated, however old" do
+      user = pending_registration(age_minutes: 1_000, activated?: true)
+
+      assert Accounts.delete_unconfirmed_registrations() == 0
+      assert Repo.get(User, user.id)
+    end
+
+    # The critical safety case: an established (e.g. legacy) member is
+    # `activated?: false` and mints a fresh "login" PIN when they try to sign in.
+    # Because that PIN was created long after the account, it must NOT be reaped
+    # as an abandoned registration.
+    test "never deletes a legacy member who merely failed to log in" do
+      user = insert(:user, activated?: false)
+      set_inserted_at(from(u in User, where: u.id == ^user.id), 60 * 24 * 365 * 5)
+      # They attempt a login now: a brand-new PIN, years after the account.
+      Accounts.gen_pin_for(user, "login")
+
+      assert Accounts.delete_unconfirmed_registrations() == 0
+      assert Repo.get(User, user.id)
+    end
+
+    test "never deletes an unconfirmed account that has no login PIN at all" do
+      user = insert(:user, activated?: false)
+      set_inserted_at(from(u in User, where: u.id == ^user.id), 1_000)
+
+      assert Accounts.delete_unconfirmed_registrations() == 0
+      assert Repo.get(User, user.id)
     end
   end
 end

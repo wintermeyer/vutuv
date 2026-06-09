@@ -10,9 +10,9 @@ defmodule Vutuv.PostsTest do
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostTag
 
-  # Feed authors must be validated (consistent with follower counts etc.), so
+  # Feed authors must be activated (consistent with follower counts etc.), so
   # the default test user is.
-  defp user(attrs \\ []), do: insert(:validated_user, attrs)
+  defp user(attrs \\ []), do: insert(:activated_user, attrs)
 
   defp group_with_member(author, member) do
     group = insert(:group, user: author)
@@ -410,13 +410,13 @@ defmodule Vutuv.PostsTest do
       assert Enum.map(entries, & &1.post.id) == [visible.id]
     end
 
-    test "hides posts from unvalidated authors but always shows own" do
-      viewer = user(validated?: false)
-      unvalidated = user(validated?: false)
-      follow!(viewer, unvalidated)
+    test "hides posts from unactivated authors but always shows own" do
+      viewer = user(activated?: false)
+      unactivated = user(activated?: false)
+      follow!(viewer, unactivated)
 
       mine = create_post!(viewer, %{body: "mine"})
-      create_post!(unvalidated, %{body: "ghost"})
+      create_post!(unactivated, %{body: "ghost"})
 
       %{entries: entries} = Posts.feed_page(viewer)
       assert Enum.map(entries, & &1.post.id) == [mine.id]
@@ -459,14 +459,14 @@ defmodule Vutuv.PostsTest do
       assert own_entry.reposted_by == nil
     end
 
-    test "ignores reposts by strangers and by unvalidated reposters" do
+    test "ignores reposts by strangers and by unactivated reposters" do
       viewer = user()
-      unvalidated = user(validated?: false)
+      unactivated = user(activated?: false)
       stranger = user()
-      follow!(viewer, unvalidated)
+      follow!(viewer, unactivated)
 
       post = create_post!(user(), %{body: "x"})
-      :ok = Posts.repost_post(unvalidated, post)
+      :ok = Posts.repost_post(unactivated, post)
       :ok = Posts.repost_post(stranger, post)
 
       assert %{entries: []} = Posts.feed_page(viewer)

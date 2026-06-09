@@ -29,7 +29,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "someone else's conversation redirects to the conversation list", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      conversation = insert_conversation_between(insert_validated_user(), insert_validated_user())
+      conversation = insert_conversation_between(insert_activated_user(), insert_activated_user())
 
       assert {:error, {:live_redirect, %{to: "/messages"}}} =
                live(conn, ~p"/messages/#{conversation.id}")
@@ -39,7 +39,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "conversation list" do
     test "shows real conversations with the other member's name and preview", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      other = insert_validated_user(first_name: "Berta", last_name: "Beispiel")
+      other = insert_activated_user(first_name: "Berta", last_name: "Beispiel")
       conversation = insert_conversation_between(me, other)
       {:ok, _} = Chat.send_message(other, conversation.id, "Hello there")
 
@@ -61,7 +61,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "sending" do
     test "a sent message is persisted and survives a reload", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      conversation = insert_conversation_between(me, insert_validated_user())
+      conversation = insert_conversation_between(me, insert_activated_user())
 
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
@@ -98,7 +98,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "messages render markdown safely with a timestamp", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      conversation = insert_conversation_between(me, insert_validated_user())
+      conversation = insert_conversation_between(me, insert_activated_user())
 
       {:ok, sender, _} = live(conn, ~p"/messages/#{conversation.id}")
 
@@ -146,7 +146,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "message requests" do
     test "a stranger's message lands as a request the recipient can accept", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      stranger = insert_validated_user(first_name: "Sam", last_name: "Stranger")
+      stranger = insert_activated_user(first_name: "Sam", last_name: "Stranger")
       conversation = insert_conversation_between(stranger, me, status: "pending")
       {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
 
@@ -166,7 +166,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "declining silently removes the request", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      stranger = insert_validated_user()
+      stranger = insert_activated_user()
       conversation = insert_conversation_between(stranger, me, status: "pending")
       {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
 
@@ -181,7 +181,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "the requester sees a waiting hint instead of the composer", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      other = insert_validated_user()
+      other = insert_activated_user()
       conversation = insert_conversation_between(me, other, status: "pending", initiator: me)
       {:ok, _} = Chat.send_message(me, conversation.id, "hello-out-there")
 
@@ -213,7 +213,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "the recipient of a request gets a composer; replying accepts", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      stranger = insert_validated_user()
+      stranger = insert_activated_user()
       conversation = insert_conversation_between(stranger, me, status: "pending")
       {:ok, _} = Chat.send_message(stranger, conversation.id, "May I?")
 
@@ -232,7 +232,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "thread pagination" do
     test "older messages load on demand", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      other = insert_validated_user()
+      other = insert_activated_user()
       conversation = insert_conversation_between(me, other)
 
       for i <- 1..35 do
@@ -263,7 +263,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "new conversation entry" do
     test "/messages/with/:slug opens the conversation with that member", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
-      other = insert_validated_user()
+      other = insert_activated_user()
 
       assert {:error, {:live_redirect, %{to: "/messages/" <> id}}} =
                live(conn, ~p"/messages/with/#{other.active_slug}")
@@ -280,7 +280,7 @@ defmodule VutuvWeb.MessageLiveTest do
 
     test "the profile Message button points at the conversation-with route", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
-      other = insert_validated_user()
+      other = insert_activated_user()
 
       html = conn |> get(~p"/#{other.active_slug}") |> html_response(200)
 
@@ -291,7 +291,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "mobile layout" do
     test "the index shows the list full-width; a thread shows a back link", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      conversation = insert_conversation_between(me, insert_validated_user())
+      conversation = insert_conversation_between(me, insert_activated_user())
 
       {:ok, index_view, _} = live(conn, ~p"/messages")
       # No active conversation: the list is visible on mobile (not hidden).
@@ -306,7 +306,7 @@ defmodule VutuvWeb.MessageLiveTest do
   describe "presence" do
     test "a lone viewer sees no online indicator", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
-      conversation = insert_conversation_between(me, insert_validated_user())
+      conversation = insert_conversation_between(me, insert_activated_user())
 
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 

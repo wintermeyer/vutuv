@@ -18,7 +18,7 @@ defmodule VutuvWeb.PostController do
   use VutuvWeb, :controller
 
   plug(VutuvWeb.Plug.UserResolveSlug when action in [:show, :index])
-  plug(VutuvWeb.Plug.EnsureValidated when action in [:show, :index])
+  plug(VutuvWeb.Plug.EnsureActivated when action in [:show, :index])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete])
 
   alias Vutuv.Posts

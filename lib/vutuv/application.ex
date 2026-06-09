@@ -19,6 +19,10 @@ defmodule Vutuv.Application do
         VutuvWeb.Endpoint
       ] ++
         optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++
+        optional_child(
+          :sweep_unconfirmed_registrations,
+          Vutuv.Accounts.UnconfirmedRegistrationSweeper
+        ) ++
         optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier)
 
     opts = [strategy: :one_for_one, name: Vutuv.Supervisor]

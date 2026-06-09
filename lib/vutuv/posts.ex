@@ -687,7 +687,7 @@ defmodule Vutuv.Posts do
 
   @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
-  followed (validated) authors, visibility-filtered, newest first.
+  followed (activated) authors, visibility-filtered, newest first.
 
   Entries are maps `%{id:, post:, reposted_by:, at:}` — `id` is
   `"post-<id>"` / `"repost-<id>"` (unique per entry, the stream DOM id),
@@ -717,7 +717,7 @@ defmodule Vutuv.Posts do
     from(p in Post,
       join: u in assoc(p, :user),
       where: p.user_id == ^viewer_id or p.user_id in subquery(followees_of(viewer_id)),
-      where: p.user_id == ^viewer_id or is_nil(u.validated?) or u.validated? == true,
+      where: p.user_id == ^viewer_id or is_nil(u.activated?) or u.activated? == true,
       order_by: [desc: p.inserted_at, desc: p.id],
       limit: ^fetch_n
     )
@@ -729,7 +729,7 @@ defmodule Vutuv.Posts do
 
   # Reposts distribute through the reposter: their followers see the post,
   # stamped with the repost time. Both the reposter and the original author
-  # must be validated (a repost must not amplify a hidden author), and the
+  # must be activated (a repost must not amplify a hidden author), and the
   # post itself passes the viewer's visibility scope as usual.
   defp feed_repost_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
     from(p in Post,
@@ -741,8 +741,8 @@ defmodule Vutuv.Posts do
       join: u in assoc(p, :user),
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
       where:
-        r.user_id == ^viewer_id or is_nil(reposter.validated?) or reposter.validated? == true,
-      where: p.user_id == ^viewer_id or is_nil(u.validated?) or u.validated? == true,
+        r.user_id == ^viewer_id or is_nil(reposter.activated?) or reposter.activated? == true,
+      where: p.user_id == ^viewer_id or is_nil(u.activated?) or u.activated? == true,
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^fetch_n,
       select: {r.id, r.inserted_at, p, reposter}
@@ -1088,7 +1088,7 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  Person typeahead for the composer's "Hide from…" sheet: validated members
+  Person typeahead for the composer's "Hide from…" sheet: activated members
   matching `term` by name or slug, the author excluded (denying yourself is
   a no-op by invariant). Returns `[]` below two characters.
   """
@@ -1103,7 +1103,7 @@ defmodule Vutuv.Posts do
       Repo.all(
         from(u in User,
           where: u.id != ^author_id,
-          where: is_nil(u.validated?) or u.validated? == true,
+          where: is_nil(u.activated?) or u.activated? == true,
           where:
             ilike(u.first_name, ^pattern) or ilike(u.last_name, ^pattern) or
               ilike(u.active_slug, ^pattern) or

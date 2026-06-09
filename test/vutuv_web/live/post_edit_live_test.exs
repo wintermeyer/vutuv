@@ -51,7 +51,7 @@ defmodule VutuvWeb.PostEditLiveTest do
     test "locks the audience while reposts exist", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, post} = Posts.create_post(user, %{body: "carried by others"})
-      :ok = Posts.repost_post(insert(:user, validated?: true), post)
+      :ok = Posts.repost_post(insert(:user, activated?: true), post)
 
       {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
 
@@ -75,7 +75,7 @@ defmodule VutuvWeb.PostEditLiveTest do
       {:ok, post} = Posts.create_post(user, %{body: "carried by a thread"})
 
       {:ok, _} =
-        Posts.create_reply(insert(:user, validated?: true), post, %{body: "the answer"})
+        Posts.create_reply(insert(:user, activated?: true), post, %{body: "the answer"})
 
       {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
 
@@ -85,7 +85,7 @@ defmodule VutuvWeb.PostEditLiveTest do
     end
 
     test "sends non-authors away without confirming existence", %{conn: conn} do
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {:ok, post} = Posts.create_post(author, %{body: "not yours"})
 
       {conn, _other} = create_and_login_user(conn)

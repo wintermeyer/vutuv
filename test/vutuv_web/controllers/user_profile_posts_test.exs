@@ -8,7 +8,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
   alias Vutuv.Posts
 
   test "shows the latest posts as previews", %{conn: conn} do
-    user = insert_validated_user()
+    user = insert_activated_user()
     {:ok, _} = Posts.create_post(user, %{body: "profile post"})
 
     conn = get(conn, "/#{user.active_slug}")
@@ -42,7 +42,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
   end
 
   test "filters restricted posts per viewer and omits the empty section", %{conn: conn} do
-    user = insert_validated_user()
+    user = insert_activated_user()
 
     {:ok, _} =
       Posts.create_post(user, %{body: "members club", denials: [%{"wildcard" => "logged_out"}]})

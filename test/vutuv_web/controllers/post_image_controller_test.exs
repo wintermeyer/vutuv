@@ -50,7 +50,7 @@ defmodule VutuvWeb.PostImageControllerTest do
 
   describe "a public post's image" do
     test "is served to anonymous visitors with immutable private caching", %{conn: conn, tmp: tmp} do
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/feed.avif")
@@ -64,7 +64,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn: conn,
       tmp: tmp
     } do
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/feed.webp")
@@ -81,7 +81,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "only served versions resolve — the original never does", %{conn: conn, tmp: tmp} do
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       assert get(conn, "/post_images/#{image.token}/original.jpg").status == 404
@@ -94,7 +94,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn: conn,
       tmp: tmp
     } do
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
 
       {_post, image} =
         post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
@@ -127,7 +127,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
       on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
 
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/large.avif")
@@ -147,7 +147,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
       on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
 
-      author = insert(:user, validated?: true)
+      author = insert(:user, activated?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       # The store wrote .avif files, so the legacy URL redirects to those.

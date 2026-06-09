@@ -52,8 +52,8 @@
     </div>
 
     <div>
-      <%= text_input f, :easy_tags, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Ruby on Rails, Cooking, Origami)") %>
-      <%= error_tag f, :easy_tags %>
+      <%= text_input f, :tag_list, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Ruby on Rails, Cooking, Origami)") %>
+      <%= error_tag f, :tag_list %>
     </div>
 
     <.inputs_for :let={ef} field={f[:emails]}>

@@ -3,7 +3,7 @@ defmodule Vutuv.Chat do
   Persisted 1:1 direct messages.
 
   A conversation is one row per unordered user pair (sorted pair columns +
-  unique index). Anyone validated can open one, but it only starts `accepted`
+  unique index). Anyone activated can open one, but it only starts `accepted`
   when the recipient already follows the sender — otherwise it is `pending`:
   a message request the recipient may accept (explicitly or by replying) or
   decline. Decline is silent and permanent: the recipient never sees the
@@ -45,7 +45,7 @@ defmodule Vutuv.Chat do
   def find_or_create_conversation(%User{id: id}, %User{id: id}), do: {:error, :self}
 
   def find_or_create_conversation(%User{} = me, %User{} = other) do
-    if me.validated? && other.validated? do
+    if me.activated? && other.activated? do
       {a_id, b_id} = pair(me.id, other.id)
 
       case get_by_pair(a_id, b_id) do
@@ -53,7 +53,7 @@ defmodule Vutuv.Chat do
         nil -> create_conversation(me, other, a_id, b_id)
       end
     else
-      {:error, :not_validated}
+      {:error, :not_activated}
     end
   end
 

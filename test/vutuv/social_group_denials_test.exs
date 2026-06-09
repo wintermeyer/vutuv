@@ -9,7 +9,7 @@ defmodule Vutuv.SocialGroupDenialsTest do
   alias Vutuv.Social
 
   test "delete_group/1 refuses while posts deny the group, succeeds after" do
-    user = insert(:user, validated?: true)
+    user = insert(:user, activated?: true)
     group = insert(:group, user: user)
 
     {:ok, post} = Posts.create_post(user, %{body: "x", denials: [%{"group_id" => group.id}]})

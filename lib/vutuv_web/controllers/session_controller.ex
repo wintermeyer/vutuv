@@ -8,7 +8,7 @@ defmodule VutuvWeb.SessionController do
 
   # The login page is logged-out-only, like registration. An already-logged-in
   # visitor is redirected to their profile. :delete (logout) stays unguarded.
-  plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create])
+  plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create, :resend, :cancel])
 
   def new(conn, _) do
     render(conn, "new.html")
@@ -50,6 +50,54 @@ defmodule VutuvWeb.SessionController do
         |> redirect(to: ~p"/login")
 
       nil ->
+        conn
+        |> put_flash(:error, gettext("Your login session expired. Please try again."))
+        |> redirect(to: ~p"/login")
+    end
+  end
+
+  # "Resend PIN": mint and mail a fresh PIN for the pending identity (carried by
+  # the signed cookie), then stay on the PIN-entry form. Throttled on its own
+  # slow budget so it cannot reset the attempt counter into a brute-force loop.
+  def resend(conn, _params) do
+    case Accounts.read_pin_cookie(conn) do
+      email when is_binary(email) ->
+        case RateLimit.check_login_resend(conn, email) do
+          :ok ->
+            resend_pin(conn, email)
+
+          :rate_limited ->
+            conn
+            |> put_flash(:error, gettext("Too many PIN requests. Please try again later."))
+            |> render("pin_user_login.html")
+        end
+
+      nil ->
+        conn
+        |> put_flash(:error, gettext("Your login session expired. Please try again."))
+        |> redirect(to: ~p"/login")
+    end
+  end
+
+  # "Use a different email address": abandon the pending login by dropping the
+  # identity cookie. This frees the landing page, which is otherwise pinned to
+  # the PIN-entry form while a PIN is in flight, so the visitor can sign in or
+  # register as someone else.
+  def cancel(conn, _params) do
+    conn
+    |> Accounts.delete_pin_cookie()
+    |> put_flash(:info, gettext("Okay, let's start over."))
+    |> redirect(to: ~p"/login")
+  end
+
+  defp resend_pin(conn, email) do
+    case Accounts.login_by_email(conn, email) do
+      {:ok, conn} ->
+        conn
+        |> put_flash(:info, gettext("A new PIN is on its way to your email."))
+        |> render("pin_user_login.html")
+
+      {:error, _reason, conn} ->
         conn
         |> put_flash(:error, gettext("Your login session expired. Please try again."))
         |> redirect(to: ~p"/login")

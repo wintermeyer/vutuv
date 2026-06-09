@@ -4,7 +4,7 @@ defmodule VutuvWeb.Api.VCardControllerTest do
   use VutuvWeb.ConnCase, async: false
 
   setup do
-    user = insert_validated_user(active_slug: "vcard-tester")
+    user = insert_activated_user(active_slug: "vcard-tester")
     %{user: user}
   end
 

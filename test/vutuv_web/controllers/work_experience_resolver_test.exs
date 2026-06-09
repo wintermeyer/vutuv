@@ -16,7 +16,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
   describe "show on an unknown work-experience slug" do
     test "returns a clean 404 instead of falling through", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, ~p"/#{user}/work_experiences/does-not-exist")
       assert conn.status == 404
       assert conn.halted
@@ -25,8 +25,8 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
   describe "owner-scoping" do
     test "another user's work-experience slug does not resolve under this user", %{conn: conn} do
-      owner = insert_validated_user()
-      other = insert_validated_user()
+      owner = insert_activated_user()
+      other = insert_activated_user()
       foreign = insert(:work_experience, user: other)
 
       conn = get(conn, ~p"/#{owner}/work_experiences/#{foreign}")
@@ -35,7 +35,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
     end
 
     test "the user's own work experience resolves and renders", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       own = insert(:work_experience, user: user)
 
       conn = get(conn, ~p"/#{user}/work_experiences/#{own}")
@@ -45,7 +45,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
   describe "index (no id param)" do
     test "passes through cleanly and renders the listing", %{conn: conn} do
-      user = insert_validated_user()
+      user = insert_activated_user()
       conn = get(conn, ~p"/#{user}/work_experiences")
       assert conn.status == 200
     end

@@ -135,8 +135,8 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
 
     test "the verification queue lists newest registrations first", %{conn: conn} do
-      older = insert(:user, first_name: "Older", verified: false)
-      insert(:user, first_name: "Newer", verified: false)
+      older = insert(:user, first_name: "Older", identity_verified?: false)
+      insert(:user, first_name: "Newer", identity_verified?: false)
 
       Repo.update_all(
         from(u in Vutuv.Accounts.User, where: u.id == ^older.id),
@@ -151,7 +151,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
 
     test "the verification queue survives garbage page params", %{conn: conn} do
-      insert(:user, first_name: "Pending", verified: false)
+      insert(:user, first_name: "Pending", identity_verified?: false)
 
       assert conn |> get(~p"/admin?page=banana") |> html_response(200) =~ "Pending"
       assert conn |> get(~p"/admin?page=999") |> html_response(200) =~ "Pending"

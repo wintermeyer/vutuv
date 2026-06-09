@@ -7,24 +7,32 @@ defmodule Vutuv.Accounts.User do
   schema "users" do
     field(:first_name, :string)
     field(:last_name, :string)
-    field(:middlename, :string)
+    field(:middle_name, :string)
     field(:nickname, :string)
     field(:honorific_prefix, :string)
     field(:honorific_suffix, :string)
     field(:gender, :string)
     field(:birthdate, :date)
     field(:locale, :string)
-    field(:verified, :boolean, default: false)
+    # An admin checked this person's physical ID against their name: this IS that
+    # person. Admin-only (deliberately NOT in @optional_fields); drives the
+    # "Verified profile" badge and the admin review queue. Not to be confused
+    # with activated? below.
+    field(:identity_verified?, :boolean, default: false)
     field(:avatar, :string)
     field(:cover_photo, :string)
     field(:active_slug, :string)
-    field(:administrator, :boolean)
+    field(:admin?, :boolean)
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
-    field(:validated?, :boolean, default: false)
+    # The account owner proved control of their email by entering a login PIN
+    # (set true on first successful login). The anti-spam visibility gate: while
+    # false the account is hidden from search, the feed, follower lists and
+    # messaging. Not to be confused with identity_verified? above.
+    field(:activated?, :boolean, default: false)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
-    field(:easy_tags, :string, virtual: true)
+    field(:tag_list, :string, virtual: true)
 
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)
     has_many(:search_query_results, Vutuv.Search.SearchQueryResult)
@@ -53,7 +61,7 @@ defmodule Vutuv.Accounts.User do
     timestamps()
   end
 
-  @optional_fields ~w(validated? noindex? headline first_name last_name middlename nickname honorific_prefix honorific_suffix gender birthdate locale active_slug easy_tags)a
+  @optional_fields ~w(activated? noindex? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale active_slug tag_list)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 
@@ -71,7 +79,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_first_name_or_last_name_or_nickname(params)
     |> validate_length(:first_name, max: 50)
     |> validate_length(:last_name, max: 50)
-    |> validate_length(:middlename, max: 50)
+    |> validate_length(:middle_name, max: 50)
     |> validate_length(:nickname, max: 50)
     |> validate_length(:honorific_prefix, max: 50)
     |> validate_length(:honorific_suffix, max: 50)
