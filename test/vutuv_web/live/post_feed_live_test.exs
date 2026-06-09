@@ -264,6 +264,36 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute html =~ "Show 1 new post"
       refute html =~ "secret"
     end
+
+    test "deleting a shown post removes it from the open feed", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+      {:ok, post} = Posts.create_post(friend, %{body: "ephemeral"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+      assert html =~ "ephemeral"
+
+      {:ok, _} = Posts.delete_post(post)
+      _ = :sys.get_state(live.pid)
+      refute render(live) =~ "ephemeral"
+    end
+
+    test "a post deleted while behind the pill never surfaces", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      {:ok, post} = Posts.create_post(friend, %{body: "fleeting"})
+      assert render(live) =~ "Show 1 new post"
+
+      {:ok, _} = Posts.delete_post(post)
+      _ = :sys.get_state(live.pid)
+      html = render(live)
+      refute html =~ "Show 1 new post"
+      refute html =~ "fleeting"
+    end
   end
 
   describe "pagination" do

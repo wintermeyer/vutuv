@@ -99,6 +99,16 @@ defmodule VutuvWeb.PostLive.Feed do
     insert_entry(socket, entry, reposter_id)
   end
 
+  # A post was deleted: drop its entry from the stream and from any pending
+  # batch behind the pill. Reposts of it are keyed by repost id, so their card
+  # shell survives until reload, but its action bar empties via the post topic.
+  def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
+    {:noreply,
+     socket
+     |> stream_delete_by_dom_id(:posts, "feed-post-#{post_id}")
+     |> update(:pending_posts, &Enum.reject(&1, fn entry -> entry.post.id == post_id end))}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Own activity (this or another session) appears immediately; other

@@ -196,13 +196,21 @@ defmodule Vutuv.Posts do
     end
   end
 
-  @doc "Deletes a post including its image files."
+  @doc """
+  Deletes a post including its image files, and tells open clients it is gone:
+  `{:post_deleted, …}` to the author's followers' feeds and the post's topic
+  (so feed entries drop and action bars empty). When the post was a reply, its
+  parent's fresh reply count is re-broadcast.
+  """
   def delete_post(%Post{} = post) do
     post = Repo.preload(post, :images)
+    parent_id = reply_parent_id(post.id)
 
     case Repo.delete(post) do
       {:ok, deleted} ->
         Enum.each(post.images, &PostImageStore.delete(&1.token))
+        broadcast_post_deleted(post.id, post.user_id)
+        if parent_id, do: broadcast_reply_count(parent_id)
         {:ok, deleted}
 
       {:error, _} = error ->
@@ -1204,19 +1212,77 @@ defmodule Vutuv.Posts do
   # A new reply ticks the parent's open action bars and notifies its author
   # (self-replies are not news).
   defp broadcast_reply(%Post{} = parent, %Post{} = reply) do
-    payload = Map.put(engagement_counts(parent.id), :post_id, parent.id)
-    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(parent.id), {:post_counters, payload})
+    broadcast_reply_count(parent.id)
 
     if parent.user_id != reply.user_id do
       Vutuv.Activity.notify_reply(parent.user_id, reply.user)
     end
   end
 
-  defp broadcast_to_followers(user_id, event) do
-    follower_ids =
-      Repo.all(from(c in Follow, where: c.followee_id == ^user_id, select: c.follower_id))
+  @doc """
+  The counterpart to `broadcast_new_post/1`: tells open clients a post is gone.
+  `{:post_deleted, …}` goes to the post's topic (so its action bars empty,
+  including those on repost cards) and to the recipients' feed topics (so the
+  feed drops the entry). Pass the author id — its followers are looked up — or,
+  when the author is already deleted (account teardown), an explicit list of
+  recipient ids captured beforehand.
+  """
+  def broadcast_post_deleted(post_id, author_id) when is_binary(author_id) do
+    broadcast_post_deleted(post_id, [author_id | follower_ids(author_id)])
+  end
 
-    Enum.each([user_id | follower_ids], &Vutuv.Activity.broadcast(&1, event))
+  def broadcast_post_deleted(post_id, recipient_ids) when is_list(recipient_ids) do
+    event = {:post_deleted, %{post_id: post_id}}
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), event)
+    Enum.each(recipient_ids, &Vutuv.Activity.broadcast(&1, event))
+  end
+
+  @doc """
+  Re-broadcasts a parent post's fresh absolute counters on its topic — used
+  after a reply is created or deleted so the parent's reply counter ticks on
+  every open action bar.
+  """
+  def broadcast_reply_count(parent_id) do
+    payload = Map.put(engagement_counts(parent_id), :post_id, parent_id)
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(parent_id), {:post_counters, payload})
+  end
+
+  @doc """
+  Snapshot — taken *before* an account is deleted — of what its post teardown
+  must broadcast afterwards, when the follow edges and posts are already gone:
+  the account's `post_ids`, the `follower_ids` whose feeds may show them, and
+  the `reply_parent_ids` of surviving parents whose reply counters must tick
+  down. Pair with `broadcast_post_deleted/2` + `broadcast_reply_count/1`.
+  """
+  def deletion_targets_for_user(user_id) do
+    post_ids = Repo.all(from(p in Post, where: p.user_id == ^user_id, select: p.id))
+
+    reply_parent_ids =
+      Repo.all(
+        from(r in PostReply,
+          join: reply in Post,
+          on: reply.id == r.post_id,
+          join: parent in Post,
+          on: parent.id == r.parent_post_id,
+          where: reply.user_id == ^user_id and parent.user_id != ^user_id,
+          distinct: true,
+          select: r.parent_post_id
+        )
+      )
+
+    %{post_ids: post_ids, follower_ids: follower_ids(user_id), reply_parent_ids: reply_parent_ids}
+  end
+
+  defp broadcast_to_followers(user_id, event) do
+    Enum.each([user_id | follower_ids(user_id)], &Vutuv.Activity.broadcast(&1, event))
+  end
+
+  defp follower_ids(user_id) do
+    Repo.all(from(c in Follow, where: c.followee_id == ^user_id, select: c.follower_id))
+  end
+
+  defp reply_parent_id(post_id) do
+    Repo.one(from(r in PostReply, where: r.post_id == ^post_id, select: r.parent_post_id))
   end
 
   ## Param helpers (attrs arrive with atom keys from code, string keys from forms)

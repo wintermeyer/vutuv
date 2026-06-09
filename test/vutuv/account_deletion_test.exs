@@ -120,8 +120,15 @@ defmodule Vutuv.AccountDeletionTest do
     {pending_served, pending_orig} = plant_files("post_images/#{pending.token}")
     {screenshot_served, screenshot_orig} = plant_files("screenshots/#{url.id}")
 
+    # A follower with the feed open should hear that the account's post is gone
+    # (the follow edge is captured before the delete, since it cascades away).
+    Vutuv.Activity.subscribe(third.id)
+    post_id = post.id
+
     # === Delete ===
     assert {:ok, _} = Accounts.delete_user(user)
+
+    assert_receive {:post_deleted, %{post_id: ^post_id}}
 
     # --- The account is gone; the other parties survive. ---
     refute Repo.get(User, user.id)

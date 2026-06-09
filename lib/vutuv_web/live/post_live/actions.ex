@@ -132,6 +132,17 @@ defmodule VutuvWeb.PostLive.Actions do
     end
   end
 
+  # The post was deleted while the bar was open: re-checking engagement turns
+  # it nil and the bar empties (on the feed the whole card is dropped; on the
+  # dead permalink/profile pages the bar is the only part that can react).
+  def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
+    if post_id == socket.assigns.post_id do
+      {:noreply, load_engagement(socket)}
+    else
+      {:noreply, socket}
+    end
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   @impl true

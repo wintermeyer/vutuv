@@ -283,4 +283,29 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert render(view) =~ "fresh like"
     end
   end
+
+  describe "the action bar reacts to deletion" do
+    # On the feed the whole card is dropped, but on the dead permalink/profile
+    # pages the bar is the only part that can react — test it in isolation.
+    test "empties itself when its post is deleted" do
+      user = other_user()
+      post = create_post!(user, %{body: "doomed"})
+
+      {:ok, bar, html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+          session: %{
+            "post_id" => post.id,
+            "user_id" => user.id,
+            "id" => "post-actions-#{post.id}",
+            "locale" => "en"
+          }
+        )
+
+      assert html =~ ~s(phx-click="toggle")
+
+      {:ok, _} = Posts.delete_post(post)
+      _ = :sys.get_state(bar.pid)
+      refute render(bar) =~ ~s(phx-click="toggle")
+    end
+  end
 end

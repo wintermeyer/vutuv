@@ -30,6 +30,7 @@ defmodule VutuvWeb.PostLive.Saved do
   @impl true
   def handle_params(_params, _uri, socket) do
     page = load_page(socket, nil)
+    if connected?(socket), do: subscribe_posts(page.entries)
 
     {:noreply,
      socket
@@ -38,6 +39,11 @@ defmodule VutuvWeb.PostLive.Saved do
      |> assign(:cursor, page.next_cursor)
      |> stream(:posts, page.entries, reset: true)}
   end
+
+  # Unlike the feed (which hears about deletions on the viewer's own topic, as a
+  # follower of the author), a liker/bookmarker usually does not follow the
+  # author, so the only signal that reaches is each shown post's topic.
+  defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
 
   defp load_page(socket, cursor) do
     user = socket.assigns.current_user
@@ -55,6 +61,7 @@ defmodule VutuvWeb.PostLive.Saved do
   @impl true
   def handle_event("load-more", _params, socket) do
     page = load_page(socket, socket.assigns.cursor)
+    subscribe_posts(page.entries)
 
     {:noreply,
      socket
@@ -75,6 +82,12 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  # A shown post was deleted (by its author or via account teardown): drop the
+  # card instead of leaving a ghost whose action bar has emptied itself.
+  def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
+    {:noreply, stream_delete_by_dom_id(socket, :posts, "posts-#{post_id}")}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp tab_kind(:likes), do: :like
@@ -86,8 +99,12 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp apply_change(socket, post_id, true) do
     case Posts.get_post(post_id) do
-      nil -> socket
-      post -> stream_insert(socket, :posts, post, at: 0)
+      nil ->
+        socket
+
+      post ->
+        Posts.subscribe_post(post.id)
+        stream_insert(socket, :posts, post, at: 0)
     end
   end
 

@@ -375,6 +375,11 @@ defmodule Vutuv.Accounts do
     url_ids =
       Repo.all(from(u in Vutuv.Profiles.Url, where: u.user_id == ^user.id, select: %{id: u.id}))
 
+    # Captured before the delete: once the account is gone so are its follow
+    # edges, so the recipients of the "post gone" broadcasts can't be looked up
+    # afterwards. See Vutuv.Posts.deletion_targets_for_user/1.
+    post_targets = Vutuv.Posts.deletion_targets_for_user(user.id)
+
     {:ok, _} =
       Repo.transaction(fn ->
         Repo.delete_all(from(p in Vutuv.Posts.Post, where: p.user_id == ^user.id))
@@ -385,6 +390,15 @@ defmodule Vutuv.Accounts do
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)
+
+    # Tell open feeds and action bars the posts are gone, and tick down the
+    # reply counters on any surviving parents the account had replied to.
+    Enum.each(
+      post_targets.post_ids,
+      &Vutuv.Posts.broadcast_post_deleted(&1, post_targets.follower_ids)
+    )
+
+    Enum.each(post_targets.reply_parent_ids, &Vutuv.Posts.broadcast_reply_count/1)
 
     {:ok, user}
   end

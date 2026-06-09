@@ -1129,4 +1129,36 @@ defmodule Vutuv.PostsTest do
       assert [%PostDenial{wildcard: "everyone"}] = updated.denials
     end
   end
+
+  describe "post deletion broadcasts" do
+    test "delete_post/1 announces {:post_deleted} on the post topic and to followers' feeds" do
+      author = user()
+      follower = user()
+      follow!(follower, author)
+      post = create_post!(author, %{body: "bye"})
+      post_id = post.id
+
+      Posts.subscribe_post(post.id)
+      Vutuv.Activity.subscribe(follower.id)
+
+      {:ok, _} = Posts.delete_post(post)
+
+      # Once on the post topic (open action bars empty), once on the
+      # follower's feed topic (their feed drops the entry).
+      assert_receive {:post_deleted, %{post_id: ^post_id}}
+      assert_receive {:post_deleted, %{post_id: ^post_id}}
+    end
+
+    test "deleting a reply re-broadcasts the parent's fresh reply count" do
+      author = user()
+      parent = create_post!(author, %{body: "parent"})
+      {:ok, reply} = Posts.create_reply(user(), parent, %{body: "child"})
+      parent_id = parent.id
+
+      Posts.subscribe_post(parent.id)
+      {:ok, _} = Posts.delete_post(reply)
+
+      assert_receive {:post_counters, %{post_id: ^parent_id, replies: 0}}
+    end
+  end
 end
