@@ -209,8 +209,14 @@ body.stretch main {
 .breadcrumbs {
   font-size: 0.8rem;
   color: #94a3b8;
-  padding: 0;
+  padding: 1rem 0 0;
   margin-bottom: 1.25rem;
+}
+/* When a `.profile-header` title sits above the crumbs it already supplies the
+   top breathing room, so don't double it up. On new/edit pages the crumbs are
+   the first element, and this top padding keeps them off the nav bar. */
+.profile-header + .breadcrumbs {
+  padding-top: 0;
 }
 .breadcrumbs a {
   color: #64748b;
