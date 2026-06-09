@@ -120,6 +120,10 @@ defmodule VutuvWeb.UserController do
         tag_users = Tag.recommended_users(tag)
         if tag_users == [user], do: Vutuv.Social.most_followed_users(6), else: tag_users
     end
+    # Never suggest following the profile you are already looking at: both the
+    # tag-endorsement and the most-followed queries can return the owner
+    # themselves (they are usually the top-endorsed person for their own skill).
+    |> Enum.reject(&(&1.id == user.id))
   end
 
   defp first_tag(user) do

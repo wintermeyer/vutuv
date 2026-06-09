@@ -109,6 +109,28 @@ defmodule VutuvWeb.ListingBatchingTest do
       # to a real connection id, not a follow POST.
       assert body =~ "Following"
     end
+
+    test "never recommends the profile owner to themselves", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+
+      # The profile owner is the most-followed member, so the default
+      # most_followed_users/1 query would otherwise surface them at the top of
+      # their own "who to follow" rail.
+      owner = insert_activated_user(first_name: "Popular")
+      insert(:connection, follower: insert_activated_user(), followee: owner)
+      insert(:connection, follower: insert_activated_user(), followee: owner)
+
+      # A second member so the rail still has someone genuine to recommend.
+      other = insert_activated_user(first_name: "Somebody")
+      insert(:connection, follower: insert_activated_user(), followee: other)
+
+      conn = get(conn, ~p"/#{owner}")
+      assert html_response(conn, 200)
+
+      recommended_ids = Enum.map(conn.assigns.recommended_users, & &1.id)
+      refute owner.id in recommended_ids
+      assert other.id in recommended_ids
+    end
   end
 
   describe "GET /tags/:slug (related/recommended user lists)" do
