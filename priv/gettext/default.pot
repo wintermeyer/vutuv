@@ -740,11 +740,11 @@ msgstr ""
 msgid "Social media account updated successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:53
-#: lib/vutuv_web/controllers/connection_controller.ex:75
-#: lib/vutuv_web/controllers/connection_controller.ex:82
-#: lib/vutuv_web/controllers/connection_controller.ex:89
-#: lib/vutuv_web/controllers/connection_controller.ex:96
+#: lib/vutuv_web/controllers/connection_controller.ex:52
+#: lib/vutuv_web/controllers/connection_controller.ex:74
+#: lib/vutuv_web/controllers/connection_controller.ex:81
+#: lib/vutuv_web/controllers/connection_controller.ex:88
+#: lib/vutuv_web/controllers/connection_controller.ex:95
 #: lib/vutuv_web/controllers/follow_controller.ex:23
 #, elixir-autogen
 msgid "Something went wrong"
@@ -791,7 +791,7 @@ msgstr ""
 msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:238
+#: lib/vutuv_web/controllers/user_controller.ex:239
 #, elixir-autogen
 msgid "User deleted successfully."
 msgstr ""
@@ -1513,7 +1513,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/email_controller.ex:95
 #: lib/vutuv_web/controllers/session_controller.ex:141
-#: lib/vutuv_web/controllers/user_controller.ex:253
+#: lib/vutuv_web/controllers/user_controller.ex:254
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr ""
@@ -1871,7 +1871,7 @@ msgstr ""
 msgid "Search terms of %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:530
+#: lib/vutuv_web/live/message_live/index.ex:531
 #, elixir-autogen, elixir-format
 msgid "Send"
 msgstr ""
@@ -1956,7 +1956,7 @@ msgstr ""
 msgid "Who to follow"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:526
+#: lib/vutuv_web/live/message_live/index.ex:527
 #, elixir-autogen, elixir-format
 msgid "Write a message…"
 msgstr ""
@@ -1985,17 +1985,17 @@ msgstr ""
 msgid "submit a bug report"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:180
+#: lib/vutuv_web/live/notification_live/index.ex:184
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tag}."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:182
+#: lib/vutuv_web/live/notification_live/index.ex:186
 #, elixir-autogen, elixir-format
 msgid "is now connected with you."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:177
+#: lib/vutuv_web/live/notification_live/index.ex:181
 #, elixir-autogen, elixir-format
 msgid "started following you."
 msgstr ""
@@ -2215,7 +2215,7 @@ msgid "Edit post"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/feed.ex:38
-#: lib/vutuv_web/live/post_live/feed.ex:133
+#: lib/vutuv_web/live/post_live/feed.ex:143
 #: lib/vutuv_web/live/shell_live.ex:123
 #: lib/vutuv_web/live/shell_live.ex:208
 #, elixir-autogen, elixir-format
@@ -2279,7 +2279,7 @@ msgstr ""
 msgid "No more than %{max} images per post."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:174
+#: lib/vutuv_web/live/post_live/feed.ex:184
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Follow people to fill your feed, or write your first post."
 msgstr ""
@@ -2346,7 +2346,7 @@ msgstr ""
 msgid "Saving…"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:154
+#: lib/vutuv_web/live/post_live/feed.ex:164
 #, elixir-autogen, elixir-format
 msgid "Show %{count} new post"
 msgid_plural "Show %{count} new posts"
@@ -2481,52 +2481,52 @@ msgstr ""
 msgid "All posts"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:183
+#: lib/vutuv_web/live/post_live/actions.ex:194
 #, elixir-autogen, elixir-format
 msgid "Bookmark"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:140
-#: lib/vutuv_web/live/post_live/saved.ex:53
-#: lib/vutuv_web/live/post_live/saved.ex:108
+#: lib/vutuv_web/live/post_live/feed.ex:150
+#: lib/vutuv_web/live/post_live/saved.ex:59
+#: lib/vutuv_web/live/post_live/saved.ex:125
 #: lib/vutuv_web/live/shell_live.ex:145
 #, elixir-autogen, elixir-format
 msgid "Bookmarks"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:152
+#: lib/vutuv_web/live/post_live/actions.ex:163
 #, elixir-autogen, elixir-format
 msgid "Like"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:136
-#: lib/vutuv_web/live/post_live/saved.ex:52
-#: lib/vutuv_web/live/post_live/saved.ex:105
+#: lib/vutuv_web/live/post_live/feed.ex:146
+#: lib/vutuv_web/live/post_live/saved.ex:58
+#: lib/vutuv_web/live/post_live/saved.ex:122
 #, elixir-autogen, elixir-format
 msgid "Likes"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/saved.ex:128
+#: lib/vutuv_web/live/post_live/saved.ex:145
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Posts you bookmark show up here."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/saved.ex:127
+#: lib/vutuv_web/live/post_live/saved.ex:144
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Posts you like show up here."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:173
+#: lib/vutuv_web/live/post_live/actions.ex:184
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be reposted."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:183
+#: lib/vutuv_web/live/post_live/actions.ex:194
 #, elixir-autogen, elixir-format
 msgid "Remove bookmark"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:170
+#: lib/vutuv_web/live/post_live/actions.ex:181
 #, elixir-autogen, elixir-format
 msgid "Repost"
 msgstr ""
@@ -2536,17 +2536,17 @@ msgstr ""
 msgid "Reposted by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/saved.ex:103
+#: lib/vutuv_web/live/post_live/saved.ex:120
 #, elixir-autogen, elixir-format
 msgid "Saved posts"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:170
+#: lib/vutuv_web/live/post_live/actions.ex:181
 #, elixir-autogen, elixir-format
 msgid "Undo repost"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:152
+#: lib/vutuv_web/live/post_live/actions.ex:163
 #, elixir-autogen, elixir-format
 msgid "Unlike"
 msgstr ""
@@ -2556,7 +2556,7 @@ msgstr ""
 msgid "Welcome to vutuv!"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:223
+#: lib/vutuv_web/live/post_live/actions.ex:234
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be answered."
 msgstr ""
@@ -2566,8 +2566,8 @@ msgstr ""
 msgid "Replies"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/actions.ex:206
-#: lib/vutuv_web/live/post_live/actions.ex:207
+#: lib/vutuv_web/live/post_live/actions.ex:217
+#: lib/vutuv_web/live/post_live/actions.ex:218
 #: lib/vutuv_web/live/post_live/reply.ex:25
 #, elixir-autogen, elixir-format
 msgid "Reply"
@@ -2589,7 +2589,7 @@ msgstr ""
 msgid "This post has been reposted or answered. Its audience stays public while reposts or replies exist; you can still delete the post."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:190
+#: lib/vutuv_web/live/notification_live/index.ex:194
 #, elixir-autogen, elixir-format
 msgid "replied to your post."
 msgstr ""
@@ -2619,12 +2619,12 @@ msgstr ""
 msgid "%{name} is typing…"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:542
+#: lib/vutuv_web/live/message_live/index.ex:543
 #, elixir-autogen, elixir-format
 msgid "@%{slug} has not accepted your message request yet."
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:508
+#: lib/vutuv_web/live/message_live/index.ex:509
 #, elixir-autogen, elixir-format
 msgid "@%{slug} wants to message you."
 msgstr ""
@@ -2636,7 +2636,7 @@ msgstr ""
 msgid "Accept"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:430
+#: lib/vutuv_web/live/message_live/index.ex:431
 #, elixir-autogen, elixir-format
 msgid "Back to conversations"
 msgstr ""
@@ -2651,7 +2651,7 @@ msgstr ""
 msgid "Deleted account"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:454
+#: lib/vutuv_web/live/message_live/index.ex:455
 #, elixir-autogen, elixir-format
 msgid "Load older messages"
 msgstr ""
@@ -2666,7 +2666,7 @@ msgstr ""
 msgid "No conversations yet."
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:447
+#: lib/vutuv_web/live/message_live/index.ex:448
 #, elixir-autogen, elixir-format
 msgid "Online"
 msgstr ""
@@ -2676,7 +2676,7 @@ msgstr ""
 msgid "Requests"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:551
+#: lib/vutuv_web/live/message_live/index.ex:552
 #, elixir-autogen, elixir-format
 msgid "Select a conversation."
 msgstr ""
@@ -2893,22 +2893,22 @@ msgstr ""
 msgid "Connected"
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:81
+#: lib/vutuv_web/controllers/connection_controller.ex:80
 #, elixir-autogen, elixir-format
 msgid "Connection accepted."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:95
+#: lib/vutuv_web/controllers/connection_controller.ex:94
 #, elixir-autogen, elixir-format
 msgid "Connection removed."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:88
+#: lib/vutuv_web/controllers/connection_controller.ex:87
 #, elixir-autogen, elixir-format
 msgid "Connection request declined."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:63
+#: lib/vutuv_web/controllers/connection_controller.ex:62
 #, elixir-autogen, elixir-format
 msgid "Connection request sent."
 msgstr ""
@@ -2999,7 +2999,7 @@ msgstr ""
 msgid "Visible only to your connections."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:66
+#: lib/vutuv_web/controllers/connection_controller.ex:65
 #, elixir-autogen, elixir-format
 msgid "You are already connected."
 msgstr ""
@@ -3009,7 +3009,7 @@ msgstr ""
 msgid "You are no longer following this person."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:60
+#: lib/vutuv_web/controllers/connection_controller.ex:59
 #, elixir-autogen, elixir-format
 msgid "You are now connected."
 msgstr ""
@@ -3019,17 +3019,17 @@ msgstr ""
 msgid "You are now following this person."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:72
+#: lib/vutuv_web/controllers/connection_controller.ex:71
 #, elixir-autogen, elixir-format
 msgid "You cannot send this request again yet."
 msgstr ""
 
-#: lib/vutuv_web/controllers/connection_controller.ex:69
+#: lib/vutuv_web/controllers/connection_controller.ex:68
 #, elixir-autogen, elixir-format
 msgid "Your request is still pending."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:188
+#: lib/vutuv_web/live/notification_live/index.ex:192
 #, elixir-autogen, elixir-format
 msgid "accepted your connection request."
 msgstr ""
@@ -3046,7 +3046,12 @@ msgstr[1] ""
 msgid "people who aren't your connections"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:185
+#: lib/vutuv_web/live/notification_live/index.ex:189
 #, elixir-autogen, elixir-format
 msgid "wants to connect with you."
+msgstr ""
+
+#: lib/vutuv_web/live/message_live/index.ex:416
+#, elixir-autogen, elixir-format
+msgid "Open someone's profile to message them."
 msgstr ""

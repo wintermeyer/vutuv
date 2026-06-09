@@ -411,9 +411,10 @@ defmodule VutuvWeb.MessageLive.Index do
           </li>
         </ul>
 
-        <p :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-400">
-          {gettext("No conversations yet.")}
-        </p>
+        <div :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-400">
+          <p>{gettext("No conversations yet.")}</p>
+          <p class="mt-1">{gettext("Open someone's profile to message them.")}</p>
+        </div>
       </aside>
 
       <%!-- Active thread --%>

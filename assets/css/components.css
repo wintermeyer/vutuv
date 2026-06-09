@@ -424,6 +424,29 @@ body.stretch main {
   background: #f1f5f9;
   border-radius: 0.5rem;
 }
+/* File pickers (avatar / cover uploads) inside the wrap: give the browser's
+   button the secondary-button look so it reads as part of the form, with the
+   chosen filename muted beside it instead of the raw native control. */
+.editform__inputwrap input[type="file"] {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  color: #64748b;
+}
+.editform__inputwrap input[type="file"]::file-selector-button {
+  margin-right: 0.75rem;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.editform__inputwrap input[type="file"]::file-selector-button:hover {
+  background: #f8fafc;
+}
 .editform__smallwrap {
   display: flex;
   align-items: center;
@@ -884,6 +907,13 @@ ul.thumbs li .text .title {
   .card dl dt { border-color: #1e293b; }
   .editform__actions { border-color: #1e293b; }
   .editform__inputwrap { background: #1e293b; }
+  .editform__inputwrap input[type="file"] { color: #94a3b8; }
+  .editform__inputwrap input[type="file"]::file-selector-button {
+    background: #0f172a;
+    border-color: #334155;
+    color: #e2e8f0;
+  }
+  .editform__inputwrap input[type="file"]::file-selector-button:hover { background: #1e293b; }
   .editform__hint { color: #94a3b8; }
   .profiles li strong { color: #f1f5f9; }
   .profiles li p { color: #94a3b8; }

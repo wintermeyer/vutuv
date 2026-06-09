@@ -15,7 +15,7 @@
 
   <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
     <%= label f, :job_description, gettext("Description") %>
-    <%= text_input f, :description %>
+    <%= textarea f, :description, rows: 3 %>
     <%= error_tag f, :description %>
   </div>
 
