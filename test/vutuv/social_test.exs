@@ -46,7 +46,7 @@ defmodule Vutuv.SocialTest do
       refute_receive {:new_notification, %{kind: "connection"}}
     end
 
-    test "a follow-back notifies both users of the new mutual connection" do
+    test "a follow-back no longer fires a connection event (connections are explicit now)" do
       a = insert(:user, first_name: "Anna", last_name: "A")
       b = insert(:user, first_name: "Ben", last_name: "B")
       {:ok, _} = Social.follow(a, b.id)
@@ -56,11 +56,10 @@ defmodule Vutuv.SocialTest do
 
       assert {:ok, _} = Social.follow(b, a.id)
 
-      # a gets the regular follower event plus the mutuality event ...
+      # The follow-back is just a follow now; a connection only comes from the
+      # consented request/accept flow (see Vutuv.ConnectionsTest).
       assert_receive {:new_notification, %{kind: "follower", actor_name: "Ben B"}}
-      assert_receive {:new_notification, %{kind: "connection", actor_name: "Ben B"}}
-      # ... and b (who just followed back) learns the connection is now mutual.
-      assert_receive {:new_notification, %{kind: "connection", actor_name: "Anna A"}}
+      refute_receive {:new_notification, %{kind: "connection"}}
     end
   end
 

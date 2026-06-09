@@ -38,7 +38,7 @@ defmodule VutuvWeb.UserHTML do
         variant="text"
         follower_id={@current_user_id}
         followee_id={@user.id}
-        connection_id={Map.get(@following_by_id, @user.id)}
+        follow_id={Map.get(@following_by_id, @user.id)}
       />
     </li>
     """

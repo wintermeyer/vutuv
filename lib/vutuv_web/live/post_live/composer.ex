@@ -10,7 +10,7 @@ defmodule VutuvWeb.PostLive.Composer do
   the post exists. Submit attaches the pending rows; abandoned ones are
   swept after a day. Each image carries an alt-text input (stored on save).
 
-  **Audience** is a preset select (public / followers / following / only me)
+  **Audience** is a preset select (public / followers / connections / only me)
   backed by the deny model; "Custom…" opens the *Hide from…* sheet with the
   author's groups (live member counts), the wildcards, and a person
   typeahead for per-user denials. Any restriction also closes anonymous
@@ -24,7 +24,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
 
-  @presets ~w(public followers following only_me custom)
+  @presets ~w(public followers connections only_me custom)
 
   @impl true
   def update(assigns, socket) do
@@ -78,8 +78,9 @@ defmodule VutuvWeb.PostLive.Composer do
   defp tags_value(nil), do: ""
   defp tags_value(post), do: Enum.map_join(post.tags, ", ", & &1.name)
 
-  # Edit mode: recognize the four presets in the stored denials; anything
-  # else is a custom audience.
+  # Edit mode: recognize the quick presets in the stored denials; anything
+  # else (including a lone "non_followees", which no longer has its own preset)
+  # is a custom audience.
   defp derive_audience(nil), do: {"public", MapSet.new(), MapSet.new(), []}
 
   defp derive_audience(%Post{denials: denials}) do
@@ -90,8 +91,8 @@ defmodule VutuvWeb.PostLive.Composer do
       [%{wildcard: "non_followers"}] ->
         {"followers", MapSet.new(), MapSet.new(), []}
 
-      [%{wildcard: "non_followees"}] ->
-        {"following", MapSet.new(), MapSet.new(), []}
+      [%{wildcard: "non_connections"}] ->
+        {"connections", MapSet.new(), MapSet.new(), []}
 
       [%{wildcard: "everyone"}] ->
         {"only_me", MapSet.new(), MapSet.new(), []}
@@ -367,8 +368,8 @@ defmodule VutuvWeb.PostLive.Composer do
       "followers" ->
         [%{"wildcard" => "non_followers"}]
 
-      "following" ->
-        [%{"wildcard" => "non_followees"}]
+      "connections" ->
+        [%{"wildcard" => "non_connections"}]
 
       "only_me" ->
         [%{"wildcard" => "everyone"}]
@@ -395,8 +396,8 @@ defmodule VutuvWeb.PostLive.Composer do
       "followers" ->
         gettext("Visible only to people who follow you.")
 
-      "following" ->
-        gettext("Visible only to people you follow.")
+      "connections" ->
+        gettext("Visible only to your connections.")
 
       "only_me" ->
         gettext("Visible only to you.")
@@ -557,8 +558,8 @@ defmodule VutuvWeb.PostLive.Composer do
                 <option value="followers" selected={@preset == "followers"}>
                   👥 {gettext("Followers only")}
                 </option>
-                <option value="following" selected={@preset == "following"}>
-                  🤝 {gettext("People I follow")}
+                <option value="connections" selected={@preset == "connections"}>
+                  🤝 {gettext("Connections only")}
                 </option>
                 <option value="only_me" selected={@preset == "only_me"}>
                   🔒 {gettext("Only me")}
@@ -605,6 +606,16 @@ defmodule VutuvWeb.PostLive.Composer do
             </div>
 
             <div class="mt-3 space-y-1.5">
+              <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+                <input
+                  type="checkbox"
+                  name="post[deny_wildcards][non_connections]"
+                  value="true"
+                  checked={MapSet.member?(@deny_wildcards, "non_connections")}
+                  class="rounded border-slate-300"
+                />
+                {gettext("People who aren't my connections")}
+              </label>
               <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
                 <input
                   type="checkbox"

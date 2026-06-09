@@ -4,13 +4,13 @@ defmodule Vutuv.Social.Membership do
   use VutuvWeb, :model
 
   schema "memberships" do
-    belongs_to(:connection, Vutuv.Social.Connection)
+    belongs_to(:follow, Vutuv.Social.Follow)
     belongs_to(:group, Vutuv.Social.Group)
 
     timestamps()
   end
 
-  @required_fields ~w(connection_id group_id)a
+  @required_fields ~w(follow_id group_id)a
   @optional_fields ~w()a
 
   def changeset(model, params \\ %{}) do

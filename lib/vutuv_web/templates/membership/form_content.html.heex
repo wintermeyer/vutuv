@@ -1,7 +1,7 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
-  <%= hidden_input f, :connection_id, class: "form-control" %>
+  <%= hidden_input f, :follow_id, class: "form-control" %>
 
   <div class={"editform__field#{if error_tag(f, :group_id), do: " editform__field--error"}"}>
     <%= label f, :group_id, class: "control-label" %>

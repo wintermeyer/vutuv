@@ -36,8 +36,8 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
       follower = insert(:user)
       followee = insert(:user)
-      insert(:connection, follower: follower, followee: user)
-      insert(:connection, follower: user, followee: followee)
+      insert(:follow, follower: follower, followee: user)
+      insert(:follow, follower: user, followee: followee)
       endorse.(follower)
       endorse.(followee)
 
@@ -193,7 +193,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
 
     test "follow another user", %{conn: conn, other: other} do
-      conn = post(conn, ~p"/connections", connection: %{followee_id: other.id})
+      conn = post(conn, ~p"/follows", follow: %{followee_id: other.id})
       assert conn.status < 500, "follow -> #{conn.status}"
     end
   end

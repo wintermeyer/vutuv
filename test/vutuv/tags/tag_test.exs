@@ -10,9 +10,9 @@ defmodule Vutuv.Tags.TagTest do
       a_followee = insert(:user)
 
       # a_follower -> viewer (so a_follower is in viewer.followers)
-      insert(:connection, follower: a_follower, followee: viewer)
+      insert(:follow, follower: a_follower, followee: viewer)
       # viewer -> a_followee (so a_followee is in viewer.followees)
-      insert(:connection, follower: viewer, followee: a_followee)
+      insert(:follow, follower: viewer, followee: a_followee)
 
       tag = insert(:tag)
 

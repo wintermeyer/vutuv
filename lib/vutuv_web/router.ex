@@ -65,9 +65,16 @@ defmodule VutuvWeb.Router do
 
     resources("/memberships", MembershipController, only: [:create, :delete])
 
-    resources "/connections", ConnectionController, only: [:create, :delete] do
+    resources "/follows", FollowController, only: [:create, :delete] do
       resources("/memberships", MembershipController, only: [:create, :delete])
     end
+
+    # The mutual-connection lifecycle (the list lives at /:slug/connections in
+    # the profile scope below). create = request, then accept/decline/withdraw.
+    post("/connections", ConnectionController, :create)
+    post("/connections/:id/accept", ConnectionController, :accept)
+    post("/connections/:id/decline", ConnectionController, :decline)
+    delete("/connections/:id", ConnectionController, :delete)
 
     # Search lives at /search: GET renders the form, POST runs a query, and
     # /search/:id shows a stored query (the id is the query value itself).
@@ -200,6 +207,7 @@ defmodule VutuvWeb.Router do
       resources("/groups", GroupController)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
+      resources("/connections", ConnectionController, only: [:index])
 
       resources("/user_tag_endorsements", UserTagEndorsementController,
         only: [:create, :delete],

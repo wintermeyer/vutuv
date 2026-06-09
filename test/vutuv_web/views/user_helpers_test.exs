@@ -126,16 +126,16 @@ defmodule VutuvWeb.UserHelpersTest do
   end
 
   describe "following_map/2" do
-    test "returns followee_id => connection_id for followed users only" do
+    test "returns followee_id => follow_id for followed users only" do
       follower = insert(:user)
       followed = insert(:user)
       not_followed = insert(:user)
 
-      connection = insert(:connection, follower: follower, followee: followed)
+      follow = insert(:follow, follower: follower, followee: followed)
 
       map = UserHelpers.following_map(follower, [followed, not_followed])
 
-      assert map == %{followed.id => connection.id}
+      assert map == %{followed.id => follow.id}
     end
 
     test "no current_user -> empty map" do
@@ -151,7 +151,7 @@ defmodule VutuvWeb.UserHelpersTest do
         for _ <- 1..20 do
           u = insert(:user)
           insert(:work_experience, user: u, end_month: nil, end_year: nil)
-          insert(:connection, follower: follower, followee: u)
+          insert(:follow, follower: follower, followee: u)
           u
         end
 

@@ -13,7 +13,7 @@ defmodule VutuvWeb.UI do
   use Phoenix.Component
   use Gettext, backend: VutuvWeb.Gettext
 
-  # `<.follow_button>` owns the ~p"/connections…" route shapes, so it needs the
+  # `<.follow_button>` owns the ~p"/follows…" route shapes, so it needs the
   # verified-route sigil and the `button/2` helper for its icon/text variants.
   use Phoenix.VerifiedRoutes,
     endpoint: VutuvWeb.Endpoint,
@@ -363,15 +363,15 @@ defmodule VutuvWeb.UI do
   defp button_class(_), do: "#{@button_base} bg-brand-600 text-white hover:bg-brand-700"
 
   @doc """
-  Follow / unfollow control — the single owner of the two `~p"/connections…"`
-  route shapes: a CSRF-protected **DELETE** `/connections/<connection_id>` to
-  unfollow, or a **POST** `/connections?connection[follower_id][followee_id]` to
-  follow, branched on whether `connection_id` is set (`nil` = not following). The
+  Follow / unfollow control — the single owner of the two `~p"/follows…"`
+  route shapes: a CSRF-protected **DELETE** `/follows/<follow_id>` to
+  unfollow, or a **POST** `/follows?follow[follower_id][followee_id]` to
+  follow, branched on whether `follow_id` is set (`nil` = not following). The
   following-state lookup (`following_by_id` / `user_follows_user?/2`) stays at the
-  call site; this component just consumes its result via `connection_id`.
+  call site; this component just consumes its result via `follow_id`.
 
   Pass `follower_id` (the viewer's id) and `followee_id` (the target's id) plus
-  the resolved `connection_id`. The owner/visitor/logged-in guards stay at the
+  the resolved `follow_id`. The owner/visitor/logged-in guards stay at the
   call site too. Three visual variants reproduce the four hand-written call
   sites byte-for-byte:
 
@@ -383,22 +383,22 @@ defmodule VutuvWeb.UI do
       muted/brand link classes.
     * `"button"` — the `<.button>` track (`show`, `teaser`): a secondary
       `<.button>` "Following" / a primary `<.button>` "Follow". `teaser` renders
-      only the follow half — pass `connection_id={nil}` (a non-follower can only
+      only the follow half — pass `follow_id={nil}` (a non-follower can only
       follow) and it emits exactly that one button.
   """
   attr(:variant, :string, required: true, values: ~w(icon text button))
   attr(:follower_id, :any, required: true)
   attr(:followee_id, :any, required: true)
-  attr(:connection_id, :any, default: nil, doc: "the connection id, or nil when not following")
+  attr(:follow_id, :any, default: nil, doc: "the follow id, or nil when not following")
 
   def follow_button(%{variant: "icon"} = assigns) do
     ~H"""
-    <%= if is_binary(@connection_id) do %>
-      <%= button to: ~p"/connections/#{@connection_id}", method: :delete, class: "button button--icon" do %>
+    <%= if is_binary(@follow_id) do %>
+      <%= button to: ~p"/follows/#{@follow_id}", method: :delete, class: "button button--icon" do %>
         <i class="icon icon--unfollow"></i>
       <% end %>
     <% else %>
-      <%= button to: ~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: "button button--icon" do %>
+      <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: "button button--icon" do %>
         <i class="icon icon--follow"></i>
       <% end %>
     <% end %>
@@ -407,13 +407,13 @@ defmodule VutuvWeb.UI do
 
   def follow_button(%{variant: "text"} = assigns) do
     ~H"""
-    <%= if is_binary(@connection_id) do %>
-      <%= button to: ~p"/connections/#{@connection_id}", method: :delete,
+    <%= if is_binary(@follow_id) do %>
+      <%= button to: ~p"/follows/#{@follow_id}", method: :delete,
             class: "ml-auto self-start text-sm font-semibold text-slate-400 hover:text-slate-600" do %>
         {gettext("Following")}
       <% end %>
     <% else %>
-      <%= button to: ~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post,
+      <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post,
             class: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700" do %>
         {gettext("Follow")}
       <% end %>
@@ -423,15 +423,69 @@ defmodule VutuvWeb.UI do
 
   def follow_button(%{variant: "button"} = assigns) do
     ~H"""
-    <.button :if={is_binary(@connection_id)} variant="secondary" href={~p"/connections/#{@connection_id}"} method="delete">
+    <.button :if={is_binary(@follow_id)} variant="secondary" href={~p"/follows/#{@follow_id}"} method="delete">
       {gettext("Following")}
     </.button>
     <.button
-      :if={!is_binary(@connection_id)}
-      href={~p"/connections?#{[connection: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
+      :if={!is_binary(@follow_id)}
+      href={~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
       method="post"
     >
       {gettext("Follow")}
+    </.button>
+    """
+  end
+
+  @doc """
+  The mutual-connection control on the profile header — the counterpart to
+  `<.follow_button>` (the one-directional follow). It owns the `~p"/connections…"`
+  route shapes and renders per the `state` from
+  `Vutuv.Social.connection_state/2`:
+
+    * `:none` / `:declined` → a primary **Connect** (POST `/connections`,
+      `connection[user_id]`)
+    * `:pending_sent` → a secondary **Pending** that withdraws the request
+      (DELETE `/connections/<id>`)
+    * `:pending_received` → a primary **Accept** (POST `/connections/<id>/accept`)
+      and a secondary **Ignore** (POST `/connections/<id>/decline`)
+    * `:accepted` → a disabled secondary **✓ Connected** (disconnect lives on
+      the connections page)
+
+  Keep the owner / visitor / logged-in guard on a `:if` at the call site.
+  """
+  attr(:state, :atom, required: true)
+  attr(:target_id, :any, required: true)
+  attr(:connection_id, :any, default: nil)
+
+  def connect_control(%{state: :pending_received} = assigns) do
+    ~H"""
+    <.button href={~p"/connections/#{@connection_id}/accept"} method="post">
+      {gettext("Accept")}
+    </.button>
+    <.button variant="secondary" href={~p"/connections/#{@connection_id}/decline"} method="post">
+      {gettext("Ignore")}
+    </.button>
+    """
+  end
+
+  def connect_control(%{state: :pending_sent} = assigns) do
+    ~H"""
+    <.button variant="secondary" href={~p"/connections/#{@connection_id}"} method="delete">
+      {gettext("Pending")}
+    </.button>
+    """
+  end
+
+  def connect_control(%{state: :accepted} = assigns) do
+    ~H"""
+    <.button variant="secondary" disabled>✓ {gettext("Connected")}</.button>
+    """
+  end
+
+  def connect_control(assigns) do
+    ~H"""
+    <.button href={~p"/connections?#{[connection: %{user_id: @target_id}]}"} method="post">
+      {gettext("Connect")}
     </.button>
     """
   end

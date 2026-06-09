@@ -346,6 +346,7 @@ defmodule VutuvWeb.PostComponents do
   page's audience summary (`VutuvWeb.PostHTML.denial_labels/1`).
   """
   def wildcard_label("everyone"), do: gettext("everyone else")
+  def wildcard_label("non_connections"), do: gettext("people who aren't your connections")
   def wildcard_label("non_followers"), do: gettext("people who don't follow you")
   def wildcard_label("non_followees"), do: gettext("people you don't follow")
   def wildcard_label("logged_out"), do: gettext("logged-out visitors")

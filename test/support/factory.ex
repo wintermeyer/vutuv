@@ -106,16 +106,43 @@ defmodule Vutuv.Factory do
     }
   end
 
-  def connection_factory do
-    %Vutuv.Social.Connection{}
+  def follow_factory do
+    %Vutuv.Social.Follow{}
   end
 
   @doc """
-  Inserts a bare `Connection` row (a follow) without the notification side
-  effects of `Social.follow/2`.
+  Inserts a bare `Follow` row (a one-directional follow edge) without the
+  notification side effects of `Social.follow/2`.
   """
   def follow!(follower, followee) do
-    insert(:connection, follower: follower, followee: followee)
+    insert(:follow, follower: follower, followee: followee)
+  end
+
+  def connection_factory do
+    %Vutuv.Social.Connection{status: "pending"}
+  end
+
+  @doc """
+  Inserts an accepted, mutual `Connection` between two users (canonical
+  ordering) plus the two follow edges acceptance creates, without the
+  notification side effects of `Social.accept_connection/2`. `requested_by`
+  defaults to `a`.
+  """
+  def connect!(a, b, requested_by \\ nil) do
+    {user_a, user_b} = if a.id < b.id, do: {a, b}, else: {b, a}
+
+    connection =
+      insert(:connection,
+        user_a: user_a,
+        user_b: user_b,
+        requested_by: requested_by || a,
+        status: "accepted",
+        status_changed_at: NaiveDateTime.utc_now(:second)
+      )
+
+    follow!(a, b)
+    follow!(b, a)
+    connection
   end
 
   def group_factory do

@@ -8,7 +8,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       {conn, user} = create_and_login_user(conn)
 
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      connection = insert(:connection, follower: follower, followee: user)
+      connection = insert(:follow, follower: follower, followee: user)
 
       endorser = insert(:user, first_name: "Ada", last_name: "Lovelace")
       tag = insert(:tag, name: "Phoenix")
@@ -36,7 +36,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       follower =
         insert(:user, first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
 
-      insert(:connection, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
@@ -44,12 +44,11 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ ~s(/avatars/#{follower.id}/)
     end
 
-    test "shows a mutual follow as a connection event", %{conn: conn} do
+    test "shows an accepted connection as a connection event", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      insert(:connection, follower: other, followee: user)
-      insert(:connection, follower: user, followee: other)
+      connect!(user, other)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
@@ -95,7 +94,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
     test "visiting the page persists the read marker (badge stays cleared)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      insert(:connection, follower: insert(:user), followee: user)
+      insert(:follow, follower: insert(:user), followee: user)
 
       # The events predate the visit (timestamps are second-precision, so an
       # event in the same second as the read marker would not count anyway).
@@ -137,7 +136,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # A real follow lands while the user is watching: the row makes it unread,
       # and the live broadcast renders it on the open page.
       follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
-      insert(:connection, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
       Vutuv.Activity.notify_new_follower(user.id, follower)
       _ = :sys.get_state(live.pid)
 
@@ -152,7 +151,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # so a live event can never update a derived row in place by id collision.
       {conn, user} = create_and_login_user(conn)
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      insert(:connection, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
@@ -173,7 +172,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # so this also exercises the tie-handling of the cursor. 52 remaining
       # after page one makes the batch size and the remainder differ, which
       # pins the order of the two numbers in the button label.
-      for _ <- 1..102, do: insert(:connection, follower: insert(:user), followee: user)
+      for _ <- 1..102, do: insert(:follow, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
@@ -199,7 +198,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # live database. Seed 51 events so the snapshot is 51 (page one shows 50,
       # one remaining) ...
       for i <- 1..51 do
-        c = insert(:connection, follower: insert(:user), followee: user)
+        c = insert(:follow, follower: insert(:user), followee: user)
         backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
       end
 
@@ -209,7 +208,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       # ... then slip many older events in behind the snapshot. The next page
       # pulls 50 of them, driving `remaining` to zero while more? is still true.
       for i <- 1..60 do
-        c = insert(:connection, follower: insert(:user), followee: user)
+        c = insert(:follow, follower: insert(:user), followee: user)
         backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -100 - i))
       end
 
@@ -224,7 +223,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
     test "a short feed shows no Load more button", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      insert(:connection, follower: insert(:user), followee: user)
+      insert(:follow, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
@@ -253,11 +252,11 @@ defmodule VutuvWeb.NotificationLiveTest do
 
   # Connection inserted_at has second precision; backdating to distinct seconds
   # gives the feed a deterministic newest-first order to paginate through.
-  defp backdate_connection(%Vutuv.Social.Connection{id: id}, at) do
+  defp backdate_connection(%Vutuv.Social.Follow{id: id}, at) do
     import Ecto.Query
 
     Vutuv.Repo.update_all(
-      from(c in Vutuv.Social.Connection, where: c.id == ^id),
+      from(c in Vutuv.Social.Follow, where: c.id == ^id),
       set: [inserted_at: at]
     )
   end

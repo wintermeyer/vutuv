@@ -153,6 +153,10 @@ defmodule VutuvWeb.NotificationLive.Index do
     )
   end
 
+  # The connection family — request, accept and the legacy mutual event — all
+  # share one badge colour and glyph.
+  @connection_kinds ~w(connection connection_request connection_accepted)
+
   defp kind_classes("follower"),
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
@@ -161,11 +165,15 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_classes("reply"),
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
+  defp kind_classes(kind) when kind in @connection_kinds,
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 
   defp kind_glyph("follower"), do: "+"
   defp kind_glyph("endorsement"), do: "★"
   defp kind_glyph("reply"), do: "↩"
+  defp kind_glyph(kind) when kind in @connection_kinds, do: "🤝"
   defp kind_glyph(_), do: "•"
 
   # The event text is rendered from the kind (not stored), so it translates
@@ -176,6 +184,13 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: gettext("endorsed you for %{tag}.", tag: tag)
 
   defp notification_text(%{kind: "connection"}), do: gettext("is now connected with you.")
+
+  defp notification_text(%{kind: "connection_request"}),
+    do: gettext("wants to connect with you.")
+
+  defp notification_text(%{kind: "connection_accepted"}),
+    do: gettext("accepted your connection request.")
+
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
   defp notification_text(n), do: n[:text]
 

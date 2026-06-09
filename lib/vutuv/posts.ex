@@ -53,7 +53,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostTag
   alias Vutuv.Repo
-  alias Vutuv.Social.Connection
+  alias Vutuv.Social.Follow
   alias Vutuv.Social.Group
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
@@ -384,21 +384,29 @@ defmodule Vutuv.Posts do
           d.wildcard == "everyone" or
           (d.wildcard == "non_followers" and
              fragment(
-               "NOT EXISTS (SELECT 1 FROM connections c WHERE c.follower_id = ? AND c.followee_id = ?)",
+               "NOT EXISTS (SELECT 1 FROM follows c WHERE c.follower_id = ? AND c.followee_id = ?)",
                type(^viewer_id, UUIDv7),
                type(^author_id, UUIDv7)
              )) or
           (d.wildcard == "non_followees" and
              fragment(
-               "NOT EXISTS (SELECT 1 FROM connections c WHERE c.follower_id = ? AND c.followee_id = ?)",
+               "NOT EXISTS (SELECT 1 FROM follows c WHERE c.follower_id = ? AND c.followee_id = ?)",
                type(^author_id, UUIDv7),
                type(^viewer_id, UUIDv7)
+             )) or
+          (d.wildcard == "non_connections" and
+             fragment(
+               "NOT EXISTS (SELECT 1 FROM connections c WHERE c.status = 'accepted' AND ((c.user_a_id = ? AND c.user_b_id = ?) OR (c.user_a_id = ? AND c.user_b_id = ?)))",
+               type(^author_id, UUIDv7),
+               type(^viewer_id, UUIDv7),
+               type(^viewer_id, UUIDv7),
+               type(^author_id, UUIDv7)
              )) or
           (not is_nil(d.group_id) and
              fragment(
                """
                EXISTS (SELECT 1 FROM memberships m
-                       JOIN connections c ON c.id = m.connection_id
+                       JOIN follows c ON c.id = m.follow_id
                        WHERE m.group_id = ? AND c.follower_id = ? AND c.followee_id = ?)
                """,
                d.group_id,
@@ -431,14 +439,19 @@ defmodule Vutuv.Posts do
                   d.denied_user_id = ?
                   OR d.wildcard = 'everyone'
                   OR (d.wildcard = 'non_followers' AND NOT EXISTS (
-                        SELECT 1 FROM connections c
+                        SELECT 1 FROM follows c
                         WHERE c.follower_id = ? AND c.followee_id = ?))
                   OR (d.wildcard = 'non_followees' AND NOT EXISTS (
-                        SELECT 1 FROM connections c
+                        SELECT 1 FROM follows c
                         WHERE c.follower_id = ? AND c.followee_id = ?))
+                  OR (d.wildcard = 'non_connections' AND NOT EXISTS (
+                        SELECT 1 FROM connections c
+                        WHERE c.status = 'accepted'
+                          AND ((c.user_a_id = ? AND c.user_b_id = ?)
+                            OR (c.user_a_id = ? AND c.user_b_id = ?))))
                   OR (d.group_id IS NOT NULL AND EXISTS (
                         SELECT 1 FROM memberships m
-                        JOIN connections c ON c.id = m.connection_id
+                        JOIN follows c ON c.id = m.follow_id
                         WHERE m.group_id = d.group_id
                           AND c.follower_id = ? AND c.followee_id = ?))
                 )
@@ -450,6 +463,10 @@ defmodule Vutuv.Posts do
             p.user_id,
             p.user_id,
             type(^viewer_id, UUIDv7),
+            p.user_id,
+            type(^viewer_id, UUIDv7),
+            type(^viewer_id, UUIDv7),
+            p.user_id,
             p.user_id,
             type(^viewer_id, UUIDv7)
           )
@@ -756,7 +773,7 @@ defmodule Vutuv.Posts do
   end
 
   defp followees_of(viewer_id) do
-    from(c in Connection, where: c.follower_id == ^viewer_id, select: c.followee_id)
+    from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
   end
 
   defp posts_at_or_before(query, nil), do: query
@@ -1197,7 +1214,7 @@ defmodule Vutuv.Posts do
 
   defp broadcast_to_followers(user_id, event) do
     follower_ids =
-      Repo.all(from(c in Connection, where: c.followee_id == ^user_id, select: c.follower_id))
+      Repo.all(from(c in Follow, where: c.followee_id == ^user_id, select: c.follower_id))
 
     Enum.each([user_id | follower_ids], &Vutuv.Activity.broadcast(&1, event))
   end

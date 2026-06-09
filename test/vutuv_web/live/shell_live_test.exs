@@ -19,7 +19,7 @@ defmodule VutuvWeb.ShellLiveTest do
 
   defp user_with_unread_notification do
     user = insert(:user)
-    insert(:connection, follower: insert(:user), followee: user)
+    insert(:follow, follower: insert(:user), followee: user)
     user
   end
 

@@ -1,6 +1,8 @@
-<%!-- Rendered to readers denied solely by the non_followers wildcard:
-following is actionable, so invite it. Every other denial renders a plain
-404 in the controller (no teaser, no reason — the deny list must not leak). --%>
+<%!-- Rendered to readers denied solely by the non_followers wildcard
+(`@teaser_kind == :follow`) or the non_connections wildcard (`:connect`):
+that one relationship is actionable, so invite it. Every other denial renders
+a plain 404 in the controller (no teaser, no reason — the deny list must not
+leak). --%>
 <div class="py-6">
   <div class="mx-auto max-w-2xl">
     <.card>
@@ -11,22 +13,38 @@ following is actionable, so invite it. Every other denial renders a plain
 
         <div>
           <h1 class="text-xl font-bold text-slate-900 dark:text-white">
-            {gettext("This post is for followers of %{name}", name: full_name(@author))}
+            <%= if @teaser_kind == :connect do %>
+              {gettext("This post is for the connections of %{name}", name: full_name(@author))}
+            <% else %>
+              {gettext("This post is for followers of %{name}", name: full_name(@author))}
+            <% end %>
           </h1>
           <p class="mt-1 text-slate-500 dark:text-slate-400">
-            {gettext("Follow %{name} to read it.", name: full_name(@author))}
+            <%= if @teaser_kind == :connect do %>
+              {gettext("Connect with %{name} to read it.", name: full_name(@author))}
+            <% else %>
+              {gettext("Follow %{name} to read it.", name: full_name(@author))}
+            <% end %>
           </p>
         </div>
 
-        <.follow_button
-          :if={@current_user && @current_user.id != @author.id}
-          variant="button"
-          follower_id={@current_user.id}
-          followee_id={@author.id}
-        />
-        <.button :if={is_nil(@current_user)} href={~p"/login"}>
-          {gettext("Log in")}
-        </.button>
+        <%= cond do %>
+          <% is_nil(@current_user) -> %>
+            <.button href={~p"/login"}>{gettext("Log in")}</.button>
+          <% @teaser_kind == :connect -> %>
+            <%!-- The Connect control lives on the profile (it pairs with the
+            Follow toggle there); send the reader to it. --%>
+            <.button :if={@current_user.id != @author.id} href={~p"/#{@author}"}>
+              {gettext("Go to profile to connect")}
+            </.button>
+          <% true -> %>
+            <.follow_button
+              :if={@current_user.id != @author.id}
+              variant="button"
+              follower_id={@current_user.id}
+              followee_id={@author.id}
+            />
+        <% end %>
 
         <.link
           href={~p"/#{@author}"}

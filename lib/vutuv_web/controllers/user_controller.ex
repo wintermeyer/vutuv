@@ -13,7 +13,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.WorkExperience
-  alias Vutuv.Social.Connection
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
   alias VutuvWeb.RateLimit
 
@@ -30,11 +30,18 @@ defmodule VutuvWeb.UserController do
     header_job = current_job(user)
     emails = VutuvWeb.UserHelpers.emails_for_display(user, conn.assigns[:current_user])
     recommended_users = recommended_users(user)
-    followers = Enum.map(user.follower_connections, & &1.follower)
-    followees = Enum.map(user.followee_connections, & &1.followee)
+    followers = Enum.map(user.inbound_follows, & &1.follower)
+    followees = Enum.map(user.outbound_follows, & &1.followee)
     # One work-info and one follow-state query for all the small user lists on
     # the page (the "Who to follow" rail plus both follow previews).
     preview_users = Enum.uniq_by(recommended_users ++ followers ++ followees, & &1.id)
+
+    # The visitor's connection situation with this profile, for the header
+    # Connect / Pending / Connected control (nil on your own profile / logged out).
+    connection_state =
+      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
+        Vutuv.Social.connection_state(conn.assigns[:current_user], user)
+      end
 
     conn
     |> assign(:emails, emails)
@@ -44,6 +51,8 @@ defmodule VutuvWeb.UserController do
     |> assign(:work_experience, user.work_experiences)
     |> assign(:follower_count, Vutuv.Social.follower_count(user))
     |> assign(:followee_count, Vutuv.Social.followee_count(user))
+    |> assign(:connection_count, Vutuv.Social.connection_count(user))
+    |> assign(:connection_state, connection_state)
     |> assign(:user, user)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
@@ -88,8 +97,8 @@ defmodule VutuvWeb.UserController do
         from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at], limit: 3),
       urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at], limit: 3),
       addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at], limit: 3),
-      follower_connections: {Connection.latest(3), [:follower]},
-      followee_connections: {Connection.latest(3), [:followee]}
+      inbound_follows: {Follow.latest(3), [:follower]},
+      outbound_follows: {Follow.latest(3), [:followee]}
     ])
   end
 
@@ -245,7 +254,6 @@ defmodule VutuvWeb.UserController do
         |> redirect(to: ~p"/#{user}")
     end
   end
-
 
   def follow_back(conn, %{"id" => id}) do
     user = Repo.get!(User, id)

@@ -52,11 +52,11 @@ defmodule Vutuv.Accounts.User do
 
     has_many(:tags, through: [:user_tags, :tag])
 
-    has_many(:follower_connections, Vutuv.Social.Connection, foreign_key: :followee_id)
-    has_many(:followers, through: [:follower_connections, :follower])
+    has_many(:inbound_follows, Vutuv.Social.Follow, foreign_key: :followee_id)
+    has_many(:followers, through: [:inbound_follows, :follower])
 
-    has_many(:followee_connections, Vutuv.Social.Connection, foreign_key: :follower_id)
-    has_many(:followees, through: [:followee_connections, :followee])
+    has_many(:outbound_follows, Vutuv.Social.Follow, foreign_key: :follower_id)
+    has_many(:followees, through: [:outbound_follows, :followee])
 
     timestamps()
   end

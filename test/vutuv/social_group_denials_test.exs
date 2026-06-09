@@ -26,8 +26,8 @@ defmodule Vutuv.SocialGroupDenialsTest do
   test "groups_with_member_counts/1 counts live membership" do
     user = insert(:user)
     group = insert(:group, user: user, name: "Circle")
-    connection = insert(:connection, follower: user, followee: insert(:user))
-    insert(:membership, connection: connection, group: group)
+    follow = insert(:follow, follower: user, followee: insert(:user))
+    insert(:membership, follow: follow, group: group)
     insert(:group, user: user, name: "Empty")
 
     assert [{%{name: "Circle"}, 1}, {%{name: "Empty"}, 0}] =

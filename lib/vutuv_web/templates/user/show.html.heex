@@ -45,11 +45,17 @@ the resulting ~200px rail width. --%>
               <% same_user?(@user, @current_user) -> %>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
               <% visitor?(@conn, @current_user) -> %>
+                <.connect_control
+                  :if={@connection_state}
+                  state={@connection_state.status}
+                  target_id={@user.id}
+                  connection_id={@connection_state.connection && @connection_state.connection.id}
+                />
                 <.follow_button
                   variant="button"
                   follower_id={@current_user_id}
                   followee_id={@user.id}
-                  connection_id={user_follows_user?(@current_user, @user)}
+                  follow_id={user_follows_user?(@current_user, @user)}
                 />
                 <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
               <% true -> %>
@@ -78,7 +84,7 @@ the resulting ~200px rail width. --%>
         </p>
 
         <% member_since = member_since(@user) %>
-        <% has_counts = @follower_count > 0 or @followee_count > 0 %>
+        <% has_counts = @follower_count > 0 or @followee_count > 0 or @connection_count > 0 %>
 
         <%!-- With no followers and no following there is no counts row to sit
         beside, so "Member since" moves up into the identity block, left-aligned
@@ -99,6 +105,15 @@ the resulting ~200px rail width. --%>
             <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class="hover:underline">
               <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
               <span class="text-slate-500">{gettext("following")}</span>
+            </.link>
+            <.link
+              :if={@connection_count > 0}
+              id="profile-connections"
+              href={~p"/#{@user}/connections"}
+              class="hover:underline"
+            >
+              <span class="font-bold text-slate-900 dark:text-white">{compact_count(@connection_count)}</span>
+              <span class="text-slate-500">{ngettext("connection", "connections", @connection_count)}</span>
             </.link>
           </div>
           <.member_since_line :if={member_since} value={member_since} class="ml-auto" />

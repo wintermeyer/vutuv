@@ -1,6 +1,6 @@
 <%!-- Listing rows. Converted callers (most-followed, follower/followee index,
 search) pass @work_info_by_id (user_id => work-info string) and @following_by_id
-(followee_id => connection_id) precomputed in one query each, so this template
+(followee_id => follow_id) precomputed in one query each, so this template
 runs no per-row queries. Callers that don't pass them fall back to the
 DB-backed helpers per row. --%>
 <% work_info_by_id = assigns[:work_info_by_id] || %{} %>
@@ -21,7 +21,7 @@ DB-backed helpers per row. --%>
         variant="icon"
         follower_id={@current_user_id}
         followee_id={user.id}
-        connection_id={if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)}
+        follow_id={if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)}
       />
     </li>
   <% end %>

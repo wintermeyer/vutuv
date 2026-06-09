@@ -5,7 +5,7 @@ defmodule Vutuv.ActivityTest do
 
   alias Vutuv.Activity
   alias Vutuv.Posts.PostReply
-  alias Vutuv.Social.Connection
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
 
   test "notify broadcasts a :new_notification to the user topic" do
@@ -73,7 +73,7 @@ defmodule Vutuv.ActivityTest do
     test "derives follower events retroactively from existing connections" do
       me = insert(:user)
       follower = insert(:user, first_name: "Grace", last_name: "Hopper")
-      connection = insert(:connection, follower: follower, followee: me)
+      connection = insert(:follow, follower: follower, followee: me)
 
       assert [n] = recent_notifications(me.id)
       assert n.kind == "follower"
@@ -108,21 +108,20 @@ defmodule Vutuv.ActivityTest do
       assert recent_notifications(me.id) == []
     end
 
-    test "derives a connection event when the follow is mutual" do
+    test "derives a connection event for an accepted connection" do
       me = insert(:user)
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      insert(:connection, follower: other, followee: me)
-      insert(:connection, follower: me, followee: other)
+      # Acceptance also materializes the follow-back, so both kinds appear.
+      connect!(me, other)
 
       kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
-      # The incoming follow shows up as usual, plus the mutuality event.
       assert "follower" in kinds
       assert "connection" in kinds
     end
 
     test "a one-way follow produces no connection event" do
       me = insert(:user)
-      insert(:connection, follower: insert(:user), followee: me)
+      insert(:follow, follower: insert(:user), followee: me)
 
       kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
       refute "connection" in kinds
@@ -131,7 +130,7 @@ defmodule Vutuv.ActivityTest do
     test "sorts newest first and respects the limit" do
       me = insert(:user)
 
-      c1 = insert(:connection, follower: insert(:user, first_name: "Old"), followee: me)
+      c1 = insert(:follow, follower: insert(:user, first_name: "Old"), followee: me)
       backdate_connection(c1, ~N[2020-01-01 12:00:00])
 
       tag = insert(:tag, name: "Elixir")
@@ -142,7 +141,7 @@ defmodule Vutuv.ActivityTest do
 
       backdate_endorsement(e, ~N[2023-01-01 12:00:00])
 
-      c2 = insert(:connection, follower: insert(:user, first_name: "New"), followee: me)
+      c2 = insert(:follow, follower: insert(:user, first_name: "New"), followee: me)
       backdate_connection(c2, ~N[2026-01-01 12:00:00])
 
       assert [%{kind: "follower"}, %{kind: "endorsement"}, %{kind: "follower"}] =
@@ -156,7 +155,7 @@ defmodule Vutuv.ActivityTest do
     test "another user's events do not leak in" do
       me = insert(:user)
       somebody_else = insert(:user)
-      insert(:connection, follower: insert(:user), followee: somebody_else)
+      insert(:follow, follower: insert(:user), followee: somebody_else)
 
       assert recent_notifications(me.id) == []
     end
@@ -199,7 +198,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
 
       for i <- 1..3 do
-        c = insert(:connection, follower: insert(:user), followee: me)
+        c = insert(:follow, follower: insert(:user), followee: me)
         backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
       end
 
@@ -219,7 +218,7 @@ defmodule Vutuv.ActivityTest do
 
       connections =
         for i <- 1..5 do
-          c = insert(:connection, follower: insert(:user), followee: me)
+          c = insert(:follow, follower: insert(:user), followee: me)
           backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
           c
         end
@@ -238,7 +237,7 @@ defmodule Vutuv.ActivityTest do
 
       connections =
         for _ <- 1..5 do
-          c = insert(:connection, follower: insert(:user), followee: me)
+          c = insert(:follow, follower: insert(:user), followee: me)
           backdate_connection(c, at)
           c
         end
@@ -254,7 +253,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
       at = ~N[2024-01-01 12:00:00]
 
-      c = insert(:connection, follower: insert(:user), followee: me)
+      c = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(c, at)
 
       tag = insert(:tag)
@@ -276,7 +275,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
 
       for i <- 1..2 do
-        c = insert(:connection, follower: insert(:user), followee: me)
+        c = insert(:follow, follower: insert(:user), followee: me)
         backdate_connection(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
       end
 
@@ -290,7 +289,7 @@ defmodule Vutuv.ActivityTest do
   describe "unread_notification_count/1" do
     test "counts all events when the user has never read notifications" do
       me = insert(:user)
-      insert(:connection, follower: insert(:user), followee: me)
+      insert(:follow, follower: insert(:user), followee: me)
 
       tag = insert(:tag)
       user_tag = insert(:user_tag, user: me, tag: tag)
@@ -302,13 +301,13 @@ defmodule Vutuv.ActivityTest do
     test "counts only events newer than the read marker" do
       me = insert(:user)
 
-      old = insert(:connection, follower: insert(:user), followee: me)
+      old = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(old, ~N[2020-01-01 12:00:00])
 
       Activity.mark_notifications_read(me.id)
       assert Activity.unread_notification_count(me.id) == 0
 
-      new = insert(:connection, follower: insert(:user), followee: me)
+      new = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(new, ~N[2099-01-01 12:00:00])
 
       assert Activity.unread_notification_count(me.id) == 1
@@ -321,12 +320,12 @@ defmodule Vutuv.ActivityTest do
     test "equals the sum of the three feed sources for a mixed constellation" do
       me = insert(:user)
 
-      # Two incoming followers, one of whom we follow back (a mutual connection),
-      # plus one endorsement. Sources: 2 followers + 1 endorsement + 1 connection.
+      # One accepted connection (which also materializes a follow-back) and one
+      # more plain incoming follower, plus one endorsement.
+      # Sources: 2 followers + 1 endorsement + 1 connection.
       mutual = insert(:user)
-      insert(:connection, follower: mutual, followee: me)
-      insert(:connection, follower: me, followee: mutual)
-      insert(:connection, follower: insert(:user), followee: me)
+      connect!(me, mutual)
+      insert(:follow, follower: insert(:user), followee: me)
 
       tag = insert(:tag)
       user_tag = insert(:user_tag, user: me, tag: tag)
@@ -342,7 +341,7 @@ defmodule Vutuv.ActivityTest do
 
     test "folds the marker read and the source counts into two queries" do
       me = insert(:user)
-      insert(:connection, follower: insert(:user), followee: me)
+      insert(:follow, follower: insert(:user), followee: me)
 
       # One read for the notifications_read_at marker, one combined count query.
       assert {_, 2} = count_queries(fn -> Activity.unread_notification_count(me.id) end)
@@ -381,7 +380,7 @@ defmodule Vutuv.ActivityTest do
   describe "notifications_count/1" do
     test "counts the whole derived feed regardless of the read marker" do
       me = insert(:user)
-      insert(:connection, follower: insert(:user), followee: me)
+      insert(:follow, follower: insert(:user), followee: me)
 
       tag = insert(:tag)
       user_tag = insert(:user_tag, user: me, tag: tag)
@@ -399,7 +398,7 @@ defmodule Vutuv.ActivityTest do
 
     test "counts the whole feed in a single query (no marker read needed)" do
       me = insert(:user)
-      insert(:connection, follower: insert(:user), followee: me)
+      insert(:follow, follower: insert(:user), followee: me)
 
       assert {_, 1} = count_queries(fn -> Activity.notifications_count(me.id) end)
     end
@@ -408,7 +407,7 @@ defmodule Vutuv.ActivityTest do
   describe "mark_notifications_read/1 persistence" do
     test "stores the read marker and still broadcasts" do
       me = insert(:user)
-      old = insert(:connection, follower: insert(:user), followee: me)
+      old = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(old, ~N[2020-01-01 12:00:00])
       assert Activity.unread_notification_count(me.id) == 1
 
@@ -424,7 +423,7 @@ defmodule Vutuv.ActivityTest do
       me = insert(:user)
       # Everything the user has seen so far is comfortably in the past, so the
       # read marker should land back there, not on the current wall clock.
-      old = insert(:connection, follower: insert(:user), followee: me)
+      old = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(old, ~N[2020-01-01 12:00:00])
 
       # Capture the second the (buggy) wall-clock marker would stamp, mark read,
@@ -435,7 +434,7 @@ defmodule Vutuv.ActivityTest do
       Activity.mark_notifications_read(me.id)
       assert Activity.unread_notification_count(me.id) == 0
 
-      fresh = insert(:connection, follower: insert(:user), followee: me)
+      fresh = insert(:follow, follower: insert(:user), followee: me)
       backdate_connection(fresh, now_second)
 
       assert Activity.unread_notification_count(me.id) == 1
@@ -460,8 +459,8 @@ defmodule Vutuv.ActivityTest do
 
   # Timestamps have second precision, so same-second inserts tie; backdating
   # gives each event a distinct, deterministic time.
-  defp backdate_connection(%Connection{id: id}, at) do
-    Repo.update_all(from(c in Connection, where: c.id == ^id), set: [inserted_at: at])
+  defp backdate_connection(%Follow{id: id}, at) do
+    Repo.update_all(from(c in Follow, where: c.id == ^id), set: [inserted_at: at])
   end
 
   defp backdate_endorsement(%UserTagEndorsement{id: id}, at) do

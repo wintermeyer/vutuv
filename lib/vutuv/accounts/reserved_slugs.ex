@@ -17,9 +17,9 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   # conventional names kept free for future use.
   @reserved ~w(
     about admin api assets avatars blog bookmarks connections contact covers
-    css datenschutzerklaerung dev edit emails favicon.ico feed fonts groups
-    help images impressum jobs js legal likes listings live login logout mail
-    memberships messages new news notifications phoenix posts press privacy
+    css datenschutzerklaerung dev edit emails favicon.ico feed follows fonts
+    groups help images impressum jobs js legal likes listings live login logout
+    mail memberships messages new news notifications phoenix posts press privacy
     robots.txt screenshots search security.txt sessions settings
     sitemap.xml socket status support tags team terms tidewave users www
   )

@@ -84,16 +84,17 @@ defmodule VutuvWeb.PostControllerTest do
       assert html_response(teaser, 200) =~ "followers of"
       refute teaser.resp_body =~ "for my people"
 
-      # Logged-in non-follower: teaser with a follow button.
+      # Logged-in non-follower: teaser with a follow button (a POST to the
+      # follow route).
       {visitor_conn, _visitor} = create_and_login_user(fresh_conn())
       teaser = get(visitor_conn, Posts.path(post))
       assert html_response(teaser, 200) =~ "followers of"
-      assert teaser.resp_body =~ "connections"
+      assert teaser.resp_body =~ "/follows"
       refute teaser.resp_body =~ "for my people"
 
       # Follower: the actual post.
       {follower_conn, follower} = create_and_login_user(fresh_conn(), @other_login_attrs)
-      insert(:connection, follower: follower, followee: user)
+      insert(:follow, follower: follower, followee: user)
       shown = get(follower_conn, Posts.path(post))
       assert html_response(shown, 200) =~ "for my people"
     end

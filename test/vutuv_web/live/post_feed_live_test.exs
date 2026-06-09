@@ -20,7 +20,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "shows own and followees' posts, newest first", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
 
       {:ok, _} = Posts.create_post(user, %{body: "my words"})
       {:ok, _} = Posts.create_post(friend, %{body: "friend words"})
@@ -214,7 +214,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "own posts carry the ⋯ menu with Edit and Delete, others' posts do not", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
 
       {:ok, mine} = Posts.create_post(user, %{body: "my words"})
       {:ok, theirs} = Posts.create_post(friend, %{body: "friend words"})
@@ -231,7 +231,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "a followed author's new post shows the pill, not the post", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
@@ -248,7 +248,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
     test "a denied post never reaches the pill", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 

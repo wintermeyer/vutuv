@@ -80,7 +80,7 @@ defmodule VutuvWeb.UserControllerTest do
     # One follower, nobody followed back: the followers counter shows, the
     # following counter is gone (a bare "0 following" says nothing).
     user = insert_activated_user()
-    insert(:connection, follower: insert(:user, activated?: true), followee: user)
+    insert(:follow, follower: insert(:user, activated?: true), followee: user)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -124,9 +124,9 @@ defmodule VutuvWeb.UserControllerTest do
     insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
 
     follower = insert(:user, activated?: true, first_name: "Fanny")
-    insert(:connection, follower: follower, followee: user)
+    insert(:follow, follower: follower, followee: user)
     followee = insert(:user, activated?: true, first_name: "Heidi")
-    insert(:connection, follower: user, followee: followee)
+    insert(:follow, follower: user, followee: followee)
 
     conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)

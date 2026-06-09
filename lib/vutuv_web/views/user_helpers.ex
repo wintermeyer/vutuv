@@ -11,7 +11,7 @@ defmodule VutuvWeb.UserHelpers do
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
-  alias Vutuv.Social.Connection
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
@@ -247,7 +247,7 @@ defmodule VutuvWeb.UserHelpers do
 
   @doc """
   Resolves, in a single query, which of `users` the `current_user` already
-  follows. Returns a map of `followee_id => connection_id` so a listing
+  follows. Returns a map of `followee_id => follow_id` so a listing
   template can render the unfollow link without a per-row
   `user_follows_user?/2` query. An empty map when there is no `current_user`.
   """
@@ -257,7 +257,7 @@ defmodule VutuvWeb.UserHelpers do
     ids = Enum.map(users, & &1.id)
 
     Repo.all(
-      from(c in Connection,
+      from(c in Follow,
         where: c.follower_id == ^follower_id and c.followee_id in ^ids,
         select: {c.followee_id, c.id}
       )
@@ -307,10 +307,10 @@ defmodule VutuvWeb.UserHelpers do
     locale
   end
 
-  # Returns the connection id (or nil), not a boolean — templates use the id
+  # Returns the follow id (or nil), not a boolean — templates use the id
   # to render the unfollow link. The query lives in the Social context.
   def user_follows_user?(%User{id: follower_id}, %User{id: followee_id}) do
-    Vutuv.Social.follow_connection_id(follower_id, followee_id)
+    Vutuv.Social.follow_id(follower_id, followee_id)
   end
 
   def user_follows_user?(_, _), do: false

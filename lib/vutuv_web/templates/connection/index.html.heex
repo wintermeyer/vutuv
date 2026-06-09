@@ -1,0 +1,88 @@
+<div class="py-6">
+  <.page_header crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Connections")
+  ]} />
+
+  <%!-- Incoming requests addressed to the owner: accept or decline. --%>
+  <.card :if={@owner? and @incoming != []} class="mb-6">
+    <.section_title>{gettext("Connection requests")}</.section_title>
+    <ul class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+      <li
+        :for={%{connection: c, user: u} <- @incoming}
+        class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+      >
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <.link
+          href={~p"/#{u}"}
+          class="min-w-0 flex-1 truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+        >
+          {full_name(u)}
+        </.link>
+        <.button href={~p"/connections/#{c.id}/accept"} method="post">{gettext("Accept")}</.button>
+        <.button variant="secondary" href={~p"/connections/#{c.id}/decline"} method="post">
+          {gettext("Ignore")}
+        </.button>
+      </li>
+    </ul>
+  </.card>
+
+  <%!-- Requests the owner sent that are still pending. --%>
+  <.card :if={@owner? and @outgoing != []} class="mb-6">
+    <.section_title>{gettext("Sent requests")}</.section_title>
+    <ul class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+      <li
+        :for={%{connection: c, user: u} <- @outgoing}
+        class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+      >
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <.link
+          href={~p"/#{u}"}
+          class="min-w-0 flex-1 truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+        >
+          {full_name(u)}
+        </.link>
+        <.button variant="secondary" href={~p"/connections/#{c.id}"} method="delete">
+          {gettext("Cancel")}
+        </.button>
+      </li>
+    </ul>
+  </.card>
+
+  <%!-- The accepted connections (public list). --%>
+  <.card>
+    <.section_title>
+      {ngettext("1 connection", "%{count} connections", @total)}
+    </.section_title>
+
+    <ul :if={@connections != []} class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+      <li
+        :for={%{connection: c, user: u} <- @connections}
+        class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+      >
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <div class="min-w-0 flex-1">
+          <.link
+            href={~p"/#{u}"}
+            class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+          >
+            {full_name(u)}
+          </.link>
+          <p class="truncate text-sm text-slate-400">{Map.get(@work_info_by_id, u.id)}</p>
+        </div>
+        <.button
+          :if={@owner?}
+          variant="secondary"
+          href={~p"/connections/#{c.id}"}
+          method="delete"
+          data-confirm={gettext("Remove this connection?")}
+        >
+          {gettext("Remove")}
+        </.button>
+      </li>
+    </ul>
+
+    <p :if={@connections == []} class="card__empty mt-3">{gettext("No connections yet.")}</p>
+  </.card>
+</div>

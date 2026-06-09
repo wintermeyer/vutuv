@@ -16,8 +16,8 @@ defmodule Vutuv.PostsTest do
 
   defp group_with_member(author, member) do
     group = insert(:group, user: author)
-    connection = follow!(author, member)
-    insert(:membership, connection: connection, group: group)
+    follow = follow!(author, member)
+    insert(:membership, follow: follow, group: group)
     group
   end
 
@@ -240,6 +240,45 @@ defmodule Vutuv.PostsTest do
       refute Posts.visible_to?(post, nil)
     end
 
+    test "wildcard non_connections: only the author's accepted connections" do
+      author = user()
+      connected = user()
+      follower = user()
+      connect!(author, connected)
+      # A mere follower (no accepted connection) must not get in.
+      follow!(follower, author)
+
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
+
+      assert Posts.visible_to?(post, author)
+      assert Posts.visible_to?(post, connected)
+      refute Posts.visible_to?(post, follower)
+      refute Posts.visible_to?(post, user())
+      refute Posts.visible_to?(post, nil)
+    end
+
+    test "a still-pending connection does not unlock a connections-only post" do
+      author = user()
+      requester = user()
+      {:ok, _} = Vutuv.Social.request_connection(requester, author)
+
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
+
+      refute Posts.visible_to?(post, requester)
+    end
+
+    test "scope_visible agrees with visible_to? for non_connections (list path)" do
+      author = user()
+      connected = user()
+      stranger = user()
+      connect!(author, connected)
+      create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
+
+      assert Posts.count_author_posts(author, connected) == 1
+      assert Posts.count_author_posts(author, stranger) == 0
+      assert Posts.count_author_posts(author, nil) == 0
+    end
+
     test "wildcard logged_out: any member, but no anonymous visitors" do
       author = user()
       post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})
@@ -267,8 +306,8 @@ defmodule Vutuv.PostsTest do
 
       # Live semantics: adding someone to the denied group hides the old post.
       late_member = user()
-      connection = follow!(author, late_member)
-      insert(:membership, connection: connection, group: group)
+      follow = follow!(author, late_member)
+      insert(:membership, follow: follow, group: group)
       refute Posts.visible_to?(post, late_member)
     end
 

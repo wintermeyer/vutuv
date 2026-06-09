@@ -61,7 +61,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
     test "repost toggles and locks the post's audience", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
       post = create_post!(friend, %{body: "spread"})
       %{view: actions} = feed_actions(conn, post)
 
@@ -203,7 +203,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
     test "a followee's repost arrives behind the pill with the reposted-by line", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user(first_name: "Carla", last_name: "Carrier")
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
       post = create_post!(other_user(), %{body: "carried far"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
@@ -220,7 +220,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
     test "your own repost prepends immediately", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
-      insert(:connection, follower: user, followee: friend)
+      insert(:follow, follower: user, followee: friend)
       post = create_post!(friend, %{body: "boost me"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")

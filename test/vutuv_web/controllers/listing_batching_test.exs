@@ -30,7 +30,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       alice = insert_activated_user(first_name: "Alice") |> with_job("Captain", "Acme")
       bob = insert_activated_user(first_name: "Bob")
       # Give Alice a follower so she sorts to the top, exercising the listing.
-      insert(:connection, follower: bob, followee: alice)
+      insert(:follow, follower: bob, followee: alice)
 
       body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
 
@@ -69,8 +69,8 @@ defmodule VutuvWeb.ListingBatchingTest do
       follower = insert_activated_user(first_name: "Fan") |> with_job("Scout", "Talent Co")
       followee = insert_activated_user(first_name: "Idol") |> with_job("Star", "Fame Inc")
 
-      insert(:connection, follower: follower, followee: owner)
-      insert(:connection, follower: owner, followee: followee)
+      insert(:follow, follower: follower, followee: owner)
+      insert(:follow, follower: owner, followee: followee)
 
       followers_body = conn |> get(~p"/#{owner}/followers") |> html_response(200)
       assert followers_body =~ "Fan"
@@ -94,12 +94,12 @@ defmodule VutuvWeb.ListingBatchingTest do
       recommended =
         insert_activated_user(first_name: "Recommendo") |> with_job("Advisor", "Guild")
 
-      insert(:connection, follower: viewer, followee: recommended)
+      insert(:follow, follower: viewer, followee: recommended)
 
       # The profile being viewed; Social.most_followed_users/1 orders by
       # follower count, so give the recommended user a follower to surface them.
       owner = insert_activated_user(first_name: "Owner")
-      insert(:connection, follower: owner, followee: recommended)
+      insert(:follow, follower: owner, followee: recommended)
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
 
@@ -117,12 +117,12 @@ defmodule VutuvWeb.ListingBatchingTest do
       # most_followed_users/1 query would otherwise surface them at the top of
       # their own "who to follow" rail.
       owner = insert_activated_user(first_name: "Popular")
-      insert(:connection, follower: insert_activated_user(), followee: owner)
-      insert(:connection, follower: insert_activated_user(), followee: owner)
+      insert(:follow, follower: insert_activated_user(), followee: owner)
+      insert(:follow, follower: insert_activated_user(), followee: owner)
 
       # A second member so the rail still has someone genuine to recommend.
       other = insert_activated_user(first_name: "Somebody")
-      insert(:connection, follower: insert_activated_user(), followee: other)
+      insert(:follow, follower: insert_activated_user(), followee: other)
 
       conn = get(conn, ~p"/#{owner}")
       assert html_response(conn, 200)

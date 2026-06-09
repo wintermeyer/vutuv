@@ -10,7 +10,7 @@ defmodule Vutuv.Activity do
   (`VutuvWeb.ShellLive`) and the notification / message LiveViews subscribe.
 
   The feed is **derived at read time** from the event tables that already exist
-  (`connections`, `user_tag_endorsements`, `post_replies`) instead of being
+  (`follows`, `connections`, `user_tag_endorsements`, `post_replies`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
@@ -23,6 +23,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
   alias Vutuv.Social.Connection
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
 
   @pubsub Vutuv.PubSub
@@ -65,7 +66,7 @@ defmodule Vutuv.Activity do
 
   defp latest_event_at(user_id) do
     follower_max =
-      from(c in Connection, where: c.followee_id == ^user_id, select: max(c.inserted_at))
+      from(c in Follow, where: c.followee_id == ^user_id, select: max(c.inserted_at))
       |> Repo.one()
 
     endorsement_max =
@@ -78,10 +79,8 @@ defmodule Vutuv.Activity do
 
     connection_max =
       from(c in Connection,
-        join: r in Connection,
-        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
-        where: c.followee_id == ^user_id,
-        select: max(fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at))
+        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
+        select: max(c.status_changed_at)
       )
       |> Repo.one()
 
@@ -148,13 +147,42 @@ defmodule Vutuv.Activity do
     )
   end
 
-  @doc ~S(Convenience: an "is now connected with you" notification after a mutual follow.)
+  @doc ~S"""
+  An "is now connected with you" notification — the `"connection"` kind the
+  derived feed also uses for accepted connections. The live accept path pushes
+  `notify_connection_accepted/2` to the requester instead; this stays for
+  completeness and the feed's shared kind vocabulary.
+  """
   def notify_connection(user_id, other) do
     notify(
       user_id,
       Map.merge(actor_fields(other), %{
         kind: "connection",
         text: "is now connected with you.",
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
+  @doc ~S(Convenience: a "wants to connect with you" notification for the request recipient.)
+  def notify_connection_request(recipient_id, requester) do
+    notify(
+      recipient_id,
+      Map.merge(actor_fields(requester), %{
+        kind: "connection_request",
+        text: "wants to connect with you.",
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
+  @doc ~S(Convenience: an "accepted your connection request" notification for the requester.)
+  def notify_connection_accepted(requester_id, accepter) do
+    notify(
+      requester_id,
+      Map.merge(actor_fields(accepter), %{
+        kind: "connection_accepted",
+        text: "accepted your connection request.",
         at: DateTime.utc_now()
       })
     )
@@ -169,10 +197,10 @@ defmodule Vutuv.Activity do
   get the next-older page.
 
   The feed is derived straight from its source tables — followers
-  (`connections`), endorsements (`user_tag_endorsements`, with the tag's
-  name), mutual connections (a reciprocal pair of `connections` rows,
-  timestamped at the later of the two) and replies (`post_replies`, minus
-  self-replies) — so it includes events from before this feature existed.
+  (`follows`), endorsements (`user_tag_endorsements`, with the tag's name),
+  connections (accepted `connections` rows, timestamped at acceptance) and
+  replies (`post_replies`, minus self-replies) — so it includes events from
+  before this feature existed.
   Items mirror the live `notify_*` payload shape; ids are
   `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
   namespace the LiveView uses for pushed events.
@@ -233,7 +261,7 @@ defmodule Vutuv.Activity do
   end
 
   defp follower_items(user_id, limit, cursor) do
-    from(c in Connection,
+    from(c in Follow,
       where: c.followee_id == ^user_id,
       join: f in assoc(c, :follower),
       order_by: [desc: c.inserted_at, desc: c.id],
@@ -267,29 +295,29 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # Accepted connections where the user is a party, timestamped at acceptance
+  # (`status_changed_at`). The CASE join resolves the *other* party so the feed
+  # item names the friend, not the user themselves.
   defp connection_items(user_id, limit, cursor) do
     query =
       from(c in Connection,
-        join: r in Connection,
-        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
-        where: c.followee_id == ^user_id,
-        join: f in assoc(c, :follower),
-        order_by: [desc: fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at), desc: c.id],
+        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
+        join: u in User,
+        on:
+          u.id ==
+            fragment(
+              "CASE WHEN ? = ? THEN ? ELSE ? END",
+              c.user_a_id,
+              type(^user_id, Vutuv.UUIDv7),
+              c.user_b_id,
+              c.user_a_id
+            ),
+        order_by: [desc: c.status_changed_at, desc: c.id],
         limit: ^limit,
-        select: {c.id, fragment("GREATEST(?, ?)", c.inserted_at, r.inserted_at), f}
+        select: {c.id, c.status_changed_at, u}
       )
 
-    query =
-      if cursor do
-        # The mutuality event happens at the later of the two follows.
-        where(
-          query,
-          [c, r],
-          fragment("GREATEST(?, ?) <= ?", c.inserted_at, r.inserted_at, ^cursor.at)
-        )
-      else
-        query
-      end
+    query = if cursor, do: where(query, [c], c.status_changed_at <= ^cursor.at), else: query
 
     query
     |> Repo.all()
@@ -338,7 +366,7 @@ defmodule Vutuv.Activity do
   # Each count helper returns a query selecting a single count, so total_count/2
   # can fold all three into one round trip via scalar subqueries.
   defp count_followers(user_id, read_at) do
-    from(c in Connection, where: c.followee_id == ^user_id, select: %{count: count()})
+    from(c in Follow, where: c.followee_id == ^user_id, select: %{count: count()})
     |> since(read_at)
   end
 
@@ -354,19 +382,12 @@ defmodule Vutuv.Activity do
   defp count_connections(user_id, read_at) do
     query =
       from(c in Connection,
-        join: r in Connection,
-        on: r.follower_id == c.followee_id and r.followee_id == c.follower_id,
-        where: c.followee_id == ^user_id,
+        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
         select: %{count: count()}
       )
 
     if read_at do
-      # The mutuality event happens at the later of the two follows.
-      where(
-        query,
-        [c, r],
-        fragment("GREATEST(?, ?) > ?", c.inserted_at, r.inserted_at, ^read_at)
-      )
+      where(query, [c], c.status_changed_at > ^read_at)
     else
       query
     end

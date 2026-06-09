@@ -12,6 +12,7 @@ defmodule Vutuv.Posts.PostDenial do
 
     * `"everyone"` — only the author (the global author invariant makes
       "everyone but me" out of plain "everyone")
+    * `"non_connections"` — only the author's accepted connections
     * `"non_followers"` — only people who follow the author
     * `"non_followees"` — only people the author follows
     * `"logged_out"` — only logged-in members
@@ -22,7 +23,7 @@ defmodule Vutuv.Posts.PostDenial do
 
   use VutuvWeb, :model
 
-  @wildcards ~w(everyone non_followers non_followees logged_out)
+  @wildcards ~w(everyone non_connections non_followers non_followees logged_out)
 
   schema "post_denials" do
     belongs_to(:post, Vutuv.Posts.Post)

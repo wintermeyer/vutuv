@@ -6,10 +6,11 @@ defmodule VutuvWeb.PostController do
 
   The permalink is public and crawlable when the post has no denials; any
   denial noindexes the page and hides it from non-matching readers. A denied
-  reader gets the follow **teaser** when the only denial is `non_followers`
-  (following fixes their access — actionable), and a plain 404 for every
-  other audience configuration (revealing *why* access is denied would leak
-  the deny list). Unknown and denied are indistinguishable by design.
+  reader gets an actionable **teaser** when one relationship unlocks the post:
+  the follow teaser when the only denial is `non_followers`, the connect teaser
+  when it is `non_connections`. Every other audience configuration is a plain
+  404 (revealing *why* access is denied would leak the deny list). Unknown and
+  denied are indistinguishable by design.
 
   Non-canonical id casing (`/stefan/posts/0197A3…`) redirects to the
   canonical lowercase URL.
@@ -132,11 +133,12 @@ defmodule VutuvWeb.PostController do
           Posts.visible_to?(post, viewer) ->
             render_post(conn, post, author, viewer)
 
-          teaser?(post) ->
+          kind = teaser_kind(post) ->
             conn
             |> put_resp_header("x-robots-tag", "noindex")
             |> render("teaser.html",
               author: author,
+              teaser_kind: kind,
               page_title: VutuvWeb.UserHelpers.full_name(author)
             )
 
@@ -185,9 +187,17 @@ defmodule VutuvWeb.PostController do
   defp maybe_noindex(conn, true), do: put_resp_header(conn, "x-robots-tag", "noindex")
   defp maybe_noindex(conn, false), do: conn
 
-  # The teaser renders only when following would actually grant access:
-  # every denial is the non_followers wildcard.
-  defp teaser?(%Post{denials: denials}) do
-    denials != [] and Enum.all?(denials, &(&1.wildcard == "non_followers"))
+  # The teaser renders only when a single, actionable relationship unlocks the
+  # post: every denial is the same wildcard, and it is one the reader can
+  # resolve themselves — `:follow` (all `non_followers`) or `:connect` (all
+  # `non_connections`). Any other denial mix stays an opaque 404.
+  defp teaser_kind(%Post{denials: []}), do: nil
+
+  defp teaser_kind(%Post{denials: denials}) do
+    cond do
+      Enum.all?(denials, &(&1.wildcard == "non_followers")) -> :follow
+      Enum.all?(denials, &(&1.wildcard == "non_connections")) -> :connect
+      true -> nil
+    end
   end
 end
