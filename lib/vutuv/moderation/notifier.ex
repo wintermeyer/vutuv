@@ -4,6 +4,14 @@ defmodule Vutuv.Moderation.Notifier do
   through the `Vutuv.Notifications.Emailer` chokepoint) and the live in-app
   pushes (`Vutuv.Activity`). Every function is fire-and-forget: a member
   without an email address simply gets no mail.
+
+  Emails are delivered **off the calling process** (one supervised task per
+  recipient): these run inside member-facing requests — reporting a profile
+  mails every admin — and the production mailer is synchronous SMTP, so one
+  slow MX must not stall the HTTP request. A failed delivery was already
+  ignored when it was inline; moving it to a task loses nothing. Tests run
+  deliveries inline (`config :vutuv, :async_email, false`) because the
+  Swoosh test adapter hands the email to the calling process.
   """
 
   import Ecto.Query
@@ -93,11 +101,25 @@ defmodule Vutuv.Moderation.Notifier do
     end
   end
 
+  # The single send chokepoint: address lookup + SMTP delivery leave the
+  # caller's process (see the moduledoc).
   defp deliver_to(%User{} = user, build) do
-    case Accounts.first_email_value(user) do
-      nil -> :ok
-      address -> user |> build.(address) |> Emailer.deliver()
+    async(fn ->
+      case Accounts.first_email_value(user) do
+        nil -> :ok
+        address -> user |> build.(address) |> Emailer.deliver()
+      end
+    end)
+  end
+
+  defp async(fun) do
+    if Application.get_env(:vutuv, :async_email, true) do
+      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, fun)
+    else
+      fun.()
     end
+
+    :ok
   end
 
   defp list_admins do

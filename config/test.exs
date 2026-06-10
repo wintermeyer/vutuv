@@ -12,6 +12,9 @@ config :vutuv, :sweep_pending_images, false
 config :vutuv, :sweep_unconfirmed_registrations, false
 config :vutuv, :send_unread_message_emails, false
 config :vutuv, :moderation_sweeper, false
+# Moderation emails deliver inline in tests: the async task would swallow the
+# Swoosh test adapter's {:email, ...} message (it goes to the calling process).
+config :vutuv, :async_email, false
 config :vutuv, :reconcile_member_count, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
