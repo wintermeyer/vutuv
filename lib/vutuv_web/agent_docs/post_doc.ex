@@ -9,6 +9,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
@@ -44,8 +46,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   def build_archive(author, path, entries, total, period_label) do
     AgentDocs.doc_meta("post_archive", path)
     |> Map.merge(%{
-      title: "#{UserHelpers.full_name(author)} · Posts" <> period_suffix(period_label),
-      description: "Post archive of #{UserHelpers.full_name(author)}",
+      title:
+        "#{UserHelpers.full_name(author)} · #{gettext("Posts")}" <> period_suffix(period_label),
+      description: gettext("Post archive of %{name}", name: UserHelpers.full_name(author)),
       author: author_ref(author),
       period: period_label,
       total: total,

@@ -507,18 +507,22 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):
-    the same page as Markdown, plain text, JSON and vCard. --%>
+    the same page as Markdown, plain text, JSON and vCard. A human visitor
+    browsing in German gets the German rendering via ?lang=; the canonical
+    extension URLs (head alternates, llms.txt) stay English. --%>
+    <% format_lang =
+      if @conn.assigns[:locale] in [nil, "en"], do: "", else: "?lang=#{@conn.assigns[:locale]}" %>
     <.card id="profile-other-formats">
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
       <ul class="space-y-2 text-sm">
         <li>
-          <a href={"/#{@user.active_slug}.md"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Markdown")}</a>
+          <a href={"/#{@user.active_slug}.md#{format_lang}"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Markdown")}</a>
         </li>
         <li>
-          <a href={"/#{@user.active_slug}.txt"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Text only")}</a>
+          <a href={"/#{@user.active_slug}.txt#{format_lang}"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Text only")}</a>
         </li>
         <li>
-          <a href={"/#{@user.active_slug}.json"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">JSON</a>
+          <a href={"/#{@user.active_slug}.json#{format_lang}"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">JSON</a>
         </li>
         <li>
           <a href={"/#{@user.active_slug}.vcf"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Vcard")}</a>

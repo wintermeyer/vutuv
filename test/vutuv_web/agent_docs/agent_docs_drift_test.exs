@@ -181,4 +181,65 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert_fact_everywhere(rendered, "Greta Gradient")
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
+
+  test "work experiences sort newest first, the ongoing role on top" do
+    user = insert_activated_user(active_slug: "sorted_cv")
+
+    insert(:work_experience,
+      user: user,
+      title: "Old role",
+      start_year: 2010,
+      end_year: 2015,
+      end_month: 6
+    )
+
+    insert(:work_experience,
+      user: user,
+      title: "Middle role",
+      start_year: 2016,
+      end_year: 2018,
+      end_month: 12
+    )
+
+    insert(:work_experience, user: user, title: "Current role", start_year: 2020)
+
+    doc = Jason.decode!(get(build_conn(), "/sorted_cv.json").resp_body)
+
+    assert Enum.map(doc["work_experiences"], & &1["title"]) ==
+             ["Current role", "Middle role", "Old role"]
+  end
+
+  test "skills sort by endorsement count, ties alphabetically" do
+    user = insert_activated_user(active_slug: "sorted_skills")
+    endorser = insert_activated_user()
+
+    for {name, slug} <- [{"Beta", "beta"}, {"Alpha", "alpha"}, {"Gamma", "gamma"}] do
+      insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: slug))
+    end
+
+    [gamma] =
+      Repo.all(from(u in Vutuv.Tags.UserTag, join: t in assoc(u, :tag), where: t.slug == "gamma"))
+
+    insert(:user_tag_endorsement, user_tag: gamma, user: endorser)
+
+    doc = Jason.decode!(get(build_conn(), "/sorted_skills.json").resp_body)
+
+    assert Enum.map(doc["tags"], & &1["name"]) == ["Gamma", "Alpha", "Beta"]
+  end
+
+  test "?lang=de translates the labels, English stays the default" do
+    de_txt = get(build_conn(), "/drift_tester.txt?lang=de").resp_body
+    assert de_txt =~ "Mitglied seit:"
+    assert de_txt =~ "FÄHIGKEITEN & BESTÄTIGUNGEN"
+
+    de_md = get(build_conn(), "/drift_tester.md?lang=de").resp_body
+    assert de_md =~ "## Lebenslauf"
+
+    en_txt = get(build_conn(), "/drift_tester.txt").resp_body
+    assert en_txt =~ "Member since:"
+
+    # An unknown language falls back to English instead of erroring.
+    fallback = get(build_conn(), "/drift_tester.txt?lang=xx").resp_body
+    assert fallback =~ "Member since:"
+  end
 end

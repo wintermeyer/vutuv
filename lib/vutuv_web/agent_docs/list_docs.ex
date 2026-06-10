@@ -11,6 +11,8 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   matching builder — the drift test (`agent_docs_drift_test.exs`) reminds you.
   """
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
@@ -22,8 +24,8 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
 
     label =
       case side do
-        :followers -> "Followers of #{name}"
-        :following -> "People #{name} follows"
+        :followers -> gettext("Followers of %{name}", name: name)
+        :following -> gettext("People %{name} follows", name: name)
       end
 
     AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true)
@@ -52,8 +54,8 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   def build_most_followed(users, work_info_by_id) do
     AgentDocs.doc_meta("listing", "/listings/most_followed_users")
     |> Map.merge(%{
-      title: "Most followed members",
-      description: "The most followed vutuv members",
+      title: gettext("Most followed members"),
+      description: gettext("The most followed vutuv members"),
       people: Enum.map(users, &person_entry(&1, work_info_by_id))
     })
   end

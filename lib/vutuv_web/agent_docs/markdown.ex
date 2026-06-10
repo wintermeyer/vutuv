@@ -4,7 +4,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   frontmatter (the Cloudflare "markdown for agents" shape) plus a body per
   doc type. User-authored Markdown (headlines, post bodies) is passed
   through verbatim — it already is Markdown.
+
+  Labels render through Gettext in the process locale, which
+  `VutuvWeb.AgentDocs.negotiate/2` sets from the `?lang=` query parameter
+  (default English). Structural metadata (frontmatter keys, the type
+  names) stays English in every language.
   """
+
+  use Gettext, backend: VutuvWeb.Gettext
+
+  alias Vutuv.Accounts.User
 
   def render(%{type: "profile"} = doc) do
     [
@@ -14,43 +23,53 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       blank_to_nil(doc.work_info),
       profile_facts(doc),
       section(
-        "Skills & endorsements",
-        Enum.map(doc.tags, &"- [#{&1.name}](#{&1.url}) (#{&1.endorsements} endorsements)")
+        gettext("Skills & endorsements"),
+        Enum.map(doc.tags, &"- [#{&1.name}](#{&1.url}) (#{endorsements_label(&1)})")
       ),
-      section("Experience", Enum.map(doc.work_experiences, &work_line/1)),
-      section("Links", Enum.map(doc.links, &link_line/1)),
-      section("Contact", Enum.map(doc.emails, &"- <#{&1}>")),
-      section("Social media", Enum.map(doc.social_media, &"- #{&1.provider}: #{&1.url}")),
-      section("Phone numbers", Enum.map(doc.phone_numbers, &"- #{&1.type}: #{&1.value}")),
-      section("Addresses", Enum.map(doc.addresses, &("- " <> address_line(&1)))),
-      section("Posts (#{doc.counts.posts} total)", Enum.map(doc.posts, &post_line/1))
+      section(gettext("Experience"), Enum.map(doc.work_experiences, &work_line/1)),
+      section(gettext("Links"), Enum.map(doc.links, &link_line/1)),
+      section(gettext("Contact"), Enum.map(doc.emails, &"- <#{&1}>")),
+      section(
+        gettext("Social Media"),
+        Enum.map(doc.social_media, &"- #{&1.provider}: #{&1.url}")
+      ),
+      section(
+        gettext("Phone Numbers"),
+        Enum.map(doc.phone_numbers, &"- #{&1.type}: #{&1.value}")
+      ),
+      section(gettext("Addresses"), Enum.map(doc.addresses, &("- " <> address_line(&1)))),
+      section(
+        gettext("Posts (%{count} total)", count: doc.counts.posts),
+        Enum.map(doc.posts, &post_line/1)
+      )
     ]
     |> join_blocks()
   end
 
   def render(%{type: "post"} = doc) do
+    author_link = "[#{doc.author.name}](#{doc.author.url})"
+
     [
       frontmatter(doc),
-      "# Post by [#{doc.author.name}](#{doc.author.url}) · #{doc.published_on}",
+      "# #{gettext("Post by %{name}", name: author_link)} · #{doc.published_on}",
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
       tags_line(doc.tags),
-      section("Images", Enum.map(doc.images, &image_line/1)),
-      section("Replies (#{doc.reply_count})", Enum.map(doc.replies, &reply_block/1))
+      section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
+      section("#{gettext("Replies")} (#{doc.reply_count})", Enum.map(doc.replies, &reply_block/1))
     ]
     |> join_blocks()
   end
 
   def render(%{type: "post_archive"} = doc) do
+    author_link = "[#{doc.author.name}](#{doc.author.url})"
+
     [
       frontmatter(doc),
       "# #{doc.title}",
-      "#{doc.total} posts by [#{doc.author.name}](#{doc.author.url})" <>
-        if(doc.period, do: " in #{doc.period}", else: "") <>
-        if(doc.total > length(doc.posts),
-          do: " (#{length(doc.posts)} on this page, use ?page=N)",
-          else: ""
-        ),
+      gettext("%{count} posts by %{name}", count: doc.total, name: author_link) <>
+        if(doc.period, do: " · #{doc.period}", else: "") <>
+        page_hint(doc.total, doc.posts),
       Enum.map_join(doc.posts, "\n", &post_line/1)
     ]
     |> join_blocks()
@@ -60,11 +79,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       frontmatter(doc),
       "# #{doc.title}",
-      "#{doc.total} total" <>
-        if(doc.total > length(doc.people),
-          do: " (#{length(doc.people)} on this page, use ?page=N)",
-          else: ""
-        ),
+      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
       Enum.map_join(doc.people, "\n", &person_line/1)
     ]
     |> join_blocks()
@@ -75,7 +90,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.name}",
       doc.description,
-      section("Most endorsed members", Enum.map(doc.most_endorsed_users, &person_line/1))
+      section(gettext("Most endorsed members"), Enum.map(doc.most_endorsed_users, &person_line/1))
     ]
     |> join_blocks()
   end
@@ -111,29 +126,37 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     counts = doc.counts
 
     [
-      "- Member since: #{doc.member_since}",
-      counts.followers > 0 && "- Followers: #{counts.followers}",
-      counts.following > 0 && "- Following: #{counts.following}",
-      counts.connections > 0 && "- Connections: #{counts.connections}",
-      doc.gender && "- Gender: #{doc.gender}",
-      doc.birthdate && "- Birthday: #{doc.birthdate}"
+      "- #{gettext("Member since")}: #{doc.member_since}",
+      counts.followers > 0 && "- #{gettext("Followers")}: #{counts.followers}",
+      counts.following > 0 && "- #{gettext("Following")}: #{counts.following}",
+      counts.connections > 0 && "- #{gettext("Connections")}: #{counts.connections}",
+      doc.gender && "- #{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
+      doc.birthdate && "- #{gettext("Birthday")}: #{doc.birthdate}"
     ]
     |> Enum.filter(& &1)
     |> Enum.join("\n")
   end
 
+  defp endorsements_label(tag) do
+    gettext("%{count} endorsements", count: tag.endorsements)
+  end
+
   defp work_line(work) do
-    period =
-      case {work.start, work.end} do
-        {nil, nil} -> nil
-        {start, nil} -> "#{start} – today"
-        {nil, ending} -> "until #{ending}"
-        {start, ending} -> "#{start} – #{ending}"
-      end
+    period = work_period(work)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Enum.join()
+  end
+
+  @doc false
+  def work_period(work) do
+    case {work.start, work.end} do
+      {nil, nil} -> nil
+      {start, nil} -> "#{start} – #{gettext("today")}"
+      {nil, ending} -> gettext("until %{date}", date: ending)
+      {start, ending} -> "#{start} – #{ending}"
+    end
   end
 
   defp link_line(%{description: nil, url: url}), do: "- <#{url}>"
@@ -145,6 +168,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       [
         address.line_1,
         address.line_2,
+        address.line_3,
+        address.line_4,
         address.zip_code,
         address.city,
         address.state,
@@ -158,7 +183,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp post_line(post) do
-    reposted = if post[:reposted_by], do: " (reposted by #{post.reposted_by})", else: ""
+    reposted =
+      if post[:reposted_by],
+        do: " (#{gettext("reposted by %{name}", name: post.reposted_by)})",
+        else: ""
+
     "- #{post.published_on}#{reposted}: [#{post.excerpt}](#{post.url})"
   end
 
@@ -169,16 +198,24 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       if person.work_info, do: " — #{person.work_info}", else: ""
   end
 
-  defp in_reply_to_line(%{author: nil}), do: "> In reply to a deleted post."
+  defp in_reply_to_line(%{author: nil}), do: "> " <> gettext("In reply to a deleted post.")
 
   defp in_reply_to_line(%{url: nil, author: author}),
-    do: "> In reply to a deleted post by #{author}."
+    do: "> " <> gettext("In reply to a deleted post by %{name}.", name: author)
 
-  defp in_reply_to_line(%{url: url, author: author}),
-    do: "> In reply to [a post by #{author}](#{url})."
+  defp in_reply_to_line(%{url: url, author: author}) do
+    author_link = "[#{author}](#{url})"
+    "> " <> gettext("In reply to a post by %{name}.", name: author_link)
+  end
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")
+
+  defp page_hint(total, listed) when total > length(listed) do
+    " (" <> gettext("%{count} on this page, use ?page=N", count: length(listed)) <> ")"
+  end
+
+  defp page_hint(_total, _listed), do: ""
 
   defp image_line(image) do
     alt = image.alt || "image"

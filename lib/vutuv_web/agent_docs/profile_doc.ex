@@ -87,8 +87,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       :social_media_accounts,
       user_tags:
         from(u in UserTag,
+          left_join: e in assoc(u, :endorsements),
           left_join: t in assoc(u, :tag),
-          order_by: t.slug,
+          # Most endorsed first, ties alphabetically — same order as the
+          # profile page.
+          order_by: [desc: count(e.id), asc: t.slug],
           group_by: [u.id, t.slug],
           preload: [:endorsements, :tag]
         ),

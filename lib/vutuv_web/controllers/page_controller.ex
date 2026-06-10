@@ -161,6 +161,9 @@ defmodule VutuvWeb.PageController do
   - `<page>.txt`  — plain text, 80 columns (or `Accept: text/plain`)
   - `<page>.json` — flat JSON document (or `Accept: application/json`)
 
+  Labels default to English; add `?lang=de` for a German rendering. The
+  member-written content keeps its original language either way.
+
   Documents carry `schema_version` (currently #{AgentDocs.schema_version()};
   additions are non-breaking) and `generated_at`. Responses carry a
   `Content-Signal` header; respect it — members can opt out of search/AI use.

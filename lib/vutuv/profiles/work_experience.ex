@@ -88,14 +88,22 @@ defmodule Vutuv.Profiles.WorkExperience do
     end
   end
 
+  @doc """
+  Newest first, the way a CV reads: ongoing roles (no end date) lead, then
+  by end date, then by start date.
+
+  Plain `DESC` does this in Postgres (DESC puts NULLs first). The previous
+  `-? ASC` negation trick inverted the NULL placement and sorted the
+  current, open-ended role **last**.
+  """
   def order_by_date(query) do
     query
-    |> order_by([u], [
-      fragment("-? ASC", u.end_year),
-      fragment("-? ASC", u.end_month),
-      fragment("-? ASC", u.start_year),
-      fragment("-? ASC", u.start_month)
-    ])
+    |> order_by([u],
+      desc: u.end_year,
+      desc: u.end_month,
+      desc: u.start_year,
+      desc: u.start_month
+    )
   end
 
   defimpl String.Chars, for: __MODULE__ do

@@ -74,7 +74,22 @@ defmodule VutuvWeb.AgentDocs do
   """
   def negotiate(conn, allowed \\ [:md, :txt, :json]) do
     format = conn.private[:vutuv_agent_format] || conn.private[:vutuv_agent_accept]
-    if format in allowed, do: format, else: :html
+
+    if format in allowed do
+      # Agent documents default to English (the canonical, cache-safe
+      # rendering); `?lang=de` opts into a translated one. The session
+      # locale is deliberately ignored so the same URL always answers
+      # with the same bytes, logged in or not.
+      Gettext.put_locale(VutuvWeb.Gettext, doc_locale(conn))
+      format
+    else
+      :html
+    end
+  end
+
+  defp doc_locale(conn) do
+    lang = conn.params["lang"]
+    if lang in Gettext.known_locales(VutuvWeb.Gettext), do: lang, else: "en"
   end
 
   @doc "The URL extension for `format` (`:md` -> `\".md\"`)."

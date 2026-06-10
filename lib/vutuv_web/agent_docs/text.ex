@@ -3,7 +3,16 @@ defmodule VutuvWeb.AgentDocs.Text do
   Renders an agent doc (see `VutuvWeb.AgentDocs`) as plain text, hard-wrapped
   at 80 columns. Bullets wrap with a hanging indent; URLs are never broken
   (a long URL may exceed the limit rather than become unclickable).
+
+  Labels render through Gettext in the process locale, which
+  `VutuvWeb.AgentDocs.negotiate/2` sets from the `?lang=` query parameter
+  (default English). The metadata footer stays English in every language.
   """
+
+  use Gettext, backend: VutuvWeb.Gettext
+
+  alias Vutuv.Accounts.User
+  alias VutuvWeb.AgentDocs.Markdown
 
   @width 80
 
@@ -14,16 +23,25 @@ defmodule VutuvWeb.AgentDocs.Text do
       blank_to_nil(doc.work_info),
       profile_facts(doc),
       section(
-        "Skills & endorsements",
-        Enum.map(doc.tags, &"* #{&1.name} (#{&1.endorsements} endorsements)")
+        gettext("Skills & endorsements"),
+        Enum.map(doc.tags, &"* #{&1.name} (#{endorsements_label(&1)})")
       ),
-      section("Experience", Enum.map(doc.work_experiences, &work_line/1)),
-      section("Links", Enum.map(doc.links, &link_line/1)),
-      section("Contact", Enum.map(doc.emails, &("* " <> &1))),
-      section("Social media", Enum.map(doc.social_media, &"* #{&1.provider}: #{&1.url}")),
-      section("Phone numbers", Enum.map(doc.phone_numbers, &"* #{&1.type}: #{&1.value}")),
-      section("Addresses", Enum.map(doc.addresses, &("* " <> address_line(&1)))),
-      section("Posts (#{doc.counts.posts} total)", Enum.map(doc.posts, &post_lines/1)),
+      section(gettext("Experience"), Enum.map(doc.work_experiences, &work_line/1)),
+      section(gettext("Links"), Enum.map(doc.links, &link_line/1)),
+      section(gettext("Contact"), Enum.map(doc.emails, &("* " <> &1))),
+      section(
+        gettext("Social Media"),
+        Enum.map(doc.social_media, &"* #{&1.provider}: #{&1.url}")
+      ),
+      section(
+        gettext("Phone Numbers"),
+        Enum.map(doc.phone_numbers, &"* #{&1.type}: #{&1.value}")
+      ),
+      section(gettext("Addresses"), Enum.map(doc.addresses, &("* " <> address_line(&1)))),
+      section(
+        gettext("Posts (%{count} total)", count: doc.counts.posts),
+        Enum.map(doc.posts, &post_lines/1)
+      ),
       footer(doc)
     ]
     |> join_blocks()
@@ -31,12 +49,15 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   def render(%{type: "post"} = doc) do
     [
-      heading("Post by #{doc.author.name} · #{doc.published_on}"),
+      heading("#{gettext("Post by %{name}", name: doc.author.name)} · #{doc.published_on}"),
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
       tags_line(doc.tags),
-      section("Images", Enum.map(doc.images, &image_lines/1)),
-      section("Replies (#{doc.reply_count})", Enum.map(doc.replies, &reply_lines/1)),
+      section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
+      section(
+        "#{gettext("Replies")} (#{doc.reply_count})",
+        Enum.map(doc.replies, &reply_lines/1)
+      ),
       footer(doc)
     ]
     |> join_blocks()
@@ -45,11 +66,8 @@ defmodule VutuvWeb.AgentDocs.Text do
   def render(%{type: "post_archive"} = doc) do
     [
       heading(doc.title),
-      "#{doc.total} posts by #{doc.author.name} (#{doc.author.url})" <>
-        if(doc.total > length(doc.posts),
-          do: " — #{length(doc.posts)} on this page, use ?page=N",
-          else: ""
-        ),
+      gettext("%{count} posts by %{name}", count: doc.total, name: doc.author.name) <>
+        " (#{doc.author.url})" <> page_hint(doc.total, doc.posts),
       Enum.map(doc.posts, &post_lines/1),
       footer(doc)
     ]
@@ -59,11 +77,7 @@ defmodule VutuvWeb.AgentDocs.Text do
   def render(%{type: type} = doc) when type in ["followers", "following"] do
     [
       heading(doc.title),
-      "#{doc.total} total" <>
-        if(doc.total > length(doc.people),
-          do: " — #{length(doc.people)} on this page, use ?page=N",
-          else: ""
-        ),
+      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
       Enum.map(doc.people, &person_line/1),
       footer(doc)
     ]
@@ -74,7 +88,10 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.name),
       doc.description,
-      section("Most endorsed members", Enum.map(doc.most_endorsed_users, &person_line/1)),
+      section(
+        gettext("Most endorsed members"),
+        Enum.map(doc.most_endorsed_users, &person_line/1)
+      ),
       footer(doc)
     ]
     |> join_blocks()
@@ -128,27 +145,24 @@ defmodule VutuvWeb.AgentDocs.Text do
     counts = doc.counts
 
     [
-      doc.verified && "Verified profile: yes",
-      "Member since: #{doc.member_since}",
-      counts.followers > 0 && "Followers: #{counts.followers}",
-      counts.following > 0 && "Following: #{counts.following}",
-      counts.connections > 0 && "Connections: #{counts.connections}",
-      doc.gender && "Gender: #{doc.gender}",
-      doc.birthdate && "Birthday: #{doc.birthdate}"
+      doc.verified && gettext("Verified profile: yes"),
+      "#{gettext("Member since")}: #{doc.member_since}",
+      counts.followers > 0 && "#{gettext("Followers")}: #{counts.followers}",
+      counts.following > 0 && "#{gettext("Following")}: #{counts.following}",
+      counts.connections > 0 && "#{gettext("Connections")}: #{counts.connections}",
+      doc.gender && "#{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
+      doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}"
     ]
     |> Enum.filter(& &1)
     |> Enum.join("\n")
   end
 
-  defp work_line(work) do
-    period =
-      case {work.start, work.end} do
-        {nil, nil} -> nil
-        {start, nil} -> "#{start} – today"
-        {nil, ending} -> "until #{ending}"
-        {start, ending} -> "#{start} – #{ending}"
-      end
+  defp endorsements_label(tag) do
+    gettext("%{count} endorsements", count: tag.endorsements)
+  end
 
+  defp work_line(work) do
+    period = Markdown.work_period(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
     "* " <> line <> if period, do: " (#{period})", else: ""
   end
@@ -162,6 +176,8 @@ defmodule VutuvWeb.AgentDocs.Text do
       [
         address.line_1,
         address.line_2,
+        address.line_3,
+        address.line_4,
         address.zip_code,
         address.city,
         address.state,
@@ -175,7 +191,11 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp post_lines(post) do
-    reposted = if post[:reposted_by], do: " (reposted by #{post.reposted_by})", else: ""
+    reposted =
+      if post[:reposted_by],
+        do: " (#{gettext("reposted by %{name}", name: post.reposted_by)})",
+        else: ""
+
     "* #{post.published_on}#{reposted}: #{post.excerpt}\n  #{post.url}"
   end
 
@@ -184,16 +204,22 @@ defmodule VutuvWeb.AgentDocs.Text do
     "#{prefix}#{person.name}#{work}\n  #{person.url}"
   end
 
-  defp in_reply_to_line(%{author: nil}), do: "In reply to a deleted post."
+  defp in_reply_to_line(%{author: nil}), do: gettext("In reply to a deleted post.")
 
   defp in_reply_to_line(%{url: nil, author: author}),
-    do: "In reply to a deleted post by #{author}."
+    do: gettext("In reply to a deleted post by %{name}.", name: author)
 
   defp in_reply_to_line(%{url: url, author: author}),
-    do: "In reply to a post by #{author}: #{url}"
+    do: gettext("In reply to a post by %{name}.", name: author) <> " #{url}"
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.join(tags, ", ")
+
+  defp page_hint(total, listed) when total > length(listed) do
+    " — " <> gettext("%{count} on this page, use ?page=N", count: length(listed))
+  end
+
+  defp page_hint(_total, _listed), do: ""
 
   defp image_lines(image) do
     alt = image.alt || "image"

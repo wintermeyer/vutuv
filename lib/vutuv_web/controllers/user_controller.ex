@@ -103,7 +103,9 @@ defmodule VutuvWeb.UserController do
         from(u in Vutuv.Tags.UserTag,
           left_join: e in assoc(u, :endorsements),
           left_join: t in assoc(u, :tag),
-          order_by: t.slug,
+          # Most endorsed first, ties alphabetically — so the 10-tag cut
+          # keeps the strongest skills.
+          order_by: [desc: count(e.id), asc: t.slug],
           # Postgres requires every ordered, non-aggregated column in GROUP BY;
           # each user_tag has exactly one tag, so this keeps one row per user_tag.
           group_by: [u.id, t.slug],
