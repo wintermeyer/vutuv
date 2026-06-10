@@ -18,6 +18,10 @@ defmodule Vutuv.Chat.Conversation do
 
     field(:status, :string, default: "pending")
     field(:last_message_at, :naive_datetime)
+    # Set by Vutuv.Moderation when one party reports the other: the whole
+    # conversation disappears for BOTH sides and accepts no new messages
+    # until a rejected report restores it. Never cast.
+    field(:frozen_at, :naive_datetime)
 
     has_many(:participants, Vutuv.Chat.Participant)
     has_many(:messages, Vutuv.Chat.Message)

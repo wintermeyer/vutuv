@@ -482,8 +482,15 @@ input[type="submit"].button {
   background: var(--color-brand-700);
   color: #ffffff;
 }
+/* Variants repeat the submit-element selectors of the base rule above:
+   `button[type="submit"].button` is more specific than a bare variant class,
+   so a variant on a real submit button would otherwise stay brand-blue. */
 .button--cancel,
-.button--secondary {
+.button--secondary,
+button[type="submit"].button--cancel,
+button[type="submit"].button--secondary,
+input[type="submit"].button--cancel,
+input[type="submit"].button--secondary {
   background: #f1f5f9;
   color: #334155;
 }
@@ -535,7 +542,9 @@ input[type="submit"].button {
   left: 50%;
   transform: translate(-50%, -50%);
 }
-.button--danger {
+.button--danger,
+button[type="submit"].button--danger,
+input[type="submit"].button--danger {
   background: #dc2626;
 }
 .button--danger:hover {
@@ -942,7 +951,9 @@ ul.thumbs li .text .title {
   .icon--follow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M19 8v6M22 11h-6'/%3E%3C/svg%3E"); }
   .icon--unfollow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='m16 11 2 2 4-4'/%3E%3C/svg%3E"); }
   .alert, .alert-danger { background: rgb(127 29 29 / 0.25); border-color: rgb(153 27 27 / 0.5); color: #fca5a5; }
-  .button--cancel, .button--secondary, .button--icon:hover { background: #1e293b; color: #e2e8f0; }
+  .button--cancel, .button--secondary, .button--icon:hover,
+  button[type="submit"].button--cancel, button[type="submit"].button--secondary,
+  input[type="submit"].button--cancel, input[type="submit"].button--secondary { background: #1e293b; color: #e2e8f0; }
   .button--icon { color: #94a3b8; }
   .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }

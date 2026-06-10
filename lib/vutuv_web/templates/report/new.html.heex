@@ -3,11 +3,40 @@
     <h1 class="text-xl font-bold text-slate-900 dark:text-white">
       {gettext("Report this content")}
     </h1>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <p :if={is_nil(@severed_owner)} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
       {gettext(
         "Your report is anonymous. If it checks out, the content is hidden right away and the owner is asked to fix it."
       )}
     </p>
+    <p :if={@severed_owner} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      {gettext(
+        "If your report checks out, the content is hidden right away and the owner is asked to fix it."
+      )}
+    </p>
+
+    <%!-- The reporter is tied to the owner: spell out the separation, the
+          why, and the de-facto loss of anonymity BEFORE they commit. Amber
+          is the moderation-notice color. --%>
+    <div
+      :if={@severed_owner}
+      id="report-severance-notice"
+      class="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900"
+    >
+      <p class="font-semibold">
+        {gettext("Sending this report separates you and @%{handle} on the spot.",
+          handle: @severed_owner.active_slug
+        )}
+      </p>
+      <p class="mt-1">
+        {gettext(
+          "To protect you, your connection, follows and messages are paused in both directions - nobody should have to stay in contact with someone they just reported. Because of this, @%{handle} may recognize that the report came from you.",
+          handle: @severed_owner.active_slug
+        )}
+      </p>
+      <p class="mt-1">
+        {gettext("If our admins find the report unfounded, everything is restored.")}
+      </p>
+    </div>
 
     <blockquote
       :if={@preview != ""}

@@ -184,11 +184,43 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
+  # `case_record` arrives with owner + reports/reporters preloaded (see
+  # `Vutuv.Moderation.Notifier.admins_urgent/1`): the mail carries the
+  # substance of the case - who, reported as what, the reporter's note - so
+  # the admin knows what they are walking into before clicking.
   def moderation_admin_urgent_email(user, email, case_record) do
-    build_email(user, email, "moderation_admin_urgent", %{case_id: case_record.id}, fn ->
+    report =
+      case_record.reports
+      |> Enum.sort_by(& &1.inserted_at, NaiveDateTime)
+      |> List.last()
+
+    assigns = %{
+      case_id: case_record.id,
+      owner_slug: case_record.owner.active_slug,
+      category_label: localized_category_label(report, user),
+      note: report && presence(report.note),
+      report_count: length(case_record.reports)
+    }
+
+    build_email(user, email, "moderation_admin_urgent", assigns, fn ->
       gettext("Moderation: a profile was reported")
     end)
   end
+
+  # The category in the *recipient's* language (the body template is selected
+  # by their locale, so the label must match it).
+  defp localized_category_label(nil, _user), do: nil
+
+  defp localized_category_label(report, user) do
+    Gettext.with_locale(VutuvWeb.Gettext, get_locale(user.locale), fn ->
+      VutuvWeb.ReportHTML.category_label(report.category)
+    end)
+  end
+
+  defp presence(nil), do: nil
+
+  defp presence(string) when is_binary(string),
+    do: if(String.trim(string) == "", do: nil, else: string)
 
   @doc "Admin daily digest: how many cases wait in the queue."
   def moderation_admin_digest_email(user, email, open_count) do

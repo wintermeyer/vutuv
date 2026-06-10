@@ -49,6 +49,10 @@ defmodule Vutuv.Chat do
       {a_id, b_id} = pair(me.id, other.id)
 
       case get_by_pair(a_id, b_id) do
+        # A report froze this pair (see Vutuv.Moderation): no new thread, no
+        # explanation - the caller shows its generic "cannot receive
+        # messages" notice.
+        %Conversation{frozen_at: %NaiveDateTime{}} -> {:error, :frozen}
         %Conversation{} = conversation -> {:ok, conversation}
         nil -> create_conversation(me, other, a_id, b_id)
       end
@@ -115,7 +119,12 @@ defmodule Vutuv.Chat do
   """
   def get_conversation(%User{id: me_id}, conversation_id) do
     fetch_as_participant(me_id, conversation_id, fn query ->
-      from(c in query, where: c.status != "declined" or c.initiator_id == ^me_id)
+      from(c in query,
+        where: c.status != "declined" or c.initiator_id == ^me_id,
+        # A moderation-frozen conversation is gone for BOTH participants
+        # (admins read it via moderation_context/2).
+        where: is_nil(c.frozen_at)
+      )
     end)
   end
 
@@ -164,6 +173,11 @@ defmodule Vutuv.Chat do
         {:error, :not_participant}
 
       %Conversation{status: "declined"} ->
+        {:ok, :dropped}
+
+      # Frozen by a report: silently dropped, exactly like a decline, so the
+      # freeze is not distinguishable from being ignored.
+      %Conversation{frozen_at: %NaiveDateTime{}} ->
         {:ok, :dropped}
 
       %Conversation{status: "accepted"} = conversation ->
@@ -285,6 +299,7 @@ defmodule Vutuv.Chat do
   def list_conversations(%User{id: me_id}) do
     from(c in Conversation,
       where: c.user_a_id == ^me_id or c.user_b_id == ^me_id,
+      where: is_nil(c.frozen_at),
       where:
         c.status == "accepted" or
           (c.initiator_id == ^me_id and c.status in ["pending", "declined"]),
@@ -303,6 +318,7 @@ defmodule Vutuv.Chat do
   def list_requests(%User{id: me_id}) do
     from(c in Conversation,
       where: c.user_a_id == ^me_id or c.user_b_id == ^me_id,
+      where: is_nil(c.frozen_at),
       where: c.status == "pending" and c.initiator_id != ^me_id,
       where: not is_nil(c.last_message_at),
       order_by: [desc: c.last_message_at, desc: c.id]
@@ -459,10 +475,14 @@ defmodule Vutuv.Chat do
       on: p.conversation_id == c.id and p.user_id == ^me_id,
       join: m in Message,
       on: m.conversation_id == c.id,
+      where: is_nil(c.frozen_at),
       where:
         c.status == "accepted" or
           (c.status == "pending" and c.initiator_id != ^me_id),
       where: m.sender_id != ^me_id,
+      # Frozen messages are invisible to the recipient (see hydrate/2), so
+      # they must not light the shell badge either.
+      where: is_nil(m.frozen_at),
       where: is_nil(p.last_read_at) or m.inserted_at > p.last_read_at,
       select: count(c.id, :distinct)
     )
@@ -492,6 +512,7 @@ defmodule Vutuv.Chat do
         join: c in Conversation,
         on: c.id == p.conversation_id,
         where: c.status == "accepted",
+        where: is_nil(c.frozen_at),
         where: is_nil(p.notified_at),
         where:
           fragment(
@@ -599,6 +620,45 @@ defmodule Vutuv.Chat do
     )
     |> Repo.all()
     |> Enum.reverse()
+  end
+
+  @doc """
+  Whether an unfrozen conversation exists between the two - i.e. whether a
+  report would freeze something. Backs the report form's "this will separate
+  you" warning (`Vutuv.Moderation`).
+  """
+  def active_conversation_between?(user_id, other_id) do
+    {a_id, b_id} = pair(user_id, other_id)
+    match?(%Conversation{frozen_at: nil}, get_by_pair(a_id, b_id))
+  end
+
+  @doc """
+  Freezes the 1:1 conversation between the two users, if one exists and is
+  not already frozen: it disappears for both sides and accepts no new
+  messages. Returns the conversation this call froze, or nil (no
+  conversation, or already frozen by an earlier report - the earlier case
+  then owns the eventual unfreeze). Called by `Vutuv.Moderation` when a
+  report severs the relationship.
+  """
+  def freeze_conversation_between(user_id, other_id) do
+    {a_id, b_id} = pair(user_id, other_id)
+
+    case get_by_pair(a_id, b_id) do
+      %Conversation{frozen_at: nil} = conversation ->
+        conversation
+        |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+        |> Repo.update!()
+
+      _ ->
+        nil
+    end
+  end
+
+  @doc "Thaws a report-frozen conversation (a rejected report restores it)."
+  def unfreeze_conversation(%Conversation{} = conversation) do
+    conversation
+    |> Ecto.Changeset.change(frozen_at: nil)
+    |> Repo.update!()
   end
 
   @doc """

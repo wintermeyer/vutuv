@@ -22,11 +22,19 @@ defmodule VutuvWeb.ReportController do
         ControllerHelpers.render_error(conn, 404)
 
       content ->
+        reporter = conn.assigns[:current_user]
+
+        # A reporter tied to the owner must understand BEFORE sending that
+        # the report separates the two of them (and thereby de-facto reveals
+        # who reported). Strangers keep the plain anonymity promise.
+        severs = Moderation.would_sever_relationship?(reporter, content)
+
         render(conn, "new.html",
           page_title: gettext("Report content"),
           content_type: type,
           content_id: id,
           preview: preview(content),
+          severed_owner: if(severs, do: Moderation.content_owner(content)),
           return_to: safe_return_to(params["return_to"])
         )
     end
@@ -44,12 +52,9 @@ defmodule VutuvWeb.ReportController do
 
       content ->
         case Moderation.report_content(reporter, content, report_params) do
-          {:ok, _case} ->
+          {:ok, case_record} ->
             conn
-            |> put_flash(
-              :info,
-              gettext("Thank you for your report. We take it from here.")
-            )
+            |> put_flash(:info, report_received_flash(case_record, reporter))
             |> redirect(to: return_to)
 
           {:error, :already_reported} ->
@@ -77,6 +82,20 @@ defmodule VutuvWeb.ReportController do
   end
 
   def create(conn, _params), do: ControllerHelpers.render_error(conn, 404)
+
+  # When the report severed a standing relationship, the reporter must
+  # understand why things just disappeared: paused both ways, undone if the
+  # report turns out unfounded. (The same explanation lands in their
+  # notifications feed, which outlives the flash.)
+  defp report_received_flash(case_record, reporter) do
+    if Moderation.severed_for?(case_record.id, reporter.id) do
+      gettext(
+        "Thank you for your report. To protect you, the connection between you and the reported member is paused - no contact in either direction, including messages. If our admins find the report unfounded, this is undone."
+      )
+    else
+      gettext("Thank you for your report. We take it from here.")
+    end
+  end
 
   # A short quote of what is being reported, so the reporter can double-check
   # they hit the right thing.

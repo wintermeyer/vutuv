@@ -1,7 +1,7 @@
 defmodule Vutuv.ModerationTest do
   use Vutuv.DataCase
 
-  alias Vutuv.{Chat, Moderation, Posts}
+  alias Vutuv.{Chat, Moderation, Posts, Social}
   alias Vutuv.Moderation.{Case, Notifier, Report, Strike}
 
   # Asserts one of the emails delivered so far has `fragment` in its subject
@@ -595,6 +595,261 @@ defmodule Vutuv.ModerationTest do
       assert Moderation.account_hidden?(
                insert(:activated_user, deactivated_at: NaiveDateTime.utc_now())
              )
+    end
+  end
+
+  describe "reporting severs the relationship between reporter and owner" do
+    # Reporting someone is a statement that the contact is unwanted: the two
+    # accounts are separated at report time - connection gone, follows gone,
+    # conversation frozen for both - before any second report or admin ruling.
+    setup %{owner: owner, reporter: reporter} do
+      connection = connect!(reporter, owner)
+      conversation = insert_conversation_between(reporter, owner)
+      message = insert(:message, conversation: conversation, sender: owner)
+      insert(:message, conversation: conversation, sender: reporter)
+      {:ok, %{connection: connection, conversation: conversation, message: message}}
+    end
+
+    test "a post report cuts connection and follows and freezes the conversation", %{
+      owner: owner,
+      reporter: reporter,
+      connection: connection,
+      conversation: conversation
+    } do
+      report!(reporter, insert_post(owner))
+
+      refute Repo.get(Vutuv.Social.Connection, connection.id)
+      refute Social.user_follows_user?(reporter.id, owner.id)
+      refute Social.user_follows_user?(owner.id, reporter.id)
+      assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+
+      # Hidden from both sidebars, no unread badge, no thread access.
+      assert Chat.list_conversations(owner) == []
+      assert Chat.list_conversations(reporter) == []
+      assert Chat.unread_conversations_count(owner) == 0
+      assert Chat.unread_conversations_count(reporter) == 0
+      refute Chat.get_conversation(owner, conversation.id)
+      refute Chat.get_conversation(reporter, conversation.id)
+      assert Chat.messages_page(owner, conversation.id).entries == []
+
+      # Writing into the frozen pair fails silently (like a decline), and
+      # opening the pair anew refuses without saying why.
+      assert {:ok, :dropped} = Chat.send_message(owner, conversation.id, "hello?")
+      assert {:error, :frozen} = Chat.find_or_create_conversation(owner, reporter)
+      assert {:error, :frozen} = Chat.find_or_create_conversation(reporter, owner)
+    end
+
+    test "a profile report severs immediately, before any second report or ruling", %{
+      owner: owner,
+      reporter: reporter,
+      connection: connection,
+      conversation: conversation
+    } do
+      case_record = report!(reporter, owner)
+
+      # The first profile report only flags - the profile itself is NOT frozen...
+      assert case_record.status == "flagged"
+      refute Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
+
+      # ...but the relationship is already cut.
+      refute Repo.get(Vutuv.Social.Connection, connection.id)
+      refute Social.user_follows_user?(owner.id, reporter.id)
+      assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+    end
+
+    test "joining an existing case severs the later reporter too", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      second = insert(:activated_user)
+      connect!(second, owner)
+      second_conversation = insert_conversation_between(second, owner)
+
+      post = insert_post(owner)
+      report!(reporter, post)
+      report!(second, post)
+
+      refute Social.user_follows_user?(second.id, owner.id)
+      assert Repo.get!(Vutuv.Chat.Conversation, second_conversation.id).frozen_at
+    end
+
+    test "admins still see the frozen conversation as evidence", %{
+      reporter: reporter,
+      message: message
+    } do
+      report!(reporter, message)
+
+      context = Chat.moderation_context(message)
+      assert Enum.any?(context, &(&1.id == message.id))
+    end
+
+    test "a report with no standing relationship is a clean no-op", %{owner: owner} do
+      stranger = insert(:activated_user)
+
+      assert {:ok, _} =
+               Moderation.report_content(stranger, insert_post(owner), %{"category" => "spam"})
+
+      assert Repo.all(Vutuv.Moderation.Severance) == []
+    end
+
+    test "rejecting the case restores connection, follows and conversation", %{
+      owner: owner,
+      reporter: reporter,
+      conversation: conversation
+    } do
+      case_record = report!(reporter, insert_post(owner))
+      admin = insert(:activated_user, admin?: true)
+
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      assert Social.user_follows_user?(reporter.id, owner.id)
+      assert Social.user_follows_user?(owner.id, reporter.id)
+      assert %{status: :accepted} = Social.connection_state(reporter, owner)
+      refute Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+      assert [%{restored_at: %NaiveDateTime{}}] = Repo.all(Vutuv.Moderation.Severance)
+    end
+
+    test "upholding the case keeps the separation in place", %{
+      owner: owner,
+      reporter: reporter,
+      conversation: conversation
+    } do
+      case_record = report!(reporter, insert_post(owner))
+      admin = insert(:activated_user, admin?: true)
+
+      {:ok, _} = Moderation.uphold_case(case_record, admin)
+
+      refute Social.user_follows_user?(owner.id, reporter.id)
+      assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+      assert [%{restored_at: nil}] = Repo.all(Vutuv.Moderation.Severance)
+    end
+
+    test "restoring never duplicates a connection the two already rebuilt", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      case_record = report!(reporter, insert_post(owner))
+      # They reconciled on their own while the case was open.
+      connect!(reporter, owner)
+      admin = insert(:activated_user, admin?: true)
+
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      assert Repo.aggregate(Vutuv.Social.Connection, :count) == 1
+
+      follows =
+        Repo.all(
+          from(f in Vutuv.Social.Follow,
+            where: f.follower_id == ^reporter.id and f.followee_id == ^owner.id
+          )
+        )
+
+      assert length(follows) == 1
+    end
+
+    test "the reporter is told about the protection and the restore in their feed", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      case_record = report!(reporter, insert_post(owner))
+
+      entries = Vutuv.Activity.notifications_page(reporter.id).entries
+      assert Enum.any?(entries, &(&1.kind == "report_protection" and &1.status == "severed"))
+
+      admin = insert(:activated_user, admin?: true)
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      entries = Vutuv.Activity.notifications_page(reporter.id).entries
+      assert Enum.any?(entries, &(&1.kind == "report_protection" and &1.status == "restored"))
+    end
+  end
+
+  describe "the audit log" do
+    test "records the whole case history for the admins", %{owner: owner, reporter: reporter} do
+      connect!(reporter, owner)
+      case_record = report!(reporter, insert_post(owner))
+
+      actions = case_record |> Moderation.case_events() |> Enum.map(& &1.action)
+      assert "report_filed" in actions
+      assert "content_frozen" in actions
+      assert "relationship_severed" in actions
+
+      filed =
+        case_record |> Moderation.case_events() |> Enum.find(&(&1.action == "report_filed"))
+
+      assert filed.actor_id == reporter.id
+
+      {:ok, case_record} = Moderation.dispute_case(case_record, owner)
+      admin = insert(:activated_user, admin?: true)
+      {:ok, _} = Moderation.uphold_case(case_record, admin)
+
+      actions = case_record |> Moderation.case_events() |> Enum.map(& &1.action)
+      assert "owner_disputed" in actions
+      assert "upheld" in actions
+      assert "strike_issued" in actions
+    end
+
+    test "a rejection logs the ruling and the relationship restore", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      connect!(reporter, owner)
+      case_record = report!(reporter, insert_post(owner))
+      admin = insert(:activated_user, admin?: true)
+
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      events = Moderation.case_events(case_record)
+      actions = Enum.map(events, & &1.action)
+      assert "rejected" in actions
+      assert "relationship_restored" in actions
+
+      rejected = Enum.find(events, &(&1.action == "rejected"))
+      assert rejected.actor_id == admin.id
+    end
+  end
+
+  describe "evidence screenshots" do
+    test "profile cases shoot the public profile, message cases the token page, posts nothing",
+         %{owner: owner, reporter: reporter} do
+      alias Vutuv.Moderation.EvidenceScreenshot
+
+      profile_case = report!(reporter, owner)
+      assert EvidenceScreenshot.evidence_url(profile_case) =~ "/#{owner.active_slug}"
+
+      conversation = insert_conversation_between(owner, reporter)
+      message = insert(:message, conversation: conversation, sender: owner)
+      message_case = report!(reporter, message)
+      url = EvidenceScreenshot.evidence_url(message_case)
+      assert url =~ "/moderation/evidence/"
+
+      token = url |> String.split("/moderation/evidence/") |> List.last()
+      assert {:ok, case_id} = EvidenceScreenshot.verify_token(token)
+      assert case_id == message_case.id
+
+      post_case = report!(reporter, insert_post(owner))
+      assert EvidenceScreenshot.evidence_url(post_case) == nil
+    end
+  end
+
+  describe "the urgent admin email" do
+    test "carries the substance of the case, not just a link", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      admin = insert(:activated_user, admin?: true)
+      insert(:email, user: admin)
+
+      report!(reporter, owner, %{"category" => "bullying", "note" => "harasses me in DMs"})
+
+      email =
+        Enum.find(flush_emails(), &(&1.subject =~ "profile")) ||
+          flunk("no urgent admin email was sent")
+
+      assert email.text_body =~ "@#{owner.active_slug}"
+      assert email.text_body =~ "Bullying or harassment"
+      assert email.text_body =~ "harasses me in DMs"
+      assert email.text_body =~ "admin/moderation/"
     end
   end
 end

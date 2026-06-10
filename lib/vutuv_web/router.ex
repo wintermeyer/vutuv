@@ -113,6 +113,11 @@ defmodule VutuvWeb.Router do
     get("/reports/new", ReportController, :new)
     post("/reports", ReportController, :create)
 
+    # The evidence-render page headless Chromium shoots for a reported
+    # message (the thread is private; the short-lived signed token is the
+    # capture's key). Not linked anywhere, noindexed, 404 on a bad token.
+    get("/moderation/evidence/:token", ModerationEvidenceController, :show)
+
     # The owner's side of a moderation case: the case page with the
     # delete / edit / "my content is fine" self-service actions.
     get("/moderation/cases", ModerationCaseController, :index)
@@ -169,6 +174,7 @@ defmodule VutuvWeb.Router do
     get("/moderation", ModerationController, :index)
     get("/moderation/reporters", ModerationController, :reporters)
     get("/moderation/:id", ModerationController, :show)
+    get("/moderation/:id/evidence", ModerationController, :evidence)
     post("/moderation/:id/uphold", ModerationController, :uphold)
     post("/moderation/:id/reject", ModerationController, :reject)
 

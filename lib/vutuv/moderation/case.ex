@@ -30,6 +30,9 @@ defmodule Vutuv.Moderation.Case do
     field(:escalated_at, :naive_datetime)
     field(:resolved_at, :naive_datetime)
     field(:content_snapshot, :string)
+    # Set by Vutuv.Moderation.EvidenceScreenshot after the async capture at
+    # report time; never cast.
+    field(:evidence_screenshot, :string)
 
     belongs_to(:owner, Vutuv.Accounts.User)
     belongs_to(:resolved_by, Vutuv.Accounts.User)

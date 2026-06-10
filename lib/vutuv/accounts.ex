@@ -15,6 +15,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.SlugChange
   alias Vutuv.Accounts.User
+  alias Vutuv.Moderation
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
 
@@ -394,6 +395,16 @@ defmodule Vutuv.Accounts do
     # afterwards. See Vutuv.Posts.deletion_targets_for_user/1.
     post_targets = Vutuv.Posts.deletion_targets_for_user(user.id)
 
+    # The moderation cases cascade with the account; their on-disk evidence
+    # screenshots would be orphaned otherwise.
+    evidence_case_ids =
+      Repo.all(
+        from(c in Moderation.Case,
+          where: c.owner_id == ^user.id and not is_nil(c.evidence_screenshot),
+          select: c.id
+        )
+      )
+
     {:ok, _} =
       Repo.transaction(fn ->
         Repo.delete_all(from(p in Vutuv.Posts.Post, where: p.user_id == ^user.id))
@@ -402,6 +413,7 @@ defmodule Vutuv.Accounts do
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
+    Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)
 

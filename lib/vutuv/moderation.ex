@@ -30,7 +30,7 @@ defmodule Vutuv.Moderation do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
-  alias Vutuv.Moderation.{Case, Notifier, Report, Strike}
+  alias Vutuv.Moderation.{Case, Event, EvidenceScreenshot, Notifier, Report, Severance, Strike}
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -91,7 +91,17 @@ defmodule Vutuv.Moderation do
       end)
 
     with {:ok, case_record} <- result do
-      if :freeze in effects, do: freeze_content(content)
+      log(case_record, reporter, "report_filed", %{"category" => attrs["category"]})
+
+      if :freeze in effects do
+        freeze_content(content)
+        log(case_record, nil, "content_frozen")
+      end
+
+      sever_relationship(case_record, reporter)
+      # Evidence before cleanup: shoot the profile / conversation as it looks
+      # right now (async; posts keep their text snapshot).
+      EvidenceScreenshot.async_capture(case_record)
       run_notifications(case_record, effects)
       {:ok, case_record}
     end
@@ -103,7 +113,10 @@ defmodule Vutuv.Moderation do
 
     case Repo.insert(report_changeset) do
       {:ok, _report} ->
-        maybe_upgrade_case(open, reporter, content)
+        log(open, reporter, "report_filed", %{"category" => attrs["category"]})
+        result = maybe_upgrade_case(open, reporter, content)
+        sever_relationship(open, reporter)
+        result
 
       {:error, %Ecto.Changeset{errors: errors} = changeset} ->
         if Keyword.has_key?(errors, :case_id),
@@ -131,6 +144,7 @@ defmodule Vutuv.Moderation do
     if trusted >= @profile_freeze_reporters do
       freeze_content(content)
       updated = update_case!(open, case_params("escalated"))
+      log(updated, nil, "content_frozen")
       run_notifications(updated, [:notify_owner_review, :notify_admins_urgent])
       {:ok, updated}
     else
@@ -142,6 +156,7 @@ defmodule Vutuv.Moderation do
     if trusted_reporter?(reporter) do
       freeze_content(content)
       updated = update_case!(open, case_params("pending_owner"))
+      log(updated, nil, "content_frozen")
       run_notifications(updated, [:notify_owner_frozen])
       {:ok, updated}
     else
@@ -296,9 +311,16 @@ defmodule Vutuv.Moderation do
   """
   def dispute_case(%Case{} = case_record, %User{} = user) do
     cond do
-      case_record.owner_id != user.id -> {:error, :not_allowed}
-      case_record.status != "pending_owner" -> {:error, :not_open}
-      true -> {:ok, update_case!(case_record, case_params("escalated"))}
+      case_record.owner_id != user.id ->
+        {:error, :not_allowed}
+
+      case_record.status != "pending_owner" ->
+        {:error, :not_open}
+
+      true ->
+        updated = update_case!(case_record, case_params("escalated"))
+        log(updated, user, "owner_disputed")
+        {:ok, updated}
     end
   end
 
@@ -350,11 +372,13 @@ defmodule Vutuv.Moderation do
         :ok
 
       case_record ->
-        update_case!(case_record, %{
-          status: "resolved_deleted",
-          resolved_at: NaiveDateTime.utc_now(:second)
-        })
+        updated =
+          update_case!(case_record, %{
+            status: "resolved_deleted",
+            resolved_at: NaiveDateTime.utc_now(:second)
+          })
 
+        log(updated, nil, "content_deleted")
         :ok
     end
   end
@@ -377,6 +401,7 @@ defmodule Vutuv.Moderation do
             resolved_at: NaiveDateTime.utc_now(:second)
           })
 
+        log(updated, nil, "content_edited")
         Notifier.reporters_content_revised(updated)
         :ok
 
@@ -391,12 +416,13 @@ defmodule Vutuv.Moderation do
   """
   def escalate_overdue do
     now = NaiveDateTime.utc_now(:second)
+    overdue = from(c in Case, where: c.status == "pending_owner" and c.owner_deadline_at < ^now)
+    ids = Repo.all(from(c in overdue, select: c.id))
 
     {count, _} =
-      Repo.update_all(
-        from(c in Case, where: c.status == "pending_owner" and c.owner_deadline_at < ^now),
-        set: [status: "escalated", escalated_at: now, updated_at: now]
-      )
+      Repo.update_all(overdue, set: [status: "escalated", escalated_at: now, updated_at: now])
+
+    for id <- ids, do: Repo.insert!(%Event{case_id: id, action: "escalated_deadline"})
 
     count
   end
@@ -447,6 +473,7 @@ defmodule Vutuv.Moderation do
         _ -> Repo.get!(User, case_record.owner_id)
       end
 
+    log(updated, admin, "upheld")
     issue_strike(owner, updated, "owner", admin)
 
     {:ok, updated}
@@ -465,6 +492,8 @@ defmodule Vutuv.Moderation do
       |> Ecto.Changeset.put_change(:resolved_by_id, admin.id)
       |> Repo.update!()
 
+    log(updated, admin, "rejected")
+
     # nil when the owner deleted the content mid-review: nothing to unfreeze.
     if content = case_content(case_record), do: unfreeze_content(content)
 
@@ -482,6 +511,9 @@ defmodule Vutuv.Moderation do
 
       issue_strike(report.reporter, updated, "reporter", admin)
     end
+
+    # An unfounded report must not leave the two accounts separated.
+    restore_severed(updated, admin)
 
     {:ok, updated}
   end
@@ -513,6 +545,7 @@ defmodule Vutuv.Moderation do
     })
     |> Repo.insert!()
 
+    log(case_record, admin, "strike_issued", %{"role" => role, "level" => level})
     apply_ladder(user, level, now)
   end
 
@@ -529,6 +562,178 @@ defmodule Vutuv.Moderation do
   defp apply_ladder(user, _level, now) do
     set_user_moderation!(user.id, deactivated_at: now)
     Notifier.deactivation(user)
+  end
+
+  ## Relationship severance
+
+  # Reporting someone is a statement that the contact is unwanted: the two
+  # accounts are separated on the spot - connection and follows removed, the
+  # 1:1 conversation frozen for both sides - before any second report or
+  # admin ruling. What existed is recorded in a `Severance` row so a rejected
+  # case can put it back (`restore_severed/2`); an upheld case leaves the
+  # separation in place. The reporter is told (flash via `severed_for?/2`,
+  # plus the in-app feed `Vutuv.Activity` derives from the severance rows).
+  defp sever_relationship(%Case{} = case_record, %User{} = reporter) do
+    owner_id = case_record.owner_id
+    ties = Vutuv.Social.sever_between(reporter.id, owner_id)
+    conversation = Vutuv.Chat.freeze_conversation_between(reporter.id, owner_id)
+
+    if ties.connection || ties.follow_a_to_b || ties.follow_b_to_a || conversation do
+      Repo.insert!(%Severance{
+        case_id: case_record.id,
+        reporter_id: reporter.id,
+        owner_id: owner_id,
+        had_connection: ties.connection != nil,
+        connection_status: ties.connection && ties.connection.status,
+        connection_requested_by_id: ties.connection && ties.connection.requested_by_id,
+        had_follow_reporter_to_owner: ties.follow_a_to_b,
+        had_follow_owner_to_reporter: ties.follow_b_to_a,
+        conversation_id: conversation && conversation.id
+      })
+
+      log(case_record, reporter, "relationship_severed", %{
+        "connection" => ties.connection != nil,
+        "follows" => Enum.count([ties.follow_a_to_b, ties.follow_b_to_a], & &1),
+        "conversation" => conversation != nil
+      })
+
+      Vutuv.Activity.notify_report_protection(reporter.id, Repo.get(User, owner_id), "severed")
+    end
+
+    :ok
+  end
+
+  # The rejected case's severances are rolled back: connection and follows
+  # recreated as they were (unless the two already rebuilt them), the
+  # conversation thawed - except when another still-open case between the
+  # same two people holds its own severance.
+  defp restore_severed(%Case{} = case_record, %User{} = admin) do
+    severances =
+      Repo.all(
+        from(s in Severance, where: s.case_id == ^case_record.id and is_nil(s.restored_at))
+      )
+
+    for severance <- severances do
+      unless other_active_severance?(severance), do: restore_ties(severance)
+
+      severance
+      |> Ecto.Changeset.change(restored_at: NaiveDateTime.utc_now(:second))
+      |> Repo.update!()
+
+      log(case_record, admin, "relationship_restored", %{
+        "reporter_id" => severance.reporter_id
+      })
+
+      Vutuv.Activity.notify_report_protection(
+        severance.reporter_id,
+        Repo.get(User, severance.owner_id),
+        "restored"
+      )
+    end
+
+    :ok
+  end
+
+  defp restore_ties(%Severance{} = severance) do
+    Vutuv.Social.restore_between(severance.reporter_id, severance.owner_id,
+      connection_status: if(severance.had_connection, do: severance.connection_status),
+      connection_requested_by_id: severance.connection_requested_by_id,
+      follow_a_to_b: severance.had_follow_reporter_to_owner,
+      follow_b_to_a: severance.had_follow_owner_to_reporter
+    )
+
+    if severance.conversation_id do
+      conversation = Repo.get(Vutuv.Chat.Conversation, severance.conversation_id)
+
+      if conversation && conversation.frozen_at,
+        do: Vutuv.Chat.unfreeze_conversation(conversation)
+    end
+
+    :ok
+  end
+
+  defp other_active_severance?(%Severance{} = severance) do
+    from(s in Severance,
+      where: s.id != ^severance.id and is_nil(s.restored_at),
+      where:
+        (s.reporter_id == ^severance.reporter_id and s.owner_id == ^severance.owner_id) or
+          (s.reporter_id == ^severance.owner_id and s.owner_id == ^severance.reporter_id)
+    )
+    |> Repo.exists?()
+  end
+
+  @doc """
+  Whether filing a report against `content` would sever a standing
+  relationship between `reporter` and the content's owner. Drives the report
+  form's up-front warning: the reporter must understand the consequence (and
+  the de-facto loss of anonymity towards a member they are tied to) BEFORE
+  sending, not after.
+  """
+  def would_sever_relationship?(%User{} = reporter, content) do
+    owner = owner_id(content)
+
+    owner != nil and owner != reporter.id and
+      (Vutuv.Social.tie_between?(reporter.id, owner) or
+         Vutuv.Chat.active_conversation_between?(reporter.id, owner))
+  end
+
+  @doc "The member owning the reportable content (nil when already deleted)."
+  def content_owner(content) do
+    case owner_id(content) do
+      nil -> nil
+      id -> Repo.get(User, id)
+    end
+  end
+
+  @doc """
+  Whether this member's report cut a standing relationship - drives the
+  reporter-facing notice after filing the report.
+  """
+  def severed_for?(case_id, reporter_id) do
+    Repo.exists?(
+      from(s in Severance, where: s.case_id == ^case_id and s.reporter_id == ^reporter_id)
+    )
+  end
+
+  @doc """
+  Every severance this member's reports caused. `Vutuv.Activity` derives the
+  reporter's protection notifications (severed + restored) from this, so the
+  feed cannot drift from what actually happened.
+  """
+  def reporter_severances_query(user_id) do
+    from(s in Severance, where: s.reporter_id == ^user_id)
+  end
+
+  @doc "The case's severances (what reporting cut), for the admin case page."
+  def case_severances(%Case{id: id}) do
+    Repo.all(from(s in Severance, where: s.case_id == ^id, order_by: [asc: s.inserted_at]))
+  end
+
+  ## Audit log
+
+  @doc "The case's full history, oldest first, with actors preloaded."
+  def case_events(%Case{id: id}), do: case_events(id)
+
+  def case_events(case_id) do
+    from(e in Event,
+      where: e.case_id == ^case_id,
+      order_by: [asc: e.inserted_at, asc: e.id],
+      preload: :actor
+    )
+    |> Repo.all()
+  end
+
+  # One audit-log row. `actor` is the member who caused the step (nil for
+  # system actions); `detail` carries small action-specific facts.
+  defp log(%Case{id: case_id}, actor, action, detail \\ %{}) do
+    Repo.insert!(%Event{
+      case_id: case_id,
+      actor_id: actor && actor.id,
+      action: action,
+      detail: detail
+    })
+
+    :ok
   end
 
   ## Reporter misuse tracking

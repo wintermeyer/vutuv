@@ -63,6 +63,10 @@ defmodule Vutuv.Moderation.Notifier do
 
   @doc "A profile was reported: mail every admin right away (urgent)."
   def admins_urgent(%Case{} = case_record) do
+    # The mail names the owner, the category and the reporter's note, so the
+    # builder needs the case fully hydrated.
+    case_record = Repo.preload(case_record, [:owner, reports: :reporter])
+
     for admin <- list_admins() do
       deliver_to(admin, fn user, email ->
         Emailer.moderation_admin_urgent_email(user, email, case_record)

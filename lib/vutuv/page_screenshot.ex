@@ -99,15 +99,20 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Captures `url` to `out_path` as a PNG using headless Chromium.
 
+  `opts` may carry `window: {width, height}` to override the configured
+  window size (headless Chromium only shoots the viewport, so a full-page
+  capture of a known-tall page is "very tall window, then trim" - see
+  `Vutuv.Moderation.EvidenceScreenshot`).
+
   Returns `:ok` or `{:error, reason}`. Never raises.
   """
-  def capture(url, out_path) do
+  def capture(url, out_path, opts \\ []) do
     case binary() do
       nil ->
         {:error, :chromium_not_found}
 
       bin ->
-        {width, height} = window_size()
+        {width, height} = Keyword.get(opts, :window, window_size())
 
         # `--headless=new` already runs in a fresh throwaway profile per
         # invocation, so concurrent captures don't clash and nothing is left

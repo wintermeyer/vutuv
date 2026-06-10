@@ -12,6 +12,8 @@ config :vutuv, :sweep_pending_images, false
 config :vutuv, :sweep_unconfirmed_registrations, false
 config :vutuv, :send_unread_message_emails, false
 config :vutuv, :moderation_sweeper, false
+# No headless Chromium in tests; the evidence capture is exercised manually.
+config :vutuv, :capture_report_evidence, false
 # Moderation emails deliver inline in tests: the async task would swallow the
 # Swoosh test adapter's {:email, ...} message (it goes to the calling process).
 config :vutuv, :async_email, false

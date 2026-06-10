@@ -3,6 +3,11 @@
 ein Mitgliedsprofil wurde gemeldet. Profil-Meldungen sind dringend:
 eine zweite unabhängige Meldung friert das gesamte Profil ein.
 
+  Profil:        @<%= @owner_slug %> (<%= @url %><%= @owner_slug %>)
+  Gemeldet als:  <%= @category_label %>
+  Meldungen:     <%= @report_count %><%= if @note do %>
+  Notiz des Melders: <%= @note %><% end %>
+
 Bitte prüfen Sie den Fall:
 
 <%= @url %>admin/moderation/<%= @case_id %>

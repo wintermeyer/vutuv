@@ -116,6 +116,16 @@ defmodule Vutuv.Activity do
       |> select([c], max(c.inserted_at))
       |> Repo.one()
 
+    severance_max =
+      Vutuv.Moderation.reporter_severances_query(user_id)
+      |> select([s], max(s.inserted_at))
+      |> Repo.one()
+
+    severance_restore_max =
+      Vutuv.Moderation.reporter_severances_query(user_id)
+      |> select([s], max(s.restored_at))
+      |> Repo.one()
+
     [
       follower_max,
       endorsement_max,
@@ -123,7 +133,9 @@ defmodule Vutuv.Activity do
       request_max,
       reply_max,
       like_max,
-      moderation_max
+      moderation_max,
+      severance_max,
+      severance_restore_max
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.max(NaiveDateTime, fn -> nil end)
@@ -238,6 +250,24 @@ defmodule Vutuv.Activity do
     )
   end
 
+  @doc """
+  Tells a reporter that their report severed ("severed") or a rejected case
+  restored ("restored") the relationship to the reported member. The actor
+  fields carry the *reported* member so the feed entry can name and link
+  @their_handle. The durable counterpart is derived from the severance rows
+  (see `report_protection_items/3`).
+  """
+  def notify_report_protection(reporter_id, reported_user, status) do
+    notify(
+      reporter_id,
+      Map.merge(actor_fields(reported_user), %{
+        kind: "report_protection",
+        status: status,
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
   ## Derived notifications feed
 
   @doc """
@@ -270,7 +300,8 @@ defmodule Vutuv.Activity do
         &connection_request_items(user_id, &1, &2),
         &reply_items(user_id, &1, &2),
         &like_items(user_id, &1, &2),
-        &moderation_items(user_id, &1, &2)
+        &moderation_items(user_id, &1, &2),
+        &report_protection_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -311,7 +342,9 @@ defmodule Vutuv.Activity do
             subquery(count_connection_requests(user_id, read_at)) +
             subquery(count_replies(user_id, read_at)) +
             subquery(count_likes(user_id, read_at)) +
-            subquery(count_moderation(user_id, read_at))
+            subquery(count_moderation(user_id, read_at)) +
+            subquery(count_severances(user_id, read_at)) +
+            subquery(count_severance_restores(user_id, read_at))
       )
     )
   end
@@ -466,6 +499,52 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # The reporter-protection entries: one when a report severed the
+  # relationship to the reported member, a second when a rejected case
+  # restored it. Both derive from the same severance row (Moderation owns the
+  # rule), timestamped by inserted_at / restored_at respectively. The actor
+  # is the *reported* member, so the entry links @their_handle.
+  defp report_protection_items(user_id, limit, cursor) do
+    severed =
+      Vutuv.Moderation.reporter_severances_query(user_id)
+      |> join(:inner, [s], u in User, on: u.id == s.owner_id)
+      |> order_by([s], desc: s.inserted_at, desc: s.id)
+      |> limit(^limit)
+      |> at_or_before(cursor)
+      |> select([s, u], {s.id, s.inserted_at, u})
+      |> Repo.all()
+      |> Enum.map(fn {id, at, reported} ->
+        protection_item("report-protection-#{id}", "severed", at, reported)
+      end)
+
+    restored =
+      Vutuv.Moderation.reporter_severances_query(user_id)
+      |> where([s], not is_nil(s.restored_at))
+      |> join(:inner, [s], u in User, on: u.id == s.owner_id)
+      |> order_by([s], desc: s.restored_at, desc: s.id)
+      |> limit(^limit)
+      |> restored_at_or_before(cursor)
+      |> select([s, u], {s.id, s.restored_at, u})
+      |> Repo.all()
+      |> Enum.map(fn {id, at, reported} ->
+        protection_item("report-protection-restored-#{id}", "restored", at, reported)
+      end)
+
+    severed ++ restored
+  end
+
+  defp protection_item(id, status, at, reported) do
+    Map.merge(actor_fields(reported), %{
+      id: id,
+      kind: "report_protection",
+      status: status,
+      at: at
+    })
+  end
+
+  defp restored_at_or_before(query, nil), do: query
+  defp restored_at_or_before(query, %{at: at}), do: where(query, [s], s.restored_at <= ^at)
+
   defp at_or_before(query, nil), do: query
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
@@ -548,6 +627,21 @@ defmodule Vutuv.Activity do
     Vutuv.Moderation.owner_notified_cases_query(user_id)
     |> select([c], %{count: count()})
     |> since(read_at)
+  end
+
+  defp count_severances(user_id, read_at) do
+    Vutuv.Moderation.reporter_severances_query(user_id)
+    |> select([s], %{count: count()})
+    |> since(read_at)
+  end
+
+  defp count_severance_restores(user_id, read_at) do
+    query =
+      Vutuv.Moderation.reporter_severances_query(user_id)
+      |> where([s], not is_nil(s.restored_at))
+      |> select([s], %{count: count()})
+
+    if read_at, do: where(query, [s], s.restored_at > ^read_at), else: query
   end
 
   defp since(query, nil), do: query

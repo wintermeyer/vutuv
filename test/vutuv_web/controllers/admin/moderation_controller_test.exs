@@ -49,6 +49,56 @@ defmodule VutuvWeb.Admin.ModerationControllerTest do
       assert response =~ ~p"/admin/moderation/#{case_record.id}/reject"
       # reporter anonymity does not apply to admins: the track record shows
       assert response =~ "report"
+      # singular, not "1 reports"
+      assert response =~ "1 report so far"
+    end
+
+    test "shows the audit log and the severance state", %{conn: conn} do
+      owner = insert_activated_user()
+      insert(:email, user: owner)
+      reporter = insert(:activated_user)
+      connect!(reporter, owner)
+      post = insert(:post, user: owner)
+      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "spam"})
+      flush_emails()
+
+      {conn, _admin} = create_and_login_admin(conn)
+      response = conn |> get(~p"/admin/moderation/#{case_record.id}") |> html_response(200)
+
+      assert response =~ "case-timeline"
+      assert response =~ "Report filed"
+      assert response =~ "Content frozen"
+      assert response =~ "Reporter and owner separated"
+      assert response =~ "separated since this report"
+    end
+  end
+
+  describe "evidence" do
+    test "404s while no screenshot was captured", %{conn: conn} do
+      {case_record, _post, _owner, _reporter} = escalated_case()
+      {conn, _admin} = create_and_login_admin(conn)
+
+      assert conn
+             |> get(~p"/admin/moderation/#{case_record.id}/evidence")
+             |> html_response(404)
+    end
+
+    test "streams the stored screenshot to admins", %{conn: conn} do
+      {case_record, _post, _owner, _reporter} = escalated_case()
+
+      filename = "#{case_record.id}.webp"
+      path = Moderation.EvidenceScreenshot.path(filename)
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, "not really a webp")
+      on_exit(fn -> File.rm(path) end)
+
+      Repo.update!(Ecto.Changeset.change(case_record, evidence_screenshot: filename))
+
+      {conn, _admin} = create_and_login_admin(conn)
+      conn = get(conn, ~p"/admin/moderation/#{case_record.id}/evidence")
+
+      assert response(conn, 200) == "not really a webp"
+      assert response_content_type(conn, :webp) =~ "image/webp"
     end
   end
 

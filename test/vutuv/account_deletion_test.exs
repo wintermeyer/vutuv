@@ -20,6 +20,7 @@ defmodule Vutuv.AccountDeletionTest do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.{Email, SlugChange, User}
   alias Vutuv.Chat.{Conversation, Message}
+  alias Vutuv.Moderation
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
   alias Vutuv.Repo
   alias Vutuv.Social
@@ -70,6 +71,23 @@ defmodule Vutuv.AccountDeletionTest do
     # --- Profile data (every direct user-owned table) ---
     insert(:email, user: user)
     insert(:slug_change, user: user)
+
+    # A moderation case against the account, with an on-disk evidence
+    # screenshot that must be purged with everything else.
+    evidence_reporter = insert(:activated_user)
+
+    {:ok, evidence_case} =
+      Moderation.report_content(evidence_reporter, user, %{"category" => "spam"})
+
+    evidence_file = Moderation.EvidenceScreenshot.path("#{evidence_case.id}.webp")
+    File.mkdir_p!(Path.dirname(evidence_file))
+    File.write!(evidence_file, "evidence")
+    on_exit(fn -> File.rm(evidence_file) end)
+
+    Repo.update!(
+      Ecto.Changeset.change(evidence_case, evidence_screenshot: "#{evidence_case.id}.webp")
+    )
+
     insert(:work_experience, user: user)
     insert(:address, user: user)
     insert(:phone_number, user: user)
@@ -181,5 +199,8 @@ defmodule Vutuv.AccountDeletionTest do
         ] do
       refute File.exists?(dir), "expected #{dir} to be removed"
     end
+
+    # --- The moderation evidence screenshot is purged with the account. ---
+    refute File.exists?(evidence_file)
   end
 end

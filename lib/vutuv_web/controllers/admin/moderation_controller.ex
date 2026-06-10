@@ -11,6 +11,7 @@ defmodule VutuvWeb.Admin.ModerationController do
 
   alias Vutuv.{Chat, Moderation}
   alias Vutuv.Moderation.Case
+  alias Vutuv.Moderation.EvidenceScreenshot
   alias VutuvWeb.ControllerHelpers
 
   def index(conn, _params) do
@@ -35,11 +36,30 @@ defmodule VutuvWeb.Admin.ModerationController do
           content: Moderation.case_content(case_record),
           conversation_context: conversation_context(case_record),
           owner_active_strikes: Moderation.active_strike_count(case_record.owner),
+          events: Moderation.case_events(case_record),
+          severance_by_reporter:
+            Map.new(Moderation.case_severances(case_record), &{&1.reporter_id, &1}),
           reporter_stats:
             Map.new(case_record.reports, fn report ->
               {report.id, Map.fetch!(stats_by_reporter, report.reporter_id)}
             end)
         )
+    end
+  end
+
+  # Streams the private evidence screenshot (captured at report time). The
+  # moderation_evidence/ tree has no static mount; this authorizing route
+  # (admin pipeline) is the only way to it.
+  def evidence(conn, %{"id" => id}) do
+    with case_record when not is_nil(case_record) <- Moderation.get_case_with_details(id),
+         filename when is_binary(filename) <- case_record.evidence_screenshot,
+         path = EvidenceScreenshot.path(filename),
+         true <- File.exists?(path) do
+      conn
+      |> put_resp_content_type("image/webp")
+      |> send_file(200, path)
+    else
+      _ -> ControllerHelpers.render_error(conn, 404)
     end
   end
 

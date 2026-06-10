@@ -182,6 +182,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_classes("moderation"),
     do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
 
+  defp kind_classes("report_protection"),
+    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 
   defp kind_glyph("follower"), do: "+"
@@ -190,6 +193,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("like"), do: "♥"
   defp kind_glyph(kind) when kind in @connection_kinds, do: "🤝"
   defp kind_glyph("moderation"), do: "⚑"
+  defp kind_glyph("report_protection"), do: "🛡"
   defp kind_glyph(_), do: "•"
 
   # The small uppercase tag under the event text. Translated like the text
@@ -202,6 +206,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("connection_request"), do: gettext("Connection request")
   defp kind_label("connection_accepted"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
+  defp kind_label("report_protection"), do: gettext("Report protection")
   defp kind_label(_), do: gettext("Activity")
 
   # Where clicking the event text leads. Events about one of the viewer's
@@ -260,6 +265,23 @@ defmodule VutuvWeb.NotificationLive.Index do
       "resolved_edited" -> gettext("You revised reported content; the case is closed.")
       "resolved_deleted" -> gettext("You deleted reported content; the case is closed.")
       _ -> gettext("Your content was reported and is hidden while the report is handled.")
+    end
+  end
+
+  # Reporter protection: the actor is the *reported* member, rendered as
+  # @handle by the actor line; the text explains the both-ways pause and
+  # that an unfounded ruling undoes it.
+  defp notification_text(%{kind: "report_protection"} = n) do
+    case n[:status] do
+      "restored" ->
+        gettext(
+          "Our admins found your report unfounded; the paused connection between you two is restored."
+        )
+
+      _ ->
+        gettext(
+          "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
+        )
     end
   end
 

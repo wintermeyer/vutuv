@@ -1,0 +1,44 @@
+<%!-- Standalone evidence page for the headless capture: inline styles only,
+      so the shot never depends on the asset build. The reported message is
+      the amber one. --%>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="robots" content="noindex" />
+    <title>Reported conversation</title>
+  </head>
+  <body style="margin: 0; padding: 24px; background: #f8fafc; font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #0f172a;">
+    <div style="max-width: 720px; margin: 0 auto;">
+      <p style="font-size: 13px; color: #64748b; margin: 0 0 4px;">
+        {gettext("Moderation evidence - reported private message with context")}
+      </p>
+      <p style="font-size: 12px; color: #94a3b8; margin: 0 0 16px;">
+        {gettext("Case %{id}, captured %{at} UTC",
+          id: @case.id,
+          at: Calendar.strftime(NaiveDateTime.utc_now(:second), "%Y-%m-%d %H:%M")
+        )}
+      </p>
+
+      <div
+        :for={message <- @context}
+        style={"border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; font-size: 14px; line-height: 1.5; " <>
+          if(message.id == @reported_id,
+            do: "background: #fffbeb; border: 2px solid #f59e0b;",
+            else: "background: #ffffff; border: 1px solid #e2e8f0;"
+          )}
+      >
+        <p style="margin: 0 0 2px; font-size: 12px; color: #64748b;">
+          <strong style="color: #0f172a;">
+            @{(message.sender && message.sender.active_slug) || gettext("(deleted account)")}
+          </strong>
+          · {Calendar.strftime(message.inserted_at, "%Y-%m-%d %H:%M")}
+          <strong :if={message.id == @reported_id} style="color: #b45309;">
+            · {gettext("reported message")}
+          </strong>
+        </p>
+        <p style="margin: 0; white-space: pre-wrap;">{message.body}</p>
+      </div>
+    </div>
+  </body>
+</html>

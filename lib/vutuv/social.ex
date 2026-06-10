@@ -280,6 +280,80 @@ defmodule Vutuv.Social do
     end
   end
 
+  @doc """
+  Cuts every social tie between the two users in one go: the connection row
+  (any status) and both follow edges are deleted. Returns what existed -
+  `%{connection: %Connection{} | nil, follow_a_to_b: bool, follow_b_to_a:
+  bool}`, directions relative to the argument order - so the caller
+  (`Vutuv.Moderation`, when a report severs the relationship) can record it
+  and a rejected report can restore it. Deliberately quiet: no notifications
+  for a protective measure.
+  """
+  def sever_between(user_id, other_id) do
+    {a_id, b_id} = connection_pair(user_id, other_id)
+    connection = get_connection_by_pair(a_id, b_id)
+    if connection, do: Repo.delete!(connection)
+
+    {a_to_b, _} =
+      Repo.delete_all(
+        from(f in Follow, where: f.follower_id == ^user_id and f.followee_id == ^other_id)
+      )
+
+    {b_to_a, _} =
+      Repo.delete_all(
+        from(f in Follow, where: f.follower_id == ^other_id and f.followee_id == ^user_id)
+      )
+
+    %{connection: connection, follow_a_to_b: a_to_b > 0, follow_b_to_a: b_to_a > 0}
+  end
+
+  @doc """
+  Restores ties `sever_between/2` cut, skipping anything the two have since
+  rebuilt on their own. `opts`: `:connection_status` plus
+  `:connection_requested_by_id` (nil status = there was no connection), and
+  the `:follow_a_to_b` / `:follow_b_to_a` booleans relative to
+  `{user_id, other_id}`. Quiet like the severing - a restore must not fire
+  "started following you" notifications.
+  """
+  def restore_between(user_id, other_id, opts) do
+    if status = opts[:connection_status] do
+      {a_id, b_id} = connection_pair(user_id, other_id)
+
+      unless get_connection_by_pair(a_id, b_id) do
+        Repo.insert!(%Connection{
+          user_a_id: a_id,
+          user_b_id: b_id,
+          requested_by_id: opts[:connection_requested_by_id],
+          status: status,
+          status_changed_at: NaiveDateTime.utc_now(:second)
+        })
+      end
+    end
+
+    if opts[:follow_a_to_b], do: quiet_follow(user_id, other_id)
+    if opts[:follow_b_to_a], do: quiet_follow(other_id, user_id)
+    :ok
+  end
+
+  defp quiet_follow(follower_id, followee_id) do
+    unless user_follows_user?(follower_id, followee_id) do
+      Repo.insert!(%Follow{follower_id: follower_id, followee_id: followee_id})
+    end
+  end
+
+  @doc """
+  Whether any severable tie exists between the two: a connection row (any
+  status) or a follow edge in either direction. Backs the report form's
+  "this will separate you" warning (`Vutuv.Moderation`).
+  """
+  def tie_between?(id1, id2) do
+    {a_id, b_id} = connection_pair(id1, id2)
+
+    get_connection_by_pair(a_id, b_id) != nil or
+      user_follows_user?(id1, id2) or
+      user_follows_user?(id2, id1)
+  end
+
   @doc "Whether `id1` and `id2` have an accepted connection."
   def connected?(id1, id2) do
     {a_id, b_id} = connection_pair(id1, id2)
