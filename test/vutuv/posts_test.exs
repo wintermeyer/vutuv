@@ -768,6 +768,26 @@ defmodule Vutuv.PostsTest do
       assert %{likes: 1, bookmarks: 0, reposts: 0} = Posts.engagement_counts(post.id)
     end
 
+    test "a fresh like pushes a live notification to the author, repeats and self-likes do not" do
+      author = user()
+      fan = user()
+      post = create_post!(author, %{body: "likeable"})
+
+      Vutuv.Activity.subscribe(author.id)
+
+      :ok = Posts.like_post(fan, post)
+      assert_receive {:new_notification, %{kind: "like", post_id: post_id}}
+      assert post_id == post.id
+
+      # The idempotent repeat is a no-op, not a second notification.
+      :ok = Posts.like_post(fan, post)
+      refute_receive {:new_notification, _}, 50
+
+      # Liking your own post is not news.
+      :ok = Posts.like_post(author, post)
+      refute_receive {:new_notification, _}, 50
+    end
+
     test "unlike_post/2 removes the like" do
       reader = user()
       post = create_post!(user(), %{body: "x"})

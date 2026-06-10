@@ -47,12 +47,76 @@ defmodule VutuvWeb.NotificationLiveTest do
     test "shows an accepted connection as a connection event", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
+      # `other` asked, `user` accepted: the viewer reads it as the new mutual
+      # connection (the requester side reads it as an acceptance instead).
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      connect!(user, other)
+      connect!(user, other, other)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
       assert render(live) =~ "is now connected with you"
+    end
+
+    test "an accepted request reads as an acceptance for the requester", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      other = insert(:user, first_name: "Wojtek", last_name: "Mach")
+      connect!(user, other, user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "accepted your connection request"
+    end
+
+    test "a pending request is shown and links to the connections page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      requester = insert(:user, first_name: "Ron", last_name: "Requester")
+      {:ok, _} = Vutuv.Social.request_connection(requester, user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "wants to connect with you"
+      # The event text links to where the request can be answered.
+      assert html =~ ~s(href="/#{user.active_slug}/connections")
+    end
+
+    test "a reply notification links to the parent post's thread", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      parent = insert(:post, user: user)
+      insert(:post_reply, post: insert(:post), parent_post: parent, parent_author: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ ~s(href="/#{user.active_slug}/posts/#{parent.id}")
+    end
+
+    test "a like is shown and links to the liked post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user)
+      fan = insert(:user, first_name: "Fanny", last_name: "First")
+      :ok = Vutuv.Posts.like_post(fan, post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "liked your post"
+      assert html =~ ~s(href="/#{user.active_slug}/posts/#{post.id}")
+    end
+
+    test "kind labels render as human text, not raw kind strings", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, _} = Vutuv.Social.request_connection(insert(:user), user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # "connection_request" must not leak as a label.
+      refute render(live) =~ ">connection_request<"
+      assert render(live) =~ "Connection request"
     end
 
     test "shows a reply as a reply event, but not a self-reply", %{conn: conn} do

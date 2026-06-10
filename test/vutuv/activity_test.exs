@@ -108,15 +108,65 @@ defmodule Vutuv.ActivityTest do
       assert recent_notifications(me.id) == []
     end
 
-    test "derives a connection event for an accepted connection" do
+    test "derives both sides' events for an accepted connection" do
       me = insert(:user)
       other = insert(:user, first_name: "Wojtek", last_name: "Mach")
-      # Acceptance also materializes the follow-back, so both kinds appear.
+      # Acceptance also materializes the follow-back, so a follower event
+      # appears alongside. `me` requested, so `me` reads it as an acceptance
+      # while `other` (who accepted) reads it as the new mutual connection.
       connect!(me, other)
 
       kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
       assert "follower" in kinds
+      assert "connection_accepted" in kinds
+
+      other_kinds = other.id |> recent_notifications() |> Enum.map(& &1.kind)
+      assert "connection" in other_kinds
+      refute "connection_accepted" in other_kinds
+    end
+
+    test "a pending incoming request appears as connection_request for the recipient only" do
+      me = insert(:user)
+      requester = insert(:user, first_name: "Ron", last_name: "Requester")
+      {:ok, _connection} = Vutuv.Social.request_connection(requester, me)
+
+      assert [%{kind: "connection_request", actor_name: "Ron Requester"}] =
+               me.id |> recent_notifications() |> Enum.filter(&(&1.kind == "connection_request"))
+
+      # The requester is waiting on an answer, not notified about their own ask.
+      assert requester.id |> recent_notifications() |> Enum.map(& &1.kind) == []
+    end
+
+    test "accepting a request replaces the pending-request event with the connection" do
+      me = insert(:user)
+      requester = insert(:user)
+      {:ok, connection} = Vutuv.Social.request_connection(requester, me)
+      {:ok, _} = Vutuv.Social.accept_connection(me, connection.id)
+
+      kinds = me.id |> recent_notifications() |> Enum.map(& &1.kind)
+      refute "connection_request" in kinds
       assert "connection" in kinds
+    end
+
+    test "a declined request notifies nobody" do
+      me = insert(:user)
+      requester = insert(:user)
+      {:ok, connection} = Vutuv.Social.request_connection(requester, me)
+      {:ok, _} = Vutuv.Social.decline_connection(me, connection.id)
+
+      assert me.id |> recent_notifications() |> Enum.map(& &1.kind) == []
+      assert requester.id |> recent_notifications() |> Enum.map(& &1.kind) == []
+    end
+
+    test "derives like events for the post's author, except self-likes" do
+      author = insert(:user)
+      fan = insert(:user, first_name: "Fanny", last_name: "First")
+      post = insert(:post, user: author)
+      :ok = Vutuv.Posts.like_post(fan, post)
+      :ok = Vutuv.Posts.like_post(author, post)
+
+      assert [%{kind: "like", actor_name: "Fanny First"}] =
+               author.id |> recent_notifications() |> Enum.filter(&(&1.kind == "like"))
     end
 
     test "a one-way follow produces no connection event" do
@@ -317,12 +367,13 @@ defmodule Vutuv.ActivityTest do
       assert Activity.unread_notification_count(nil) == 0
     end
 
-    test "equals the sum of the three feed sources for a mixed constellation" do
+    test "equals the sum of the feed sources for a mixed constellation" do
       me = insert(:user)
 
       # One accepted connection (which also materializes a follow-back) and one
-      # more plain incoming follower, plus one endorsement.
-      # Sources: 2 followers + 1 endorsement + 1 connection.
+      # more plain incoming follower, plus one endorsement, one pending
+      # incoming request and one like.
+      # Sources: 2 followers + 1 endorsement + 1 acceptance + 1 request + 1 like.
       mutual = insert(:user)
       connect!(me, mutual)
       insert(:follow, follower: insert(:user), followee: me)
@@ -331,12 +382,22 @@ defmodule Vutuv.ActivityTest do
       user_tag = insert(:user_tag, user: me, tag: tag)
       insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
 
+      {:ok, _} = Vutuv.Social.request_connection(insert(:user), me)
+      :ok = Vutuv.Posts.like_post(insert(:user), insert(:post, user: me))
+
       sources =
         me.id |> recent_notifications() |> Enum.frequencies_by(& &1.kind)
 
-      assert sources == %{"follower" => 2, "endorsement" => 1, "connection" => 1}
-      # The collapsed single-query count must still equal that source total (4).
-      assert Activity.unread_notification_count(me.id) == 4
+      assert sources == %{
+               "follower" => 2,
+               "endorsement" => 1,
+               "connection_accepted" => 1,
+               "connection_request" => 1,
+               "like" => 1
+             }
+
+      # The collapsed single-query count must still equal that source total (6).
+      assert Activity.unread_notification_count(me.id) == 6
     end
 
     test "folds the marker read and the source counts into two queries" do

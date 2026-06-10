@@ -120,10 +120,19 @@ defmodule VutuvWeb.NotificationLive.Index do
               <% else %>
                 <span :if={n[:actor_name]} class="font-semibold">{n.actor_name}</span>
               <% end %>
-              {notification_text(n)}
+              <%!-- The event text leads to the thing it reports: the liked or
+              replied-to post, the connections page for a request, the actor's
+              profile otherwise. --%>
+              <%= if target = notification_target(n, @current_user) do %>
+                <.link href={target} class="hover:text-brand-700 hover:underline">
+                  {notification_text(n)}
+                </.link>
+              <% else %>
+                {notification_text(n)}
+              <% end %>
             </p>
             <span class="text-xs uppercase tracking-wide text-slate-400">
-              {n.kind}<span :if={n[:at]}> &middot; <time>{format_at(n.at)}</time></span>
+              {kind_label(n.kind)}<span :if={n[:at]}> &middot; <time>{format_at(n.at)}</time></span>
             </span>
           </div>
         </li>
@@ -165,6 +174,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_classes("reply"),
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
+  defp kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
+
   defp kind_classes(kind) when kind in @connection_kinds,
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
@@ -173,8 +184,43 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("follower"), do: "+"
   defp kind_glyph("endorsement"), do: "★"
   defp kind_glyph("reply"), do: "↩"
+  defp kind_glyph("like"), do: "♥"
   defp kind_glyph(kind) when kind in @connection_kinds, do: "🤝"
   defp kind_glyph(_), do: "•"
+
+  # The small uppercase tag under the event text. Translated like the text
+  # itself; raw kind strings ("connection_request") must not leak to users.
+  defp kind_label("follower"), do: gettext("Follower")
+  defp kind_label("endorsement"), do: gettext("Endorsement")
+  defp kind_label("reply"), do: gettext("Reply")
+  defp kind_label("like"), do: gettext("Like")
+  defp kind_label("connection"), do: gettext("Connection")
+  defp kind_label("connection_request"), do: gettext("Connection request")
+  defp kind_label("connection_accepted"), do: gettext("Connection")
+  defp kind_label(_), do: gettext("Activity")
+
+  # Where clicking the event text leads. Events about one of the viewer's
+  # posts open that post's thread; a pending request opens the page where it
+  # can be answered; an endorsement the viewer's tags; everything else the
+  # actor's profile. Logged-out renders (no viewer) only ever get the latter.
+  defp notification_target(n, viewer) do
+    cond do
+      n.kind in ["reply", "like"] and is_binary(n[:post_id]) and viewer ->
+        ~p"/#{viewer}/posts/#{n.post_id}"
+
+      n.kind == "connection_request" and viewer ->
+        ~p"/#{viewer}/connections"
+
+      n.kind == "endorsement" and viewer ->
+        ~p"/#{viewer}/tags"
+
+      is_binary(n[:actor_param]) ->
+        ~p"/#{n.actor_param}"
+
+      true ->
+        nil
+    end
+  end
 
   # The event text is rendered from the kind (not stored), so it translates
   # with the viewer's locale. Unknown kinds fall back to the pushed text.
@@ -192,6 +238,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: gettext("accepted your connection request.")
 
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
+  defp notification_text(%{kind: "like"}), do: gettext("liked your post.")
   defp notification_text(n), do: n[:text]
 
   defp format_at(%mod{} = at) when mod in [NaiveDateTime, DateTime],

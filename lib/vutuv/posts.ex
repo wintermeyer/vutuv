@@ -502,7 +502,22 @@ defmodule Vutuv.Posts do
 
   @doc "Likes `post` as `user` (idempotent). Only visible posts can be liked."
   def like_post(%User{} = user, %Post{} = post) do
-    with {:ok, _} <- engage(PostLike, :like, user, post), do: :ok
+    case engage(PostLike, :like, user, post) do
+      {:ok, %PostLike{}} ->
+        # A fresh like is news for the author; the idempotent repeat is not,
+        # and neither is liking your own post.
+        if post.user_id != user.id do
+          Vutuv.Activity.notify_like(post.user_id, user, post.id)
+        end
+
+        :ok
+
+      {:ok, :noop} ->
+        :ok
+
+      {:error, _} = error ->
+        error
+    end
   end
 
   @doc "Removes `user`'s like (idempotent)."
@@ -1215,7 +1230,7 @@ defmodule Vutuv.Posts do
     broadcast_reply_count(parent.id)
 
     if parent.user_id != reply.user_id do
-      Vutuv.Activity.notify_reply(parent.user_id, reply.user)
+      Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id)
     end
   end
 

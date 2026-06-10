@@ -10,7 +10,8 @@ defmodule Vutuv.Activity do
   (`VutuvWeb.ShellLive`) and the notification / message LiveViews subscribe.
 
   The feed is **derived at read time** from the event tables that already exist
-  (`follows`, `connections`, `user_tag_endorsements`, `post_replies`) instead of being
+  (`follows`, `connections` — accepted ones and pending incoming requests —,
+  `user_tag_endorsements`, `post_replies`, `post_likes`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
@@ -20,6 +21,7 @@ defmodule Vutuv.Activity do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
   alias Vutuv.Social.Connection
@@ -84,6 +86,15 @@ defmodule Vutuv.Activity do
       )
       |> Repo.one()
 
+    request_max =
+      from(c in Connection,
+        where:
+          c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
+            c.requested_by_id != ^user_id,
+        select: max(c.inserted_at)
+      )
+      |> Repo.one()
+
     reply_max =
       from(r in PostReply,
         join: reply in assoc(r, :post),
@@ -92,7 +103,15 @@ defmodule Vutuv.Activity do
       )
       |> Repo.one()
 
-    [follower_max, endorsement_max, connection_max, reply_max]
+    like_max =
+      from(l in PostLike,
+        join: p in assoc(l, :post),
+        where: p.user_id == ^user_id and l.user_id != ^user_id,
+        select: max(l.inserted_at)
+      )
+      |> Repo.one()
+
+    [follower_max, endorsement_max, connection_max, request_max, reply_max, like_max]
     |> Enum.reject(&is_nil/1)
     |> Enum.max(NaiveDateTime, fn -> nil end)
   end
@@ -135,13 +154,31 @@ defmodule Vutuv.Activity do
     )
   end
 
-  @doc ~S(Convenience: a "replied to your post" notification for the parent post's author.)
-  def notify_reply(parent_author_id, replier) do
+  @doc ~S"""
+  Convenience: a "replied to your post" notification for the parent post's
+  author. `post_id` is the parent post, so the notification can link to the
+  thread the reply landed in.
+  """
+  def notify_reply(parent_author_id, replier, post_id \\ nil) do
     notify(
       parent_author_id,
       Map.merge(actor_fields(replier), %{
         kind: "reply",
         text: "replied to your post.",
+        post_id: post_id,
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
+  @doc ~S(Convenience: a "liked your post" notification for the post's author.)
+  def notify_like(author_id, liker, post_id) do
+    notify(
+      author_id,
+      Map.merge(actor_fields(liker), %{
+        kind: "like",
+        text: "liked your post.",
+        post_id: post_id,
         at: DateTime.utc_now()
       })
     )
@@ -217,7 +254,9 @@ defmodule Vutuv.Activity do
         &follower_items(user_id, &1, &2),
         &endorsement_items(user_id, &1, &2),
         &connection_items(user_id, &1, &2),
-        &reply_items(user_id, &1, &2)
+        &connection_request_items(user_id, &1, &2),
+        &reply_items(user_id, &1, &2),
+        &like_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -255,7 +294,9 @@ defmodule Vutuv.Activity do
         select:
           s.count + subquery(count_endorsements(user_id, read_at)) +
             subquery(count_connections(user_id, read_at)) +
-            subquery(count_replies(user_id, read_at))
+            subquery(count_connection_requests(user_id, read_at)) +
+            subquery(count_replies(user_id, read_at)) +
+            subquery(count_likes(user_id, read_at))
       )
     )
   end
@@ -297,7 +338,9 @@ defmodule Vutuv.Activity do
 
   # Accepted connections where the user is a party, timestamped at acceptance
   # (`status_changed_at`). The CASE join resolves the *other* party so the feed
-  # item names the friend, not the user themselves.
+  # item names the friend, not the user themselves. The requester reads the
+  # event as "accepted your connection request"; the acceptor as the plain
+  # "is now connected with you".
   defp connection_items(user_id, limit, cursor) do
     query =
       from(c in Connection,
@@ -314,15 +357,37 @@ defmodule Vutuv.Activity do
             ),
         order_by: [desc: c.status_changed_at, desc: c.id],
         limit: ^limit,
-        select: {c.id, c.status_changed_at, u}
+        select: {c.id, c.status_changed_at, u, c.requested_by_id}
       )
 
     query = if cursor, do: where(query, [c], c.status_changed_at <= ^cursor.at), else: query
 
     query
     |> Repo.all()
-    |> Enum.map(fn {id, at, friend} ->
-      actor_item("connection-#{id}", "connection", at, friend)
+    |> Enum.map(fn {id, at, friend, requested_by_id} ->
+      kind = if requested_by_id == user_id, do: "connection_accepted", else: "connection"
+      actor_item("connection-#{id}", kind, at, friend)
+    end)
+  end
+
+  # Pending requests waiting on this user's answer. They live in the feed so
+  # an offline recipient still discovers them; once answered, the row leaves
+  # the pending state and the item disappears (accepted ones re-enter above).
+  defp connection_request_items(user_id, limit, cursor) do
+    from(c in Connection,
+      where:
+        c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
+          c.requested_by_id != ^user_id,
+      join: u in User,
+      on: u.id == c.requested_by_id,
+      order_by: [desc: c.inserted_at, desc: c.id],
+      limit: ^limit,
+      select: {c.id, c.inserted_at, u}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, requester} ->
+      actor_item("connection_request-#{id}", "connection_request", at, requester)
     end)
   end
 
@@ -334,12 +399,34 @@ defmodule Vutuv.Activity do
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^limit,
-      select: {r.id, r.inserted_at, replier}
+      select: {r.id, r.inserted_at, replier, r.parent_post_id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
-    |> Enum.map(fn {id, at, replier} ->
-      actor_item("reply-#{id}", "reply", at, replier)
+    |> Enum.map(fn {id, at, replier, parent_post_id} ->
+      "reply-#{id}"
+      |> actor_item("reply", at, replier)
+      |> Map.put(:post_id, parent_post_id)
+    end)
+  end
+
+  # Likes on this user's posts, minus self-likes. Carries the liked post's id
+  # so the notification can link to it.
+  defp like_items(user_id, limit, cursor) do
+    from(l in PostLike,
+      join: p in assoc(l, :post),
+      join: liker in assoc(l, :user),
+      where: p.user_id == ^user_id and l.user_id != ^user_id,
+      order_by: [desc: l.inserted_at, desc: l.id],
+      limit: ^limit,
+      select: {l.id, l.inserted_at, liker, p.id}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, liker, post_id} ->
+      "like-#{id}"
+      |> actor_item("like", at, liker)
+      |> Map.put(:post_id, post_id)
     end)
   end
 
@@ -393,10 +480,29 @@ defmodule Vutuv.Activity do
     end
   end
 
+  defp count_connection_requests(user_id, read_at) do
+    from(c in Connection,
+      where:
+        c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
+          c.requested_by_id != ^user_id,
+      select: %{count: count()}
+    )
+    |> since(read_at)
+  end
+
   defp count_replies(user_id, read_at) do
     from(r in PostReply,
       join: reply in assoc(r, :post),
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
+      select: %{count: count()}
+    )
+    |> since(read_at)
+  end
+
+  defp count_likes(user_id, read_at) do
+    from(l in PostLike,
+      join: p in assoc(l, :post),
+      where: p.user_id == ^user_id and l.user_id != ^user_id,
       select: %{count: count()}
     )
     |> since(read_at)
@@ -408,6 +514,10 @@ defmodule Vutuv.Activity do
   defp actor_param(%User{} = user), do: Phoenix.Param.to_param(user)
   defp actor_param(_), do: nil
 
+  # nil (not the default-placeholder URL) when the actor has no picture, so
+  # the notifications page renders its colored kind glyph instead of a grey
+  # anonymous image.
+  defp actor_avatar(%User{avatar: nil}), do: nil
   defp actor_avatar(%User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
   defp actor_avatar(_), do: nil
 
