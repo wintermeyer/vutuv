@@ -32,7 +32,9 @@ defmodule VutuvWeb.ConnectionController do
 
     connections = Social.list_connections(profile)
     users = Enum.map(connections, & &1.user)
-    total = Social.connection_count(profile)
+    # list_connections/1 is unpaginated, so the loaded list is the full set —
+    # no separate count query needed.
+    total = length(connections)
     work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 45)
 
     AgentDocs.respond(conn,

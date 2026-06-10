@@ -28,16 +28,13 @@ defmodule VutuvWeb.UserController do
   # gains or loses public data, ProfileDoc must follow (the drift test
   # agent_docs_drift_test.exs enforces it).
   def show(conn, params) do
-    case AgentDocs.negotiate(conn, [:md, :txt, :json, :vcf]) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates([:md, :txt, :json, :vcf])
-        |> show_html(params)
-
-      format ->
-        doc = ProfileDoc.build(conn.assigns[:user], include_photo: format == :vcf)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    # The profile is the one page that also serves :vcf; the doc embeds the
+    # photo only for that format, so the doc fun takes the negotiated format.
+    AgentDocs.respond(conn,
+      allowed: AgentDocs.formats(),
+      html: &show_html(&1, params),
+      doc: &ProfileDoc.build(conn.assigns[:user], include_photo: &1 == :vcf)
+    )
   end
 
   defp show_html(conn, _params) do

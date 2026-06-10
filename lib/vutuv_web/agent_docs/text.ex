@@ -145,12 +145,28 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> Enum.map_join("\n", &wrap_line(&1, indent))
   end
 
+  # A line that already fits is returned verbatim, so the renderer's own
+  # 2-space continuation indents (and any meaningful whitespace in post
+  # bodies) survive. Only over-long lines are reflowed, and the first
+  # wrapped segment keeps the line's original leading indentation.
   defp wrap_line(line, indent) do
-    line
-    |> String.split(" ", trim: true)
-    |> Enum.reduce([], &add_word(&1, &2, indent))
-    |> Enum.reverse()
-    |> Enum.join("\n")
+    if String.length(line) <= @width do
+      line
+    else
+      leading = leading_whitespace(line)
+
+      line
+      |> String.split(" ", trim: true)
+      |> Enum.reduce([], &add_word(&1, &2, indent))
+      |> Enum.reverse()
+      |> List.update_at(0, &(leading <> &1))
+      |> Enum.join("\n")
+    end
+  end
+
+  defp leading_whitespace(line) do
+    trimmed = String.trim_leading(line)
+    String.slice(line, 0, String.length(line) - String.length(trimmed))
   end
 
   defp add_word(word, [], _indent), do: [word]

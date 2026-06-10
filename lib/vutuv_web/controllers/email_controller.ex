@@ -136,10 +136,15 @@ defmodule VutuvWeb.EmailController do
 
       email ->
         conn
-        |> AgentDocs.put_html_alternates()
+        |> maybe_put_alternates(email)
         |> render("show.html", email: email)
     end
   end
+
+  # Advertise the agent-format siblings only for a public address — show_doc
+  # serves the anonymous view, so a private email's .md/.txt/.json would 404.
+  defp maybe_put_alternates(conn, %{public?: true}), do: AgentDocs.put_html_alternates(conn)
+  defp maybe_put_alternates(conn, _email), do: conn
 
   # The anonymous view: a private address has no agent documents, even for a
   # permitted viewer's session — only the public-scoped query runs here, no

@@ -119,7 +119,9 @@ defmodule VutuvWeb.AgentDocs do
   HTML page (alternate links and `Vary` set) via the `:html` fun or sends
   the doc built by the `:doc` fun — which runs only for agent-format
   requests. `:allowed` (default md/txt/json) drives both the negotiation
-  and the advertised alternates.
+  and the advertised alternates. The `:doc` fun may take the negotiated
+  format as an argument (arity 1) when the doc depends on it (e.g. the
+  profile embeds a photo only for `:vcf`).
   """
   def respond(conn, opts) do
     allowed = Keyword.get(opts, :allowed, @default_formats)
@@ -131,9 +133,12 @@ defmodule VutuvWeb.AgentDocs do
 
       format ->
         doc_fun = Keyword.fetch!(opts, :doc)
-        send_doc(conn, format, doc_fun.())
+        send_doc(conn, format, build_doc(doc_fun, format))
     end
   end
+
+  defp build_doc(fun, format) when is_function(fun, 1), do: fun.(format)
+  defp build_doc(fun, _format) when is_function(fun, 0), do: fun.()
 
   @doc "The URL extension for `format` (`:md` -> `\".md\"`)."
   def extension(format) when format in @formats, do: "." <> Atom.to_string(format)
@@ -142,6 +147,7 @@ defmodule VutuvWeb.AgentDocs do
   Renders `doc` as `format` and sends it, with all agent headers set.
   """
   def send_doc(conn, format, doc) do
+    doc = put_request_query(doc, conn)
     body = format |> render_doc(doc) |> append_language_hint(conn, format)
 
     conn
@@ -162,19 +168,33 @@ defmodule VutuvWeb.AgentDocs do
   `<link rel="alternate">` tags.
   """
   def put_html_alternates(conn, formats \\ @default_formats) do
-    query = if conn.query_string in [nil, ""], do: "", else: "?" <> conn.query_string
+    path = canonical_path(conn.request_path)
+    query = query_suffix(conn)
 
     alternates =
       for format <- formats do
         %{
           type: Map.fetch!(@content_types, format),
-          href: conn.request_path <> extension(format) <> query
+          href: path <> extension(format) <> query
         }
       end
 
     conn
     |> put_resp_header("vary", "accept")
     |> assign(:agent_doc_alternates, alternates)
+  end
+
+  # "/stefan/" routes to the profile (Plug drops the empty segment) but
+  # request_path keeps the slash; strip it so the alternate href is the
+  # routable "/stefan.md", not the dead "/stefan/.md".
+  defp canonical_path("/"), do: "/"
+  defp canonical_path(path), do: String.replace_suffix(path, "/", "")
+
+  defp query_suffix(conn) do
+    case conn.query_string do
+      empty when empty in [nil, ""] -> ""
+      query -> "?" <> query
+    end
   end
 
   @doc """
@@ -197,6 +217,24 @@ defmodule VutuvWeb.AgentDocs do
         end),
       noindex: Keyword.get(opts, :noindex, false)
     }
+  end
+
+  # A paginated or translated request (?page=2, ?lang=de) changes what the
+  # page shows, so the doc's own canonical `url` and its sibling `formats`
+  # links must carry the same query — otherwise they point at page 1 /
+  # English. Mirrors put_html_alternates/2, which keeps the query too.
+  defp put_request_query(doc, conn) do
+    case query_suffix(conn) do
+      "" ->
+        doc
+
+      suffix ->
+        %{
+          doc
+          | url: doc.url <> suffix,
+            formats: Map.new(doc.formats, fn {name, url} -> {name, url <> suffix} end)
+        }
+    end
   end
 
   @doc "Absolute URL for an app path."

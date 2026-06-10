@@ -149,9 +149,9 @@ defmodule VutuvWeb.PostController do
 
         cond do
           conn.request_path != canonical ->
-            # An extension request keeps its format across this redirect —
-            # VutuvWeb.Plug.AgentFormat re-appends it in before_send.
-            redirect(conn, to: canonical)
+            # Keep the format (the plug re-appends the extension in before_send)
+            # and the query string (?lang=de) across the canonical redirect.
+            redirect(conn, to: canonical <> redirect_query(conn))
 
           format != :html ->
             send_post_doc(conn, format, author, post)
@@ -214,6 +214,13 @@ defmodule VutuvWeb.PostController do
   # crawler somehow holds a permitted session.
   defp maybe_noindex(conn, true), do: put_resp_header(conn, "x-robots-tag", "noindex")
   defp maybe_noindex(conn, false), do: conn
+
+  defp redirect_query(conn) do
+    case conn.query_string do
+      empty when empty in [nil, ""] -> ""
+      query -> "?" <> query
+    end
+  end
 
   # The agent formats render strictly the anonymous view: a post a
   # logged-out visitor cannot see has no agent documents either.

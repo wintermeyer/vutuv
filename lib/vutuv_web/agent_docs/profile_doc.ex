@@ -44,7 +44,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
 
     AgentDocs.doc_meta("profile", path,
       noindex: user.noindex?,
-      formats: [:md, :txt, :json, :vcf]
+      formats: AgentDocs.formats()
     )
     |> Map.merge(%{
       title: UserHelpers.full_name(user),

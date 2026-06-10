@@ -109,6 +109,134 @@ defmodule VutuvWeb.AgentFormatTest do
       assert conn.status == 301
       assert get_resp_header(conn, "location") == ["/agent_tester.md"]
     end
+
+    test "a search term ending in a known extension is not mistaken for a format" do
+      # /search/:id carries the raw query as the last segment; "search" must be
+      # skipped so the plug does not strip a real ".json"/".md" off it. A fresh
+      # query 302s to its canonical URL — the term must survive intact, not be
+      # truncated to "package".
+      conn = get(build_conn(), "/search/package.json")
+      assert redirected_to(conn) == "/search/package.json"
+    end
+
+    test "a trailing-slash profile advertises clean alternate URLs" do
+      html = get(build_conn(), "/agent_tester/") |> html_response(200)
+
+      assert html =~ ~s(href="/agent_tester.md")
+      refute html =~ "/agent_tester/.md"
+    end
+  end
+
+  describe "escaping and injection" do
+    test "the vCard escapes ; , and newlines in user-controlled fields", %{user: user} do
+      insert(:address,
+        user: user,
+        line_1: "Suite 1; Floor 2\nDoor B",
+        city: "Foo,Bar",
+        country: "Germany"
+      )
+
+      body = get(build_conn(), "/agent_tester.vcf").resp_body
+
+      # The data ";" and "," are escaped, so they don't shift the ADR fields.
+      assert body =~ "Suite 1\\; Floor 2"
+      assert body =~ "Foo\\,Bar"
+      # An embedded newline becomes the escaped \n token, never a raw line.
+      refute body =~ "Floor 2\nDoor B"
+    end
+
+    test "the vCard download filename drops quotes and control chars" do
+      insert_activated_user(
+        active_slug: "weird_name",
+        first_name: ~s(Ann "X"),
+        last_name: "Smith"
+      )
+
+      conn = get(build_conn(), "/weird_name.vcf")
+
+      assert conn.status == 200
+      assert [disposition] = get_resp_header(conn, "content-disposition")
+      # The inner quote must not leak into the quoted-string header.
+      refute disposition =~ ~s(ann "x")
+      assert disposition =~ "_vcard.vcf"
+    end
+
+    test "Markdown escapes link-breaking characters in member names", %{user: target} do
+      evil =
+        insert_activated_user(first_name: "Eve", last_name: "x](https://evil.example)")
+
+      follow!(evil, target)
+
+      body = get(build_conn(), "/agent_tester/followers.md").resp_body
+
+      # The closing bracket in the name is escaped, so it cannot terminate the
+      # link text and smuggle in an attacker URL.
+      assert body =~ "x\\]"
+      refute body =~ "[Eve x](https://evil.example)"
+    end
+
+    test "YAML frontmatter keeps interpolation-looking text literal", %{user: _user} do
+      insert(:tag, name: "Sharp", slug: "sharp", description: ~S(Costs #{n} euros))
+
+      body = get(build_conn(), "/tags/sharp.md").resp_body
+
+      assert body =~ ~S(description: "Costs #{n} euros")
+      # inspect/1 would have produced an invalid YAML escape here.
+      refute body =~ ~S(\#{n})
+    end
+  end
+
+  describe "anonymous-view enforcement" do
+    test "a moderation-hidden account has no agent documents, even for its owner", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+
+      Vutuv.Repo.update_all(
+        from(u in Vutuv.Accounts.User, where: u.id == ^me.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      # The owner still reaches their own frozen HTML profile (banner/review),
+      # but the agent formats are the anonymous view and must 404 like everyone.
+      assert html_response(get(conn, "/#{me.active_slug}"), 200)
+      assert get(conn, "/#{me.active_slug}.md").status == 404
+      assert get(conn, "/#{me.active_slug}.json").status == 404
+    end
+
+    test "a private email's show page advertises no agent-format alternates", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      private = insert(:email, user: me, public?: false, value: "secret@example.com")
+
+      html = get(conn, "/#{me.active_slug}/emails/#{private.id}") |> html_response(200)
+
+      refute html =~ ~s(rel="alternate")
+      assert get(conn, "/#{me.active_slug}/emails/#{private.id}.md").status == 404
+    end
+  end
+
+  describe "the vCard download affordance" do
+    test "the owner downloads the all-emails (session-aware) vCard", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+
+      html = get(conn, "/#{me.active_slug}") |> html_response(200)
+
+      assert html =~ ~s(href="/api/1.0/users/#{me.active_slug}/vcard")
+    end
+
+    test "an anonymous visitor downloads the public .vcf" do
+      html = get(build_conn(), "/agent_tester") |> html_response(200)
+
+      assert html =~ ~s(href="/agent_tester.vcf")
+    end
+  end
+
+  describe "self-referential URLs" do
+    test "a translated doc's own url and sibling links carry the query string" do
+      conn = get(build_conn(), "/agent_tester.json?lang=de")
+      doc = Jason.decode!(conn.resp_body)
+
+      assert String.ends_with?(doc["url"], "/agent_tester?lang=de")
+      assert doc["formats"]["markdown"] =~ "/agent_tester.md?lang=de"
+    end
   end
 
   describe "the unsupported-extension guard" do

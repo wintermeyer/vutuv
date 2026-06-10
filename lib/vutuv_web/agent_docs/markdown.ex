@@ -75,7 +75,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   def render(%{type: "post"} = doc) do
-    author_link = "[#{doc.author.name}](#{doc.author.url})"
+    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
 
     [
       frontmatter(doc),
@@ -90,13 +90,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   def render(%{type: "post_archive"} = doc) do
-    author_link = "[#{doc.author.name}](#{doc.author.url})"
+    author_link = "[#{md_text(doc.author.name)}](#{doc.author.url})"
 
     [
       frontmatter(doc),
+      # doc.title already carries the period (PostDoc's period_suffix/1).
       "# #{doc.title}",
       gettext("%{count} posts by %{name}", count: doc.total, name: author_link) <>
-        if(doc.period, do: " · #{doc.period}", else: "") <>
         page_hint(doc.total, doc.posts),
       Enum.map_join(doc.posts, "\n", &post_line/1)
     ]
@@ -202,7 +202,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp link_line(%{description: nil, url: url}), do: "- <#{url}>"
-  defp link_line(%{description: description, url: url}), do: "- [#{description}](#{url})"
+  defp link_line(%{description: description, url: url}), do: "- [#{md_text(description)}](#{url})"
 
   # The provider labels the link — the same [label](url) form as the Links
   # section. A provider without a canonical URL scheme (Snapchat) carries
@@ -239,13 +239,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         do: " (#{gettext("reposted by %{name}", name: post.reposted_by)})",
         else: ""
 
-    "- #{post.published_on}#{reposted}: [#{post.excerpt}](#{post.url})"
+    "- #{post.published_on}#{reposted}: [#{md_text(post.excerpt)}](#{post.url})"
   end
 
   defp person_line(person), do: "- #{person_text(person)}"
 
   defp person_text(person) do
-    "[#{person.name}](#{person.url})" <>
+    "[#{md_text(person.name)}](#{person.url})" <>
       if person.work_info, do: " — #{person.work_info}", else: ""
   end
 
@@ -255,7 +255,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: "> " <> gettext("In reply to a deleted post by %{name}.", name: author)
 
   defp in_reply_to_line(%{url: url, author: author}) do
-    author_link = "[#{author}](#{url})"
+    author_link = "[#{md_text(author)}](#{url})"
     "> " <> gettext("In reply to a post by %{name}.", name: author_link)
   end
 
@@ -274,7 +274,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp reply_block(reply) do
-    "### [#{reply.author}](#{reply.url}) · #{reply.published_on}\n\n#{reply.body_markdown}"
+    "### [#{md_text(reply.author)}](#{reply.url}) · #{reply.published_on}\n\n#{reply.body_markdown}"
   end
 
   defp section(_title, []), do: nil
@@ -283,10 +283,32 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(value), do: value
 
-  # Strings that may contain anything go into YAML double-quoted; Elixir's
-  # inspect produces a compatible escape set for the characters we meet here.
+  # A YAML double-quoted scalar: escape backslash and double-quote, fold
+  # newlines/tabs to spaces. (inspect/1 was wrong here — it emits `\#{` for a
+  # literal `#{`, which is not a legal YAML escape, and truncates at 4096.)
   defp yaml(nil), do: ~s("")
-  defp yaml(value), do: value |> to_string() |> String.replace("\n", " ") |> inspect()
+
+  defp yaml(value) do
+    escaped =
+      value
+      |> to_string()
+      |> String.replace("\\", "\\\\")
+      |> String.replace("\"", "\\\"")
+      |> String.replace(["\n", "\r", "\t"], " ")
+
+    ~s(") <> escaped <> ~s(")
+  end
+
+  # Escape the Markdown link-syntax characters in user-controlled link *text*
+  # (names, excerpts), so a value like `x](http://evil)` cannot break out of
+  # `[text](url)` and forge a link.
+  defp md_text(value) do
+    value
+    |> to_string()
+    |> String.replace("\\", "\\\\")
+    |> String.replace("[", "\\[")
+    |> String.replace("]", "\\]")
+  end
 
   defp join_blocks(blocks) do
     blocks

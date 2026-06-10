@@ -38,11 +38,17 @@ defmodule VutuvWeb.AgentDocs.VCard do
 
   @doc "The download filename, e.g. `stefan_wintermeyer_vcard.vcf`."
   def filename(doc) do
-    [doc.first_name, doc.last_name]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join("_")
-    |> String.downcase()
-    |> Kernel.<>("_vcard.vcf")
+    name =
+      [doc.first_name, doc.last_name]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join("_")
+      |> String.downcase()
+      # Strip the characters that would break (or crash) the quoted-string
+      # Content-Disposition header: control chars, double-quote, backslash.
+      # Unicode letters are kept.
+      |> String.replace(~r/[\x00-\x1f\x7f"\\]/, "")
+
+    if(name == "", do: "profile", else: name) <> "_vcard.vcf"
   end
 
   defp organization(%{current_position: nil}), do: ""
@@ -87,7 +93,9 @@ defmodule VutuvWeb.AgentDocs.VCard do
          address.country
        ]
        |> Enum.filter(&(&1 not in [nil, ""]))
-       |> Enum.join("\\n")) <>
+       # The "\n" joiner is the escaped-newline vCard token between label
+       # lines; the components themselves still need their own escaping.
+       |> Enum.map_join("\\n", &sanitize/1)) <>
       "\n"
   end
 
@@ -106,6 +114,19 @@ defmodule VutuvWeb.AgentDocs.VCard do
 
   defp timestamp(doc), do: Calendar.strftime(doc.generated_at, "%Y%m%d%H%M%S")
 
+  # vCard 3.0 (RFC 2426) text-value escaping: backslash first (so we don't
+  # double-escape the ones we add), then the structural separators and
+  # newlines. Carriage returns are dropped. The unescaped ";" separators of
+  # the N/ADR fields are written by render/1 itself, not by sanitize.
   defp sanitize(nil), do: ""
-  defp sanitize(value), do: value
+
+  defp sanitize(value) do
+    value
+    |> to_string()
+    |> String.replace("\\", "\\\\")
+    |> String.replace("\r", "")
+    |> String.replace("\n", "\\n")
+    |> String.replace(";", "\\;")
+    |> String.replace(",", "\\,")
+  end
 end

@@ -155,6 +155,32 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert redirected_to(conn) == "/drift_tester/posts/#{post.id}.md"
   end
 
+  test "the canonical-casing redirect keeps the ?lang= query too", %{post: post} do
+    upper = String.upcase(post.id)
+    conn = get(build_conn(), "/drift_tester/posts/#{upper}.md?lang=de")
+    assert redirected_to(conn) == "/drift_tester/posts/#{post.id}.md?lang=de"
+  end
+
+  test "reply_count reflects the replies the anonymous doc actually lists", %{post: post} do
+    visible = insert_activated_user(first_name: "Vee", last_name: "Visible")
+    {:ok, _} = Vutuv.Posts.create_reply(visible, post, %{"body" => "Sound point."})
+
+    hidden = insert_activated_user(first_name: "Han", last_name: "Hidden")
+
+    {:ok, _} =
+      Vutuv.Posts.create_reply(hidden, post, %{
+        "body" => "Secret reply.",
+        "denials" => [%{"wildcard" => "non_followers"}]
+      })
+
+    doc = Jason.decode!(get(build_conn(), "/drift_tester/posts/#{post.id}.json").resp_body)
+
+    # The restricted reply is neither listed nor counted in the anonymous doc.
+    assert doc["reply_count"] == 1
+    assert length(doc["replies"]) == 1
+    refute get(build_conn(), "/drift_tester/posts/#{post.id}.txt").resp_body =~ "Secret reply"
+  end
+
   test "follower and following lists in every format", %{user: user, follower: follower} do
     follow!(user, follower)
 
