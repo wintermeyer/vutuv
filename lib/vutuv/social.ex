@@ -81,6 +81,31 @@ defmodule Vutuv.Social do
     )
   end
 
+  @doc """
+  One page of a user's follow lists for the browse pages: `side` is
+  `:followers` (people following `user`) or `:followees` (people `user`
+  follows), newest follow first. `params` are the request params understood
+  by `Vutuv.Pages.paginate/3`. Returns `%{user: user_with_preload, users:
+  [people on this page], total: count}` — the shared engine behind the
+  otherwise identical follower/followee index actions.
+  """
+  def follows_page(%User{} = user, side, params) when side in [:followers, :followees] do
+    {total, assoc, person} =
+      case side do
+        :followers -> {follower_count(user), :inbound_follows, :follower}
+        :followees -> {followee_count(user), :outbound_follows, :followee}
+      end
+
+    query = Follow.latest(100) |> Vutuv.Pages.paginate(params, total)
+    user = Repo.preload(user, [{assoc, {query, [person]}}])
+
+    %{
+      user: user,
+      users: user |> Map.fetch!(assoc) |> Enum.map(&Map.fetch!(&1, person)),
+      total: total
+    }
+  end
+
   def user_follows_user?(follower_id, followee_id) do
     Repo.exists?(
       from(c in Follow,

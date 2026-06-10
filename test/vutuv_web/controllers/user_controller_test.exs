@@ -109,6 +109,18 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "md:col-span-2"
   end
 
+  test "the profile header's action buttons wrap on narrow screens", %{conn: conn} do
+    # A visitor sees up to three controls (Connect/Follow/Message) beside the
+    # avatar; without flex-wrap the last one is clipped off a 390px phone.
+    {conn, _visitor} = create_and_login_user(conn)
+    profile = insert_activated_user()
+    html = conn |> get(~p"/#{profile}") |> html_response(200)
+
+    assert html =~ ~s(id="profile-actions")
+    assert [actions_div] = Regex.run(~r/<div id="profile-actions"[^>]*>/, html)
+    assert actions_div =~ "flex-wrap"
+  end
+
   test "lists the user's full profile information to visitors", %{conn: conn} do
     user =
       insert_activated_user(

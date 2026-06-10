@@ -27,10 +27,7 @@
 
   <div class={"editform__field#{if error_tag(f, :start_month), do: " editform__field--error"}"}>
     <%= label f, :start_month, gettext("Start month") %>
-    <%= select f, :start_month,
-    ["January": 1, "February": 2, "March": 3, "April": 4,
-     "May": 5, "June": 6, "July": 7, "August": 8,
-     "September": 9, "October": 10, "November": 11, "December": 12], prompt: gettext("Select a month") %>
+    <%= select f, :start_month, month_options(), prompt: gettext("Select a month") %>
     <%= error_tag f, :start_month %>
   </div>
 
@@ -42,10 +39,7 @@
 
   <div class={"editform__field#{if error_tag(f, :end_month), do: " editform__field--error"}"}>
     <%= label f, :end_month, gettext("End month") %>
-    <%= select f, :end_month,
-    ["January": 1, "February": 2, "March": 3, "April": 4,
-     "May": 5, "June": 6, "July": 7, "August": 8,
-     "September": 9, "October": 10, "November": 11, "December": 12], prompt: gettext("Select a month") %>
+    <%= select f, :end_month, month_options(), prompt: gettext("Select a month") %>
     <%= error_tag f, :end_month %>
   </div>
 

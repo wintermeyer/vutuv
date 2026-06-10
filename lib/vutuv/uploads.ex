@@ -6,6 +6,10 @@ defmodule Vutuv.Uploads do
   (`regenerate_from_original/3`). Private originals live in
   `Vutuv.Uploads.Originals`, version specs and the AVIF encoder in
   `Vutuv.Uploads.Spec`.
+
+  Directory orientation for new readers: `lib/vutuv/uploads/` (this context)
+  is the shared pipeline; `lib/vutuv/uploaders/` holds the per-asset-type
+  modules (avatar, cover, post image, screenshot) that configure it.
   """
 
   alias Vutuv.Uploads.Originals

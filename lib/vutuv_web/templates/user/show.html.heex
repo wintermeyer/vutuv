@@ -40,7 +40,10 @@ the resulting ~200px rail width. --%>
           this the static avatar would render behind the banner instead of
           overlapping on top of it. --%>
           <.avatar user={@user} size="lg" shape="square" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 ring-4 ring-white dark:ring-slate-900" />
-          <div class="ml-auto flex gap-2 pb-1">
+          <%!-- flex-wrap: on narrow phones the visitor's three controls
+          (Connect/Follow/Message) don't fit beside the avatar in one row;
+          without it the last button is clipped off-screen. --%>
+          <div id="profile-actions" class="ml-auto flex flex-wrap justify-end gap-2 pb-1">
             <%= cond do %>
               <% same_user?(@user, @current_user) -> %>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>

@@ -81,8 +81,28 @@ defmodule VutuvWeb.UITest do
       assert html =~ ~s(src="/avatars/x/Jane%20Doe_thumb.avif")
     end
 
-    test "resolves the neutral SVG for a user with no avatar, still marked" do
+    test "falls back to the user's initials when they have no picture" do
+      html =
+        render_component(&UI.avatar/1,
+          user: %Vutuv.Accounts.User{avatar: nil, first_name: "Greta", last_name: "Tester"}
+        )
+
+      # An initials tile, not the anonymous placeholder image: it matches the
+      # shell's top-bar avatar and tells people apart in lists.
+      assert html =~ "data-avatar"
+      assert html =~ ">GT<"
+      refute html =~ "<img"
+    end
+
+    test "a nameless user without a picture gets the ? tile" do
       html = render_component(&UI.avatar/1, user: %Vutuv.Accounts.User{avatar: nil})
+
+      assert html =~ "data-avatar"
+      assert html =~ ">?<"
+    end
+
+    test "renders the neutral SVG image when given neither user nor src" do
+      html = render_component(&UI.avatar/1, [])
 
       assert html =~ "data-avatar"
       assert html =~ "data:image/svg+xml"

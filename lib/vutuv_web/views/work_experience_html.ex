@@ -4,6 +4,28 @@ defmodule VutuvWeb.WorkExperienceHTML do
   import VutuvWeb.UserHelpers
 
   @doc """
+  The `{label, value}` options for the start/end month selects on the
+  work-experience form — defined once (the form needs the list twice) and
+  translated, unlike the English literals it replaces.
+  """
+  def month_options do
+    [
+      {gettext("January"), 1},
+      {gettext("February"), 2},
+      {gettext("March"), 3},
+      {gettext("April"), 4},
+      {gettext("May"), 5},
+      {gettext("June"), 6},
+      {gettext("July"), 7},
+      {gettext("August"), 8},
+      {gettext("September"), 9},
+      {gettext("October"), 10},
+      {gettext("November"), 11},
+      {gettext("December"), 12}
+    ]
+  end
+
+  @doc """
   Renders a role's date range. `order` controls month/year ordering within each
   endpoint: `:month_first` (default) yields `3/2018`, `:year_first` yields
   `2018/3`.

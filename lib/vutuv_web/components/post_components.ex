@@ -77,6 +77,7 @@ defmodule VutuvWeb.PostComponents do
       # must stay unique.
       |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
       |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
+      |> assign(:time_id, "post-time-#{assigns.entry_id || assigns.post.id}")
       |> assign(:author?, Posts.author?(assigns.post, assigns.viewer))
       |> assign(:reply_banner, reply_banner(assigns.post))
       |> assign(
@@ -102,6 +103,7 @@ defmodule VutuvWeb.PostComponents do
       conn_or_socket={@conn_or_socket}
       actions_id={@actions_id}
       menu_id={@menu_id}
+      time_id={@time_id}
     />
     """
   end
@@ -122,6 +124,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:conn_or_socket, :any, required: true)
   attr(:actions_id, :string, required: true)
   attr(:menu_id, :string, required: true)
+  attr(:time_id, :string, required: true)
 
   defp post_card_body(assigns) do
     ~H"""
@@ -197,7 +200,17 @@ defmodule VutuvWeb.PostComponents do
               {full_name(@post.user)}
             </.link>
             <.link href={@permalink} class="text-sm text-slate-500 hover:text-brand-700">
-              <time datetime={NaiveDateTime.to_iso8601(@post.inserted_at)}>
+              <%!-- Stored timestamps are naive UTC; the trailing "Z" lets the
+              LocalTime pass (LiveView hook on live pages, the DOMContentLoaded
+              sweep on dead ones) rewrite it into the viewer's timezone. The
+              server-rendered text is the no-JS fallback. --%>
+              <time
+                id={@time_id}
+                phx-hook="LocalTime"
+                data-localtime
+                datetime={NaiveDateTime.to_iso8601(@post.inserted_at) <> "Z"}
+                title={NaiveDateTime.to_iso8601(@post.inserted_at) <> "Z"}
+              >
                 {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M")}
               </time>
             </.link>

@@ -10,10 +10,28 @@ const csrfToken = document
   .querySelector("meta[name='csrf-token']")
   ?.getAttribute("content")
 
+// Rewrites a <time datetime="…Z"> into the viewer's locale and timezone.
+// Server-rendered timestamps are UTC; this runs as the LocalTime hook inside
+// LiveViews and as a DOMContentLoaded sweep over time[data-localtime] on
+// classic controller pages (post cards render on both kinds of page).
+function localizeTime(el) {
+  const dt = new Date(el.dateTime)
+  if (!isNaN(dt)) {
+    el.textContent = new Intl.DateTimeFormat(undefined, {
+      dateStyle: "short",
+      timeStyle: "short",
+    }).format(dt)
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
+})
+
 // Hooks. ClearOnSubmit resets a form right after it is submitted (used by the
 // message composer so the input empties once a message is sent). LocalTime
-// rewrites a <time datetime="…"> into the viewer's locale and timezone.
-// ScrollBottom keeps a chat thread pinned to its newest message.
+// localizes timestamps (see above). ScrollBottom keeps a chat thread pinned
+// to its newest message.
 const Hooks = {
   ClearOnSubmit: {
     mounted() {
@@ -24,19 +42,10 @@ const Hooks = {
   },
   LocalTime: {
     mounted() {
-      this.localize()
+      localizeTime(this.el)
     },
     updated() {
-      this.localize()
-    },
-    localize() {
-      const dt = new Date(this.el.dateTime)
-      if (!isNaN(dt)) {
-        this.el.textContent = new Intl.DateTimeFormat(undefined, {
-          dateStyle: "short",
-          timeStyle: "short",
-        }).format(dt)
-      }
+      localizeTime(this.el)
     },
   },
   ScrollBottom: {

@@ -168,7 +168,10 @@ defmodule VutuvWeb.DesignConsistencyTest do
         |> put_req_header("accept-language", "de")
         |> live(~p"/notifications")
 
-      assert render(view) =~ "Benachrichtigungen"
+      # "Mitteilungen" is the one German term for notifications (page title
+      # and shell tab agree; "Benachrichtigungen" was retired to stop the
+      # three-way Nachrichten/Mitteilungen/Benachrichtigungen mix).
+      assert render(view) =~ "Mitteilungen"
     end
   end
 

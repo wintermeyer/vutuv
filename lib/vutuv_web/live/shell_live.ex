@@ -21,7 +21,7 @@ defmodule VutuvWeb.ShellLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1]
+  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1, name_initials: 1]
 
   alias Vutuv.Activity
 
@@ -87,19 +87,7 @@ defmodule VutuvWeb.ShellLive do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  defp initials(nil), do: "?"
-
-  defp initials(name) do
-    name
-    |> String.split(~r/\s+/, trim: true)
-    |> Enum.take(2)
-    |> Enum.map_join(&String.first/1)
-    |> String.upcase()
-    |> case do
-      "" -> "?"
-      i -> i
-    end
-  end
+  # The initials tile shares VutuvWeb.UI.name_initials/1 with <.avatar>.
 
   @impl true
   def render(assigns) do
@@ -174,7 +162,7 @@ defmodule VutuvWeb.ShellLive do
                   <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
                 <% else %>
                   <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
-                    {initials(@user_name)}
+                    {name_initials(@user_name)}
                   </span>
                 <% end %>
               </.link>

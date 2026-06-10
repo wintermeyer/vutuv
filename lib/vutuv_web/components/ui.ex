@@ -505,6 +505,33 @@ defmodule VutuvWeb.UI do
   # valid <img> instead of a broken one.
   @fallback_avatar "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20width='24'%20height='24'%20fill='%23e2e8f0'/%3E%3Ccircle%20cx='12'%20cy='9'%20r='4'%20fill='%2394a3b8'/%3E%3Cpath%20d='M4%2022c0-4%204-6%208-6s8%202%208%206'%20fill='%2394a3b8'/%3E%3C/svg%3E"
 
+  # A user without a picture gets an initials tile (matching the shell's
+  # top-bar avatar) instead of the anonymous placeholder image — initials
+  # tell people apart in lists, a shared grey silhouette does not.
+  def avatar(%{src: nil, user: %{avatar: nil} = user} = assigns) do
+    full_name =
+      [Map.get(user, :first_name), Map.get(user, :last_name)]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(" ")
+
+    assigns = assign(assigns, :initials, name_initials(full_name))
+
+    ~H"""
+    <span
+      data-avatar
+      role="img"
+      aria-label={@alt}
+      class={[
+        avatar_size(@size),
+        if(@shape == "square", do: "rounded-2xl", else: "rounded-full"),
+        "inline-flex shrink-0 select-none items-center justify-center bg-brand-100 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100",
+        initials_text_size(@size),
+        @class
+      ]}
+    >{@initials}</span>
+    """
+  end
+
   def avatar(assigns) do
     src =
       assigns.src ||
@@ -528,10 +555,34 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  Up to two uppercased initials from a display name (`"Greta Tester"` → `"GT"`),
+  `"?"` when there is nothing to abbreviate. Shared by `<.avatar>` and the
+  shell's top-bar tile so the two always agree.
+  """
+  def name_initials(nil), do: "?"
+
+  def name_initials(name) do
+    name
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.take(2)
+    |> Enum.map_join(&String.first/1)
+    |> String.upcase()
+    |> case do
+      "" -> "?"
+      initials -> initials
+    end
+  end
+
   defp avatar_size("xs"), do: "h-8 w-8"
   defp avatar_size("sm"), do: "h-9 w-9"
   defp avatar_size("lg"), do: "h-24 w-24"
   defp avatar_size(_), do: "h-12 w-12"
+
+  defp initials_text_size("xs"), do: "text-xs"
+  defp initials_text_size("sm"), do: "text-xs"
+  defp initials_text_size("lg"), do: "text-3xl"
+  defp initials_text_size(_), do: "text-base"
 
   defp avatar_url_size(size) when size in ["xs", "sm"], do: :thumb
   defp avatar_url_size(_), do: :medium

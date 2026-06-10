@@ -1,22 +1,12 @@
 defmodule VutuvWeb.FolloweeController do
   use VutuvWeb, :controller
-  alias Vutuv.Pages
-  alias Vutuv.Social.Follow
 
   def index(conn, _params) do
-    total = Vutuv.Social.followee_count(conn.assigns[:user])
-
-    query =
-      Follow.latest(100)
-      |> Pages.paginate(conn.params, total)
-
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(outbound_follows: {query, [:followee]})
-
-    # Render only the current page of followees (the paginated follows),
-    # not the full :followees association.
-    followees = Enum.map(user.outbound_follows, & &1.followee)
+    # Render only the current page of followees, not the full association —
+    # the pagination lives in Vutuv.Social.follows_page/3 (shared with the
+    # follower list).
+    %{user: user, users: followees, total: total} =
+      Vutuv.Social.follows_page(conn.assigns[:user], :followees, conn.params)
 
     render(conn, "index.html",
       user: user,

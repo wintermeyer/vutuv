@@ -46,10 +46,10 @@ defmodule VutuvWeb.SearchQueryController do
     end
   end
 
+  # No success flash here: the result list appearing IS the feedback; a
+  # "search executed successfully" toast on top of it was pure noise.
   defp query_created(conn, query) do
-    conn
-    |> put_flash(:info, gettext("Search query executed successfully."))
-    |> redirect(to: ~p"/search/#{query}")
+    redirect(conn, to: ~p"/search/#{query}")
   end
 
   def show(conn, %{"id" => query_id}) do
