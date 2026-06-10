@@ -10,6 +10,14 @@
 	</section>
   <aside>
     <section class="card">
+      <h1><%= gettext "Username" %></h1>
+      <%!-- The handle is the profile URL and the @mention name; changing it is
+            its own flow (uniqueness, quota), so it cannot live in this form. --%>
+      <p>@<%= @user.active_slug %></p>
+      <p><%= link gettext("Change your username"), to: ~p"/#{@user}/slugs/new" %></p>
+    </section>
+
+    <section class="card">
       <h1><%= gettext "Emails" %></h1>
       <%!-- Addresses are managed on their own page: adding one is a
             PIN-verified two-step flow, so it cannot live in this form. --%>

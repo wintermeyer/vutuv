@@ -14,9 +14,6 @@ defmodule Vutuv.Factory do
     }
   end
 
-  # A activated user without the matching `Slug` row. Many context tests just
-  # need an account that passes the activated gate; only slug-routed pages also
-  # need the `Slug` row that `insert_activated_user/1` adds.
   def activated_user_factory do
     struct!(user_factory(), activated?: true)
   end
@@ -33,20 +30,19 @@ defmodule Vutuv.Factory do
     }
   end
 
-  def slug_factory do
-    %Vutuv.Accounts.Slug{
-      value: sequence(:slug_value, &"user-slug-#{&1}")
+  # One row per username change: the ledger behind the 4-per-90-days quota.
+  def slug_change_factory do
+    %Vutuv.Accounts.SlugChange{
+      value: sequence(:slug_change_value, &"old_handle_#{&1}")
     }
   end
 
   @doc """
-  Inserts a activated user plus the enabled `Slug` row matching `active_slug` —
-  the shape every slug-routed page needs to resolve the user.
+  Inserts an activated user. Resolution is by `users.active_slug` alone, so
+  nothing else is needed for slug-routed pages.
   """
   def insert_activated_user(attrs \\ []) do
-    user = insert(:activated_user, attrs)
-    insert(:slug, value: user.active_slug, disabled: false, user: user)
-    user
+    insert(:activated_user, attrs)
   end
 
   def search_term_factory do

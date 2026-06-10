@@ -18,7 +18,7 @@ defmodule Vutuv.AccountDeletionTest do
   import Vutuv.PostsHelpers, only: [create_post!: 2]
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.{Email, Slug, User}
+  alias Vutuv.Accounts.{Email, SlugChange, User}
   alias Vutuv.Chat.{Conversation, Message}
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
   alias Vutuv.Repo
@@ -69,7 +69,7 @@ defmodule Vutuv.AccountDeletionTest do
 
     # --- Profile data (every direct user-owned table) ---
     insert(:email, user: user)
-    insert(:slug, user: user)
+    insert(:slug_change, user: user)
     insert(:work_experience, user: user)
     insert(:address, user: user)
     insert(:phone_number, user: user)
@@ -138,7 +138,7 @@ defmodule Vutuv.AccountDeletionTest do
 
     # --- No orphaned rows anywhere the account reached. ---
     assert count(from(e in Email, where: e.user_id == ^user.id)) == 0
-    assert count(from(s in Slug, where: s.user_id == ^user.id)) == 0
+    assert count(from(s in SlugChange, where: s.user_id == ^user.id)) == 0
 
     assert count(from(f in Follow, where: f.follower_id == ^user.id or f.followee_id == ^user.id)) ==
              0

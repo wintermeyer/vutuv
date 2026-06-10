@@ -1,6 +1,54 @@
-<h2>New URL</h2>
+<.page_header
+  title={gettext("Username")}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Username")
+  ]}
+/>
 
-<%= render "form_content.html", backlink: ~p"/#{@user}/slugs", changeset: @changeset,
-                        action: ~p"/#{@user}/slugs" %>
+<div class="card-list">
+  <section class="card">
+    <p>
+      <%= gettext(
+        "Your username is your profile address (vutuv.de/username) and how others mention you, like %{handle}.",
+        handle: "@#{@user.active_slug}"
+      ) %>
+      <%= gettext(
+        "Changing it frees the old name immediately: links to your old address stop working and anyone can claim the name."
+      ) %>
+    </p>
 
-<%= link "Back", to: ~p"/#{@user}/slugs" %>
+    <p class="editform__hint">
+      <%= gettext("You can change your username up to %{limit} times within %{days} days.",
+        limit: @quota.limit,
+        days: @quota.window_days
+      ) %>
+      <%= if @quota.remaining > 0 do %>
+        <%= gettext("%{remaining} of %{limit} changes left.",
+          remaining: @quota.remaining,
+          limit: @quota.limit
+        ) %>
+      <% end %>
+    </p>
+
+    <%= if @quota.remaining > 0 do %>
+      <%= render("form_content.html",
+        backlink: ~p"/#{@user}/edit",
+        changeset: @changeset,
+        action: ~p"/#{@user}/slugs",
+        user: @user
+      ) %>
+    <% else %>
+      <p class="card__empty">
+        <%= gettext("You have used all %{limit} username changes of the last %{days} days.",
+          limit: @quota.limit,
+          days: @quota.window_days
+        ) %>
+        <%= gettext("You can change it again on %{date}.",
+          date: Calendar.strftime(@quota.next_change_at, "%Y-%m-%d")
+        ) %>
+      </p>
+    <% end %>
+  </section>
+</div>

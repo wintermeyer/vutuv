@@ -16,7 +16,9 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 
 1. **Legacy controller+view pages** still use shared classes (`.card` / `.card-list`,
    `.editform` + inputs (`.editform__hint` is the muted helper line under a field, e.g.
-   "Markdown is supported"), `.button` + variants, `.breadcrumbs`, `.profile-header` page
+   "Markdown is supported"; its `--ok` brand-blue / `--error` red variants color the live
+   username-availability verdict that app.js writes under the new-username field),
+   `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`, `.imagebox`,
    `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs`,
    `.card__empty` empty-state line, `.error-page` 404/403/500 card). They

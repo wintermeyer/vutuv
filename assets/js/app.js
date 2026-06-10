@@ -108,6 +108,52 @@ function setupToasts() {
 window.addEventListener("DOMContentLoaded", setupToasts)
 window.addEventListener("phx:page-loading-stop", setupToasts)
 
+// Username availability. The new-username form (slug/form_content) marks its
+// input with data-availability-url; as the user types, ask the server whether
+// the handle is valid and free and show the verdict in the #slug-availability
+// hint line, so "already taken" appears before the form is submitted. Plain
+// JS on a classic controller page (no LiveView there).
+function setupSlugAvailability() {
+  const input = document.querySelector("input[data-availability-url]")
+  const hint = document.getElementById("slug-availability")
+  if (!input || !hint) return
+
+  let timer = null
+
+  input.addEventListener("input", () => {
+    clearTimeout(timer)
+    const value = input.value.trim()
+
+    if (value === "") {
+      hint.textContent = ""
+      hint.classList.remove("editform__hint--ok", "editform__hint--error")
+      return
+    }
+
+    timer = setTimeout(async () => {
+      try {
+        const url = `${input.dataset.availabilityUrl}?value=${encodeURIComponent(value)}`
+        // No explicit Accept header: the route lives in the :browser pipeline,
+        // whose `accepts ["html"]` 406s an "application/json" Accept; fetch's
+        // default */* negotiates fine and the action responds with JSON anyway.
+        const resp = await fetch(url)
+        if (!resp.ok) return
+        const data = await resp.json()
+        // A slower response for an older value must not overwrite the verdict
+        // for what is in the input now.
+        if (input.value.trim() !== value) return
+        hint.textContent = data.message
+        hint.classList.toggle("editform__hint--ok", data.available)
+        hint.classList.toggle("editform__hint--error", !data.available)
+      } catch (_e) {
+        // Network hiccup: keep quiet, the server still validates on submit.
+      }
+    }, 300)
+  })
+}
+
+window.addEventListener("DOMContentLoaded", setupSlugAvailability)
+
 // Card ⋯ menus (<details data-menu>, see VutuvWeb.UI.card_menu): the native
 // <details> toggle does everything except light-dismiss, so close any open
 // menu when clicking outside it or pressing Escape. Event delegation keeps

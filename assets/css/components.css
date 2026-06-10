@@ -388,6 +388,11 @@ body.stretch main {
   margin: 0.25rem 0 0;
   display: block;
 }
+/* The live username-availability verdict (filled in by app.js). Doubled
+   class for specificity: the hint is a <p> inside a card, and `.card p`
+   (one class + element) would out-rank a single class. */
+.editform__hint.editform__hint--ok { color: var(--color-brand-500); }
+.editform__hint.editform__hint--error { color: #dc2626; }
 .alert,
 .alert-danger {
   background: #fef2f2;
@@ -915,6 +920,8 @@ ul.thumbs li .text .title {
   }
   .editform__inputwrap input[type="file"]::file-selector-button:hover { background: #1e293b; }
   .editform__hint { color: #94a3b8; }
+  .editform__hint.editform__hint--ok { color: var(--color-brand-400); }
+  .editform__hint.editform__hint--error { color: #f87171; }
   .profiles li strong { color: #f1f5f9; }
   .profiles li p { color: #94a3b8; }
   .button-list li { border-color: #1e293b; }

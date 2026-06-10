@@ -13,7 +13,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.SearchTerm
-  alias Vutuv.Accounts.Slug
+  alias Vutuv.Accounts.SlugChange
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
@@ -22,7 +22,7 @@ defmodule Vutuv.Accounts do
 
   def register_user(conn, user_params, assocs \\ []) do
     user_params
-    |> slug_changeset()
+    |> registration_slug()
     |> user_changeset(conn, user_params, assocs)
     |> Repo.insert()
     |> case do
@@ -45,33 +45,40 @@ defmodule Vutuv.Accounts do
     end
   end
 
-  defp slug_changeset(user_params) do
+  # The initial handle, generated from the name (underscore style, unique,
+  # never reserved). nil when no name was given - user_changeset/4 turns that
+  # into a changeset error so registration fails cleanly.
+  defp registration_slug(user_params) do
     if user_params["first_name"] != nil or user_params["last_name"] != nil do
       struct = %User{first_name: user_params["first_name"], last_name: user_params["last_name"]}
 
-      slug_value =
-        Vutuv.SlugHelpers.gen_slug_unique(struct, Slug, :value, ReservedSlugs.list())
-
-      Slug.changeset(%Slug{}, %{value: slug_value})
-    else
-      Slug.changeset(%Slug{}, %{value: "invalid"})
-      |> Ecto.Changeset.add_error(:value, "Invalid slug")
+      Vutuv.SlugHelpers.gen_handle_unique(struct, User, :active_slug, ReservedSlugs.list())
     end
   end
 
-  defp user_changeset(slug_changeset, conn, user_params, assocs) do
+  defp user_changeset(slug_value, conn, user_params, assocs) do
     search_terms = SearchTerm.create_search_terms(user_params)
 
     changeset =
       User.registration_changeset(%User{}, user_params)
-      |> Ecto.Changeset.put_assoc(:slugs, [slug_changeset])
       |> Ecto.Changeset.put_assoc(:search_terms, search_terms)
-      |> Ecto.Changeset.put_change(:active_slug, slug_changeset.changes[:value])
+      |> put_registration_slug(slug_value)
       |> Ecto.Changeset.put_change(:locale, conn.assigns[:locale])
 
     Enum.reduce([changeset | assocs], fn {type, params}, changeset ->
       Ecto.Changeset.put_assoc(changeset, type, [params])
     end)
+  end
+
+  defp put_registration_slug(changeset, nil),
+    do: Ecto.Changeset.add_error(changeset, :active_slug, "can't be generated without a name")
+
+  defp put_registration_slug(changeset, slug_value) do
+    changeset
+    |> Ecto.Changeset.put_change(:active_slug, slug_value)
+    # The generator already dodged collisions; this catches the race where two
+    # registrations generate the same handle at once.
+    |> Ecto.Changeset.unique_constraint(:active_slug)
   end
 
   # Best-effort gravatar import: spawned (when enabled) under the app-wide
@@ -107,7 +114,7 @@ defmodule Vutuv.Accounts do
         File.write(path <> filename, body)
 
         user
-        |> Repo.preload([:slugs, :oauth_providers, :emails])
+        |> Repo.preload([:oauth_providers, :emails])
         |> User.changeset(%{avatar: upload})
         |> Repo.update()
 
@@ -555,6 +562,107 @@ defmodule Vutuv.Accounts do
     user
     |> User.changeset(attrs)
     |> Repo.update()
+  end
+
+  # ── Usernames ──
+
+  @slug_change_limit 4
+  @slug_change_window_days 90
+
+  @doc """
+  Renames the account: validates the new handle (`User.slug_changeset/2`),
+  checks the change quota, and records the change in the `slug_changes`
+  ledger, all in one transaction. The old handle is simply freed - no
+  redirect, no reservation. Returns the changeset on failure (invalid, taken,
+  reserved, unchanged, or quota exhausted).
+  """
+  def update_active_slug(%User{} = user, attrs) do
+    changeset =
+      user
+      |> User.slug_changeset(attrs)
+      |> validate_slug_was_changed()
+      |> validate_slug_quota(user)
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:user, changeset)
+    |> Ecto.Multi.insert(:change, fn %{user: updated} ->
+      %SlugChange{user_id: user.id, value: updated.active_slug}
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{user: user}} -> {:ok, user}
+      {:error, :user, changeset, _} -> {:error, changeset}
+    end
+  end
+
+  # Re-submitting the current handle would be a no-op rename that still burns
+  # quota and a ledger row - reject it instead.
+  defp validate_slug_was_changed(changeset) do
+    if changeset.valid? and Ecto.Changeset.get_change(changeset, :active_slug) == nil do
+      Ecto.Changeset.add_error(changeset, :active_slug, "is already your username")
+    else
+      changeset
+    end
+  end
+
+  defp validate_slug_quota(changeset, user) do
+    case slug_change_quota(user) do
+      %{remaining: 0} ->
+        Ecto.Changeset.add_error(
+          changeset,
+          :active_slug,
+          "can only be changed %{limit} times within %{days} days",
+          limit: @slug_change_limit,
+          days: @slug_change_window_days
+        )
+
+      _ ->
+        changeset
+    end
+  end
+
+  @doc """
+  The user's change quota: `4` changes per rolling `90` days, counted from the
+  `slug_changes` ledger. `next_change_at` is set once the quota is used up -
+  the moment the oldest counted change leaves the window.
+  """
+  def slug_change_quota(%User{id: user_id}) do
+    window_start =
+      NaiveDateTime.add(NaiveDateTime.utc_now(), -@slug_change_window_days * 86_400, :second)
+
+    changes =
+      Repo.all(
+        from(c in SlugChange,
+          where: c.user_id == ^user_id and c.inserted_at > ^window_start,
+          order_by: [desc: c.inserted_at],
+          select: c.inserted_at
+        )
+      )
+
+    used = length(changes)
+    remaining = max(@slug_change_limit - used, 0)
+
+    next_change_at =
+      if remaining == 0 do
+        # The quota frees up when the oldest of the counted changes (the
+        # limit-th most recent) falls out of the rolling window.
+        changes
+        |> Enum.at(@slug_change_limit - 1)
+        |> NaiveDateTime.add(@slug_change_window_days * 86_400, :second)
+      end
+
+    %{
+      used: used,
+      remaining: remaining,
+      limit: @slug_change_limit,
+      window_days: @slug_change_window_days,
+      next_change_at: next_change_at
+    }
+  end
+
+  @doc "Whether a handle is in use by any member right now."
+  def slug_taken?(value) when is_binary(value) do
+    Repo.exists?(from(u in User, where: u.active_slug == ^value))
   end
 
   # ── Emails ──

@@ -6,6 +6,43 @@ defmodule Vutuv.SlugHelpers do
 
   @short_sha_length 8
 
+  # User handles follow the Twitter username mechanism (see
+  # Vutuv.Accounts.User.slug_changeset/2): 15 characters max, so a suffixed
+  # handle is 6 (base) + 1 ("_") + 8 (short sha) characters.
+  @handle_max_length 15
+  @handle_base_with_suffix 6
+
+  @doc """
+  Generates a unique user handle (the @username) from the resource's string
+  representation, Twitter-style: lowercase letters, digits and underscores,
+  at most #{@handle_max_length} characters. A collision with an existing
+  value or a `reserved` word gets a short-sha suffix instead of failing.
+  """
+  def gen_handle_unique(resource, model, slug_field, reserved \\ []) do
+    handle = resource |> to_string() |> handleize()
+
+    taken =
+      handle == "" or handle in reserved or
+        Repo.exists?(from(s in model, where: field(s, ^slug_field) == ^handle))
+
+    if taken do
+      base = handle |> String.slice(0, @handle_base_with_suffix) |> String.trim("_")
+      String.trim_leading("#{base}_#{short_sha()}", "_")
+    else
+      handle
+    end
+  end
+
+  defp handleize(text) do
+    text
+    |> String.downcase()
+    |> String.replace(~r/[^a-z0-9\s_-]/u, "")
+    |> String.replace(~r/[\s-]+/, "_")
+    |> String.trim("_")
+    |> String.slice(0, @handle_max_length)
+    |> String.trim("_")
+  end
+
   defp gen_slug(resource) do
     resource
     |> to_string()

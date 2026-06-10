@@ -227,7 +227,10 @@ defmodule VutuvWeb.Router do
       resources("/emails", EmailController)
       # PIN-entry step for the email-change flow (issue #759).
       post("/emails/confirmation", EmailController, :confirm)
-      resources("/slugs", SlugController, only: [:index, :new, :create, :show, :update])
+      # Changing the username: the form, the POST, and the live
+      # availability check behind the form's as-you-type verdict.
+      get("/slugs/availability", SlugController, :availability)
+      resources("/slugs", SlugController, only: [:new, :create])
       resources("/groups", GroupController)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])

@@ -1,67 +1,43 @@
 defmodule VutuvWeb.Admin.SlugController do
   use VutuvWeb, :controller
 
-  alias Vutuv.Accounts.Slug
+  alias Vutuv.Accounts.ReservedSlugs
+  alias Vutuv.Accounts.User
 
   def index(conn, _params) do
     render(conn, "index.html")
   end
 
+  # "Disabling" a username means taking it away: the member is force-renamed
+  # to a generated handle. The old name is not blocked afterwards (usernames
+  # are neither reserved nor redirected anymore); a name bad enough to ban
+  # globally belongs in the moderation tooling, not here.
   def update(conn, %{"slug_disable" => %{"value" => value}}) do
-    case Repo.one(from(s in Slug, where: s.value == ^value)) do
+    case Repo.get_by(User, active_slug: value) do
       nil ->
         conn
-        |> put_flash(:error, gettext("Slug doesn't exist."))
+        |> put_flash(:error, gettext("No member uses this username."))
         |> render("index.html")
 
-      slug ->
-        disable_slug(conn, slug)
+      user ->
+        replace_slug(conn, user)
     end
   end
 
-  defp disable_slug(conn, slug) do
-    changeset = Ecto.Changeset.cast(slug, %{disabled: true}, [:disabled])
+  defp replace_slug(conn, user) do
+    new_handle =
+      Vutuv.SlugHelpers.gen_handle_unique(user, User, :active_slug, ReservedSlugs.list())
 
-    case Repo.update(changeset) do
-      {:ok, slug} ->
-        update_user_active_slug(conn, slug)
-
-      {:error, _changeset} ->
-        redirect(conn, to: ~p"/admin")
-    end
-  end
-
-  defp update_user_active_slug(conn, slug) do
-    user =
-      Repo.get(Vutuv.Accounts.User, slug.user_id)
-      |> Repo.preload(:slugs)
-
-    user_changeset =
-      case Repo.all(
-             from(s in Slug,
-               where: s.user_id == ^slug.user_id and s.disabled == false,
-               select: s.value
-             )
-           ) do
-        [] ->
-          slug_value = Vutuv.SlugHelpers.gen_slug_unique(user, Vutuv.Accounts.Slug, :value)
-
-          Ecto.Changeset.cast(user, %{active_slug: slug_value}, [:active_slug])
-          |> Ecto.Changeset.put_assoc(:slugs, [
-            Slug.changeset(%Slug{}, %{value: slug_value})
-          ])
-
-        new ->
-          Ecto.Changeset.cast(user, %{active_slug: hd(new)}, [:active_slug])
-      end
-
-    case Repo.update(user_changeset) do
-      {:ok, _user} ->
+    case Repo.update(Ecto.Changeset.change(user, active_slug: new_handle)) do
+      {:ok, user} ->
         conn
-        |> put_flash(:info, gettext("Slug disabled successfully."))
+        |> put_flash(
+          :info,
+          gettext("Username replaced with @%{handle}.", handle: user.active_slug)
+        )
         |> redirect(to: ~p"/admin")
 
-      {:error, _user_changeset} ->
+      {:error, _changeset} ->
         redirect(conn, to: ~p"/admin")
     end
   end

@@ -1,15 +1,12 @@
 defmodule VutuvWeb.Plug.UserResolveSlug do
-  @moduledoc false
+  @moduledoc """
+  Resolves the `:slug` / `:user_slug` path segment to the member whose
+  `active_slug` it is. There is exactly one live handle per member - old
+  handles are neither reserved nor redirected, so an unknown handle is a
+  plain 404.
+  """
 
-  import Plug.Conn
-  import Ecto.Query
-  import Phoenix.Controller
   alias Vutuv.Repo
-
-  use Phoenix.VerifiedRoutes,
-    endpoint: VutuvWeb.Endpoint,
-    router: VutuvWeb.Router,
-    statics: ~w(assets fonts images favicon.ico robots.txt)
 
   def init(opts) do
     opts
@@ -20,30 +17,15 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   def call(conn, _opts), do: invalid_slug(conn)
 
   defp resolve(conn, slug) do
-    Repo.one(
-      from(s in Vutuv.Accounts.Slug,
-        join: u in assoc(s, :user),
-        where: s.value == ^slug and not is_nil(u.id),
-        preload: [:user]
-      )
-    )
-    |> eval_slug(conn)
-  end
+    case Repo.get_by(Vutuv.Accounts.User, active_slug: slug) do
+      nil ->
+        invalid_slug(conn)
 
-  defp eval_slug(%{disabled: false, user: user, value: slug}, conn) do
-    if user.active_slug != slug do
-      conn
-      |> redirect(to: ~p"/#{user}")
-      |> halt()
-    else
-      conn
-      |> assign(:user_id, user.id)
-      |> assign(:user, user)
+      user ->
+        conn
+        |> Plug.Conn.assign(:user_id, user.id)
+        |> Plug.Conn.assign(:user, user)
     end
-  end
-
-  defp eval_slug(_, conn) do
-    invalid_slug(conn)
   end
 
   defp invalid_slug(conn) do

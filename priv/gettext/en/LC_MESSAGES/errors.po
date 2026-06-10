@@ -88,3 +88,13 @@ msgid "must be equal to %{count}"
 msgid_plural "must be equal to %{count}"
 msgstr[0] ""
 msgstr[1] ""
+
+## Custom messages from Vutuv.Accounts.Slug (the username rules).
+msgid "may only contain letters, numbers, and underscores"
+msgstr ""
+
+msgid "can only be changed %{limit} times within %{days} days"
+msgstr ""
+
+msgid "is already your username"
+msgstr ""

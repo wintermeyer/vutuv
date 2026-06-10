@@ -2,6 +2,7 @@ defmodule Vutuv.Accounts.User do
   @moduledoc false
 
   use VutuvWeb, :model
+  alias Vutuv.Accounts.ReservedSlugs
   @derive {Phoenix.Param, key: :active_slug}
 
   schema "users" do
@@ -48,7 +49,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:groups, Vutuv.Social.Group)
     has_many(:emails, Vutuv.Accounts.Email)
     has_many(:user_tags, Vutuv.Tags.UserTag)
-    has_many(:slugs, Vutuv.Accounts.Slug, on_replace: :nilify)
+    has_many(:slug_changes, Vutuv.Accounts.SlugChange)
     has_many(:urls, Vutuv.Profiles.Url)
     has_many(:phone_numbers, Vutuv.Profiles.PhoneNumber)
     has_many(:addresses, Vutuv.Profiles.Address)
@@ -68,7 +69,10 @@ defmodule Vutuv.Accounts.User do
     timestamps()
   end
 
-  @optional_fields ~w(activated? noindex? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale active_slug tag_list)a
+  # :active_slug is deliberately NOT here: the username is unique, rate-limited
+  # and Twitter-validated, so it only changes through slug_changeset/2 (used by
+  # Accounts.update_active_slug/2), never through the generic profile form.
+  @optional_fields ~w(activated? noindex? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 
@@ -81,7 +85,6 @@ defmodule Vutuv.Accounts.User do
     |> cast(params, @optional_fields)
     |> validate_avatar(params)
     |> validate_cover_photo(params)
-    |> cast_assoc(:slugs)
     |> cast_assoc(:oauth_providers)
     |> validate_first_name_or_last_name_or_nickname(params)
     |> validate_length(:first_name, max: 50)
@@ -93,7 +96,27 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
     |> nullify_default_birthdate()
+  end
+
+  @doc """
+  The one changeset that may touch the username. The Twitter username
+  mechanism: letters, digits and underscores, at most 15 characters (we keep
+  the historical minimum of 3). Handles are case-insensitive, so they are
+  stored lowercase. Unique across all members, and never a reserved route
+  word (profiles live at the URL root, so a handle equal to a route prefix
+  would shadow that route forever).
+  """
+  def slug_changeset(model, params \\ %{}) do
+    model
+    |> cast(params, [:active_slug])
+    |> validate_required(:active_slug)
     |> downcase_active_slug()
+    |> validate_format(:active_slug, ~r/^[a-z0-9_]+$/,
+      message: "may only contain letters, numbers, and underscores"
+    )
+    |> validate_length(:active_slug, min: 3, max: 15)
+    |> validate_exclusion(:active_slug, ReservedSlugs.list(), message: "is reserved")
+    |> unique_constraint(:active_slug)
   end
 
   # Registration is the one place where an email address may ride along with

@@ -148,9 +148,8 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
   describe "error pages" do
     test "the 404 page is styled and links back home", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      # The slugs feature is intentionally disabled via Plug.All404.
-      conn = get(conn, ~p"/#{user}/slugs")
+      {conn, _user} = create_and_login_user(conn)
+      conn = get(conn, "/this_user_does_not_exist")
       html = html_response(conn, 404)
 
       assert html =~ "error-page"

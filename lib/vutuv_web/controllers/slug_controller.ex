@@ -1,71 +1,63 @@
 defmodule VutuvWeb.SlugController do
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.All404)
+  # Changing the username is owner-only.
+  plug(VutuvWeb.Plug.AuthUser)
+  plug(:scrub_params, "user" when action in [:create])
 
-  alias Vutuv.Accounts.Slug
-  alias VutuvWeb.ControllerHelpers
-  import Ecto, only: [assoc: 2, build_assoc: 2]
-
-  def index(conn, _params) do
-    slugs = Repo.all(assoc(conn.assigns[:user], :slugs))
-    render(conn, "index.html", slugs: slugs)
-  end
+  alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
 
   def new(conn, _params) do
-    changeset =
-      conn.assigns[:user]
-      |> build_assoc(:slugs)
-      |> Slug.changeset()
+    user = conn.assigns[:user]
 
-    render(conn, "new.html", changeset: changeset)
+    render(conn, "new.html",
+      changeset: User.slug_changeset(user),
+      quota: Accounts.slug_change_quota(user)
+    )
   end
 
-  def create(conn, %{"slug" => params}) do
-    case Repo.transaction(new_slug(conn.assigns[:user], params)) do
-      {:ok, %{user: user, slug: _slug}} ->
-        conn
-        |> put_flash(:info, gettext("Slug updated successfully."))
-        |> redirect(to: ~p"/#{user}")
+  def create(conn, %{"user" => params}) do
+    user = conn.assigns[:current_user]
 
-      {:error, _failure, changeset, _} ->
-        render(conn, "new.html", changeset: changeset)
-    end
-  end
-
-  def show(conn, %{"id" => id}) do
-    slug = ControllerHelpers.get_owned!(conn, :slugs, id)
-    render(conn, "show.html", slug: slug)
-  end
-
-  def update(conn, %{"id" => id}) do
-    slug = ControllerHelpers.get_owned!(conn, :slugs, id)
-
-    changeset =
-      Ecto.Changeset.cast(conn.assigns[:current_user], %{active_slug: slug.value}, [:active_slug])
-
-    case Repo.update(changeset) do
+    case Accounts.update_active_slug(user, params) do
       {:ok, user} ->
         conn
-        |> put_flash(:info, gettext("Slug activated successfully"))
-        |> redirect(to: ~p"/#{user}/slugs")
+        |> put_flash(
+          :info,
+          gettext("Your username is now @%{handle}.", handle: user.active_slug)
+        )
+        |> redirect(to: ~p"/#{user}")
 
-      {:error, _changeset} ->
-        redirect(conn, to: ~p"/#{conn.assigns[:current_user]}/slugs")
+      {:error, changeset} ->
+        render(conn, "new.html",
+          changeset: changeset,
+          quota: Accounts.slug_change_quota(user)
+        )
     end
   end
 
-  def new_slug(user, params) do
-    slug_changeset =
-      user
-      |> build_assoc(:slugs)
-      |> Slug.changeset(params)
+  # Backs the live "is this name free?" check in the change form.
+  def availability(conn, params) do
+    value = params["value"] |> to_string() |> String.trim() |> String.downcase()
+    json(conn, availability_payload(value))
+  end
 
-    user_changeset =
-      Ecto.Changeset.cast(user, %{"active_slug" => slug_changeset.changes.value}, [:active_slug])
+  defp availability_payload(value) do
+    changeset = User.slug_changeset(%User{}, %{"active_slug" => value})
 
-    Ecto.Multi.new()
-    |> Ecto.Multi.insert(:slug, slug_changeset)
-    |> Ecto.Multi.update(:user, user_changeset)
+    cond do
+      not changeset.valid? ->
+        %{
+          available: false,
+          message: VutuvWeb.ErrorHelpers.translate_error(changeset.errors[:active_slug])
+        }
+
+      Accounts.slug_taken?(value) ->
+        %{available: false, message: gettext("@%{handle} is already taken.", handle: value)}
+
+      true ->
+        %{available: true, message: gettext("@%{handle} is available.", handle: value)}
+    end
   end
 end
