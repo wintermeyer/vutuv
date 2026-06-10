@@ -60,9 +60,15 @@ defmodule VutuvWeb.AgentDocs do
     vcf: "text/vcard"
   }
 
-  @extensions %{md: ".md", txt: ".txt", json: ".json", vcf: ".vcf"}
+  # The one list of formats the system knows; only the profile supports :vcf,
+  # so it is not part of the per-page default.
+  @formats Map.keys(@content_types)
+  @default_formats [:md, :txt, :json]
 
   def schema_version, do: @schema_version
+
+  @doc "Every format the system knows (`VutuvWeb.Plug.AgentFormat` derives its extension list from this)."
+  def formats, do: @formats
 
   @doc """
   The format this request asks for: `:md | :txt | :json | :vcf | :html`.
@@ -72,7 +78,7 @@ defmodule VutuvWeb.AgentDocs do
   extension request the plug's before_send guard then turns the HTML answer
   into a 404, so an unsupported extension never serves HTML.
   """
-  def negotiate(conn, allowed \\ [:md, :txt, :json]) do
+  def negotiate(conn, allowed \\ @default_formats) do
     format = conn.private[:vutuv_agent_format] || conn.private[:vutuv_agent_accept]
 
     if format in allowed do
@@ -93,7 +99,7 @@ defmodule VutuvWeb.AgentDocs do
   end
 
   @doc "The URL extension for `format` (`:md` -> `\".md\"`)."
-  def extension(format), do: Map.fetch!(@extensions, format)
+  def extension(format) when format in @formats, do: "." <> Atom.to_string(format)
 
   @doc """
   Renders `doc` as `format` and sends it, with all agent headers set.
@@ -118,7 +124,7 @@ defmodule VutuvWeb.AgentDocs do
   assigns `:agent_doc_alternates`, which the root layout renders as
   `<link rel="alternate">` tags.
   """
-  def put_html_alternates(conn, formats \\ [:md, :txt, :json]) do
+  def put_html_alternates(conn, formats \\ @default_formats) do
     query = if conn.query_string in [nil, ""], do: "", else: "?" <> conn.query_string
 
     alternates =
@@ -141,7 +147,7 @@ defmodule VutuvWeb.AgentDocs do
   """
   def doc_meta(type, path, opts \\ []) do
     base = VutuvWeb.Endpoint.url()
-    formats = Keyword.get(opts, :formats, [:md, :txt, :json])
+    formats = Keyword.get(opts, :formats, @default_formats)
 
     %{
       type: type,
@@ -158,6 +164,23 @@ defmodule VutuvWeb.AgentDocs do
 
   @doc "Absolute URL for an app path."
   def abs_url(path), do: VutuvWeb.Endpoint.url() <> path
+
+  @doc "The doc representation of a person: name, slug, profile URL."
+  def person_ref(user) do
+    %{
+      name: VutuvWeb.UserHelpers.full_name(user),
+      slug: user.active_slug,
+      url: abs_url("/" <> user.active_slug)
+    }
+  end
+
+  @doc "The one-line excerpt the list-like docs show of a post body."
+  def excerpt(body) do
+    body
+    |> String.split("\n", parts: 2)
+    |> hd()
+    |> String.slice(0, 200)
+  end
 
   defp format_name(:md), do: :markdown
   defp format_name(:txt), do: :text

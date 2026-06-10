@@ -32,7 +32,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     |> Map.merge(%{
       title: label,
       description: label,
-      user: user_ref(user),
+      user: AgentDocs.person_ref(user),
       total: total,
       people: Enum.map(people, &person_entry(&1, work_info_by_id))
     })
@@ -60,21 +60,10 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     })
   end
 
-  defp user_ref(user) do
-    %{
-      name: UserHelpers.full_name(user),
-      slug: user.active_slug,
-      url: AgentDocs.abs_url("/" <> user.active_slug)
-    }
-  end
-
   defp person_entry(user, work_info_by_id) do
-    %{
-      name: UserHelpers.full_name(user),
-      slug: user.active_slug,
-      url: AgentDocs.abs_url("/" <> user.active_slug),
-      work_info: presence(work_info_by_id[user.id])
-    }
+    user
+    |> AgentDocs.person_ref()
+    |> Map.put(:work_info, presence(work_info_by_id[user.id]))
   end
 
   defp presence(""), do: nil

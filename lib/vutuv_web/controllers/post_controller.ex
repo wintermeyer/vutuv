@@ -149,7 +149,9 @@ defmodule VutuvWeb.PostController do
 
         cond do
           conn.request_path != canonical ->
-            redirect(conn, to: canonical <> agent_extension(conn))
+            # An extension request keeps its format across this redirect —
+            # VutuvWeb.Plug.AgentFormat re-appends it in before_send.
+            redirect(conn, to: canonical)
 
           format != :html ->
             send_post_doc(conn, format, author, post)
@@ -230,15 +232,6 @@ defmodule VutuvWeb.PostController do
       AgentDocs.put_html_alternates(conn)
     else
       conn
-    end
-  end
-
-  # Keeps the requested extension across the canonical-casing redirect, so
-  # /:slug/posts/<UPPERCASE>.md lands on the canonical .md URL.
-  defp agent_extension(conn) do
-    case conn.private[:vutuv_agent_format] do
-      nil -> ""
-      format -> AgentDocs.extension(format)
     end
   end
 

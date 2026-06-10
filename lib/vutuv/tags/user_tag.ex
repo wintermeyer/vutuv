@@ -21,6 +21,23 @@ defmodule Vutuv.Tags.UserTag do
     |> unique_constraint(:user_id_tag_id, message: "You already have this tag.")
   end
 
+  @doc """
+  A user's tags ordered most endorsed first, ties alphabetically — the
+  display order of the profile page and its agent documents (both preload
+  through this query; compose with `Ecto.Query.limit/2` for the page's cut).
+  """
+  def ordered_by_endorsements(query \\ __MODULE__) do
+    from(u in query,
+      left_join: e in assoc(u, :endorsements),
+      left_join: t in assoc(u, :tag),
+      order_by: [desc: count(e.id), asc: t.slug],
+      # Postgres requires every ordered, non-aggregated column in GROUP BY;
+      # each user_tag has exactly one tag, so this keeps one row per user_tag.
+      group_by: [u.id, t.slug],
+      preload: [:endorsements, :tag]
+    )
+  end
+
   def name(user_tag) do
     tag(user_tag).name
   end

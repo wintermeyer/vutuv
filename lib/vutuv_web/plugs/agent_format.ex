@@ -14,8 +14,10 @@ defmodule VutuvWeb.Plug.AgentFormat do
 
   A `before_send` guard turns the response into a plain 404 if no controller
   actually delivered an agent document (`conn.private.vutuv_agent_doc_sent`):
-  a `.md` URL must never quietly serve the HTML page. Redirects and error
-  responses pass through unchanged.
+  a `.md` URL must never quietly serve the HTML page. An in-app redirect
+  keeps the requested extension on its location (so a canonical-casing
+  redirect of `/:slug/posts/<UPPERCASE>.md` lands on the canonical `.md`
+  URL); error responses pass through unchanged.
 
   Accept negotiation also happens here: a GET whose `Accept` header asks for
   `text/markdown` / `application/json` / `text/plain` / `text/vcard` (and not
@@ -30,7 +32,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
 
   import Plug.Conn
 
-  @extensions [{".md", :md}, {".txt", :txt}, {".json", :json}, {".vcf", :vcf}]
+  @extensions for format <- VutuvWeb.AgentDocs.formats(),
+                  do: {VutuvWeb.AgentDocs.extension(format), format}
 
   # First path segments that never carry agent documents: the API, the admin
   # panel, the static mounts and framework/dev endpoints.
@@ -99,17 +102,47 @@ defmodule VutuvWeb.Plug.AgentFormat do
     end)
   end
 
-  # Only successful responses are flipped: a redirect must keep redirecting
-  # (the controller appends the extension to the canonical location) and an
-  # error page is already the right answer.
+  # Only successful responses are flipped: a redirect keeps redirecting
+  # (carrying the extension along, see keep_extension/1) and an error page
+  # is already the right answer.
   defp enforce_handled(conn) do
-    if conn.private[:vutuv_agent_doc_sent] || conn.status not in 200..299 do
-      conn
-    else
-      conn
-      |> put_resp_content_type("text/plain")
-      |> Map.put(:status, 404)
-      |> Map.put(:resp_body, "Not Found")
+    cond do
+      conn.private[:vutuv_agent_doc_sent] ->
+        conn
+
+      conn.status in 300..399 ->
+        keep_extension(conn)
+
+      conn.status in 200..299 ->
+        conn
+        |> put_resp_content_type("text/plain")
+        |> Map.put(:status, 404)
+        |> Map.put(:resp_body, "Not Found")
+
+      true ->
+        conn
+    end
+  end
+
+  # An in-app redirect of an extension URL redirects to the same format:
+  # append the extension to the location's path (once, before any query
+  # string) so every canonicalizing redirect keeps it without each
+  # controller having to remember to.
+  defp keep_extension(conn) do
+    extension = VutuvWeb.AgentDocs.extension(conn.private.vutuv_agent_format)
+
+    case get_resp_header(conn, "location") do
+      ["/" <> _ = location] ->
+        [path | query] = String.split(location, "?", parts: 2)
+
+        if String.ends_with?(path, extension) do
+          conn
+        else
+          put_resp_header(conn, "location", Enum.join([path <> extension | query], "?"))
+        end
+
+      _ ->
+        conn
     end
   end
 end

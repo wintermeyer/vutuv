@@ -15,6 +15,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.RateLimit
@@ -99,19 +100,8 @@ defmodule VutuvWeb.UserController do
     user
     |> Repo.preload([
       :social_media_accounts,
-      user_tags:
-        from(u in Vutuv.Tags.UserTag,
-          left_join: e in assoc(u, :endorsements),
-          left_join: t in assoc(u, :tag),
-          # Most endorsed first, ties alphabetically — so the 10-tag cut
-          # keeps the strongest skills.
-          order_by: [desc: count(e.id), asc: t.slug],
-          # Postgres requires every ordered, non-aggregated column in GROUP BY;
-          # each user_tag has exactly one tag, so this keeps one row per user_tag.
-          group_by: [u.id, t.slug],
-          limit: 10,
-          preload: [:endorsements, :tag]
-        ),
+      # Most endorsed first, so the 10-tag cut keeps the strongest skills.
+      user_tags: UserTag.ordered_by_endorsements() |> limit(10),
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),

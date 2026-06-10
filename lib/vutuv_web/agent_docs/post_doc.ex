@@ -25,8 +25,8 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     AgentDocs.doc_meta("post", Posts.path(post), noindex: Posts.restricted?(post))
     |> Map.merge(%{
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
-      description: excerpt(post.body),
-      author: author_ref(author),
+      description: AgentDocs.excerpt(post.body),
+      author: AgentDocs.person_ref(author),
       published_on: post.published_on,
       body_markdown: post.body,
       tags: Enum.map(post.tags, & &1.name),
@@ -49,7 +49,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       title:
         "#{UserHelpers.full_name(author)} · #{gettext("Posts")}" <> period_suffix(period_label),
       description: gettext("Post archive of %{name}", name: UserHelpers.full_name(author)),
-      author: author_ref(author),
+      author: AgentDocs.person_ref(author),
       period: period_label,
       total: total,
       posts: Enum.map(entries, &entry/1)
@@ -59,20 +59,12 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   defp period_suffix(nil), do: ""
   defp period_suffix(label), do: " · #{label}"
 
-  defp author_ref(user) do
-    %{
-      name: UserHelpers.full_name(user),
-      slug: user.active_slug,
-      url: AgentDocs.abs_url("/" <> user.active_slug)
-    }
-  end
-
   defp entry(%{post: post, reposted_by: reposted_by}) do
     %{
       url: AgentDocs.abs_url(Posts.path(post)),
       author: UserHelpers.full_name(post.user),
       published_on: post.published_on,
-      excerpt: excerpt(post.body),
+      excerpt: AgentDocs.excerpt(post.body),
       reposted_by: reposted_by && UserHelpers.full_name(reposted_by)
     }
   end
@@ -116,11 +108,4 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   end
 
   defp in_reply_to(_post), do: nil
-
-  defp excerpt(body) do
-    body
-    |> String.split("\n", parts: 2)
-    |> hd()
-    |> String.slice(0, 200)
-  end
 end

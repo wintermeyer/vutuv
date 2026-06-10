@@ -106,8 +106,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  @doc "The YAML frontmatter every Markdown doc starts with."
-  def frontmatter(doc) do
+  # The YAML frontmatter every Markdown doc starts with.
+  defp frontmatter(doc) do
     [
       "---",
       "title: #{yaml(doc.title)}",
@@ -137,7 +137,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Enum.join("\n")
   end
 
-  defp endorsements_label(tag) do
+  # Format-independent line content, shared with the text renderer (like
+  # work_period/1 below).
+  @doc false
+  def endorsements_label(tag) do
     gettext("%{count} endorsements", count: tag.endorsements)
   end
 
@@ -162,7 +165,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp link_line(%{description: nil, url: url}), do: "- <#{url}>"
   defp link_line(%{description: description, url: url}), do: "- [#{description}](#{url})"
 
-  defp address_line(address) do
+  @doc false
+  def address_line(address) do
     [
       address.description && "#{address.description}: ",
       [

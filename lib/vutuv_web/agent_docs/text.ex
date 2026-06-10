@@ -24,7 +24,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       profile_facts(doc),
       section(
         gettext("Skills & endorsements"),
-        Enum.map(doc.tags, &"* #{&1.name} (#{endorsements_label(&1)})")
+        Enum.map(doc.tags, &"* #{&1.name} (#{Markdown.endorsements_label(&1)})")
       ),
       section(gettext("Experience"), Enum.map(doc.work_experiences, &work_line/1)),
       section(gettext("Links"), Enum.map(doc.links, &link_line/1)),
@@ -37,7 +37,10 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Phone Numbers"),
         Enum.map(doc.phone_numbers, &"* #{&1.type}: #{&1.value}")
       ),
-      section(gettext("Addresses"), Enum.map(doc.addresses, &("* " <> address_line(&1)))),
+      section(
+        gettext("Addresses"),
+        Enum.map(doc.addresses, &("* " <> Markdown.address_line(&1)))
+      ),
       section(
         gettext("Posts (%{count} total)", count: doc.counts.posts),
         Enum.map(doc.posts, &post_lines/1)
@@ -108,12 +111,10 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  @doc """
-  Hard-wraps `text` at #{@width} columns. Existing newlines are kept;
-  wrapped continuation lines get `indent`. A single word longer than the
-  width (a URL) stays on its own line unbroken.
-  """
-  def wrap(text, indent \\ "") do
+  # Hard-wraps `text` at @width columns. Existing newlines are kept;
+  # wrapped continuation lines get `indent`. A single word longer than the
+  # width (a URL) stays on its own line unbroken.
+  defp wrap(text, indent) do
     text
     |> String.split("\n")
     |> Enum.map_join("\n", &wrap_line(&1, indent))
@@ -157,10 +158,6 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> Enum.join("\n")
   end
 
-  defp endorsements_label(tag) do
-    gettext("%{count} endorsements", count: tag.endorsements)
-  end
-
   defp work_line(work) do
     period = Markdown.work_period(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
@@ -169,26 +166,6 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp link_line(%{description: nil, url: url}), do: "* #{url}"
   defp link_line(%{description: description, url: url}), do: "* #{description}: #{url}"
-
-  defp address_line(address) do
-    [
-      address.description && "#{address.description}: ",
-      [
-        address.line_1,
-        address.line_2,
-        address.line_3,
-        address.line_4,
-        address.zip_code,
-        address.city,
-        address.state,
-        address.country
-      ]
-      |> Enum.filter(&(&1 not in [nil, ""]))
-      |> Enum.join(", ")
-    ]
-    |> Enum.filter(& &1)
-    |> Enum.join()
-  end
 
   defp post_lines(post) do
     reposted =

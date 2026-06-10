@@ -80,6 +80,13 @@ defmodule VutuvWeb.AgentFormatTest do
     test "an unknown member 404s with extension too" do
       assert get(build_conn(), "/nobody_here.md").status == 404
     end
+
+    test "in-app redirects keep the extension (legacy /users/:slug URL)" do
+      conn = get(build_conn(), "/users/agent_tester.md")
+
+      assert conn.status == 301
+      assert get_resp_header(conn, "location") == ["/agent_tester.md"]
+    end
   end
 
   describe "the unsupported-extension guard" do

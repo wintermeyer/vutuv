@@ -30,14 +30,17 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   def build(user, opts \\ []) do
     user = preload(user)
     path = "/" <> user.active_slug
-    job = UserHelpers.current_job(user)
+    # The header job, resolved against the already-preloaded experiences
+    # (current_job_in_memory mirrors the page's DB-backed current_job/1 on
+    # an id-ordered list — UUID v7 ids sort by creation time).
+    job = UserHelpers.current_job_in_memory(Enum.sort_by(user.work_experiences, & &1.id))
     work_info = UserHelpers.work_information_string_for_job(job, 256)
     posts = Vutuv.Posts.profile_posts(user, nil)
 
+    # The anonymous public view: the same addresses the page shows a
+    # logged-out visitor.
     emails =
-      Keyword.get_lazy(opts, :emails, fn ->
-        Repo.all(from(e in Ecto.assoc(user, :emails), where: e.public?))
-      end)
+      Keyword.get_lazy(opts, :emails, fn -> UserHelpers.emails_for_display(user, nil) end)
 
     AgentDocs.doc_meta("profile", path,
       noindex: user.noindex?,
@@ -85,16 +88,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   defp preload(user) do
     Repo.preload(user, [
       :social_media_accounts,
-      user_tags:
-        from(u in UserTag,
-          left_join: e in assoc(u, :endorsements),
-          left_join: t in assoc(u, :tag),
-          # Most endorsed first, ties alphabetically — same order as the
-          # profile page.
-          order_by: [desc: count(e.id), asc: t.slug],
-          group_by: [u.id, t.slug],
-          preload: [:endorsements, :tag]
-        ),
+      user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
       phone_numbers: from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at]),
       urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at]),
@@ -169,16 +163,9 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
-      excerpt: excerpt(entry.post.body),
+      excerpt: AgentDocs.excerpt(entry.post.body),
       reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by)
     }
-  end
-
-  defp excerpt(body) do
-    body
-    |> String.split("\n", parts: 2)
-    |> hd()
-    |> String.slice(0, 200)
   end
 
   defp maybe_include_photo(doc, user, opts) do

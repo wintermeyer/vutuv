@@ -83,16 +83,15 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp get_display(_), do: ""
 
-  # This generates special url rule matches
-  for url <- base_urls do
-    case url do
-      {provider, nil} ->
-        def social_media_link(%__MODULE__{provider: unquote(provider), value: value}), do: value
-
-      {provider, url} ->
-        def social_media_link(%__MODULE__{provider: unquote(provider), value: value} = account) do
-          HTMLLink.link(get_display(account), to: unquote(url) <> value)
-        end
+  # The rendered profile link; the provider → URL scheme knowledge lives
+  # only in url/1 below. Providers without a canonical URL scheme (a nil
+  # base) show the bare account name instead of a link.
+  for {provider, base} <- base_urls do
+    if base do
+      def social_media_link(%__MODULE__{provider: unquote(provider)} = account),
+        do: HTMLLink.link(get_display(account), to: url(account))
+    else
+      def social_media_link(%__MODULE__{provider: unquote(provider), value: value}), do: value
     end
   end
 

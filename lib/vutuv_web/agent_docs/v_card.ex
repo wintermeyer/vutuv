@@ -104,13 +104,7 @@ defmodule VutuvWeb.AgentDocs.VCard do
     end
   end
 
-  defp timestamp(doc) do
-    doc.generated_at
-    |> DateTime.to_string()
-    |> String.split(".")
-    |> hd()
-    |> String.replace(~r/[-:\sZ]/, "")
-  end
+  defp timestamp(doc), do: Calendar.strftime(doc.generated_at, "%Y%m%d%H%M%S")
 
   defp sanitize(nil), do: ""
   defp sanitize(value), do: value
