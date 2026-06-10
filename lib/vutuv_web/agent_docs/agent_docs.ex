@@ -42,7 +42,14 @@ defmodule VutuvWeb.AgentDocs do
   (all `yes`, or all `no` when the page is noindexed or the member opted out
   of search engines via `noindex?`), `Vary: Accept`, and for Markdown an
   `x-markdown-tokens` estimate.
+
+  Markdown and text docs end with one `Accept-Language`-dependent extra: a
+  pointer to the same page in the reader's language when a translation
+  exists (declared via `Vary: accept-language`). The doc content itself
+  stays locale-stable — English unless `?lang=` says otherwise.
   """
+
+  use Gettext, backend: VutuvWeb.Gettext
 
   import Plug.Conn
 
@@ -64,6 +71,11 @@ defmodule VutuvWeb.AgentDocs do
   # so it is not part of the per-page default.
   @formats Map.keys(@content_types)
   @default_formats [:md, :txt, :json]
+
+  # Native-language names for the language hint (the hint addresses the
+  # reader of the *other* language); a locale added without a name here
+  # falls back to its code.
+  @language_names %{"en" => "English", "de" => "Deutsch"}
 
   def schema_version, do: @schema_version
 
@@ -105,11 +117,11 @@ defmodule VutuvWeb.AgentDocs do
   Renders `doc` as `format` and sends it, with all agent headers set.
   """
   def send_doc(conn, format, doc) do
-    body = render_doc(format, doc)
+    body = format |> render_doc(doc) |> append_language_hint(conn, format)
 
     conn
     |> put_resp_content_type(Map.fetch!(@content_types, format))
-    |> put_resp_header("vary", "accept")
+    |> put_resp_header("vary", vary_header(format))
     |> put_resp_header("content-signal", content_signal(doc))
     |> maybe_put_noindex(doc)
     |> maybe_put_tokens(format, body)
@@ -191,6 +203,76 @@ defmodule VutuvWeb.AgentDocs do
   defp render_doc(:txt, doc), do: Text.render(doc)
   defp render_doc(:json, doc), do: JSON.render(doc)
   defp render_doc(:vcf, doc), do: VCard.render(doc)
+
+  # A reader whose Accept-Language asks for another language we have a
+  # translation for gets a final pointer to that rendering, written in the
+  # target language. Only the human-readable formats carry the hint (JSON
+  # consumers have the formats map); it is the one byte of the response
+  # that varies per Accept-Language, declared via vary_header/1.
+  defp append_language_hint(body, conn, format) when format in [:md, :txt] do
+    rendered = Gettext.get_locale(VutuvWeb.Gettext)
+
+    case browser_locale(conn) do
+      nil -> body
+      ^rendered -> body
+      target -> body <> language_hint(conn, format, target)
+    end
+  end
+
+  defp append_language_hint(body, _conn, _format), do: body
+
+  defp vary_header(format) when format in [:md, :txt], do: "accept, accept-language"
+  defp vary_header(_format), do: "accept"
+
+  # The first Accept-Language entry we have a translation for. Browsers
+  # send entries in preference order, so q-values are ignored (the same
+  # simplification VutuvWeb.Plug.Locale makes); de-DE counts as de.
+  defp browser_locale(conn) do
+    conn
+    |> get_req_header("accept-language")
+    |> Enum.flat_map(&String.split(&1, ","))
+    |> Enum.map(fn entry ->
+      entry
+      |> String.split(";", parts: 2)
+      |> hd()
+      |> String.trim()
+      |> String.split("-", parts: 2)
+      |> hd()
+      |> String.downcase()
+    end)
+    |> Enum.find(&(&1 in Gettext.known_locales(VutuvWeb.Gettext)))
+  end
+
+  defp language_hint(conn, format, target) do
+    line =
+      Gettext.with_locale(VutuvWeb.Gettext, target, fn ->
+        gettext("This page in %{language}: %{url}",
+          language: Map.get(@language_names, target, target),
+          url: language_url(conn, format, target)
+        )
+      end)
+
+    case format do
+      :md -> "\n<!-- " <> line <> " -->\n"
+      :txt -> "\n" <> line <> "\n"
+    end
+  end
+
+  # The sibling URL in the target language: the canonical extension URL,
+  # other query params kept, ?lang= swapped (English is the lang-less
+  # canonical rendering).
+  defp language_url(conn, format, target) do
+    conn = fetch_query_params(conn)
+
+    query =
+      conn.query_params
+      |> Map.delete("lang")
+      |> then(&if target == "en", do: &1, else: Map.put(&1, "lang", target))
+      |> URI.encode_query()
+
+    abs_url(conn.request_path <> extension(format)) <>
+      if query == "", do: "", else: "?" <> query
+  end
 
   # All-or-nothing on purpose ("safer", per product decision): a noindexed
   # page or an opted-out member sends every signal as no.

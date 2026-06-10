@@ -21,7 +21,7 @@ defmodule VutuvWeb.AgentFormatTest do
       assert content_type =~ "text/markdown"
       assert conn.resp_body =~ "# Agatha Test"
       assert conn.resp_body =~ "schema_version: 1"
-      assert get_resp_header(conn, "vary") == ["accept"]
+      assert get_resp_header(conn, "vary") == ["accept, accept-language"]
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
       assert [tokens] = get_resp_header(conn, "x-markdown-tokens")
       assert String.to_integer(tokens) > 0
@@ -154,6 +154,89 @@ defmodule VutuvWeb.AgentFormatTest do
       assert html =~ ~s(rel="alternate" type="text/vcard" href="/agent_tester.vcf")
       # The visible "Other formats" card links all four siblings.
       assert html =~ ~s(href="/agent_tester.txt")
+    end
+  end
+
+  describe "the language hint" do
+    # The doc content itself stays locale-stable (English unless ?lang= says
+    # otherwise); the browser's Accept-Language only adds a final pointer to
+    # the translated sibling URL — written in that language — when we have
+    # a translation. Declared via Vary: accept-language.
+
+    test "a German browser reading the English Markdown gets a comment pointing to ?lang=de" do
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "de-DE,de;q=0.9,en;q=0.8")
+        |> get("/agent_tester.md")
+
+      assert conn.status == 200
+
+      assert conn.resp_body =~
+               "<!-- Diese Seite auf Deutsch: #{VutuvWeb.Endpoint.url()}/agent_tester.md?lang=de -->"
+
+      assert get_resp_header(conn, "vary") == ["accept, accept-language"]
+    end
+
+    test "an English browser reading the German text doc gets a bottom line to the English URL" do
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "en-US,en;q=0.9")
+        |> get("/agent_tester.txt?lang=de")
+
+      assert conn.status == 200
+
+      assert String.ends_with?(
+               conn.resp_body,
+               "This page in English: #{VutuvWeb.Endpoint.url()}/agent_tester.txt\n"
+             )
+    end
+
+    test "no hint when the browser language matches the rendering" do
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "de")
+        |> get("/agent_tester.md?lang=de")
+
+      assert conn.status == 200
+      refute conn.resp_body =~ "<!--"
+
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "en-GB")
+        |> get("/agent_tester.md")
+
+      refute conn.resp_body =~ "<!--"
+    end
+
+    test "no hint for a language we have no translation for, or without the header" do
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "fr-FR,fr;q=0.9")
+        |> get("/agent_tester.md")
+
+      refute conn.resp_body =~ "<!--"
+
+      refute get(build_conn(), "/agent_tester.txt").resp_body =~ "This page in"
+    end
+
+    test "other query params survive in the hint URL, JSON stays hint-free" do
+      follower = insert_activated_user(first_name: "Fan")
+      follow!(follower, insert_activated_user(active_slug: "followed_one"))
+
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "de")
+        |> get("/followed_one/followers.md?page=1")
+
+      assert conn.resp_body =~ "/followed_one/followers.md?lang=de&page=1 -->"
+
+      conn =
+        build_conn()
+        |> put_req_header("accept-language", "de")
+        |> get("/agent_tester.json")
+
+      refute conn.resp_body =~ "Diese Seite"
+      assert get_resp_header(conn, "vary") == ["accept"]
     end
   end
 
