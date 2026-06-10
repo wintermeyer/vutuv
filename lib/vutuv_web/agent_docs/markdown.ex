@@ -18,7 +18,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   def render(%{type: "profile"} = doc) do
     [
       frontmatter(doc),
-      "# #{doc.name}#{if doc.verified, do: " ✓"}",
+      "# #{doc.name}",
       doc.headline_markdown,
       blank_to_nil(doc.work_info),
       profile_facts(doc),
@@ -123,6 +123,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     counts = doc.counts
 
     [
+      doc.verified && "- " <> gettext("Verified profile: yes"),
       "- #{gettext("Member since")}: #{doc.member_since}",
       counts.followers > 0 && "- #{gettext("Followers")}: #{counts.followers}",
       counts.following > 0 && "- #{gettext("Following")}: #{counts.following}",

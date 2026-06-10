@@ -81,6 +81,15 @@ defmodule VutuvWeb.AgentFormatTest do
       assert get(build_conn(), "/nobody_here.md").status == 404
     end
 
+    test "a verified member's Markdown states it as a fact line, like the text version" do
+      insert_activated_user(active_slug: "verified_member", identity_verified?: true)
+
+      body = get(build_conn(), "/verified_member.md").resp_body
+
+      assert body =~ "- Verified profile: yes"
+      refute body =~ "✓"
+    end
+
     test "Links and Social Media share the Markdown [label](url) link style", %{user: user} do
       insert(:url, user: user, value: "https://blog.example.org/", description: "Blog")
       insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
