@@ -66,79 +66,73 @@ defmodule Vutuv.Activity do
     latest_event_at(user_id) || NaiveDateTime.utc_now(:second)
   end
 
+  # One round trip instead of nine: every event source contributes its MAX as
+  # a UNION ALL arm and the outer query takes the greatest. The arms mirror
+  # the per-kind event queries below; keep them in sync.
   defp latest_event_at(user_id) do
     follower_max =
-      from(c in Follow, where: c.followee_id == ^user_id, select: max(c.inserted_at))
-      |> Repo.one()
+      from(c in Follow, where: c.followee_id == ^user_id, select: %{ts: max(c.inserted_at)})
 
     endorsement_max =
       from(e in UserTagEndorsement,
         join: ut in assoc(e, :user_tag),
         where: ut.user_id == ^user_id and e.user_id != ^user_id,
-        select: max(e.inserted_at)
+        select: %{ts: max(e.inserted_at)}
       )
-      |> Repo.one()
 
     connection_max =
       from(c in Connection,
         where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
-        select: max(c.status_changed_at)
+        select: %{ts: max(c.status_changed_at)}
       )
-      |> Repo.one()
 
     request_max =
       from(c in Connection,
         where:
           c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
             c.requested_by_id != ^user_id,
-        select: max(c.inserted_at)
+        select: %{ts: max(c.inserted_at)}
       )
-      |> Repo.one()
 
     reply_max =
       from(r in PostReply,
         join: reply in assoc(r, :post),
         where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
-        select: max(r.inserted_at)
+        select: %{ts: max(r.inserted_at)}
       )
-      |> Repo.one()
 
     like_max =
       from(l in PostLike,
         join: p in assoc(l, :post),
         where: p.user_id == ^user_id and l.user_id != ^user_id,
-        select: max(l.inserted_at)
+        select: %{ts: max(l.inserted_at)}
       )
-      |> Repo.one()
 
     moderation_max =
       Vutuv.Moderation.owner_notified_cases_query(user_id)
-      |> select([c], max(c.inserted_at))
-      |> Repo.one()
+      |> select([c], %{ts: max(c.inserted_at)})
 
     severance_max =
       Vutuv.Moderation.reporter_severances_query(user_id)
-      |> select([s], max(s.inserted_at))
-      |> Repo.one()
+      |> select([s], %{ts: max(s.inserted_at)})
 
     severance_restore_max =
       Vutuv.Moderation.reporter_severances_query(user_id)
-      |> select([s], max(s.restored_at))
-      |> Repo.one()
+      |> select([s], %{ts: max(s.restored_at)})
 
-    [
-      follower_max,
-      endorsement_max,
-      connection_max,
-      request_max,
-      reply_max,
-      like_max,
-      moderation_max,
-      severance_max,
-      severance_restore_max
-    ]
-    |> Enum.reject(&is_nil/1)
-    |> Enum.max(NaiveDateTime, fn -> nil end)
+    union =
+      follower_max
+      |> union_all(^endorsement_max)
+      |> union_all(^connection_max)
+      |> union_all(^request_max)
+      |> union_all(^reply_max)
+      |> union_all(^like_max)
+      |> union_all(^moderation_max)
+      |> union_all(^severance_max)
+      |> union_all(^severance_restore_max)
+
+    from(t in subquery(union), select: max(t.ts))
+    |> Repo.one()
   end
 
   @doc "Tell a user's shell their messages were just read (clears the badge)."

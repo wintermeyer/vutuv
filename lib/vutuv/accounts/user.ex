@@ -44,7 +44,6 @@ defmodule Vutuv.Accounts.User do
 
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)
     has_many(:search_query_results, Vutuv.Search.SearchQueryResult)
-    has_many(:oauth_providers, Vutuv.Accounts.OAuthProvider)
     has_many(:login_pins, Vutuv.Accounts.LoginPin)
     has_many(:groups, Vutuv.Social.Group)
     has_many(:emails, Vutuv.Accounts.Email)
@@ -69,6 +68,17 @@ defmodule Vutuv.Accounts.User do
     timestamps()
   end
 
+  @doc """
+  The columns a user listing row renders: the id (links, follow state, work-
+  info maps), the name parts `full_name/1` and the avatar initials read, the
+  slug (`Phoenix.Param`) and the avatar. Listing queries (most-followed,
+  tag-recommended) select only these via `select: struct(u, listing_fields())`
+  so their group-by doesn't drag all user columns through aggregate and sort.
+  """
+  def listing_fields do
+    ~w(id first_name last_name honorific_prefix honorific_suffix active_slug avatar)a
+  end
+
   # :active_slug is deliberately NOT here: the username is unique, rate-limited
   # and Twitter-validated, so it only changes through slug_changeset/2 (used by
   # Accounts.update_active_slug/2), never through the generic profile form.
@@ -85,7 +95,6 @@ defmodule Vutuv.Accounts.User do
     |> cast(params, @optional_fields)
     |> validate_avatar(params)
     |> validate_cover_photo(params)
-    |> cast_assoc(:oauth_providers)
     |> validate_first_name_or_last_name_or_nickname(params)
     |> validate_length(:first_name, max: 50)
     |> validate_length(:last_name, max: 50)

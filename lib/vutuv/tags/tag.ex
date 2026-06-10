@@ -111,16 +111,22 @@ defmodule Vutuv.Tags.Tag do
   # The ten users with the most endorsements for `tag`, drawn from `source`
   # (a queryable: a plain schema or an association query). Shared by
   # `related_for/3` and `recommended_users/1`, which differ only in that source.
+  # Same visibility gate as search/most-followed (unactivated + moderation-
+  # hidden accounts never surface), same narrow listing-row select.
   defp most_endorsed_in_tag(source, tag) do
+    import Vutuv.Moderation.Query, only: [account_hidden: 1]
+
     Vutuv.Repo.all(
       from(u in source,
         left_join: us in assoc(u, :user_tags),
         left_join: e in assoc(us, :endorsements),
         where: us.tag_id == ^tag.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
         # most endorsed
         order_by: fragment("count(?) DESC", e.id),
         group_by: u.id,
-        limit: 10
+        limit: 10,
+        select: struct(u, ^Vutuv.Accounts.User.listing_fields())
       )
     )
   end

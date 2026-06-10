@@ -115,7 +115,7 @@ defmodule Vutuv.Accounts do
         File.write(path <> filename, body)
 
         user
-        |> Repo.preload([:oauth_providers, :emails])
+        |> Repo.preload([:emails])
         |> User.changeset(%{avatar: upload})
         |> Repo.update()
 

@@ -205,13 +205,6 @@ defmodule Vutuv.Factory do
     }
   end
 
-  def o_auth_provider_factory do
-    %Vutuv.Accounts.OAuthProvider{
-      provider: "google",
-      provider_id: sequence(:provider_id, &"google-id-#{&1}")
-    }
-  end
-
   def conversation_factory do
     %Vutuv.Chat.Conversation{}
   end

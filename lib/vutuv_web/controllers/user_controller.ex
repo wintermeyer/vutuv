@@ -157,9 +157,7 @@ defmodule VutuvWeb.UserController do
   end
 
   def edit(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload([:oauth_providers])
+    user = conn.assigns[:user]
 
     changeset = User.changeset(user)
 
@@ -170,7 +168,7 @@ defmodule VutuvWeb.UserController do
     user = conn.assigns[:user]
 
     user
-    |> Repo.preload([:oauth_providers, :search_terms])
+    |> Repo.preload([:search_terms])
     |> User.changeset(user_params)
     |> update_search_terms(user_params)
     |> Repo.update()

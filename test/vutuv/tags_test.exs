@@ -38,6 +38,27 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "recommended_users/1" do
+    test "hides unactivated and moderation-hidden accounts" do
+      # Same visibility gate as search and the most-followed listing: a frozen
+      # or never-activated account must not surface on the public tag page.
+      tag = insert(:tag)
+      visible = insert(:user, activated?: true)
+      unactivated = insert(:user)
+      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+
+      for owner <- [visible, unactivated, frozen] do
+        insert(:user_tag, user: owner, tag: tag)
+      end
+
+      ids = Vutuv.Tags.Tag.recommended_users(tag) |> Enum.map(& &1.id)
+
+      assert visible.id in ids
+      refute unactivated.id in ids
+      refute frozen.id in ids
+    end
+  end
+
   describe "user_tag_endorsements" do
     test "create_endorsement/1 creates an endorsement" do
       user = insert(:user)

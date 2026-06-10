@@ -105,6 +105,42 @@ defmodule Vutuv.SocialTest do
     end
   end
 
+  describe "most_followed_users/1" do
+    test "hides unactivated and moderation-hidden accounts despite their followers" do
+      # Every other public surface (search, follower counts) gates on
+      # activated? + Moderation.Query.account_hidden; the public most-followed
+      # listing and the "Who to follow" rail must too.
+      popular = insert(:user, activated?: true)
+      unactivated = insert(:user)
+      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      deactivated = insert(:user, activated?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+
+      follow!(insert(:user), popular)
+
+      for hidden <- [unactivated, frozen, deactivated] do
+        for _ <- 1..2, do: follow!(insert(:user), hidden)
+      end
+
+      ids = Social.most_followed_users(10) |> Enum.map(& &1.id)
+
+      assert popular.id in ids
+      refute unactivated.id in ids
+      refute frozen.id in ids
+      refute deactivated.id in ids
+    end
+
+    test "returns the fields the listing rows render" do
+      user = insert(:user, activated?: true, honorific_prefix: "Dr.")
+      follow!(insert(:user), user)
+
+      assert [row] = Social.most_followed_users(1)
+      assert row.id == user.id
+      assert row.active_slug == user.active_slug
+      assert row.first_name == user.first_name
+      assert row.honorific_prefix == "Dr."
+    end
+  end
+
   describe "groups" do
     test "create_group/2 creates a group" do
       user = insert(:user)

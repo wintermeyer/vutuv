@@ -93,7 +93,6 @@ defmodule Vutuv.AccountDeletionTest do
     insert(:phone_number, user: user)
     url = insert(:url, user: user)
     insert(:social_media_account, user: user)
-    insert(:o_auth_provider, user: user)
     insert(:login_pin, user: user)
     insert(:search_term, user: user)
 

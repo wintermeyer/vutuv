@@ -12,6 +12,7 @@ defmodule Vutuv.Social do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_hidden: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -130,14 +131,21 @@ defmodule Vutuv.Social do
   @doc """
   The `limit` users with the most followers, ties broken by name. Backs both
   the public listing page and the profile's default "who to follow" rail.
+
+  Applies the same visibility gate as search: unactivated accounts and
+  accounts hidden by moderation never surface. Selects only the columns the
+  listing rows render (`Vutuv.Accounts.User.listing_fields/0`) — the group-by
+  otherwise drags all user columns through the aggregate and sort.
   """
   def most_followed_users(limit) do
     Repo.all(
       from(u in Vutuv.Accounts.User,
         left_join: f in assoc(u, :followers),
+        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
         group_by: u.id,
         order_by: [fragment("count(?) DESC", f.id), u.first_name, u.last_name],
-        limit: ^limit
+        limit: ^limit,
+        select: struct(u, ^Vutuv.Accounts.User.listing_fields())
       )
     )
   end
