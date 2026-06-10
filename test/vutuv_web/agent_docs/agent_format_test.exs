@@ -81,6 +81,19 @@ defmodule VutuvWeb.AgentFormatTest do
       assert get(build_conn(), "/nobody_here.md").status == 404
     end
 
+    test "Links and Social Media share the Markdown [label](url) link style", %{user: user} do
+      insert(:url, user: user, value: "https://blog.example.org/", description: "Blog")
+      insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+      insert(:social_media_account, user: user, provider: "Snapchat", value: "ghosty")
+
+      body = get(build_conn(), "/agent_tester.md").resp_body
+
+      assert body =~ "- [Blog](https://blog.example.org/)"
+      assert body =~ "- [GitHub](https://github.com/octocat)"
+      # A provider without a canonical URL scheme has no link to offer.
+      assert body =~ "- Snapchat: ghosty"
+    end
+
     test "in-app redirects keep the extension (legacy /users/:slug URL)" do
       conn = get(build_conn(), "/users/agent_tester.md")
 

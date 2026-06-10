@@ -29,10 +29,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       section(gettext("Experience"), Enum.map(doc.work_experiences, &work_line/1)),
       section(gettext("Links"), Enum.map(doc.links, &link_line/1)),
       section(gettext("Contact"), Enum.map(doc.emails, &"- <#{&1}>")),
-      section(
-        gettext("Social Media"),
-        Enum.map(doc.social_media, &"- #{&1.provider}: #{&1.url}")
-      ),
+      section(gettext("Social Media"), Enum.map(doc.social_media, &social_line/1)),
       section(
         gettext("Phone Numbers"),
         Enum.map(doc.phone_numbers, &"- #{&1.type}: #{&1.value}")
@@ -164,6 +161,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp link_line(%{description: nil, url: url}), do: "- <#{url}>"
   defp link_line(%{description: description, url: url}), do: "- [#{description}](#{url})"
+
+  # The provider labels the link — the same [label](url) form as the Links
+  # section. A provider without a canonical URL scheme (Snapchat) carries
+  # only the account name, so there is no link to offer.
+  defp social_line(%{provider: provider, url: "http" <> _ = url}),
+    do: "- [#{provider}](#{url})"
+
+  defp social_line(%{provider: provider, url: value}), do: "- #{provider}: #{value}"
 
   @doc false
   def address_line(address) do
