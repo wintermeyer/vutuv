@@ -1,6 +1,12 @@
 defmodule VutuvWeb.FolloweeController do
   use VutuvWeb, :controller
 
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.ListDocs
+
+  # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs
+  # (keep index.html and the doc builder in sync, see
+  # agent_docs_drift_test.exs). The list itself is viewer-independent.
   def index(conn, _params) do
     # Render only the current page of followees, not the full association —
     # the pagination lives in Vutuv.Social.follows_page/3 (shared with the
@@ -8,12 +14,24 @@ defmodule VutuvWeb.FolloweeController do
     %{user: user, users: followees, total: total} =
       Vutuv.Social.follows_page(conn.assigns[:user], :followees, conn.params)
 
-    render(conn, "index.html",
-      user: user,
-      followees: followees,
-      total_followees: total,
-      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followees, 45),
-      following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees)
-    )
+    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(followees, 45)
+
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html",
+          user: user,
+          followees: followees,
+          total_followees: total,
+          work_info_by_id: work_info_by_id,
+          following_by_id:
+            VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees)
+        )
+
+      format ->
+        doc = ListDocs.build_follow_list(user, :following, followees, total, work_info_by_id)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 end

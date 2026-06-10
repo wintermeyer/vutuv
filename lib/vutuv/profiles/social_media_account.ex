@@ -97,4 +97,20 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   def social_media_link(_), do: ""
+
+  # The profile URL as a plain string (the bare value when the provider has
+  # no canonical URL scheme, e.g. Snapchat) — the agent documents
+  # (VutuvWeb.AgentDocs) need a string, not a rendered link.
+  for url <- base_urls do
+    case url do
+      {provider, nil} ->
+        def url(%__MODULE__{provider: unquote(provider), value: value}), do: value
+
+      {provider, url} ->
+        def url(%__MODULE__{provider: unquote(provider), value: value}),
+          do: unquote(url) <> value
+    end
+  end
+
+  def url(_), do: ""
 end

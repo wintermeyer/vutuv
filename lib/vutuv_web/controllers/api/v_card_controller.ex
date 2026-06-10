@@ -1,47 +1,49 @@
 defmodule VutuvWeb.Api.VCardController do
+  @moduledoc """
+  The legacy vCard URL (`/api/1.0/users/:slug/vcard`). The profile's
+  canonical vCard now lives at `/:slug.vcf` (see `VutuvWeb.AgentDocs`); this
+  route stays as an alias and keeps its one historical extra: a viewer the
+  member follows back (or the member themselves) gets **all** email
+  addresses, not just the public ones.
+  """
+
   use VutuvWeb, :controller
-  import Ecto.Query
-  alias VutuvWeb.Api.VCardJSON
+
+  alias VutuvWeb.AgentDocs.ProfileDoc
+  alias VutuvWeb.AgentDocs.VCard
 
   # The :api pipeline does not fetch the session, so do it here, then reuse
   # the shared session-user plug instead of re-implementing it.
   plug(:fetch_session)
   plug(VutuvWeb.Plug.ConfigureSession, repo: Vutuv.Repo)
-  plug(:headers)
 
   def get(conn, _params) do
-    vcard =
-      conn.assigns[:user]
-      |> Repo.preload([
-        :addresses,
-        :phone_numbers,
-        social_media_accounts:
-          from(s in Vutuv.Profiles.SocialMediaAccount, where: s.provider == ^"Twitter")
-      ])
-      |> preload_emails(conn.assigns[:current_user])
+    user = conn.assigns[:user]
 
-    # The vCard body is a plain text/vcard string (Content-Type and
-    # Content-Disposition are set by the `headers` plug above). Send it
-    # directly instead of going through Phoenix format/view resolution,
-    # which only knows the :html and :json formats and cannot resolve a
-    # "vcf" view — that mismatch raised a 500 at runtime.
-    send_resp(conn, 200, VCardJSON.vcard(vcard))
-  end
+    doc =
+      ProfileDoc.build(user,
+        include_photo: true,
+        emails: visible_emails(user, conn.assigns[:current_user])
+      )
 
-  defp preload_emails(user, requester) do
-    if VutuvWeb.UserHelpers.user_has_permissions?(user, requester) do
-      Repo.preload(user, [:emails])
-    else
-      user
-    end
-  end
-
-  defp headers(conn, _opts) do
-    filename =
-      "#{VutuvWeb.UserHelpers.first_and_last(conn.assigns[:user], "_") |> String.downcase()}_vcard.vcf"
-
+    # Plain text/vcard, sent directly: Phoenix format/view resolution only
+    # knows :html and :json and cannot resolve a "vcf" view.
     conn
-    |> Plug.Conn.put_resp_content_type("text/vcard")
-    |> Plug.Conn.put_resp_header("content-disposition", "attachment; filename=\"#{filename}\"")
+    |> put_resp_content_type("text/vcard")
+    |> put_resp_header(
+      "content-disposition",
+      "attachment; filename=\"#{VCard.filename(doc)}\""
+    )
+    |> send_resp(200, VCard.render(doc))
+  end
+
+  # The historical permission rule of this route: all addresses for a
+  # permitted viewer, none otherwise (the public addresses are on /:slug.vcf).
+  defp visible_emails(user, requester) do
+    if VutuvWeb.UserHelpers.user_has_permissions?(user, requester) do
+      user |> Ecto.assoc(:emails) |> Repo.all()
+    else
+      []
+    end
   end
 end

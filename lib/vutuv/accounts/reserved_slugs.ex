@@ -18,7 +18,7 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   @reserved ~w(
     about admin api assets avatars blog bookmarks community connections contact
     covers css datenschutzerklaerung dev edit emails favicon.ico feed follows
-    fonts groups help images impressum jobs js legal likes listings live login
+    fonts groups help images impressum jobs js legal likes listings live llms.txt login
     logout mail memberships messages moderation new news notifications phoenix
     posts press privacy reports robots.txt screenshots search security.txt
     sessions settings sitemap.xml socket status support tags team terms

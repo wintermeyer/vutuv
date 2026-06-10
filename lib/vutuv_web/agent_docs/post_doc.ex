@@ -1,0 +1,123 @@
+defmodule VutuvWeb.AgentDocs.PostDoc do
+  @moduledoc """
+  The post permalink (`/:slug/posts/:id`) and the author archive
+  (`/:slug/posts[...]`) as data maps for the agent formats. Anonymous view
+  only: the controller checks `Posts.visible_to?(post, nil)` before building,
+  and the archive is queried with `viewer = nil`.
+
+  Changed what the post pages show? Update these builders too — the drift
+  test (`agent_docs_drift_test.exs`) will remind you.
+  """
+
+  alias Vutuv.Posts
+  alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReply
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.UserHelpers
+
+  @doc "The permalink page: the post itself plus its anonymous-visible replies."
+  def build(author, %Post{} = post) do
+    replies = Posts.list_replies(post, nil)
+
+    AgentDocs.doc_meta("post", Posts.path(post), noindex: Posts.restricted?(post))
+    |> Map.merge(%{
+      title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
+      description: excerpt(post.body),
+      author: author_ref(author),
+      published_on: post.published_on,
+      body_markdown: post.body,
+      tags: Enum.map(post.tags, & &1.name),
+      images: Enum.map(post.images, &image_entry/1),
+      in_reply_to: in_reply_to(post),
+      reply_count: Posts.reply_count(post.id),
+      replies: Enum.map(replies, &reply_entry/1)
+    })
+  end
+
+  @doc """
+  The archive page: one offset page of the author's timeline (posts and
+  reposts), whole or scoped to a year / month / day (`period_label`).
+  `path` is the extension-free request path, so the doc describes exactly
+  the page that was asked for (including the period segments).
+  """
+  def build_archive(author, path, entries, total, period_label) do
+    AgentDocs.doc_meta("post_archive", path)
+    |> Map.merge(%{
+      title: "#{UserHelpers.full_name(author)} · Posts" <> period_suffix(period_label),
+      description: "Post archive of #{UserHelpers.full_name(author)}",
+      author: author_ref(author),
+      period: period_label,
+      total: total,
+      posts: Enum.map(entries, &entry/1)
+    })
+  end
+
+  defp period_suffix(nil), do: ""
+  defp period_suffix(label), do: " · #{label}"
+
+  defp author_ref(user) do
+    %{
+      name: UserHelpers.full_name(user),
+      slug: user.active_slug,
+      url: AgentDocs.abs_url("/" <> user.active_slug)
+    }
+  end
+
+  defp entry(%{post: post, reposted_by: reposted_by}) do
+    %{
+      url: AgentDocs.abs_url(Posts.path(post)),
+      author: UserHelpers.full_name(post.user),
+      published_on: post.published_on,
+      excerpt: excerpt(post.body),
+      reposted_by: reposted_by && UserHelpers.full_name(reposted_by)
+    }
+  end
+
+  defp reply_entry(%Post{} = reply) do
+    %{
+      url: AgentDocs.abs_url(Posts.path(reply)),
+      author: UserHelpers.full_name(reply.user),
+      author_slug: reply.user.active_slug,
+      published_on: reply.published_on,
+      body_markdown: reply.body
+    }
+  end
+
+  defp image_entry(%PostImage{} = image) do
+    %{
+      alt: image.alt,
+      width: image.width,
+      height: image.height,
+      urls: image |> PostImage.urls() |> Map.new(fn {k, v} -> {k, absolutize(v)} end)
+    }
+  end
+
+  defp absolutize("/" <> _ = path), do: AgentDocs.abs_url(path)
+  defp absolutize(url), do: url
+
+  defp in_reply_to(%Post{reply_ref: %PostReply{} = ref}) do
+    cond do
+      match?(%Post{}, ref.parent_post) ->
+        %{
+          url: AgentDocs.abs_url(Posts.path(ref.parent_post)),
+          author: UserHelpers.full_name(ref.parent_post.user)
+        }
+
+      match?(%Vutuv.Accounts.User{}, ref.parent_author) ->
+        %{url: nil, author: UserHelpers.full_name(ref.parent_author)}
+
+      true ->
+        %{url: nil, author: nil}
+    end
+  end
+
+  defp in_reply_to(_post), do: nil
+
+  defp excerpt(body) do
+    body
+    |> String.split("\n", parts: 2)
+    |> hd()
+    |> String.slice(0, 200)
+  end
+end

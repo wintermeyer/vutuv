@@ -20,6 +20,14 @@
     <link rel="icon" href="/favicon.ico" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#020617" media="(prefers-color-scheme: dark)" />
+    <%!-- Agent-format discovery (VutuvWeb.AgentDocs): pages that exist as
+    Markdown / text / JSON (/ vCard) advertise the sibling URLs here. --%>
+    <link
+      :for={alt <- assigns[:agent_doc_alternates] || []}
+      rel="alternate"
+      type={alt.type}
+      href={alt.href}
+    />
     <link rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer src={~p"/assets/app.js"}></script>
   </head>

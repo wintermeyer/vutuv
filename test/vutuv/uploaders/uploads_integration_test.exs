@@ -12,7 +12,8 @@ defmodule Vutuv.UploadsIntegrationTest do
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
-  alias VutuvWeb.Api.VCardJSON
+  alias VutuvWeb.AgentDocs.ProfileDoc
+  alias VutuvWeb.AgentDocs.VCard
 
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_uploads_int_#{System.unique_integer([:positive])}")
@@ -153,8 +154,8 @@ defmodule Vutuv.UploadsIntegrationTest do
 
   defp render_vcard(user) do
     user
-    |> Repo.preload([:addresses, :phone_numbers, :social_media_accounts, :emails])
-    |> VCardJSON.vcard()
+    |> ProfileDoc.build(include_photo: true)
+    |> VCard.render()
   end
 
   defp png_fixture do

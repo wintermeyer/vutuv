@@ -49,6 +49,9 @@ defmodule VutuvWeb.Router do
   # by the browser pipeline's `accepts ["html"]`.
   scope "/", VutuvWeb do
     get("/robots.txt", PageController, :robots)
+    # The agent-format discovery file (llms.txt convention): documents the
+    # .md/.txt/.json/.vcf URL scheme; see VutuvWeb.AgentDocs.
+    get("/llms.txt", PageController, :llms)
   end
 
   scope "/", VutuvWeb do

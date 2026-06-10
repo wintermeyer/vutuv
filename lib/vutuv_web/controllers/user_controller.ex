@@ -15,11 +15,31 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.RateLimit
 
   plug(:scrub_params, "user" when action in [:update])
 
-  def show(conn, _params) do
+  # The profile is also served as Markdown / text / JSON / vCard (same URL
+  # plus .md/.txt/.json/.vcf, or Accept negotiation) — the agent formats.
+  # All four render from VutuvWeb.AgentDocs.ProfileDoc, so when show.html
+  # gains or loses public data, ProfileDoc must follow (the drift test
+  # agent_docs_drift_test.exs enforces it).
+  def show(conn, params) do
+    case AgentDocs.negotiate(conn, [:md, :txt, :json, :vcf]) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates([:md, :txt, :json, :vcf])
+        |> show_html(params)
+
+      format ->
+        doc = ProfileDoc.build(conn.assigns[:user], include_photo: format == :vcf)
+        AgentDocs.send_doc(conn, format, doc)
+    end
+  end
+
+  defp show_html(conn, _params) do
     # The totals drive the "View all" links for the sections whose preloads
     # below are cut off after a few entries.
     totals = assoc_totals(conn.assigns[:user])

@@ -24,20 +24,28 @@ defmodule VutuvWeb.PostController do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.PostDoc
 
   # The author archive: /:slug/posts, optionally scoped to a year, month or
   # day (/:slug/posts/2026[/06[/06]]), offset-paginated like the other
   # browse pages. Lists only what the viewer may see, so it is as crawlable
   # as the permalinks it links to.
+  # Also served as Markdown / text / JSON (.md/.txt/.json or Accept
+  # negotiation), rendered from VutuvWeb.AgentDocs.PostDoc.build_archive/5 —
+  # always the anonymous view. Keep index.html and the doc builder in sync
+  # (agent_docs_drift_test.exs).
   def index(conn, params) do
     author = conn.assigns[:user]
 
-    case parse_period(params) do
-      {:ok, period, period_label} ->
+    case {parse_period(params), AgentDocs.negotiate(conn)} do
+      {{:ok, period, period_label}, :html} ->
         {posts, total} =
           Posts.author_posts_page(author, conn.assigns[:current_user], params, period)
 
-        render(conn, "index.html",
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html",
           author: author,
           posts: posts,
           total: total,
@@ -46,7 +54,12 @@ defmodule VutuvWeb.PostController do
           page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
         )
 
-      :error ->
+      {{:ok, period, period_label}, format} ->
+        {posts, total} = Posts.author_posts_page(author, nil, params, period)
+        doc = PostDoc.build_archive(author, conn.request_path, posts, total, period_label)
+        AgentDocs.send_doc(conn, format, doc)
+
+      {:error, _format} ->
         VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
@@ -121,9 +134,14 @@ defmodule VutuvWeb.PostController do
     end
   end
 
+  # The permalink is also served as Markdown / text / JSON, rendered from
+  # VutuvWeb.AgentDocs.PostDoc — strictly the anonymous view, so a post a
+  # logged-out visitor cannot see has no agent documents either. Keep
+  # show.html and the doc builder in sync (agent_docs_drift_test.exs).
   defp show_post(conn, id) do
     author = conn.assigns[:user]
     viewer = conn.assigns[:current_user]
+    format = AgentDocs.negotiate(conn)
 
     case Posts.get_post(author, id) do
       %Post{} = post ->
@@ -131,10 +149,15 @@ defmodule VutuvWeb.PostController do
 
         cond do
           conn.request_path != canonical ->
-            redirect(conn, to: canonical)
+            redirect(conn, to: canonical <> agent_extension(conn))
+
+          format != :html ->
+            send_post_doc(conn, format, author, post)
 
           Posts.visible_to?(post, viewer) ->
-            render_post(conn, post, author, viewer)
+            conn
+            |> maybe_put_alternates(post)
+            |> render_post(post, author, viewer)
 
           kind = teaser_kind(post) ->
             conn
@@ -189,6 +212,35 @@ defmodule VutuvWeb.PostController do
   # crawler somehow holds a permitted session.
   defp maybe_noindex(conn, true), do: put_resp_header(conn, "x-robots-tag", "noindex")
   defp maybe_noindex(conn, false), do: conn
+
+  # The agent formats render strictly the anonymous view: a post a
+  # logged-out visitor cannot see has no agent documents either.
+  defp send_post_doc(conn, format, author, post) do
+    if Posts.visible_to?(post, nil) do
+      AgentDocs.send_doc(conn, format, PostDoc.build(author, post))
+    else
+      VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # Advertise the agent formats only when the anonymous view can actually
+  # fetch them — a restricted post's .md link would 404.
+  defp maybe_put_alternates(conn, post) do
+    if Posts.visible_to?(post, nil) do
+      AgentDocs.put_html_alternates(conn)
+    else
+      conn
+    end
+  end
+
+  # Keeps the requested extension across the canonical-casing redirect, so
+  # /:slug/posts/<UPPERCASE>.md lands on the canonical .md URL.
+  defp agent_extension(conn) do
+    case conn.private[:vutuv_agent_format] do
+      nil -> ""
+      format -> AgentDocs.extension(format)
+    end
+  end
 
   # The teaser renders only when a single, actionable relationship unlocks the
   # post: every denial is the same wildcard, and it is one the reader can

@@ -167,17 +167,19 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Heidi"
 
     # The vCard download now lives in the profile header, not a separate
-    # "Exports" rail card.
+    # "Exports" rail card, and points at the agent-format URL.
     assert html =~ ~s(id="download-vcard")
-    assert html =~ ~p"/api/1.0/users/#{user}/vcard"
+    assert html =~ "/#{user.active_slug}.vcf"
     refute html =~ ~s(id="profile-exports")
 
-    # Placeholder "Other formats" card (real downloads land here later).
+    # The "Other formats" card links the agent documents (VutuvWeb.AgentDocs).
     assert html =~ ~s(id="profile-other-formats")
     assert html =~ "Other formats"
     assert html =~ "Text only"
     assert html =~ "Markdown"
-    assert html =~ "PDF"
+    assert html =~ "/#{user.active_slug}.md"
+    assert html =~ "/#{user.active_slug}.txt"
+    assert html =~ "/#{user.active_slug}.json"
   end
 
   test "renders the headline as Markdown", %{conn: conn} do

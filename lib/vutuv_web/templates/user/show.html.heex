@@ -1,7 +1,12 @@
 <%!-- Profile page (Direction A, green-field). Controller + view, no LiveView.
 Built from the VutuvWeb.UI kit (<.card>, <.button>, <.avatar>, <.chip>,
 <.section_title>). Follow / unfollow / endorse hit the existing POST/DELETE
-routes; CSRF + method are handled by the rendered links. --%>
+routes; CSRF + method are handled by the rendered links.
+
+AGENT FORMATS: this page also exists as /:slug.md, .txt, .json and .vcf,
+all rendered from VutuvWeb.AgentDocs.ProfileDoc. When you add or remove
+public data here, update ProfileDoc too — agent_docs_drift_test.exs fails
+on drift. --%>
 <%!-- md, not lg: portrait iPads (768-834px CSS width) get the desktop
 content+rail columns too; user_row and the rail cards truncate cleanly at
 the resulting ~200px rail width. --%>
@@ -152,7 +157,7 @@ the resulting ~200px rail width. --%>
           </.link>
           <.link
             id="download-vcard"
-            href={~p"/api/1.0/users/#{@user}/vcard"}
+            href={"/#{@user.active_slug}.vcf"}
             title={gettext("Download")}
             class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
@@ -501,14 +506,23 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
-    <%!-- Placeholder: other download formats. The list is static for now;
-    real export links (plain text, Markdown, PDF) land here later. --%>
+    <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):
+    the same page as Markdown, plain text, JSON and vCard. --%>
     <.card id="profile-other-formats">
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
-      <ul class="space-y-2 text-sm text-slate-500 dark:text-slate-400">
-        <li>{gettext("Text only")}</li>
-        <li>{gettext("Markdown")}</li>
-        <li>{gettext("PDF")}</li>
+      <ul class="space-y-2 text-sm">
+        <li>
+          <a href={"/#{@user.active_slug}.md"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Markdown")}</a>
+        </li>
+        <li>
+          <a href={"/#{@user.active_slug}.txt"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Text only")}</a>
+        </li>
+        <li>
+          <a href={"/#{@user.active_slug}.json"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">JSON</a>
+        </li>
+        <li>
+          <a href={"/#{@user.active_slug}.vcf"} class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300">{gettext("Vcard")}</a>
+        </li>
       </ul>
     </.card>
 

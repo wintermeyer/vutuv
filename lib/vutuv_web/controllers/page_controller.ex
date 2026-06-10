@@ -4,6 +4,8 @@ defmodule VutuvWeb.PageController do
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:index])
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.ListDocs
 
   def index(conn, _params) do
     changeset =
@@ -126,14 +128,60 @@ defmodule VutuvWeb.PageController do
     end
   end
 
+  # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs.
+  # Keep most_followed_users.html and the doc builder in sync
+  # (agent_docs_drift_test.exs).
   def most_followed_users(conn, _params) do
     users = Vutuv.Social.most_followed_users(100)
+    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 60)
 
-    render(conn, "most_followed_users.html",
-      users: users,
-      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 60),
-      following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
-    )
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("most_followed_users.html",
+          users: users,
+          work_info_by_id: work_info_by_id,
+          following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
+        )
+
+      format ->
+        doc = ListDocs.build_most_followed(users, work_info_by_id)
+        AgentDocs.send_doc(conn, format, doc)
+    end
+  end
+
+  @llms_txt """
+  # vutuv
+
+  vutuv is a free social/business network. Every public page is also
+  available in agent-friendly formats under the same URL plus an extension:
+
+  - `<page>.md`   — Markdown with YAML frontmatter (or `Accept: text/markdown`)
+  - `<page>.txt`  — plain text, 80 columns (or `Accept: text/plain`)
+  - `<page>.json` — flat JSON document (or `Accept: application/json`)
+
+  Documents carry `schema_version` (currently #{AgentDocs.schema_version()};
+  additions are non-breaking) and `generated_at`. Responses carry a
+  `Content-Signal` header; respect it — members can opt out of search/AI use.
+
+  ## Pages
+
+  - `/<username>` — member profile (also `/<username>.vcf` as vCard 3.0)
+  - `/<username>/posts` — post archive, also `/<username>/posts/<year>[/<month>[/<day>]]`
+  - `/<username>/posts/<id>` — a single post with replies
+  - `/<username>/followers`, `/<username>/following` — follow lists
+  - `/tags/<tag>` — a skill tag and its most endorsed members
+  - `/listings/most_followed_users` — the most followed members
+
+  List pages paginate with `?page=N`.
+  """
+
+  @doc "Serves /llms.txt: the agent-format discovery file (llms.txt convention)."
+  def llms(conn, _params) do
+    conn
+    |> put_resp_content_type("text/plain")
+    |> send_resp(200, @llms_txt)
   end
 
   # If a login PIN is already in flight (the visitor entered their email, got a

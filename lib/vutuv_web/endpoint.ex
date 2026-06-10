@@ -66,6 +66,11 @@ defmodule VutuvWeb.Endpoint do
   plug(Plug.MethodOverride)
   plug(Plug.Head)
 
+  # After Plug.Head (HEAD arrives here as GET), before the router: strips the
+  # agent-document extensions (.md/.txt/.json/.vcf) off the path so
+  # /stefan.wintermeyer.md matches the /:slug route; see VutuvWeb.AgentDocs.
+  plug(VutuvWeb.Plug.AgentFormat)
+
   plug(Plug.Session, @session_options)
 
   plug(VutuvWeb.Router)

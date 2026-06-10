@@ -1,0 +1,191 @@
+defmodule VutuvWeb.AgentDocs.ProfileDoc do
+  @moduledoc """
+  The profile page (`/:slug`) as one data map — the single source the
+  Markdown / text / JSON / vCard renderers share. Mirrors the **anonymous
+  public view** of `user/show.html.heex`; unlike the page it does not cut
+  the lists off after a few entries (the full lists are public on the
+  sub-pages anyway, and the vCard always exported them all).
+
+  Changed what the profile page shows? Update this builder too — the drift
+  test (`agent_docs_drift_test.exs`) will remind you.
+  """
+
+  import Ecto.Query
+
+  alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.Repo
+  alias Vutuv.Tags.UserTag
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.UserHelpers
+
+  @doc """
+  Options:
+
+    * `:emails` — override the email list (the legacy session-aware vCard
+      route passes the viewer-visible set; default is the public addresses).
+    * `:include_photo` — embed the avatar as a base64 data URI for the
+      vCard renderer (skipped for md/txt/json, where it would be dead weight).
+  """
+  def build(user, opts \\ []) do
+    user = preload(user)
+    path = "/" <> user.active_slug
+    job = UserHelpers.current_job(user)
+    work_info = UserHelpers.work_information_string_for_job(job, 256)
+    posts = Vutuv.Posts.profile_posts(user, nil)
+
+    emails =
+      Keyword.get_lazy(opts, :emails, fn ->
+        Repo.all(from(e in Ecto.assoc(user, :emails), where: e.public?))
+      end)
+
+    AgentDocs.doc_meta("profile", path,
+      noindex: user.noindex?,
+      formats: [:md, :txt, :json, :vcf]
+    )
+    |> Map.merge(%{
+      title: UserHelpers.full_name(user),
+      description: work_info,
+      name: UserHelpers.full_name(user),
+      first_name: user.first_name,
+      middle_name: user.middle_name,
+      last_name: user.last_name,
+      nickname: user.nickname,
+      honorific_prefix: user.honorific_prefix,
+      honorific_suffix: user.honorific_suffix,
+      slug: user.active_slug,
+      verified: user.identity_verified?,
+      headline_markdown: user.headline,
+      work_info: work_info,
+      current_position: current_position(job),
+      gender: public_gender(user),
+      birthdate: user.birthdate,
+      member_since: NaiveDateTime.to_date(user.inserted_at),
+      avatar_url: avatar_url(user),
+      counts: %{
+        followers: Vutuv.Social.follower_count(user),
+        following: Vutuv.Social.followee_count(user),
+        connections: Vutuv.Social.connection_count(user),
+        posts: Vutuv.Posts.count_author_posts(user, nil)
+      },
+      tags: Enum.map(user.user_tags, &tag_entry/1),
+      work_experiences: Enum.map(user.work_experiences, &work_entry/1),
+      links: Enum.map(user.urls, &%{url: &1.value, description: &1.description}),
+      emails: Enum.map(emails, & &1.value),
+      phone_numbers: Enum.map(user.phone_numbers, &%{type: &1.number_type, value: &1.value}),
+      addresses: Enum.map(user.addresses, &address_entry/1),
+      social_media: Enum.map(user.social_media_accounts, &social_entry/1),
+      posts: Enum.map(posts, &post_entry/1)
+    })
+    |> maybe_include_photo(user, opts)
+  end
+
+  # The same associations the profile page preloads (user_controller.ex),
+  # without the page's preview limits.
+  defp preload(user) do
+    Repo.preload(user, [
+      :social_media_accounts,
+      user_tags:
+        from(u in UserTag,
+          left_join: t in assoc(u, :tag),
+          order_by: t.slug,
+          group_by: [u.id, t.slug],
+          preload: [:endorsements, :tag]
+        ),
+      work_experiences: WorkExperience.order_by_date(WorkExperience),
+      phone_numbers: from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at]),
+      urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at]),
+      addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at])
+    ])
+  end
+
+  defp current_position(nil), do: nil
+
+  defp current_position(job) do
+    %{
+      title: UserHelpers.current_title(job),
+      organization: UserHelpers.current_organization(job)
+    }
+  end
+
+  # The page hides "other" (the unspecified default); the docs do the same.
+  defp public_gender(%{gender: gender}) when gender in [nil, "other"], do: nil
+  defp public_gender(%{gender: gender}), do: gender
+
+  defp avatar_url(user) do
+    case Vutuv.Avatar.display_url(user, :medium) do
+      "data:" <> _ -> nil
+      "/" <> _ = path -> AgentDocs.abs_url(path)
+      url -> url
+    end
+  end
+
+  defp tag_entry(user_tag) do
+    %{
+      name: UserTag.name(user_tag),
+      slug: user_tag.tag.slug,
+      endorsements: length(user_tag.endorsements),
+      url: AgentDocs.abs_url("/tags/#{user_tag.tag.slug}")
+    }
+  end
+
+  defp work_entry(work) do
+    %{
+      title: work.title,
+      organization: work.organization,
+      start: year_month(work.start_year, work.start_month),
+      end: year_month(work.end_year, work.end_month)
+    }
+  end
+
+  defp year_month(nil, _month), do: nil
+  defp year_month(year, nil), do: Integer.to_string(year)
+
+  defp year_month(year, month),
+    do: "#{year}-#{String.pad_leading(Integer.to_string(month), 2, "0")}"
+
+  defp address_entry(address) do
+    %{
+      description: address.description,
+      line_1: address.line_1,
+      line_2: address.line_2,
+      line_3: address.line_3,
+      line_4: address.line_4,
+      city: address.city,
+      state: address.state,
+      zip_code: address.zip_code,
+      country: address.country
+    }
+  end
+
+  defp social_entry(account) do
+    %{provider: account.provider, url: SocialMediaAccount.url(account)}
+  end
+
+  defp post_entry(entry) do
+    %{
+      url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
+      published_on: entry.post.published_on,
+      excerpt: excerpt(entry.post.body),
+      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by)
+    }
+  end
+
+  defp excerpt(body) do
+    body
+    |> String.split("\n", parts: 2)
+    |> hd()
+    |> String.slice(0, 200)
+  end
+
+  defp maybe_include_photo(doc, user, opts) do
+    if Keyword.get(opts, :include_photo, false) do
+      case Vutuv.Avatar.binary(user, :thumb) do
+        "data:image/" <> _ = data_uri -> Map.put(doc, :vcard_photo, data_uri)
+        _ -> doc
+      end
+    else
+      doc
+    end
+  end
+end
