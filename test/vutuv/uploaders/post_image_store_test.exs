@@ -18,6 +18,8 @@ defmodule Vutuv.PostImageStoreTest do
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
 
+  alias Vix.Vips.Image, as: VipsImage
+  alias Vix.Vips.MutableImage
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.PostImage
 
@@ -48,11 +50,11 @@ defmodule Vutuv.PostImageStoreTest do
 
     {:ok, tagged} =
       Image.mutate(img, fn mut ->
-        :ok = Vix.Vips.MutableImage.set(mut, "orientation", :gint, 6)
-        :ok = Vix.Vips.MutableImage.set(mut, "exif-ifd0-Make", :gchararray, "TestCam")
+        :ok = MutableImage.set(mut, "orientation", :gint, 6)
+        :ok = MutableImage.set(mut, "exif-ifd0-Make", :gchararray, "TestCam")
 
         :ok =
-          Vix.Vips.MutableImage.set(mut, "exif-ifd2-GPSLatitude", :gchararray, "50/1 56/1 0/1")
+          MutableImage.set(mut, "exif-ifd2-GPSLatitude", :gchararray, "50/1 56/1 0/1")
       end)
 
     {:ok, _} = Image.write(tagged, path)
@@ -61,7 +63,7 @@ defmodule Vutuv.PostImageStoreTest do
 
   defp exif_fields(path) do
     {:ok, image} = Image.open(path)
-    {:ok, fields} = Vix.Vips.Image.header_field_names(image)
+    {:ok, fields} = VipsImage.header_field_names(image)
     Enum.filter(fields, &String.contains?(&1, "exif"))
   end
 

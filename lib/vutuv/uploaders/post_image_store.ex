@@ -32,6 +32,7 @@ defmodule Vutuv.PostImageStore do
   uploads start working without a code change.
   """
 
+  alias Vix.Vips.Image, as: VipsImage
   alias Vutuv.Posts.PostImage
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
@@ -62,7 +63,7 @@ defmodule Vutuv.PostImageStore do
         # cannot decode HEVC — only materializing pixels surfaces the error.
         supported =
           with {:ok, image} <- Image.thumbnail(probe, "8x8"),
-               {:ok, _binary} <- Vix.Vips.Image.write_to_binary(image) do
+               {:ok, _binary} <- VipsImage.write_to_binary(image) do
             true
           else
             _ -> false

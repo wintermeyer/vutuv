@@ -24,6 +24,7 @@ defmodule Vutuv.Repo.UpgradePathMigrationTest do
   # not the SQL Sandbox.
   use ExUnit.Case, async: false
 
+  alias Ecto.Adapters.Postgres, as: PostgresAdapter
   alias Vutuv.UpgradePathTestRepo, as: ScratchRepo
 
   # {version, module} of every migration that creates a table with a FK to a
@@ -44,8 +45,8 @@ defmodule Vutuv.Repo.UpgradePathMigrationTest do
       )
 
     # A leftover DB from a crashed run would fail storage_up; start clean.
-    _ = Ecto.Adapters.Postgres.storage_down(config)
-    :ok = Ecto.Adapters.Postgres.storage_up(config)
+    _ = PostgresAdapter.storage_down(config)
+    :ok = PostgresAdapter.storage_up(config)
 
     Application.put_env(:vutuv, ScratchRepo, config)
     {:ok, pid} = ScratchRepo.start_link(config)
@@ -63,7 +64,7 @@ defmodule Vutuv.Repo.UpgradePathMigrationTest do
         :exit, _ -> :ok
       end
 
-      _ = Ecto.Adapters.Postgres.storage_down(config)
+      _ = PostgresAdapter.storage_down(config)
       Application.delete_env(:vutuv, ScratchRepo)
     end)
 

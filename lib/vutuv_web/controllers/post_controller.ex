@@ -55,29 +55,32 @@ defmodule VutuvWeb.PostController do
   # plus its display label ("2026", "2026-06", "2026-06-06").
   defp parse_period(%{"year" => year} = params) do
     with {:ok, year} <- parse_int(year, 1000, 9999) do
-      case {params["month"], params["day"]} do
-        {nil, _} ->
-          {:ok, {Date.new!(year, 1, 1), Date.new!(year, 12, 31)}, Integer.to_string(year)}
-
-        {month, nil} ->
-          with {:ok, month} <- parse_int(month, 1, 12) do
-            from = Date.new!(year, month, 1)
-            {:ok, {from, Date.end_of_month(from)}, Calendar.strftime(from, "%Y-%m")}
-          end
-
-        {month, day} ->
-          with {:ok, month} <- parse_int(month, 1, 12),
-               {:ok, day} <- parse_int(day, 1, 31),
-               {:ok, date} <- Date.new(year, month, day) do
-            {:ok, {date, date}, Date.to_iso8601(date)}
-          else
-            _ -> :error
-          end
-      end
+      period_for(year, params["month"], params["day"])
     end
   end
 
   defp parse_period(_params), do: {:ok, nil, nil}
+
+  defp period_for(year, nil, _day) do
+    {:ok, {Date.new!(year, 1, 1), Date.new!(year, 12, 31)}, Integer.to_string(year)}
+  end
+
+  defp period_for(year, month, nil) do
+    with {:ok, month} <- parse_int(month, 1, 12) do
+      from = Date.new!(year, month, 1)
+      {:ok, {from, Date.end_of_month(from)}, Calendar.strftime(from, "%Y-%m")}
+    end
+  end
+
+  defp period_for(year, month, day) do
+    with {:ok, month} <- parse_int(month, 1, 12),
+         {:ok, day} <- parse_int(day, 1, 31),
+         {:ok, date} <- Date.new(year, month, day) do
+      {:ok, {date, date}, Date.to_iso8601(date)}
+    else
+      _ -> :error
+    end
+  end
 
   defp parse_int(value, min, max) when is_binary(value) do
     case Integer.parse(value) do

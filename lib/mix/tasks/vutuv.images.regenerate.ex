@@ -23,6 +23,8 @@ defmodule Mix.Tasks.Vutuv.Images.Regenerate do
 
   use Mix.Task
 
+  alias Vutuv.Uploads.Regenerator
+
   @impl Mix.Task
   def run(args) do
     {opts, _argv, _errors} =
@@ -35,14 +37,14 @@ defmodule Mix.Tasks.Vutuv.Images.Regenerate do
       {:only, type} -> {:only, parse_type!(type)}
       other -> other
     end)
-    |> Vutuv.Uploads.Regenerator.run()
+    |> Regenerator.run()
   end
 
   defp parse_type!(type) do
-    Enum.find(Vutuv.Uploads.Regenerator.types(), &(Atom.to_string(&1) == type)) ||
+    Enum.find(Regenerator.types(), &(Atom.to_string(&1) == type)) ||
       Mix.raise(
         "unknown --only type #{inspect(type)}; expected one of: " <>
-          Enum.map_join(Vutuv.Uploads.Regenerator.types(), ", ", &Atom.to_string/1)
+          Enum.map_join(Regenerator.types(), ", ", &Atom.to_string/1)
       )
   end
 end

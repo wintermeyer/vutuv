@@ -214,22 +214,23 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   defp notification_target(n, viewer) do
-    cond do
-      n.kind in ["reply", "like"] and is_binary(n[:post_id]) and viewer ->
-        ~p"/#{viewer}/posts/#{n.post_id}"
+    primary_target(n, viewer) || actor_target(n)
+  end
 
-      n.kind == "connection_request" and viewer ->
-        ~p"/#{viewer}/connections"
+  defp primary_target(%{kind: kind} = n, viewer) when kind in ["reply", "like"] do
+    if is_binary(n[:post_id]) and viewer != nil, do: ~p"/#{viewer}/posts/#{n.post_id}"
+  end
 
-      n.kind == "endorsement" and viewer ->
-        ~p"/#{viewer}/tags"
+  defp primary_target(%{kind: "connection_request"}, viewer) when viewer != nil,
+    do: ~p"/#{viewer}/connections"
 
-      is_binary(n[:actor_param]) ->
-        ~p"/#{n.actor_param}"
+  defp primary_target(%{kind: "endorsement"}, viewer) when viewer != nil,
+    do: ~p"/#{viewer}/tags"
 
-      true ->
-        nil
-    end
+  defp primary_target(_n, _viewer), do: nil
+
+  defp actor_target(n) do
+    if is_binary(n[:actor_param]), do: ~p"/#{n.actor_param}"
   end
 
   # The event text is rendered from the kind (not stored), so it translates

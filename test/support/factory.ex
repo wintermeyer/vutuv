@@ -3,6 +3,8 @@ defmodule Vutuv.Factory do
 
   use ExMachina.Ecto, repo: Vutuv.Repo
 
+  alias Vutuv.Posts.PostImage
+
   def user_factory do
     %Vutuv.Accounts.User{
       first_name: sequence(:first_name, &"User#{&1}"),
@@ -188,7 +190,7 @@ defmodule Vutuv.Factory do
 
   def post_image_factory do
     %Vutuv.Posts.PostImage{
-      token: Vutuv.Posts.PostImage.gen_token(),
+      token: PostImage.gen_token(),
       alt: "",
       position: 0,
       width: 800,

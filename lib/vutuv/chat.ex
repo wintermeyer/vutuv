@@ -258,19 +258,20 @@ defmodule Vutuv.Chat do
     end
 
     case fetch_as_participant(me_id, conversation_id, recipient_pending) do
-      nil ->
-        {:error, :not_recipient}
+      nil -> {:error, :not_recipient}
+      conversation -> set_request_status(conversation, status)
+    end
+  end
 
-      conversation ->
-        with {:ok, updated} <-
-               conversation |> Conversation.changeset(%{status: status}) |> Repo.update() do
-          # Accepting flips the initiator's open thread from its "not accepted
-          # yet" placeholder to a live composer, so nudge that thread to
-          # re-read. Declines never broadcast: the initiator must stay unable to
-          # tell a decline from being ignored.
-          if status == "accepted", do: broadcast_conversation_update(updated.id)
-          {:ok, updated}
-        end
+  defp set_request_status(conversation, status) do
+    with {:ok, updated} <-
+           conversation |> Conversation.changeset(%{status: status}) |> Repo.update() do
+      # Accepting flips the initiator's open thread from its "not accepted
+      # yet" placeholder to a live composer, so nudge that thread to
+      # re-read. Declines never broadcast: the initiator must stay unable to
+      # tell a decline from being ignored.
+      if status == "accepted", do: broadcast_conversation_update(updated.id)
+      {:ok, updated}
     end
   end
 

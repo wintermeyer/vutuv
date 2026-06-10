@@ -10,6 +10,7 @@ defmodule Vutuv.Accounts do
   alias Plug.Conn
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.LoginPin
+  alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.Slug
@@ -36,7 +37,7 @@ defmodule Vutuv.Accounts do
         maybe_fetch_gravatar(user)
         # Lock-free bump of the live "number of members" counter shown on the
         # landing page; never a per-sign-up COUNT, so it stays cheap in a spike.
-        Vutuv.Accounts.MemberCounter.increment()
+        MemberCounter.increment()
         {:ok, user}
 
       error ->

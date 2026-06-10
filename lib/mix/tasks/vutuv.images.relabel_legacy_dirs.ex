@@ -18,13 +18,15 @@ defmodule Mix.Tasks.Vutuv.Images.RelabelLegacyDirs do
 
   use Mix.Task
 
+  alias Vutuv.Uploads.LegacyRelabel
+
   @impl Mix.Task
   def run(args) do
     {opts, _argv, _errors} = OptionParser.parse(args, strict: [dry_run: :boolean])
 
     Mix.Task.run("app.start")
 
-    case Vutuv.Uploads.LegacyRelabel.run(opts) do
+    case LegacyRelabel.run(opts) do
       {:ok, summary} ->
         Mix.shell().info(
           "relabel: #{summary.renamed} renamed, #{summary.unmapped} unmapped, " <>

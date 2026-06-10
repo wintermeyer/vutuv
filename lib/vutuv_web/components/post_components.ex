@@ -52,7 +52,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:entry_id, :string,
     default: nil,
     doc:
-      "timeline entry id (\"post-<id>\" / \"repost-<id>\") — keeps embedded LiveView ids " <>
+      ~s|timeline entry id ("post-<id>" / "repost-<id>") — keeps embedded LiveView ids | <>
         "unique when the same post renders more than once on a page"
   )
 

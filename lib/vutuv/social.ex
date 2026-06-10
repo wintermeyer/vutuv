@@ -441,28 +441,32 @@ defmodule Vutuv.Social do
   end
 
   defp fetch_pending_for_recipient(%User{id: me_id}, connection_id) do
-    with id when not is_nil(id) <- Vutuv.UUIDv7.cast_or_nil(connection_id) do
-      Repo.one(
-        from(c in Connection,
-          where: c.id == ^id and c.status == "pending" and c.requested_by_id != ^me_id,
-          where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
+    case Vutuv.UUIDv7.cast_or_nil(connection_id) do
+      nil ->
+        nil
+
+      id ->
+        Repo.one(
+          from(c in Connection,
+            where: c.id == ^id and c.status == "pending" and c.requested_by_id != ^me_id,
+            where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
+          )
         )
-      )
-    else
-      _ -> nil
     end
   end
 
   defp fetch_for_party(%User{id: me_id}, connection_id) do
-    with id when not is_nil(id) <- Vutuv.UUIDv7.cast_or_nil(connection_id) do
-      Repo.one(
-        from(c in Connection,
-          where: c.id == ^id,
-          where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
+    case Vutuv.UUIDv7.cast_or_nil(connection_id) do
+      nil ->
+        nil
+
+      id ->
+        Repo.one(
+          from(c in Connection,
+            where: c.id == ^id,
+            where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
+          )
         )
-      )
-    else
-      _ -> nil
     end
   end
 

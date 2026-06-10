@@ -1,6 +1,8 @@
 defmodule VutuvWeb.GroupControllerTest do
   use VutuvWeb.ConnCase
 
+  alias Vutuv.Social.Group
+
   # Regression: group/form_content.html.heex needs @backlink (the shared
   # <.form_actions> Cancel link), but new.html/edit.html never passed it, so
   # GET new/edit crashed with a KeyError instead of rendering the form. Found
@@ -23,7 +25,7 @@ defmodule VutuvWeb.GroupControllerTest do
     {:ok, group} =
       user
       |> Ecto.build_assoc(:groups)
-      |> Vutuv.Social.Group.changeset(%{"name" => "Mountain bikers"})
+      |> Group.changeset(%{"name" => "Mountain bikers"})
       |> Vutuv.Repo.insert()
 
     conn = get(conn, ~p"/#{user}/groups/#{group}/edit")

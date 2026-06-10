@@ -26,6 +26,8 @@ defmodule Vutuv.Uploads.Spec do
   later) in a private location that is never served.
   """
 
+  alias Vix.Vips.Operation
+
   @served_ext ".avif"
   # Extensions a derived version may carry on disk from before the AVIF
   # switch; URL/path resolution falls back to these until the one-shot
@@ -117,7 +119,7 @@ defmodule Vutuv.Uploads.Spec do
   end
 
   defp save(image, dest, quality) do
-    case Vix.Vips.Operation.heifsave(image, dest,
+    case Operation.heifsave(image, dest,
            compression: :VIPS_FOREIGN_HEIF_COMPRESSION_AV1,
            Q: quality,
            effort: @effort,

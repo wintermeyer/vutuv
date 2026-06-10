@@ -3,6 +3,7 @@ defmodule Vutuv.Accounts.Slug do
 
   use VutuvWeb, :model
   import Vutuv.ChangesetHelpers, only: [downcase_value: 1]
+  alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.Slug
 
   schema "slugs" do
@@ -25,7 +26,7 @@ defmodule Vutuv.Accounts.Slug do
     |> trim_slug_to_32
     # Profiles live at the URL root, so a slug must never equal a route
     # prefix or static path (it would shadow that route forever).
-    |> validate_exclusion(:value, Vutuv.Accounts.ReservedSlugs.list(), message: "is reserved")
+    |> validate_exclusion(:value, ReservedSlugs.list(), message: "is reserved")
     |> can_create_slug?(model)
   end
 

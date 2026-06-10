@@ -1,6 +1,7 @@
 defmodule Vutuv.ColognePhoneticsTest do
   use ExUnit.Case, async: true
 
+  alias Vutuv.Accounts.SearchTerm
   alias Vutuv.ColognePhonetics
 
   describe "to_cologne/1 edge cases" do
@@ -35,7 +36,7 @@ defmodule Vutuv.ColognePhoneticsTest do
   describe "create_search_terms/1 with phonetically-empty names" do
     test "survives a punctuation-only first/last name without crashing" do
       changesets =
-        Vutuv.Accounts.SearchTerm.create_search_terms(%{
+        SearchTerm.create_search_terms(%{
           "first_name" => "***",
           "last_name" => "!!!"
         })

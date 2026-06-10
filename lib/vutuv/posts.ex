@@ -414,6 +414,9 @@ defmodule Vutuv.Posts do
   end
 
   # All denial rows of the post that match this viewer (union semantics).
+  # The or-chain mirrors one SQL expression branch-for-branch; splitting it
+  # into helpers would only obscure the query, so the complexity is accepted.
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defp denial_match_query(post_id, author_id, viewer_id) do
     from(d in PostDenial,
       where: d.post_id == ^post_id,

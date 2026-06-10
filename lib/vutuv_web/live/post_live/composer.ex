@@ -23,6 +23,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostImage
 
   @presets ~w(public followers connections only_me custom)
 
@@ -163,7 +164,7 @@ defmodule VutuvWeb.PostLive.Composer do
         {:noreply, socket}
 
       image ->
-        snippet = "\n\n![](#{Vutuv.Posts.PostImage.url(image, "large")})\n"
+        snippet = "\n\n![](#{PostImage.url(image, "large")})\n"
         {:noreply, assign(socket, :body, String.trim_trailing(socket.assigns.body) <> snippet)}
     end
   end
@@ -467,7 +468,7 @@ defmodule VutuvWeb.PostLive.Composer do
           <ul :if={@images != []} class="mt-3 space-y-2" id={"#{@id}-images"}>
             <li :for={image <- @images} class="flex items-center gap-3">
               <img
-                src={Vutuv.Posts.PostImage.url(image, "thumb")}
+                src={PostImage.url(image, "thumb")}
                 alt=""
                 width="48"
                 height="48"

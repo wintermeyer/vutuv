@@ -48,8 +48,10 @@ defmodule Vutuv.Tags.UserTag do
   def tag(%__MODULE__{} = user_tag), do: Vutuv.Repo.preload(user_tag, :tag).tag
 
   defimpl Phoenix.Param, for: Vutuv.Tags.UserTag do
+    alias Vutuv.Tags.UserTag
+
     def to_param(user_tag) do
-      Vutuv.Tags.UserTag.tag(user_tag).slug
+      UserTag.tag(user_tag).slug
     end
   end
 end

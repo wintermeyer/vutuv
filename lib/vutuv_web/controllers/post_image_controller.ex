@@ -19,6 +19,7 @@ defmodule VutuvWeb.PostImageController do
   use VutuvWeb, :controller
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostImage
 
   @cache_control "private, max-age=31536000, immutable"
 
@@ -39,7 +40,7 @@ defmodule VutuvWeb.PostImageController do
   defp parse_version(version_file) do
     case String.split(version_file, ".") do
       [version, ext] when ext in ["avif", "webp"] ->
-        if version in Vutuv.Posts.PostImage.versions(), do: version
+        if version in PostImage.versions(), do: version
 
       _ ->
         nil

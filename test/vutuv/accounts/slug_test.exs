@@ -8,6 +8,7 @@ defmodule Vutuv.Accounts.SlugTest do
   """
   use Vutuv.DataCase
 
+  alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.Slug
 
   # Mirrors the controller: a new slug is built off the user (so `user_id` is set)
@@ -52,7 +53,7 @@ defmodule Vutuv.Accounts.SlugTest do
     end
 
     test "generated slugs skip reserved words by appending a suffix" do
-      reserved = Vutuv.Accounts.ReservedSlugs.list()
+      reserved = ReservedSlugs.list()
       user = %Vutuv.Accounts.User{first_name: "Login", last_name: nil}
 
       slug = Vutuv.SlugHelpers.gen_slug_unique(user, Slug, :value, reserved)
