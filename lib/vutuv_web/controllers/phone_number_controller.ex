@@ -1,14 +1,28 @@
 defmodule VutuvWeb.PhoneNumberController do
   use VutuvWeb, :controller
   alias Vutuv.Profiles.PhoneNumber
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "phone_number" when action in [:create, :update])
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
     phone_numbers = Repo.all(assoc(conn.assigns[:user], :phone_numbers))
-    render(conn, "index.html", phone_numbers: phone_numbers)
+
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", phone_numbers: phone_numbers)
+
+      format ->
+        doc = SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -35,7 +49,17 @@ defmodule VutuvWeb.PhoneNumberController do
 
   def show(conn, %{"id" => id}) do
     phone_number = ControllerHelpers.get_owned!(conn, :phone_numbers, id)
-    render(conn, "show.html", phone_number: phone_number)
+
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", phone_number: phone_number)
+
+      format ->
+        doc = SectionDocs.build_show(conn.assigns[:user], :phone_numbers, phone_number)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def edit(conn, %{"id" => id}) do

@@ -16,6 +16,19 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   @width 80
 
+  # The profile section pages (VutuvWeb.AgentDocs.SectionDocs): index doc
+  # types and the show doc type -> section mapping for entry_line/2.
+  @section_indexes ~w(work_experiences links social_media_accounts addresses phone_numbers emails tags)
+  @section_entries %{
+    "work_experience" => "work_experiences",
+    "link" => "links",
+    "social_media_account" => "social_media_accounts",
+    "address" => "addresses",
+    "phone_number" => "phone_numbers",
+    "email" => "emails",
+    "user_tag" => "tags"
+  }
+
   def render(%{type: "profile"} = doc) do
     [
       heading(doc.name),
@@ -24,27 +37,46 @@ defmodule VutuvWeb.AgentDocs.Text do
       profile_facts(doc),
       section(
         gettext("Skills & endorsements"),
-        Enum.map(doc.tags, &"* #{&1.name} (#{Markdown.endorsements_label(&1)})")
+        Enum.map(doc.tags, &entry_line("tags", &1))
       ),
-      section(gettext("Experience"), Enum.map(doc.work_experiences, &work_line/1)),
-      section(gettext("Links"), Enum.map(doc.links, &link_line/1)),
-      section(gettext("Contact"), Enum.map(doc.emails, &("* " <> &1))),
+      section(
+        gettext("Experience"),
+        Enum.map(doc.work_experiences, &entry_line("work_experiences", &1))
+      ),
+      section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
+      section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
         gettext("Social Media"),
-        Enum.map(doc.social_media, &"* #{&1.provider}: #{&1.url}")
+        Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
       section(
         gettext("Phone Numbers"),
-        Enum.map(doc.phone_numbers, &"* #{&1.type}: #{&1.value}")
+        Enum.map(doc.phone_numbers, &entry_line("phone_numbers", &1))
       ),
-      section(
-        gettext("Addresses"),
-        Enum.map(doc.addresses, &("* " <> Markdown.address_line(&1)))
-      ),
+      section(gettext("Addresses"), Enum.map(doc.addresses, &entry_line("addresses", &1))),
       section(
         gettext("Posts (%{count} total)", count: doc.counts.posts),
         Enum.map(doc.posts, &post_lines/1)
       ),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  def render(%{type: type} = doc) when type in @section_indexes do
+    [
+      heading(doc.title),
+      gettext("%{count} total", count: doc.total),
+      Enum.map(doc.entries, &entry_line(type, &1)),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  def render(%{type: type} = doc) when is_map_key(@section_entries, type) do
+    [
+      heading(doc.title),
+      entry_line(@section_entries[type], doc.entry),
       footer(doc)
     ]
     |> join_blocks()
@@ -77,7 +109,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  def render(%{type: type} = doc) when type in ["followers", "following"] do
+  def render(%{type: type} = doc) when type in ["followers", "following", "connections"] do
     [
       heading(doc.title),
       gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
@@ -157,6 +189,16 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> Enum.filter(& &1)
     |> Enum.join("\n")
   end
+
+  # One entry of a profile section — the same line on the profile page and
+  # on the section's own index / show pages.
+  defp entry_line("tags", tag), do: "* #{tag.name} (#{Markdown.endorsements_label(tag)})"
+  defp entry_line("work_experiences", work), do: work_line(work)
+  defp entry_line("links", link), do: link_line(link)
+  defp entry_line("emails", email), do: "* " <> email
+  defp entry_line("social_media_accounts", account), do: "* #{account.provider}: #{account.url}"
+  defp entry_line("phone_numbers", phone), do: "* #{phone.type}: #{phone.value}"
+  defp entry_line("addresses", address), do: "* " <> Markdown.address_line(address)
 
   defp work_line(work) do
     period = Markdown.work_period(work)

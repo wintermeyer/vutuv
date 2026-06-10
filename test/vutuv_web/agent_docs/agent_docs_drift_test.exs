@@ -182,6 +182,75 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 
+  test "every profile section page serves its facts in all formats" do
+    sections = [
+      {"work_experiences", ["Bridge Engineer", "Span AG"]},
+      {"links", ["bridges.example.org", "Bridge blog"]},
+      {"social_media_accounts", ["github.com/gretagradient"]},
+      {"addresses", ["Berlin", "10115"]},
+      {"phone_numbers", ["+49 30 5550100"]},
+      {"emails", ["greta.public@example.com"]},
+      {"tags", ["Bridgebuilding"]}
+    ]
+
+    for {section, facts} <- sections do
+      rendered = formats_for("/drift_tester/#{section}")
+      for fact <- facts, do: assert_fact_everywhere(rendered, fact)
+
+      doc = Jason.decode!(rendered.json)
+      assert doc["type"] == section
+      assert doc["total"] == length(doc["entries"])
+      assert doc["user"]["slug"] == "drift_tester"
+    end
+  end
+
+  test "section docs are noindexed like their HTML pages (the NoIndex pipeline)" do
+    conn = get(build_conn(), "/drift_tester/work_experiences.md")
+
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
+    assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+  end
+
+  test "a single section entry page serves all formats", %{user: user} do
+    work = Repo.one!(Ecto.assoc(user, :work_experiences))
+    rendered = formats_for("/drift_tester/work_experiences/#{work.slug}")
+
+    for fact <- ["Bridge Engineer", "Span AG"], do: assert_fact_everywhere(rendered, fact)
+    assert Jason.decode!(rendered.json)["type"] == "work_experience"
+
+    [url] = Repo.all(Ecto.assoc(user, :urls))
+    rendered = formats_for("/drift_tester/links/#{url.id}")
+    assert_fact_everywhere(rendered, "bridges.example.org")
+
+    rendered = formats_for("/drift_tester/tags/bridgebuilding")
+    assert_fact_everywhere(rendered, "Bridgebuilding")
+    assert Jason.decode!(rendered.json)["type"] == "user_tag"
+  end
+
+  test "a private email never reaches the agent formats", %{user: user} do
+    private = insert(:email, user: user, public?: false, value: "greta.secret@example.com")
+
+    refute get(build_conn(), "/drift_tester/emails.md").resp_body =~ "greta.secret"
+    refute get(build_conn(), "/drift_tester/emails.json").resp_body =~ "greta.secret"
+    assert get(build_conn(), "/drift_tester/emails/#{private.id}.md").status == 404
+
+    public = Repo.one!(from(e in Ecto.assoc(user, :emails), where: e.public?))
+    assert get(build_conn(), "/drift_tester/emails/#{public.id}.md").resp_body =~ "greta.public"
+  end
+
+  test "connections list in every format", %{user: user} do
+    buddy = insert_activated_user(first_name: "Conni", last_name: "Connection")
+    connect!(user, buddy)
+
+    rendered = formats_for("/drift_tester/connections")
+    assert_fact_everywhere(rendered, "Conni Connection")
+
+    doc = Jason.decode!(rendered.json)
+    assert doc["type"] == "connections"
+    assert doc["total"] == 1
+  end
+
   test "work experiences sort newest first, the ongoing role on top" do
     user = insert_activated_user(active_slug: "sorted_cv")
 

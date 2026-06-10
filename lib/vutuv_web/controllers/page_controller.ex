@@ -61,6 +61,7 @@ defmodule VutuvWeb.PageController do
   # social media, work history, followers, ...) are off-limits. The profile
   # page /<slug> itself stays crawlable; only its sub-pages are blocked.
   Disallow: /*/addresses
+  Disallow: /*/connections
   Disallow: /*/edit
   Disallow: /*/emails
   Disallow: /*/followers
@@ -173,7 +174,11 @@ defmodule VutuvWeb.PageController do
   - `/<username>` — member profile (also `/<username>.vcf` as vCard 3.0)
   - `/<username>/posts` — post archive, also `/<username>/posts/<year>[/<month>[/<day>]]`
   - `/<username>/posts/<id>` — a single post with replies
-  - `/<username>/followers`, `/<username>/following` — follow lists
+  - `/<username>/followers`, `/<username>/following`, `/<username>/connections` — people lists
+  - `/<username>/<section>` — the profile sections in full: `work_experiences`,
+    `links`, `social_media_accounts`, `addresses`, `phone_numbers`, `emails`
+    (public addresses only), `tags`; a single entry lives at
+    `/<username>/<section>/<id-or-slug>`
   - `/tags/<tag>` — a skill tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members
 

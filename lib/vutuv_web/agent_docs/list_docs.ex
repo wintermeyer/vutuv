@@ -1,14 +1,16 @@
 defmodule VutuvWeb.AgentDocs.ListDocs do
   @moduledoc """
   The people-list pages as data maps for the agent formats: the follower /
-  following lists (`/:slug/followers`, `/:slug/following`), the tag page
-  (`/tags/:slug`) and the most-followed listing
-  (`/listings/most_followed_users`).
+  following lists (`/:slug/followers`, `/:slug/following`), the connections
+  list (`/:slug/connections`), the tag page (`/tags/:slug`) and the
+  most-followed listing (`/listings/most_followed_users`).
 
-  The follow lists are noindexed in HTML (the `NoIndex` plug + robots.txt),
-  so their docs carry `noindex: true` and answer with an all-no
-  `Content-Signal`. Changed what one of these pages shows? Update the
-  matching builder — the drift test (`agent_docs_drift_test.exs`) reminds you.
+  The follow and connection lists are noindexed in HTML (the `NoIndex`
+  plug + robots.txt), so their docs carry `noindex: true` and answer with
+  an all-no `Content-Signal`. The connections doc is the anonymous view:
+  accepted connections only, never the owner's pending requests. Changed
+  what one of these pages shows? Update the matching builder — the drift
+  test (`agent_docs_drift_test.exs`) reminds you.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -29,6 +31,20 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       end
 
     AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true)
+    |> Map.merge(%{
+      title: label,
+      description: label,
+      user: AgentDocs.person_ref(user),
+      total: total,
+      people: Enum.map(people, &person_entry(&1, work_info_by_id))
+    })
+  end
+
+  @doc "One page of `/:slug/connections`: the accepted connections (public)."
+  def build_connections(user, people, total, work_info_by_id) do
+    label = gettext("Connections of %{name}", name: UserHelpers.full_name(user))
+
+    AgentDocs.doc_meta("connections", "/#{user.active_slug}/connections", noindex: true)
     |> Map.merge(%{
       title: label,
       description: label,

@@ -2,6 +2,8 @@ defmodule VutuvWeb.WorkExperienceController do
   use VutuvWeb, :controller
 
   alias Vutuv.Profiles.WorkExperience
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
@@ -15,6 +17,9 @@ defmodule VutuvWeb.WorkExperienceController do
     assign: :job
   )
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs (keep the templates and the doc builder
+  # in sync, see agent_docs_drift_test.exs).
   def index(conn, _params) do
     user =
       conn.assigns[:user]
@@ -23,7 +28,16 @@ defmodule VutuvWeb.WorkExperienceController do
           from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date()
       )
 
-    render(conn, "index.html", user: user, work_experience: user.work_experiences)
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", user: user, work_experience: user.work_experiences)
+
+      format ->
+        doc = SectionDocs.build_index(user, :work_experiences, user.work_experiences)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -47,7 +61,16 @@ defmodule VutuvWeb.WorkExperienceController do
 
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :job to conn.assigns[:user], so no ownership re-check.
-    render(conn, "show.html", work_experience: conn.assigns[:job])
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", work_experience: conn.assigns[:job])
+
+      format ->
+        doc = SectionDocs.build_show(conn.assigns[:user], :work_experiences, conn.assigns[:job])
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def edit(conn, _params) do

@@ -3,18 +3,35 @@ defmodule VutuvWeb.EmailController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.Email
   alias Vutuv.Notifications.Emailer
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.RateLimit
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "email" when action in [:create, :update])
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs. The agent formats render strictly the
+  # anonymous view: public addresses only, whoever asks.
   def index(conn, _params) do
-    emails =
-      VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], conn.assigns[:current_user])
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        emails =
+          VutuvWeb.UserHelpers.emails_for_display(
+            conn.assigns[:user],
+            conn.assigns[:current_user]
+          )
 
-    emails_counter = length(emails)
-    render(conn, "index.html", emails: emails, emails_counter: emails_counter)
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", emails: emails, emails_counter: length(emails))
+
+      format ->
+        emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
+        doc = SectionDocs.build_index(conn.assigns[:user], :emails, emails)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -98,17 +115,35 @@ defmodule VutuvWeb.EmailController do
   end
 
   def show(conn, %{"id" => id}) do
-    if VutuvWeb.UserHelpers.user_has_permissions?(
-         conn.assigns[:user],
-         conn.assigns[:current_user]
-       ) do
-      Repo.get(assoc(conn.assigns[:user], :emails), id)
-    else
-      Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
-    end
-    |> case do
-      nil -> ControllerHelpers.render_error(conn, 404)
-      email -> render(conn, "show.html", email: email)
+    email =
+      if VutuvWeb.UserHelpers.user_has_permissions?(
+           conn.assigns[:user],
+           conn.assigns[:current_user]
+         ) do
+        Repo.get(assoc(conn.assigns[:user], :emails), id)
+      else
+        Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
+      end
+
+    format = AgentDocs.negotiate(conn)
+
+    cond do
+      is_nil(email) ->
+        ControllerHelpers.render_error(conn, 404)
+
+      format == :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", email: email)
+
+      # The anonymous view: a private address has no agent documents, even
+      # for a permitted viewer's session.
+      email.public? ->
+        doc = SectionDocs.build_show(conn.assigns[:user], :emails, email)
+        AgentDocs.send_doc(conn, format, doc)
+
+      true ->
+        ControllerHelpers.render_error(conn, 404)
     end
   end
 

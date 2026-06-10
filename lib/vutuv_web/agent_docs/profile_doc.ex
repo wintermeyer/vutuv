@@ -12,11 +12,11 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
 
   import Ecto.Query
 
-  alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -71,13 +71,13 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
         connections: Vutuv.Social.connection_count(user),
         posts: Vutuv.Posts.count_author_posts(user, nil)
       },
-      tags: Enum.map(user.user_tags, &tag_entry/1),
-      work_experiences: Enum.map(user.work_experiences, &work_entry/1),
-      links: Enum.map(user.urls, &%{url: &1.value, description: &1.description}),
+      tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
+      work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
+      links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, & &1.value),
-      phone_numbers: Enum.map(user.phone_numbers, &%{type: &1.number_type, value: &1.value}),
-      addresses: Enum.map(user.addresses, &address_entry/1),
-      social_media: Enum.map(user.social_media_accounts, &social_entry/1),
+      phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),
+      addresses: Enum.map(user.addresses, &SectionDocs.address_entry/1),
+      social_media: Enum.map(user.social_media_accounts, &SectionDocs.social_entry/1),
       posts: Enum.map(posts, &post_entry/1)
     })
     |> maybe_include_photo(user, opts)
@@ -115,48 +115,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       "/" <> _ = path -> AgentDocs.abs_url(path)
       url -> url
     end
-  end
-
-  defp tag_entry(user_tag) do
-    %{
-      name: UserTag.name(user_tag),
-      slug: user_tag.tag.slug,
-      endorsements: length(user_tag.endorsements),
-      url: AgentDocs.abs_url("/tags/#{user_tag.tag.slug}")
-    }
-  end
-
-  defp work_entry(work) do
-    %{
-      title: work.title,
-      organization: work.organization,
-      start: year_month(work.start_year, work.start_month),
-      end: year_month(work.end_year, work.end_month)
-    }
-  end
-
-  defp year_month(nil, _month), do: nil
-  defp year_month(year, nil), do: Integer.to_string(year)
-
-  defp year_month(year, month),
-    do: "#{year}-#{String.pad_leading(Integer.to_string(month), 2, "0")}"
-
-  defp address_entry(address) do
-    %{
-      description: address.description,
-      line_1: address.line_1,
-      line_2: address.line_2,
-      line_3: address.line_3,
-      line_4: address.line_4,
-      city: address.city,
-      state: address.state,
-      zip_code: address.zip_code,
-      country: address.country
-    }
-  end
-
-  defp social_entry(account) do
-    %{provider: account.provider, url: SocialMediaAccount.url(account)}
   end
 
   defp post_entry(entry) do

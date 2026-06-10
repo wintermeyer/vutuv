@@ -12,6 +12,8 @@ defmodule VutuvWeb.ConnectionController do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Social
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.RequireLoginOr404 when action in [:create, :accept, :decline, :delete])
@@ -20,6 +22,9 @@ defmodule VutuvWeb.ConnectionController do
   # The profile-scoped page (/:slug/connections): that user's accepted
   # connections (public), plus — for the owner viewing their own — the pending
   # requests addressed to them (accept/decline) and the ones they sent.
+  # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs;
+  # the docs carry only the public part (accepted connections), never the
+  # owner's pending requests.
   def index(conn, _params) do
     profile = conn.assigns[:user]
     current = conn.assigns[:current_user]
@@ -27,23 +32,34 @@ defmodule VutuvWeb.ConnectionController do
 
     connections = Social.list_connections(profile)
     users = Enum.map(connections, & &1.user)
+    total = Social.connection_count(profile)
+    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 45)
 
-    {incoming, outgoing} =
-      if owner? do
-        {Social.list_incoming_requests(current), Social.list_outgoing_requests(current)}
-      else
-        {[], []}
-      end
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        {incoming, outgoing} =
+          if owner? do
+            {Social.list_incoming_requests(current), Social.list_outgoing_requests(current)}
+          else
+            {[], []}
+          end
 
-    render(conn, "index.html",
-      user: profile,
-      owner?: owner?,
-      connections: connections,
-      total: Social.connection_count(profile),
-      incoming: incoming,
-      outgoing: outgoing,
-      work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 45)
-    )
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html",
+          user: profile,
+          owner?: owner?,
+          connections: connections,
+          total: total,
+          incoming: incoming,
+          outgoing: outgoing,
+          work_info_by_id: work_info_by_id
+        )
+
+      format ->
+        doc = ListDocs.build_connections(profile, users, total, work_info_by_id)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def create(conn, %{"connection" => %{"user_id" => target_id}}) do

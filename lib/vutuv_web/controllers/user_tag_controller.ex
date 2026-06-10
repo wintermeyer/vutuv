@@ -14,14 +14,29 @@ defmodule VutuvWeb.UserTagController do
   plug(:scrub_params, "tag_param" when action in [:create])
 
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs). The
+  # shared preload carries the endorsements the docs count and keeps the
+  # order in sync with the profile page.
   def index(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload(user_tags: :tag)
+      |> Repo.preload(user_tags: UserTag.ordered_by_endorsements())
 
-    render(conn, "index.html", user: user, user_tags: user.user_tags)
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", user: user, user_tags: user.user_tags)
+
+      format ->
+        doc = SectionDocs.build_index(user, :tags, user.user_tags)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -83,7 +98,16 @@ defmodule VutuvWeb.UserTagController do
       conn.assigns[:user_tag]
       |> Repo.preload([:tag, :endorsements])
 
-    render(conn, "show.html", user_tag: user_tag)
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", user_tag: user_tag)
+
+      format ->
+        doc = SectionDocs.build_show(conn.assigns[:user], :tags, user_tag)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def delete(conn, %{"id" => _id}) do

@@ -1,16 +1,29 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
   alias Vutuv.Profiles.SocialMediaAccount
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
     user =
       conn.assigns[:user]
       |> Repo.preload([:social_media_accounts])
 
-    render(conn, "index.html", user: user, social_media_accounts: user.social_media_accounts)
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", user: user, social_media_accounts: user.social_media_accounts)
+
+      format ->
+        doc = SectionDocs.build_index(user, :social_media_accounts, user.social_media_accounts)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -58,7 +71,23 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
   def show(conn, %{"id" => id}) do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
-    render(conn, "show.html", social_media_account: social_media_account)
+
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", social_media_account: social_media_account)
+
+      format ->
+        doc =
+          SectionDocs.build_show(
+            conn.assigns[:user],
+            :social_media_accounts,
+            social_media_account
+          )
+
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def edit(conn, %{"id" => id}) do

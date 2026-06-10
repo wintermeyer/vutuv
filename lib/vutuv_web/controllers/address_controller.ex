@@ -2,17 +2,30 @@ defmodule VutuvWeb.AddressController do
   use VutuvWeb, :controller
 
   alias Vutuv.Profiles.Address
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Plug.Locale
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
 
+  # Index and show are also served as Markdown / text / JSON via
+  # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
     user =
       conn.assigns[:user]
       |> Repo.preload(:addresses)
 
-    render(conn, "index.html", user: user, addresses: user.addresses)
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("index.html", user: user, addresses: user.addresses)
+
+      format ->
+        doc = SectionDocs.build_index(user, :addresses, user.addresses)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def new(conn, _params) do
@@ -41,7 +54,17 @@ defmodule VutuvWeb.AddressController do
 
   def show(conn, %{"id" => id}) do
     address = ControllerHelpers.get_owned!(conn, :addresses, id)
-    render(conn, "show.html", address: address)
+
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> render("show.html", address: address)
+
+      format ->
+        doc = SectionDocs.build_show(conn.assigns[:user], :addresses, address)
+        AgentDocs.send_doc(conn, format, doc)
+    end
   end
 
   def edit(conn, %{"id" => id}) do
