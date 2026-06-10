@@ -13,7 +13,6 @@ defmodule VutuvWeb.UserTagController do
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
   plug(:scrub_params, "tag_param" when action in [:create])
 
-  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.ControllerHelpers
 
@@ -31,20 +30,14 @@ defmodule VutuvWeb.UserTagController do
   end
 
   # Accepts a single tag or several comma-separated ones ("PHP, JavaScript, Go").
-  # This is the one place tags are added — the old non-RESTful
-  # `POST /:slug/tags_create` quick-add endpoint folded into it. A single tag
-  # keeps the inline-error re-render (a duplicate / invalid name shown on the
-  # form); a batch redirects with a count of how many were added.
+  # Inserts go through `Vutuv.Tags.add_user_tag/2` (shared with the sign-up
+  # form's tag field). A single tag keeps the inline-error re-render (a
+  # duplicate / invalid name shown on the form); a batch redirects with a
+  # count of how many were added.
   def create(conn, %{"tag_param" => tag_param}) do
     user = conn.assigns[:current_user]
 
-    names =
-      (tag_param["value"] || "")
-      |> String.split(",")
-      |> Enum.map(&String.trim/1)
-      |> Enum.reject(&(&1 == ""))
-
-    case names do
+    case Vutuv.Tags.parse_tag_names(tag_param["value"]) do
       # Nothing usable typed: re-render the form with the error banner. (Never
       # hand a nil/blank value to create_or_link_tag — it would crash on
       # String.downcase/1.)
@@ -56,7 +49,7 @@ defmodule VutuvWeb.UserTagController do
         create_single(conn, user, single)
 
       many ->
-        results = Enum.map(many, &insert_tag(user, &1))
+        results = Enum.map(many, &Vutuv.Tags.add_user_tag(user, &1))
         failures = Enum.count(results, &match?({:error, _}, &1))
 
         conn
@@ -66,19 +59,11 @@ defmodule VutuvWeb.UserTagController do
   end
 
   defp create_single(conn, user, value) do
-    ControllerHelpers.save(conn, insert_tag(user, value),
+    ControllerHelpers.save(conn, Vutuv.Tags.add_user_tag(user, value),
       flash: gettext("User tag created successfully."),
       redirect_to: ~p"/#{conn.assigns[:user]}/tags",
       render: "new.html"
     )
-  end
-
-  defp insert_tag(user, value) do
-    user
-    |> Ecto.build_assoc(:user_tags, %{})
-    |> UserTag.changeset()
-    |> Tag.create_or_link_tag(%{"value" => value})
-    |> Repo.insert()
   end
 
   defp tags_added_flash(successes, 0) do

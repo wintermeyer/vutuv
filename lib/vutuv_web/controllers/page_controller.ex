@@ -105,8 +105,18 @@ defmodule VutuvWeb.PageController do
       {:ok, conn} ->
         render(conn, "pin_new_registration.html")
 
+      # The account exists but the PIN mail could not be started (e.g. rate
+      # limited). Never bounce them to "/" without a word — say what happened
+      # and where to continue.
       {:error, _reason, conn} ->
-        redirect(conn, to: ~p"/")
+        conn
+        |> put_flash(
+          :error,
+          gettext(
+            "Your account was created, but we could not send the sign-in PIN right now. Please sign in with your email address to try again."
+          )
+        )
+        |> redirect(to: ~p"/login")
     end
   end
 

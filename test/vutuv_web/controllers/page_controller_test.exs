@@ -151,6 +151,37 @@ defmodule VutuvWeb.PageControllerTest do
       assert user_by_email("hidden@example.com").noindex? == true
     end
 
+    # The sign-up form's "Your tags" field must actually land as user tags;
+    # it used to be cast into the virtual `tag_list` and silently dropped.
+    test "creates user tags from the comma-separated tag list", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "tagged@example.com"}},
+          "tag_list" => " Elixir,  Cooking , "
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("tagged@example.com") |> Vutuv.Repo.preload(user_tags: :tag)
+
+      assert user.user_tags
+             |> Enum.map(&String.downcase(&1.tag.name))
+             |> Enum.sort() == ["cooking", "elixir"]
+    end
+
+    test "a blank tag list creates no tags", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "untagged@example.com"}},
+          "tag_list" => "   "
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("untagged@example.com") |> Vutuv.Repo.preload(:user_tags)
+      assert user.user_tags == []
+    end
+
     # The PIN-entry confirmation page shown right after sign-up used to point at
     # the dead @vutuv Twitter account. The whole "Updates about vutuv" line is
     # gone; the PIN form and its instructions must stay untouched.
@@ -181,7 +212,8 @@ defmodule VutuvWeb.PageControllerTest do
           "session" => %{"pin" => pin, "context" => "registration"}
         })
 
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome to vutuv!"
+      # Greeted by first name, not the anonymous "Welcome to vutuv!".
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome to vutuv, Newcomer!"
     end
   end
 

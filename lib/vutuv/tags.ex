@@ -1,11 +1,41 @@
 defmodule Vutuv.Tags do
   @moduledoc """
-  The Tags context. Handles user tag endorsements; tags and user tags are
-  managed by the controllers through their schema modules directly.
+  The Tags context: adding tags to users (one name or a comma-separated
+  batch — registration and the tags page share this path) and user tag
+  endorsements.
   """
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Repo
+  alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
+
+  @doc """
+  Splits a comma-separated tag string into clean names: `" PHP, , Go "` →
+  `["PHP", "Go"]`. Safe to call with `nil` (returns `[]`).
+  """
+  def parse_tag_names(value) when is_binary(value) do
+    value
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  def parse_tag_names(_), do: []
+
+  @doc """
+  Tags `user` with `name`, creating the global tag or linking the existing
+  one. Returns the `Repo.insert` result; a duplicate or invalid name comes
+  back as `{:error, changeset}`.
+  """
+  def add_user_tag(%User{} = user, name) when is_binary(name) do
+    user
+    |> Ecto.build_assoc(:user_tags, %{})
+    |> UserTag.changeset()
+    |> Tag.create_or_link_tag(%{"value" => name})
+    |> Repo.insert()
+  end
 
   @doc """
   Endorse a user's tag. The chokepoint for endorsements: besides inserting the

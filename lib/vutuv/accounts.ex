@@ -26,6 +26,12 @@ defmodule Vutuv.Accounts do
     |> Repo.insert()
     |> case do
       {:ok, user} ->
+        # The sign-up form's "Your tags" field (the virtual `tag_list`): turn
+        # it into real user tags now that the user row exists.
+        user_params["tag_list"]
+        |> Vutuv.Tags.parse_tag_names()
+        |> Enum.each(&Vutuv.Tags.add_user_tag(user, &1))
+
         user = Repo.preload(user, user_tags: [:tag])
         maybe_fetch_gravatar(user)
         # Lock-free bump of the live "number of members" counter shown on the

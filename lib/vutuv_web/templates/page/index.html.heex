@@ -39,6 +39,7 @@
     <div>
       <%= select f, :gender, [{gettext("male"), "male"},
         {gettext("female"), "female"}, {gettext("other"), "other"}], class: input_class(), prompt: gettext("Choose a gender"), autofocus: true %>
+      <%= error_tag f, :gender %>
     </div>
 
     <div>

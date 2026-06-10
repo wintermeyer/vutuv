@@ -147,6 +147,11 @@ defmodule VutuvWeb.SessionController do
   # personal one with their name and, when they have any, a nudge about the
   # conversations waiting for them (the same count the shell's message badge
   # shows, so the two never disagree).
+  defp welcome_flash("registration", %User{first_name: name})
+       when is_binary(name) and name != "" do
+    gettext("Welcome to vutuv, %{name}!", name: name)
+  end
+
   defp welcome_flash("registration", _user), do: gettext("Welcome to vutuv!")
 
   defp welcome_flash(_context, %User{} = user) do
