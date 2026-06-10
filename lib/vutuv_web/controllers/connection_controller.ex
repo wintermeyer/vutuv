@@ -35,8 +35,8 @@ defmodule VutuvWeb.ConnectionController do
     total = Social.connection_count(profile)
     work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 45)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
+    AgentDocs.respond(conn,
+      html: fn conn ->
         {incoming, outgoing} =
           if owner? do
             {Social.list_incoming_requests(current), Social.list_outgoing_requests(current)}
@@ -44,9 +44,7 @@ defmodule VutuvWeb.ConnectionController do
             {[], []}
           end
 
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html",
+        render(conn, "index.html",
           user: profile,
           owner?: owner?,
           connections: connections,
@@ -55,11 +53,11 @@ defmodule VutuvWeb.ConnectionController do
           outgoing: outgoing,
           work_info_by_id: work_info_by_id
         )
-
-      format ->
-        doc = ListDocs.build_connections(profile, users, total, work_info_by_id)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+      end,
+      doc: fn ->
+        ListDocs.build_follow_list(profile, :connections, users, total, work_info_by_id)
+      end
+    )
   end
 
   def create(conn, %{"connection" => %{"user_id" => target_id}}) do

@@ -136,20 +136,16 @@ defmodule VutuvWeb.PageController do
     users = Vutuv.Social.most_followed_users(100)
     work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 60)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("most_followed_users.html",
+    AgentDocs.respond(conn,
+      html: fn conn ->
+        render(conn, "most_followed_users.html",
           users: users,
           work_info_by_id: work_info_by_id,
           following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
         )
-
-      format ->
-        doc = ListDocs.build_most_followed(users, work_info_by_id)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+      end,
+      doc: fn -> ListDocs.build_most_followed(users, work_info_by_id) end
+    )
   end
 
   @llms_txt """

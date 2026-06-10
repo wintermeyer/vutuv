@@ -15,23 +15,21 @@ defmodule VutuvWeb.EmailController do
   # VutuvWeb.AgentDocs.SectionDocs. The agent formats render strictly the
   # anonymous view: public addresses only, whoever asks.
   def index(conn, _params) do
-    case AgentDocs.negotiate(conn) do
-      :html ->
+    AgentDocs.respond(conn,
+      html: fn conn ->
         emails =
           VutuvWeb.UserHelpers.emails_for_display(
             conn.assigns[:user],
             conn.assigns[:current_user]
           )
 
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", emails: emails, emails_counter: length(emails))
-
-      format ->
+        render(conn, "index.html", emails: emails, emails_counter: length(emails))
+      end,
+      doc: fn ->
         emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
-        doc = SectionDocs.build_index(conn.assigns[:user], :emails, emails)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+        SectionDocs.build_index(conn.assigns[:user], :emails, emails)
+      end
+    )
   end
 
   def new(conn, _params) do
@@ -115,6 +113,13 @@ defmodule VutuvWeb.EmailController do
   end
 
   def show(conn, %{"id" => id}) do
+    case AgentDocs.negotiate(conn) do
+      :html -> show_html(conn, id)
+      format -> show_doc(conn, format, id)
+    end
+  end
+
+  defp show_html(conn, id) do
     email =
       if VutuvWeb.UserHelpers.user_has_permissions?(
            conn.assigns[:user],
@@ -122,29 +127,36 @@ defmodule VutuvWeb.EmailController do
          ) do
         Repo.get(assoc(conn.assigns[:user], :emails), id)
       else
-        Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
+        public_email(conn, id)
       end
 
-    format = AgentDocs.negotiate(conn)
-
-    cond do
-      is_nil(email) ->
+    case email do
+      nil ->
         ControllerHelpers.render_error(conn, 404)
 
-      format == :html ->
+      email ->
         conn
         |> AgentDocs.put_html_alternates()
         |> render("show.html", email: email)
+    end
+  end
 
-      # The anonymous view: a private address has no agent documents, even
-      # for a permitted viewer's session.
-      email.public? ->
+  # The anonymous view: a private address has no agent documents, even for a
+  # permitted viewer's session — only the public-scoped query runs here, no
+  # permission check.
+  defp show_doc(conn, format, id) do
+    case public_email(conn, id) do
+      nil ->
+        ControllerHelpers.render_error(conn, 404)
+
+      email ->
         doc = SectionDocs.build_show(conn.assigns[:user], :emails, email)
         AgentDocs.send_doc(conn, format, doc)
-
-      true ->
-        ControllerHelpers.render_error(conn, 404)
     end
+  end
+
+  defp public_email(conn, id) do
+    Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
   end
 
   # Editing is limited to the public? flag: changing the address itself would

@@ -14,16 +14,13 @@ defmodule VutuvWeb.SocialMediaAccountController do
       conn.assigns[:user]
       |> Repo.preload([:social_media_accounts])
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", user: user, social_media_accounts: user.social_media_accounts)
-
-      format ->
-        doc = SectionDocs.build_index(user, :social_media_accounts, user.social_media_accounts)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html:
+        &render(&1, "index.html", user: user, social_media_accounts: user.social_media_accounts),
+      doc: fn ->
+        SectionDocs.build_index(user, :social_media_accounts, user.social_media_accounts)
+      end
+    )
   end
 
   def new(conn, _params) do
@@ -72,22 +69,12 @@ defmodule VutuvWeb.SocialMediaAccountController do
   def show(conn, %{"id" => id}) do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", social_media_account: social_media_account)
-
-      format ->
-        doc =
-          SectionDocs.build_show(
-            conn.assigns[:user],
-            :social_media_accounts,
-            social_media_account
-          )
-
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", social_media_account: social_media_account),
+      doc: fn ->
+        SectionDocs.build_show(conn.assigns[:user], :social_media_accounts, social_media_account)
+      end
+    )
   end
 
   def edit(conn, %{"id" => id}) do

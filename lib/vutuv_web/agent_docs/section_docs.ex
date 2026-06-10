@@ -23,25 +23,31 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
-  # section key => {path segment / index doc type, show doc type}
+  # section (= URL segment = index doc type) => show doc type. The doc maps
+  # carry the section under :section, so the renderers dispatch on the doc
+  # itself and hold no copy of this inventory.
   @sections %{
-    work_experiences: {"work_experiences", "work_experience"},
-    links: {"links", "link"},
-    social_media_accounts: {"social_media_accounts", "social_media_account"},
-    addresses: {"addresses", "address"},
-    phone_numbers: {"phone_numbers", "phone_number"},
-    emails: {"emails", "email"},
-    tags: {"tags", "user_tag"}
+    work_experiences: "work_experience",
+    links: "link",
+    social_media_accounts: "social_media_account",
+    addresses: "address",
+    phone_numbers: "phone_number",
+    emails: "email",
+    tags: "user_tag"
   }
+
+  @doc "Every profile section (the drift test derives its coverage from this)."
+  def sections, do: Map.keys(@sections)
 
   @doc "The section index page: all of `user`'s entries of one kind."
   def build_index(user, section, entries) when is_map_key(@sections, section) do
-    {segment, _singular} = @sections[section]
+    segment = Atom.to_string(section)
     title = index_title(section, UserHelpers.full_name(user))
     entries = Enum.map(entries, &entry(section, &1))
 
     AgentDocs.doc_meta(segment, "/#{user.active_slug}/#{segment}", noindex: true)
     |> Map.merge(%{
+      section: segment,
       title: title,
       description: title,
       user: AgentDocs.person_ref(user),
@@ -52,12 +58,13 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   @doc "A single entry's show page (`/:slug/<section>/<id-or-slug>`)."
   def build_show(user, section, record) when is_map_key(@sections, section) do
-    {segment, singular} = @sections[section]
+    segment = Atom.to_string(section)
     path = "/#{user.active_slug}/#{segment}/#{Phoenix.Param.to_param(record)}"
     entry = entry(section, record)
 
-    AgentDocs.doc_meta(singular, path, noindex: true)
+    AgentDocs.doc_meta(@sections[section], path, noindex: true)
     |> Map.merge(%{
+      section: segment,
       title: "#{entry_title(section, entry)} · #{UserHelpers.full_name(user)}",
       description: nil,
       user: AgentDocs.person_ref(user),
@@ -142,8 +149,13 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     %{
       name: UserTag.name(user_tag),
       slug: user_tag.tag.slug,
-      endorsements: length(user_tag.endorsements),
+      endorsements: endorsement_count(user_tag),
       url: AgentDocs.abs_url("/tags/#{user_tag.tag.slug}")
     }
   end
+
+  # ordered_by_endorsements/0 select_merges the count; a user_tag loaded
+  # another way (the show page's plain preload) counts its loaded rows.
+  defp endorsement_count(%UserTag{endorsement_count: count}) when is_integer(count), do: count
+  defp endorsement_count(user_tag), do: length(user_tag.endorsements)
 end

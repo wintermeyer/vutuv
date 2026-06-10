@@ -16,16 +16,10 @@ defmodule VutuvWeb.AddressController do
       conn.assigns[:user]
       |> Repo.preload(:addresses)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", user: user, addresses: user.addresses)
-
-      format ->
-        doc = SectionDocs.build_index(user, :addresses, user.addresses)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "index.html", user: user, addresses: user.addresses),
+      doc: fn -> SectionDocs.build_index(user, :addresses, user.addresses) end
+    )
   end
 
   def new(conn, _params) do
@@ -55,16 +49,10 @@ defmodule VutuvWeb.AddressController do
   def show(conn, %{"id" => id}) do
     address = ControllerHelpers.get_owned!(conn, :addresses, id)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", address: address)
-
-      format ->
-        doc = SectionDocs.build_show(conn.assigns[:user], :addresses, address)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", address: address),
+      doc: fn -> SectionDocs.build_show(conn.assigns[:user], :addresses, address) end
+    )
   end
 
   def edit(conn, %{"id" => id}) do

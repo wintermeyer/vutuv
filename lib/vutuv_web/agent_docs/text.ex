@@ -16,18 +16,9 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   @width 80
 
-  # The profile section pages (VutuvWeb.AgentDocs.SectionDocs): index doc
-  # types and the show doc type -> section mapping for entry_line/2.
-  @section_indexes ~w(work_experiences links social_media_accounts addresses phone_numbers emails tags)
-  @section_entries %{
-    "work_experience" => "work_experiences",
-    "link" => "links",
-    "social_media_account" => "social_media_accounts",
-    "address" => "addresses",
-    "phone_number" => "phone_numbers",
-    "email" => "emails",
-    "user_tag" => "tags"
-  }
+  # The per-user people lists (followers/following/connections) share one
+  # clause; the set lives in ListDocs.
+  @people_lists VutuvWeb.AgentDocs.ListDocs.people_list_types()
 
   def render(%{type: "profile"} = doc) do
     [
@@ -63,20 +54,22 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  def render(%{type: type} = doc) when type in @section_indexes do
+  # The profile section pages (VutuvWeb.AgentDocs.SectionDocs) carry their
+  # section in the doc map, so no inventory is kept here.
+  def render(%{section: section, entries: entries} = doc) do
     [
       heading(doc.title),
       gettext("%{count} total", count: doc.total),
-      Enum.map(doc.entries, &entry_line(type, &1)),
+      Enum.map(entries, &entry_line(section, &1)),
       footer(doc)
     ]
     |> join_blocks()
   end
 
-  def render(%{type: type} = doc) when is_map_key(@section_entries, type) do
+  def render(%{section: section, entry: entry} = doc) do
     [
       heading(doc.title),
-      entry_line(@section_entries[type], doc.entry),
+      entry_line(section, entry),
       footer(doc)
     ]
     |> join_blocks()
@@ -109,7 +102,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  def render(%{type: type} = doc) when type in ["followers", "following", "connections"] do
+  def render(%{type: type} = doc) when type in @people_lists do
     [
       heading(doc.title),
       gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),

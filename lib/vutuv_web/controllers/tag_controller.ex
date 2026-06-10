@@ -30,17 +30,13 @@ defmodule VutuvWeb.TagController do
   def show(conn, _params) do
     tag = conn.assigns[:tag]
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", tag: tag)
-
-      format ->
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", tag: tag),
+      doc: fn ->
         recommended = Tag.recommended_users(tag)
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
-        doc = ListDocs.build_tag(tag, recommended, work_info_by_id)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+        ListDocs.build_tag(tag, recommended, work_info_by_id)
+      end
+    )
   end
 end

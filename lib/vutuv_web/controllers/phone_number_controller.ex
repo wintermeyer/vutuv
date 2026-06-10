@@ -13,16 +13,10 @@ defmodule VutuvWeb.PhoneNumberController do
   def index(conn, _params) do
     phone_numbers = Repo.all(assoc(conn.assigns[:user], :phone_numbers))
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", phone_numbers: phone_numbers)
-
-      format ->
-        doc = SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "index.html", phone_numbers: phone_numbers),
+      doc: fn -> SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers) end
+    )
   end
 
   def new(conn, _params) do
@@ -50,16 +44,10 @@ defmodule VutuvWeb.PhoneNumberController do
   def show(conn, %{"id" => id}) do
     phone_number = ControllerHelpers.get_owned!(conn, :phone_numbers, id)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", phone_number: phone_number)
-
-      format ->
-        doc = SectionDocs.build_show(conn.assigns[:user], :phone_numbers, phone_number)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", phone_number: phone_number),
+      doc: fn -> SectionDocs.build_show(conn.assigns[:user], :phone_numbers, phone_number) end
+    )
   end
 
   def edit(conn, %{"id" => id}) do

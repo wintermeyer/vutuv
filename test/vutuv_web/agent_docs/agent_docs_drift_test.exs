@@ -11,6 +11,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
   import Vutuv.PostsHelpers
 
+  alias VutuvWeb.AgentDocs.SectionDocs
+
   setup do
     user =
       insert_activated_user(
@@ -183,22 +185,24 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "every profile section page serves its facts in all formats" do
-    sections = [
-      {"work_experiences", ["Bridge Engineer", "Span AG"]},
-      {"links", ["bridges.example.org", "Bridge blog"]},
-      {"social_media_accounts", ["github.com/gretagradient"]},
-      {"addresses", ["Berlin", "10115"]},
-      {"phone_numbers", ["+49 30 5550100"]},
-      {"emails", ["greta.public@example.com"]},
-      {"tags", ["Bridgebuilding"]}
-    ]
+    facts = %{
+      work_experiences: ["Bridge Engineer", "Span AG"],
+      links: ["bridges.example.org", "Bridge blog"],
+      social_media_accounts: ["github.com/gretagradient"],
+      addresses: ["Berlin", "10115"],
+      phone_numbers: ["+49 30 5550100"],
+      emails: ["greta.public@example.com"],
+      tags: ["Bridgebuilding"]
+    }
 
-    for {section, facts} <- sections do
+    # The loop runs over the SectionDocs registry itself, so a new section
+    # without a facts entry here fails loudly instead of going untested.
+    for section <- SectionDocs.sections() do
       rendered = formats_for("/drift_tester/#{section}")
-      for fact <- facts, do: assert_fact_everywhere(rendered, fact)
+      for fact <- Map.fetch!(facts, section), do: assert_fact_everywhere(rendered, fact)
 
       doc = Jason.decode!(rendered.json)
-      assert doc["type"] == section
+      assert doc["type"] == Atom.to_string(section)
       assert doc["total"] == length(doc["entries"])
       assert doc["user"]["slug"] == "drift_tester"
     end

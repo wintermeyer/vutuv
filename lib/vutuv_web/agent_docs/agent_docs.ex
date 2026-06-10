@@ -20,14 +20,18 @@ defmodule VutuvWeb.AgentDocs do
 
   ## How a page supports the formats
 
-  The controller action branches on `negotiate/2` and either sends a doc or
-  renders HTML (with `put_html_alternates/2` for the `<link rel="alternate">`
-  head tags and the `Vary: Accept` header):
+  The controller action calls `respond/2`, which owns the standard branch —
+  HTML (with `put_html_alternates/2` for the `<link rel="alternate">` head
+  tags and the `Vary: Accept` header) or the agent doc:
 
-      case AgentDocs.negotiate(conn) do
-        :html -> conn |> AgentDocs.put_html_alternates() |> render(...)
-        format -> AgentDocs.send_doc(conn, format, SomeDoc.build(...))
-      end
+      AgentDocs.respond(conn,
+        html: fn conn -> render(conn, "index.html", ...) end,
+        doc: fn -> SomeDoc.build(...) end
+      )
+
+  Actions with more intricate flows (the post permalink's redirect/teaser
+  cascade, the viewer-dependent email show) branch on `negotiate/2`
+  themselves and must remember `put_html_alternates/2` on the HTML arm.
 
   A *doc* is one plain map per page (built by the `VutuvWeb.AgentDocs.*Doc`
   modules) that all formats render from — **that map is the single source of
@@ -108,6 +112,27 @@ defmodule VutuvWeb.AgentDocs do
   defp doc_locale(conn) do
     lang = conn.params["lang"]
     if lang in Gettext.known_locales(VutuvWeb.Gettext), do: lang, else: "en"
+  end
+
+  @doc """
+  The standard controller integration: negotiates, then either renders the
+  HTML page (alternate links and `Vary` set) via the `:html` fun or sends
+  the doc built by the `:doc` fun — which runs only for agent-format
+  requests. `:allowed` (default md/txt/json) drives both the negotiation
+  and the advertised alternates.
+  """
+  def respond(conn, opts) do
+    allowed = Keyword.get(opts, :allowed, @default_formats)
+
+    case negotiate(conn, allowed) do
+      :html ->
+        html_fun = Keyword.fetch!(opts, :html)
+        html_fun.(put_html_alternates(conn, allowed))
+
+      format ->
+        doc_fun = Keyword.fetch!(opts, :doc)
+        send_doc(conn, format, doc_fun.())
+    end
   end
 
   @doc "The URL extension for `format` (`:md` -> `\".md\"`)."
@@ -228,19 +253,23 @@ defmodule VutuvWeb.AgentDocs do
   # send entries in preference order, so q-values are ignored (the same
   # simplification VutuvWeb.Plug.Locale makes); de-DE counts as de.
   defp browser_locale(conn) do
+    known = Gettext.known_locales(VutuvWeb.Gettext)
+
     conn
     |> get_req_header("accept-language")
     |> Enum.flat_map(&String.split(&1, ","))
-    |> Enum.map(fn entry ->
-      entry
-      |> String.split(";", parts: 2)
-      |> hd()
-      |> String.trim()
-      |> String.split("-", parts: 2)
-      |> hd()
-      |> String.downcase()
+    |> Enum.find_value(fn entry ->
+      locale =
+        entry
+        |> String.split(";", parts: 2)
+        |> hd()
+        |> String.trim()
+        |> String.split("-", parts: 2)
+        |> hd()
+        |> String.downcase()
+
+      locale in known && locale
     end)
-    |> Enum.find(&(&1 in Gettext.known_locales(VutuvWeb.Gettext)))
   end
 
   defp language_hint(conn, format, target) do

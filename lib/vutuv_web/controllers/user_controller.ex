@@ -101,7 +101,8 @@ defmodule VutuvWeb.UserController do
     |> Repo.preload([
       :social_media_accounts,
       # Most endorsed first, so the 10-tag cut keeps the strongest skills.
-      user_tags: UserTag.ordered_by_endorsements() |> limit(10),
+      # The endorsement rows drive the template's "already endorsed?" check.
+      user_tags: UserTag.ordered_by_endorsements() |> limit(10) |> preload(:endorsements),
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),

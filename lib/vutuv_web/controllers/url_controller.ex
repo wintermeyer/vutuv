@@ -13,16 +13,10 @@ defmodule VutuvWeb.UrlController do
   def index(conn, _params) do
     urls = Repo.all(assoc(conn.assigns[:user], :urls))
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", urls: urls)
-
-      format ->
-        doc = SectionDocs.build_index(conn.assigns[:user], :links, urls)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "index.html", urls: urls),
+      doc: fn -> SectionDocs.build_index(conn.assigns[:user], :links, urls) end
+    )
   end
 
   def new(conn, _params) do
@@ -58,16 +52,10 @@ defmodule VutuvWeb.UrlController do
   def show(conn, %{"id" => id}) do
     url = ControllerHelpers.get_owned!(conn, :urls, id)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", url: url)
-
-      format ->
-        doc = SectionDocs.build_show(conn.assigns[:user], :links, url)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", url: url),
+      doc: fn -> SectionDocs.build_show(conn.assigns[:user], :links, url) end
+    )
   end
 
   def edit(conn, %{"id" => id}) do

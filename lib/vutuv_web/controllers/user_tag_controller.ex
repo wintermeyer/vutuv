@@ -27,16 +27,10 @@ defmodule VutuvWeb.UserTagController do
       conn.assigns[:user]
       |> Repo.preload(user_tags: UserTag.ordered_by_endorsements())
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html", user: user, user_tags: user.user_tags)
-
-      format ->
-        doc = SectionDocs.build_index(user, :tags, user.user_tags)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "index.html", user: user, user_tags: user.user_tags),
+      doc: fn -> SectionDocs.build_index(user, :tags, user.user_tags) end
+    )
   end
 
   def new(conn, _params) do
@@ -98,16 +92,10 @@ defmodule VutuvWeb.UserTagController do
       conn.assigns[:user_tag]
       |> Repo.preload([:tag, :endorsements])
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("show.html", user_tag: user_tag)
-
-      format ->
-        doc = SectionDocs.build_show(conn.assigns[:user], :tags, user_tag)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+    AgentDocs.respond(conn,
+      html: &render(&1, "show.html", user_tag: user_tag),
+      doc: fn -> SectionDocs.build_show(conn.assigns[:user], :tags, user_tag) end
+    )
   end
 
   def delete(conn, %{"id" => _id}) do

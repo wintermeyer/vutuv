@@ -18,9 +18,18 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
-  @doc "One page of `/:slug/followers` or `/:slug/following`."
-  def build_follow_list(user, side, people, total, work_info_by_id)
-      when side in [:followers, :following] do
+  # The noindexed per-user people lists; the renderers derive their dispatch
+  # from people_list_types/0, so this is the one place the set lives.
+  @sides [:followers, :following, :connections]
+
+  @doc "The doc types of the per-user people lists (for the renderers' dispatch)."
+  def people_list_types, do: Enum.map(@sides, &Atom.to_string/1)
+
+  @doc """
+  One page of `/:slug/followers`, `/:slug/following` or `/:slug/connections`
+  (for connections: the accepted ones — the public part of the page).
+  """
+  def build_follow_list(user, side, people, total, work_info_by_id) when side in @sides do
     path = "/#{user.active_slug}/#{side}"
     name = UserHelpers.full_name(user)
 
@@ -28,23 +37,10 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       case side do
         :followers -> gettext("Followers of %{name}", name: name)
         :following -> gettext("People %{name} follows", name: name)
+        :connections -> gettext("Connections of %{name}", name: name)
       end
 
     AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true)
-    |> Map.merge(%{
-      title: label,
-      description: label,
-      user: AgentDocs.person_ref(user),
-      total: total,
-      people: Enum.map(people, &person_entry(&1, work_info_by_id))
-    })
-  end
-
-  @doc "One page of `/:slug/connections`: the accepted connections (public)."
-  def build_connections(user, people, total, work_info_by_id) do
-    label = gettext("Connections of %{name}", name: UserHelpers.full_name(user))
-
-    AgentDocs.doc_meta("connections", "/#{user.active_slug}/connections", noindex: true)
     |> Map.merge(%{
       title: label,
       description: label,

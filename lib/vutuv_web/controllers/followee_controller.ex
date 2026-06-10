@@ -16,11 +16,9 @@ defmodule VutuvWeb.FolloweeController do
 
     work_info_by_id = VutuvWeb.UserHelpers.work_information_map(followees, 45)
 
-    case AgentDocs.negotiate(conn) do
-      :html ->
-        conn
-        |> AgentDocs.put_html_alternates()
-        |> render("index.html",
+    AgentDocs.respond(conn,
+      html: fn conn ->
+        render(conn, "index.html",
           user: user,
           followees: followees,
           total_followees: total,
@@ -28,10 +26,10 @@ defmodule VutuvWeb.FolloweeController do
           following_by_id:
             VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees)
         )
-
-      format ->
-        doc = ListDocs.build_follow_list(user, :following, followees, total, work_info_by_id)
-        AgentDocs.send_doc(conn, format, doc)
-    end
+      end,
+      doc: fn ->
+        ListDocs.build_follow_list(user, :following, followees, total, work_info_by_id)
+      end
+    )
   end
 end

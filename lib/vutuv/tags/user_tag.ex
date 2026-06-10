@@ -9,6 +9,10 @@ defmodule Vutuv.Tags.UserTag do
 
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
 
+    # Filled by ordered_by_endorsements/0 via select_merge, so counting does
+    # not require loading the endorsement rows.
+    field(:endorsement_count, :integer, virtual: true)
+
     timestamps()
   end
 
@@ -24,7 +28,10 @@ defmodule Vutuv.Tags.UserTag do
   @doc """
   A user's tags ordered most endorsed first, ties alphabetically — the
   display order of the profile page and its agent documents (both preload
-  through this query; compose with `Ecto.Query.limit/2` for the page's cut).
+  through this query; compose with `Ecto.Query.limit/2` for the page's
+  cut). The ordering count rides along as the virtual `endorsement_count`;
+  callers that need the endorsement *rows* (the profile page's upvote
+  state) add `preload(:endorsements)` themselves.
   """
   def ordered_by_endorsements(query \\ __MODULE__) do
     from(u in query,
@@ -34,7 +41,8 @@ defmodule Vutuv.Tags.UserTag do
       # Postgres requires every ordered, non-aggregated column in GROUP BY;
       # each user_tag has exactly one tag, so this keeps one row per user_tag.
       group_by: [u.id, t.slug],
-      preload: [:endorsements, :tag]
+      select_merge: %{endorsement_count: count(e.id)},
+      preload: [:tag]
     )
   end
 
