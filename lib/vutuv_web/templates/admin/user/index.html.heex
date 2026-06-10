@@ -4,6 +4,7 @@
   <%= if Enum.empty?(@users) do %>
     <p class="card__empty"><%= gettext("Nothing here yet.") %></p>
   <% else %>
+    <div class="card__tablewrap">
     <table>
       <thead>
         <tr>
@@ -24,6 +25,7 @@
         <% end %>
       </tbody>
     </table>
+    </div>
     <.pager params={@conn.params} total={@users_count} />
   <% end %>
 </section>

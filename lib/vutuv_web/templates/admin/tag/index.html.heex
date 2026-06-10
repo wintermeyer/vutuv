@@ -8,6 +8,7 @@
 
 <div class="card-list">
   <section class="card">
+    <div class="card__tablewrap">
     <table>
       <thead>
         <tr>
@@ -34,6 +35,7 @@
     <% end %>
       </tbody>
     </table>
+    </div>
 
     <.pager params={@conn.params} total={@tags_count} />
 

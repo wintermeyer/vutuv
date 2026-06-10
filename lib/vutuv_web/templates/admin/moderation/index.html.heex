@@ -16,6 +16,7 @@
       {gettext("The queue is empty - the self-service flow settled everything.")}
     </p>
 
+    <div class="card__tablewrap">
     <table :if={@cases != []} class="pure-table">
       <thead>
         <tr>
@@ -62,5 +63,6 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </section>
 </div>

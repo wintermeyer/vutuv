@@ -11,6 +11,7 @@
 
     <p :if={@stats == []} class="card__empty">{gettext("No reports filed yet.")}</p>
 
+    <div class="card__tablewrap">
     <table :if={@stats != []} class="pure-table">
       <thead>
         <tr>
@@ -37,5 +38,6 @@
         </tr>
       </tbody>
     </table>
+    </div>
   </section>
 </div>

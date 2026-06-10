@@ -11,6 +11,7 @@
   empty={Enum.empty?(@user_tags)}
   add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/tags/new"}
 >
+  <div class="card__tablewrap">
   <table>
     <thead>
       <tr>
@@ -34,4 +35,5 @@
       <% end %>
     </tbody>
   </table>
+  </div>
 </.card_section>

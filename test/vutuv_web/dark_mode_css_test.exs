@@ -83,6 +83,34 @@ defmodule VutuvWeb.DarkModeCssTest do
     assert declarations =~ ~r/background\s*:/
   end
 
+  test "dark mode restyles the secondary/cancel button hover" do
+    # The light `.button--cancel:hover { background: #e2e8f0 }` rule (0,2,0)
+    # outranks the dark `.button--cancel { background: #1e293b }` base (0,1,0),
+    # so without a dark hover rule the button flashes light grey on hover.
+    declarations =
+      rule(dark_block(), ~r/\.button--cancel:hover/.source) ||
+        flunk("""
+        The dark block must restyle `.button--cancel:hover` (and
+        `.button--secondary:hover`); the light hover rule outranks the dark
+        base rule and flashes the button light grey on hover.
+        """)
+
+    assert declarations =~ ~r/background\s*:/
+
+    assert rule(dark_block(), ~r/\.button--secondary:hover/.source),
+           "the dark block must also cover `.button--secondary:hover`"
+  end
+
+  test "the legacy .select wrapper keeps no white-filled arrow background" do
+    # The legacy `<div class="select">` wrapper painted a white square +
+    # arrow data-URI behind the native select; in dark mode the white square
+    # peeked out behind the select's rounded corners. The native select
+    # renders its own arrow, so the rule stays deleted.
+    refute components_css() =~ ~r/\.select\s*\{[^}]*fill%3D%27%23FFF/,
+           "components.css must not paint the .select wrapper with the " <>
+             "white-filled data-URI arrow (white box in dark mode)"
+  end
+
   test "the legacy stylesheet stays deleted" do
     # legacy.css was removed after its still-used rules were folded into
     # components.css. It painted bare <header>/<footer> as white bars and

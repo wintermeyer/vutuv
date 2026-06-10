@@ -20,8 +20,12 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    username-availability verdict that app.js writes under the new-username field),
    `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.search-form`, `.imagebox`,
-   `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs`,
-   `.card__empty` empty-state line, `.error-page` 404/403/500 card). They
+   `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
+   thumbnail + truncating URL), `.card__tablewrap` (every in-card `<table>`
+   sits in this overflow-x scroller so a wide table scrolls instead of being
+   clipped by the card's `overflow:hidden` — `card_table_scroll_test.exs`
+   enforces it), `.card__empty` empty-state line, `.error-page` 404/403/500
+   card). They
    are styled **centrally** in `assets/css/components.css` — since the old vendored
    `legacy.css` was removed, that file is the **single source** for these classes,
    including element defaults (body canvas, h1/p/a, label, tables, dl) and the data-URI

@@ -10,7 +10,16 @@ DB-backed helpers per row. --%>
     <li>
       <div class="profile-image">
         <%= link to: ~p"/#{user}" do %>
-          <img data-avatar src={Vutuv.Avatar.display_url(user, :thumb)} width="50" height="50" alt={"Avatar of #{full_name(user)}"} />
+          <%!-- src is passed for users with a picture so the row keeps the
+                small :thumb version; without one, <.avatar> renders the
+                initials tile instead of the light-grey default image (a
+                bright white circle in dark mode). --%>
+          <.avatar
+            user={user}
+            src={user.avatar && Vutuv.Avatar.display_url(user, :thumb)}
+            size="md"
+            alt={"Avatar of #{full_name(user)}"}
+          />
         <% end %>
       </div>
       <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>

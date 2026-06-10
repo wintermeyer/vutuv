@@ -286,6 +286,14 @@ body.stretch main {
   margin: 0;
 }
 
+/* In-card tables sit in this wrapper: a table wider than the card (admin
+   queues on narrow windows, long addresses on phones) scrolls sideways
+   instead of having its trailing columns clipped by the card's
+   overflow:hidden. A regression test asserts every in-card <table> has it. */
+.card__tablewrap {
+  overflow-x: auto;
+}
+
 /* Empty `<aside></aside>` placeholders the legacy form pages emit add a phantom
    flex gap — hide them. */
 .card-list aside:empty {
@@ -617,8 +625,10 @@ i.icon svg {
    red-stroked trash glyph for a white one so it reads on the red fill, the way
    the old white-filled svg delete button did. */
 .button--danger .icon--delete { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/%3E%3Cpath d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
-/* Dropdown arrow on the legacy `<div class="select">` wrapper. */
-.select { background: url(data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2744%27%20height%3D%2744%27%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Cpath%20fill%3D%27%23FFF%27%20d%3D%27M0%200h44v44H0z%27%2F%3E%3Cpath%20fill%3D%27%231A1918%27%20d%3D%27M22%2027l-7-8h14%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E) no-repeat right center; }
+/* The legacy `<div class="select">` wrapper used to paint a white square +
+   arrow data-URI behind the select; the native select arrow makes it
+   redundant, and the white square peeked out behind the select's rounded
+   corners in dark mode. Keep the wrapper unstyled. */
 
 /* Centered helper rows in the search results card. */
 .search-results__toggle,
@@ -785,39 +795,50 @@ td.text-right {
 }
 
 /* ---------- Link screenshots (`ul.thumbs` on the links page) ---------- */
+/* Flex rows (the legacy 400px float + 415px text margin overflowed the 48rem
+   card): a capped thumbnail beside a shrinkable text block whose URL
+   truncates instead of clipping at the card edge. Wraps on narrow screens. */
 ul.thumbs {
   margin: 0;
   padding: 0;
 }
 ul.thumbs li {
   list-style: none;
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: flex-start;
   margin: 0 0 10px;
   padding: 0 0 10px;
   border-bottom: 1px solid #e2e8f0;
 }
-ul.thumbs li:after {
-  content: "";
-  float: none;
-  clear: both;
-  display: block;
-}
 ul.thumbs li .img {
-  display: inline-block;
-  float: left;
+  flex: 1 1 240px;
+  max-width: 400px;
   border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  overflow: hidden;
 }
 ul.thumbs li .img img {
   display: block;
+  width: 100%;
+  height: auto;
 }
 ul.thumbs li .text {
+  flex: 1 1 14rem;
+  min-width: 0;
   font-size: 14px;
-  padding: 0 0 10px 10px;
-  margin: 0 0 0 415px;
 }
 ul.thumbs li .text .title {
   font-weight: bold;
   margin: 0 0 0.25em;
+}
+ul.thumbs li .text .url a {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ---------- Dark mode (follows system) ---------- */
@@ -954,6 +975,11 @@ ul.thumbs li .text .title {
   .button--cancel, .button--secondary, .button--icon:hover,
   button[type="submit"].button--cancel, button[type="submit"].button--secondary,
   input[type="submit"].button--cancel, input[type="submit"].button--secondary { background: #1e293b; color: #e2e8f0; }
+  /* The light hover rule (`.button--cancel:hover { background:#e2e8f0 }`,
+     specificity 0,2,0) outranks the dark base rule above (0,1,0), so without
+     these the buttons flash light grey on hover in dark mode. */
+  .button--cancel:hover,
+  .button--secondary:hover { background: #334155; color: #f1f5f9; }
   .button--icon { color: #94a3b8; }
   .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
