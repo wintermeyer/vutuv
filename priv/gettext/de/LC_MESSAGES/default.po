@@ -253,12 +253,12 @@ msgstr "E-Mail-Adressen von "
 #: lib/vutuv_web/controllers/user_tag_endorsement_controller.ex:27
 #, elixir-autogen
 msgid "Endorsement successful."
-msgstr "Endorsement eingetragen."
+msgstr "Empfehlung eingetragen."
 
 #: lib/vutuv_web/controllers/user_tag_endorsement_controller.ex:32
 #, elixir-autogen
 msgid "Endorsement unsuccessful."
-msgstr "Endorsement konnte nicht eingetragen werden."
+msgstr "Empfehlung konnte nicht eingetragen werden."
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:76
 #, elixir-autogen
@@ -1635,7 +1635,7 @@ msgstr "Tag-Name"
 #: lib/vutuv_web/templates/tag/single_card.html.heex:15
 #, elixir-autogen
 msgid "The most endorsed users with this tag"
-msgstr "Die höchst bewerteten Personen mit dieser Fähigkeit"
+msgstr "Die am häufigsten empfohlenen Mitglieder mit dieser Fähigkeit"
 
 #: lib/vutuv_web/templates/tag/single_card.html.heex:8
 #, elixir-autogen
@@ -1645,7 +1645,7 @@ msgstr "Für diese Fähigkeit gibt es noch keine Beschreibung."
 #: lib/vutuv_web/controllers/user_tag_endorsement_controller.ex:50
 #, elixir-autogen
 msgid "Unendorsed tag successfully."
-msgstr "Endorsement erfolgreich."
+msgstr "Empfehlung zurückgenommen."
 
 #: lib/vutuv_web/controllers/user_tag_controller.ex:63
 #, elixir-autogen
@@ -1711,7 +1711,7 @@ msgstr "Es wurde noch kein Screenshot erstellt."
 
 #: web/templates/user/show.html.eex:228
 msgid "Recommended"
-msgstr "Empfehlung"
+msgstr "Vorgeschlagen"
 
 #: web/templates/shared/_admin_card.html.eex:3
 msgid "Admin Area"
@@ -1781,7 +1781,7 @@ msgstr "Profil bearbeiten"
 #: lib/vutuv_web/templates/user/show.html.heex:237
 #, elixir-autogen, elixir-format
 msgid "Endorse"
-msgstr "Bestätigen"
+msgstr "Empfehlen"
 
 #: lib/vutuv_web/components/ui.ex:418
 #: lib/vutuv_web/components/ui.ex:434
@@ -1897,7 +1897,7 @@ msgstr "User-Ergebnisse anzeigen"
 #: lib/vutuv_web/templates/user/show.html.heex:221
 #, elixir-autogen, elixir-format
 msgid "Skills & endorsements"
-msgstr "Fähigkeiten & Bestätigungen"
+msgstr "Fähigkeiten & Empfehlungen"
 
 #: lib/vutuv_web/templates/admin/slug/form_content.html.heex:4
 #, elixir-autogen, elixir-format
@@ -1962,7 +1962,7 @@ msgstr "Wir haben einen PIN an Ihre neue E-Mail-Adresse geschickt. Geben Sie ihn
 #: lib/vutuv_web/templates/user/show.html.heex:541
 #, elixir-autogen, elixir-format
 msgid "Who to follow"
-msgstr "Empfohlene Profile"
+msgstr "Vorgeschlagene Profile"
 
 #: lib/vutuv_web/live/message_live/index.ex:563
 #, elixir-autogen, elixir-format
@@ -1996,7 +1996,7 @@ msgstr "einen Fehlerbericht erstellen"
 #: lib/vutuv_web/live/notification_live/index.ex:246
 #, elixir-autogen, elixir-format
 msgid "endorsed you for %{tag}."
-msgstr "hat Sie für %{tag} bestätigt."
+msgstr "hat Sie für %{tag} empfohlen."
 
 #: lib/vutuv_web/live/notification_live/index.ex:248
 #, elixir-autogen, elixir-format
@@ -3099,7 +3099,7 @@ msgstr "Kontaktanfrage"
 #: lib/vutuv_web/live/notification_live/index.ex:202
 #, elixir-autogen, elixir-format
 msgid "Endorsement"
-msgstr "Bestätigung"
+msgstr "Empfehlung"
 
 #: lib/vutuv_web/live/notification_live/index.ex:201
 #, elixir-autogen, elixir-format
@@ -4048,7 +4048,7 @@ msgstr "Im Rahmen scrollen oder klicken, um das ganze Bild zu öffnen."
 #: lib/vutuv_web/agent_docs/markdown.ex:142
 #, elixir-autogen, elixir-format
 msgid "%{count} endorsements"
-msgstr "%{count} Bestätigungen"
+msgstr "%{count} Empfehlungen"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:225
 #: lib/vutuv_web/agent_docs/text.ex:196
@@ -4107,7 +4107,7 @@ msgstr "Mitglied seit"
 #: lib/vutuv_web/agent_docs/text.ex:95
 #, elixir-autogen, elixir-format
 msgid "Most endorsed members"
-msgstr "Am häufigsten bestätigte Mitglieder"
+msgstr "Am häufigsten empfohlene Mitglieder"
 
 #: lib/vutuv_web/agent_docs/list_docs.ex:57
 #, elixir-autogen, elixir-format
