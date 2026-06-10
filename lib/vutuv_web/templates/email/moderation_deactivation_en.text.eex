@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+after a third confirmed violation of our community guidelines your
+vutuv account has been permanently deactivated. You can no longer log
+in and your profile is no longer visible.
+
+If you believe this decision is wrong, you can appeal by replying to
+info@vutuv.de.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

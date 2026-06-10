@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+ein Mitgliedsprofil wurde gemeldet. Profil-Meldungen sind dringend:
+eine zweite unabhängige Meldung friert das gesamte Profil ein.
+
+Bitte prüfen Sie den Fall:
+
+<%= @url %>admin/moderation/<%= @case_id %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

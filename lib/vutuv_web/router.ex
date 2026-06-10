@@ -104,6 +104,21 @@ defmodule VutuvWeb.Router do
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)
+
+    # The community guidelines every moderation email and report form links to.
+    get("/community", PageController, :community)
+
+    # Reporting content (family-friendliness / bullying / spam): the form and
+    # its submission. Logged-in only; checked in the controller.
+    get("/reports/new", ReportController, :new)
+    post("/reports", ReportController, :create)
+
+    # The owner's side of a moderation case: the case page with the
+    # delete / edit / "my content is fine" self-service actions.
+    get("/moderation/cases", ModerationCaseController, :index)
+    get("/moderation/cases/:id", ModerationCaseController, :show)
+    post("/moderation/cases/:id/dispute", ModerationCaseController, :dispute)
+    post("/moderation/cases/:id/delete_content", ModerationCaseController, :delete_content)
   end
 
   # Legacy URLs from before profiles moved to the root (and before the
@@ -148,6 +163,15 @@ defmodule VutuvWeb.Router do
   scope "/admin", VutuvWeb.Admin, as: :admin do
     pipe_through([:browser, :admin])
     resources("/", AdminController, only: [:index])
+
+    # The moderation queue + rulings. /reporters (the misuse dashboard) must
+    # precede /:id so the literal segment wins.
+    get("/moderation", ModerationController, :index)
+    get("/moderation/reporters", ModerationController, :reporters)
+    get("/moderation/:id", ModerationController, :show)
+    post("/moderation/:id/uphold", ModerationController, :uphold)
+    post("/moderation/:id/reject", ModerationController, :reject)
+
     post("/slugs", SlugController, :update)
     post("/users", UserController, :update)
     resources("/locales", LocaleController, only: [:index, :show])

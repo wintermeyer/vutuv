@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+our admins reviewed a report about content of yours and found that it
+breaks our community guidelines:
+
+<%= @url %>community
+
+This is a formal warning, the first of three steps. A second confirmed
+violation suspends your account for a week; a third deactivates it for
+good. Warnings expire after twelve months.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

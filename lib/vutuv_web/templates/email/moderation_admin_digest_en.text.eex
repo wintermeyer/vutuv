@@ -1,0 +1,11 @@
+<%= email_greeting(@user) %>,
+
+<%= @open_count %> moderation case(s) are waiting for an admin ruling.
+
+The queue:
+
+<%= @url %>admin/moderation
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

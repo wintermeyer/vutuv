@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+one of your contributions on vutuv was reported and is hidden while our
+admins review it. You do not need to do anything; we will let you know
+the outcome.
+
+You can see the case here:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

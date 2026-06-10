@@ -23,7 +23,8 @@ defmodule Vutuv.Application do
           :sweep_unconfirmed_registrations,
           Vutuv.Accounts.UnconfirmedRegistrationSweeper
         ) ++
-        optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier)
+        optional_child(:send_unread_message_emails, Vutuv.Chat.UnreadNotifier) ++
+        optional_child(:moderation_sweeper, Vutuv.Moderation.Sweeper)
 
     opts = [strategy: :one_for_one, name: Vutuv.Supervisor]
     Supervisor.start_link(children, opts)

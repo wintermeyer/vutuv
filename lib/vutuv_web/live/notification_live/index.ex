@@ -179,6 +179,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_classes(kind) when kind in @connection_kinds,
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
+  defp kind_classes("moderation"),
+    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
+
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 
   defp kind_glyph("follower"), do: "+"
@@ -186,6 +189,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("reply"), do: "↩"
   defp kind_glyph("like"), do: "♥"
   defp kind_glyph(kind) when kind in @connection_kinds, do: "🤝"
+  defp kind_glyph("moderation"), do: "⚑"
   defp kind_glyph(_), do: "•"
 
   # The small uppercase tag under the event text. Translated like the text
@@ -197,12 +201,18 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("connection_request"), do: gettext("Connection request")
   defp kind_label("connection_accepted"), do: gettext("Connection")
+  defp kind_label("moderation"), do: gettext("Moderation")
   defp kind_label(_), do: gettext("Activity")
 
   # Where clicking the event text leads. Events about one of the viewer's
   # posts open that post's thread; a pending request opens the page where it
   # can be answered; an endorsement the viewer's tags; everything else the
   # actor's profile. Logged-out renders (no viewer) only ever get the latter.
+  # Moderation events lead to the owner's case page (and carry no actor).
+  defp notification_target(%{kind: "moderation"} = n, viewer) do
+    if is_binary(n[:case_id]) and viewer != nil, do: ~p"/moderation/cases/#{n.case_id}"
+  end
+
   defp notification_target(n, viewer) do
     cond do
       n.kind in ["reply", "like"] and is_binary(n[:post_id]) and viewer ->
@@ -239,6 +249,19 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
   defp notification_text(%{kind: "like"}), do: gettext("liked your post.")
+
+  # Moderation items carry no actor (reports are anonymous); the text alone
+  # tells the owner what happened and links to the case page.
+  defp notification_text(%{kind: "moderation"} = n) do
+    case n[:status] do
+      "upheld" -> gettext("A report about your content was confirmed.")
+      "rejected" -> gettext("A report about your content was dismissed; it is visible again.")
+      "resolved_edited" -> gettext("You revised reported content; the case is closed.")
+      "resolved_deleted" -> gettext("You deleted reported content; the case is closed.")
+      _ -> gettext("Your content was reported and is hidden while the report is handled.")
+    end
+  end
+
   defp notification_text(n), do: n[:text]
 
   defp format_at(%mod{} = at) when mod in [NaiveDateTime, DateTime],

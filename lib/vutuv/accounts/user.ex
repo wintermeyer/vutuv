@@ -32,6 +32,13 @@ defmodule Vutuv.Accounts.User do
     field(:activated?, :boolean, default: false)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
+    # Moderation state, managed by Vutuv.Moderation, never cast from params.
+    # frozen_at: profile in the freezer pending review (hidden from everyone
+    # but the owner and admins). suspended_until: strike 2, login blocked and
+    # profile hidden until the date. deactivated_at: strike 3, permanent.
+    field(:frozen_at, :naive_datetime)
+    field(:suspended_until, :naive_datetime)
+    field(:deactivated_at, :naive_datetime)
     field(:tag_list, :string, virtual: true)
 
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)

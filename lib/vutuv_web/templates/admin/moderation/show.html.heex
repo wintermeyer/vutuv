@@ -1,0 +1,121 @@
+<.page_header title={gettext("Moderation case")} crumbs={[gettext("Moderation")]} />
+
+<div class="card-list">
+  <section class="card">
+    <h1>
+      {content_type_label(@case.content_type)} · {status_badge(@case)}
+    </h1>
+
+    <dl class="mt-3 space-y-4 text-sm">
+      <div>
+        <dt class="font-semibold">{gettext("Owner")}</dt>
+        <dd>
+          <a href={~p"/#{@case.owner}"}>@{@case.owner.active_slug}</a>
+          · {ngettext("%{count} active strike", "%{count} active strikes", @owner_active_strikes)}
+        </dd>
+      </div>
+
+      <div>
+        <dt class="font-semibold">{gettext("Reported content (snapshot at report time)")}</dt>
+        <dd>
+          <blockquote class="mt-1 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+            {@case.content_snapshot || gettext("(no text)")}
+          </blockquote>
+        </dd>
+      </div>
+
+      <div :if={@case.content_type == "post" && @content && @content.body != @case.content_snapshot}>
+        <dt class="font-semibold">{gettext("Current version (edited since the report)")}</dt>
+        <dd>
+          <blockquote class="mt-1 rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
+            {@content.body}
+          </blockquote>
+        </dd>
+      </div>
+
+      <div :if={@conversation_context != []}>
+        <dt class="font-semibold">{gettext("Conversation context (the reported message last)")}</dt>
+        <dd class="mt-1 space-y-1">
+          <p
+            :for={message <- @conversation_context}
+            class={[
+              "rounded-lg p-2 ring-1",
+              if(message.id == @case.content_id,
+                do: "bg-amber-50 ring-amber-200 dark:bg-amber-900/30 dark:ring-amber-900",
+                else: "bg-slate-50 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+              )
+            ]}
+          >
+            <span class="font-semibold">
+              @{(message.sender && message.sender.active_slug) || gettext("(deleted account)")}:
+            </span>
+            {message.body}
+          </p>
+        </dd>
+      </div>
+
+      <div>
+        <dt class="font-semibold">{gettext("Reports")}</dt>
+        <dd>
+          <ul class="mt-1 space-y-2">
+            <li
+              :for={report <- @case.reports}
+              class="rounded-lg bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+            >
+              <p>
+                <span class="font-semibold">{category_label(report.category)}</span>
+                {gettext("by")}
+                <a href={~p"/#{report.reporter}"}>@{report.reporter.active_slug}</a>
+                <% stats = @reporter_stats[report.id] %>
+                <span class="text-slate-500">
+                  · {gettext("%{total} reports so far, %{rejected} rejected, %{abusive} abusive",
+                    total: stats.total,
+                    rejected: stats.rejected,
+                    abusive: stats.abusive
+                  )}
+                </span>
+              </p>
+              <p :if={report.note not in [nil, ""]} class="mt-1 text-slate-600 dark:text-slate-400">
+                „{report.note}"
+              </p>
+            </li>
+          </ul>
+        </dd>
+      </div>
+    </dl>
+
+    <div class="mt-6 grid gap-4 md:grid-cols-2">
+      <form action={~p"/admin/moderation/#{@case.id}/uphold"} method="post" class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+        <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
+          )}
+        </p>
+        <button type="submit" class="button mt-3" id="uphold-case">
+          {gettext("Uphold the report")}
+        </button>
+      </form>
+
+      <form action={~p"/admin/moderation/#{@case.id}/reject"} method="post" class="rounded-lg border border-slate-200 p-4 dark:border-slate-700">
+        <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+        <p class="text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "The report is unfounded. The content becomes visible again and the rejection counts against each reporter's trust."
+          )}
+        </p>
+        <label :for={report <- @case.reports} class="mt-2 flex items-start gap-2 text-sm">
+          <input type="checkbox" name="abusive_report_ids[]" value={report.id} class="mt-0.5" />
+          <span>
+            {gettext("The report by @%{slug} was a deliberate weapon (strikes the reporter)",
+              slug: report.reporter.active_slug
+            )}
+          </span>
+        </label>
+        <button type="submit" class="button button--danger mt-3" id="reject-case">
+          {gettext("Reject the report")}
+        </button>
+      </form>
+    </div>
+  </section>
+</div>

@@ -7,6 +7,9 @@ defmodule Vutuv.Chat.Message do
 
   schema "messages" do
     field(:body, :string)
+    # Set while the message is in the moderation freezer: hidden from the
+    # other participant. Managed by Vutuv.Moderation, never cast.
+    field(:frozen_at, :naive_datetime)
 
     belongs_to(:conversation, Vutuv.Chat.Conversation)
     # Nullable: a deleted sender's messages survive for the other participant.

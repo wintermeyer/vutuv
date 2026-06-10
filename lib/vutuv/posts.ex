@@ -41,6 +41,7 @@ defmodule Vutuv.Posts do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_hidden: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.PostImageStore
@@ -174,6 +175,9 @@ defmodule Vutuv.Posts do
       {:ok, updated} ->
         # Only after the commit: a rolled-back update must not lose files.
         Enum.each(removed, &PostImageStore.delete(&1.token))
+        # A reported post that its owner edits leaves the moderation freezer
+        # (the owner's self-service round; see Vutuv.Moderation).
+        Vutuv.Moderation.content_edited(updated)
         {:ok, preload_post(updated)}
 
       {:error, _} = error ->
@@ -211,6 +215,8 @@ defmodule Vutuv.Posts do
         Enum.each(post.images, &PostImageStore.delete(&1.token))
         broadcast_post_deleted(post.id, post.user_id)
         if parent_id, do: broadcast_reply_count(parent_id)
+        # Deleting reported content settles its moderation case.
+        Vutuv.Moderation.content_deleted(deleted)
         {:ok, deleted}
 
       {:error, _} = error ->
@@ -376,11 +382,35 @@ defmodule Vutuv.Posts do
 
   def visible_to?(%Post{} = post, nil) do
     # Anonymous readers see a post only when it has no denials at all.
-    not restricted?(post)
+    not moderation_hidden?(post) and not restricted?(post)
   end
 
-  def visible_to?(%Post{} = post, %User{id: viewer_id}) do
-    not Repo.exists?(denial_match_query(post.id, post.user_id, viewer_id))
+  def visible_to?(%Post{} = post, %User{id: viewer_id} = viewer) do
+    if moderation_hidden?(post) do
+      # Admins can open a frozen permalink to review it in place.
+      viewer.admin? == true
+    else
+      not Repo.exists?(denial_match_query(post.id, post.user_id, viewer_id))
+    end
+  end
+
+  # A post is in the moderation freezer, or its author's whole account is
+  # hidden (frozen pending review, suspended, or deactivated). Such posts
+  # vanish for everyone but the author (first clause above) and admins.
+  # The policy itself lives in Vutuv.Moderation; render paths usually carry
+  # the author preloaded, so the user fetch is the fallback, not the rule.
+  defp moderation_hidden?(%Post{} = post) do
+    post.frozen_at != nil or author_hidden?(post)
+  end
+
+  defp author_hidden?(%Post{user: %User{} = author}),
+    do: Vutuv.Moderation.account_hidden?(author)
+
+  defp author_hidden?(%Post{user_id: author_id}) do
+    case Repo.get(User, author_id) do
+      nil -> false
+      author -> Vutuv.Moderation.account_hidden?(author)
+    end
   end
 
   # All denial rows of the post that match this viewer (union semantics).
@@ -432,9 +462,10 @@ defmodule Vutuv.Posts do
     from(p in query,
       where: fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id)
     )
+    |> scope_unfrozen(nil)
   end
 
-  def scope_visible(query, %User{id: viewer_id}) do
+  def scope_visible(query, %User{id: viewer_id} = viewer) do
     from(p in query,
       where:
         p.user_id == ^viewer_id or
@@ -479,6 +510,23 @@ defmodule Vutuv.Posts do
             type(^viewer_id, UUIDv7)
           )
     )
+    |> scope_unfrozen(viewer)
+  end
+
+  # The moderation arm of scope_visible/2: frozen posts and posts whose
+  # author's account is hidden (frozen / suspended / deactivated) vanish from
+  # every list, except the author's own. The SQL twin of moderation_hidden?/1;
+  # the hidden-account condition itself is owned by Vutuv.Moderation.Query.
+  defp scope_unfrozen(query, viewer) do
+    passes = dynamic([p], is_nil(p.frozen_at) and not account_hidden(p.user_id))
+
+    filter =
+      case viewer do
+        %User{id: viewer_id} -> dynamic([p], p.user_id == ^viewer_id or ^passes)
+        nil -> passes
+      end
+
+    where(query, ^filter)
   end
 
   @doc """

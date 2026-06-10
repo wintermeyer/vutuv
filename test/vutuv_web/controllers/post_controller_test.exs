@@ -177,16 +177,21 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ "Reposted by Renate Repost"
     end
 
-    test "anonymous visitors and other readers get no menu", %{conn: conn} do
+    test "anonymous visitors and other readers get no author menu", %{conn: conn} do
       user = insert_activated_user()
       post = create_post!(user, %{body: "public words"})
 
+      # Anonymous: neither the author menu nor the report menu.
       anonymous = get(conn, Posts.path(post))
       refute html_response(anonymous, 200) =~ "post-menu-#{post.id}"
+      refute anonymous.resp_body =~ "post-report-#{post.id}"
 
+      # A logged-in reader gets the quiet report menu, but no Edit/Delete.
       {reader_conn, _reader} = create_and_login_user(fresh_conn(), @other_login_attrs)
       reader_view = get(reader_conn, Posts.path(post))
       refute html_response(reader_view, 200) =~ "post-menu-#{post.id}"
+      assert reader_view.resp_body =~ "post-report-#{post.id}"
+      assert reader_view.resp_body =~ "/reports/new?"
     end
   end
 

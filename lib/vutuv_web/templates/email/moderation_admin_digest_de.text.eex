@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+<%= @open_count %> Moderationsfall/-fälle warten auf eine
+Admin-Entscheidung.
+
+Die Warteschlange:
+
+<%= @url %>admin/moderation
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

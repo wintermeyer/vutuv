@@ -1,0 +1,41 @@
+<.page_header title={gettext("Reporter track records")} crumbs={[gettext("Moderation")]} />
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Who reports, and how it holds up")}</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      {gettext(
+        "Worst offenders first. Reporters with abusive reports or three rejections in a year lose the instant freeze; their reports only flag for review."
+      )}
+    </p>
+
+    <p :if={@stats == []} class="card__empty">{gettext("No reports filed yet.")}</p>
+
+    <table :if={@stats != []} class="pure-table">
+      <thead>
+        <tr>
+          <th>{gettext("Reporter")}</th>
+          <th>{gettext("Reports")}</th>
+          <th>{gettext("Rejected")}</th>
+          <th>{gettext("Abusive")}</th>
+          <th>{gettext("Trusted")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr :for={row <- @stats}>
+          <td><a href={~p"/#{row.reporter}"}>@{row.reporter.active_slug}</a></td>
+          <td>{row.total}</td>
+          <td>{row.rejected}</td>
+          <td>{row.abusive}</td>
+          <td>
+            <%= if row.trusted do %>
+              {gettext("yes")}
+            <% else %>
+              <span class="font-bold text-accent">{gettext("no")}</span>
+            <% end %>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>

@@ -12,6 +12,11 @@ defmodule VutuvWeb.Plug.ConfigureSession do
     # ids — treat them as logged out instead of raising a CastError.
     user_id = conn |> get_session(:user_id) |> Vutuv.UUIDv7.cast_or_nil()
     user = user_id && repo.get(Vutuv.Accounts.User, user_id)
+    # A suspension or deactivation must also end already-running sessions,
+    # not just block new logins.
+    user = if user && Vutuv.Moderation.login_block(user), do: nil, else: user
+
+    conn = if user_id && is_nil(user), do: delete_session(conn, :user_id), else: conn
 
     conn
     |> assign(:current_user, user)

@@ -20,6 +20,7 @@ defmodule Vutuv.DataCase do
       import Ecto.Query
       import Vutuv.DataCase
       import Vutuv.Factory
+      import Vutuv.MailboxHelpers
     end
   end
 

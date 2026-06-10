@@ -24,6 +24,12 @@ defmodule VutuvWeb.PageController do
     redirect(conn, to: ~p"/")
   end
 
+  # The community guidelines (the "family-friendly" house rules) that the
+  # report form, the moderation emails and the footer link to.
+  def community(conn, _params) do
+    render(conn, "community.html", page_title: gettext("Community guidelines"))
+  end
+
   @robots_txt """
   # robots.txt for vutuv.de
   #

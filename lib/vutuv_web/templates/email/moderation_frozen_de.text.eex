@@ -1,0 +1,17 @@
+<%= email_greeting(@user) %>,
+
+einer Ihrer Beiträge auf vutuv wurde gemeldet. Sicherheitshalber ist er
+vorerst verborgen; niemand sonst kann ihn sehen.
+
+Sie können das innerhalb von 72 Stunden selbst klären:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+Dort können Sie den Inhalt löschen, ihn bearbeiten (nach einer
+Bearbeitung ist er sofort wieder sichtbar) oder uns mitteilen, dass Ihr
+Inhalt in Ordnung ist. Hören wir nichts von Ihnen, schauen sich unsere
+Admins den Fall an.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

@@ -11,6 +11,9 @@ defmodule Vutuv.Posts.Post do
     # insert time, set programmatically, never cast from params. The
     # permalink itself is the post id (a UUID v7).
     field(:published_on, :date)
+    # Set while the post is in the moderation freezer: hidden from everyone
+    # but the author and admins. Managed by Vutuv.Moderation, never cast.
+    field(:frozen_at, :naive_datetime)
 
     belongs_to(:user, Vutuv.Accounts.User)
 

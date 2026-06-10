@@ -9,10 +9,17 @@ defmodule VutuvWeb.Admin.AdminController do
     total = Repo.aggregate(from(u in User, where: u.identity_verified? != true), :count)
 
     users =
-      from(u in User, where: u.identity_verified? != true, order_by: [desc: u.inserted_at, desc: u.id])
+      from(u in User,
+        where: u.identity_verified? != true,
+        order_by: [desc: u.inserted_at, desc: u.id]
+      )
       |> Vutuv.Pages.paginate(conn.params, total)
       |> Repo.all()
 
-    render(conn, "index.html", users: users, users_count: total)
+    render(conn, "index.html",
+      users: users,
+      users_count: total,
+      moderation_count: Vutuv.Moderation.open_queue_count()
+    )
   end
 end

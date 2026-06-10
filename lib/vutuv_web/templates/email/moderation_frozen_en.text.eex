@@ -1,0 +1,16 @@
+<%= email_greeting(@user) %>,
+
+someone reported one of your contributions on vutuv. To be on the safe
+side it is hidden for now; nobody else can see it.
+
+You can settle this yourself within 72 hours:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+On that page you can delete the content, edit it (an edit makes it
+visible again right away), or tell us that your content is fine. If we
+do not hear from you, our admins will take a look.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

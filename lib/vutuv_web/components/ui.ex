@@ -640,6 +640,34 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The owner-facing moderation freezer notice — the one rendering of "only you
+  can see this while a report is handled" (post card, profile header). A
+  quiet amber strip with the ⚑ glyph and a "Review" link to the owner's case
+  list; `class` sets the per-surface shell (radius, padding, text size).
+  Guard visibility (`:if={owner and frozen}`) at the call site.
+  """
+  attr(:class, :any, default: nil)
+  slot(:inner_block, required: true)
+
+  def frozen_banner(assigns) do
+    ~H"""
+    <p
+      data-frozen-banner
+      class={[
+        "flex flex-wrap items-center gap-1.5 bg-amber-50 font-semibold text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900",
+        @class
+      ]}
+    >
+      <span aria-hidden="true">⚑</span>
+      {render_slot(@inner_block)}
+      <.link href={~p"/moderation/cases"} class="underline hover:no-underline">
+        {gettext("Review")}
+      </.link>
+    </p>
+    """
+  end
+
+  @doc """
   Numbered pagination for offset-paginated browse pages (followers, tags,
   users). Pass the conn params (for the current `?page`) and the total row
   count; page size and windowing come from `Vutuv.Pages`. Renders nothing

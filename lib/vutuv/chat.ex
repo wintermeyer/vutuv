@@ -192,6 +192,24 @@ defmodule Vutuv.Chat do
   defp has_message?(conversation_id),
     do: Repo.exists?(from(m in Message, where: m.conversation_id == ^conversation_id))
 
+  @doc """
+  Deletes one of `sender`'s own messages. Messages are otherwise immutable;
+  the only caller is `Vutuv.Moderation.delete_reported_content/2` ("delete
+  the reported message"), which also settles the moderation case.
+  """
+  def delete_message(%User{id: sender_id}, %Message{sender_id: sender_id} = message) do
+    case Repo.delete(message) do
+      {:ok, deleted} ->
+        broadcast_conversation_update(message.conversation_id)
+        {:ok, deleted}
+
+      {:error, _} = error ->
+        error
+    end
+  end
+
+  def delete_message(%User{}, %Message{}), do: {:error, :not_allowed}
+
   defp deliver(conversation, sender, body, accept?: accept?) do
     changeset =
       %Message{conversation_id: conversation.id, sender_id: sender.id}
@@ -308,6 +326,9 @@ defmodule Vutuv.Chat do
     previews =
       from(m in Message,
         where: m.conversation_id in ^ids,
+        # A frozen message must not leak into the sidebar preview of the
+        # other participant; the sender still sees their own.
+        where: is_nil(m.frozen_at) or m.sender_id == ^me_id,
         distinct: m.conversation_id,
         order_by: [asc: m.conversation_id, desc: m.inserted_at, desc: m.id],
         select: {m.conversation_id, {m.body, m.inserted_at}}
@@ -336,6 +357,9 @@ defmodule Vutuv.Chat do
       on: p.conversation_id == m.conversation_id and p.user_id == ^me_id,
       where: m.conversation_id in ^conversation_ids,
       where: m.sender_id != ^me_id,
+      # Frozen messages are invisible to the recipient, so they must not
+      # count as unread either (the badge would point at nothing).
+      where: is_nil(m.frozen_at),
       where: is_nil(p.last_read_at) or m.inserted_at > p.last_read_at,
       group_by: m.conversation_id,
       select: {m.conversation_id, count(m.id)}
@@ -363,6 +387,9 @@ defmodule Vutuv.Chat do
         entries =
           from(m in Message,
             where: m.conversation_id == ^conversation.id,
+            # The moderation freezer: a frozen message is hidden from the
+            # other participant but stays visible to its sender.
+            where: is_nil(m.frozen_at) or m.sender_id == ^me.id,
             order_by: [desc: m.inserted_at, desc: m.id],
             limit: ^(limit + 1),
             preload: :sender
@@ -552,6 +579,39 @@ defmodule Vutuv.Chat do
   """
   def broadcast_typing(conversation_id, name),
     do: Phoenix.PubSub.broadcast_from(@pubsub, self(), topic(conversation_id), {:typing, name})
+
+  @doc """
+  For admins reviewing a reported message: the message itself plus up to `n`
+  messages before it in the same conversation, oldest first. Only the
+  moderation review path may call this — it deliberately bypasses the
+  participant check.
+  """
+  def moderation_context(%Message{} = message, n \\ 5) do
+    from(m in Message,
+      where: m.conversation_id == ^message.conversation_id,
+      where:
+        m.inserted_at < ^message.inserted_at or
+          (m.inserted_at == ^message.inserted_at and m.id <= ^message.id),
+      order_by: [desc: m.inserted_at, desc: m.id],
+      limit: ^(n + 1),
+      preload: :sender
+    )
+    |> Repo.all()
+    |> Enum.reverse()
+  end
+
+  @doc """
+  A message just entered the moderation freezer: open threads drop it for the
+  recipient and dim it for the sender (see `VutuvWeb.MessageLive.Index`).
+  Called by `Vutuv.Moderation` when it freezes a message.
+  """
+  def broadcast_message_frozen(%Message{} = message) do
+    Phoenix.PubSub.broadcast(
+      @pubsub,
+      topic(message.conversation_id),
+      {:message_frozen, %{message_id: message.id, sender_id: message.sender_id}}
+    )
+  end
 
   defp topic(conversation_id), do: "conversation:#{conversation_id}"
 

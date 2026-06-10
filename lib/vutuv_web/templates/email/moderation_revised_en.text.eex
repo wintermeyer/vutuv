@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+thank you for your report. The owner has revised the content you
+reported, and it is visible again. If you still believe it breaks our
+community guidelines, you can report it once more; it will then go
+straight to our admins.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

@@ -34,7 +34,10 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert tag_count(user) == 2
     end
 
-    test "re-renders the form with an error when nothing usable is typed", %{conn: conn, user: user} do
+    test "re-renders the form with an error when nothing usable is typed", %{
+      conn: conn,
+      user: user
+    } do
       conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: ""})
 
       assert html_response(conn, 200) =~ "editform"

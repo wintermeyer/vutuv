@@ -111,7 +111,20 @@ defmodule Vutuv.Activity do
       )
       |> Repo.one()
 
-    [follower_max, endorsement_max, connection_max, request_max, reply_max, like_max]
+    moderation_max =
+      Vutuv.Moderation.owner_notified_cases_query(user_id)
+      |> select([c], max(c.inserted_at))
+      |> Repo.one()
+
+    [
+      follower_max,
+      endorsement_max,
+      connection_max,
+      request_max,
+      reply_max,
+      like_max,
+      moderation_max
+    ]
     |> Enum.reject(&is_nil/1)
     |> Enum.max(NaiveDateTime, fn -> nil end)
   end
@@ -256,7 +269,8 @@ defmodule Vutuv.Activity do
         &connection_items(user_id, &1, &2),
         &connection_request_items(user_id, &1, &2),
         &reply_items(user_id, &1, &2),
-        &like_items(user_id, &1, &2)
+        &like_items(user_id, &1, &2),
+        &moderation_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -296,7 +310,8 @@ defmodule Vutuv.Activity do
             subquery(count_connections(user_id, read_at)) +
             subquery(count_connection_requests(user_id, read_at)) +
             subquery(count_replies(user_id, read_at)) +
-            subquery(count_likes(user_id, read_at))
+            subquery(count_likes(user_id, read_at)) +
+            subquery(count_moderation(user_id, read_at))
       )
     )
   end
@@ -430,6 +445,27 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # Moderation cases about the user's own content. Which cases the owner was
+  # actually told about is Moderation's rule, not ours — the query comes from
+  # there so this feed cannot drift from the notify behavior.
+  defp moderation_items(user_id, limit, cursor) do
+    Vutuv.Moderation.owner_notified_cases_query(user_id)
+    |> order_by([c], desc: c.inserted_at, desc: c.id)
+    |> limit(^limit)
+    |> select([c], {c.id, c.inserted_at, c.status})
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, status} ->
+      %{
+        id: "moderation-#{id}",
+        kind: "moderation",
+        at: at,
+        case_id: id,
+        status: status
+      }
+    end)
+  end
+
   defp at_or_before(query, nil), do: query
   defp at_or_before(query, %{at: at}), do: where(query, [event], event.inserted_at <= ^at)
 
@@ -505,6 +541,12 @@ defmodule Vutuv.Activity do
       where: p.user_id == ^user_id and l.user_id != ^user_id,
       select: %{count: count()}
     )
+    |> since(read_at)
+  end
+
+  defp count_moderation(user_id, read_at) do
+    Vutuv.Moderation.owner_notified_cases_query(user_id)
+    |> select([c], %{count: count()})
     |> since(read_at)
   end
 

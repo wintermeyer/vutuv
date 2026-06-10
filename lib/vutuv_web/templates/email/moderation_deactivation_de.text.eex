@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+nach einem dritten bestätigten Verstoß gegen unsere
+Community-Richtlinien wurde Ihr vutuv-Konto endgültig deaktiviert. Sie
+können sich nicht mehr anmelden und Ihr Profil ist nicht mehr sichtbar.
+
+Wenn Sie diese Entscheidung für falsch halten, können Sie per Antwort
+an info@vutuv.de Einspruch einlegen.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

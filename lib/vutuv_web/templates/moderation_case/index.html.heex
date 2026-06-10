@@ -1,0 +1,32 @@
+<div class="mx-auto max-w-xl py-6">
+  <.card>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Reported content")}
+    </h1>
+
+    <p :if={@cases == []} class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+      {gettext("Nothing here - none of your content is currently reported.")}
+    </p>
+
+    <ul :if={@cases != []} class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <li :for={case_record <- @cases} class="py-3 first:pt-0 last:pb-0">
+        <a
+          href={~p"/moderation/cases/#{case_record.id}"}
+          class="group flex items-center justify-between gap-4"
+        >
+          <span class="min-w-0">
+            <span class="block truncate text-sm text-slate-700 group-hover:text-brand-700 dark:text-slate-300">
+              {case_record.content_snapshot || gettext("(no text)")}
+            </span>
+            <span class="text-xs uppercase tracking-wide text-slate-400">
+              {Calendar.strftime(case_record.inserted_at, "%Y-%m-%d")}
+            </span>
+          </span>
+          <span class="shrink-0 text-sm font-semibold text-brand-600 group-hover:text-brand-700">
+            {gettext("Review")} ›
+          </span>
+        </a>
+      </li>
+    </ul>
+  </.card>
+</div>

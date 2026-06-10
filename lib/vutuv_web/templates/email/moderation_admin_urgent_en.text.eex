@@ -1,0 +1,12 @@
+<%= email_greeting(@user) %>,
+
+a member profile was reported. Profile reports are urgent: a second
+independent report freezes the whole profile.
+
+Please review the case:
+
+<%= @url %>admin/moderation/<%= @case_id %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

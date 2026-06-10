@@ -1,6 +1,33 @@
 <.page_header title={gettext("Admin control panel")} crumbs={[gettext("Admin")]} />
 
 <div class="card-list">
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="flex items-center gap-2">
+        {gettext("Moderation")}
+        <.count_badge count={@moderation_count} />
+      </h1>
+      <a
+        href={~p"/admin/moderation"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-moderation-link"
+      >
+        {gettext("Open the queue")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      <%= if @moderation_count == 0 do %>
+        {gettext("No reported content waiting - the self-service flow is doing its job.")}
+      <% else %>
+        {ngettext(
+          "%{count} case is waiting for a ruling.",
+          "%{count} cases are waiting for a ruling.",
+          @moderation_count
+        )}
+      <% end %>
+    </p>
+  </section>
+
   {VutuvWeb.Admin.SlugHTML.index(%{conn: @conn})}
   {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

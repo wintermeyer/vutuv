@@ -1,0 +1,81 @@
+<div class="mx-auto max-w-xl py-6">
+  <.card>
+    <h1 class="text-xl font-bold text-slate-900 dark:text-white">
+      {gettext("Your content was reported")}
+    </h1>
+
+    <p class="mt-2 flex items-start gap-2 rounded-lg bg-amber-50 p-3 text-sm font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-900">
+      <span aria-hidden="true">⚑</span>
+      {status_line(@case)}
+    </p>
+
+    <dl class="mt-4 space-y-3 text-sm">
+      <div>
+        <dt class="font-semibold text-slate-700 dark:text-slate-300">{gettext("Reported as")}</dt>
+        <dd class="text-slate-600 dark:text-slate-400">{category_names(@case)}</dd>
+      </div>
+      <div :if={@case.content_snapshot not in [nil, ""]}>
+        <dt class="font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("The content in question")}
+        </dt>
+        <dd>
+          <blockquote class="mt-1 rounded-lg bg-slate-50 p-3 text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+            {@case.content_snapshot}
+          </blockquote>
+        </dd>
+      </div>
+    </dl>
+
+    <%= if @case.status == "pending_owner" do %>
+      <p class="mt-5 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Nobody else can see it right now. You have 72 hours to settle this yourself; after that our admins decide. Three ways out:"
+        )}
+      </p>
+
+      <div class="mt-4 space-y-3">
+        <div
+          :if={@case.content_type == "post" and @content}
+          class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700"
+        >
+          <p class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Fix it. An edited post is visible again immediately.")}
+          </p>
+          <.button variant="secondary" href={~p"/posts/#{@case.content_id}/edit"}>
+            {gettext("Edit")}
+          </.button>
+        </div>
+
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+          <p class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Remove it. That settles the report, no questions asked.")}
+          </p>
+          <.button
+            variant="danger"
+            href={~p"/moderation/cases/#{@case.id}/delete_content"}
+            method="post"
+            data-confirm={gettext("Delete this content permanently?")}
+          >
+            {gettext("Delete")}
+          </.button>
+        </div>
+
+        <div class="flex items-center justify-between gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+          <p class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Stand by it. It stays hidden until one of our admins has ruled.")}
+          </p>
+          <.button href={~p"/moderation/cases/#{@case.id}/dispute"} method="post">
+            {gettext("My content is fine")}
+          </.button>
+        </div>
+      </div>
+    <% end %>
+
+    <p class="mt-6 text-xs text-slate-400">
+      {gettext("Reports are anonymous; we never tell you who reported. Our rules:")}
+      <a href={~p"/community"} class="font-semibold text-brand-600 hover:text-brand-700">
+        {gettext("community guidelines")}
+      </a>
+    </p>
+  </.card>
+</div>

@@ -114,12 +114,32 @@ defmodule VutuvWeb.SessionController do
 
   defp verify_login_pin(conn, email, pin, context) do
     case Accounts.check_pin(email, pin, "login") do
-      # correct, drop cookie, log the user in
+      # correct, drop cookie, log the user in (unless moderation blocks it)
       {:ok, user} ->
-        Accounts.login(conn, user)
-        |> Accounts.delete_pin_cookie()
-        |> put_flash(:info, welcome_flash(context, user))
-        |> redirect(to: ~p"/#{user}")
+        case Vutuv.Moderation.login_block(user) do
+          nil ->
+            Accounts.login(conn, user)
+            |> Accounts.delete_pin_cookie()
+            |> put_flash(:info, welcome_flash(context, user))
+            |> redirect(to: ~p"/#{user}")
+
+          {:suspended, until} ->
+            conn
+            |> Accounts.delete_pin_cookie()
+            |> put_flash(
+              :error,
+              gettext("This account is suspended until %{date}.",
+                date: Calendar.strftime(until, "%Y-%m-%d")
+              )
+            )
+            |> redirect(to: ~p"/")
+
+          :deactivated ->
+            conn
+            |> Accounts.delete_pin_cookie()
+            |> put_flash(:error, gettext("This account has been deactivated."))
+            |> redirect(to: ~p"/")
+        end
 
       # incorrect, let them retry
       {:error, reason} ->

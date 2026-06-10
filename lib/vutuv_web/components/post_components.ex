@@ -77,8 +77,14 @@ defmodule VutuvWeb.PostComponents do
       # must stay unique.
       |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
       |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
+      |> assign(:report_menu_id, "post-report-#{assigns.entry_id || assigns.post.id}")
       |> assign(:time_id, "post-time-#{assigns.entry_id || assigns.post.id}")
       |> assign(:author?, Posts.author?(assigns.post, assigns.viewer))
+      |> assign(
+        :reporter?,
+        match?(%User{}, assigns.viewer) and not Posts.author?(assigns.post, assigns.viewer)
+      )
+      |> assign(:frozen?, assigns.post.frozen_at != nil)
       |> assign(:reply_banner, reply_banner(assigns.post))
       |> assign(
         :edited?,
@@ -98,11 +104,14 @@ defmodule VutuvWeb.PostComponents do
       gallery={@gallery}
       edited?={@edited?}
       author?={@author?}
+      reporter?={@reporter?}
+      frozen?={@frozen?}
       reposted_by={@reposted_by}
       reply_banner={@reply_banner}
       conn_or_socket={@conn_or_socket}
       actions_id={@actions_id}
       menu_id={@menu_id}
+      report_menu_id={@report_menu_id}
       time_id={@time_id}
     />
     """
@@ -119,11 +128,14 @@ defmodule VutuvWeb.PostComponents do
   attr(:gallery, :list, required: true)
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
+  attr(:reporter?, :boolean, required: true)
+  attr(:frozen?, :boolean, required: true)
   attr(:reposted_by, :any, required: true)
   attr(:reply_banner, :any, required: true)
   attr(:conn_or_socket, :any, required: true)
   attr(:actions_id, :string, required: true)
   attr(:menu_id, :string, required: true)
+  attr(:report_menu_id, :string, required: true)
   attr(:time_id, :string, required: true)
 
   defp post_card_body(assigns) do
@@ -140,6 +152,12 @@ defmodule VutuvWeb.PostComponents do
   defp render_post_card_inner(assigns) do
     ~H"""
     <div>
+      <%!-- The owner's freezer notice: only the author (and admins) still see
+      a reported post; everyone else gets nothing, not even a tombstone. --%>
+      <.frozen_banner :if={@frozen? and @author?} class="mb-3 rounded-lg px-3 py-2 text-xs">
+        {gettext("Only you can see this post while a report about it is handled.")}
+      </.frozen_banner>
+
       <p
         :if={@reposted_by}
         class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
@@ -315,6 +333,16 @@ defmodule VutuvWeb.PostComponents do
               danger
             >
               {gettext("Delete")}
+            </:item>
+          </.card_menu>
+        </div>
+
+        <%!-- Everyone else gets the same quiet ⋯ menu with the Report action:
+        out of the way until needed, easy to find when it is. --%>
+        <div :if={@reporter?} class="shrink-0">
+          <.card_menu id={@report_menu_id}>
+            <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
+              {gettext("Report")}
             </:item>
           </.card_menu>
         </div>

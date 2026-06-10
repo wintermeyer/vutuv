@@ -2,6 +2,8 @@ defmodule Vutuv.Search do
   @moduledoc false
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -18,11 +20,13 @@ defmodule Vutuv.Search do
         Repo.all(
           from(t in SearchTerm,
             left_join: u in assoc(t, :user),
+            as: :user,
             where:
               (is_nil(u.activated?) or u.activated? == true) and
                 (like(t.value, ^"#{value}%") or ^cologne_fuzzy_value == t.value or
                    ^soundex_fuzzy_value == t.value)
           )
+          |> exclude_moderated()
         )
     ) do
       %{
@@ -46,12 +50,21 @@ defmodule Vutuv.Search do
 
     Repo.all(
       from(u in User,
+        as: :user,
         join: e in assoc(u, :emails),
         where: (is_nil(u.activated?) or u.activated? == true) and ^value == e.value
       )
+      |> exclude_moderated()
     )
     # Filters duplicates
     |> Enum.uniq_by(& &1.id)
+  end
+
+  # Accounts in the moderation freezer (frozen pending review, suspended or
+  # deactivated) are hidden everywhere, including search. The condition is
+  # owned by Vutuv.Moderation.Query; left-joined orphan terms (no user) pass.
+  defp exclude_moderated(query) do
+    from([user: u] in query, where: not account_hidden(u.id))
   end
 
   defp phoneticize_search_value(value, algorithm) do

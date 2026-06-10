@@ -19,6 +19,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
 
   import Swoosh.Email
+  use Gettext, backend: VutuvWeb.Gettext
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
@@ -69,25 +70,25 @@ defmodule Vutuv.Notifications.Emailer do
 
   def login_email(pin, email, %Vutuv.Accounts.User{activated?: false} = user) do
     gen_email(pin, email, user, "registration_email", fn ->
-      Gettext.gettext(VutuvWeb.Gettext, "Confirm your vutuv account")
+      gettext("Confirm your vutuv account")
     end)
   end
 
   def login_email(pin, email, user) do
     gen_email(pin, email, user, "login_email", fn ->
-      Gettext.gettext(VutuvWeb.Gettext, "Login to vutuv")
+      gettext("Login to vutuv")
     end)
   end
 
   def email_creation_email(pin, email, user) do
     gen_email(pin, email, user, "email_creation_email", fn ->
-      Gettext.gettext(VutuvWeb.Gettext, "Confirm your email")
+      gettext("Confirm your email")
     end)
   end
 
   def user_deletion_email(pin, email, user) do
     gen_email(pin, email, user, "user_deletion_email", fn ->
-      Gettext.gettext(VutuvWeb.Gettext, "Confirm your account deletion")
+      gettext("Confirm your account deletion")
     end)
   end
 
@@ -99,7 +100,7 @@ defmodule Vutuv.Notifications.Emailer do
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(
       recipient_subject(locale, fn ->
-        Gettext.gettext(VutuvWeb.Gettext, "vutuv Account verified")
+        gettext("vutuv Account verified")
       end)
     )
     |> text_body(
@@ -123,7 +124,7 @@ defmodule Vutuv.Notifications.Emailer do
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(
       recipient_subject(locale, fn ->
-        Gettext.gettext(VutuvWeb.Gettext, "New message from @%{slug} on vutuv",
+        gettext("New message from @%{slug} on vutuv",
           slug: other.active_slug
         )
       end)
@@ -138,18 +139,83 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
+  ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
+
+  @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."
+  def moderation_frozen_email(user, email, case_record) do
+    build_email(user, email, "moderation_frozen", %{case_id: case_record.id}, fn ->
+      gettext("Your content on vutuv was reported and is hidden")
+    end)
+  end
+
+  @doc "Owner notice: content frozen and with the admins (no self-service round)."
+  def moderation_review_email(user, email, case_record) do
+    build_email(user, email, "moderation_review", %{case_id: case_record.id}, fn ->
+      gettext("Your content on vutuv is under review")
+    end)
+  end
+
+  @doc "Reporter notice: the content they reported was revised by its owner."
+  def moderation_revised_email(user, email) do
+    build_email(user, email, "moderation_revised", %{}, fn ->
+      gettext("The content you reported was revised")
+    end)
+  end
+
+  @doc "Strike 1: the formal warning."
+  def moderation_warning_email(user, email) do
+    build_email(user, email, "moderation_warning", %{}, fn ->
+      gettext("A warning for your vutuv account")
+    end)
+  end
+
+  @doc "Strike 2: the one-week suspension."
+  def moderation_suspension_email(user, email, until) do
+    build_email(user, email, "moderation_suspension", %{until: until}, fn ->
+      gettext("Your vutuv account is suspended")
+    end)
+  end
+
+  @doc "Strike 3: deactivated for good."
+  def moderation_deactivation_email(user, email) do
+    build_email(user, email, "moderation_deactivation", %{}, fn ->
+      gettext("Your vutuv account has been deactivated")
+    end)
+  end
+
+  @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
+  def moderation_admin_urgent_email(user, email, case_record) do
+    build_email(user, email, "moderation_admin_urgent", %{case_id: case_record.id}, fn ->
+      gettext("Moderation: a profile was reported")
+    end)
+  end
+
+  @doc "Admin daily digest: how many cases wait in the queue."
+  def moderation_admin_digest_email(user, email, open_count) do
+    build_email(user, email, "moderation_admin_digest", %{open_count: open_count}, fn ->
+      gettext("Moderation: %{count} cases are waiting",
+        count: open_count
+      )
+    end)
+  end
+
   defp gen_email(pin, email, user, template_base, subject_fun) do
+    build_email(user, email, template_base, %{pin: pin}, subject_fun)
+  end
+
+  # Every templated email: recipient, localized subject, and the matching
+  # per-locale text template with `user` + `url` always in its assigns.
+  defp build_email(user, email, template_base, extra_assigns, subject_fun) do
     locale = get_locale(user.locale)
 
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(recipient_subject(locale, subject_fun))
     |> text_body(
-      VutuvWeb.EmailText.render("#{template_base}_#{locale}.text", %{
-        pin: pin,
-        url: public_url(),
-        user: user
-      })
+      VutuvWeb.EmailText.render(
+        "#{template_base}_#{locale}.text",
+        Map.merge(%{user: user, url: public_url()}, extra_assigns)
+      )
     )
   end
 

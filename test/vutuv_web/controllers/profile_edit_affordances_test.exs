@@ -28,7 +28,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
                profile-phone-numbers-menu profile-addresses-menu)
 
   describe "profile section owner affordances" do
-    test "full sections show a Manage link; empty sections show the dashed add tile", %{conn: conn} do
+    test "full sections show a Manage link; empty sections show the dashed add tile", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
       # Fill experience + links; leave phone/address/social/tags empty.
       job = insert(:work_experience, user: user)

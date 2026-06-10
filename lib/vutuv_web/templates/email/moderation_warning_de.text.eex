@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+unsere Admins haben eine Meldung zu einem Ihrer Inhalte geprüft und
+festgestellt, dass er gegen unsere Community-Richtlinien verstößt:
+
+<%= @url %>community
+
+Dies ist eine formelle Verwarnung, die erste von drei Stufen. Ein
+zweiter bestätigter Verstoß sperrt Ihr Konto für eine Woche, ein
+dritter deaktiviert es endgültig. Verwarnungen verfallen nach zwölf
+Monaten.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

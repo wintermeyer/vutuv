@@ -199,6 +199,14 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def strike_factory do
+    %Vutuv.Moderation.Strike{
+      role: "owner",
+      level: 1,
+      expires_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 365 * 86_400)
+    }
+  end
+
   def o_auth_provider_factory do
     %Vutuv.Accounts.OAuthProvider{
       provider: "google",

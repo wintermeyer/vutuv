@@ -1,0 +1,13 @@
+<%= email_greeting(@user) %>,
+
+einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen,
+während unsere Admins den Fall prüfen. Sie müssen nichts weiter tun;
+wir melden uns mit dem Ergebnis.
+
+Den Fall finden Sie hier:
+
+<%= @url %>moderation/cases/<%= @case_id %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

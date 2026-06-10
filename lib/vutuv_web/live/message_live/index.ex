@@ -221,6 +221,23 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign_lists()}
   end
 
+  # A message in this thread was frozen by moderation: pull it off the
+  # recipient's screen right away; the sender's copy re-renders dimmed with
+  # the "under review" note.
+  def handle_info({:message_frozen, %{message_id: message_id, sender_id: sender_id}}, socket) do
+    if socket.assigns.current_user.id == sender_id do
+      case Vutuv.Repo.get(Message, message_id) do
+        nil ->
+          {:noreply, socket}
+
+        message ->
+          {:noreply, stream_insert(socket, :messages, Vutuv.Repo.preload(message, :sender))}
+      end
+    else
+      {:noreply, stream_delete_by_dom_id(socket, :messages, "message-#{message_id}")}
+    end
+  end
+
   # Activity event: a message arrived in some conversation of mine. The open
   # conversation's own topic already delivered its copy above, so only
   # messages landing elsewhere need a sidebar refresh.
@@ -460,13 +477,14 @@ defmodule VutuvWeb.MessageLive.Index do
           <div
             :for={{dom_id, m} <- @streams.messages}
             id={dom_id}
-            class={["flex", mine?(m, @current_user.id) && "justify-end"]}
+            class={["group flex items-center gap-1.5", mine?(m, @current_user.id) && "justify-end"]}
           >
             <div class={[
               "max-w-[75%] break-words rounded-2xl px-3 py-2 text-sm",
               "[&_a]:underline [&_a]:break-all [&_blockquote]:border-l-2 [&_blockquote]:pl-2",
               "[&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]",
               "[&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4",
+              m.frozen_at && "opacity-60",
               if(mine?(m, @current_user.id),
                 do: "bg-brand-600 text-white [&_a]:text-white [&_code]:bg-white/20",
                 else:
@@ -477,6 +495,11 @@ defmodule VutuvWeb.MessageLive.Index do
                 {display_name(m.sender)}
               </span>
               {VutuvWeb.Markdown.render(m.body)}
+              <%!-- Only the sender ever sees a frozen message; tell them why
+              the other side stopped reacting to it. --%>
+              <span :if={m.frozen_at} class="mt-1 block text-[10px] font-semibold text-white/80">
+                ⚑ <.link navigate={~p"/moderation/cases"} class="underline">{gettext("Hidden: reported, under review")}</.link>
+              </span>
               <time
                 id={"#{dom_id}-at"}
                 phx-hook="LocalTime"
@@ -488,6 +511,19 @@ defmodule VutuvWeb.MessageLive.Index do
                 ]}
               >{Calendar.strftime(m.inserted_at, "%d.%m.%Y %H:%M")}</time>
             </div>
+            <%!-- The quiet per-message report flag, beside the other side's
+            bubbles. Faint until the row is hovered or the flag is focused, so
+            it never crowds the conversation; always tappable on touch. --%>
+            <.link
+              :if={not mine?(m, @current_user.id)}
+              id={"#{dom_id}-report"}
+              navigate={~p"/reports/new?#{[type: "message", id: m.id, return_to: "/messages/#{m.conversation_id}"]}"}
+              title={gettext("Report this message")}
+              aria-label={gettext("Report this message")}
+              class="text-xs text-slate-300 opacity-60 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100 dark:text-slate-600 dark:hover:text-red-400"
+            >
+              ⚑
+            </.link>
           </div>
         </div>
 

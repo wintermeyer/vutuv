@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+nach einem zweiten bestätigten Verstoß gegen unsere
+Community-Richtlinien ist Ihr vutuv-Konto bis zum
+<%= Calendar.strftime(@until, "%d.%m.%Y") %> gesperrt. Bis dahin können
+Sie sich nicht anmelden und Ihr Profil ist verborgen.
+
+Bitte nehmen Sie das ernst: ein weiterer bestätigter Verstoß
+deaktiviert Ihr Konto endgültig. Unsere Community-Richtlinien:
+
+<%= @url %>community
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

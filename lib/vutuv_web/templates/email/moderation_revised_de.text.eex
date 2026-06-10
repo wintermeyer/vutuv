@@ -1,0 +1,10 @@
+<%= email_greeting(@user) %>,
+
+danke für Ihre Meldung. Der gemeldete Inhalt wurde von seinem Besitzer
+überarbeitet und ist wieder sichtbar. Wenn Sie weiterhin der Meinung
+sind, dass er gegen unsere Community-Richtlinien verstößt, können Sie
+ihn erneut melden; der Fall geht dann direkt an unsere Admins.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

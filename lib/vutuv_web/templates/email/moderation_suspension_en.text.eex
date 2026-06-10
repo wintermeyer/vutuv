@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+after a second confirmed violation of our community guidelines your
+vutuv account is suspended until <%= Calendar.strftime(@until, "%Y-%m-%d") %>.
+Until then you cannot log in and your profile is hidden.
+
+Please take this seriously: one more confirmed violation deactivates
+your account for good. Our community guidelines:
+
+<%= @url %>community
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>
