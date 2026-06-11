@@ -31,6 +31,32 @@ defmodule VutuvWeb.ErrorHTML do
     |> error_page()
   end
 
+  # The admin-area 403 for a logged-in member: instead of a bare error it
+  # answers the natural follow-up question - how does one become an admin?
+  def render("403_admin.html", assigns) do
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">403</p>
+      <h1 class="error-page__title">{gettext("This area is reserved for administrators.")}</h1>
+      <p class="error-page__hint">
+        {gettext(
+          "Admin rights are granted by the operator of this vutuv instance, directly in the database:"
+        )}
+      </p>
+      <p class="error-page__hint"><code>UPDATE users SET administrator = TRUE WHERE ...;</code></p>
+      <p class="error-page__hint">
+        {gettext("If you do not run this instance yourself, please contact the operator.")}
+        <a href="/impressum">{gettext("Legal notice")}</a>
+      </p>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
+  end
+
   def render(template, _assigns) do
     Phoenix.Controller.status_message_from_template(template)
   end

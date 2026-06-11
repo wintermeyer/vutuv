@@ -16,7 +16,7 @@ defmodule VutuvWeb.TagController do
     tags_count = Repo.one(from(t in Tag, select: count(t.id)))
 
     tags =
-      from(t in Tag)
+      from(t in Tag, order_by: fragment("lower(coalesce(?, ?))", t.name, t.slug))
       |> Vutuv.Pages.paginate(conn.params, tags_count)
       |> Repo.all()
 

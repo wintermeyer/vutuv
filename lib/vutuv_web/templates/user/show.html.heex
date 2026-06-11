@@ -202,7 +202,7 @@ the resulting ~200px rail width. --%>
             <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
-            {gettext("Vcard")}
+            {gettext("vCard")}
           </.link>
         </div>
       </div>
@@ -418,7 +418,9 @@ the resulting ~200px rail width. --%>
       </.card>
 
       <.card :if={@followee_count > 0} id="profile-following">
-        <.section_title class="mb-4">{gettext("Following")}</.section_title>
+        <.section_title class="mb-4">
+          {if same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows")}
+        </.section_title>
         <ul class="space-y-4">
           <.user_row
             :for={user <- @followees}
@@ -559,7 +561,7 @@ the resulting ~200px rail width. --%>
             {gettext("Markdown"), "/#{@user.active_slug}.md#{format_lang}"},
             {gettext("Text only"), "/#{@user.active_slug}.txt#{format_lang}"},
             {"JSON", "/#{@user.active_slug}.json#{format_lang}"},
-            {gettext("Vcard"), "/#{@user.active_slug}.vcf"}
+            {gettext("vCard"), "/#{@user.active_slug}.vcf"}
           ]
         }>
           <a

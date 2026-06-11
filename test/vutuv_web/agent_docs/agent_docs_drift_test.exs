@@ -212,7 +212,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
   test "every profile section page serves its facts in all formats" do
     facts = %{
-      work_experiences: ["Bridge Engineer", "Span AG"],
+      work_experiences: ["Bridge Engineer", "Span AG", "Building things"],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
       addresses: ["Berlin", "10115"],
@@ -246,7 +246,9 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     work = Repo.one!(Ecto.assoc(user, :work_experiences))
     rendered = formats_for("/drift_tester/work_experiences/#{work.slug}")
 
-    for fact <- ["Bridge Engineer", "Span AG"], do: assert_fact_everywhere(rendered, fact)
+    for fact <- ["Bridge Engineer", "Span AG", "Building things"],
+        do: assert_fact_everywhere(rendered, fact)
+
     assert Jason.decode!(rendered.json)["type"] == "work_experience"
 
     [url] = Repo.all(Ecto.assoc(user, :urls))

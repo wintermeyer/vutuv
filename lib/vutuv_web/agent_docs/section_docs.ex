@@ -108,6 +108,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     %{
       title: work.title,
       organization: work.organization,
+      description: work.description,
       start: year_month(work.start_year, work.start_month),
       end: year_month(work.end_year, work.end_month)
     }

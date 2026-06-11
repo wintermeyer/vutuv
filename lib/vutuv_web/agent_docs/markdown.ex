@@ -204,9 +204,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp work_line(work) do
     period = work_period(work)
+    description = Map.get(work, :description)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
+    |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])
     |> Enum.join()
   end
 

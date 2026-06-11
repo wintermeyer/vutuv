@@ -1,10 +1,10 @@
 <.page_header
-  title={gettext("About this Social Media Profile")}
+  title={"#{@social_media_account.provider}: @#{@social_media_account.value}"}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Social Media Profiles"), ~p"/#{@user}/social_media_accounts"},
-    gettext("More Info")
+    @social_media_account.provider
   ]}
 />
 
@@ -19,5 +19,5 @@
   <h1><%= gettext("Provider") %></h1>
   <p><%= @social_media_account.provider %></p>
   <h1><%= gettext("Username") %></h1>
-  <p>@<%= @social_media_account.value %></p>
+  <p><%= Vutuv.Profiles.SocialMediaAccount.social_media_link(@social_media_account) %></p>
 </.card_section>

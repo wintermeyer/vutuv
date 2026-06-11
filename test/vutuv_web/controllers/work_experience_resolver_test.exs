@@ -43,6 +43,39 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
     end
   end
 
+  describe "legacy entries without a slug" do
+    # Imported work experiences can carry a NULL slug. `Phoenix.Param` used to
+    # raise on those, which 500ed the whole profile page of the affected user.
+    # They fall back to the id as their URL param instead.
+
+    test "the profile page renders and links the entry by id", %{conn: conn} do
+      user = insert_activated_user()
+      job = insert(:work_experience, user: user, slug: nil, title: "Pionier")
+
+      conn = get(conn, ~p"/#{user}")
+
+      assert html_response(conn, 200) =~ "/#{user.active_slug}/work_experiences/#{job.id}"
+    end
+
+    test "the show page resolves via the id", %{conn: conn} do
+      user = insert_activated_user()
+      job = insert(:work_experience, user: user, slug: nil, title: "Pionier")
+
+      conn = get(conn, ~p"/#{user}/work_experiences/#{job}")
+
+      assert html_response(conn, 200) =~ "Pionier"
+    end
+
+    test "an id param never resolves a foreign user's entry", %{conn: conn} do
+      owner = insert_activated_user()
+      other = insert_activated_user()
+      foreign = insert(:work_experience, user: other, slug: nil)
+
+      conn = get(conn, ~p"/#{owner}/work_experiences/#{foreign}")
+      assert conn.status == 404
+    end
+  end
+
   describe "index (no id param)" do
     test "passes through cleanly and renders the listing", %{conn: conn} do
       user = insert_activated_user()

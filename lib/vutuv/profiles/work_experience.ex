@@ -3,7 +3,6 @@ defmodule Vutuv.Profiles.WorkExperience do
 
   use VutuvWeb, :model
   import Ecto.Query
-  @derive {Phoenix.Param, key: :slug}
 
   schema "work_experiences" do
     field(:organization, :string)
@@ -104,6 +103,13 @@ defmodule Vutuv.Profiles.WorkExperience do
       desc: u.start_year,
       desc: u.start_month
     )
+  end
+
+  # Imported legacy entries can carry a NULL slug; falling back to the id
+  # keeps their URLs (and the whole profile page) working instead of raising.
+  defimpl Phoenix.Param, for: __MODULE__ do
+    def to_param(%{slug: slug}) when is_binary(slug) and slug != "", do: slug
+    def to_param(%{id: id}), do: id
   end
 
   defimpl String.Chars, for: __MODULE__ do

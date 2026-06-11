@@ -1,17 +1,21 @@
 <.page_header crumbs={[
   gettext("Users"),
   {full_name(@user), ~p"/#{@user}"},
-  gettext("Following")
+  if(same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows"))
 ]} />
 
 <div class="search-results card-list">
   <section class="card">
-    <h1><%= gettext "Following" %></h1>
+    <h1><%= if same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows") %></h1>
 
     {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
 
     <%= if(Enum.count(@followees) == 0) do %>
-      <p class="card__empty"><%= gettext "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!" %></p>
+      <%= if same_user?(@user, @current_user) do %>
+        <p class="card__empty"><%= gettext "It doesn't look like you're following anyone yet. Open the profile of someone you know or find interesting and click the follow button!" %></p>
+      <% else %>
+        <p class="card__empty"><%= gettext "Not following anyone yet." %></p>
+      <% end %>
     <% end %>
     <.pager params={@conn.params} total={@total_followees} />
   </section>

@@ -11,7 +11,11 @@
     {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @followers, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
 
     <%= if(Enum.count(@followers) == 0) do %>
-      <p class="card__empty"><%= gettext "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites." %></p>
+      <%= if same_user?(@user, @current_user) do %>
+        <p class="card__empty"><%= gettext "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites." %></p>
+      <% else %>
+        <p class="card__empty"><%= gettext "No followers yet." %></p>
+      <% end %>
     <% end %>
     <.pager params={@conn.params} total={@total_followers} />
   </section>

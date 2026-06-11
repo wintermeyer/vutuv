@@ -1,10 +1,10 @@
 <.page_header
-  title={gettext("About this Email")}
+  title={@email.value}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Emails"), ~p"/#{@user}/emails"},
-    gettext("More Info")
+    @email.value
   ]}
 />
 
@@ -17,7 +17,9 @@
   />
 
   <h1><%= gettext("Email") %></h1>
-  <p><%= @email.value %></p>
-  <h1><%= gettext("Visibility") %></h1>
-  <p><%= if @email.public?, do: gettext("Public"), else: gettext("Private") %></p>
+  <p><a href={"mailto:" <> @email.value}><%= @email.value %></a></p>
+  <%= if same_user?(@user, @current_user) do %>
+    <h1><%= gettext("Visibility") %></h1>
+    <p><%= if @email.public?, do: gettext("Public"), else: gettext("Private") %></p>
+  <% end %>
 </.card_section>

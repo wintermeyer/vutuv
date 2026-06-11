@@ -231,7 +231,12 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp work_line(work) do
     period = Markdown.work_period(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
-    "* " <> line <> if period, do: " (#{period})", else: ""
+    description = Map.get(work, :description)
+
+    "* " <>
+      line <>
+      if(period, do: " (#{period})", else: "") <>
+      if description, do: ": #{description}", else: ""
   end
 
   defp link_line(%{description: nil, url: url}), do: "* #{url}"

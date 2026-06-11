@@ -793,6 +793,11 @@ td.text-right {
 .job__edit {
   float: right;
 }
+.job__description {
+  color: #475569;
+  font-size: 14px;
+  margin: 4px 0 0;
+}
 
 /* ---------- Link screenshots (`ul.thumbs` on the links page) ---------- */
 /* Flex rows (the legacy 400px float + 415px text margin overflowed the 48rem
@@ -957,6 +962,7 @@ ul.thumbs li .text .url a {
   .button-list li { border-color: #1e293b; }
   .job { border-color: #1e293b; }
   .job__title { color: #f1f5f9; }
+  .job__description { color: #94a3b8; }
   .job__organization { color: #cbd5e1; }
   ul.thumbs li { border-color: #1e293b; }
   ul.thumbs li .img { border-color: #334155; }

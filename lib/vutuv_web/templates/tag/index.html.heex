@@ -2,23 +2,8 @@
 
 <div class="card-list">
   <section class="card">
-    <div class="card__tablewrap">
-    <table>
-      <thead>
-        <tr>
-          <th><%= gettext "Tag name" %></th>
-          <th><%= gettext "Slug" %></th>
-        </tr>
-      </thead>
-      <tbody>
-        <%= for tag <- @tags do %>
-          <tr>
-            <td><%= link tag.name || tag.slug, to: ~p"/tags/#{tag}" %></td>
-            <td class="text-left text-slate-500"><%= tag.slug %></td>
-          </tr>
-        <% end %>
-      </tbody>
-    </table>
+    <div class="flex flex-wrap gap-2">
+      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"}>{tag.name || tag.slug}</.chip>
     </div>
     <.pager params={@conn.params} total={@tags_count} />
   </section>

@@ -1,10 +1,10 @@
 <.page_header
-  title={gettext("About this Address")}
+  title={@address.description || gettext("Address")}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Addresses"), ~p"/#{@user}/addresses"},
-    gettext("Show")
+    @address.description || gettext("Address")
   ]}
 />
 
@@ -16,7 +16,5 @@
     delete_to={~p"/#{@user}/addresses/#{@address}"}
   />
 
-  <h1><%= @address.description %></h1>
   <p><%= format_address @address %></p>
 </.card_section>
-

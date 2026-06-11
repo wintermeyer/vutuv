@@ -55,6 +55,8 @@ UPDATE users SET administrator = true WHERE id = <user_id>;
 
 Admin panel: http://localhost:4000/admin
 
+A logged-in member without admin rights who opens `/admin` gets a 403 page that explains exactly this: admin rights are granted by the instance operator directly in the database (contact via Impressum).
+
 ## Architecture
 
 - **Views**: mostly Phoenix 1.8 HTML modules with `embed_templates` (no `phoenix_view` dependency); **LiveView is being adopted incrementally** for the real-time parts (see below)

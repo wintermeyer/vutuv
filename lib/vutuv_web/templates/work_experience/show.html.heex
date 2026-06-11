@@ -1,10 +1,10 @@
 <.page_header
-  title={gettext("About this Experience")}
+  title={Enum.join(Enum.filter([@work_experience.title, @work_experience.organization], & &1), " @ ")}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Experience"), ~p"/#{@user}/work_experiences"},
-    gettext("Show")
+    @work_experience.title
   ]}
 />
 
@@ -16,12 +16,12 @@
     delete_to={~p"/#{@user}/work_experiences/#{@work_experience}"}
   />
 
-  <h1><%= gettext("Job Title") %></h1>
-  <p><%= @work_experience.title %></p>
-  <h1><%= gettext("Organization") %></h1>
-  <p><%= @work_experience.organization %></p>
   <h1><%= gettext("Time Period") %></h1>
   <p>
     <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>
   </p>
+  <%= if @work_experience.description do %>
+    <h1><%= gettext("Description") %></h1>
+    <p><%= @work_experience.description %></p>
+  <% end %>
 </.card_section>

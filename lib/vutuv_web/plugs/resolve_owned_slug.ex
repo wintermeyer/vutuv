@@ -21,6 +21,9 @@ defmodule VutuvWeb.Plug.ResolveOwnedSlug do
       (e.g. `:tag` when the slug lives on the joined tag, not the member row)
     * `:select` — optional field to select instead of the whole struct
       (e.g. `:id` to assign just the id)
+    * `:id_fallback` — also match the param against the member `id` when it
+      casts as a UUID (for rows whose slug column is NULL; their
+      `Phoenix.Param` falls back to the id). Only without `:join`.
   """
 
   import Plug.Conn
@@ -35,7 +38,8 @@ defmodule VutuvWeb.Plug.ResolveOwnedSlug do
       field: Keyword.fetch!(opts, :field),
       assign: Keyword.fetch!(opts, :assign),
       join: Keyword.get(opts, :join),
-      select: Keyword.get(opts, :select)
+      select: Keyword.get(opts, :select),
+      id_fallback: Keyword.get(opts, :id_fallback, false)
     }
   end
 
@@ -53,7 +57,15 @@ defmodule VutuvWeb.Plug.ResolveOwnedSlug do
   end
 
   defp query(parent, slug, %{join: nil, assoc: assoc, field: field} = opts) do
-    from(m in Ecto.assoc(parent, assoc), where: field(m, ^field) == ^slug)
+    # The OR lives inside one `where`, so it stays ANDed with the owner
+    # scoping that `Ecto.assoc/2` already put on the query.
+    matcher =
+      case opts.id_fallback && Vutuv.UUIDv7.cast(slug) do
+        {:ok, id} -> dynamic([m], field(m, ^field) == ^slug or m.id == ^id)
+        _ -> dynamic([m], field(m, ^field) == ^slug)
+      end
+
+    from(m in Ecto.assoc(parent, assoc), where: ^matcher)
     |> maybe_select(opts.select)
   end
 

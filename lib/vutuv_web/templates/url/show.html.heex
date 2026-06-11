@@ -1,10 +1,10 @@
 <.page_header
-  title={gettext("About this Link")}
+  title={@url.description || @url.value}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Links"), ~p"/#{@user}/links"},
-    gettext("More Info")
+    @url.description || @url.value
   ]}
 />
 
@@ -18,6 +18,8 @@
 
   <h1><%= gettext("URL") %></h1>
   <p><%= link @url.value, to: @url.value %></p>
-  <h1><%= gettext("Description") %></h1>
-  <p><%= @url.description %></p>
+  <%= if @url.description do %>
+    <h1><%= gettext("Description") %></h1>
+    <p><%= @url.description %></p>
+  <% end %>
 </.card_section>

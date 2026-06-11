@@ -14,7 +14,9 @@ defmodule VutuvWeb.WorkExperienceController do
     assoc: :work_experiences,
     slug_param: "id",
     field: :slug,
-    assign: :job
+    assign: :job,
+    # legacy imports can carry a NULL slug; their Phoenix.Param is the id
+    id_fallback: true
   )
 
   # Index and show are also served as Markdown / text / JSON via

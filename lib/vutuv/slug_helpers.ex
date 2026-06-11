@@ -36,11 +36,25 @@ defmodule Vutuv.SlugHelpers do
   defp handleize(text) do
     text
     |> String.downcase()
+    |> transliterate()
     |> String.replace(~r/[^a-z0-9\s_-]/u, "")
     |> String.replace(~r/[\s-]+/, "_")
     |> String.trim("_")
     |> String.slice(0, @handle_max_length)
     |> String.trim("_")
+  end
+
+  @german_folds %{"ä" => "ae", "ö" => "oe", "ü" => "ue", "ß" => "ss"}
+
+  # ASCII-fold the already-downcased text instead of letting the character
+  # filter swallow it ("Prüfer" must become "pruefer", not "prfer"): German
+  # specials get their two-letter forms, everything else loses its
+  # diacritics via Unicode decomposition (é -> e).
+  defp transliterate(text) do
+    text
+    |> String.replace(Map.keys(@german_folds), &Map.fetch!(@german_folds, &1))
+    |> :unicode.characters_to_nfd_binary()
+    |> String.replace(~r/\p{Mn}/u, "")
   end
 
   defp gen_slug(resource) do
@@ -52,6 +66,7 @@ defmodule Vutuv.SlugHelpers do
   defp slugify_downcase(text) do
     text
     |> String.downcase()
+    |> transliterate()
     |> String.replace(~r/[^\w\s-]/u, "")
     |> String.replace(~r/[\s_]+/, "-")
     |> String.trim("-")

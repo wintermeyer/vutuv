@@ -87,6 +87,21 @@ defmodule Vutuv.Accounts.SlugTest do
       assert Vutuv.SlugHelpers.gen_handle_unique(user, User, :active_slug) == "jane_maria_doe"
     end
 
+    test "umlauts and ß transliterate instead of vanishing" do
+      # "Paula Prüfer" used to come out as "paula_prfer" - the umlaut was
+      # stripped, mangling the name. German specials map to their
+      # two-letter forms, other diacritics to their base letter.
+      assert handle_for("Paula", "Prüfer") == "paula_pruefer"
+      assert handle_for("Jörg", "Weiß") == "joerg_weiss"
+      assert handle_for("Älva", nil) == "aelva"
+      assert handle_for("André", "Çelik") == "andre_celik"
+    end
+
+    defp handle_for(first, last) do
+      user = %User{first_name: first, last_name: last}
+      Vutuv.SlugHelpers.gen_handle_unique(user, User, :active_slug)
+    end
+
     test "generated handles never exceed 15 characters" do
       user = %User{first_name: "Maximiliane", last_name: "Wintermeyer"}
 

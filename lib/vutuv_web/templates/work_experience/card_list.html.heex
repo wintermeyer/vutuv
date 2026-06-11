@@ -6,6 +6,9 @@
     <span class="job__date">
       <%= format_duration(job.start_month, job.start_year, job.end_month, job.end_year) %>
     </span>
+    <%= if job.description do %>
+      <p class="job__description"><%= job.description %></p>
+    <% end %>
     <.row_actions
       :if={same_user?(@user, @current_user)}
       class="mt-2"
