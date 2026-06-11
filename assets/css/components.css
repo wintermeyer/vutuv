@@ -848,6 +848,24 @@ ul.thumbs li .text .url a {
   padding: 0.75em 0.9em;
 }
 .markdown pre code { background: transparent; padding: 0; }
+/* Markdown tables (the developer docs): readable cells, and the table
+   scrolls horizontally instead of being clipped by the card's
+   overflow:hidden (same idea as .card__tablewrap). */
+.markdown table {
+  border-collapse: collapse;
+  display: block;
+  margin: 0 0 0.75em;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.markdown th,
+.markdown td {
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.4em 0.9em 0.4em 0;
+  text-align: left;
+  vertical-align: top;
+}
+.markdown th { font-weight: 600; }
 /* Inline post images (own attachments referenced via ![](…)). */
 .markdown img.post-inline-image {
   border-radius: 8px;
@@ -958,6 +976,7 @@ ul.thumbs li .text .url a {
   .markdown blockquote { border-color: #334155; color: #94a3b8; }
   .markdown code { background: #1e293b; }
   .markdown pre { background: #1e293b; }
+  .markdown th, .markdown td { border-color: #1e293b; }
   .error-page { background: #0f172a; outline-color: #1e293b; }
   .error-page__code { color: #334155; }
   .error-page__title { color: #f1f5f9; }

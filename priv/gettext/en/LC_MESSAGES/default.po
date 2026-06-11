@@ -452,6 +452,7 @@ msgstr ""
 msgid "More"
 msgstr ""
 
+#: lib/vutuv_web/templates/access_token/new.html.heex:8
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:15
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:17
 #: lib/vutuv_web/templates/group/index.html.heex:15
@@ -459,6 +460,7 @@ msgstr ""
 msgid "Name"
 msgstr ""
 
+#: lib/vutuv_web/templates/access_token/new.html.heex:1
 #: lib/vutuv_web/templates/ad/new.html.heex:3
 #: lib/vutuv_web/templates/address/new.html.heex:5
 #: lib/vutuv_web/templates/admin/exonym/new.html.heex:6
@@ -4851,4 +4853,173 @@ msgstr ""
 #: lib/vutuv_web/live/search_live.ex:235
 #, elixir-autogen, elixir-format, fuzzy
 msgid "only people with this tag, combinable: miller tag:php"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:1
+#: lib/vutuv_web/templates/access_token/index.html.heex:1
+#: lib/vutuv_web/templates/access_token/new.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Access tokens"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "An expiry limits the damage if a token leaks. You can always revoke earlier."
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Create an access token"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_doc/show.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Developers"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:46
+#, elixir-autogen, elixir-format
+msgid "Edit your profile and its sections"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Expires"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:52
+#, elixir-autogen, elixir-format
+msgid "Follow people, manage connections and endorse tags for you"
+msgstr ""
+
+#: lib/vutuv_web/controllers/access_token_controller.ex:63
+#, elixir-autogen, elixir-format
+msgid "One token was revoked."
+msgid_plural "%{count} tokens were revoked."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:11
+#, elixir-autogen, elixir-format
+msgid "Only for you, so you recognize the token in the list later."
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Permissions"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:10
+#, elixir-autogen, elixir-format
+msgid "Personal access tokens let scripts and third-party tools use the vutuv API as you, limited to the permissions you pick. Revoking a token cuts off its access immediately. Documentation: "
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:55
+#, elixir-autogen, elixir-format
+msgid "Read posts visible to you"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:61
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Read your messages"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:43
+#, elixir-autogen, elixir-format
+msgid "Read your profile, including entries only you can see"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:50
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Revoke"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:45
+#, elixir-autogen, elixir-format
+msgid "Revoke \"%{name}\"? Anything using it stops working immediately."
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:62
+#, elixir-autogen, elixir-format
+msgid "Revoke ALL tokens? Every app and script using them stops working immediately."
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:65
+#, elixir-autogen, elixir-format
+msgid "Revoke all tokens"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:49
+#, elixir-autogen, elixir-format
+msgid "See your followers, who you follow, and your connections"
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:64
+#, elixir-autogen, elixir-format
+msgid "Send messages as you"
+msgstr ""
+
+#: lib/vutuv_web/controllers/access_token_controller.ex:52
+#, elixir-autogen, elixir-format
+msgid "The token \"%{name}\" no longer works."
+msgstr ""
+
+#: lib/vutuv/api_auth/scopes.ex:58
+#, elixir-autogen, elixir-format
+msgid "Write, edit and delete your posts"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:7
+#, elixir-autogen, elixir-format, fuzzy
+msgid "You have no active tokens."
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/index.html.heex:21
+#, elixir-autogen, elixir-format
+msgid "Your new token. Copy it now, it will not be shown again:"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:9
+#, elixir-autogen, elixir-format
+msgid "e.g. My import script"
+msgstr ""
+
+#: lib/vutuv_web/views/access_token_html.ex:10
+#, elixir-autogen, elixir-format
+msgid "expires %{date}"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:44
+#, elixir-autogen, elixir-format
+msgid "in 30 days"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:45
+#, elixir-autogen, elixir-format
+msgid "in 90 days"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:46
+#, elixir-autogen, elixir-format
+msgid "in a year"
+msgstr ""
+
+#: lib/vutuv_web/views/access_token_html.ex:15
+#, elixir-autogen, elixir-format
+msgid "last used %{date}"
+msgstr ""
+
+#: lib/vutuv_web/templates/access_token/new.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "never"
+msgstr ""
+
+#: lib/vutuv_web/views/access_token_html.ex:7
+#, elixir-autogen, elixir-format
+msgid "never expires"
+msgstr ""
+
+#: lib/vutuv_web/views/access_token_html.ex:12
+#, elixir-autogen, elixir-format
+msgid "never used"
 msgstr ""

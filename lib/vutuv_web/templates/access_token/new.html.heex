@@ -1,0 +1,58 @@
+<.page_header crumbs={[{gettext("Access tokens"), ~p"/access_tokens"}, gettext("New")]} />
+
+<.card_section>
+  <.form :let={f} for={@changeset} as={:token} action={~p"/access_tokens"} class="editform">
+    <.form_error changeset={@changeset} />
+
+    <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+      <%= label(f, :name, gettext("Name")) %>
+      <%= text_input(f, :name, autofocus: true, placeholder: gettext("e.g. My import script")) %>
+      <p class="editform__hint">
+        {gettext("Only for you, so you recognize the token in the list later.")}
+      </p>
+      <%= error_tag(f, :name) %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :scopes), do: " editform__field--error"}"}>
+      <label>{gettext("Permissions")}</label>
+      <div class="mt-1 space-y-2">
+        <%= for scope <- Vutuv.ApiAuth.Scopes.all() do %>
+          <label class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              name="token[scopes][]"
+              value={scope}
+              checked={scope in (Ecto.Changeset.get_field(@changeset, :scopes) || [])}
+              class="mt-0.5"
+            />
+            <span>
+              <code class="font-semibold">{scope}</code>
+              &middot; {Vutuv.ApiAuth.Scopes.description(scope)}
+            </span>
+          </label>
+        <% end %>
+      </div>
+      <%= error_tag(f, :scopes) %>
+    </div>
+
+    <div class="editform__field">
+      <%= label(f, :expires_in, gettext("Expires")) %>
+      <%= select(
+        f,
+        :expires_in,
+        [
+          {gettext("in 30 days"), "30"},
+          {gettext("in 90 days"), "90"},
+          {gettext("in a year"), "365"},
+          {gettext("never"), "never"}
+        ],
+        selected: "90"
+      ) %>
+      <p class="editform__hint">
+        {gettext("An expiry limits the damage if a token leaks. You can always revoke earlier.")}
+      </p>
+    </div>
+
+    <.form_actions backlink={~p"/access_tokens"} />
+  </.form>
+</.card_section>

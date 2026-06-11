@@ -1,0 +1,73 @@
+<.page_header title={gettext("Access tokens")} crumbs={[gettext("Access tokens")]} />
+
+<%!-- empty={false} on purpose: the intro line and the one-time new-token box
+      must render even when the list is empty (card_section's empty branch
+      would swallow the whole inner block). --%>
+<.card_section
+  add_href={~p"/access_tokens/new"}
+  add_label={gettext("Create an access token")}
+  empty={false}
+>
+  <p class="text-sm text-slate-500 dark:text-slate-400">
+    {gettext(
+      "Personal access tokens let scripts and third-party tools use the vutuv API as you, limited to the permissions you pick. Revoking a token cuts off its access immediately. Documentation: "
+    )}<a href={~p"/developers"} class="font-semibold text-brand-600 hover:text-brand-700">vutuv.de/developers</a>
+  </p>
+
+  <%= if new_token = Phoenix.Flash.get(@flash, :new_token) do %>
+    <div
+      class="mt-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
+      data-new-token
+    >
+      <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
+        {gettext("Your new token. Copy it now, it will not be shown again:")}
+      </p>
+      <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{new_token}</code>
+    </div>
+  <% end %>
+
+  <%= if @tokens == [] do %>
+    <p class="card__empty">{gettext("You have no active tokens.")}</p>
+  <% else %>
+    <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <%= for token <- @tokens do %>
+        <li class="flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0">
+          <div class="min-w-0 flex-1">
+            <p class="font-medium text-slate-800 dark:text-slate-100">{token.name}</p>
+            <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+              {Enum.join(token.scopes, ", ")}
+            </p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+              {expiry_line(token)} &middot; {last_used_line(token)}
+            </p>
+          </div>
+          <.button
+            href={~p"/access_tokens/#{token.id}"}
+            method="delete"
+            variant="danger"
+            data-confirm={
+              gettext("Revoke \"%{name}\"? Anything using it stops working immediately.",
+                name: token.name
+              )
+            }
+          >
+            {gettext("Revoke")}
+          </.button>
+        </li>
+      <% end %>
+    </ul>
+
+    <div class="mt-6 border-t border-slate-100 pt-4 dark:border-slate-800">
+      <.button
+        href={~p"/access_tokens"}
+        method="delete"
+        variant="secondary"
+        data-confirm={
+          gettext("Revoke ALL tokens? Every app and script using them stops working immediately.")
+        }
+      >
+        {gettext("Revoke all tokens")}
+      </.button>
+    </div>
+  <% end %>
+</.card_section>

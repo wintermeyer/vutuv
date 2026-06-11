@@ -29,7 +29,18 @@ defmodule Vutuv.RateLimiter do
   exceeded. Creating the table lazily means callers work even if the limiter
   process has not been started (e.g. some unit tests).
   """
-  def hit(key, limit, window_ms)
+  def hit(key, limit, window_ms) do
+    case hit_remaining(key, limit, window_ms) do
+      {:ok, _remaining} -> :ok
+      {:error, :rate_limited} -> {:error, :rate_limited}
+    end
+  end
+
+  @doc """
+  Like `hit/3`, but returns `{:ok, remaining}` so callers can expose the
+  budget (the API's `X-RateLimit-Remaining` header).
+  """
+  def hit_remaining(key, limit, window_ms)
       when is_integer(limit) and limit > 0 and is_integer(window_ms) and window_ms > 0 do
     ensure_table()
     now = System.system_time(:millisecond)
@@ -39,7 +50,7 @@ defmodule Vutuv.RateLimiter do
 
     count = :ets.update_counter(@table, bucket, {2, 1}, {bucket, 0, window_end})
 
-    if count <= limit, do: :ok, else: {:error, :rate_limited}
+    if count <= limit, do: {:ok, limit - count}, else: {:error, :rate_limited}
   end
 
   @doc false

@@ -181,6 +181,13 @@ defmodule VutuvWeb.PageController do
     (booking happens online and requires a login)
 
   List pages paginate with `?page=N`.
+
+  ## API
+
+  An authenticated REST/JSON API for third-party apps and scripts lives at
+  `/api/v1` (Bearer tokens, scoped permissions, 5,000 requests/hour).
+  Documentation: `/developers` — also as raw Markdown at `/developers.md`,
+  `/developers/authentication.md` and `/developers/reference.md`.
   """
 
   @doc "Serves /llms.txt: the agent-format discovery file (llms.txt convention)."

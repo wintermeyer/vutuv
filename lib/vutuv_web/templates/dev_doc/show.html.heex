@@ -1,0 +1,30 @@
+<.page_header title={@page_title} crumbs={[gettext("Developers")]} />
+
+<div class="card-list">
+  <section class="card">
+    <nav class="mb-6 flex flex-wrap gap-4 border-b border-slate-100 pb-4 text-sm font-semibold dark:border-slate-800">
+      <.link
+        href={~p"/developers"}
+        class={nav_class(@page == "index")}
+      >
+        Overview
+      </.link>
+      <.link
+        href={~p"/developers/authentication"}
+        class={nav_class(@page == "authentication")}
+      >
+        Authentication
+      </.link>
+      <.link
+        href={~p"/developers/reference"}
+        class={nav_class(@page == "reference")}
+      >
+        Reference
+      </.link>
+    </nav>
+
+    <div class="markdown text-slate-800 dark:text-slate-200">
+      {raw(@body)}
+    </div>
+  </section>
+</div>

@@ -63,6 +63,24 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def oauth_app_factory do
+    %Vutuv.ApiAuth.App{
+      user: build(:activated_user),
+      name: sequence(:oauth_app_name, &"App #{&1}"),
+      client_id: sequence(:oauth_client_id, &"vutuv_app_test_#{&1}"),
+      redirect_uris: ["https://example.org/callback"]
+    }
+  end
+
+  def api_token_factory do
+    %Vutuv.ApiAuth.Token{
+      kind: "pat",
+      name: sequence(:api_token_name, &"Token #{&1}"),
+      scopes: ["profile:read"],
+      token_hash: sequence(:api_token_hash, &Vutuv.ApiAuth.hash_token("factory_token_#{&1}"))
+    }
+  end
+
   def search_term_factory do
     %Vutuv.Accounts.SearchTerm{
       value: sequence(:search_term_value, &"term-#{&1}"),

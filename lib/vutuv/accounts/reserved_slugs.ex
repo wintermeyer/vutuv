@@ -17,8 +17,9 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   # Router prefixes (current and legacy), endpoint/static paths, and a few
   # conventional names kept free for future use.
   @reserved ~w(
-    about admin ads api assets avatars blocks blog bookmarks community connections contact
-    covers css datenschutzerklaerung dev edit emails favicon.ico feed follow_back
+    about access_tokens admin ads api assets avatars blocks blog bookmarks community
+    connections contact covers css datenschutzerklaerung dev developers edit emails
+    favicon.ico feed follow_back
     follows fonts groups help images impressum jobs js legal likes listings live
     llms.txt login logout mail memberships messages moderation new news
     notifications phoenix post_images posts press privacy reports robots.txt

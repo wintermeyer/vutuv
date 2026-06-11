@@ -58,6 +58,16 @@ defmodule VutuvWeb.Router do
     plug(Plugs.Locale)
   end
 
+  # The versioned third-party JSON API (see Vutuv.ApiAuth and /developers).
+  # Bearer tokens only — no session, no CSRF; CORS is wide open because no
+  # cookie ever authenticates here. ApiCors must run before ApiV1Auth so
+  # preflights (sent without an Authorization header) are answered.
+  pipeline :api_v1 do
+    plug(:accepts, ["json"])
+    plug(Plugs.ApiCors)
+    plug(Plugs.ApiV1Auth)
+  end
+
   pipeline :render_404 do
     plug(Plugs.All404)
   end
@@ -139,6 +149,11 @@ defmodule VutuvWeb.Router do
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
+    # Developer documentation for /api/v1 (English; "developers" is in
+    # ReservedSlugs). Each page also serves its raw Markdown under .md.
+    get("/developers", DevDocController, :index)
+    get("/developers/:page", DevDocController, :show)
+
     # The daily text ad: the public offer page, the booking flow and the
     # member's booking dashboard (logged-in only; checked in the
     # controller). See Vutuv.Ads; admin approval lives under /admin/ads.
@@ -155,6 +170,12 @@ defmodule VutuvWeb.Router do
     # Blocking: the profile-footer Block control, the private blocked list,
     # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).
     resources("/blocks", BlockController, only: [:index, :create, :delete])
+
+    # Personal access tokens for /api/v1 ("access_tokens" is in
+    # ReservedSlugs). Logged-in only. The collection DELETE (no id) is the
+    # panic button: revoke every token at once.
+    delete("/access_tokens", AccessTokenController, :delete_all)
+    resources("/access_tokens", AccessTokenController, only: [:index, :new, :create, :delete])
 
     # Reporting content (family-friendliness / bullying / spam): the form and
     # its submission. Logged-in only; checked in the controller.
@@ -249,6 +270,19 @@ defmodule VutuvWeb.Router do
     resources("/exonyms", ExonymController)
 
     resources("/tags", TagController, param: "slug")
+  end
+
+  # /api/v1 — the authenticated third-party API. Contract: additions are
+  # free, breaking changes mean /api/v2 (a new scope here).
+  scope "/api/v1", VutuvWeb.ApiV1, as: :api_v1 do
+    pipe_through(:api_v1)
+
+    get("/me", MeController, :show)
+    get("/users/:slug", UserController, :show)
+
+    # JSON 404 for unknown API paths — without this they would fall through
+    # to the HTML profile routes. Also the CORS preflight's match.
+    match(:*, "/*path", NotFoundController, :show)
   end
 
   scope "/api/1.0/", as: :api do

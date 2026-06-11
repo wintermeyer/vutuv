@@ -22,25 +22,30 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   @doc """
   Options:
 
+    * `:viewer` — the user whose eyes the doc is built through (the
+      authenticated `/api/v1` reads). Default `nil` = the anonymous public
+      view the extension URLs serve; never pass a viewer for those, they
+      must stay cache-safe.
     * `:emails` — override the email list (the legacy session-aware vCard
-      route passes the viewer-visible set; default is the public addresses).
+      route passes the viewer-visible set; default is what `:viewer` sees).
     * `:include_photo` — embed the avatar as a base64 data URI for the
       vCard renderer (skipped for md/txt/json, where it would be dead weight).
   """
   def build(user, opts \\ []) do
     user = preload(user)
+    viewer = Keyword.get(opts, :viewer)
     path = "/" <> user.active_slug
     # The header job, resolved against the already-preloaded experiences
     # (current_job_in_memory mirrors the page's DB-backed current_job/1 on
     # an id-ordered list — UUID v7 ids sort by creation time).
     job = UserHelpers.current_job_in_memory(Enum.sort_by(user.work_experiences, & &1.id))
     work_info = UserHelpers.work_information_string_for_job(job, 256)
-    posts = Vutuv.Posts.profile_posts(user, nil)
+    posts = Vutuv.Posts.profile_posts(user, viewer)
 
-    # The anonymous public view: the same addresses the page shows a
-    # logged-out visitor.
+    # Without a viewer: the anonymous public view, the same addresses the
+    # page shows a logged-out visitor.
     emails =
-      Keyword.get_lazy(opts, :emails, fn -> UserHelpers.emails_for_display(user, nil) end)
+      Keyword.get_lazy(opts, :emails, fn -> UserHelpers.emails_for_display(user, viewer) end)
 
     AgentDocs.doc_meta("profile", path,
       noindex: user.noindex?,
@@ -69,7 +74,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
         followers: Vutuv.Social.follower_count(user),
         following: Vutuv.Social.followee_count(user),
         connections: Vutuv.Social.connection_count(user),
-        posts: Vutuv.Posts.count_author_posts(user, nil)
+        posts: Vutuv.Posts.count_author_posts(user, viewer)
       },
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
