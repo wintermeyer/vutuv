@@ -57,22 +57,38 @@ defmodule VutuvWeb.LayoutHTML do
   def ad_banner(assigns) do
     ~H"""
     <div id="vutuv-ad" data-ad-banner class="mx-auto max-w-6xl px-4 pt-4">
-      <div class="flex items-start gap-3 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-        <span class="mt-0.5 shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:text-slate-400">{gettext("Ad")}</span>
-        <%= case @banner do %>
-          <% {:ad, ad} -> %>
-            <div class="markdown min-w-0 text-sm text-slate-700 dark:text-slate-300">
-              {VutuvWeb.Markdown.render(ad.content)}
-            </div>
-          <% :house -> %>
-            <p class="min-w-0 text-sm text-slate-700 dark:text-slate-300">
-              {gettext("This spot is free today. One day, one ad, every visitor.")}
-              <.link href={~p"/ads"} class="font-semibold text-brand-600 hover:text-brand-700">
-                {gettext("Book your ad")}
-              </.link>
-            </p>
-        <% end %>
-      </div>
+      <.ad_banner_box banner={@banner} />
+    </div>
+    """
+  end
+
+  @doc """
+  The banner box itself (label + content), without the live-banner wrapper:
+  no `id="vutuv-ad"` (the plug's seen-detection marker) and no
+  `data-ad-banner` (the two-minute auto-hide hook). The booking flow's
+  preview page renders this directly, so the buyer sees exactly the box that
+  will run - without burning their hourly slot or having the preview fade
+  away under them.
+  """
+  attr(:banner, :any, required: true)
+
+  def ad_banner_box(assigns) do
+    ~H"""
+    <div class="flex items-start gap-3 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+      <span class="mt-0.5 shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:text-slate-400">{gettext("Ad")}</span>
+      <%= case @banner do %>
+        <% {:ad, ad} -> %>
+          <div class="markdown min-w-0 text-sm text-slate-700 dark:text-slate-300">
+            {VutuvWeb.Markdown.render(ad.content)}
+          </div>
+        <% :house -> %>
+          <p class="min-w-0 text-sm text-slate-700 dark:text-slate-300">
+            {gettext("This spot is free today. One day, one ad, every visitor.")}
+            <.link href={~p"/ads"} class="font-semibold text-brand-600 hover:text-brand-700">
+              {gettext("Book your ad")}
+            </.link>
+          </p>
+      <% end %>
     </div>
     """
   end

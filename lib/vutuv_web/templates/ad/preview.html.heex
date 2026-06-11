@@ -1,0 +1,88 @@
+<.page_header crumbs={[
+  {gettext("Advertising"), ~p"/ads"},
+  gettext("Preview")
+]} />
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Preview your ad")}</h1>
+    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      {gettext(
+        "This is exactly how your ad will appear between the navigation and the content on %{day}.",
+        day: @ad.day
+      )}
+    </p>
+
+    <%!-- The real banner box on the page-canvas grey, so the preview shows
+    the ad in its natural surroundings. Deliberately without the live
+    banner's id/auto-hide hooks (see LayoutHTML.ad_banner_box/1). --%>
+    <div class="mt-4 rounded-xl bg-slate-100 px-2 py-4 dark:bg-slate-950">
+      <VutuvWeb.LayoutHTML.ad_banner_box banner={{:ad, @ad}} />
+    </div>
+
+    <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-3 dark:bg-slate-800/60">
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Day")}
+        </dt>
+        <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">{@ad.day}</dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Price")}
+        </dt>
+        <dd class="mt-1 font-bold text-slate-900 dark:text-slate-100">
+          {VutuvWeb.AgentDocs.AdsDoc.price_display()}
+        </dd>
+      </div>
+      <div>
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Billing address")}
+        </dt>
+        <dd class="mt-1 whitespace-pre-line text-slate-700 dark:text-slate-300">{[
+          @ad.billing_name,
+          @ad.billing_company,
+          @ad.billing_street,
+          "#{@ad.billing_zip_code} #{@ad.billing_city}",
+          @ad.billing_country,
+          @ad.vat_id
+        ]
+        |> Enum.reject(&(&1 in [nil, ""]))
+        |> Enum.join("\n")}</dd>
+      </div>
+    </dl>
+
+    <p class="mt-4 text-xs text-slate-500 dark:text-slate-400">
+      {gettext(
+        "Booking is binding; payment by invoice. We review and approve every ad before it runs."
+      )}
+    </p>
+
+    <%!-- One form, two ways out: the default action books (binding), the
+    second submit posts the same values back to the form for editing. --%>
+    <form action={~p"/ads"} method="post" class="mt-4" id="ad-confirm-form">
+      <input type="hidden" name="_csrf_token" value={get_csrf_token()} />
+      <input
+        :for={{key, value} <- @ad_params}
+        type="hidden"
+        name={"ad[#{key}]"}
+        value={value}
+      />
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          type="submit"
+          formaction={~p"/ads/new"}
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {gettext("Edit the ad")}
+        </button>
+        <button
+          type="submit"
+          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          {gettext("Book now (binding, by invoice)")}
+        </button>
+      </div>
+    </form>
+  </section>
+</div>

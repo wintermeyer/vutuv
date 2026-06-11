@@ -1,7 +1,7 @@
 defmodule VutuvWeb.AdController do
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :create, :bookings])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :preview, :create, :bookings])
 
   alias Vutuv.Ads
   alias VutuvWeb.AgentDocs
@@ -24,10 +24,33 @@ defmodule VutuvWeb.AdController do
     )
   end
 
+  # The "edit again" leg of the preview step: re-render the form with what
+  # was entered (no errors shown - the changeset carries no action).
+  def new(conn, %{"ad" => ad_params}) do
+    render_form(conn, Ads.change_ad(%Ads.Ad{}, ad_params))
+  end
+
   def new(conn, _params) do
-    # Prefill the first bookable day; the date input's `min` mirrors it.
+    # Prefill the first bookable day; the calendar marks it selected.
     changeset = Ads.change_ad(%Ads.Ad{day: Ads.next_available_day()})
     render_form(conn, changeset)
+  end
+
+  # The check before buying: validate everything (including day
+  # availability), then show the ad exactly as the banner will render it,
+  # with the order summary. Booking happens only on the confirm POST /ads.
+  def preview(conn, %{"ad" => ad_params}) do
+    case Ads.preview_ad(ad_params) do
+      {:ok, ad} ->
+        render(conn, "preview.html",
+          ad: ad,
+          ad_params: ad_params,
+          page_title: gettext("Preview your ad")
+        )
+
+      {:error, changeset} ->
+        render_form(conn, changeset)
+    end
   end
 
   def create(conn, %{"ad" => ad_params}) do

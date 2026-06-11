@@ -4,7 +4,9 @@
 ]} />
 
 <.card_section>
-  <.form :let={f} for={@changeset} action={~p"/ads"} class="editform" id="ad-form">
+  <%!-- Submits to the preview step first; the binding POST /ads happens on
+  the preview page's confirm button. --%>
+  <.form :let={f} for={@changeset} action={~p"/ads/preview"} class="editform" id="ad-form">
     <.form_error changeset={@changeset} />
 
     <div class={"editform__field#{if error_tag(f, :day), do: " editform__field--error"}"}>
@@ -125,6 +127,11 @@
       {gettext("We review and approve every ad before it runs, which is why the earliest bookable day is three days out.")}
     </p>
 
-    <.form_actions backlink={~p"/ads"} />
+    <%!-- Hand-written actions row: the submit leads to the preview, not the
+    booking, so it must not say "Submit" (<.form_actions> has a fixed label). --%>
+    <div class="editform__actions">
+      <a class="button button--cancel" href={~p"/ads"}>{gettext("Cancel")}</a>
+      <button class="button" type="submit">{gettext("Preview your ad")}</button>
+    </div>
   </.form>
 </.card_section>

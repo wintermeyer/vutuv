@@ -86,6 +86,74 @@ defmodule VutuvWeb.AdControllerTest do
     end
   end
 
+  describe "preview (the check before buying)" do
+    test "requires login", %{conn: conn} do
+      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      assert redirected_to(conn) == "/"
+    end
+
+    test "shows the ad exactly as the banner will render it, plus the order summary", %{
+      conn: conn
+    } do
+      {conn, _user} = create_and_login_user(conn)
+      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      html = html_response(conn, 200)
+
+      # The rendered ad with its mandatory label...
+      assert html =~ "<strong>Acme GmbH</strong>"
+      assert html =~ ">Ad</span>"
+      # ...but none of the live-banner hooks: no hourly-cap marker, no
+      # two-minute auto-hide (the preview must not vanish or burn the slot).
+      refute html =~ "vutuv-ad"
+      refute html =~ "data-ad-banner"
+
+      # The order summary and both ways forward.
+      assert html =~ @booking_params["day"]
+      assert html =~ "1,250"
+      assert html =~ ~s(action="/ads") or html =~ ~s(action="#{~p"/ads"}")
+      assert html =~ ~s(formaction="/ads/new")
+      # The params ride along as hidden fields for the confirm POST.
+      assert html =~ ~s(name="ad[content]")
+      assert html =~ ~s(name="ad[billing_name]")
+      # Nothing is booked yet.
+      assert Repo.aggregate(Ads.Ad, :count) == 0
+      assert flush_emails() == []
+    end
+
+    test "invalid input goes back to the form with errors", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/ads/preview", %{"ad" => Map.put(@booking_params, "billing_name", "")})
+
+      html = html_response(conn, 200)
+      assert html =~ "id=\"ad-form\""
+      refute html =~ ~s(formaction="/ads/new")
+    end
+
+    test "an already booked day is caught at preview time", %{conn: conn} do
+      insert(:ad, day: Date.from_iso8601!(@booking_params["day"]))
+      {conn, _user} = create_and_login_user(conn)
+
+      conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
+      html = html_response(conn, 200)
+
+      assert html =~ "id=\"ad-form\""
+      assert html =~ "has already been booked"
+    end
+
+    test "the edit round-trip keeps the entered values", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      conn = post(conn, ~p"/ads/new", %{"ad" => @booking_params})
+      html = html_response(conn, 200)
+
+      assert html =~ "id=\"ad-form\""
+      assert html =~ @booking_params["content"]
+      assert html =~ "Acme GmbH"
+    end
+  end
+
   describe "bookings (the member dashboard)" do
     test "requires login", %{conn: conn} do
       conn = get(conn, ~p"/ads/bookings")

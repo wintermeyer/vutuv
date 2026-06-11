@@ -116,6 +116,25 @@ defmodule Vutuv.Ads do
   def change_ad(%Ad{} = ad, attrs \\ %{}), do: Ad.changeset(ad, attrs)
 
   @doc """
+  The check-before-buying step: validates `attrs` like `book_ad/2` would
+  (including whether the day is still free, which `book_ad/2` only learns
+  from the unique index) and returns the would-be ad without persisting
+  anything - the preview page renders it through the real banner component.
+  """
+  def preview_ad(attrs) do
+    %Ad{price_cents: @price_cents}
+    |> Ad.changeset(attrs)
+    |> validate_day_free()
+    |> Ecto.Changeset.apply_action(:insert)
+  end
+
+  defp validate_day_free(changeset) do
+    Ecto.Changeset.validate_change(changeset, :day, fn :day, day ->
+      if get_ad(day), do: [day: "has already been booked"], else: []
+    end)
+  end
+
+  @doc """
   The admin review gate: stamps `approved_at` and the approving admin, after
   which the ad serves on its day. Idempotent - approving an already approved
   ad keeps the original stamp (so two admins clicking at once cannot

@@ -122,6 +122,11 @@ defmodule VutuvWeb.Router do
     # controller). See Vutuv.Ads; admin approval lives under /admin/ads.
     get("/ads", AdController, :index)
     get("/ads/new", AdController, :new)
+    # POST /ads/new is the "edit again" leg of the preview step: it re-renders
+    # the form with the submitted values; /ads/preview shows the ad as the
+    # banner will render it before the binding POST /ads books it.
+    post("/ads/new", AdController, :new)
+    post("/ads/preview", AdController, :preview)
     get("/ads/bookings", AdController, :bookings)
     post("/ads", AdController, :create)
 
