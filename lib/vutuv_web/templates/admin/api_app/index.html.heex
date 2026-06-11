@@ -1,0 +1,71 @@
+<.page_header
+  title={gettext("API applications")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("API applications")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <%= if @apps == [] do %>
+      <p class="card__empty">{gettext("No application has been registered yet.")}</p>
+    <% else %>
+      <div class="card__tablewrap">
+        <table class="pure-table">
+          <thead>
+            <tr>
+              <th>{gettext("Name")}</th>
+              <th>{gettext("Owner")}</th>
+              <th>{gettext("Registered")}</th>
+              <th>{gettext("Status")}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <%= for app <- @apps do %>
+              <tr id={"api-app-#{app.id}"}>
+                <td>{app.name}</td>
+                <td>
+                  <.link href={~p"/#{app.user}"} class="text-brand-600 hover:text-brand-700">
+                    @{app.user.active_slug}
+                  </.link>
+                  <span class="text-slate-500">({full_name(app.user)})</span>
+                </td>
+                <td>{Calendar.strftime(app.inserted_at, "%Y-%m-%d")}</td>
+                <td>
+                  <%= if app.suspended_at do %>
+                    <span class="font-semibold text-red-600">{gettext("Suspended")}</span>
+                  <% else %>
+                    {gettext("Active")}
+                  <% end %>
+                </td>
+                <td class="text-right">
+                  <%= if app.suspended_at do %>
+                    <.button
+                      href={~p"/admin/api_apps/#{app.id}/unsuspend"}
+                      method="post"
+                      variant="secondary"
+                    >
+                      {gettext("Reactivate")}
+                    </.button>
+                  <% else %>
+                    <.button
+                      href={~p"/admin/api_apps/#{app.id}/suspend"}
+                      method="post"
+                      variant="danger"
+                      data-confirm={
+                        gettext("Suspend \"%{name}\"? All of its tokens stop working immediately.",
+                          name: app.name
+                        )
+                      }
+                    >
+                      {gettext("Suspend")}
+                    </.button>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+</div>

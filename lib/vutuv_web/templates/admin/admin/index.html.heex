@@ -55,6 +55,26 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1>{gettext("API applications")}</h1>
+      <a
+        href={~p"/admin/api_apps"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-api-apps-link"
+      >
+        {gettext("Manage applications")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      {ngettext(
+        "%{count} registered third-party application. Suspending one cuts off all of its tokens.",
+        "%{count} registered third-party applications. Suspending one cuts off all of its tokens.",
+        @api_apps_count
+      )}
+    </p>
+  </section>
+
   {VutuvWeb.Admin.SlugHTML.index(%{conn: @conn})}
   {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

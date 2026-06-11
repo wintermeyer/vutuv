@@ -1,0 +1,42 @@
+<.page_header title={gettext("Your applications")} crumbs={[{gettext("Developers"), ~p"/developers"}, gettext("Applications")]} />
+
+<.card_section
+  add_href={~p"/developers/apps/new"}
+  add_label={gettext("Register an application")}
+  empty={false}
+>
+  <p class="text-sm text-slate-500 dark:text-slate-400">
+    {gettext(
+      "OAuth applications let other members connect your software with their vutuv account through a consent screen, instead of pasting tokens. Documentation: "
+    )}<a
+      href={~p"/developers/authentication"}
+      class="font-semibold text-brand-600 hover:text-brand-700"
+    >vutuv.de/developers</a>
+  </p>
+
+  <%= if @apps == [] do %>
+    <p class="card__empty">{gettext("You have not registered an application yet.")}</p>
+  <% else %>
+    <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+      <%= for app <- @apps do %>
+        <li class="flex flex-wrap items-center gap-3 py-4 first:pt-0 last:pb-0">
+          <div class="min-w-0 flex-1">
+            <.link
+              href={~p"/developers/apps/#{app.id}"}
+              class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+            >
+              {app.name}
+            </.link>
+            <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+              <code>{app.client_id}</code>
+            </p>
+            <p :if={app.suspended_at} class="text-sm font-semibold text-red-600">
+              {gettext("Suspended by the operator")}
+            </p>
+          </div>
+          <.row_actions edit_to={~p"/developers/apps/#{app.id}/edit"} />
+        </li>
+      <% end %>
+    </ul>
+  <% end %>
+</.card_section>

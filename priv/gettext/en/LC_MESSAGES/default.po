@@ -140,6 +140,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/address/card_list.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:32
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:14
+#: lib/vutuv_web/templates/dev_app/show.html.heex:56
 #: lib/vutuv_web/templates/tag/single_card.html.heex:5
 #: lib/vutuv_web/templates/url/form_content.html.heex:11
 #: lib/vutuv_web/templates/url/show.html.heex:22
@@ -164,6 +166,8 @@ msgstr ""
 #: lib/vutuv_web/templates/address/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/exonym/edit.html.heex:6
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:6
+#: lib/vutuv_web/templates/dev_app/edit.html.heex:5
+#: lib/vutuv_web/templates/dev_app/show.html.heex:63
 #: lib/vutuv_web/templates/email/edit.html.heex:6
 #: lib/vutuv_web/templates/group/edit.html.heex:5
 #: lib/vutuv_web/templates/group/index.html.heex:30
@@ -453,8 +457,10 @@ msgid "More"
 msgstr ""
 
 #: lib/vutuv_web/templates/access_token/new.html.heex:8
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:15
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:15
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:17
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:5
 #: lib/vutuv_web/templates/group/index.html.heex:15
 #, elixir-autogen
 msgid "Name"
@@ -465,6 +471,7 @@ msgstr ""
 #: lib/vutuv_web/templates/address/new.html.heex:5
 #: lib/vutuv_web/templates/admin/exonym/new.html.heex:6
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:6
+#: lib/vutuv_web/templates/dev_app/new.html.heex:4
 #: lib/vutuv_web/templates/email/new.html.heex:6
 #: lib/vutuv_web/templates/group/new.html.heex:5
 #: lib/vutuv_web/templates/phone_number/new.html.heex:5
@@ -850,7 +857,7 @@ msgstr ""
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:187
+#: lib/vutuv_web/controllers/session_controller.ex:204
 #, elixir-autogen
 msgid "Welcome back!"
 msgstr ""
@@ -1111,6 +1118,7 @@ msgstr ""
 msgid "Present"
 msgstr ""
 
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:20
 #: lib/vutuv_web/templates/url/form_content.html.heex:12
 #, elixir-autogen
 msgid "Homepage"
@@ -1182,6 +1190,7 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:4
 #: lib/vutuv_web/templates/admin/ad/show.html.heex:4
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:1
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:3
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:4
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:4
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:4
@@ -1478,7 +1487,7 @@ msgid "Tags"
 msgstr ""
 
 #: lib/vutuv_web/controllers/email_controller.ex:110
-#: lib/vutuv_web/controllers/session_controller.ex:161
+#: lib/vutuv_web/controllers/session_controller.ex:166
 #: lib/vutuv_web/controllers/user_controller.ex:270
 #, elixir-autogen
 msgid "Too many incorrect attempts."
@@ -2284,7 +2293,7 @@ msgstr ""
 msgid "Post deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/post_doc.ex:53
+#: lib/vutuv_web/agent_docs/post_doc.ex:59
 #: lib/vutuv_web/controllers/post_controller.ex:54
 #: lib/vutuv_web/live/search_live.ex:147
 #: lib/vutuv_web/live/search_live.ex:306
@@ -2525,7 +2534,7 @@ msgstr ""
 msgid "Unlike"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:175
+#: lib/vutuv_web/controllers/session_controller.ex:192
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv!"
 msgstr ""
@@ -2728,12 +2737,12 @@ msgstr ""
 msgid "Allow search engines to index your profile"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:184
+#: lib/vutuv_web/controllers/session_controller.ex:201
 #, elixir-autogen, elixir-format
 msgid "Welcome back, %{name}!"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:195
+#: lib/vutuv_web/controllers/session_controller.ex:212
 #, elixir-autogen, elixir-format
 msgid "You have %{count} new message."
 msgid_plural "You have %{count} new messages."
@@ -3052,7 +3061,7 @@ msgstr ""
 msgid "Follower"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:172
+#: lib/vutuv_web/controllers/session_controller.ex:189
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Welcome to vutuv, %{name}!"
 msgstr ""
@@ -3301,6 +3310,7 @@ msgstr ""
 msgid "Opened"
 msgstr ""
 
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:16
 #: lib/vutuv_web/templates/admin/moderation/index.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Owner"
@@ -3464,6 +3474,7 @@ msgid "Stand by it. It stays hidden until one of our admins has ruled."
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:59
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:18
 #: lib/vutuv_web/templates/admin/moderation/index.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Status"
@@ -3509,12 +3520,12 @@ msgstr ""
 msgid "The report is justified. The content stays hidden and the owner gets a strike (warn, suspend, deactivate)."
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:140
+#: lib/vutuv_web/controllers/session_controller.ex:145
 #, elixir-autogen, elixir-format
 msgid "This account has been deactivated."
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:131
+#: lib/vutuv_web/controllers/session_controller.ex:136
 #, elixir-autogen, elixir-format
 msgid "This account is suspended until %{date}."
 msgstr ""
@@ -4068,7 +4079,7 @@ msgstr ""
 msgid "People %{name} follows"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/post_doc.ex:54
+#: lib/vutuv_web/agent_docs/post_doc.ex:60
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Post archive of %{name}"
 msgstr ""
@@ -4867,11 +4878,15 @@ msgstr ""
 msgid "An expiry limits the damage if a token leaks. You can always revoke earlier."
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:5
+#: lib/vutuv_web/templates/access_token/index.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Create an access token"
 msgstr ""
 
+#: lib/vutuv_web/templates/dev_app/edit.html.heex:2
+#: lib/vutuv_web/templates/dev_app/index.html.heex:1
+#: lib/vutuv_web/templates/dev_app/new.html.heex:2
+#: lib/vutuv_web/templates/dev_app/show.html.heex:4
 #: lib/vutuv_web/templates/dev_doc/show.html.heex:1
 #, elixir-autogen, elixir-format
 msgid "Developers"
@@ -4909,7 +4924,7 @@ msgstr ""
 msgid "Permissions"
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:10
+#: lib/vutuv_web/templates/access_token/index.html.heex:12
 #, elixir-autogen, elixir-format
 msgid "Personal access tokens let scripts and third-party tools use the vutuv API as you, limited to the permissions you pick. Revoking a token cuts off its access immediately. Documentation: "
 msgstr ""
@@ -4929,22 +4944,22 @@ msgstr ""
 msgid "Read your profile, including entries only you can see"
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:50
+#: lib/vutuv_web/templates/access_token/index.html.heex:54
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Revoke"
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:45
+#: lib/vutuv_web/templates/access_token/index.html.heex:49
 #, elixir-autogen, elixir-format
 msgid "Revoke \"%{name}\"? Anything using it stops working immediately."
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:62
+#: lib/vutuv_web/templates/access_token/index.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "Revoke ALL tokens? Every app and script using them stops working immediately."
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:65
+#: lib/vutuv_web/templates/access_token/index.html.heex:69
 #, elixir-autogen, elixir-format
 msgid "Revoke all tokens"
 msgstr ""
@@ -4969,12 +4984,12 @@ msgstr ""
 msgid "Write, edit and delete your posts"
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:7
+#: lib/vutuv_web/templates/access_token/index.html.heex:30
 #, elixir-autogen, elixir-format, fuzzy
 msgid "You have no active tokens."
 msgstr ""
 
-#: lib/vutuv_web/templates/access_token/index.html.heex:21
+#: lib/vutuv_web/templates/access_token/index.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Your new token. Copy it now, it will not be shown again:"
 msgstr ""
@@ -5022,4 +5037,294 @@ msgstr ""
 #: lib/vutuv_web/views/access_token_html.ex:12
 #, elixir-autogen, elixir-format
 msgid "never used"
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/api_app_controller.ex:41
+#, elixir-autogen, elixir-format
+msgid "\"%{name}\" is active again."
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/api_app_controller.ex:27
+#, elixir-autogen, elixir-format
+msgid "\"%{name}\" is suspended; its tokens are refused."
+msgstr ""
+
+#: lib/vutuv_web/controllers/connected_app_controller.ex:29
+#, elixir-autogen, elixir-format
+msgid "\"%{name}\" no longer has access to your account."
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "%{app} wants to access your vutuv account. It would be allowed to:"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:70
+#, elixir-autogen, elixir-format
+msgid "%{count} registered third-party application. Suspending one cuts off all of its tokens."
+msgid_plural "%{count} registered third-party applications. Suspending one cuts off all of its tokens."
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:60
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:2
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:3
+#, elixir-autogen, elixir-format
+msgid "API applications"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:37
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Active"
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Allow access"
+msgstr ""
+
+#: lib/vutuv_web/controllers/dev_app_controller.ex:56
+#, elixir-autogen, elixir-format
+msgid "Application updated."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/edit.html.heex:3
+#: lib/vutuv_web/templates/dev_app/index.html.heex:1
+#: lib/vutuv_web/templates/dev_app/new.html.heex:3
+#: lib/vutuv_web/templates/dev_app/show.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Applications"
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/error.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Authorization failed"
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:1
+#: lib/vutuv_web/templates/oauth/error.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Authorize"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:76
+#, elixir-autogen, elixir-format
+msgid "Authorize URL:"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Client ID"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:37
+#, elixir-autogen, elixir-format
+msgid "Client secret"
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:1
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Connect %{app}?"
+msgstr ""
+
+#: lib/vutuv_web/templates/connected_app/index.html.heex:1
+#: lib/vutuv_web/templates/connected_app/index.html.heex:1
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Connected apps"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/edit.html.heex:15
+#, elixir-autogen, elixir-format
+msgid "Delete \"%{name}\"? Every member authorization and every token of this application stops working immediately."
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:56
+#, elixir-autogen, elixir-format
+msgid "Deny"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:83
+#, elixir-autogen, elixir-format
+msgid "Documentation"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:69
+#, elixir-autogen, elixir-format
+msgid "Generate a new client secret? The current one stops working."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:66
+#, elixir-autogen, elixir-format
+msgid "Manage applications"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:8
+#, elixir-autogen, elixir-format
+msgid "Members see this name on the consent screen."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:71
+#, elixir-autogen, elixir-format
+msgid "New client secret"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:9
+#, elixir-autogen, elixir-format
+msgid "No application has been registered yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/connected_app/index.html.heex:12
+#, elixir-autogen, elixir-format
+msgid "No application is connected to your account."
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/error.html.heex:7
+#, elixir-autogen, elixir-format
+msgid "Nothing was changed on your account."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/index.html.heex:9
+#, elixir-autogen, elixir-format
+msgid "OAuth applications let other members connect your software with their vutuv account through a consent screen, instead of pasting tokens. Documentation: "
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "One per line. Exact https:// URLs (http://localhost is allowed for development). The authorization flow only ever redirects to these."
+msgstr ""
+
+#: lib/vutuv_web/controllers/oauth_controller.ex:33
+#, elixir-autogen, elixir-format
+msgid "Please log in to connect %{app} with your account."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Reactivate"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/form_content.html.heex:26
+#: lib/vutuv_web/templates/dev_app/show.html.heex:45
+#, elixir-autogen, elixir-format
+msgid "Redirect URLs"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/index.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Register an application"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "Registered"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:40
+#, elixir-autogen, elixir-format
+msgid "Stored as a hash; only shown right after generating it."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:60
+#, elixir-autogen, elixir-format
+msgid "Suspend"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:55
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Suspend \"%{name}\"? All of its tokens stop working immediately."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/api_app/index.html.heex:35
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Suspended"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/index.html.heex:34
+#, elixir-autogen, elixir-format
+msgid "Suspended by the operator"
+msgstr ""
+
+#: lib/vutuv_web/controllers/dev_app_controller.ex:99
+#, elixir-autogen, elixir-format
+msgid "The application and all its access were deleted."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:20
+#, elixir-autogen, elixir-format
+msgid "The application asked for unknown permissions."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:8
+#, elixir-autogen, elixir-format
+msgid "The application is unknown. Its developer needs to check the client_id."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:23
+#, elixir-autogen, elixir-format
+msgid "The application's request is missing the required PKCE challenge (S256)."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:26
+#, elixir-autogen, elixir-format
+msgid "The authorization request is invalid."
+msgstr ""
+
+#: lib/vutuv_web/controllers/dev_app_controller.ex:77
+#, elixir-autogen, elixir-format
+msgid "The old client secret stopped working."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:12
+#, elixir-autogen, elixir-format
+msgid "The redirect address is not registered for this application. Its developer needs to register it first."
+msgstr ""
+
+#: lib/vutuv_web/templates/connected_app/index.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "These applications may use your vutuv account, limited to the permissions you granted them. Withdrawing access cuts them off immediately."
+msgstr ""
+
+#: lib/vutuv_web/views/oauth_html.ex:17
+#, elixir-autogen, elixir-format
+msgid "This application has been suspended."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:13
+#, elixir-autogen, elixir-format
+msgid "This application was suspended by the operator. Its tokens are refused."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "Token URL:"
+msgstr ""
+
+#: lib/vutuv_web/templates/connected_app/index.html.heex:38
+#, elixir-autogen, elixir-format
+msgid "Withdraw access"
+msgstr ""
+
+#: lib/vutuv_web/templates/connected_app/index.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "Withdraw access for \"%{name}\"? It stops working immediately."
+msgstr ""
+
+#: lib/vutuv_web/templates/oauth/authorize.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "You can withdraw this access at any time under Connected apps in your settings."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/index.html.heex:18
+#, elixir-autogen, elixir-format
+msgid "You have not registered an application yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/index.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Your applications"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:22
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Your client secret. Copy it now, it will not be shown again:"
 msgstr ""

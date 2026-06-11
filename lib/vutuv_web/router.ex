@@ -68,6 +68,12 @@ defmodule VutuvWeb.Router do
     plug(Plugs.ApiV1Auth)
   end
 
+  # The OAuth machine endpoints: form-encoded in (parsed at the endpoint),
+  # JSON out, no session, no CSRF — RFC 6749's token/revocation endpoints.
+  pipeline :oauth_token do
+    plug(:accepts, ["json"])
+  end
+
   pipeline :render_404 do
     plug(Plugs.All404)
   end
@@ -151,8 +157,20 @@ defmodule VutuvWeb.Router do
 
     # Developer documentation for /api/v1 (English; "developers" is in
     # ReservedSlugs). Each page also serves its raw Markdown under .md.
+    # The app registry routes must precede the docs' :page catch.
+    post("/developers/apps/:id/regenerate_secret", DevAppController, :regenerate_secret)
+    resources("/developers/apps", DevAppController)
     get("/developers", DevDocController, :index)
     get("/developers/:page", DevDocController, :show)
+
+    # The OAuth consent screen (the machine endpoints /oauth/token and
+    # /oauth/revoke live in their own session-free scope below).
+    get("/oauth/authorize", OauthController, :authorize)
+    post("/oauth/authorize", OauthController, :approve)
+
+    # The member's side of OAuth: which apps may act for them, one-click
+    # revoke ("connected_apps" is in ReservedSlugs).
+    resources("/connected_apps", ConnectedAppController, only: [:index, :delete])
 
     # The daily text ad: the public offer page, the booking flow and the
     # member's booking dashboard (logged-in only; checked in the
@@ -193,6 +211,14 @@ defmodule VutuvWeb.Router do
     get("/moderation/cases/:id", ModerationCaseController, :show)
     post("/moderation/cases/:id/dispute", ModerationCaseController, :dispute)
     post("/moderation/cases/:id/delete_content", ModerationCaseController, :delete_content)
+  end
+
+  # The OAuth token machinery (see the :oauth_token pipeline above).
+  scope "/oauth", VutuvWeb do
+    pipe_through(:oauth_token)
+
+    post("/token", OauthController, :token)
+    post("/revoke", OauthController, :revoke)
   end
 
   # Switching notification emails off without a login (the email footer link
@@ -270,6 +296,11 @@ defmodule VutuvWeb.Router do
     resources("/exonyms", ExonymController)
 
     resources("/tags", TagController, param: "slug")
+
+    # The registered OAuth apps + the bad-player kill switch.
+    get("/api_apps", ApiAppController, :index)
+    post("/api_apps/:id/suspend", ApiAppController, :suspend)
+    post("/api_apps/:id/unsuspend", ApiAppController, :unsuspend)
   end
 
   # /api/v1 — the authenticated third-party API. Contract: additions are

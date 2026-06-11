@@ -90,16 +90,17 @@ audiences, replies, likes/bookmarks/reposts, your feed), direct messages
 (the request model included) and the notification feed. See the
 [reference](/developers/reference).
 
+For real third-party apps there is **OAuth 2** (authorization code +
+PKCE): register your app at [/developers/apps](/developers/apps), send
+members through a consent screen instead of pasting tokens — see
+[Authentication & tokens](/developers/authentication#oauth-2-for-third-party-apps).
+
 ## Roadmap
 
 The API grows in deliberate steps. Coming next, in order:
 
-1. OAuth 2 apps: register an application, send members through a consent
-   screen instead of pasting tokens. Third-party developers will register
-   their app with their vutuv account, so misbehaving apps can be suspended
-   without affecting anything else.
-2. Post image upload over the API.
-3. Webhooks: signed event deliveries (new follower, new message, ...).
+1. Post image upload over the API.
+2. Webhooks: signed event deliveries (new follower, new message, ...).
 
 Questions or a use case the API does not cover yet? Write to
 [sw@wintermeyer-consulting.de](mailto:sw@wintermeyer-consulting.de).

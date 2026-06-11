@@ -19,10 +19,12 @@ defmodule Vutuv.ApiAuth do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
-  alias Vutuv.ApiAuth.{App, Token}
+  alias Vutuv.ApiAuth.{App, Grant, Token}
   alias Vutuv.{Moderation, Repo}
 
   @pat_prefix "vutuv_pat_"
+  @client_id_prefix "vutuv_app_"
+  @secret_prefix "vutuv_sec_"
 
   # last_used_at is an audit trail, not a precise counter; updating it at
   # most once a minute keeps the hot token row from being written on every
@@ -92,6 +94,138 @@ defmodule Vutuv.ApiAuth do
     count
   end
 
+  # ── Registered apps (OAuth clients) ──
+
+  @doc """
+  Registers a third-party app for `user` (self-service, but always owned
+  by a vutuv account — the accountability anchor). Returns `{:ok, app,
+  client_secret}`; the secret is shown once and stored only as a hash.
+  """
+  def create_app(%User{} = user, attrs) do
+    secret = @secret_prefix <> random_token()
+
+    %App{
+      user_id: user.id,
+      client_id: @client_id_prefix <> random_token(16),
+      client_secret_hash: hash_token(secret)
+    }
+    |> App.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, app} -> {:ok, app, secret}
+      {:error, changeset} -> {:error, changeset}
+    end
+  end
+
+  def change_app(%App{} = app, attrs \\ %{}), do: App.changeset(app, attrs)
+
+  def update_app(%App{} = app, attrs) do
+    app |> App.changeset(attrs) |> Repo.update()
+  end
+
+  @doc "Mints a fresh client secret (the old one stops working). Returns `{app, secret}`."
+  def regenerate_secret!(%App{} = app) do
+    secret = @secret_prefix <> random_token()
+    app = app |> Ecto.Changeset.change(client_secret_hash: hash_token(secret)) |> Repo.update!()
+    {app, secret}
+  end
+
+  def list_apps(%User{} = user) do
+    Repo.all(from(a in App, where: a.user_id == ^user.id, order_by: [desc: a.id]))
+  end
+
+  @doc "One of the user's own apps, or nil (also on a malformed id)."
+  def get_app(%User{} = user, id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get_by(App, id: uuid, user_id: user.id)
+    end
+  end
+
+  def get_app_by_client_id(client_id) when is_binary(client_id) do
+    Repo.get_by(App, client_id: client_id)
+  end
+
+  def get_app_by_client_id(_other), do: nil
+
+  @doc "Deletes the app; its grants, codes and tokens cascade away with it."
+  def delete_app!(%App{} = app), do: Repo.delete!(app)
+
+  # ── Admin: the bad-player kill switch ──
+
+  def list_all_apps do
+    Repo.all(from(a in App, order_by: [desc: a.id], preload: :user))
+  end
+
+  def get_any_app(id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get(App, uuid)
+    end
+  end
+
+  @doc "Suspends the app: every one of its tokens fails on its next request."
+  def suspend_app!(%App{} = app) do
+    app |> Ecto.Changeset.change(suspended_at: DateTime.utc_now(:second)) |> Repo.update!()
+  end
+
+  def unsuspend_app!(%App{} = app) do
+    app |> Ecto.Changeset.change(suspended_at: nil) |> Repo.update!()
+  end
+
+  # ── Grants (the user × app authorizations) ──
+
+  @doc "The user's active app authorizations, app preloaded — the Connected apps page."
+  def list_grants(%User{} = user) do
+    Repo.all(
+      from(g in Grant,
+        where: g.user_id == ^user.id and is_nil(g.revoked_at),
+        order_by: [desc: g.updated_at],
+        preload: :app
+      )
+    )
+  end
+
+  def get_grant(%User{} = user, id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil ->
+        nil
+
+      uuid ->
+        Repo.one(from(g in Grant, where: g.id == ^uuid and g.user_id == ^user.id, preload: :app))
+    end
+  end
+
+  @doc """
+  Revokes the authorization: the grant is marked and every token minted
+  under it dies. One click on the Connected apps page.
+  """
+  def revoke_grant!(%Grant{} = grant) do
+    {:ok, grant} =
+      Repo.transaction(fn ->
+        revoke_grant_tokens!(grant.id)
+
+        grant
+        |> Ecto.Changeset.change(revoked_at: DateTime.utc_now(:second))
+        |> Repo.update!()
+      end)
+
+    grant
+  end
+
+  @doc false
+  # Kills every live token of a grant — grant revocation, and the OAuth
+  # code-reuse / refresh-reuse theft signals.
+  def revoke_grant_tokens!(grant_id) do
+    {count, _} =
+      Repo.update_all(
+        from(t in Token, where: t.grant_id == ^grant_id and is_nil(t.revoked_at)),
+        set: [revoked_at: DateTime.utc_now(:second)]
+      )
+
+    count
+  end
+
   # ── Verification (the API pipeline's entry point) ──
 
   @doc """
@@ -118,10 +252,12 @@ defmodule Vutuv.ApiAuth do
 
   # ── Internals ──
 
-  defp random_token do
-    # Base32 keeps the token strictly alphanumeric (double-click selectable);
-    # 32 random bytes -> 52 characters, ~165 bits of entropy.
-    32 |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
+  @doc false
+  # Base32 keeps tokens strictly alphanumeric (double-click selectable);
+  # 32 random bytes -> 52 characters, ~165 bits of entropy. Public for
+  # Vutuv.ApiAuth.OAuth (codes, access/refresh tokens); not a caller API.
+  def random_token(bytes \\ 32) do
+    bytes |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
   end
 
   defp lookup(hash) do

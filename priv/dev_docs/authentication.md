@@ -129,10 +129,121 @@ limits, acting against members' interests — leads to token revocation,
 app suspension, or account moderation. A suspended app's tokens all stop
 working at once.
 
-## OAuth 2 for third-party apps (coming)
+## OAuth 2 for third-party apps
 
-Personal access tokens are for your own scripts and trusted tools — the
-member has to create and paste the token. For real third-party apps, OAuth 2
-(authorization code + PKCE, consent screen, per-app revocation) is on the
-roadmap; this page will document it when it ships. The error and scope
-mechanics above stay identical.
+Personal access tokens are for your own scripts — the member has to create
+and paste the token. A real third-party app uses **OAuth 2 (authorization
+code + PKCE)** instead: your users click "Connect with vutuv", approve the
+permissions on a consent screen, and your app receives tokens. Members see
+and revoke the connection at [vutuv.de/connected_apps](/connected_apps).
+
+### 1. Register your application
+
+At [vutuv.de/developers/apps](/developers/apps) (you need a vutuv account —
+that account is the accountability anchor; misbehaving apps get suspended,
+which cuts off all of their tokens at once). You receive a `client_id` and
+a `client_secret` (shown once). Register your exact redirect URLs —
+`https://` only, `http://localhost` allowed for development.
+
+v1 supports **confidential clients only**: the token exchange needs the
+client secret, so a purely client-side app needs a small server-side
+exchange. PKCE (S256) is required on top for every client.
+
+### 2. Send the member to the consent screen
+
+```text
+https://vutuv.de/oauth/authorize
+  ?response_type=code
+  &client_id=vutuv_app_…
+  &redirect_uri=https://yourapp.example/callback
+  &scope=profile:read posts:write
+  &state=RANDOM_OPAQUE_VALUE
+  &code_challenge=BASE64URL(SHA256(code_verifier))
+  &code_challenge_method=S256
+```
+
+Scopes are space-separated (the table above). Generating the PKCE pair in
+bash:
+
+```bash
+code_verifier=$(openssl rand -base64 48 | tr -dc 'a-zA-Z0-9' | head -c 64)
+code_challenge=$(printf '%s' "$code_verifier" | openssl dgst -sha256 -binary | basenc --base64url | tr -d '=')
+```
+
+The member logs in if needed, sees your app's name and the requested
+permissions in plain language, and approves or denies. You get redirected
+to your exact registered `redirect_uri`:
+
+```text
+https://yourapp.example/callback?code=vutuv_ac_…&state=RANDOM_OPAQUE_VALUE
+# or, on deny: ?error=access_denied&state=…
+```
+
+Always verify `state` matches what you sent.
+
+### 3. Exchange the code for tokens
+
+Within 10 minutes, server-side (form-encoded POST):
+
+```bash
+curl -X POST https://vutuv.de/oauth/token \
+  -d grant_type=authorization_code \
+  -d client_id=vutuv_app_… \
+  -d client_secret=vutuv_sec_… \
+  -d code=vutuv_ac_… \
+  -d redirect_uri=https://yourapp.example/callback \
+  -d code_verifier=$code_verifier
+```
+
+```json
+{
+  "access_token": "vutuv_at_…",
+  "refresh_token": "vutuv_rt_…",
+  "token_type": "Bearer",
+  "expires_in": 7200,
+  "scope": "profile:read posts:write"
+}
+```
+
+The access token works exactly like a personal access token
+(`Authorization: Bearer …`), acting as the consenting member with the
+granted scopes. Codes are **one-time**: redeeming a code twice revokes
+every token of that authorization (the standard theft response).
+
+### 4. Refresh
+
+Access tokens live 2 hours. Refresh tokens live 90 days and **rotate on
+every use** — store the new pair, discard the old one. Using an old
+(rotated) refresh token revokes the whole authorization: that, too, is
+theft detection, not flakiness.
+
+```bash
+curl -X POST https://vutuv.de/oauth/token \
+  -d grant_type=refresh_token \
+  -d client_id=vutuv_app_… \
+  -d client_secret=vutuv_sec_… \
+  -d refresh_token=vutuv_rt_…
+```
+
+### 5. Revoke (RFC 7009)
+
+When a user disconnects inside your app, throw the tokens away properly:
+
+```bash
+curl -X POST https://vutuv.de/oauth/revoke \
+  -d client_id=vutuv_app_… \
+  -d client_secret=vutuv_sec_… \
+  -d token=vutuv_rt_…
+```
+
+Revoking a refresh token kills the whole pair. Members can do the same
+unilaterally at any time on their Connected apps page — handle `401`s
+gracefully, they are a normal part of life.
+
+### Token endpoint errors
+
+RFC 6749 vocabulary: `{"error": "invalid_client"}` with `401` for bad
+client credentials, `{"error": "invalid_grant"}` with `400` for a bad/used
+code, failed PKCE, redirect mismatch or a dead refresh token, and
+`{"error": "unsupported_grant_type"}` for anything but the two grant
+types above.

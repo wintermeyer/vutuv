@@ -1,0 +1,61 @@
+<.page_header title={gettext("Connect %{app}?", app: @request.app.name)} crumbs={[gettext("Authorize")]} />
+
+<div class="card-list">
+  <section class="card" id="oauth-consent">
+    <p class="text-sm text-slate-700 dark:text-slate-200">
+      {gettext(
+        "%{app} wants to access your vutuv account. It would be allowed to:",
+        app: @request.app.name
+      )}
+    </p>
+
+    <ul class="mt-4 space-y-2">
+      <%= for scope <- @request.scopes do %>
+        <li class="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+          <span class="mt-0.5 text-brand-600">✓</span>
+          <span>
+            {Vutuv.ApiAuth.Scopes.description(scope)}
+            <code class="ml-1 text-xs text-slate-400">{scope}</code>
+          </span>
+        </li>
+      <% end %>
+    </ul>
+
+    <p :if={@request.app.description} class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+      {@request.app.description}
+    </p>
+
+    <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+      {gettext(
+        "You can withdraw this access at any time under Connected apps in your settings."
+      )}
+    </p>
+
+    <.form for={%{}} action={~p"/oauth/authorize"} class="mt-6">
+      <%= for key <- ~w(response_type client_id redirect_uri scope state code_challenge code_challenge_method) do %>
+        <input :if={@params[key]} type="hidden" name={key} value={@params[key]} />
+      <% end %>
+
+      <div class="flex gap-3">
+        <button
+          type="submit"
+          name="decision"
+          value="allow"
+          id="oauth-allow"
+          class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          {gettext("Allow access")}
+        </button>
+        <button
+          type="submit"
+          name="decision"
+          value="deny"
+          id="oauth-deny"
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {gettext("Deny")}
+        </button>
+      </div>
+    </.form>
+  </section>
+</div>

@@ -1,0 +1,13 @@
+<.page_header crumbs={[
+  {gettext("Developers"), ~p"/developers"},
+  {gettext("Applications"), ~p"/developers/apps"},
+  gettext("New")
+]} />
+
+<.card_section>
+  <%= render("form_content.html",
+    changeset: @changeset,
+    action: ~p"/developers/apps",
+    backlink: ~p"/developers/apps"
+  ) %>
+</.card_section>

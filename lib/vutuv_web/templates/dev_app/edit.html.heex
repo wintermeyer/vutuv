@@ -1,0 +1,20 @@
+<.page_header crumbs={[
+  {gettext("Developers"), ~p"/developers"},
+  {gettext("Applications"), ~p"/developers/apps"},
+  {@app.name, ~p"/developers/apps/#{@app.id}"},
+  gettext("Edit")
+]} />
+
+<.card_section>
+  <%= render("form_content.html",
+    changeset: @changeset,
+    action: ~p"/developers/apps/#{@app.id}",
+    backlink: ~p"/developers/apps/#{@app.id}",
+    delete_to: ~p"/developers/apps/#{@app.id}",
+    confirm:
+      gettext(
+        "Delete \"%{name}\"? Every member authorization and every token of this application stops working immediately.",
+        name: @app.name
+      )
+  ) %>
+</.card_section>

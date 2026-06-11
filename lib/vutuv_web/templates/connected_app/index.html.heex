@@ -1,0 +1,45 @@
+<.page_header title={gettext("Connected apps")} crumbs={[gettext("Connected apps")]} />
+
+<div class="card-list">
+  <section class="card">
+    <p class="text-sm text-slate-500 dark:text-slate-400">
+      {gettext(
+        "These applications may use your vutuv account, limited to the permissions you granted them. Withdrawing access cuts them off immediately."
+      )}
+    </p>
+
+    <%= if @grants == [] do %>
+      <p class="card__empty">{gettext("No application is connected to your account.")}</p>
+    <% else %>
+      <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
+        <%= for grant <- @grants do %>
+          <li class="flex flex-wrap items-start gap-3 py-4 first:pt-0 last:pb-0">
+            <div class="min-w-0 flex-1">
+              <p class="font-medium text-slate-800 dark:text-slate-100">{grant.app.name}</p>
+              <ul class="mt-1 space-y-0.5">
+                <li
+                  :for={scope <- grant.scopes}
+                  class="text-sm text-slate-500 dark:text-slate-400"
+                >
+                  {Vutuv.ApiAuth.Scopes.description(scope)}
+                </li>
+              </ul>
+            </div>
+            <.button
+              href={~p"/connected_apps/#{grant.id}"}
+              method="delete"
+              variant="danger"
+              data-confirm={
+                gettext("Withdraw access for \"%{name}\"? It stops working immediately.",
+                  name: grant.app.name
+                )
+              }
+            >
+              {gettext("Withdraw access")}
+            </.button>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  </section>
+</div>

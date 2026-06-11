@@ -1,0 +1,87 @@
+<.page_header
+  title={@app.name}
+  crumbs={[
+    {gettext("Developers"), ~p"/developers"},
+    {gettext("Applications"), ~p"/developers/apps"},
+    @app.name
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card" id="dev-app">
+    <p :if={@app.suspended_at} class="mb-4 text-sm font-semibold text-red-600">
+      {gettext("This application was suspended by the operator. Its tokens are refused.")}
+    </p>
+
+    <%= if secret = Phoenix.Flash.get(@flash, :new_app_secret) do %>
+      <div
+        class="mb-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
+        data-new-secret
+      >
+        <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
+          {gettext("Your client secret. Copy it now, it will not be shown again:")}
+        </p>
+        <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{secret}</code>
+      </div>
+    <% end %>
+
+    <dl class="space-y-3 text-sm">
+      <div>
+        <dt class="font-semibold text-slate-500 dark:text-slate-400">{gettext("Client ID")}</dt>
+        <dd>
+          <code class="select-all text-slate-800 dark:text-slate-100">{@app.client_id}</code>
+        </dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 dark:text-slate-400">
+          {gettext("Client secret")}
+        </dt>
+        <dd class="text-slate-700 dark:text-slate-200">
+          {gettext("Stored as a hash; only shown right after generating it.")}
+        </dd>
+      </div>
+      <div>
+        <dt class="font-semibold text-slate-500 dark:text-slate-400">
+          {gettext("Redirect URLs")}
+        </dt>
+        <dd>
+          <ul>
+            <li :for={uri <- @app.redirect_uris}>
+              <code class="text-slate-800 dark:text-slate-100">{uri}</code>
+            </li>
+          </ul>
+        </dd>
+      </div>
+      <div :if={@app.description}>
+        <dt class="font-semibold text-slate-500 dark:text-slate-400">{gettext("Description")}</dt>
+        <dd class="text-slate-700 dark:text-slate-200">{@app.description}</dd>
+      </div>
+    </dl>
+
+    <div class="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
+      <.button href={~p"/developers/apps/#{@app.id}/edit"} variant="secondary">
+        {gettext("Edit")}
+      </.button>
+      <.button
+        href={~p"/developers/apps/#{@app.id}/regenerate_secret"}
+        method="post"
+        variant="secondary"
+        data-confirm={gettext("Generate a new client secret? The current one stops working.")}
+      >
+        {gettext("New client secret")}
+      </.button>
+    </div>
+
+    <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
+      {gettext("Authorize URL:")} <code>https://vutuv.de/oauth/authorize</code>
+      &middot; {gettext("Token URL:")} <code>https://vutuv.de/oauth/token</code>
+      &middot;
+      <a
+        href={~p"/developers/authentication"}
+        class="font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("Documentation")}
+      </a>
+    </p>
+  </section>
+</div>
