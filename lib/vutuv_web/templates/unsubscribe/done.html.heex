@@ -1,0 +1,12 @@
+<.page_header title={gettext("Notification emails")} />
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext("Done. We will no longer send notification emails to @%{slug}.",
+        slug: @user.active_slug
+      )}
+    </p>
+    <p>{gettext("You can switch them back on in your profile settings at any time.")}</p>
+  </section>
+</div>

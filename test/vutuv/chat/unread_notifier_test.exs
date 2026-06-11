@@ -100,6 +100,18 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
     assert Chat.send_unread_notifications() == 1
   end
 
+  test "a member who switched notification emails off is not emailed" do
+    [a, b] = [user(), user(notification_emails?: false)]
+    conversation = insert_conversation_between(a, b)
+    age_message!(send!(a, conversation))
+
+    assert Chat.send_unread_notifications() == 0
+    refute_email_sent()
+    # notified_at stays unset: switching the emails back on (edit profile)
+    # makes the still-unread burst eligible again.
+    assert participant(conversation, b).notified_at == nil
+  end
+
   test "pending requests never email (strangers cannot trigger mail to anyone)" do
     [a, b] = [user(), user()]
     conversation = insert_conversation_between(a, b, status: "pending", initiator: a)

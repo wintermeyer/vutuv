@@ -576,6 +576,20 @@ defmodule Vutuv.Accounts do
     |> Repo.update()
   end
 
+  def get_user(id), do: Repo.get(User, id)
+
+  @doc """
+  Switches non-essential notification email (the unread-message nudge) on or
+  off. The off switch is reachable without a login: the signed token in every
+  notification email authorizes it (`VutuvWeb.UnsubscribeToken`), so a
+  recipient locked out of their account can still stop the mail.
+  """
+  def set_notification_emails(%User{} = user, enabled?) when is_boolean(enabled?) do
+    user
+    |> Ecto.Changeset.change(notification_emails?: enabled?)
+    |> Repo.update()
+  end
+
   # ── Usernames ──
 
   @slug_change_limit 4

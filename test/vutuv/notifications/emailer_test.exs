@@ -108,6 +108,34 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
   end
 
+  describe "notification mail carries the one-click unsubscribe (RFC 8058)" do
+    test "the unread-message email has the headers and the footer link" do
+      user = insert(:activated_user, locale: "en")
+      other = insert(:user)
+
+      email =
+        Emailer.unread_messages_email("unread@example.com", user, other, Vutuv.UUIDv7.generate())
+
+      assert email.headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
+      assert email.headers["List-Unsubscribe"] =~ "/unsubscribe/"
+      assert email.headers["List-Unsubscribe"] =~ "mailto:"
+      assert email.text_body =~ "/unsubscribe/"
+
+      # The link in the mail really authorizes that recipient, nobody else.
+      [_, token] = Regex.run(~r{/unsubscribe/([\w._-]+)}, email.text_body)
+      assert {:ok, user_id} = VutuvWeb.UnsubscribeToken.verify(token)
+      assert user_id == user.id
+    end
+
+    test "transactional PIN mail carries no unsubscribe headers" do
+      user = insert(:user, activated?: false, locale: "en")
+      email = Emailer.login_email(@pin, "reg@example.com", user)
+
+      assert email.headers["List-Unsubscribe"] == nil
+      assert email.headers["List-Unsubscribe-Post"] == nil
+    end
+  end
+
   describe "PIN emails name a PIN, never a link (issue #759)" do
     # These four emails carry a 6-digit PIN. The German subjects used to say
     # "Login-Link" / "Link zum Löschen ...", which sent recipients hunting for a

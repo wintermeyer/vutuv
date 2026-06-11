@@ -8,21 +8,23 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   segments in `VutuvWeb.Router` and the `Plug.Static` mounts in
   `VutuvWeb.Endpoint`.
 
-  Words containing an underscore (new_registration, search_queries, ...)
-  are not listed: the slug format `^[a-z][a-z0-9-.]*$` already rules them
-  out.
+  Handles allow underscores (`^[a-z0-9_]+$`, 3-15 characters), so route
+  words *with* underscores must be listed too — only those longer than 15
+  characters (new_registration, account_deletion) are ruled out by the
+  length limit alone.
   """
 
   # Router prefixes (current and legacy), endpoint/static paths, and a few
   # conventional names kept free for future use.
   @reserved ~w(
     about admin ads api assets avatars blog bookmarks community connections contact
-    covers css datenschutzerklaerung dev edit emails favicon.ico feed follows
-    fonts groups help images impressum jobs js legal likes listings live llms.txt login
-    logout mail memberships messages moderation new news notifications phoenix
-    posts press privacy reports robots.txt screenshots search security.txt
-    sessions settings sitemap.xml socket status support tags team terms
-    tidewave users www
+    covers css datenschutzerklaerung dev edit emails favicon.ico feed follow_back
+    follows fonts groups help images impressum jobs js legal likes listings live
+    llms.txt login logout mail memberships messages moderation new news
+    notifications phoenix post_images posts press privacy reports robots.txt
+    screenshots search search_queries security.txt sent_emails sessions settings
+    sitemap.xml socket status support tags team terms tidewave unsubscribe
+    users www
   )
 
   def list, do: @reserved

@@ -83,6 +83,12 @@
     <%= error_tag f, :noindex? %>
   </div>
 
+  <div class={"editform__field#{if error_tag(f, :notification_emails?), do: " editform__field--error"}"}>
+    <%= label f, :notification_emails?, gettext("Would you like to receive notification emails (e.g. about unread messages)?") %>
+    <%= select f, :notification_emails?, [{gettext("Yes"), true}, {gettext("No"), false}] %>
+    <%= error_tag f, :notification_emails? %>
+  </div>
+
   <div class="editform__actions">
     <%= link gettext("Cancel"), to: @backlink, class: "button button--cancel" %>
     <%= submit gettext("Save"), class: "button" %>

@@ -1,0 +1,18 @@
+<.page_header title={gettext("Notification emails")} />
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext(
+        "Switch off notification emails (such as unread message reminders) for @%{slug}?",
+        slug: @user.active_slug
+      )}
+    </p>
+    <p>{gettext("Login PINs and other essential emails are not affected.")}</p>
+    <.form for={%{}} action={~p"/unsubscribe/#{@token}"} id="unsubscribe-form">
+      <div class="editform__actions">
+        <%= submit gettext("Switch off notification emails"), class: "button" %>
+      </div>
+    </.form>
+  </section>
+</div>

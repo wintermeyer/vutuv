@@ -26,6 +26,10 @@ defmodule Vutuv.Accounts.User do
     field(:admin?, :boolean)
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
+    # Non-essential notification mail (the unread-message nudge). Off via the
+    # edit-profile form or the tokenized unsubscribe link in every such email
+    # (RFC 8058 one-click); transactional mail (PINs, moderation) ignores it.
+    field(:notification_emails?, :boolean, default: true)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -82,7 +86,7 @@ defmodule Vutuv.Accounts.User do
   # :active_slug is deliberately NOT here: the username is unique, rate-limited
   # and Twitter-validated, so it only changes through slug_changeset/2 (used by
   # Accounts.update_active_slug/2), never through the generic profile form.
-  @optional_fields ~w(activated? noindex? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(activated? noindex? notification_emails? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

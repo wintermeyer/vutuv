@@ -126,7 +126,7 @@ msgstr "Geburtstag"
 #: lib/vutuv_web/templates/connection/index.html.heex:47
 #: lib/vutuv_web/templates/report/new.html.heex:103
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
-#: lib/vutuv_web/templates/user/form_content.html.heex:87
+#: lib/vutuv_web/templates/user/form_content.html.heex:93
 #, elixir-autogen
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -506,7 +506,7 @@ msgstr "Name"
 msgid "New"
 msgstr "Neu"
 
-#: lib/vutuv/notifications/emailer.ex:127
+#: lib/vutuv/notifications/emailer.ex:129
 #, elixir-autogen
 msgid "New message from @%{slug} on vutuv"
 msgstr "Neue Nachricht von @%{slug} auf vutuv"
@@ -517,6 +517,7 @@ msgid "Nickname"
 msgstr "Spitzname"
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:82
+#: lib/vutuv_web/templates/user/form_content.html.heex:88
 #, elixir-autogen
 msgid "No"
 msgstr "Nein"
@@ -651,7 +652,7 @@ msgid "Results"
 msgstr "Ergebnisse"
 
 #: lib/vutuv_web/live/post_live/composer.ex:578
-#: lib/vutuv_web/templates/user/form_content.html.heex:88
+#: lib/vutuv_web/templates/user/form_content.html.heex:94
 #, elixir-autogen
 msgid "Save"
 msgstr "Speichern"
@@ -929,6 +930,7 @@ msgid "Would you like to allow search engines to index your profile?"
 msgstr "Möchten Sie Suchmaschinen erlauben Ihr Profil zu durchsuchen?"
 
 #: lib/vutuv_web/templates/user/form_content.html.heex:82
+#: lib/vutuv_web/templates/user/form_content.html.heex:88
 #, elixir-autogen
 msgid "Yes"
 msgstr "Ja"
@@ -3704,42 +3706,42 @@ msgstr "vutuv ist ein freundliches, familienfreundliches Netzwerk. Alles, was Si
 msgid "yes"
 msgstr "ja"
 
-#: lib/vutuv/notifications/emailer.ex:221
+#: lib/vutuv/notifications/emailer.ex:234
 #, elixir-autogen, elixir-format
 msgid "A warning for your vutuv account"
 msgstr "Eine Verwarnung für Ihr vutuv-Konto"
 
-#: lib/vutuv/notifications/emailer.ex:281
+#: lib/vutuv/notifications/emailer.ex:294
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr "Moderation: %{count} Fälle warten"
 
-#: lib/vutuv/notifications/emailer.ex:259
+#: lib/vutuv/notifications/emailer.ex:272
 #, elixir-autogen, elixir-format
 msgid "Moderation: a profile was reported"
 msgstr "Moderation: Ein Profil wurde gemeldet"
 
-#: lib/vutuv/notifications/emailer.ex:214
+#: lib/vutuv/notifications/emailer.ex:227
 #, elixir-autogen, elixir-format
 msgid "The content you reported was revised"
 msgstr "Der von Ihnen gemeldete Inhalt wurde überarbeitet"
 
-#: lib/vutuv/notifications/emailer.ex:207
+#: lib/vutuv/notifications/emailer.ex:220
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv is under review"
 msgstr "Ihr Inhalt auf vutuv wird geprüft"
 
-#: lib/vutuv/notifications/emailer.ex:200
+#: lib/vutuv/notifications/emailer.ex:213
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv was reported and is hidden"
 msgstr "Ihr Inhalt auf vutuv wurde gemeldet und ist verborgen"
 
-#: lib/vutuv/notifications/emailer.ex:235
+#: lib/vutuv/notifications/emailer.ex:248
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account has been deactivated"
 msgstr "Ihr vutuv-Konto wurde deaktiviert"
 
-#: lib/vutuv/notifications/emailer.ex:228
+#: lib/vutuv/notifications/emailer.ex:241
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account is suspended"
 msgstr "Ihr vutuv-Konto ist gesperrt"
@@ -4674,3 +4676,39 @@ msgstr "Genau so erscheint Ihre Anzeige am %{day} zwischen der Navigation und de
 #, elixir-autogen, elixir-format
 msgid "Hide ads for today"
 msgstr "Werbung für heute ausblenden"
+
+#: lib/vutuv_web/templates/unsubscribe/done.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "Done. We will no longer send notification emails to @%{slug}."
+msgstr "Erledigt. Wir senden keine Benachrichtigungs-E-Mails mehr an @%{slug}."
+
+#: lib/vutuv_web/templates/unsubscribe/show.html.heex:11
+#, elixir-autogen, elixir-format
+msgid "Login PINs and other essential emails are not affected."
+msgstr "Login-PINs und andere notwendige E-Mails sind davon nicht betroffen."
+
+#: lib/vutuv_web/templates/unsubscribe/done.html.heex:1
+#: lib/vutuv_web/templates/unsubscribe/show.html.heex:1
+#, elixir-autogen, elixir-format
+msgid "Notification emails"
+msgstr "Benachrichtigungs-E-Mails"
+
+#: lib/vutuv_web/templates/unsubscribe/show.html.heex:14
+#, elixir-autogen, elixir-format
+msgid "Switch off notification emails"
+msgstr "Benachrichtigungs-E-Mails abschalten"
+
+#: lib/vutuv_web/templates/unsubscribe/show.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "Switch off notification emails (such as unread message reminders) for @%{slug}?"
+msgstr "Benachrichtigungs-E-Mails (z. B. Hinweise auf ungelesene Nachrichten) für @%{slug} abschalten?"
+
+#: lib/vutuv_web/templates/user/form_content.html.heex:87
+#, elixir-autogen, elixir-format
+msgid "Would you like to receive notification emails (e.g. about unread messages)?"
+msgstr "Möchten Sie Benachrichtigungs-E-Mails erhalten (z. B. über ungelesene Nachrichten)?"
+
+#: lib/vutuv_web/templates/unsubscribe/done.html.heex:10
+#, elixir-autogen, elixir-format
+msgid "You can switch them back on in your profile settings at any time."
+msgstr "Sie können sie in Ihren Profileinstellungen jederzeit wieder einschalten."

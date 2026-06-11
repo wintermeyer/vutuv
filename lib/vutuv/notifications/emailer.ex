@@ -119,9 +119,11 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def unread_messages_email(email, user, other, conversation_id) do
     locale = get_locale(user.locale)
+    unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user)
 
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> unsubscribe_headers(unsubscribe_url)
     |> subject(
       recipient_subject(locale, fn ->
         gettext("New message from @%{slug} on vutuv",
@@ -134,9 +136,20 @@ defmodule Vutuv.Notifications.Emailer do
         user: user,
         other_slug: other.active_slug,
         conversation_id: conversation_id,
-        url: public_url()
+        url: public_url(),
+        unsubscribe_url: unsubscribe_url
       })
     )
+  end
+
+  # RFC 8058 one-click unsubscribe for notification (non-transactional) mail:
+  # the HTTPS form is what Gmail/Yahoo's unsubscribe buttons POST to, the
+  # mailto is the fallback for everything else. Transactional mail (PINs,
+  # moderation notices) must NOT carry these - it cannot be opted out of.
+  defp unsubscribe_headers(email, url) do
+    email
+    |> header("List-Unsubscribe", "<#{url}>, <mailto:info@vutuv.de?subject=unsubscribe>")
+    |> header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
   end
 
   ## Ad bookings (see Vutuv.Ads.book_ad/2, the only caller)

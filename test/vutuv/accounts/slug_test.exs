@@ -58,8 +58,21 @@ defmodule Vutuv.Accounts.SlugTest do
 
     test "route and asset path words cannot be claimed as usernames" do
       # Profiles live at the URL root, so a handle equal to a route prefix
-      # would shadow that route forever.
-      for value <- ["tags", "login", "messages", "assets", "users"] do
+      # would shadow that route forever. The underscore words are real route
+      # prefixes too: handles allow underscores (^[a-z0-9_]+$), so any route
+      # word of 3-15 characters must be reserved regardless of underscores.
+      for value <- [
+            "tags",
+            "login",
+            "messages",
+            "assets",
+            "users",
+            "unsubscribe",
+            "post_images",
+            "follow_back",
+            "search_queries",
+            "sent_emails"
+          ] do
         changeset = slug_changeset(value)
         refute changeset.valid?, "expected #{value} to be rejected"
         assert "is reserved" in errors_on(changeset).active_slug

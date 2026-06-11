@@ -36,6 +36,20 @@ defmodule VutuvWeb.Router do
     plug(Plugs.AuthAdmin)
   end
 
+  # Like :browser, but deliberately WITHOUT CSRF protection and without the
+  # ad banner: the RFC 8058 one-click unsubscribe POST comes from the mail
+  # provider with no cookies and no token. The signed token in the URL is the
+  # authorization, and the action only ever switches notification mail off.
+  pipeline :unsubscribe do
+    plug(:accepts, ["html"])
+    plug(:fetch_session)
+    plug(:fetch_flash)
+    plug(:put_secure_browser_headers)
+    plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
+    plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
+    plug(Plugs.Locale)
+  end
+
   pipeline :api do
     plug(:accepts, ["json-api"])
     plug(Plugs.PutAPIHeaders)
@@ -146,6 +160,15 @@ defmodule VutuvWeb.Router do
     get("/moderation/cases/:id", ModerationCaseController, :show)
     post("/moderation/cases/:id/dispute", ModerationCaseController, :dispute)
     post("/moderation/cases/:id/delete_content", ModerationCaseController, :delete_content)
+  end
+
+  # Switching notification emails off without a login (the email footer link
+  # and the providers' one-click POST). See the :unsubscribe pipeline above.
+  scope "/", VutuvWeb do
+    pipe_through(:unsubscribe)
+
+    get("/unsubscribe/:token", UnsubscribeController, :show)
+    post("/unsubscribe/:token", UnsubscribeController, :create)
   end
 
   # Legacy URLs from before profiles moved to the root (and before the
