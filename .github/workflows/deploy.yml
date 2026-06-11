@@ -3,6 +3,9 @@ name: Deploy
 on:
   push:
     branches: [main]
+  # Manual redeploy of main from the Actions tab, e.g. to re-run a deploy
+  # without pushing a no-op commit.
+  workflow_dispatch:
 
 # Never run two production deploys at once; let an in-flight one finish.
 concurrency:
