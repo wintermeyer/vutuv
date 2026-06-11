@@ -23,7 +23,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   Options:
 
     * `:viewer` — the user whose eyes the doc is built through (the
-      authenticated `/api/v1` reads). Default `nil` = the anonymous public
+      authenticated `/api/2.0` reads). Default `nil` = the anonymous public
       view the extension URLs serve; never pass a viewer for those, they
       must stay cache-safe.
     * `:emails` — override the email list (the legacy session-aware vCard

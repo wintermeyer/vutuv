@@ -1,6 +1,6 @@
 # API reference
 
-Base URL: `https://vutuv.de/api/v1` · All endpoints need a
+Base URL: `https://vutuv.de/api/2.0` · All endpoints need a
 [bearer token](/developers/authentication) · Errors are
 `application/problem+json` ([details](/developers/authentication#errors)).
 
@@ -9,7 +9,7 @@ Conventions:
 * Responses carry `schema_version` (currently `1`) where they mirror a
   public page. New fields appear without notice — parse leniently and
   ignore keys you do not know. Fields never disappear or change meaning
-  within `/api/v1`.
+  within `/api/2.0`.
 * Request bodies are plain JSON objects (`Content-Type: application/json`),
   no envelope.
 * Reads return **what the authorizing member sees on the website** — the
@@ -24,11 +24,11 @@ Conventions:
   repeating a call is success, not a conflict.
 
 In the examples, `$VUTUV_TOKEN` holds your token and `$API` stands for
-`https://vutuv.de/api/v1`:
+`https://vutuv.de/api/2.0`:
 
 ```bash
 export VUTUV_TOKEN="vutuv_pat_..."
-export API="https://vutuv.de/api/v1"
+export API="https://vutuv.de/api/2.0"
 auth() { curl -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
 ```
 
@@ -333,7 +333,7 @@ unread marker (`204`).
 
 ## Notifications
 
-### GET /api/v1/notifications · POST /api/v1/notifications/read
+### GET /api/2.0/notifications · POST /api/2.0/notifications/read
 
 Scopes: `social:read` / `social:write`. The derived notification feed
 (new follower, endorsement, connection events, replies, likes, moderation
@@ -372,17 +372,17 @@ The full page list lives in [`/llms.txt`](/llms.txt).
 
 ## CORS
 
-`/api/v1` sends `Access-Control-Allow-Origin: *` — browser apps can call
+`/api/2.0` sends `Access-Control-Allow-Origin: *` — browser apps can call
 it directly. Never embed a long-lived token in shipped client code; tokens
 belong server-side or in the user's own hands.
 
 ## Versioning promise
 
-* Additive changes (new endpoints, new fields) happen within `/api/v1`.
+* Additive changes (new endpoints, new fields) happen within `/api/2.0`.
 * Breaking changes (removed/renamed fields, changed semantics) only happen
   in a new version prefix, with a documented migration window.
-* The deprecated read-only `/api/1.0` JSON-API endpoints predate this API;
-  new integrations must not use them.
+* The old read-only `/api/1.0` JSON-API has been removed; this API
+  replaces it.
 
 ## See also
 

@@ -1,6 +1,6 @@
 defmodule VutuvWeb.Plug.ApiCors do
   @moduledoc """
-  CORS for the token-authenticated JSON API (`/api/v1`).
+  CORS for the token-authenticated JSON API (`/api/2.0`).
 
   The API authenticates with bearer tokens, never cookies, so the wildcard
   `Access-Control-Allow-Origin: *` is safe and lets browser-based

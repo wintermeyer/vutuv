@@ -193,7 +193,7 @@ the resulting ~200px rail width. --%>
             id="download-vcard"
             href={
               if user_has_permissions?(@user, @current_user),
-                do: ~p"/api/1.0/users/#{@user}/vcard",
+                do: ~p"/#{@user}/vcard",
                 else: "/#{@user.active_slug}.vcf"
             }
             title={gettext("Download")}

@@ -9,7 +9,7 @@ defmodule Vutuv.ApiAuth.OAuth do
   Deliberate choices:
 
     * **PKCE (S256) is mandatory for every client**, and the client secret
-      is required at the token endpoint — v1 supports confidential clients
+      is required at the token endpoint — 2.0 supports confidential clients
       only (a browser-only app needs a small server-side exchange).
     * Authorization codes are one-time and 10-minute; **redeeming a code
       twice revokes every token of its grant** (the RFC's theft signal).

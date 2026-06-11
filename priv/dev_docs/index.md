@@ -1,6 +1,6 @@
 # vutuv API
 
-vutuv offers a RESTful JSON API at `https://vutuv.de/api/v1` so your scripts
+vutuv offers a RESTful JSON API at `https://vutuv.de/api/2.0` so your scripts
 and apps can read and (soon) write vutuv data on behalf of a member who
 authorized them.
 
@@ -21,7 +21,7 @@ tools and offline reading.
 
 ```bash
 curl -H "Authorization: Bearer vutuv_pat_YOUR_TOKEN" \
-     https://vutuv.de/api/v1/me
+     https://vutuv.de/api/2.0/me
 ```
 
 You get your own profile as JSON, seen through your own eyes (including
@@ -45,14 +45,14 @@ never more):
 
 ```bash
 curl -H "Authorization: Bearer vutuv_pat_YOUR_TOKEN" \
-     https://vutuv.de/api/v1/users/stefan.wintermeyer
+     https://vutuv.de/api/2.0/users/stefan.wintermeyer
 ```
 
 ## The API in five sentences
 
-1. **Versioned.** Everything lives under `/api/v1`. Additions (new fields,
+1. **Versioned.** Everything lives under `/api/2.0`. Additions (new fields,
    new endpoints) happen without notice and never break you; breaking
-   changes only ever appear under a new prefix (`/api/v2`).
+   changes only ever appear under a new prefix (`/api/3.0`).
 2. **Token-authenticated.** Every request carries
    `Authorization: Bearer <token>`. Members create tokens themselves and can
    revoke each one (or all of them) with one click — revocation is

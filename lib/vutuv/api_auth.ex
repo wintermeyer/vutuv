@@ -1,8 +1,8 @@
 defmodule Vutuv.ApiAuth do
   @moduledoc """
-  Credentials for the `/api/v1` JSON API: personal access tokens now, the
-  OAuth grant/token machinery in a later phase. See `Vutuv.ApiAuth.Token`
-  and `Vutuv.ApiAuth.Scopes`.
+  Credentials for the `/api/2.0` JSON API: personal access tokens, the
+  registered OAuth apps with their grants, and token verification. See
+  `Vutuv.ApiAuth.Token`, `Vutuv.ApiAuth.OAuth` and `Vutuv.ApiAuth.Scopes`.
 
   Tokens are opaque random strings with a recognizable prefix
   (`vutuv_pat_…` / `vutuv_at_…` / `vutuv_rt_…`, for secret scanners) whose

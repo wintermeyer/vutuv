@@ -1,6 +1,6 @@
 defmodule VutuvWeb.Plug.RequireScope do
   @moduledoc """
-  Scope gate for `/api/v1` endpoints — runs after `VutuvWeb.Plug.ApiV1Auth`:
+  Scope gate for `/api/2.0` endpoints — runs after `VutuvWeb.Plug.ApiV2Auth`:
 
       plug(VutuvWeb.Plug.RequireScope, "profile:read")
 
@@ -10,7 +10,7 @@ defmodule VutuvWeb.Plug.RequireScope do
   """
 
   alias Vutuv.ApiAuth.Scopes
-  alias VutuvWeb.ApiV1.Problem
+  alias VutuvWeb.ApiV2.Problem
 
   def init(scope) when is_binary(scope) do
     Scopes.valid?(scope) || raise(ArgumentError, "unknown API scope: #{inspect(scope)}")

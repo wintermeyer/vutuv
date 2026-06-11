@@ -104,7 +104,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   # The shared entry vocabulary (also used by ProfileDoc).
 
   # Every entry map carries the record's id: the public docs gain a stable
-  # reference (additive, schema_version stays 1) and the /api/v1 CRUD
+  # reference (additive, schema_version stays 1) and the /api/2.0 CRUD
   # endpoints need it to address entries.
 
   @doc false

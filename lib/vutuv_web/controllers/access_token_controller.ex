@@ -1,6 +1,6 @@
 defmodule VutuvWeb.AccessTokenController do
   @moduledoc """
-  The user's personal access tokens for `/api/v1` (see `Vutuv.ApiAuth`):
+  The user's personal access tokens for `/api/2.0` (see `Vutuv.ApiAuth`):
   list, create, revoke one, revoke all. The token value is carried to the
   list page in a one-shot flash and shown exactly once; revocation cuts the
   token's access on its very next request.

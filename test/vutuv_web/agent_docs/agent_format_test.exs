@@ -219,7 +219,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
       html = get(conn, "/#{me.active_slug}") |> html_response(200)
 
-      assert html =~ ~s(href="/api/1.0/users/#{me.active_slug}/vcard")
+      assert html =~ ~s(href="/#{me.active_slug}/vcard")
     end
 
     test "an anonymous visitor downloads the public .vcf" do

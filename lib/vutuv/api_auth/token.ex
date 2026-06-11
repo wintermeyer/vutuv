@@ -1,6 +1,6 @@
 defmodule Vutuv.ApiAuth.Token do
   @moduledoc """
-  A bearer credential for the `/api/v1` JSON API.
+  A bearer credential for the `/api/2.0` JSON API.
 
   One table holds every kind: personal access tokens (`kind: "pat"`, no
   app) and the OAuth access/refresh pairs (`kind: "access"/"refresh"`,

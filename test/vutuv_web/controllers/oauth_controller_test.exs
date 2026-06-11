@@ -131,7 +131,7 @@ defmodule VutuvWeb.OauthControllerTest do
       conn =
         build_conn()
         |> put_req_header("authorization", "Bearer " <> access)
-        |> get("/api/v1/me")
+        |> get("/api/2.0/me")
 
       assert json_response(conn, 200)["slug"] == user.active_slug
 
@@ -162,7 +162,7 @@ defmodule VutuvWeb.OauthControllerTest do
       conn =
         build_conn()
         |> put_req_header("authorization", "Bearer " <> access2)
-        |> get("/api/v1/me")
+        |> get("/api/2.0/me")
 
       assert conn.status == 401
     end

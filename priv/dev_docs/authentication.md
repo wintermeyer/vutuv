@@ -1,13 +1,13 @@
 # Authentication & tokens
 
-Every `/api/v1` request must carry a bearer token:
+Every `/api/2.0` request must carry a bearer token:
 
 ```bash
 curl -H "Authorization: Bearer vutuv_pat_YOUR_TOKEN" \
-     https://vutuv.de/api/v1/me
+     https://vutuv.de/api/2.0/me
 ```
 
-There is no anonymous access to `/api/v1`. (Anonymous *public* data is served
+There is no anonymous access to `/api/2.0`. (Anonymous *public* data is served
 by the extension URLs instead — see the
 [reference](/developers/reference#public-data-without-a-token).)
 
@@ -31,7 +31,7 @@ Treat tokens like passwords:
 
 ```bash
 export VUTUV_TOKEN="vutuv_pat_..."
-curl -H "Authorization: Bearer $VUTUV_TOKEN" https://vutuv.de/api/v1/me
+curl -H "Authorization: Bearer $VUTUV_TOKEN" https://vutuv.de/api/2.0/me
 ```
 
 * The `vutuv_pat_` prefix exists so secret scanners can recognize leaked
@@ -97,7 +97,7 @@ Anything that speaks HTTPS works. Two minimal examples:
 **JavaScript (browser or Node — CORS is open, tokens never go in cookies):**
 
 ```javascript
-const res = await fetch("https://vutuv.de/api/v1/me", {
+const res = await fetch("https://vutuv.de/api/2.0/me", {
   headers: { Authorization: `Bearer ${process.env.VUTUV_TOKEN}` },
 });
 if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -111,7 +111,7 @@ console.log(profile.name, profile.counts);
 import os, requests
 
 res = requests.get(
-    "https://vutuv.de/api/v1/me",
+    "https://vutuv.de/api/2.0/me",
     headers={"Authorization": f"Bearer {os.environ['VUTUV_TOKEN']}"},
     timeout=10,
 )
@@ -145,7 +145,7 @@ which cuts off all of their tokens at once). You receive a `client_id` and
 a `client_secret` (shown once). Register your exact redirect URLs —
 `https://` only, `http://localhost` allowed for development.
 
-v1 supports **confidential clients only**: the token exchange needs the
+API 2.0 supports **confidential clients only**: the token exchange needs the
 client secret, so a purely client-side app needs a small server-side
 exchange. PKCE (S256) is required on top for every client.
 

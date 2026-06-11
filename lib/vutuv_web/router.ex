@@ -52,30 +52,20 @@ defmodule VutuvWeb.Router do
     plug(Plugs.Locale)
   end
 
-  pipeline :api do
-    plug(:accepts, ["json-api"])
-    plug(Plugs.PutAPIHeaders)
-    plug(Plugs.Locale)
-  end
-
   # The versioned third-party JSON API (see Vutuv.ApiAuth and /developers).
   # Bearer tokens only — no session, no CSRF; CORS is wide open because no
-  # cookie ever authenticates here. ApiCors must run before ApiV1Auth so
+  # cookie ever authenticates here. ApiCors must run before ApiV2Auth so
   # preflights (sent without an Authorization header) are answered.
-  pipeline :api_v1 do
+  pipeline :api_v2 do
     plug(:accepts, ["json"])
     plug(Plugs.ApiCors)
-    plug(Plugs.ApiV1Auth)
+    plug(Plugs.ApiV2Auth)
   end
 
   # The OAuth machine endpoints: form-encoded in (parsed at the endpoint),
   # JSON out, no session, no CSRF — RFC 6749's token/revocation endpoints.
   pipeline :oauth_token do
     plug(:accepts, ["json"])
-  end
-
-  pipeline :render_404 do
-    plug(Plugs.All404)
   end
 
   # Served from the app (not priv/static, which is gitignored) and with no
@@ -155,7 +145,7 @@ defmodule VutuvWeb.Router do
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
-    # Developer documentation for /api/v1 (English; "developers" is in
+    # Developer documentation for /api/2.0 (English; "developers" is in
     # ReservedSlugs). Each page also serves its raw Markdown under .md.
     # The app registry routes must precede the docs' :page catch.
     post("/developers/apps/:id/regenerate_secret", DevAppController, :regenerate_secret)
@@ -194,7 +184,7 @@ defmodule VutuvWeb.Router do
     # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).
     resources("/blocks", BlockController, only: [:index, :create, :delete])
 
-    # Personal access tokens for /api/v1 ("access_tokens" is in
+    # Personal access tokens for /api/2.0 ("access_tokens" is in
     # ReservedSlugs). Logged-in only. The collection DELETE (no id) is the
     # panic button: revoke every token at once.
     delete("/access_tokens", AccessTokenController, :delete_all)
@@ -308,10 +298,10 @@ defmodule VutuvWeb.Router do
     post("/api_apps/:id/unsuspend", ApiAppController, :unsuspend)
   end
 
-  # /api/v1 — the authenticated third-party API. Contract: additions are
+  # /api/2.0 — the authenticated third-party API. Contract: additions are
   # free, breaking changes mean /api/v2 (a new scope here).
-  scope "/api/v1", VutuvWeb.ApiV1, as: :api_v1 do
-    pipe_through(:api_v1)
+  scope "/api/2.0", VutuvWeb.ApiV2, as: :api_v2 do
+    pipe_through(:api_v2)
 
     get("/me", MeController, :show)
     patch("/me", MeController, :update)
@@ -393,37 +383,6 @@ defmodule VutuvWeb.Router do
     match(:*, "/*path", NotFoundController, :show)
   end
 
-  scope "/api/1.0/", as: :api do
-    pipe_through(:api)
-
-    # `only: []`: the user collection and a single user are intentionally not
-    # exposed over the API; this resource exists purely to namespace the
-    # read-only nested sub-resources below. `param: "slug"` must stay so the
-    # nested param remains `:user_slug` (resolved by UserResolveSlug).
-    resources "/users", VutuvWeb.Api.UserController, param: "slug", only: [] do
-      pipe_through(:user_pipe)
-      get("/vcard", VutuvWeb.Api.VCardController, :get)
-
-      resources("/emails", VutuvWeb.Api.EmailController, only: [:index, :show])
-
-      resources("/groups", VutuvWeb.Api.GroupController, only: [:index, :show])
-      resources("/followers", VutuvWeb.Api.FollowerController, only: [:index])
-      resources("/followees", VutuvWeb.Api.FolloweeController, only: [:index])
-
-      resources("/phone_numbers", VutuvWeb.Api.PhoneNumberController, only: [:index, :show])
-      resources("/links", VutuvWeb.Api.UrlController, only: [:index, :show])
-
-      resources("/social_media_accounts", VutuvWeb.Api.SocialMediaAccountController,
-        only: [:index, :show]
-      )
-
-      resources("/work_experiences", VutuvWeb.Api.WorkExperienceController, only: [:index, :show])
-      resources("/addresses", VutuvWeb.Api.AddressController, only: [:index, :show])
-    end
-
-    pipe_through(:render_404)
-  end
-
   # Profiles live at the URL root: /:slug is the profile page, /:slug/... the
   # per-user sub-pages. This scope must stay LAST — every route above wins by
   # definition order, and Vutuv.Accounts.ReservedSlugs keeps users from
@@ -440,6 +399,9 @@ defmodule VutuvWeb.Router do
       # The owner's personal data download (GDPR): one JSON file. Owner-only,
       # enforced by the controller's RequireLogin + AuthUser plugs.
       get("/export", ExportController, :show)
+      # The session-aware vCard (all emails for the owner / a follower-back
+      # viewer); the anonymous canonical vCard is /:slug.vcf.
+      get("/vcard", VCardController, :get)
       resources("/emails", EmailController)
       # PIN-entry step for the email-change flow (issue #759).
       post("/emails/confirmation", EmailController, :confirm)

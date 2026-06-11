@@ -21,7 +21,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   @doc """
   The permalink page: the post itself plus its visible replies. Anonymous
   by default; `viewer:` switches the reply list (and its count) to what
-  that user sees — the authenticated `/api/v1` reads. Never pass a viewer
+  that user sees — the authenticated `/api/2.0` reads. Never pass a viewer
   for the extension URLs, they must stay cache-safe.
   """
   def build(author, %Post{} = post, opts \\ []) do

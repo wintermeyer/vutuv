@@ -7,7 +7,7 @@ defmodule VutuvWeb.DevDocControllerTest do
     response = conn |> get(~p"/developers") |> html_response(200)
     assert response =~ "vutuv API"
     assert response =~ "curl"
-    assert response =~ "/api/v1/me"
+    assert response =~ "/api/2.0/me"
 
     for page <- ["authentication", "reference"] do
       response = conn |> get("/developers/#{page}") |> html_response(200)
@@ -47,6 +47,6 @@ defmodule VutuvWeb.DevDocControllerTest do
   test "llms.txt points agents at the API docs", %{conn: conn} do
     body = get(conn, "/llms.txt").resp_body
     assert body =~ "/developers"
-    assert body =~ "/api/v1"
+    assert body =~ "/api/2.0"
   end
 end
