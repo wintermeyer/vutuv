@@ -137,6 +137,7 @@ defmodule Vutuv.SearchTest do
       assert %{city: "koblenz", scope: :people} = Search.parse("ort:koblenz")
       assert %{city: "koblenz"} = Search.parse("stadt:koblenz")
       assert %{city: "koblenz"} = Search.parse("city:koblenz")
+
       assert %{text: "müller", tag: "php", city: "koblenz"} =
                Search.parse("müller tag:php ort:koblenz")
     end

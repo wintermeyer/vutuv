@@ -166,7 +166,9 @@ defmodule Vutuv.Search do
   defp people(parsed) do
     cond do
       is_binary(parsed.slug) ->
-        {parsed |> filtered_users() |> by_field(:active_slug, parsed.slug, parsed.exact?)
+        {parsed
+         |> filtered_users()
+         |> by_field(:active_slug, parsed.slug, parsed.exact?)
          |> list_people(), []}
 
       is_binary(parsed.first_name) or is_binary(parsed.last_name) ->
