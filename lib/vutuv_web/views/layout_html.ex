@@ -45,6 +45,39 @@ defmodule VutuvWeb.LayoutHTML do
   end
 
   @doc """
+  The discreet text-ad strip between the top navigation and the content
+  (Google text-ad style; see `Vutuv.Ads` and `VutuvWeb.Plug.AdBanner`).
+  Renders the booked ad's Markdown (`{:ad, ad}`) or the house ad (`:house`)
+  that sells the slot, always with the unmistakable "Ad" label. The
+  `id="vutuv-ad"` marker is the plug's seen-detection contract and
+  `data-ad-banner` triggers the two-minute auto-hide in app.js.
+  """
+  attr(:banner, :any, required: true)
+
+  def ad_banner(assigns) do
+    ~H"""
+    <div id="vutuv-ad" data-ad-banner class="mx-auto max-w-6xl px-4 pt-4">
+      <div class="flex items-start gap-3 rounded-xl bg-white px-4 py-3 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+        <span class="mt-0.5 shrink-0 rounded border border-slate-300 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:border-slate-600 dark:text-slate-400">{gettext("Ad")}</span>
+        <%= case @banner do %>
+          <% {:ad, ad} -> %>
+            <div class="markdown min-w-0 text-sm text-slate-700 dark:text-slate-300">
+              {VutuvWeb.Markdown.render(ad.content)}
+            </div>
+          <% :house -> %>
+            <p class="min-w-0 text-sm text-slate-700 dark:text-slate-300">
+              {gettext("This spot is free today. One day, one ad, every visitor.")}
+              <.link href={~p"/ads"} class="font-semibold text-brand-600 hover:text-brand-700">
+                {gettext("Book your ad")}
+              </.link>
+            </p>
+        <% end %>
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   The `<title>` content, sans the site-name suffix: an explicit `:page_title`
   assign wins (the post pages and the LiveViews set one), a page about a user
   (`:user` in the conn assigns) falls back to the user's name, and everything

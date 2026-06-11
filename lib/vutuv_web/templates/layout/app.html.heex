@@ -48,6 +48,13 @@ server-side flash. --%>
   <% end %>
 </div>
 
+<%!-- The daily text ad (or the house ad selling the slot), between the
+navigation and the content. Only dead pages get the assign (see
+VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
+<%= if assigns[:ad_banner] do %>
+  <.ad_banner banner={@ad_banner} />
+<% end %>
+
 <main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 md:pb-10">
   {@inner_content}
 </main>

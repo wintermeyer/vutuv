@@ -15,6 +15,8 @@ defmodule VutuvWeb.Router do
     plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
     plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
     plug(Plugs.Locale)
+    # The daily text ad between navigation and content (1/hour per session).
+    plug(Plugs.AdBanner)
   end
 
   pipeline :user_pipe do
@@ -114,6 +116,12 @@ defmodule VutuvWeb.Router do
 
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
+
+    # The daily text ad: the public offer page and the booking flow
+    # (logged-in only; checked in the controller). See Vutuv.Ads.
+    get("/ads", AdController, :index)
+    get("/ads/new", AdController, :new)
+    post("/ads", AdController, :create)
 
     # Reporting content (family-friendliness / bullying / spam): the form and
     # its submission. Logged-in only; checked in the controller.

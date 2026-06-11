@@ -177,6 +177,8 @@ defmodule VutuvWeb.PageController do
     `/<username>/<section>/<id-or-slug>`
   - `/tags/<tag>` — a skill tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members
+  - `/ads` — the daily text ad: price, conditions, next available day
+    (booking happens online and requires a login)
 
   List pages paginate with `?page=N`.
   """

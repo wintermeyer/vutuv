@@ -136,6 +136,21 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
+  def render(%{type: "advertising"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map(doc.rules, &("- " <> &1)),
+      "- #{gettext("Price")}: #{doc.price.display}",
+      doc.next_available_day &&
+        "- #{gettext("Next available day")}: #{doc.next_available_day}",
+      gettext("Book online (login required): %{url}", url: doc.booking_url),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   # Hard-wraps `text` at @width columns. Existing newlines are kept;
   # wrapped continuation lines get `indent`. A single word longer than the
   # width (a URL) stays on its own line unbroken.

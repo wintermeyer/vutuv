@@ -1,0 +1,57 @@
+<%!-- The public offer page for the daily text ad. Also served as .md/.txt/.json
+(VutuvWeb.AgentDocs.AdsDoc); rules and price line come from the doc module so
+the two renderings cannot drift apart. --%>
+<div class="mx-auto max-w-2xl py-6">
+  <.card class="p-8">
+    <p class="text-sm font-semibold uppercase tracking-wide text-brand-600">
+      {gettext("Advertising")}
+    </p>
+    <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-slate-100">
+      {gettext("One day. One ad. Every visitor.")}
+    </h1>
+    <p class="mt-3 text-slate-700 dark:text-slate-300">
+      {gettext(
+        "vutuv shows a single, text-only ad per calendar day: discreet, between the navigation and the content, in the style of classic text ads."
+      )}
+    </p>
+
+    <ul class="mt-6 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+      <%= for rule <- VutuvWeb.AgentDocs.AdsDoc.rules() do %>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600">•</span>
+          <span>{rule}</span>
+        </li>
+      <% end %>
+    </ul>
+
+    <dl class="mt-6 grid gap-4 rounded-xl bg-slate-50 p-4 text-sm sm:grid-cols-2 dark:bg-slate-800/60">
+      <div>
+        <dt class="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {gettext("Price")}
+        </dt>
+        <dd class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
+          {VutuvWeb.AgentDocs.AdsDoc.price_display()}
+        </dd>
+      </div>
+      <div>
+        <dt class="font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {gettext("Next available day")}
+        </dt>
+        <dd class="mt-1 text-lg font-bold text-slate-900 dark:text-slate-100">
+          <%= if @next_available_day do %>
+            {@next_available_day}
+          <% else %>
+            {gettext("fully booked")}
+          <% end %>
+        </dd>
+      </div>
+    </dl>
+
+    <div class="mt-8">
+      <.button href={~p"/ads/new"}>{gettext("Book your ad")}</.button>
+      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+        {gettext("Booking requires a vutuv login.")}
+      </p>
+    </div>
+  </.card>
+</div>

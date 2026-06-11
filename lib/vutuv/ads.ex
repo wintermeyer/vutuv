@@ -1,0 +1,122 @@
+defmodule Vutuv.Ads do
+  @moduledoc """
+  The daily text-ad system.
+
+  Exactly one ad runs per calendar day (Europe/Berlin). Logged-in members
+  book a future day online (`book_ad/2`): the day is reserved in the
+  database and the billing data plus the ad text are mailed to the operator,
+  who invoices manually. Serving is automatic: `current_banner/0` is what
+  `VutuvWeb.Plug.AdBanner` shows between the navigation and the content -
+  the booked ad on its day, the house ad (an ad for the ad system) on days
+  nobody booked.
+
+  Day boundaries are German local time, computed with the fixed EU DST rule
+  (see `berlin_date/1`) because the project deliberately carries no timezone
+  database dependency.
+  """
+
+  import Ecto.Query
+
+  alias Vutuv.Ads.Ad
+  alias Vutuv.Notifications.Emailer
+  alias Vutuv.Repo
+
+  # The fixed price per day, in cents net (1250 EUR). Stamped onto every
+  # booking so old rows keep the price that was agreed.
+  @price_cents 125_000
+
+  # How far ahead next_available_day/0 searches; bookings further out than a
+  # year are not offered.
+  @booking_horizon_days 365
+
+  def price_cents, do: @price_cents
+
+  @doc "The ad booked for `day`, or nil."
+  def get_ad(%Date{} = day), do: Repo.get_by(Ad, day: day)
+
+  @doc """
+  What the banner shows right now: `{:ad, ad}` on a booked day, `:house`
+  (the ad for the ad system) otherwise.
+  """
+  def current_banner do
+    case get_ad(today()) do
+      nil -> :house
+      ad -> {:ad, ad}
+    end
+  end
+
+  @doc """
+  Books `attrs`'s day for `user` and mails the booking (billing data + ad
+  text) to the operator. The unique index on `day` decides races; payment is
+  by manually sent invoice, so nothing else happens here.
+  """
+  def book_ad(user, attrs) do
+    %Ad{user_id: user.id, price_cents: @price_cents}
+    |> Ad.changeset(attrs)
+    |> Repo.insert()
+    |> case do
+      {:ok, ad} ->
+        ad
+        |> Emailer.ad_booking_email(user)
+        |> Emailer.deliver()
+
+        {:ok, ad}
+
+      {:error, changeset} ->
+        {:error, changeset}
+    end
+  end
+
+  @doc "Changeset for the booking form."
+  def change_ad(%Ad{} = ad, attrs \\ %{}), do: Ad.changeset(ad, attrs)
+
+  @doc """
+  The first bookable day: tomorrow (Berlin) or the first free day after it.
+  Nil when the next #{@booking_horizon_days} days are all booked.
+  """
+  def next_available_day do
+    tomorrow = Date.add(today(), 1)
+    horizon = Date.add(tomorrow, @booking_horizon_days - 1)
+
+    booked =
+      from(a in Ad, where: a.day >= ^tomorrow and a.day <= ^horizon, select: a.day)
+      |> Repo.all()
+      |> MapSet.new()
+
+    Enum.find(
+      Date.range(tomorrow, horizon),
+      &(not MapSet.member?(booked, &1))
+    )
+  end
+
+  @doc "Today as a German calendar day (Europe/Berlin)."
+  def today, do: berlin_date(DateTime.utc_now())
+
+  @doc """
+  The German calendar date of a UTC instant, without a timezone database:
+  CEST (UTC+2) between the last Sunday of March, 01:00 UTC, and the last
+  Sunday of October, 01:00 UTC; CET (UTC+1) otherwise. That EU rule has been
+  fixed since 1996, so hardcoding it beats pulling in tzdata for one offset.
+  """
+  def berlin_date(%DateTime{} = utc) do
+    offset_hours = if german_summer_time?(utc), do: 2, else: 1
+
+    utc
+    |> DateTime.add(offset_hours * 3600, :second)
+    |> DateTime.to_date()
+  end
+
+  defp german_summer_time?(utc) do
+    dst_start = last_sunday_at_one_utc(utc.year, 3)
+    dst_end = last_sunday_at_one_utc(utc.year, 10)
+
+    DateTime.compare(utc, dst_start) != :lt and DateTime.compare(utc, dst_end) == :lt
+  end
+
+  defp last_sunday_at_one_utc(year, month) do
+    last_of_month = Date.new!(year, month, Date.days_in_month(Date.new!(year, month, 1)))
+    # day_of_week: Monday = 1 ... Sunday = 7; rem/2 turns Sunday into 0.
+    last_sunday = Date.add(last_of_month, -rem(Date.day_of_week(last_of_month), 7))
+    DateTime.new!(last_sunday, ~T[01:00:00], "Etc/UTC")
+  end
+end

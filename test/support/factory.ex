@@ -45,6 +45,21 @@ defmodule Vutuv.Factory do
     insert(:activated_user, attrs)
   end
 
+  # A booked text ad (Vutuv.Ads). Day defaults to tomorrow (Berlin); banner
+  # tests override it with `day: Vutuv.Ads.today()`.
+  def ad_factory do
+    %Vutuv.Ads.Ad{
+      day: Date.add(Vutuv.Ads.today(), 1),
+      content: sequence(:ad_content, &"**Ad #{&1}** content"),
+      price_cents: Vutuv.Ads.price_cents(),
+      billing_name: sequence(:billing_name, &"Billing Name #{&1}"),
+      billing_street: "Musterstraße 1",
+      billing_zip_code: "10115",
+      billing_city: "Berlin",
+      billing_country: "Deutschland"
+    }
+  end
+
   def search_term_factory do
     %Vutuv.Accounts.SearchTerm{
       value: sequence(:search_term_value, &"term-#{&1}"),

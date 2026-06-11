@@ -1,0 +1,83 @@
+<.page_header crumbs={[
+  {gettext("Advertising"), ~p"/ads"},
+  gettext("New")
+]} />
+
+<.card_section>
+  <.form :let={f} for={@changeset} action={~p"/ads"} class="editform" id="ad-form">
+    <.form_error changeset={@changeset} />
+
+    <div class={"editform__field#{if error_tag(f, :day), do: " editform__field--error"}"}>
+      <%= label f, :day, gettext("Day") %>
+      <%= date_input f, :day, min: @next_available_day %>
+      <%= error_tag f, :day %>
+      <p class="editform__hint">
+        {gettext("One ad per calendar day. Next available day: %{day}",
+          day: @next_available_day || gettext("fully booked")
+        )}
+      </p>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :content), do: " editform__field--error"}"}>
+      <%= label f, :content, gettext("Ad text") %>
+      <%= textarea f, :content, rows: 8, maxlength: Vutuv.Ads.Ad.content_max_length() %>
+      <%= error_tag f, :content %>
+      <p class="editform__hint">
+        {gettext("Markdown is supported. At most %{max} characters.",
+          max: Vutuv.Ads.Ad.content_max_length()
+        )}
+      </p>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_name), do: " editform__field--error"}"}>
+      <%= label f, :billing_name, gettext("Billing name") %>
+      <%= text_input f, :billing_name %>
+      <%= error_tag f, :billing_name %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_company), do: " editform__field--error"}"}>
+      <%= label f, :billing_company, gettext("Company (optional)") %>
+      <%= text_input f, :billing_company %>
+      <%= error_tag f, :billing_company %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_street), do: " editform__field--error"}"}>
+      <%= label f, :billing_street, gettext("Street and number") %>
+      <%= text_input f, :billing_street %>
+      <%= error_tag f, :billing_street %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_zip_code), do: " editform__field--error"}"}>
+      <%= label f, :billing_zip_code, gettext("Zip code") %>
+      <%= text_input f, :billing_zip_code %>
+      <%= error_tag f, :billing_zip_code %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_city), do: " editform__field--error"}"}>
+      <%= label f, :billing_city, gettext("City") %>
+      <%= text_input f, :billing_city %>
+      <%= error_tag f, :billing_city %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :billing_country), do: " editform__field--error"}"}>
+      <%= label f, :billing_country, gettext("Country") %>
+      <%= text_input f, :billing_country %>
+      <%= error_tag f, :billing_country %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :vat_id), do: " editform__field--error"}"}>
+      <%= label f, :vat_id, gettext("VAT ID (optional)") %>
+      <%= text_input f, :vat_id %>
+      <%= error_tag f, :vat_id %>
+    </div>
+
+    <p class="editform__hint">
+      {gettext(
+        "Price: %{price}. Payment by invoice; the day is reserved immediately and the invoice follows by email.",
+        price: VutuvWeb.AgentDocs.AdsDoc.price_display()
+      )}
+    </p>
+
+    <.form_actions backlink={~p"/ads"} />
+  </.form>
+</.card_section>

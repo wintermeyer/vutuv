@@ -1,0 +1,101 @@
+defmodule VutuvWeb.AdControllerTest do
+  use VutuvWeb.ConnCase
+
+  alias Vutuv.Ads
+  alias Vutuv.Repo
+
+  @booking_params %{
+    "day" => Date.to_iso8601(Date.add(Ads.today(), 14)),
+    "content" => "**Acme GmbH** sucht Elixir-Entwickler.",
+    "billing_name" => "Acme GmbH",
+    "billing_company" => "",
+    "billing_street" => "Musterstraße 1",
+    "billing_zip_code" => "10115",
+    "billing_city" => "Berlin",
+    "billing_country" => "Deutschland",
+    "vat_id" => "DE123456789"
+  }
+
+  describe "index (the public offer page)" do
+    test "shows price and conditions to anonymous visitors", %{conn: conn} do
+      html = conn |> get(~p"/ads") |> html_response(200)
+
+      assert html =~ "1,250"
+      assert html =~ "2048"
+      assert html =~ ~p"/ads/new"
+    end
+
+    test "every public fact also appears in the agent formats (no drift)", %{conn: conn} do
+      next_day = Date.to_iso8601(Ads.next_available_day())
+
+      rendered = %{
+        html: get(conn, ~p"/ads") |> html_response(200),
+        md: get(build_conn(), "/ads.md").resp_body,
+        txt: get(build_conn(), "/ads.txt").resp_body,
+        json: get(build_conn(), "/ads.json").resp_body
+      }
+
+      for {format, body} <- rendered, fact <- ["1,250", "2048", next_day] do
+        assert body =~ fact,
+               "#{inspect(fact)} is missing from the #{format} version — " <>
+                 "HTML page and agent doc have drifted apart (see VutuvWeb.AgentDocs)"
+      end
+    end
+  end
+
+  describe "new" do
+    test "requires login", %{conn: conn} do
+      conn = get(conn, ~p"/ads/new")
+      assert redirected_to(conn) == "/"
+    end
+
+    test "renders the booking form for a logged-in member", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/ads/new") |> html_response(200)
+
+      assert html =~ "id=\"ad-form\""
+      assert html =~ "billing_name"
+      assert html =~ "1,250"
+    end
+  end
+
+  describe "create" do
+    test "requires login", %{conn: conn} do
+      conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
+      assert redirected_to(conn) == "/"
+      assert Repo.aggregate(Ads.Ad, :count) == 0
+    end
+
+    test "books the day and mails the booking (CSRF enforced like a browser)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = get(conn, ~p"/ads/new")
+      conn = submit_with_csrf(conn, ~p"/ads", %{"ad" => @booking_params})
+
+      assert redirected_to(conn) == ~p"/ads"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "booked"
+
+      ad = Repo.get_by!(Ads.Ad, day: Date.add(Ads.today(), 14))
+      assert ad.user_id == user.id
+      assert ad.price_cents == 125_000
+      assert ad.vat_id == "DE123456789"
+
+      assert_received {:email, email}
+      assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
+      assert email.text_body =~ @booking_params["content"]
+      assert email.text_body =~ "Acme GmbH"
+    end
+
+    test "an already booked day re-renders the form with the error", %{conn: conn} do
+      insert(:ad, day: Date.from_iso8601!(@booking_params["day"]))
+      {conn, _user} = create_and_login_user(conn)
+
+      conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
+      html = html_response(conn, 200)
+
+      assert html =~ "id=\"ad-form\""
+      assert html =~ "has already been booked"
+      assert flush_emails() == []
+    end
+  end
+end

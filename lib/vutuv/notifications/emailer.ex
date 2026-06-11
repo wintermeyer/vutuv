@@ -139,6 +139,59 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
+  ## Ad bookings (see Vutuv.Ads.book_ad/2, the only caller)
+
+  @ad_booking_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
+
+  @doc """
+  The operator notice for a new ad booking: the booked day, the billing
+  address and the full ad text — everything the manually written invoice
+  needs. The recipient is the (German) operator, not the booker, so subject
+  and template are fixed German rather than locale-selected.
+  """
+  def ad_booking_email(%Vutuv.Ads.Ad{} = ad, booker) do
+    base_email()
+    |> to(@ad_booking_recipient)
+    |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
+    |> text_body(
+      VutuvWeb.EmailText.render("ad_booking_de.text", %{
+        ad: ad,
+        booker: booker,
+        booker_email: Vutuv.Accounts.first_email_value(booker),
+        billing_address: billing_address(ad),
+        price: format_euro_cents(ad.price_cents),
+        url: public_url()
+      })
+    )
+  end
+
+  # The invoice address block, optional lines (company, VAT id) folded away.
+  defp billing_address(ad) do
+    [
+      ad.billing_name,
+      ad.billing_company,
+      ad.billing_street,
+      "#{ad.billing_zip_code} #{ad.billing_city}",
+      ad.billing_country,
+      ad.vat_id && "USt-IdNr.: #{ad.vat_id}"
+    ]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join("\n")
+  end
+
+  # 125000 -> "1.250,00" (fixed German formatting, like the recipient).
+  defp format_euro_cents(cents) do
+    euros =
+      div(cents, 100)
+      |> Integer.to_string()
+      |> String.reverse()
+      |> String.replace(~r/(\d{3})(?=\d)/, "\\1.")
+      |> String.reverse()
+
+    decimals = rem(cents, 100) |> Integer.to_string() |> String.pad_leading(2, "0")
+    "#{euros},#{decimals}"
+  end
+
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
 
   @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."

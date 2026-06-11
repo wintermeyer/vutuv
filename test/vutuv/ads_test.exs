@@ -1,0 +1,115 @@
+defmodule Vutuv.AdsTest do
+  use Vutuv.DataCase
+
+  import Vutuv.MailboxHelpers
+
+  alias Vutuv.Ads
+  alias Vutuv.Ads.Ad
+
+  @valid_attrs %{
+    "day" => Date.to_iso8601(Date.add(Ads.today(), 7)),
+    "content" => "**Acme GmbH** sucht Elixir-Entwickler. https://acme.example",
+    "billing_name" => "Acme GmbH",
+    "billing_street" => "Musterstraße 1",
+    "billing_zip_code" => "10115",
+    "billing_city" => "Berlin",
+    "billing_country" => "Deutschland"
+  }
+
+  defp booker do
+    insert_activated_user(first_name: "Bea", last_name: "Bucher")
+  end
+
+  describe "book_ad/2" do
+    test "books the day, stamps the fixed price and mails the booking" do
+      user = booker()
+
+      assert {:ok, %Ad{} = ad} = Ads.book_ad(user, @valid_attrs)
+      assert ad.user_id == user.id
+      assert ad.price_cents == 125_000
+      assert ad.day == Date.add(Ads.today(), 7)
+
+      assert_received {:email, email}
+      assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
+      # The mail carries everything the manual invoice needs: billing data,
+      # the booked day and the full ad text.
+      assert email.text_body =~ "Acme GmbH"
+      assert email.text_body =~ "Musterstraße 1"
+      assert email.text_body =~ "10115"
+      assert email.text_body =~ "1.250,00"
+      assert email.text_body =~ @valid_attrs["content"]
+      assert email.text_body =~ "@#{user.active_slug}"
+      assert email.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
+    end
+
+    test "a day can only be booked once" do
+      assert {:ok, _ad} = Ads.book_ad(booker(), @valid_attrs)
+      flush_emails()
+
+      assert {:error, changeset} = Ads.book_ad(booker(), @valid_attrs)
+      assert "has already been booked" in errors_on(changeset).day
+      assert flush_emails() == []
+    end
+
+    test "rejects today and past days" do
+      for day <- [Ads.today(), Date.add(Ads.today(), -1)] do
+        attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(day))
+        assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+        assert "must be a future day" in errors_on(changeset).day
+      end
+
+      assert flush_emails() == []
+    end
+
+    test "rejects ad text longer than 2048 characters" do
+      attrs = Map.put(@valid_attrs, "content", String.duplicate("a", 2049))
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+      assert %{content: [_]} = errors_on(changeset)
+    end
+
+    test "requires the billing address" do
+      attrs = Map.drop(@valid_attrs, ["billing_name", "billing_street"])
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+      assert %{billing_name: [_], billing_street: [_]} = errors_on(changeset)
+    end
+  end
+
+  describe "current_banner/0" do
+    test "is the house ad while no ad is booked for today" do
+      assert Ads.current_banner() == :house
+    end
+
+    test "is the booked ad on its day" do
+      ad = insert(:ad, day: Ads.today())
+      assert {:ad, %Ad{id: id}} = Ads.current_banner()
+      assert id == ad.id
+    end
+  end
+
+  describe "next_available_day/0" do
+    test "starts tomorrow and skips booked days" do
+      tomorrow = Date.add(Ads.today(), 1)
+      assert Ads.next_available_day() == tomorrow
+
+      insert(:ad, day: tomorrow)
+      assert Ads.next_available_day() == Date.add(tomorrow, 1)
+    end
+  end
+
+  describe "berlin_date/1" do
+    test "applies CET in winter and CEST in summer" do
+      assert Ads.berlin_date(~U[2026-01-10 22:30:00Z]) == ~D[2026-01-10]
+      assert Ads.berlin_date(~U[2026-01-10 23:30:00Z]) == ~D[2026-01-11]
+      assert Ads.berlin_date(~U[2026-07-10 21:30:00Z]) == ~D[2026-07-10]
+      assert Ads.berlin_date(~U[2026-07-10 22:30:00Z]) == ~D[2026-07-11]
+    end
+
+    test "switches on the last Sundays of March and October, 01:00 UTC" do
+      # 2026: DST starts March 29, ends October 25.
+      assert Ads.berlin_date(~U[2026-03-29 00:59:00Z]) == ~D[2026-03-29]
+      assert Ads.berlin_date(~U[2026-03-29 22:30:00Z]) == ~D[2026-03-30]
+      assert Ads.berlin_date(~U[2026-10-25 00:30:00Z]) == ~D[2026-10-25]
+      assert Ads.berlin_date(~U[2026-10-25 22:30:00Z]) == ~D[2026-10-25]
+    end
+  end
+end

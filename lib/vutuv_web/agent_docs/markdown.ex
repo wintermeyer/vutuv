@@ -134,6 +134,21 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
+  def render(%{type: "advertising"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.rules, "\n", &("- " <> &1)),
+      "- #{gettext("Price")}: #{doc.price.display}",
+      doc.next_available_day &&
+        "- #{gettext("Next available day")}: #{doc.next_available_day}",
+      gettext("Book online (login required): %{url}", url: doc.booking_url)
+    ]
+    |> join_blocks()
+  end
+
   # The YAML frontmatter every Markdown doc starts with.
   defp frontmatter(doc) do
     [

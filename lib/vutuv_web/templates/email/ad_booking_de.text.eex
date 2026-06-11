@@ -1,0 +1,19 @@
+Neue Anzeigenbuchung auf vutuv
+==============================
+
+Tag:    <%= Calendar.strftime(@ad.day, "%d.%m.%Y") %>
+Preis:  <%= @price %> EUR (netto), Zahlung per Rechnung
+
+Gebucht von @<%= @booker.active_slug %> (<%= @url %><%= @booker.active_slug %>)
+E-Mail: <%= @booker_email %>
+
+Rechnungsadresse
+----------------
+<%= @billing_address %>
+
+Anzeigentext (Markdown, <%= String.length(@ad.content) %> Zeichen)
+------------------------------------------------------
+<%= @ad.content %>
+
+Die Rechnung wird manuell erstellt und versendet. Die Ausspielung am
+gebuchten Tag erfolgt automatisch.

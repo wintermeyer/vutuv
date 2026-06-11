@@ -154,6 +154,20 @@ function setupSlugAvailability() {
 
 window.addEventListener("DOMContentLoaded", setupSlugAvailability)
 
+// The ad banner (layout strip between navigation and content, see
+// VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
+// then drop the node. Classic controller pages only, so plain JS suffices.
+window.addEventListener("DOMContentLoaded", () => {
+  const ad = document.querySelector("[data-ad-banner]")
+  if (!ad) return
+
+  setTimeout(() => {
+    ad.style.transition = "opacity 0.5s ease"
+    ad.style.opacity = "0"
+    setTimeout(() => ad.remove(), 500)
+  }, 120000)
+})
+
 // Card ⋯ menus (<details data-menu>, see VutuvWeb.UI.card_menu): the native
 // <details> toggle does everything except light-dismiss, so close any open
 // menu when clicking outside it or pressing Escape. Event delegation keeps
