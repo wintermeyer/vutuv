@@ -28,6 +28,33 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="flex items-center gap-2">
+        {gettext("Ads")}
+        <.count_badge count={@pending_ads_count} />
+      </h1>
+      <a
+        href={~p"/admin/ads"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-ads-link"
+      >
+        {gettext("Open the ad review")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      <%= if @pending_ads_count == 0 do %>
+        {gettext("No ads waiting for approval.")}
+      <% else %>
+        {ngettext(
+          "%{count} ad is waiting for approval.",
+          "%{count} ads are waiting for approval.",
+          @pending_ads_count
+        )}
+      <% end %>
+    </p>
+  </section>
+
   {VutuvWeb.Admin.SlugHTML.index(%{conn: @conn})}
   {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

@@ -117,10 +117,12 @@ defmodule VutuvWeb.Router do
     # The community guidelines every moderation email and report form links to.
     get("/community", PageController, :community)
 
-    # The daily text ad: the public offer page and the booking flow
-    # (logged-in only; checked in the controller). See Vutuv.Ads.
+    # The daily text ad: the public offer page, the booking flow and the
+    # member's booking dashboard (logged-in only; checked in the
+    # controller). See Vutuv.Ads; admin approval lives under /admin/ads.
     get("/ads", AdController, :index)
     get("/ads/new", AdController, :new)
+    get("/ads/bookings", AdController, :bookings)
     post("/ads", AdController, :create)
 
     # Reporting content (family-friendliness / bullying / spam): the form and
@@ -192,6 +194,11 @@ defmodule VutuvWeb.Router do
     get("/moderation/:id/evidence", ModerationController, :evidence)
     post("/moderation/:id/uphold", ModerationController, :uphold)
     post("/moderation/:id/reject", ModerationController, :reject)
+
+    # The ad review dashboard: every booked ad is approved here before it
+    # serves (see Vutuv.Ads.approve_ad/2).
+    get("/ads", AdController, :index)
+    post("/ads/:id/approve", AdController, :approve)
 
     post("/slugs", SlugController, :update)
     post("/users", UserController, :update)

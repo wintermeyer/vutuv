@@ -1,7 +1,7 @@
 defmodule VutuvWeb.AdController do
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :create])
+  plug(VutuvWeb.Plug.RequireLogin when action in [:new, :create, :bookings])
 
   alias Vutuv.Ads
   alias VutuvWeb.AgentDocs
@@ -37,15 +37,23 @@ defmodule VutuvWeb.AdController do
         |> put_flash(
           :info,
           gettext(
-            "Your ad for %{day} is booked. The day is reserved; the invoice follows by email.",
+            "Your ad for %{day} is booked. We will review and approve it shortly; the invoice follows by email.",
             day: ad.day
           )
         )
-        |> redirect(to: ~p"/ads")
+        |> redirect(to: ~p"/ads/bookings")
 
       {:error, changeset} ->
         render_form(conn, changeset)
     end
+  end
+
+  # The member's booking dashboard: every booked day with its approval state.
+  def bookings(conn, _params) do
+    render(conn, "bookings.html",
+      ads: Ads.user_ads(conn.assigns[:current_user]),
+      page_title: gettext("My ad bookings")
+    )
   end
 
   defp render_form(conn, changeset) do

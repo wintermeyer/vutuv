@@ -100,7 +100,7 @@ msgid "is already your username"
 msgstr ""
 
 ## Custom messages from the ad booking rules (Vutuv.Ads.Ad.changeset/2).
-msgid "must be a future day"
+msgid "must be booked at least three days ahead"
 msgstr ""
 
 msgid "has already been booked"

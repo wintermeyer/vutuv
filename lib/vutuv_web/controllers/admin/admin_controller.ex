@@ -19,7 +19,8 @@ defmodule VutuvWeb.Admin.AdminController do
     render(conn, "index.html",
       users: users,
       users_count: total,
-      moderation_count: Vutuv.Moderation.open_queue_count()
+      moderation_count: Vutuv.Moderation.open_queue_count(),
+      pending_ads_count: Vutuv.Ads.pending_ads_count()
     )
   end
 end

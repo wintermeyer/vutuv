@@ -45,11 +45,14 @@ defmodule Vutuv.Factory do
     insert(:activated_user, attrs)
   end
 
-  # A booked text ad (Vutuv.Ads). Day defaults to tomorrow (Berlin); banner
-  # tests override it with `day: Vutuv.Ads.today()`.
+  # A booked text ad (Vutuv.Ads), approved by default so it serves; pass
+  # `approved_at: nil` for one still waiting for the admin review. Day
+  # defaults to the first bookable day; banner tests override it with
+  # `day: Vutuv.Ads.today()`.
   def ad_factory do
     %Vutuv.Ads.Ad{
-      day: Date.add(Vutuv.Ads.today(), 1),
+      day: Vutuv.Ads.first_bookable_day(),
+      approved_at: DateTime.truncate(DateTime.utc_now(), :second),
       content: sequence(:ad_content, &"**Ad #{&1}** content"),
       price_cents: Vutuv.Ads.price_cents(),
       billing_name: sequence(:billing_name, &"Billing Name #{&1}"),

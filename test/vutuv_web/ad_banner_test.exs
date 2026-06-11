@@ -25,7 +25,7 @@ defmodule VutuvWeb.AdBannerTest do
       assert html =~ ~s(href="/ads")
     end
 
-    test "on a booked day the ad's Markdown renders instead", %{conn: conn} do
+    test "on a booked day the approved ad's Markdown renders instead", %{conn: conn} do
       insert(:ad, day: Ads.today(), content: "**Acme** sucht [Leute](https://jobs.acme.example)")
 
       html = conn |> get(~p"/community") |> html_response(200)
@@ -34,6 +34,16 @@ defmodule VutuvWeb.AdBannerTest do
       assert html =~ "<strong>Acme</strong>"
       assert html =~ ~s(href="https://jobs.acme.example")
       assert html =~ ">Ad</span>"
+    end
+
+    test "an ad still waiting for approval never serves", %{conn: conn} do
+      insert(:ad, day: Ads.today(), approved_at: nil, content: "**Unapproved** ad")
+
+      html = conn |> get(~p"/community") |> html_response(200)
+
+      refute html =~ "<strong>Unapproved</strong>"
+      # The house ad fills the day instead.
+      assert html =~ ~s(href="/ads")
     end
   end
 

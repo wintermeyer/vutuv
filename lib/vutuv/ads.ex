@@ -5,10 +5,14 @@ defmodule Vutuv.Ads do
   Exactly one ad runs per calendar day (Europe/Berlin). Logged-in members
   book a future day online (`book_ad/2`): the day is reserved in the
   database and the billing data plus the ad text are mailed to the operator,
-  who invoices manually. Serving is automatic: `current_banner/0` is what
-  `VutuvWeb.Plug.AdBanner` shows between the navigation and the content -
-  the booked ad on its day, the house ad (an ad for the ad system) on days
-  nobody booked.
+  who invoices manually. Every ad must be family-friendly and is **reviewed
+  by an admin before it runs** (`approve_ad/2`, the dashboard at
+  `/admin/ads`); to leave room for that review the earliest bookable day is
+  three days out (`first_bookable_day/0`). Serving is automatic:
+  `current_banner/0` is what `VutuvWeb.Plug.AdBanner` shows between the
+  navigation and the content - the **approved** ad on its day, the house ad
+  (an ad for the ad system) on days nobody booked (or where approval never
+  came).
 
   Day boundaries are German local time, computed with the fixed EU DST rule
   (see `berlin_date/1`) because the project deliberately carries no timezone
@@ -29,17 +33,36 @@ defmodule Vutuv.Ads do
   # year are not offered.
   @booking_horizon_days 365
 
+  # Days between booking and the earliest bookable day: every ad is approved
+  # by an admin before it runs, and this is the room for that review.
+  @approval_lead_days 3
+
   def price_cents, do: @price_cents
+
+  @doc "The earliest day a new booking may pick (today + #{@approval_lead_days}, Berlin)."
+  def first_bookable_day, do: Date.add(today(), @approval_lead_days)
 
   @doc "The ad booked for `day`, or nil."
   def get_ad(%Date{} = day), do: Repo.get_by(Ad, day: day)
 
+  @doc "The ad with this id, or nil (also on a malformed id)."
+  def get_ad_by_id(id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get(Ad, uuid)
+    end
+  end
+
   @doc """
-  What the banner shows right now: `{:ad, ad}` on a booked day, `:house`
-  (the ad for the ad system) otherwise.
+  What the banner shows right now: `{:ad, ad}` on a booked day whose ad has
+  been approved, `:house` (the ad for the ad system) otherwise. An
+  unapproved ad never serves.
   """
   def current_banner do
-    case get_ad(today()) do
+    ad =
+      Repo.one(from(a in Ad, where: a.day == ^today() and not is_nil(a.approved_at)))
+
+    case ad do
       nil -> :house
       ad -> {:ad, ad}
     end
@@ -71,20 +94,70 @@ defmodule Vutuv.Ads do
   def change_ad(%Ad{} = ad, attrs \\ %{}), do: Ad.changeset(ad, attrs)
 
   @doc """
-  The first bookable day: tomorrow (Berlin) or the first free day after it.
+  The admin review gate: stamps `approved_at` and the approving admin, after
+  which the ad serves on its day. Idempotent - approving an already approved
+  ad keeps the original stamp (so two admins clicking at once cannot
+  reassign the approval).
+  """
+  def approve_ad(%Ad{approved_at: nil} = ad, admin) do
+    ad
+    |> Ecto.Changeset.change(
+      approved_at: DateTime.truncate(DateTime.utc_now(), :second),
+      approved_by_id: admin.id
+    )
+    |> Repo.update()
+  end
+
+  def approve_ad(%Ad{} = ad, _admin), do: {:ok, ad}
+
+  @doc "All bookings of `user`, newest day first (the member dashboard)."
+  def user_ads(user) do
+    Repo.all(from(a in Ad, where: a.user_id == ^user.id, order_by: [desc: a.day]))
+  end
+
+  @doc """
+  The admin dashboard lists: upcoming ads (today included) in serving order
+  with their bookers preloaded, and the recent past for reference.
+  """
+  def upcoming_ads do
+    Repo.all(from(a in Ad, where: a.day >= ^today(), order_by: [asc: a.day], preload: [:user]))
+  end
+
+  @doc "The most recent past ads (reference section of the admin dashboard)."
+  def past_ads(limit \\ 50) do
+    Repo.all(
+      from(a in Ad,
+        where: a.day < ^today(),
+        order_by: [desc: a.day],
+        limit: ^limit,
+        preload: [:user]
+      )
+    )
+  end
+
+  @doc "How many upcoming ads still wait for approval (the admin panel badge)."
+  def pending_ads_count do
+    Repo.aggregate(
+      from(a in Ad, where: a.day >= ^today() and is_nil(a.approved_at)),
+      :count
+    )
+  end
+
+  @doc """
+  The first bookable day (see `first_bookable_day/0`) that is still free.
   Nil when the next #{@booking_horizon_days} days are all booked.
   """
   def next_available_day do
-    tomorrow = Date.add(today(), 1)
-    horizon = Date.add(tomorrow, @booking_horizon_days - 1)
+    first = first_bookable_day()
+    horizon = Date.add(first, @booking_horizon_days - 1)
 
     booked =
-      from(a in Ad, where: a.day >= ^tomorrow and a.day <= ^horizon, select: a.day)
+      from(a in Ad, where: a.day >= ^first and a.day <= ^horizon, select: a.day)
       |> Repo.all()
       |> MapSet.new()
 
     Enum.find(
-      Date.range(tomorrow, horizon),
+      Date.range(first, horizon),
       &(not MapSet.member?(booked, &1))
     )
   end

@@ -15,5 +15,8 @@ Anzeigentext (Markdown, <%= String.length(@ad.content) %> Zeichen)
 ------------------------------------------------------
 <%= @ad.content %>
 
+Die Anzeige ist noch NICHT freigeschaltet. Bitte prüfen (familienfreundlich?)
+und freischalten: <%= @url %>admin/ads
+
 Die Rechnung wird manuell erstellt und versendet. Die Ausspielung am
-gebuchten Tag erfolgt automatisch.
+gebuchten Tag erfolgt nach der Freischaltung automatisch.

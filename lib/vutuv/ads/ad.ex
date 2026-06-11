@@ -26,6 +26,11 @@ defmodule Vutuv.Ads.Ad do
     field(:billing_country, :string)
     field(:vat_id, :string)
 
+    # The admin review gate: an ad only serves once approved_at is set
+    # (see Vutuv.Ads.approve_ad/2 and current_banner/0).
+    field(:approved_at, :utc_datetime)
+    belongs_to(:approved_by, Vutuv.Accounts.User)
+
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
   end
@@ -63,14 +68,15 @@ defmodule Vutuv.Ads.Ad do
     |> unique_constraint(:day, message: "has already been booked")
   end
 
-  # Ads start at midnight Berlin time, so a day must be bookable in full:
-  # tomorrow (Berlin) at the earliest.
+  # Every ad is reviewed by an admin before it runs, so the earliest
+  # bookable day leaves room for that: three days out (Berlin), see
+  # Vutuv.Ads.first_bookable_day/0.
   defp validate_future_day(changeset) do
     validate_change(changeset, :day, fn :day, day ->
-      if Date.compare(day, Vutuv.Ads.today()) == :gt do
-        []
+      if Date.compare(day, Vutuv.Ads.first_bookable_day()) == :lt do
+        [day: "must be booked at least three days ahead"]
       else
-        [day: "must be a future day"]
+        []
       end
     end)
   end

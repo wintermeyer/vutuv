@@ -51,14 +51,17 @@ defmodule Vutuv.AdsTest do
       assert flush_emails() == []
     end
 
-    test "rejects today and past days" do
-      for day <- [Ads.today(), Date.add(Ads.today(), -1)] do
-        attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(day))
+    test "rejects days that leave no time for the approval review" do
+      # Earliest bookable day is three days out (the admin reviews first).
+      for offset <- [-1, 0, 1, 2] do
+        attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(Date.add(Ads.today(), offset)))
         assert {:error, changeset} = Ads.book_ad(booker(), attrs)
-        assert "must be a future day" in errors_on(changeset).day
+        assert "must be booked at least three days ahead" in errors_on(changeset).day
       end
 
-      assert flush_emails() == []
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(Date.add(Ads.today(), 3)))
+      assert {:ok, _ad} = Ads.book_ad(booker(), attrs)
+      assert flush_emails() != []
     end
 
     test "rejects ad text longer than 2048 characters" do
@@ -74,25 +77,55 @@ defmodule Vutuv.AdsTest do
     end
   end
 
+  describe "approve_ad/2" do
+    test "stamps the approval and the approving admin" do
+      {:ok, ad} = Ads.book_ad(booker(), @valid_attrs)
+      flush_emails()
+      admin = insert_activated_user(first_name: "Ada", last_name: "Admin")
+
+      assert ad.approved_at == nil
+      assert {:ok, approved} = Ads.approve_ad(ad, admin)
+      assert approved.approved_at
+      assert approved.approved_by_id == admin.id
+    end
+
+    test "is idempotent: a second approval keeps the first stamp" do
+      {:ok, ad} = Ads.book_ad(booker(), @valid_attrs)
+      flush_emails()
+      admin = insert_activated_user()
+      other_admin = insert_activated_user()
+
+      {:ok, approved} = Ads.approve_ad(ad, admin)
+      {:ok, still} = Ads.approve_ad(approved, other_admin)
+      assert still.approved_at == approved.approved_at
+      assert still.approved_by_id == admin.id
+    end
+  end
+
   describe "current_banner/0" do
     test "is the house ad while no ad is booked for today" do
       assert Ads.current_banner() == :house
     end
 
-    test "is the booked ad on its day" do
+    test "is the booked ad on its day once approved" do
       ad = insert(:ad, day: Ads.today())
       assert {:ad, %Ad{id: id}} = Ads.current_banner()
       assert id == ad.id
     end
+
+    test "an unapproved ad never runs: the house ad serves instead" do
+      insert(:ad, day: Ads.today(), approved_at: nil)
+      assert Ads.current_banner() == :house
+    end
   end
 
   describe "next_available_day/0" do
-    test "starts tomorrow and skips booked days" do
-      tomorrow = Date.add(Ads.today(), 1)
-      assert Ads.next_available_day() == tomorrow
+    test "starts three days out (approval lead time) and skips booked days" do
+      first = Date.add(Ads.today(), 3)
+      assert Ads.next_available_day() == first
 
-      insert(:ad, day: tomorrow)
-      assert Ads.next_available_day() == Date.add(tomorrow, 1)
+      insert(:ad, day: first)
+      assert Ads.next_available_day() == Date.add(first, 1)
     end
   end
 

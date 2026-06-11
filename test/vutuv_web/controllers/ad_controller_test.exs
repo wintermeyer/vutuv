@@ -35,7 +35,7 @@ defmodule VutuvWeb.AdControllerTest do
         json: get(build_conn(), "/ads.json").resp_body
       }
 
-      for {format, body} <- rendered, fact <- ["1,250", "2048", next_day] do
+      for {format, body} <- rendered, fact <- ["1,250", "2048", "family-friendly", next_day] do
         assert body =~ fact,
                "#{inspect(fact)} is missing from the #{format} version — " <>
                  "HTML page and agent doc have drifted apart (see VutuvWeb.AgentDocs)"
@@ -59,6 +59,31 @@ defmodule VutuvWeb.AdControllerTest do
     end
   end
 
+  describe "bookings (the member dashboard)" do
+    test "requires login", %{conn: conn} do
+      conn = get(conn, ~p"/ads/bookings")
+      assert redirected_to(conn) == "/"
+    end
+
+    test "lists only my bookings, with their approval status", %{conn: conn} do
+      insert(:ad, day: Date.add(Ads.today(), 30), content: "Somebody else's ad")
+      {conn, user} = create_and_login_user(conn)
+
+      pending = insert(:ad, approved_at: nil, user: user, content: "**Meine** Anzeige")
+      approved = insert(:ad, day: Date.add(Ads.today(), 9), user: user)
+
+      html = conn |> get(~p"/ads/bookings") |> html_response(200)
+
+      assert html =~ "booking-#{pending.id}"
+      assert html =~ "booking-#{approved.id}"
+      refute html =~ "Somebody else"
+      assert html =~ "<strong>Meine</strong>"
+      # Both status labels show up (pending review vs. approved).
+      assert html =~ "Waiting for approval"
+      assert html =~ "Approved"
+    end
+  end
+
   describe "create" do
     test "requires login", %{conn: conn} do
       conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
@@ -72,13 +97,15 @@ defmodule VutuvWeb.AdControllerTest do
       conn = get(conn, ~p"/ads/new")
       conn = submit_with_csrf(conn, ~p"/ads", %{"ad" => @booking_params})
 
-      assert redirected_to(conn) == ~p"/ads"
+      assert redirected_to(conn) == ~p"/ads/bookings"
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "booked"
 
       ad = Repo.get_by!(Ads.Ad, day: Date.add(Ads.today(), 14))
       assert ad.user_id == user.id
       assert ad.price_cents == 125_000
       assert ad.vat_id == "DE123456789"
+      # Bookings start unapproved: the admin reviews before the ad runs.
+      assert ad.approved_at == nil
 
       assert_received {:email, email}
       assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]

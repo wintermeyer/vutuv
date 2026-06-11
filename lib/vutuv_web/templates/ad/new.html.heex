@@ -26,6 +26,9 @@
         {gettext("Markdown is supported. At most %{max} characters.",
           max: Vutuv.Ads.Ad.content_max_length()
         )}
+        <.link href={~p"/community"} class="font-semibold text-brand-600 hover:text-brand-700">
+          {gettext("The ad must be family-friendly.")}
+        </.link>
       </p>
     </div>
 
@@ -76,6 +79,7 @@
         "Price: %{price}. Payment by invoice; the day is reserved immediately and the invoice follows by email.",
         price: VutuvWeb.AgentDocs.AdsDoc.price_display()
       )}
+      {gettext("We review and approve every ad before it runs, which is why the earliest bookable day is three days out.")}
     </p>
 
     <.form_actions backlink={~p"/ads"} />

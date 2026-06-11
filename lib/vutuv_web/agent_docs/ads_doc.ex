@@ -19,6 +19,10 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
       gettext("Text only: Markdown, up to %{max} characters, always clearly labeled as an ad.",
         max: Ad.content_max_length()
       ),
+      gettext("Ads must be family-friendly and follow the community guidelines."),
+      gettext(
+        "Every ad is reviewed and approved before it runs; the earliest bookable day is three days out."
+      ),
       gettext("Booked online by logged-in members. Payment by invoice.")
     ]
   end
@@ -44,7 +48,8 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
       },
       rules: rules(),
       next_available_day: next_available_day,
-      booking_url: AgentDocs.abs_url("/ads/new")
+      booking_url: AgentDocs.abs_url("/ads/new"),
+      community_guidelines_url: AgentDocs.abs_url("/community")
     })
   end
 end
