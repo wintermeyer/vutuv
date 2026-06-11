@@ -41,6 +41,10 @@ defmodule VutuvWeb.Router do
   # by the browser pipeline's `accepts ["html"]`.
   scope "/", VutuvWeb do
     get("/robots.txt", PageController, :robots)
+    # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
+    # it is hit by curl on localhost and must not depend on sessions or
+    # content negotiation.
+    get("/health", HealthController, :index)
   end
 
   scope "/", VutuvWeb do
