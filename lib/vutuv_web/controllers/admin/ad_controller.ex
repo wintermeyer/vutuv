@@ -20,6 +20,19 @@ defmodule VutuvWeb.Admin.AdController do
     )
   end
 
+  def show(conn, %{"id" => id}) do
+    case Ads.get_ad_by_id(id) do
+      nil ->
+        ControllerHelpers.render_error(conn, 404)
+
+      ad ->
+        render(conn, "show.html",
+          ad: ad,
+          page_title: gettext("Ad for %{day}", day: ad.day)
+        )
+    end
+  end
+
   def approve(conn, %{"id" => id}) do
     case Ads.get_ad_by_id(id) do
       nil ->

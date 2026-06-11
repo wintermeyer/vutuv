@@ -64,11 +64,14 @@ defmodule Vutuv.Ads do
   @doc "The ad booked for `day`, or nil."
   def get_ad(%Date{} = day), do: Repo.get_by(Ad, day: day)
 
-  @doc "The ad with this id, or nil (also on a malformed id)."
+  @doc """
+  The ad with this id - booker and approving admin preloaded (the admin
+  detail page) - or nil (also on a malformed id).
+  """
   def get_ad_by_id(id) do
     case Vutuv.UUIDv7.cast_or_nil(id) do
       nil -> nil
-      uuid -> Repo.get(Ad, uuid)
+      uuid -> Ad |> Repo.get(uuid) |> Repo.preload([:user, :approved_by])
     end
   end
 

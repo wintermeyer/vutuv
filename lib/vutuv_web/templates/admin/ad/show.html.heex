@@ -1,0 +1,38 @@
+<.page_header
+  title={gettext("Ad for %{day}", day: @ad.day)}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Ads"), ~p"/admin/ads"},
+    "#{@ad.day}"
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <div class="flex flex-wrap items-center gap-3">
+      <span class="text-lg font-bold text-slate-900 dark:text-slate-100">{@ad.day}</span>
+      <VutuvWeb.AdHTML.status_badge ad={@ad} />
+      <div class="ml-auto">
+        <.button :if={is_nil(@ad.approved_at)} href={~p"/admin/ads/#{@ad}/approve"} method="post">
+          {gettext("Approve")}
+        </.button>
+      </div>
+    </div>
+
+    <p :if={@ad.approved_at} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+      {gettext("Approved on")}
+      <time datetime={"#{@ad.approved_at}"} data-localtime>{@ad.approved_at}</time>
+      <%= if @ad.approved_by do %>
+        {gettext("by")}
+        <.link
+          href={~p"/#{@ad.approved_by}"}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          @{@ad.approved_by.active_slug}
+        </.link>
+      <% end %>
+    </p>
+
+    <.ad_details ad={@ad} />
+  </section>
+</div>

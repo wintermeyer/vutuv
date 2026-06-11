@@ -196,8 +196,9 @@ defmodule VutuvWeb.Router do
     post("/moderation/:id/reject", ModerationController, :reject)
 
     # The ad review dashboard: every booked ad is approved here before it
-    # serves (see Vutuv.Ads.approve_ad/2).
+    # serves (see Vutuv.Ads.approve_ad/2). :show is the per-ad detail page.
     get("/ads", AdController, :index)
+    get("/ads/:id", AdController, :show)
     post("/ads/:id/approve", AdController, :approve)
 
     post("/slugs", SlugController, :update)
