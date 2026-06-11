@@ -6,6 +6,14 @@ legacy skill tables are dropped first). The migration runs in one
 transaction and aborts itself if any parent/child link would be lost, but
 its `down/0` raises — **the dump below is the only rollback**.
 
+**Blue/green note (decided 2026-06-11):** this deploy is the exempt,
+planned-downtime case in `scripts/deploy.sh` — the old slot keeps serving
+until the migration's transaction commits, then breaks (its queries still
+use integer ids) until the new slot passes `/health` and nginx switches.
+Expect a short outage between migration commit and traffic switch; all
+pre-cutover sessions are invalid by design anyway. Run it deliberately at
+a quiet hour, after the `pg_dump` below.
+
 ## Before the deploy (manual, on the server)
 
 - [ ] `pg_dump -Fc -d vutuv3_prod -f ~/vutuv3_prod_pre_uuid_$(date +%Y%m%d).dump`

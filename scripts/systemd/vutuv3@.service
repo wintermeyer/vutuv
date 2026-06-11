@@ -1,0 +1,30 @@
+# Blue/green slot template for the vutuv production app (vutuv.de).
+# Install as /etc/systemd/system/vutuv3@.service; instances vutuv3@blue
+# (port 4003) and vutuv3@green (port 4005). The port comes from
+# shared/.env.%i, which overrides the PORT in shared/.env. Each slot is
+# pinned to its own release via the slots/%i symlink, so a deploy never
+# changes the code under a running instance.
+[Unit]
+Description=vutuv production app (%i slot) at vutuv.de
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=vutuv3
+Group=vutuv3
+WorkingDirectory=/var/www/vutuv3/slots/%i
+EnvironmentFile=/var/www/vutuv3/shared/.env
+EnvironmentFile=/var/www/vutuv3/shared/.env.%i
+ExecStart=/var/www/vutuv3/slots/%i/bin/vutuv start
+# No ExecStop: RELEASE_DISTRIBUTION=none has no node for `bin/vutuv stop`
+# RPC. systemd sends SIGTERM to the BEAM, which shuts down gracefully.
+KillSignal=SIGTERM
+TimeoutStopSec=15
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+SyslogIdentifier=vutuv3-%i
+
+[Install]
+WantedBy=multi-user.target

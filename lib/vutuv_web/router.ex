@@ -52,6 +52,10 @@ defmodule VutuvWeb.Router do
     # The agent-format discovery file (llms.txt convention): documents the
     # .md/.txt/.json/.vcf URL scheme; see VutuvWeb.AgentDocs.
     get("/llms.txt", PageController, :llms)
+    # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
+    # it is hit by curl on localhost and must not depend on sessions or
+    # content negotiation.
+    get("/health", HealthController, :index)
   end
 
   scope "/", VutuvWeb do

@@ -110,7 +110,9 @@ Deployment is automatic. Two GitHub Actions workflows drive it:
 - **CI** (`.github/workflows/ci.yml`) runs `mix precommit` (compile with `--warnings-as-errors`, unused-deps, format, `credo --strict`, tests) on every pull request and on pushes to `main`.
 - **Deploy** (`.github/workflows/deploy.yml`) runs on every push to `main`. So **merging or pushing anything to `main` ships it to production**; there is no separate deploy command.
 
-The Deploy job runs on the self-hosted `vutuv3` runner (on bremen2) and executes `scripts/deploy.sh`, which builds a `prod` release, runs migrations against `vutuv3_prod`, atomically flips the `current` symlink, and restarts the `vutuv3` systemd service. A `deploy-production` concurrency group ensures two production deploys never overlap. nginx is not touched by the script.
+The Deploy job runs on the self-hosted `vutuv3` runner (on bremen2) and executes `scripts/deploy.sh`, a **blue/green zero-downtime deploy**: it builds a `prod` release, runs migrations against `vutuv3_prod`, starts the release on the idle slot (`vutuv3@blue` on port 4003 / `vutuv3@green` on port 4005), waits until `GET /health` answers 200 with a live database connection, switches the nginx upstream (`/etc/nginx/snippets/vutuv3-upstream.conf`) with a graceful reload, drains for 30 s and stops the old slot. A failed build or boot leaves the old slot serving, untouched. A `deploy-production` concurrency group ensures two production deploys never overlap.
+
+Because the old code briefly serves against the already-migrated database, **migrations must be backward-compatible**; a deploy that cannot be (such as the one-time UUID v7 re-key prepared on the `version-6` branch, see `DEPLOY_TODO.md` there) is a planned-downtime deploy and must be run deliberately. The systemd slot template lives in `scripts/systemd/vutuv3@.service`.
 
 ### nginx for post images (one-time setup)
 
