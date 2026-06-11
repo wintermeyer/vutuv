@@ -25,17 +25,18 @@ defmodule VutuvWeb.EmailControllerTest do
     test "toggles public? but never changes the address itself", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       %{emails: [email]} = Repo.preload(user, :emails)
-      assert email.public?
+      # Privacy by default: a registration without the opt-in box stays private.
+      refute email.public?
 
       conn =
         put(conn, ~p"/#{user}/emails/#{email}",
-          email: %{"value" => "hijacked@example.com", "public?" => "false"}
+          email: %{"value" => "hijacked@example.com", "public?" => "true"}
         )
 
       assert redirected_to(conn) == ~p"/#{user}/emails/#{email}"
       reloaded = Repo.get(Email, email.id)
       assert reloaded.value == email.value
-      refute reloaded.public?
+      assert reloaded.public?
     end
   end
 end

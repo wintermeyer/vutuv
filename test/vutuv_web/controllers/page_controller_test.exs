@@ -99,11 +99,12 @@ defmodule VutuvWeb.PageControllerTest do
 
   describe "GET / sign-up opt-in checkboxes" do
     # Both opt-in boxes on the sign-up form are framed positively (you grant a
-    # permission by checking) and start checked, so the friendly defaults
-    # (public email, search-indexable profile) are visible and on by default.
-    # The indexing box is wired to the inverted `noindex?` field: checked means
-    # "allow indexing" (noindex? = false), unchecked means "prevent" (true).
-    test "are positively framed and checked by default", %{conn: conn} do
+    # permission by checking). Privacy by default (GDPR Art. 25): the email
+    # visibility box starts UNchecked - showing your address to everyone is an
+    # explicit opt-in. Being findable is the point of the product, so the
+    # indexing box stays checked; it is wired to the inverted `noindex?`
+    # field: checked means "allow indexing" (noindex? = false).
+    test "are positively framed; email private, indexing on by default", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
       # Positive, parallel phrasing; the old negative "Prevent ..." copy is gone.
@@ -111,8 +112,7 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Allow search engines to index your profile"
       refute body =~ "Prevent search engines from indexing your profile"
 
-      # Both checkboxes render checked.
-      assert checkbox_checked?(body, "user[emails][0][public?]")
+      refute checkbox_checked?(body, "user[emails][0][public?]")
       assert checkbox_checked?(body, "user[noindex?]")
     end
   end
@@ -149,6 +149,32 @@ defmodule VutuvWeb.PageControllerTest do
       post(conn, ~p"/new_registration", user: attrs)
 
       assert user_by_email("hidden@example.com").noindex? == true
+    end
+
+    # Privacy by default: an untouched email box (the hidden "false") stores a
+    # private address; ticking it is the explicit opt-in to a public one.
+    test "the email address stays private unless the box is ticked", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "private@example.com", "public?" => "false"}}
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("private@example.com") |> Vutuv.Repo.preload(:emails)
+      refute hd(user.emails).public?
+    end
+
+    test "ticking the email box stores a public address", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "open@example.com", "public?" => "true"}}
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("open@example.com") |> Vutuv.Repo.preload(:emails)
+      assert hd(user.emails).public?
     end
 
     # The sign-up form's "Your tags" field must actually land as user tags;

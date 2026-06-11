@@ -113,6 +113,24 @@ defmodule VutuvWeb.ShellLiveTest do
     refute has_element?(view, "span.bg-accent")
   end
 
+  test "the anonymous bottom bar offers Log in instead of dead-end tabs", %{conn: conn} do
+    # Messages and Alerts only redirect a visitor to the login page, so the
+    # mobile tab bar replaces them with a Log in tab while logged out.
+    {:ok, view, html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+    assert has_element?(view, ~s(nav a[href="/login"]))
+    refute html =~ ~s(href="/messages")
+    refute html =~ ~s(href="/notifications")
+  end
+
+  test "the logged-in bottom bar keeps Messages and Alerts", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    html = conn |> get(~p"/search") |> html_response(200)
+
+    assert html =~ ~s(href="/messages")
+    assert html =~ ~s(href="/notifications")
+  end
+
   test "renders the anonymous shell for a stale cookie user_id with no profile data", %{
     conn: conn
   } do

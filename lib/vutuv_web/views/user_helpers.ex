@@ -142,7 +142,31 @@ defmodule VutuvWeb.UserHelpers do
     # Resolve the current job once; current_title/1 and current_organization/1
     # both accept a %WorkExperience{} or nil, so this avoids running the
     # current_job/1 query chain twice per call.
-    build_work_information_string(current_job(user), len)
+    case build_work_information_string(current_job(user), len) do
+      "" -> headline_text(user.headline, len)
+      info -> info
+    end
+  end
+
+  @doc """
+  The headline as a one-line plain string for list rows: inline Markdown
+  markers are stripped (a row is no place for `**bold**` literals) and the
+  text is truncated to `len`. Lists fall back to this when a member has no
+  work experience to show.
+  """
+  def headline_text(headline, len \\ 256)
+
+  def headline_text(nil, _len), do: ""
+
+  def headline_text(headline, len) do
+    text =
+      headline
+      |> String.replace(~r/\[([^\]]*)\]\([^)]*\)/, "\\1")
+      |> String.replace(~r/[*_`~#>]/, "")
+      |> String.replace(~r/\s+/, " ")
+      |> String.trim()
+
+    if String.length(text) > len, do: String.slice(text, 0, max(len - 3, 1)) <> "...", else: text
   end
 
   @doc """
@@ -241,7 +265,14 @@ defmodule VutuvWeb.UserHelpers do
 
     Map.new(users, fn user ->
       job = current_job_in_memory(Map.get(experiences_by_user, user.id, []))
-      {user.id, work_information_string_for_job(job, len)}
+
+      info =
+        case work_information_string_for_job(job, len) do
+          "" -> headline_text(user.headline, len)
+          info -> info
+        end
+
+      {user.id, info}
     end)
   end
 

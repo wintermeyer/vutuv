@@ -187,17 +187,23 @@ defmodule VutuvWeb.ShellLive do
       </header>
 
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
+      <%!-- Logged out, Messages/Alerts would only bounce the visitor to the
+      login page, so the anonymous bar offers Log in directly instead. --%>
       <nav class={[
         "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
-        if(@user_id, do: "grid-cols-5", else: "grid-cols-4")
+        if(@user_id, do: "grid-cols-5", else: "grid-cols-3")
       ]}>
         <.tab href={~p"/"} label={gettext("Home")}><.icon_home /></.tab>
         <%= if @user_id do %>
           <.tab href={~p"/feed"} label={gettext("Feed")}><.icon_feed /></.tab>
         <% end %>
         <.tab href={~p"/search"} label={gettext("Search")}><.icon_search /></.tab>
-        <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
-        <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
+        <%= if @user_id do %>
+          <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
+          <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
+        <% else %>
+          <.tab href={~p"/login"} label={gettext("Log in")}><.icon_login /></.tab>
+        <% end %>
       </nav>
     </div>
     """
@@ -273,6 +279,15 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
+    </svg>
+    """
+  end
+
+  # The logout door, arrow pointing in.
+  defp icon_login(assigns) do
+    ~H"""
+    <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 9V5.25A2.25 2.25 0 0 1 10.5 3h6a2.25 2.25 0 0 1 2.25 2.25v13.5A2.25 2.25 0 0 1 16.5 21h-6a2.25 2.25 0 0 1-2.25-2.25V15m3-3H2.25m9 0-3-3m3 3-3 3" />
     </svg>
     """
   end

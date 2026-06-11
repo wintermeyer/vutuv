@@ -7,7 +7,9 @@ defmodule Vutuv.Accounts.Email do
   schema "emails" do
     field(:value, :string)
     field(:md5sum, :string)
-    field(:public?, :boolean, default: true)
+    # Privacy by default (GDPR Art. 25): an address is only shown to others
+    # after the owner explicitly opts in (sign-up checkbox / email settings).
+    field(:public?, :boolean, default: false)
     # Set by a failure DSN (Vutuv.Notifications.Bounces), cleared by a
     # successful login PIN through the address. Never cast from params.
     field(:undeliverable_at, :naive_datetime)

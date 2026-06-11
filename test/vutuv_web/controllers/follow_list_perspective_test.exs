@@ -31,6 +31,24 @@ defmodule VutuvWeb.FollowListPerspectiveTest do
     refute html =~ "If you want more followers"
   end
 
+  test "list rows fall back to the headline when there is no work experience", %{conn: conn} do
+    user = insert_activated_user()
+
+    follower =
+      insert_activated_user(
+        first_name: "Hedda",
+        last_name: "Headline",
+        headline: "Designs **calm** interfaces"
+      )
+
+    follow!(follower, user)
+
+    html = get(conn, ~p"/#{user}/followers") |> html_response(200)
+
+    # Plain text, markdown markers stripped - this is a one-line list row.
+    assert html =~ "Designs calm interfaces"
+  end
+
   test "the profile of someone else titles their following card in third person", %{conn: conn} do
     user = insert_activated_user(first_name: "Greta", last_name: "Gradient")
     other = insert_activated_user()

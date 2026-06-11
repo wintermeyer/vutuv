@@ -27,6 +27,18 @@ defmodule Vutuv.TagsTest do
       assert get_change(built, :name) == "Rust"
       assert get_change(built, :slug) =~ "rust"
     end
+
+    test "a new tag keeps the entered casing as its display name" do
+      # "UX" must not become the chip "ux" - only the slug is lowercased.
+      # (Lowercase chips on old profiles come from 2017 legacy tag names,
+      # not from this path.)
+      user = insert(:user)
+      {:ok, user_tag} = Tags.add_user_tag(user, "WebAssembly")
+
+      tag = Repo.preload(user_tag, :tag).tag
+      assert tag.name == "WebAssembly"
+      assert tag.slug == "webassembly"
+    end
   end
 
   describe "user_tags" do
