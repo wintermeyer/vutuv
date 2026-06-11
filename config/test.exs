@@ -47,3 +47,7 @@ config :vutuv, Vutuv.Repo,
   pool: Ecto.Adapters.SQL.Sandbox
 
 config :vutuv, Vutuv.Mailer, adapter: Swoosh.Adapters.Test
+
+# The bounce ingestion endpoint (POST /webhooks/bounces) is enabled with a
+# fixed token in tests; production reads BOUNCE_WEBHOOK_TOKEN at runtime.
+config :vutuv, :bounce_webhook_token, "test-bounce-webhook-token"

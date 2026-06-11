@@ -52,3 +52,9 @@ config :vutuv, Vutuv.Mailer, adapter: Swoosh.Adapters.Local
 # Show a link to the Swoosh local mailbox (/sent_emails, forwarded only in dev)
 # on the login pages so PINs are one click away while developing.
 config :vutuv, :dev_mailbox, true
+
+# Exercise the bounce webhook locally:
+#   curl -X POST -H "Authorization: Bearer dev-bounce-webhook-token" \
+#     -H "Content-Type: message/rfc822" --data-binary @dsn.eml \
+#     http://localhost:4000/webhooks/bounces
+config :vutuv, :bounce_webhook_token, "dev-bounce-webhook-token"

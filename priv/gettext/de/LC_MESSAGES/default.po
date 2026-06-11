@@ -506,7 +506,7 @@ msgstr "Name"
 msgid "New"
 msgstr "Neu"
 
-#: lib/vutuv/notifications/emailer.ex:129
+#: lib/vutuv/notifications/emailer.ex:160
 #, elixir-autogen
 msgid "New message from @%{slug} on vutuv"
 msgstr "Neue Nachricht von @%{slug} auf vutuv"
@@ -610,7 +610,7 @@ msgstr "Titel"
 msgid "Privacy Policy"
 msgstr "Datenschutzerklärung"
 
-#: lib/vutuv_web/templates/email/card_list.html.heex:16
+#: lib/vutuv_web/templates/email/card_list.html.heex:23
 #: lib/vutuv_web/templates/email/form_content.html.heex:15
 #: lib/vutuv_web/templates/email/show.html.heex:22
 #, elixir-autogen
@@ -634,7 +634,7 @@ msgstr "Provider"
 
 #: lib/vutuv_web/live/post_live/composer.ex:547
 #: lib/vutuv_web/live/post_live/composer.ex:558
-#: lib/vutuv_web/templates/email/card_list.html.heex:16
+#: lib/vutuv_web/templates/email/card_list.html.heex:23
 #: lib/vutuv_web/templates/email/form_content.html.heex:15
 #: lib/vutuv_web/templates/email/show.html.heex:22
 #, elixir-autogen
@@ -1090,22 +1090,22 @@ msgstr "Verifizieren"
 msgid "Choose a gender"
 msgstr "Geschlecht auswählen"
 
-#: lib/vutuv/notifications/emailer.ex:91
+#: lib/vutuv/notifications/emailer.ex:122
 #, elixir-autogen
 msgid "Confirm your account deletion"
 msgstr "PIN zum Löschen eines vutuv Accounts"
 
-#: lib/vutuv/notifications/emailer.ex:85
+#: lib/vutuv/notifications/emailer.ex:116
 #, elixir-autogen
 msgid "Confirm your email"
 msgstr "Weitere E-Mail Adresse für einen vutuv Account verifizieren"
 
-#: lib/vutuv/notifications/emailer.ex:73
+#: lib/vutuv/notifications/emailer.ex:104
 #, elixir-autogen
 msgid "Confirm your vutuv account"
 msgstr "vutuv Account einrichten"
 
-#: lib/vutuv/notifications/emailer.ex:79
+#: lib/vutuv/notifications/emailer.ex:110
 #, elixir-autogen
 msgid "Login to vutuv"
 msgstr "vutuv Login-PIN"
@@ -1687,7 +1687,7 @@ msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen und Fähigke
 msgid "tag name"
 msgstr "Tag Name"
 
-#: lib/vutuv/notifications/emailer.ex:103
+#: lib/vutuv/notifications/emailer.ex:134
 #, elixir-autogen
 msgid "vutuv Account verified"
 msgstr "verifizierter Account"
@@ -3706,42 +3706,42 @@ msgstr "vutuv ist ein freundliches, familienfreundliches Netzwerk. Alles, was Si
 msgid "yes"
 msgstr "ja"
 
-#: lib/vutuv/notifications/emailer.ex:234
+#: lib/vutuv/notifications/emailer.ex:267
 #, elixir-autogen, elixir-format
 msgid "A warning for your vutuv account"
 msgstr "Eine Verwarnung für Ihr vutuv-Konto"
 
-#: lib/vutuv/notifications/emailer.ex:294
+#: lib/vutuv/notifications/emailer.ex:327
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr "Moderation: %{count} Fälle warten"
 
-#: lib/vutuv/notifications/emailer.ex:272
+#: lib/vutuv/notifications/emailer.ex:305
 #, elixir-autogen, elixir-format
 msgid "Moderation: a profile was reported"
 msgstr "Moderation: Ein Profil wurde gemeldet"
 
-#: lib/vutuv/notifications/emailer.ex:227
+#: lib/vutuv/notifications/emailer.ex:260
 #, elixir-autogen, elixir-format
 msgid "The content you reported was revised"
 msgstr "Der von Ihnen gemeldete Inhalt wurde überarbeitet"
 
-#: lib/vutuv/notifications/emailer.ex:220
+#: lib/vutuv/notifications/emailer.ex:253
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv is under review"
 msgstr "Ihr Inhalt auf vutuv wird geprüft"
 
-#: lib/vutuv/notifications/emailer.ex:213
+#: lib/vutuv/notifications/emailer.ex:246
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv was reported and is hidden"
 msgstr "Ihr Inhalt auf vutuv wurde gemeldet und ist verborgen"
 
-#: lib/vutuv/notifications/emailer.ex:248
+#: lib/vutuv/notifications/emailer.ex:281
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account has been deactivated"
 msgstr "Ihr vutuv-Konto wurde deaktiviert"
 
-#: lib/vutuv/notifications/emailer.ex:241
+#: lib/vutuv/notifications/emailer.ex:274
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account is suspended"
 msgstr "Ihr vutuv-Konto ist gesperrt"
@@ -4712,3 +4712,13 @@ msgstr "Möchten Sie Benachrichtigungs-E-Mails erhalten (z. B. über ungelesene 
 #, elixir-autogen, elixir-format
 msgid "You can switch them back on in your profile settings at any time."
 msgstr "Sie können sie in Ihren Profileinstellungen jederzeit wieder einschalten."
+
+#: lib/vutuv_web/templates/email/card_list.html.heex:20
+#, elixir-autogen, elixir-format
+msgid "Mail to this address bounced. Logging in with a PIN sent to it will clear this warning."
+msgstr "E-Mails an diese Adresse kamen als unzustellbar zurück. Ein Login mit einer an diese Adresse geschickten PIN entfernt diese Warnung."
+
+#: lib/vutuv_web/templates/email/card_list.html.heex:21
+#, elixir-autogen, elixir-format
+msgid "Undeliverable"
+msgstr "Unzustellbar"

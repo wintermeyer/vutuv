@@ -8,6 +8,9 @@ defmodule Vutuv.Accounts.Email do
     field(:value, :string)
     field(:md5sum, :string)
     field(:public?, :boolean, default: true)
+    # Set by a failure DSN (Vutuv.Notifications.Bounces), cleared by a
+    # successful login PIN through the address. Never cast from params.
+    field(:undeliverable_at, :naive_datetime)
     belongs_to(:user, Vutuv.Accounts.User)
 
     timestamps()

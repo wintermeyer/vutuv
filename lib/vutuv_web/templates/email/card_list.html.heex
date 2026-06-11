@@ -12,6 +12,13 @@
     <tr>
       <td>
       <%= link email.value, to: ~p"/#{@user}/emails/#{email}" %>
+      <%!-- Owner-only delivery warning: mail to this address bounced. A
+            successful login PIN through the address clears it. --%>
+      <span
+        :if={same_user?(@user, @current_user) && email.undeliverable_at}
+        class="ml-2 text-sm font-semibold text-red-600 dark:text-red-400"
+        title={gettext("Mail to this address bounced. Logging in with a PIN sent to it will clear this warning.")}
+      >{gettext("Undeliverable")}</span>
       </td>
       <td><%= if email.public?, do: gettext("Public"), else: gettext("Private") %></td>
       <td class="text-right">

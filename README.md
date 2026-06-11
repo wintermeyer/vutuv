@@ -75,7 +75,7 @@ Admin panel: http://localhost:4000/admin
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
 - **Assets**: esbuild + Tailwind CSS v4; dark mode follows the system (`prefers-color-scheme`, no toggle) — legacy pages get their dark styles centrally from `assets/css/components.css`
 - **HTTP server**: Bandit
-- **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers
+- **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers and the bounce envelope sender (`Sender: bounces@vutuv.de` → SMTP MAIL FROM). **Notification mail is opt-out**: the unread-message nudge respects `users.notification_emails?`, carries RFC 8058 one-click unsubscribe headers and a tokenized footer link (`/unsubscribe/:token`, no login needed); transactional mail (PINs, moderation) cannot be opted out of. **Bounces feed back**: a failure DSN POSTed to `/webhooks/bounces` (by the production Postfix pipe, see Deployment) marks the address undeliverable, `deliver/1` then drops automatic mail to it; PIN mail still sends, and a successful login PIN through the address clears the mark
 - **Images**: avatars, profile cover photos, URL screenshots and post images are stored on local disk and processed with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Cover` / `Vutuv.Screenshot` / `Vutuv.PostImageStore`. **Every served version is AVIF**; the resolution, crop and quality of every version live in one module, `Vutuv.Uploads.Spec`, so a future format/compression change is a Spec edit plus one `mix vutuv.images.regenerate` run. Every uploaded **original** is kept verbatim (format + metadata) under the private `<UPLOADS_DIR_PREFIX>/originals/` tree (`Vutuv.Uploads.Originals`) as the source for re-deriving — it must **never** be served (no `Plug.Static` mount, no nginx alias; a regression test enforces this). Cover photos are uploaded via the Edit profile form and served from `<UPLOADS_DIR_PREFIX>/covers/` (nginx needs a `location /covers/` alias in production, mirroring `/avatars/`)
 - **URL screenshots**: rendered by local headless Chromium, wrapped in a browser window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on `$PATH`)
 
@@ -136,6 +136,25 @@ The private originals tree (`/srv/legacy-vutuv/originals/`) must **not** get any
 nginx `location`/`alias`: uploaded originals are never served to anyone.
 
 Uploads run over the LiveView websocket (no `client_max_body_size` change needed for the 6 MB images unless the websocket location caps buffers unusually small).
+
+### Email bounce handling (one-time setup)
+
+All outbound mail uses `bounces@vutuv.de` as its SMTP envelope sender, so
+every DSN lands in one mailbox. Pipe it into the app:
+
+1. `install -m 755 scripts/postfix/vutuv-bounce /usr/local/bin/vutuv-bounce`
+2. Generate a token, store it for both sides:
+   - `/etc/vutuv/bounce-webhook-token` (chmod 600, read by the pipe script)
+   - `BOUNCE_WEBHOOK_TOKEN=...` in the app env file (`/var/www/vutuv/shared/.env`)
+3. Route the address into the pipe, e.g. via `/etc/aliases`:
+   `bounces: "|/usr/local/bin/vutuv-bounce"` + `newaliases` (make sure
+   `bounces@vutuv.de` resolves to local delivery in your Postfix setup).
+
+Without `BOUNCE_WEBHOOK_TOKEN` the endpoint 404s and bounce handling is
+simply off. Failure DSNs mark the address undeliverable (`emails.
+undeliverable_at`, visible to the owner on their emails page); automatic
+mail to it is dropped, PIN mail still sends, and a successful login PIN
+through the address clears the mark.
 
 ## Maintenance / ops tasks
 

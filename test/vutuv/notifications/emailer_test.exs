@@ -35,6 +35,25 @@ defmodule Vutuv.Notifications.EmailerTest do
   end
 
   describe "deliver/1 chokepoint" do
+    test "every message leaves with the bounce address as envelope sender" do
+      # The Swoosh SMTP adapter uses the Sender header as SMTP MAIL FROM, so
+      # bounces (DSNs) all come back to the one piped bounce mailbox instead
+      # of info@. The From stays untouched.
+      email = Emailer.base_email()
+      assert email.headers["Sender"] == "bounces@vutuv.de"
+      assert email.from == {"vutuv", "info@vutuv.de"}
+
+      raw =
+        Swoosh.Email.new()
+        |> Swoosh.Email.from({"vutuv", "info@vutuv.de"})
+        |> Swoosh.Email.to("nobody@example.com")
+        |> Swoosh.Email.subject("Naked email")
+        |> Swoosh.Email.text_body("hi")
+
+      Emailer.deliver(raw)
+      assert_email_sent(fn sent -> assert sent.headers["Sender"] == "bounces@vutuv.de" end)
+    end
+
     test "re-applies the robot headers even when a builder forgot the base" do
       raw =
         Swoosh.Email.new()

@@ -20,6 +20,9 @@ defmodule Vutuv.Notifications.Emailer do
 
   import Swoosh.Email
   use Gettext, backend: VutuvWeb.Gettext
+
+  require Logger
+
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
@@ -49,17 +52,45 @@ defmodule Vutuv.Notifications.Emailer do
     new()
     |> from(@from_address)
     |> robot_headers()
+    |> envelope_sender()
   end
 
   @doc """
   The single delivery chokepoint for all outbound mail. Re-applies the robot
-  headers and then hands the message to `Vutuv.Mailer`.
+  headers and the bounce envelope sender, drops automatic mail to addresses
+  a bounce marked undeliverable (`Vutuv.Notifications.Bounces`), and hands
+  everything else to `Vutuv.Mailer`. User-initiated mail (the PIN flows, ad
+  bookings — `put_private(:user_initiated, true)`) is exempt from the
+  suppression: a member whose mailbox once bounced must still be able to
+  request a login PIN, and a verified PIN clears the mark again.
   """
   def deliver(%Swoosh.Email{} = email) do
-    email
-    |> robot_headers()
-    |> Vutuv.Mailer.deliver()
+    if suppressed?(email) do
+      Logger.info("Suppressed email \"#{email.subject}\" to undeliverable address")
+      :suppressed
+    else
+      email
+      |> robot_headers()
+      |> envelope_sender()
+      |> Vutuv.Mailer.deliver()
+    end
   end
+
+  defp suppressed?(%Swoosh.Email{private: %{user_initiated: true}}), do: false
+
+  defp suppressed?(%Swoosh.Email{to: to}) when is_list(to) and to != [] do
+    Enum.all?(to, fn {_name, address} -> Vutuv.Notifications.Bounces.suppressed?(address) end)
+  end
+
+  defp suppressed?(_email), do: false
+
+  # The Swoosh SMTP adapter uses the Sender header as the SMTP envelope
+  # sender (MAIL FROM), so every DSN comes back to the one bounce mailbox
+  # production Postfix pipes into POST /webhooks/bounces. The visible From
+  # stays info@vutuv.de.
+  defp envelope_sender(email), do: header(email, "Sender", bounce_address())
+
+  defp bounce_address, do: Application.fetch_env!(:vutuv, :bounce_address)
 
   @doc """
   Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
@@ -164,6 +195,8 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def ad_booking_email(%Vutuv.Ads.Ad{} = ad, booker) do
     base_email()
+    # A booking the member just made; never suppressed (see deliver/1).
+    |> put_private(:user_initiated, true)
     |> to(@ad_booking_recipient)
     |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
     |> text_body(
@@ -297,8 +330,12 @@ defmodule Vutuv.Notifications.Emailer do
     end)
   end
 
+  # PIN mail is user-initiated: someone just asked for it, so it is exempt
+  # from the bounce suppression in deliver/1 (the way back into a once-
+  # bounced account must stay open).
   defp gen_email(pin, email, user, template_base, subject_fun) do
     build_email(user, email, template_base, %{pin: pin}, subject_fun)
+    |> put_private(:user_initiated, true)
   end
 
   # Every templated email: recipient, localized subject, and the matching

@@ -49,6 +49,11 @@ config :vutuv, :reconcile_member_count, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
+# The SMTP envelope sender (Sender header -> MAIL FROM) for all outbound
+# mail: bounces (DSNs) come back to this one mailbox, which production
+# Postfix pipes into POST /webhooks/bounces (see Vutuv.Notifications.Bounces).
+config :vutuv, :bounce_address, "bounces@vutuv.de"
+
 # Mail is delivered via SMTP (prod) and the Local/Test adapters elsewhere, none
 # of which need an HTTP API client. Disabling it avoids pulling in hackney.
 config :swoosh, :api_client, false

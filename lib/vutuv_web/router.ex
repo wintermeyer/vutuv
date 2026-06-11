@@ -72,6 +72,11 @@ defmodule VutuvWeb.Router do
     # it is hit by curl on localhost and must not depend on sessions or
     # content negotiation.
     get("/health", HealthController, :index)
+    # Bounce ingestion: production Postfix pipes the bounce mailbox into this
+    # (scripts/postfix/vutuv-bounce). Bearer-token auth in the controller; no
+    # pipeline so the raw message/rfc822 body stays unparsed and no CSRF or
+    # session machinery gets in the way of a machine-to-machine POST.
+    post("/webhooks/bounces", WebhookController, :bounces)
   end
 
   scope "/", VutuvWeb do

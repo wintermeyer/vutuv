@@ -58,4 +58,9 @@ if config_env() == :prod do
   # streams the bytes via X-Accel-Redirect from an `internal` location
   # (see README deploy notes). Dev/test use the send_file fallback instead.
   config :vutuv, :post_image_serving, :accel_redirect
+
+  # Bearer token for POST /webhooks/bounces (the Postfix bounce pipe, see
+  # README "Email bounce handling"). Unset => the endpoint 404s, bounce
+  # handling is simply off; nothing else breaks.
+  config :vutuv, :bounce_webhook_token, System.get_env("BOUNCE_WEBHOOK_TOKEN")
 end

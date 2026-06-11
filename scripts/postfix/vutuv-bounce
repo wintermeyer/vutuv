@@ -1,0 +1,31 @@
+#!/bin/sh
+# Pipe target for the bounce mailbox (bounces@vutuv.de). Postfix feeds the
+# full DSN message on stdin; we hand it to the running app, which parses it
+# and marks the bounced address undeliverable (Vutuv.Notifications.Bounces).
+#
+# Setup (one time, as root) — see README "Email bounce handling":
+#   install -m 755 vutuv-bounce /usr/local/bin/vutuv-bounce
+#   echo "<token>" > /etc/vutuv/bounce-webhook-token && chmod 600 /etc/vutuv/bounce-webhook-token
+#   (the same token goes into the app env file as BOUNCE_WEBHOOK_TOKEN)
+#
+# Always exit 0: a bounce we fail to record is better than Postfix bouncing
+# the bounce back and forth.
+
+TOKEN_FILE=/etc/vutuv/bounce-webhook-token
+URL=${VUTUV_BOUNCE_URL:-https://www.vutuv.de/webhooks/bounces}
+
+[ -r "$TOKEN_FILE" ] || exit 0
+
+# The Authorization header goes through a mode-600 temp file (-H @file), not
+# argv: command lines are world-readable in /proc while curl runs.
+HDR=$(mktemp) || exit 0
+trap 'rm -f "$HDR"' EXIT
+printf 'Authorization: Bearer %s\n' "$(cat "$TOKEN_FILE")" > "$HDR"
+
+curl -sS --max-time 10 \
+  -H @"$HDR" \
+  -H "Content-Type: message/rfc822" \
+  --data-binary @- \
+  "$URL" >/dev/null 2>&1 || true
+
+exit 0

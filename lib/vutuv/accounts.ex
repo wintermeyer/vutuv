@@ -493,14 +493,21 @@ defmodule Vutuv.Accounts do
   end
 
   def check_pin(email, pin, "login") when is_binary(email) do
-    Repo.one(
-      from(m in LoginPin,
-        join: u in assoc(m, :user),
-        join: e in assoc(u, :emails),
-        where: e.value == ^email and m.type == ^"login"
+    result =
+      Repo.one(
+        from(m in LoginPin,
+          join: u in assoc(m, :user),
+          join: e in assoc(u, :emails),
+          where: e.value == ^email and m.type == ^"login"
+        )
       )
-    )
-    |> verify_pin(pin)
+      |> verify_pin(pin)
+
+    # The PIN arrived by mail and was typed back: delivery to this address
+    # provably works, so a bounce-set undeliverable mark is stale.
+    with {:ok, _user} <- result, do: Vutuv.Notifications.Bounces.clear(email)
+
+    result
   end
 
   defp verify_pin(nil, _pin) do
