@@ -286,6 +286,9 @@ defmodule VutuvWeb.Router do
     # UserController versions were unreachable (EnsureActivated 404'd them).
     resources "/", UserController, param: "slug", except: [:index, :new, :create] do
       pipe_through(:user_pipe)
+      # The owner's personal data download (GDPR): one JSON file. Owner-only,
+      # enforced by the controller's RequireLogin + AuthUser plugs.
+      get("/export", ExportController, :show)
       resources("/emails", EmailController)
       # PIN-entry step for the email-change flow (issue #759).
       post("/emails/confirmation", EmailController, :confirm)

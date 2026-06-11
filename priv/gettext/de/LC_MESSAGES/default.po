@@ -966,7 +966,7 @@ msgstr "unserem Blog"
 msgid "An email has been sent to your email address with instructions on how to delete your account."
 msgstr "Eine E-Mail mit einem Löschlink wurde gerade an Sie verschickt."
 
-#: lib/vutuv_web/templates/user/edit.html.heex:29
+#: lib/vutuv_web/templates/user/edit.html.heex:32
 #, elixir-autogen
 msgid "Delete Account"
 msgstr "Account (User-Konto) löschen"
@@ -4723,3 +4723,8 @@ msgstr "Unzustellbar"
 #, elixir-autogen, elixir-format
 msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Fähigkeiten oder nach Wörtern in öffentlichen Beiträgen suchen."
+
+#: lib/vutuv_web/templates/user/edit.html.heex:31
+#, elixir-autogen, elixir-format
+msgid "Download your data"
+msgstr "Ihre Daten herunterladen"

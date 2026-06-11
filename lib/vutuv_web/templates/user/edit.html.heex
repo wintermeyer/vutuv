@@ -26,6 +26,9 @@
 
     <section class="card">
       <h1><%= gettext "Administration" %></h1>
+      <%!-- The GDPR data download: every piece of data vutuv stores about
+            this account, as one JSON file. --%>
+      <p><%= link gettext("Download your data"), to: ~p"/#{@user}/export" %></p>
       <%= button gettext("Delete Account"), to: ~p"/#{@user}", method: "delete", class: "link_button delete_link_button" %>
     </section>
   </aside>

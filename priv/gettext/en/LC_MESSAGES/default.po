@@ -966,7 +966,7 @@ msgstr ""
 msgid "An email has been sent to your email address with instructions on how to delete your account."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:29
+#: lib/vutuv_web/templates/user/edit.html.heex:32
 #, elixir-autogen
 msgid "Delete Account"
 msgstr ""
@@ -4722,4 +4722,9 @@ msgstr ""
 #: lib/vutuv_web/templates/search_query/new.html.heex:17
 #, elixir-autogen, elixir-format, fuzzy
 msgid "You can search for a name, email, or tag, or for words in public posts."
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:31
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Download your data"
 msgstr ""
