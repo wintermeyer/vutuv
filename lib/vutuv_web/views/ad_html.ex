@@ -20,7 +20,11 @@ defmodule VutuvWeb.AdHTML do
     last = Ads.last_bookable_day()
     booked = Ads.booked_days()
 
-    for offset <- 0..2 do
+    # One grid per month the window touches, however wide the context says
+    # the window is (today's month through last_bookable_day's month).
+    month_span = last.year * 12 + last.month - (today.year * 12 + today.month)
+
+    for offset <- 0..month_span do
       month_start = today |> Date.shift(month: offset) |> Date.beginning_of_month()
 
       %{

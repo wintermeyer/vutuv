@@ -33,10 +33,10 @@ defmodule Vutuv.Ads do
   # by an admin before it runs, and this is the room for that review.
   @approval_lead_days 3
 
-  # The booking window reaches to the end of the month after next, so the
-  # booking page can show availability as two to three full month calendars
-  # and bookings stay near-term.
-  @booking_window_months 2
+  # The booking window reaches to the end of next month, so the booking page
+  # shows availability as two full month calendars and bookings stay
+  # near-term. Widen by bumping this one knob (the calendar follows).
+  @booking_window_months 1
 
   def price_cents, do: @price_cents
 
@@ -44,7 +44,7 @@ defmodule Vutuv.Ads do
   def first_bookable_day, do: Date.add(today(), @approval_lead_days)
 
   @doc """
-  The last bookable day: the end of the month #{@booking_window_months} months
+  The last bookable day: the end of the month #{@booking_window_months} month(s)
   out - the last grid of the availability calendar on the booking page.
   """
   def last_bookable_day do

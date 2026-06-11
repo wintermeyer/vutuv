@@ -70,9 +70,9 @@ defmodule VutuvWeb.AdControllerTest do
       # A free day is a selectable radio; a booked day is not offered.
       assert html =~ ~s(value="#{first}")
       refute html =~ ~s(value="#{booked.day}")
-      # The grid spans the window: three month headings, booked-day marker.
+      # The grid spans the window: two month headings, booked-day marker.
       assert html =~ "data-calendar-day=\"#{booked.day}\""
-      assert length(Regex.scan(~r/data-calendar-month/, html)) == 3
+      assert length(Regex.scan(~r/data-calendar-month/, html)) == 2
     end
 
     test "a day beyond the booking window re-renders with the error", %{conn: conn} do
