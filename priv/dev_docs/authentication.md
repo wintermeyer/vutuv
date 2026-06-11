@@ -54,8 +54,8 @@ A token only ever does what its scopes allow. A `*:write` scope implies its
 | `messages:read`  | Read your messages |
 | `messages:write` | Send messages as you |
 
-Write endpoints ship in an upcoming release; request write scopes only when
-you will use them.
+Request only the scopes you will use — members see the list when they
+create the token, and a narrow token is an easy yes.
 
 ## Errors
 

@@ -18,12 +18,18 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
-  @doc "The permalink page: the post itself plus its anonymous-visible replies."
-  def build(author, %Post{} = post) do
-    replies = Posts.list_replies(post, nil)
+  @doc """
+  The permalink page: the post itself plus its visible replies. Anonymous
+  by default; `viewer:` switches the reply list (and its count) to what
+  that user sees — the authenticated `/api/v1` reads. Never pass a viewer
+  for the extension URLs, they must stay cache-safe.
+  """
+  def build(author, %Post{} = post, opts \\ []) do
+    replies = Posts.list_replies(post, Keyword.get(opts, :viewer))
 
     AgentDocs.doc_meta("post", Posts.path(post), noindex: Posts.restricted?(post))
     |> Map.merge(%{
+      id: post.id,
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
       description: AgentDocs.excerpt(post.body),
       author: AgentDocs.person_ref(author),
@@ -64,6 +70,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
 
   defp entry(%{post: post, reposted_by: reposted_by}) do
     %{
+      id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
       author: UserHelpers.full_name(post.user),
       published_on: post.published_on,

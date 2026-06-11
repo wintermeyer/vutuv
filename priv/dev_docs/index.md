@@ -82,15 +82,23 @@ See [`/llms.txt`](/llms.txt) for the full list of public pages. Use the
 authenticated API when you need the member's own view, write access, or
 stable rate limits.
 
+## What the API covers today
+
+Reading and writing across the whole product, as the authorizing member:
+profile and its sections, follows and connections, posts (composing,
+audiences, replies, likes/bookmarks/reposts, your feed), direct messages
+(the request model included) and the notification feed. See the
+[reference](/developers/reference).
+
 ## Roadmap
 
 The API grows in deliberate steps. Coming next, in order:
 
-1. Write endpoints (profile sections, posts, follows/connections, messages).
-2. OAuth 2 apps: register an application, send members through a consent
+1. OAuth 2 apps: register an application, send members through a consent
    screen instead of pasting tokens. Third-party developers will register
    their app with their vutuv account, so misbehaving apps can be suspended
    without affecting anything else.
+2. Post image upload over the API.
 3. Webhooks: signed event deliveries (new follower, new message, ...).
 
 Questions or a use case the API does not cover yet? Write to

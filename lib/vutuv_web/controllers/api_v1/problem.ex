@@ -28,6 +28,29 @@ defmodule VutuvWeb.ApiV1.Problem do
     send_problem(conn, 404, "Not found", detail: detail)
   end
 
+  @doc """
+  The 422 every write endpoint answers on changeset errors: per-field
+  message lists under `errors`, the same texts the HTML forms show.
+  """
+  def validation_failed(conn, %Ecto.Changeset{} = changeset) do
+    send_problem(conn, 422, "Validation failed",
+      detail: "One or more fields are invalid.",
+      extra: %{errors: changeset_errors(changeset)}
+    )
+  end
+
+  defp changeset_errors(changeset) do
+    Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+      Enum.reduce(opts, msg, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", stringify(value))
+      end)
+    end)
+  end
+
+  defp stringify(value) when is_binary(value), do: value
+  defp stringify(value) when is_atom(value) or is_number(value), do: to_string(value)
+  defp stringify(value), do: inspect(value)
+
   defp put_detail(body, nil), do: body
   defp put_detail(body, detail), do: Map.put(body, :detail, detail)
 end

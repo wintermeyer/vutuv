@@ -103,9 +103,14 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   # The shared entry vocabulary (also used by ProfileDoc).
 
+  # Every entry map carries the record's id: the public docs gain a stable
+  # reference (additive, schema_version stays 1) and the /api/v1 CRUD
+  # endpoints need it to address entries.
+
   @doc false
   def work_entry(work) do
     %{
+      id: work.id,
       title: work.title,
       organization: work.organization,
       description: work.description,
@@ -121,15 +126,16 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     do: "#{year}-#{String.pad_leading(Integer.to_string(month), 2, "0")}"
 
   @doc false
-  def link_entry(url), do: %{url: url.value, description: url.description}
+  def link_entry(url), do: %{id: url.id, url: url.value, description: url.description}
 
   @doc false
   def social_entry(account),
-    do: %{provider: account.provider, url: SocialMediaAccount.url(account)}
+    do: %{id: account.id, provider: account.provider, url: SocialMediaAccount.url(account)}
 
   @doc false
   def address_entry(address) do
     %{
+      id: address.id,
       description: address.description,
       line_1: address.line_1,
       line_2: address.line_2,
@@ -143,11 +149,12 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  def phone_entry(phone), do: %{type: phone.number_type, value: phone.value}
+  def phone_entry(phone), do: %{id: phone.id, type: phone.number_type, value: phone.value}
 
   @doc false
   def tag_entry(user_tag) do
     %{
+      id: user_tag.id,
       name: UserTag.name(user_tag),
       slug: user_tag.tag.slug,
       endorsements: endorsement_count(user_tag),

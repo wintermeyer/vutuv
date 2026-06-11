@@ -278,7 +278,74 @@ defmodule VutuvWeb.Router do
     pipe_through(:api_v1)
 
     get("/me", MeController, :show)
+    patch("/me", MeController, :update)
+
     get("/users/:slug", UserController, :show)
+
+    # The profile sections, same doc shape as the public .json pages (the
+    # email list is viewer-aware). Which section a route means travels in
+    # the route assigns.
+    for section <- ~w(work_experiences links social_media_accounts addresses
+                      phone_numbers emails tags)a do
+      get("/users/:slug/#{section}", SectionController, :index, assigns: %{section: section})
+    end
+
+    # Writes on the authorized user's own sections. No email routes (an
+    # address is a PIN-verified identity); tags go through TagController.
+    for section <- ~w(work_experiences links social_media_accounts addresses
+                      phone_numbers)a do
+      post("/me/#{section}", SectionController, :create, assigns: %{section: section})
+      patch("/me/#{section}/:id", SectionController, :update, assigns: %{section: section})
+      delete("/me/#{section}/:id", SectionController, :delete, assigns: %{section: section})
+    end
+
+    post("/me/tags", TagController, :create)
+    delete("/me/tags/:id", TagController, :delete)
+
+    # The social graph: people lists (same doc shape as the public .json
+    # pages), the viewer's standing with a member, follow/unfollow and the
+    # connection lifecycle.
+    get("/users/:slug/followers", SocialController, :followers)
+    get("/users/:slug/following", SocialController, :following)
+    get("/users/:slug/connections", SocialController, :connections)
+    get("/users/:slug/relationship", SocialController, :relationship)
+
+    put("/users/:slug/follow", SocialController, :follow)
+    delete("/users/:slug/follow", SocialController, :unfollow)
+    post("/users/:slug/connection", SocialController, :request_connection)
+    post("/connections/:id/accept", SocialController, :accept_connection)
+    post("/connections/:id/decline", SocialController, :decline_connection)
+    delete("/connections/:id", SocialController, :remove_connection)
+
+    # Posts: the member's feed, the author archive, permalinks, composing,
+    # replies and the idempotent engagement switches.
+    get("/feed", PostController, :feed)
+    get("/users/:slug/posts", PostController, :archive)
+    get("/posts/:id", PostController, :show)
+    get("/posts/:id/engagement", PostController, :engagement)
+
+    post("/posts", PostController, :create)
+    post("/posts/:id/replies", PostController, :reply)
+    patch("/posts/:id", PostController, :update)
+    delete("/posts/:id", PostController, :delete)
+
+    for kind <- ~w(like bookmark repost)a do
+      put("/posts/:id/#{kind}", PostController, :engage, assigns: %{engagement: kind})
+      delete("/posts/:id/#{kind}", PostController, :disengage, assigns: %{engagement: kind})
+    end
+
+    # Direct messages (the request model, blocking and freezes apply like
+    # on the website) and the derived notification feed.
+    get("/conversations", MessageController, :index)
+    get("/conversations/:id/messages", MessageController, :messages)
+    post("/conversations/:id/messages", MessageController, :create_message)
+    post("/conversations/:id/accept", MessageController, :accept)
+    post("/conversations/:id/decline", MessageController, :decline)
+    post("/conversations/:id/read", MessageController, :mark_read)
+    post("/users/:slug/messages", MessageController, :send_to_user)
+
+    get("/notifications", NotificationController, :index)
+    post("/notifications/read", NotificationController, :mark_read)
 
     # JSON 404 for unknown API paths — without this they would fall through
     # to the HTML profile routes. Also the CORS preflight's match.

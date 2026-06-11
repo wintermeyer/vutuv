@@ -4,87 +4,356 @@ Base URL: `https://vutuv.de/api/v1` · All endpoints need a
 [bearer token](/developers/authentication) · Errors are
 `application/problem+json` ([details](/developers/authentication#errors)).
 
-Responses carry `schema_version` (currently `1`). New fields appear without
-notice — parse leniently and ignore keys you do not know. Fields never
-disappear or change meaning within `/api/v1`.
+Conventions:
 
-## GET /me
+* Responses carry `schema_version` (currently `1`) where they mirror a
+  public page. New fields appear without notice — parse leniently and
+  ignore keys you do not know. Fields never disappear or change meaning
+  within `/api/v1`.
+* Request bodies are plain JSON objects (`Content-Type: application/json`),
+  no envelope.
+* Reads return **what the authorizing member sees on the website** — the
+  same visibility rules, enforced server-side. `404` covers both "does not
+  exist" and "not visible to you".
+* Validation failures are `422` with per-field messages:
+  `{"errors": {"organization": ["can't be blank"]}}`.
+* List endpoints with a `next_cursor` paginate by cursor: pass the value
+  back as `?cursor=`, unmodified (it is signed; a tampered cursor is a
+  `400`). `?limit=` accepts 1–100.
+* `PUT`/`DELETE` switches (follow, like, bookmark, repost) are idempotent:
+  repeating a call is success, not a conflict.
 
-Scope: `profile:read`. Your own profile, through your own eyes: private
-email addresses and posts only visible to you are included.
+In the examples, `$VUTUV_TOKEN` holds your token and `$API` stands for
+`https://vutuv.de/api/v1`:
 
 ```bash
-curl -H "Authorization: Bearer $VUTUV_TOKEN" \
-     https://vutuv.de/api/v1/me
+export VUTUV_TOKEN="vutuv_pat_..."
+export API="https://vutuv.de/api/v1"
+auth() { curl -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
+```
+
+## Profile
+
+### GET /me · GET /users/:slug
+
+Scope: `profile:read`. Your own profile (through your own eyes: private
+email addresses included) — or another member's, where you see exactly what
+their profile page would show you.
+
+```bash
+auth $API/me
+auth $API/users/stefan.wintermeyer
 ```
 
 ```json
 {
   "type": "profile",
   "schema_version": 1,
-  "generated_at": "2026-06-11T14:00:00Z",
-  "url": "https://vutuv.de/stefan.wintermeyer",
-  "title": "Stefan Wintermeyer",
   "name": "Stefan Wintermeyer",
-  "first_name": "Stefan",
-  "last_name": "Wintermeyer",
   "slug": "stefan.wintermeyer",
-  "verified": true,
   "headline_markdown": "Phoenix, Elixir & web performance.",
-  "current_position": {"title": "Consultant", "organization": "Wintermeyer Consulting"},
-  "member_since": "2016-08-01",
-  "avatar_url": "https://vutuv.de/avatars/...",
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
-  "emails": ["stefan@example.com", "private@example.com"],
-  "phone_numbers": [{"value": "+49 261 9886 9072", "type": "work"}],
-  "addresses": [{"description": "Office", "city": "Neuwied", "country": "Germany"}],
-  "social_media": [{"provider": "GitHub", "url": "https://github.com/wintermeyer"}],
-  "tags": [{"name": "Phoenix", "slug": "phoenix", "endorsements": 31}],
-  "work_experiences": [{"title": "Consultant", "organization": "Wintermeyer Consulting", "start": "2010-01"}],
-  "links": [{"url": "https://www.wintermeyer-consulting.de", "description": "Company"}],
-  "posts": [{"url": "https://vutuv.de/stefan.wintermeyer/posts/0190...", "published_on": "2026-06-10", "excerpt": "..."}]
+  "emails": ["stefan@example.com"],
+  "tags": [{"id": "0190…", "name": "Phoenix", "slug": "phoenix", "endorsements": 31}],
+  "work_experiences": [{"id": "0190…", "title": "Consultant", "organization": "Wintermeyer Consulting", "start": "2010-01", "end": null}],
+  "links": [{"id": "0190…", "url": "https://www.wintermeyer-consulting.de", "description": "Company"}],
+  "...": "..."
 }
 ```
 
-(Abridged — fields with no data are empty lists or `null`. The exact entry
-shapes match the public `.json` pages, so one parser serves both.)
+### PATCH /me
 
-## GET /users/:slug
-
-Scope: `profile:read`. A member's profile **through your eyes**: you get
-what you would see on their profile page logged in as yourself — public
-data, plus e.g. private email addresses only if they follow you back. Never
-more.
+Scope: `profile:write`. Updates the plain profile fields: `headline`,
+`first_name`, `middle_name`, `last_name`, `nickname`, `honorific_prefix`,
+`honorific_suffix`, `gender`, `birthdate` (ISO date), `locale`,
+`noindex?`. Returns the fresh profile. The username and email addresses
+are deliberately **not** writable over the API.
 
 ```bash
-curl -H "Authorization: Bearer $VUTUV_TOKEN" \
-     https://vutuv.de/api/v1/users/stefan.wintermeyer
+auth -X PATCH $API/me \
+  -H "Content-Type: application/json" \
+  -d '{"headline": "Now hiring!", "locale": "de"}'
 ```
 
-Same response shape as `/me`. Unknown slugs, never-activated accounts and
-accounts hidden by moderation answer `404`.
+## Profile sections
+
+Sections: `work_experiences`, `links`, `social_media_accounts`,
+`addresses`, `phone_numbers`, `emails` (read-only), `tags`.
+
+### GET /users/:slug/&lt;section&gt;
+
+Scope: `profile:read`. The section's entries (the same shape as the public
+`/slug/<section>.json` pages, plus entry `id`s). The email list is
+viewer-dependent: public addresses, or all of them when you are the owner
+or the owner follows you.
+
+```bash
+auth $API/users/stefan.wintermeyer/work_experiences
+```
+
+### POST /me/&lt;section&gt; · PATCH /me/&lt;section&gt;/:id · DELETE /me/&lt;section&gt;/:id
+
+Scope: `profile:write`. Create, edit, delete your own entries (not for
+`emails` — an address is a PIN-verified identity and can only be managed
+on the website). Create and update answer with the entry; delete answers
+`204`.
+
+```bash
+auth -X POST $API/me/work_experiences \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Developer", "organization": "ACME", "start_year": 2024, "start_month": 3}'
+
+auth -X PATCH $API/me/work_experiences/0190abcd-… \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Senior Developer"}'
+
+auth -X DELETE $API/me/work_experiences/0190abcd-…
+```
+
+Field names per section: work_experiences (`title`, `organization`,
+`description`, `start_year`, `start_month`, `end_year`, `end_month`),
+links (`value` = the URL, `description`), social_media_accounts
+(`provider`, `value`), addresses (`description`, `line_1`…`line_4`,
+`zip_code`, `city`, `state`, `country`), phone_numbers (`value`,
+`number_type`).
+
+### POST /me/tags · DELETE /me/tags/:id
+
+Scope: `profile:write`. Tags are global; adding one links or creates it.
+
+```bash
+auth -X POST $API/me/tags -H "Content-Type: application/json" -d '{"name": "Phoenix"}'
+auth -X DELETE $API/me/tags/0190abcd-…
+```
+
+## Social graph
+
+### GET /users/:slug/followers · /following · /connections
+
+Scope: `social:read`. The people lists (same doc shape as the public
+`.json` pages; followers/following paginate with `?page=N`).
+
+### GET /users/:slug/relationship
+
+Scope: `social:read`. Your standing with that member — what the profile
+header shows you:
+
+```bash
+auth $API/users/stefan.wintermeyer/relationship
+```
+
+```json
+{
+  "type": "relationship",
+  "self": false,
+  "following": true,
+  "followed_by": false,
+  "connection": {"status": "pending_sent", "id": "0190…", "requested_by_me": true}
+}
+```
+
+`connection.status` is one of `none`, `pending_sent`, `pending_received`,
+`accepted`, `declined`.
+
+### PUT /users/:slug/follow · DELETE /users/:slug/follow
+
+Scope: `social:write`. Follow (idempotent; `201` on a new follow, `200`
+when already following) and unfollow (`204`; `404` when not following).
+A block between the accounts answers `403`.
+
+```bash
+auth -X PUT $API/users/stefan.wintermeyer/follow
+auth -X DELETE $API/users/stefan.wintermeyer/follow
+```
+
+### Connections
+
+Scope: `social:write`. A connection is mutual and consented: request,
+then the other side accepts or declines.
+
+```bash
+auth -X POST $API/users/stefan.wintermeyer/connection   # request (201)
+auth -X POST $API/connections/0190…/accept              # as the recipient
+auth -X POST $API/connections/0190…/decline
+auth -X DELETE $API/connections/0190…                   # disconnect / withdraw
+```
+
+A mutual request auto-accepts (`200` with `"status": "accepted"`).
+Conflicts answer `409` with a `reason` of `already_connected`,
+`already_requested` or `cooldown`. Accepting materializes the follow in
+both directions, like on the website.
+
+## Posts
+
+### GET /posts/:id
+
+Scope: `posts:read`. The permalink doc — body, tags, images, the reply
+list you are allowed to see.
+
+### GET /users/:slug/posts
+
+Scope: `posts:read`. The author archive (posts + reposts, `?page=N`),
+entries with `id`, `url`, `excerpt`, `reposted_by`.
+
+### GET /feed
+
+Scope: `posts:read`. Your timeline (your posts + followed authors' posts
+and reposts), newest first, cursor-paginated:
+
+```bash
+auth "$API/feed?limit=25"
+auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
+```
+
+```json
+{
+  "type": "feed",
+  "posts": [{"id": "0190…", "author": {"name": "…", "slug": "…"}, "body_markdown": "…", "tags": [], "reposted_by": null}],
+  "more": true,
+  "next_cursor": "SFMyNTY…"
+}
+```
+
+### POST /posts
+
+Scope: `posts:write`. Fields: `body` (Markdown, required unless images),
+`tags` (comma-separated string or list), `denials` (audience
+restrictions, see below). Image upload is not part of the API yet.
+
+```bash
+auth -X POST $API/posts \
+  -H "Content-Type: application/json" \
+  -d '{"body": "Hello from the API!", "tags": "elixir, phoenix"}'
+```
+
+Audiences are **deny-based**: no `denials` means public. Each denial is
+one of `{"wildcard": "non_connections" | "non_followers" | "non_followees"
+| "logged_out" | "everyone"}`, `{"denied_user_id": "<user id>"}` or
+`{"group_id": "<your group id>"}`. A connections-only post:
+
+```bash
+auth -X POST $API/posts \
+  -H "Content-Type: application/json" \
+  -d '{"body": "Connections only", "denials": [{"wildcard": "non_connections"}]}'
+```
+
+### PATCH /posts/:id · DELETE /posts/:id
+
+Scope: `posts:write`, own posts only. While reposts or replies exist the
+audience cannot be restricted (`409`, `reason: visibility_locked`);
+deleting is always possible (`204`).
+
+### POST /posts/:id/replies
+
+Scope: `posts:write`. A reply is a normal post (same fields) attached to a
+**public** parent; a restricted parent answers `409`
+(`reason: restricted`).
+
+### PUT/DELETE /posts/:id/like · /bookmark · /repost
+
+Scope: `posts:write`. Idempotent switches; each answers the fresh
+engagement state. Reposting works on public posts only (`409` otherwise);
+likes across a block answer `403`.
+
+```bash
+auth -X PUT $API/posts/0190…/like
+```
+
+```json
+{"type": "post_engagement", "post_id": "0190…", "likes": 12, "bookmarks": 3,
+ "reposts": 2, "replies": 4, "liked?": true, "bookmarked?": false,
+ "reposted?": false}
+```
+
+### GET /posts/:id/engagement
+
+Scope: `posts:read`. The same engagement state, read-only.
+
+## Messages
+
+The message-request model applies, exactly as on the website: your message
+lands directly when the recipient already follows you; otherwise it opens
+a **request** with exactly one message, which the recipient accepts or
+declines. Declining is silent. New requests are rate-limited.
+
+### GET /conversations
+
+Scope: `messages:read`. Your accepted conversations and own outgoing
+requests under `conversations`, incoming requests under `requests` — each
+with the other member, a preview, `last_message_at` and your `unread`
+count.
+
+### GET /conversations/:id/messages
+
+Scope: `messages:read`. The thread, newest first, cursor-paginated.
+
+```bash
+auth "$API/conversations/0190…/messages?limit=30"
+```
+
+### POST /users/:slug/messages · POST /conversations/:id/messages
+
+Scope: `messages:write`. Send by member (finds or opens the conversation)
+or into a known conversation. Markdown body.
+
+```bash
+auth -X POST $API/users/stefan.wintermeyer/messages \
+  -H "Content-Type: application/json" \
+  -d '{"body": "Hello Stefan!"}'
+```
+
+Answers `201` with the message. A second message into your own pending
+request is `409` (`reason: pending_limit`); a member who cannot receive
+messages answers `403`; too many new requests answer `429`.
+
+### POST /conversations/:id/accept · /decline · /read
+
+Scope: `messages:write`. Answer an incoming request; `/read` clears your
+unread marker (`204`).
+
+## Notifications
+
+### GET /api/v1/notifications · POST /api/v1/notifications/read
+
+Scopes: `social:read` / `social:write`. The derived notification feed
+(new follower, endorsement, connection events, replies, likes, moderation
+notices), cursor-paginated, plus your unread count; `/read` moves the read
+marker (`204`).
+
+```bash
+auth $API/notifications
+```
+
+```json
+{
+  "type": "notifications",
+  "unread": 2,
+  "notifications": [{"id": "follower-0190…", "kind": "follower",
+                     "actor_name": "Greta Tester", "actor_slug": "greta-tester",
+                     "at": "2026-06-11T14:00:00"}],
+  "more": false,
+  "next_cursor": null
+}
+```
 
 ## Public data, without a token
 
 Anonymous public reads do not need the API at all: every public page is
-also served as `.json` (and `.md`, `.txt`, the profile as `.vcf`) under its
-own URL — the anonymous view, cache-friendly, no auth:
+also served as `.json` (and `.md`, `.txt`, the profile as `.vcf`) under
+its own URL — the anonymous view, cache-friendly, no auth:
 
 ```bash
 curl https://vutuv.de/stefan.wintermeyer.json            # profile
 curl https://vutuv.de/stefan.wintermeyer/posts.json      # post archive
-curl https://vutuv.de/stefan.wintermeyer/followers.json  # follower list
 curl https://vutuv.de/tags/phoenix.json                  # a tag page
 ```
 
-The full page list lives in [`/llms.txt`](/llms.txt). Rule of thumb: use
-extension URLs for anonymous public data, `/api/v1` for the member's own
-view (and, soon, writes).
+The full page list lives in [`/llms.txt`](/llms.txt).
 
 ## CORS
 
-`/api/v1` sends `Access-Control-Allow-Origin: *` — browser apps can call it
-directly. Never embed a long-lived token in shipped client code; tokens
+`/api/v1` sends `Access-Control-Allow-Origin: *` — browser apps can call
+it directly. Never embed a long-lived token in shipped client code; tokens
 belong server-side or in the user's own hands.
 
 ## Versioning promise
@@ -97,7 +366,6 @@ belong server-side or in the user's own hands.
 
 ## Coming next
 
-Write endpoints (profile sections, posts, follows/connections, messages),
-OAuth 2 app registration, and webhooks — see the
-[roadmap](/developers#roadmap). This reference only ever documents what is
-actually live.
+OAuth 2 app registration (consent screen instead of pasted tokens),
+post image upload, and webhooks — see the [roadmap](/developers#roadmap).
+This reference only ever documents what is actually live.
