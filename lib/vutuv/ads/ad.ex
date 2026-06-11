@@ -69,14 +69,20 @@ defmodule Vutuv.Ads.Ad do
   end
 
   # Every ad is reviewed by an admin before it runs, so the earliest
-  # bookable day leaves room for that: three days out (Berlin), see
-  # Vutuv.Ads.first_bookable_day/0.
+  # bookable day leaves room for that: three days out (Berlin). Bookings are
+  # also only accepted inside the calendar window the booking page shows
+  # (through Vutuv.Ads.last_bookable_day/0).
   defp validate_future_day(changeset) do
     validate_change(changeset, :day, fn :day, day ->
-      if Date.compare(day, Vutuv.Ads.first_bookable_day()) == :lt do
-        [day: "must be booked at least three days ahead"]
-      else
-        []
+      cond do
+        Date.compare(day, Vutuv.Ads.first_bookable_day()) == :lt ->
+          [day: "must be booked at least three days ahead"]
+
+        Date.compare(day, Vutuv.Ads.last_bookable_day()) == :gt ->
+          [day: "is outside the booking window"]
+
+        true ->
+          []
       end
     end)
   end

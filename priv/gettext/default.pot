@@ -115,8 +115,8 @@ msgstr ""
 msgid "Birthdate"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:178
-#: lib/vutuv_web/agent_docs/text.ex:211
+#: lib/vutuv_web/agent_docs/markdown.ex:182
+#: lib/vutuv_web/agent_docs/text.ex:215
 #: lib/vutuv_web/templates/user/show.html.heex:447
 #, elixir-autogen
 msgid "Birthday"
@@ -304,8 +304,8 @@ msgstr ""
 msgid "First Name"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:174
-#: lib/vutuv_web/agent_docs/text.ex:207
+#: lib/vutuv_web/agent_docs/markdown.ex:178
+#: lib/vutuv_web/agent_docs/text.ex:211
 #: lib/vutuv_web/templates/follower/index.html.heex:4
 #: lib/vutuv_web/templates/follower/index.html.heex:9
 #: lib/vutuv_web/templates/user/show.html.heex:373
@@ -313,8 +313,8 @@ msgstr ""
 msgid "Followers"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:175
-#: lib/vutuv_web/agent_docs/text.ex:208
+#: lib/vutuv_web/agent_docs/markdown.ex:179
+#: lib/vutuv_web/agent_docs/text.ex:212
 #: lib/vutuv_web/components/ui.ex:413
 #: lib/vutuv_web/components/ui.ex:427
 #: lib/vutuv_web/templates/followee/index.html.heex:4
@@ -324,8 +324,8 @@ msgstr ""
 msgid "Following"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:177
-#: lib/vutuv_web/agent_docs/text.ex:210
+#: lib/vutuv_web/agent_docs/markdown.ex:181
+#: lib/vutuv_web/agent_docs/text.ex:214
 #: lib/vutuv_web/templates/user/form_content.html.heex:20
 #: lib/vutuv_web/templates/user/show.html.heex:443
 #, elixir-autogen
@@ -1698,7 +1698,7 @@ msgstr ""
 msgid "You'll receive an email with a login link."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:66
+#: lib/vutuv_web/templates/ad/new.html.heex:107
 #: lib/vutuv_web/templates/address/country_input.html.heex:2
 #, elixir-autogen
 msgid "Country"
@@ -2081,12 +2081,14 @@ msgstr ""
 msgid "Add cover photo"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:69
 #: lib/vutuv_web/views/user_html.ex:101
 #: lib/vutuv_web/views/work_experience_html.ex:16
 #, elixir-autogen, elixir-format
 msgid "April"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:73
 #: lib/vutuv_web/views/user_html.ex:105
 #: lib/vutuv_web/views/work_experience_html.ex:20
 #, elixir-autogen, elixir-format
@@ -2113,42 +2115,49 @@ msgstr ""
 msgid "Cover photo of %{name}"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:77
 #: lib/vutuv_web/views/user_html.ex:109
 #: lib/vutuv_web/views/work_experience_html.ex:24
 #, elixir-autogen, elixir-format
 msgid "December"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:67
 #: lib/vutuv_web/views/user_html.ex:99
 #: lib/vutuv_web/views/work_experience_html.ex:14
 #, elixir-autogen, elixir-format
 msgid "February"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:66
 #: lib/vutuv_web/views/user_html.ex:98
 #: lib/vutuv_web/views/work_experience_html.ex:13
 #, elixir-autogen, elixir-format
 msgid "January"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:72
 #: lib/vutuv_web/views/user_html.ex:104
 #: lib/vutuv_web/views/work_experience_html.ex:19
 #, elixir-autogen, elixir-format
 msgid "July"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:71
 #: lib/vutuv_web/views/user_html.ex:103
 #: lib/vutuv_web/views/work_experience_html.ex:18
 #, elixir-autogen, elixir-format
 msgid "June"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:68
 #: lib/vutuv_web/views/user_html.ex:100
 #: lib/vutuv_web/views/work_experience_html.ex:15
 #, elixir-autogen, elixir-format
 msgid "March"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:70
 #: lib/vutuv_web/views/user_html.ex:102
 #: lib/vutuv_web/views/work_experience_html.ex:17
 #, elixir-autogen, elixir-format
@@ -2165,18 +2174,21 @@ msgstr ""
 msgid "Member since %{year}"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:76
 #: lib/vutuv_web/views/user_html.ex:108
 #: lib/vutuv_web/views/work_experience_html.ex:23
 #, elixir-autogen, elixir-format
 msgid "November"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:75
 #: lib/vutuv_web/views/user_html.ex:107
 #: lib/vutuv_web/views/work_experience_html.ex:22
 #, elixir-autogen, elixir-format
 msgid "October"
 msgstr ""
 
+#: lib/vutuv_web/views/ad_html.ex:74
 #: lib/vutuv_web/views/user_html.ex:106
 #: lib/vutuv_web/views/work_experience_html.ex:21
 #, elixir-autogen, elixir-format
@@ -2951,8 +2963,8 @@ msgstr ""
 msgid "Connection requests"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:176
-#: lib/vutuv_web/agent_docs/text.ex:209
+#: lib/vutuv_web/agent_docs/markdown.ex:180
+#: lib/vutuv_web/agent_docs/text.ex:213
 #: lib/vutuv_web/templates/connection/index.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Connections"
@@ -4053,13 +4065,13 @@ msgstr ""
 msgid "Scroll inside the frame, or click to open the full image."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:198
+#: lib/vutuv_web/agent_docs/markdown.ex:202
 #, elixir-autogen, elixir-format
 msgid "%{count} endorsements"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:281
-#: lib/vutuv_web/agent_docs/text.ex:262
+#: lib/vutuv_web/agent_docs/markdown.ex:285
+#: lib/vutuv_web/agent_docs/text.ex:266
 #, elixir-autogen, elixir-format
 msgid "%{count} on this page, use ?page=N"
 msgstr ""
@@ -4089,26 +4101,26 @@ msgstr ""
 msgid "Images"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:270
-#: lib/vutuv_web/agent_docs/text.ex:253
+#: lib/vutuv_web/agent_docs/markdown.ex:274
+#: lib/vutuv_web/agent_docs/text.ex:257
 #, elixir-autogen, elixir-format
 msgid "In reply to a deleted post by %{name}."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:267
-#: lib/vutuv_web/agent_docs/text.ex:250
+#: lib/vutuv_web/agent_docs/markdown.ex:271
+#: lib/vutuv_web/agent_docs/text.ex:254
 #, elixir-autogen, elixir-format
 msgid "In reply to a deleted post."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:274
-#: lib/vutuv_web/agent_docs/text.ex:256
+#: lib/vutuv_web/agent_docs/markdown.ex:278
+#: lib/vutuv_web/agent_docs/text.ex:260
 #, elixir-autogen, elixir-format
 msgid "In reply to a post by %{name}."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:173
-#: lib/vutuv_web/agent_docs/text.ex:206
+#: lib/vutuv_web/agent_docs/markdown.ex:177
+#: lib/vutuv_web/agent_docs/text.ex:210
 #, elixir-autogen, elixir-format
 msgid "Member since"
 msgstr ""
@@ -4151,24 +4163,24 @@ msgstr ""
 msgid "The most followed vutuv members"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:172
-#: lib/vutuv_web/agent_docs/text.ex:205
+#: lib/vutuv_web/agent_docs/markdown.ex:176
+#: lib/vutuv_web/agent_docs/text.ex:209
 #, elixir-autogen, elixir-format
 msgid "Verified profile: yes"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:254
-#: lib/vutuv_web/agent_docs/text.ex:239
+#: lib/vutuv_web/agent_docs/markdown.ex:258
+#: lib/vutuv_web/agent_docs/text.ex:243
 #, elixir-autogen, elixir-format
 msgid "reposted by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:213
+#: lib/vutuv_web/agent_docs/markdown.ex:217
 #, elixir-autogen, elixir-format
 msgid "today"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:214
+#: lib/vutuv_web/agent_docs/markdown.ex:218
 #, elixir-autogen, elixir-format
 msgid "until %{date}"
 msgstr ""
@@ -4218,7 +4230,7 @@ msgstr ""
 msgid "Ad"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:22
+#: lib/vutuv_web/templates/ad/new.html.heex:63
 #, elixir-autogen, elixir-format
 msgid "Ad text"
 msgstr ""
@@ -4241,21 +4253,21 @@ msgstr ""
 msgid "Appears at most once per hour per visitor and hides itself after two minutes."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:36
+#: lib/vutuv_web/templates/ad/new.html.heex:77
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:90
 #, elixir-autogen, elixir-format
 msgid "Billing name"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:147
-#: lib/vutuv_web/agent_docs/text.ex:148
+#: lib/vutuv_web/agent_docs/markdown.ex:151
+#: lib/vutuv_web/agent_docs/text.ex:152
 #, elixir-autogen, elixir-format
 msgid "Book online (login required): %{url}"
 msgstr ""
 
 #: lib/vutuv_web/controllers/ad_controller.ex:63
 #: lib/vutuv_web/templates/ad/bookings.html.heex:14
-#: lib/vutuv_web/templates/ad/index.html.heex:56
+#: lib/vutuv_web/templates/ad/index.html.heex:59
 #: lib/vutuv_web/views/layout_html.ex:71
 #, elixir-autogen, elixir-format
 msgid "Book your ad"
@@ -4266,17 +4278,17 @@ msgstr ""
 msgid "Booked online by logged-in members. Payment by invoice."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/index.html.heex:58
+#: lib/vutuv_web/templates/ad/index.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Booking requires a vutuv login."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:60
+#: lib/vutuv_web/templates/ad/new.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "City"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:42
+#: lib/vutuv_web/templates/ad/new.html.heex:83
 #, elixir-autogen, elixir-format
 msgid "Company (optional)"
 msgstr ""
@@ -4287,21 +4299,16 @@ msgstr ""
 msgid "Day"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:26
+#: lib/vutuv_web/templates/ad/new.html.heex:67
 #, elixir-autogen, elixir-format
 msgid "Markdown is supported. At most %{max} characters."
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/markdown.ex:146
-#: lib/vutuv_web/agent_docs/text.ex:147
+#: lib/vutuv_web/agent_docs/markdown.ex:147
+#: lib/vutuv_web/agent_docs/text.ex:148
 #: lib/vutuv_web/templates/ad/index.html.heex:43
 #, elixir-autogen, elixir-format
 msgid "Next available day"
-msgstr ""
-
-#: lib/vutuv_web/templates/ad/new.html.heex:15
-#, elixir-autogen, elixir-format
-msgid "One ad per calendar day. Next available day: %{day}"
 msgstr ""
 
 #: lib/vutuv_web/templates/ad/index.html.heex:10
@@ -4327,7 +4334,7 @@ msgstr ""
 msgid "Shown to every visitor, between the top navigation and the page content."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:48
+#: lib/vutuv_web/templates/ad/new.html.heex:89
 #, elixir-autogen, elixir-format
 msgid "Street and number"
 msgstr ""
@@ -4342,23 +4349,23 @@ msgstr ""
 msgid "This spot is free today. One day, one ad, every visitor."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:72
+#: lib/vutuv_web/templates/ad/new.html.heex:113
 #, elixir-autogen, elixir-format
 msgid "VAT ID (optional)"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:54
+#: lib/vutuv_web/templates/ad/new.html.heex:95
 #, elixir-autogen, elixir-format
 msgid "Zip code"
 msgstr ""
 
 #: lib/vutuv_web/templates/ad/index.html.heex:49
-#: lib/vutuv_web/templates/ad/new.html.heex:16
+#: lib/vutuv_web/templates/ad/new.html.heex:57
 #, elixir-autogen, elixir-format
 msgid "fully booked"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:78
+#: lib/vutuv_web/templates/ad/new.html.heex:119
 #, elixir-autogen, elixir-format
 msgid "Price: %{price}. Payment by invoice; the day is reserved immediately and the invoice follows by email."
 msgstr ""
@@ -4397,7 +4404,7 @@ msgstr ""
 msgid "Approve"
 msgstr ""
 
-#: lib/vutuv_web/views/ad_html.ex:10
+#: lib/vutuv_web/views/ad_html.ex:80
 #, elixir-autogen, elixir-format
 msgid "Approved"
 msgstr ""
@@ -4440,7 +4447,7 @@ msgid "My ad bookings"
 msgstr ""
 
 #: lib/vutuv_web/templates/ad/bookings.html.heex:5
-#: lib/vutuv_web/templates/ad/index.html.heex:64
+#: lib/vutuv_web/templates/ad/index.html.heex:67
 #, elixir-autogen, elixir-format
 msgid "My bookings"
 msgstr ""
@@ -4475,7 +4482,7 @@ msgstr ""
 msgid "The ad for %{day} is approved and will run."
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:30
+#: lib/vutuv_web/templates/ad/new.html.heex:71
 #, elixir-autogen, elixir-format
 msgid "The ad must be family-friendly."
 msgstr ""
@@ -4490,12 +4497,12 @@ msgstr ""
 msgid "VAT ID"
 msgstr ""
 
-#: lib/vutuv_web/views/ad_html.ex:9
+#: lib/vutuv_web/views/ad_html.ex:79
 #, elixir-autogen, elixir-format
 msgid "Waiting for approval"
 msgstr ""
 
-#: lib/vutuv_web/templates/ad/new.html.heex:82
+#: lib/vutuv_web/templates/ad/new.html.heex:123
 #, elixir-autogen, elixir-format
 msgid "We review and approve every ad before it runs, which is why the earliest bookable day is three days out."
 msgstr ""
@@ -4523,4 +4530,71 @@ msgstr ""
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "deleted account"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:149
+#: lib/vutuv_web/agent_docs/text.ex:150
+#, elixir-autogen, elixir-format
+msgid "Already booked"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:145
+#: lib/vutuv_web/agent_docs/text.ex:146
+#, elixir-autogen, elixir-format
+msgid "Booking window"
+msgstr ""
+
+#: lib/vutuv_web/templates/ad/index.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "Bookings are open through %{last}."
+msgstr ""
+
+#: lib/vutuv_web/templates/ad/new.html.heex:55
+#, elixir-autogen, elixir-format
+msgid "Bookings are open through %{last}. Next available day: %{day}"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:60
+#, elixir-autogen, elixir-format
+msgid "Fr"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:56
+#, elixir-autogen, elixir-format
+msgid "Mo"
+msgstr ""
+
+#: lib/vutuv_web/templates/ad/new.html.heex:54
+#, elixir-autogen, elixir-format
+msgid "One ad per calendar day: pick a free day in the calendar; struck-through days are already booked."
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:61
+#, elixir-autogen, elixir-format
+msgid "Sa"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:62
+#, elixir-autogen, elixir-format
+msgid "Su"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:59
+#, elixir-autogen, elixir-format
+msgid "Th"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:57
+#, elixir-autogen, elixir-format
+msgid "Tu"
+msgstr ""
+
+#: lib/vutuv_web/views/ad_html.ex:58
+#, elixir-autogen, elixir-format
+msgid "We"
+msgstr ""
+
+#: lib/vutuv_web/templates/ad/new.html.heex:41
+#, elixir-autogen, elixir-format
+msgid "already booked"
 msgstr ""

@@ -29,18 +29,37 @@ defmodule Vutuv.Ads do
   # booking so old rows keep the price that was agreed.
   @price_cents 125_000
 
-  # How far ahead next_available_day/0 searches; bookings further out than a
-  # year are not offered.
-  @booking_horizon_days 365
-
   # Days between booking and the earliest bookable day: every ad is approved
   # by an admin before it runs, and this is the room for that review.
   @approval_lead_days 3
+
+  # The booking window reaches to the end of the month after next, so the
+  # booking page can show availability as two to three full month calendars
+  # and bookings stay near-term.
+  @booking_window_months 2
 
   def price_cents, do: @price_cents
 
   @doc "The earliest day a new booking may pick (today + #{@approval_lead_days}, Berlin)."
   def first_bookable_day, do: Date.add(today(), @approval_lead_days)
+
+  @doc """
+  The last bookable day: the end of the month #{@booking_window_months} months
+  out - the last grid of the availability calendar on the booking page.
+  """
+  def last_bookable_day do
+    today() |> Date.shift(month: @booking_window_months) |> Date.end_of_month()
+  end
+
+  @doc "Every taken day inside the booking window, as a MapSet (the calendar)."
+  def booked_days do
+    first = first_bookable_day()
+    last = last_bookable_day()
+
+    from(a in Ad, where: a.day >= ^first and a.day <= ^last, select: a.day)
+    |> Repo.all()
+    |> MapSet.new()
+  end
 
   @doc "The ad booked for `day`, or nil."
   def get_ad(%Date{} = day), do: Repo.get_by(Ad, day: day)
@@ -144,20 +163,14 @@ defmodule Vutuv.Ads do
   end
 
   @doc """
-  The first bookable day (see `first_bookable_day/0`) that is still free.
-  Nil when the next #{@booking_horizon_days} days are all booked.
+  The first free day inside the booking window
+  (`first_bookable_day/0`..`last_bookable_day/0`), nil when it is sold out.
   """
   def next_available_day do
-    first = first_bookable_day()
-    horizon = Date.add(first, @booking_horizon_days - 1)
-
-    booked =
-      from(a in Ad, where: a.day >= ^first and a.day <= ^horizon, select: a.day)
-      |> Repo.all()
-      |> MapSet.new()
+    booked = booked_days()
 
     Enum.find(
-      Date.range(first, horizon),
+      Date.range(first_bookable_day(), last_bookable_day()),
       &(not MapSet.member?(booked, &1))
     )
   end

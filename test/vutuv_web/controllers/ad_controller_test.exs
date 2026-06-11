@@ -27,6 +27,7 @@ defmodule VutuvWeb.AdControllerTest do
 
     test "every public fact also appears in the agent formats (no drift)", %{conn: conn} do
       next_day = Date.to_iso8601(Ads.next_available_day())
+      window_end = Date.to_iso8601(Ads.last_bookable_day())
 
       rendered = %{
         html: get(conn, ~p"/ads") |> html_response(200),
@@ -35,7 +36,8 @@ defmodule VutuvWeb.AdControllerTest do
         json: get(build_conn(), "/ads.json").resp_body
       }
 
-      for {format, body} <- rendered, fact <- ["1,250", "2048", "family-friendly", next_day] do
+      for {format, body} <- rendered,
+          fact <- ["1,250", "2048", "family-friendly", next_day, window_end] do
         assert body =~ fact,
                "#{inspect(fact)} is missing from the #{format} version — " <>
                  "HTML page and agent doc have drifted apart (see VutuvWeb.AgentDocs)"
@@ -56,6 +58,31 @@ defmodule VutuvWeb.AdControllerTest do
       assert html =~ "id=\"ad-form\""
       assert html =~ "billing_name"
       assert html =~ "1,250"
+    end
+
+    test "the availability calendar offers free days and marks booked ones", %{conn: conn} do
+      first = Ads.next_available_day()
+      booked = insert(:ad, day: Date.add(first, 1))
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/ads/new") |> html_response(200)
+
+      # A free day is a selectable radio; a booked day is not offered.
+      assert html =~ ~s(value="#{first}")
+      refute html =~ ~s(value="#{booked.day}")
+      # The grid spans the window: three month headings, booked-day marker.
+      assert html =~ "data-calendar-day=\"#{booked.day}\""
+      assert length(Regex.scan(~r/data-calendar-month/, html)) == 3
+    end
+
+    test "a day beyond the booking window re-renders with the error", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      beyond = Date.add(Ads.last_bookable_day(), 1)
+
+      conn =
+        post(conn, ~p"/ads", %{"ad" => Map.put(@booking_params, "day", Date.to_iso8601(beyond))})
+
+      assert html_response(conn, 200) =~ "is outside the booking window"
     end
   end
 

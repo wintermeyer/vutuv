@@ -48,6 +48,8 @@ defmodule VutuvWeb.AgentDocs.AdsDoc do
       },
       rules: rules(),
       next_available_day: next_available_day,
+      booking_window: %{from: Ads.first_bookable_day(), to: Ads.last_bookable_day()},
+      booked_days: Enum.sort(Ads.booked_days(), Date),
       booking_url: AgentDocs.abs_url("/ads/new"),
       community_guidelines_url: AgentDocs.abs_url("/community")
     })

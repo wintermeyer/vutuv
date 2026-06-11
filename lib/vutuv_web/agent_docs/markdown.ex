@@ -142,8 +142,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.description,
       Enum.map_join(doc.rules, "\n", &("- " <> &1)),
       "- #{gettext("Price")}: #{doc.price.display}",
+      "- #{gettext("Booking window")}: #{doc.booking_window.from} – #{doc.booking_window.to}",
       doc.next_available_day &&
         "- #{gettext("Next available day")}: #{doc.next_available_day}",
+      if(doc.booked_days != [],
+        do: "- #{gettext("Already booked")}: #{Enum.join(doc.booked_days, ", ")}"
+      ),
       gettext("Book online (login required): %{url}", url: doc.booking_url)
     ]
     |> join_blocks()

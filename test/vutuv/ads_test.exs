@@ -64,6 +64,18 @@ defmodule Vutuv.AdsTest do
       assert flush_emails() != []
     end
 
+    test "rejects days beyond the booking window" do
+      beyond = Date.add(Ads.last_bookable_day(), 1)
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(beyond))
+
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+      assert "is outside the booking window" in errors_on(changeset).day
+
+      attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(Ads.last_bookable_day()))
+      assert {:ok, _ad} = Ads.book_ad(booker(), attrs)
+      flush_emails()
+    end
+
     test "rejects ad text longer than 2048 characters" do
       attrs = Map.put(@valid_attrs, "content", String.duplicate("a", 2049))
       assert {:error, changeset} = Ads.book_ad(booker(), attrs)
@@ -126,6 +138,20 @@ defmodule Vutuv.AdsTest do
 
       insert(:ad, day: first)
       assert Ads.next_available_day() == Date.add(first, 1)
+    end
+  end
+
+  describe "the booking window" do
+    test "ends with the month after next (the calendar's last grid)" do
+      expected = Ads.today() |> Date.shift(month: 2) |> Date.end_of_month()
+      assert Ads.last_bookable_day() == expected
+    end
+
+    test "booked_days/0 is the set of taken days within the window" do
+      assert Ads.booked_days() == MapSet.new()
+
+      ad = insert(:ad)
+      assert Ads.booked_days() == MapSet.new([ad.day])
     end
   end
 
