@@ -3,9 +3,10 @@ defmodule VutuvWeb.LegacyRedirectController do
   301s for the pre-2026 URL scheme: profiles and their sub-pages lived under
   /users/:slug, login under /sessions/new, and search under /search_queries.
 
-  GET-only by design. Forms always re-render against the new paths, so only
-  links and bookmarks need redirects; replaying POST bodies across a 301 is
-  not reliable anyway.
+  Mostly GET-only: forms always re-render against the new paths, so links and
+  bookmarks are what need redirects. The one POST is the pre-LiveView search
+  form, which 303s into the live search so a form rendered by the previous
+  release keeps working across a deploy.
   """
 
   use VutuvWeb, :controller
@@ -29,13 +30,35 @@ defmodule VutuvWeb.LegacyRedirectController do
 
   def search(conn, _params), do: permanent(conn, "/search")
 
-  def search_query(conn, %{"id" => id}), do: permanent(conn, "/search/" <> encode(id))
+  def search_query(conn, %{"id" => id}), do: permanent(conn, search_path(id))
+
+  # A stored-query URL: /search/:id carried the query value as the id, so it
+  # replays as a live search for the same value.
+  def search_show(conn, %{"id" => id}), do: permanent(conn, search_path(id))
+
+  # The previous release's search form POSTs here during a blue/green switch;
+  # 303 so the browser re-issues it as a GET against the live search.
+  def search_post(conn, params) do
+    value = get_in(params, ["search_query", "value"]) || ""
+
+    conn
+    |> put_status(:see_other)
+    |> redirect(to: search_path(value))
+    |> halt()
+  end
+
+  defp search_path(value) do
+    case String.trim(value) do
+      "" -> "/search"
+      value -> "/search?q=" <> URI.encode_www_form(value)
+    end
+  end
 
   defp permanent(conn, path) do
     path =
       case conn.query_string do
         "" -> path
-        query_string -> path <> "?" <> query_string
+        query_string -> path <> if(path =~ "?", do: "&", else: "?") <> query_string
       end
 
     conn

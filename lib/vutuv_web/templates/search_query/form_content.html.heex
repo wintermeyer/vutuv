@@ -1,7 +1,0 @@
-<.form :let={f} for={@changeset} action={@action} class="search-form">
-  <.form_error changeset={@changeset} />
-  <%= text_input f, :value, placeholder: gettext("Search here"), value: @conn.assigns[:value], required: true, autofocus: true %>
-  <%= error_tag f, :value %>
-
-  <%= submit gettext("Search"), class: "button search-submit" %>
-</.form>

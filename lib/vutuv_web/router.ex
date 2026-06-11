@@ -106,11 +106,12 @@ defmodule VutuvWeb.Router do
     post("/connections/:id/decline", ConnectionController, :decline)
     delete("/connections/:id", ConnectionController, :delete)
 
-    # Search lives at /search: GET renders the form, POST runs a query, and
-    # /search/:id shows a stored query (the id is the query value itself).
-    get("/search", SearchQueryController, :new)
-    post("/search", SearchQueryController, :create)
-    get("/search/:id", SearchQueryController, :show)
+    # Search is a LiveView (live "/search" in the live_session below): results
+    # stream in while typing and ?q= keeps the URL shareable. The pre-LiveView
+    # POST endpoint and the stored-query URLs (/search/:id, where the id is the
+    # query value itself) bounce into it.
+    post("/search", LegacyRedirectController, :search_post)
+    get("/search/:id", LegacyRedirectController, :search_show)
 
     # Login/logout under the names humans type. The controller still speaks
     # "session": POST /login handles both PIN steps, DELETE /logout signs out.
@@ -203,6 +204,8 @@ defmodule VutuvWeb.Router do
       pipe_through(:browser)
 
       live("/notifications", NotificationLive.Index, :index)
+      # Search-as-you-type ("search" is a reserved slug; open to visitors).
+      live("/search", SearchLive, :index)
       live("/messages", MessageLive.Index, :index)
       # The profile "Message" button: open my conversation with that member
       # (find-or-create), then land in the thread.

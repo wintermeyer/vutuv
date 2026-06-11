@@ -75,13 +75,13 @@ defmodule VutuvWeb.UrlStructureTest do
   end
 
   describe "search" do
-    test "GET /search renders the search form", %{conn: conn} do
-      assert html_response(get(conn, "/search"), 200) =~ ~s(action="/search")
+    test "GET /search renders the live search form", %{conn: conn} do
+      assert html_response(get(conn, "/search"), 200) =~ ~s(id="search-form")
     end
 
     test "the legacy /search_queries URLs 301 to /search", %{conn: conn} do
       assert redirected_to(get(conn, "/search_queries/new"), 301) == "/search"
-      assert redirected_to(get(conn, "/search_queries/elixir"), 301) == "/search/elixir"
+      assert redirected_to(get(conn, "/search_queries/elixir"), 301) == "/search?q=elixir"
     end
   end
 

@@ -111,12 +111,12 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "a search term ending in a known extension is not mistaken for a format" do
-      # /search/:id carries the raw query as the last segment; "search" must be
-      # skipped so the plug does not strip a real ".json"/".md" off it. A fresh
-      # query 302s to its canonical URL — the term must survive intact, not be
-      # truncated to "package".
+      # /search/:id carried the raw query as the last segment; "search" must be
+      # skipped so the plug does not strip a real ".json"/".md" off it. The
+      # stored-query URL 301s into the live search; the term must survive
+      # intact, not be truncated to "package".
       conn = get(build_conn(), "/search/package.json")
-      assert redirected_to(conn) == "/search/package.json"
+      assert redirected_to(conn, 301) == "/search?q=package.json"
     end
 
     test "a trailing-slash profile advertises clean alternate URLs" do

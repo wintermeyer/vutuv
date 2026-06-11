@@ -34,6 +34,42 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Wraps every case-insensitive occurrence of `needles` (a string or a list of
+  strings) in `text` in a brand-tinted `<mark>` — the search result match
+  marker. Returns safe HTML built from escaped parts; `nil`/empty needles
+  return the text unchanged (HEEx escapes it as usual).
+  """
+  def highlight(text, needles) when is_binary(text) do
+    needles = needles |> List.wrap() |> Enum.filter(&(is_binary(&1) and &1 != ""))
+
+    if needles == [] do
+      text
+    else
+      downcased = Enum.map(needles, &String.downcase/1)
+      pattern = Regex.compile!(Enum.map_join(needles, "|", &Regex.escape/1), "iu")
+
+      marked =
+        text
+        |> String.split(pattern, include_captures: true)
+        |> Enum.map(fn part ->
+          escaped = part |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+          if String.downcase(part) in downcased do
+            [
+              ~s(<mark class="rounded-sm bg-brand-100 text-brand-900 dark:bg-brand-500/30 dark:text-brand-100">),
+              escaped,
+              "</mark>"
+            ]
+          else
+            escaped
+          end
+        end)
+
+      {:safe, marked}
+    end
+  end
+
+  @doc """
   Dev convenience flag: in dev the Swoosh local adapter drops login / sign-up
   PINs into the mailbox preview at `/sent_emails`. The logged-out auth and PIN
   templates link there when this is on (`config/dev.exs`); it stays off in

@@ -630,41 +630,6 @@ i.icon svg {
    redundant, and the white square peeked out behind the select's rounded
    corners in dark mode. Keep the wrapper unstyled. */
 
-/* Centered helper rows in the search results card. */
-.search-results__toggle,
-.search-results__empty {
-  text-align: center;
-}
-.search-results__empty {
-  color: #94a3b8;
-  font-weight: 600;
-}
-
-/* ---------- Search form (top bar on /search_queries/new) ---------- */
-/* Flex row: input grows, submit (a `.button`) keeps its size. */
-.search-form {
-  display: flex;
-  gap: 0.5rem;
-  box-sizing: border-box;
-  max-width: 48rem;
-  margin: 1rem auto;
-}
-.search-form input:not([type="submit"]) {
-  flex: 1;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  color: #0f172a;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-.search-form input:not([type="submit"]):focus {
-  outline: none;
-  border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
-}
-
 /* ---------- Tables ---------- */
 .pure-table {
   width: 100%;
@@ -934,7 +899,6 @@ ul.thumbs li .text .url a {
   .editform input:not([type]),
   .editform select,
   .editform textarea,
-  .search-form input:not([type="submit"]),
   select {
     background: #1e293b;
     border-color: #334155;

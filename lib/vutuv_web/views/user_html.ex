@@ -17,6 +17,9 @@ defmodule VutuvWeb.UserHTML do
   attr(:current_user_id, :any, required: true)
   attr(:work_info_by_id, :map, required: true)
   attr(:following_by_id, :map, required: true)
+  # Search match marker(s): substring(s) of the name to wrap in a brand <mark>
+  # (string or list, see `VutuvWeb.UI.highlight/2`). nil renders plainly.
+  attr(:highlight, :any, default: nil)
 
   def user_row(assigns) do
     ~H"""
@@ -25,7 +28,7 @@ defmodule VutuvWeb.UserHTML do
         <.avatar user={@user} size="sm" alt={"Avatar of #{full_name(@user)}"} />
       </.link>
       <div class="min-w-0 text-sm">
-        <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{full_name(@user)}</.link>
+        <.link href={~p"/#{@user}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">{highlight(full_name(@user), @highlight)}</.link>
         <%!-- Always render a line (non-breaking space when empty) so rows keep a
         uniform height and the side-by-side follower/following cards stay aligned.
         Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom
