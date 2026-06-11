@@ -76,6 +76,7 @@ defmodule VutuvWeb.SearchQueryController do
           query: query,
           user_results: query.user_results,
           tag_results: tags,
+          post_results: Vutuv.Posts.search_public(query.value),
           changeset: empty_changeset,
           value: query.value,
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(query.user_results, 45),

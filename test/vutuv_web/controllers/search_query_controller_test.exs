@@ -55,4 +55,35 @@ defmodule VutuvWeb.SearchQueryControllerTest do
       assert html_response(conn, 200) =~ "required"
     end
   end
+
+  describe "post results on the search page" do
+    import Vutuv.PostsHelpers
+
+    test "matching public posts show with author and permalink", %{conn: conn} do
+      author = insert(:activated_user)
+      post = create_post!(author, %{body: "Quantum gardening tips for beginners"})
+
+      conn = post(conn, ~p"/search", search_query: %{"value" => "quantum gardening"})
+      conn = get(conn, redirected_to(conn))
+
+      body = html_response(conn, 200)
+      assert body =~ "Quantum gardening tips"
+      assert body =~ ~p"/#{author}/posts/#{post.id}"
+      assert body =~ "@#{author.active_slug}"
+    end
+
+    test "a restricted post never surfaces", %{conn: conn} do
+      author = insert(:activated_user)
+
+      create_post!(author, %{
+        body: "Quantum gardening secrets",
+        denials: [%{"wildcard" => "non_followers"}]
+      })
+
+      conn = post(conn, ~p"/search", search_query: %{"value" => "quantum"})
+      conn = get(conn, redirected_to(conn))
+
+      refute html_response(conn, 200) =~ "Quantum gardening secrets"
+    end
+  end
 end

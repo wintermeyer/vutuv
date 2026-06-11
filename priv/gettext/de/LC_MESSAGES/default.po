@@ -1169,7 +1169,7 @@ msgstr "Die URL ist ungültig"
 msgid "Can't find URL"
 msgstr "Die URL kann nicht gefunden werden"
 
-#: lib/vutuv_web/templates/search_query/new.html.heex:43
+#: lib/vutuv_web/templates/search_query/new.html.heex:44
 #, elixir-autogen
 msgid "No results"
 msgstr "Zu dieser Suchanfrage gibt es keine Ergebnisse."
@@ -1677,11 +1677,6 @@ msgstr ""
 #: web/templates/admin/tag/show.html.eex:38
 msgid "View related tags"
 msgstr ""
-
-#: lib/vutuv_web/templates/search_query/new.html.heex:17
-#, elixir-autogen
-msgid "You can search for a name, email, or tag."
-msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen und Fähigkeiten suchen."
 
 #: web/templates/user_tag/index.html.eex:25
 msgid "tag name"
@@ -2359,6 +2354,7 @@ msgstr "Beitrag erfolgreich gelöscht."
 
 #: lib/vutuv_web/agent_docs/post_doc.ex:53
 #: lib/vutuv_web/controllers/post_controller.ex:54
+#: lib/vutuv_web/templates/search_query/new.html.heex:53
 #: lib/vutuv_web/templates/user/show.html.heex:194
 #, elixir-autogen, elixir-format
 msgid "Posts"
@@ -4722,3 +4718,8 @@ msgstr "E-Mails an diese Adresse kamen als unzustellbar zurück. Ein Login mit e
 #, elixir-autogen, elixir-format
 msgid "Undeliverable"
 msgstr "Unzustellbar"
+
+#: lib/vutuv_web/templates/search_query/new.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "You can search for a name, email, or tag, or for words in public posts."
+msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Fähigkeiten oder nach Wörtern in öffentlichen Beiträgen suchen."

@@ -777,6 +777,38 @@ defmodule Vutuv.Posts do
   ## Reading
 
   @doc """
+  Full-text search over post bodies, best match first (ties: newest first).
+
+  Search results are shown to logged-out visitors too, so only posts every
+  visitor may read can surface: any denial, a frozen post, an unactivated
+  or moderation-hidden author all exclude one. Matching uses the Postgres-
+  generated `search_tsv` column with `websearch_to_tsquery` ('simple'
+  config, no language stemming — bodies are mixed German/English), so plain
+  words, "quoted phrases" and `-exclusions` all work and garbage never
+  raises. Authors come preloaded.
+  """
+  def search_public(value, opts \\ []) when is_binary(value) do
+    limit = Keyword.get(opts, :limit, 25)
+
+    from(p in Post,
+      as: :post,
+      join: u in assoc(p, :user),
+      where: fragment("? @@ websearch_to_tsquery('simple', ?)", p.search_tsv, ^value),
+      where: is_nil(p.frozen_at),
+      where: u.activated? == true,
+      where: not account_hidden(u.id),
+      where: not exists(from(d in PostDenial, where: d.post_id == parent_as(:post).id)),
+      order_by: [
+        desc: fragment("ts_rank(?, websearch_to_tsquery('simple', ?))", p.search_tsv, ^value),
+        desc: p.id
+      ],
+      limit: ^limit,
+      preload: [user: u]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
   followed (activated) authors, visibility-filtered, newest first.
 

@@ -1169,7 +1169,7 @@ msgstr ""
 msgid "Can't find URL"
 msgstr ""
 
-#: lib/vutuv_web/templates/search_query/new.html.heex:43
+#: lib/vutuv_web/templates/search_query/new.html.heex:44
 #, elixir-autogen
 msgid "No results"
 msgstr ""
@@ -1676,11 +1676,6 @@ msgstr ""
 
 #: web/templates/admin/tag/show.html.eex:38
 msgid "View related tags"
-msgstr ""
-
-#: lib/vutuv_web/templates/search_query/new.html.heex:17
-#, elixir-autogen
-msgid "You can search for a name, email, or tag."
 msgstr ""
 
 #: web/templates/user_tag/index.html.eex:25
@@ -2359,6 +2354,7 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/post_doc.ex:53
 #: lib/vutuv_web/controllers/post_controller.ex:54
+#: lib/vutuv_web/templates/search_query/new.html.heex:53
 #: lib/vutuv_web/templates/user/show.html.heex:194
 #, elixir-autogen, elixir-format
 msgid "Posts"
@@ -4721,4 +4717,9 @@ msgstr ""
 #: lib/vutuv_web/templates/email/card_list.html.heex:21
 #, elixir-autogen, elixir-format
 msgid "Undeliverable"
+msgstr ""
+
+#: lib/vutuv_web/templates/search_query/new.html.heex:17
+#, elixir-autogen, elixir-format, fuzzy
+msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr ""

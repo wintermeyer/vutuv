@@ -14,7 +14,7 @@
     <section class="card">
       <h1><%= gettext "Search Tips" %></h1>
       <p>
-        <%= gettext "You can search for a name, email, or tag." %>
+        <%= gettext "You can search for a name, email, or tag, or for words in public posts." %>
       </p>
       <p>
         <%= gettext "Our search will try to match similar names to your search, so don't worry about spelling." %>
@@ -39,9 +39,43 @@
       <% else %>
         {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @user_results, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id})}
       <% end %>
-      <%= if Enum.count(@tag_results) == 0 and Enum.count(@user_results) == 0 do %>
+      <%= if Enum.count(@tag_results) == 0 and Enum.count(@user_results) == 0 and
+                Enum.empty?(assigns[:post_results] || []) do %>
         <p class="search-results__empty"><%= gettext "No results" %></p>
       <% end %>
+    </section>
+  <% end %>
+
+  <%!-- Full-text matches in public posts (Vutuv.Posts.search_public/2):
+        author + dated excerpt, both linking to the permalink. --%>
+  <%= if (assigns[:post_results] || []) != [] do %>
+    <section class="card">
+      <h1><%= gettext "Posts" %></h1>
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        <%= for post <- @post_results do %>
+          <li class="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
+            <.avatar user={post.user} size="sm" shape="circle" />
+            <div class="min-w-0">
+              <p class="text-sm">
+                <.link
+                  href={~p"/#{post.user}"}
+                  class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                >
+                  {VutuvWeb.UserHelpers.full_name(post.user)}
+                </.link>
+                <span class="text-slate-500 dark:text-slate-400">@{post.user.active_slug}</span>
+                <span class="text-slate-400 dark:text-slate-500">· {post.published_on}</span>
+              </p>
+              <.link
+                href={~p"/#{post.user}/posts/#{post.id}"}
+                class="mt-1 block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300"
+              >
+                {VutuvWeb.AgentDocs.excerpt(post.body)}
+              </.link>
+            </div>
+          </li>
+        <% end %>
+      </ul>
     </section>
   <% end %>
 </div>

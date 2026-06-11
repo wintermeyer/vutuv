@@ -14,6 +14,9 @@ defmodule Vutuv.Posts.Post do
     # Set while the post is in the moderation freezer: hidden from everyone
     # but the author and admins. Managed by Vutuv.Moderation, never cast.
     field(:frozen_at, :naive_datetime)
+    # Postgres-generated tsvector over body (see the migration); referenced
+    # only by search_public/2's fragments, never loaded or written by Ecto.
+    field(:search_tsv, :string, load_in_query: false)
 
     belongs_to(:user, Vutuv.Accounts.User)
 
