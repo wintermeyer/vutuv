@@ -58,7 +58,7 @@ defmodule Vutuv.Search do
   @doc """
   Parses a raw query into what to search where. Operators: `vorname:x` /
   `first:x` and `nachname:x` / `last:x` search a single name field, `@x` the
-  username, and the people filters `tag:x` / `skill:x` (has that skill) and
+  username, and the people filters `tag:x` / `skill:x` (has that tag) and
   `ort:x` / `stadt:x` / `city:x` (has an address in that city) - both
   combinable with a name ("müller tag:php"). A query wrapped in double quotes
   sets `exact?` (equality instead of substring + phonetics). Options: `:scope`
@@ -202,28 +202,28 @@ defmodule Vutuv.Search do
     end
   end
 
-  # The skill (tag:) and city (ort:) people filters, applied as EXISTS
+  # The tag (tag:) and city (ort:) people filters, applied as EXISTS
   # subqueries against whatever query carries a named :user binding - the
   # users table for field searches, the search_terms join for name searches.
   defp filtered_users(parsed) do
     visible_users()
-    |> filter_skill(parsed.tag, parsed.exact?)
+    |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
   end
 
-  defp filter_skill(query, nil, _exact?), do: query
+  defp filter_tag(query, nil, _exact?), do: query
 
-  defp filter_skill(query, skill, exact?) do
+  defp filter_tag(query, tag, exact?) do
     sub =
       if exact? do
         from(ut in Vutuv.Tags.UserTag,
           join: t in assoc(ut, :tag),
           where:
             ut.user_id == parent_as(:user).id and
-              (fragment("lower(?)", t.name) == ^skill or t.slug == ^skill)
+              (fragment("lower(?)", t.name) == ^tag or t.slug == ^tag)
         )
       else
-        infix = "%" <> escape_like(skill) <> "%"
+        infix = "%" <> escape_like(tag) <> "%"
 
         from(ut in Vutuv.Tags.UserTag,
           join: t in assoc(ut, :tag),
@@ -286,7 +286,7 @@ defmodule Vutuv.Search do
       preload: [user: u]
     )
     |> exclude_moderated()
-    |> filter_skill(parsed.tag, parsed.exact?)
+    |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
     |> Repo.all()
     |> Enum.map(& &1.user)
@@ -316,7 +316,7 @@ defmodule Vutuv.Search do
         preload: [user: u]
       )
       |> exclude_moderated()
-      |> filter_skill(parsed.tag, parsed.exact?)
+      |> filter_tag(parsed.tag, parsed.exact?)
       |> filter_city(parsed.city, parsed.exact?)
       |> Repo.all()
 

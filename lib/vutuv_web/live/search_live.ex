@@ -6,11 +6,11 @@ defmodule VutuvWeb.SearchLive do
   stays shareable and reloadable. Exact name matches and phonetically similar
   ones render as clearly separated groups.
 
-  Filters: scope chips (all / people / skills / posts) and an "exact matches
+  Filters: scope chips (all / people / tags / posts) and an "exact matches
   only" toggle. Power users get operators instead, parsed by
   `Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aliases `first:`/`last:`),
   `@handle`, double quotes for exact-only, and the combinable people filters
-  `tag:`/`skill:` (has the skill) and `ort:`/`stadt:`/`city:` (has an address
+  `tag:`/`skill:` (has the tag) and `ort:`/`stadt:`/`city:` (has an address
   in the city) - "müller tag:php", "müller ort:koblenz".
 
   A query is recorded for the search history only after it settles (no
@@ -143,7 +143,7 @@ defmodule VutuvWeb.SearchLive do
 
   defp scope_label(:all), do: gettext("All")
   defp scope_label(:people), do: gettext("People")
-  defp scope_label(:tags), do: gettext("Skills")
+  defp scope_label(:tags), do: gettext("Tags")
   defp scope_label(:posts), do: gettext("Posts")
 
   attr(:id, :string, required: true)
@@ -183,7 +183,7 @@ defmodule VutuvWeb.SearchLive do
           type="search"
           name="q"
           value={@q}
-          placeholder={gettext("Search for people, skills, or posts")}
+          placeholder={gettext("Search for people, tags, or posts")}
           autocomplete="off"
           autofocus
           phx-debounce="250"
@@ -232,7 +232,7 @@ defmodule VutuvWeb.SearchLive do
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("first:stefan")}</dt>
           <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("searches first names only (last: for last names)")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">tag:php</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("only people with this skill, combinable: miller tag:php")}</dd>
+          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("only people with this tag, combinable: miller tag:php")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("city:koblenz")}</dt>
           <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">@stefan</dt>
@@ -289,7 +289,7 @@ defmodule VutuvWeb.SearchLive do
 
         <.card :if={@results.tags != []} id="search-tags">
           <.section_title>
-            {gettext("Skills")} ({compact_count(length(@results.tags))})
+            {gettext("Tags")} ({compact_count(length(@results.tags))})
           </.section_title>
           <div class="mt-4 flex flex-wrap gap-2">
             <.chip :for={tag <- @results.tags} navigate={~p"/tags/#{tag}"}>

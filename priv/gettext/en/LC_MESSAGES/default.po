@@ -1460,6 +1460,8 @@ msgstr ""
 msgid "Tag urls"
 msgstr ""
 
+#: lib/vutuv_web/live/search_live.ex:146
+#: lib/vutuv_web/live/search_live.ex:292
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:5
@@ -1591,11 +1593,6 @@ msgstr ""
 #: lib/vutuv_web/templates/tag/single_card.html.heex:15
 #, elixir-autogen
 msgid "The most endorsed users with this tag"
-msgstr ""
-
-#: lib/vutuv_web/templates/tag/single_card.html.heex:8
-#, elixir-autogen
-msgid "This skill doesn't have a description yet."
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_tag_endorsement_controller.ex:50
@@ -1834,13 +1831,6 @@ msgstr ""
 #: lib/vutuv_web/live/message_live/index.ex:572
 #, elixir-autogen, elixir-format
 msgid "Send"
-msgstr ""
-
-#: lib/vutuv_web/agent_docs/markdown.ex:30
-#: lib/vutuv_web/agent_docs/text.ex:30
-#: lib/vutuv_web/templates/user/show.html.heex:259
-#, elixir-autogen, elixir-format
-msgid "Skills & endorsements"
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/slug/form_content.html.heex:4
@@ -2827,11 +2817,6 @@ msgstr ""
 #: lib/vutuv_web/templates/user/show.html.heex:230
 #, elixir-autogen, elixir-format
 msgid "Write a post"
-msgstr ""
-
-#: lib/vutuv_web/templates/user/show.html.heex:262
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Add a skill"
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_tag_controller.ex:79
@@ -4786,20 +4771,9 @@ msgstr ""
 msgid "Results appear once you have typed at least three letters."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:186
-#, elixir-autogen, elixir-format
-msgid "Search for people, skills, or posts"
-msgstr ""
-
 #: lib/vutuv_web/live/search_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Similar names"
-msgstr ""
-
-#: lib/vutuv_web/live/search_live.ex:146
-#: lib/vutuv_web/live/search_live.ex:292
-#, elixir-autogen, elixir-format
-msgid "Skills"
 msgstr ""
 
 #: lib/vutuv_web/live/search_live.ex:144
@@ -4842,12 +4816,39 @@ msgstr ""
 msgid "miller"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:235
-#, elixir-autogen, elixir-format, fuzzy
-msgid "only people with this skill, combinable: miller tag:php"
-msgstr ""
-
 #: lib/vutuv_web/live/search_live.ex:233
 #, elixir-autogen, elixir-format, fuzzy
 msgid "searches first names only (last: for last names)"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:262
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Add a tag"
+msgstr ""
+
+#: lib/vutuv_web/templates/tag/single_card.html.heex:20
+#, elixir-autogen, elixir-format
+msgid "Add this tag"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:186
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Search for people, tags, or posts"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:30
+#: lib/vutuv_web/agent_docs/text.ex:30
+#: lib/vutuv_web/templates/user/show.html.heex:259
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Tags & endorsements"
+msgstr ""
+
+#: lib/vutuv_web/templates/tag/single_card.html.heex:8
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This tag doesn't have a description yet."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:235
+#, elixir-autogen, elixir-format, fuzzy
+msgid "only people with this tag, combinable: miller tag:php"
 msgstr ""

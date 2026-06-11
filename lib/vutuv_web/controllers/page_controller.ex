@@ -175,7 +175,7 @@ defmodule VutuvWeb.PageController do
     `links`, `social_media_accounts`, `addresses`, `phone_numbers`, `emails`
     (public addresses only), `tags`; a single entry lives at
     `/<username>/<section>/<id-or-slug>`
-  - `/tags/<tag>` — a skill tag and its most endorsed members
+  - `/tags/<tag>` — a tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members
   - `/ads` — the daily text ad: price, conditions, next available day
     (booking happens online and requires a login)

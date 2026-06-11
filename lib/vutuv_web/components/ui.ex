@@ -315,7 +315,7 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  @doc "Skill/tag chip (brand tint). Pass `navigate`/`href` to render it as a link."
+  @doc "Tag chip (brand tint). Pass `navigate`/`href` to render it as a link."
   attr(:navigate, :string, default: nil)
   attr(:href, :string, default: nil)
   attr(:class, :string, default: nil)

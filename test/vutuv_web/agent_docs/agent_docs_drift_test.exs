@@ -69,7 +69,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # experience
       "Bridge Engineer",
       "Span AG",
-      # skills
+      # tags
       "Bridgebuilding",
       # links / contact / social / phone / address
       "bridges.example.org",
@@ -310,7 +310,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
              ["Current role", "Middle role", "Old role"]
   end
 
-  test "skills sort by endorsement count, ties alphabetically" do
+  test "tags sort by endorsement count, ties alphabetically" do
     user = insert_activated_user(active_slug: "sorted_skills")
     endorser = insert_activated_user()
 
@@ -331,7 +331,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   test "?lang=de translates the labels, English stays the default" do
     de_txt = get(build_conn(), "/drift_tester.txt?lang=de").resp_body
     assert de_txt =~ "Mitglied seit:"
-    assert de_txt =~ "FÄHIGKEITEN & EMPFEHLUNGEN"
+    assert de_txt =~ "TAGS & EMPFEHLUNGEN"
 
     de_md = get(build_conn(), "/drift_tester.md?lang=de").resp_body
     assert de_md =~ "## Lebenslauf"

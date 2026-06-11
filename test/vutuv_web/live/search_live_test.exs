@@ -291,20 +291,20 @@ defmodule VutuvWeb.SearchLiveTest do
       assert has_element?(view, "#search-tags", "1")
     end
 
-    test "tag: lists the people with that skill instead of the tag", %{conn: conn} do
+    test "tag: lists the people with that tag instead of the tag itself", %{conn: conn} do
       tag = insert(:tag, name: "PHP", slug: "php")
-      skilled = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
-      insert(:user_tag, tag: tag, user: skilled)
-      insert(:activated_user, first_name: "Norbert", last_name: "NoSkill")
+      tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
+      insert(:user_tag, tag: tag, user: tagged)
+      insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
 
       {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
 
       assert has_element?(view, "#search-people-exact", "Paula Programmer")
-      refute has_element?(view, "#search-people-exact", "Norbert NoSkill")
+      refute has_element?(view, "#search-people-exact", "Norbert NoTag")
       refute has_element?(view, "#search-tags")
     end
 
-    test "a name combines with skill and city filters", %{conn: conn} do
+    test "a name combines with tag and city filters", %{conn: conn} do
       tag = insert(:tag, name: "PHP", slug: "php")
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: tag, user: php_mueller)

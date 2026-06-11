@@ -194,22 +194,22 @@ defmodule Vutuv.SearchTest do
       assert Enum.map(results.exact_people, & &1.id) == [user.id]
     end
 
-    test "tag: lists people with that skill, not the tag itself" do
+    test "tag: lists people with that tag, not the tag itself" do
       tag = insert(:tag, name: "PHP", slug: "php")
-      with_skill = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
-      insert(:user_tag, tag: tag, user: with_skill)
-      insert(:activated_user, first_name: "Norbert", last_name: "NoSkill")
+      with_tag = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
+      insert(:user_tag, tag: tag, user: with_tag)
+      insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
       author = insert(:activated_user)
       Vutuv.PostsHelpers.create_post!(author, %{body: "All about php"})
 
       results = Search.instant("tag:php")
 
-      assert Enum.map(results.exact_people, & &1.id) == [with_skill.id]
+      assert Enum.map(results.exact_people, & &1.id) == [with_tag.id]
       assert results.tags == []
       assert results.posts == []
     end
 
-    test "a name combines with the skill filter" do
+    test "a name combines with the tag filter" do
       php_tag = insert(:tag, name: "PHP", slug: "php")
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: php_tag, user: php_mueller)

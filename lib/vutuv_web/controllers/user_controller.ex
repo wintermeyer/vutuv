@@ -105,7 +105,7 @@ defmodule VutuvWeb.UserController do
     user
     |> Repo.preload([
       :social_media_accounts,
-      # Most endorsed first, so the 10-tag cut keeps the strongest skills.
+      # Most endorsed first, so the 10-tag cut keeps the strongest tags.
       # The endorsement rows drive the template's "already endorsed?" check.
       user_tags: UserTag.ordered_by_endorsements() |> limit(10) |> preload(:endorsements),
       work_experiences:
@@ -149,7 +149,7 @@ defmodule VutuvWeb.UserController do
     end
     # Never suggest following the profile you are already looking at: both the
     # tag-endorsement and the most-followed queries can return the owner
-    # themselves (they are usually the top-endorsed person for their own skill).
+    # themselves (they are usually the top-endorsed person for their own tag).
     |> Enum.reject(&(&1.id == user.id))
   end
 

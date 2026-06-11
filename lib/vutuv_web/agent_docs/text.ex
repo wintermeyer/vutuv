@@ -27,7 +27,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       blank_to_nil(doc.work_info),
       profile_facts(doc),
       section(
-        gettext("Skills & endorsements"),
+        gettext("Tags & endorsements"),
         Enum.map(doc.tags, &entry_line("tags", &1))
       ),
       section(

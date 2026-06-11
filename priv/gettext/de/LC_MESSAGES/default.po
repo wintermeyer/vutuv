@@ -1460,6 +1460,8 @@ msgstr ""
 msgid "Tag urls"
 msgstr ""
 
+#: lib/vutuv_web/live/search_live.ex:146
+#: lib/vutuv_web/live/search_live.ex:292
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:5
@@ -1549,7 +1551,7 @@ msgstr ""
 #: lib/vutuv_web/templates/tag/single_card.html.heex:11
 #, elixir-autogen
 msgid "People you may know with this tag"
-msgstr "Personen mit dieser Fähigkeit"
+msgstr "Personen mit diesem Tag"
 
 #: lib/vutuv_web/templates/user/show.html.heex:218
 #, elixir-autogen
@@ -1567,7 +1569,7 @@ msgstr ""
 
 #: web/controllers/user_controller.ex:256
 msgid "Successfully added %{successes} tags with %{failures} failures."
-msgstr "%{successes} neue Fähigkeiten wurden hinzugefügt."
+msgstr "%{successes} neue Tags wurden hinzugefügt."
 
 #: web/controllers/admin/tag_closure_controller.ex:29
 msgid "Tag closure created successfully."
@@ -1591,12 +1593,7 @@ msgstr "Tag-Name"
 #: lib/vutuv_web/templates/tag/single_card.html.heex:15
 #, elixir-autogen
 msgid "The most endorsed users with this tag"
-msgstr "Die am häufigsten empfohlenen Mitglieder mit dieser Fähigkeit"
-
-#: lib/vutuv_web/templates/tag/single_card.html.heex:8
-#, elixir-autogen
-msgid "This skill doesn't have a description yet."
-msgstr "Für diese Fähigkeit gibt es noch keine Beschreibung."
+msgstr "Die am häufigsten empfohlenen Mitglieder mit diesem Tag"
 
 #: lib/vutuv_web/controllers/user_tag_endorsement_controller.ex:50
 #, elixir-autogen
@@ -1611,7 +1608,7 @@ msgstr "Tag erfolgreich hinzugefügt."
 #: lib/vutuv_web/controllers/user_tag_controller.ex:109
 #, elixir-autogen
 msgid "User tag deleted successfully."
-msgstr "Eine Fähigkeit wurde gelöscht."
+msgstr "Ein Tag wurde gelöscht."
 
 #: lib/vutuv_web/templates/user_tag/new.html.heex:6
 #, elixir-autogen
@@ -1835,13 +1832,6 @@ msgstr "Suchbegriffe von %{name}"
 #, elixir-autogen, elixir-format
 msgid "Send"
 msgstr "Senden"
-
-#: lib/vutuv_web/agent_docs/markdown.ex:30
-#: lib/vutuv_web/agent_docs/text.ex:30
-#: lib/vutuv_web/templates/user/show.html.heex:259
-#, elixir-autogen, elixir-format
-msgid "Skills & endorsements"
-msgstr "Fähigkeiten & Empfehlungen"
 
 #: lib/vutuv_web/templates/admin/slug/form_content.html.heex:4
 #, elixir-autogen, elixir-format
@@ -2828,11 +2818,6 @@ msgstr "Verwalten"
 #, elixir-autogen, elixir-format
 msgid "Write a post"
 msgstr "Beitrag schreiben"
-
-#: lib/vutuv_web/templates/user/show.html.heex:262
-#, elixir-autogen, elixir-format
-msgid "Add a skill"
-msgstr "Fähigkeit hinzufügen"
 
 #: lib/vutuv_web/controllers/user_tag_controller.ex:79
 #, elixir-autogen, elixir-format
@@ -4663,7 +4648,7 @@ msgstr "Unzustellbar"
 #: lib/vutuv_web/live/search_live.ex:222
 #, elixir-autogen, elixir-format
 msgid "You can search for a name, email, or tag, or for words in public posts."
-msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Fähigkeiten oder nach Wörtern in öffentlichen Beiträgen suchen."
+msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Tags oder nach Wörtern in öffentlichen Beiträgen suchen."
 
 #: lib/vutuv_web/templates/user/edit.html.heex:31
 #, elixir-autogen, elixir-format
@@ -4786,21 +4771,10 @@ msgstr "Personen"
 msgid "Results appear once you have typed at least three letters."
 msgstr "Ergebnisse erscheinen, sobald Sie mindestens drei Buchstaben eingegeben haben."
 
-#: lib/vutuv_web/live/search_live.ex:186
-#, elixir-autogen, elixir-format
-msgid "Search for people, skills, or posts"
-msgstr "Nach Personen, Fähigkeiten oder Beiträgen suchen"
-
 #: lib/vutuv_web/live/search_live.ex:272
 #, elixir-autogen, elixir-format
 msgid "Similar names"
 msgstr "Ähnliche Namen"
-
-#: lib/vutuv_web/live/search_live.ex:146
-#: lib/vutuv_web/live/search_live.ex:292
-#, elixir-autogen, elixir-format
-msgid "Skills"
-msgstr "Fähigkeiten"
 
 #: lib/vutuv_web/live/search_live.ex:144
 #, elixir-autogen, elixir-format
@@ -4842,12 +4816,39 @@ msgstr "vorname:stefan"
 msgid "miller"
 msgstr "müller"
 
-#: lib/vutuv_web/live/search_live.ex:235
-#, elixir-autogen, elixir-format
-msgid "only people with this skill, combinable: miller tag:php"
-msgstr "nur Personen mit dieser Fähigkeit, kombinierbar: müller tag:php"
-
 #: lib/vutuv_web/live/search_live.ex:233
 #, elixir-autogen, elixir-format
 msgid "searches first names only (last: for last names)"
 msgstr "sucht nur in Vornamen (nachname: für Nachnamen)"
+
+#: lib/vutuv_web/templates/user/show.html.heex:262
+#, elixir-autogen, elixir-format
+msgid "Add a tag"
+msgstr "Tag hinzufügen"
+
+#: lib/vutuv_web/templates/tag/single_card.html.heex:20
+#, elixir-autogen, elixir-format
+msgid "Add this tag"
+msgstr "Dieses Tag hinzufügen"
+
+#: lib/vutuv_web/live/search_live.ex:186
+#, elixir-autogen, elixir-format
+msgid "Search for people, tags, or posts"
+msgstr "Nach Personen, Tags oder Beiträgen suchen"
+
+#: lib/vutuv_web/agent_docs/markdown.ex:30
+#: lib/vutuv_web/agent_docs/text.ex:30
+#: lib/vutuv_web/templates/user/show.html.heex:259
+#, elixir-autogen, elixir-format
+msgid "Tags & endorsements"
+msgstr "Tags & Empfehlungen"
+
+#: lib/vutuv_web/templates/tag/single_card.html.heex:8
+#, elixir-autogen, elixir-format
+msgid "This tag doesn't have a description yet."
+msgstr "Für dieses Tag gibt es noch keine Beschreibung."
+
+#: lib/vutuv_web/live/search_live.ex:235
+#, elixir-autogen, elixir-format
+msgid "only people with this tag, combinable: miller tag:php"
+msgstr "nur Personen mit diesem Tag, kombinierbar: müller tag:php"

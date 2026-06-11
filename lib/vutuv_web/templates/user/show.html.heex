@@ -250,16 +250,16 @@ the resulting ~200px rail width. --%>
       </.card_footer_link>
     </.card>
 
-    <%!-- Skills & endorsements --%>
+    <%!-- Tags & endorsements --%>
     <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
       <%!-- The dashed add tile is onboarding scaffolding: it shows only while the
       card is empty. Once there are entries the card is a clean showcase and
       "Verwalten" (manage_footer) leads to the page where tags are added/removed
       (tags have no edit form). --%>
-      <.section_header title={gettext("Skills & endorsements")} />
+      <.section_header title={gettext("Tags & endorsements")} />
 
       <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@user_tags) == 0} href={~p"/#{@user}/tags/new"}>
-        {gettext("Add a skill")}
+        {gettext("Add a tag")}
       </.empty_add>
 
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">

@@ -5,7 +5,7 @@
 	<h1><%= gettext("Description") %></h1>
   <p><%= @tag.description %></p>
   <% else %>
-  <p><%= gettext("This skill doesn't have a description yet.") %></p>
+  <p><%= gettext("This tag doesn't have a description yet.") %></p>
 	<% end %>
 	<%= if Enum.count(@related_users) > 0 do %>
 		<h1><%= gettext("People you may know with this tag") %></h1>
@@ -17,7 +17,7 @@
 	<% end %>
   <%= if @conn.assigns[:current_user] && !(has_tag?(assigns[:current_user], assigns[:tag])) do %>
   <%= button to: ~p"/#{@current_user}/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "link_button" do %>
-  <i class="icon icon--plus"></i> Add This tag
+  <i class="icon icon--plus"></i> <%= gettext("Add this tag") %>
   <% end %>
   <% end %>
 </section>
