@@ -10,12 +10,13 @@ defmodule VutuvWeb.DevDocController do
 
   alias VutuvWeb.AgentDocs
 
-  @pages ~w(index authentication reference)
+  @pages ~w(index authentication reference webhooks)
 
   @titles %{
     "index" => "vutuv API",
     "authentication" => "Authentication & tokens",
-    "reference" => "API reference"
+    "reference" => "API reference",
+    "webhooks" => "Webhooks"
   }
 
   for page <- @pages do

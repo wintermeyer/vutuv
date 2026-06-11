@@ -159,6 +159,11 @@ defmodule VutuvWeb.Router do
     # ReservedSlugs). Each page also serves its raw Markdown under .md.
     # The app registry routes must precede the docs' :page catch.
     post("/developers/apps/:id/regenerate_secret", DevAppController, :regenerate_secret)
+    get("/developers/apps/:app_id/webhooks/new", DevWebhookController, :new)
+    post("/developers/apps/:app_id/webhooks", DevWebhookController, :create)
+    post("/developers/apps/:app_id/webhooks/:id/ping", DevWebhookController, :ping)
+    post("/developers/apps/:app_id/webhooks/:id/reactivate", DevWebhookController, :reactivate)
+    delete("/developers/apps/:app_id/webhooks/:id", DevWebhookController, :delete)
     resources("/developers/apps", DevAppController)
     get("/developers", DevDocController, :index)
     get("/developers/:page", DevDocController, :show)
@@ -332,6 +337,11 @@ defmodule VutuvWeb.Router do
 
     post("/me/tags", TagController, :create)
     delete("/me/tags/:id", TagController, :delete)
+
+    # Pending post images (multipart upload; attach via image_ids in
+    # POST /posts, swept after a day if left unattached).
+    post("/me/post_images", ImageController, :create)
+    delete("/me/post_images/:id", ImageController, :delete)
 
     # The social graph: people lists (same doc shape as the public .json
     # pages), the viewer's standing with a member, follow/unfollow and the

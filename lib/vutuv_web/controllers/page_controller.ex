@@ -185,9 +185,10 @@ defmodule VutuvWeb.PageController do
   ## API
 
   An authenticated REST/JSON API for third-party apps and scripts lives at
-  `/api/v1` (Bearer tokens, scoped permissions, 5,000 requests/hour).
-  Documentation: `/developers` — also as raw Markdown at `/developers.md`,
-  `/developers/authentication.md` and `/developers/reference.md`.
+  `/api/v1` (Bearer tokens or OAuth 2, scoped permissions, 5,000
+  requests/hour, signed webhooks). Documentation: `/developers` — also as
+  raw Markdown at `/developers.md`, `/developers/authentication.md`,
+  `/developers/reference.md` and `/developers/webhooks.md`.
   """
 
   @doc "Serves /llms.txt: the agent-format discovery file (llms.txt convention)."

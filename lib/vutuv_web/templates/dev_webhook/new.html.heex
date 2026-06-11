@@ -1,0 +1,54 @@
+<.page_header crumbs={[
+  {gettext("Developers"), ~p"/developers"},
+  {gettext("Applications"), ~p"/developers/apps"},
+  {@app.name, ~p"/developers/apps/#{@app.id}"},
+  gettext("New webhook")
+]} />
+
+<.card_section>
+  <.form
+    :let={f}
+    for={@changeset}
+    as={:subscription}
+    action={~p"/developers/apps/#{@app.id}/webhooks"}
+    class="editform"
+  >
+    <.form_error changeset={@changeset} />
+
+    <div class={"editform__field#{if error_tag(f, :url), do: " editform__field--error"}"}>
+      <%= label(f, :url, gettext("Endpoint URL")) %>
+      <%= text_input(f, :url, autofocus: true, placeholder: "https://…") %>
+      <p class="editform__hint">
+        {gettext(
+          "vutuv POSTs signed JSON envelopes here (see the webhooks documentation). https:// only; http://localhost is allowed for development."
+        )}
+      </p>
+      <%= error_tag(f, :url) %>
+    </div>
+
+    <div class={"editform__field#{if error_tag(f, :events), do: " editform__field--error"}"}>
+      <label>{gettext("Events")}</label>
+      <div class="mt-1 space-y-2">
+        <%= for event <- Vutuv.Webhooks.events() do %>
+          <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">
+            <input
+              type="checkbox"
+              name="subscription[events][]"
+              value={event}
+              checked={event in (Ecto.Changeset.get_field(@changeset, :events) || [])}
+            />
+            <code>{event}</code>
+          </label>
+        <% end %>
+      </div>
+      <p class="editform__hint">
+        {gettext(
+          "Deliveries only ever concern members who authorized your application with the matching permission."
+        )}
+      </p>
+      <%= error_tag(f, :events) %>
+    </div>
+
+    <.form_actions backlink={~p"/developers/apps/#{@app.id}"} />
+  </.form>
+</.card_section>

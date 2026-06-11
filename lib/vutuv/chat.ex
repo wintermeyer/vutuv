@@ -244,6 +244,14 @@ defmodule Vutuv.Chat do
       {:ok, message} ->
         message = %{message | sender: sender}
         broadcast_new_message(conversation, message)
+
+        # Webhooks hear about it on the recipient's side (their grant, their
+        # messages:read scope) — a thin envelope, never the message body.
+        Vutuv.Webhooks.emit(other_user_id(conversation, sender.id), "message.created", %{
+          "conversation_id" => conversation.id,
+          "from" => sender.active_slug
+        })
+
         {:ok, message}
 
       {:error, %Ecto.Changeset{} = changeset} ->

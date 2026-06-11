@@ -86,21 +86,21 @@ stable rate limits.
 
 Reading and writing across the whole product, as the authorizing member:
 profile and its sections, follows and connections, posts (composing,
-audiences, replies, likes/bookmarks/reposts, your feed), direct messages
-(the request model included) and the notification feed. See the
+audiences, images, replies, likes/bookmarks/reposts, your feed), direct
+messages (the request model included) and the notification feed. See the
 [reference](/developers/reference).
 
 For real third-party apps there is **OAuth 2** (authorization code +
 PKCE): register your app at [/developers/apps](/developers/apps), send
 members through a consent screen instead of pasting tokens — see
 [Authentication & tokens](/developers/authentication#oauth-2-for-third-party-apps).
+Registered apps can also receive **[webhooks](/developers/webhooks)** —
+signed event deliveries instead of polling.
 
 ## Roadmap
 
-The API grows in deliberate steps. Coming next, in order:
-
-1. Post image upload over the API.
-2. Webhooks: signed event deliveries (new follower, new message, ...).
+The core API is feature-complete. What comes next is driven by what
+developers build — tell us what you are missing.
 
 Questions or a use case the API does not cover yet? Write to
 [sw@wintermeyer-consulting.de](mailto:sw@wintermeyer-consulting.de).

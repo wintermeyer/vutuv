@@ -132,6 +132,7 @@ msgstr "Konnte nicht zu %{name} zurückfolgen."
 
 #: lib/vutuv_web/components/post_components.ex:335
 #: lib/vutuv_web/components/ui.ex:924
+#: lib/vutuv_web/templates/dev_app/show.html.heex:145
 #: lib/vutuv_web/templates/group/index.html.heex:31
 #: lib/vutuv_web/templates/moderation_case/show.html.heex:59
 #, elixir-autogen
@@ -4888,6 +4889,7 @@ msgstr "API-Token erstellen"
 #: lib/vutuv_web/templates/dev_app/new.html.heex:2
 #: lib/vutuv_web/templates/dev_app/show.html.heex:4
 #: lib/vutuv_web/templates/dev_doc/show.html.heex:1
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Developers"
 msgstr "Entwickler"
@@ -5039,12 +5041,12 @@ msgstr "läuft nie ab"
 msgid "never used"
 msgstr "noch nie benutzt"
 
-#: lib/vutuv_web/controllers/admin/api_app_controller.ex:41
+#: lib/vutuv_web/controllers/admin/api_app_controller.ex:44
 #, elixir-autogen, elixir-format
 msgid "\"%{name}\" is active again."
 msgstr "\"%{name}\" ist wieder aktiv."
 
-#: lib/vutuv_web/controllers/admin/api_app_controller.ex:27
+#: lib/vutuv_web/controllers/admin/api_app_controller.ex:29
 #, elixir-autogen, elixir-format
 msgid "\"%{name}\" is suspended; its tokens are refused."
 msgstr "\"%{name}\" ist gesperrt; seine Tokens werden abgewiesen."
@@ -5083,7 +5085,7 @@ msgstr "Aktiv"
 msgid "Allow access"
 msgstr "Zugriff erlauben"
 
-#: lib/vutuv_web/controllers/dev_app_controller.ex:56
+#: lib/vutuv_web/controllers/dev_app_controller.ex:59
 #, elixir-autogen, elixir-format
 msgid "Application updated."
 msgstr "Anwendung aktualisiert."
@@ -5092,6 +5094,7 @@ msgstr "Anwendung aktualisiert."
 #: lib/vutuv_web/templates/dev_app/index.html.heex:1
 #: lib/vutuv_web/templates/dev_app/new.html.heex:3
 #: lib/vutuv_web/templates/dev_app/show.html.heex:5
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "Applications"
 msgstr "Anwendungen"
@@ -5244,7 +5247,7 @@ msgstr "Gesperrt"
 msgid "Suspended by the operator"
 msgstr "Vom Betreiber gesperrt"
 
-#: lib/vutuv_web/controllers/dev_app_controller.ex:99
+#: lib/vutuv_web/controllers/dev_app_controller.ex:102
 #, elixir-autogen, elixir-format
 msgid "The application and all its access were deleted."
 msgstr "Die Anwendung und alle ihre Zugriffe wurden gelöscht."
@@ -5269,7 +5272,7 @@ msgstr "Der Anfrage der Anwendung fehlt die erforderliche PKCE-Challenge (S256).
 msgid "The authorization request is invalid."
 msgstr "Die Autorisierungsanfrage ist ungültig."
 
-#: lib/vutuv_web/controllers/dev_app_controller.ex:77
+#: lib/vutuv_web/controllers/dev_app_controller.ex:80
 #, elixir-autogen, elixir-format
 msgid "The old client secret stopped working."
 msgstr "Das alte Client-Secret funktioniert nicht mehr."
@@ -5328,3 +5331,83 @@ msgstr "Ihre Anwendungen"
 #, elixir-autogen, elixir-format
 msgid "Your client secret. Copy it now, it will not be shown again:"
 msgstr "Ihr Client-Secret. Kopieren Sie es jetzt, es wird nicht noch einmal angezeigt:"
+
+#: lib/vutuv_web/controllers/dev_webhook_controller.ex:52
+#, elixir-autogen, elixir-format
+msgid "A ping event is on its way to your endpoint."
+msgstr "Ein Ping-Event ist auf dem Weg zu Ihrem Endpunkt."
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:159
+#, elixir-autogen, elixir-format
+msgid "Add a webhook"
+msgstr ""
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:143
+#, elixir-autogen, elixir-format
+msgid "Delete this webhook?"
+msgstr "Diesen Webhook löschen?"
+
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:45
+#, elixir-autogen, elixir-format
+msgid "Deliveries only ever concern members who authorized your application with the matching permission."
+msgstr "Zustellungen betreffen nur Mitglieder, die Ihrer Anwendung die passende Berechtigung erteilt haben."
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Disabled: %{reason}"
+msgstr "Deaktiviert: %{reason}"
+
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:19
+#, elixir-autogen, elixir-format
+msgid "Endpoint URL"
+msgstr "Endpunkt-URL"
+
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Events"
+msgstr "Events"
+
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "New webhook"
+msgstr "Neuer Webhook"
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:105
+#, elixir-autogen, elixir-format
+msgid "No webhooks. vutuv can notify your server about events as they happen."
+msgstr "Keine Webhooks. vutuv kann Ihren Server benachrichtigen, sobald etwas passiert."
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:137
+#, elixir-autogen, elixir-format
+msgid "Re-enable"
+msgstr "Wieder aktivieren"
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:129
+#, elixir-autogen, elixir-format
+msgid "Send ping"
+msgstr "Ping senden"
+
+#: lib/vutuv_web/controllers/dev_webhook_controller.ex:62
+#, elixir-autogen, elixir-format
+msgid "The webhook is active again."
+msgstr "Der Webhook ist wieder aktiv."
+
+#: lib/vutuv_web/controllers/dev_webhook_controller.ex:42
+#, elixir-autogen, elixir-format
+msgid "The webhook was deleted."
+msgstr "Der Webhook wurde gelöscht."
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:89
+#, elixir-autogen, elixir-format
+msgid "Webhooks"
+msgstr "Webhooks"
+
+#: lib/vutuv_web/templates/dev_app/show.html.heex:97
+#, elixir-autogen, elixir-format
+msgid "Your webhook signing secret. Copy it now, it will not be shown again:"
+msgstr "Ihr Webhook-Signatur-Secret. Kopieren Sie es jetzt, es wird nicht noch einmal angezeigt:"
+
+#: lib/vutuv_web/templates/dev_webhook/new.html.heex:22
+#, elixir-autogen, elixir-format
+msgid "vutuv POSTs signed JSON envelopes here (see the webhooks documentation). https:// only; http://localhost is allowed for development."
+msgstr "vutuv schickt signierte JSON-Umschläge per POST an diese Adresse (siehe Webhook-Dokumentation). Nur https://; http://localhost ist für die Entwicklung erlaubt."

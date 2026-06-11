@@ -36,8 +36,11 @@ defmodule VutuvWeb.DevAppController do
 
   def show(conn, %{"id" => id}) do
     case ApiAuth.get_app(conn.assigns.current_user, id) do
-      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
-      app -> render(conn, "show.html", app: app)
+      nil ->
+        VutuvWeb.ControllerHelpers.render_error(conn, 404)
+
+      app ->
+        render(conn, "show.html", app: app, webhooks: Vutuv.Webhooks.list_subscriptions(app))
     end
   end
 

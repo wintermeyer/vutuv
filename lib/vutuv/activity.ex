@@ -150,6 +150,10 @@ defmodule Vutuv.Activity do
   to the follower's profile and show their picture.
   """
   def notify_new_follower(followee_id, follower) do
+    Vutuv.Webhooks.emit(followee_id, "follower.created", %{
+      "follower" => actor_param(follower)
+    })
+
     notify(
       followee_id,
       Map.merge(actor_fields(follower), %{
@@ -162,6 +166,11 @@ defmodule Vutuv.Activity do
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
   def notify_endorsement(owner_id, endorser, tag_name) do
+    Vutuv.Webhooks.emit(owner_id, "endorsement.created", %{
+      "endorser" => actor_param(endorser),
+      "tag" => tag_name
+    })
+
     notify(
       owner_id,
       Map.merge(actor_fields(endorser), %{
@@ -179,6 +188,11 @@ defmodule Vutuv.Activity do
   thread the reply landed in.
   """
   def notify_reply(parent_author_id, replier, post_id \\ nil) do
+    Vutuv.Webhooks.emit(parent_author_id, "post.replied", %{
+      "by" => actor_param(replier),
+      "post_id" => post_id
+    })
+
     notify(
       parent_author_id,
       Map.merge(actor_fields(replier), %{
@@ -192,6 +206,11 @@ defmodule Vutuv.Activity do
 
   @doc ~S(Convenience: a "liked your post" notification for the post's author.)
   def notify_like(author_id, liker, post_id) do
+    Vutuv.Webhooks.emit(author_id, "post.liked", %{
+      "by" => actor_param(liker),
+      "post_id" => post_id
+    })
+
     notify(
       author_id,
       Map.merge(actor_fields(liker), %{
@@ -222,6 +241,10 @@ defmodule Vutuv.Activity do
 
   @doc ~S(Convenience: a "wants to connect with you" notification for the request recipient.)
   def notify_connection_request(recipient_id, requester) do
+    Vutuv.Webhooks.emit(recipient_id, "connection.requested", %{
+      "from" => actor_param(requester)
+    })
+
     notify(
       recipient_id,
       Map.merge(actor_fields(requester), %{
@@ -234,6 +257,10 @@ defmodule Vutuv.Activity do
 
   @doc ~S(Convenience: an "accepted your connection request" notification for the requester.)
   def notify_connection_accepted(requester_id, accepter) do
+    Vutuv.Webhooks.emit(requester_id, "connection.accepted", %{
+      "by" => actor_param(accepter)
+    })
+
     notify(
       requester_id,
       Map.merge(actor_fields(accepter), %{

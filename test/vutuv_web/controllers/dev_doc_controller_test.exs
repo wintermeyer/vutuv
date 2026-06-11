@@ -13,15 +13,22 @@ defmodule VutuvWeb.DevDocControllerTest do
       response = conn |> get("/developers/#{page}") |> html_response(200)
       assert response =~ "curl"
     end
+
+    assert conn |> get("/developers/webhooks") |> html_response(200) =~ "X-Vutuv-Signature"
   end
 
   test "every page serves its raw Markdown under .md", %{conn: _conn} do
-    for path <- ["/developers.md", "/developers/authentication.md", "/developers/reference.md"] do
+    for path <- [
+          "/developers.md",
+          "/developers/authentication.md",
+          "/developers/reference.md",
+          "/developers/webhooks.md"
+        ] do
       conn = get(build_conn(), path)
       assert conn.status == 200
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "text/markdown"
-      assert conn.resp_body =~ "curl"
+      assert conn.resp_body =~ ~r/^# /
     end
   end
 

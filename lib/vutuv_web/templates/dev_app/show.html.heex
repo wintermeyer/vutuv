@@ -84,4 +84,80 @@
       </a>
     </p>
   </section>
+
+  <section class="card" id="dev-app-webhooks">
+    <.section_header title={gettext("Webhooks")} />
+
+    <%= if secret = Phoenix.Flash.get(@flash, :new_webhook_secret) do %>
+      <div
+        class="mb-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
+        data-new-webhook-secret
+      >
+        <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
+          {gettext("Your webhook signing secret. Copy it now, it will not be shown again:")}
+        </p>
+        <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{secret}</code>
+      </div>
+    <% end %>
+
+    <%= if @webhooks == [] do %>
+      <p class="card__empty">
+        {gettext("No webhooks. vutuv can notify your server about events as they happen.")}
+      </p>
+    <% else %>
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        <%= for webhook <- @webhooks do %>
+          <li class="flex flex-wrap items-start gap-3 py-4 first:pt-0 last:pb-0">
+            <div class="min-w-0 flex-1">
+              <p class="truncate font-medium text-slate-800 dark:text-slate-100">
+                <code>{webhook.url}</code>
+              </p>
+              <p class="text-sm text-slate-500 dark:text-slate-400">
+                {Enum.join(webhook.events, ", ")}
+              </p>
+              <p :if={not webhook.active} class="text-sm font-semibold text-red-600">
+                {gettext("Disabled: %{reason}", reason: webhook.disabled_reason)}
+              </p>
+            </div>
+            <div class="flex gap-2">
+              <.button
+                :if={webhook.active}
+                href={~p"/developers/apps/#{@app.id}/webhooks/#{webhook.id}/ping"}
+                method="post"
+                variant="secondary"
+              >
+                {gettext("Send ping")}
+              </.button>
+              <.button
+                :if={not webhook.active}
+                href={~p"/developers/apps/#{@app.id}/webhooks/#{webhook.id}/reactivate"}
+                method="post"
+                variant="secondary"
+              >
+                {gettext("Re-enable")}
+              </.button>
+              <.button
+                href={~p"/developers/apps/#{@app.id}/webhooks/#{webhook.id}"}
+                method="delete"
+                variant="danger"
+                data-confirm={gettext("Delete this webhook?")}
+              >
+                {gettext("Delete")}
+              </.button>
+            </div>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+
+    <div class="mt-4">
+      <a
+        href={~p"/developers/apps/#{@app.id}/webhooks/new"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="add-webhook-link"
+      >
+        {gettext("Add a webhook")} ›
+      </a>
+    </div>
+  </section>
 </div>

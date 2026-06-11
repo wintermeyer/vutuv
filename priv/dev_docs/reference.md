@@ -218,7 +218,7 @@ auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
 
 Scope: `posts:write`. Fields: `body` (Markdown, required unless images),
 `tags` (comma-separated string or list), `denials` (audience
-restrictions, see below). Image upload is not part of the API yet.
+restrictions, see below), `image_ids` (uploaded images, see below).
 
 ```bash
 auth -X POST $API/posts \
@@ -236,6 +236,26 @@ auth -X POST $API/posts \
   -H "Content-Type: application/json" \
   -d '{"body": "Connections only", "denials": [{"wildcard": "non_connections"}]}'
 ```
+
+### POST /me/post_images
+
+Scope: `posts:write`. Upload an image (multipart, the file in the
+`image` field, optional `alt`), then attach it via `image_ids`:
+
+```bash
+IMAGE_ID=$(auth -X POST $API/me/post_images \
+  -F "image=@photo.jpg" -F "alt=Sunrise over Koblenz" | jq -r .id)
+
+auth -X POST $API/posts \
+  -H "Content-Type: application/json" \
+  -d "{\"body\": \"What a morning!\", \"image_ids\": [\"$IMAGE_ID\"]}"
+```
+
+JPEG/PNG/WebP, at most 6 MB, up to 10 per post. An uploaded image that is
+not attached to a post within 24 hours is swept;
+`DELETE /me/post_images/:id` removes a pending upload immediately. Served
+image bytes always go through the audience-checking proxy, like on the
+website.
 
 ### PATCH /posts/:id · DELETE /posts/:id
 
@@ -364,8 +384,9 @@ belong server-side or in the user's own hands.
 * The deprecated read-only `/api/1.0` JSON-API endpoints predate this API;
   new integrations must not use them.
 
-## Coming next
+## See also
 
-OAuth 2 app registration (consent screen instead of pasted tokens),
-post image upload, and webhooks — see the [roadmap](/developers#roadmap).
-This reference only ever documents what is actually live.
+[Authentication & tokens](/developers/authentication) (PATs, OAuth 2,
+scopes, errors, rate limits) and [Webhooks](/developers/webhooks)
+(signed event deliveries instead of polling). This reference only ever
+documents what is actually live.
