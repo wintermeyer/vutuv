@@ -45,19 +45,30 @@ defmodule Vutuv.Chat do
   def find_or_create_conversation(%User{id: id}, %User{id: id}), do: {:error, :self}
 
   def find_or_create_conversation(%User{} = me, %User{} = other) do
-    if me.activated? && other.activated? do
-      {a_id, b_id} = pair(me.id, other.id)
+    cond do
+      not (me.activated? && other.activated?) ->
+        {:error, :not_activated}
 
-      case get_by_pair(a_id, b_id) do
-        # A report froze this pair (see Vutuv.Moderation): no new thread, no
-        # explanation - the caller shows its generic "cannot receive
-        # messages" notice.
-        %Conversation{frozen_at: %NaiveDateTime{}} -> {:error, :frozen}
-        %Conversation{} = conversation -> {:ok, conversation}
-        nil -> create_conversation(me, other, a_id, b_id)
-      end
-    else
-      {:error, :not_activated}
+      # A block stands between the pair: same opaque refusal as a report
+      # freeze, so blocking is not distinguishable from being frozen/ignored.
+      Vutuv.Social.blocked_between?(me.id, other.id) ->
+        {:error, :frozen}
+
+      true ->
+        find_or_create_unblocked(me, other)
+    end
+  end
+
+  defp find_or_create_unblocked(%User{} = me, %User{} = other) do
+    {a_id, b_id} = pair(me.id, other.id)
+
+    case get_by_pair(a_id, b_id) do
+      # A report froze this pair (see Vutuv.Moderation): no new thread, no
+      # explanation - the caller shows its generic "cannot receive
+      # messages" notice.
+      %Conversation{frozen_at: %NaiveDateTime{}} -> {:error, :frozen}
+      %Conversation{} = conversation -> {:ok, conversation}
+      nil -> create_conversation(me, other, a_id, b_id)
     end
   end
 

@@ -62,6 +62,9 @@ the resulting ~200px rail width. --%>
             <%= cond do %>
               <% same_user?(@user, @current_user) -> %>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
+              <% assigns[:viewer_block] -> %>
+                <%!-- I blocked this member: no Connect/Follow/Message (they
+                would all refuse anyway) - the footer offers Unblock. --%>
               <% visitor?(@conn, @current_user) -> %>
                 <.connect_control
                   :if={@connection_state}
@@ -154,6 +157,34 @@ the resulting ~200px rail width. --%>
           >
             <span aria-hidden="true">⚑</span>
             {gettext("Report")}
+          </.link>
+          <%!-- Block / Unblock: as quiet as Report. Blocking severs follows +
+          connection, freezes the conversation and stops all interaction both
+          ways (Vutuv.Social.block_user/2); unblocking restores nothing. --%>
+          <.link
+            :if={@current_user && not same_user?(@user, @current_user) && is_nil(@viewer_block)}
+            id="block-user"
+            href={~p"/blocks?#{[block: [user_id: @user.id]]}"}
+            method="post"
+            data-confirm={
+              gettext(
+                "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
+                slug: @user.active_slug
+              )
+            }
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+          >
+            {gettext("Block")}
+          </.link>
+          <.link
+            :if={@viewer_block}
+            id="unblock-user"
+            href={~p"/blocks/#{@viewer_block.id}"}
+            method="delete"
+            data-confirm={gettext("Unblock @%{slug}?", slug: @user.active_slug)}
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-400 hover:text-brand-700 dark:hover:text-brand-300"
+          >
+            {gettext("Unblock")}
           </.link>
           <%!-- A permitted viewer (the owner, or a member they follow back)
           gets the session-aware export with all their email addresses; an

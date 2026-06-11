@@ -147,6 +147,9 @@ defmodule Vutuv.Posts do
     cond do
       not visible_to?(parent, author) -> {:error, :not_visible}
       restricted?(parent) -> {:error, :restricted}
+      # A block between author and parent author refuses the reply with the
+      # same opaque :restricted the disabled reply button already explains.
+      blocked?(author, parent) -> {:error, :restricted}
       true -> :ok
     end
   end
@@ -551,8 +554,19 @@ defmodule Vutuv.Posts do
   # {:engagement_changed, …} on their activity topic (multi-tab sync for
   # the likes/bookmarks pages).
 
-  @doc "Likes `post` as `user` (idempotent). Only visible posts can be liked."
+  @doc """
+  Likes `post` as `user` (idempotent). Only visible posts can be liked, and
+  never across a block (a like notifies the author — a harassment vector).
+  """
   def like_post(%User{} = user, %Post{} = post) do
+    if blocked?(user, post) do
+      {:error, :blocked}
+    else
+      do_like_post(user, post)
+    end
+  end
+
+  defp do_like_post(%User{} = user, %Post{} = post) do
     case engage(PostLike, :like, user, post) do
       {:ok, %PostLike{}} ->
         # A fresh like is news for the author; the idempotent repeat is not,
@@ -592,14 +606,21 @@ defmodule Vutuv.Posts do
   (see `update_post/2`), only delete it.
   """
   def repost_post(%User{} = user, %Post{} = post) do
-    if restricted?(post) do
-      {:error, :restricted}
-    else
-      case engage(PostRepost, :repost, user, post) do
-        {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
-        {:ok, :noop} -> :ok
-        {:error, _} = error -> error
-      end
+    cond do
+      restricted?(post) ->
+        {:error, :restricted}
+
+      # No reposting across a block: it pins the author's audience open and
+      # redistributes their words - both unacceptable from/to a blocked party.
+      blocked?(user, post) ->
+        {:error, :blocked}
+
+      true ->
+        case engage(PostRepost, :repost, user, post) do
+          {:ok, %PostRepost{} = repost} -> broadcast_new_repost(repost)
+          {:ok, :noop} -> :ok
+          {:error, _} = error -> error
+        end
     end
   end
 
@@ -866,6 +887,10 @@ defmodule Vutuv.Posts do
       where:
         r.user_id == ^viewer_id or is_nil(reposter.activated?) or reposter.activated? == true,
       where: p.user_id == ^viewer_id or is_nil(u.activated?) or u.activated? == true,
+      # A third party's repost must not carry a blocked author's post into
+      # the viewer's feed (the direct path is already cut: blocking severed
+      # the follow).
+      where: p.user_id not in subquery(blocked_either_way(viewer_id)),
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^fetch_n,
       select: {r.id, r.inserted_at, p, reposter}
@@ -880,6 +905,27 @@ defmodule Vutuv.Posts do
 
   defp followees_of(viewer_id) do
     from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
+  end
+
+  # Everyone with a block either way relative to `user_id` (feed exclusion).
+  defp blocked_either_way(user_id) do
+    from(b in Vutuv.Social.Block,
+      where: b.blocker_id == ^user_id or b.blocked_id == ^user_id,
+      select:
+        fragment(
+          "CASE WHEN ? = ? THEN ? ELSE ? END",
+          b.blocker_id,
+          type(^user_id, Vutuv.UUIDv7),
+          b.blocked_id,
+          b.blocker_id
+        )
+    )
+  end
+
+  # Whether a block stands between `user` and the post's author (either
+  # direction). Own posts are never "blocked".
+  defp blocked?(%User{id: user_id}, %Post{user_id: author_id}) do
+    user_id != author_id and Vutuv.Social.blocked_between?(user_id, author_id)
   end
 
   defp posts_at_or_before(query, nil), do: query

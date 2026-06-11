@@ -61,7 +61,15 @@ defmodule VutuvWeb.UserController do
         Vutuv.Social.connection_state(conn.assigns[:current_user], user)
       end
 
+    # The footer Block/Unblock control: my own block row on this profile
+    # (nil = not blocking; logged out / own profile need no control at all).
+    viewer_block =
+      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
+        Vutuv.Social.get_block(conn.assigns[:current_user].id, user.id)
+      end
+
     conn
+    |> assign(:viewer_block, viewer_block)
     |> assign(:emails, emails)
     |> assign(:posts, Vutuv.Posts.profile_posts(user, conn.assigns[:current_user]))
     |> assign(:posts_total, Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user]))

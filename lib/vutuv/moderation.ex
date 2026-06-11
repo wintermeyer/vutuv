@@ -686,6 +686,23 @@ defmodule Vutuv.Moderation do
   end
 
   @doc """
+  Whether an unrestored severance stands between the two (either direction).
+  `Vutuv.Social.unblock_user/2` consults it: a conversation a report froze
+  must stay frozen when a block on the same pair is lifted - the report's
+  ruling owns that freeze.
+  """
+  def active_severance_between?(a_id, b_id) do
+    Repo.exists?(
+      from(s in Severance,
+        where: is_nil(s.restored_at),
+        where:
+          (s.reporter_id == ^a_id and s.owner_id == ^b_id) or
+            (s.reporter_id == ^b_id and s.owner_id == ^a_id)
+      )
+    )
+  end
+
+  @doc """
   Whether this member's report cut a standing relationship - drives the
   reporter-facing notice after filing the report.
   """

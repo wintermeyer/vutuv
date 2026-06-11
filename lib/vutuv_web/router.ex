@@ -149,6 +149,10 @@ defmodule VutuvWeb.Router do
     get("/ads/bookings", AdController, :bookings)
     post("/ads", AdController, :create)
 
+    # Blocking: the profile-footer Block control, the private blocked list,
+    # and unblocking. Logged-in only ("blocks" is in ReservedSlugs).
+    resources("/blocks", BlockController, only: [:index, :create, :delete])
+
     # Reporting content (family-friendliness / bullying / spam): the form and
     # its submission. Logged-in only; checked in the controller.
     get("/reports/new", ReportController, :new)

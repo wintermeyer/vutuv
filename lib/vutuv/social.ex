@@ -16,6 +16,7 @@ defmodule Vutuv.Social do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
+  alias Vutuv.Social.Block
   alias Vutuv.Social.Connection
   alias Vutuv.Social.Follow
   alias Vutuv.Social.Group
@@ -29,6 +30,14 @@ defmodule Vutuv.Social do
   `Repo.get` otherwise needed to build the live new-follower notification.
   """
   def follow(follower, followee_id) do
+    if blocked_between?(follower_id(follower), followee_id) do
+      {:error, :blocked}
+    else
+      do_follow(follower, followee_id)
+    end
+  end
+
+  defp do_follow(follower, followee_id) do
     result =
       %Follow{}
       |> Follow.changeset(%{follower_id: follower_id(follower), followee_id: followee_id})
@@ -170,6 +179,14 @@ defmodule Vutuv.Social do
   def request_connection(%User{id: id}, %User{id: id}), do: {:error, :self}
 
   def request_connection(%User{} = me, %User{} = other) do
+    if blocked_between?(me.id, other.id) do
+      {:error, :blocked}
+    else
+      do_request_connection(me, other)
+    end
+  end
+
+  defp do_request_connection(%User{} = me, %User{} = other) do
     {a_id, b_id} = connection_pair(me.id, other.id)
 
     case get_connection_by_pair(a_id, b_id) do
@@ -341,6 +358,109 @@ defmodule Vutuv.Social do
     if opts[:follow_a_to_b], do: quiet_follow(user_id, other_id)
     if opts[:follow_b_to_a], do: quiet_follow(other_id, user_id)
     :ok
+  end
+
+  # ── Blocks ──
+
+  @doc """
+  Blocks `blocked`: severs follows and connection both ways
+  (`sever_between/2`), freezes the 1:1 conversation, and from then on
+  `blocked_between?/2` makes every interaction chokepoint refuse in **both**
+  directions — follow, connect, open/continue a conversation, reply, like,
+  repost — while reading stays untouched (public content is public; the
+  profile and posts pages do not change).
+
+  Quiet by design: no notification fires and the blocked party only ever
+  sees the same generic refusals a decline or freeze produces. Idempotent.
+  Unblocking lifts the enforcement but restores nothing — deliberately
+  unlike a rejected moderation report, which puts severed ties back.
+  """
+  def block_user(%User{id: id}, %User{id: id}), do: {:error, :self}
+
+  def block_user(%User{} = blocker, %User{} = blocked) do
+    case get_block(blocker.id, blocked.id) do
+      %Block{} = block ->
+        {:ok, block}
+
+      nil ->
+        Repo.transaction(fn ->
+          sever_between(blocker.id, blocked.id)
+          # Remember the conversation THIS block froze (nil when none, or
+          # when a report already froze it) so unblock thaws only its own.
+          conversation = Vutuv.Chat.freeze_conversation_between(blocker.id, blocked.id)
+
+          Repo.insert!(%Block{
+            blocker_id: blocker.id,
+            blocked_id: blocked.id,
+            conversation_id: conversation && conversation.id
+          })
+        end)
+    end
+  end
+
+  @doc "Removes `blocker`'s block on `blocked` (no-op without one)."
+  def unblock_user(%User{} = blocker, %User{} = blocked) do
+    case get_block(blocker.id, blocked.id) do
+      nil ->
+        :ok
+
+      %Block{} = block ->
+        {:ok, _} =
+          Repo.transaction(fn ->
+            Repo.delete!(block)
+            maybe_unfreeze_conversation(block)
+          end)
+
+        :ok
+    end
+  end
+
+  # Thaw the conversation this block froze - but only when nothing else
+  # still separates the pair: the reverse block, or an active moderation
+  # severance from a report (whose rejected/upheld ruling owns that freeze).
+  defp maybe_unfreeze_conversation(%Block{conversation_id: nil}), do: :ok
+
+  defp maybe_unfreeze_conversation(%Block{} = block) do
+    unless blocked_between?(block.blocker_id, block.blocked_id) or
+             Vutuv.Moderation.active_severance_between?(block.blocker_id, block.blocked_id) do
+      conversation = Repo.get(Vutuv.Chat.Conversation, block.conversation_id)
+
+      if conversation && conversation.frozen_at,
+        do: Vutuv.Chat.unfreeze_conversation(conversation)
+    end
+
+    :ok
+  end
+
+  def get_block(blocker_id, blocked_id),
+    do: Repo.get_by(Block, blocker_id: blocker_id, blocked_id: blocked_id)
+
+  @doc "The current user's own block row by id - the only way to unblock by id."
+  def get_block!(%User{id: blocker_id}, block_id),
+    do: Repo.get_by!(Block, id: block_id, blocker_id: blocker_id)
+
+  @doc "Whether a block exists in either direction between the two."
+  def blocked_between?(a_id, b_id) when is_binary(a_id) and is_binary(b_id) do
+    Repo.exists?(
+      from(b in Block,
+        where:
+          (b.blocker_id == ^a_id and b.blocked_id == ^b_id) or
+            (b.blocker_id == ^b_id and b.blocked_id == ^a_id)
+      )
+    )
+  end
+
+  def blocked_between?(_a_id, _b_id), do: false
+
+  @doc "The members `user` blocked, newest first, `:blocked` preloaded."
+  def list_blocked(%User{} = user) do
+    from(b in Block,
+      where: b.blocker_id == ^user.id,
+      join: u in assoc(b, :blocked),
+      order_by: [desc: b.id],
+      preload: [blocked: u]
+    )
+    |> Repo.all()
   end
 
   defp quiet_follow(follower_id, followee_id) do
