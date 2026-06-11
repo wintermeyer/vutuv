@@ -13,6 +13,11 @@ defmodule VutuvWeb.Plug.AdBanner do
   works because callbacks run last-registered-first, so the timestamp lands
   before `Plug.Session` serializes the cookie.
 
+  The banner's ✕ control dismisses ads for the rest of the (Berlin) day:
+  app.js writes a plain client-side cookie naming that day, and any request
+  carrying today's value gets no banner at all. The cookie is unsigned on
+  purpose - forging it only keeps ads away from yourself.
+
   GET only, and not on `/ads` itself - a house ad above the page that sells
   ads would advertise advertising on the advertising page.
   """
@@ -22,11 +27,16 @@ defmodule VutuvWeb.Plug.AdBanner do
   @hour 3600
   # The banner's DOM id as rendered by the layout's ad_banner component.
   @marker ~s(id="vutuv-ad")
+  # The dismissed-for-today cookie written by the ✕ (see app.js).
+  @dismissed_cookie "vutuv_ad_dismissed"
 
   def init(opts), do: opts
 
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
-    if agent_format?(conn) or booking_pages?(conn) or recently_seen?(conn) do
+    conn = fetch_cookies(conn)
+
+    if agent_format?(conn) or booking_pages?(conn) or dismissed_today?(conn) or
+         recently_seen?(conn) do
       conn
     else
       conn
@@ -36,6 +46,10 @@ defmodule VutuvWeb.Plug.AdBanner do
   end
 
   def call(conn, _opts), do: conn
+
+  defp dismissed_today?(conn) do
+    conn.req_cookies[@dismissed_cookie] == Date.to_iso8601(Vutuv.Ads.today())
+  end
 
   defp agent_format?(conn) do
     conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil

@@ -57,7 +57,7 @@ defmodule VutuvWeb.LayoutHTML do
   def ad_banner(assigns) do
     ~H"""
     <div id="vutuv-ad" data-ad-banner class="mx-auto max-w-6xl px-4 pt-4">
-      <.ad_banner_box banner={@banner} />
+      <.ad_banner_box banner={@banner} dismissible />
     </div>
     """
   end
@@ -69,8 +69,13 @@ defmodule VutuvWeb.LayoutHTML do
   preview page renders this directly, so the buyer sees exactly the box that
   will run - without burning their hourly slot or having the preview fade
   away under them.
+
+  `dismissible` adds the ✕ that hides ads for the rest of the day (app.js
+  writes the day-stamped cookie `VutuvWeb.Plug.AdBanner` honors). Only the
+  live banner passes it - a ✕ on the preview page would set that cookie too.
   """
   attr(:banner, :any, required: true)
+  attr(:dismissible, :boolean, default: false)
 
   def ad_banner_box(assigns) do
     ~H"""
@@ -89,6 +94,17 @@ defmodule VutuvWeb.LayoutHTML do
             </.link>
           </p>
       <% end %>
+      <button
+        :if={@dismissible}
+        type="button"
+        data-ad-close
+        data-ad-day={Vutuv.Ads.today()}
+        aria-label={gettext("Hide ads for today")}
+        title={gettext("Hide ads for today")}
+        class="ml-auto shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+      >
+        ✕
+      </button>
     </div>
     """
   end

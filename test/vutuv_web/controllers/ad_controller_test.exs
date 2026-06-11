@@ -103,9 +103,11 @@ defmodule VutuvWeb.AdControllerTest do
       assert html =~ "<strong>Acme GmbH</strong>"
       assert html =~ ">Ad</span>"
       # ...but none of the live-banner hooks: no hourly-cap marker, no
-      # two-minute auto-hide (the preview must not vanish or burn the slot).
+      # two-minute auto-hide, no dismiss control (the preview must not
+      # vanish, burn the slot, or set the dismissed-for-today cookie).
       refute html =~ "vutuv-ad"
       refute html =~ "data-ad-banner"
+      refute html =~ "data-ad-close"
 
       # The order summary and both ways forward.
       assert html =~ @booking_params["day"]

@@ -93,4 +93,35 @@ defmodule VutuvWeb.AdBannerTest do
     {conn, _user} = create_and_login_user(conn)
     assert conn |> get(~p"/community") |> html_response(200) =~ "id=\"vutuv-ad\""
   end
+
+  describe "dismissing the banner for the day" do
+    test "the banner carries the close control naming today", %{conn: conn} do
+      html = conn |> get(~p"/community") |> html_response(200)
+
+      assert html =~ "data-ad-close"
+      assert html =~ ~s(data-ad-day="#{Ads.today()}")
+    end
+
+    test "a dismissed-today cookie keeps every ad away", %{conn: conn} do
+      insert(:ad, day: Ads.today(), content: "**Dismissed** ad")
+
+      conn =
+        conn
+        |> put_req_cookie("vutuv_ad_dismissed", Date.to_iso8601(Ads.today()))
+        |> get(~p"/community")
+
+      html = html_response(conn, 200)
+      refute html =~ "id=\"vutuv-ad\""
+      refute html =~ "<strong>Dismissed</strong>"
+    end
+
+    test "yesterday's dismissal no longer counts", %{conn: conn} do
+      conn =
+        conn
+        |> put_req_cookie("vutuv_ad_dismissed", Date.to_iso8601(Date.add(Ads.today(), -1)))
+        |> get(~p"/community")
+
+      assert html_response(conn, 200) =~ "id=\"vutuv-ad\""
+    end
+  end
 end

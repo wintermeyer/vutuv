@@ -4226,7 +4226,7 @@ msgstr "Lebenslauf von %{name}"
 msgid "%{amount} € per day (net)"
 msgstr "%{amount} € pro Tag (netto)"
 
-#: lib/vutuv_web/views/layout_html.ex:78
+#: lib/vutuv_web/views/layout_html.ex:83
 #, elixir-autogen, elixir-format
 msgid "Ad"
 msgstr "Werbung"
@@ -4270,7 +4270,7 @@ msgstr "Online buchen (Login erforderlich): %{url}"
 #: lib/vutuv_web/controllers/ad_controller.ex:86
 #: lib/vutuv_web/templates/ad/bookings.html.heex:14
 #: lib/vutuv_web/templates/ad/index.html.heex:59
-#: lib/vutuv_web/views/layout_html.ex:88
+#: lib/vutuv_web/views/layout_html.ex:93
 #, elixir-autogen, elixir-format
 msgid "Book your ad"
 msgstr "Anzeige buchen"
@@ -4348,7 +4348,7 @@ msgstr "Straße und Hausnummer"
 msgid "Text only: Markdown, up to %{max} characters, always clearly labeled as an ad."
 msgstr "Nur Text: Markdown, bis zu %{max} Zeichen, immer deutlich als Werbung gekennzeichnet."
 
-#: lib/vutuv_web/views/layout_html.ex:86
+#: lib/vutuv_web/views/layout_html.ex:91
 #, elixir-autogen, elixir-format
 msgid "This spot is free today. One day, one ad, every visitor."
 msgstr "Dieser Platz ist heute frei. Ein Tag, eine Anzeige, alle Besucher."
@@ -4668,3 +4668,9 @@ msgstr "Anzeigen-Vorschau"
 #, elixir-autogen, elixir-format
 msgid "This is exactly how your ad will appear between the navigation and the content on %{day}."
 msgstr "Genau so erscheint Ihre Anzeige am %{day} zwischen der Navigation und dem Seiteninhalt."
+
+#: lib/vutuv_web/views/layout_html.ex:102
+#: lib/vutuv_web/views/layout_html.ex:103
+#, elixir-autogen, elixir-format
+msgid "Hide ads for today"
+msgstr "Werbung für heute ausblenden"

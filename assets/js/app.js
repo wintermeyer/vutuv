@@ -156,10 +156,21 @@ window.addEventListener("DOMContentLoaded", setupSlugAvailability)
 
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
-// then drop the node. Classic controller pages only, so plain JS suffices.
+// then drop the node. Its ✕ removes it immediately AND keeps ads away for
+// the rest of the (Berlin) day: the cookie value is the day stamped onto the
+// button by the server, which the plug compares against its own "today".
+// Classic controller pages only, so plain JS suffices.
 window.addEventListener("DOMContentLoaded", () => {
   const ad = document.querySelector("[data-ad-banner]")
   if (!ad) return
+
+  const close = ad.querySelector("[data-ad-close]")
+  if (close) {
+    close.addEventListener("click", () => {
+      document.cookie = `vutuv_ad_dismissed=${close.dataset.adDay}; path=/; max-age=86400; samesite=lax`
+      ad.remove()
+    })
+  }
 
   setTimeout(() => {
     ad.style.transition = "opacity 0.5s ease"
