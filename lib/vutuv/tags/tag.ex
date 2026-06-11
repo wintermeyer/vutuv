@@ -4,6 +4,8 @@ defmodule Vutuv.Tags.Tag do
   use VutuvWeb, :model
   @derive {Phoenix.Param, key: :slug}
 
+  alias Vutuv.Accounts.User
+
   schema "tags" do
     field(:slug, :string)
     field(:name, :string)
@@ -126,7 +128,7 @@ defmodule Vutuv.Tags.Tag do
         order_by: fragment("count(?) DESC", e.id),
         group_by: u.id,
         limit: 10,
-        select: struct(u, ^Vutuv.Accounts.User.listing_fields())
+        select: struct(u, ^User.listing_fields())
       )
     )
   end

@@ -145,7 +145,7 @@ defmodule Vutuv.Social do
         group_by: u.id,
         order_by: [fragment("count(?) DESC", f.id), u.first_name, u.last_name],
         limit: ^limit,
-        select: struct(u, ^Vutuv.Accounts.User.listing_fields())
+        select: struct(u, ^User.listing_fields())
       )
     )
   end

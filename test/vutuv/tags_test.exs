@@ -51,7 +51,7 @@ defmodule Vutuv.TagsTest do
         insert(:user_tag, user: owner, tag: tag)
       end
 
-      ids = Vutuv.Tags.Tag.recommended_users(tag) |> Enum.map(& &1.id)
+      ids = Tag.recommended_users(tag) |> Enum.map(& &1.id)
 
       assert visible.id in ids
       refute unactivated.id in ids
