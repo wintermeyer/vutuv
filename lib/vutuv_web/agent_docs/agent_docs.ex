@@ -154,12 +154,28 @@ defmodule VutuvWeb.AgentDocs do
     |> put_resp_content_type(Map.fetch!(@content_types, format))
     |> put_resp_header("vary", vary_header(format))
     |> put_resp_header("content-signal", content_signal(doc))
+    # Docs render the anonymous public view only, so they are publicly
+    # cacheable (Plug's default would be private, must-revalidate).
+    |> put_resp_header("cache-control", "public, max-age=300")
+    |> maybe_put_content_location(format)
     |> maybe_put_noindex(doc)
     |> maybe_put_tokens(format, body)
     |> maybe_put_disposition(format, doc)
     |> put_private(:vutuv_agent_doc_sent, true)
     |> send_resp(200, body)
     |> halt()
+  end
+
+  # An Accept-negotiated response (extension-free URL) names its canonical
+  # extension sibling so caches and agents learn the format-specific URL;
+  # an extension URL already self-identifies.
+  defp maybe_put_content_location(conn, format) do
+    if conn.private[:vutuv_agent_accept] && !conn.private[:vutuv_agent_format] do
+      location = canonical_path(conn.request_path) <> extension(format) <> query_suffix(conn)
+      put_resp_header(conn, "content-location", location)
+    else
+      conn
+    end
   end
 
   @doc """
