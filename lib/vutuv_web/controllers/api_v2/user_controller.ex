@@ -6,14 +6,13 @@ defmodule VutuvWeb.ApiV2.UserController do
 
   use VutuvWeb, :controller
 
-  alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.ApiV2
 
   def show(conn, %{"slug" => slug}) do
     viewer = conn.assigns.current_user
 
     ApiV2.with_visible_user(conn, slug, fn user ->
-      ApiV2.send_json(conn, ProfileDoc.build(user, viewer: viewer))
+      ApiV2.send_json(conn, ApiV2.profile_doc(user, viewer))
     end)
   end
 end

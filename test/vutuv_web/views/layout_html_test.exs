@@ -18,6 +18,17 @@ defmodule VutuvWeb.LayoutHTMLTest do
     refute body =~ "github.com/vutuv/vutuv"
   end
 
+  # The developer documentation is only useful if people can find it: the
+  # shared footer must link it from every page, logged out and logged in.
+  test "the footer links the developer documentation everywhere", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+    assert footer_html(body) =~ ~s|href="/developers"|
+
+    {conn, _user} = create_and_login_user(conn)
+    body = conn |> get(~p"/access_tokens") |> html_response(200)
+    assert footer_html(body) =~ ~s|href="/developers"|
+  end
+
   test "the footer copyright spans from 2019 to the current year", %{conn: conn} do
     body = conn |> get(~p"/impressum") |> html_response(200)
 

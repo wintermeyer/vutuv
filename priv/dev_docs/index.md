@@ -6,6 +6,10 @@ authorized them.
 
 * [Authentication & tokens](/developers/authentication) — how to get and use
   an access token, scopes, rate limits, errors.
+* [Cookbook](/developers/cookbook) — copy-paste answers to "how do I post
+  something?", "how do I send or read a direct message?" and friends.
+* [The data model](/developers/data-model) — what members, posts, tags,
+  follows, connections and conversations are and how they relate.
 * [API reference](/developers/reference) — every endpoint, with examples.
 
 This documentation is also available as plain Markdown: append `.md` to any
@@ -96,6 +100,25 @@ members through a consent screen instead of pasting tokens — see
 [Authentication & tokens](/developers/authentication#oauth-2-for-third-party-apps).
 Registered apps can also receive **[webhooks](/developers/webhooks)** —
 signed event deliveries instead of polling.
+
+## Development, bugs and feature requests
+
+vutuv is **open source** (MIT), built with Elixir and the Phoenix
+Framework. Development happens in the open at
+[github.com/wintermeyer/vutuv](https://github.com/wintermeyer/vutuv):
+
+* **Found a bug?** Open an issue at
+  [github.com/wintermeyer/vutuv/issues](https://github.com/wintermeyer/vutuv/issues)
+  — what you did, what you expected, what happened instead. For API bugs,
+  include the request (with the token redacted!) and the response.
+* **Missing a feature?** Open an issue too, and describe the use case
+  rather than the solution — what are you trying to build?
+* **Security issues** go privately to
+  [sw@wintermeyer-consulting.de](mailto:sw@wintermeyer-consulting.de)
+  (see [/.well-known/security.txt](/.well-known/security.txt)), never into
+  a public issue.
+* **Pull requests are welcome.** The README in the repository explains how
+  to run vutuv locally; every change ships with tests.
 
 ## Roadmap
 

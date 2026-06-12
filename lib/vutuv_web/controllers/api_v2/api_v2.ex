@@ -20,6 +20,16 @@ defmodule VutuvWeb.ApiV2 do
     |> send_resp(status, JSON.render(doc))
   end
 
+  @doc """
+  The profile doc as the API serves it: the public doc plus the member's
+  consent flags in-band (see `VutuvWeb.AgentDocs.JSON.expose_consent/1`).
+  """
+  def profile_doc(user, viewer) do
+    user
+    |> VutuvWeb.AgentDocs.ProfileDoc.build(viewer: viewer)
+    |> JSON.expose_consent()
+  end
+
   @cursor_salt "api v1 cursor"
 
   @doc """

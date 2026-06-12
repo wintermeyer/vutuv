@@ -68,6 +68,8 @@ it on desktop where that bar is hidden. Links wrap into a centered row. --%>
           decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
           of each dot. --%>
     <nav class="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+      <.link href={~p"/developers"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("API documentation")}</.link>
+      <span aria-hidden="true">·</span>
       <a href="https://github.com/wintermeyer/vutuv" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Source")}</a>
       <span aria-hidden="true">·</span>
       <a href="https://github.com/wintermeyer/vutuv/issues/new" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Submit a bug report or feature request")}</a>

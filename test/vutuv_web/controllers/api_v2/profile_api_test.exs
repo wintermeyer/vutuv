@@ -54,6 +54,36 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
     end
   end
 
+  describe "consent flags" do
+    # The public extension URLs carry the member's noindex?/noai? choice as
+    # Content-Signal/X-Robots-Tag headers; API consumers read bodies, so
+    # profile responses must carry them in-band — a client feeding profiles
+    # into an LLM has to be able to honor "noai?": true. The keys match the
+    # PATCH /me param names.
+    test "profile reads carry noindex?/noai?, and PATCH round-trips them",
+         %{conn: conn, user: user, write_token: write_token, read_token: read_token} do
+      body = conn |> authed(read_token) |> get("/api/2.0/me") |> json_response(200)
+      assert body["noindex?"] == false
+      assert body["noai?"] == false
+
+      body =
+        build_conn()
+        |> json_patch(write_token, "/api/2.0/me", %{"noai?" => true})
+        |> json_response(200)
+
+      assert body["noai?"] == true
+
+      body =
+        build_conn()
+        |> authed(read_token)
+        |> get("/api/2.0/users/#{user.active_slug}")
+        |> json_response(200)
+
+      assert body["noai?"] == true
+      assert body["noindex?"] == false
+    end
+  end
+
   describe "GET /api/2.0/users/:slug/<section>" do
     test "lists section entries with ids", %{conn: conn, read_token: token} do
       other = insert_activated_user()

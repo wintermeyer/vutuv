@@ -10,14 +10,21 @@ defmodule VutuvWeb.DevDocController do
 
   alias VutuvWeb.AgentDocs
 
-  @titles %{
-    "index" => "vutuv API",
-    "authentication" => "Authentication & tokens",
-    "reference" => "API reference",
-    "webhooks" => "Webhooks"
-  }
+  # The one ordered page registry: {url slug, page title, nav label}.
+  # It drives the compiled docs, the 404 guard, the page titles and the
+  # nav links — adding a page means one entry here plus its Markdown file.
+  @registry [
+    {"index", "vutuv API", "Overview"},
+    {"authentication", "Authentication & tokens", "Authentication"},
+    {"cookbook", "Cookbook", "Cookbook"},
+    {"data-model", "The data model", "Data model"},
+    {"reference", "API reference", "Reference"},
+    {"webhooks", "Webhooks", "Webhooks"}
+  ]
 
-  @pages Map.keys(@titles)
+  @titles Map.new(@registry, fn {slug, title, _label} -> {slug, title} end)
+  @nav Enum.map(@registry, fn {slug, _title, label} -> {slug, label} end)
+  @pages Enum.map(@registry, fn {slug, _title, _label} -> slug end)
 
   for page <- @pages do
     @external_resource Path.join("priv/dev_docs", page <> ".md")
@@ -50,6 +57,7 @@ defmodule VutuvWeb.DevDocController do
         |> render("show.html",
           page: page,
           page_title: Map.fetch!(@titles, page),
+          nav: @nav,
           body: Map.fetch!(@docs_html, page)
         )
     end

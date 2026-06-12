@@ -82,13 +82,19 @@ defmodule VutuvWeb.RobotsTxt do
       "\n# Retrieval and AI search may read; model training may not.\n",
       group(nil, @retrieval_bots, @path_rules, allowed_signals(:block_training)),
       "\n# Training crawlers sit this one out.\n",
-      group(nil, @training_bots, "Disallow: /\n", ContentPolicy.render_signals(false, false, false)),
+      group(
+        nil,
+        @training_bots,
+        "Disallow: /\n",
+        ContentPolicy.render_signals(false, false, false)
+      ),
       sitemap_line()
     ]
     |> IO.iodata_to_binary()
   end
 
-  defp allowed_signals(policy), do: ContentPolicy.render_signals(policy == :permissive, true, true)
+  defp allowed_signals(policy),
+    do: ContentPolicy.render_signals(policy == :permissive, true, true)
 
   defp group(comment, agents, rules, signals) do
     [

@@ -31,14 +31,33 @@ defmodule Vutuv.ApiAuth.Token do
     timestamps()
   end
 
-  @doc "Changeset for a user-created personal access token."
+  @default_expiry_days 90
+
+  @doc """
+  Changeset for a user-created personal access token. Every token expires:
+  a missing `expires_at` gets the #{@default_expiry_days}-day default here
+  in the minting chokepoint, so no caller can create an eternal token by
+  omission.
+  """
   def pat_changeset(token, params \\ %{}) do
     token
     |> cast(params, [:name, :scopes, :expires_at])
     |> validate_required([:name])
     |> validate_length(:name, max: 80)
     |> validate_scopes()
+    |> put_default_expiry()
     |> unique_constraint(:token_hash)
+  end
+
+  defp put_default_expiry(changeset) do
+    case get_field(changeset, :expires_at) do
+      nil ->
+        expires = DateTime.add(DateTime.utc_now(:second), @default_expiry_days * 86_400)
+        put_change(changeset, :expires_at, expires)
+
+      _explicit ->
+        changeset
+    end
   end
 
   # An empty list equals the schema default, so Ecto records no change and

@@ -164,7 +164,8 @@ defmodule VutuvWeb.FeedControllerTest do
 
       html = build_conn() |> get("/feed_author") |> html_response(200)
 
-      assert html =~ ~s(rel="alternate" type="application/rss+xml" href="/feed_author/posts/feed.xml")
+      assert html =~
+               ~s(rel="alternate" type="application/rss+xml" href="/feed_author/posts/feed.xml")
     end
 
     test "the post archive advertises the member's feed" do

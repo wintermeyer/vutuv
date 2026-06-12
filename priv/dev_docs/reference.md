@@ -29,7 +29,7 @@ In the examples, `$VUTUV_TOKEN` holds your token and `$API` stands for
 ```bash
 export VUTUV_TOKEN="vutuv_pat_..."
 export API="https://vutuv.de/api/2.0"
-auth() { curl -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
+auth() { curl -sS -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
 ```
 
 ## Profile
@@ -38,7 +38,9 @@ auth() { curl -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
 
 Scope: `profile:read`. Your own profile (through your own eyes: private
 email addresses included) — or another member's, where you see exactly what
-their profile page would show you.
+their profile page would show you. `noindex?`/`noai?` are the member's
+consent flags — **skip members with `"noai?": true`** if you feed profiles
+into an LLM.
 
 ```bash
 auth $API/me
@@ -57,6 +59,8 @@ auth $API/users/stefan.wintermeyer
   "tags": [{"id": "0190…", "name": "Phoenix", "slug": "phoenix", "endorsements": 31}],
   "work_experiences": [{"id": "0190…", "title": "Consultant", "organization": "Wintermeyer Consulting", "start": "2010-01", "end": null}],
   "links": [{"id": "0190…", "url": "https://www.wintermeyer-consulting.de", "description": "Company"}],
+  "noindex?": false,
+  "noai?": false,
   "...": "..."
 }
 ```
@@ -96,8 +100,9 @@ auth $API/users/stefan.wintermeyer/work_experiences
 
 Scope: `profile:write`. Create, edit, delete your own entries (not for
 `emails` — an address is a PIN-verified identity and can only be managed
-on the website). Create and update answer with the entry; delete answers
-`204`.
+on the website). Create and update answer with the entry's document (the
+fields under `entry`, plus the canonical URL of its public page); delete
+answers `204`.
 
 ```bash
 auth -X POST $API/me/work_experiences \
@@ -209,7 +214,10 @@ auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
 ```json
 {
   "type": "feed",
-  "posts": [{"id": "0190…", "author": {"name": "…", "slug": "…"}, "body_markdown": "…", "tags": [], "reposted_by": null}],
+  "posts": [{"id": "0190…", "url": "…", "published_on": "2026-06-12",
+             "author": {"name": "…", "slug": "…", "url": "…"},
+             "body_markdown": "…", "tags": [],
+             "reposted_by": {"name": "…", "slug": "…", "url": "…"}}],
   "more": true,
   "next_cursor": "SFMyNTY…"
 }
@@ -230,7 +238,9 @@ auth -X POST $API/posts \
 Audiences are **deny-based**: no `denials` means public. Each denial is
 one of `{"wildcard": "non_connections" | "non_followers" | "non_followees"
 | "logged_out" | "everyone"}`, `{"denied_user_id": "<user id>"}` or
-`{"group_id": "<your group id>"}`. A connections-only post:
+`{"group_id": "<your group id>"}` — semantics in
+[the data model](/developers/data-model#audiences-the-denial-model).
+A connections-only post:
 
 ```bash
 auth -X POST $API/posts \
@@ -388,6 +398,8 @@ belong server-side or in the user's own hands.
 ## See also
 
 [Authentication & tokens](/developers/authentication) (PATs, OAuth 2,
-scopes, errors, rate limits) and [Webhooks](/developers/webhooks)
+scopes, errors, rate limits), the [cookbook](/developers/cookbook)
+(task-by-task recipes), [the data model](/developers/data-model) (what the
+entities mean and who sees what) and [Webhooks](/developers/webhooks)
 (signed event deliveries instead of polling). This reference only ever
 documents what is actually live.

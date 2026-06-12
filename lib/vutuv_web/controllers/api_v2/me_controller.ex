@@ -11,20 +11,19 @@ defmodule VutuvWeb.ApiV2.MeController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts
-  alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
   def show(conn, _params) do
     user = conn.assigns.current_user
-    ApiV2.send_json(conn, ProfileDoc.build(user, viewer: user))
+    ApiV2.send_json(conn, ApiV2.profile_doc(user, user))
   end
 
   def update(conn, params) do
     user = conn.assigns.current_user
 
     case Accounts.update_profile(user, params) do
-      {:ok, user} -> ApiV2.send_json(conn, ProfileDoc.build(user, viewer: user))
+      {:ok, user} -> ApiV2.send_json(conn, ApiV2.profile_doc(user, user))
       {:error, changeset} -> Problem.validation_failed(conn, changeset)
     end
   end

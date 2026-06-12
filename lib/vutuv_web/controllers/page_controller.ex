@@ -146,7 +146,12 @@ defmodule VutuvWeb.PageController do
   `/api/2.0` (Bearer tokens or OAuth 2, scoped permissions, 5,000
   requests/hour, signed webhooks). Documentation: `/developers` — also as
   raw Markdown at `/developers.md`, `/developers/authentication.md`,
+  `/developers/cookbook.md` (task recipes: posting, direct messages, ...),
+  `/developers/data-model.md` (entities and visibility rules),
   `/developers/reference.md` and `/developers/webhooks.md`.
+
+  vutuv is open source: https://github.com/wintermeyer/vutuv — bug reports
+  and feature requests via GitHub issues.
   """
 
   @doc "Serves /llms.txt: the agent-format discovery file (llms.txt convention)."

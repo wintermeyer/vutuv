@@ -79,7 +79,9 @@ defmodule Vutuv.Sitemap do
     |> window(chunk)
     |> select([t], {t.slug, t.updated_at})
     |> Repo.all()
-    |> Enum.map(fn {slug, updated_at} -> {"/tags/" <> slug, NaiveDateTime.to_date(updated_at)} end)
+    |> Enum.map(fn {slug, updated_at} ->
+      {"/tags/" <> slug, NaiveDateTime.to_date(updated_at)}
+    end)
   end
 
   defp window(query, chunk) when is_integer(chunk) and chunk >= 1 do

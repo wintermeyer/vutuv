@@ -20,8 +20,9 @@ the permissions ("scopes") they picked.
   account, logged in).
 * The token starts with `vutuv_pat_` and is shown **exactly once**. vutuv
   stores only a hash; a lost token cannot be recovered, only replaced.
-* Tokens optionally expire (30/90/365 days). Pick an expiry unless you have
-  a good reason not to.
+* Every token expires — after 30, 90 (default) or 365 days. The expiry
+  limits the damage if a token leaks; you can always revoke earlier and
+  mint a fresh one in seconds.
 * Revocation is one click on the same page — per token, or all at once. A
   revoked token fails on its very next request.
 

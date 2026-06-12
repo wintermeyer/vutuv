@@ -49,6 +49,55 @@ defmodule VutuvWeb.AccessTokenControllerTest do
       assert html_response(conn, 422) =~ "editform"
     end
 
+    test "the new form is pre-filled so submitting it untouched just works", %{conn: conn} do
+      doc =
+        conn
+        |> get(~p"/access_tokens/new")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      # The name carries a recognizable default (it embeds today's date so
+      # several click-through tokens stay distinguishable in the list) ...
+      assert [default_name] =
+               doc |> LazyHTML.query("input#token_name") |> LazyHTML.attribute("value")
+
+      assert default_name =~ Date.to_iso8601(Date.utc_today())
+
+      # ... exactly the quickstart scope is pre-checked ...
+      checked = LazyHTML.query(doc, "input[name='token[scopes][]'][checked]")
+      assert LazyHTML.attribute(checked, "value") == ["profile:read"]
+
+      # ... and submitting exactly those defaults mints a token.
+      conn =
+        post(conn, ~p"/access_tokens",
+          token: %{"name" => default_name, "scopes" => ["profile:read"], "expires_in" => "90"}
+        )
+
+      assert redirected_to(conn) == ~p"/access_tokens"
+    end
+
+    test "tokens always expire: no never option, missing choice falls back to 90 days",
+         %{conn: conn, user: user} do
+      doc =
+        conn
+        |> get(~p"/access_tokens/new")
+        |> html_response(200)
+        |> LazyHTML.from_document()
+
+      options = LazyHTML.query(doc, "select#token_expires_in option")
+      assert LazyHTML.attribute(options, "value") == ["30", "90", "365"]
+
+      selected = LazyHTML.query(doc, "select#token_expires_in option[selected]")
+      assert LazyHTML.attribute(selected, "value") == ["90"]
+
+      # A hand-crafted POST without an expiry choice must not mint an
+      # eternal token either.
+      post(conn, ~p"/access_tokens", token: %{"name" => "X", "scopes" => ["profile:read"]})
+      assert [token] = ApiAuth.list_pats(user)
+      assert %DateTime{} = token.expires_at
+      assert DateTime.diff(token.expires_at, DateTime.utc_now(), :day) in 89..90
+    end
+
     test "an expiry choice sets expires_at", %{conn: conn, user: user} do
       post(conn, ~p"/access_tokens",
         token: %{"name" => "Short", "scopes" => ["profile:read"], "expires_in" => "30"}

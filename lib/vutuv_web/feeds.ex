@@ -65,7 +65,9 @@ defmodule VutuvWeb.Feeds do
 
   # Deterministic (cache-friendly): the newest item's timestamp, not "now".
   defp last_build_date([]), do: ""
-  defp last_build_date([newest | _]), do: "  <lastBuildDate>#{rfc1123(newest.inserted_at)}</lastBuildDate>\n"
+
+  defp last_build_date([newest | _]),
+    do: "  <lastBuildDate>#{rfc1123(newest.inserted_at)}</lastBuildDate>\n"
 
   defp item(post) do
     permalink = AgentDocs.abs_url(Posts.path(post))
@@ -102,5 +104,6 @@ defmodule VutuvWeb.Feeds do
   # A literal "]]>" in the rendered body would close the CDATA section.
   defp cdata_safe(html), do: String.replace(html, "]]>", "]]]]><![CDATA[>")
 
-  defp rfc1123(%NaiveDateTime{} = naive), do: Calendar.strftime(naive, "%a, %d %b %Y %H:%M:%S GMT")
+  defp rfc1123(%NaiveDateTime{} = naive),
+    do: Calendar.strftime(naive, "%a, %d %b %Y %H:%M:%S GMT")
 end

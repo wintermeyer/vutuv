@@ -12,14 +12,21 @@ defmodule VutuvWeb.AccessTokenController do
 
   plug(VutuvWeb.Plug.RequireLoginOr404)
 
-  @expiry_days %{"30" => 30, "90" => 90, "365" => 365}
-
   def index(conn, _params) do
     render(conn, "index.html", tokens: ApiAuth.list_pats(conn.assigns.current_user))
   end
 
   def new(conn, _params) do
-    render(conn, "new.html", changeset: ApiAuth.change_pat())
+    # Pre-filled so that submitting the untouched form mints a working
+    # token: a dated name (several click-through tokens stay apart in the
+    # list) and the quickstart scope.
+    changeset =
+      ApiAuth.change_pat(%{
+        "name" => gettext("API token (%{date})", date: Date.to_iso8601(Date.utc_today())),
+        "scopes" => ["profile:read"]
+      })
+
+    render(conn, "new.html", changeset: changeset)
   end
 
   def create(conn, %{"token" => params}) do
@@ -65,9 +72,13 @@ defmodule VutuvWeb.AccessTokenController do
     |> redirect(to: ~p"/access_tokens")
   end
 
-  defp expires_at(choice) when is_map_key(@expiry_days, choice) do
-    DateTime.add(DateTime.utc_now(:second), @expiry_days[choice] * 86_400)
-  end
+  # Maps the form's expiry choice to a timestamp. Anything else falls
+  # through to the minting chokepoint's default — every token expires
+  # (see Vutuv.ApiAuth.Token.pat_changeset/2).
+  defp expires_at("30"), do: days_from_now(30)
+  defp expires_at("90"), do: days_from_now(90)
+  defp expires_at("365"), do: days_from_now(365)
+  defp expires_at(_unknown_or_missing), do: nil
 
-  defp expires_at(_never_or_missing), do: nil
+  defp days_from_now(days), do: DateTime.add(DateTime.utc_now(:second), days * 86_400)
 end

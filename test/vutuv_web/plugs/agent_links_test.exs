@@ -42,7 +42,8 @@ defmodule VutuvWeb.Plug.AgentLinksTest do
       assert html =~ ~s(href="/linked_member#{ext}")
     end
 
-    assert links =~ ~s(</linked_member/posts/feed.xml>; rel="alternate"; type="application/rss+xml")
+    assert links =~
+             ~s(</linked_member/posts/feed.xml>; rel="alternate"; type="application/rss+xml")
   end
 
   test "an agent document points back at its canonical HTML URL" do

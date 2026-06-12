@@ -39,6 +39,32 @@ defmodule Vutuv.ApiAuthTest do
 
       assert %{name: _} = errors_on(changeset)
     end
+
+    # The "every token expires" policy lives here in the minting chokepoint,
+    # not in the web form — no caller can mint an eternal token by omission.
+    test "defaults the expiry to 90 days when none is given" do
+      user = insert_activated_user()
+
+      assert {:ok, _plaintext, token} =
+               ApiAuth.create_pat(user, %{"name" => "CLI", "scopes" => ["profile:read"]})
+
+      assert %DateTime{} = token.expires_at
+      assert DateTime.diff(token.expires_at, DateTime.utc_now(), :day) in 89..90
+    end
+
+    test "an explicit expiry wins over the default" do
+      user = insert_activated_user()
+      next_week = DateTime.add(DateTime.utc_now(:second), 7 * 86_400)
+
+      assert {:ok, _plaintext, token} =
+               ApiAuth.create_pat(user, %{
+                 "name" => "CLI",
+                 "scopes" => ["profile:read"],
+                 "expires_at" => next_week
+               })
+
+      assert DateTime.compare(token.expires_at, next_week) == :eq
+    end
   end
 
   describe "verify_token/1" do
