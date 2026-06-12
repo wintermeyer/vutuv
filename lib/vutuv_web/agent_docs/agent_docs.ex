@@ -157,6 +157,9 @@ defmodule VutuvWeb.AgentDocs do
     # Docs render the anonymous public view only, so they are publicly
     # cacheable (Plug's default would be private, must-revalidate).
     |> put_resp_header("cache-control", "public, max-age=300")
+    # The HTML original, as a Link header (VutuvWeb.Plug.AgentLinks adds
+    # the global discovery links on these responses too).
+    |> prepend_resp_headers([{"link", ~s(<#{doc.url}>; rel="canonical"; type="text/html")}])
     |> maybe_put_content_location(format)
     |> maybe_put_noindex(doc)
     |> maybe_put_tokens(format, body)

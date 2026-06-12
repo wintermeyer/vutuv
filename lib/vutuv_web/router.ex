@@ -13,6 +13,9 @@ defmodule VutuvWeb.Router do
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
     plug(Plugs.ContentSecurityPolicy)
+    # Link headers advertising llms.txt/sitemap and the page's agent-format
+    # alternates (HTML-free discovery).
+    plug(Plugs.AgentLinks)
     plug(:put_root_layout, html: {VutuvWeb.LayoutHTML, :root})
     plug(Plugs.ConfigureSession, repo: Vutuv.Repo)
     plug(Plugs.Locale)
