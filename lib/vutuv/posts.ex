@@ -964,6 +964,36 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The newest anonymous-visible posts for the RSS feeds: `author`'s own
+  original posts (reposts are engagement rows, so they never appear), or
+  `:all` for the site-wide feed (activated, indexable authors only).
+  Preloaded like every rendered post; ordered by creation (the UUID v7 id).
+  """
+  def recent_public_posts(author_or_all, opts \\ [])
+
+  def recent_public_posts(%User{id: author_id}, opts) do
+    Post
+    |> where([p], p.user_id == ^author_id)
+    |> recent_public(opts)
+  end
+
+  def recent_public_posts(:all, opts) do
+    Post
+    |> join(:inner, [p], u in assoc(p, :user))
+    |> where([p, u], u.activated? and not u.noindex?)
+    |> recent_public(opts)
+  end
+
+  defp recent_public(query, opts) do
+    query
+    |> scope_visible(nil)
+    |> order_by([p], desc: p.id)
+    |> limit(^Keyword.get(opts, :limit, 20))
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+  end
+
+  @doc """
   One offset page of `author`'s timeline visible to `viewer` — the author
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).
   An optional `period` (`{from, to}` dates, inclusive) scopes it to the

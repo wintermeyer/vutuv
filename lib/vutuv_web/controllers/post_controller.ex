@@ -45,6 +45,10 @@ defmodule VutuvWeb.PostController do
 
         conn
         |> AgentDocs.put_html_alternates()
+        |> AgentDocs.put_feed_alternate(
+          VutuvWeb.Feeds.user_feed_path(author),
+          "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
+        )
         |> render("index.html",
           author: author,
           posts: posts,

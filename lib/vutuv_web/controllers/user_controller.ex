@@ -38,6 +38,15 @@ defmodule VutuvWeb.UserController do
   end
 
   defp show_html(conn, _params) do
+    # The profile also advertises the member's RSS feed next to the agent
+    # formats respond/2 already put there.
+    conn =
+      AgentDocs.put_feed_alternate(
+        conn,
+        VutuvWeb.Feeds.user_feed_path(conn.assigns[:user]),
+        "#{full_name(conn.assigns[:user])} · #{gettext("Posts")}"
+      )
+
     # The totals drive the "View all" links for the sections whose preloads
     # below are cut off after a few entries.
     totals = assoc_totals(conn.assigns[:user])

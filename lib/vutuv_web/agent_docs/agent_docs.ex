@@ -200,6 +200,18 @@ defmodule VutuvWeb.AgentDocs do
     |> assign(:agent_doc_alternates, alternates)
   end
 
+  @doc """
+  Adds an RSS feed to the page's advertised alternates (the same
+  `<link rel="alternate">` list the agent formats use). Call after
+  `put_html_alternates/2` — `respond/2` has already run it when the
+  `:html` fun gets the conn.
+  """
+  def put_feed_alternate(conn, href, title) do
+    alternates = conn.assigns[:agent_doc_alternates] || []
+    feed = %{type: "application/rss+xml", href: href, title: title}
+    assign(conn, :agent_doc_alternates, alternates ++ [feed])
+  end
+
   # "/stefan/" routes to the profile (Plug drops the empty segment) but
   # request_path keeps the slash; strip it so the alternate href is the
   # routable "/stefan.md", not the dead "/stefan/.md".

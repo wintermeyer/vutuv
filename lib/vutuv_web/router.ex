@@ -79,6 +79,11 @@ defmodule VutuvWeb.Router do
     # Sitemap index + chunked children (see Vutuv.Sitemap for the queries).
     get("/sitemap.xml", SitemapController, :index)
     get("/sitemaps/:name", SitemapController, :show)
+    # RSS 2.0 post feeds (VutuvWeb.Feeds): site-wide and per member. Both
+    # must beat the catch-all /:slug routes further down, and feed readers
+    # send Accept: application/rss+xml, which the browser pipeline rejects.
+    get("/posts/feed.xml", FeedController, :site)
+    get("/:slug/posts/feed.xml", FeedController, :user)
     # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
     # it is hit by curl on localhost and must not depend on sessions or
     # content negotiation.
