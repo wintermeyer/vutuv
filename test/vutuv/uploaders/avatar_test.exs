@@ -124,6 +124,58 @@ defmodule Vutuv.AvatarTest do
       assert "data:image/jpeg;base64," <> _ =
                Vutuv.Avatar.binary(%{@user | avatar: "orig.png"}, :thumb)
     end
+
+    test "the derived JPEG carries no EXIF from the original", %{tmp: tmp} do
+      dir = Path.join(tmp, "originals/avatars/7")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(300, 200, color: [1, 2, 3])
+
+      {:ok, tagged} =
+        Image.mutate(img, fn mut ->
+          :ok = MutableImage.set(mut, "exif-ifd0-Make", :gchararray, "TestCam")
+        end)
+
+      {:ok, _} = Image.write(tagged, Path.join(dir, "original.jpg"))
+
+      assert "data:image/jpeg;base64," <> data =
+               Vutuv.Avatar.binary(%{@user | avatar: "orig.jpg"}, :thumb)
+
+      {:ok, jpeg} = data |> Base.decode64!() |> Image.from_binary()
+      {:ok, fields} = VipsImage.header_field_names(jpeg)
+      assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
+    end
+  end
+
+  describe "og_jpeg/1 (the /:slug/avatar.jpg link-preview bytes)" do
+    test "derives a square JPEG at og_size from the original", %{tmp: tmp} do
+      dir = Path.join(tmp, "originals/avatars/7")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(600, 400, color: [10, 120, 200])
+      {:ok, _} = Image.write(img, Path.join(dir, "original.jpg"))
+
+      assert {:ok, data} = Vutuv.Avatar.og_jpeg(%{@user | avatar: "orig.jpg"})
+      {:ok, jpeg} = Image.from_binary(data)
+      size = Vutuv.Avatar.og_size()
+      assert {Image.width(jpeg), Image.height(jpeg)} == {size, size}
+    end
+
+    test "falls back to a served version when no original was kept (legacy uploads)", %{
+      tmp: tmp
+    } do
+      dir = Path.join(tmp, "avatars/7")
+      File.mkdir_p!(dir)
+      {:ok, img} = Image.new(192, 192, color: [10, 120, 200])
+      {:ok, _} = Image.write(img, Path.join(dir, "John Doe_medium.avif"))
+
+      assert {:ok, data} = Vutuv.Avatar.og_jpeg(%{@user | avatar: "selfie.jpg"})
+      {:ok, jpeg} = Image.from_binary(data)
+      assert Image.width(jpeg) == Vutuv.Avatar.og_size()
+    end
+
+    test ":error without an avatar or with nothing usable on disk" do
+      assert Vutuv.Avatar.og_jpeg(%{@user | avatar: nil}) == :error
+      assert Vutuv.Avatar.og_jpeg(%{@user | avatar: "missing.jpg"}) == :error
+    end
   end
 
   describe "display_url/2 (what templates put in <img src>)" do

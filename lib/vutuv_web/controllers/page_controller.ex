@@ -156,6 +156,26 @@ defmodule VutuvWeb.PageController do
     |> send_resp(200, @llms_txt)
   end
 
+  @doc """
+  Serves the default link-preview image (`VutuvWeb.OgCard`) — the
+  `og:image` of every page that has no better one. 404 on a host whose
+  libvips cannot generate it (the pages then simply omit the tag).
+  """
+  def og_card(conn, _params) do
+    case VutuvWeb.OgCard.png() do
+      {:ok, png} ->
+        conn
+        |> put_resp_content_type("image/png")
+        |> put_resp_header("cache-control", "public, max-age=86400")
+        |> send_resp(200, png)
+
+      :error ->
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(404, "Not Found")
+    end
+  end
+
   # If a login PIN is already in flight (the visitor entered their email, got a
   # PIN, then came back to "/"), show the PIN-entry form instead of the sign-up
   # page so they can finish logging in.

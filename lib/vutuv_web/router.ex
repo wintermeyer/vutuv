@@ -87,6 +87,11 @@ defmodule VutuvWeb.Router do
     # send Accept: application/rss+xml, which the browser pipeline rejects.
     get("/posts/feed.xml", FeedController, :site)
     get("/:slug/posts/feed.xml", FeedController, :user)
+    # Link-preview images (VutuvWeb.OpenGraph): the brand card and the
+    # member avatar as a scraper-friendly JPEG. The consumers are the
+    # WhatsApp/Facebook/... scrapers, not browsers.
+    get("/og-card.png", PageController, :og_card)
+    get("/:slug/avatar.jpg", AvatarController, :show)
     # Agent-skills discovery (Cloudflare draft) + security.txt (RFC 9116).
     get("/.well-known/agent-skills/index.json", WellKnownController, :agent_skills_index)
     get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)

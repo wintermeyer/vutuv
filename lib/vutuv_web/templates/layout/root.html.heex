@@ -11,11 +11,15 @@
     <%!-- live_title so client-side page_title updates (live navigation, tab
     patches) keep the suffix; no suffix on the bare site name. --%>
     <.live_title default="vutuv" suffix={page_title(assigns) && " - vutuv"}>{page_title(assigns)}</.live_title>
-    <%= if assigns[:conn] && @conn.assigns[:user] do %>
-      <meta name="description" content={meta_description(@conn.assigns[:user], @conn.assigns[:user_tags], @conn.assigns[:header_job])} />
-    <% else %>
-      <meta name="description" content={gettext("Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds.")} />
-    <% end %>
+    <meta name="description" content={OpenGraph.description(assigns)} />
+    <%!-- Link previews (WhatsApp, Facebook, LinkedIn, X, ...):
+    VutuvWeb.OpenGraph derives one set of tags per page from the assigns. --%>
+    <meta
+      :for={{property, content} <- OpenGraph.tags(assigns)}
+      property={property}
+      content={content}
+    />
+    <meta name="twitter:card" content={OpenGraph.twitter_card(assigns)} />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <link rel="shortcut icon" href="/favicon.ico" />

@@ -102,13 +102,45 @@ defmodule Vutuv.Avatar do
   def binary(user, version) do
     %{fit: {:crop, width, height, gravity}} = Spec.version(:avatar, version)
 
-    with path when not is_nil(path) <- Originals.path("#{@config.prefix}/#{user.id}"),
+    case derive_jpeg(user, width, height, gravity) do
+      {:ok, data} -> "data:image/jpeg;base64,#{Base.encode64(data)}"
+      :error -> @default_avatar
+    end
+  end
+
+  @og_size 512
+
+  @doc "The pixel size (square) of the link-preview JPEG from `og_jpeg/1`."
+  def og_size, do: @og_size
+
+  @doc """
+  The avatar as JPEG bytes for the link-preview endpoint
+  (`/:slug/avatar.jpg`, see `VutuvWeb.AvatarController`): Open Graph
+  scrapers don't decode the served AVIF versions. Derived on the fly from
+  the private original — or, for legacy uploads that predate the kept
+  originals, from the largest served version — at #{@og_size}px square.
+  `:error` when the user has no avatar or nothing usable is on disk.
+  """
+  def og_jpeg(%{avatar: nil}), do: :error
+  def og_jpeg(user), do: derive_jpeg(user, @og_size, @og_size, :center)
+
+  # JPEG from the best available source: decode + EXIF-autorotate,
+  # crop-resize, save **stripped** (`keep: []`). The original's metadata
+  # (camera, GPS) must never leak into a served or exported derivative —
+  # the same rule the AVIF pipeline enforces in Vutuv.Uploads.Spec.
+  defp derive_jpeg(user, width, height, gravity) do
+    with path when not is_nil(path) <- source_path(user),
          {:ok, rotated} <- Spec.open_rotated(path),
          {:ok, small} <- Image.thumbnail(rotated, "#{width}x#{height}", crop: gravity),
-         {:ok, data} <- Image.write(small, :memory, suffix: ".jpg") do
-      "data:image/jpeg;base64,#{Base.encode64(data)}"
+         {:ok, data} <- Vix.Vips.Operation.jpegsave_buffer(small, keep: [], Q: 80) do
+      {:ok, data}
     else
-      _ -> @default_avatar
+      _ -> :error
     end
+  end
+
+  defp source_path(user) do
+    Originals.path("#{@config.prefix}/#{user.id}") ||
+      Uploads.version_path({user.avatar, user}, :medium, @config)
   end
 end

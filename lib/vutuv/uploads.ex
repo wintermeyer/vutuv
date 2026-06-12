@@ -97,6 +97,21 @@ defmodule Vutuv.Uploads do
   end
 
   @doc """
+  The on-disk path of a served version (the `.avif`, or the transitional
+  pre-AVIF file), or `nil` when none exists. Lets the avatar link-preview
+  JPEG (`Vutuv.Avatar.og_jpeg/1`) derive from the best available image
+  when no private original was kept (legacy uploads predate the kept
+  originals).
+  """
+  def version_path({file, scope}, version, config) do
+    if file do
+      dir = disk_dir(storage_dir(scope, config))
+      path = Path.join(dir, served_filename(scope, version, file, config))
+      if File.exists?(path), do: path
+    end
+  end
+
+  @doc """
   Re-derives the served versions from the original per the current
   `Vutuv.Uploads.Spec` and `config`'s layout — see
   `regenerate_from_original/3`. Used by `Vutuv.Uploads.Regenerator`.
