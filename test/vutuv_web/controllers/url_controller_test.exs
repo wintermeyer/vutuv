@@ -17,15 +17,15 @@ defmodule VutuvWeb.UrlControllerTest do
     assert Repo.get_by(Url, value: "http://example.org", user_id: user.id)
   end
 
-  test "return 400 when creating invalid url", %{conn: conn} do
+  test "return 422 when creating invalid url", %{conn: conn} do
     {conn, user} = create_url(conn, "invalid_url")
-    assert html_response(conn, 400) =~ ~p"/#{user}/links"
+    assert html_response(conn, 422) =~ ~p"/#{user}/links"
     refute Repo.get_by(Url, value: "invalid_url", user_id: user.id)
   end
 
-  test "return 400 when creating empty url", %{conn: conn} do
+  test "return 422 when creating empty url", %{conn: conn} do
     {conn, user} = create_url(conn, "")
-    assert html_response(conn, 400) =~ ~p"/#{user}/links"
+    assert html_response(conn, 422) =~ ~p"/#{user}/links"
   end
 
   test "redirect when setting valid url", %{conn: conn} do
@@ -34,15 +34,15 @@ defmodule VutuvWeb.UrlControllerTest do
     assert Repo.get(Url, url.id).value == "http://example.org"
   end
 
-  test "return 400 when setting invalid url", %{conn: conn} do
+  test "return 422 when setting invalid url", %{conn: conn} do
     {conn, user, url} = set_url(conn, "invalid_url")
-    assert html_response(conn, 400) =~ ~p"/#{user}/links/#{url}"
+    assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
     refute Repo.get(Url, url.id).value == "invalid_url"
   end
 
-  test "return 400 when setting empty url", %{conn: conn} do
+  test "return 422 when setting empty url", %{conn: conn} do
     {conn, user, url} = set_url(conn, "")
-    assert html_response(conn, 400) =~ ~p"/#{user}/links/#{url}"
+    assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
   end
 
   test "redirect when deleting url", %{conn: conn} do

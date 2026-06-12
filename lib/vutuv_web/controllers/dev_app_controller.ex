@@ -30,7 +30,7 @@ defmodule VutuvWeb.DevAppController do
         |> redirect(to: ~p"/developers/apps/#{app.id}")
 
       {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
+        conn |> put_status(:unprocessable_entity) |> render("new.html", changeset: changeset)
     end
   end
 
@@ -55,7 +55,9 @@ defmodule VutuvWeb.DevAppController do
           |> redirect(to: ~p"/developers/apps/#{app.id}")
 
         {:error, changeset} ->
-          render(conn, "edit.html", app: app, changeset: changeset)
+          conn
+          |> put_status(:unprocessable_entity)
+          |> render("edit.html", app: app, changeset: changeset)
       end
     end)
   end

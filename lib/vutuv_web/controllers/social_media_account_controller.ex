@@ -62,7 +62,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
         |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts")
 
       {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
+        conn |> put_status(:unprocessable_entity) |> render("new.html", changeset: changeset)
     end
   end
 

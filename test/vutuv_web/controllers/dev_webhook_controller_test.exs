@@ -52,7 +52,7 @@ defmodule VutuvWeb.DevWebhookControllerTest do
         subscription: %{"url" => "ftp://nope", "events" => []}
       )
 
-    assert html_response(conn, 200) =~ "editform"
+    assert html_response(conn, 422) =~ "editform"
   end
 
   test "webhooks are owner-scoped", %{conn: conn, app: app} do

@@ -44,7 +44,7 @@ defmodule VutuvWeb.UrlController do
 
       {:error, changeset} ->
         conn
-        |> put_status(:bad_request)
+        |> put_status(:unprocessable_entity)
         |> render("new.html", changeset: changeset)
     end
   end
@@ -78,7 +78,7 @@ defmodule VutuvWeb.UrlController do
 
       {:error, changeset} ->
         conn
-        |> put_status(:bad_request)
+        |> put_status(:unprocessable_entity)
         |> render("edit.html", url: url, changeset: changeset)
     end
   end

@@ -36,7 +36,7 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "does not create resource and renders errors when data is invalid", %{conn: conn} do
     conn = post(conn, ~p"/new_registration", user: @invalid_attrs)
-    assert html_response(conn, 200) =~ "Sign up"
+    assert html_response(conn, 422) =~ "Sign up"
   end
 
   test "there is no public user directory (GET /users does not route)", %{conn: conn} do
@@ -345,7 +345,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = put(conn, ~p"/#{user}", user: @invalid_update_attrs)
-    assert html_response(conn, 200) =~ "Edit"
+    assert html_response(conn, 422) =~ "Edit"
   end
 
   test "deletes chosen resource after confirming the PIN", %{conn: conn} do

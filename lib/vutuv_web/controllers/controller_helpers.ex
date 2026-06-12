@@ -69,7 +69,12 @@ defmodule VutuvWeb.ControllerHelpers do
 
       {:error, %Ecto.Changeset{} = changeset} ->
         assigns = Keyword.put(opts[:assigns] || [], :changeset, changeset)
-        Phoenix.Controller.render(conn, Keyword.fetch!(opts, :render), assigns)
+
+        # A failed validation is not a 200: answer 422 (the browser renders
+        # the error form all the same, machines see the truth).
+        conn
+        |> Conn.put_status(:unprocessable_entity)
+        |> Phoenix.Controller.render(Keyword.fetch!(opts, :render), assigns)
     end
   end
 

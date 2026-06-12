@@ -105,7 +105,7 @@ defmodule VutuvWeb.PageController do
         handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
-        render(conn, "index.html", changeset: changeset)
+        conn |> put_status(:unprocessable_entity) |> render("index.html", changeset: changeset)
     end
   end
 

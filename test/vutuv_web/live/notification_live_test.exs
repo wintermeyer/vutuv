@@ -169,10 +169,8 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert Vutuv.Activity.unread_notification_count(user.id) == 0
     end
 
-    test "renders for a logged-out visitor too", %{conn: conn} do
-      {:ok, _live, html} = live(conn, ~p"/notifications")
-      assert html =~ "Notifications"
-      assert html =~ "Nothing new yet."
+    test "redirects a logged-out visitor to the login", %{conn: conn} do
+      assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/notifications")
     end
 
     test "a new follower appears live without a reload", %{conn: conn} do

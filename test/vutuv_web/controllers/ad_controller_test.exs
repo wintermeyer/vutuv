@@ -82,7 +82,7 @@ defmodule VutuvWeb.AdControllerTest do
       conn =
         post(conn, ~p"/ads", %{"ad" => Map.put(@booking_params, "day", Date.to_iso8601(beyond))})
 
-      assert html_response(conn, 200) =~ "is outside the booking window"
+      assert html_response(conn, 422) =~ "is outside the booking window"
     end
   end
 
@@ -128,7 +128,7 @@ defmodule VutuvWeb.AdControllerTest do
       conn =
         post(conn, ~p"/ads/preview", %{"ad" => Map.put(@booking_params, "billing_name", "")})
 
-      html = html_response(conn, 200)
+      html = html_response(conn, 422)
       assert html =~ "id=\"ad-form\""
       refute html =~ ~s(formaction="/ads/new")
     end
@@ -138,7 +138,7 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       conn = post(conn, ~p"/ads/preview", %{"ad" => @booking_params})
-      html = html_response(conn, 200)
+      html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""
       assert html =~ "has already been booked"
@@ -215,7 +215,7 @@ defmodule VutuvWeb.AdControllerTest do
       {conn, _user} = create_and_login_user(conn)
 
       conn = post(conn, ~p"/ads", %{"ad" => @booking_params})
-      html = html_response(conn, 200)
+      html = html_response(conn, 422)
 
       assert html =~ "id=\"ad-form\""
       assert html =~ "has already been booked"

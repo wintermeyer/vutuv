@@ -49,7 +49,7 @@ defmodule VutuvWeb.AdController do
         )
 
       {:error, changeset} ->
-        render_form(conn, changeset)
+        conn |> put_status(:unprocessable_entity) |> render_form(changeset)
     end
   end
 
@@ -67,7 +67,7 @@ defmodule VutuvWeb.AdController do
         |> redirect(to: ~p"/ads/bookings")
 
       {:error, changeset} ->
-        render_form(conn, changeset)
+        conn |> put_status(:unprocessable_entity) |> render_form(changeset)
     end
   end
 

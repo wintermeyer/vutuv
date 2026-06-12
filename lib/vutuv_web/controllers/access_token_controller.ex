@@ -36,7 +36,7 @@ defmodule VutuvWeb.AccessTokenController do
         |> redirect(to: ~p"/access_tokens")
 
       {:error, changeset} ->
-        render(conn, "new.html", changeset: changeset)
+        conn |> put_status(:unprocessable_entity) |> render("new.html", changeset: changeset)
     end
   end
 

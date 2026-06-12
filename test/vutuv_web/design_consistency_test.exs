@@ -204,7 +204,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
     test "a failed submit re-renders the form with the error banner", %{conn: conn, user: user} do
       conn = post(conn, ~p"/#{user}/phone_numbers", phone_number: %{"value" => ""})
-      html = html_response(conn, 200)
+      html = html_response(conn, 422)
 
       assert html =~ ~s(class="alert alert-danger")
       assert html =~ ~s(<p class="editform__error">)

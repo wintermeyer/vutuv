@@ -26,12 +26,14 @@ defmodule VutuvWeb.SessionController do
           {:error, _reason, conn} ->
             conn
             |> put_flash(:error, gettext("Invalid email"))
+            |> put_status(:unprocessable_entity)
             |> render("new.html")
         end
 
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
+        |> put_status(:too_many_requests)
         |> render("new.html")
     end
   end
@@ -69,6 +71,7 @@ defmodule VutuvWeb.SessionController do
           :rate_limited ->
             conn
             |> put_flash(:error, gettext("Too many PIN requests. Please try again later."))
+            |> put_status(:too_many_requests)
             |> render("pin_user_login.html")
         end
 

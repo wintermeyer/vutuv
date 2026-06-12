@@ -187,7 +187,9 @@ defmodule VutuvWeb.UserController do
         |> redirect(to: ~p"/#{user}")
 
       {:error, changeset} ->
-        render(conn, "edit.html", user: user, changeset: changeset)
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render("edit.html", user: user, changeset: changeset)
     end
   end
 

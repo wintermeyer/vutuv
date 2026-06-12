@@ -29,7 +29,9 @@ defmodule VutuvWeb.DevWebhookController do
           |> redirect(to: ~p"/developers/apps/#{app.id}")
 
         {:error, changeset} ->
-          render(conn, "new.html", app: app, changeset: changeset)
+          conn
+          |> put_status(:unprocessable_entity)
+          |> render("new.html", app: app, changeset: changeset)
       end
     end)
   end

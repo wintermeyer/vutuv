@@ -13,27 +13,28 @@ defmodule VutuvWeb.NotificationLive.Index do
   """
   use VutuvWeb, :live_view
 
+  # Like the feed and messages: not a page for anonymous visitors —
+  # redirect to /login instead of rendering an empty 200.
+  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
+
   alias Vutuv.Activity
 
   @page_size 50
 
   @impl true
   def mount(_params, _session, socket) do
-    user = socket.assigns[:current_user]
+    user = socket.assigns.current_user
 
-    if connected?(socket) && user do
+    if connected?(socket) do
       Activity.subscribe(user.id)
       Activity.mark_notifications_read(user.id)
     end
 
-    page =
-      if user,
-        do: Activity.notifications_page(user.id, limit: @page_size),
-        else: %{entries: [], more?: false, next_cursor: nil}
+    page = Activity.notifications_page(user.id, limit: @page_size)
 
     # What the "Load more" label counts down: feed events not on screen yet.
     # Live-pushed events show up immediately, so they never touch this number.
-    total = if user, do: Activity.notifications_count(user.id), else: 0
+    total = Activity.notifications_count(user.id)
 
     {:ok,
      socket
@@ -74,7 +75,7 @@ defmodule VutuvWeb.NotificationLive.Index do
     # The user is watching the event arrive, so it is already read: advance the
     # read marker, which broadcasts :notifications_read and keeps the shell's
     # bell badge at zero instead of bumping it for an event shown live here.
-    if user = socket.assigns[:current_user], do: Activity.mark_notifications_read(user.id)
+    Activity.mark_notifications_read(socket.assigns.current_user.id)
 
     {:noreply,
      socket

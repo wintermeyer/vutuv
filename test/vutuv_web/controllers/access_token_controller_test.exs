@@ -46,7 +46,7 @@ defmodule VutuvWeb.AccessTokenControllerTest do
 
     test "create without a name or scopes re-renders the form", %{conn: conn} do
       conn = post(conn, ~p"/access_tokens", token: %{"name" => "", "scopes" => []})
-      assert html_response(conn, 200) =~ "editform"
+      assert html_response(conn, 422) =~ "editform"
     end
 
     test "an expiry choice sets expires_at", %{conn: conn, user: user} do
