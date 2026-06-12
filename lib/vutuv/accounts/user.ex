@@ -27,12 +27,9 @@ defmodule Vutuv.Accounts.User do
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
     # The AI counterpart to noindex?: true = AI agents and LLMs may not use
-    # this member's content (training or live retrieval). Independent of
-    # noindex? — all four combinations are valid (VutuvWeb.ContentPolicy).
-    # The DB default is true (existing members were backfilled as opted
-    # out and were never asked); the struct default stays false because
-    # every asking path (registration, edit form) submits an explicit
-    # value and the pre-checked consent box reads from it.
+    # this member's content. Independent axes (VutuvWeb.ContentPolicy). The
+    # DB default is true while this struct default is false — deliberate,
+    # see the add_noai_to_users migration.
     field(:noai?, :boolean, default: false)
     # Non-essential notification mail (the unread-message nudge). Off via the
     # edit-profile form or the tokenized unsubscribe link in every such email

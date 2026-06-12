@@ -129,22 +129,17 @@ defmodule VutuvWeb.PageControllerTest do
     # works the same way on the inverted `noai?` field — new members answer
     # the question themselves (only the unasked legacy rows were defaulted
     # to "no AI" by the migration).
-    test "are positively framed; email private, indexing on by default", %{conn: conn} do
+    test "are positively framed; email private, indexing and AI on by default", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
       # Positive, parallel phrasing; the old negative "Prevent ..." copy is gone.
       assert body =~ "Allow others to view your email address"
       assert body =~ "Allow search engines to index your profile"
+      assert body =~ "Allow AI agents and LLMs to use your profile"
       refute body =~ "Prevent search engines from indexing your profile"
 
       refute checkbox_checked?(body, "user[emails][0][public?]")
       assert checkbox_checked?(body, "user[noindex?]")
-    end
-
-    test "asks the AI question as its own checked opt-in box", %{conn: conn} do
-      body = conn |> get(~p"/") |> html_response(200)
-
-      assert body =~ "Allow AI agents and LLMs to use your profile"
       assert checkbox_checked?(body, "user[noai?]")
     end
   end

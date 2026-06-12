@@ -19,6 +19,15 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias VutuvWeb.UserHelpers
 
   @doc """
+  The robots axes of a post page as `{noindex?, noai?}`: a restriction
+  noindexes the page and keeps it from AI page-level, and the author's
+  `noai?` extends their AI opt-out to all their posts. The one derivation
+  behind the HTML permalink's headers (`PostController`) and the doc's,
+  so the two cannot disagree.
+  """
+  def robots_axes(author, restricted?), do: {restricted?, restricted? or author.noai?}
+
+  @doc """
   The permalink page: the post itself plus its visible replies. Anonymous
   by default; `viewer:` switches the reply list (and its count) to what
   that user sees — the authenticated `/api/2.0` reads. Never pass a viewer
@@ -26,13 +35,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   """
   def build(author, %Post{} = post, opts \\ []) do
     replies = Posts.list_replies(post, Keyword.get(opts, :viewer))
+    {noindex?, noai?} = robots_axes(author, Posts.restricted?(post))
 
-    # A restricted post is noindexed (and kept from AI) page-level; the
-    # author's noai? extends their AI opt-out to all their posts.
-    AgentDocs.doc_meta("post", Posts.path(post),
-      noindex: Posts.restricted?(post),
-      noai: Posts.restricted?(post) or author.noai?
-    )
+    AgentDocs.doc_meta("post", Posts.path(post), noindex: noindex?, noai: noai?)
     |> Map.merge(%{
       id: post.id,
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",

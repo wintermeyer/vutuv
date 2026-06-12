@@ -64,7 +64,7 @@
       </div>
 
       <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-        <%= checkbox ef, :public?, class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+        <%= checkbox ef, :public?, class: checkbox_class() %>
         <span>{gettext("Allow others to view your email address")}</span>
         <%= error_tag ef, :public? %>
       </label>
@@ -74,7 +74,7 @@
           checked by default. The field is `noindex?`, so the box is inverted:
           checked submits "false" (allow indexing), unchecked submits "true". --%>
     <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-      <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+      <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
       <span>{gettext("Allow search engines to index your profile")}</span>
       <%= error_tag f, :noindex? %>
     </label>
@@ -83,7 +83,7 @@
           engines and no to AI, or the other way around). Same inverted
           mechanism on `noai?`: checked submits "false" (allow AI use). --%>
     <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-      <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+      <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
       <span>{gettext("Allow AI agents and LLMs to use your profile")}</span>
       <%= error_tag f, :noai? %>
     </label>

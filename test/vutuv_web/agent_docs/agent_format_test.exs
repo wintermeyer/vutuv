@@ -390,8 +390,9 @@ defmodule VutuvWeb.AgentFormatTest do
     end
   end
 
-  # noindex? and noai? are independent member choices; each of the four
-  # combinations must reach the Content-Signal and X-Robots-Tag headers.
+  # noindex? and noai? are independent member choices; one test per axis
+  # proves each flag reaches the Content-Signal and X-Robots-Tag headers
+  # (the full 2x2 table is unit-tested in robots_txt_test.exs).
   describe "Content-Signal" do
     test "a noindexed member signals search=no but keeps their AI choice" do
       insert_activated_user(active_slug: "private_person", noindex?: true, noai?: false)
@@ -411,16 +412,6 @@ defmodule VutuvWeb.AgentFormatTest do
       assert conn.status == 200
       assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=yes, ai-input=no"]
       assert get_resp_header(conn, "x-robots-tag") == ["noai, noimageai"]
-    end
-
-    test "a member opted out of both sends every signal as no" do
-      insert_activated_user(active_slug: "fully_private", noindex?: true, noai?: true)
-
-      conn = get(build_conn(), "/fully_private.md")
-
-      assert conn.status == 200
-      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
-      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
     end
 
     test "the noindexed follow lists send every signal as no", %{user: user} do

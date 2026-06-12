@@ -299,34 +299,24 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Would you like to allow AI agents and LLMs to use your profile?"
   end
 
-  # The two consents are independent booleans; either combination must stick.
+  # The two consents are independent booleans; a mixed combination must
+  # land exactly as submitted (the full 2x2 table is unit-tested in
+  # robots_txt_test.exs).
   test "updates the search-engine and AI consents independently", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
     conn = put(conn, ~p"/#{user}", user: %{"noindex?" => "true", "noai?" => "false"})
     assert redirected_to(conn) == ~p"/#{user}"
     assert %{noindex?: true, noai?: false} = Repo.get(User, user.id)
-
-    conn |> recycle() |> put(~p"/#{user}", user: %{"noindex?" => "false", "noai?" => "true"})
-    assert %{noindex?: false, noai?: true} = Repo.get(User, user.id)
   end
 
   # The profile page tells crawlers about the member's choices in a robots
-  # meta tag: noindex for the search opt-out, noai/noimageai for the AI
-  # opt-out, combined when both are set, absent when neither is.
+  # meta tag. Two cases prove the layout wiring (no tag without opt-outs;
+  # both flags reach ContentPolicy.robots_directives/2, whose full table
+  # is unit-tested in robots_txt_test.exs).
   test "the profile page renders the robots meta tag the member chose", %{conn: conn} do
     open = insert_activated_user(noindex?: false, noai?: false)
     refute conn |> get(~p"/#{open}") |> html_response(200) =~ ~s(<meta name="robots")
-
-    hidden = insert_activated_user(noindex?: true, noai?: false)
-
-    assert build_conn() |> get(~p"/#{hidden}") |> html_response(200) =~
-             ~s(<meta name="robots" content="noindex")
-
-    no_ai = insert_activated_user(noindex?: false, noai?: true)
-
-    assert build_conn() |> get(~p"/#{no_ai}") |> html_response(200) =~
-             ~s(<meta name="robots" content="noai, noimageai")
 
     private = insert_activated_user(noindex?: true, noai?: true)
 

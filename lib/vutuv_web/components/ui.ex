@@ -34,6 +34,16 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Shared checkbox class for hand-written (Track 2) consent/opt-in boxes —
+  the companion to `input_class/0` (brand check on a rounded slate box,
+  top-aligned beside its label text, dark-aware). The single source for
+  the sign-up form's consent checkboxes.
+  """
+  def checkbox_class do
+    "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800"
+  end
+
+  @doc """
   Wraps every case-insensitive occurrence of `needles` (a string or a list of
   strings) in `text` in a brand-tinted `<mark>` — the search result match
   marker. Returns safe HTML built from escaped parts; `nil`/empty needles

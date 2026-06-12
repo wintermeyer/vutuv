@@ -44,6 +44,19 @@ defmodule VutuvWeb.ContentPolicy do
   def robots_directives(false, true), do: "noai, noimageai"
   def robots_directives(true, true), do: "noindex, noai, noimageai"
 
+  @doc """
+  Stamps `robots_directives/2` as the response's `X-Robots-Tag` header (a
+  no-op when there is nothing to declare). The one conn-level application
+  of the directives, shared by the agent docs, the feeds, the post pages
+  and the `NoIndex` plug.
+  """
+  def put_robots_header(conn, noindex?, noai?) do
+    case robots_directives(noindex?, noai?) do
+      nil -> conn
+      directives -> Plug.Conn.put_resp_header(conn, "x-robots-tag", directives)
+    end
+  end
+
   @doc false
   def render_signals(train?, search?, input?) do
     "ai-train=#{yn(train?)}, search=#{yn(search?)}, ai-input=#{yn(input?)}"

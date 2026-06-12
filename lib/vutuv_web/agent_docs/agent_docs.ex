@@ -153,7 +153,7 @@ defmodule VutuvWeb.AgentDocs do
     conn
     |> put_resp_content_type(Map.fetch!(@content_types, format))
     |> put_resp_header("vary", vary_header(format))
-    |> put_resp_header("content-signal", content_signal(doc))
+    |> put_policy_headers(doc)
     # Docs render the anonymous public view only, so they are publicly
     # cacheable (Plug's default would be private, must-revalidate).
     |> put_resp_header("cache-control", "public, max-age=300")
@@ -161,7 +161,6 @@ defmodule VutuvWeb.AgentDocs do
     # the global discovery links on these responses too).
     |> prepend_resp_headers([{"link", ~s(<#{doc.url}>; rel="canonical"; type="text/html")}])
     |> maybe_put_content_location(format)
-    |> maybe_put_robots(doc)
     |> maybe_put_tokens(format, body)
     |> maybe_put_disposition(format, doc)
     |> put_private(:vutuv_agent_doc_sent, true)
@@ -374,24 +373,16 @@ defmodule VutuvWeb.AgentDocs do
       if query == "", do: "", else: "?" <> query
   end
 
-  # The site-wide stance and the per-member opt-outs both live in
-  # ContentPolicy, the same source robots.txt renders from — header and
-  # directives cannot disagree.
-  defp content_signal(doc) do
-    VutuvWeb.ContentPolicy.signal_header(
-      Map.get(doc, :noindex, false),
-      Map.get(doc, :noai, false)
-    )
-  end
+  # The doc's two opt-out axes as the Content-Signal and X-Robots-Tag
+  # headers — both rendered by ContentPolicy, the same source robots.txt
+  # renders from, so header and directives cannot disagree.
+  defp put_policy_headers(conn, doc) do
+    noindex? = Map.get(doc, :noindex, false)
+    noai? = Map.get(doc, :noai, false)
 
-  defp maybe_put_robots(conn, doc) do
-    case VutuvWeb.ContentPolicy.robots_directives(
-           Map.get(doc, :noindex, false),
-           Map.get(doc, :noai, false)
-         ) do
-      nil -> conn
-      directives -> put_resp_header(conn, "x-robots-tag", directives)
-    end
+    conn
+    |> put_resp_header("content-signal", VutuvWeb.ContentPolicy.signal_header(noindex?, noai?))
+    |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
   end
 
   defp maybe_put_tokens(conn, :md, body),

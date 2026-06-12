@@ -44,14 +44,7 @@ defmodule VutuvWeb.FeedController do
     |> put_resp_content_type("application/rss+xml")
     |> put_resp_header("cache-control", "public, max-age=300")
     |> put_resp_header("content-signal", ContentPolicy.signal_header(noindex?, noai?))
-    |> put_robots(noindex?, noai?)
+    |> ContentPolicy.put_robots_header(noindex?, noai?)
     |> send_resp(200, body)
-  end
-
-  defp put_robots(conn, noindex?, noai?) do
-    case ContentPolicy.robots_directives(noindex?, noai?) do
-      nil -> conn
-      directives -> put_resp_header(conn, "x-robots-tag", directives)
-    end
   end
 end

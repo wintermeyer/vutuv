@@ -166,8 +166,10 @@ defmodule VutuvWeb.PostController do
             |> render_post(post, author, viewer)
 
           kind = teaser_kind(post) ->
+            # The teaser only exists for restricted posts — a page-level
+            # restriction, so both axes are declared (like the doc side).
             conn
-            |> put_resp_header("x-robots-tag", "noindex")
+            |> VutuvWeb.ContentPolicy.put_robots_header(true, true)
             |> render("teaser.html",
               author: author,
               teaser_kind: kind,
@@ -200,9 +202,10 @@ defmodule VutuvWeb.PostController do
 
   defp render_post(conn, post, author, viewer) do
     restricted? = Posts.restricted?(post)
+    {noindex?, noai?} = PostDoc.robots_axes(author, restricted?)
 
     conn
-    |> put_robots(restricted?, restricted? or author.noai?)
+    |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
     |> render("show.html",
       post: post,
       author: author,
@@ -212,17 +215,6 @@ defmodule VutuvWeb.PostController do
       page_title:
         "#{VutuvWeb.UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}"
     )
-  end
-
-  # Restricted posts must never surface in search results or AI corpora,
-  # even when the crawler somehow holds a permitted session; the author's
-  # noai? extends their AI opt-out to every post of theirs (mirrors
-  # PostDoc.build/3, so the HTML page and its agent documents agree).
-  defp put_robots(conn, noindex?, noai?) do
-    case VutuvWeb.ContentPolicy.robots_directives(noindex?, noai?) do
-      nil -> conn
-      directives -> put_resp_header(conn, "x-robots-tag", directives)
-    end
   end
 
   defp redirect_query(conn) do
