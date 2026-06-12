@@ -110,23 +110,10 @@ defmodule VutuvWeb.PageController do
   end
 
   defp handle_post_registration_login(conn, email) do
-    case Vutuv.Accounts.login_by_email(conn, email) do
-      {:ok, conn} ->
-        render(conn, "pin_new_registration.html")
-
-      # The account exists but the PIN mail could not be started (e.g. rate
-      # limited). Never bounce them to "/" without a word — say what happened
-      # and where to continue.
-      {:error, _reason, conn} ->
-        conn
-        |> put_flash(
-          :error,
-          gettext(
-            "Your account was created, but we could not send the sign-in PIN right now. Please sign in with your email address to try again."
-          )
-        )
-        |> redirect(to: ~p"/login")
-    end
+    # The account was just created, so login_by_email/2 always mails the PIN
+    # and advances to the confirmation screen.
+    {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+    render(conn, "pin_new_registration.html")
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs.
@@ -202,20 +189,20 @@ defmodule VutuvWeb.PageController do
   # PIN, then came back to "/"), show the PIN-entry form instead of the sign-up
   # page so they can finish logging in.
   defp display_pin_entry(conn, _params) do
+    # A valid signed cookie means a login is in progress for that identity;
+    # show the PIN form. Deliberately NOT gated on a PIN row existing in the
+    # DB - that check would betray whether the entered address has an account
+    # (an enumeration oracle), since at step 1 an unknown address sets the
+    # same cookie but creates no PIN row.
     case Vutuv.Accounts.read_pin_cookie(conn) do
-      nil -> conn
-      email -> check_pin_session(conn, email)
-    end
-  end
+      nil ->
+        conn
 
-  defp check_pin_session(conn, email) do
-    if Vutuv.Accounts.login_pin_pending?(email) do
-      conn
-      |> put_view(VutuvWeb.SessionHTML)
-      |> render("pin_user_login.html")
-      |> halt
-    else
-      Vutuv.Accounts.delete_pin_cookie(conn)
+      _email ->
+        conn
+        |> put_view(VutuvWeb.SessionHTML)
+        |> render("pin_user_login.html")
+        |> halt()
     end
   end
 end

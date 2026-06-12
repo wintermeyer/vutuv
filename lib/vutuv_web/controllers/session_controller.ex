@@ -19,16 +19,11 @@ defmodule VutuvWeb.SessionController do
   def create(conn, %{"session" => %{"email" => email}}) do
     case RateLimit.check(conn, :login_email, email) do
       :ok ->
-        case Accounts.login_by_email(conn, email) do
-          {:ok, conn} ->
-            render(conn, "pin_user_login.html")
-
-          {:error, _reason, conn} ->
-            conn
-            |> put_flash(:error, gettext("Invalid email"))
-            |> put_status(:unprocessable_entity)
-            |> render("new.html")
-        end
+        # Always advances to the PIN screen — login_by_email/2 mails a PIN
+        # only when the address has an account, but the response is the same
+        # either way so it cannot be used to find out who has an account.
+        {:ok, conn} = Accounts.login_by_email(conn, email)
+        render(conn, "pin_user_login.html")
 
       :rate_limited ->
         conn
@@ -94,17 +89,11 @@ defmodule VutuvWeb.SessionController do
   end
 
   defp resend_pin(conn, email) do
-    case Accounts.login_by_email(conn, email) do
-      {:ok, conn} ->
-        conn
-        |> put_flash(:info, gettext("A new PIN is on its way to your email."))
-        |> render("pin_user_login.html")
+    {:ok, conn} = Accounts.login_by_email(conn, email)
 
-      {:error, _reason, conn} ->
-        conn
-        |> put_flash(:error, gettext("Your login session expired. Please try again."))
-        |> redirect(to: ~p"/login")
-    end
+    conn
+    |> put_flash(:info, gettext("A new PIN is on its way to your email."))
+    |> render("pin_user_login.html")
   end
 
   def delete(conn, _) do

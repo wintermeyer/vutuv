@@ -146,14 +146,26 @@ defmodule Vutuv.Accounts do
     |> Conn.configure_session(renew: true)
   end
 
+  @doc """
+  Step 1 of the PIN login: stash the pending identity in the signed cookie
+  and advance to the PIN-entry screen. Always returns `{:ok, conn}` — the
+  response must **not** reveal whether an account exists for `email`, or it
+  becomes an enumeration oracle. A PIN is mailed only when the address
+  belongs to an account; an attacker who guesses an unknown address gets
+  the identical PIN screen but never receives a PIN.
+  """
   def login_by_email(conn, email) do
     email = String.downcase(email)
 
-    User
-    |> join(:inner, [u], e in assoc(u, :emails))
-    |> where([u, e], e.value == ^email)
-    |> Repo.one()
-    |> send_login_email(reset_login_session(conn), email)
+    user =
+      User
+      |> join(:inner, [u], e in assoc(u, :emails))
+      |> where([u, e], e.value == ^email)
+      |> Repo.one()
+
+    if user, do: send_login_pin(user, email)
+
+    {:ok, put_pin_cookie(reset_login_session(conn), email)}
   end
 
   # Reset the session at the start of a login attempt **without dropping it**.
@@ -168,15 +180,24 @@ defmodule Vutuv.Accounts do
     |> Conn.delete_session(:user_id)
   end
 
-  defp send_login_email(nil, conn, _), do: {:error, :not_found, conn}
+  defp send_login_pin(user, email) do
+    mail = user |> gen_pin_for("login") |> Emailer.login_email(email, user)
 
-  defp send_login_email(user, conn, email) do
-    user
-    |> gen_pin_for("login")
-    |> Emailer.login_email(email, user)
-    |> deliver_login_email(email)
+    # Mail off the request path in production: a synchronous SMTP send would
+    # make the login-step response measurably slower for a known address
+    # than an unknown one — a timing-based enumeration oracle. Tests deliver
+    # inline (`config :vutuv, :async_email, false`) so the Swoosh test
+    # adapter's message reaches the calling process.
+    if Application.get_env(:vutuv, :async_email, true) do
+      {:ok, _pid} =
+        Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
+          deliver_login_email(mail, email)
+        end)
+    else
+      deliver_login_email(mail, email)
+    end
 
-    {:ok, put_pin_cookie(conn, email)}
+    :ok
   end
 
   # Deliver a login email and never let a delivery failure pass silently:
@@ -330,21 +351,6 @@ defmodule Vutuv.Accounts do
 
   defp pin_expired?(%{created_at: date_time}) do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), date_time, :second) > @pin_expire_time
-  end
-
-  @doc """
-  Whether a login PIN is in flight for `email` (minted, and its `created_at`
-  not yet cleared by consumption or lockout), i.e. the visitor should be
-  offered the PIN-entry form instead of the sign-up page.
-  """
-  def login_pin_pending?(email) do
-    Repo.exists?(
-      from(m in LoginPin,
-        join: u in assoc(m, :user),
-        join: e in assoc(u, :emails),
-        where: e.value == ^email and m.type == "login" and not is_nil(m.created_at)
-      )
-    )
   end
 
   # A registration mints the account and its first "login" PIN in the same
@@ -510,8 +516,11 @@ defmodule Vutuv.Accounts do
     result
   end
 
+  # No PIN row for this identity. For the login flow this is also what an
+  # unknown email reaches after step 1's identical PIN screen, so it must
+  # read exactly like a wrong PIN — never "no such account".
   defp verify_pin(nil, _pin) do
-    {:error, Gettext.gettext(VutuvWeb.Gettext, "An error occured")}
+    {:error, Gettext.gettext(VutuvWeb.Gettext, "Incorrect PIN")}
   end
 
   defp verify_pin(%LoginPin{} = login_pin, pin) do
