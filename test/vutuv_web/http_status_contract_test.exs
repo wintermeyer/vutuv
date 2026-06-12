@@ -12,7 +12,22 @@ defmodule VutuvWeb.HttpStatusContractTest do
 
   describe "anonymous visitors" do
     test "public pages answer 200", %{conn: conn} do
-      for path <- ["/", "/login", "/community", "/developers", "/llms.txt", "/health", "/ads"] do
+      paths = [
+        "/",
+        "/login",
+        "/community",
+        "/developers",
+        "/llms.txt",
+        "/health",
+        "/ads",
+        "/robots.txt",
+        "/sitemap.xml",
+        "/posts/feed.xml",
+        "/.well-known/agent-skills/index.json",
+        "/.well-known/security.txt"
+      ]
+
+      for path <- paths do
         assert get(conn, path).status == 200, "expected 200 for #{path}"
       end
     end

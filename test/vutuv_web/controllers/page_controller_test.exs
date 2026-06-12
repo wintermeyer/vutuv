@@ -44,6 +44,19 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET /llms.txt" do
+    test "documents the discovery surface: sitemap, feeds, well-known, headers" do
+      body = build_conn() |> get("/llms.txt") |> response(200)
+
+      assert body =~ "/sitemap.xml"
+      assert body =~ "/posts/feed.xml"
+      assert body =~ "/.well-known/agent-skills/index.json"
+      assert body =~ "/.well-known/security.txt"
+      assert body =~ "Link"
+      assert body =~ "Content-Location"
+    end
+  end
+
   describe "GET /datenschutzerklaerung" do
     test "renders the vutuv-specific privacy policy", %{conn: conn} do
       body = conn |> get(~p"/datenschutzerklaerung") |> html_response(200)

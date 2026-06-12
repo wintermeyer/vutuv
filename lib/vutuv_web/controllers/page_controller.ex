@@ -125,6 +125,21 @@ defmodule VutuvWeb.PageController do
 
   List pages paginate with `?page=N`.
 
+  ## Discovery
+
+  - `/sitemap.xml` — sitemap index (members, posts, tags, static pages)
+  - `/<username>/posts/feed.xml` — a member's posts as RSS 2.0, full content
+  - `/posts/feed.xml` — the latest public posts site-wide (RSS 2.0)
+  - `/.well-known/agent-skills/index.json` — agent-skills discovery
+    (Cloudflare draft); the skill teaches this whole surface
+  - `/.well-known/security.txt` — vulnerability-report contact (RFC 9116)
+
+  Responses carry `Link` headers (`describedby` -> this file, `sitemap`,
+  per-page `alternate` siblings, `canonical` on the agent documents) and
+  Accept-negotiated documents name their extension URL in
+  `Content-Location`. Profiles embed schema.org JSON-LD (Person), post
+  permalinks a BlogPosting.
+
   ## API
 
   An authenticated REST/JSON API for third-party apps and scripts lives at
