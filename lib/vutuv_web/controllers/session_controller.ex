@@ -138,11 +138,21 @@ defmodule VutuvWeb.SessionController do
             |> redirect(to: ~p"/")
         end
 
-      # incorrect, let them retry
+      # incorrect, let them retry — but count the failure against a
+      # server-side per-identity budget so an address WITHOUT an account
+      # locks out after the same number of wrong PINs as a real one. Without
+      # this, only real accounts (which have a LoginPin row to count against)
+      # ever reach the lockout, revealing which addresses are registered.
       {:error, reason} ->
-        conn
-        |> put_flash(:error, reason)
-        |> redirect(to: ~p"/")
+        case Accounts.record_login_pin_failure(email) do
+          :locked ->
+            lockout(conn)
+
+          :ok ->
+            conn
+            |> put_flash(:error, reason)
+            |> redirect(to: ~p"/")
+        end
 
       # expired, drop cookie
       {:expired, message} ->
@@ -151,13 +161,20 @@ defmodule VutuvWeb.SessionController do
         |> put_flash(:error, message)
         |> redirect(to: ~p"/login")
 
-      # locked out, drop cookie
+      # locked out (a real account's per-PIN counter tripped), drop cookie
       :lockout ->
-        conn
-        |> Accounts.delete_pin_cookie()
-        |> put_flash(:error, gettext("Too many incorrect attempts."))
-        |> redirect(to: ~p"/login")
+        lockout(conn)
     end
+  end
+
+  # The one lockout response, shared by the per-PIN DB counter (real account)
+  # and the per-identity counter (any address) so the two are byte-identical
+  # — the account-enumeration tell would otherwise reappear here.
+  defp lockout(conn) do
+    conn
+    |> Accounts.delete_pin_cookie()
+    |> put_flash(:error, gettext("Too many incorrect attempts."))
+    |> redirect(to: ~p"/login")
   end
 
   # Only local paths ("/...", but not protocol-relative "//...") are ever

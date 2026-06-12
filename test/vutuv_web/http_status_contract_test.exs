@@ -84,4 +84,43 @@ defmodule VutuvWeb.HttpStatusContractTest do
       assert last.status == 429
     end
   end
+
+  describe "no account-enumeration tell at the PIN step" do
+    setup do
+      Vutuv.RateLimiter.reset()
+      :ok
+    end
+
+    test "wrong PINs for a known and an unknown address lock out identically", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:email, user: user, value: "real@example.com")
+
+      known = wrong_pin_until_lockout(conn, "real@example.com")
+      unknown = wrong_pin_until_lockout(conn, "ghost@example.com")
+
+      # The lockout arrives on the same attempt, with the same status, the
+      # same redirect target and the same flash — nothing distinguishes the
+      # real address from the made-up one.
+      assert known == unknown
+      assert {3, 302, "/login"} = known
+    end
+
+    # Drive step 1 (email) then submit wrong PINs until the response stops
+    # being the "incorrect PIN" redirect-to-"/" and becomes the lockout
+    # redirect-to-"/login". Returns {attempt_number, status, location}.
+    defp wrong_pin_until_lockout(conn, email) do
+      {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
+
+      Enum.reduce_while(1..5, conn, fn n, acc ->
+        acc = post(acc, ~p"/login", session: %{"pin" => "000000"})
+        location = redirected_to(acc)
+
+        if location == "/login" do
+          {:halt, {n, acc.status, location}}
+        else
+          {:cont, acc}
+        end
+      end)
+    end
+  end
 end

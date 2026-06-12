@@ -516,6 +516,33 @@ defmodule Vutuv.Accounts do
     result
   end
 
+  @doc """
+  Records a failed login-PIN attempt for `email` and reports whether that
+  identity is now locked out (`:ok` while under the limit, `:locked` once
+  the same `@max_attempts` threshold the per-PIN DB counter uses is hit).
+
+  This exists so an address **without** an account locks out after the same
+  number of wrong PINs as a real one. The per-PIN `pin_login_attempts`
+  lockout only exists for a real account's `LoginPin` row, so on its own it
+  would tell an attacker which addresses are registered (a known address
+  eventually answers "too many attempts", an unknown one never does). The
+  counter is server-side (an ETS window keyed by the signed-cookie email,
+  not a replayable cookie or a per-account row) and shares the PIN's
+  lifetime as its window, so it cannot be evaded by dropping a cookie and
+  mirrors the DB lockout's reset cadence.
+  """
+  def record_login_pin_failure(email) when is_binary(email) do
+    key = {:login_pin_lockout, String.downcase(email)}
+
+    # `hit/3` reports `:rate_limited` once the count exceeds the limit, so a
+    # limit of `@max_attempts - 1` locks on exactly the @max_attempts-th
+    # failure — the same attempt the DB counter locks on.
+    case Vutuv.RateLimiter.hit(key, @max_attempts - 1, @pin_expire_time * 1000) do
+      :ok -> :ok
+      {:error, :rate_limited} -> :locked
+    end
+  end
+
   # No PIN row for this identity. For the login flow this is also what an
   # unknown email reaches after step 1's identical PIN screen, so it must
   # read exactly like a wrong PIN — never "no such account".
