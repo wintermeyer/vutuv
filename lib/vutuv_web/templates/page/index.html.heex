@@ -89,21 +89,5 @@
   </.form>
 </.auth_layout>
 
-<script type="application/ld+json">
-{
-  "@context": "http://schema.org",
-  "@type": "Organization",
-  "name": "vutuv",
-  "url": "https://vutuv.de"
-}
-</script>
-
-<script type="application/ld+json">
-{
-  "@context": "http://schema.org",
-  "@type": "WebSite",
-  "name": "vutuv",
-  "alternateName": "www.vutuv.de",
-  "url": "https://vutuv.de"
-}
-</script>
+<JsonLd.script data={JsonLd.organization()} />
+<JsonLd.script data={JsonLd.web_site()} />

@@ -58,6 +58,8 @@ defmodule VutuvWeb do
       use Gettext, backend: VutuvWeb.Gettext
       # Direction A design-system components (<.card>, <.section_title>, <.chip>).
       import VutuvWeb.UI
+      # schema.org JSON-LD blocks (<JsonLd.script>, the page-type builders).
+      alias VutuvWeb.JsonLd
     end
   end
 

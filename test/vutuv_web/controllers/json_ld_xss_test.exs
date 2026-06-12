@@ -31,4 +31,17 @@ defmodule VutuvWeb.JsonLdXssTest do
     # payload can never break out of the <script> element.
     assert body =~ "\\u003C\\/script>\\u003Cscript>alert(1)\\u003C\\/script>"
   end
+
+  test "a malicious post body cannot break out of the BlogPosting block",
+       %{conn: conn, payload: payload} do
+    author = insert_activated_user()
+    post = Vutuv.PostsHelpers.create_post!(author, %{body: "hi " <> payload})
+
+    body = conn |> get(Vutuv.Posts.path(post)) |> html_response(200)
+
+    # articleBody carries the raw markdown — encoded, never literal.
+    refute body =~ payload
+    refute body =~ "</script><script>"
+    assert body =~ "\\u003C\\/script>\\u003Cscript>alert(1)\\u003C\\/script>"
+  end
 end

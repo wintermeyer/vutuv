@@ -31,3 +31,7 @@
     </section>
   </div>
 </div>
+
+<%!-- Restricted posts are noindexed and must not advertise their content
+as structured data. --%>
+<JsonLd.script :if={not @restricted?} data={JsonLd.blog_posting(@post, @author)} />

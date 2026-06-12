@@ -593,13 +593,10 @@ the resulting ~200px rail width. --%>
   </aside>
 </div>
 
-<script type="application/ld+json">
-<%= raw(Jason.encode!(%{
-  "@context" => "http://schema.org",
-  "@type" => "BreadcrumbList",
-  "itemListElement" => [
-    %{"@type" => "ListItem", "position" => 1, "item" => %{"@id" => "https://vutuv.de", "name" => "vutuv"}},
-    %{"@type" => "ListItem", "position" => 2, "item" => %{"@id" => "https://vutuv.de#{~p"/#{@user}"}", "name" => full_name(@user)}}
-  ]
-}, escape: :html_safe, pretty: true)) %>
-</script>
+<JsonLd.script data={JsonLd.breadcrumbs(@user)} />
+<%!-- Markup mirrors the page (schema.org accuracy rule): a noindexed
+member's profile carries no Person entity. --%>
+<JsonLd.script
+  :if={not @user.noindex?}
+  data={JsonLd.person(@user, @header_job, @user_tags, @user.social_media_accounts)}
+/>

@@ -114,7 +114,12 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   defp public_gender(%{gender: gender}) when gender in [nil, "other"], do: nil
   defp public_gender(%{gender: gender}), do: gender
 
-  defp avatar_url(user) do
+  @doc """
+  The member's absolute avatar URL, or nil when only the inline-data
+  placeholder exists. Public because the JSON-LD Person (`VutuvWeb.JsonLd`)
+  shares it — the markup must mirror the doc.
+  """
+  def avatar_url(user) do
     case Vutuv.Avatar.display_url(user, :medium) do
       "data:" <> _ -> nil
       "/" <> _ = path -> AgentDocs.abs_url(path)
