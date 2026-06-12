@@ -357,10 +357,11 @@ defmodule VutuvWeb.AgentDocs do
       if query == "", do: "", else: "?" <> query
   end
 
-  # All-or-nothing on purpose ("safer", per product decision): a noindexed
-  # page or an opted-out member sends every signal as no.
-  defp content_signal(%{noindex: true}), do: "ai-train=no, search=no, ai-input=no"
-  defp content_signal(_doc), do: "ai-train=yes, search=yes, ai-input=yes"
+  # The site-wide stance and the all-no opt-out both live in ContentPolicy,
+  # the same source robots.txt renders from — header and directives cannot
+  # disagree.
+  defp content_signal(doc),
+    do: VutuvWeb.ContentPolicy.signal_header(Map.get(doc, :noindex, false))
 
   defp maybe_put_noindex(conn, %{noindex: true}),
     do: put_resp_header(conn, "x-robots-tag", "noindex")

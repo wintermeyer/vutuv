@@ -40,6 +40,13 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# The site-wide AI-crawler stance (see VutuvWeb.ContentPolicy): :permissive
+# welcomes search, live AI input AND model training; :block_training keeps
+# retrieval but declares ai-train=no and blocks the training crawlers in
+# robots.txt. Flipping this also flips the Content-Signal header every
+# agent document and feed sends — one policy, declared everywhere.
+config :vutuv, :ai_crawler_policy, :permissive
+
 # The live member counter (Vutuv.Accounts.MemberCounter) re-reads the
 # authoritative user count from the database on a slow timer. Tests turn this
 # off so its process never uses the SQL Sandbox connection it does not own.

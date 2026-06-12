@@ -33,6 +33,15 @@ defmodule VutuvWeb.PageControllerTest do
       # The legacy /users/... URLs are redirects now; crawlers can skip them.
       assert body =~ "Disallow: /users/"
     end
+
+    test "names the AI crawlers and declares Content-Signals (permissive stance)" do
+      body = build_conn() |> get("/robots.txt") |> response(200)
+
+      assert body =~ "User-agent: GPTBot"
+      assert body =~ "User-agent: ClaudeBot"
+      assert body =~ "Content-Signal: ai-train=yes, search=yes, ai-input=yes"
+      assert body =~ "Sitemap: http://localhost:4001/sitemap.xml"
+    end
   end
 
   describe "GET /datenschutzerklaerung" do

@@ -32,61 +32,17 @@ defmodule VutuvWeb.PageController do
     render(conn, "community.html", page_title: gettext("Community guidelines"))
   end
 
-  @robots_txt """
-  # robots.txt for vutuv.de
-  #
-  # vutuv is the friendly social/business network.
-  # Humans and robots are welcome and overly enthusiastic crawlers
-  # are politely asked to read the house rules.
-
-  User-agent: *
-
-  # Help yourself to the public stuff: profiles, tags, listings.
-  Allow: /
-
-  # ...but these are backstage. No autographs, no peeking.
-  Disallow: /admin/
-  Disallow: /login
-  Disallow: /logout
-  Disallow: /sessions
-  Disallow: /api/
-
-  # Search results are an endless hall of mirrors; don't get lost in there.
-  Disallow: /search
-
-  # The old /users/... URLs are permanent redirects now; skip the detour.
-  Disallow: /users/
-
-  # Personal profile detail pages (phone numbers, emails, addresses, links,
-  # social media, work history, followers, ...) are off-limits. The profile
-  # page /<slug> itself stays crawlable; only its sub-pages are blocked.
-  Disallow: /*/addresses
-  Disallow: /*/connections
-  Disallow: /*/edit
-  Disallow: /*/emails
-  Disallow: /*/followers
-  Disallow: /*/following
-  Disallow: /*/groups
-  Disallow: /*/links
-  Disallow: /*/phone_numbers
-  Disallow: /*/search_terms
-  Disallow: /*/slugs
-  Disallow: /*/social_media_accounts
-  Disallow: /*/tags
-  Disallow: /*/work_experiences
-  """
-
   @doc """
   Serves robots.txt from the application rather than a static file.
 
   `priv/static` is gitignored in this project, so a code route keeps the
-  policy under version control and lets us tune it per environment later
-  (for example, a blanket `Disallow: /` on a staging host).
+  policy under version control. The content lives in `VutuvWeb.RobotsTxt`,
+  rendered for the configured AI-crawler stance (`VutuvWeb.ContentPolicy`).
   """
   def robots(conn, _params) do
     conn
     |> put_resp_content_type("text/plain")
-    |> send_resp(200, @robots_txt)
+    |> send_resp(200, VutuvWeb.RobotsTxt.render(VutuvWeb.ContentPolicy.policy()))
   end
 
   def impressum(conn, _params) do
