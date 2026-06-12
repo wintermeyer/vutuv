@@ -26,6 +26,14 @@ defmodule Vutuv.Accounts.User do
     field(:admin?, :boolean)
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
+    # The AI counterpart to noindex?: true = AI agents and LLMs may not use
+    # this member's content (training or live retrieval). Independent of
+    # noindex? — all four combinations are valid (VutuvWeb.ContentPolicy).
+    # The DB default is true (existing members were backfilled as opted
+    # out and were never asked); the struct default stays false because
+    # every asking path (registration, edit form) submits an explicit
+    # value and the pre-checked consent box reads from it.
+    field(:noai?, :boolean, default: false)
     # Non-essential notification mail (the unread-message nudge). Off via the
     # edit-profile form or the tokenized unsubscribe link in every such email
     # (RFC 8058 one-click); transactional mail (PINs, moderation) ignores it.
@@ -86,7 +94,7 @@ defmodule Vutuv.Accounts.User do
   # :active_slug is deliberately NOT here: the username is unique, rate-limited
   # and Twitter-validated, so it only changes through slug_changeset/2 (used by
   # Accounts.update_active_slug/2), never through the generic profile form.
-  @optional_fields ~w(activated? noindex? notification_emails? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(activated? noindex? noai? notification_emails? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

@@ -239,7 +239,9 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     assert conn.status == 200
     assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
-    assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    # The page-level restriction covers both axes: out of search results
+    # and out of AI corpora, whatever the member's own settings say.
+    assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
   end
 
   test "a single section entry page serves all formats", %{user: user} do

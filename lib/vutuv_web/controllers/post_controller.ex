@@ -202,7 +202,7 @@ defmodule VutuvWeb.PostController do
     restricted? = Posts.restricted?(post)
 
     conn
-    |> maybe_noindex(restricted?)
+    |> put_robots(restricted?, restricted? or author.noai?)
     |> render("show.html",
       post: post,
       author: author,
@@ -214,10 +214,16 @@ defmodule VutuvWeb.PostController do
     )
   end
 
-  # Restricted posts must never surface in search results, even when the
-  # crawler somehow holds a permitted session.
-  defp maybe_noindex(conn, true), do: put_resp_header(conn, "x-robots-tag", "noindex")
-  defp maybe_noindex(conn, false), do: conn
+  # Restricted posts must never surface in search results or AI corpora,
+  # even when the crawler somehow holds a permitted session; the author's
+  # noai? extends their AI opt-out to every post of theirs (mirrors
+  # PostDoc.build/3, so the HTML page and its agent documents agree).
+  defp put_robots(conn, noindex?, noai?) do
+    case VutuvWeb.ContentPolicy.robots_directives(noindex?, noai?) do
+      nil -> conn
+      directives -> put_resp_header(conn, "x-robots-tag", directives)
+    end
+  end
 
   defp redirect_query(conn) do
     case conn.query_string do

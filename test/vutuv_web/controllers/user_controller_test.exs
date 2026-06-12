@@ -291,6 +291,49 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
   end
 
+  test "the edit form asks the search-engine and the AI question separately", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+
+    assert html =~ "Would you like to allow search engines to index your profile?"
+    assert html =~ "Would you like to allow AI agents and LLMs to use your profile?"
+  end
+
+  # The two consents are independent booleans; either combination must stick.
+  test "updates the search-engine and AI consents independently", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    conn = put(conn, ~p"/#{user}", user: %{"noindex?" => "true", "noai?" => "false"})
+    assert redirected_to(conn) == ~p"/#{user}"
+    assert %{noindex?: true, noai?: false} = Repo.get(User, user.id)
+
+    conn |> recycle() |> put(~p"/#{user}", user: %{"noindex?" => "false", "noai?" => "true"})
+    assert %{noindex?: false, noai?: true} = Repo.get(User, user.id)
+  end
+
+  # The profile page tells crawlers about the member's choices in a robots
+  # meta tag: noindex for the search opt-out, noai/noimageai for the AI
+  # opt-out, combined when both are set, absent when neither is.
+  test "the profile page renders the robots meta tag the member chose", %{conn: conn} do
+    open = insert_activated_user(noindex?: false, noai?: false)
+    refute conn |> get(~p"/#{open}") |> html_response(200) =~ ~s(<meta name="robots")
+
+    hidden = insert_activated_user(noindex?: true, noai?: false)
+
+    assert build_conn() |> get(~p"/#{hidden}") |> html_response(200) =~
+             ~s(<meta name="robots" content="noindex")
+
+    no_ai = insert_activated_user(noindex?: false, noai?: true)
+
+    assert build_conn() |> get(~p"/#{no_ai}") |> html_response(200) =~
+             ~s(<meta name="robots" content="noai, noimageai")
+
+    private = insert_activated_user(noindex?: true, noai?: true)
+
+    assert build_conn() |> get(~p"/#{private}") |> html_response(200) =~
+             ~s(<meta name="robots" content="noindex, noai, noimageai")
+  end
+
   test "profile update ignores email params (emails change only via the PIN flow)", %{conn: conn} do
     # Adding an address goes through EmailController.create, which mails a PIN
     # to the new address and only inserts it after confirmation (issue #759).

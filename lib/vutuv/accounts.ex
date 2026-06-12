@@ -620,7 +620,7 @@ defmodule Vutuv.Accounts do
   # on it.
   @profile_fields ~w(headline first_name last_name middle_name nickname
                      honorific_prefix honorific_suffix gender birthdate
-                     locale noindex?)
+                     locale noindex? noai?)
 
   @doc """
   Updates only the plain profile fields (see `@profile_fields`) — the

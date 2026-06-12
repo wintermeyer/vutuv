@@ -42,10 +42,10 @@ defmodule VutuvWeb.AgentDocs do
   ## Versioning and headers
 
   Docs carry `schema_version` (bumped only on breaking changes; additions
-  are free) and `generated_at`. Responses carry `Content-Signal`
-  (all `yes`, or all `no` when the page is noindexed or the member opted out
-  of search engines via `noindex?`), `Vary: Accept`, and for Markdown an
-  `x-markdown-tokens` estimate.
+  are free) and `generated_at`. Responses carry `Content-Signal` rendered
+  from the page's two opt-out axes — `noindex` (the member's search-engine
+  choice, or a page-level restriction) and `noai` (the member's AI choice)
+  — plus `Vary: Accept`, and for Markdown an `x-markdown-tokens` estimate.
 
   Markdown and text docs end with one `Accept-Language`-dependent extra: a
   pointer to the same page in the reader's language when a translation
@@ -161,7 +161,7 @@ defmodule VutuvWeb.AgentDocs do
     # the global discovery links on these responses too).
     |> prepend_resp_headers([{"link", ~s(<#{doc.url}>; rel="canonical"; type="text/html")}])
     |> maybe_put_content_location(format)
-    |> maybe_put_noindex(doc)
+    |> maybe_put_robots(doc)
     |> maybe_put_tokens(format, body)
     |> maybe_put_disposition(format, doc)
     |> put_private(:vutuv_agent_doc_sent, true)
@@ -231,7 +231,8 @@ defmodule VutuvWeb.AgentDocs do
   @doc """
   The shared head of every doc: type, schema_version, generated_at, the
   canonical HTML URL and the sibling format URLs. `:noindex` mirrors the
-  HTML page's robots state and drives the `Content-Signal` header.
+  HTML page's robots state, `:noai` the member's AI opt-out; together they
+  drive the `Content-Signal` and `X-Robots-Tag` headers.
   """
   def doc_meta(type, path, opts \\ []) do
     base = VutuvWeb.Endpoint.url()
@@ -246,7 +247,8 @@ defmodule VutuvWeb.AgentDocs do
         Map.new(formats, fn format ->
           {format_name(format), base <> path <> extension(format)}
         end),
-      noindex: Keyword.get(opts, :noindex, false)
+      noindex: Keyword.get(opts, :noindex, false),
+      noai: Keyword.get(opts, :noai, false)
     }
   end
 
@@ -372,16 +374,25 @@ defmodule VutuvWeb.AgentDocs do
       if query == "", do: "", else: "?" <> query
   end
 
-  # The site-wide stance and the all-no opt-out both live in ContentPolicy,
-  # the same source robots.txt renders from — header and directives cannot
-  # disagree.
-  defp content_signal(doc),
-    do: VutuvWeb.ContentPolicy.signal_header(Map.get(doc, :noindex, false))
+  # The site-wide stance and the per-member opt-outs both live in
+  # ContentPolicy, the same source robots.txt renders from — header and
+  # directives cannot disagree.
+  defp content_signal(doc) do
+    VutuvWeb.ContentPolicy.signal_header(
+      Map.get(doc, :noindex, false),
+      Map.get(doc, :noai, false)
+    )
+  end
 
-  defp maybe_put_noindex(conn, %{noindex: true}),
-    do: put_resp_header(conn, "x-robots-tag", "noindex")
-
-  defp maybe_put_noindex(conn, _doc), do: conn
+  defp maybe_put_robots(conn, doc) do
+    case VutuvWeb.ContentPolicy.robots_directives(
+           Map.get(doc, :noindex, false),
+           Map.get(doc, :noai, false)
+         ) do
+      nil -> conn
+      directives -> put_resp_header(conn, "x-robots-tag", directives)
+    end
+  end
 
   defp maybe_put_tokens(conn, :md, body),
     do: put_resp_header(conn, "x-markdown-tokens", Integer.to_string(estimate_tokens(body)))

@@ -125,7 +125,10 @@ defmodule VutuvWeb.PageControllerTest do
     # visibility box starts UNchecked - showing your address to everyone is an
     # explicit opt-in. Being findable is the point of the product, so the
     # indexing box stays checked; it is wired to the inverted `noindex?`
-    # field: checked means "allow indexing" (noindex? = false).
+    # field: checked means "allow indexing" (noindex? = false). The AI box
+    # works the same way on the inverted `noai?` field — new members answer
+    # the question themselves (only the unasked legacy rows were defaulted
+    # to "no AI" by the migration).
     test "are positively framed; email private, indexing on by default", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
@@ -136,6 +139,13 @@ defmodule VutuvWeb.PageControllerTest do
 
       refute checkbox_checked?(body, "user[emails][0][public?]")
       assert checkbox_checked?(body, "user[noindex?]")
+    end
+
+    test "asks the AI question as its own checked opt-in box", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert body =~ "Allow AI agents and LLMs to use your profile"
+      assert checkbox_checked?(body, "user[noai?]")
     end
   end
 
@@ -171,6 +181,37 @@ defmodule VutuvWeb.PageControllerTest do
       post(conn, ~p"/new_registration", user: attrs)
 
       assert user_by_email("hidden@example.com").noindex? == true
+    end
+
+    # The AI box is the same inverted mechanism on `noai?`. The two choices
+    # are independent: search engines yes plus AI no (and vice versa) must
+    # both land exactly as submitted.
+    test "the AI box stores the member's choice independently of indexing", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "search_only@example.com"}},
+          "noindex?" => "false",
+          "noai?" => "true"
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("search_only@example.com")
+      assert user.noindex? == false
+      assert user.noai? == true
+
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "ai_only@example.com"}},
+          "noindex?" => "true",
+          "noai?" => "false"
+        })
+
+      post(build_conn(), ~p"/new_registration", user: attrs)
+
+      user = user_by_email("ai_only@example.com")
+      assert user.noindex? == true
+      assert user.noai? == false
     end
 
     # Privacy by default: an untouched email box (the hidden "false") stores a

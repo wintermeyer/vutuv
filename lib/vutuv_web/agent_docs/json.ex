@@ -5,9 +5,9 @@ defmodule VutuvWeb.AgentDocs.JSON do
   JSON-shaped; only renderer-internal keys are dropped.
   """
 
-  # :noindex steers the Content-Signal header, :vcard_photo is vCard-only
-  # payload — neither belongs in the serialized document.
-  @internal_keys [:noindex, :vcard_photo]
+  # :noindex/:noai steer the Content-Signal header, :vcard_photo is
+  # vCard-only payload — none of them belongs in the serialized document.
+  @internal_keys [:noindex, :noai, :vcard_photo]
 
   def render(doc) do
     doc

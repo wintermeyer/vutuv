@@ -12,9 +12,11 @@ defmodule VutuvWeb.ContentPolicy do
     * `:block_training` — search and retrieval stay allowed, training
       crawlers are blocked and `ai-train=no` is declared.
 
-  Per-member opt-out stays all-or-nothing on purpose ("safer", per product
-  decision): a noindexed page sends every signal as no, whatever the
-  site-wide policy says.
+  On top of the site stance every member answers two independent
+  questions: `noindex?` (may search engines index my profile?) and `noai?`
+  (may AI agents and LLMs use my content — training and live retrieval?).
+  All four combinations are valid; `signal_header/2` and
+  `robots_directives/2` render them per page.
   """
 
   def policy do
@@ -22,12 +24,25 @@ defmodule VutuvWeb.ContentPolicy do
   end
 
   @doc """
-  The `Content-Signal` header value for a page; `noindex?` is the page's
-  (or member's) opt-out state.
+  The `Content-Signal` header value for a page. `noindex?` is the page's
+  (or member's) search opt-out, `noai?` the AI opt-out; the two axes are
+  independent. `ai-train` additionally requires the permissive site stance.
   """
-  def signal_header(noindex?)
-  def signal_header(true), do: render_signals(false, false, false)
-  def signal_header(false), do: render_signals(policy() == :permissive, true, true)
+  def signal_header(noindex?, noai?) do
+    render_signals(policy() == :permissive and not noai?, not noindex?, not noai?)
+  end
+
+  @doc """
+  The robots directives a page's meta tag / `X-Robots-Tag` header should
+  carry for these opt-outs: `noindex` for search engines, the
+  `noai, noimageai` pair (the de-facto AI-crawler vocabulary) for AI use.
+  `nil` when there is nothing to declare.
+  """
+  def robots_directives(noindex?, noai?)
+  def robots_directives(false, false), do: nil
+  def robots_directives(true, false), do: "noindex"
+  def robots_directives(false, true), do: "noai, noimageai"
+  def robots_directives(true, true), do: "noindex, noai, noimageai"
 
   @doc false
   def render_signals(train?, search?, input?) do

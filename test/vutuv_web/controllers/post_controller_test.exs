@@ -57,6 +57,23 @@ defmodule VutuvWeb.PostControllerTest do
       assert get(conn, "/#{user.active_slug}/posts/#{post.id}").status == 404
     end
 
+    # The member's AI choice covers their posts: the permalink page and its
+    # agent-format siblings both carry the noai directives and the matching
+    # Content-Signal, while staying searchable.
+    test "an AI-opted-out author's post serves with the noai directives", %{conn: conn} do
+      user = insert_activated_user(noai?: true)
+      post = create_post!(user, %{body: "human readers welcome"})
+
+      conn = get(conn, Posts.path(post))
+      assert html_response(conn, 200) =~ "human readers welcome"
+      assert get_resp_header(conn, "x-robots-tag") == ["noai, noimageai"]
+
+      doc = get(fresh_conn(), Posts.path(post) <> ".md")
+      assert doc.status == 200
+      assert get_resp_header(doc, "content-signal") == ["ai-train=no, search=yes, ai-input=no"]
+      assert get_resp_header(doc, "x-robots-tag") == ["noai, noimageai"]
+    end
+
     test "restricted post: 404 for denied readers, 200 + noindex for permitted", %{conn: conn} do
       user = insert_activated_user()
       post = create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
@@ -67,7 +84,9 @@ defmodule VutuvWeb.PostControllerTest do
       conn = get(member_conn, Posts.path(post))
 
       assert html_response(conn, 200) =~ "members only"
-      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+      # A page-level restriction covers both axes: out of search results
+      # and out of AI corpora, whatever the author's own settings say.
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
     end
 
     test "followers-only post: teaser for non-followers, post for followers", %{conn: conn} do

@@ -390,15 +390,37 @@ defmodule VutuvWeb.AgentFormatTest do
     end
   end
 
+  # noindex? and noai? are independent member choices; each of the four
+  # combinations must reach the Content-Signal and X-Robots-Tag headers.
   describe "Content-Signal" do
-    test "a noindexed member sends every signal as no, plus x-robots-tag" do
-      insert_activated_user(active_slug: "private_person", noindex?: true)
+    test "a noindexed member signals search=no but keeps their AI choice" do
+      insert_activated_user(active_slug: "private_person", noindex?: true, noai?: false)
 
       conn = get(build_conn(), "/private_person.md")
 
       assert conn.status == 200
-      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
+      assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=no, ai-input=yes"]
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    end
+
+    test "an AI-opted-out member signals ai=no but stays searchable" do
+      insert_activated_user(active_slug: "no_ai_person", noindex?: false, noai?: true)
+
+      conn = get(build_conn(), "/no_ai_person.md")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=yes, ai-input=no"]
+      assert get_resp_header(conn, "x-robots-tag") == ["noai, noimageai"]
+    end
+
+    test "a member opted out of both sends every signal as no" do
+      insert_activated_user(active_slug: "fully_private", noindex?: true, noai?: true)
+
+      conn = get(build_conn(), "/fully_private.md")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
     end
 
     test "the noindexed follow lists send every signal as no", %{user: user} do

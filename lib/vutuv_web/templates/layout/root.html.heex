@@ -1,8 +1,10 @@
 <!doctype html>
 <html lang={assigns[:locale] || "en"}>
   <head>
-    <%= if assigns[:conn] && @conn.assigns[:user] && @conn.assigns[:user].noindex? do %>
-      <meta name="robots" content="noindex" />
+    <%!-- The member's two crawler opt-outs (search engines via noindex?,
+    AI agents/LLMs via noai?) on every page about them. --%>
+    <%= if directives = robots_directives(assigns) do %>
+      <meta name="robots" content={directives} />
     <% end %>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />

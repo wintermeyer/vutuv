@@ -79,6 +79,15 @@
       <%= error_tag f, :noindex? %>
     </label>
 
+    <%!-- The AI question, asked separately (a member may say yes to search
+          engines and no to AI, or the other way around). Same inverted
+          mechanism on `noai?`: checked submits "false" (allow AI use). --%>
+    <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
+      <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: "mt-0.5 h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+      <span>{gettext("Allow AI agents and LLMs to use your profile")}</span>
+      <%= error_tag f, :noai? %>
+    </label>
+
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 
     <p class="text-center text-sm">

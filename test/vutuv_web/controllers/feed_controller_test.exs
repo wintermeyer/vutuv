@@ -97,15 +97,26 @@ defmodule VutuvWeb.FeedControllerTest do
       assert get(build_conn(), "/sleepy_member/posts/feed.xml").status == 404
     end
 
-    test "a noindexed member's feed serves, marked noindex with all-no signals" do
-      quiet = insert_activated_user(active_slug: "quiet_author", noindex?: true)
+    test "a noindexed member's feed serves, marked noindex, AI choice intact" do
+      quiet = insert_activated_user(active_slug: "quiet_author", noindex?: true, noai?: false)
       create_post!(quiet, %{"body" => "Quiet words"})
 
       conn = get(build_conn(), "/quiet_author/posts/feed.xml")
 
       assert conn.status == 200
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
-      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
+      assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=no, ai-input=yes"]
+    end
+
+    test "an AI-opted-out member's feed serves with the noai directives" do
+      human = insert_activated_user(active_slug: "human_author", noindex?: false, noai?: true)
+      create_post!(human, %{"body" => "For people"})
+
+      conn = get(build_conn(), "/human_author/posts/feed.xml")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noai, noimageai"]
+      assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=yes, ai-input=no"]
     end
   end
 
@@ -123,9 +134,15 @@ defmodule VutuvWeb.FeedControllerTest do
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
     end
 
-    test "skips noindexed members and restricted posts", %{author: author} do
+    # The aggregate feed carries one all-yes Content-Signal and cannot
+    # signal per item, so members who opted out (of search engines or of
+    # AI use) are left out entirely — same reasoning for both axes.
+    test "skips noindexed members, AI-opted-out members and restricted posts", %{author: author} do
       quiet = insert_activated_user(active_slug: "quiet_author", noindex?: true)
       quiet_post = create_post!(quiet, %{"body" => "Quiet words"})
+
+      human = insert_activated_user(active_slug: "human_author", noai?: true)
+      human_post = create_post!(human, %{"body" => "For people only"})
 
       restricted =
         create_post!(author, %{
@@ -136,6 +153,7 @@ defmodule VutuvWeb.FeedControllerTest do
       body = build_conn() |> get("/posts/feed.xml") |> response(200)
 
       refute body =~ quiet_post.id
+      refute body =~ human_post.id
       refute body =~ restricted.id
     end
   end

@@ -67,13 +67,46 @@ defmodule VutuvWeb.RobotsTxtTest do
     end
   end
 
-  describe "ContentPolicy.signal_header/1" do
-    test "a noindexed page signals all-no regardless of policy" do
-      assert ContentPolicy.signal_header(true) == "ai-train=no, search=no, ai-input=no"
+  # The two member choices are independent axes: noindex? answers the
+  # search engines, noai? answers AI training and live AI retrieval. All
+  # four combinations must hold.
+  describe "ContentPolicy.signal_header/2" do
+    test "both allowed signals the configured stance" do
+      assert ContentPolicy.signal_header(false, false) ==
+               "ai-train=yes, search=yes, ai-input=yes"
     end
 
-    test "an indexable page signals the configured stance" do
-      assert ContentPolicy.signal_header(false) == "ai-train=yes, search=yes, ai-input=yes"
+    test "search opted out, AI allowed" do
+      assert ContentPolicy.signal_header(true, false) ==
+               "ai-train=yes, search=no, ai-input=yes"
+    end
+
+    test "search allowed, AI opted out" do
+      assert ContentPolicy.signal_header(false, true) ==
+               "ai-train=no, search=yes, ai-input=no"
+    end
+
+    test "both opted out signals all-no" do
+      assert ContentPolicy.signal_header(true, true) ==
+               "ai-train=no, search=no, ai-input=no"
+    end
+  end
+
+  describe "ContentPolicy.robots_directives/2" do
+    test "nothing to say for a fully permissive page" do
+      assert ContentPolicy.robots_directives(false, false) == nil
+    end
+
+    test "search opt-out yields noindex" do
+      assert ContentPolicy.robots_directives(true, false) == "noindex"
+    end
+
+    test "AI opt-out yields the noai directives" do
+      assert ContentPolicy.robots_directives(false, true) == "noai, noimageai"
+    end
+
+    test "both opt-outs combine" do
+      assert ContentPolicy.robots_directives(true, true) == "noindex, noai, noimageai"
     end
   end
 end

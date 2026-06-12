@@ -8,7 +8,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   Anonymous view only — the email pages carry just the public addresses.
   All these pages run through the `NoIndex` pipeline in HTML, so their
-  docs are `noindex: true` and answer with an all-no `Content-Signal`.
+  docs are `noindex: true` (and `noai: true` — the page-level restriction
+  covers both axes) and answer with an all-no `Content-Signal`.
 
   This module also owns the **entry vocabulary**: the per-entry maps
   (`work_entry/1`, `tag_entry/1`, …) are shared with
@@ -45,7 +46,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     title = index_title(section, UserHelpers.full_name(user))
     entries = Enum.map(entries, &entry(section, &1))
 
-    AgentDocs.doc_meta(segment, "/#{user.active_slug}/#{segment}", noindex: true)
+    AgentDocs.doc_meta(segment, "/#{user.active_slug}/#{segment}", noindex: true, noai: true)
     |> Map.merge(%{
       section: segment,
       title: title,
@@ -62,7 +63,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     path = "/#{user.active_slug}/#{segment}/#{Phoenix.Param.to_param(record)}"
     entry = entry(section, record)
 
-    AgentDocs.doc_meta(@sections[section], path, noindex: true)
+    AgentDocs.doc_meta(@sections[section], path, noindex: true, noai: true)
     |> Map.merge(%{
       section: segment,
       title: "#{entry_title(section, entry)} · #{UserHelpers.full_name(user)}",

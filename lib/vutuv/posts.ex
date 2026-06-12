@@ -966,7 +966,11 @@ defmodule Vutuv.Posts do
   @doc """
   The newest anonymous-visible posts for the RSS feeds: `author`'s own
   original posts (reposts are engagement rows, so they never appear), or
-  `:all` for the site-wide feed (activated, indexable authors only).
+  `:all` for the site-wide feed. The aggregate feed carries one all-yes
+  Content-Signal and cannot signal per item, so it lists only members who
+  opted out of nothing — neither of search engines (`noindex?`) nor of AI
+  use (`noai?`); an opted-out member's posts still serve through their own
+  feed, which signals their choices per response.
   Preloaded like every rendered post; ordered by creation (the UUID v7 id).
   """
   def recent_public_posts(author_or_all, opts \\ [])
@@ -980,7 +984,7 @@ defmodule Vutuv.Posts do
   def recent_public_posts(:all, opts) do
     Post
     |> join(:inner, [p], u in assoc(p, :user))
-    |> where([p, u], u.activated? and not u.noindex?)
+    |> where([p, u], u.activated? and not u.noindex? and not u.noai?)
     |> recent_public(opts)
   end
 

@@ -66,8 +66,9 @@ auth $API/users/stefan.wintermeyer
 Scope: `profile:write`. Updates the plain profile fields: `headline`,
 `first_name`, `middle_name`, `last_name`, `nickname`, `honorific_prefix`,
 `honorific_suffix`, `gender`, `birthdate` (ISO date), `locale`,
-`noindex?`. Returns the fresh profile. The username and email addresses
-are deliberately **not** writable over the API.
+`noindex?` (search-engine opt-out), `noai?` (AI/LLM opt-out). Returns the
+fresh profile. The username and email addresses are deliberately **not**
+writable over the API.
 
 ```bash
 auth -X PATCH $API/me \

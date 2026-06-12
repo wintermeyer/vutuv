@@ -49,6 +49,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
 
     AgentDocs.doc_meta("profile", path,
       noindex: user.noindex?,
+      noai: user.noai?,
       formats: AgentDocs.formats()
     )
     |> Map.merge(%{

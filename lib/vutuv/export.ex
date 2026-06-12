@@ -107,6 +107,7 @@ defmodule Vutuv.Export do
       headline: user.headline,
       locale: user.locale,
       noindex: user.noindex?,
+      noai: user.noai?,
       notification_emails: user.notification_emails?,
       identity_verified: user.identity_verified?,
       avatar_file: user.avatar,

@@ -6,8 +6,8 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   most-followed listing (`/listings/most_followed_users`).
 
   The follow and connection lists are noindexed in HTML (the `NoIndex`
-  plug + robots.txt), so their docs carry `noindex: true` and answer with
-  an all-no `Content-Signal`. The connections doc is the anonymous view:
+  plug + robots.txt), so their docs carry `noindex: true` plus
+  `noai: true` and answer with an all-no `Content-Signal`. The connections doc is the anonymous view:
   accepted connections only, never the owner's pending requests. Changed
   what one of these pages shows? Update the matching builder — the drift
   test (`agent_docs_drift_test.exs`) reminds you.
@@ -40,7 +40,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
         :connections -> gettext("Connections of %{name}", name: name)
       end
 
-    AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true)
+    AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true, noai: true)
     |> Map.merge(%{
       title: label,
       description: label,

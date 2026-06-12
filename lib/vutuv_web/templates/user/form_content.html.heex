@@ -83,6 +83,12 @@
     <%= error_tag f, :noindex? %>
   </div>
 
+  <div class={"editform__field#{if error_tag(f, :noai?), do: " editform__field--error"}"}>
+    <%= label f, :noai?, gettext("Would you like to allow AI agents and LLMs to use your profile?") %>
+    <%= select f, :noai?, [{gettext("Yes"), false}, {gettext("No"), true}] %>
+    <%= error_tag f, :noai? %>
+  </div>
+
   <div class={"editform__field#{if error_tag(f, :notification_emails?), do: " editform__field--error"}"}>
     <%= label f, :notification_emails?, gettext("Would you like to receive notification emails (e.g. about unread messages)?") %>
     <%= select f, :notification_emails?, [{gettext("Yes"), true}, {gettext("No"), false}] %>

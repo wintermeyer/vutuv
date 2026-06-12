@@ -127,6 +127,24 @@ defmodule VutuvWeb.LayoutHTML do
   def page_title(_assigns), do: nil
 
   @doc """
+  The robots meta directives for a page about a member (`:user` in the conn
+  assigns): the member's search-engine and AI opt-outs rendered by
+  `VutuvWeb.ContentPolicy.robots_directives/2`. `nil` (no meta tag) when
+  the page is about nobody or the member opted out of nothing.
+  """
+  def robots_directives(%{conn: conn}) when not is_nil(conn) do
+    case conn.assigns[:user] do
+      %Vutuv.Accounts.User{} = user ->
+        VutuvWeb.ContentPolicy.robots_directives(user.noindex?, user.noai?)
+
+      _ ->
+        nil
+    end
+  end
+
+  def robots_directives(_assigns), do: nil
+
+  @doc """
   Minimal, serializable session map handed to the embedded `ShellLive` so it can
   render the logged-in chrome (name, avatar, profile link) over both a dead
   request and a LiveView socket. `"user_avatar"` is `nil` when the user has no

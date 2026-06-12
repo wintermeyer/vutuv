@@ -27,7 +27,12 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   def build(author, %Post{} = post, opts \\ []) do
     replies = Posts.list_replies(post, Keyword.get(opts, :viewer))
 
-    AgentDocs.doc_meta("post", Posts.path(post), noindex: Posts.restricted?(post))
+    # A restricted post is noindexed (and kept from AI) page-level; the
+    # author's noai? extends their AI opt-out to all their posts.
+    AgentDocs.doc_meta("post", Posts.path(post),
+      noindex: Posts.restricted?(post),
+      noai: Posts.restricted?(post) or author.noai?
+    )
     |> Map.merge(%{
       id: post.id,
       title: "#{UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}",
@@ -53,7 +58,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   the page that was asked for (including the period segments).
   """
   def build_archive(author, path, entries, total, period_label) do
-    AgentDocs.doc_meta("post_archive", path)
+    AgentDocs.doc_meta("post_archive", path, noai: author.noai?)
     |> Map.merge(%{
       title:
         "#{UserHelpers.full_name(author)} · #{gettext("Posts")}" <> period_suffix(period_label),
