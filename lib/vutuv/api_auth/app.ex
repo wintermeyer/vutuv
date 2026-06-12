@@ -1,12 +1,13 @@
 defmodule Vutuv.ApiAuth.App do
   @moduledoc """
-  A registered third-party application (OAuth client).
+  A registered third-party application (OAuth client, see
+  `Vutuv.ApiAuth.OAuth`).
 
-  `client_id` is the public identifier; the client secret is stored only as
-  a SHA-256 hash (`client_secret_hash`, null for PKCE-only public clients).
-  Registration is self-service; `suspended_at` is the admin kill switch.
-  The OAuth authorization flow itself ships in a later phase — the table
-  and schema exist so tokens and grants reference stable ids from day one.
+  `client_id` is the public identifier; the client secret is stored only
+  as a SHA-256 hash (`client_secret_hash`). Registration is self-service
+  (`/developers/apps`) but always owned by a vutuv account;
+  `suspended_at` is the admin kill switch that fails every token of the
+  app on its next request.
   """
 
   use VutuvWeb, :model

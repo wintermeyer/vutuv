@@ -29,14 +29,6 @@ defmodule VutuvWeb.ApiV2.MessageController do
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
-  plug(VutuvWeb.Plug.RequireScope, "messages:read" when action in [:index, :messages])
-
-  plug(
-    VutuvWeb.Plug.RequireScope,
-    "messages:write"
-    when action in [:send_to_user, :create_message, :accept, :decline, :mark_read]
-  )
-
   # ── Reads ──
 
   def index(conn, _params) do
@@ -54,27 +46,25 @@ defmodule VutuvWeb.ApiV2.MessageController do
 
     with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(id),
          %Conversation{} = conversation <- Chat.get_conversation(me, uuid) do
-      case ApiV2.decode_cursor(params["cursor"]) do
-        {:ok, cursor} ->
-          page =
-            Chat.messages_page(me, conversation.id,
-              cursor: cursor,
-              limit: ApiV2.page_limit(params, 30)
-            )
-
-          ApiV2.send_json(conn, %{
-            type: "messages",
-            conversation_id: conversation.id,
-            messages: Enum.map(page.entries, &message_entry(&1, me)),
-            more: page.more?,
-            next_cursor: ApiV2.encode_cursor(page.more? && page.next_cursor)
-          })
-
-        :error ->
-          Problem.send_problem(conn, 400, "Bad cursor",
-            detail: "Pass the next_cursor value from a previous page, unmodified."
+      ApiV2.with_cursor(conn, params, fn cursor ->
+        page =
+          Chat.messages_page(me, conversation.id,
+            cursor: cursor,
+            limit: ApiV2.page_limit(params, 30)
           )
-      end
+
+        doc =
+          Map.merge(
+            %{
+              type: "messages",
+              conversation_id: conversation.id,
+              messages: Enum.map(page.entries, &message_entry(&1, me))
+            },
+            ApiV2.page_fields(page)
+          )
+
+        ApiV2.send_json(conn, doc)
+      end)
     else
       _missing -> Problem.not_found(conn)
     end
@@ -96,6 +86,9 @@ defmodule VutuvWeb.ApiV2.MessageController do
         Problem.send_problem(conn, 422, "Cannot message yourself")
 
       {:error, :not_activated} ->
+        # Reachable for legacy rows whose activated? is nil: visible as a
+        # profile (the predicate treats nil as activated), but Chat's
+        # stricter gate refuses to open a conversation with them.
         Problem.not_found(conn)
 
       {:error, :frozen} ->
@@ -198,16 +191,13 @@ defmodule VutuvWeb.ApiV2.MessageController do
     %{
       id: conversation.id,
       # A declined request reads "pending" to its sender, like the website.
-      status: masked_status(conversation.status),
+      status: Chat.display_status(conversation),
       with: AgentDocs.person_ref(other),
       last_message_at: entry.last_at,
       preview: entry.last_body && AgentDocs.excerpt(entry.last_body),
       unread: entry.unread
     }
   end
-
-  defp masked_status("declined"), do: "pending"
-  defp masked_status(status), do: status
 
   defp message_entry(%Message{} = message, me) do
     %{

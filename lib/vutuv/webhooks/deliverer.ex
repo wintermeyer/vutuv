@@ -18,10 +18,9 @@ defmodule Vutuv.Webhooks.Deliverer do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @doc "Asks the deliverer to drain soon (fresh work was queued). No-op when it is not running."
+  @doc "Asks the deliverer to drain soon (fresh work was queued). A cast to the unstarted name (tests) is a no-op."
   def nudge do
-    if interval(), do: GenServer.cast(__MODULE__, :drain)
-    :ok
+    GenServer.cast(__MODULE__, :drain)
   end
 
   @impl true

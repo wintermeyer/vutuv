@@ -577,6 +577,24 @@ defmodule Vutuv.Accounts do
     Repo.get_by(User, active_slug: slug)
   end
 
+  # The plain profile fields a member may edit about themselves. The API's
+  # PATCH /me writes through this list; the username (quota'd,
+  # Twitter-validated), email addresses (PIN-verified identities) and
+  # account flags (activated?, notification_emails?) are deliberately not
+  # on it.
+  @profile_fields ~w(headline first_name last_name middle_name nickname
+                     honorific_prefix honorific_suffix gender birthdate
+                     locale noindex?)
+
+  @doc """
+  Updates only the plain profile fields (see `@profile_fields`) — the
+  contract behind `PATCH /api/2.0/me`. Anything else in `attrs` is ignored,
+  so callers can pass request params through untouched.
+  """
+  def update_profile(%User{} = user, attrs) do
+    update_user(user, Map.take(attrs, @profile_fields))
+  end
+
   def update_user(%User{} = user, attrs) do
     user
     |> User.changeset(attrs)

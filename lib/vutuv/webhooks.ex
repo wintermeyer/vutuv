@@ -55,13 +55,8 @@ defmodule Vutuv.Webhooks do
   def create_subscription(%App{} = app, attrs) do
     secret = @secret_prefix <> ApiAuth.random_token()
 
-    %Subscription{app_id: app.id, secret: secret}
-    |> Subscription.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, subscription} -> {:ok, subscription, secret}
-      {:error, changeset} -> {:error, changeset}
-    end
+    changeset = Subscription.changeset(%Subscription{app_id: app.id, secret: secret}, attrs)
+    with {:ok, subscription} <- Repo.insert(changeset), do: {:ok, subscription, secret}
   end
 
   def change_subscription(%Subscription{} = subscription, attrs \\ %{}) do
@@ -96,9 +91,11 @@ defmodule Vutuv.Webhooks do
   (whose grant authorizes the delivery). Cheap when nobody subscribed:
   one indexed existence check.
   """
-  def emit(member, event, data) when is_map_key(@events, event) do
+  # No guard on member_id: it is only dereferenced when subscriptions
+  # exist, so unit tests with bare fixture ids pass through the fast path.
+  def emit(member_id, event, data) when is_map_key(@events, event) do
     if subscriptions_exist?(event) do
-      do_emit(member, event, data)
+      do_emit(member_id, event, data)
     end
 
     :ok
@@ -108,8 +105,7 @@ defmodule Vutuv.Webhooks do
     Repo.exists?(from(s in Subscription, where: s.active and ^event in s.events))
   end
 
-  defp do_emit(member, event, data) do
-    member = resolve_member(member)
+  defp do_emit(member_id, event, data) do
     scope = required_scope(event)
 
     subscription_ids =
@@ -121,23 +117,23 @@ defmodule Vutuv.Webhooks do
           on: g.app_id == a.id,
           where: s.active and ^event in s.events,
           where: is_nil(a.suspended_at),
-          where: g.user_id == ^member.id and is_nil(g.revoked_at) and ^scope in g.scopes,
+          where: g.user_id == ^member_id and is_nil(g.revoked_at) and ^scope in g.scopes,
           select: s.id,
           distinct: true
         )
       )
 
-    queue_all(subscription_ids, event, envelope(member, event, data))
+    queue_all(subscription_ids, event, envelope(member_id, event, data))
   end
 
-  defp resolve_member(%User{} = user), do: user
-  defp resolve_member(user_id) when is_binary(user_id), do: Repo.get!(User, user_id)
+  defp envelope(member_id, event, data) do
+    # Only the slug is needed for the thin envelope, not the wide user row.
+    member_slug = Repo.one!(from(u in User, where: u.id == ^member_id, select: u.active_slug))
 
-  defp envelope(member, event, data) do
     %{
       "event" => event,
       "occurred_at" => DateTime.to_iso8601(DateTime.utc_now(:second)),
-      "member" => member.active_slug,
+      "member" => member_slug,
       "data" => data
     }
   end

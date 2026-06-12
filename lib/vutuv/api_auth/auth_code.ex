@@ -1,9 +1,9 @@
 defmodule Vutuv.ApiAuth.AuthCode do
   @moduledoc """
   A one-time OAuth authorization code (10-minute lifetime) with its PKCE
-  challenge. `used_at` marks consumption; a second redemption is the RFC
-  6749/9700 token-theft signal and revokes the grant's tokens. Populated by
-  the OAuth flow (a later phase).
+  challenge, minted by the consent flow (`Vutuv.ApiAuth.OAuth`). `used_at`
+  marks consumption; a second redemption is the RFC 6749/9700 token-theft
+  signal and revokes the grant's tokens.
   """
 
   use VutuvWeb, :model

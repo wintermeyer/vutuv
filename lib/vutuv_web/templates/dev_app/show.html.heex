@@ -13,17 +13,12 @@
       {gettext("This application was suspended by the operator. Its tokens are refused.")}
     </p>
 
-    <%= if secret = Phoenix.Flash.get(@flash, :new_app_secret) do %>
-      <div
-        class="mb-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
-        data-new-secret
-      >
-        <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
-          {gettext("Your client secret. Copy it now, it will not be shown again:")}
-        </p>
-        <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{secret}</code>
-      </div>
-    <% end %>
+    <.secret_once
+      flash={@flash}
+      key={:new_app_secret}
+      label={gettext("Your client secret. Copy it now, it will not be shown again:")}
+      class="mb-4"
+    />
 
     <dl class="space-y-3 text-sm">
       <div>
@@ -88,17 +83,12 @@
   <section class="card" id="dev-app-webhooks">
     <.section_header title={gettext("Webhooks")} />
 
-    <%= if secret = Phoenix.Flash.get(@flash, :new_webhook_secret) do %>
-      <div
-        class="mb-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
-        data-new-webhook-secret
-      >
-        <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
-          {gettext("Your webhook signing secret. Copy it now, it will not be shown again:")}
-        </p>
-        <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{secret}</code>
-      </div>
-    <% end %>
+    <.secret_once
+      flash={@flash}
+      key={:new_webhook_secret}
+      label={gettext("Your webhook signing secret. Copy it now, it will not be shown again:")}
+      class="mb-4"
+    />
 
     <%= if @webhooks == [] do %>
       <p class="card__empty">

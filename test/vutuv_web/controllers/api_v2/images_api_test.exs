@@ -27,8 +27,6 @@ defmodule VutuvWeb.ApiV2.ImagesApiTest do
     {:ok, conn: conn, user: user, token: token, tmp: tmp}
   end
 
-  defp authed(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
-
   defp jpeg!(tmp) do
     src = Path.join(tmp, "src-#{System.unique_integer([:positive])}.jpg")
     {:ok, img} = Image.new(64, 64, color: [10, 200, 100])

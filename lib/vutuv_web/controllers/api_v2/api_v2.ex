@@ -1,6 +1,6 @@
 defmodule VutuvWeb.ApiV2 do
   @moduledoc """
-  Shared response helper for the `/api/2.0` controllers: success bodies are
+  Shared response helpers for the `/api/2.0` controllers: success bodies are
   the same doc maps the public AgentDocs `.json` siblings serve (rendered
   by `VutuvWeb.AgentDocs.JSON`), so the authenticated API and the anonymous
   JSON pages speak one schema. Errors are `VutuvWeb.ApiV2.Problem`.
@@ -12,6 +12,7 @@ defmodule VutuvWeb.ApiV2 do
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation
   alias VutuvWeb.AgentDocs.JSON
+  alias VutuvWeb.ApiV2.Problem
 
   def send_json(conn, doc, status \\ 200) do
     conn
@@ -25,8 +26,9 @@ defmodule VutuvWeb.ApiV2 do
   Keyset cursors cross the wire signed: opaque to clients, tamper-proof for
   us (`Phoenix.Token` only term-decodes after verifying the signature).
   Shared by every cursor-paginated endpoint (feed, messages, notifications).
+  `false` is the no-more-pages value the callers compute via `page.more? &&
+  page.next_cursor`.
   """
-  def encode_cursor(nil), do: nil
   def encode_cursor(false), do: nil
 
   def encode_cursor(cursor) do
@@ -46,6 +48,28 @@ defmodule VutuvWeb.ApiV2 do
 
   def decode_cursor(_other), do: :error
 
+  @doc """
+  The cursor-pagination plumbing every paginated endpoint shares: decodes
+  `params["cursor"]` and hands it to `fun`, or answers the uniform 400.
+  Pair with `page_fields/1` for the response envelope.
+  """
+  def with_cursor(conn, params, fun) do
+    case decode_cursor(params["cursor"]) do
+      {:ok, cursor} ->
+        fun.(cursor)
+
+      :error ->
+        Problem.send_problem(conn, 400, "Bad cursor",
+          detail: "Pass the next_cursor value from a previous page, unmodified."
+        )
+    end
+  end
+
+  @doc "The shared tail of every cursor-paginated response."
+  def page_fields(page) do
+    %{more: page.more?, next_cursor: encode_cursor(page.more? && page.next_cursor)}
+  end
+
   @doc "Clamped per-page limit from the request params."
   def page_limit(params, default \\ 25) do
     case Integer.parse(to_string(params["limit"] || "")) do
@@ -57,27 +81,24 @@ defmodule VutuvWeb.ApiV2 do
   @doc """
   Resolves a slug to a user the viewer may see, or `:error` (one shape for
   unknown / never-activated / moderation-hidden, so the API cannot probe).
-  Mirrors `VutuvWeb.Plug.EnsureActivated`: hidden accounts stay visible to
-  themselves and admins — the API reads through the viewer's eyes.
+  The rule itself is `Vutuv.Moderation.profile_visible_to?/2` — the same
+  one the HTML gate (`VutuvWeb.Plug.EnsureActivated`) enforces, with the
+  token's user as viewer: the API reads through their eyes.
   """
   def fetch_visible_user(slug, viewer) do
     with %User{} = user <- Accounts.get_user_by_slug(slug),
-         true <- visible_to?(user, viewer) do
+         true <- Moderation.profile_visible_to?(user, viewer) do
       {:ok, user}
     else
       _missing_or_hidden -> :error
     end
   end
 
-  defp visible_to?(user, viewer) do
-    activated?(user) and (not Moderation.account_hidden?(user) or bypass?(user, viewer))
+  @doc "`fetch_visible_user/2` with the uniform 404 — the shape every slug endpoint shares."
+  def with_visible_user(conn, slug, fun) do
+    case fetch_visible_user(slug, conn.assigns.current_user) do
+      {:ok, user} -> fun.(user)
+      :error -> Problem.not_found(conn)
+    end
   end
-
-  defp activated?(%User{activated?: true}), do: true
-  defp activated?(%User{activated?: nil}), do: true
-  defp activated?(_user), do: false
-
-  defp bypass?(%User{id: id}, %User{id: id}), do: true
-  defp bypass?(_user, %User{admin?: true}), do: true
-  defp bypass?(_user, _viewer), do: false
 end

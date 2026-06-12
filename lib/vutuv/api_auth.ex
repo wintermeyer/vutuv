@@ -40,13 +40,11 @@ defmodule Vutuv.ApiAuth do
   def create_pat(%User{} = user, attrs) do
     plaintext = @pat_prefix <> random_token()
 
-    %Token{user_id: user.id, kind: "pat", token_hash: hash_token(plaintext)}
-    |> Token.pat_changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, token} -> {:ok, plaintext, token}
-      {:error, changeset} -> {:error, changeset}
-    end
+    changeset =
+      %Token{user_id: user.id, kind: "pat", token_hash: hash_token(plaintext)}
+      |> Token.pat_changeset(attrs)
+
+    with {:ok, token} <- Repo.insert(changeset), do: {:ok, plaintext, token}
   end
 
   @doc "A changeset for the PAT form."
@@ -104,17 +102,15 @@ defmodule Vutuv.ApiAuth do
   def create_app(%User{} = user, attrs) do
     secret = @secret_prefix <> random_token()
 
-    %App{
-      user_id: user.id,
-      client_id: @client_id_prefix <> random_token(16),
-      client_secret_hash: hash_token(secret)
-    }
-    |> App.changeset(attrs)
-    |> Repo.insert()
-    |> case do
-      {:ok, app} -> {:ok, app, secret}
-      {:error, changeset} -> {:error, changeset}
-    end
+    changeset =
+      %App{
+        user_id: user.id,
+        client_id: @client_id_prefix <> random_token(16),
+        client_secret_hash: hash_token(secret)
+      }
+      |> App.changeset(attrs)
+
+    with {:ok, app} <- Repo.insert(changeset), do: {:ok, app, secret}
   end
 
   def change_app(%App{} = app, attrs \\ %{}), do: App.changeset(app, attrs)
@@ -233,10 +229,10 @@ defmodule Vutuv.ApiAuth do
   :invalid_token | :revoked | :expired | :app_suspended | :account_inactive}`.
   """
   def verify_token(plaintext) when is_binary(plaintext) do
-    with {:ok, token} <- lookup(hash_token(plaintext)),
+    with {:ok, token, user, app} <- lookup(hash_token(plaintext)),
          :ok <- check_live(token),
-         :ok <- check_app(token),
-         {:ok, user} <- usable_user(token) do
+         :ok <- check_app(token, app),
+         :ok <- check_user(user) do
       {:ok, touch_last_used(token), user}
     end
   end
@@ -260,10 +256,21 @@ defmodule Vutuv.ApiAuth do
     bytes |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
   end
 
+  # One round trip for the hot path: the token, its user and (for OAuth
+  # tokens) its app arrive together; all further checks are in-memory.
   defp lookup(hash) do
-    case Repo.get_by(Token, token_hash: hash) do
+    from(t in Token,
+      where: t.token_hash == ^hash,
+      join: u in User,
+      on: u.id == t.user_id,
+      left_join: a in App,
+      on: a.id == t.app_id,
+      select: {t, u, a}
+    )
+    |> Repo.one()
+    |> case do
       nil -> {:error, :invalid_token}
-      token -> {:ok, token}
+      {token, user, app} -> {:ok, token, user, app}
     end
   end
 
@@ -278,25 +285,17 @@ defmodule Vutuv.ApiAuth do
   defp check_live(_token), do: :ok
 
   # The "bad player" kill switch: a suspended app's tokens all die at once.
-  defp check_app(%Token{app_id: nil}), do: :ok
-
-  defp check_app(%Token{app_id: app_id}) do
-    case Repo.get(App, app_id) do
-      %App{suspended_at: nil} -> :ok
-      _suspended_or_gone -> {:error, :app_suspended}
-    end
-  end
+  defp check_app(%Token{app_id: nil}, _app), do: :ok
+  defp check_app(%Token{}, %App{suspended_at: nil}), do: :ok
+  defp check_app(%Token{}, _suspended_or_gone), do: {:error, :app_suspended}
 
   # The same gate the session login applies: unactivated, suspended and
   # deactivated accounts cannot act over the API either.
-  defp usable_user(%Token{user_id: user_id}) do
-    user = Repo.get(User, user_id)
-
+  defp check_user(%User{} = user) do
     cond do
-      is_nil(user) -> {:error, :invalid_token}
       not user.activated? -> {:error, :account_inactive}
       Moderation.login_block(user) -> {:error, :account_inactive}
-      true -> {:ok, user}
+      true -> :ok
     end
   end
 

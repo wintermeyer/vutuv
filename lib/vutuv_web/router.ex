@@ -303,84 +303,141 @@ defmodule VutuvWeb.Router do
   scope "/api/2.0", VutuvWeb.ApiV2, as: :api_v2 do
     pipe_through(:api_v2)
 
-    get("/me", MeController, :show)
-    patch("/me", MeController, :update)
+    # Every route DECLARES the scope it needs in its assigns; the pipeline's
+    # ApiV2Auth plug enforces it and refuses to serve a route that forgot to
+    # declare one — default-deny, so an endpoint can never ship unchecked.
 
-    get("/users/:slug", UserController, :show)
+    get("/me", MeController, :show, assigns: %{api_scope: "profile:read"})
+    patch("/me", MeController, :update, assigns: %{api_scope: "profile:write"})
+
+    get("/users/:slug", UserController, :show, assigns: %{api_scope: "profile:read"})
 
     # The profile sections, same doc shape as the public .json pages (the
     # email list is viewer-aware). Which section a route means travels in
     # the route assigns.
     for section <- ~w(work_experiences links social_media_accounts addresses
                       phone_numbers emails tags)a do
-      get("/users/:slug/#{section}", SectionController, :index, assigns: %{section: section})
+      get("/users/:slug/#{section}", SectionController, :index,
+        assigns: %{section: section, api_scope: "profile:read"}
+      )
     end
 
     # Writes on the authorized user's own sections. No email routes (an
     # address is a PIN-verified identity); tags go through TagController.
     for section <- ~w(work_experiences links social_media_accounts addresses
                       phone_numbers)a do
-      post("/me/#{section}", SectionController, :create, assigns: %{section: section})
-      patch("/me/#{section}/:id", SectionController, :update, assigns: %{section: section})
-      delete("/me/#{section}/:id", SectionController, :delete, assigns: %{section: section})
+      post("/me/#{section}", SectionController, :create,
+        assigns: %{section: section, api_scope: "profile:write"}
+      )
+
+      patch("/me/#{section}/:id", SectionController, :update,
+        assigns: %{section: section, api_scope: "profile:write"}
+      )
+
+      delete("/me/#{section}/:id", SectionController, :delete,
+        assigns: %{section: section, api_scope: "profile:write"}
+      )
     end
 
-    post("/me/tags", TagController, :create)
-    delete("/me/tags/:id", TagController, :delete)
+    post("/me/tags", TagController, :create, assigns: %{api_scope: "profile:write"})
+    delete("/me/tags/:id", TagController, :delete, assigns: %{api_scope: "profile:write"})
 
     # Pending post images (multipart upload; attach via image_ids in
     # POST /posts, swept after a day if left unattached).
-    post("/me/post_images", ImageController, :create)
-    delete("/me/post_images/:id", ImageController, :delete)
+    post("/me/post_images", ImageController, :create, assigns: %{api_scope: "posts:write"})
+    delete("/me/post_images/:id", ImageController, :delete, assigns: %{api_scope: "posts:write"})
 
     # The social graph: people lists (same doc shape as the public .json
     # pages), the viewer's standing with a member, follow/unfollow and the
     # connection lifecycle.
-    get("/users/:slug/followers", SocialController, :followers)
-    get("/users/:slug/following", SocialController, :following)
-    get("/users/:slug/connections", SocialController, :connections)
-    get("/users/:slug/relationship", SocialController, :relationship)
+    for route <- ~w(followers following connections relationship)a do
+      get("/users/:slug/#{route}", SocialController, route, assigns: %{api_scope: "social:read"})
+    end
 
-    put("/users/:slug/follow", SocialController, :follow)
-    delete("/users/:slug/follow", SocialController, :unfollow)
-    post("/users/:slug/connection", SocialController, :request_connection)
-    post("/connections/:id/accept", SocialController, :accept_connection)
-    post("/connections/:id/decline", SocialController, :decline_connection)
-    delete("/connections/:id", SocialController, :remove_connection)
+    put("/users/:slug/follow", SocialController, :follow, assigns: %{api_scope: "social:write"})
+
+    delete("/users/:slug/follow", SocialController, :unfollow,
+      assigns: %{api_scope: "social:write"}
+    )
+
+    post("/users/:slug/connection", SocialController, :request_connection,
+      assigns: %{api_scope: "social:write"}
+    )
+
+    post("/connections/:id/accept", SocialController, :accept_connection,
+      assigns: %{api_scope: "social:write"}
+    )
+
+    post("/connections/:id/decline", SocialController, :decline_connection,
+      assigns: %{api_scope: "social:write"}
+    )
+
+    delete("/connections/:id", SocialController, :remove_connection,
+      assigns: %{api_scope: "social:write"}
+    )
 
     # Posts: the member's feed, the author archive, permalinks, composing,
     # replies and the idempotent engagement switches.
-    get("/feed", PostController, :feed)
-    get("/users/:slug/posts", PostController, :archive)
-    get("/posts/:id", PostController, :show)
-    get("/posts/:id/engagement", PostController, :engagement)
+    get("/feed", PostController, :feed, assigns: %{api_scope: "posts:read"})
+    get("/users/:slug/posts", PostController, :archive, assigns: %{api_scope: "posts:read"})
+    get("/posts/:id", PostController, :show, assigns: %{api_scope: "posts:read"})
 
-    post("/posts", PostController, :create)
-    post("/posts/:id/replies", PostController, :reply)
-    patch("/posts/:id", PostController, :update)
-    delete("/posts/:id", PostController, :delete)
+    get("/posts/:id/engagement", PostController, :engagement, assigns: %{api_scope: "posts:read"})
+
+    post("/posts", PostController, :create, assigns: %{api_scope: "posts:write"})
+    post("/posts/:id/replies", PostController, :reply, assigns: %{api_scope: "posts:write"})
+    patch("/posts/:id", PostController, :update, assigns: %{api_scope: "posts:write"})
+    delete("/posts/:id", PostController, :delete, assigns: %{api_scope: "posts:write"})
 
     for kind <- ~w(like bookmark repost)a do
-      put("/posts/:id/#{kind}", PostController, :engage, assigns: %{engagement: kind})
-      delete("/posts/:id/#{kind}", PostController, :disengage, assigns: %{engagement: kind})
+      put("/posts/:id/#{kind}", PostController, :engage,
+        assigns: %{engagement: kind, api_scope: "posts:write"}
+      )
+
+      delete("/posts/:id/#{kind}", PostController, :disengage,
+        assigns: %{engagement: kind, api_scope: "posts:write"}
+      )
     end
 
     # Direct messages (the request model, blocking and freezes apply like
     # on the website) and the derived notification feed.
-    get("/conversations", MessageController, :index)
-    get("/conversations/:id/messages", MessageController, :messages)
-    post("/conversations/:id/messages", MessageController, :create_message)
-    post("/conversations/:id/accept", MessageController, :accept)
-    post("/conversations/:id/decline", MessageController, :decline)
-    post("/conversations/:id/read", MessageController, :mark_read)
-    post("/users/:slug/messages", MessageController, :send_to_user)
+    get("/conversations", MessageController, :index, assigns: %{api_scope: "messages:read"})
 
-    get("/notifications", NotificationController, :index)
-    post("/notifications/read", NotificationController, :mark_read)
+    get("/conversations/:id/messages", MessageController, :messages,
+      assigns: %{api_scope: "messages:read"}
+    )
+
+    post("/conversations/:id/messages", MessageController, :create_message,
+      assigns: %{api_scope: "messages:write"}
+    )
+
+    post("/conversations/:id/accept", MessageController, :accept,
+      assigns: %{api_scope: "messages:write"}
+    )
+
+    post("/conversations/:id/decline", MessageController, :decline,
+      assigns: %{api_scope: "messages:write"}
+    )
+
+    post("/conversations/:id/read", MessageController, :mark_read,
+      assigns: %{api_scope: "messages:write"}
+    )
+
+    post("/users/:slug/messages", MessageController, :send_to_user,
+      assigns: %{api_scope: "messages:write"}
+    )
+
+    # Notifications span the social areas, so they ride on the social scopes.
+    get("/notifications", NotificationController, :index, assigns: %{api_scope: "social:read"})
+
+    post("/notifications/read", NotificationController, :mark_read,
+      assigns: %{api_scope: "social:write"}
+    )
 
     # JSON 404 for unknown API paths — without this they would fall through
-    # to the HTML profile routes. Also the CORS preflight's match.
-    match(:*, "/*path", NotFoundController, :show)
+    # to the HTML profile routes. Also the CORS preflight's match. The one
+    # route that legitimately needs no scope.
+    match(:*, "/*path", NotFoundController, :show, assigns: %{api_scope: :none})
   end
 
   # Profiles live at the URL root: /:slug is the profile page, /:slug/... the

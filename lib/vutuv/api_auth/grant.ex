@@ -1,9 +1,9 @@
 defmodule Vutuv.ApiAuth.Grant do
   @moduledoc """
   A user's authorization of an app: which scopes they granted, once per
-  user × app. Revoking sets `revoked_at` and kills the grant's tokens;
-  re-authorizing reuses the row. The "Connected apps" settings page lists
-  these. Populated by the OAuth flow (a later phase).
+  user × app (written by the consent flow, `Vutuv.ApiAuth.OAuth`).
+  Revoking sets `revoked_at` and kills the grant's tokens; re-consent
+  reuses the row. The "Connected apps" page lists these.
   """
 
   use VutuvWeb, :model

@@ -125,7 +125,6 @@ defmodule Vutuv.ApiAuth.OAuth do
           redirect_uri: request.redirect_uri,
           scopes: grant.scopes,
           code_challenge: request.code_challenge,
-          code_challenge_method: "S256",
           expires_at: seconds_from_now(@code_ttl_seconds)
         })
       end)

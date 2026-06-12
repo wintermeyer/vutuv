@@ -14,8 +14,6 @@ defmodule Vutuv.ApiAuth.Token do
 
   alias Vutuv.ApiAuth.Scopes
 
-  @kinds ~w(pat access refresh)
-
   schema "api_tokens" do
     belongs_to(:user, Vutuv.Accounts.User)
     belongs_to(:app, Vutuv.ApiAuth.App)
@@ -32,8 +30,6 @@ defmodule Vutuv.ApiAuth.Token do
 
     timestamps()
   end
-
-  def kinds, do: @kinds
 
   @doc "Changeset for a user-created personal access token."
   def pat_changeset(token, params \\ %{}) do

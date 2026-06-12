@@ -14,15 +14,6 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
     {:ok, conn: conn, me: me, other: other, token: token}
   end
 
-  defp authed(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
-
-  defp json_req(conn, method, token, path, body) do
-    conn
-    |> authed(token)
-    |> put_req_header("content-type", "application/json")
-    |> then(&dispatch(&1, @endpoint, method, path, Jason.encode!(body)))
-  end
-
   describe "create / read / update / delete" do
     test "the full lifecycle of a post", %{conn: conn, me: me, token: token} do
       conn1 =

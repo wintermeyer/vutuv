@@ -17,17 +17,11 @@ defmodule VutuvWeb.ApiV2Test do
     put_req_header(conn, "authorization", "Bearer " <> plaintext)
   end
 
-  defp problem(conn) do
-    assert [content_type] = get_resp_header(conn, "content-type")
-    assert content_type =~ "application/problem+json"
-    Jason.decode!(conn.resp_body)
-  end
-
   describe "authentication" do
     test "no token is a 401 problem with WWW-Authenticate", %{conn: conn} do
       conn = get(conn, "/api/2.0/me")
       assert conn.status == 401
-      assert %{"title" => "Unauthorized", "status" => 401} = problem(conn)
+      assert %{"title" => "Unauthorized", "status" => 401} = api_problem(conn)
       assert [www] = get_resp_header(conn, "www-authenticate")
       assert www =~ "Bearer"
     end
@@ -48,7 +42,7 @@ defmodule VutuvWeb.ApiV2Test do
 
       conn = build_conn() |> authed(plaintext) |> get("/api/2.0/me")
       assert conn.status == 401
-      assert problem(conn)["detail"] =~ "revoked"
+      assert api_problem(conn)["detail"] =~ "revoked"
     end
 
     test "unknown API paths are a JSON 404, not an HTML page", %{
@@ -57,7 +51,7 @@ defmodule VutuvWeb.ApiV2Test do
     } do
       conn = conn |> authed(plaintext) |> get("/api/2.0/nonexistent")
       assert conn.status == 404
-      assert %{"status" => 404} = problem(conn)
+      assert %{"status" => 404} = api_problem(conn)
     end
   end
 
@@ -67,7 +61,7 @@ defmodule VutuvWeb.ApiV2Test do
 
       conn = conn |> authed(plaintext) |> get("/api/2.0/me")
       assert conn.status == 403
-      assert problem(conn)["required_scope"] == "profile:read"
+      assert api_problem(conn)["required_scope"] == "profile:read"
     end
 
     test "profile:write implies profile:read", %{conn: conn, user: user} do

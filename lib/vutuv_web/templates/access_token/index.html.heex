@@ -14,17 +14,12 @@
     )}<a href={~p"/developers"} class="font-semibold text-brand-600 hover:text-brand-700">vutuv.de/developers</a>
   </p>
 
-  <%= if new_token = Phoenix.Flash.get(@flash, :new_token) do %>
-    <div
-      class="mt-4 rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800"
-      data-new-token
-    >
-      <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">
-        {gettext("Your new token. Copy it now, it will not be shown again:")}
-      </p>
-      <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{new_token}</code>
-    </div>
-  <% end %>
+  <.secret_once
+    flash={@flash}
+    key={:new_token}
+    label={gettext("Your new token. Copy it now, it will not be shown again:")}
+    class="mt-4"
+  />
 
   <%= if @tokens == [] do %>
     <p class="card__empty">{gettext("You have no active tokens.")}</p>

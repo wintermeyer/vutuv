@@ -15,15 +15,6 @@ defmodule VutuvWeb.ApiV2.MeController do
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
-  plug(VutuvWeb.Plug.RequireScope, "profile:read" when action == :show)
-  plug(VutuvWeb.Plug.RequireScope, "profile:write" when action == :update)
-
-  # The whitelist is the API contract; Accounts.update_user/2 casts more
-  # (activated?, notification_emails?, tag_list), which an app must not touch.
-  @updatable_fields ~w(headline first_name last_name middle_name nickname
-                       honorific_prefix honorific_suffix gender birthdate
-                       locale noindex?)
-
   def show(conn, _params) do
     user = conn.assigns.current_user
     ApiV2.send_json(conn, ProfileDoc.build(user, viewer: user))
@@ -32,7 +23,7 @@ defmodule VutuvWeb.ApiV2.MeController do
   def update(conn, params) do
     user = conn.assigns.current_user
 
-    case Accounts.update_user(user, Map.take(params, @updatable_fields)) do
+    case Accounts.update_profile(user, params) do
       {:ok, user} -> ApiV2.send_json(conn, ProfileDoc.build(user, viewer: user))
       {:error, changeset} -> Problem.validation_failed(conn, changeset)
     end

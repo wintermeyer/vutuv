@@ -27,13 +27,6 @@ defmodule VutuvWeb.ApiV2.SectionController do
   alias VutuvWeb.ApiV2.Problem
   alias VutuvWeb.UserHelpers
 
-  plug(VutuvWeb.Plug.RequireScope, "profile:read" when action == :index)
-
-  plug(
-    VutuvWeb.Plug.RequireScope,
-    "profile:write" when action in [:create, :update, :delete]
-  )
-
   @writable %{
     work_experiences: %{assoc: :work_experiences, schema: WorkExperience},
     links: %{assoc: :urls, schema: Url},
@@ -46,14 +39,10 @@ defmodule VutuvWeb.ApiV2.SectionController do
     viewer = conn.assigns.current_user
     section = conn.assigns.section
 
-    case ApiV2.fetch_visible_user(slug, viewer) do
-      {:ok, user} ->
-        doc = SectionDocs.build_index(user, section, entries(user, section, viewer))
-        ApiV2.send_json(conn, doc)
-
-      :error ->
-        Problem.not_found(conn)
-    end
+    ApiV2.with_visible_user(conn, slug, fn user ->
+      doc = SectionDocs.build_index(user, section, entries(user, section, viewer))
+      ApiV2.send_json(conn, doc)
+    end)
   end
 
   def create(conn, params) do
@@ -64,7 +53,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
     case Repo.insert(changeset) do
       {:ok, record} ->
-        after_create(conn.assigns.section, record)
+        after_write(conn.assigns.section, record)
         ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record), 201)
 
       {:error, changeset} ->
@@ -78,6 +67,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
     with %{} = record <- get_owned(user, assoc, id),
          {:ok, record} <- record |> schema.changeset(params) |> Repo.update() do
+      after_write(conn.assigns.section, record)
       ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record))
     else
       nil -> Problem.not_found(conn)
@@ -110,9 +100,10 @@ defmodule VutuvWeb.ApiV2.SectionController do
     Repo.all(assoc(user, Map.fetch!(@writable, section).assoc))
   end
 
-  # Same side effect as the HTML link form: capture the page screenshot off
+  # Same side effect as the HTML link forms (create AND update, so an API
+  # edit never leaves a stale screenshot): capture the page screenshot off
   # the request path, supervised, gated so tests launch no Chromium.
-  defp after_create(:links, url) do
+  defp after_write(:links, url) do
     if Application.get_env(:vutuv, :generate_screenshots, true) do
       Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
         Vutuv.PageScreenshot.generate_screenshot(url)
@@ -122,7 +113,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     :ok
   end
 
-  defp after_create(_section, _record), do: :ok
+  defp after_write(_section, _record), do: :ok
 
   defp get_owned(user, assoc_name, id) do
     case UUIDv7.cast_or_nil(id) do

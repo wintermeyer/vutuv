@@ -657,6 +657,36 @@ defmodule VutuvWeb.UI do
     if n < 0, do: "-" <> digits, else: digits
   end
 
+  @doc """
+  The show-once credential reveal: a brand-tint box with a `select-all`
+  `<code>` line, rendered only while the one-shot flash under `key` holds a
+  freshly minted secret (access tokens, client secrets, webhook signing
+  secrets). `label` is the "copy it now" sentence; `class` adds margin
+  utilities at the call site.
+  """
+  attr(:flash, :map, required: true)
+  attr(:key, :atom, required: true)
+  attr(:label, :string, required: true)
+  attr(:class, :any, default: nil)
+
+  def secret_once(assigns) do
+    assigns = assign(assigns, :secret, Phoenix.Flash.get(assigns.flash, assigns.key))
+
+    ~H"""
+    <div
+      :if={@secret}
+      class={[
+        "rounded-lg bg-brand-50 p-4 ring-1 ring-brand-200 dark:bg-brand-900/40 dark:ring-brand-800",
+        @class
+      ]}
+      data-secret-once={@key}
+    >
+      <p class="text-sm font-semibold text-brand-800 dark:text-brand-100">{@label}</p>
+      <code class="mt-2 block select-all break-all rounded bg-white px-3 py-2 text-sm text-slate-800 dark:bg-slate-900 dark:text-slate-100">{@secret}</code>
+    </div>
+    """
+  end
+
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)
   attr(:class, :string, default: nil)

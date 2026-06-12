@@ -16,8 +16,6 @@ defmodule VutuvWeb.ApiV2.ImageController do
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
-  plug(VutuvWeb.Plug.RequireScope, "posts:write")
-
   def create(conn, %{"image" => %Plug.Upload{} = upload} = params) do
     user = conn.assigns.current_user
 

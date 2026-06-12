@@ -18,9 +18,6 @@ defmodule VutuvWeb.ApiV2.SocialApiTest do
     {:ok, conn: conn, me: me, other: other, token: token, other_token: other_token}
   end
 
-  defp authed(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
-  defp body(conn), do: Jason.decode!(conn.resp_body)
-
   describe "people lists" do
     test "followers and following with totals", %{conn: conn, me: me, other: other, token: token} do
       follow!(other, me)
@@ -137,7 +134,7 @@ defmodule VutuvWeb.ApiV2.SocialApiTest do
 
       conn = post(authed(build_conn(), token), "/api/2.0/users/#{other.active_slug}/connection")
       assert conn.status == 409
-      assert body(conn)["reason"] == "already_requested"
+      assert api_problem(conn)["reason"] == "already_requested"
     end
 
     test "only the recipient can accept", %{conn: conn, other: other, token: token} do

@@ -854,6 +854,26 @@ defmodule Vutuv.Moderation do
     user.frozen_at != nil or user.deactivated_at != nil or login_block(user) != nil
   end
 
+  @doc """
+  The one profile-visibility rule: never-activated accounts are invisible
+  to everyone; moderation-hidden accounts stay visible to themselves and
+  admins. Both the HTML gate (`VutuvWeb.Plug.EnsureActivated`) and the API
+  (`VutuvWeb.ApiV2.fetch_visible_user/2`) decide through this predicate —
+  pass `viewer: nil` for renderings that must stay anonymous (the
+  agent-format siblings).
+  """
+  def profile_visible_to?(%User{} = user, viewer) do
+    activated?(user) and (not account_hidden?(user) or bypass?(user, viewer))
+  end
+
+  # nil counts as activated: rows from before the activation gate existed.
+  defp activated?(%User{activated?: false}), do: false
+  defp activated?(%User{}), do: true
+
+  defp bypass?(%User{id: id}, %User{id: id}), do: true
+  defp bypass?(_user, %User{admin?: true}), do: true
+  defp bypass?(_user, _viewer), do: false
+
   ## Content plumbing
 
   defp content_type(%Post{}), do: "post"

@@ -89,6 +89,29 @@ defmodule VutuvWeb.ConnCase do
         [_, token] = Regex.run(~r/name="_csrf_token"[^>]*value="([^"]+)"/, conn.resp_body)
         token
       end
+
+      # ── /api/2.0 helpers (shared by every API test file) ──
+
+      defp authed(conn, token) do
+        put_req_header(conn, "authorization", "Bearer " <> token)
+      end
+
+      defp json_req(conn, method, token, path, body) do
+        conn
+        |> authed(token)
+        |> put_req_header("content-type", "application/json")
+        |> dispatch(@endpoint, method, path, Jason.encode!(body))
+      end
+
+      defp json_post(conn, token, path, body), do: json_req(conn, :post, token, path, body)
+      defp json_patch(conn, token, path, body), do: json_req(conn, :patch, token, path, body)
+
+      # Decode a problem+json error response, asserting its content type.
+      defp api_problem(conn) do
+        assert [content_type] = get_resp_header(conn, "content-type")
+        assert content_type =~ "application/problem+json"
+        Jason.decode!(conn.resp_body)
+      end
     end
   end
 

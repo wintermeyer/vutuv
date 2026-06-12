@@ -170,6 +170,16 @@ defmodule Vutuv.Chat do
   def other_user(%Conversation{} = conversation, me_id),
     do: Repo.get!(User, other_user_id(conversation, me_id))
 
+  @doc """
+  The status a conversation shows to its initiator: a declined request
+  reads "pending", so declining stays indistinguishable from being
+  ignored. Part of the same invariant the listing queries and the silent
+  `{:ok, :dropped}` sends enforce — every surface (web, API) must display
+  status through this.
+  """
+  def display_status(%Conversation{status: "declined"}), do: "pending"
+  def display_status(%Conversation{status: status}), do: status
+
   ## Sending
 
   @doc """

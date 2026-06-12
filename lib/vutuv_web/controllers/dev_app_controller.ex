@@ -35,24 +35,19 @@ defmodule VutuvWeb.DevAppController do
   end
 
   def show(conn, %{"id" => id}) do
-    case ApiAuth.get_app(conn.assigns.current_user, id) do
-      nil ->
-        VutuvWeb.ControllerHelpers.render_error(conn, 404)
-
-      app ->
-        render(conn, "show.html", app: app, webhooks: Vutuv.Webhooks.list_subscriptions(app))
-    end
+    with_app(conn, id, fn conn, app ->
+      render(conn, "show.html", app: app, webhooks: Vutuv.Webhooks.list_subscriptions(app))
+    end)
   end
 
   def edit(conn, %{"id" => id}) do
-    case ApiAuth.get_app(conn.assigns.current_user, id) do
-      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
-      app -> render(conn, "edit.html", app: app, changeset: ApiAuth.change_app(app))
-    end
+    with_app(conn, id, fn conn, app ->
+      render(conn, "edit.html", app: app, changeset: ApiAuth.change_app(app))
+    end)
   end
 
   def update(conn, %{"id" => id, "app" => params}) do
-    with %App{} = app <- ApiAuth.get_app(conn.assigns.current_user, id) do
+    with_app(conn, id, fn conn, app ->
       case ApiAuth.update_app(app, normalize(params)) do
         {:ok, app} ->
           conn
@@ -62,24 +57,18 @@ defmodule VutuvWeb.DevAppController do
         {:error, changeset} ->
           render(conn, "edit.html", app: app, changeset: changeset)
       end
-    else
-      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
-    end
+    end)
   end
 
   def regenerate_secret(conn, %{"id" => id}) do
-    case ApiAuth.get_app(conn.assigns.current_user, id) do
-      nil ->
-        VutuvWeb.ControllerHelpers.render_error(conn, 404)
+    with_app(conn, id, fn conn, app ->
+      {app, secret} = ApiAuth.regenerate_secret!(app)
 
-      app ->
-        {app, secret} = ApiAuth.regenerate_secret!(app)
-
-        conn
-        |> put_flash(:new_app_secret, secret)
-        |> put_flash(:info, gettext("The old client secret stopped working."))
-        |> redirect(to: ~p"/developers/apps/#{app.id}")
-    end
+      conn
+      |> put_flash(:new_app_secret, secret)
+      |> put_flash(:info, gettext("The old client secret stopped working."))
+      |> redirect(to: ~p"/developers/apps/#{app.id}")
+    end)
   end
 
   # The form posts the redirect URIs as a one-per-line textarea.
@@ -91,16 +80,21 @@ defmodule VutuvWeb.DevAppController do
   end
 
   def delete(conn, %{"id" => id}) do
+    with_app(conn, id, fn conn, app ->
+      ApiAuth.delete_app!(app)
+
+      conn
+      |> put_flash(:info, gettext("The application and all its access were deleted."))
+      |> redirect(to: ~p"/developers/apps")
+    end)
+  end
+
+  # Owner-scoped lookup with the uniform 404 (same shape as the sibling
+  # DevWebhookController.with_app/3).
+  defp with_app(conn, id, fun) do
     case ApiAuth.get_app(conn.assigns.current_user, id) do
-      nil ->
-        VutuvWeb.ControllerHelpers.render_error(conn, 404)
-
-      app ->
-        ApiAuth.delete_app!(app)
-
-        conn
-        |> put_flash(:info, gettext("The application and all its access were deleted."))
-        |> redirect(to: ~p"/developers/apps")
+      %App{} = app -> fun.(conn, app)
+      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
 end

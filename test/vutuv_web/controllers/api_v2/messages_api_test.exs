@@ -17,15 +17,6 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
     {:ok, conn: conn, me: me, other: other, token: token, other_token: other_token}
   end
 
-  defp authed(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
-
-  defp json_post(conn, token, path, body) do
-    conn
-    |> authed(token)
-    |> put_req_header("content-type", "application/json")
-    |> post(path, Jason.encode!(body))
-  end
-
   describe "POST /users/:slug/messages" do
     test "messaging a follower lands directly; thread and list follow", %{
       conn: conn,

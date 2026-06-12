@@ -10,8 +10,6 @@ defmodule VutuvWeb.DevDocController do
 
   alias VutuvWeb.AgentDocs
 
-  @pages ~w(index authentication reference webhooks)
-
   @titles %{
     "index" => "vutuv API",
     "authentication" => "Authentication & tokens",
@@ -19,11 +17,19 @@ defmodule VutuvWeb.DevDocController do
     "webhooks" => "Webhooks"
   }
 
+  @pages Map.keys(@titles)
+
   for page <- @pages do
     @external_resource Path.join("priv/dev_docs", page <> ".md")
   end
 
   @docs Map.new(@pages, fn page -> {page, File.read!("priv/dev_docs/#{page}.md")} end)
+
+  # The HTML rendering is static too, so Earmark runs once at compile time,
+  # not per request on a public, crawlable page.
+  @docs_html Map.new(@docs, fn {page, markdown} ->
+               {page, markdown |> String.replace(~r/\A# [^\n]*\n/, "") |> Earmark.as_html!()}
+             end)
 
   def index(conn, _params), do: show_page(conn, "index")
 
@@ -32,33 +38,22 @@ defmodule VutuvWeb.DevDocController do
   def show(conn, _params), do: VutuvWeb.ControllerHelpers.render_error(conn, 404)
 
   defp show_page(conn, page) do
-    markdown = Map.fetch!(@docs, page)
-
     case AgentDocs.negotiate(conn, [:md]) do
       :md ->
-        send_markdown(conn, markdown)
+        send_markdown(conn, Map.fetch!(@docs, page))
 
       :html ->
+        # The leading `# Heading` was stripped at compile time: the page
+        # header already shows the title. The raw .md keeps it, of course.
         conn
         |> AgentDocs.put_html_alternates([:md])
         |> render("show.html",
           page: page,
           page_title: Map.fetch!(@titles, page),
-          body: markdown |> strip_leading_h1() |> Earmark.as_html!()
+          body: Map.fetch!(@docs_html, page)
         )
     end
   end
-
-  # The page header already shows the title; rendering the Markdown's own
-  # `# Heading` again would duplicate it. The raw .md keeps it, of course.
-  defp strip_leading_h1("# " <> rest) do
-    case String.split(rest, "\n", parts: 2) do
-      [_title, body] -> body
-      [_title] -> ""
-    end
-  end
-
-  defp strip_leading_h1(markdown), do: markdown
 
   # The raw file, not a doc map — these pages ARE Markdown. The private flag
   # satisfies VutuvWeb.Plug.AgentFormat's "extension URLs must answer with

@@ -28,6 +28,11 @@ defmodule VutuvWeb.ApiV2.Problem do
     send_problem(conn, 404, "Not found", detail: detail)
   end
 
+  @doc "The uniform refusal for actions across a block (follow, connect, like, ...)."
+  def blocked(conn) do
+    send_problem(conn, 403, "Blocked", detail: "A block between the two accounts prevents this.")
+  end
+
   @doc """
   The 422 every write endpoint answers on changeset errors: per-field
   message lists under `errors`, the same texts the HTML forms show.

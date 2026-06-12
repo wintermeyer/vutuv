@@ -18,37 +18,23 @@ defmodule VutuvWeb.Plug.EnsureActivated do
   end
 
   def call(conn, _opts) do
-    user = conn.assigns[:user]
+    case conn.assigns[:user] do
+      %User{} = user ->
+        # The rule itself lives in Vutuv.Moderation (shared with the API).
+        # The owner/admin bypass is for the HTML page only; an agent-format
+        # request is the anonymous view, so it gets viewer: nil.
+        viewer = if agent_format?(conn), do: nil, else: conn.assigns[:current_user]
 
-    cond do
-      not activated?(user) ->
+        if Vutuv.Moderation.profile_visible_to?(user, viewer) do
+          conn
+        else
+          VutuvWeb.ControllerHelpers.render_error(conn, 404)
+        end
+
+      _missing ->
         VutuvWeb.ControllerHelpers.render_error(conn, 404)
-
-      hidden_for?(user, conn.assigns[:current_user], conn) ->
-        VutuvWeb.ControllerHelpers.render_error(conn, 404)
-
-      true ->
-        conn
     end
   end
-
-  defp activated?(%User{activated?: true}), do: true
-  defp activated?(%User{activated?: nil}), do: true
-  defp activated?(_), do: false
-
-  defp hidden_for?(%User{} = user, viewer, conn) do
-    Vutuv.Moderation.account_hidden?(user) and not bypass?(user, viewer, conn)
-  end
-
-  # The owner/admin bypass is for the HTML page only; an agent-format request
-  # is the anonymous view and never bypasses.
-  defp bypass?(user, viewer, conn) do
-    not agent_format?(conn) and html_bypass?(user, viewer)
-  end
-
-  defp html_bypass?(%User{id: id}, %User{id: id}), do: true
-  defp html_bypass?(_user, %User{admin?: true}), do: true
-  defp html_bypass?(_user, _viewer), do: false
 
   defp agent_format?(conn) do
     conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil

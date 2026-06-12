@@ -1,17 +1,25 @@
 defmodule VutuvWeb.Plug.ApiV2Auth do
   @moduledoc """
-  Bearer-token authentication for `/api/2.0` (see `Vutuv.ApiAuth`).
+  Bearer-token authentication and scope enforcement for `/api/2.0` (see
+  `Vutuv.ApiAuth`).
 
   On success assigns `:current_user`, `:api_token` and `:api_scopes` and
   stamps the `X-RateLimit-*` headers; on failure halts with a problem+json
   401 (or 429 over the per-token limit). Every request verifies the token
   against the database — revocation and app suspension take effect on the
   next request, by design.
+
+  Scope enforcement is **default-deny**: every `/api/2.0` route declares
+  the scope it needs in its router assigns (`api_scope: "posts:write"`, or
+  `:none` for the 404 catch-all), and this plug refuses to serve a route
+  without that declaration — an endpoint can never ship unchecked because
+  someone forgot a per-controller plug.
   """
 
   import Plug.Conn
 
   alias Vutuv.ApiAuth
+  alias Vutuv.ApiAuth.Scopes
   alias Vutuv.RateLimiter
   alias VutuvWeb.ApiV2.Problem
 
@@ -38,9 +46,36 @@ defmodule VutuvWeb.Plug.ApiV2Auth do
       |> assign(:current_user, user)
       |> assign(:api_token, token)
       |> assign(:api_scopes, token.scopes)
+      |> enforce_scope()
     else
       {:error, :rate_limited} -> rate_limited(conn)
       {:error, reason} -> unauthorized(conn, detail_for(reason))
+    end
+  end
+
+  defp enforce_scope(conn) do
+    case conn.assigns[:api_scope] do
+      :none ->
+        conn
+
+      scope when is_binary(scope) ->
+        Scopes.valid?(scope) ||
+          raise "the matched /api/2.0 route declares the unknown api_scope #{inspect(scope)}"
+
+        if Scopes.granted?(conn.assigns.api_scopes, scope) do
+          conn
+        else
+          Problem.send_problem(conn, 403, "Missing scope",
+            detail:
+              "This endpoint needs the \"#{scope}\" scope, which this token was not granted.",
+            extra: %{required_scope: scope}
+          )
+        end
+
+      nil ->
+        # Default-deny: a route without a declared scope is a programming
+        # error, not an open endpoint.
+        raise "the matched /api/2.0 route declares no :api_scope assign"
     end
   end
 

@@ -14,31 +14,25 @@ defmodule VutuvWeb.ApiV2.NotificationController do
 
   alias Vutuv.Activity
   alias VutuvWeb.ApiV2
-  alias VutuvWeb.ApiV2.Problem
-
-  plug(VutuvWeb.Plug.RequireScope, "social:read" when action == :index)
-  plug(VutuvWeb.Plug.RequireScope, "social:write" when action == :mark_read)
 
   def index(conn, params) do
     me = conn.assigns.current_user
 
-    case ApiV2.decode_cursor(params["cursor"]) do
-      {:ok, cursor} ->
-        page = Activity.notifications_page(me.id, cursor: cursor, limit: ApiV2.page_limit(params))
+    ApiV2.with_cursor(conn, params, fn cursor ->
+      page = Activity.notifications_page(me.id, cursor: cursor, limit: ApiV2.page_limit(params))
 
-        ApiV2.send_json(conn, %{
-          type: "notifications",
-          unread: Activity.unread_notification_count(me.id),
-          notifications: Enum.map(page.entries, &entry/1),
-          more: page.more?,
-          next_cursor: ApiV2.encode_cursor(page.more? && page.next_cursor)
-        })
-
-      :error ->
-        Problem.send_problem(conn, 400, "Bad cursor",
-          detail: "Pass the next_cursor value from a previous page, unmodified."
+      doc =
+        Map.merge(
+          %{
+            type: "notifications",
+            unread: Activity.unread_notification_count(me.id),
+            notifications: Enum.map(page.entries, &entry/1)
+          },
+          ApiV2.page_fields(page)
         )
-    end
+
+      ApiV2.send_json(conn, doc)
+    end)
   end
 
   def mark_read(conn, _params) do

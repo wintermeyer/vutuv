@@ -16,22 +16,6 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
     {:ok, conn: conn, user: user, write_token: write_token, read_token: read_token}
   end
 
-  defp authed(conn, token), do: put_req_header(conn, "authorization", "Bearer " <> token)
-
-  defp json_patch(conn, token, path, body) do
-    conn
-    |> authed(token)
-    |> put_req_header("content-type", "application/json")
-    |> patch(path, Jason.encode!(body))
-  end
-
-  defp json_post(conn, token, path, body) do
-    conn
-    |> authed(token)
-    |> put_req_header("content-type", "application/json")
-    |> post(path, Jason.encode!(body))
-  end
-
   describe "PATCH /api/2.0/me" do
     test "updates the whitelisted profile fields", %{conn: conn, write_token: token} do
       conn = json_patch(conn, token, "/api/2.0/me", %{headline: "New **headline**"})

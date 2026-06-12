@@ -15,8 +15,6 @@ defmodule VutuvWeb.ApiV2.TagController do
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
-  plug(VutuvWeb.Plug.RequireScope, "profile:write")
-
   def create(conn, %{"name" => name}) when is_binary(name) and name != "" do
     user = conn.assigns.current_user
 
