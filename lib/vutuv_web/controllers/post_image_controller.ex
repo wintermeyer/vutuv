@@ -36,7 +36,10 @@ defmodule VutuvWeb.PostImageController do
   # Only "<served version>.<served ext>" resolves; "original.*" never does.
   # The legacy ".webp" extension stays accepted (old stored post bodies and
   # bookmarked URLs carry it) — the response is whatever file is on disk,
-  # with the matching content type.
+  # with the matching content type. "og.jpg" is the link-preview JPEG
+  # (og:image), derived on the fly rather than stored.
+  defp parse_version("og.jpg"), do: :og
+
   defp parse_version(version_file) do
     case String.split(version_file, ".") do
       [version, ext] when ext in ["avif", "webp"] ->
@@ -44,6 +47,22 @@ defmodule VutuvWeb.PostImageController do
 
       _ ->
         nil
+    end
+  end
+
+  # The og.jpg bytes are generated in the app (Vutuv.PostImageStore.og_jpeg/1),
+  # so they are sent directly in both serving modes — there is no file for
+  # nginx to accel-stream. Rare traffic: one fetch per scrape, then cached.
+  defp serve(conn, image, :og) do
+    case Vutuv.PostImageStore.og_jpeg(image) do
+      {:ok, jpeg} ->
+        conn
+        |> put_resp_header("cache-control", @cache_control)
+        |> put_resp_content_type("image/jpeg")
+        |> send_resp(200, jpeg)
+
+      :error ->
+        not_found(conn)
     end
   end
 

@@ -7,6 +7,7 @@ defmodule VutuvWeb.PostImageControllerTest do
   """
   use VutuvWeb.ConnCase
 
+  alias Vix.Vips.MutableImage
   alias Vutuv.Posts
 
   @other_login_attrs %{
@@ -119,6 +120,80 @@ defmodule VutuvWeb.PostImageControllerTest do
 
       anonymous = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
       assert get(anonymous, "/post_images/#{image.token}/thumb.avif").status == 404
+    end
+  end
+
+  # og.jpg is the link-preview version (og:image — scrapers don't decode
+  # AVIF): derived from the original on the fly, width-capped, stripped.
+  # Same authorization as every other version.
+  describe "the og.jpg link-preview version" do
+    test "serves a width-capped, metadata-free JPEG to anonymous visitors", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, activated?: true)
+
+      # A wide source carrying EXIF that must not survive into the JPEG.
+      src = Path.join(tmp, "wide.jpg")
+      {:ok, img} = Image.new(2000, 500, color: [10, 120, 200])
+
+      {:ok, tagged} =
+        Image.mutate(img, fn mut ->
+          :ok = MutableImage.set(mut, "exif-ifd0-Make", :gchararray, "TestCam")
+        end)
+
+      {:ok, _} = Image.write(tagged, src)
+      {:ok, image} = Posts.create_pending_image(author, src, "wide.jpg")
+      {:ok, _post} = Posts.create_post(author, %{body: "pic", image_ids: [image.id]})
+
+      conn = get(conn, "/post_images/#{image.token}/og.jpg")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") |> hd() =~ "image/jpeg"
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
+
+      {:ok, jpeg} = Image.from_binary(conn.resp_body)
+      assert {Image.width(jpeg), Image.height(jpeg)} == {1200, 300}
+      assert {Image.width(jpeg), Image.height(jpeg)} == Vutuv.PostImageStore.og_dimensions(image)
+
+      {:ok, fields} = Vix.Vips.Image.header_field_names(jpeg)
+      assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
+    end
+
+    test "a small image is never upscaled", %{conn: conn, tmp: tmp} do
+      author = insert(:user, activated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      conn = get(conn, "/post_images/#{image.token}/og.jpg")
+
+      assert conn.status == 200
+      {:ok, jpeg} = Image.from_binary(conn.resp_body)
+      assert {Image.width(jpeg), Image.height(jpeg)} == {64, 64}
+    end
+
+    test "is guarded by the post's audience like every version", %{conn: conn, tmp: tmp} do
+      author = insert(:user, activated?: true)
+
+      {_post, image} =
+        post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
+
+      assert get(conn, "/post_images/#{image.token}/og.jpg").status == 404
+    end
+
+    test "falls back to a served version when the original is missing", %{conn: conn, tmp: tmp} do
+      author = insert(:user, activated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+      File.rm_rf!(Path.join(tmp, "originals"))
+
+      assert get(conn, "/post_images/#{image.token}/og.jpg").status == 200
+    end
+
+    test "404 when nothing usable is on disk", %{conn: conn, tmp: tmp} do
+      author = insert(:user, activated?: true)
+      {_post, image} = post_with_image!(author, tmp)
+      File.rm_rf!(tmp)
+
+      assert get(conn, "/post_images/#{image.token}/og.jpg").status == 404
     end
   end
 

@@ -167,6 +167,43 @@ defmodule Vutuv.PostImageStore do
     end
   end
 
+  @og_width 1200
+
+  @doc """
+  The dimensions `og_jpeg/1` serves, computed from the stored
+  (post-rotation) dimensions: width capped at #{@og_width}px, aspect kept,
+  never upscaled. Lets the `og:image:width`/`height` tags render without
+  disk I/O (`VutuvWeb.OpenGraph`).
+  """
+  def og_dimensions(%PostImage{width: width, height: height}) when width > @og_width do
+    {@og_width, round(height * @og_width / width)}
+  end
+
+  def og_dimensions(%PostImage{width: width, height: height}), do: {width, height}
+
+  @doc """
+  The image as JPEG bytes for the link preview (`og:image` — preview
+  scrapers don't decode AVIF): derived on the fly from the private
+  original, or from the largest served version when no original exists,
+  width-capped per `og_dimensions/1` and metadata-stripped (`keep: []` —
+  the original's EXIF/GPS must not leak, the rule the AVIF pipeline
+  enforces too). `:error` when nothing usable is on disk.
+  """
+  def og_jpeg(%PostImage{token: token} = image) do
+    with path when not is_nil(path) <- og_source(image, token),
+         {:ok, rotated} <- Spec.open_rotated(path),
+         {:ok, capped} <- Image.thumbnail(rotated, "#{@og_width}", resize: :down),
+         {:ok, data} <- Vix.Vips.Operation.jpegsave_buffer(capped, keep: [], Q: 80) do
+      {:ok, data}
+    else
+      _ -> :error
+    end
+  end
+
+  defp og_source(image, token) do
+    Originals.path(storage_dir(token)) || version_path(image, "large")
+  end
+
   @doc """
   The path nginx resolves inside its `internal` alias location (production
   X-Accel-Redirect target), pointing at the resolved on-disk file so

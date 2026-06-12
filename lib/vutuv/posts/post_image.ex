@@ -55,6 +55,13 @@ defmodule Vutuv.Posts.PostImage do
   end
 
   @doc """
+  The link-preview JPEG URL (the post's `og:image`, see
+  `VutuvWeb.OpenGraph`) — derived on the fly by the proxy, not a stored
+  version (`Vutuv.PostImageStore.og_jpeg/1`).
+  """
+  def og_url(%__MODULE__{token: token}), do: "#{token_prefix(token)}og.jpg"
+
+  @doc """
   Every URL form that may reference this version in a stored post body: the
   canonical URL plus the pre-AVIF `.webp` form old bodies still carry.
   Transitional — remove together with `Vutuv.Uploads.Spec.legacy_exts/0`.

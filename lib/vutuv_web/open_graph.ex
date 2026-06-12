@@ -10,9 +10,11 @@ defmodule VutuvWeb.OpenGraph do
       their avatar as image. The avatar is linked as `/:slug/avatar.jpg`
       (`VutuvWeb.AvatarController`) because preview scrapers don't decode
       the AVIF the site serves itself.
-    * a visible, unrestricted post additionally previews its first line
-      and publication date; restricted posts and teasers never put the
-      body into a tag.
+    * a visible, unrestricted post additionally previews its first line,
+      its publication date and — when it has images — its first image
+      (`/post_images/<token>/og.jpg`, the proxy's on-the-fly JPEG);
+      restricted posts and teasers never put the body or an image into
+      a tag.
     * everything else: the site description and the generated brand card
       (`VutuvWeb.OgCard`).
 
@@ -112,7 +114,42 @@ defmodule VutuvWeb.OpenGraph do
 
   defp article_tags(_ca), do: []
 
-  defp image(%{user: %User{avatar: avatar} = user}) when not is_nil(avatar) do
+  # Image priority: an unrestricted post's first image, else the member's
+  # avatar, else the brand card. A restricted post's images must stay out
+  # of the tags like its body does.
+  defp image(%{post: %Post{} = post, restricted?: false} = ca) do
+    case first_image(post) do
+      %Vutuv.Posts.PostImage{} = post_image -> post_image_entry(post_image, ca)
+      nil -> member_image(ca) || brand_card()
+    end
+  end
+
+  defp image(ca), do: member_image(ca) || brand_card()
+
+  defp first_image(%Post{images: images}) when is_list(images) do
+    images |> Enum.sort_by(&{&1.position, &1.id}) |> List.first()
+  end
+
+  defp first_image(_post), do: nil
+
+  defp post_image_entry(post_image, ca) do
+    {width, height} = Vutuv.PostImageStore.og_dimensions(post_image)
+
+    %{
+      url: abs_url(Vutuv.Posts.PostImage.og_url(post_image)),
+      width: width,
+      height: height,
+      type: "image/jpeg",
+      alt: image_alt(post_image, ca),
+      card: "summary_large_image"
+    }
+  end
+
+  defp image_alt(%{alt: alt}, _ca) when alt not in [nil, ""], do: alt
+  defp image_alt(_post_image, %{user: %User{} = user}), do: UserHelpers.full_name(user)
+  defp image_alt(_post_image, _ca), do: "vutuv"
+
+  defp member_image(%{user: %User{avatar: avatar} = user}) when not is_nil(avatar) do
     size = Vutuv.Avatar.og_size()
 
     %{
@@ -125,7 +162,9 @@ defmodule VutuvWeb.OpenGraph do
     }
   end
 
-  defp image(_ca) do
+  defp member_image(_ca), do: nil
+
+  defp brand_card do
     case OgCard.png() do
       {:ok, _png} ->
         %{

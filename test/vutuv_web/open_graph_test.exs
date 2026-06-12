@@ -101,6 +101,50 @@ defmodule VutuvWeb.OpenGraphTest do
       assert og(html, "og:image") == @base <> "/#{author.active_slug}/avatar.jpg"
     end
 
+    test "a post with images previews its first image instead of the avatar", %{conn: conn} do
+      author = insert_activated_user(first_name: "Painter", avatar: "selfie.jpg")
+      post = create_post!(author, %{"body" => "look at this"})
+
+      # Position decides "first", not insertion order.
+      insert(:post_image, post: post, user: author, position: 1, width: 800, height: 600)
+
+      first =
+        insert(:post_image,
+          post: post,
+          user: author,
+          position: 0,
+          width: 2000,
+          height: 1000,
+          alt: "A wide painting"
+        )
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert og(html, "og:image") == @base <> "/post_images/#{first.token}/og.jpg"
+      assert og(html, "og:image:width") == "1200"
+      assert og(html, "og:image:height") == "600"
+      assert og(html, "og:image:type") == "image/jpeg"
+      assert og(html, "og:image:alt") == "A wide painting"
+      assert html =~ ~s(<meta name="twitter:card" content="summary_large_image")
+    end
+
+    test "a restricted post's image stays out of the preview", %{conn: conn} do
+      author = insert_activated_user(avatar: "selfie.jpg")
+
+      post =
+        create_post!(author, %{
+          "body" => "members only",
+          "denials" => [%{"wildcard" => "logged_out"}]
+        })
+
+      insert(:post_image, post: post, user: author, width: 800, height: 600)
+
+      {member_conn, _member} = create_and_login_user(conn)
+      html = member_conn |> get(Posts.path(post)) |> html_response(200)
+
+      refute og(html, "og:image") =~ "/post_images/"
+    end
+
     test "a restricted post never leaks its body into the preview", %{conn: conn} do
       author = insert_activated_user()
 
