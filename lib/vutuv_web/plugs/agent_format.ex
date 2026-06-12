@@ -38,9 +38,11 @@ defmodule VutuvWeb.Plug.AgentFormat do
   # First path segments that never carry agent documents: the API, the admin
   # panel, the static mounts and framework/dev endpoints, plus `search` —
   # `/search/:id` carries the raw query as its last segment, so a term like
-  # "package.json" must not be read as a `.json` format request.
+  # "package.json" must not be read as a `.json` format request — and
+  # `.well-known`, whose literal routes end in real .json/.md filenames.
   @skip_prefixes ~w(api admin assets css fonts images js favicon.ico avatars covers
-                    screenshots post_images live phoenix tidewave sent_emails dev search)
+                    screenshots post_images live phoenix tidewave sent_emails dev search
+                    .well-known)
 
   # Literal routes whose name ends in a known extension.
   @skip_paths ["/robots.txt", "/llms.txt", "/security.txt"]

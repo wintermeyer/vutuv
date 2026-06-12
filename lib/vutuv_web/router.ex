@@ -87,6 +87,11 @@ defmodule VutuvWeb.Router do
     # send Accept: application/rss+xml, which the browser pipeline rejects.
     get("/posts/feed.xml", FeedController, :site)
     get("/:slug/posts/feed.xml", FeedController, :user)
+    # Agent-skills discovery (Cloudflare draft) + security.txt (RFC 9116).
+    get("/.well-known/agent-skills/index.json", WellKnownController, :agent_skills_index)
+    get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)
+    get("/.well-known/security.txt", WellKnownController, :security_txt)
+    get("/security.txt", WellKnownController, :security_txt)
     # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
     # it is hit by curl on localhost and must not depend on sessions or
     # content negotiation.
