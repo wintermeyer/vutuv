@@ -26,4 +26,29 @@ defmodule Vutuv.Moderation.Query do
       )
     end
   end
+
+  @doc """
+  The row-bound twin of `account_hidden/1`: same definition of "hidden", but
+  checked directly on an already-joined users row `u` instead of a correlated
+  `EXISTS` that re-fetches the same row by id. Use it when the users row is
+  already in scope (a join or the main binding) — it lets the planner read the
+  columns it already has rather than running a subquery per candidate row
+  (measured ~2x on the most-followed listing).
+
+  The suspension arm is spelled `suspended_until IS NOT NULL AND ... > now`
+  rather than the bare `> now` the EXISTS can afford: under `NOT(...)` a bare
+  `NULL > now` would make a member with no moderation flags evaluate to NULL
+  (and so vanish), which the EXISTS form sidesteps via its WHERE semantics.
+  """
+  defmacro account_hidden_row(u) do
+    quote do
+      fragment(
+        "(? IS NOT NULL OR ? IS NOT NULL OR (? IS NOT NULL AND ? > (NOW() AT TIME ZONE 'utc')))",
+        unquote(u).frozen_at,
+        unquote(u).deactivated_at,
+        unquote(u).suspended_until,
+        unquote(u).suspended_until
+      )
+    end
+  end
 end

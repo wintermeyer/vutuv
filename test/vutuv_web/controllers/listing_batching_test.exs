@@ -29,8 +29,10 @@ defmodule VutuvWeb.ListingBatchingTest do
     test "renders each user's name and current-job line", %{conn: conn} do
       alice = insert_activated_user(first_name: "Alice") |> with_job("Captain", "Acme")
       bob = insert_activated_user(first_name: "Bob")
-      # Give Alice a follower so she sorts to the top, exercising the listing.
+      # Both need a visible follower to surface: the listing ranks members who
+      # have at least one, most followers first.
       insert(:follow, follower: bob, followee: alice)
+      insert(:follow, follower: alice, followee: bob)
 
       body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
 
@@ -41,8 +43,13 @@ defmodule VutuvWeb.ListingBatchingTest do
     end
 
     test "query count stays constant as the user count grows", %{conn: conn} do
+      # A shared follower so every listed member surfaces (the listing only
+      # ranks members with at least one visible follower).
+      fan = insert_activated_user(first_name: "Fan")
+
       for n <- 1..15 do
-        insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        u = insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert(:follow, follower: fan, followee: u)
       end
 
       conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
@@ -50,7 +57,8 @@ defmodule VutuvWeb.ListingBatchingTest do
       {_, few} = count_queries(fn -> conn_for.() end)
 
       for n <- 16..40 do
-        insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        u = insert_activated_user(first_name: "List#{n}") |> with_job("Eng#{n}", "Org#{n}")
+        insert(:follow, follower: fan, followee: u)
       end
 
       {_, many} = count_queries(fn -> conn_for.() end)

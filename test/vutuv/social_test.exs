@@ -198,11 +198,14 @@ defmodule Vutuv.SocialTest do
       unactivated = insert(:user)
       frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
       deactivated = insert(:user, activated?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+      suspended = insert(:user, activated?: true, suspended_until: ~N[2099-01-01 00:00:00])
 
-      follow!(insert(:user), popular)
+      # A real (visible) follower, so the popular control legitimately ranks:
+      # the listing shows members with at least one visible follower.
+      follow!(insert(:user, activated?: true), popular)
 
-      for hidden <- [unactivated, frozen, deactivated] do
-        for _ <- 1..2, do: follow!(insert(:user), hidden)
+      for hidden <- [unactivated, frozen, deactivated, suspended] do
+        for _ <- 1..2, do: follow!(insert(:user, activated?: true), hidden)
       end
 
       ids = Social.most_followed_users(10) |> Enum.map(& &1.id)
@@ -211,6 +214,7 @@ defmodule Vutuv.SocialTest do
       refute unactivated.id in ids
       refute frozen.id in ids
       refute deactivated.id in ids
+      refute suspended.id in ids
     end
 
     test "ranks by VISIBLE followers only, not ghost/hidden ones" do

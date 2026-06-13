@@ -12,7 +12,7 @@ defmodule Vutuv.Social do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_hidden_row: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -146,24 +146,35 @@ defmodule Vutuv.Social do
 
   Applies the same visibility gate as search: unactivated accounts and
   accounts hidden by moderation never surface. Selects only the columns the
-  listing rows render (`Vutuv.Accounts.User.listing_fields/0`) — the group-by
-  otherwise drags all user columns through the aggregate and sort.
+  listing rows render (`Vutuv.Accounts.User.listing_fields/0`), so the sort
+  does not drag every user column through it.
+
+  Ranks from the (small) `follows` table rather than grouping the whole users
+  table, so a member with no visible follower does not appear at all. On the
+  real data that is the same top-N as ranking everyone (the most-followed
+  members all have followers), but it replaces a full-table group-by with a
+  scan of the far smaller follows table.
   """
   def most_followed_users(limit) do
-    Repo.all(
-      from(u in Vutuv.Accounts.User,
-        left_join: fl in Follow,
-        on: fl.followee_id == u.id,
-        # Count only followers that are themselves visible, so the ranking
-        # matches the follower_count/1 shown on each profile and can't be
-        # inflated by mass-registering never-activated follower accounts.
-        left_join: fr in Vutuv.Accounts.User,
+    # Count each followee's *visible* followers, so the ranking matches the
+    # follower_count/1 shown on each profile and can't be inflated by
+    # mass-registering never-activated follower accounts.
+    follower_counts =
+      from(fl in Follow,
+        join: fr in Vutuv.Accounts.User,
         on:
           fr.id == fl.follower_id and (is_nil(fr.activated?) or fr.activated? == true) and
-            not account_hidden(fr.id),
-        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
-        group_by: u.id,
-        order_by: [fragment("count(?) DESC", fr.id), u.first_name, u.last_name],
+            not account_hidden_row(fr),
+        group_by: fl.followee_id,
+        select: %{followee_id: fl.followee_id, count: count()}
+      )
+
+    Repo.all(
+      from(u in Vutuv.Accounts.User,
+        join: fc in subquery(follower_counts),
+        on: fc.followee_id == u.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden_row(u),
+        order_by: [desc: fc.count, asc: u.first_name, asc: u.last_name],
         limit: ^limit,
         select: struct(u, ^User.listing_fields())
       )
