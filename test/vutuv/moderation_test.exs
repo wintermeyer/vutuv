@@ -2,7 +2,7 @@ defmodule Vutuv.ModerationTest do
   use Vutuv.DataCase
 
   alias Vutuv.{Chat, Moderation, Posts, Social}
-  alias Vutuv.Moderation.{Case, Notifier, Report, Strike}
+  alias Vutuv.Moderation.{Case, Event, Notifier, Report, Strike}
 
   # Asserts one of the emails delivered so far has `fragment` in its subject
   # (Swoosh's assert_email_sent/1 pops mailbox messages in order, which
@@ -136,6 +136,49 @@ defmodule Vutuv.ModerationTest do
       assert upgraded.id == flagged.id
       assert upgraded.status == "pending_owner"
       assert Repo.get!(Vutuv.Posts.Post, post.id).frozen_at
+    end
+
+    test "two trusted reporters racing on a flagged case freeze, log and notify once", %{
+      owner: owner,
+      reporter: trusted_b
+    } do
+      # The Ecto SQL sandbox serializes, so a real two-connection race cannot be
+      # reproduced here (issue #778). Drive the upgrade twice with the SAME
+      # stale `flagged` struct instead: that is exactly what two reporters who
+      # both read the case as flagged before either upgraded it would do. The
+      # (case_id, reporter_id) unique index only stops the same reporter from
+      # racing, so two different reporters can both enter the upgrade.
+      bad = make_untrusted!(insert(:activated_user))
+      trusted_c = insert(:activated_user)
+      insert(:email, user: trusted_c)
+
+      post = insert_post(owner)
+      flagged = report!(bad, post)
+      assert flagged.status == "flagged"
+
+      # Clear the emails the make_untrusted! setup produced for other cases.
+      _ = flush_emails()
+
+      # First reporter wins the atomic claim: one freeze, one content_frozen
+      # log row, one owner notification.
+      assert {:ok, first} = Moderation.maybe_upgrade_case(flagged, trusted_b, post)
+      assert first.status == "pending_owner"
+
+      # Second reporter holds the same stale flagged struct and loses the claim,
+      # so it must NOT freeze/log/notify a second time.
+      assert {:ok, second} = Moderation.maybe_upgrade_case(flagged, trusted_c, post)
+      assert second.status == "pending_owner"
+
+      frozen_events =
+        Repo.all(
+          from(e in Event, where: e.case_id == ^flagged.id and e.action == "content_frozen")
+        )
+
+      assert length(frozen_events) == 1
+      assert Repo.get!(Posts.Post, post.id).frozen_at
+
+      subjects = Enum.map(flush_emails(), & &1.subject)
+      assert Enum.count(subjects, &(&1 =~ "reported")) == 1
     end
 
     test "a reporter who cannot see the post cannot report it", %{owner: owner} do

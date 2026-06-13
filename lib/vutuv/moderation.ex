@@ -133,12 +133,14 @@ defmodule Vutuv.Moderation do
 
   # A new report can upgrade an open case: a trusted report freezes a
   # so-far-only-flagged post/message, and the second trusted reporter
-  # freezes a whole profile.
-  defp maybe_upgrade_case(
-         %Case{content_type: "user", status: "flagged"} = open,
-         _reporter,
-         content
-       ) do
+  # freezes a whole profile. Exposed (@doc false) only so the concurrency
+  # regression test can drive the upgrade twice with a stale flagged struct.
+  @doc false
+  def maybe_upgrade_case(
+        %Case{content_type: "user", status: "flagged"} = open,
+        _reporter,
+        content
+      ) do
     reports = Repo.preload(open, reports: :reporter).reports
 
     trusted =
@@ -148,29 +150,60 @@ defmodule Vutuv.Moderation do
       end)
 
     if trusted >= @profile_freeze_reporters do
-      freeze_content(content)
-      updated = update_case!(open, case_params("escalated"))
-      log(updated, nil, "content_frozen")
-      run_notifications(updated, [:notify_owner_review, :notify_admins_urgent])
-      {:ok, updated}
+      case claim_flagged_upgrade(open, "escalated") do
+        {:ok, updated} ->
+          freeze_content(content)
+          log(updated, nil, "content_frozen")
+          run_notifications(updated, [:notify_owner_review, :notify_admins_urgent])
+          {:ok, updated}
+
+        :already_upgraded ->
+          {:ok, Repo.get!(Case, open.id)}
+      end
     else
       {:ok, open}
     end
   end
 
-  defp maybe_upgrade_case(%Case{status: "flagged"} = open, reporter, content) do
+  def maybe_upgrade_case(%Case{status: "flagged"} = open, reporter, content) do
     if trusted_reporter?(reporter) do
-      freeze_content(content)
-      updated = update_case!(open, case_params("pending_owner"))
-      log(updated, nil, "content_frozen")
-      run_notifications(updated, [:notify_owner_frozen])
-      {:ok, updated}
+      case claim_flagged_upgrade(open, "pending_owner") do
+        {:ok, updated} ->
+          freeze_content(content)
+          log(updated, nil, "content_frozen")
+          run_notifications(updated, [:notify_owner_frozen])
+          {:ok, updated}
+
+        :already_upgraded ->
+          {:ok, Repo.get!(Case, open.id)}
+      end
     else
       {:ok, open}
     end
   end
 
-  defp maybe_upgrade_case(open, _reporter, _content), do: {:ok, open}
+  def maybe_upgrade_case(open, _reporter, _content), do: {:ok, open}
+
+  # Atomically transitions a still-`flagged` case to `new_status`, claiming the
+  # upgrade for exactly one caller. Two *different* reporters can race on the
+  # same flagged case (the (case_id, reporter_id) unique index only stops the
+  # same reporter from racing), but the `status == "flagged"` WHERE makes the
+  # loser match zero rows, so the freeze/log/notify side effects run at most
+  # once. The query twin of claim_case_resolution/3 for the upgrade path;
+  # update_all does not touch timestamps, so updated_at is set explicitly.
+  defp claim_flagged_upgrade(%Case{} = case_record, new_status) do
+    now = NaiveDateTime.utc_now(:second)
+    set = case_params(new_status) |> Map.put(:updated_at, now) |> Map.to_list()
+
+    {_count, rows} =
+      from(c in Case, where: c.id == ^case_record.id and c.status == "flagged", select: c)
+      |> Repo.update_all(set: set)
+
+    case rows do
+      [updated] -> {:ok, updated}
+      [] -> :already_upgraded
+    end
+  end
 
   # The initial case status plus the side effects it implies.
   defp initial_status(_reporter, %User{}) do
