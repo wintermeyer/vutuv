@@ -16,6 +16,12 @@ defmodule Vutuv.ChatTest do
     %{message | inserted_at: at}
   end
 
+  # Pin a message's inserted_at to an exact (microsecond-precise) instant.
+  defp set_inserted_at!(message, %NaiveDateTime{} = at) do
+    Repo.update_all(from(m in Message, where: m.id == ^message.id), set: [inserted_at: at])
+    %{message | inserted_at: at}
+  end
+
   setup do
     Vutuv.RateLimiter.reset()
     :ok
@@ -410,6 +416,27 @@ defmodule Vutuv.ChatTest do
 
       assert participant.last_read_at
       assert participant.notified_at == nil
+    end
+
+    test "a message arriving in the same wall-clock second as the read stays unread" do
+      # Issue #776 (4b): the read marker is max(inserted_at). With second
+      # precision a message landing in the same second as the read got
+      # inserted_at == marker, so the strict `> last_read_at` test marked it
+      # read. Microsecond inserted_at + last_read_at keep it unread.
+      [me, x] = [user(), user()]
+      conversation = insert_conversation_between(me, x)
+
+      earlier = send!(x, conversation, "one")
+      set_inserted_at!(earlier, ~N[2026-06-13 12:00:00.100000])
+
+      :ok = Chat.mark_read(me, conversation.id)
+      assert Chat.unread_conversations_count(me) == 0
+
+      later = send!(x, conversation, "two")
+      set_inserted_at!(later, ~N[2026-06-13 12:00:00.900000])
+
+      assert Chat.unread_conversations_count(me) == 1
+      assert [%{unread: 1}] = Chat.list_conversations(me)
     end
 
     test "nil user has no unread conversations" do

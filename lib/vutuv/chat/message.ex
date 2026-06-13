@@ -15,7 +15,10 @@ defmodule Vutuv.Chat.Message do
     # Nullable: a deleted sender's messages survive for the other participant.
     belongs_to(:sender, Vutuv.Accounts.User)
 
-    timestamps()
+    # Microsecond precision (not the default second) so the read marker
+    # `max(inserted_at)` can distinguish a message arriving in the same
+    # wall-clock second as a read — issue #776 (4b).
+    timestamps(type: :naive_datetime_usec)
   end
 
   def max_body_length, do: @max_body_length

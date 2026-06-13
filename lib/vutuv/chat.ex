@@ -471,6 +471,10 @@ defmodule Vutuv.Chat do
   message (not wall clock, so a message arriving during the read stays unread
   — same reasoning as `Vutuv.Activity.mark_notifications_read/1`), the
   unread-email debounce re-arms, and the shell badge is told to clear.
+
+  Both `messages.inserted_at` and `participants.last_read_at` carry microsecond
+  precision, so a message inserted in the same wall-clock second as the read
+  still has a strictly greater `inserted_at` and stays unread (issue #776).
   """
   def mark_read(%User{id: me_id}, conversation_id) do
     marker =
@@ -478,7 +482,7 @@ defmodule Vutuv.Chat do
         where: m.conversation_id == ^conversation_id,
         select: max(m.inserted_at)
       )
-      |> Repo.one() || NaiveDateTime.utc_now(:second)
+      |> Repo.one() || NaiveDateTime.utc_now(:microsecond)
 
     from(p in Participant,
       where: p.conversation_id == ^conversation_id and p.user_id == ^me_id
