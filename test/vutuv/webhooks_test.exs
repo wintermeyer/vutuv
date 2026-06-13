@@ -77,6 +77,38 @@ defmodule Vutuv.WebhooksTest do
         "events" => ["follower.created"]
       })
     end
+
+    test "rejects URLs pointing at private, loopback or metadata addresses (SSRF)", %{app: app} do
+      # Webhook delivery is a server-side POST, so any authenticated developer
+      # could otherwise make us hit the cloud-metadata endpoint or an internal
+      # host (issue #775). The same gate the profile-link screenshots use.
+      internal = [
+        "https://169.254.169.254/latest/meta-data/",
+        "https://10.0.0.5/hook",
+        "https://192.168.1.1/hook",
+        "https://[::1]/hook",
+        "http://localhost/hook",
+        "https://127.0.0.1/hook"
+      ]
+
+      for url <- internal do
+        assert {:error, changeset} =
+                 Webhooks.create_subscription(app, %{
+                   "url" => url,
+                   "events" => ["follower.created"]
+                 }),
+               "expected #{url} to be rejected as an internal target"
+
+        assert %{url: _} = errors_on(changeset)
+      end
+
+      # A normal public https endpoint is still accepted.
+      assert {:ok, _sub, _secret} =
+               Webhooks.create_subscription(app, %{
+                 "url" => "https://hooks.example.org/ok",
+                 "events" => ["follower.created"]
+               })
+    end
   end
 
   describe "emit/3" do
@@ -268,6 +300,43 @@ defmodule Vutuv.WebhooksTest do
       :ok = Webhooks.ping(subscription)
       assert Webhooks.deliver_due() == 1
       assert [%Delivery{event: "ping", delivered_at: %DateTime{}}] = Repo.all(Delivery)
+    end
+
+    test "delivery is blocked when the URL resolves to an internal address (DNS rebinding)", %{
+      member: member,
+      app: app
+    } do
+      # The subscription was created with a public-looking hostname (the
+      # literal-IP gate passed), but its DNS record now points at an internal
+      # address (issue #775). Delivery must resolve and refuse before POSTing.
+      {subscription, _secret} = subscribe!(app, ["follower.created"])
+      grant!(member, app, ["social:read"])
+      Webhooks.emit(member.id, "follower.created", %{})
+
+      parent = self()
+
+      stub_endpoint(fn conn ->
+        send(parent, {:hit, conn.request_path})
+        Plug.Conn.send_resp(conn, 200, "")
+      end)
+
+      prev = Application.get_env(:vutuv, :ssrf_resolver)
+      on_exit(fn -> Application.put_env(:vutuv, :ssrf_resolver, prev) end)
+
+      Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
+        {:ok, [{169, 254, 169, 254}]}
+      end)
+
+      assert Webhooks.deliver_due() == 1
+
+      # No POST reached the endpoint, and the delivery is recorded as failed.
+      refute_receive {:hit, _}
+
+      assert [%Delivery{delivered_at: nil, last_status: nil, last_error: error}] =
+               Repo.all(Delivery)
+
+      assert error =~ "internal"
+      assert Repo.get(Subscription, subscription.id).consecutive_failures == 1
     end
   end
 end

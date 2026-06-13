@@ -64,17 +64,27 @@ defmodule Vutuv.PageScreenshot do
     end
   end
 
+  # `url.value` is an untrusted member-supplied profile link. The changeset
+  # already rejected literal internal hosts, but a public hostname can resolve
+  # to an internal IP (DNS rebinding, issue #777), so resolve at capture time
+  # and refuse before handing the URL to Chromium. This guards only the
+  # profile path; `Vutuv.Moderation.EvidenceScreenshot` calls `capture/3`
+  # directly to shoot the app's own host and is intentionally not gated.
   defp capture_and_frame(url) do
-    page_path = tmp_path("page", url.id, "png")
-    framed_path = tmp_path("frame", url.id, "webp")
+    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url.value).host) do
+      {:error, :internal_target}
+    else
+      page_path = tmp_path("page", url.id, "png")
+      framed_path = tmp_path("frame", url.id, "webp")
 
-    try do
-      with :ok <- capture(url.value, page_path),
-           {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url.value, framed_path) do
-        {:ok, framed_path}
+      try do
+        with :ok <- capture(url.value, page_path),
+             {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url.value, framed_path) do
+          {:ok, framed_path}
+        end
+      after
+        File.rm(page_path)
       end
-    after
-      File.rm(page_path)
     end
   end
 

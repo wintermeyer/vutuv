@@ -211,6 +211,18 @@ defmodule Vutuv.Webhooks do
 
   @doc false
   def attempt(%Delivery{subscription: %Subscription{} = subscription} = delivery) do
+    # Defeat DNS rebinding at delivery time: the literal-IP gate runs when the
+    # subscription is created, but a public hostname can be re-pointed at an
+    # internal address afterwards (issue #775). Resolve now and refuse to POST
+    # to our own network. `redirect: false` already blocks the 30x variant.
+    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(subscription.url).host) do
+      fail(delivery, nil, "blocked: URL resolves to an internal address")
+    else
+      do_attempt(delivery, subscription)
+    end
+  end
+
+  defp do_attempt(delivery, subscription) do
     body = Jason.encode!(delivery.payload)
 
     headers = [

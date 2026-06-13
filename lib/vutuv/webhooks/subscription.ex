@@ -33,14 +33,23 @@ defmodule Vutuv.Webhooks.Subscription do
     |> validate_events()
   end
 
-  # https only — localhost http for development, mirroring the OAuth
-  # redirect URI rule.
+  # https only (mirroring the OAuth redirect URI rule), and never an internal
+  # target. Webhook delivery is a server-side POST, so accepting a private,
+  # loopback or metadata host would let any authenticated developer make the
+  # server hit our own network on demand (issue #775). Unlike OAuth redirect
+  # URIs (followed by the user's browser), these are fetched by us, so the
+  # internal-host gate applies here and not in `valid_redirect_uri?/1`.
   defp validate_url(changeset) do
     validate_change(changeset, :url, fn :url, url ->
-      if Vutuv.ApiAuth.App.valid_redirect_uri?(url) do
-        []
-      else
-        [url: "must be an https:// URL (http://localhost is allowed for development)"]
+      cond do
+        not Vutuv.ApiAuth.App.valid_redirect_uri?(url) ->
+          [url: "must be an https:// URL (http://localhost is allowed for development)"]
+
+        Vutuv.Ssrf.internal_host?(URI.parse(url).host) ->
+          [url: "must not point at a private, loopback or link-local address"]
+
+        true ->
+          []
       end
     end)
   end

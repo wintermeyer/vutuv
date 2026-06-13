@@ -18,6 +18,10 @@ config :vutuv, :moderation_sweeper, false
 config :vutuv, :webhook_deliverer, false
 # No headless Chromium in tests; the evidence capture is exercised manually.
 config :vutuv, :capture_report_evidence, false
+# Resolve every host to a fixed public IP so the SSRF fetch-time check
+# (`Vutuv.Ssrf.resolves_to_internal?/1`) never hits real DNS in tests; the SSRF
+# tests override this per-test to return an internal address.
+config :vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{93, 184, 216, 34}]} end
 # Moderation emails deliver inline in tests: the async task would swallow the
 # Swoosh test adapter's {:email, ...} message (it goes to the calling process).
 config :vutuv, :async_email, false
