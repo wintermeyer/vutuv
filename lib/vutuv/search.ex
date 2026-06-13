@@ -479,7 +479,10 @@ defmodule Vutuv.Search do
             where:
               (is_nil(u.activated?) or u.activated? == true) and
                 (like(t.value, ^infix) or ^cologne_fuzzy_value == t.value or
-                   ^soundex_fuzzy_value == t.value)
+                   ^soundex_fuzzy_value == t.value),
+            # Only the two columns the result rows need — the full SearchTerm
+            # row (value, timestamps) is never read here.
+            select: %{score: t.score, user_id: t.user_id}
           )
           |> exclude_moderated()
         )
