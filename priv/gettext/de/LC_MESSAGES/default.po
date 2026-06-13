@@ -1715,7 +1715,7 @@ msgid "Datenschutzerklärung"
 msgstr "Datenschutzerklärung"
 
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:26
-#: lib/vutuv_web/templates/user/edit.html.heex:53
+#: lib/vutuv_web/templates/user/edit.html.heex:65
 #, elixir-autogen, elixir-format
 msgid "Delete my account"
 msgstr "Mein Konto löschen"
@@ -4666,6 +4666,7 @@ msgstr "@%{slug} blockieren? Dadurch werden alle Follows und die Verbindung zwis
 
 #: lib/vutuv_web/templates/block/index.html.heex:1
 #: lib/vutuv_web/templates/block/index.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Blocked members"
 msgstr "Blockierte Mitglieder"
@@ -4855,6 +4856,7 @@ msgstr "nur Personen mit diesem Tag, kombinierbar: müller tag:php"
 #: lib/vutuv_web/templates/access_token/index.html.heex:1
 #: lib/vutuv_web/templates/access_token/index.html.heex:1
 #: lib/vutuv_web/templates/access_token/new.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "Access tokens"
 msgstr "API-Tokens"
@@ -5112,6 +5114,7 @@ msgstr "%{app} verbinden?"
 
 #: lib/vutuv_web/templates/connected_app/index.html.heex:1
 #: lib/vutuv_web/templates/connected_app/index.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:41
 #, elixir-autogen, elixir-format
 msgid "Connected apps"
 msgstr "Verbundene Apps"
@@ -5412,12 +5415,12 @@ msgstr "API-Token (%{date})"
 msgid "API documentation"
 msgstr "API-Dokumentation"
 
-#: lib/vutuv_web/templates/user/edit.html.heex:39
+#: lib/vutuv_web/templates/user/edit.html.heex:51
 #, elixir-autogen, elixir-format
 msgid "Delete account"
 msgstr "Konto löschen"
 
-#: lib/vutuv_web/templates/user/edit.html.heex:50
+#: lib/vutuv_web/templates/user/edit.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "Start deleting your account? We will email you a PIN to confirm."
 msgstr ""
@@ -5435,7 +5438,7 @@ msgstr "Die Anzeige konnte nicht genehmigt werden."
 msgid "This case has already been resolved."
 msgstr "Dieser Fall ist bereits erledigt."
 
-#: lib/vutuv_web/templates/user/edit.html.heex:41
+#: lib/vutuv_web/templates/user/edit.html.heex:53
 #, elixir-autogen, elixir-format
 msgid "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
 msgstr ""
@@ -5452,3 +5455,13 @@ msgstr "Sie können auf diesen Beitrag nicht mehr antworten."
 #, elixir-autogen, elixir-format
 msgid "Your data"
 msgstr "Ihre Daten"
+
+#: lib/vutuv_web/templates/user/edit.html.heex:43
+#, elixir-autogen, elixir-format
+msgid "Content under review"
+msgstr "Inhalte in Prüfung"
+
+#: lib/vutuv_web/templates/user/edit.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Privacy and security"
+msgstr "Privatsphäre und Sicherheit"

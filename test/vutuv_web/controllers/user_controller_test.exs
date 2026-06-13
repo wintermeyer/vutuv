@@ -319,6 +319,20 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ "delete_link_button"
   end
 
+  test "the settings hub links to the otherwise-unfindable privacy/security pages", %{
+    conn: conn
+  } do
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+
+    # These pages are reachable only from here for a normal user (no shell or
+    # profile link), so the account hub must surface them.
+    assert html =~ ~s(href="#{~p"/blocks"}")
+    assert html =~ ~s(href="#{~p"/connected_apps"}")
+    assert html =~ ~s(href="#{~p"/access_tokens"}")
+    assert html =~ ~s(href="#{~p"/moderation/cases"}")
+  end
+
   # The two consents are independent booleans; a mixed combination must
   # land exactly as submitted (the full 2x2 table is unit-tested in
   # robots_txt_test.exs).

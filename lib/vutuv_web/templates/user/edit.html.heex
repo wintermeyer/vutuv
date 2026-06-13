@@ -31,6 +31,18 @@
       <p><%= link gettext("Download your data"), to: ~p"/#{@user}/export" %></p>
     </section>
 
+    <%!-- These account/security pages have no link anywhere else in the app
+          (not the shell, not the profile), so a user could only reach them by
+          guessing the URL. Surfacing them here makes the edit page the real
+          account hub. --%>
+    <section class="card">
+      <h1><%= gettext "Privacy and security" %></h1>
+      <p><%= link gettext("Blocked members"), to: ~p"/blocks" %></p>
+      <p><%= link gettext("Connected apps"), to: ~p"/connected_apps" %></p>
+      <p><%= link gettext("Access tokens"), to: ~p"/access_tokens" %></p>
+      <p><%= link gettext("Content under review"), to: ~p"/moderation/cases" %></p>
+    </section>
+
     <%!-- The destructive action gets its own clearly-labelled card (a "danger
           zone"), the canonical red `.button--danger` control, a plain-language
           warning, and a confirm dialog — so it is easy to find on the settings

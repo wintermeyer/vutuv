@@ -1715,7 +1715,7 @@ msgid "Datenschutzerklärung"
 msgstr ""
 
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:26
-#: lib/vutuv_web/templates/user/edit.html.heex:53
+#: lib/vutuv_web/templates/user/edit.html.heex:65
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Delete my account"
 msgstr ""
@@ -4666,6 +4666,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/block/index.html.heex:1
 #: lib/vutuv_web/templates/block/index.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Blocked members"
 msgstr ""
@@ -4855,6 +4856,7 @@ msgstr ""
 #: lib/vutuv_web/templates/access_token/index.html.heex:1
 #: lib/vutuv_web/templates/access_token/index.html.heex:1
 #: lib/vutuv_web/templates/access_token/new.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "Access tokens"
 msgstr ""
@@ -5112,6 +5114,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/connected_app/index.html.heex:1
 #: lib/vutuv_web/templates/connected_app/index.html.heex:1
+#: lib/vutuv_web/templates/user/edit.html.heex:41
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Connected apps"
 msgstr ""
@@ -5412,12 +5415,12 @@ msgstr ""
 msgid "API documentation"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:39
+#: lib/vutuv_web/templates/user/edit.html.heex:51
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Delete account"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:50
+#: lib/vutuv_web/templates/user/edit.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "Start deleting your account? We will email you a PIN to confirm."
 msgstr ""
@@ -5433,7 +5436,7 @@ msgstr ""
 msgid "This case has already been resolved."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:41
+#: lib/vutuv_web/templates/user/edit.html.heex:53
 #, elixir-autogen, elixir-format
 msgid "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
 msgstr ""
@@ -5446,4 +5449,14 @@ msgstr ""
 #: lib/vutuv_web/templates/user/edit.html.heex:28
 #, elixir-autogen, elixir-format
 msgid "Your data"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:43
+#, elixir-autogen, elixir-format
+msgid "Content under review"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Privacy and security"
 msgstr ""
