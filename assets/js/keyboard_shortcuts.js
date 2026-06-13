@@ -8,9 +8,10 @@
 //
 // A "?" opens a help overlay listing the shortcuts; the account menu carries a
 // "Keyboard shortcuts" item that opens the same overlay (both wired here). "g"
-// starts a Gmail-style two-key navigation sequence (g h, g f, …). Navigation
-// is a plain location change so it works identically on classic controller
-// pages and LiveView pages.
+// starts a Gmail-style two-key navigation sequence (g h, g f, …); "/" jumps to
+// search, "n" focuses the feed composer, and "j" / "k" step through feed posts.
+// Cross-page navigation is a plain location change so it works identically on
+// classic controller pages and LiveView pages.
 
 const DESKTOP = window.matchMedia("(hover: hover) and (pointer: fine)")
 
@@ -43,6 +44,53 @@ function profilePath() {
 
 function go(path) {
   if (path) window.location.assign(path)
+}
+
+// "n" (new post): focus the feed composer if it is already on the page,
+// otherwise jump to the feed and focus it on arrival (#compose). The composer
+// is a LiveView component, so on a fresh load it can mount a beat after the page.
+function focusComposer() {
+  const el = document.getElementById("composer-body")
+  if (!el) return false
+  el.focus()
+  // Drop the hash so a later reload / back-button doesn't refocus out of the blue.
+  if (location.hash === "#compose") {
+    history.replaceState(null, "", location.pathname + location.search)
+  }
+  return true
+}
+
+function focusComposerFromHash() {
+  if (location.hash !== "#compose") return
+  let tries = 0
+  const attempt = () => {
+    if (focusComposer() || ++tries > 20) return
+    setTimeout(attempt, 100)
+  }
+  attempt()
+}
+
+// "j" / "k": step a highlight down / up the feed and scroll it into view. Only
+// the feed page has #feed-posts, so they are inert everywhere else.
+let feedIndex = -1
+
+function feedPosts() {
+  return Array.from(document.querySelectorAll("#feed-posts > div[id]"))
+}
+
+function moveFeed(delta) {
+  const posts = feedPosts()
+  if (posts.length === 0) return false
+  feedIndex = Math.max(0, Math.min(posts.length - 1, feedIndex + delta))
+  // A brand ring hugging the current post. Inline so the feature stays
+  // self-contained (the CSP allows inline styles); cleared from the others.
+  posts.forEach((p, i) => {
+    const on = i === feedIndex
+    p.style.boxShadow = on ? "0 0 0 2px var(--color-brand-500, #2563eb)" : ""
+    p.style.borderRadius = on ? "1rem" : ""
+  })
+  posts[feedIndex].scrollIntoView({ behavior: "smooth", block: "center" })
+  return true
 }
 
 function overlay() {
@@ -97,11 +145,16 @@ function handleKey(e) {
     return
   }
 
-  // While the help dialog is open it is modal: keep Tab on its single control
-  // (the close button) so keyboard focus can't wander to the page behind it.
-  if (overlayOpen() && e.key === "Tab") {
-    e.preventDefault()
-    overlay().querySelector("[data-overlay-close]")?.focus()
+  // While the help dialog is open it is modal: Tab stays trapped on its close
+  // button, "?" closes it, and every other shortcut is inert behind it.
+  if (overlayOpen()) {
+    if (e.key === "Tab") {
+      e.preventDefault()
+      overlay().querySelector("[data-overlay-close]")?.focus()
+    } else if (e.key === "?") {
+      e.preventDefault()
+      closeOverlay()
+    }
     return
   }
 
@@ -111,7 +164,7 @@ function handleKey(e) {
 
   if (e.key === "?") {
     e.preventDefault()
-    overlayOpen() ? closeOverlay() : openOverlay()
+    openOverlay()
     return
   }
 
@@ -146,12 +199,22 @@ function handleKey(e) {
 
   if (e.key === "n" && loggedIn()) {
     e.preventDefault()
-    go("/feed")
+    if (!focusComposer()) go("/feed#compose")
+    return
+  }
+
+  if (e.key === "j" || e.key === "k") {
+    if (moveFeed(e.key === "j" ? 1 : -1)) e.preventDefault()
     return
   }
 }
 
 document.addEventListener("keydown", handleKey)
+
+// Focus the composer when arriving at /feed#compose (the "n" shortcut fired
+// from another page). Both events fire on a LiveView page load.
+window.addEventListener("DOMContentLoaded", focusComposerFromHash)
+window.addEventListener("phx:page-loading-stop", focusComposerFromHash)
 
 // The account-menu "Keyboard shortcuts" item, the overlay's close button, and a
 // backdrop click. Delegated so it keeps working for markup the LiveView shell

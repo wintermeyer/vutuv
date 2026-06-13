@@ -5537,3 +5537,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Add a headline"
 msgstr ""
+
+#: lib/vutuv_web/templates/layout/app.html.heex:112
+#, elixir-autogen, elixir-format
+msgid "Next post in the feed"
+msgstr ""
+
+#: lib/vutuv_web/templates/layout/app.html.heex:113
+#, elixir-autogen, elixir-format
+msgid "Previous post in the feed"
+msgstr ""
