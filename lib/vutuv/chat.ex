@@ -66,9 +66,42 @@ defmodule Vutuv.Chat do
       # A report froze this pair (see Vutuv.Moderation): no new thread, no
       # explanation - the caller shows its generic "cannot receive
       # messages" notice.
-      %Conversation{frozen_at: %NaiveDateTime{}} -> {:error, :frozen}
-      %Conversation{} = conversation -> {:ok, conversation}
-      nil -> create_conversation(me, other, a_id, b_id)
+      %Conversation{frozen_at: %NaiveDateTime{}} ->
+        {:error, :frozen}
+
+      # The decliner re-initiating: the non-initiator of a declined request
+      # opening a thread re-opens it as a fresh request from them, rather than
+      # dead-ending on the row that stays hidden from them (issue #779). The
+      # original requester (the initiator) falls through and keeps their
+      # declined-but-shown-pending row, so they never learn of the decline.
+      %Conversation{status: "declined", initiator_id: initiator_id} = conversation
+      when initiator_id != me.id ->
+        reopen_declined(conversation, me, other)
+
+      %Conversation{} = conversation ->
+        {:ok, conversation}
+
+      nil ->
+        create_conversation(me, other, a_id, b_id)
+    end
+  end
+
+  # Turn a declined request into a fresh request from `me` (the party who had
+  # declined): the same accepted/pending rule and rate limit as a brand-new
+  # request, with the original request's messages dropped so the new initiator
+  # gets their one request message back and `last_message_at` is cleared. The
+  # row, its id and its participants stay, so existing links keep resolving.
+  defp reopen_declined(%Conversation{} = conversation, %User{} = me, %User{} = other) do
+    status = if Vutuv.Social.user_follows_user?(other.id, me.id), do: "accepted", else: "pending"
+
+    with :ok <- check_request_limit(me, status) do
+      Repo.transaction(fn ->
+        Repo.delete_all(from(m in Message, where: m.conversation_id == ^conversation.id))
+
+        conversation
+        |> Ecto.Changeset.change(initiator_id: me.id, status: status, last_message_at: nil)
+        |> Repo.update!()
+      end)
     end
   end
 

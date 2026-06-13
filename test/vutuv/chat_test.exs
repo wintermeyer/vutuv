@@ -86,6 +86,69 @@ defmodule Vutuv.ChatTest do
                Chat.find_or_create_conversation(activated, unactivated)
     end
 
+    test "the decliner re-initiating re-opens a fresh request from them (issue #779)" do
+      a = user()
+      b = user()
+
+      # A requests, sends the one request message, B declines.
+      {:ok, conversation} = Chat.find_or_create_conversation(a, b)
+      {:ok, _} = Chat.send_message(a, conversation.id, "let's connect")
+      {:ok, %Conversation{status: "declined"}} = Chat.decline_request(b, conversation.id)
+
+      # B (the decliner) opens A's profile and clicks Message: instead of
+      # dead-ending on the hidden declined row, it re-opens as a fresh pending
+      # request from B, which B can now see.
+      assert {:ok, %Conversation{id: same_id, status: "pending", initiator_id: b_id}} =
+               Chat.find_or_create_conversation(b, a)
+
+      assert same_id == conversation.id
+      assert b_id == b.id
+      assert %Conversation{} = Chat.get_conversation(b, conversation.id)
+
+      # The original request's message is dropped, so B gets their one request
+      # message and last_message_at is cleared.
+      assert Repo.aggregate(
+               from(m in Message, where: m.conversation_id == ^conversation.id),
+               :count
+             ) == 0
+
+      assert Repo.get!(Conversation, conversation.id).last_message_at == nil
+      assert {:ok, %Message{}} = Chat.send_message(b, conversation.id, "actually, hi")
+    end
+
+    test "re-opening as the decliner counts against the request rate limit (issue #779)" do
+      b = user()
+      x = user()
+
+      # X requests b; b declines, leaving a declined row b could re-open.
+      {:ok, declined} = Chat.find_or_create_conversation(x, b)
+      {:ok, %Conversation{status: "declined"}} = Chat.decline_request(b, declined.id)
+
+      # b spends its own new-request budget on fresh strangers.
+      for _ <- 1..Chat.new_conversation_limit() do
+        assert {:ok, _} = Chat.find_or_create_conversation(b, user())
+      end
+
+      # Re-opening the declined row is a fresh request from b, so it is limited.
+      assert {:error, :rate_limited} = Chat.find_or_create_conversation(b, x)
+    end
+
+    test "the original requester re-initiating still sees only their unanswered request" do
+      a = user()
+      b = user()
+
+      {:ok, conversation} = Chat.find_or_create_conversation(a, b)
+      {:ok, %Conversation{}} = Chat.decline_request(b, conversation.id)
+
+      # A re-initiating returns the same row, still declined-but-shown-pending
+      # and still A's: A never learns it was declined, and B is not re-requested.
+      assert {:ok, %Conversation{id: same_id, status: "declined", initiator_id: a_id}} =
+               Chat.find_or_create_conversation(a, b)
+
+      assert same_id == conversation.id
+      assert a_id == a.id
+    end
+
     test "rate-limits opening new pending conversations, but not accepted ones" do
       me = user()
 
