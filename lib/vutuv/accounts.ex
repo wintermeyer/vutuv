@@ -114,10 +114,9 @@ defmodule Vutuv.Accounts do
 
         File.write(path <> filename, body)
 
-        user
-        |> Repo.preload([:emails])
-        |> User.changeset(%{avatar: upload})
-        |> Repo.update()
+        # Through update_user/2 so the avatar file is written only after the row
+        # commits (issue #776), the same as the edit-profile path.
+        update_user(user, %{avatar: upload})
 
       _ ->
         nil
@@ -657,11 +656,56 @@ defmodule Vutuv.Accounts do
   end
 
   def update_user(%User{} = user, attrs) do
+    changeset =
+      user
+      |> Repo.preload(:search_terms)
+      |> User.changeset(attrs)
+      |> maybe_rebuild_search_terms()
+
+    with {:ok, user} <- Repo.update(changeset) do
+      {:ok, store_pending_images(user, attrs)}
+    end
+  end
+
+  # Avatar/cover files are written to disk only AFTER the row commits, so a
+  # rolled-back update (a name too long, a constraint, ...) never orphans them
+  # (issue #776). User.changeset already validated the uploads in memory; here
+  # we store them against the just-committed user (final id + name, which the
+  # on-disk file name is derived from) and set the column in a second write.
+  defp store_pending_images(user, attrs) do
     user
-    |> Repo.preload(:search_terms)
-    |> User.changeset(attrs)
-    |> maybe_rebuild_search_terms()
-    |> Repo.update()
+    |> store_pending_image(:avatar, image_upload(attrs, :avatar), &Vutuv.Avatar.store/1)
+    |> store_pending_image(:cover_photo, image_upload(attrs, :cover_photo), &Vutuv.Cover.store/1)
+  end
+
+  defp store_pending_image(user, _field, nil, _store), do: user
+
+  defp store_pending_image(user, field, %Plug.Upload{} = upload, store) do
+    with {:ok, file_name} <- store.({upload, user}),
+         {:ok, user} <- user |> Ecto.Changeset.change(%{field => file_name}) |> Repo.update() do
+      user
+    else
+      # The changeset already proved the upload decodes, so this is a rare disk
+      # failure; keep the prior image rather than committing a column that
+      # points at a file that was never written.
+      _ ->
+        Logger.warning("#{field} store failed for user ##{user.id}")
+        user
+    end
+  end
+
+  defp image_upload(attrs, field) do
+    case attrs do
+      %{^field => %Plug.Upload{} = upload} -> upload
+      %{} -> string_image_upload(attrs, Atom.to_string(field))
+    end
+  end
+
+  defp string_image_upload(attrs, key) do
+    case attrs do
+      %{^key => %Plug.Upload{} = upload} -> upload
+      _ -> nil
+    end
   end
 
   # Rebuild the denormalized people-search index whenever the name changes, so

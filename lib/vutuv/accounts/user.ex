@@ -147,67 +147,43 @@ defmodule Vutuv.Accounts.User do
     |> cast_assoc(:emails)
   end
 
+  # Avatar/cover uploads are validated here (size, extension, decodability) but
+  # NOT written to disk: the file is stored only after the row commits, by
+  # Accounts.store_pending_images/2, so a rolled-back write never orphans files
+  # (issue #776, mirroring the post-image pending-row pattern). The :avatar /
+  # :cover_photo column is therefore set post-commit too, not in this changeset.
   defp validate_avatar(changeset, %{avatar: avatar}),
     do: validate_avatar(changeset, %{"avatar" => avatar})
 
-  defp validate_avatar(changeset, %{"avatar" => avatar} = params) do
-    stat = File.stat!(avatar.path)
+  defp validate_avatar(changeset, %{"avatar" => %Plug.Upload{} = upload}),
+    do: validate_image_upload(changeset, :avatar, upload, "Avatar")
 
-    if stat.size > @max_image_filesize do
-      add_error(
-        changeset,
-        :avatar,
-        "Avatar filesize is greater than 2MB. Please upload a smaller image."
-      )
-    else
-      cast_avatar_attachment(changeset, params)
-    end
-  end
-
-  defp validate_avatar(changeset, %{}), do: changeset
-
-  # The scope passed to the uploader must reflect any name/id changes in this
-  # same changeset, because the on-disk file name is derived from it. This
-  # mirrors what Waffle's `cast_attachments/3` did via `apply_changes/1`.
-  defp cast_avatar_attachment(changeset, %{"avatar" => %Plug.Upload{} = upload}) do
-    case Vutuv.Avatar.store({upload, Ecto.Changeset.apply_changes(changeset)}) do
-      {:ok, file_name} -> put_change(changeset, :avatar, file_name)
-      {:error, _reason} -> add_error(changeset, :avatar, "is not a valid image")
-    end
-  end
-
-  defp cast_avatar_attachment(changeset, _params), do: changeset
+  defp validate_avatar(changeset, _params), do: changeset
 
   defp validate_cover_photo(changeset, %{cover_photo: cover_photo}),
     do: validate_cover_photo(changeset, %{"cover_photo" => cover_photo})
 
-  defp validate_cover_photo(changeset, %{"cover_photo" => cover_photo} = params) do
-    stat = File.stat!(cover_photo.path)
+  defp validate_cover_photo(changeset, %{"cover_photo" => %Plug.Upload{} = upload}),
+    do: validate_image_upload(changeset, :cover_photo, upload, "Cover photo")
 
-    if stat.size > @max_image_filesize do
-      add_error(
-        changeset,
-        :cover_photo,
-        "Cover photo filesize is greater than 2MB. Please upload a smaller image."
-      )
-    else
-      cast_cover_photo_attachment(changeset, params)
+  defp validate_cover_photo(changeset, _params), do: changeset
+
+  defp validate_image_upload(changeset, field, %Plug.Upload{} = upload, label) do
+    cond do
+      File.stat!(upload.path).size > @max_image_filesize ->
+        add_error(
+          changeset,
+          field,
+          "#{label} filesize is greater than 2MB. Please upload a smaller image."
+        )
+
+      not Vutuv.Uploads.valid_upload?(upload) ->
+        add_error(changeset, field, "is not a valid image")
+
+      true ->
+        changeset
     end
   end
-
-  defp validate_cover_photo(changeset, %{}), do: changeset
-
-  # The scope passed to the uploader must reflect any name/id changes in this
-  # same changeset, because the on-disk file name is derived from it (mirrors
-  # cast_avatar_attachment/2).
-  defp cast_cover_photo_attachment(changeset, %{"cover_photo" => %Plug.Upload{} = upload}) do
-    case Vutuv.Cover.store({upload, Ecto.Changeset.apply_changes(changeset)}) do
-      {:ok, file_name} -> put_change(changeset, :cover_photo, file_name)
-      {:error, _reason} -> add_error(changeset, :cover_photo, "is not a valid image")
-    end
-  end
-
-  defp cast_cover_photo_attachment(changeset, _params), do: changeset
 
   defp validate_first_name_or_last_name_or_nickname(changeset, %{}) do
     first_name = get_field(changeset, :first_name)

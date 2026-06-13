@@ -55,10 +55,9 @@ defmodule Vutuv.UploadsIntegrationTest do
     user = insert(:user, first_name: "Ada", last_name: "King")
     upload = %Plug.Upload{filename: "me.png", path: png_fixture(), content_type: "image/png"}
 
-    assert {:ok, updated} =
-             user
-             |> User.changeset(%{avatar: upload})
-             |> Repo.update()
+    # The file is written by Accounts.update_user/2 only after the row commits
+    # (issue #776), not during changeset construction.
+    assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{avatar: upload})
 
     assert updated.avatar == "me.png"
     assert File.exists?(Path.join(tmp, "avatars/#{user.id}/Ada King_thumb.avif"))
@@ -81,10 +80,8 @@ defmodule Vutuv.UploadsIntegrationTest do
     user = insert(:user, first_name: "Ada", last_name: "King")
     upload = %Plug.Upload{filename: "banner.png", path: png_fixture(), content_type: "image/png"}
 
-    assert {:ok, updated} =
-             user
-             |> User.changeset(%{cover_photo: upload})
-             |> Repo.update()
+    # Written by Accounts.update_user/2 after the row commits (issue #776).
+    assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{cover_photo: upload})
 
     assert updated.cover_photo == "banner.png"
     assert File.exists?(Path.join(tmp, "covers/#{user.id}/Ada King_wide.avif"))

@@ -84,6 +84,19 @@ defmodule Vutuv.Uploads do
   end
 
   @doc """
+  Whether `upload` is a storable image — a whitelisted extension whose bytes
+  decode as an image — **without writing anything to disk**. The pre-commit
+  half of `store/2`: a changeset validates here, and only after the row
+  commits does the caller `store/2` (which writes), so a rolled-back write
+  can never orphan files on disk (issue #776).
+  """
+  def valid_upload?(%Plug.Upload{} = upload) do
+    valid_extension?(upload.filename) and match?({:ok, _}, Spec.open_rotated(upload.path))
+  end
+
+  def valid_upload?(_), do: false
+
+  @doc """
   Root-relative, URI-encoded URL for a given `{file, scope}` and served
   version per `config`. Returns `nil` when the user has no file or for
   `:original` (the original is never URL-addressable).
