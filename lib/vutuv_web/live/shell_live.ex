@@ -186,23 +186,72 @@ defmodule VutuvWeb.ShellLive do
                   class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
                 />
               </.link>
-              <.link href={~p"/#{@user_param}"} title={@user_name} class="ml-1 shrink-0">
-                <%= if @user_avatar do %>
-                  <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
-                <% else %>
-                  <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
-                    {name_initials(@user_name)}
-                  </span>
-                <% end %>
-              </.link>
-              <.link
-                href={~p"/logout"}
-                method="delete"
-                title={gettext("Log out")}
-                class="flex h-10 w-10 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
-              >
-                <.icon_logout />
-              </.link>
+              <%!-- The avatar opens the account menu (a native <details data-menu>,
+              light-dismissed by app.js): the single, conventional home for every
+              account/settings destination, so the whole surface is one click from
+              anywhere. Log out lives here now instead of as its own bar icon. --%>
+              <details data-menu data-account-menu class="relative ml-1 shrink-0" id="account-menu">
+                <summary
+                  title={@user_name}
+                  class="flex cursor-pointer list-none items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden"
+                >
+                  <%= if @user_avatar do %>
+                    <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
+                  <% else %>
+                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
+                      {name_initials(@user_name)}
+                    </span>
+                  <% end %>
+                  <span class="sr-only">{gettext("Account menu")}</span>
+                </summary>
+
+                <div class="absolute right-0 z-20 mt-2 w-60 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                  <.link
+                    href={~p"/#{@user_param}"}
+                    data-self-profile
+                    class="block border-b border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800"
+                  >
+                    <span class="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {@user_name}
+                    </span>
+                    <span class="block text-xs text-slate-500 dark:text-slate-400">
+                      {gettext("View profile")}
+                    </span>
+                  </.link>
+
+                  <.link href={~p"/bookmarks"} class={[menu_item_class(), "block"]}>
+                    {gettext("Bookmarks")}
+                  </.link>
+                  <.link href={~p"/likes"} class={[menu_item_class(), "block"]}>
+                    {gettext("Likes")}
+                  </.link>
+
+                  <div class="my-1 border-t border-slate-100 dark:border-slate-800"></div>
+
+                  <.link href={~p"/#{@user_param}/edit"} class={[menu_item_class(), "block"]}>
+                    {gettext("Settings")}
+                  </.link>
+
+                  <%!-- Power-user affordance: opens the shortcuts overlay (wired in
+                  app.js). Hidden on touch devices, where shortcuts don't apply. --%>
+                  <button
+                    type="button"
+                    data-shortcuts-trigger
+                    class={[menu_item_class(), "flex w-full items-center justify-between [@media(hover:none)]:hidden"]}
+                  >
+                    {gettext("Keyboard shortcuts")}
+                    <kbd class="rounded border border-slate-300 px-1.5 text-xs font-normal text-slate-500 dark:border-slate-600 dark:text-slate-400">
+                      ?
+                    </kbd>
+                  </button>
+
+                  <div class="my-1 border-t border-slate-100 dark:border-slate-800"></div>
+
+                  <.link href={~p"/logout"} method="delete" class={[menu_item_class(), "block"]}>
+                    {gettext("Log out")}
+                  </.link>
+                </div>
+              </details>
             <% else %>
               <.link
                 href={~p"/login"}
@@ -260,6 +309,13 @@ defmodule VutuvWeb.ShellLive do
     """
   end
 
+  # Shared classes for an avatar account-menu item — mirrors the card_menu
+  # item styling so both dropdowns read the same. The display utility
+  # (block / flex) is added per call site.
+  defp menu_item_class do
+    "px-4 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+  end
+
   defp icon_search(assigns) do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -300,14 +356,6 @@ defmodule VutuvWeb.ShellLive do
     ~H"""
     <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.5a.75.75 0 0 0 .75.75h4.5v-6h4.5v6h4.5a.75.75 0 0 0 .75-.75V9.75" />
-    </svg>
-    """
-  end
-
-  defp icon_logout(assigns) do
-    ~H"""
-    <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 9l-3 3m0 0 3 3m-3-3h12.75" />
     </svg>
     """
   end

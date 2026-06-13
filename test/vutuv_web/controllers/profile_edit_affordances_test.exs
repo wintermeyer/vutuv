@@ -27,6 +27,18 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
                profile-contact-menu profile-about-menu profile-social-media-menu
                profile-phone-numbers-menu profile-addresses-menu)
 
+  # The shell's avatar account menu is a legitimate `<details data-menu>` that
+  # renders on every page now, so a page-wide `data-menu` check no longer means
+  # "the profile section has a ⋯ menu". Scope the check to data-menu dropdowns
+  # that are NOT the account menu (same spirit as the #delete-entry pinning in
+  # the second describe block).
+  defp section_card_menus(html) do
+    ~r/<details[^>]*\bdata-menu\b[^>]*>/
+    |> Regex.scan(html)
+    |> List.flatten()
+    |> Enum.reject(&(&1 =~ "data-account-menu"))
+  end
+
   describe "profile section owner affordances" do
     test "full sections show a Manage link; empty sections show the dashed add tile", %{
       conn: conn
@@ -38,8 +50,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      # No quiet ⋯ menu anywhere; the empty cards still carry the visible tile.
-      refute html =~ "data-menu"
+      # No quiet ⋯ menu on the profile sections (the shell's account menu is a
+      # legitimate data-menu and is excluded); empty cards still carry the tile.
+      assert section_card_menus(html) == []
       assert html =~ "data-empty-add"
 
       for id <- @menu_ids do
@@ -82,8 +95,9 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       assert html =~ data.job.title
       assert html =~ email.value
 
-      # ...but no menu and none of the owner-only management links.
-      refute html =~ "data-menu"
+      # ...but no profile-section ⋯ menu (the shell account menu is excluded)
+      # and none of the owner-only management links.
+      assert section_card_menus(html) == []
 
       for id <- @menu_ids do
         refute html =~ ~s(id="#{id}")

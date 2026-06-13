@@ -64,6 +64,19 @@ defmodule VutuvWeb.LayoutHTMLTest do
     assert nav =~ "·"
   end
 
+  # The keyboard-shortcuts help overlay lives in the shared layout so "?" and
+  # the account-menu item can open it from any page. It ships hidden.
+  test "the layout carries the keyboard-shortcuts help overlay", %{conn: conn} do
+    body = conn |> get(~p"/impressum") |> html_response(200)
+
+    assert body =~ ~s(id="shortcuts-overlay")
+    assert body =~ ~s(role="dialog")
+    assert body =~ "Keyboard shortcuts"
+    # The overlay opens via JS; it must start hidden.
+    [overlay_tag] = Regex.run(~r/<div[^>]*id="shortcuts-overlay"[^>]*>/, body)
+    assert overlay_tag =~ "hidden"
+  end
+
   defp footer_html(body) do
     [footer] = Regex.run(~r{<footer.*?</footer>}s, body)
     footer

@@ -2,6 +2,9 @@
 import "phoenix_html"
 import { Socket } from "phoenix"
 import { LiveSocket } from "phoenix_live_view"
+// Desktop-only keyboard shortcuts + the "?" help overlay (self-contained,
+// gated off touch devices; see keyboard_shortcuts.js).
+import "./keyboard_shortcuts"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the

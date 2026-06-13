@@ -114,16 +114,41 @@ defmodule VutuvWeb.ShellLiveTest do
     session = session_for(user, %{"user_avatar" => "/avatars/#{user.id}/Stefan%20W_thumb.jpg"})
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
 
-    assert has_element?(view, ~s(a[title="Stefan Wintermeyer"] img))
-    refute has_element?(view, ~s(a[title="Stefan Wintermeyer"]), "SW")
+    assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
+    refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
   end
 
   test "falls back to initials when the user has no avatar", %{conn: conn} do
     user = insert(:user)
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
-    assert has_element?(view, ~s(a[title="Stefan Wintermeyer"]), "SW")
-    refute has_element?(view, ~s(a[title="Stefan Wintermeyer"] img))
+    assert has_element?(view, ~s(summary[title="Stefan Wintermeyer"]), "SW")
+    refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
+  end
+
+  test "the avatar opens an account menu linking to every account area", %{conn: conn} do
+    user = insert(:user)
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+    menu = "details[data-account-menu]"
+    assert has_element?(view, menu)
+    # Identity header + the content/settings destinations a member expects to
+    # find behind their avatar, so the whole account surface is one click away.
+    assert has_element?(view, ~s(#{menu} a[href="/stefan"]))
+    assert has_element?(view, ~s(#{menu} a[href="/bookmarks"]))
+    assert has_element?(view, ~s(#{menu} a[href="/likes"]))
+    assert has_element?(view, ~s(#{menu} a[href="/stefan/edit"]))
+    # Log out folds into the menu (its own door icon in the bar is gone).
+    assert has_element?(view, ~s(#{menu} a[href="/logout"][data-method="delete"]))
+    # The desktop-only trigger that opens the keyboard-shortcuts overlay.
+    assert has_element?(view, ~s(#{menu} [data-shortcuts-trigger]))
+  end
+
+  test "logged out there is no account menu and no log out link", %{conn: conn} do
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+    refute has_element?(view, "details[data-account-menu]")
+    refute has_element?(view, ~s(a[href="/logout"]))
   end
 
   test "a logged-in dead render carries the avatar through shell_session", %{conn: conn} do

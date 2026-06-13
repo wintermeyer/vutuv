@@ -91,3 +91,80 @@ it on desktop where that bar is hidden. Links wrap into a centered row. --%>
     </p>
   </div>
 </footer>
+
+<%!-- Keyboard-shortcuts help overlay (desktop). Hidden by default; opened by
+"?" or the account-menu "Keyboard shortcuts" item, both wired in app.js. Lives
+in the static layout, outside the live root, so it is stable across LiveView
+patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
+<% shortcut_groups = [
+  {gettext("Navigation"),
+   [
+     {["g", "h"], gettext("Home")},
+     {["g", "f"], gettext("Feed")},
+     {["g", "m"], gettext("Messages")},
+     {["g", "n"], gettext("Notifications")},
+     {["g", "p"], gettext("Your profile")},
+     {["/"], gettext("Search")}
+   ]},
+  {gettext("Actions"), [{["n"], gettext("Write a new post")}]},
+  {gettext("General"),
+   [
+     {["?"], gettext("Show this help")},
+     {["Esc"], gettext("Close menus and dialogs")}
+   ]}
+] %>
+<% kbd_class =
+  "inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-md border border-slate-300 bg-slate-50 px-1.5 font-mono text-xs font-semibold text-slate-600 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300" %>
+<div
+  id="shortcuts-overlay"
+  class="hidden fixed inset-0 z-[60] items-center justify-center p-4 [&:not(.hidden)]:flex"
+  role="dialog"
+  aria-modal="true"
+  aria-labelledby="shortcuts-title"
+>
+  <div data-overlay-backdrop class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
+  <div class="relative w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+    <div class="mb-5 flex items-center justify-between">
+      <h2 id="shortcuts-title" class="text-lg font-bold text-slate-900 dark:text-white">
+        {gettext("Keyboard shortcuts")}
+      </h2>
+      <button
+        type="button"
+        data-overlay-close
+        title={gettext("Close")}
+        class="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+      >
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+        </svg>
+        <span class="sr-only">{gettext("Close")}</span>
+      </button>
+    </div>
+
+    <div class="space-y-5">
+      <%= for {title, rows} <- shortcut_groups do %>
+        <section>
+          <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+            {title}
+          </h3>
+          <div class="space-y-2">
+            <%= for {keys, label} <- rows do %>
+              <div class="flex items-center justify-between gap-4 text-sm">
+                <span class="text-slate-600 dark:text-slate-300">{label}</span>
+                <span class="flex shrink-0 items-center gap-1">
+                  <%= for key <- keys do %>
+                    <kbd class={kbd_class}>{key}</kbd>
+                  <% end %>
+                </span>
+              </div>
+            <% end %>
+          </div>
+        </section>
+      <% end %>
+    </div>
+
+    <p class="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+      {gettext("Shortcuts pause while you type, and are off on phones and tablets.")}
+    </p>
+  </div>
+</div>

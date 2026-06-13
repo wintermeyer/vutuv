@@ -5465,3 +5465,59 @@ msgstr "Inhalte in Prüfung"
 #, elixir-autogen, elixir-format
 msgid "Privacy and security"
 msgstr "Privatsphäre und Sicherheit"
+
+#: lib/vutuv_web/live/shell_live.ex:205
+#, elixir-autogen, elixir-format
+msgid "Account menu"
+msgstr "Kontomenü"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:109
+#, elixir-autogen, elixir-format
+msgid "Actions"
+msgstr "Aktionen"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:113
+#, elixir-autogen, elixir-format
+msgid "Close menus and dialogs"
+msgstr "Menüs und Dialoge schließen"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:110
+#, elixir-autogen, elixir-format
+msgid "General"
+msgstr "Allgemeines"
+
+#: lib/vutuv_web/live/shell_live.ex:242
+#: lib/vutuv_web/templates/layout/app.html.heex:129
+#, elixir-autogen, elixir-format
+msgid "Keyboard shortcuts"
+msgstr "Tastaturkürzel"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:100
+#, elixir-autogen, elixir-format
+msgid "Navigation"
+msgstr "Navigation"
+
+#: lib/vutuv_web/live/shell_live.ex:232
+#, elixir-autogen, elixir-format
+msgid "Settings"
+msgstr "Einstellungen"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:167
+#, elixir-autogen, elixir-format
+msgid "Shortcuts pause while you type, and are off on phones and tablets."
+msgstr "Tastaturkürzel pausieren während der Eingabe und sind auf Smartphones und Tablets aus."
+
+#: lib/vutuv_web/templates/layout/app.html.heex:112
+#, elixir-autogen, elixir-format
+msgid "Show this help"
+msgstr "Diese Hilfe anzeigen"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:109
+#, elixir-autogen, elixir-format
+msgid "Write a new post"
+msgstr "Beitrag schreiben"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:106
+#, elixir-autogen, elixir-format
+msgid "Your profile"
+msgstr "Ihr Profil"
