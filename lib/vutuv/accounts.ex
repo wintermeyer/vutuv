@@ -46,6 +46,28 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  @doc """
+  Whether a failed `register_user/3` changeset failed *only* because the email
+  address is already registered (the emails unique constraint fired). The
+  sign-up controller masks exactly this case so the form can't leak whether an
+  address has an account; classifying it here keeps that security-relevant rule
+  next to the constraint that defines it rather than in the web layer.
+
+  `unique_constraint` only fires after the INSERT, which Ecto attempts only on
+  an otherwise-valid changeset, so a genuine input error (bad format, missing
+  name) never coincides with it.
+  """
+  def email_already_taken?(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.get_change(:emails, [])
+    |> Enum.any?(fn email_changeset ->
+      Enum.any?(email_changeset.errors, fn
+        {:value, {_message, opts}} -> Keyword.get(opts, :constraint) == :unique
+        _ -> false
+      end)
+    end)
+  end
+
   # The initial handle, generated from the name (underscore style, unique,
   # never reserved). nil when no name was given - user_changeset/4 turns that
   # into a changeset error so registration fails cleanly.

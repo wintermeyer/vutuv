@@ -13,7 +13,7 @@ defmodule Vutuv.Search do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden_row: 1]
 
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
@@ -391,7 +391,7 @@ defmodule Vutuv.Search do
         on: u.id == ut.user_id,
         where:
           ut.tag_id in ^ids and (is_nil(u.activated?) or u.activated? == true) and
-            not account_hidden(u.id),
+            not account_hidden_row(u),
         group_by: ut.tag_id,
         select: {ut.tag_id, count(ut.id)}
       )
@@ -557,7 +557,7 @@ defmodule Vutuv.Search do
   # deactivated) are hidden everywhere, including search. The condition is
   # owned by Vutuv.Moderation.Query; left-joined orphan terms (no user) pass.
   defp exclude_moderated(query) do
-    from([user: u] in query, where: not account_hidden(u.id))
+    from([user: u] in query, where: not account_hidden_row(u))
   end
 
   defp phoneticize_search_value(value, algorithm) do
