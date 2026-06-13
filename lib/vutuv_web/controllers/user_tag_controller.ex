@@ -14,6 +14,7 @@ defmodule VutuvWeb.UserTagController do
   plug(:scrub_params, "tag_param" when action in [:create])
 
   alias Vutuv.Tags.UserTag
+  alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
@@ -88,9 +89,11 @@ defmodule VutuvWeb.UserTagController do
   end
 
   def show(conn, %{"id" => _id}) do
+    # Count only visible endorsers (issue #783); the agent doc derives the
+    # endorsement count from length(endorsements) on this plain preload.
     user_tag =
       conn.assigns[:user_tag]
-      |> Repo.preload([:tag, :endorsements])
+      |> Repo.preload([:tag, endorsements: UserTagEndorsement.visible()])
 
     AgentDocs.respond(conn,
       html: &render(&1, "show.html", user_tag: user_tag),

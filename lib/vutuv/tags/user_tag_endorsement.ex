@@ -18,4 +18,24 @@ defmodule Vutuv.Tags.UserTagEndorsement do
     |> cast(params, [:user_id, :user_tag_id])
     |> unique_constraint(:user_id_user_tag_id)
   end
+
+  @doc """
+  Endorsements whose endorser is currently publicly visible: activated and
+  not frozen / suspended / deactivated. The same gate the follower,
+  connection, tag-member and most-followed counts use, so a hidden or
+  never-activated endorser no longer inflates a public endorsement count.
+
+  Preload through this (`preload(endorsements: ^UserTagEndorsement.visible())`)
+  wherever an in-memory `length/1`/`Enum.count/1` over the loaded rows feeds a
+  displayed count or a rendered endorser list, matching the SQL aggregate in
+  `Vutuv.Tags.UserTag.ordered_by_endorsements/0`.
+  """
+  def visible(query \\ __MODULE__) do
+    import Vutuv.Moderation.Query, only: [account_hidden: 1]
+
+    from(e in query,
+      join: u in assoc(e, :user),
+      where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id)
+    )
+  end
 end

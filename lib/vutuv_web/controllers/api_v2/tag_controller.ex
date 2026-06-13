@@ -10,6 +10,7 @@ defmodule VutuvWeb.ApiV2.TagController do
   use VutuvWeb, :controller
 
   alias Vutuv.Tags
+  alias Vutuv.Tags.UserTagEndorsement
   alias Vutuv.UUIDv7
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
@@ -20,7 +21,7 @@ defmodule VutuvWeb.ApiV2.TagController do
 
     case Tags.add_user_tag(user, name) do
       {:ok, user_tag} ->
-        user_tag = Repo.preload(user_tag, [:tag, :endorsements])
+        user_tag = Repo.preload(user_tag, [:tag, endorsements: UserTagEndorsement.visible()])
         ApiV2.send_json(conn, SectionDocs.build_show(user, :tags, user_tag), 201)
 
       {:error, changeset} ->

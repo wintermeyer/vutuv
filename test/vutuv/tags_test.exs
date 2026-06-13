@@ -4,6 +4,7 @@ defmodule Vutuv.TagsTest do
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
+  alias Vutuv.Tags.UserTagEndorsement
 
   describe "create_or_link_tag/2" do
     import Ecto.Changeset
@@ -68,6 +69,49 @@ defmodule Vutuv.TagsTest do
       assert visible.id in ids
       refute unactivated.id in ids
       refute frozen.id in ids
+    end
+  end
+
+  describe "endorsement count visibility" do
+    # The endorsement count must obey the project-wide rule that hidden
+    # accounts never count toward a public tally (issue #783), the same gate
+    # already applied to the follower / connection / tag-member / most-followed
+    # counts. A tag endorsed by one visible and four hidden members reads "1".
+    defp tag_with_mixed_endorsers do
+      tag_owner = insert(:user, activated?: true)
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: tag_owner, tag: tag)
+
+      visible = insert(:user, activated?: true)
+      unactivated = insert(:user)
+      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      suspended = insert(:user, activated?: true, suspended_until: ~N[2099-12-31 23:59:59])
+      deactivated = insert(:user, activated?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+
+      for endorser <- [visible, unactivated, frozen, suspended, deactivated] do
+        insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
+      end
+
+      {tag_owner, user_tag}
+    end
+
+    test "ordered_by_endorsements/0 counts only currently-visible endorsers" do
+      {tag_owner, _user_tag} = tag_with_mixed_endorsers()
+
+      [counted] =
+        UserTag.ordered_by_endorsements()
+        |> where(user_id: ^tag_owner.id)
+        |> Repo.all()
+
+      assert counted.endorsement_count == 1
+    end
+
+    test "UserTagEndorsement.visible/1 preloads only currently-visible endorsers" do
+      {_tag_owner, user_tag} = tag_with_mixed_endorsers()
+
+      user_tag = Repo.preload(user_tag, endorsements: UserTagEndorsement.visible())
+
+      assert length(user_tag.endorsements) == 1
     end
   end
 

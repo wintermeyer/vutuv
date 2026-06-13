@@ -15,6 +15,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
+  alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.RateLimit
@@ -113,9 +114,15 @@ defmodule VutuvWeb.UserController do
     user
     |> Repo.preload([
       :social_media_accounts,
-      # Most endorsed first, so the 10-tag cut keeps the strongest tags.
-      # The endorsement rows drive the template's "already endorsed?" check.
-      user_tags: UserTag.ordered_by_endorsements() |> limit(10) |> preload(:endorsements),
+      # Most endorsed first, so the 10-tag cut keeps the strongest tags. The
+      # endorsement rows drive both the chip's displayed count (Enum.count) and
+      # the template's "already endorsed?" check, so preload only the visible
+      # endorsers: hidden accounts must not inflate the count (issue #783). The
+      # viewer is logged in and visible, so their own row survives the filter.
+      user_tags:
+        UserTag.ordered_by_endorsements()
+        |> limit(10)
+        |> preload(endorsements: ^UserTagEndorsement.visible()),
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),
@@ -265,5 +272,4 @@ defmodule VutuvWeb.UserController do
         |> redirect(to: ~p"/#{user}")
     end
   end
-
 end

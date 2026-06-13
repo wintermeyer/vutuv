@@ -34,14 +34,25 @@ defmodule Vutuv.Tags.UserTag do
   state) add `preload(:endorsements)` themselves.
   """
   def ordered_by_endorsements(query \\ __MODULE__) do
+    import Vutuv.Moderation.Query, only: [account_hidden: 1]
+
     from(u in query,
       left_join: e in assoc(u, :endorsements),
+      # Count only endorsers who are currently publicly visible (the project-wide
+      # rule, shared with the follower / connection / tag-member / most-followed
+      # counts). The visibility test rides in the left-join ON clause, so a
+      # hidden endorser leaves `endorser` NULL and drops out of count(endorser.id)
+      # without discarding the user_tag row (it still shows 0).
+      left_join: endorser in assoc(e, :user),
+      on:
+        (is_nil(endorser.activated?) or endorser.activated? == true) and
+          not account_hidden(endorser.id),
       left_join: t in assoc(u, :tag),
-      order_by: [desc: count(e.id), asc: t.slug],
+      order_by: [desc: count(endorser.id), asc: t.slug],
       # Postgres requires every ordered, non-aggregated column in GROUP BY;
       # each user_tag has exactly one tag, so this keeps one row per user_tag.
       group_by: [u.id, t.slug],
-      select_merge: %{endorsement_count: count(e.id)},
+      select_merge: %{endorsement_count: count(endorser.id)},
       preload: [:tag]
     )
   end

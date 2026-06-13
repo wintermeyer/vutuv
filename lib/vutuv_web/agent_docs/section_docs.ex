@@ -164,7 +164,10 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   # ordered_by_endorsements/0 select_merges the count; a user_tag loaded
-  # another way (the show page's plain preload) counts its loaded rows.
+  # another way (the show page) counts its loaded rows. Both mechanisms drop
+  # hidden/unactivated endorsers (issue #783): the query filters in its ON
+  # clause, and every :endorsements preload that reaches here goes through
+  # UserTagEndorsement.visible/1, so length/1 counts only visible endorsers.
   defp endorsement_count(%UserTag{endorsement_count: count}) when is_integer(count), do: count
   defp endorsement_count(user_tag), do: length(user_tag.endorsements)
 end
