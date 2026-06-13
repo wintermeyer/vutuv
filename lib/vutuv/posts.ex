@@ -798,9 +798,17 @@ defmodule Vutuv.Posts do
   defp post_topic(post_id), do: "post:#{post_id}"
 
   defp broadcast_engagement(kind, user_id, post_id, active?) do
-    payload = Map.put(engagement_counts(post_id), :post_id, post_id)
+    # Absolute counts for every open action bar on this post (idempotent). The
+    # `by_user_id` tag lets the actor's own bars — in their other tabs — re-sync
+    # their like/bookmark/repost *flags* off this same message, so an action bar
+    # no longer has to subscribe to the actor's whole activity firehose just to
+    # hear about its own toggles (see VutuvWeb.PostLive.Actions).
+    payload = Map.merge(engagement_counts(post_id), %{post_id: post_id, by_user_id: user_id})
     Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), {:post_counters, payload})
 
+    # The Saved (likes/bookmarks) page still reacts on the actor's activity
+    # topic: it may need to add or drop a card for a post it is not subscribed
+    # to, which the per-post topic alone cannot tell it.
     Vutuv.Activity.broadcast(
       user_id,
       {:engagement_changed, %{kind: kind, post_id: post_id, active?: active?}}

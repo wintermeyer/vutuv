@@ -37,13 +37,13 @@ defmodule VutuvWeb.PostLive.Actions do
     viewer_id = session["user_id"]
     VutuvWeb.LiveLocale.put_locale(session)
 
-    if connected?(socket) do
-      Posts.subscribe_post(post_id)
-      # The viewer's own activity topic: an {:engagement_changed, …} from
-      # another of their sessions re-syncs the liked/bookmarked/reposted
-      # flags here (the post topic only carries counts).
-      Vutuv.Activity.subscribe(viewer_id)
-    end
+    # The post topic carries everything this bar needs: absolute counts for
+    # every viewer, plus — when the actor is the viewer (`:by_user_id`) — the
+    # cue to re-sync the viewer's own filled-in flags across their tabs. So the
+    # bar does NOT subscribe to the viewer's activity firehose; on a feed of N
+    # posts that used to put N subscribers on `"user:<id>"`, each handed every
+    # notification / message / new-post event only to discard it.
+    if connected?(socket), do: Posts.subscribe_post(post_id)
 
     {:ok,
      socket
@@ -103,7 +103,7 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def handle_info(
         {:post_counters,
-         %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies}},
+         %{likes: likes, bookmarks: bookmarks, reposts: reposts, replies: replies} = payload},
         socket
       ) do
     case socket.assigns.engagement do
@@ -111,24 +111,22 @@ defmodule VutuvWeb.PostLive.Actions do
         {:noreply, socket}
 
       engagement ->
-        {:noreply,
-         assign(socket, :engagement, %{
-           engagement
-           | likes: likes,
-             bookmarks: bookmarks,
-             reposts: reposts,
-             replies: replies
-         })}
-    end
-  end
-
-  # The viewer toggled this post in another tab: reload, so their own flag
-  # state (filled heart etc.) stays in sync everywhere, not just the counts.
-  def handle_info({:engagement_changed, %{post_id: post_id}}, socket) do
-    if post_id == socket.assigns.post_id do
-      {:noreply, load_engagement(socket)}
-    else
-      {:noreply, socket}
+        # The viewer's own toggle (from this or another of their tabs) carries
+        # `:by_user_id`: reload so their filled-in flags follow, not just the
+        # counts. Anything else — another viewer's toggle, a reply-count tick —
+        # is counts-only and never touches this viewer's flags.
+        if payload[:by_user_id] && payload[:by_user_id] == socket.assigns.viewer_id do
+          {:noreply, load_engagement(socket)}
+        else
+          {:noreply,
+           assign(socket, :engagement, %{
+             engagement
+             | likes: likes,
+               bookmarks: bookmarks,
+               reposts: reposts,
+               replies: replies
+           })}
+        end
     end
   end
 

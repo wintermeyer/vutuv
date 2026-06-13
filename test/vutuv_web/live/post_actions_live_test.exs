@@ -308,4 +308,36 @@ defmodule VutuvWeb.PostActionsLiveTest do
       refute render(bar) =~ ~s(phx-click="toggle")
     end
   end
+
+  describe "engagement broadcasts" do
+    # The action bar learns about the actor's *own* toggle over the post topic
+    # (so it no longer has to subscribe to the actor's whole activity firehose
+    # just to re-sync its own filled-in flags). The post-counter event therefore
+    # names the actor via :by_user_id, alongside the absolute counts.
+    test "a toggle tags the post-topic counter with the acting user" do
+      author = other_user()
+      liker = other_user()
+      post = create_post!(author, %{body: "tagged"})
+
+      Posts.subscribe_post(post.id)
+      :ok = Posts.like_post(liker, post)
+
+      assert_receive {:post_counters, %{likes: 1, post_id: post_id, by_user_id: by_user_id}}
+      assert post_id == post.id
+      assert by_user_id == liker.id
+    end
+
+    # A non-toggle counter refresh (a reply ticking the parent's count) carries
+    # no actor, so a bar treats it as counts-only and never reloads flags.
+    test "a reply-count refresh carries no acting user" do
+      author = other_user()
+      post = create_post!(author, %{body: "parent"})
+
+      Posts.subscribe_post(post.id)
+      {:ok, _} = Posts.create_reply(other_user(), post, %{body: "child"})
+
+      assert_receive {:post_counters, %{replies: 1} = payload}
+      refute Map.has_key?(payload, :by_user_id)
+    end
+  end
 end
