@@ -182,13 +182,44 @@ defmodule VutuvWeb.ShellLiveTest do
     refute has_element?(view, "span.bg-accent")
   end
 
-  test "a new-notification event bumps the bell badge", %{conn: conn} do
+  test "a new-notification event recomputes the bell badge from the source of truth", %{
+    conn: conn
+  } do
     user = user_with_unread_notification()
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    assert has_element?(view, @bell_badge, "1")
 
+    # A second real unread event lands, then the push notification announces it.
+    # The shell recomputes (like the messages badge) rather than blindly +1'ing,
+    # so the badge reflects the true count and can't drift.
+    insert(:follow, follower: insert(:user), followee: user)
     send(view.pid, {:new_notification, %{text: "hi"}})
 
     assert has_element?(view, @bell_badge, "2")
+  end
+
+  test "a :notifications_changed event recomputes (lowers) the bell badge after a withdrawn request",
+       %{conn: conn} do
+    # Regression for #782: a withdrawn/declined connection request lowers the
+    # unread count with no new notification to push. The shell must recompute on
+    # :notifications_changed, not only ever increment, or the badge stays stale
+    # until a full page reload re-seeds it.
+    recipient = insert(:user)
+    requester = insert(:user)
+    {:ok, connection} = Vutuv.Social.request_connection(requester, recipient)
+
+    {:ok, view, _html} =
+      live_isolated(conn, VutuvWeb.ShellLive, session: session_for(recipient))
+
+    # Seeded from the DB: one pending request addressed to the recipient.
+    assert has_element?(view, @bell_badge, "1")
+
+    # The requester withdraws; the pending row is gone. On the recompute event
+    # the badge must drop to 0.
+    {:ok, _} = Vutuv.Social.remove_connection(requester, connection.id)
+    send(view.pid, :notifications_changed)
+
+    refute has_element?(view, @bell_badge)
   end
 
   test "the badge for the page being viewed starts at zero (no read-broadcast race)", %{

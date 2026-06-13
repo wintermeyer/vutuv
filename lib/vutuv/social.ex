@@ -308,6 +308,9 @@ defmodule Vutuv.Social do
         connection
         |> Connection.changeset(%{status: "declined", status_changed_at: now()})
         |> Repo.update()
+        # The decliner's own pending-request notification is gone; nudge only
+        # them. Stays silent toward the requester (`me` is the recipient).
+        |> broadcast_notifications_changed([me.id])
 
       nil ->
         {:error, :not_found}
@@ -322,10 +325,29 @@ defmodule Vutuv.Social do
   """
   def remove_connection(%User{} = me, connection_id) do
     case fetch_for_party(me, connection_id) do
-      %Connection{} = connection -> Repo.delete(connection)
-      nil -> {:error, :not_found}
+      %Connection{} = connection ->
+        connection
+        |> Repo.delete()
+        # Withdraw drops the recipient's request badge; disconnect drops both
+        # parties' accepted-connection count. Nudge both and let each shell
+        # recompute (a no-op for whoever's count didn't change).
+        |> broadcast_notifications_changed([connection.user_a_id, connection.user_b_id])
+
+      nil ->
+        {:error, :not_found}
     end
   end
+
+  # On a silent change to the unread set (a withdrawn or declined pending
+  # request, a disconnect), nudge the affected parties' shells to recompute the
+  # notification badge. No notification is pushed, so without this the badge
+  # would stay stale until a reload (issue #782).
+  defp broadcast_notifications_changed({:ok, _} = result, user_ids) do
+    Enum.each(user_ids, &Vutuv.Activity.mark_notifications_changed/1)
+    result
+  end
+
+  defp broadcast_notifications_changed(result, _user_ids), do: result
 
   @doc """
   Cuts every social tie between the two users in one go: the connection row

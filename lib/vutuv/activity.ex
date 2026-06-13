@@ -138,6 +138,14 @@ defmodule Vutuv.Activity do
   @doc "Tell a user's shell their messages were just read (clears the badge)."
   def mark_messages_read(user_id), do: broadcast(user_id, :messages_read)
 
+  @doc """
+  Tell a user's shell to recompute its notification badge after a silent change
+  to the unread set, i.e. a change with no new notification to push: a pending
+  connection request was withdrawn or declined, so the unread count dropped.
+  The shell reseeds from `unread_notification_count/1` on this event.
+  """
+  def mark_notifications_changed(user_id), do: broadcast(user_id, :notifications_changed)
+
   @doc "Push a new in-app notification to `user_id`."
   def notify(nil, _notification), do: :ok
 

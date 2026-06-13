@@ -69,9 +69,22 @@ defmodule VutuvWeb.ShellLive do
     if String.starts_with?(path, prefix), do: 0, else: counter.(user_id)
   end
 
+  # Both badges recompute from the source of truth rather than adjusting a
+  # running tally, so they can't drift. A bare +1 on :new_notification went
+  # stale the moment a counted event was *removed* with no notification to
+  # announce it (a withdrawn or declined connection request), and only
+  # self-healed on a full reload (issue #782). :notifications_changed is that
+  # silent-decrement signal (broadcast by Vutuv.Social), and recomputing on
+  # :new_notification too keeps the increment honest.
   @impl true
   def handle_info({:new_notification, _n}, socket),
-    do: {:noreply, update(socket, :notifications_count, &(&1 + 1))}
+    do: {:noreply, recount_notifications(socket)}
+
+  def handle_info(:notifications_changed, socket),
+    do: {:noreply, recount_notifications(socket)}
+
+  def handle_info(:notifications_read, socket),
+    do: {:noreply, assign(socket, :notifications_count, 0)}
 
   # Vutuv.Chat broadcasts :new_message on every delivered message and
   # MessageLive's mark_read broadcasts :messages_read when the member opens a
@@ -85,9 +98,6 @@ defmodule VutuvWeb.ShellLive do
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
 
-  def handle_info(:notifications_read, socket),
-    do: {:noreply, assign(socket, :notifications_count, 0)}
-
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp recount_messages(socket) do
@@ -95,6 +105,14 @@ defmodule VutuvWeb.ShellLive do
       socket,
       :messages_count,
       Vutuv.Chat.unread_conversations_count(socket.assigns.user_id)
+    )
+  end
+
+  defp recount_notifications(socket) do
+    assign(
+      socket,
+      :notifications_count,
+      Activity.unread_notification_count(socket.assigns.user_id)
     )
   end
 

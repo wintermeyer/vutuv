@@ -135,6 +135,22 @@ defmodule Vutuv.ConnectionsTest do
 
       assert req == b.id
     end
+
+    test "tells the decliner's shell to recompute its notification badge (#782)" do
+      # The recipient's pending-request notification disappears on decline, but
+      # nothing used to tell their shell, so the bell badge stayed stale until a
+      # reload. The decliner (b) now gets a :notifications_changed nudge.
+      {a, b} = users()
+      {:ok, c} = Social.request_connection(a, b)
+
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+      {:ok, _} = Social.decline_connection(b, c.id)
+
+      assert_receive :notifications_changed
+      # Silent toward the requester: a is not nudged (and never learns of the decline).
+      refute_received :notifications_changed
+    end
   end
 
   describe "remove_connection/2" do
@@ -156,6 +172,23 @@ defmodule Vutuv.ConnectionsTest do
 
       assert {:ok, _} = Social.remove_connection(a, c.id)
       assert %{status: :none} = Social.connection_state(a, b)
+    end
+
+    test "withdrawing nudges both parties' shells to recompute the badge (#782)" do
+      # The recipient (b) had a pending-request notification; withdrawing it must
+      # drop their badge. remove_connection broadcasts :notifications_changed to
+      # both parties so each shell recomputes from the source of truth (it is a
+      # harmless no-op for the requester, whose count never included the request).
+      {a, b} = users()
+      {:ok, c} = Social.request_connection(a, b)
+
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+      assert {:ok, _} = Social.remove_connection(a, c.id)
+
+      assert_receive :notifications_changed
+      assert_receive :notifications_changed
+      refute_received :notifications_changed
     end
 
     test "a non-party cannot remove it" do
