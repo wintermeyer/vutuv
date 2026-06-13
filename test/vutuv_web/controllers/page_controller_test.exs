@@ -301,6 +301,78 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  # The sign-up form must never become an account-enumeration oracle: anyone
+  # could otherwise probe an address and read "has already been taken" to learn
+  # it belongs to a member. Registering with a known address therefore returns
+  # the identical screen a fresh sign-up gets, and the only signal goes to the
+  # address owner's own inbox.
+  describe "POST /new_registration with an address that already exists" do
+    @taken_attrs %{
+      "emails" => %{"0" => %{"value" => "taken@example.com"}},
+      "first_name" => "Mallory"
+    }
+
+    setup %{conn: conn} do
+      {:ok, owner} =
+        Vutuv.Accounts.register_user(conn, %{
+          "emails" => %{"0" => %{"value" => "taken@example.com"}},
+          "first_name" => "Owner"
+        })
+
+      %{owner: owner}
+    end
+
+    test "returns the same PIN screen as a fresh sign-up, with no 'taken' hint", %{conn: conn} do
+      conn = post(conn, ~p"/new_registration", user: @taken_attrs)
+
+      # The 200 + PIN-entry confirmation page a real sign-up renders (see the
+      # "POST /new_registration" tests above), not the 422 error form.
+      body = html_response(conn, 200)
+      assert body =~ "INBOX"
+      assert body =~ ~s(name="session[pin]")
+
+      # The inline error that used to confirm the address exists is gone.
+      refute body =~ "already been taken"
+    end
+
+    test "mails the owner a notice with a login link, never a PIN", %{conn: conn} do
+      post(conn, ~p"/new_registration", user: @taken_attrs)
+
+      assert_received {:email, email}
+      assert {_name, "taken@example.com"} = hd(email.to)
+      assert email.subject =~ "Someone tried to register"
+      # A way back in for the real owner...
+      assert email.text_body =~ "/login"
+      # ...but no credential anyone else could use.
+      refute email.text_body =~ ~r/\b\d{6}\b/
+    end
+
+    test "creates no second account for the address", %{conn: conn} do
+      post(conn, ~p"/new_registration", user: @taken_attrs)
+
+      count =
+        Repo.one(
+          from(e in Vutuv.Accounts.Email, where: e.value == "taken@example.com", select: count())
+        )
+
+      assert count == 1
+    end
+
+    # Only the address-exists signal is masked. A genuine input error (here no
+    # name, so no profile handle can be derived) must still fail the form, and
+    # it does so identically whether or not the address exists, so it leaks
+    # nothing either.
+    test "a real validation error still re-renders the form", %{conn: conn} do
+      conn =
+        post(conn, ~p"/new_registration",
+          user: %{"emails" => %{"0" => %{"value" => "taken@example.com"}}}
+        )
+
+      assert conn.status == 422
+      refute conn.resp_body =~ "already been taken"
+    end
+  end
+
   # True when the <input type="checkbox" name=name> in `html` is checked,
   # regardless of attribute order.
   defp checkbox_checked?(html, name) do

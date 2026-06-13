@@ -1,0 +1,14 @@
+<%= email_greeting(@user) %>,
+
+Someone just tried to create a vutuv account using this email address.
+You already have an account, so we did not create a new one.
+
+If that was you, you can log in here:
+<%= @url %>login
+
+If it wasn't you, you can safely ignore this email. No account was created
+and nothing about your account has changed.
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

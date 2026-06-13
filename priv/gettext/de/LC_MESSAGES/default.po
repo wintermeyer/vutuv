@@ -1067,6 +1067,11 @@ msgstr "vutuv Account einrichten"
 msgid "Login to vutuv"
 msgstr "vutuv Login-PIN"
 
+#: lib/vutuv/notifications/emailer.ex:140
+#, elixir-autogen
+msgid "Someone tried to register with your email address"
+msgstr "Registrierungsversuch mit Ihrer E-Mail-Adresse"
+
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:3
 #, elixir-autogen
 msgid "Listings"

@@ -61,7 +61,15 @@ defmodule VutuvWeb.PageController do
         handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
-        conn |> put_status(:unprocessable_entity) |> render("index.html", changeset: changeset)
+        if email_already_taken?(changeset) do
+          # Don't betray that the address exists: render the identical screen a
+          # fresh sign-up gets, and let the owner's inbox carry the truth (a
+          # "someone tried to register" notice with a login link). Surfacing the
+          # "has already been taken" error here would be an enumeration oracle.
+          handle_existing_email_registration(conn, email)
+        else
+          conn |> put_status(:unprocessable_entity) |> render("index.html", changeset: changeset)
+        end
     end
   end
 
@@ -70,6 +78,31 @@ defmodule VutuvWeb.PageController do
     # and advances to the confirmation screen.
     {:ok, conn} = Vutuv.Accounts.login_by_email(conn, email)
     render(conn, "pin_new_registration.html")
+  end
+
+  # Same confirmation screen as a real sign-up (so the response can't be told
+  # apart), but notify_registration_attempt/2 mints no account and sends the
+  # existing owner a notice instead of a PIN.
+  defp handle_existing_email_registration(conn, email) do
+    {:ok, conn} = Vutuv.Accounts.notify_registration_attempt(conn, email)
+    render(conn, "pin_new_registration.html")
+  end
+
+  # True when the only thing wrong with the sign-up is that the email address
+  # already belongs to an account (the unique constraint on the emails
+  # association). `unique_constraint` only fires after the INSERT, which Ecto
+  # attempts only on an otherwise-valid changeset, so a genuine input error
+  # (bad format, missing name) never coincides with it, and those keep their
+  # form with its error.
+  defp email_already_taken?(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.get_change(:emails, [])
+    |> Enum.any?(fn email_changeset ->
+      Enum.any?(email_changeset.errors, fn
+        {:value, {_message, opts}} -> Keyword.get(opts, :constraint) == :unique
+        _ -> false
+      end)
+    end)
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs.

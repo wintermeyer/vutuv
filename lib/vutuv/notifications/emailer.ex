@@ -123,6 +123,24 @@ defmodule Vutuv.Notifications.Emailer do
     end)
   end
 
+  @doc """
+  Sent to the owner of an existing account when someone tries to register
+  again with their address. The sign-up form deliberately returns the
+  identical screen for known and unknown addresses, so it never reveals
+  whether an account exists (`Vutuv.Accounts.notify_registration_attempt/2`);
+  the only place the truth surfaces is the owner's own inbox. The notice
+  carries no PIN, just a link to the login page, so it hands nothing
+  actionable to anyone who is not the mailbox owner. Built with `build_email`
+  (not `gen_email`), so it is not user-initiated and stays subject to the
+  bounce suppression in `deliver/1` — a third party cannot keep mailing a
+  dead address.
+  """
+  def registration_attempt_email(user, email) do
+    build_email(user, email, "registration_attempt", %{}, fn ->
+      gettext("Someone tried to register with your email address")
+    end)
+  end
+
   def verification_notice(user) do
     email = Vutuv.Accounts.first_email_value(user)
     locale = get_locale(user.locale)

@@ -168,6 +168,28 @@ defmodule Vutuv.Accounts do
   the identical PIN screen but never receives a PIN.
   """
   def login_by_email(conn, email) do
+    advance_to_pin_screen(conn, email, &send_login_pin/2)
+  end
+
+  @doc """
+  Step 1 of registration when the address is **already taken**. The sign-up
+  form must not betray that an account exists, so this returns the exact same
+  `{:ok, conn}` — same pin cookie, same PIN-entry screen — as a fresh sign-up:
+  the response is byte-identical, which closes the enumeration oracle the
+  inline "has already been taken" error used to be. The truth reaches only the
+  address owner's inbox, where `Emailer.registration_attempt_email/2` tells
+  them someone tried to register and links them to the login page. No PIN is
+  sent, so the notice carries nothing a non-owner could act on.
+  """
+  def notify_registration_attempt(conn, email) do
+    advance_to_pin_screen(conn, email, &send_registration_attempt_notice/2)
+  end
+
+  # The shared, enumeration-safe step 1 behind both flows above: look the
+  # address up, hand a found account to `notify` (a login PIN, or the
+  # registration-attempt notice), and advance to the PIN screen the same way
+  # whether or not it was found — the response never depends on existence.
+  defp advance_to_pin_screen(conn, email, notify) do
     email = String.downcase(email)
 
     user =
@@ -176,7 +198,7 @@ defmodule Vutuv.Accounts do
       |> where([u, e], e.value == ^email)
       |> Repo.one()
 
-    if user, do: send_login_pin(user, email)
+    if user, do: notify.(user, email)
 
     {:ok, put_pin_cookie(reset_login_session(conn), email)}
   end
@@ -194,35 +216,46 @@ defmodule Vutuv.Accounts do
   end
 
   defp send_login_pin(user, email) do
-    mail = user |> gen_pin_for("login") |> Emailer.login_email(email, user)
+    user
+    |> gen_pin_for("login")
+    |> Emailer.login_email(email, user)
+    |> deliver_off_request_path(email)
+  end
 
-    # Mail off the request path in production: a synchronous SMTP send would
-    # make the login-step response measurably slower for a known address
-    # than an unknown one — a timing-based enumeration oracle. Tests deliver
-    # inline (`config :vutuv, :async_email, false`) so the Swoosh test
-    # adapter's message reaches the calling process.
+  defp send_registration_attempt_notice(user, email) do
+    user
+    |> Emailer.registration_attempt_email(email)
+    |> deliver_off_request_path(email)
+  end
+
+  # Mail off the request path in production: a synchronous SMTP send would make
+  # the step-1 response measurably slower for a known address than an unknown
+  # one. That timing gap is itself an enumeration oracle, so the send is
+  # detached. Tests deliver inline (`config :vutuv, :async_email, false`) so the
+  # Swoosh test adapter's message reaches the calling process.
+  defp deliver_off_request_path(mail, address) do
     if Application.get_env(:vutuv, :async_email, true) do
       {:ok, _pid} =
         Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-          deliver_login_email(mail, email)
+          deliver_and_log(mail, address)
         end)
     else
-      deliver_login_email(mail, email)
+      deliver_and_log(mail, address)
     end
 
     :ok
   end
 
-  # Deliver a login email and never let a delivery failure pass silently:
+  # Deliver an off-request-path email and never let a failure pass silently:
   # the user is shown "check your email", so a dropped mail must at least be
-  # logged (the PIN is already persisted, so we do not roll back).
-  defp deliver_login_email(mail, address) do
+  # logged (any PIN is already persisted, so we do not roll back).
+  defp deliver_and_log(mail, address) do
     case Emailer.deliver(mail) do
       {:ok, _} = ok ->
         ok
 
       {:error, reason} = error ->
-        Logger.error("Failed to deliver login email to #{address}: #{inspect(reason)}")
+        Logger.error("Failed to deliver email to #{address}: #{inspect(reason)}")
         error
     end
   end
