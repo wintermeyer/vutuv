@@ -6,7 +6,7 @@ defmodule Vutuv.Avatar do
   the served versions come from `Vutuv.Uploads.Spec`. The derived versions are
   AVIF and live in the publicly served tree (nginx `location /avatars/`):
 
-      <uploads_dir_prefix>/avatars/<user.id>/<First Last>_<version>.avif
+      <uploads_dir_prefix>/avatars/<user.id>/avatar_<version>.avif
 
   The uploaded **original** is kept verbatim (format + metadata) so better
   formats can be re-derived later (`Vutuv.Uploads.Regenerator`), but in a
@@ -18,9 +18,10 @@ defmodule Vutuv.Avatar do
   `uploads_dir_prefix` is the absolute storage root, configured per environment
   (`config :vutuv, :uploads_dir_prefix`); it is empty in dev/test and
   `/srv/legacy-vutuv` in production. URLs are always root-relative
-  (`/avatars/<id>/...`) and URI-encoded. Pre-AVIF derived files (`_thumb.jpg`)
+  (`/avatars/<id>/...`) and URI-encoded. Files written by an earlier pipeline
+  (pre-AVIF `_thumb.jpg`, or the pre-#773 name-derived `<First Last>_thumb.avif`)
   keep resolving through a transitional fallback until the one-shot
-  regeneration has converted them.
+  regeneration has re-derived them under the stable name.
 
   The store/serve/url/regenerate pipeline is shared with `Vutuv.Cover` and
   lives in `Vutuv.Uploads`; this module supplies the avatar layout (`@config`)

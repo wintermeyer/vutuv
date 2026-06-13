@@ -60,7 +60,7 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{avatar: upload})
 
     assert updated.avatar == "me.png"
-    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/Ada King_thumb.avif"))
+    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/avatar_thumb.avif"))
     assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.png"))
   end
 
@@ -84,7 +84,7 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{cover_photo: upload})
 
     assert updated.cover_photo == "banner.png"
-    assert File.exists?(Path.join(tmp, "covers/#{user.id}/Ada King_wide.avif"))
+    assert File.exists?(Path.join(tmp, "covers/#{user.id}/cover_wide.avif"))
     assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.png"))
   end
 

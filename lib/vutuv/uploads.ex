@@ -72,7 +72,7 @@ defmodule Vutuv.Uploads do
       File.mkdir_p!(dir)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
-           :ok <- write_derived_versions(rotated, scope, dir, config),
+           :ok <- write_derived_versions(rotated, dir, config),
            :ok <- Originals.store(storage_dir(scope, config), upload.path, ext) do
         {:ok, upload.filename}
       else
@@ -133,10 +133,10 @@ defmodule Vutuv.Uploads do
     dir = disk_dir(storage_dir(user, config))
 
     regenerate_from_original(storage_dir(user, config), dir,
-      canonical: canonical_filenames(user, config),
+      canonical: canonical_filenames(config),
       stale_glob: config.stale_glob,
       legacy_candidates: [Path.join(dir, "*_original.*")],
-      derive: &write_derived_versions(&1, user, dir, config),
+      derive: &write_derived_versions(&1, dir, config),
       opts: opts
     )
   end
@@ -163,9 +163,9 @@ defmodule Vutuv.Uploads do
     |> URI.encode()
   end
 
-  defp write_derived_versions(rotated, scope, dir, config) do
+  defp write_derived_versions(rotated, dir, config) do
     Enum.reduce_while(Spec.versions(config.spec_key), :ok, fn spec, :ok ->
-      dest = Path.join(dir, version_filename(scope, spec.name, Spec.served_ext()))
+      dest = Path.join(dir, version_filename(config, spec.name, Spec.served_ext()))
 
       case Spec.write_derived(spec, rotated, dest) do
         :ok -> {:cont, :ok}
@@ -174,32 +174,47 @@ defmodule Vutuv.Uploads do
     end)
   end
 
-  defp canonical_filenames(scope, config) do
+  defp canonical_filenames(config) do
     for spec <- Spec.versions(config.spec_key),
-        do: version_filename(scope, spec.name, Spec.served_ext())
+        do: version_filename(config, spec.name, Spec.served_ext())
   end
 
-  # The .avif is authoritative; until the regeneration has run, a pre-AVIF
-  # derived file with the stored filename's extension keeps resolving.
-  # Transitional — remove together with `Spec.legacy_exts/0`.
+  # Which on-disk file backs a served URL. The stable, id-scoped filename
+  # (`avatar_thumb.avif`) is authoritative; renaming the profile no longer
+  # moves it, because the name is no longer baked into the filename (issue
+  # #773). Until the regenerator has re-derived an existing row to the stable
+  # name, the pre-#773 name-derived file (`<First Last>_thumb.avif`, or its
+  # pre-AVIF extension) keeps resolving (transitional, like the AVIF fallback).
   defp served_filename(scope, version, file, config) do
-    avif = version_filename(scope, version, Spec.served_ext())
+    dir = disk_dir(storage_dir(scope, config))
+    stable = version_filename(config, version, Spec.served_ext())
 
-    if File.exists?(Path.join(disk_dir(storage_dir(scope, config)), avif)) do
-      avif
+    if File.exists?(Path.join(dir, stable)) do
+      stable
     else
-      legacy_filename(scope, version, file, config) || avif
+      legacy_name_filename(scope, version, file, dir) || stable
     end
   end
 
-  defp legacy_filename(scope, version, file, config) do
-    candidate = version_filename(scope, version, extname(file))
-    if File.exists?(Path.join(disk_dir(storage_dir(scope, config)), candidate)), do: candidate
+  # The pre-#773 name-derived filename still on disk: `"<First Last>_<version>"`
+  # with the served `.avif` or, for a not-yet-AVIF-converted row, the stored
+  # upload's extension. A profile that has since been renamed no longer matches
+  # its own old file here (that is the bug #773 fixes); the regenerator's
+  # re-derive to the stable name is what repairs those, permanently.
+  defp legacy_name_filename(scope, version, file, dir) do
+    Enum.find_value([Spec.served_ext(), extname(file)], fn ext ->
+      candidate = "#{scope}_#{version}#{ext}"
+      if File.exists?(Path.join(dir, candidate)), do: candidate
+    end)
   end
 
   defp storage_dir(scope, config), do: "#{config.prefix}/#{scope.id}"
 
-  defp version_filename(scope, version, ext), do: "#{scope}_#{version}#{ext}"
+  # Stable and id-scoped: the directory (`<prefix>/<id>`) already isolates the
+  # user, so the filename only needs the asset kind + version. No display name,
+  # so a rename can never orphan it and an unsanitized name can never escape the
+  # directory (both #773).
+  defp version_filename(config, version, ext), do: "#{config.spec_key}_#{version}#{ext}"
 
   defp extname(value) when is_binary(value) do
     value

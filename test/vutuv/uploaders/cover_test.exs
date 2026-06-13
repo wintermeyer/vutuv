@@ -1,10 +1,10 @@
 defmodule Vutuv.CoverTest do
   @moduledoc """
   Locks the on-disk and URL conventions for profile cover photos, mirroring
-  avatars: served versions are AVIF (per `Vutuv.Uploads.Spec`) at
-  `covers/<user.id>/<First Last>_<version>.avif` (nginx `location /covers/`),
-  the uploaded original is kept privately at
-  `originals/covers/<user.id>/original<ext>` and is never served.
+  avatars: served versions are AVIF (per `Vutuv.Uploads.Spec`) at the stable,
+  id-scoped `covers/<user.id>/cover_<version>.avif` (nginx `location /covers/`),
+  which a rename never orphans (issue #773); the uploaded original is kept
+  privately at `originals/covers/<user.id>/original<ext>` and is never served.
   """
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
@@ -38,14 +38,21 @@ defmodule Vutuv.CoverTest do
   end
 
   describe "url/2 (the contract nginx + templates depend on)" do
-    test "builds the version path with the user's name and the served .avif extension" do
+    test "builds the stable, id-scoped version path with the served .avif extension" do
       assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) ==
-               "/covers/7/John%20Doe_wide.avif"
+               "/covers/7/cover_wide.avif"
+    end
+
+    test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
+      renamed = %{@user | first_name: "Jane", last_name: "Smith"}
+
+      assert Vutuv.Cover.url({"banner.jpg", renamed}, :wide) ==
+               "/covers/7/cover_wide.avif"
     end
 
     test "the stored filename's extension does not leak into served URLs" do
       assert Vutuv.Cover.url({"banner.PNG", @user}, :wide) ==
-               "/covers/7/John%20Doe_wide.avif"
+               "/covers/7/cover_wide.avif"
     end
 
     test "the original is not URL-addressable" do
@@ -57,7 +64,7 @@ defmodule Vutuv.CoverTest do
     end
 
     test "default version is :wide" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}) == "/covers/7/John%20Doe_wide.avif"
+      assert Vutuv.Cover.url({"banner.jpg", @user}) == "/covers/7/cover_wide.avif"
     end
 
     test "falls back to a not-yet-regenerated legacy file (incl. ?timestamp suffix)", %{tmp: tmp} do
@@ -69,18 +76,24 @@ defmodule Vutuv.CoverTest do
       assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
                "/covers/7/John%20Doe_wide.jpg"
 
-      # Once the .avif exists it wins over the legacy file.
+      # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_wide.avif"))
 
       assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
                "/covers/7/John%20Doe_wide.avif"
+
+      # ...and the stable id-scoped file wins over every name-derived file (#773).
+      {:ok, _} = Image.write(img, Path.join(dir, "cover_wide.avif"))
+
+      assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
+               "/covers/7/cover_wide.avif"
     end
   end
 
   describe "display_url/2 (what the profile puts in <img src>)" do
     test "returns the nginx-served URL when the user has a cover photo" do
       user = %{@user | cover_photo: "banner.jpg"}
-      assert Vutuv.Cover.display_url(user, :wide) == "/covers/7/John%20Doe_wide.avif"
+      assert Vutuv.Cover.display_url(user, :wide) == "/covers/7/cover_wide.avif"
     end
 
     test "returns nil when the user has no cover photo (gradient fallback)" do
@@ -106,7 +119,7 @@ defmodule Vutuv.CoverTest do
       assert {:ok, "banner.jpg"} = Vutuv.Cover.store({upload, @user})
 
       dir = Path.join(tmp, "covers/7")
-      assert File.exists?(Path.join(dir, "John Doe_wide.avif"))
+      assert File.exists?(Path.join(dir, "cover_wide.avif"))
       assert File.exists?(Path.join(tmp, "originals/covers/7/original.jpg"))
 
       # Nothing original may land in the publicly served tree.
@@ -121,7 +134,7 @@ defmodule Vutuv.CoverTest do
       assert {:ok, _} = Vutuv.Cover.store({upload, @user})
 
       # Source is 1200 wide (< 1600), so it is not upscaled; aspect ratio holds.
-      {w, h} = dimensions(Path.join(tmp, "covers/7/John Doe_wide.avif"))
+      {w, h} = dimensions(Path.join(tmp, "covers/7/cover_wide.avif"))
       assert w == 1200
       assert h == 600
     end
@@ -141,7 +154,7 @@ defmodule Vutuv.CoverTest do
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
       assert {:ok, _} = Vutuv.Cover.store({upload, @user})
 
-      {:ok, stored} = Image.open(Path.join(tmp, "covers/7/John Doe_wide.avif"))
+      {:ok, stored} = Image.open(Path.join(tmp, "covers/7/cover_wide.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)
       assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
     end

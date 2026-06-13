@@ -59,13 +59,14 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       assert summary.avatars == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
 
       dir = Path.join(tmp, "avatars/#{user.id}")
-      assert File.exists?(Path.join(dir, "Ada King_thumb.avif"))
-      assert File.exists?(Path.join(dir, "Ada King_medium.avif"))
+      assert File.exists?(Path.join(dir, "avatar_thumb.avif"))
+      assert File.exists?(Path.join(dir, "avatar_medium.avif"))
       assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.jpg"))
 
-      # The pre-AVIF files (incl. the publicly downloadable original) are gone.
+      # The pre-AVIF and pre-#773 name-derived files (incl. the publicly
+      # downloadable original) are gone; only the stable id-scoped files remain.
       assert dir |> File.ls!() |> Enum.sort() ==
-               ["Ada King_medium.avif", "Ada King_thumb.avif"]
+               ["avatar_medium.avif", "avatar_thumb.avif"]
     end
 
     test "a second run leaves converged rows alone (cheap deploy hook)", %{tmp: tmp} do
@@ -122,7 +123,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :avatars)
 
       assert summary.avatars == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert File.exists?(Path.join(tmp, "avatars/#{user.id}/Ada King_thumb.avif"))
+      assert File.exists?(Path.join(tmp, "avatars/#{user.id}/avatar_thumb.avif"))
     end
   end
 
@@ -136,11 +137,11 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :covers)
 
       assert summary.covers == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert File.ls!(dir) == ["Ada King_wide.avif"]
+      assert File.ls!(dir) == ["cover_wide.avif"]
       assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.jpg"))
 
       # 1800px original is capped at the Spec's 1600px wide.
-      {:ok, wide} = Image.open(Path.join(dir, "Ada King_wide.avif"))
+      {:ok, wide} = Image.open(Path.join(dir, "cover_wide.avif"))
       assert Image.width(wide) == 1600
     end
   end

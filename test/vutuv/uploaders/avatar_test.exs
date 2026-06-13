@@ -2,15 +2,18 @@ defmodule Vutuv.AvatarTest do
   @moduledoc """
   Locks the on-disk and URL conventions for avatars.
 
-  Served versions are AVIF (per `Vutuv.Uploads.Spec`) at
-  `avatars/<user.id>/<First Last>_<version>.avif` under the storage root,
-  served by nginx (`location /avatars/`). The uploaded **original** is kept
-  verbatim at `originals/avatars/<user.id>/original<ext>` — a private tree
-  that is never served, so nobody can download the full-resolution upload
-  (with its EXIF/GPS metadata).
+  Served versions are AVIF (per `Vutuv.Uploads.Spec`) at the stable, id-scoped
+  `avatars/<user.id>/avatar_<version>.avif` under the storage root, served by
+  nginx (`location /avatars/`). The filename does not embed the display name,
+  so renaming a profile never orphans it (issue #773). The uploaded
+  **original** is kept verbatim at `originals/avatars/<user.id>/original<ext>`
+  — a private tree that is never served, so nobody can download the
+  full-resolution upload (with its EXIF/GPS metadata).
 
-  Pre-AVIF derived files (`_thumb.jpg` ...) keep resolving through a
-  transitional fallback until `Vutuv.Uploads.Regenerator` has converted them.
+  Files written by an earlier pipeline (pre-AVIF `_thumb.jpg`, or the pre-#773
+  name-derived `<First Last>_thumb.avif`) keep resolving through a transitional
+  fallback until `Vutuv.Uploads.Regenerator` has re-derived them under the
+  stable name.
   """
   # Not async: these tests set the global `:uploads_dir_prefix` application env.
   use ExUnit.Case, async: false
@@ -44,17 +47,24 @@ defmodule Vutuv.AvatarTest do
   end
 
   describe "url/2 (the contract nginx + templates depend on)" do
-    test "builds the version path with the user's name and the served .avif extension" do
+    test "builds the stable, id-scoped version path with the served .avif extension" do
       assert Vutuv.Avatar.url({"selfie.jpg", @user}, :thumb) ==
-               "/avatars/7/John%20Doe_thumb.avif"
+               "/avatars/7/avatar_thumb.avif"
 
       assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
-               "/avatars/7/John%20Doe_medium.avif"
+               "/avatars/7/avatar_medium.avif"
+    end
+
+    test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
+      renamed = %{@user | first_name: "Jane", last_name: "Smith"}
+
+      assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :thumb) ==
+               "/avatars/7/avatar_thumb.avif"
     end
 
     test "the stored filename's extension does not leak into served URLs" do
       assert Vutuv.Avatar.url({"selfie.PNG", @user}, :medium) ==
-               "/avatars/7/John%20Doe_medium.avif"
+               "/avatars/7/avatar_medium.avif"
     end
 
     test "the original is not URL-addressable" do
@@ -67,7 +77,7 @@ defmodule Vutuv.AvatarTest do
 
     test "default version is :medium" do
       assert Vutuv.Avatar.url({"selfie.jpg", @user}) ==
-               "/avatars/7/John%20Doe_medium.avif"
+               "/avatars/7/avatar_medium.avif"
     end
 
     test "falls back to a not-yet-regenerated legacy file (incl. ?timestamp suffix)", %{tmp: tmp} do
@@ -79,17 +89,24 @@ defmodule Vutuv.AvatarTest do
       assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
                "/avatars/7/John%20Doe_thumb.jpg"
 
-      # Once the .avif exists it wins over the legacy file.
+      # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_thumb.avif"))
 
       assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
                "/avatars/7/John%20Doe_thumb.avif"
+
+      # ...and once the regenerator has written the stable id-scoped file, that
+      # wins over every name-derived legacy file (issue #773).
+      {:ok, _} = Image.write(img, Path.join(dir, "avatar_thumb.avif"))
+
+      assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
+               "/avatars/7/avatar_thumb.avif"
     end
   end
 
   test "user_url/2 reads the avatar field off the user" do
     user = %{@user | avatar: "selfie.jpg"}
-    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/John%20Doe_medium.avif"
+    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/avatar_medium.avif"
   end
 
   describe "binary/2 (base64 JPEG used by the vCard export)" do
@@ -181,7 +198,7 @@ defmodule Vutuv.AvatarTest do
   describe "display_url/2 (what templates put in <img src>)" do
     test "returns the nginx-served URL when the user has an avatar" do
       user = %{@user | avatar: "selfie.jpg"}
-      assert Vutuv.Avatar.display_url(user, :medium) == "/avatars/7/John%20Doe_medium.avif"
+      assert Vutuv.Avatar.display_url(user, :medium) == "/avatars/7/avatar_medium.avif"
     end
 
     test "falls back to the default SVG when the user has no avatar" do
@@ -205,8 +222,8 @@ defmodule Vutuv.AvatarTest do
       assert {:ok, "selfie.jpg"} = Vutuv.Avatar.store({upload, @user})
 
       dir = Path.join(tmp, "avatars/7")
-      assert File.exists?(Path.join(dir, "John Doe_thumb.avif"))
-      assert File.exists?(Path.join(dir, "John Doe_medium.avif"))
+      assert File.exists?(Path.join(dir, "avatar_thumb.avif"))
+      assert File.exists?(Path.join(dir, "avatar_medium.avif"))
       assert File.exists?(Path.join(tmp, "originals/avatars/7/original.jpg"))
 
       # Nothing original may land in the publicly served tree.
@@ -235,8 +252,8 @@ defmodule Vutuv.AvatarTest do
       assert {:ok, _} = Vutuv.Avatar.store({upload, @user})
 
       dir = Path.join(tmp, "avatars/7")
-      assert dimensions(Path.join(dir, "John Doe_thumb.avif")) == {96, 96}
-      assert dimensions(Path.join(dir, "John Doe_medium.avif")) == {192, 192}
+      assert dimensions(Path.join(dir, "avatar_thumb.avif")) == {96, 96}
+      assert dimensions(Path.join(dir, "avatar_medium.avif")) == {192, 192}
     end
 
     test "served versions carry no EXIF metadata", %{tmp: tmp} do
@@ -254,7 +271,7 @@ defmodule Vutuv.AvatarTest do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
       assert {:ok, _} = Vutuv.Avatar.store({upload, @user})
 
-      {:ok, stored} = Image.open(Path.join(tmp, "avatars/7/John Doe_thumb.avif"))
+      {:ok, stored} = Image.open(Path.join(tmp, "avatars/7/avatar_thumb.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)
       assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
     end

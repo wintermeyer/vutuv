@@ -7,16 +7,17 @@ defmodule Vutuv.Cover do
   `Vutuv.Uploads.Spec`), but stores a single wide version instead of square
   crops, because the banner is displayed full-bleed with CSS `object-cover`:
 
-      <uploads_dir_prefix>/covers/<user.id>/<First Last>_wide.avif
+      <uploads_dir_prefix>/covers/<user.id>/cover_wide.avif
       <uploads_dir_prefix>/originals/covers/<user.id>/original<ext>
 
   The served version is AVIF in the public tree (nginx `location /covers/`,
   mirroring `/avatars/`; locally the endpoint serves it when
   `:serve_uploads_locally` is set). The uploaded original is kept verbatim in
   the private `originals/` tree (`Vutuv.Uploads.Originals`) and never served.
-  URLs are root-relative (`/covers/<id>/...`) and URI-encoded; pre-AVIF
-  derived files keep resolving through a transitional fallback until the
-  one-shot regeneration has converted them.
+  URLs are root-relative (`/covers/<id>/...`) and URI-encoded; files from an
+  earlier pipeline (pre-AVIF, or the pre-#773 name-derived `<First Last>_wide`)
+  keep resolving through a transitional fallback until the one-shot
+  regeneration has re-derived them under the stable name.
 
   The store/serve/url/regenerate pipeline is shared with `Vutuv.Avatar` and
   lives in `Vutuv.Uploads`; this module supplies only the cover layout
