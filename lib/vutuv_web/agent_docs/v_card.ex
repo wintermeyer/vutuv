@@ -18,10 +18,10 @@ defmodule VutuvWeb.AgentDocs.VCard do
       sanitize(doc.middle_name) <>
       ";" <>
       sanitize(doc.honorific_prefix) <>
+      ";" <>
+      sanitize(doc.honorific_suffix) <>
       "\nFN:" <>
-      sanitize(doc.first_name) <>
-      " " <>
-      sanitize(doc.last_name) <>
+      sanitize(doc.name) <>
       "\nORG:#{organization(doc)}" <>
       "\nTITLE:#{title(doc)}" <>
       "\nURL:#{doc.url}" <>

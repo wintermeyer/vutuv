@@ -69,11 +69,17 @@ defmodule VutuvWeb.Admin.ModerationController do
         ControllerHelpers.render_error(conn, 404)
 
       case_record ->
-        {:ok, _} = Moderation.uphold_case(case_record, conn.assigns[:current_user])
+        case Moderation.uphold_case(case_record, conn.assigns[:current_user]) do
+          {:ok, _} ->
+            conn
+            |> put_flash(:info, gettext("Report upheld; the owner got a strike."))
+            |> redirect(to: ~p"/admin/moderation")
 
-        conn
-        |> put_flash(:info, gettext("Report upheld; the owner got a strike."))
-        |> redirect(to: ~p"/admin/moderation")
+          {:error, :not_open} ->
+            conn
+            |> put_flash(:error, gettext("This case has already been resolved."))
+            |> redirect(to: ~p"/admin/moderation")
+        end
     end
   end
 
@@ -85,12 +91,17 @@ defmodule VutuvWeb.Admin.ModerationController do
         ControllerHelpers.render_error(conn, 404)
 
       case_record ->
-        {:ok, _} =
-          Moderation.reject_case(case_record, conn.assigns[:current_user], abusive_ids)
+        case Moderation.reject_case(case_record, conn.assigns[:current_user], abusive_ids) do
+          {:ok, _} ->
+            conn
+            |> put_flash(:info, gettext("Report rejected; the content is visible again."))
+            |> redirect(to: ~p"/admin/moderation")
 
-        conn
-        |> put_flash(:info, gettext("Report rejected; the content is visible again."))
-        |> redirect(to: ~p"/admin/moderation")
+          {:error, :not_open} ->
+            conn
+            |> put_flash(:error, gettext("This case has already been resolved."))
+            |> redirect(to: ~p"/admin/moderation")
+        end
     end
   end
 

@@ -92,6 +92,15 @@ defmodule VutuvWeb.AdControllerTest do
       assert redirected_to(conn) == "/"
     end
 
+    test "tolerates a tampered list-valued param without a 500", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      # A crafted non-scalar value must not crash the hidden-input stringify.
+      params = Map.put(@booking_params, "billing_company", ["x", "y"])
+
+      conn = post(conn, ~p"/ads/preview", %{"ad" => params})
+      assert conn.status in [200, 422]
+    end
+
     test "shows the ad exactly as the banner will render it, plus the order summary", %{
       conn: conn
     } do

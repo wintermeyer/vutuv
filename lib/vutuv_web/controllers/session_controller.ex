@@ -180,14 +180,15 @@ defmodule VutuvWeb.SessionController do
   # Only local paths ("/...", but not protocol-relative "//...") are ever
   # followed — the session value is ours, but defense in depth is cheap.
   defp pop_login_return_to(conn) do
-    case get_session(conn, :login_return_to) do
-      "/" <> rest = path when binary_part(rest, 0, 1) != "/" ->
-        {path, delete_session(conn, :login_return_to)}
-
-      _none_or_unsafe ->
-        {nil, delete_session(conn, :login_return_to)}
-    end
+    path = get_session(conn, :login_return_to)
+    {safe_return_to(path), delete_session(conn, :login_return_to)}
   end
+
+  # "//evil.com" is protocol-relative (external); the bare "/" and any "/path"
+  # are local. Matching the prefixes avoids binary_part/3 raising on "/".
+  defp safe_return_to("//" <> _), do: nil
+  defp safe_return_to("/" <> _ = path), do: path
+  defp safe_return_to(_), do: nil
 
   # First-time sign-ups get their own greeting; returning members get a
   # personal one with their name and, when they have any, a nudge about the

@@ -165,7 +165,7 @@ defmodule VutuvWeb.PostController do
             |> maybe_put_alternates(post)
             |> render_post(post, author, viewer)
 
-          kind = teaser_kind(post) ->
+          kind = unlockable_teaser_kind(post) ->
             # The teaser only exists for restricted posts — a page-level
             # restriction, so both axes are declared (like the doc side).
             conn
@@ -242,6 +242,13 @@ defmodule VutuvWeb.PostController do
     else
       conn
     end
+  end
+
+  # A moderation-frozen post gets no teaser: following can't unlock it and a
+  # tombstone would leak its existence during the case. Only audience-only
+  # restrictions reach teaser_kind/1.
+  defp unlockable_teaser_kind(%Post{} = post) do
+    if Posts.moderation_hidden?(post), do: nil, else: teaser_kind(post)
   end
 
   # The teaser renders only when a single, actionable relationship unlocks the

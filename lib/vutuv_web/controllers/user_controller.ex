@@ -124,8 +124,8 @@ defmodule VutuvWeb.UserController do
         from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at], limit: 3),
       urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at], limit: 3),
       addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at], limit: 3),
-      inbound_follows: {Follow.latest(3), [:follower]},
-      outbound_follows: {Follow.latest(3), [:followee]}
+      inbound_follows: {Follow.latest(3, :follower), [:follower]},
+      outbound_follows: {Follow.latest(3, :followee), [:followee]}
     ])
   end
 
@@ -283,29 +283,4 @@ defmodule VutuvWeb.UserController do
     end
   end
 
-  def follow_back(conn, %{"id" => id}) do
-    user = Repo.get!(User, id)
-
-    # Through the Social.follow/2 chokepoint so the followee also gets the live
-    # "started following you" notification (this path skipped it before).
-    case Vutuv.Social.follow(conn.assigns.current_user, user.id) do
-      {:ok, _connection} ->
-        conn
-        |> put_flash(
-          :info,
-          Gettext.gettext(VutuvWeb.Gettext, "You follow back %{name}.", name: full_name(user))
-        )
-        |> redirect(to: ~p"/#{conn.assigns.current_user}")
-
-      {:error, _changeset} ->
-        conn
-        |> put_flash(
-          :error,
-          Gettext.gettext(VutuvWeb.Gettext, "Couldn't follow back to %{name}.",
-            name: full_name(user)
-          )
-        )
-        |> redirect(to: ~p"/#{conn.assigns.current_user}")
-    end
-  end
 end

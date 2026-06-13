@@ -39,14 +39,20 @@ defmodule VutuvWeb.Admin.AdController do
         ControllerHelpers.render_error(conn, 404)
 
       ad ->
-        {:ok, ad} = Ads.approve_ad(ad, conn.assigns[:current_user])
+        case Ads.approve_ad(ad, conn.assigns[:current_user]) do
+          {:ok, approved} ->
+            conn
+            |> put_flash(
+              :info,
+              gettext("The ad for %{day} is approved and will run.", day: approved.day)
+            )
+            |> redirect(to: ~p"/admin/ads")
 
-        conn
-        |> put_flash(
-          :info,
-          gettext("The ad for %{day} is approved and will run.", day: ad.day)
-        )
-        |> redirect(to: ~p"/admin/ads")
+          {:error, _changeset} ->
+            conn
+            |> put_flash(:error, gettext("The ad could not be approved."))
+            |> redirect(to: ~p"/admin/ads")
+        end
     end
   end
 end

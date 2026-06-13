@@ -138,5 +138,16 @@ defmodule Vutuv.Uploads.SpecTest do
 
       assert {:error, _} = Spec.open_rotated(path)
     end
+
+    test "rejects an image whose decoded size exceeds the megapixel cap" do
+      tmp = tmp!()
+      path = Path.join(tmp, "bomb.png")
+      # 7500×7000 ≈ 52.5 MP of one color: a few KB on disk (a real
+      # decompression-bomb shape), well over the 50 MP cap once decoded.
+      {:ok, big} = Image.new(7500, 7000, color: [0, 0, 0])
+      {:ok, _} = Image.write(big, path)
+
+      assert {:error, :too_large} = Spec.open_rotated(path)
+    end
   end
 end

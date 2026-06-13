@@ -49,6 +49,26 @@ defmodule VutuvWeb.PostReplyLiveTest do
       assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/0/reply")
     end
 
+    test "a blocked replier sees a reply-specific error, not the images message", %{conn: conn} do
+      # Quiet blocking keeps the author's public post visible to the blocked
+      # user, so the reply page mounts; the block only refuses on submit. The
+      # error shown must be about replying, not the composer's image-count
+      # catch-all.
+      {conn, replier} = create_and_login_user(conn)
+      author = other_user()
+      {:ok, _} = Vutuv.Social.block_user(author, replier)
+      parent = create_post!(author, %{body: "open to all"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{parent.id}/reply")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "let me in", "preset" => "public"}})
+      |> render_submit()
+
+      assert live |> element("#composer-error") |> render() =~ "can no longer reply"
+      assert Posts.list_replies(parent, author) == []
+    end
+
     test "submitting creates the reply and returns to the parent", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       parent = create_post!(other_user(), %{body: "the question"})

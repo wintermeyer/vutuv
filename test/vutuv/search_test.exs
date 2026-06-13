@@ -101,6 +101,20 @@ defmodule Vutuv.SearchTest do
       assert Enum.map(Search.instant("eLi").tags, & &1.id) == [tag.id]
     end
 
+    test "the tag member count excludes unactivated and moderation-hidden members" do
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+
+      visible = searchable_user("Vera", "Visible")
+      unactivated = insert(:user, activated?: false)
+      frozen = searchable_user("Fred", "Frozen", frozen_at: ~N[2026-01-01 00:00:00])
+
+      for u <- [visible, unactivated, frozen], do: insert(:user_tag, tag: tag, user: u)
+
+      # Three rows in the DB, but only the one visible member should be counted —
+      # matching what the tag page (Tag.recommended_users) actually shows.
+      assert Search.instant("eli").tag_member_counts[tag.id] == 1
+    end
+
     test "matching public posts are included" do
       author = insert(:activated_user)
       post = Vutuv.PostsHelpers.create_post!(author, %{body: "Quantum gardening tips"})

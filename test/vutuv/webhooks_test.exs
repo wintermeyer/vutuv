@@ -219,6 +219,47 @@ defmodule Vutuv.WebhooksTest do
       assert Repo.get(Subscription, subscription.id).active
     end
 
+    test "every failing delivery counts toward the failure budget", %{member: member, app: app} do
+      {subscription, _secret} = subscribe!(app, ["follower.created"])
+      grant!(member, app, ["social:read"])
+      Webhooks.emit(member.id, "follower.created", %{"n" => 1})
+      Webhooks.emit(member.id, "follower.created", %{"n" => 2})
+
+      stub_endpoint(fn conn -> Plug.Conn.send_resp(conn, 500, "boom") end)
+
+      # Both deliveries belong to the same subscription; each failure must
+      # increment the failure budget rather than clobber the other's write
+      # with its own stale preloaded counter.
+      assert Webhooks.deliver_due() == 2
+      assert Repo.get(Subscription, subscription.id).consecutive_failures == 2
+    end
+
+    test "delivery never follows redirects (SSRF guard)", %{member: member, app: app} do
+      {_subscription, _secret} = subscribe!(app, ["follower.created"])
+      grant!(member, app, ["social:read"])
+      Webhooks.emit(member.id, "follower.created", %{})
+
+      parent = self()
+
+      stub_endpoint(fn conn ->
+        send(parent, {:hit, conn.request_path})
+        # A misconfigured/malicious endpoint 30x-redirecting to an internal
+        # host: Req must not chase it.
+        conn
+        |> Plug.Conn.put_resp_header("location", "http://169.254.169.254/latest/meta-data")
+        |> Plug.Conn.send_resp(302, "")
+      end)
+
+      assert Webhooks.deliver_due() == 1
+
+      # The original endpoint was hit exactly once; the redirect target never.
+      assert_receive {:hit, _}
+      refute_receive {:hit, "/latest/meta-data"}
+
+      # A 302 is not a success: the delivery is recorded as failed.
+      assert [%Delivery{delivered_at: nil, last_status: 302}] = Repo.all(Delivery)
+    end
+
     test "ping delivers without any grant", %{app: app} do
       {subscription, _secret} = subscribe!(app, ["follower.created"])
 

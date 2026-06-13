@@ -235,7 +235,7 @@ defmodule Vutuv.Chat do
   def delete_message(%User{id: sender_id}, %Message{sender_id: sender_id} = message) do
     case Repo.delete(message) do
       {:ok, deleted} ->
-        broadcast_conversation_update(message.conversation_id)
+        broadcast_message_deleted(message)
         {:ok, deleted}
 
       {:error, _} = error ->
@@ -549,6 +549,7 @@ defmodule Vutuv.Chat do
             EXISTS (SELECT 1 FROM messages m
                     WHERE m.conversation_id = ?
                       AND m.sender_id <> ?
+                      AND m.frozen_at IS NULL
                       AND (? IS NULL OR m.inserted_at > ?)
                       AND m.inserted_at < ?)
             """,
@@ -686,6 +687,22 @@ defmodule Vutuv.Chat do
     end
   end
 
+  @doc """
+  The id of the frozen 1:1 conversation between the two, or nil. Used when a
+  block must adopt freeze-ownership of a conversation a rejected report leaves
+  frozen, without relying on which moderation severance happened to record it.
+  """
+  def frozen_conversation_id_between(user_id, other_id) do
+    {a_id, b_id} = pair(user_id, other_id)
+
+    Repo.one(
+      from(c in Conversation,
+        where: c.user_a_id == ^a_id and c.user_b_id == ^b_id and not is_nil(c.frozen_at),
+        select: c.id
+      )
+    )
+  end
+
   @doc "Thaws a report-frozen conversation (a rejected report restores it)."
   def unfreeze_conversation(%Conversation{} = conversation) do
     conversation
@@ -703,6 +720,19 @@ defmodule Vutuv.Chat do
       @pubsub,
       topic(message.conversation_id),
       {:message_frozen, %{message_id: message.id, sender_id: message.sender_id}}
+    )
+  end
+
+  @doc """
+  A message was deleted (moderation removing reported content): open threads
+  drop the bubble for both participants and refresh their sidebar preview, so a
+  deleted message can't be read until the next reload.
+  """
+  def broadcast_message_deleted(%Message{} = message) do
+    Phoenix.PubSub.broadcast(
+      @pubsub,
+      topic(message.conversation_id),
+      {:message_deleted, %{message_id: message.id, conversation_id: message.conversation_id}}
     )
   end
 

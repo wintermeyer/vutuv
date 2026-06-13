@@ -69,6 +69,14 @@ defmodule Vutuv.AccountsTest do
       attrs = %{"emails" => %{"0" => %{"value" => "test@example.com"}}}
       assert {:error, _changeset} = Accounts.register_user(conn, attrs)
     end
+
+    test "ignores an activated? flag smuggled into the params" do
+      conn = build_conn()
+      attrs = Map.put(@valid_registration, "activated?", "true")
+
+      assert {:ok, %User{} = user} = Accounts.register_user(conn, attrs)
+      refute user.activated?
+    end
   end
 
   describe "update_user/2" do
@@ -76,6 +84,44 @@ defmodule Vutuv.AccountsTest do
       user = insert(:user)
       assert {:ok, updated} = Accounts.update_user(user, %{first_name: "Updated"})
       assert updated.first_name == "Updated"
+    end
+
+    test "ignores an activated? flag smuggled into the params" do
+      user = insert(:user, activated?: false)
+
+      assert {:ok, updated} =
+               Accounts.update_user(user, %{"first_name" => "Updated", "activated?" => "true"})
+
+      refute updated.activated?
+    end
+
+    test "rebuilds the people-search index when the name changes (API rename stays in sync)" do
+      user = insert(:user, first_name: "Jane", last_name: "Doe")
+
+      for cs <- Vutuv.Accounts.SearchTerm.create_search_terms(%{
+                  "first_name" => "Jane",
+                  "last_name" => "Doe"
+                }) do
+        cs |> Ecto.Changeset.put_change(:user_id, user.id) |> Repo.insert!()
+      end
+
+      {:ok, _} = Accounts.update_user(user, %{"last_name" => "Smith"})
+
+      terms =
+        Repo.all(from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id, select: s.value))
+        |> Enum.map(&String.downcase/1)
+
+      assert Enum.any?(terms, &String.contains?(&1, "smith"))
+      refute Enum.any?(terms, &String.contains?(&1, "doe"))
+    end
+
+    test "a name change does not wipe the index when one name key is omitted" do
+      user = insert(:user, first_name: "Jane", last_name: "Doe")
+
+      {:ok, _} = Accounts.update_user(user, %{"first_name" => "Janet"})
+
+      terms = Repo.all(from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id))
+      refute terms == []
     end
   end
 
@@ -134,6 +180,24 @@ defmodule Vutuv.AccountsTest do
       Accounts.gen_pin_for(user, "login")
 
       assert Repo.one(from(m in LoginPin, where: m.user_id == ^user.id, select: count(m.id))) == 1
+    end
+
+    test "concurrent first mints for a (user, type) pair never raise" do
+      user = insert(:user)
+
+      pins =
+        Task.await_many(
+          for _ <- 1..4 do
+            Task.async(fn -> Accounts.gen_pin_for(user, "email", "new@example.com") end)
+          end
+        )
+
+      assert Enum.all?(pins, &(byte_size(&1) == 6))
+
+      assert Repo.aggregate(
+               from(m in LoginPin, where: m.user_id == ^user.id and m.type == "email"),
+               :count
+             ) == 1
     end
 
     test "carries a value for the email-change flow" do

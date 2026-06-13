@@ -103,7 +103,7 @@ defmodule Vutuv.Accounts do
 
       {:ok, %Req.Response{status: 200, body: body, headers: headers}} ->
         content_type = find_content_type(headers)
-        filename = "/#{user.active_slug}.#{String.replace(content_type, "image/", "")}"
+        filename = "/#{user.active_slug}.#{gravatar_extension(content_type)}"
         path = System.tmp_dir()
 
         upload = %Plug.Upload{
@@ -135,6 +135,16 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  # A whitelisted file extension from the response content type — dropping any
+  # `; charset=...` parameter so the filename isn't e.g. `png; charset=binary`
+  # (which fails the avatar extension whitelist and silently drops the import).
+  defp gravatar_extension(content_type) do
+    case content_type |> String.split(";", parts: 2) |> hd() |> String.trim() do
+      "image/png" -> "png"
+      _ -> "jpg"
+    end
+  end
+
   # ── Authentication ──
 
   def login(conn, user) do
@@ -143,6 +153,10 @@ defmodule Vutuv.Accounts do
     conn
     |> Conn.assign(:current_user, user)
     |> Conn.put_session(:user_id, user.id)
+    # The LiveView socket subscribes to this topic on connect; logout (and
+    # the stale-session sweep in ConfigureSession) broadcasts "disconnect"
+    # on it so live views never outlive the session that mounted them.
+    |> Conn.put_session(:live_socket_id, "users_socket:#{user.id}")
     |> Conn.configure_session(renew: true)
   end
 
@@ -215,6 +229,13 @@ defmodule Vutuv.Accounts do
   end
 
   def logout(conn) do
+    # Kill this session's live sockets (the embedded shell, /messages,
+    # /notifications): the client reloads, re-mounts through the dropped
+    # session and renders the anonymous chrome.
+    if live_socket_id = Conn.get_session(conn, :live_socket_id) do
+      VutuvWeb.Endpoint.broadcast(live_socket_id, "disconnect", %{})
+    end
+
     conn
     |> Conn.configure_session(drop: true)
     |> Conn.delete_session(:user_id)
@@ -289,10 +310,10 @@ defmodule Vutuv.Accounts do
     pin = gen_pin()
     salt = :crypto.strong_rand_bytes(16)
 
-    case Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type)) do
-      nil -> Ecto.build_assoc(user, :login_pins)
-      login_pin -> login_pin
-    end
+    # A single upsert: a select-then-insert would race with itself (two
+    # concurrent first mints for the same (user, type) both see "no row" and
+    # the loser's INSERT blows up on the unique index).
+    %LoginPin{user_id: user.id}
     |> LoginPin.changeset(%{
       type: type,
       value: value,
@@ -301,7 +322,11 @@ defmodule Vutuv.Accounts do
       pin_salt: salt,
       pin_login_attempts: 0
     })
-    |> Repo.insert_or_update!()
+    |> Repo.insert!(
+      on_conflict:
+        {:replace, [:value, :created_at, :pin, :pin_salt, :pin_login_attempts, :updated_at]},
+      conflict_target: [:user_id, :type]
+    )
 
     pin
   end
@@ -633,8 +658,31 @@ defmodule Vutuv.Accounts do
 
   def update_user(%User{} = user, attrs) do
     user
+    |> Repo.preload(:search_terms)
     |> User.changeset(attrs)
+    |> maybe_rebuild_search_terms()
     |> Repo.update()
+  end
+
+  # Rebuild the denormalized people-search index whenever the name changes, so
+  # the API rename path (PATCH /api/2.0/me) keeps search in sync with the
+  # profile — the web edit form already does this in its controller. Built from
+  # the changeset's final field values (not the raw params), so a partial
+  # update that carries only one name key can't wipe the whole index.
+  defp maybe_rebuild_search_terms(changeset) do
+    if Ecto.Changeset.get_change(changeset, :first_name) ||
+         Ecto.Changeset.get_change(changeset, :last_name) do
+      first = Ecto.Changeset.get_field(changeset, :first_name) || ""
+      last = Ecto.Changeset.get_field(changeset, :last_name) || ""
+
+      Ecto.Changeset.put_assoc(
+        changeset,
+        :search_terms,
+        SearchTerm.create_search_terms(%{"first_name" => first, "last_name" => last})
+      )
+    else
+      changeset
+    end
   end
 
   def get_user(id), do: Repo.get(User, id)

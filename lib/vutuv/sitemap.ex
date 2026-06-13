@@ -22,6 +22,11 @@ defmodule Vutuv.Sitemap do
 
   @chunk_size 10_000
 
+  # Keep `@dev_doc_pages` in sync with VutuvWeb.DevDocController's registry — a
+  # drift test (sitemap_dev_docs_test.exs) fails the build if a dev-doc page is
+  # added there without appearing in the sitemap.
+  @dev_doc_pages ~w(authentication cookbook data-model reference webhooks)
+
   @static_paths [
                   "/",
                   "/community",
@@ -31,7 +36,7 @@ defmodule Vutuv.Sitemap do
                   "/ads",
                   "/tags",
                   "/developers"
-                ] ++ Enum.map(~w(authentication reference webhooks), &("/developers/" <> &1))
+                ] ++ Enum.map(@dev_doc_pages, &("/developers/" <> &1))
 
   def chunk_size, do: @chunk_size
 

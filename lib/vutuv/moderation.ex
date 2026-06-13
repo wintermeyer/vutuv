@@ -42,6 +42,12 @@ defmodule Vutuv.Moderation do
   @rejected_reports_to_lose_trust 3
   @profile_freeze_reporters 2
 
+  # The statuses an admin ruling may still act on; once a case is resolved
+  # (upheld/rejected/resolved_*) a second ruling must be a no-op so it cannot
+  # issue a second strike. Mirrors Case.open_statuses/0 as a compile-time list
+  # usable in guards.
+  @open_statuses Case.open_statuses()
+
   ## Reporting
 
   @doc """
@@ -454,29 +460,48 @@ defmodule Vutuv.Moderation do
   deactivation.
   """
   def uphold_case(%Case{} = case_record, %User{admin?: true} = admin) do
-    updated =
-      case_record
-      |> Case.changeset(%{status: "upheld", resolved_at: NaiveDateTime.utc_now(:second)})
-      |> Ecto.Changeset.put_change(:resolved_by_id, admin.id)
-      |> Repo.update!()
+    case claim_case_resolution(case_record, "upheld", admin) do
+      :already_resolved ->
+        {:error, :not_open}
 
-    # For a profile case the consequence is the strike itself: a warning
-    # leaves the profile visible again, a suspension/deactivation hides
-    # everything anyway. Frozen posts/messages stay frozen as evidence.
-    if case_record.content_type == "user" do
-      set_user_moderation!(case_record.owner_id, frozen_at: nil)
+      {:ok, updated} ->
+        # For a profile case the consequence is the strike itself: a warning
+        # leaves the profile visible again, a suspension/deactivation hides
+        # everything anyway. Frozen posts/messages stay frozen as evidence.
+        if case_record.content_type == "user" do
+          set_user_moderation!(case_record.owner_id, frozen_at: nil)
+        end
+
+        owner =
+          case case_record.owner do
+            %User{} = preloaded -> preloaded
+            _ -> Repo.get!(User, case_record.owner_id)
+          end
+
+        log(updated, admin, "upheld")
+        issue_strike(owner, updated, "owner", admin)
+
+        {:ok, updated}
     end
+  end
 
-    owner =
-      case case_record.owner do
-        %User{} = preloaded -> preloaded
-        _ -> Repo.get!(User, case_record.owner_id)
-      end
+  # Atomically transitions a still-open case to its resolved status, claiming
+  # it for exactly one caller. The `status in @open_statuses` WHERE makes a
+  # second ruling (a double-submit or a second admin holding a stale struct)
+  # match zero rows, so the strike-issuing consequences run at most once.
+  defp claim_case_resolution(%Case{} = case_record, status, %User{} = admin) do
+    now = NaiveDateTime.utc_now(:second)
 
-    log(updated, admin, "upheld")
-    issue_strike(owner, updated, "owner", admin)
+    {_count, rows} =
+      from(c in Case, where: c.id == ^case_record.id and c.status in ^@open_statuses, select: c)
+      |> Repo.update_all(
+        set: [status: status, resolved_at: now, resolved_by_id: admin.id, updated_at: now]
+      )
 
-    {:ok, updated}
+    case rows do
+      [updated] -> {:ok, updated}
+      [] -> :already_resolved
+    end
   end
 
   @doc """
@@ -486,36 +511,36 @@ defmodule Vutuv.Moderation do
   regular ladder.
   """
   def reject_case(%Case{} = case_record, %User{admin?: true} = admin, abusive_report_ids \\ []) do
-    updated =
-      case_record
-      |> Case.changeset(%{status: "rejected", resolved_at: NaiveDateTime.utc_now(:second)})
-      |> Ecto.Changeset.put_change(:resolved_by_id, admin.id)
-      |> Repo.update!()
+    case claim_case_resolution(case_record, "rejected", admin) do
+      :already_resolved ->
+        {:error, :not_open}
 
-    log(updated, admin, "rejected")
+      {:ok, updated} ->
+        log(updated, admin, "rejected")
 
-    # nil when the owner deleted the content mid-review: nothing to unfreeze.
-    if content = case_content(case_record), do: unfreeze_content(content)
+        # nil when the owner deleted the content mid-review: nothing to unfreeze.
+        if content = case_content(case_record), do: unfreeze_content(content)
 
-    abusive_reports =
-      from(r in Report,
-        where: r.case_id == ^case_record.id and r.id in ^abusive_report_ids,
-        preload: :reporter
-      )
-      |> Repo.all()
+        abusive_reports =
+          from(r in Report,
+            where: r.case_id == ^case_record.id and r.id in ^abusive_report_ids,
+            preload: :reporter
+          )
+          |> Repo.all()
 
-    for report <- abusive_reports do
-      report
-      |> Ecto.Changeset.change(abusive?: true)
-      |> Repo.update!()
+        for report <- abusive_reports do
+          report
+          |> Ecto.Changeset.change(abusive?: true)
+          |> Repo.update!()
 
-      issue_strike(report.reporter, updated, "reporter", admin)
+          issue_strike(report.reporter, updated, "reporter", admin)
+        end
+
+        # An unfounded report must not leave the two accounts separated.
+        restore_severed(updated, admin)
+
+        {:ok, updated}
     end
-
-    # An unfounded report must not leave the two accounts separated.
-    restore_severed(updated, admin)
-
-    {:ok, updated}
   end
 
   ## Strikes
@@ -614,24 +639,53 @@ defmodule Vutuv.Moderation do
       )
 
     for severance <- severances do
-      unless other_active_severance?(severance), do: restore_ties(severance)
+      restored? = restore_or_handover(severance)
 
       severance
       |> Ecto.Changeset.change(restored_at: NaiveDateTime.utc_now(:second))
       |> Repo.update!()
 
-      log(case_record, admin, "relationship_restored", %{
-        "reporter_id" => severance.reporter_id
-      })
+      # Only announce a restoration that actually happened — when a block or
+      # another open report kept the ties severed, nothing was put back, so the
+      # reporter must not be told their relationship was restored.
+      if restored? do
+        log(case_record, admin, "relationship_restored", %{
+          "reporter_id" => severance.reporter_id
+        })
 
-      Vutuv.Activity.notify_report_protection(
-        severance.reporter_id,
-        Repo.get(User, severance.owner_id),
-        "restored"
-      )
+        Vutuv.Activity.notify_report_protection(
+          severance.reporter_id,
+          Repo.get(User, severance.owner_id),
+          "restored"
+        )
+      end
     end
 
     :ok
+  end
+
+  # Returns true when the ties were actually put back.
+  defp restore_or_handover(%Severance{} = severance) do
+    cond do
+      # Another open report still holds its own severance: leave everything cut.
+      other_active_severance?(severance) ->
+        false
+
+      # A block now owns the separation: don't restore follows/connection (the
+      # blocked author's posts would flow back into the blocker's feed), and
+      # hand the conversation freeze to the block so a later unblock thaws it
+      # (otherwise it would stay frozen forever once the report releases it).
+      # Looks the frozen conversation up fresh, so it works even when a second
+      # case's severance — whose own conversation_id is nil — is the one being
+      # rejected.
+      Vutuv.Social.blocked_between?(severance.reporter_id, severance.owner_id) ->
+        Vutuv.Social.adopt_conversation_freeze(severance.reporter_id, severance.owner_id)
+        false
+
+      true ->
+        restore_ties(severance)
+        true
+    end
   end
 
   defp restore_ties(%Severance{} = severance) do

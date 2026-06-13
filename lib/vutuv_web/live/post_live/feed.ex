@@ -126,6 +126,12 @@ defmodule VutuvWeb.PostLive.Feed do
          |> assign(:empty?, false)
          |> stream_insert(:posts, entry, at: 0)}
 
+      # Mirror the pull path's blocked-author filter: a third party's repost
+      # must not carry a blocked author's post into the feed (blocking already
+      # severed the direct follow). visible_to?/2 alone never checks blocks.
+      Vutuv.Social.blocked_between?(user.id, entry.post.user_id) ->
+        {:noreply, socket}
+
       Posts.visible_to?(entry.post, user) ->
         {:noreply, update(socket, :pending_posts, &[entry | &1])}
 

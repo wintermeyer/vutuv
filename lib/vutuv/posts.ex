@@ -146,12 +146,19 @@ defmodule Vutuv.Posts do
   defp check_reply_allowed(%User{} = author, %Post{} = parent) do
     cond do
       not visible_to?(parent, author) -> {:error, :not_visible}
-      restricted?(parent) -> {:error, :restricted}
+      # Query restriction fresh from the DB, not the (possibly stale) preloaded
+      # denials: the reply LiveView holds the parent struct from mount, and the
+      # author may have restricted the post after it was loaded.
+      parent_restricted_now?(parent) -> {:error, :restricted}
       # A block between author and parent author refuses the reply with the
       # same opaque :restricted the disabled reply button already explains.
       blocked?(author, parent) -> {:error, :restricted}
       true -> :ok
     end
+  end
+
+  defp parent_restricted_now?(%Post{id: id}) do
+    Repo.exists?(from(d in PostDenial, where: d.post_id == ^id))
   end
 
   @doc """
@@ -397,12 +404,16 @@ defmodule Vutuv.Posts do
     end
   end
 
-  # A post is in the moderation freezer, or its author's whole account is
-  # hidden (frozen pending review, suspended, or deactivated). Such posts
-  # vanish for everyone but the author (first clause above) and admins.
-  # The policy itself lives in Vutuv.Moderation; render paths usually carry
-  # the author preloaded, so the user fetch is the fallback, not the rule.
-  defp moderation_hidden?(%Post{} = post) do
+  @doc """
+  A post is in the moderation freezer, or its author's whole account is
+  hidden (frozen pending review, suspended, or deactivated). Such posts
+  vanish for everyone but the author (first `visible_to?/2` clause) and
+  admins — and unlike a plain audience restriction, no teaser stands in for
+  them (a frozen post gets a 404, not a "Follow to read" tombstone).
+  The policy itself lives in Vutuv.Moderation; render paths usually carry
+  the author preloaded, so the user fetch is the fallback, not the rule.
+  """
+  def moderation_hidden?(%Post{} = post) do
     post.frozen_at != nil or author_hidden?(post)
   end
 

@@ -76,6 +76,23 @@ defmodule VutuvWeb.MessageLiveTest do
       assert html =~ "For the record"
     end
 
+    test "a deleted message disappears live from open threads", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {_other_conn, other} = login_other_user()
+      conversation = insert_conversation_between(me, other)
+      {:ok, message} = Vutuv.Chat.send_message(other, conversation.id, "to be removed")
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+      assert has_element?(view, "#message-#{message.id}")
+
+      # The only caller is moderation deleting reported content: the bubble must
+      # leave open threads, not linger until reload.
+      {:ok, _} = Vutuv.Chat.delete_message(other, message)
+      _ = :sys.get_state(view.pid)
+
+      refute has_element?(view, "#message-#{message.id}")
+    end
+
     test "a message appears live in the other member's session", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       {other_conn, other} = login_other_user()

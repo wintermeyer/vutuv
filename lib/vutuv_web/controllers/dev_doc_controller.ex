@@ -38,6 +38,13 @@ defmodule VutuvWeb.DevDocController do
                {page, markdown |> String.replace(~r/\A# [^\n]*\n/, "") |> Earmark.as_html!()}
              end)
 
+  @doc """
+  The slugs served under `/developers/:page` (everything but `index`, which
+  lives at `/developers`). The single source of truth for which dev-doc pages
+  the sitemap and llms.txt must list.
+  """
+  def doc_pages, do: @pages -- ["index"]
+
   def index(conn, _params), do: show_page(conn, "index")
 
   def show(conn, %{"page" => page}) when page in @pages, do: show_page(conn, page)

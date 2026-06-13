@@ -121,6 +121,24 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
     refute_email_sent()
   end
 
+  test "a moderation-frozen message does not trigger an unread email" do
+    [a, b] = [user(), user()]
+    conversation = insert_conversation_between(a, b)
+    message = send!(a, conversation)
+    age_message!(message)
+
+    # A frozen message is hidden from the recipient (messages_page filters it),
+    # so it must not light the unread email either.
+    Repo.update_all(
+      from(m in Message, where: m.id == ^message.id),
+      set: [frozen_at: NaiveDateTime.utc_now(:second)]
+    )
+
+    assert Chat.send_unread_notifications() == 0
+    refute_email_sent()
+    assert participant(conversation, b).notified_at == nil
+  end
+
   test "the sender of the unread message is not emailed" do
     [a, b] = [user(), user()]
     conversation = insert_conversation_between(a, b)

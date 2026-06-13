@@ -45,6 +45,23 @@ defmodule VutuvWeb.UrlControllerTest do
     assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
   end
 
+  test "the public show page neutralizes a legacy javascript: link instead of 500ing", %{
+    conn: conn
+  } do
+    {_conn, user} = create_and_login_user(conn)
+    # A row that predates the scheme validation (inserted straight, bypassing
+    # the changeset) must still render as an inert link on the public page.
+    url = insert(:url, user: user, value: "javascript://example.com/%0aalert(document.cookie)")
+
+    # Anonymous visitor (no login): the show page is public. It must render
+    # (no 500 from link/2's scheme guard) with the href neutralized — the raw
+    # value may still appear as escaped link *text*, which is harmless.
+    resp = get(build_conn(), ~p"/#{user}/links/#{url}")
+    assert html_response(resp, 200)
+    refute resp.resp_body =~ ~s(href="javascript)
+    assert resp.resp_body =~ ~s(href="#")
+  end
+
   test "redirect when deleting url", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     url = insert(:url, user: user)

@@ -228,7 +228,11 @@ defmodule Vutuv.Webhooks do
           body: body,
           headers: headers,
           receive_timeout: 10_000,
-          retry: false
+          retry: false,
+          # Never chase redirects: an allowed https endpoint that 30x-redirects
+          # to an internal/loopback/metadata host would otherwise turn delivery
+          # into an SSRF primitive (Req follows up to 10 redirects by default).
+          redirect: false
         ],
         Application.get_env(:vutuv, :webhook_req_options, [])
       )
@@ -289,28 +293,32 @@ defmodule Vutuv.Webhooks do
     DateTime.add(DateTime.utc_now(:second), trunc(:math.pow(2, attempts)) * 60)
   end
 
-  defp reset_failures(%Subscription{consecutive_failures: 0}), do: :ok
+  # Both counters update atomically in the database: deliveries of the same
+  # subscription run concurrently (and each carries its own preloaded copy of
+  # the subscription), so a struct read-modify-write would lose increments.
 
   defp reset_failures(subscription) do
-    subscription |> Ecto.Changeset.change(consecutive_failures: 0) |> Repo.update!()
+    from(s in Subscription, where: s.id == ^subscription.id and s.consecutive_failures != 0)
+    |> Repo.update_all(set: [consecutive_failures: 0])
+
     :ok
   end
 
   defp count_failure(subscription) do
-    failures = subscription.consecutive_failures + 1
+    {1, [failures]} =
+      from(s in Subscription, where: s.id == ^subscription.id, select: s.consecutive_failures)
+      |> Repo.update_all(inc: [consecutive_failures: 1])
 
-    changes =
-      if failures >= @max_consecutive_failures do
-        [
-          consecutive_failures: failures,
+    if failures >= @max_consecutive_failures do
+      from(s in Subscription, where: s.id == ^subscription.id and s.active)
+      |> Repo.update_all(
+        set: [
           active: false,
           disabled_reason: "disabled after #{failures} consecutive delivery failures"
         ]
-      else
-        [consecutive_failures: failures]
-      end
+      )
+    end
 
-    subscription |> Ecto.Changeset.change(changes) |> Repo.update!()
     :ok
   end
 end

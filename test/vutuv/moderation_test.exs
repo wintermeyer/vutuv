@@ -400,6 +400,38 @@ defmodule Vutuv.ModerationTest do
       assert_email_subject("warning")
     end
 
+    test "a second uphold on the same case is a no-op, not a second strike", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      post = insert_post(owner)
+      case_record = report!(reporter, post)
+
+      assert {:ok, upheld} = Moderation.uphold_case(case_record, admin)
+      # A double-submit / second admin acting on the already-resolved case.
+      assert {:error, :not_open} = Moderation.uphold_case(upheld, admin)
+      assert {:error, :not_open} = Moderation.uphold_case(case_record, admin)
+
+      assert [%{level: 1}] = Repo.all(from(s in Strike, where: s.user_id == ^owner.id))
+
+      user = Repo.get!(Vutuv.Accounts.User, owner.id)
+      refute user.suspended_until
+      refute user.deactivated_at
+    end
+
+    test "a second reject on the same case is a no-op", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      post = insert_post(owner)
+      case_record = report!(reporter, post)
+
+      assert {:ok, rejected} = Moderation.reject_case(case_record, admin)
+      assert {:error, :not_open} = Moderation.reject_case(rejected, admin)
+    end
+
     test "the second strike suspends for a week", %{owner: owner, admin: admin} do
       for _ <- 1..2 do
         reporter = insert(:activated_user)
@@ -707,6 +739,32 @@ defmodule Vutuv.ModerationTest do
       assert %{status: :accepted} = Social.connection_state(reporter, owner)
       refute Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
       assert [%{restored_at: %NaiveDateTime{}}] = Repo.all(Vutuv.Moderation.Severance)
+    end
+
+    test "rejecting the case does NOT restore ties when one party now blocks the other", %{
+      owner: owner,
+      reporter: reporter,
+      conversation: conversation
+    } do
+      # The reporter reports, then blocks the owner: the block deliberately
+      # severs follows + connection and keeps the conversation frozen. An
+      # admin rejecting the report must not silently undo the block.
+      case_record = report!(reporter, insert_post(owner))
+      {:ok, _block} = Social.block_user(reporter, owner)
+      admin = insert(:activated_user, admin?: true)
+
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      refute Social.user_follows_user?(reporter.id, owner.id)
+      refute Social.user_follows_user?(owner.id, reporter.id)
+      assert %{status: :none} = Social.connection_state(reporter, owner)
+      assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+
+      # Freeze-ownership passed to the block: unblocking now thaws the
+      # conversation (it must not be stuck frozen forever after the report
+      # released its own freeze).
+      :ok = Social.unblock_user(reporter, owner)
+      refute Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
     end
 
     test "upholding the case keeps the separation in place", %{

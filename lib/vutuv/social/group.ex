@@ -11,11 +11,13 @@ defmodule Vutuv.Social.Group do
     timestamps()
   end
 
+  # :user_id is set programmatically (build_assoc from the session user) and
+  # must not be castable — castable, a form field could re-home the group.
   @required_fields ~w(name)a
-  @optional_fields ~w(user_id)a
 
   def changeset(model, params \\ %{}) do
     model
-    |> cast(params, @required_fields ++ @optional_fields)
+    |> cast(params, @required_fields)
+    |> validate_required(@required_fields)
   end
 end

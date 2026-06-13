@@ -17,7 +17,7 @@
   />
 
   <h1><%= gettext("URL") %></h1>
-  <p><%= link @url.value, to: @url.value %></p>
+  <p><%= link @url.value, to: VutuvWeb.UrlHTML.linkable_url(@url.value) %></p>
   <%= if @url.description do %>
     <h1><%= gettext("Description") %></h1>
     <p><%= @url.description %></p>

@@ -135,15 +135,37 @@ defmodule Vutuv.ApiAuth.OAuth do
   defp upsert_grant!(user, app, scopes) do
     case Repo.get_by(Grant, user_id: user.id, app_id: app.id) do
       nil ->
-        Repo.insert!(%Grant{user_id: user.id, app_id: app.id, scopes: scopes})
+        %Grant{user_id: user.id, app_id: app.id, scopes: scopes}
+        |> Ecto.Changeset.change()
+        |> Ecto.Changeset.unique_constraint(:user_id, name: :oauth_grants_user_id_app_id_index)
+        |> Repo.insert()
+        |> case do
+          {:ok, grant} ->
+            grant
 
-      %Grant{} = grant ->
-        merged = Enum.uniq(grant.scopes ++ scopes)
+          # Lost the first-mint race against a concurrent authorize (the row
+          # exists now): fold this consent into the winner's grant instead of
+          # raising a raw unique-violation 500. Ecto wraps the insert in a
+          # savepoint, so this error doesn't abort approve/2's transaction.
+          {:error, _changeset} ->
+            Repo.get_by!(Grant, user_id: user.id, app_id: app.id) |> merge_grant!(scopes)
+        end
 
-        grant
-        |> Ecto.Changeset.change(scopes: merged, revoked_at: nil)
-        |> Repo.update!()
+      grant ->
+        merge_grant!(grant, scopes)
     end
+  end
+
+  # A revoked grant starts fresh: the user explicitly took the old scopes away,
+  # so re-authorization grants exactly what this consent screen showed — never
+  # the union with the revoked set (that would silently resurrect a scope the
+  # user removed and never re-approved). An active grant widens by union.
+  defp merge_grant!(%Grant{revoked_at: revoked} = grant, scopes) when not is_nil(revoked) do
+    grant |> Ecto.Changeset.change(scopes: scopes, revoked_at: nil) |> Repo.update!()
+  end
+
+  defp merge_grant!(%Grant{} = grant, scopes) do
+    grant |> Ecto.Changeset.change(scopes: Enum.uniq(grant.scopes ++ scopes)) |> Repo.update!()
   end
 
   # ── The token endpoint (POST /oauth/token) ──

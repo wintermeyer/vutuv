@@ -222,14 +222,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     end
   end
 
-  defp link_line(%{description: nil, url: url}), do: "- <#{url}>"
-  defp link_line(%{description: description, url: url}), do: "- [#{md_text(description)}](#{url})"
+  defp link_line(%{description: nil, url: url}), do: "- <#{md_url(url)}>"
+
+  defp link_line(%{description: description, url: url}),
+    do: "- [#{md_text(description)}](#{md_url(url)})"
 
   # The provider labels the link — the same [label](url) form as the Links
   # section. A provider without a canonical URL scheme (Snapchat) carries
   # only the account name, so there is no link to offer.
   defp social_line(%{provider: provider, url: "http" <> _ = url}),
-    do: "- [#{provider}](#{url})"
+    do: "- [#{provider}](#{md_url(url)})"
 
   defp social_line(%{provider: provider, url: value}), do: "- #{provider}: #{value}"
 
@@ -329,6 +331,25 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> String.replace("\\", "\\\\")
     |> String.replace("[", "\\[")
     |> String.replace("]", "\\]")
+  end
+
+  # Percent-encode the characters that delimit a Markdown link *destination*
+  # in a user-controlled URL, so a value like `http://x/) [evil](http://evil`
+  # cannot close the `(...)` (or the `<...>` autolink) and forge a second link.
+  # Real URLs survive — these chars are URL-encodable without changing meaning.
+  defp md_url(value) do
+    value
+    |> to_string()
+    |> String.replace("\\", "%5C")
+    |> String.replace(" ", "%20")
+    |> String.replace("\t", "%09")
+    |> String.replace("\n", "%0A")
+    |> String.replace("\r", "%0D")
+    |> String.replace("(", "%28")
+    |> String.replace(")", "%29")
+    |> String.replace("<", "%3C")
+    |> String.replace(">", "%3E")
+    |> String.replace("\"", "%22")
   end
 
   defp join_blocks(blocks) do

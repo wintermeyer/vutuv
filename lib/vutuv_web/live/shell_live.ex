@@ -73,19 +73,30 @@ defmodule VutuvWeb.ShellLive do
   def handle_info({:new_notification, _n}, socket),
     do: {:noreply, update(socket, :notifications_count, &(&1 + 1))}
 
-  # Vutuv.Chat broadcasts this to the recipient on every delivered message;
-  # MessageLive's mark_read broadcasts :messages_read below to zero it again
-  # while the member is looking at the conversation.
+  # Vutuv.Chat broadcasts :new_message on every delivered message and
+  # MessageLive's mark_read broadcasts :messages_read when the member opens a
+  # conversation. The badge counts unread *conversations*, which neither event
+  # maps to additively — a repeat message in an already-unread conversation
+  # adds nothing, and reading one conversation says nothing about the others —
+  # so both recompute the count instead of adjusting it.
   def handle_info({:new_message, _m}, socket),
-    do: {:noreply, update(socket, :messages_count, &(&1 + 1))}
+    do: {:noreply, recount_messages(socket)}
+
+  def handle_info(:messages_read, socket),
+    do: {:noreply, recount_messages(socket)}
 
   def handle_info(:notifications_read, socket),
     do: {:noreply, assign(socket, :notifications_count, 0)}
 
-  def handle_info(:messages_read, socket),
-    do: {:noreply, assign(socket, :messages_count, 0)}
-
   def handle_info(_other, socket), do: {:noreply, socket}
+
+  defp recount_messages(socket) do
+    assign(
+      socket,
+      :messages_count,
+      Vutuv.Chat.unread_conversations_count(socket.assigns.user_id)
+    )
+  end
 
   # The initials tile shares VutuvWeb.UI.name_initials/1 with <.avatar>.
 

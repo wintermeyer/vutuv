@@ -87,10 +87,26 @@ defmodule Vutuv.Uploads.Spec do
   once, then derive all versions from it) or `{:error, reason}` when the file
   cannot be decoded.
   """
+  # A generous ceiling — far above any real avatar/cover/post photo (all
+  # downscaled to ≤1600px), far below the pixel-flood "decompression bombs"
+  # that slip past the byte-size gate: a flat 30000×30000 PNG is ~2 MB on disk
+  # but ~3.6 GB once decoded. The dimensions come from the header, so an
+  # oversized image is rejected before autorotate/thumbnail pull its pixels.
+  @max_megapixels 50
+
   def open_rotated(path) do
     with {:ok, image} <- Image.open(path),
+         :ok <- within_pixel_budget(image),
          {:ok, {rotated, _flags}} <- Image.autorotate(image) do
       {:ok, rotated}
+    end
+  end
+
+  defp within_pixel_budget(image) do
+    if Image.width(image) * Image.height(image) > @max_megapixels * 1_000_000 do
+      {:error, :too_large}
+    else
+      :ok
     end
   end
 

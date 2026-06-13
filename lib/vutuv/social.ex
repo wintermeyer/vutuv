@@ -69,13 +69,17 @@ defmodule Vutuv.Social do
   end
 
   # The public pages only count/show follows from activated accounts (nil
-  # covers legacy rows that predate the flag), matching Follow.latest/1.
+  # covers legacy rows that predate the flag) that moderation has not hidden,
+  # matching Follow.latest/2. The gate sits on the counted person only — the
+  # other end is the page owner, who may be a frozen member viewing their own
+  # lists through the moderation bypass.
 
   def follower_count(user) do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :follower),
-        where: (is_nil(u.activated?) or u.activated? == true) and c.followee_id == ^user.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
+        where: c.followee_id == ^user.id,
         select: count(c.id)
       )
     )
@@ -85,7 +89,8 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :followee),
-        where: (is_nil(u.activated?) or u.activated? == true) and c.follower_id == ^user.id,
+        where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
+        where: c.follower_id == ^user.id,
         select: count(c.id)
       )
     )
@@ -106,7 +111,7 @@ defmodule Vutuv.Social do
         :followees -> {followee_count(user), :outbound_follows, :followee}
       end
 
-    query = Follow.latest(100) |> Vutuv.Pages.paginate(params, total)
+    query = Follow.latest(100, person) |> Vutuv.Pages.paginate(params, total)
     user = Repo.preload(user, [{assoc, {query, [person]}}])
 
     %{
@@ -149,10 +154,18 @@ defmodule Vutuv.Social do
   def most_followed_users(limit) do
     Repo.all(
       from(u in Vutuv.Accounts.User,
-        left_join: f in assoc(u, :followers),
+        left_join: fl in Follow,
+        on: fl.followee_id == u.id,
+        # Count only followers that are themselves visible, so the ranking
+        # matches the follower_count/1 shown on each profile and can't be
+        # inflated by mass-registering never-activated follower accounts.
+        left_join: fr in Vutuv.Accounts.User,
+        on:
+          fr.id == fl.follower_id and (is_nil(fr.activated?) or fr.activated? == true) and
+            not account_hidden(fr.id),
         where: (is_nil(u.activated?) or u.activated? == true) and not account_hidden(u.id),
         group_by: u.id,
-        order_by: [fragment("count(?) DESC", f.id), u.first_name, u.last_name],
+        order_by: [fragment("count(?) DESC", fr.id), u.first_name, u.last_name],
         limit: ^limit,
         select: struct(u, ^User.listing_fields())
       )
@@ -186,12 +199,12 @@ defmodule Vutuv.Social do
     end
   end
 
-  defp do_request_connection(%User{} = me, %User{} = other) do
+  defp do_request_connection(%User{} = me, %User{} = other, retried? \\ false) do
     {a_id, b_id} = connection_pair(me.id, other.id)
 
     case get_connection_by_pair(a_id, b_id) do
       nil ->
-        create_request(me, other, a_id, b_id)
+        create_request(me, other, a_id, b_id, retried?)
 
       %Connection{status: "accepted"} ->
         {:error, :already_connected}
@@ -206,14 +219,25 @@ defmodule Vutuv.Social do
     end
   end
 
-  defp create_request(%User{} = me, %User{} = other, a_id, b_id) do
+  defp create_request(%User{} = me, %User{} = other, a_id, b_id, retried?) do
     changeset =
       %Connection{user_a_id: a_id, user_b_id: b_id, requested_by_id: me.id}
       |> Connection.changeset(%{status: "pending", status_changed_at: now()})
 
-    with {:ok, connection} <- Repo.insert(changeset) do
-      Vutuv.Activity.notify_connection_request(other.id, me)
-      {:ok, connection}
+    case Repo.insert(changeset) do
+      {:ok, connection} ->
+        Vutuv.Activity.notify_connection_request(other.id, me)
+        {:ok, connection}
+
+      {:error, _changeset} when not retried? ->
+        # Lost the race against the other party's simultaneous request (the
+        # unique pair index only rejects after their row committed):
+        # re-dispatch, where the pending-by-them branch accepts it as the
+        # mutual desire it is.
+        do_request_connection(me, other, true)
+
+      {:error, changeset} ->
+        {:error, changeset}
     end
   end
 
@@ -383,19 +407,38 @@ defmodule Vutuv.Social do
         {:ok, block}
 
       nil ->
-        Repo.transaction(fn ->
-          sever_between(blocker.id, blocked.id)
-          # Remember the conversation THIS block froze (nil when none, or
-          # when a report already froze it) so unblock thaws only its own.
-          conversation = Vutuv.Chat.freeze_conversation_between(blocker.id, blocked.id)
-
-          Repo.insert!(%Block{
-            blocker_id: blocker.id,
-            blocked_id: blocked.id,
-            conversation_id: conversation && conversation.id
-          })
-        end)
+        case insert_block(blocker.id, blocked.id) do
+          # Lost the race against a concurrent identical block: the winner's
+          # row is committed (the unique index only rejects after the other
+          # transaction completed), so idempotency means returning it.
+          {:error, :raced} -> {:ok, get_block(blocker.id, blocked.id)}
+          result -> result
+        end
     end
+  end
+
+  defp insert_block(blocker_id, blocked_id) do
+    Repo.transaction(fn ->
+      sever_between(blocker_id, blocked_id)
+      # Remember the conversation THIS block froze (nil when none, or
+      # when a report already froze it) so unblock thaws only its own.
+      conversation = Vutuv.Chat.freeze_conversation_between(blocker_id, blocked_id)
+
+      %Block{
+        blocker_id: blocker_id,
+        blocked_id: blocked_id,
+        conversation_id: conversation && conversation.id
+      }
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.unique_constraint(:blocked_id,
+        name: :blocks_blocker_id_blocked_id_index
+      )
+      |> Repo.insert()
+      |> case do
+        {:ok, block} -> block
+        {:error, _changeset} -> Repo.rollback(:raced)
+      end
+    end)
   end
 
   @doc "Removes `blocker`'s block on `blocked` (no-op without one)."
@@ -430,6 +473,35 @@ defmodule Vutuv.Social do
     end
 
     :ok
+  end
+
+  @doc """
+  Hands freeze-ownership of the pair's frozen 1:1 conversation to the block(s)
+  standing between them — used when a moderation report that froze the
+  conversation is rejected while a block exists: the report releases the
+  freeze, but the block must keep the conversation frozen and thaw it on
+  unblock. The conversation is looked up fresh (not taken from the rejected
+  severance, whose recorded id is nil for any report that wasn't the first to
+  freeze), so the handover is robust across multiple cases. Only fills a block
+  whose `conversation_id` is still nil, so it never clobbers a block's own
+  freeze.
+  """
+  def adopt_conversation_freeze(a_id, b_id) do
+    case Vutuv.Chat.frozen_conversation_id_between(a_id, b_id) do
+      nil ->
+        :ok
+
+      conversation_id ->
+        from(b in Block,
+          where:
+            is_nil(b.conversation_id) and
+              ((b.blocker_id == ^a_id and b.blocked_id == ^b_id) or
+                 (b.blocker_id == ^b_id and b.blocked_id == ^a_id))
+        )
+        |> Repo.update_all(set: [conversation_id: conversation_id])
+
+        :ok
+    end
   end
 
   def get_block(blocker_id, blocked_id),
@@ -525,15 +597,47 @@ defmodule Vutuv.Social do
     end
   end
 
-  @doc "Accepted connections of `user` as `%{connection:, user: other}`, newest first."
+  @doc """
+  Accepted connections of `user` as `%{connection:, user: other}`, newest
+  first. Connections whose other endpoint is unactivated or hidden by
+  moderation are excluded — a member the platform hid must not stay
+  enumerable through someone else's connections page. The owner's own state
+  is deliberately not checked: a frozen member still sees their own list
+  through the moderation bypass.
+  """
   def list_connections(%User{id: user_id}) do
-    from(c in Connection,
-      where: c.status == "accepted",
-      where: c.user_a_id == ^user_id or c.user_b_id == ^user_id,
-      order_by: [desc: c.status_changed_at, desc: c.id]
-    )
+    accepted_visible_connections(user_id)
+    |> order_by([c], desc: c.status_changed_at, desc: c.id)
     |> Repo.all()
     |> with_other_user(user_id)
+  end
+
+  defp accepted_visible_connections(user_id) do
+    from(c in Connection,
+      where: c.status == "accepted",
+      where: c.user_a_id == ^user_id or c.user_b_id == ^user_id
+    )
+    |> with_visible_other(user_id)
+  end
+
+  # Joins the connection's *other* endpoint and keeps only rows whose other
+  # party is activated and not moderation-hidden — so request/connection lists
+  # never show (or link to) a member the platform has hidden, matching the
+  # counts. The viewer's own state is intentionally not checked.
+  defp with_visible_other(query, user_id) do
+    from(c in query,
+      join: o in User,
+      on:
+        o.id ==
+          fragment(
+            "CASE WHEN ? = ? THEN ? ELSE ? END",
+            c.user_a_id,
+            type(^user_id, Vutuv.UUIDv7),
+            c.user_b_id,
+            c.user_a_id
+          ),
+      where: (is_nil(o.activated?) or o.activated? == true) and not account_hidden(o.id)
+    )
   end
 
   @doc "Pending requests addressed to `user` (someone else asked), newest first."
@@ -543,6 +647,7 @@ defmodule Vutuv.Social do
       where: c.user_a_id == ^user_id or c.user_b_id == ^user_id,
       order_by: [desc: c.status_changed_at, desc: c.id]
     )
+    |> with_visible_other(user_id)
     |> Repo.all()
     |> with_other_user(user_id)
   end
@@ -553,19 +658,19 @@ defmodule Vutuv.Social do
       where: c.status == "pending" and c.requested_by_id == ^user_id,
       order_by: [desc: c.status_changed_at, desc: c.id]
     )
+    |> with_visible_other(user_id)
     |> Repo.all()
     |> with_other_user(user_id)
   end
 
-  @doc "How many accepted connections `user` has."
+  @doc """
+  How many accepted connections `user` has — same visibility rule as
+  `list_connections/1`, so the profile count never disagrees with the list.
+  """
   def connection_count(%User{id: user_id}) do
-    Repo.one(
-      from(c in Connection,
-        where: c.status == "accepted",
-        where: c.user_a_id == ^user_id or c.user_b_id == ^user_id,
-        select: count(c.id)
-      )
-    )
+    accepted_visible_connections(user_id)
+    |> select([c], count(c.id))
+    |> Repo.one()
   end
 
   @doc """
@@ -777,7 +882,20 @@ defmodule Vutuv.Social do
     follow
     |> Ecto.build_assoc(:memberships)
     |> Membership.changeset(attrs)
+    |> validate_own_group(follow.follower_id)
     |> Repo.insert()
+  end
+
+  # The form posts a group_id; it must be one of the follow owner's own
+  # groups — the ownership check on the follow says nothing about the group.
+  defp validate_own_group(changeset, owner_id) do
+    Ecto.Changeset.validate_change(changeset, :group_id, fn :group_id, group_id ->
+      if Repo.exists?(from(g in Group, where: g.id == ^group_id and g.user_id == ^owner_id)) do
+        []
+      else
+        [group_id: "is invalid"]
+      end
+    end)
   end
 
   def delete_membership!(%Membership{} = membership), do: Repo.delete!(membership)

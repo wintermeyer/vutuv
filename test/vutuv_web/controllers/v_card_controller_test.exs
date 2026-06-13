@@ -56,4 +56,22 @@ defmodule VutuvWeb.VCardControllerTest do
     assert conn.status == 200
     assert conn.resp_body =~ "PHOTO;ENCODING=b;TYPE=JPEG:"
   end
+
+  test "the N field carries all five components incl. the honorific suffix" do
+    insert_activated_user(
+      active_slug: "phd-tester",
+      first_name: "Ada",
+      last_name: "Lovelace",
+      honorific_prefix: "Dr.",
+      honorific_suffix: "PhD"
+    )
+
+    conn = get(build_conn(), "/phd-tester/vcard")
+    n_line = conn.resp_body |> String.split("\n") |> Enum.find(&String.starts_with?(&1, "N:"))
+
+    # vCard N is Family;Given;Additional;Prefix;Suffix — the suffix must not be
+    # dropped, and FN must be the full display name, not just "first last".
+    assert n_line == "N:Lovelace;Ada;;Dr.;PhD"
+    assert conn.resp_body =~ "FN:Dr. Ada Lovelace PhD"
+  end
 end

@@ -238,6 +238,15 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  # A message was deleted (moderation): drop the bubble from any open thread
+  # (no-op when it isn't streamed here) and refresh the sidebar preview.
+  def handle_info({:message_deleted, %{message_id: message_id}}, socket) do
+    {:noreply,
+     socket
+     |> stream_delete_by_dom_id(:messages, "message-#{message_id}")
+     |> assign_lists()}
+  end
+
   # Activity event: a message arrived in some conversation of mine. The open
   # conversation's own topic already delivered its copy above, so only
   # messages landing elsewhere need a sidebar refresh.

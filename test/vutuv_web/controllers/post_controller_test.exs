@@ -118,6 +118,36 @@ defmodule VutuvWeb.PostControllerTest do
       assert html_response(shown, 200) =~ "for my people"
     end
 
+    test "a frozen followers-only post 404s instead of showing the teaser", %{conn: conn} do
+      user = insert_activated_user()
+
+      post =
+        create_post!(user, %{
+          body: "for my people",
+          denials: [%{"wildcard" => "non_followers"}]
+        })
+
+      # Moderation froze the post itself (the author's account is fine, so the
+      # permalink is still reachable). The teaser must not stand in for it —
+      # following can't unlock a frozen post and the tombstone would leak its
+      # existence during the case.
+      {:ok, _} =
+        post
+        |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+        |> Vutuv.Repo.update()
+
+      # Anonymous, logged-in non-follower, and an existing follower all 404.
+      anon = get(conn, Posts.path(post))
+      assert anon.status == 404
+      refute anon.resp_body =~ "followers of"
+
+      {follower_conn, follower} = create_and_login_user(fresh_conn())
+      insert(:follow, follower: follower, followee: user)
+      shown = get(follower_conn, Posts.path(post))
+      assert shown.status == 404
+      refute shown.resp_body =~ "for my people"
+    end
+
     test "every other denial shape is a plain 404, never a teaser", %{conn: conn} do
       user = insert_activated_user()
       group = insert(:group, user: user, name: "Geheimbund")

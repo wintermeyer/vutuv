@@ -49,19 +49,52 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, @mail_badge, "1")
   end
 
-  test "a new-message event bumps the messages badge", %{conn: conn} do
+  test "the messages badge counts unread conversations, not message events", %{conn: conn} do
     user = with_unread_message(insert(:user))
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
 
-    send(view.pid, {:new_message, %{conversation_id: "x"}})
+    assert has_element?(view, @mail_badge, "1")
 
+    # A repeat message in the same, already-unread conversation: still one
+    # unread conversation, not two.
+    send(view.pid, {:new_message, %{conversation_id: "x"}})
+    assert has_element?(view, @mail_badge, "1")
+
+    # A message opening a second unread conversation: now two.
+    with_unread_message(user)
+    send(view.pid, {:new_message, %{conversation_id: "y"}})
     assert has_element?(view, @mail_badge, "2")
   end
 
-  test "marking messages read clears the messages badge", %{conn: conn} do
-    user = with_unread_message(insert(:user))
-    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+  test "reading one conversation leaves the other conversations' badge intact", %{conn: conn} do
+    user = insert(:user)
+    other = insert(:user)
+    conversation = insert_conversation_between(other, user)
+    {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "unread ping")
+    with_unread_message(user)
 
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    assert has_element?(view, @mail_badge, "2")
+
+    # The member opens conversation one: MessageLive marks it read and
+    # broadcasts :messages_read. The second conversation is still unread —
+    # the badge must drop to 1, not be blanked to 0.
+    Vutuv.Chat.mark_read(user, conversation.id)
+    send(view.pid, :messages_read)
+
+    assert has_element?(view, @mail_badge, "1")
+  end
+
+  test "reading the only unread conversation clears the messages badge", %{conn: conn} do
+    user = insert(:user)
+    other = insert(:user)
+    conversation = insert_conversation_between(other, user)
+    {:ok, _} = Vutuv.Chat.send_message(other, conversation.id, "unread ping")
+
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+    assert has_element?(view, @mail_badge, "1")
+
+    Vutuv.Chat.mark_read(user, conversation.id)
     send(view.pid, :messages_read)
 
     refute has_element?(view, @mail_badge)

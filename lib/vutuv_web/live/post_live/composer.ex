@@ -137,7 +137,13 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   def handle_event("deny-user", %{"id" => id}, socket) do
-    user = Vutuv.Repo.get(Vutuv.Accounts.User, id)
+    # cast_or_nil: a tampered phx-value-id (non-UUID) is a no-op, not a
+    # CastError that crashes the composer and loses the pending compose state.
+    user =
+      case Vutuv.UUIDv7.cast_or_nil(id) do
+        nil -> nil
+        uuid -> Vutuv.Repo.get(Vutuv.Accounts.User, uuid)
+      end
 
     denied_users =
       if user && user.id != socket.assigns.current_user.id do
@@ -254,6 +260,9 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp save_error_message(:invalid_images),
     do: gettext("One of the images could not be attached.")
+
+  defp save_error_message(reason) when reason in [:restricted, :not_visible],
+    do: gettext("You can no longer reply to this post.")
 
   defp save_error_message(_too_many_images) do
     gettext("No more than %{max} images per post.", max: Posts.max_images_per_post())

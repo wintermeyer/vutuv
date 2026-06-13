@@ -193,9 +193,13 @@ defmodule Vutuv.ConnectionsTest do
 
   describe "listings + count" do
     test "lists connections, incoming and outgoing requests; counts accepted" do
-      {a, b} = users()
-      c2 = insert(:user, first_name: "Cy")
-      d = insert(:user, first_name: "Di")
+      # Activated like every real connection participant (request/accept
+      # require a login, which activates) — list_connections only shows
+      # activated, non-hidden people.
+      a = insert(:user, first_name: "Ann", activated?: true)
+      b = insert(:user, first_name: "Bob", activated?: true)
+      c2 = insert(:user, first_name: "Cy", activated?: true)
+      d = insert(:user, first_name: "Di", activated?: true)
 
       # a connected with b
       connect!(a, b)
@@ -213,6 +217,27 @@ defmodule Vutuv.ConnectionsTest do
 
       assert [%{user: out}] = Social.list_outgoing_requests(a)
       assert out.id == d.id
+    end
+
+    test "request lists hide a counterparty hidden by moderation (no dead links)" do
+      a = insert(:user, activated?: true)
+      incoming = insert(:user, activated?: true)
+      outgoing = insert(:user, activated?: true)
+
+      {:ok, _} = Social.request_connection(incoming, a)
+      {:ok, _} = Social.request_connection(a, outgoing)
+
+      assert [_one] = Social.list_incoming_requests(a)
+      assert [_one] = Social.list_outgoing_requests(a)
+
+      # Both counterparties get frozen by moderation after requesting: their
+      # profiles 404, so the request rows must drop out rather than link there.
+      for u <- [incoming, outgoing] do
+        u |> Ecto.Changeset.change(frozen_at: ~N[2026-01-01 00:00:00]) |> Repo.update!()
+      end
+
+      assert Social.list_incoming_requests(a) == []
+      assert Social.list_outgoing_requests(a) == []
     end
   end
 

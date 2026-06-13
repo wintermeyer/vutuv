@@ -152,7 +152,6 @@ defmodule VutuvWeb.Router do
 
     # PIN-entry step for the account-deletion flow (issue #759).
     post("/account_deletion", UserController, :confirm_delete)
-    get("/follow_back/:id", UserController, :follow_back)
 
     # The authorizing post-image proxy: every post-image byte goes through
     # the app so the post's audience guards its images too. `:version` is

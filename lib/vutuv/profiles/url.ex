@@ -52,7 +52,14 @@ defmodule Vutuv.Profiles.Url do
   defp ensure_http_prefix(changeset) do
     url = get_change(changeset, :value)
 
-    if url && !String.contains?(url, ["http://", "https://"]) do
+    # Prepend http:// unless the value already carries an http(s) scheme.
+    # Gating on "scheme is not http/https" (rather than "scheme is nil") is
+    # deliberate: URI.parse reads a bare "example.com:8080" as scheme
+    # "example.com", so a nil check would leave a legitimate host:port
+    # un-prefixed and validate_url would then reject it. A genuinely dangerous
+    # scheme (javascript:/data:) gets prefixed to a broken http:// host that
+    # validate_url rejects anyway, so nothing unsafe survives.
+    if url && URI.parse(url).scheme not in ["http", "https"] do
       put_change(changeset, :value, "http://#{url}")
     else
       changeset

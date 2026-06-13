@@ -224,6 +224,43 @@ defmodule Vutuv.ApiAuth.OAuthTest do
       assert [_grant] = ApiAuth.list_grants(member)
     end
 
+    test "re-consent after revocation grants only the freshly approved scopes", %{
+      member: member,
+      app: app,
+      secret: secret
+    } do
+      # First authorize with two scopes, then explicitly revoke.
+      {:ok, tokens} = run_flow(member, app, secret)
+      assert {:ok, token, _} = ApiAuth.verify_token(tokens.access_token)
+      assert Enum.sort(token.scopes) == ["posts:write", "profile:read"]
+
+      [grant] = ApiAuth.list_grants(member)
+      ApiAuth.revoke_grant!(grant)
+
+      # Re-authorize requesting ONLY profile:read — the revoked posts:write
+      # must not resurrect through the union.
+      {:ok, request} =
+        OAuth.validate_authorize(authorize_params(app, %{"scope" => "profile:read"}))
+
+      {:ok, code} = OAuth.approve(member, request)
+
+      {:ok, fresh} =
+        OAuth.exchange(%{
+          "grant_type" => "authorization_code",
+          "client_id" => app.client_id,
+          "client_secret" => secret,
+          "code" => code,
+          "redirect_uri" => @redirect,
+          "code_verifier" => verifier()
+        })
+
+      assert {:ok, fresh_token, _} = ApiAuth.verify_token(fresh.access_token)
+      assert fresh_token.scopes == ["profile:read"]
+
+      [regrant] = ApiAuth.list_grants(member)
+      assert regrant.scopes == ["profile:read"]
+    end
+
     test "consent widens scopes (union), never narrows", %{member: member, app: app} do
       {:ok, request} = OAuth.validate_authorize(authorize_params(app))
       {:ok, _code} = OAuth.approve(member, request)
@@ -235,6 +272,23 @@ defmodule Vutuv.ApiAuth.OAuthTest do
 
       assert [grant] = ApiAuth.list_grants(member)
       assert Enum.sort(grant.scopes) == ["messages:read", "posts:write", "profile:read"]
+    end
+
+    test "concurrent first authorizes don't crash on the grant unique index", %{
+      member: member,
+      app: app
+    } do
+      {:ok, request} = OAuth.validate_authorize(authorize_params(app))
+
+      results =
+        Task.await_many(
+          for _ <- 1..4, do: Task.async(fn -> OAuth.approve(member, request) end)
+        )
+
+      # No first-mint race may surface a raw unique-violation 500: every
+      # consent either creates the grant or folds into the winner's row.
+      assert Enum.all?(results, &match?({:ok, _code}, &1))
+      assert [_one] = ApiAuth.list_grants(member)
     end
   end
 

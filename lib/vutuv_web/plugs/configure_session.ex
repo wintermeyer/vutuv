@@ -16,7 +16,16 @@ defmodule VutuvWeb.Plug.ConfigureSession do
     # not just block new logins.
     user = if user && Vutuv.Moderation.login_block(user), do: nil, else: user
 
-    conn = if user_id && is_nil(user), do: delete_session(conn, :user_id), else: conn
+    conn =
+      if user_id && is_nil(user) do
+        # The cookie points at a user who may no longer log in (deleted,
+        # suspended, deactivated): end the session and also kill any live
+        # sockets it still has open in other tabs.
+        VutuvWeb.Endpoint.broadcast("users_socket:#{user_id}", "disconnect", %{})
+        delete_session(conn, :user_id)
+      else
+        conn
+      end
 
     conn
     |> assign(:current_user, user)

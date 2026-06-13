@@ -26,6 +26,13 @@ defmodule Vutuv.Social.BlockTest do
   end
 
   describe "block_user/2" do
+    test "concurrent double-block is idempotent, not a crash", %{blocker: a, blocked: b} do
+      results = Task.await_many(for _ <- 1..2, do: Task.async(fn -> Social.block_user(a, b) end))
+
+      assert Enum.all?(results, &match?({:ok, %Block{}}, &1))
+      assert Repo.aggregate(from(b in Block, where: b.blocker_id == ^a.id), :count) == 1
+    end
+
     test "severs follows and connection both ways and freezes the conversation", %{
       blocker: a,
       blocked: b

@@ -117,6 +117,30 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert Enum.any?(post.denials, &(&1.denied_user_id == target.id))
     end
 
+    test "deny-user with a tampered non-UUID id is a no-op, not a crash", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      _target = other_user(first_name: "Maxima", last_name: "Musterfrau")
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Open the custom sheet, then search to surface a real deny-user control.
+      live |> form("#composer-form", %{"post" => %{"preset" => "custom"}}) |> render_change()
+
+      live
+      |> form("#composer-form", %{"post" => %{"preset" => "custom", "user_search" => "Maxima"}})
+      |> render_change()
+
+      # Tamper the id the client sends: a non-UUID must not reach Repo.get as a
+      # raw cast (which would raise Ecto.Query.CastError and kill the composer).
+      live
+      |> element("#composer-user-results button", "Maxima")
+      |> render_click(%{"id" => "not-a-uuid"})
+
+      assert Process.alive?(live.pid)
+      assert render(live) =~ "Hide this post from"
+      # The tampered id denied nobody (no "remove" chip rendered).
+      refute has_element?(live, "button[phx-click=undeny-user]")
+    end
+
     test "publishes a photo-only post (upload, no text)", %{conn: conn} do
       # Real files land on disk: isolate the uploads root per test.
       tmp =
@@ -263,6 +287,26 @@ defmodule VutuvWeb.PostFeedLiveTest do
       html = render(live)
       refute html =~ "Show 1 new post"
       refute html =~ "secret"
+    end
+
+    test "a blocked author's post never reaches the pill via a third-party repost", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      blocked_author = other_user()
+      reposter = other_user()
+
+      {:ok, _} = Vutuv.Social.block_user(viewer, blocked_author)
+      insert(:follow, follower: viewer, followee: reposter)
+
+      {:ok, post} = Posts.create_post(blocked_author, %{body: "blocked words"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      :ok = Posts.repost_post(reposter, post)
+      _ = :sys.get_state(live.pid)
+
+      html = render(live)
+      refute html =~ "Show 1 new post"
+      refute html =~ "blocked words"
     end
 
     test "deleting a shown post removes it from the open feed", %{conn: conn} do

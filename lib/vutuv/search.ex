@@ -377,9 +377,16 @@ defmodule Vutuv.Search do
   defp tag_member_counts(tags) do
     ids = Enum.map(tags, & &1.id)
 
+    # Count only members the tag page would actually show: activated and not
+    # moderation-hidden (Tag.recommended_users applies the same gate), so the
+    # chip's "N members" can't exceed what clicking it reveals.
     Repo.all(
       from(ut in Vutuv.Tags.UserTag,
-        where: ut.tag_id in ^ids,
+        join: u in User,
+        on: u.id == ut.user_id,
+        where:
+          ut.tag_id in ^ids and (is_nil(u.activated?) or u.activated? == true) and
+            not account_hidden(u.id),
         group_by: ut.tag_id,
         select: {ut.tag_id, count(ut.id)}
       )

@@ -44,7 +44,9 @@ defmodule VutuvWeb.AdController do
       {:ok, ad} ->
         render(conn, "preview.html",
           ad: ad,
-          ad_params: ad_params,
+          # Only scalar fields are re-emitted as hidden inputs on the confirm
+          # form; a tampered list/map value would crash the template stringify.
+          ad_params: Map.filter(ad_params, fn {_k, v} -> is_binary(v) end),
           page_title: gettext("Preview your ad")
         )
 

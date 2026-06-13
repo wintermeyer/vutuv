@@ -9,6 +9,8 @@ defmodule Vutuv.Social.Follow do
 
   use VutuvWeb, :model
 
+  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+
   schema "follows" do
     belongs_to(:follower, Vutuv.Accounts.User)
     belongs_to(:followee, Vutuv.Accounts.User)
@@ -41,15 +43,31 @@ defmodule Vutuv.Social.Follow do
 
   defp validate_not_following_self(changeset), do: changeset
 
-  def latest(n) do
-    Ecto.Query.from(u in __MODULE__,
-      join: f in assoc(u, :followee),
-      join: f2 in assoc(u, :follower),
-      where:
-        (is_nil(f.activated?) or f.activated? == true) and
-          (is_nil(f2.activated?) or f2.activated? == true),
-      order_by: [desc: :inserted_at],
-      limit: ^n
-    )
+  @doc """
+  The page query behind the public follow lists: newest first, both ends
+  activated (nil covers legacy rows predating the flag), and the `listed`
+  person — `:follower` on a followers page, `:followee` on a following
+  page — not hidden by moderation. The hidden gate deliberately skips the
+  other end: that is the page owner, who may be viewing their own lists
+  through the moderation bypass while frozen.
+  """
+  def latest(n, listed) when listed in [:follower, :followee] do
+    query =
+      Ecto.Query.from(fl in __MODULE__,
+        join: fe in assoc(fl, :followee),
+        as: :followee,
+        join: fr in assoc(fl, :follower),
+        as: :follower,
+        where:
+          (is_nil(fe.activated?) or fe.activated? == true) and
+            (is_nil(fr.activated?) or fr.activated? == true),
+        order_by: [desc: :inserted_at],
+        limit: ^n
+      )
+
+    case listed do
+      :follower -> Ecto.Query.from([follower: u] in query, where: not account_hidden(u.id))
+      :followee -> Ecto.Query.from([followee: u] in query, where: not account_hidden(u.id))
+    end
   end
 end

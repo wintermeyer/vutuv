@@ -72,6 +72,19 @@ defmodule VutuvWeb.UrlStructureTest do
       assert redirected_to(conn) == "/#{user.active_slug}"
       refute get_session(conn, :user_id)
     end
+
+    test "login stamps a live_socket_id and logout disconnects those sockets", %{conn: conn} do
+      # Without the disconnect broadcast, the embedded shell and any open
+      # live page keep the logged-in chrome and the user's PubSub events
+      # until the tab happens to reload.
+      {conn, user} = create_and_login_user(conn)
+      assert get_session(conn, :live_socket_id) == "users_socket:#{user.id}"
+
+      VutuvWeb.Endpoint.subscribe("users_socket:#{user.id}")
+      delete(conn, "/logout")
+
+      assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
+    end
   end
 
   describe "search" do

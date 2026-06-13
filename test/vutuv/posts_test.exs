@@ -962,6 +962,26 @@ defmodule Vutuv.PostsTest do
       assert Posts.reply_count(parent.id) == 0
     end
 
+    test "refuses a parent restricted after it was loaded (stale struct)" do
+      # The reply LiveView holds the parent from mount. If the author restricts
+      # the post afterwards, a reply submitted against the stale (denials: [])
+      # struct must still be refused — restriction is checked fresh from the DB.
+      replier = user()
+      author = user()
+      follow!(replier, author)
+      stale_parent = create_post!(author, %{body: "was public"})
+      assert stale_parent.denials == []
+
+      {:ok, _} =
+        Posts.update_post(stale_parent, %{
+          body: "now restricted",
+          denials: [%{"wildcard" => "non_followers"}]
+        })
+
+      assert {:error, :restricted} = Posts.create_reply(replier, stale_parent, %{body: "y"})
+      assert Posts.reply_count(stale_parent.id) == 0
+    end
+
     test "refuses a parent the replier cannot see" do
       replier = user()
 
