@@ -54,6 +54,10 @@ function overlayOpen() {
   return o && !o.classList.contains("hidden")
 }
 
+// The element focus was on before the dialog opened, so it can be restored
+// when the dialog closes (don't strand keyboard focus on a now-hidden node).
+let lastFocused = null
+
 function openOverlay() {
   // Close any open dropdown first so the menu doesn't sit under the modal.
   document
@@ -61,6 +65,7 @@ function openOverlay() {
     .forEach((m) => m.removeAttribute("open"))
   const o = overlay()
   if (!o) return
+  lastFocused = document.activeElement
   o.classList.remove("hidden")
   // Move focus into the dialog so Esc / Tab land there and screen readers
   // announce it.
@@ -68,7 +73,11 @@ function openOverlay() {
 }
 
 function closeOverlay() {
-  overlay()?.classList.add("hidden")
+  const o = overlay()
+  if (!o || o.classList.contains("hidden")) return
+  o.classList.add("hidden")
+  if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus()
+  lastFocused = null
 }
 
 let gPending = false
@@ -85,6 +94,14 @@ function handleKey(e) {
   if (e.key === "Escape") {
     if (overlayOpen()) closeOverlay()
     resetSequence()
+    return
+  }
+
+  // While the help dialog is open it is modal: keep Tab on its single control
+  // (the close button) so keyboard focus can't wander to the page behind it.
+  if (overlayOpen() && e.key === "Tab") {
+    e.preventDefault()
+    overlay().querySelector("[data-overlay-close]")?.focus()
     return
   }
 
