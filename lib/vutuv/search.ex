@@ -31,6 +31,11 @@ defmodule Vutuv.Search do
   @post_limit 10
   @post_scope_limit 25
 
+  # How long a settled search is kept (see prune_history/1). The search-history
+  # tables feed no user-facing feature; the window just bounds their growth and
+  # how long who-searched-what is retained. Change here to adjust the policy.
+  @history_retention_days 90
+
   @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
 
   # Operator keys (German first, English alias) → parsed field.
@@ -427,6 +432,32 @@ defmodule Vutuv.Search do
 
     Repo.one(from(q in SearchQuery, where: q.value == ^value))
     |> insert_or_update_query(params, requester_changeset(requester), results)
+  end
+
+  @doc """
+  Bounds the search-history tables, which are written on every settled search
+  but read by no feature and never trimmed otherwise. Drops queries not searched
+  within `@history_retention_days` (cascading their results and requesters
+  through the FK), and trims requester rows older than the window from queries
+  that are still active. Returns the deleted row counts. Run on a schedule by
+  `Vutuv.Search.HistorySweeper`; safe to call by hand for an immediate sweep.
+  """
+  def prune_history(now \\ NaiveDateTime.utc_now()) do
+    cutoff =
+      now
+      |> NaiveDateTime.add(-@history_retention_days * 24 * 3600, :second)
+      |> NaiveDateTime.truncate(:second)
+
+    # The per-search log (who searched what, when) grows with every search even
+    # for a popular query whose row stays fresh, so trim its old rows directly.
+    {requesters, _} =
+      Repo.delete_all(from(r in SearchQueryRequester, where: r.inserted_at < ^cutoff))
+
+    # Queries not searched within the window go entirely, taking their results
+    # and any remaining requesters with them (FK on_delete: :delete_all).
+    {queries, _} = Repo.delete_all(from(q in SearchQuery, where: q.updated_at < ^cutoff))
+
+    %{search_queries: queries, search_query_requesters: requesters}
   end
 
   defp insert_or_update_query(nil, params, requester_changeset, results) do
