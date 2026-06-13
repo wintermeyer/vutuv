@@ -299,6 +299,26 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Would you like to allow AI agents and LLMs to use your profile?"
   end
 
+  test "account settings are discoverable: a clear, confirmed Delete account control", %{
+    conn: conn
+  } do
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+
+    # The data-management cards are clearly labelled (not buried under a vague
+    # "Administration" heading), and the GDPR export is still reachable.
+    assert html =~ "Delete account"
+    assert html =~ "Download your data"
+
+    # The consequence is spelled out before the user acts...
+    assert html =~ "cannot be undone"
+    # ...and the control is the canonical red danger button with a confirm
+    # dialog, replacing the old ad-hoc link styling.
+    assert html =~ "button--danger"
+    assert html =~ "data-confirm"
+    refute html =~ "delete_link_button"
+  end
+
   # The two consents are independent booleans; a mixed combination must
   # land exactly as submitted (the full 2x2 table is unit-tested in
   # robots_txt_test.exs).

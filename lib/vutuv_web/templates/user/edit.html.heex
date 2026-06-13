@@ -25,11 +25,32 @@
     </section>
 
     <section class="card">
-      <h1><%= gettext "Administration" %></h1>
+      <h1><%= gettext "Your data" %></h1>
       <%!-- The GDPR data download: every piece of data vutuv stores about
             this account, as one JSON file. --%>
       <p><%= link gettext("Download your data"), to: ~p"/#{@user}/export" %></p>
-      <%= button gettext("Delete Account"), to: ~p"/#{@user}", method: "delete", class: "link_button delete_link_button" %>
+    </section>
+
+    <%!-- The destructive action gets its own clearly-labelled card (a "danger
+          zone"), the canonical red `.button--danger` control, a plain-language
+          warning, and a confirm dialog — so it is easy to find on the settings
+          page but hard to trigger by accident. --%>
+    <section class="card">
+      <h1><%= gettext "Delete account" %></h1>
+      <p class="editform__hint">
+        <%= gettext(
+          "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
+        ) %>
+      </p>
+      <.link
+        id="delete-account"
+        href={~p"/#{@user}"}
+        method="delete"
+        data-confirm={
+          gettext("Start deleting your account? We will email you a PIN to confirm.")
+        }
+        class="button button--danger"
+      ><%= gettext("Delete my account") %></.link>
     </section>
   </aside>
 </div>
