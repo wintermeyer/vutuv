@@ -9,7 +9,6 @@ defmodule VutuvWeb.UserController do
   import Ecto.Query
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.WorkExperience
@@ -184,12 +183,11 @@ defmodule VutuvWeb.UserController do
   def update(conn, %{"user" => user_params}) do
     user = conn.assigns[:user]
 
-    user
-    |> Repo.preload([:search_terms])
-    |> User.changeset(user_params)
-    |> update_search_terms(user_params)
-    |> Repo.update()
-    |> case do
+    # Go through Accounts.update_user/2 so the people-search index is rebuilt
+    # from the changeset's final field values, not the raw params. The old local
+    # helper rebuilt straight from params, so a partial submission missing a name
+    # key wiped every search term (issue #780).
+    case Accounts.update_user(user, user_params) do
       {:ok, user} ->
         conn
         |> put_flash(:info, gettext("User updated successfully."))
@@ -199,21 +197,6 @@ defmodule VutuvWeb.UserController do
         conn
         |> put_status(:unprocessable_entity)
         |> render("edit.html", user: user, changeset: changeset)
-    end
-  end
-
-  defp update_search_terms(changeset, params) do
-    first_name = Ecto.Changeset.get_change(changeset, :first_name)
-    last_name = Ecto.Changeset.get_change(changeset, :last_name)
-    # if first or last name is changed, update search terms
-    if first_name || last_name do
-      Ecto.Changeset.put_assoc(
-        changeset,
-        :search_terms,
-        SearchTerm.create_search_terms(params)
-      )
-    else
-      changeset
     end
   end
 

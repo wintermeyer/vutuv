@@ -281,6 +281,32 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get_by(User, @update_attrs)
   end
 
+  test "a partial update (only the first name) rebuilds search terms instead of wiping them",
+       %{conn: conn} do
+    # Regression for #780: the web update path used to rebuild search terms from
+    # the raw params, so a submission missing the last_name key fell through to
+    # create_search_terms(_) -> [] and erased the member from people-search. The
+    # fix routes the web path through Accounts.update_user/2, which rebuilds from
+    # the changeset's final field values like the API path.
+    attrs = %{
+      "emails" => %{"0" => %{"value" => "renamed@example.com"}},
+      "first_name" => "Jane",
+      "last_name" => "Doe"
+    }
+
+    {:ok, user} = Vutuv.Accounts.register_user(conn, attrs)
+    conn = login_via_pin(conn, "renamed@example.com")
+    assert search_term_values(user) != []
+
+    # Submit only the first name (no last_name key, as a partial/non-form post).
+    conn = put(conn, ~p"/#{user}", user: %{"first_name" => "Janet"})
+    assert redirected_to(conn) == ~p"/#{user}"
+
+    values = search_term_values(user)
+    refute values == []
+    assert "janet doe" in values
+  end
+
   test "updates the birthdate from the single native date field", %{conn: conn} do
     # The edit form now renders <input type="date">, which submits the date as a
     # single ISO 8601 string rather than the old date_select year/month/day map.
@@ -442,5 +468,12 @@ defmodule VutuvWeb.UserControllerTest do
     conn = post(conn, ~p"/account_deletion", account_deletion: %{pin: "000000"})
     assert html_response(conn, 200) =~ "PIN"
     assert Repo.get(User, user.id)
+  end
+
+  defp search_term_values(user) do
+    user
+    |> Ecto.assoc(:search_terms)
+    |> Repo.all()
+    |> Enum.map(& &1.value)
   end
 end
