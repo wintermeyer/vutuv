@@ -2,24 +2,24 @@
   <.form_error changeset={@changeset} />
   <%= if @conn.assigns[:tag] do %>
   <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
-    <%= label f, :name, class: "control-label" %>
-    <%= text_input f, :name, class: "form-control" %>
+    <%= label f, :name %>
+    <%= text_input f, :name %>
     <%= error_tag f, :name %>
   </div>
   <div class={"editform__field#{if error_tag(f, :slug), do: " editform__field--error"}"}>
-    <%= label f, :slug, class: "control-label" %>
-    <%= text_input f, :slug, class: "form-control" %>
+    <%= label f, :slug %>
+    <%= text_input f, :slug %>
     <%= error_tag f, :slug %>
   </div>
   <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
-    <%= label f, :description, class: "control-label" %>
-    <%= text_input f, :description, class: "form-control" %>
+    <%= label f, :description %>
+    <%= text_input f, :description %>
     <%= error_tag f, :description %>
   </div>
   <% else %>
   <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
-    <%= label f, :value, class: "control-label" %>
-    <%= text_input f, :value, class: "form-control" %>
+    <%= label f, :value %>
+    <%= text_input f, :value %>
     <%= error_tag f, :value %>
   </div>
   <% end %>

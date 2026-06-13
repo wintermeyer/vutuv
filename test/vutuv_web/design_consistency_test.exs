@@ -76,6 +76,50 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
+  # The legacy editforms are styled entirely by the `.editform` descendant
+  # selectors in components.css; the Bootstrap leftovers (`control-label`,
+  # `form-control`, the `<div class="select">` wrapper) and the dead
+  # `search-results` class on the listing pages were unstyled no-ops. They are
+  # gone now, and this guards against them creeping back in via copy-paste.
+  describe "no dead Bootstrap / leftover classes leak into legacy markup" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      %{conn: conn, user: user}
+    end
+
+    test "the editforms carry the editform structure, not Bootstrap classes", %{
+      conn: conn,
+      user: user
+    } do
+      for path <- [
+            ~p"/#{user}/slugs/new",
+            ~p"/#{user}/social_media_accounts/new",
+            ~p"/#{user}/phone_numbers/new"
+          ] do
+        html = conn |> get(path) |> html_response(200)
+
+        # The real, styled structure is still there.
+        assert html =~ ~s(class="editform"), "expected .editform on #{path}"
+        assert html =~ "editform__field", "expected .editform__field on #{path}"
+
+        # The unstyled Bootstrap leftovers are gone.
+        refute html =~ "control-label", "stray control-label on #{path}"
+        refute html =~ "form-control", "stray form-control on #{path}"
+        refute html =~ ~s(class="select"), "stray select wrapper on #{path}"
+      end
+    end
+
+    test "the followers listing keeps card-list, drops the dead search-results class", %{
+      conn: conn,
+      user: user
+    } do
+      html = conn |> get(~p"/#{user}/followers") |> html_response(200)
+
+      assert html =~ ~s(class="card-list")
+      refute html =~ "search-results"
+    end
+  end
+
   describe "error pages" do
     test "the 404 page is styled and links back home", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)

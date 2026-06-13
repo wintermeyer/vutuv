@@ -10,7 +10,7 @@
     <%= for tag <- @tags do %>
     <tr>
       <td>
-      <p style="word-wrap: break-word; max-width: 600px;"><%= link tag.name, to: ~p"/tags/#{tag}" %></p>
+      <p class="breakwrap"><%= link tag.name, to: ~p"/tags/#{tag}" %></p>
       </td>
       <td>
       </td>

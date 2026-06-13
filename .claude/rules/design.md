@@ -24,7 +24,9 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    thumbnail + truncating URL), `.card__tablewrap` (every in-card `<table>`
    sits in this overflow-x scroller so a wide table scrolls instead of being
    clipped by the card's `overflow:hidden` — `card_table_scroll_test.exs`
-   enforces it), `.card__empty` empty-state line, `.error-page` 404/403/500
+   enforces it), `.breakwrap` (break a long unbroken string and cap the line at a
+   readable measure — use it instead of an inline `word-wrap`/`max-width` style),
+   `.card__empty` empty-state line, `.error-page` 404/403/500
    card). They
    are styled **centrally** in `assets/css/components.css` — since the old vendored
    `legacy.css` was removed, that file is the **single source** for these classes,

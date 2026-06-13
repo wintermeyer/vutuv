@@ -8,9 +8,7 @@
   </div>
   <div class={"editform__field#{if error_tag(f, :number_type), do: " editform__field--error"}"}>
     <%= label f, :number_type, gettext("Type of Number") %>
-    <div class="select">
     <%= select f, :number_type, [{gettext("Choose One"), nil}, {gettext("Work"), "Work"}, {gettext("Cell"), "Cell"}, {gettext("Home"), "Home"}, {gettext("Fax"), "Fax"}]%>
-    </div>
     <%= error_tag f, :number_type %>
   </div>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />

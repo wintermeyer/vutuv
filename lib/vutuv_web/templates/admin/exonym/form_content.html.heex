@@ -2,16 +2,16 @@
   <.form_error changeset={@changeset} />
 
 <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
-  <%= label f, :value, class: "control-label" %>
-  <%= text_input f, :value, class: "form-control" %>
+  <%= label f, :value %>
+  <%= text_input f, :value %>
   <%= error_tag f, :value %>
 
-  <%= label f, :locale_id, class: "control-label" %>
-  <%= text_input f, :locale_id, class: "form-control" %>
+  <%= label f, :locale_id %>
+  <%= text_input f, :locale_id %>
   <%= error_tag f, :locale_id %>
 
-  <%= label f, :exonym_locale_id, class: "control-label" %>
-  <%= text_input f, :exonym_locale_id, class: "form-control" %>
+  <%= label f, :exonym_locale_id %>
+  <%= text_input f, :exonym_locale_id %>
   <%= error_tag f, :exonym_locale_id %>
 </div>
 

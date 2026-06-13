@@ -294,6 +294,13 @@ body.stretch main {
   overflow-x: auto;
 }
 
+/* Long unbroken strings (tag names, free-text descriptions) break instead of
+   blowing out their column, and the line is capped at a readable measure. */
+.breakwrap {
+  overflow-wrap: break-word;
+  max-width: 600px;
+}
+
 /* Empty `<aside></aside>` placeholders the legacy form pages emit add a phantom
    flex gap — hide them. */
 .card-list aside:empty {

@@ -4,10 +4,9 @@
   <.form_error changeset={@changeset} />
 
   <div class={"editform__field#{if error_tag(f, :active_slug), do: " editform__field--error"}"}>
-    <%= label(f, :active_slug, gettext("New username"), class: "control-label") %>
+    <%= label(f, :active_slug, gettext("New username")) %>
     <%= text_input(f, :active_slug,
       autofocus: true,
-      class: "form-control",
       maxlength: "15",
       autocomplete: "off",
       autocapitalize: "none",
