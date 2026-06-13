@@ -904,6 +904,50 @@ defmodule Vutuv.PostsTest do
       assert nested.reply_ref.parent_author_id == b.id
     end
 
+    test "a reply has no audience of its own: denials in attrs are ignored (issue #774)" do
+      replier = user()
+      parent = create_post!(user(), %{body: "original"})
+
+      # A reply inherits the parent's (public) audience; it cannot be
+      # independently restricted, so any denials in the params are dropped.
+      assert {:ok, %Post{} = reply} =
+               Posts.create_reply(replier, parent, %{
+                 body: "secret answer",
+                 denials: [%{"wildcard" => "everyone"}]
+               })
+
+      assert Repo.aggregate(from(d in PostDenial, where: d.post_id == ^reply.id), :count) == 0
+      refute Posts.restricted?(Repo.preload(reply, :denials))
+    end
+
+    test "the reply count excludes a moderation-frozen reply (issue #774)" do
+      parent = create_post!(user(), %{body: "root"})
+      {:ok, _visible} = Posts.create_reply(user(), parent, %{body: "shown"})
+      {:ok, frozen} = Posts.create_reply(user(), parent, %{body: "to be frozen"})
+
+      # Moderation freezes the reply: it must vanish from the public count, like
+      # it already does from the permalink thread (list_replies/scope_visible).
+      Repo.update_all(from(p in Post, where: p.id == ^frozen.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      assert Posts.reply_count(parent.id) == 1
+      assert %{replies: 1} = Posts.engagement_counts(parent.id)
+    end
+
+    test "the reply count excludes a legacy reply that carries its own denials" do
+      parent = create_post!(user(), %{body: "root"})
+      {:ok, _visible} = Posts.create_reply(user(), parent, %{body: "shown"})
+      {:ok, legacy} = Posts.create_reply(user(), parent, %{body: "pre-#774 restricted reply"})
+
+      # A reply created before this fix could carry denials; it must not be in
+      # the public count either.
+      Repo.insert!(%PostDenial{post_id: legacy.id, wildcard: "everyone"})
+
+      assert Posts.reply_count(parent.id) == 1
+      assert %{replies: 1} = Posts.engagement_counts(parent.id)
+    end
+
     test "refuses a restricted parent" do
       replier = user()
       author = user()
@@ -1035,23 +1079,22 @@ defmodule Vutuv.PostsTest do
       assert Enum.map(Posts.list_replies(parent, viewer), & &1.id) == [old.id, new.id]
     end
 
-    test "filters replies by viewer visibility; the raw count does not" do
+    test "the visible thread and the public count agree on a frozen reply (issue #774)" do
+      # Replies can no longer be independently restricted, so the only way one
+      # is hidden is a moderation freeze. The permalink thread and the public
+      # count must then agree — the drift the issue was about is gone.
       viewer = user()
       parent = create_post!(user(), %{body: "root"})
-      hidden_author = user()
 
-      {:ok, _hidden} =
-        Posts.create_reply(hidden_author, parent, %{
-          body: "secret",
-          denials: [%{"wildcard" => "everyone"}]
-        })
-
+      {:ok, frozen} = Posts.create_reply(user(), parent, %{body: "to be frozen"})
       {:ok, open} = Posts.create_reply(user(), parent, %{body: "open"})
 
+      Repo.update_all(from(p in Post, where: p.id == ^frozen.id),
+        set: [frozen_at: NaiveDateTime.utc_now(:second)]
+      )
+
       assert Enum.map(Posts.list_replies(parent, viewer), & &1.id) == [open.id]
-      # The author of the hidden reply still sees both.
-      assert length(Posts.list_replies(parent, hidden_author)) == 2
-      assert Posts.reply_count(parent.id) == 2
+      assert Posts.reply_count(parent.id) == 1
     end
 
     test "reply counts appear in the engagement counters" do

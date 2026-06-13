@@ -110,8 +110,9 @@ defmodule Vutuv.Posts do
 
   @doc """
   Creates a reply to `parent` for `author` — a normal post (same attrs,
-  validations and broadcasts as `create_post/2`) plus a
-  `Vutuv.Posts.PostReply` row naming the parent. Only **public** parents
+  validations and broadcasts as `create_post/2`, **except** it carries no
+  denials of its own: a reply inherits the parent's audience, issue #774) plus
+  a `Vutuv.Posts.PostReply` row naming the parent. Only **public** parents
   (no denials) accept replies — `{:error, :restricted}` otherwise — and the
   parent must be visible to the author (`{:error, :not_visible}`). While
   replies exist the parent's audience is pinned open, like with reposts.
@@ -126,9 +127,12 @@ defmodule Vutuv.Posts do
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
     with :ok <- check_reply_allowed(author, parent),
-         {:ok, denials} <- normalize_denials(author.id, fetch(attrs, :denials) || []),
          :ok <- check_image_count(image_ids),
-         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, denials, image_ids) do
+         # A reply has no audience of its own: it inherits the parent's, which
+         # check_reply_allowed already constrains to public. Any denials in the
+         # params are dropped, so the public reply count and the parent-author
+         # notification only ever concern content the author can see (issue #774).
+         {:ok, changeset} <- build_changeset(%Post{user_id: author.id}, attrs, [], image_ids) do
       case insert_post(changeset, image_ids, parent) do
         {:ok, post} ->
           post = preload_post(post)
@@ -694,9 +698,20 @@ defmodule Vutuv.Posts do
           ),
         reposts:
           fragment("(SELECT count(*) FROM post_reposts r WHERE r.post_id = ?)", unquote(post).id),
+        # Only publicly-visible replies, matching the anonymous list_replies /
+        # scope_visible view: the reply post must still exist, be unfrozen and
+        # carry no denials. A reply can no longer be restricted apart from its
+        # parent (issue #774), but a moderation-frozen or pre-#774 denied reply
+        # must not inflate the public count.
         replies:
           fragment(
-            "(SELECT count(*) FROM post_replies r WHERE r.parent_post_id = ?)",
+            """
+            (SELECT count(*) FROM post_replies r
+               JOIN posts rp ON rp.id = r.post_id
+              WHERE r.parent_post_id = ?
+                AND rp.frozen_at IS NULL
+                AND NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = rp.id))
+            """,
             unquote(post).id
           )
       }
@@ -712,9 +727,22 @@ defmodule Vutuv.Posts do
     Repo.one(query) || %{likes: 0, bookmarks: 0, reposts: 0, replies: 0}
   end
 
-  @doc "How many replies a post has (raw row count, like the other counters)."
+  @doc """
+  How many publicly-visible replies a post has: the reply post must still
+  exist, be unfrozen and carry no denials, matching the anonymous
+  `list_replies/3` thread (issue #774). The action bar's `engagement_counts/1`
+  applies the same filter.
+  """
   def reply_count(post_id) do
-    Repo.aggregate(from(r in PostReply, where: r.parent_post_id == ^post_id), :count)
+    Repo.one(
+      from(r in PostReply,
+        join: rp in Post,
+        on: rp.id == r.post_id,
+        where: r.parent_post_id == ^post_id and is_nil(rp.frozen_at),
+        where: fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", rp.id),
+        select: count(r.id)
+      )
+    )
   end
 
   @doc """

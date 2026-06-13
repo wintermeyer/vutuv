@@ -389,11 +389,13 @@ defmodule VutuvWeb.PostControllerTest do
 
       {:ok, _old} = Posts.create_reply(replier, parent, %{body: "older answer"})
 
-      {:ok, _hidden} =
-        Posts.create_reply(insert_activated_user(), parent, %{
-          body: "secret answer",
-          denials: [%{"wildcard" => "everyone"}]
-        })
+      # A reply inherits the parent's audience now (issue #774); the only way one
+      # is hidden from the thread is a moderation freeze.
+      {:ok, hidden} = Posts.create_reply(insert_activated_user(), parent, %{body: "secret answer"})
+
+      hidden
+      |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+      |> Vutuv.Repo.update!()
 
       {:ok, _new} = Posts.create_reply(replier, parent, %{body: "newer answer"})
 

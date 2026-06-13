@@ -48,9 +48,10 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       tags: Enum.map(post.tags, & &1.name),
       images: Enum.map(post.images, &image_entry/1),
       in_reply_to: in_reply_to(post),
-      # The anonymous doc lists only anonymous-visible replies, so the count
-      # must match — Posts.reply_count/1 counts restricted replies too and
-      # would over-advertise.
+      # The anonymous doc lists only anonymous-visible replies; count the loaded
+      # rows so it matches exactly. (Posts.reply_count/1 now also excludes
+      # frozen / denied replies (issue #774), but counting `replies` here avoids
+      # a second query and can never drift from the list.)
       reply_count: length(replies),
       replies: Enum.map(replies, &reply_entry/1)
     })

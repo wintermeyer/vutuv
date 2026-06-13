@@ -166,16 +166,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     {:ok, _} = Vutuv.Posts.create_reply(visible, post, %{"body" => "Sound point."})
 
     hidden = insert_activated_user(first_name: "Han", last_name: "Hidden")
+    {:ok, frozen} = Vutuv.Posts.create_reply(hidden, post, %{"body" => "Secret reply."})
 
-    {:ok, _} =
-      Vutuv.Posts.create_reply(hidden, post, %{
-        "body" => "Secret reply.",
-        "denials" => [%{"wildcard" => "non_followers"}]
-      })
+    # A reply can no longer be restricted apart from its parent (issue #774);
+    # the only way one is hidden is a moderation freeze.
+    frozen
+    |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+    |> Vutuv.Repo.update!()
 
     doc = Jason.decode!(get(build_conn(), "/drift_tester/posts/#{post.id}.json").resp_body)
 
-    # The restricted reply is neither listed nor counted in the anonymous doc.
+    # The frozen reply is neither listed nor counted in the anonymous doc.
     assert doc["reply_count"] == 1
     assert length(doc["replies"]) == 1
     refute get(build_conn(), "/drift_tester/posts/#{post.id}.txt").resp_body =~ "Secret reply"
