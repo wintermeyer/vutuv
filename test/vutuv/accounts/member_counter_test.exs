@@ -29,12 +29,36 @@ defmodule Vutuv.Accounts.MemberCounterTest do
       assert MemberCounter.count() == before + 1
     end
 
-    test "registering a user increments the live member count" do
+    test "an unconfirmed sign-up does not tick the counter; confirming it does (issue #781)" do
       before = MemberCounter.count()
 
-      assert {:ok, _user} = Accounts.register_user(build_conn(), @valid_registration)
+      assert {:ok, user} = Accounts.register_user(build_conn(), @valid_registration)
+      # The advertised total counts confirmed members, so a sign-up that has not
+      # confirmed its PIN must not move the live counter.
+      assert MemberCounter.count() == before
+      refute user.activated?
 
+      # First login confirms the account (activated? false -> true) and counts it.
+      Accounts.login(build_conn(), user)
       assert MemberCounter.count() == before + 1
+    end
+
+    test "a returning login of an already-confirmed member does not re-count" do
+      user = insert(:activated_user)
+      before = MemberCounter.count()
+
+      Accounts.login(build_conn(), user)
+
+      assert MemberCounter.count() == before
+    end
+
+    test "a legacy nil-activated account is not re-counted when it logs in" do
+      user = insert(:user, activated?: nil)
+      before = MemberCounter.count()
+
+      Accounts.login(build_conn(), user)
+
+      assert MemberCounter.count() == before
     end
   end
 
@@ -86,7 +110,7 @@ defmodule Vutuv.Accounts.MemberCounterTest do
 
   describe "reconciling from the database" do
     test "seeds the cell from the authoritative user count" do
-      insert_list(3, :user)
+      insert_list(3, :activated_user)
 
       ref = :atomics.new(1, signed: false)
       topic = "member_count:reconcile:#{System.unique_integer([:positive])}"

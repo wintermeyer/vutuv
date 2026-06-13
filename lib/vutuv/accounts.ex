@@ -36,9 +36,9 @@ defmodule Vutuv.Accounts do
 
         user = Repo.preload(user, user_tags: [:tag])
         maybe_fetch_gravatar(user)
-        # Lock-free bump of the live "number of members" counter shown on the
-        # landing page; never a per-sign-up COUNT, so it stays cheap in a spike.
-        MemberCounter.increment()
+        # The landing-page counter is bumped on confirmation, not here (issue
+        # #781) — see activate_user/1. A sign-up that never confirms is swept by
+        # delete_unconfirmed_registrations/1 and must not inflate the total.
         {:ok, user}
 
       error ->
@@ -240,7 +240,20 @@ defmodule Vutuv.Accounts do
     |> Conn.delete_session(:user_id)
   end
 
-  defp activate_user(user) do
+  # A genuine first confirmation (activated? false -> true) is when a sign-up
+  # becomes a real member, so the live counter ticks up here, not at
+  # registration (issue #781). A legacy `nil`-activated account (already in the
+  # count) or an already-activated returning login falls through the second
+  # clause and is never re-counted; the cast is a no-op for an already-true row.
+  defp activate_user(%User{activated?: false} = user) do
+    activated = do_activate(user)
+    MemberCounter.increment()
+    activated
+  end
+
+  defp activate_user(user), do: do_activate(user)
+
+  defp do_activate(user) do
     user
     |> Ecto.Changeset.cast(%{activated?: true}, [:activated?])
     |> Repo.update!()
@@ -624,8 +637,20 @@ defmodule Vutuv.Accounts do
 
   # ── User CRUD ──
 
+  @doc """
+  The authoritative "number of members" the landing-page counter reconciles
+  against: confirmed members only. Never-confirmed registrations
+  (`activated? == false`) are excluded so the advertised total matches every
+  other "real member" gate (followers, tags, endorsements); a legacy
+  `nil`-activated account still counts (issue #781).
+  """
   def count_users do
-    Repo.one(from(u in User, select: count(u.id)))
+    Repo.one(
+      from(u in User,
+        where: is_nil(u.activated?) or u.activated? == true,
+        select: count(u.id)
+      )
+    )
   end
 
   @doc """

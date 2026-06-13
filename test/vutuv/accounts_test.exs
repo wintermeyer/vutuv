@@ -98,17 +98,20 @@ defmodule Vutuv.AccountsTest do
     test "rebuilds the people-search index when the name changes (API rename stays in sync)" do
       user = insert(:user, first_name: "Jane", last_name: "Doe")
 
-      for cs <- Vutuv.Accounts.SearchTerm.create_search_terms(%{
-                  "first_name" => "Jane",
-                  "last_name" => "Doe"
-                }) do
+      for cs <-
+            Vutuv.Accounts.SearchTerm.create_search_terms(%{
+              "first_name" => "Jane",
+              "last_name" => "Doe"
+            }) do
         cs |> Ecto.Changeset.put_change(:user_id, user.id) |> Repo.insert!()
       end
 
       {:ok, _} = Accounts.update_user(user, %{"last_name" => "Smith"})
 
       terms =
-        Repo.all(from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id, select: s.value))
+        Repo.all(
+          from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id, select: s.value)
+        )
         |> Enum.map(&String.downcase/1)
 
       assert Enum.any?(terms, &String.contains?(&1, "smith"))
@@ -268,10 +271,19 @@ defmodule Vutuv.AccountsTest do
   end
 
   describe "count_users/0" do
-    test "returns the count of users" do
+    test "counts confirmed members (activated, or legacy nil-activated)" do
+      base = Accounts.count_users()
+      insert(:activated_user)
+      insert(:activated_user)
+      insert(:user, activated?: nil)
+      assert Accounts.count_users() == base + 3
+    end
+
+    test "excludes never-confirmed registrations (activated? == false, issue #781)" do
+      base = Accounts.count_users()
       insert(:user)
       insert(:user)
-      assert Accounts.count_users() >= 2
+      assert Accounts.count_users() == base
     end
   end
 
