@@ -5521,3 +5521,23 @@ msgstr "Beitrag schreiben"
 #, elixir-autogen, elixir-format
 msgid "Your profile"
 msgstr "Ihr Profil"
+
+#: lib/vutuv_web/templates/user/show.html.heex:222
+#, elixir-autogen, elixir-format
+msgid "Complete your profile"
+msgstr "Profil vervollständigen"
+
+#: lib/vutuv_web/templates/user/show.html.heex:228
+#, elixir-autogen, elixir-format
+msgid "A few quick steps so people can find and recognize you."
+msgstr "Ein paar schnelle Schritte, damit andere Sie finden und erkennen."
+
+#: lib/vutuv_web/controllers/user_controller.ex:159
+#, elixir-autogen, elixir-format
+msgid "Add a profile photo"
+msgstr "Profilfoto hinzufügen"
+
+#: lib/vutuv_web/controllers/user_controller.ex:160
+#, elixir-autogen, elixir-format
+msgid "Add a headline"
+msgstr "Überschrift hinzufügen"

@@ -5517,3 +5517,23 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Your profile"
 msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:222
+#, elixir-autogen, elixir-format
+msgid "Complete your profile"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:228
+#, elixir-autogen, elixir-format
+msgid "A few quick steps so people can find and recognize you."
+msgstr ""
+
+#: lib/vutuv_web/controllers/user_controller.ex:159
+#, elixir-autogen, elixir-format
+msgid "Add a profile photo"
+msgstr ""
+
+#: lib/vutuv_web/controllers/user_controller.ex:160
+#, elixir-autogen, elixir-format
+msgid "Add a headline"
+msgstr ""

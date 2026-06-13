@@ -77,11 +77,13 @@ defmodule VutuvWeb.UserController do
         Vutuv.Social.get_block(conn.assigns[:current_user].id, user.id)
       end
 
+    posts_total = Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user])
+
     conn
     |> assign(:viewer_block, viewer_block)
     |> assign(:emails, emails)
     |> assign(:posts, Vutuv.Posts.profile_posts(user, conn.assigns[:current_user]))
-    |> assign(:posts_total, Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user]))
+    |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
     |> assign(:work_experience, user.work_experiences)
     |> assign(:follower_count, Vutuv.Social.follower_count(user))
@@ -91,7 +93,7 @@ defmodule VutuvWeb.UserController do
     |> assign(:user, user)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
-    |> assign(:display_welcome_message, new_user?(user))
+    |> assign(:completion_steps, completion_steps(user, posts_total))
     |> assign(:recommended_users, recommended_users)
     |> assign(:followers, followers)
     |> assign(:followees, followees)
@@ -147,11 +149,28 @@ defmodule VutuvWeb.UserController do
 
   defp count_assoc(user, assoc), do: Repo.aggregate(Ecto.assoc(user, assoc), :count)
 
-  defp new_user?(user) do
-    inserted_at = :calendar.datetime_to_gregorian_seconds(NaiveDateTime.to_erl(user.inserted_at))
-    now = :calendar.datetime_to_gregorian_seconds(:calendar.universal_time())
-    now - inserted_at <= 600
+  # The new-member onboarding checklist: the few highest-impact steps that make a
+  # profile findable and recognizable. Each links straight to where it is done;
+  # the profile shows it to the owner only while something is still undone, and it
+  # disappears once every step is done. Replaces the old 10-minute welcome note,
+  # which vanished long before most people finished setting up.
+  defp completion_steps(user, posts_total) do
+    [
+      %{label: gettext("Add a profile photo"), done: present?(user.avatar), href: ~p"/#{user}/edit"},
+      %{label: gettext("Add a headline"), done: present?(user.headline), href: ~p"/#{user}/edit"},
+      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/#{user}/tags/new"},
+      %{
+        label: gettext("Add work experience"),
+        done: user.work_experiences != [],
+        href: ~p"/#{user}/work_experiences/new"
+      },
+      %{label: gettext("Write your first post"), done: posts_total > 0, href: ~p"/feed"}
+    ]
   end
+
+  defp present?(nil), do: false
+  defp present?(value) when is_binary(value), do: String.trim(value) != ""
+  defp present?(_), do: true
 
   defp recommended_users(user) do
     case first_tag(user) do

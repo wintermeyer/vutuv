@@ -109,6 +109,48 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
     end
   end
 
+  describe "profile completion checklist" do
+    # The owner's onboarding nudge: a few high-impact steps, shown only while
+    # something is still undone, and gone once the profile is complete. It is
+    # owner-only (a visitor never sees it).
+
+    test "a new owner sees the checklist with every step still to do", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "Complete your profile"
+      assert html =~ "Add a profile photo"
+      assert html =~ "Add a headline"
+      # A blank factory profile has none of the five done.
+      assert html =~ "0/5"
+    end
+
+    test "the checklist disappears once every step is done", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, user} =
+        Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
+
+      insert(:user_tag, user: user, tag: insert(:tag))
+      insert(:work_experience, user: user)
+      insert(:post, user: user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      refute html =~ "Complete your profile"
+    end
+
+    test "a visitor never sees the owner's completion checklist", %{conn: conn} do
+      {conn, _visitor} = create_and_login_user(conn)
+      other = insert_activated_user()
+
+      html = conn |> get(~p"/#{other}") |> html_response(200)
+
+      refute html =~ "Complete your profile"
+    end
+  end
+
   describe "edit forms carry the delete action" do
     # Each owned resource's edit form renders a delete control (a
     # CSRF-protected `data-method="delete"` link with a confirm prompt,
