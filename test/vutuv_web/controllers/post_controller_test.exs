@@ -150,12 +150,12 @@ defmodule VutuvWeb.PostControllerTest do
 
     test "every other denial shape is a plain 404, never a teaser", %{conn: conn} do
       user = insert_activated_user()
-      group = insert(:group, user: user, name: "Geheimbund")
+      other = insert_activated_user()
 
       post =
         create_post!(user, %{
           body: "x",
-          denials: [%{"wildcard" => "non_followers"}, %{"group_id" => group.id}]
+          denials: [%{"wildcard" => "non_followers"}, %{"denied_user_id" => other.id}]
         })
 
       conn = get(conn, Posts.path(post))
@@ -165,20 +165,20 @@ defmodule VutuvWeb.PostControllerTest do
 
     test "the deny list shows to the author and never to other readers" do
       {author_conn, author} = create_and_login_user(fresh_conn())
-      group = insert(:group, user: author, name: "Geheimbund")
-      post = create_post!(author, %{body: "visible", denials: [%{"group_id" => group.id}]})
+      denied = insert_activated_user(first_name: "Verboten", last_name: "Mensch")
+      post = create_post!(author, %{body: "visible", denials: [%{"denied_user_id" => denied.id}]})
 
       own_view = get(author_conn, Posts.path(post))
       assert html_response(own_view, 200) =~ "Hidden from"
-      assert own_view.resp_body =~ "Geheimbund"
+      assert own_view.resp_body =~ "Verboten"
 
-      # A permitted other reader (logged-in, not in the group) sees the post
-      # but neither the summary nor the group name.
+      # A permitted other reader (logged-in, not the denied user) sees the post
+      # but neither the summary nor the denied name.
       {reader_conn, _reader} = create_and_login_user(fresh_conn(), @other_login_attrs)
       reader_view = get(reader_conn, Posts.path(post))
       assert html_response(reader_view, 200) =~ "visible"
       refute reader_view.resp_body =~ "Hidden from"
-      refute reader_view.resp_body =~ "Geheimbund"
+      refute reader_view.resp_body =~ "Verboten"
     end
   end
 

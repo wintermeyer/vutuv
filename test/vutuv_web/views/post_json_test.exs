@@ -10,7 +10,7 @@ defmodule VutuvWeb.PostJSONTest do
 
   test "serializes a post with images, tags and the author's audience" do
     author = insert(:user, activated?: true)
-    group = insert(:group, user: author, name: "Inner circle")
+    denied = insert(:user, activated?: true)
     image = insert(:post_image, user: author, post: nil, alt: "Sunset", width: 400, height: 300)
 
     {:ok, post} =
@@ -18,7 +18,7 @@ defmodule VutuvWeb.PostJSONTest do
         body: "**Hi** there",
         tags: "elixir",
         image_ids: [image.id],
-        denials: [%{"group_id" => group.id}, %{"wildcard" => "non_followers"}]
+        denials: [%{"denied_user_id" => denied.id}, %{"wildcard" => "non_followers"}]
       })
 
     json = PostJSON.post(post, author)
@@ -38,7 +38,7 @@ defmodule VutuvWeb.PostJSONTest do
     assert img.urls.feed == "/post_images/#{image.token}/feed.avif"
 
     assert %{default: "allow", deny: deny} = json.audience
-    assert %{type: "group", name: "Inner circle"} = Enum.find(deny, &(&1.type == "group"))
+    assert %{type: "user"} = Enum.find(deny, &(&1.type == "user"))
     assert %{type: "wildcard", value: "non_followers"} = Enum.find(deny, &(&1.type == "wildcard"))
   end
 

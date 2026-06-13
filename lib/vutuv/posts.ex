@@ -55,7 +55,6 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostTag
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
-  alias Vutuv.Social.Group
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
 
@@ -79,8 +78,8 @@ defmodule Vutuv.Posts do
 
     * `:body` — markdown, at most `Post.max_body_length/0` chars; may be
       blank when images are attached
-    * `:denials` — list of `%{"group_id" => id}` / `%{"denied_user_id" => id}`
-      / `%{"wildcard" => w}` maps (see `Vutuv.Posts.PostDenial`)
+    * `:denials` — list of `%{"denied_user_id" => id}` / `%{"wildcard" => w}`
+      maps (see `Vutuv.Posts.PostDenial`)
     * `:tags` — comma-separated string or list of tag names (find-or-create,
       case-insensitive; invalid values are skipped, at most
       `max_tags_per_post/0` are kept)
@@ -338,7 +337,6 @@ defmodule Vutuv.Posts do
 
   defp normalize_denial(author_id, denial) when is_map(denial) do
     targets = [
-      group_id: denial |> fetch(:group_id) |> parse_id(),
       denied_user_id: denial |> fetch(:denied_user_id) |> parse_id(),
       wildcard: fetch(denial, :wildcard)
     ]
@@ -351,13 +349,6 @@ defmodule Vutuv.Posts do
   end
 
   defp normalize_denial(_author_id, _other), do: :error
-
-  defp validate_denial_target(author_id, {:group_id, group_id}) do
-    case Repo.get(Group, group_id) do
-      %Group{user_id: ^author_id} -> {:ok, %{group_id: group_id}}
-      _ -> :error
-    end
-  end
 
   defp validate_denial_target(author_id, {:denied_user_id, denied_user_id}) do
     if denied_user_id != author_id &&
@@ -456,17 +447,6 @@ defmodule Vutuv.Posts do
                type(^viewer_id, UUIDv7),
                type(^viewer_id, UUIDv7),
                type(^author_id, UUIDv7)
-             )) or
-          (not is_nil(d.group_id) and
-             fragment(
-               """
-               EXISTS (SELECT 1 FROM memberships m
-                       JOIN follows c ON c.id = m.follow_id
-                       WHERE m.group_id = ? AND c.follower_id = ? AND c.followee_id = ?)
-               """,
-               d.group_id,
-               type(^author_id, UUIDv7),
-               type(^viewer_id, UUIDv7)
              ))
     )
   end
@@ -505,11 +485,6 @@ defmodule Vutuv.Posts do
                         WHERE c.status = 'accepted'
                           AND ((c.user_a_id = ? AND c.user_b_id = ?)
                             OR (c.user_a_id = ? AND c.user_b_id = ?))))
-                  OR (d.group_id IS NOT NULL AND EXISTS (
-                        SELECT 1 FROM memberships m
-                        JOIN follows c ON c.id = m.follow_id
-                        WHERE m.group_id = d.group_id
-                          AND c.follower_id = ? AND c.followee_id = ?))
                 )
             )
             """,
@@ -522,9 +497,7 @@ defmodule Vutuv.Posts do
             p.user_id,
             type(^viewer_id, UUIDv7),
             type(^viewer_id, UUIDv7),
-            p.user_id,
-            p.user_id,
-            type(^viewer_id, UUIDv7)
+            p.user_id
           )
     )
     |> scope_unfrozen(viewer)
@@ -1192,7 +1165,7 @@ defmodule Vutuv.Posts do
     [
       :user,
       :images,
-      denials: [:group, :denied_user],
+      denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
       reply_ref: [:parent_author, parent_post: :user]
     ]

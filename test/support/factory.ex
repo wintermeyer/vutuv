@@ -179,16 +179,6 @@ defmodule Vutuv.Factory do
     connection
   end
 
-  def group_factory do
-    %Vutuv.Social.Group{
-      name: sequence(:group_name, &"Group #{&1}")
-    }
-  end
-
-  def membership_factory do
-    %Vutuv.Social.Membership{}
-  end
-
   def tag_factory do
     %Vutuv.Tags.Tag{
       name: sequence(:tag_name, &"Tag Name #{&1}"),

@@ -177,7 +177,7 @@ defmodule Vutuv.Export do
   end
 
   defp denial(d) do
-    %{wildcard: d.wildcard, group_id: d.group_id, denied_user_id: d.denied_user_id}
+    %{wildcard: d.wildcard, denied_user_id: d.denied_user_id}
   end
 
   # Likes / bookmarks / reposts share the shape {post, user, inserted_at};

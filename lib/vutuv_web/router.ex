@@ -120,11 +120,7 @@ defmodule VutuvWeb.Router do
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 
-    resources("/memberships", MembershipController, only: [:create, :delete])
-
-    resources "/follows", FollowController, only: [:create, :delete] do
-      resources("/memberships", MembershipController, only: [:create, :delete])
-    end
+    resources "/follows", FollowController, only: [:create, :delete]
 
     # The mutual-connection lifecycle (the list lives at /:slug/connections in
     # the profile scope below). create = request, then accept/decline/withdraw.
@@ -486,7 +482,6 @@ defmodule VutuvWeb.Router do
       # availability check behind the form's as-you-type verdict.
       get("/slugs/availability", SlugController, :availability)
       resources("/slugs", SlugController, only: [:new, :create])
-      resources("/groups", GroupController)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])

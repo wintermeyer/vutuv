@@ -15,9 +15,6 @@ defmodule Vutuv.Social.Follow do
     belongs_to(:follower, Vutuv.Accounts.User)
     belongs_to(:followee, Vutuv.Accounts.User)
 
-    has_many(:memberships, Vutuv.Social.Membership)
-    has_many(:groups, through: [:memberships, :group])
-
     timestamps()
   end
 

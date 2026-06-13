@@ -16,17 +16,6 @@ defmodule VutuvWeb.DesignConsistencyTest do
       %{conn: conn, user: user}
     end
 
-    test "groups index uses the standard page chrome", %{conn: conn, user: user} do
-      insert(:group, user: user)
-      conn = get(conn, ~p"/#{user}/groups")
-      html = html_response(conn, 200)
-
-      assert html =~ "profile-header"
-      assert html =~ "breadcrumbs"
-      assert html =~ ~s(class="card)
-      refute html =~ "pure-button"
-    end
-
     # The shared `<.page_header>` component replaces the `.profile-header` h1 +
     # `.breadcrumbs` boilerplate that opened ~47 controller pages. It must keep the
     # exact legacy anatomy (`.profile-header > .profile-header__info > h1` and the

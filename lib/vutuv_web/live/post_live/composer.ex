@@ -12,8 +12,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   **Audience** is a preset select (public / followers / connections / only me)
   backed by the deny model; "Custom…" opens the *Hide from…* sheet with the
-  author's groups (live member counts), the wildcards, and a person
-  typeahead for per-user denials. Any restriction also closes anonymous
+  wildcards and a person typeahead for per-user denials. Any restriction also closes anonymous
   access — the sheet says so, and `Vutuv.Posts` enforces it. The last-used
   preset stays selected after posting (people who post followers-only post
   followers-only).
@@ -43,7 +42,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp init_composer(socket) do
     post = socket.assigns[:post]
-    {preset, groups, wildcards, denied_users} = derive_audience(post)
+    {preset, wildcards, denied_users} = derive_audience(post)
 
     socket
     |> assign(:composer_ready?, true)
@@ -60,10 +59,8 @@ defmodule VutuvWeb.PostLive.Composer do
     |> assign(:images, (post && post.images) || [])
     |> assign(:alts, %{})
     |> assign(:preset, preset)
-    |> assign(:deny_groups, groups)
     |> assign(:deny_wildcards, wildcards)
     |> assign(:denied_users, denied_users)
-    |> assign(:groups, Vutuv.Social.groups_with_member_counts(socket.assigns.current_user))
     |> assign(:user_search, "")
     |> assign(:user_results, [])
     |> assign(:error, nil)
@@ -82,26 +79,25 @@ defmodule VutuvWeb.PostLive.Composer do
   # Edit mode: recognize the quick presets in the stored denials; anything
   # else (including a lone "non_followees", which no longer has its own preset)
   # is a custom audience.
-  defp derive_audience(nil), do: {"public", MapSet.new(), MapSet.new(), []}
+  defp derive_audience(nil), do: {"public", MapSet.new(), []}
 
   defp derive_audience(%Post{denials: denials}) do
     case denials do
       [] ->
-        {"public", MapSet.new(), MapSet.new(), []}
+        {"public", MapSet.new(), []}
 
       [%{wildcard: "non_followers"}] ->
-        {"followers", MapSet.new(), MapSet.new(), []}
+        {"followers", MapSet.new(), []}
 
       [%{wildcard: "non_connections"}] ->
-        {"connections", MapSet.new(), MapSet.new(), []}
+        {"connections", MapSet.new(), []}
 
       [%{wildcard: "everyone"}] ->
-        {"only_me", MapSet.new(), MapSet.new(), []}
+        {"only_me", MapSet.new(), []}
 
       denials ->
         {
           "custom",
-          MapSet.new(for d <- denials, d.group_id, do: d.group_id),
           MapSet.new(for d <- denials, d.wildcard, do: d.wildcard),
           for(d <- denials, d.denied_user_id, do: d.denied_user)
         }
@@ -126,7 +122,6 @@ defmodule VutuvWeb.PostLive.Composer do
     socket =
       if preset == "custom" do
         socket
-        |> assign(:deny_groups, checked_keys(params["deny_groups"]))
         |> assign(:deny_wildcards, checked_keys(params["deny_wildcards"]))
         |> run_user_search(params["user_search"] || "")
       else
@@ -202,7 +197,6 @@ defmodule VutuvWeb.PostLive.Composer do
     socket =
       socket
       |> assign(:preset, if(params["preset"] in @presets, do: params["preset"], else: "public"))
-      |> assign(:deny_groups, checked_keys(params["deny_groups"]))
       |> assign(:deny_wildcards, checked_keys(params["deny_wildcards"]))
 
     attrs = %{
@@ -385,8 +379,7 @@ defmodule VutuvWeb.PostLive.Composer do
         [%{"wildcard" => "everyone"}]
 
       "custom" ->
-        Enum.map(MapSet.to_list(assigns.deny_groups), &%{"group_id" => &1}) ++
-          Enum.map(MapSet.to_list(assigns.deny_wildcards), &%{"wildcard" => &1}) ++
+        Enum.map(MapSet.to_list(assigns.deny_wildcards), &%{"wildcard" => &1}) ++
           Enum.map(assigns.denied_users, &%{"denied_user_id" => &1.id})
     end
   end
@@ -426,11 +419,6 @@ defmodule VutuvWeb.PostLive.Composer do
   end
 
   defp custom_denial_labels(assigns) do
-    group_labels =
-      for {group, count} <- assigns.groups, MapSet.member?(assigns.deny_groups, group.id) do
-        "#{group.name} (#{count})"
-      end
-
     wildcard_labels =
       for wildcard <- MapSet.to_list(assigns.deny_wildcards) do
         wildcard_label(wildcard)
@@ -438,7 +426,7 @@ defmodule VutuvWeb.PostLive.Composer do
 
     user_labels = Enum.map(assigns.denied_users, &full_name/1)
 
-    group_labels ++ wildcard_labels ++ user_labels
+    wildcard_labels ++ user_labels
   end
 
   defp wildcard_label(wildcard), do: VutuvWeb.PostComponents.wildcard_label(wildcard)
@@ -597,23 +585,6 @@ defmodule VutuvWeb.PostLive.Composer do
             <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
               {gettext("Hide this post from…")}
             </h3>
-
-            <div :if={@groups != []} class="mt-3 space-y-1.5">
-              <label
-                :for={{group, count} <- @groups}
-                class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200"
-              >
-                <input
-                  type="checkbox"
-                  name={"post[deny_groups][#{group.id}]"}
-                  value="true"
-                  checked={MapSet.member?(@deny_groups, group.id)}
-                  class="rounded border-slate-300"
-                />
-                {group.name}
-                <span class="text-xs text-slate-400">({count})</span>
-              </label>
-            </div>
 
             <div class="mt-3 space-y-1.5">
               <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200">

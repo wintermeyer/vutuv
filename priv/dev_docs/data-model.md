@@ -125,8 +125,6 @@ excluded (union). Denial shapes:
 * `{"wildcard": "non_connections"}` — only your connections.
 * `{"wildcard": "everyone"}` — only you (a private note).
 * `{"denied_user_id": "<member id>"}` — everyone but this member.
-* `{"group_id": "<your group id>"}` — members of this group are
-  **excluded** (a denial, like everything else in the list).
 
 Once a post has replies or reposts, its audience can no longer be
 restricted (`409`, `reason: visibility_locked`) — people who interacted

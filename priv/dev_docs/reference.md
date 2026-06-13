@@ -237,8 +237,8 @@ auth -X POST $API/posts \
 
 Audiences are **deny-based**: no `denials` means public. Each denial is
 one of `{"wildcard": "non_connections" | "non_followers" | "non_followees"
-| "logged_out" | "everyone"}`, `{"denied_user_id": "<user id>"}` or
-`{"group_id": "<your group id>"}` — semantics in
+| "logged_out" | "everyone"}` or `{"denied_user_id": "<user id>"}`, with
+semantics in
 [the data model](/developers/data-model#audiences-the-denial-model).
 A connections-only post:
 

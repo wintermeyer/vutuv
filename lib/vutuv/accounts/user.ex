@@ -54,7 +54,6 @@ defmodule Vutuv.Accounts.User do
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)
     has_many(:search_query_results, Vutuv.Search.SearchQueryResult)
     has_many(:login_pins, Vutuv.Accounts.LoginPin)
-    has_many(:groups, Vutuv.Social.Group)
     has_many(:emails, Vutuv.Accounts.Email)
     has_many(:user_tags, Vutuv.Tags.UserTag)
     has_many(:slug_changes, Vutuv.Accounts.SlugChange)

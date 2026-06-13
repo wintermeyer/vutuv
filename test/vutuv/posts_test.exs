@@ -14,13 +14,6 @@ defmodule Vutuv.PostsTest do
   # the default test user is.
   defp user(attrs \\ []), do: insert(:activated_user, attrs)
 
-  defp group_with_member(author, member) do
-    group = insert(:group, user: author)
-    follow = follow!(author, member)
-    insert(:membership, follow: follow, group: group)
-    group
-  end
-
   # Timeline ordering ties at second precision; shift a post into the past so
   # order assertions stay deterministic.
   defp backdate_post!(post, seconds) do
@@ -129,35 +122,22 @@ defmodule Vutuv.PostsTest do
       assert kept == expected
     end
 
-    test "stores wildcard, group and per-user denials" do
+    test "stores wildcard and per-user denials" do
       author = user()
       denied = user()
-      group = insert(:group, user: author)
 
       post =
         create_post!(author, %{
           body: "restricted",
           denials: [
             %{"wildcard" => "non_followers"},
-            %{"group_id" => group.id},
             %{"denied_user_id" => denied.id}
           ]
         })
 
-      assert length(post.denials) == 3
+      assert length(post.denials) == 2
       assert Enum.any?(post.denials, &(&1.wildcard == "non_followers"))
-      assert Enum.any?(post.denials, &(&1.group_id == group.id))
       assert Enum.any?(post.denials, &(&1.denied_user_id == denied.id))
-    end
-
-    test "rejects a denial naming another user's group" do
-      foreign_group = insert(:group, user: user())
-
-      assert {:error, :invalid_denials} =
-               Posts.create_post(user(), %{
-                 body: "x",
-                 denials: [%{"group_id" => foreign_group.id}]
-               })
     end
 
     test "rejects denying yourself and unknown wildcards" do
@@ -288,29 +268,6 @@ defmodule Vutuv.PostsTest do
       refute Posts.visible_to?(post, nil)
     end
 
-    test "group denial: hides from current group members, evaluated live" do
-      author = user()
-      member = user()
-      outside_follower = user()
-      group = group_with_member(author, member)
-      follow!(author, outside_follower)
-
-      post = create_post!(author, %{body: "x", denials: [%{"group_id" => group.id}]})
-
-      assert Posts.visible_to?(post, author)
-      assert Posts.visible_to?(post, outside_follower)
-      refute Posts.visible_to?(post, member)
-      # Any denial closes anonymous access (an anonymous reader cannot be
-      # proven not-denied).
-      refute Posts.visible_to?(post, nil)
-
-      # Live semantics: adding someone to the denied group hides the old post.
-      late_member = user()
-      follow = follow!(author, late_member)
-      insert(:membership, follow: follow, group: group)
-      refute Posts.visible_to?(post, late_member)
-    end
-
     test "per-user denial: hides from exactly that person" do
       author = user()
       denied = user()
@@ -324,20 +281,20 @@ defmodule Vutuv.PostsTest do
 
     test "denials are a union: matching any one of them denies" do
       author = user()
-      follower_in_group = user()
+      denied = user()
       follower_outside = user()
-      group = group_with_member(author, follower_in_group)
-      follow!(follower_in_group, author)
       follow!(follower_outside, author)
 
       post =
         create_post!(author, %{
           body: "x",
-          denials: [%{"wildcard" => "non_followers"}, %{"group_id" => group.id}]
+          denials: [%{"wildcard" => "non_followers"}, %{"denied_user_id" => denied.id}]
         })
 
+      # The outside follower matches neither denial; the named user matches the
+      # per-user denial; a stranger matches non_followers.
       assert Posts.visible_to?(post, follower_outside)
-      refute Posts.visible_to?(post, follower_in_group)
+      refute Posts.visible_to?(post, denied)
       refute Posts.visible_to?(post, user())
     end
   end
@@ -347,10 +304,8 @@ defmodule Vutuv.PostsTest do
       author = user()
       follower = user()
       followee = user()
-      member = user()
       denied = user()
       stranger = user()
-      group = group_with_member(author, member)
       follow!(follower, author)
       follow!(author, followee)
 
@@ -364,12 +319,11 @@ defmodule Vutuv.PostsTest do
         create_post!(author, %{body: "g", denials: [%{"wildcard" => "non_followees"}]})
 
       members_only = create_post!(author, %{body: "m", denials: [%{"wildcard" => "logged_out"}]})
-      no_group = create_post!(author, %{body: "h", denials: [%{"group_id" => group.id}]})
       not_you = create_post!(author, %{body: "n", denials: [%{"denied_user_id" => denied.id}]})
 
-      all = [public, only_me, followers_only, followees_only, members_only, no_group, not_you]
+      all = [public, only_me, followers_only, followees_only, members_only, not_you]
 
-      for viewer <- [nil, author, follower, followee, member, denied, stranger] do
+      for viewer <- [nil, author, follower, followee, denied, stranger] do
         expected =
           all
           |> Enum.filter(&Posts.visible_to?(&1, viewer))
@@ -434,12 +388,10 @@ defmodule Vutuv.PostsTest do
       friend = user()
       aloof = user()
       follow!(viewer, friend)
-      # Putting the viewer in a group makes friend follow the viewer, so the
-      # non_followees case needs a second author who does NOT follow back.
+      # aloof does NOT follow viewer back, so the non_followees denial hides it.
       follow!(viewer, aloof)
-      group = group_with_member(friend, viewer)
 
-      create_post!(friend, %{body: "hidden", denials: [%{"group_id" => group.id}]})
+      create_post!(friend, %{body: "hidden", denials: [%{"denied_user_id" => viewer.id}]})
       create_post!(aloof, %{body: "circle", denials: [%{"wildcard" => "non_followees"}]})
 
       visible =

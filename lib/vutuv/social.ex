@@ -19,8 +19,6 @@ defmodule Vutuv.Social do
   alias Vutuv.Social.Block
   alias Vutuv.Social.Connection
   alias Vutuv.Social.Follow
-  alias Vutuv.Social.Group
-  alias Vutuv.Social.Membership
 
   # ── Follows ──
 
@@ -816,87 +814,4 @@ defmodule Vutuv.Social do
   end
 
   defp now, do: NaiveDateTime.utc_now(:second)
-
-  # ── Groups ──
-
-  def list_groups(user) do
-    Repo.all(Ecto.assoc(user, :groups))
-  end
-
-  def create_group(user, attrs) do
-    user
-    |> Ecto.build_assoc(:groups)
-    |> Group.changeset(attrs)
-    |> Repo.insert()
-  end
-
-  def update_group(%Group{} = group, attrs) do
-    group
-    |> Group.changeset(attrs)
-    |> Repo.update()
-  end
-
-  @doc """
-  Deletes a group — unless posts deny it. `post_denials.group_id` is
-  RESTRICT on purpose: silently dropping a denial would widen the audience
-  of old posts, so the deletion fails with a changeset error instead and the
-  UI tells the user to update those posts first.
-  """
-  def delete_group(%Group{} = group) do
-    group
-    |> Ecto.Changeset.change()
-    |> Ecto.Changeset.foreign_key_constraint(:id,
-      name: :post_denials_group_id_fkey,
-      message: "this group limits the audience of existing posts"
-    )
-    |> Repo.delete()
-  end
-
-  @doc """
-  The user's groups with their member counts, for the composer's audience
-  sheet (`[{group, member_count}]`, sorted by name).
-  """
-  def groups_with_member_counts(user) do
-    Repo.all(
-      from(g in Group,
-        where: g.user_id == ^user.id,
-        left_join: m in assoc(g, :memberships),
-        group_by: g.id,
-        order_by: g.name,
-        select: {g, count(m.id)}
-      )
-    )
-  end
-
-  # ── Memberships ──
-
-  @doc """
-  Fetches a membership scoped to `follow`, so a caller can only reach
-  memberships of a follow edge they actually own.
-  """
-  def get_membership!(%Follow{} = follow, id) do
-    Repo.get!(Ecto.assoc(follow, :memberships), id)
-  end
-
-  def create_membership(%Follow{} = follow, attrs) do
-    follow
-    |> Ecto.build_assoc(:memberships)
-    |> Membership.changeset(attrs)
-    |> validate_own_group(follow.follower_id)
-    |> Repo.insert()
-  end
-
-  # The form posts a group_id; it must be one of the follow owner's own
-  # groups — the ownership check on the follow says nothing about the group.
-  defp validate_own_group(changeset, owner_id) do
-    Ecto.Changeset.validate_change(changeset, :group_id, fn :group_id, group_id ->
-      if Repo.exists?(from(g in Group, where: g.id == ^group_id and g.user_id == ^owner_id)) do
-        []
-      else
-        [group_id: "is invalid"]
-      end
-    end)
-  end
-
-  def delete_membership!(%Membership{} = membership), do: Repo.delete!(membership)
 end

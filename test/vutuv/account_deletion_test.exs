@@ -2,14 +2,13 @@ defmodule Vutuv.AccountDeletionTest do
   @moduledoc """
   Deleting a user must be clean and complete: every row that belongs to the
   account goes (DB cascade), the records that deliberately outlive their author
-  survive in a degraded form (replies to the account's posts, the conversation
-  membership), and the on-disk files the cascade cannot touch — post images,
-  avatar, cover — are removed too.
+  survive in a degraded form (replies to the account's posts, the sent
+  messages), and the on-disk files the cascade cannot touch (post images,
+  avatar, cover) are removed too.
 
-  This pins the two gaps `Vutuv.Accounts.delete_user/1` closes: a membership
-  on the account's group/follow used to abort the whole cascade (the
-  `memberships` FKs were NO ACTION), and the image files were orphaned on disk
-  because the cascade only drops the rows that name them.
+  This pins the gap `Vutuv.Accounts.delete_user/1` closes: the image files were
+  orphaned on disk because the cascade only drops the rows that name them, so
+  the chokepoint collects their paths before the delete and removes them after.
   """
   # Not async: sets the global :uploads_dir_prefix and plants files on disk.
   use Vutuv.DataCase, async: false
@@ -24,7 +23,7 @@ defmodule Vutuv.AccountDeletionTest do
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
   alias Vutuv.Repo
   alias Vutuv.Social
-  alias Vutuv.Social.{Connection, Follow, Group, Membership}
+  alias Vutuv.Social.{Connection, Follow}
   alias Vutuv.Tags.{UserTag, UserTagEndorsement}
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
@@ -109,15 +108,9 @@ defmodule Vutuv.AccountDeletionTest do
     {:ok, _} = Social.request_connection(user, fourth)
     {:ok, _} = Social.request_connection(third, user)
 
-    # --- Group + membership on the account's own follow edge (the cascade
-    #     wall this fix removes). ---
-    group = insert(:group, user: user)
-    user_other_follow = Repo.get_by!(Follow, follower_id: user.id, followee_id: other.id)
-    insert(:membership, follow: user_other_follow, group: group)
-
-    # --- A group-denied post (exercises the RESTRICT on post_denials.group_id),
-    #     an attached image, and a pending (unattached) image. ---
-    post = create_post!(user, %{body: "private", denials: [%{"group_id" => group.id}]})
+    # --- A post that hides itself from one person (a per-user denial), an
+    #     attached image, and a pending (unattached) image. ---
+    post = create_post!(user, %{body: "private", denials: [%{"denied_user_id" => other.id}]})
     attached = insert(:post_image, user: user, post: post)
     pending = insert(:post_image, user: user)
 
@@ -163,11 +156,9 @@ defmodule Vutuv.AccountDeletionTest do
     assert count(from(c in Connection, where: c.user_a_id == ^user.id or c.user_b_id == ^user.id)) ==
              0
 
-    assert count(from(g in Group, where: g.user_id == ^user.id)) == 0
-    assert count(Membership) == 0
     assert count(from(p in Post, where: p.user_id == ^user.id)) == 0
     assert count(from(i in PostImage, where: i.user_id == ^user.id)) == 0
-    assert count(from(d in PostDenial, where: d.group_id == ^group.id)) == 0
+    assert count(from(d in PostDenial, where: d.post_id == ^post.id)) == 0
     assert count(from(t in UserTag, where: t.user_id == ^user.id)) == 0
     assert count(from(e in UserTagEndorsement, where: e.user_id == ^user.id)) == 0
     refute Repo.get(UserTagEndorsement, given_endorsement.id)

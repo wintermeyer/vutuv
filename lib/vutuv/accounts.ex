@@ -403,11 +403,11 @@ defmodule Vutuv.Accounts do
       and paths are collected *before* the delete and removed *after* it
       commits, so a rolled-back delete never strands the account without its
       files.
-    * **Cascade ordering.** A connections-/group-only post denies one of the
-      user's own groups through `post_denials.group_id`, which is RESTRICT on
-      purpose (deleting a group must not silently widen a post's audience).
-      The user's posts are deleted first, inside the transaction, so those
-      denials are gone before the `groups` cascade reaches that constraint.
+    * **Cascade ordering.** The user's posts are deleted first, inside the
+      transaction. The audience-Groups feature is gone, but its legacy
+      `post_denials.group_id` column (and its RESTRICT FK to `groups`) is kept
+      for one N-1 deploy, so clearing the user's posts before the `groups`
+      cascade keeps any stale group-denial row from blocking the delete.
 
   Returns `{:ok, user}`.
   """

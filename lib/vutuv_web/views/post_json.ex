@@ -89,9 +89,6 @@ defmodule VutuvWeb.PostJSON do
   defp denial(%{wildcard: wildcard}) when not is_nil(wildcard),
     do: %{type: "wildcard", value: wildcard}
 
-  defp denial(%{group_id: group_id} = denial) when not is_nil(group_id),
-    do: %{type: "group", id: group_id, name: denial.group.name}
-
   defp denial(%{denied_user_id: user_id} = denial),
     do: %{type: "user", id: user_id, slug: denial.denied_user.active_slug}
 end

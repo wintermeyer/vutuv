@@ -68,9 +68,8 @@ defmodule VutuvWeb.PostFeedLiveTest do
                ~s(option value="followers" selected)
     end
 
-    test "the custom sheet collects groups, wildcards and people", %{conn: conn} do
+    test "the custom sheet collects wildcards and people", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      group = insert(:group, user: user, name: "Ex colleagues")
       target = other_user(first_name: "Maxima", last_name: "Musterfrau")
 
       {:ok, live, _html} = live(conn, ~p"/feed")
@@ -82,7 +81,6 @@ defmodule VutuvWeb.PostFeedLiveTest do
         |> render_change()
 
       assert html =~ "Hide this post from"
-      assert html =~ "Ex colleagues"
 
       # Typeahead: search, then deny the person.
       html =
@@ -98,21 +96,19 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> element("#composer-user-results button", "Maxima")
       |> render_click()
 
-      # Submit with the group checked and a wildcard on.
+      # Submit with a wildcard on.
       live
       |> form("#composer-form", %{
         "post" => %{
           "body" => "not for everyone",
           "preset" => "custom",
-          "deny_groups" => %{"#{group.id}" => "true"},
           "deny_wildcards" => %{"logged_out" => "true"}
         }
       })
       |> render_submit()
 
       [%{post: post}] = Posts.profile_posts(user, user)
-      assert length(post.denials) == 3
-      assert Enum.any?(post.denials, &(&1.group_id == group.id))
+      assert length(post.denials) == 2
       assert Enum.any?(post.denials, &(&1.wildcard == "logged_out"))
       assert Enum.any?(post.denials, &(&1.denied_user_id == target.id))
     end
