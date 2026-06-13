@@ -139,7 +139,7 @@ defmodule VutuvWeb.NotificationLive.Index do
         </li>
       </ul>
 
-      <p :if={@empty?} class="mt-6 text-slate-400">{gettext("Nothing new yet.")}</p>
+      <p :if={@empty?} class="mt-6 text-slate-600 dark:text-slate-400">{gettext("Nothing new yet.")}</p>
 
       <.load_more :if={@more?} class="mt-6">{load_more_label(@remaining)}</.load_more>
     </div>

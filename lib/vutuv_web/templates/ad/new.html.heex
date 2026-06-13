@@ -18,7 +18,7 @@
         <div :for={month <- VutuvWeb.AdHTML.calendar_months()} data-calendar-month>
           <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">{month.title}</p>
           <div class="mt-2 grid grid-cols-7 gap-1 text-center text-xs">
-            <span :for={wd <- VutuvWeb.AdHTML.weekday_initials()} class="py-1 font-semibold text-slate-400">
+            <span :for={wd <- VutuvWeb.AdHTML.weekday_initials()} class="py-1 font-semibold text-slate-600 dark:text-slate-400">
               {wd}
             </span>
             <%= for week <- month.weeks, cell <- week do %>
@@ -43,7 +43,7 @@
                   <span
                     data-calendar-day={day}
                     title={gettext("already booked")}
-                    class="block rounded-lg bg-slate-100 py-1.5 text-slate-400 line-through dark:bg-slate-800 dark:text-slate-600"
+                    class="block rounded-lg bg-slate-100 py-1.5 text-slate-600 line-through dark:bg-slate-800 dark:text-slate-600"
                   >
                     {day.day}
                   </span>

@@ -186,7 +186,7 @@ defmodule VutuvWeb.PostLive.Feed do
           </div>
         </div>
 
-        <p :if={@empty? && @pending_posts == []} class="text-slate-400">
+        <p :if={@empty? && @pending_posts == []} class="text-slate-600 dark:text-slate-400">
           {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
           <.link
             navigate={~p"/listings/most_followed_users"}

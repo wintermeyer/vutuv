@@ -457,7 +457,7 @@ defmodule VutuvWeb.PostLive.Composer do
             class={[input_class(), "resize-y"]}
           >{@body}</textarea>
 
-          <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-400">
+          <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {String.length(@body)} / {Post.max_body_length()}
           </p>
 
@@ -672,13 +672,13 @@ defmodule VutuvWeb.PostLive.Composer do
                     class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     {full_name(user)}
-                    <span class="text-xs text-slate-400">@{user.active_slug}</span>
+                    <span class="text-xs text-slate-600 dark:text-slate-400">@{user.active_slug}</span>
                   </button>
                 </li>
               </ul>
             </div>
 
-            <p class="mt-3 text-xs text-slate-400">
+            <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
               {gettext(
                 "As soon as anything is hidden, the post is also invisible to logged-out visitors and search engines."
               )}
@@ -689,7 +689,7 @@ defmodule VutuvWeb.PostLive.Composer do
             {audience_summary(assigns)}
           </p>
 
-          <p :if={@audience_locked?} class="mt-1 text-xs text-slate-400" id={"#{@id}-audience-lock-hint"}>
+          <p :if={@audience_locked?} class="mt-1 text-xs text-slate-600 dark:text-slate-400" id={"#{@id}-audience-lock-hint"}>
             {gettext(
               "This post has been reposted or answered. Its audience stays public while reposts or replies exist; you can still delete the post."
             )}

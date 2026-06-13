@@ -33,7 +33,7 @@ defmodule VutuvWeb.LayoutHTML do
       <p class="text-sm text-slate-700 dark:text-slate-200">{@msg}</p>
       <button
         type="button"
-        class="ml-auto shrink-0 text-slate-400 hover:text-slate-600"
+        class="ml-auto shrink-0 text-slate-600 dark:text-slate-400 hover:text-slate-600"
         data-toast-close
         phx-click="lv:clear-flash"
         phx-value-key={@kind}
@@ -102,7 +102,7 @@ defmodule VutuvWeb.LayoutHTML do
         data-ad-day={Vutuv.Ads.today()}
         aria-label={gettext("Hide ads for today")}
         title={gettext("Hide ads for today")}
-        class="ml-auto shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+        class="ml-auto shrink-0 text-slate-600 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
       >
         ✕
       </button>

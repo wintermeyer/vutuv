@@ -63,7 +63,7 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 on mobile clears the fixed bottom tab bar (`ShellLive`, h-16); `md:pb-8` drops
 it on desktop where that bar is hidden. Links wrap into a centered row. --%>
 <footer class="border-t border-slate-200 pt-8 pb-24 md:pb-8 dark:border-slate-800">
-  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-500">
+  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-600 dark:text-slate-400">
     <%!-- Links separated by middots to match the credit line below; the dots are
           decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
           of each dot. --%>
@@ -137,7 +137,7 @@ patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
         type="button"
         data-overlay-close
         title={gettext("Close")}
-        class="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
+        class="flex h-8 w-8 items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
       >
         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -168,7 +168,7 @@ patches. The list is kept in sync with keyboard_shortcuts.js by hand. --%>
       <% end %>
     </div>
 
-    <p class="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-400 dark:border-slate-800 dark:text-slate-500">
+    <p class="mt-5 border-t border-slate-100 pt-4 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-500">
       {gettext("Shortcuts pause while you type, and are off on phones and tablets.")}
     </p>
   </div>

@@ -208,7 +208,7 @@ body.stretch main {
 /* ---------- Breadcrumbs ---------- */
 .breadcrumbs {
   font-size: 0.8rem;
-  color: #64748b;
+  color: #475569;
   padding: 1rem 0 0;
   margin-bottom: 1.25rem;
 }
@@ -219,7 +219,7 @@ body.stretch main {
   padding-top: 0;
 }
 .breadcrumbs a {
-  color: #64748b;
+  color: #475569;
   text-decoration: underline;
 }
 .breadcrumbs a:hover {
@@ -451,7 +451,7 @@ body.stretch main {
   flex: 1;
   min-width: 0;
   font-size: 0.875rem;
-  color: #64748b;
+  color: #475569;
 }
 .editform__inputwrap input[type="file"]::file-selector-button {
   margin-right: 0.75rem;

@@ -69,7 +69,7 @@
           >
             {full_name(u)}
           </.link>
-          <p class="truncate text-sm text-slate-400">{Map.get(@work_info_by_id, u.id)}</p>
+          <p class="truncate text-sm text-slate-600 dark:text-slate-400">{Map.get(@work_info_by_id, u.id)}</p>
         </div>
         <.button
           :if={@owner?}

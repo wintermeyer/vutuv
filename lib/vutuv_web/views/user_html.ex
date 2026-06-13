@@ -34,7 +34,7 @@ defmodule VutuvWeb.UserHTML do
         Pin text-sm + mb-0 so the legacy global `p` default (15px font, 15px bottom
         margin) doesn't enlarge the line or wedge dead space under it, which would
         push the avatar off-centre against the name/work-line group. --%>
-        <p class="mb-0 truncate text-sm text-slate-400">{work_line(@work_info_by_id, @user.id)}</p>
+        <p class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">{work_line(@work_info_by_id, @user.id)}</p>
       </div>
       <.follow_button
         :if={@current_user && not same_user?(@current_user, @user)}
@@ -89,7 +89,7 @@ defmodule VutuvWeb.UserHTML do
 
   def member_since_line(assigns) do
     ~H"""
-    <p class={["flex items-center gap-1.5 text-sm text-slate-400 dark:text-slate-500", @class]}>
+    <p class={["flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-500", @class]}>
       <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
       </svg>

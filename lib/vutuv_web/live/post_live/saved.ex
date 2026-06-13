@@ -127,7 +127,7 @@ defmodule VutuvWeb.PostLive.Saved do
         </nav>
 
         <div id="saved-posts" phx-update="stream" class="space-y-4">
-          <p class="hidden text-slate-400 only:block" id="saved-empty">
+          <p class="hidden text-slate-600 dark:text-slate-400 only:block" id="saved-empty">
             {empty_text(@live_action)}
           </p>
           <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>

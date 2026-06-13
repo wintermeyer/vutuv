@@ -48,7 +48,7 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
 
 - **Brand blue:** `bg-brand-600` (primary), hover `bg-brand-700`; text `text-brand-700` / `text-brand-800`; tint `bg-brand-50`. Full scale `brand-50…900`.
 - **Accent (unread counts / CTAs highlight):** `bg-accent` / `text-accent` (coral `#f97362`).
-- **Surfaces:** page is grey (`slate-50`/`slate-100`); cards `bg-white`; borders `ring-slate-200`; text `text-slate-900 / 700 / 500 / 400`.
+- **Surfaces:** page is grey (`slate-50`/`slate-100`); cards `bg-white`; borders `ring-slate-200`; text `text-slate-900 / 700 / 500`. **Muted/secondary text is `text-slate-600 dark:text-slate-400`** — passes WCAG AA on both white cards and the slate canvas. **Don't use bare `text-slate-400` as a text colour**: it fails AA (~2.6:1 on white) and is gone from the templates; `slate-400` now lives on only as the `dark:` half of the muted pair. Even `slate-500` is borderline directly on the slate-100 canvas (breadcrumbs, footer), so those use `slate-600`. A WCAG axe-core sweep keeps the key pages clean.
 - **Dark:** `dark:bg-slate-900` (cards) / `slate-950` (page), `dark:ring-slate-800`, `dark:text-slate-100 / 300 / 400`. `app.css` sets `html { color-scheme: light dark }` and `root.html.heex` ships a `theme-color` meta per scheme (`#ffffff` / `#020617`).
 
 ### Canonical recipes (copy these exactly)

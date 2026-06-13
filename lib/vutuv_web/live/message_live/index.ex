@@ -402,7 +402,7 @@ defmodule VutuvWeb.MessageLive.Index do
                   <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                     {display_name(entry.other)}
                   </span>
-                  <span class="block truncate text-xs text-slate-400">{entry.last_body}</span>
+                  <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.last_body}</span>
                 </span>
               </.link>
               <.request_actions id={entry.conversation.id} class="mt-2" />
@@ -431,14 +431,14 @@ defmodule VutuvWeb.MessageLive.Index do
                 <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
                   {display_name(entry.other)}
                 </span>
-                <span class="block truncate text-xs text-slate-400">{entry.last_body}</span>
+                <span class="block truncate text-xs text-slate-600 dark:text-slate-400">{entry.last_body}</span>
               </span>
               <.count_badge count={entry.unread} />
             </.link>
           </li>
         </ul>
 
-        <div :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-400">
+        <div :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-600 dark:text-slate-400">
           <p>{gettext("No conversations yet.")}</p>
           <p class="mt-1">{gettext("Open someone's profile to message them.")}</p>
           <p class="mt-2">
@@ -459,7 +459,7 @@ defmodule VutuvWeb.MessageLive.Index do
             <.link
               id="back-to-list"
               navigate={~p"/messages"}
-              class="shrink-0 text-slate-400 hover:text-slate-600 md:hidden dark:hover:text-slate-200"
+              class="shrink-0 text-slate-600 dark:text-slate-400 hover:text-slate-600 md:hidden dark:hover:text-slate-200"
               aria-label={gettext("Back to conversations")}
             >
               <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -522,7 +522,7 @@ defmodule VutuvWeb.MessageLive.Index do
                 title={NaiveDateTime.to_iso8601(m.inserted_at) <> "Z"}
                 class={[
                   "mt-1 block text-right text-[10px] leading-none",
-                  if(mine?(m, @current_user.id), do: "text-white/70", else: "text-slate-400")
+                  if(mine?(m, @current_user.id), do: "text-white/70", else: "text-slate-600 dark:text-slate-400")
                 ]}
               >{Calendar.strftime(m.inserted_at, "%d.%m.%Y %H:%M")}</time>
             </div>
@@ -549,7 +549,7 @@ defmodule VutuvWeb.MessageLive.Index do
             <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]"></span>
             <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400"></span>
           </div>
-          <p class="mt-1 text-xs italic text-slate-400">{typing_label(@typing_tokens)}</p>
+          <p class="mt-1 text-xs italic text-slate-600 dark:text-slate-400">{typing_label(@typing_tokens)}</p>
         </div>
 
         <div
@@ -589,7 +589,7 @@ defmodule VutuvWeb.MessageLive.Index do
               not Chat.request_recipient?(@conversation, @current_user.id)
           }
           id="awaiting-acceptance"
-          class="border-t border-slate-200 p-4 text-center text-sm text-slate-400 dark:border-slate-800"
+          class="border-t border-slate-200 p-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:border-slate-800"
         >
           {gettext("@%{slug} has not accepted your message request yet.", slug: @other.active_slug)}
         </p>
@@ -600,7 +600,7 @@ defmodule VutuvWeb.MessageLive.Index do
         :if={is_nil(@conversation)}
         class="hidden min-w-0 flex-1 items-center justify-center rounded-2xl bg-white ring-1 ring-slate-200 md:flex dark:bg-slate-900 dark:ring-slate-800"
       >
-        <p class="text-sm text-slate-400">{gettext("Select a conversation.")}</p>
+        <p class="text-sm text-slate-600 dark:text-slate-400">{gettext("Select a conversation.")}</p>
       </section>
     </div>
     """

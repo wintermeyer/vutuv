@@ -3,7 +3,7 @@
     <div class="flex flex-wrap items-baseline justify-between gap-2">
       <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
         {gettext("Posts by %{name}", name: full_name(@author))}
-        <span :if={@period_label} class="font-normal text-slate-400">· {@period_label}</span>
+        <span :if={@period_label} class="font-normal text-slate-600 dark:text-slate-400">· {@period_label}</span>
       </h1>
       <.link
         href={~p"/#{@author}"}
@@ -34,7 +34,7 @@
       mode={:preview}
     />
 
-    <p :if={@posts == []} class="text-slate-400">{gettext("Nothing here yet.")}</p>
+    <p :if={@posts == []} class="text-slate-600 dark:text-slate-400">{gettext("Nothing here yet.")}</p>
 
     <.pager params={@conn.params} total={@total} />
   </div>

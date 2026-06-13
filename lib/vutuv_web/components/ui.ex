@@ -253,7 +253,7 @@ defmodule VutuvWeb.UI do
       <summary
         title={gettext("Options")}
         class={[
-          "flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full text-slate-400",
+          "flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-full text-slate-600 dark:text-slate-400",
           "hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300",
           "[&::-webkit-details-marker]:hidden"
         ]}
@@ -455,7 +455,7 @@ defmodule VutuvWeb.UI do
     ~H"""
     <%= if is_binary(@follow_id) do %>
       <%= button to: ~p"/follows/#{@follow_id}", method: :delete,
-            class: "ml-auto self-start text-sm font-semibold text-slate-400 hover:text-slate-600" do %>
+            class: "ml-auto self-start text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-600" do %>
         {gettext("Following")}
       <% end %>
     <% else %>
@@ -770,7 +770,7 @@ defmodule VutuvWeb.UI do
       aria-label={gettext("Pagination")}
       class="mt-6 flex items-center justify-center gap-1 text-sm font-semibold"
     >
-      <span :if={List.first(@window) > 1} class="px-1 text-slate-400">…</span>
+      <span :if={List.first(@window) > 1} class="px-1 text-slate-600 dark:text-slate-400">…</span>
       <%= for num <- @window do %>
         <%= if num == @current do %>
           <span
@@ -788,7 +788,7 @@ defmodule VutuvWeb.UI do
           </a>
         <% end %>
       <% end %>
-      <span :if={List.last(@window) < @total_pages} class="px-1 text-slate-400">…</span>
+      <span :if={List.last(@window) < @total_pages} class="px-1 text-slate-600 dark:text-slate-400">…</span>
     </nav>
     """
   end

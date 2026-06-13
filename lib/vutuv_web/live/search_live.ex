@@ -271,7 +271,7 @@ defmodule VutuvWeb.SearchLive do
             <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400">
               {gettext("Similar names")}
             </h3>
-            <p class="mt-0.5 text-xs text-slate-400 dark:text-slate-500">
+            <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-500">
               {gettext("Not an exact match, but sounds like your search.")}
             </p>
             <ul class="mt-3 space-y-4">
@@ -295,7 +295,7 @@ defmodule VutuvWeb.SearchLive do
             <.chip :for={tag <- @results.tags} navigate={~p"/tags/#{tag}"}>
               {highlight(tag.name, @tag_needle)}<span
                 :if={Map.get(@results.tag_member_counts, tag.id, 0) > 0}
-                class="font-normal opacity-70"
+                class="font-normal"
               > · {compact_count(@results.tag_member_counts[tag.id])}</span>
             </.chip>
           </div>
@@ -317,7 +317,7 @@ defmodule VutuvWeb.SearchLive do
                     {UserHelpers.full_name(post.user)}
                   </.link>
                   <span class="text-slate-500 dark:text-slate-400">@{post.user.active_slug}</span>
-                  <span class="text-slate-400 dark:text-slate-500">· {post.published_on}</span>
+                  <span class="text-slate-600 dark:text-slate-500">· {post.published_on}</span>
                 </p>
                 <.link
                   href={~p"/#{post.user}/posts/#{post.id}"}
@@ -334,7 +334,7 @@ defmodule VutuvWeb.SearchLive do
           @results.exact_people == [] and @results.similar_people == [] and
             @results.tags == [] and @results.posts == []
         }>
-          <p id="search-empty" class="mb-0 text-center font-semibold text-slate-400">
+          <p id="search-empty" class="mb-0 text-center font-semibold text-slate-600 dark:text-slate-400">
             {gettext("No results for \"%{query}\"", query: @results.query)}
           </p>
         </.card>
