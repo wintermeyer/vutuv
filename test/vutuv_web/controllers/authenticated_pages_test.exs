@@ -77,7 +77,6 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/#{user}/social_media_accounts")
       renders(conn, ~p"/#{user}/work_experiences")
       renders(conn, ~p"/#{user}/addresses")
-      renders(conn, ~p"/#{user}/search_terms")
     end
 
     test "new forms render", %{conn: conn, user: user} do

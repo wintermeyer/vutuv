@@ -27,16 +27,6 @@ defmodule VutuvWeb.DesignConsistencyTest do
       refute html =~ "pure-button"
     end
 
-    test "search terms index uses the standard page chrome", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/#{user}/search_terms")
-      html = html_response(conn, 200)
-
-      assert html =~ "profile-header"
-      assert html =~ "breadcrumbs"
-      assert html =~ ~s(class="card)
-      refute html =~ "pure-button"
-    end
-
     # The shared `<.page_header>` component replaces the `.profile-header` h1 +
     # `.breadcrumbs` boilerplate that opened ~47 controller pages. It must keep the
     # exact legacy anatomy (`.profile-header > .profile-header__info > h1` and the
@@ -78,55 +68,6 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
-  # The search_term/show detail page was the last page still on raw pure.css
-  # markup (`.pure-g`/`.pure-u`/`.pure-button`) with hardcoded English labels
-  # (`<strong>Value:</strong>`) that bypassed gettext. It is brought onto the
-  # standard legacy shell (`<.page_header>` + `<.card_section>` + h1/p detail
-  # rows, like email/show) with every label wrapped in gettext. This test pins
-  # the new intended markup: it fails on the old page and passes once converted.
-  describe "search term detail page" do
-    setup %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      %{conn: conn, user: user}
-    end
-
-    test "uses the standard chrome and card shell, not pure.css", %{conn: conn, user: user} do
-      search_term = insert(:search_term, user: user)
-      conn = get(conn, ~p"/#{user}/search_terms/#{search_term}")
-      html = html_response(conn, 200)
-
-      # Standard legacy chrome + card shell instead of the pure.css grid.
-      assert html =~ "profile-header"
-      assert html =~ "breadcrumbs"
-      assert html =~ ~s(class="card)
-      refute html =~ "pure-g"
-      refute html =~ "pure-u"
-      refute html =~ "pure-button"
-
-      # The search term's value still shows.
-      assert html =~ search_term.value
-    end
-
-    test "wraps its labels in gettext (German renders 'Wert' for 'Value')", %{
-      conn: conn,
-      user: user
-    } do
-      search_term = insert(:search_term, user: user)
-
-      conn =
-        conn
-        |> recycle()
-        |> put_req_header("accept-language", "de")
-        |> get(~p"/#{user}/search_terms/#{search_term}")
-
-      html = html_response(conn, 200)
-
-      # The old page hardcoded "<strong>Value:</strong>"; the converted page
-      # routes the label through gettext, so the German locale shows "Wert".
-      assert html =~ "Wert"
-      refute html =~ ~s(<strong>Value:</strong>)
-    end
-  end
 
   describe "admin dashboard" do
     setup %{conn: conn} do

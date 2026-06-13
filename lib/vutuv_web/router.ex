@@ -501,7 +501,6 @@ defmodule VutuvWeb.Router do
       resources("/social_media_accounts", SocialMediaAccountController)
       resources("/work_experiences", WorkExperienceController)
       resources("/addresses", AddressController)
-      resources("/search_terms", SearchTermController, only: [:show, :index])
 
       resources("/tags", UserTagController,
         only: [:new, :create, :show, :delete, :index],

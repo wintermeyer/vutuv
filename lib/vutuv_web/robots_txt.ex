@@ -50,7 +50,6 @@ defmodule VutuvWeb.RobotsTxt do
   Disallow: /*/groups
   Disallow: /*/links
   Disallow: /*/phone_numbers
-  Disallow: /*/search_terms
   Disallow: /*/slugs
   Disallow: /*/social_media_accounts
   Disallow: /*/tags
