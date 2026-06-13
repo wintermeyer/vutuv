@@ -63,11 +63,11 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 on mobile clears the fixed bottom tab bar (`ShellLive`, h-16); `md:pb-8` drops
 it on desktop where that bar is hidden. Links wrap into a centered row. --%>
 <footer class="border-t border-slate-200 pt-8 pb-24 md:pb-8 dark:border-slate-800">
-  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-400">
+  <div class="mx-auto flex max-w-6xl flex-col items-center gap-3 px-4 text-center text-xs text-slate-500">
     <%!-- Links separated by middots to match the credit line below; the dots are
           decorative (aria-hidden) and the tighter gap-x-2 sits ~8px either side
           of each dot. --%>
-    <nav class="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+    <nav aria-label={gettext("Footer navigation")} class="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
       <.link href={~p"/developers"} class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("API documentation")}</.link>
       <span aria-hidden="true">·</span>
       <a href="https://github.com/wintermeyer/vutuv" class="hover:text-slate-600 dark:hover:text-slate-300">{gettext("Source")}</a>
@@ -86,7 +86,7 @@ it on desktop where that bar is hidden. Links wrap into a centered row. --%>
           line larger. --%>
     <p class="text-xs">
       © 2019 - {Date.utc_today().year} ·
-      <a href="https://wintermeyer-consulting.de" class="hover:text-slate-600 dark:hover:text-slate-300">Wintermeyer Consulting</a>
+      <a href="https://wintermeyer-consulting.de" class="underline hover:text-slate-600 dark:hover:text-slate-300">Wintermeyer Consulting</a>
       · vutuv {Application.spec(:vutuv, :vsn)}
     </p>
   </div>

@@ -205,7 +205,10 @@ defmodule VutuvWeb.PostComponents do
       <% end %>
 
       <div class="flex items-start gap-3">
-        <.link href={~p"/#{@post.user}"} class="shrink-0">
+        <%!-- Decorative duplicate of the author-name link below; hidden from
+        assistive tech and the tab order so the name link is the one profile
+        link (otherwise the avatar link has no accessible name). --%>
+        <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
           <.avatar user={@post.user} size="sm" />
         </.link>
 
@@ -232,11 +235,11 @@ defmodule VutuvWeb.PostComponents do
                 {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M")}
               </time>
             </.link>
-            <span :if={@edited?} class="text-xs text-slate-400">{gettext("edited")}</span>
+            <span :if={@edited?} class="text-xs text-slate-500">{gettext("edited")}</span>
             <span
               :if={@restricted?}
               title={gettext("Limited audience")}
-              class="text-xs text-slate-400"
+              class="text-xs text-slate-500"
               aria-label={gettext("Limited audience")}
             >
               🔒
@@ -262,7 +265,12 @@ defmodule VutuvWeb.PostComponents do
             <%!-- A single image keeps its aspect ratio at column width
             (height-capped) — square micro-thumbs would crop a panorama down
             to its middle sliver. Multiple images tile in a 2-up grid. --%>
-            <.link :if={length(@post.images) == 1} href={@permalink} class="mt-3 block">
+            <.link
+              :if={length(@post.images) == 1}
+              href={@permalink}
+              aria-label={gettext("View post")}
+              class="mt-3 block"
+            >
               <img
                 src={PostImage.url(hd(@post.images), "feed")}
                 alt={hd(@post.images).alt}
@@ -273,7 +281,7 @@ defmodule VutuvWeb.PostComponents do
               />
             </.link>
             <div :if={length(@post.images) > 1} class="mt-3 grid grid-cols-2 gap-2">
-              <.link :for={image <- @post.images} href={@permalink} class="block">
+              <.link :for={image <- @post.images} href={@permalink} aria-label={gettext("View post")} class="block">
                 <img
                   src={PostImage.url(image, "feed")}
                   alt={image.alt}

@@ -565,8 +565,9 @@ defmodule VutuvWeb.UI do
     ~H"""
     <span
       data-avatar
-      role="img"
-      aria-label={@alt}
+      role={@alt != "" && "img"}
+      aria-label={@alt != "" && @alt}
+      aria-hidden={@alt == "" && "true"}
       class={[
         avatar_size(@size),
         if(@shape == "square", do: "rounded-2xl", else: "rounded-full"),
@@ -820,11 +821,22 @@ defmodule VutuvWeb.UI do
         <h1>{@title}</h1>
       </div>
     </div>
+    <%!-- New/edit forms pass only crumbs; still give the page one h1 (the last
+    crumb is its identity) so screen-reader and keyboard heading navigation work. --%>
+    <h1 :if={is_nil(@title) and @crumbs} class="sr-only">{crumbs_title(@crumbs)}</h1>
     <div :if={@crumbs} class="breadcrumbs">
       {VutuvWeb.UserHelpers.gen_breadcrumbs(@crumbs)}
     </div>
     """
   end
+
+  defp crumbs_title(crumbs) do
+    crumbs |> List.last() |> crumb_text()
+  end
+
+  defp crumb_text(text) when is_binary(text), do: text
+  defp crumb_text({text, _href}) when is_binary(text), do: text
+  defp crumb_text(other), do: to_string(other)
 
   @doc """
   Legacy (Track 1) changeset-error banner shared by the `editform` `form_content`

@@ -157,6 +157,18 @@ function setupSlugAvailability() {
 
 window.addEventListener("DOMContentLoaded", setupSlugAvailability)
 
+// Make horizontally-scrollable code blocks and tables in rendered Markdown
+// keyboard-focusable, so they can be scrolled without a mouse (WCAG 2.1.1).
+function markFocusableScrollers() {
+  document.querySelectorAll(".markdown pre, .markdown table").forEach((el) => {
+    if (el.scrollWidth > el.clientWidth && !el.hasAttribute("tabindex")) {
+      el.tabIndex = 0
+    }
+  })
+}
+window.addEventListener("DOMContentLoaded", markFocusableScrollers)
+window.addEventListener("phx:page-loading-stop", markFocusableScrollers)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

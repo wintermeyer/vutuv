@@ -132,7 +132,7 @@ defmodule VutuvWeb.NotificationLive.Index do
                 {notification_text(n)}
               <% end %>
             </p>
-            <span class="text-xs uppercase tracking-wide text-slate-400">
+            <span class="text-xs uppercase tracking-wide text-slate-500">
               {kind_label(n.kind)}<span :if={n[:at]}> &middot; <time>{format_at(n.at)}</time></span>
             </span>
           </div>

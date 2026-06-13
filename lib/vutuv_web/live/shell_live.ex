@@ -128,7 +128,7 @@ defmodule VutuvWeb.ShellLive do
             vutuv
           </.link>
 
-          <nav class="hidden items-center gap-1 text-sm font-medium md:flex">
+          <nav aria-label={gettext("Main navigation")} class="hidden items-center gap-1 text-sm font-medium md:flex">
             <.link href={~p"/"} class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
               {gettext("Home")}
             </.link>
@@ -267,10 +267,13 @@ defmodule VutuvWeb.ShellLive do
       <%!-- Mobile bottom tab bar (fixed; content in the layout reserves space) --%>
       <%!-- Logged out, Messages/Alerts would only bounce the visitor to the
       login page, so the anonymous bar offers Log in directly instead. --%>
-      <nav class={[
-        "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
-        if(@user_id, do: "grid-cols-5", else: "grid-cols-3")
-      ]}>
+      <nav
+        aria-label={gettext("Main navigation")}
+        class={[
+          "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
+          if(@user_id, do: "grid-cols-5", else: "grid-cols-3")
+        ]}
+      >
         <.tab href={~p"/"} label={gettext("Home")}><.icon_home /></.tab>
         <%= if @user_id do %>
           <.tab href={~p"/feed"} label={gettext("Feed")}><.icon_feed /></.tab>

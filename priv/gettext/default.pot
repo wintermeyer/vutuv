@@ -5547,3 +5547,18 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Previous post in the feed"
 msgstr ""
+
+#: lib/vutuv_web/live/shell_live.ex:131
+#, elixir-autogen, elixir-format
+msgid "Main navigation"
+msgstr ""
+
+#: lib/vutuv_web/templates/layout/app.html.heex:70
+#, elixir-autogen, elixir-format
+msgid "Footer navigation"
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:271
+#, elixir-autogen, elixir-format
+msgid "View post"
+msgstr ""

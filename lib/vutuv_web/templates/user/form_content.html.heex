@@ -18,7 +18,7 @@
 
   <div class={"editform__field#{if error_tag(f, :gender), do: " editform__field--error"}"}>
   <%= label f, :gender, gettext("Gender") %>
-  <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], id: "gender", prompt: gettext("Choose a gender") %>
+  <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], prompt: gettext("Choose a gender") %>
   <%= error_tag f, :gender %>
   </div>
 

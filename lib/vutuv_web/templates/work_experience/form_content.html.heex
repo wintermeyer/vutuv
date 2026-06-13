@@ -8,13 +8,13 @@
   </div>
 
   <div class={"editform__field#{if error_tag(f, :title), do: " editform__field--error"}"}>
-    <%= label f, :job_title, gettext("Job Title") %>
+    <%= label f, :title, gettext("Job Title") %>
     <%= text_input f, :title %>
     <%= error_tag f, :title %>
   </div>
 
   <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
-    <%= label f, :job_description, gettext("Description") %>
+    <%= label f, :description, gettext("Description") %>
     <%= textarea f, :description, rows: 3 %>
     <%= error_tag f, :description %>
   </div>

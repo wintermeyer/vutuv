@@ -382,6 +382,7 @@ defmodule VutuvWeb.MessageLive.Index do
   def render(assigns) do
     ~H"""
     <div id="messages" class="flex h-[calc(100vh-9rem)] gap-4 py-6 md:h-[calc(100vh-7rem)]">
+      <h1 class="sr-only">{gettext("Messages")}</h1>
       <%!-- Conversation list. Full-width on mobile while no thread is open;
             once one is, the thread takes over and the list moves behind the
             back link (md+ always shows both). --%>
