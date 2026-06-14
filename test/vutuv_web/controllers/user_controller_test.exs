@@ -88,8 +88,10 @@ defmodule VutuvWeb.UserControllerTest do
     refute html =~ ~p"/#{user}/following"
   end
 
-  test "with no followers or following, the counts row is gone and Member since moves up",
+  test "with no followers or following, the counts row is gone but Member since still shows",
        %{conn: conn} do
+    # "Member since" always anchors the footer row (left of the vCard action),
+    # whether or not there is a counts row above it.
     user = insert_activated_user(inserted_at: ~N[2008-02-15 10:00:00])
 
     html = conn |> get(~p"/#{user}") |> html_response(200)

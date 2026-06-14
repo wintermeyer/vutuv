@@ -100,61 +100,60 @@ the resulting ~200px rail width. --%>
         >
           {VutuvWeb.Markdown.render(@user.headline)}
         </div>
-        <p :if={@work_info not in [nil, ""]} class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+        <p :if={@work_info not in [nil, ""]} class="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
           {@work_info}
         </p>
 
         <% member_since = member_since(@user) %>
         <% has_counts = @follower_count > 0 or @followee_count > 0 or @connection_count > 0 %>
 
-        <%!-- With no followers and no following there is no counts row to sit
-        beside, so "Member since" moves up into the identity block, left-aligned
-        under the work line. --%>
-        <.member_since_line :if={member_since && not has_counts} value={member_since} class="mt-2" />
-
         <%!-- Counts row: each counter is hidden when its total is 0 (a bare "0"
-        with no label says nothing). "Member since" (how long the account has
-        been on vutuv) rides on the right of the same line via ml-auto whenever
-        at least one counter shows; ml-auto keeps it right-aligned even if it
-        wraps on a narrow screen. --%>
-        <div :if={has_counts} class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-          <div class="flex gap-6">
-            <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class="hover:underline">
-              <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
-              <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span>
-            </.link>
-            <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class="hover:underline">
-              <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
-              <span class="text-slate-500">{gettext("following")}</span>
-            </.link>
-            <.link
-              :if={@connection_count > 0}
-              id="profile-connections"
-              href={~p"/#{@user}/connections"}
-              class="hover:underline"
-            >
-              <span class="font-bold text-slate-900 dark:text-white">{compact_count(@connection_count)}</span>
-              <span class="text-slate-500">{ngettext("connection", "connections", @connection_count)}</span>
-            </.link>
-          </div>
-          <.member_since_line :if={member_since} value={member_since} class="ml-auto" />
+        with no label says nothing). Left-aligned. "Member since" used to ride
+        the right end of this line via ml-auto, but on a narrow phone it wrapped
+        to a lone right-aligned line that read as orphaned and left the card
+        lopsided; it now anchors the left of the footer row below, opposite the
+        actions. --%>
+        <div :if={has_counts} class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+          <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class="hover:underline">
+            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
+            <span class="text-slate-500">{ngettext("follower", "followers", @follower_count)}</span>
+          </.link>
+          <.link :if={@followee_count > 0} href={~p"/#{@user}/following"} class="hover:underline">
+            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@followee_count)}</span>
+            <span class="text-slate-500">{gettext("following")}</span>
+          </.link>
+          <.link
+            :if={@connection_count > 0}
+            id="profile-connections"
+            href={~p"/#{@user}/connections"}
+            class="hover:underline"
+          >
+            <span class="font-bold text-slate-900 dark:text-white">{compact_count(@connection_count)}</span>
+            <span class="text-slate-500">{ngettext("connection", "connections", @connection_count)}</span>
+          </.link>
         </div>
 
-        <%!-- Footer action: download this profile as a vCard (.vcf). Pinned to
-        the bottom-right of the header card on its own hairline-divided row, so
-        it never collides with the counts/member-since line above (which is
-        right-aligned when counts are present). Shown to everyone, including the
-        owner. Replaces the old standalone "Exports" rail card. --%>
-        <div class="mt-4 flex items-center justify-end gap-4 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <%!-- The quiet escape hatch: report this profile. Deliberately muted
-          (footer, slate, no fill) so it is findable when needed but never in
-          the way. Logged-in non-owners only. --%>
-          <.link
-            :if={@current_user && not same_user?(@user, @current_user)}
-            id="report-profile"
-            href={~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.active_slug}"]}"}
-            class="mr-auto inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-          >
+        <%!-- Footer row: "Member since" anchors the left and the actions
+        (report / block / vCard) cluster on the right, so the hairline-divided
+        row carries weight on both ends instead of stacking everything against
+        the right edge (which left all the empty space on the left). vCard is
+        the download of this profile as a .vcf, shown to everyone including the
+        owner; it replaces the old standalone "Exports" rail card. --%>
+        <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <%!-- my-0 neutralises the default <p> margin from components.css, which
+          would otherwise inflate the margin-box and lift the text above the
+          vCard baseline under the row's items-center. --%>
+          <.member_since_line :if={member_since} value={member_since} class="my-0" />
+          <div class="ml-auto flex items-center gap-4">
+            <%!-- The quiet escape hatch: report this profile. Deliberately muted
+            (footer, slate, no fill) so it is findable when needed but never in
+            the way. Logged-in non-owners only. --%>
+            <.link
+              :if={@current_user && not same_user?(@user, @current_user)}
+              id="report-profile"
+              href={~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.active_slug}"]}"}
+              class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
+            >
             <span aria-hidden="true">⚑</span>
             {gettext("Report")}
           </.link>
@@ -204,6 +203,7 @@ the resulting ~200px rail width. --%>
             </svg>
             {gettext("vCard")}
           </.link>
+          </div>
         </div>
       </div>
     </section>
