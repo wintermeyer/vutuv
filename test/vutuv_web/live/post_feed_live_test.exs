@@ -12,6 +12,26 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
 
+  describe "engagement query batching" do
+    test "feed engagement queries do not grow with post count", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      for n <- 1..3, do: {:ok, _} = Posts.create_post(friend, %{body: "post #{n}"})
+      {_, few} = Vutuv.QueryCounter.count_queries(fn -> get(conn, ~p"/feed") end)
+
+      for n <- 4..13, do: {:ok, _} = Posts.create_post(friend, %{body: "post #{n}"})
+      {_, many} = Vutuv.QueryCounter.count_queries(fn -> recycle(conn) |> get(~p"/feed") end)
+
+      # 10 more posts must not add ~10 per-card engagement queries: the feed
+      # pre-loads engagement for the whole page in one batch and hands it to the
+      # action bars (it used to run one post_engagement query per card on mount).
+      assert many <= few + 2,
+             "feed query count grew from #{few} to #{many}; engagement is not batched"
+    end
+  end
+
   describe "mount" do
     test "redirects logged-out visitors to the login page", %{conn: conn} do
       assert {:error, {:redirect, %{to: "/login"}}} = live(conn, ~p"/feed")

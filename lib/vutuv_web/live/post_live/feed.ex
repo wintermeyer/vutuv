@@ -41,7 +41,16 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:empty?, page.entries == [])
      |> assign(:pending_posts, [])
      |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
-     |> stream(:posts, page.entries)}
+     |> stream(:posts, with_engagement(page.entries, user))}
+  end
+
+  # Pre-load the action-bar engagement for the whole page in one query and hang
+  # it on each entry, so the per-card Actions LiveViews don't each run their own
+  # query on mount (was one query per post). Live-arriving single posts carry
+  # `engagement: nil` and fall back to the bar's own query.
+  defp with_engagement(entries, user) do
+    engagement = Posts.post_engagement_map(Enum.map(entries, & &1.post.id), user)
+    Enum.map(entries, &Map.put(&1, :engagement, engagement[&1.post.id]))
   end
 
   @impl true
@@ -56,7 +65,7 @@ defmodule VutuvWeb.PostLive.Feed do
      socket
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
-     |> stream(:posts, page.entries, at: -1)}
+     |> stream(:posts, with_engagement(page.entries, socket.assigns.current_user), at: -1)}
   end
 
   def handle_event("show-new", _params, socket) do
@@ -76,7 +85,17 @@ defmodule VutuvWeb.PostLive.Feed do
   @impl true
   def handle_info({:new_post, %{post_id: post_id, author_id: author_id}}, socket) do
     post = Posts.get_post(post_id)
-    entry = post && %{id: "post-#{post.id}", post: post, reposted_by: nil, at: post.inserted_at}
+
+    entry =
+      post &&
+        %{
+          id: "post-#{post.id}",
+          post: post,
+          reposted_by: nil,
+          at: post.inserted_at,
+          engagement: nil
+        }
+
     insert_entry(socket, entry, author_id)
   end
 
@@ -93,7 +112,8 @@ defmodule VutuvWeb.PostLive.Feed do
           id: "repost-#{repost_id}",
           post: post,
           reposted_by: reposter,
-          at: NaiveDateTime.utc_now(:second)
+          at: NaiveDateTime.utc_now(:second),
+          engagement: nil
         }
 
     insert_entry(socket, entry, reposter_id)
@@ -182,6 +202,7 @@ defmodule VutuvWeb.PostLive.Feed do
               reposted_by={entry.reposted_by}
               entry_id={entry.id}
               conn_or_socket={@socket}
+              engagement={entry.engagement}
             />
           </div>
         </div>

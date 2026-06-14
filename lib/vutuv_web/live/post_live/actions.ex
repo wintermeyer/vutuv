@@ -45,12 +45,17 @@ defmodule VutuvWeb.PostLive.Actions do
     # notification / message / new-post event only to discard it.
     if connected?(socket), do: Posts.subscribe_post(post_id)
 
+    # A list page (e.g. the feed) that already loaded the post can hand the
+    # engagement in via the session, sparing this bar its own query on mount;
+    # otherwise (a lone card on a dead page) the bar loads it itself.
+    engagement = session["engagement"] || Posts.post_engagement(post_id, viewer_id)
+
     {:ok,
      socket
      |> assign(:id, session["id"])
      |> assign(:post_id, post_id)
      |> assign(:viewer_id, viewer_id)
-     |> load_engagement()}
+     |> assign(:engagement, engagement)}
   end
 
   # The post can vanish between page render and socket mount (or while the

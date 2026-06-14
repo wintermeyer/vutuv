@@ -710,6 +710,46 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "post_engagement_map/2" do
+    test "batches the same engagement post_engagement/2 returns per post" do
+      author = user()
+      viewer = user()
+      other = user()
+
+      p1 = create_post!(author, %{body: "one"})
+      p2 = create_post!(author, %{body: "two"})
+
+      :ok = Posts.like_post(viewer, p1)
+      :ok = Posts.like_post(other, p1)
+      :ok = Posts.bookmark_post(viewer, p2)
+
+      map = Posts.post_engagement_map([p1.id, p2.id], viewer)
+
+      # Each batched entry is byte-for-byte the single-post query (the shared
+      # select guarantees the shape can't drift), so the action bar is fed the
+      # exact same data whether it was preloaded or self-loaded.
+      assert map[p1.id] == Posts.post_engagement(p1.id, viewer)
+      assert map[p2.id] == Posts.post_engagement(p2.id, viewer)
+
+      # ...and the values are right: p1 has two likes incl. the viewer's; the
+      # viewer bookmarked (but did not like) p2.
+      assert map[p1.id].likes == 2
+      assert map[p1.id].liked? == true
+      assert map[p2.id].bookmarked? == true
+      assert map[p2.id].liked? == false
+    end
+
+    test "an anonymous viewer gets the counts with every flag false" do
+      post = create_post!(user(), %{body: "x"})
+      :ok = Posts.like_post(user(), post)
+
+      map = Posts.post_engagement_map([post.id], nil)
+
+      assert map[post.id].likes == 1
+      assert map[post.id].liked? == false
+    end
+  end
+
   describe "likes and bookmarks" do
     test "like_post/2 likes once, idempotently" do
       reader = user()

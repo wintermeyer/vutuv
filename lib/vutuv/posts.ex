@@ -753,41 +753,59 @@ defmodule Vutuv.Posts do
   `nil` when the post is gone.
   """
   def post_engagement(post_id, viewer) do
-    viewer_id =
-      case viewer do
-        %User{id: id} -> id
-        id when is_binary(id) -> id
-        # The nil UUID can never match a row: "anonymous" without a NULL arm.
-        nil -> "00000000-0000-0000-0000-000000000000"
-      end
+    from(p in Post, where: p.id == ^post_id)
+    |> engagement_select(engagement_viewer_id(viewer))
+    |> Repo.one()
+  end
 
-    query =
-      from(p in Post, where: p.id == ^post_id)
-      |> select([p], engagement_count_select(p))
-      |> select_merge([p], %{
-        liked?:
-          fragment(
-            "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
-            p.id,
-            type(^viewer_id, UUIDv7)
-          ),
-        bookmarked?:
-          fragment(
-            "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
-            p.id,
-            type(^viewer_id, UUIDv7)
-          ),
-        reposted?:
-          fragment(
-            "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
-            p.id,
-            type(^viewer_id, UUIDv7)
-          ),
-        restricted?: fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
-        author_id: p.user_id
-      })
+  @doc """
+  Batched `post_engagement/2`: the same per-post engagement (counts, the
+  viewer's flags, `restricted?`, `author_id`) for many posts in one round trip,
+  returned as `%{post_id => engagement}`. The feed pre-loads this for its page
+  and hands each card's engagement to its action bar, so the per-card `Actions`
+  LiveViews don't each run their own query on mount. `post_id` rides in the
+  value too; otherwise the shape matches `post_engagement/2`.
+  """
+  def post_engagement_map(post_ids, viewer) do
+    from(p in Post, where: p.id in ^post_ids)
+    |> engagement_select(engagement_viewer_id(viewer))
+    |> Repo.all()
+    |> Map.new(fn engagement -> {engagement.id, engagement} end)
+  end
 
-    Repo.one(query)
+  defp engagement_viewer_id(%User{id: id}), do: id
+  defp engagement_viewer_id(id) when is_binary(id), do: id
+  # The nil UUID can never match a row: "anonymous" without a NULL arm.
+  defp engagement_viewer_id(nil), do: "00000000-0000-0000-0000-000000000000"
+
+  # The shared SELECT behind post_engagement/2 and post_engagement_map/2, so the
+  # single-post and batched paths can never drift in what the action bar reads.
+  defp engagement_select(query, viewer_id) do
+    query
+    |> select([p], engagement_count_select(p))
+    |> select_merge([p], %{
+      id: p.id,
+      liked?:
+        fragment(
+          "EXISTS (SELECT 1 FROM post_likes l WHERE l.post_id = ? AND l.user_id = ?)",
+          p.id,
+          type(^viewer_id, UUIDv7)
+        ),
+      bookmarked?:
+        fragment(
+          "EXISTS (SELECT 1 FROM post_bookmarks b WHERE b.post_id = ? AND b.user_id = ?)",
+          p.id,
+          type(^viewer_id, UUIDv7)
+        ),
+      reposted?:
+        fragment(
+          "EXISTS (SELECT 1 FROM post_reposts r WHERE r.post_id = ? AND r.user_id = ?)",
+          p.id,
+          type(^viewer_id, UUIDv7)
+        ),
+      restricted?: fragment("EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", p.id),
+      author_id: p.user_id
+    })
   end
 
   @doc "Subscribes the caller to a post's `{:post_counters, …}` updates."

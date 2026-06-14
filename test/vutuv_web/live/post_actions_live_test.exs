@@ -340,4 +340,62 @@ defmodule VutuvWeb.PostActionsLiveTest do
       refute Map.has_key?(payload, :by_user_id)
     end
   end
+
+  describe "preloaded engagement" do
+    # A list page (the feed) pre-loads engagement once and hands each card its
+    # own via the session, so the bar skips its mount query. Prove the bar
+    # renders exactly what it was handed by passing a like count no query could
+    # produce (the post has zero likes).
+    test "renders engagement handed in via the session instead of querying" do
+      user = other_user()
+      post = create_post!(user, %{body: "preloaded"})
+
+      passed = %{
+        likes: 999,
+        bookmarks: 0,
+        reposts: 0,
+        replies: 0,
+        liked?: true,
+        bookmarked?: false,
+        reposted?: false,
+        restricted?: false,
+        author_id: user.id,
+        id: post.id
+      }
+
+      {:ok, _bar, html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+          session: %{
+            "post_id" => post.id,
+            "user_id" => user.id,
+            "id" => "post-actions-#{post.id}",
+            "locale" => "en",
+            "engagement" => passed
+          }
+        )
+
+      assert html =~ ~r/data-count="like">\s*999\s*</
+      assert html =~ ~s(aria-pressed="true")
+    end
+
+    # Without an engagement in the session (a lone card on a dead page), the bar
+    # falls back to loading its own — here the post genuinely has one like.
+    test "falls back to its own query when the session carries none" do
+      user = other_user()
+      post = create_post!(user, %{body: "self-loaded"})
+      :ok = Posts.like_post(other_user(), post)
+
+      {:ok, _bar, html} =
+        live_isolated(build_conn(), VutuvWeb.PostLive.Actions,
+          session: %{
+            "post_id" => post.id,
+            "user_id" => user.id,
+            "id" => "post-actions-#{post.id}",
+            "locale" => "en"
+          }
+        )
+
+      assert html =~ ~r/data-count="like">\s*1\s*</
+    end
+  end
 end

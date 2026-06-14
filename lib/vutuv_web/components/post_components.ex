@@ -58,6 +58,13 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:class, :string, default: nil)
 
+  attr(:engagement, :any,
+    default: nil,
+    doc:
+      "preloaded engagement map (Posts.post_engagement_map/2) handed to the card's " <>
+        "action bar so it skips its own mount query; nil = the bar loads it itself"
+  )
+
   def post_card(assigns) do
     {body_html, truncated?} =
       case assigns.mode do
@@ -113,6 +120,7 @@ defmodule VutuvWeb.PostComponents do
       menu_id={@menu_id}
       report_menu_id={@report_menu_id}
       time_id={@time_id}
+      engagement={@engagement}
     />
     """
   end
@@ -137,6 +145,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:menu_id, :string, required: true)
   attr(:report_menu_id, :string, required: true)
   attr(:time_id, :string, required: true)
+  attr(:engagement, :any, default: nil)
 
   defp post_card_body(assigns) do
     ~H"""
@@ -326,7 +335,7 @@ defmodule VutuvWeb.PostComponents do
           post can render twice on one page (original + repost). --%>
           {live_render(@conn_or_socket, VutuvWeb.PostLive.Actions,
             id: @actions_id,
-            session: %{"post_id" => @post.id, "id" => @actions_id}
+            session: %{"post_id" => @post.id, "id" => @actions_id, "engagement" => @engagement}
           )}
         </div>
 
