@@ -3,7 +3,7 @@ Built from the VutuvWeb.UI kit (<.card>, <.button>, <.avatar>, <.chip>,
 <.section_title>). Follow / unfollow / endorse hit the existing POST/DELETE
 routes; CSRF + method are handled by the rendered links.
 
-AGENT FORMATS: this page also exists as /:slug.md, .txt, .json and .vcf,
+AGENT FORMATS: this page also exists as /:slug.md, .txt, .json, .xml and .vcf,
 all rendered from VutuvWeb.AgentDocs.ProfileDoc. When you add or remove
 public data here, update ProfileDoc too — agent_docs_drift_test.exs fails
 on drift. --%>
@@ -580,7 +580,7 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):
-    the same page as Markdown, plain text, JSON and vCard. A human visitor
+    the same page as Markdown, plain text, JSON, XML and vCard. A human visitor
     browsing in German gets the German rendering via ?lang=; the canonical
     extension URLs (head alternates, llms.txt) stay English. --%>
     <% format_lang =
@@ -594,6 +594,7 @@ the resulting ~200px rail width. --%>
             {gettext("Markdown"), "/#{@user.active_slug}.md#{format_lang}"},
             {gettext("Text only"), "/#{@user.active_slug}.txt#{format_lang}"},
             {"JSON", "/#{@user.active_slug}.json#{format_lang}"},
+            {"XML", "/#{@user.active_slug}.xml#{format_lang}"},
             {gettext("vCard"), "/#{@user.active_slug}.vcf"}
           ]
         }>

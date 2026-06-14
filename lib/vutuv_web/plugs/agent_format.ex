@@ -5,12 +5,19 @@ defmodule VutuvWeb.Plug.AgentFormat do
   `/stefan.wintermeyer`, answered as Markdown.
 
   Runs in the endpoint, before the router: when a GET path's last segment
-  ends in one of the known extensions (`.md`, `.txt`, `.json`, `.vcf`), the
-  extension is stripped from `path_info`/`request_path` so the normal route
-  matches, and the requested format is stored in
+  ends in one of the known extensions (`.md`, `.txt`, `.json`, `.xml`,
+  `.vcf`), the extension is stripped from `path_info`/`request_path` so the
+  normal route matches, and the requested format is stored in
   `conn.private.vutuv_agent_format`. Only the known extensions are cut, and
   only as a suffix — user slugs legitimately contain dots
   (`stefan.wintermeyer`), so nothing else of the segment is touched.
+
+  `.xml` is shared with routes that serve their own XML and must not be
+  rewritten: `/sitemap.xml` (a `@skip_paths` literal), the chunked
+  `/sitemaps/*.xml` children (the `sitemaps` `@skip_prefix`) and the RSS
+  feeds `/posts/feed.xml` + `/:slug/posts/feed.xml` (skipped by their literal
+  `feed.xml` last segment, since the per-member one has a dynamic slug up
+  front). RSS is `application/rss+xml`, distinct from our `application/xml`.
 
   A `before_send` guard turns the response into a plain 404 if no controller
   actually delivered an agent document (`conn.private.vutuv_agent_doc_sent`):
@@ -20,8 +27,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
   URL); error responses pass through unchanged.
 
   Accept negotiation also happens here: a GET whose `Accept` header asks for
-  `text/markdown` / `application/json` / `text/plain` / `text/vcard` (and not
-  `text/html` — browsers always list it) gets the format recorded in
+  `text/markdown` / `application/json` / `application/xml` / `text/plain` /
+  `text/vcard` (and not `text/html` — browsers always list it) gets the format recorded in
   `conn.private.vutuv_agent_accept`, and the header is normalized to
   `text/html` so the browser pipeline's `accepts ["html"]` admits the
   request. Header-negotiated requests are best-effort: a page without agent
@@ -42,10 +49,10 @@ defmodule VutuvWeb.Plug.AgentFormat do
   # `.well-known`, whose literal routes end in real .json/.md filenames.
   @skip_prefixes ~w(api admin assets css fonts images js favicon.ico avatars covers
                     screenshots post_images live phoenix tidewave sent_emails dev search
-                    .well-known)
+                    sitemaps .well-known)
 
   # Literal routes whose name ends in a known extension.
-  @skip_paths ["/robots.txt", "/llms.txt", "/security.txt"]
+  @skip_paths ["/robots.txt", "/llms.txt", "/security.txt", "/sitemap.xml"]
 
   @impl Plug
   def init(opts), do: opts
@@ -53,7 +60,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
   @impl Plug
   def call(%Plug.Conn{method: "GET", path_info: [_ | _] = path_info} = conn, _opts) do
     with false <- conn.request_path in @skip_paths,
-         false <- hd(path_info) in @skip_prefixes do
+         false <- hd(path_info) in @skip_prefixes,
+         false <- List.last(path_info) == "feed.xml" do
       case strip_extension(List.last(path_info)) do
         {format, stripped} ->
           rewritten = List.replace_at(path_info, -1, stripped)
@@ -86,6 +94,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
         String.contains?(accept, "text/html") -> nil
         String.contains?(accept, "text/vcard") -> :vcf
         String.contains?(accept, "application/json") -> :json
+        String.contains?(accept, "application/xml") -> :xml
+        String.contains?(accept, "text/xml") -> :xml
         String.contains?(accept, "text/plain") -> :txt
         true -> nil
       end

@@ -4,13 +4,14 @@ defmodule VutuvWeb.AgentDocs do
   for every non-HTML page representation.**
 
   Every public page that supports it is also available as Markdown, plain
-  text (80 columns) and JSON under the same URL plus an extension, and the
-  profile additionally as a vCard:
+  text (80 columns), JSON and XML under the same URL plus an extension, and
+  the profile additionally as a vCard:
 
       /stefan.wintermeyer        the HTML page
       /stefan.wintermeyer.md     Markdown (also via `Accept: text/markdown`)
       /stefan.wintermeyer.txt    plain text (also via `Accept: text/plain`)
       /stefan.wintermeyer.json   JSON (also via `Accept: application/json`)
+      /stefan.wintermeyer.xml    XML (also via `Accept: application/xml`)
       /stefan.wintermeyer.vcf    vCard (also via `Accept: text/vcard`)
 
   The extension is parsed by `VutuvWeb.Plug.AgentFormat` (endpoint); the
@@ -61,6 +62,7 @@ defmodule VutuvWeb.AgentDocs do
   alias VutuvWeb.AgentDocs.Markdown
   alias VutuvWeb.AgentDocs.Text
   alias VutuvWeb.AgentDocs.VCard
+  alias VutuvWeb.AgentDocs.Xml
 
   # v2 (2026-06): email entries gained a `type` and changed shape from a bare
   # address string to a `{id, type, value}` map, matching phone_numbers.
@@ -70,13 +72,14 @@ defmodule VutuvWeb.AgentDocs do
     md: "text/markdown",
     txt: "text/plain",
     json: "application/json",
+    xml: "application/xml",
     vcf: "text/vcard"
   }
 
   # The one list of formats the system knows; only the profile supports :vcf,
   # so it is not part of the per-page default.
   @formats Map.keys(@content_types)
-  @default_formats [:md, :txt, :json]
+  @default_formats [:md, :txt, :json, :xml]
 
   # Native-language names for the language hint (the hint addresses the
   # reader of the *other* language); a locale added without a name here
@@ -89,7 +92,7 @@ defmodule VutuvWeb.AgentDocs do
   def formats, do: @formats
 
   @doc """
-  The format this request asks for: `:md | :txt | :json | :vcf | :html`.
+  The format this request asks for: `:md | :txt | :json | :xml | :vcf | :html`.
 
   URL extension first (set by `VutuvWeb.Plug.AgentFormat`), then `Accept`
   header negotiation. A format outside `allowed` resolves to `:html`; for an
@@ -294,11 +297,13 @@ defmodule VutuvWeb.AgentDocs do
   defp format_name(:md), do: :markdown
   defp format_name(:txt), do: :text
   defp format_name(:json), do: :json
+  defp format_name(:xml), do: :xml
   defp format_name(:vcf), do: :vcard
 
   defp render_doc(:md, doc), do: Markdown.render(doc)
   defp render_doc(:txt, doc), do: Text.render(doc)
   defp render_doc(:json, doc), do: JSON.render(doc)
+  defp render_doc(:xml, doc), do: Xml.render(doc)
   defp render_doc(:vcf, doc), do: VCard.render(doc)
 
   # A reader whose Accept-Language asks for another language we have a

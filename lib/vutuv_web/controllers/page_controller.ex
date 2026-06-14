@@ -116,6 +116,7 @@ defmodule VutuvWeb.PageController do
   - `<page>.md`   — Markdown with YAML frontmatter (or `Accept: text/markdown`)
   - `<page>.txt`  — plain text, 80 columns (or `Accept: text/plain`)
   - `<page>.json` — flat JSON document (or `Accept: application/json`)
+  - `<page>.xml`  — flat XML document (or `Accept: application/xml`)
 
   Labels default to English; add `?lang=de` for a German rendering. The
   member-written content keeps its original language either way.

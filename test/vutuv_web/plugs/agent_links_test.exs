@@ -35,7 +35,7 @@ defmodule VutuvWeb.Plug.AgentLinksTest do
 
     html = html_response(conn, 200)
 
-    for ext <- ~w(.md .txt .json .vcf) do
+    for ext <- ~w(.md .txt .json .xml .vcf) do
       assert links =~ ~s(</linked_member#{ext}>; rel="alternate"),
              "missing #{ext} alternate in Link header"
 

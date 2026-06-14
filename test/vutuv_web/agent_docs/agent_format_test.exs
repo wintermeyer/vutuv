@@ -1,8 +1,8 @@
 defmodule VutuvWeb.AgentFormatTest do
   @moduledoc """
-  The agent-format plumbing: URL extensions (.md/.txt/.json/.vcf), Accept
-  negotiation, the response headers and the "an unsupported extension never
-  serves HTML" guard. Content parity lives in agent_docs_drift_test.exs.
+  The agent-format plumbing: URL extensions (.md/.txt/.json/.xml/.vcf),
+  Accept negotiation, the response headers and the "an unsupported extension
+  never serves HTML" guard. Content parity lives in agent_docs_drift_test.exs.
   """
 
   use VutuvWeb.ConnCase, async: true
@@ -54,6 +54,48 @@ defmodule VutuvWeb.AgentFormatTest do
       assert doc["name"] == "Agatha Test"
       assert doc["generated_at"]
       assert doc["formats"]["markdown"] =~ "/agent_tester.md"
+    end
+
+    test "/:slug.xml answers a well-formed XML document with schema_version" do
+      conn = get(build_conn(), "/agent_tester.xml")
+
+      assert conn.status == 200
+      assert [content_type] = get_resp_header(conn, "content-type")
+      assert content_type =~ "application/xml"
+
+      body = conn.resp_body
+      assert body =~ ~s(<?xml version="1.0" encoding="UTF-8"?>)
+      # The root element is the doc type, the fields are child elements.
+      assert body =~ "<profile>"
+      assert body =~ "</profile>"
+      assert body =~ "<schema_version>2</schema_version>"
+      assert body =~ "<name>Agatha Test</name>"
+      # The sibling-format URLs ride along, the new XML one included.
+      assert body =~ "<xml>#{VutuvWeb.Endpoint.url()}/agent_tester.xml</xml>"
+
+      # It parses: a real XML reader accepts it (xmerl ships with OTP).
+      assert {parsed, _rest} = :xmerl_scan.string(String.to_charlist(body))
+      assert elem(parsed, 0) == :xmlElement
+
+      # A machine format, so no Accept-Language hint and no token header.
+      assert get_resp_header(conn, "vary") == ["accept"]
+      assert get_resp_header(conn, "x-markdown-tokens") == []
+    end
+
+    test "XML escapes markup-breaking characters in user content" do
+      insert_activated_user(
+        active_slug: "xml_evil",
+        first_name: "Eve",
+        headline: ~s(Tags & <angle> "brackets")
+      )
+
+      body = get(build_conn(), "/xml_evil.xml").resp_body
+
+      assert body =~ "Tags &amp; &lt;angle&gt;"
+      refute body =~ "<angle>"
+      # And it still parses with the hostile content in place.
+      assert {parsed, _rest} = :xmerl_scan.string(String.to_charlist(body))
+      assert elem(parsed, 0) == :xmlElement
     end
 
     test "/:slug.vcf answers a vCard download" do
@@ -301,9 +343,61 @@ defmodule VutuvWeb.AgentFormatTest do
       assert get_resp_header(conn, "vary") == ["accept"]
       assert html =~ ~s(rel="alternate" type="text/markdown" href="/agent_tester.md")
       assert html =~ ~s(rel="alternate" type="application/json" href="/agent_tester.json")
+      assert html =~ ~s(rel="alternate" type="application/xml" href="/agent_tester.xml")
       assert html =~ ~s(rel="alternate" type="text/vcard" href="/agent_tester.vcf")
-      # The visible "Other formats" card links all four siblings.
+      # The visible "Other formats" card links every sibling.
       assert html =~ ~s(href="/agent_tester.txt")
+      assert html =~ ~s(href="/agent_tester.xml")
+    end
+
+    test "Accept: application/xml answers XML, but text/html still wins for browsers" do
+      conn =
+        build_conn()
+        |> put_req_header("accept", "application/xml")
+        |> get("/agent_tester")
+
+      assert [content_type] = get_resp_header(conn, "content-type")
+      assert content_type =~ "application/xml"
+      assert conn.resp_body =~ "<profile>"
+
+      # A browser (text/html present) keeps the HTML page even when it also
+      # lists application/xhtml+xml, which must not be read as our XML format.
+      conn =
+        build_conn()
+        |> put_req_header("accept", "text/html,application/xhtml+xml,application/xml;q=0.9")
+        |> get("/agent_tester")
+
+      assert html_response(conn, 200) =~ "Agatha"
+    end
+  end
+
+  describe "the real .xml routes are not mistaken for an agent format" do
+    # Adding .xml as an agent extension must not let the endpoint plug strip it
+    # off the routes that already serve their own XML (sitemap, RSS feeds).
+    test "/sitemap.xml still serves the sitemap index" do
+      conn = get(build_conn(), "/sitemap.xml")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<sitemapindex"
+    end
+
+    test "the chunked /sitemaps/*.xml children still serve" do
+      conn = get(build_conn(), "/sitemaps/static.xml")
+
+      assert conn.status == 200
+      assert conn.resp_body =~ "<urlset"
+    end
+
+    test "the site-wide and per-member RSS feeds still serve" do
+      site = get(build_conn(), "/posts/feed.xml")
+      assert site.status == 200
+      assert [content_type] = get_resp_header(site, "content-type")
+      assert content_type =~ "application/rss+xml"
+      assert site.resp_body =~ "<rss"
+
+      member = get(build_conn(), "/agent_tester/posts/feed.xml")
+      assert member.status == 200
+      assert member.resp_body =~ "<rss"
     end
   end
 

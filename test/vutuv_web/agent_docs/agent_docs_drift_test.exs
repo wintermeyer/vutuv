@@ -1,8 +1,8 @@
 defmodule VutuvWeb.AgentDocsDriftTest do
   @moduledoc """
   The anti-drift contract for the agent formats (`VutuvWeb.AgentDocs`): every
-  public fact a page's HTML shows must also appear in its Markdown, text and
-  JSON documents. When this fails you changed a public page (or a doc
+  public fact a page's HTML shows must also appear in its Markdown, text,
+  JSON and XML documents. When this fails you changed a public page (or a doc
   builder) without updating the other side — keep `show.html.heex` (etc.)
   and the `VutuvWeb.AgentDocs.*Doc` builders in sync.
   """
@@ -24,7 +24,13 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         birthdate: ~D[1991-04-23]
       )
 
-    insert(:email, user: user, public?: true, value: "greta.public@example.com", email_type: "Work")
+    insert(:email,
+      user: user,
+      public?: true,
+      value: "greta.public@example.com",
+      email_type: "Work"
+    )
+
     insert(:work_experience, user: user, title: "Bridge Engineer", organization: "Span AG")
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
@@ -47,7 +53,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       html: get(build_conn(), path) |> html_response(200),
       md: get(build_conn(), path <> ".md").resp_body,
       txt: get(build_conn(), path <> ".txt").resp_body,
-      json: get(build_conn(), path <> ".json").resp_body
+      json: get(build_conn(), path <> ".json").resp_body,
+      xml: get(build_conn(), path <> ".xml").resp_body
     }
   end
 
@@ -278,8 +285,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     doc = Jason.decode!(get(build_conn(), "/drift_tester/emails.json").resp_body)
 
     assert [%{"type" => "Work", "value" => "greta.public@example.com"}] = doc["entries"]
-    assert get(build_conn(), "/drift_tester/emails.md").resp_body =~ "Work: <greta.public@example.com>"
-    assert get(build_conn(), "/drift_tester/emails.txt").resp_body =~ "Work: greta.public@example.com"
+
+    assert get(build_conn(), "/drift_tester/emails.md").resp_body =~
+             "Work: <greta.public@example.com>"
+
+    assert get(build_conn(), "/drift_tester/emails.txt").resp_body =~
+             "Work: greta.public@example.com"
 
     # The profile doc and vCard carry the same typed address.
     profile = Jason.decode!(get(build_conn(), "/drift_tester.json").resp_body)
@@ -289,7 +300,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
              &(&1["type"] == "Work" and &1["value"] == "greta.public@example.com")
            )
 
-    assert get(build_conn(), "/drift_tester.vcf").resp_body =~ "EMAIL;TYPE=Work:greta.public@example.com"
+    assert get(build_conn(), "/drift_tester.vcf").resp_body =~
+             "EMAIL;TYPE=Work:greta.public@example.com"
   end
 
   test "connections list in every format", %{user: user} do
