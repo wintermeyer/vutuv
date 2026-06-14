@@ -201,6 +201,32 @@ defmodule VutuvWeb.MessageLive.Index do
      |> stream(:messages, Enum.reverse(page.entries), at: 0)}
   end
 
+  # Block the other member straight from the thread — the moment unwanted
+  # contact usually arrives. Same Social.block_user/2 path as the profile
+  # control: it severs follows + the connection and freezes this conversation,
+  # so it drops off the list (list_conversations hides frozen ones); land back
+  # there with a notice. block_user/2 is idempotent and never refuses here
+  # (the other party is, by construction, not the current user).
+  def handle_event("block", _params, socket) do
+    case socket.assigns.other do
+      nil ->
+        {:noreply, socket}
+
+      other ->
+        {:ok, _block} = Vutuv.Social.block_user(socket.assigns.current_user, other)
+
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           gettext("You blocked @%{slug}. You can undo this on your blocked list.",
+             slug: other.active_slug
+           )
+         )
+         |> push_navigate(to: ~p"/messages")}
+    end
+  end
+
   ## PubSub
 
   @impl true
@@ -473,13 +499,48 @@ defmodule VutuvWeb.MessageLive.Index do
               </h1>
             </.link>
           </div>
-          <%= if typing_label(@typing_tokens) do %>
-            <span class="text-xs font-medium text-brand-600 dark:text-brand-400">{typing_label(@typing_tokens)}</span>
-          <% else %>
-            <span :if={online?(@online_ids, @other.id)} class="text-xs text-emerald-600 dark:text-emerald-400">
-              {gettext("Online")}
-            </span>
-          <% end %>
+          <div class="flex items-center gap-2">
+            <%= if typing_label(@typing_tokens) do %>
+              <span class="text-xs font-medium text-brand-600 dark:text-brand-400">{typing_label(@typing_tokens)}</span>
+            <% else %>
+              <span :if={online?(@online_ids, @other.id)} class="text-xs text-emerald-600 dark:text-emerald-400">
+                {gettext("Online")}
+              </span>
+            <% end %>
+
+            <%!-- Calm overflow menu: blocking is reachable right where unwanted
+            contact arrives, without shouting. Native <details data-menu>; app.js
+            closes it on outside click and Escape. Blocking severs follows + the
+            connection, freezes this conversation and stops all interaction both
+            ways; unblocking restores nothing. --%>
+            <details :if={@other} data-menu class="relative" id="thread-menu">
+              <summary
+                title={gettext("Options")}
+                class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 [&::-webkit-details-marker]:hidden"
+              >
+                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M6.75 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
+                </svg>
+                <span class="sr-only">{gettext("Options")}</span>
+              </summary>
+              <div class="absolute right-0 z-20 mt-1 w-56 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
+                <button
+                  type="button"
+                  id="block-from-thread"
+                  phx-click="block"
+                  data-confirm={
+                    gettext(
+                      "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
+                      slug: @other.active_slug
+                    )
+                  }
+                  class="block w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                >
+                  {gettext("Block @%{slug}", slug: @other.active_slug)}
+                </button>
+              </div>
+            </details>
+          </div>
         </header>
 
         <div :if={@more?} class="border-b border-slate-200 py-2 text-center dark:border-slate-800">

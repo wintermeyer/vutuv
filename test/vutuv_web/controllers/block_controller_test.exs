@@ -38,6 +38,59 @@ defmodule VutuvWeb.BlockControllerTest do
     assert body =~ ~p"/blocks/#{block.id}"
   end
 
+  test "GET /blocks offers a form to block a new member by handle", %{conn: conn} do
+    body = conn |> get(~p"/blocks") |> html_response(200)
+    assert body =~ "block-someone-form"
+    assert body =~ "block[handle]"
+  end
+
+  test "POST /blocks with a handle blocks the member and returns to the blocked list", %{
+    conn: conn,
+    user: user,
+    other: other
+  } do
+    # A leading "@" and odd casing both have to resolve to the active slug.
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{String.upcase(other.active_slug)}"})
+
+    assert redirected_to(conn) == ~p"/blocks"
+    assert Social.blocked_between?(user.id, other.id)
+  end
+
+  test "POST /blocks with an unknown handle blocks nobody", %{conn: conn, user: user} do
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "no-such-member"})
+
+    assert redirected_to(conn) == ~p"/blocks"
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "no-such-member"
+    assert Social.list_blocked(user) == []
+  end
+
+  test "POST /blocks with a blank handle blocks nobody", %{conn: conn, user: user} do
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "  "})
+
+    assert redirected_to(conn) == ~p"/blocks"
+    assert Social.list_blocked(user) == []
+  end
+
+  test "POST /blocks refuses blocking yourself by handle", %{conn: conn, user: user} do
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{user.active_slug}"})
+
+    assert redirected_to(conn) == ~p"/blocks"
+    refute Social.blocked_between?(user.id, user.id)
+  end
+
+  test "POST /blocks with an already-blocked handle stays idempotent", %{
+    conn: conn,
+    user: user,
+    other: other
+  } do
+    {:ok, _block} = Social.block_user(user, other)
+
+    conn = post(conn, ~p"/blocks", block: %{"handle" => other.active_slug})
+
+    assert redirected_to(conn) == ~p"/blocks"
+    assert length(Social.list_blocked(user)) == 1
+  end
+
   test "DELETE /blocks/:id unblocks", %{conn: conn, user: user, other: other} do
     {:ok, block} = Social.block_user(user, other)
 

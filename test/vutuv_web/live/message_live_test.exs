@@ -246,6 +246,37 @@ defmodule VutuvWeb.MessageLiveTest do
     end
   end
 
+  describe "blocking from a thread" do
+    test "the thread offers a Block action for the other member", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_activated_user(first_name: "Otto", last_name: "Other")
+      conversation = insert_conversation_between(me, other)
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      assert has_element?(view, "#thread-menu")
+      assert has_element?(view, "#block-from-thread")
+    end
+
+    test "blocking from the thread severs ties, freezes it, and returns to the list", %{
+      conn: conn
+    } do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_activated_user()
+      conversation = insert_conversation_between(me, other)
+      insert(:follow, follower: me, followee: other)
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      assert {:error, {:live_redirect, %{to: "/messages"}}} =
+               view |> element("#block-from-thread") |> render_click()
+
+      assert Vutuv.Social.blocked_between?(me.id, other.id)
+      assert Vutuv.Social.follow_id(me.id, other.id) == nil
+      assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
+    end
+  end
+
   describe "thread pagination" do
     test "older messages load on demand", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)

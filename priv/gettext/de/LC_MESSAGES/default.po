@@ -642,7 +642,7 @@ msgstr "Ein Social Media Account wurde gelöscht."
 msgid "Social media account updated successfully."
 msgstr "Ein Social Media Account wurde geändert."
 
-#: lib/vutuv_web/controllers/block_controller.ex:33
+#: lib/vutuv_web/controllers/block_controller.ex:36
 #: lib/vutuv_web/controllers/connection_controller.ex:68
 #: lib/vutuv_web/controllers/connection_controller.ex:90
 #: lib/vutuv_web/controllers/connection_controller.ex:97
@@ -1668,7 +1668,7 @@ msgstr "Es sieht so aus, als würden Sie noch niemandem folgen. Öffnen Sie das 
 msgid "Log out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/live/message_live/index.ex:337
+#: lib/vutuv_web/live/message_live/index.ex:363
 #, elixir-autogen, elixir-format
 msgid "Member"
 msgstr "Mitglied"
@@ -1679,7 +1679,7 @@ msgid "Message"
 msgstr "Nachricht"
 
 #: lib/vutuv_web/live/message_live/index.ex:44
-#: lib/vutuv_web/live/message_live/index.ex:385
+#: lib/vutuv_web/live/message_live/index.ex:411
 #: lib/vutuv_web/live/shell_live.ex:166
 #: lib/vutuv_web/live/shell_live.ex:279
 #: lib/vutuv_web/templates/layout/app.html.heex:104
@@ -1730,7 +1730,7 @@ msgstr "PIN"
 msgid "Pardon us! Something went wrong."
 msgstr "Entschuldigung! Etwas ist schiefgelaufen."
 
-#: lib/vutuv_web/live/message_live/index.ex:582
+#: lib/vutuv_web/live/message_live/index.ex:643
 #, elixir-autogen, elixir-format
 msgid "Send"
 msgstr "Senden"
@@ -1801,7 +1801,7 @@ msgstr "Wir haben einen PIN an Ihre neue E-Mail-Adresse geschickt. Geben Sie ihn
 msgid "Who to follow"
 msgstr "Vorgeschlagene Profile"
 
-#: lib/vutuv_web/live/message_live/index.ex:578
+#: lib/vutuv_web/live/message_live/index.ex:639
 #, elixir-autogen, elixir-format
 msgid "Write a message…"
 msgstr "Nachricht schreiben…"
@@ -1872,6 +1872,8 @@ msgstr "Eintrag löschen"
 
 #: lib/vutuv_web/components/ui.ex:256
 #: lib/vutuv_web/components/ui.ex:266
+#: lib/vutuv_web/live/message_live/index.ex:518
+#: lib/vutuv_web/live/message_live/index.ex:524
 #, elixir-autogen, elixir-format
 msgid "Options"
 msgstr "Optionen"
@@ -2481,49 +2483,49 @@ msgstr "Antwort auf einen inzwischen gelöschten Beitrag von %{handle}"
 msgid "Replying to %{handle}"
 msgstr "Antwort an %{handle}"
 
-#: lib/vutuv_web/live/message_live/index.ex:375
+#: lib/vutuv_web/live/message_live/index.ex:401
 #, elixir-autogen, elixir-format
 msgid "%{names} are typing…"
 msgstr "%{names} schreiben…"
 
-#: lib/vutuv_web/live/message_live/index.ex:374
+#: lib/vutuv_web/live/message_live/index.ex:400
 #, elixir-autogen, elixir-format
 msgid "%{name} is typing…"
 msgstr "%{name} schreibt…"
 
-#: lib/vutuv_web/live/message_live/index.ex:594
+#: lib/vutuv_web/live/message_live/index.ex:655
 #, elixir-autogen, elixir-format
 msgid "@%{slug} has not accepted your message request yet."
 msgstr "@%{slug} hat Ihre Nachrichtenanfrage noch nicht angenommen."
 
-#: lib/vutuv_web/live/message_live/index.ex:560
+#: lib/vutuv_web/live/message_live/index.ex:621
 #, elixir-autogen, elixir-format
 msgid "@%{slug} wants to message you."
 msgstr "@%{slug} möchte Ihnen Nachrichten schicken."
 
 #: lib/vutuv_web/components/ui.ex:511
-#: lib/vutuv_web/live/message_live/index.ex:358
+#: lib/vutuv_web/live/message_live/index.ex:384
 #: lib/vutuv_web/templates/connection/index.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Accept"
 msgstr "Annehmen"
 
-#: lib/vutuv_web/live/message_live/index.ex:463
+#: lib/vutuv_web/live/message_live/index.ex:489
 #, elixir-autogen, elixir-format
 msgid "Back to conversations"
 msgstr "Zurück zu den Unterhaltungen"
 
-#: lib/vutuv_web/live/message_live/index.ex:365
+#: lib/vutuv_web/live/message_live/index.ex:391
 #, elixir-autogen, elixir-format
 msgid "Decline"
 msgstr "Ablehnen"
 
-#: lib/vutuv_web/live/message_live/index.ex:333
+#: lib/vutuv_web/live/message_live/index.ex:359
 #, elixir-autogen, elixir-format
 msgid "Deleted account"
 msgstr "Gelöschtes Konto"
 
-#: lib/vutuv_web/live/message_live/index.ex:487
+#: lib/vutuv_web/live/message_live/index.ex:548
 #, elixir-autogen, elixir-format
 msgid "Load older messages"
 msgstr "Ältere Nachrichten laden"
@@ -2533,22 +2535,22 @@ msgstr "Ältere Nachrichten laden"
 msgid "Member not found."
 msgstr "Mitglied nicht gefunden."
 
-#: lib/vutuv_web/live/message_live/index.ex:442
+#: lib/vutuv_web/live/message_live/index.ex:468
 #, elixir-autogen, elixir-format
 msgid "No conversations yet."
 msgstr "Noch keine Unterhaltungen."
 
-#: lib/vutuv_web/live/message_live/index.ex:480
+#: lib/vutuv_web/live/message_live/index.ex:507
 #, elixir-autogen, elixir-format
 msgid "Online"
 msgstr "Online"
 
-#: lib/vutuv_web/live/message_live/index.ex:395
+#: lib/vutuv_web/live/message_live/index.ex:421
 #, elixir-autogen, elixir-format
 msgid "Requests"
 msgstr "Anfragen"
 
-#: lib/vutuv_web/live/message_live/index.ex:603
+#: lib/vutuv_web/live/message_live/index.ex:664
 #, elixir-autogen, elixir-format
 msgid "Select a conversation."
 msgstr "Wählen Sie eine Unterhaltung aus."
@@ -2919,7 +2921,7 @@ msgstr "Personen, die nicht Ihre Kontakte sind"
 msgid "wants to connect with you."
 msgstr "möchte sich mit Ihnen vernetzen."
 
-#: lib/vutuv_web/live/message_live/index.ex:443
+#: lib/vutuv_web/live/message_live/index.ex:469
 #, elixir-autogen, elixir-format
 msgid "Open someone's profile to message them."
 msgstr "Öffnen Sie ein Profil, um jemandem zu schreiben."
@@ -3083,7 +3085,7 @@ msgstr "Verborgen, bis einer unserer Admins entschieden hat. Sie müssen nichts 
 msgid "Hidden. You can settle this yourself - see below."
 msgstr "Verborgen. Sie können das selbst klären, siehe unten."
 
-#: lib/vutuv_web/live/message_live/index.ex:516
+#: lib/vutuv_web/live/message_live/index.ex:577
 #, elixir-autogen, elixir-format
 msgid "Hidden: reported, under review"
 msgstr "Verborgen: gemeldet, wird geprüft"
@@ -3264,8 +3266,8 @@ msgstr "Meldung abgelehnt; der Inhalt ist wieder sichtbar."
 msgid "Report this content"
 msgstr "Diesen Inhalt melden"
 
-#: lib/vutuv_web/live/message_live/index.ex:536
-#: lib/vutuv_web/live/message_live/index.ex:537
+#: lib/vutuv_web/live/message_live/index.ex:597
+#: lib/vutuv_web/live/message_live/index.ex:598
 #, elixir-autogen, elixir-format
 msgid "Report this message"
 msgstr "Diese Nachricht melden"
@@ -4541,11 +4543,13 @@ msgstr "Unzustellbar"
 msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr "Sie können nach Namen (Vor- und Nachname), E-Mail Adressen, Tags oder nach Wörtern in öffentlichen Beiträgen suchen."
 
+#: lib/vutuv_web/templates/block/index.html.heex:29
 #: lib/vutuv_web/templates/user/show.html.heex:176
 #, elixir-autogen, elixir-format
 msgid "Block"
 msgstr "Blockieren"
 
+#: lib/vutuv_web/live/message_live/index.ex:532
 #: lib/vutuv_web/templates/user/show.html.heex:169
 #, elixir-autogen, elixir-format
 msgid "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed."
@@ -4558,34 +4562,35 @@ msgstr "@%{slug} blockieren? Dadurch werden alle Follows und die Verbindung zwis
 msgid "Blocked members"
 msgstr "Blockierte Mitglieder"
 
-#: lib/vutuv_web/templates/block/index.html.heex:6
+#: lib/vutuv_web/templates/block/index.html.heex:35
 #, elixir-autogen, elixir-format
 msgid "Blocked members cannot follow you, connect with you, message you, or reply to your posts - and you cannot interact with them either. Blocking removed any follows and connection between you; unblocking does not restore them."
 msgstr "Blockierte Mitglieder können Ihnen nicht folgen, sich nicht mit Ihnen verbinden, Ihnen keine Nachrichten schreiben und nicht auf Ihre Beiträge antworten - und Sie können auch nicht mit ihnen interagieren. Beim Blockieren wurden alle Follows und die Verbindung zwischen Ihnen entfernt; eine Aufhebung stellt sie nicht wieder her."
 
-#: lib/vutuv_web/templates/block/index.html.heex:35
+#: lib/vutuv_web/templates/block/index.html.heex:64
 #: lib/vutuv_web/templates/user/show.html.heex:186
 #, elixir-autogen, elixir-format
 msgid "Unblock"
 msgstr "Blockierung aufheben"
 
-#: lib/vutuv_web/templates/block/index.html.heex:33
+#: lib/vutuv_web/templates/block/index.html.heex:62
 #: lib/vutuv_web/templates/user/show.html.heex:183
 #, elixir-autogen, elixir-format
 msgid "Unblock @%{slug}?"
 msgstr "Blockierung von @%{slug} aufheben?"
 
-#: lib/vutuv_web/controllers/block_controller.ex:25
+#: lib/vutuv_web/controllers/block_controller.ex:28
+#: lib/vutuv_web/live/message_live/index.ex:222
 #, elixir-autogen, elixir-format
 msgid "You blocked @%{slug}. You can undo this on your blocked list."
 msgstr "Sie haben @%{slug} blockiert. Auf Ihrer Liste blockierter Mitglieder können Sie das rückgängig machen."
 
-#: lib/vutuv_web/templates/block/index.html.heex:12
+#: lib/vutuv_web/templates/block/index.html.heex:41
 #, elixir-autogen, elixir-format
 msgid "You have not blocked anyone."
 msgstr "Sie haben niemanden blockiert."
 
-#: lib/vutuv_web/controllers/block_controller.ex:44
+#: lib/vutuv_web/controllers/block_controller.ex:91
 #, elixir-autogen, elixir-format
 msgid "You unblocked @%{slug}."
 msgstr "Sie haben die Blockierung von @%{slug} aufgehoben."
@@ -4600,7 +4605,7 @@ msgstr "Admin-Rechte vergibt der Betreiber dieser vutuv-Instanz, direkt in der D
 msgid "Discover people to follow"
 msgstr "Entdecken Sie Mitglieder zum Folgen"
 
-#: lib/vutuv_web/live/message_live/index.ex:446
+#: lib/vutuv_web/live/message_live/index.ex:472
 #, elixir-autogen, elixir-format
 msgid "Find members"
 msgstr "Mitglieder finden"
@@ -5768,3 +5773,48 @@ msgstr "Wenn jemand beginnt, Ihnen zu folgen."
 #, elixir-autogen, elixir-format
 msgid "Your profile is always public to people. These switches decide whether automated systems may use it too."
 msgstr "Ihr Profil ist für Menschen immer öffentlich. Diese Schalter entscheiden, ob auch automatische Systeme es nutzen dürfen."
+
+#: lib/vutuv_web/templates/block/index.html.heex:24
+#, elixir-autogen, elixir-format
+msgid "@handle"
+msgstr "@handle"
+
+#: lib/vutuv_web/live/message_live/index.ex:539
+#, elixir-autogen, elixir-format
+msgid "Block @%{slug}"
+msgstr "@%{slug} blockieren"
+
+#: lib/vutuv_web/templates/block/index.html.heex:8
+#, elixir-autogen, elixir-format
+msgid "Block someone"
+msgstr "Jemanden blockieren"
+
+#: lib/vutuv_web/controllers/block_controller.ex:74
+#, elixir-autogen, elixir-format
+msgid "Enter a member's @handle to block them."
+msgstr "Geben Sie den @handle eines Mitglieds ein, um es zu blockieren."
+
+#: lib/vutuv_web/templates/block/index.html.heex:10
+#, elixir-autogen, elixir-format
+msgid "Type a member's @handle. You do not have to visit their profile."
+msgstr "Geben Sie den @handle eines Mitglieds ein. Sie müssen dafür nicht das Profil der Person besuchen."
+
+#: lib/vutuv_web/controllers/block_controller.ex:77
+#, elixir-autogen, elixir-format
+msgid "We could not find a member with the handle @%{handle}."
+msgstr "Wir konnten kein Mitglied mit dem Handle @%{handle} finden."
+
+#: lib/vutuv_web/controllers/block_controller.ex:80
+#, elixir-autogen, elixir-format
+msgid "You already blocked @%{slug}."
+msgstr "Sie haben @%{slug} bereits blockiert."
+
+#: lib/vutuv_web/controllers/block_controller.ex:83
+#, elixir-autogen, elixir-format
+msgid "You blocked @%{slug}."
+msgstr "Sie haben @%{slug} blockiert."
+
+#: lib/vutuv_web/controllers/block_controller.ex:59
+#, elixir-autogen, elixir-format
+msgid "You cannot block yourself."
+msgstr "Sie können sich nicht selbst blockieren."
