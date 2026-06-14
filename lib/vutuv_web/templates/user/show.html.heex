@@ -475,8 +475,11 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
-      <ul class="space-y-1">
+      <ul class="space-y-2">
         <li :for={email <- @emails}>
+          <%!-- "Other" is the unspecified default; only a meaningful label
+                (Work/Personal) earns a line on the clean showcase card. --%>
+          <p :if={email.email_type && email.email_type != "Other"} class="text-sm text-slate-600 dark:text-slate-400">{email.email_type}</p>
           <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
         </li>
       </ul>

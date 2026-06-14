@@ -18,6 +18,8 @@
 
   <h1><%= gettext("Email") %></h1>
   <p><a href={"mailto:" <> @email.value}><%= @email.value %></a></p>
+  <h1><%= gettext("Type") %></h1>
+  <p><%= email_type_label(@email.email_type) %></p>
   <%= if same_user?(@user, @current_user) do %>
     <h1><%= gettext("Visibility") %></h1>
     <p><%= if @email.public?, do: gettext("Public"), else: gettext("Private") %></p>

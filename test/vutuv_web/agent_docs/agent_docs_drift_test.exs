@@ -24,7 +24,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         birthdate: ~D[1991-04-23]
       )
 
-    insert(:email, user: user, public?: true, value: "greta.public@example.com")
+    insert(:email, user: user, public?: true, value: "greta.public@example.com", email_type: "Work")
     insert(:work_experience, user: user, title: "Bridge Engineer", organization: "Span AG")
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "mobile")
@@ -99,7 +99,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "ORG:Span AG"
     assert body =~ "TITLE:Bridge Engineer"
     assert body =~ "TEL;TYPE=mobile:+49 30 5550100"
-    assert body =~ "EMAIL:greta.public@example.com"
+    assert body =~ "EMAIL;TYPE=Work:greta.public@example.com"
     assert body =~ "Berlin"
     assert body =~ "URL:"
   end
@@ -272,6 +272,24 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     public = Repo.one!(from(e in Ecto.assoc(user, :emails), where: e.public?))
     assert get(build_conn(), "/drift_tester/emails/#{public.id}.md").resp_body =~ "greta.public"
+  end
+
+  test "email entries carry their Work/Personal/Other type in every format" do
+    doc = Jason.decode!(get(build_conn(), "/drift_tester/emails.json").resp_body)
+
+    assert [%{"type" => "Work", "value" => "greta.public@example.com"}] = doc["entries"]
+    assert get(build_conn(), "/drift_tester/emails.md").resp_body =~ "Work: <greta.public@example.com>"
+    assert get(build_conn(), "/drift_tester/emails.txt").resp_body =~ "Work: greta.public@example.com"
+
+    # The profile doc and vCard carry the same typed address.
+    profile = Jason.decode!(get(build_conn(), "/drift_tester.json").resp_body)
+
+    assert Enum.any?(
+             profile["emails"],
+             &(&1["type"] == "Work" and &1["value"] == "greta.public@example.com")
+           )
+
+    assert get(build_conn(), "/drift_tester.vcf").resp_body =~ "EMAIL;TYPE=Work:greta.public@example.com"
   end
 
   test "connections list in every format", %{user: user} do

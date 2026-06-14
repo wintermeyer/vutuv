@@ -62,7 +62,9 @@ defmodule VutuvWeb.AgentDocs do
   alias VutuvWeb.AgentDocs.Text
   alias VutuvWeb.AgentDocs.VCard
 
-  @schema_version 1
+  # v2 (2026-06): email entries gained a `type` and changed shape from a bare
+  # address string to a `{id, type, value}` map, matching phone_numbers.
+  @schema_version 2
 
   @content_types %{
     md: "text/markdown",

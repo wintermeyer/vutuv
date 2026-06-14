@@ -22,5 +22,13 @@
       <%= error_tag f, :value %>
     </div>
   <% end %>
+
+  <%!-- The Work/Personal/Other label is pure metadata, so it is editable on
+        both the new and the edit form (the address itself stays read-only). --%>
+  <div class={"editform__field#{if error_tag(f, :email_type), do: " editform__field--error"}"}>
+    <%= label f, :email_type, gettext("Type of Email") %>
+    <%= select f, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] %>
+    <%= error_tag f, :email_type %>
+  </div>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

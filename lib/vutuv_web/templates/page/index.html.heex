@@ -63,6 +63,12 @@
         <%= error_tag ef, :value %>
       </div>
 
+      <div>
+        <label for={ef[:email_type].id} class="sr-only">{gettext("Type of email address")}</label>
+        <%= select ef, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}], class: input_class() %>
+        <%= error_tag ef, :email_type %>
+      </div>
+
       <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
         <%= checkbox ef, :public?, class: checkbox_class() %>
         <span>{gettext("Allow others to view your email address")}</span>

@@ -54,7 +54,12 @@ defmodule VutuvWeb.EmailController do
         |> Emailer.email_creation_email(email, user)
         |> Emailer.deliver()
 
-        render(conn, "confirm.html", user: conn.assigns[:user])
+        conn
+        # The login_pin payload is a single string already carrying the new
+        # address, so the chosen Work/Personal/Other label waits in the
+        # session until step 2's PIN confirms the address.
+        |> put_session(:pending_email_type, email_params["email_type"])
+        |> render("confirm.html", user: conn.assigns[:user])
 
       :rate_limited ->
         conn
@@ -79,13 +84,16 @@ defmodule VutuvWeb.EmailController do
   defp verify_email_pin(conn, pin) do
     case Accounts.check_pin(conn.assigns[:current_user], pin, "email") do
       {:ok, new_email, user} ->
+        email_type = get_session(conn, :pending_email_type) || "Other"
+
         user
         |> build_assoc(:emails)
-        |> Email.changeset(%{value: new_email})
+        |> Email.changeset(%{value: new_email, email_type: email_type})
         |> Repo.insert()
         |> case do
           {:ok, _email} ->
             conn
+            |> delete_session(:pending_email_type)
             |> put_flash(:info, gettext("Email created successfully."))
             |> redirect(to: ~p"/")
 

@@ -91,7 +91,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:social_media_accounts, entry), do: entry.provider
   defp entry_title(:addresses, entry), do: entry.description || entry.city || gettext("Address")
   defp entry_title(:phone_numbers, entry), do: entry.value
-  defp entry_title(:emails, entry), do: entry
+  defp entry_title(:emails, entry), do: entry.value
   defp entry_title(:tags, entry), do: entry.name
 
   defp entry(:work_experiences, record), do: work_entry(record)
@@ -99,7 +99,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry(:social_media_accounts, record), do: social_entry(record)
   defp entry(:addresses, record), do: address_entry(record)
   defp entry(:phone_numbers, record), do: phone_entry(record)
-  defp entry(:emails, record), do: record.value
+  defp entry(:emails, record), do: email_entry(record)
   defp entry(:tags, record), do: tag_entry(record)
 
   # The shared entry vocabulary (also used by ProfileDoc).
@@ -151,6 +151,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   @doc false
   def phone_entry(phone), do: %{id: phone.id, type: phone.number_type, value: phone.value}
+
+  @doc false
+  def email_entry(email), do: %{id: email.id, type: email.email_type, value: email.value}
 
   @doc false
   def tag_entry(user_tag) do

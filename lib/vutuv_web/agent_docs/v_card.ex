@@ -31,7 +31,9 @@ defmodule VutuvWeb.AgentDocs.VCard do
         "TEL;TYPE=" <> sanitize(phone.type) <> ":" <> sanitize(phone.value) <> "\n"
       end) <>
       Enum.map_join(doc.addresses, "", &address/1) <>
-      Enum.map_join(doc.emails, "", fn email -> "EMAIL:" <> sanitize(email) <> "\n" end) <>
+      Enum.map_join(doc.emails, "", fn email ->
+        "EMAIL;TYPE=" <> sanitize(email.type) <> ":" <> sanitize(email.value) <> "\n"
+      end) <>
       twitter(doc) <>
       "REV:#{timestamp(doc)}Z\nEND:VCARD"
   end

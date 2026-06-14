@@ -20,7 +20,7 @@ defmodule VutuvWeb.AgentFormatTest do
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "text/markdown"
       assert conn.resp_body =~ "# Agatha Test"
-      assert conn.resp_body =~ "schema_version: 1"
+      assert conn.resp_body =~ "schema_version: 2"
       assert get_resp_header(conn, "vary") == ["accept, accept-language"]
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
       assert [tokens] = get_resp_header(conn, "x-markdown-tokens")
@@ -34,7 +34,7 @@ defmodule VutuvWeb.AgentFormatTest do
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "text/plain"
       assert conn.resp_body =~ "Agatha Test"
-      assert conn.resp_body =~ "schema_version: 1"
+      assert conn.resp_body =~ "schema_version: 2"
 
       for line <- String.split(conn.resp_body, "\n"), not (line =~ "http") do
         assert String.length(line) <= 80, "line longer than 80 columns: #{inspect(line)}"
@@ -50,7 +50,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
       doc = Jason.decode!(conn.resp_body)
       assert doc["type"] == "profile"
-      assert doc["schema_version"] == 1
+      assert doc["schema_version"] == 2
       assert doc["name"] == "Agatha Test"
       assert doc["generated_at"]
       assert doc["formats"]["markdown"] =~ "/agent_tester.md"

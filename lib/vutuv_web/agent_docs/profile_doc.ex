@@ -80,7 +80,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
-      emails: Enum.map(emails, & &1.value),
+      emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),
       addresses: Enum.map(user.addresses, &SectionDocs.address_entry/1),
       social_media: Enum.map(user.social_media_accounts, &SectionDocs.social_entry/1),

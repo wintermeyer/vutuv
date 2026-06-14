@@ -42,7 +42,7 @@ defmodule Vutuv.Export do
       emails:
         Enum.map(
           user.emails,
-          &%{value: &1.value, public: &1.public?, added_at: &1.inserted_at}
+          &%{value: &1.value, type: &1.email_type, public: &1.public?, added_at: &1.inserted_at}
         ),
       phone_numbers: Enum.map(user.phone_numbers, &%{value: &1.value, type: &1.number_type}),
       addresses:

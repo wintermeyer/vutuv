@@ -85,7 +85,8 @@ defmodule VutuvWeb.ApiV2Test do
       body = json_response(conn, 200)
 
       assert body["slug"] == user.active_slug
-      assert "private@example.com" in body["emails"]
+      # Emails are typed maps (schema_version 2), matching phone_numbers.
+      assert Enum.any?(body["emails"], &(&1["value"] == "private@example.com"))
     end
   end
 
@@ -99,8 +100,8 @@ defmodule VutuvWeb.ApiV2Test do
       body = json_response(conn, 200)
 
       assert body["slug"] == other.active_slug
-      assert "public@example.com" in body["emails"]
-      refute "private@example.com" in body["emails"]
+      assert Enum.any?(body["emails"], &(&1["value"] == "public@example.com"))
+      refute Enum.any?(body["emails"], &(&1["value"] == "private@example.com"))
     end
 
     test "unactivated and moderation-hidden accounts 404 for strangers", %{

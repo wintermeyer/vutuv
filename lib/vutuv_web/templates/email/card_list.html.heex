@@ -3,6 +3,7 @@
   <thead>
     <tr>
       <th><%= gettext "Email" %></th>
+      <th><%= gettext "Type" %></th>
       <th><%= gettext "Visibility" %></th>
       <th></th>
     </tr>
@@ -20,6 +21,7 @@
         title={gettext("Mail to this address bounced. Logging in with a PIN sent to it will clear this warning.")}
       >{gettext("Undeliverable")}</span>
       </td>
+      <td><%= email_type_label(email.email_type) %></td>
       <td><%= if email.public?, do: gettext("Public"), else: gettext("Private") %></td>
       <td class="text-right">
         <.row_actions

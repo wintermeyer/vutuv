@@ -190,7 +190,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("tags", tag), do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("links", link), do: link_line(link)
-  defp entry_line("emails", email), do: "- <#{email}>"
+  defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
   defp entry_line("social_media_accounts", account), do: social_line(account)
   defp entry_line("phone_numbers", phone), do: "- #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "- " <> address_line(address)
