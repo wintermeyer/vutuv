@@ -89,6 +89,10 @@ defmodule VutuvWeb.AdBannerTest do
     refute conn |> get(~p"/ads") |> html_response(200) =~ "id=\"vutuv-ad\""
   end
 
+  test "the landing page carries no banner", %{conn: conn} do
+    refute conn |> get(~p"/") |> html_response(200) =~ "id=\"vutuv-ad\""
+  end
+
   test "logged-in members get the banner too", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     assert conn |> get(~p"/community") |> html_response(200) =~ "id=\"vutuv-ad\""

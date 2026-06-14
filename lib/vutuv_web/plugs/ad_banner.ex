@@ -18,8 +18,9 @@ defmodule VutuvWeb.Plug.AdBanner do
   carrying today's value gets no banner at all. The cookie is unsigned on
   purpose - forging it only keeps ads away from yourself.
 
-  GET only, and not on `/ads` itself - a house ad above the page that sells
-  ads would advertise advertising on the advertising page.
+  GET only, never on the landing page `/` (the sign-up funnel stays ad-free),
+  and not on `/ads` itself - a house ad above the page that sells ads would
+  advertise advertising on the advertising page.
   """
 
   import Plug.Conn
@@ -35,8 +36,8 @@ defmodule VutuvWeb.Plug.AdBanner do
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
     conn = fetch_cookies(conn)
 
-    if agent_format?(conn) or booking_pages?(conn) or dismissed_today?(conn) or
-         recently_seen?(conn) do
+    if agent_format?(conn) or landing_page?(conn) or booking_pages?(conn) or
+         dismissed_today?(conn) or recently_seen?(conn) do
       conn
     else
       conn
@@ -54,6 +55,10 @@ defmodule VutuvWeb.Plug.AdBanner do
   defp agent_format?(conn) do
     conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil
   end
+
+  # The logged-out landing / sign-up page is the primary registration funnel:
+  # keep it ad-free so the house ad doesn't compete with the sign-up hero.
+  defp landing_page?(conn), do: conn.path_info == []
 
   defp booking_pages?(conn), do: conn.path_info |> List.first() == "ads"
 
