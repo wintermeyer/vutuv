@@ -166,10 +166,10 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       conn2 =
         json_post(build_conn(), token, "/api/2.0/me/phone_numbers", %{
           value: "+49 261 1234567",
-          number_type: "work"
+          number_type: "Work"
         })
 
-      assert %{"entry" => %{"value" => "+49 261 1234567", "type" => "work"}} =
+      assert %{"entry" => %{"value" => "+49 261 1234567", "type" => "Work"}} =
                json_response(conn2, 201)
 
       assert length(Repo.all(Ecto.assoc(user, :urls))) == 1

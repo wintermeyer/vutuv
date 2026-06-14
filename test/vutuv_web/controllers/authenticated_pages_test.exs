@@ -166,7 +166,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     test "create a phone number", %{conn: conn, user: user} do
       conn =
         post(conn, ~p"/#{user}/phone_numbers",
-          phone_number: %{value: "+49 30 5550000", number_type: "mobile"}
+          phone_number: %{value: "+49 30 5550000", number_type: "Cell"}
         )
 
       assert conn.status < 500, "phone create -> #{conn.status}"

@@ -111,7 +111,7 @@ defmodule Vutuv.Factory do
   def phone_number_factory do
     %Vutuv.Profiles.PhoneNumber{
       value: sequence(:phone_value, &"+49 30 #{&1}00000"),
-      number_type: "mobile"
+      number_type: "Cell"
     }
   end
 

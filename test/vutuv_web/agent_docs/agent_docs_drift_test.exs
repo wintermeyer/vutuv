@@ -27,7 +27,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     insert(:email, user: user, public?: true, value: "greta.public@example.com", email_type: "Work")
     insert(:work_experience, user: user, title: "Bridge Engineer", organization: "Span AG")
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
-    insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "mobile")
+    insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
     insert(:social_media_account, user: user, provider: "GitHub", value: "gretagradient")
 
@@ -98,7 +98,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "FN:Greta Gradient"
     assert body =~ "ORG:Span AG"
     assert body =~ "TITLE:Bridge Engineer"
-    assert body =~ "TEL;TYPE=mobile:+49 30 5550100"
+    assert body =~ "TEL;TYPE=Cell:+49 30 5550100"
     assert body =~ "EMAIL;TYPE=Work:greta.public@example.com"
     assert body =~ "Berlin"
     assert body =~ "URL:"

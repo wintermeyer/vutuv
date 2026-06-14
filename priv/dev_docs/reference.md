@@ -121,7 +121,8 @@ Field names per section: work_experiences (`title`, `organization`,
 links (`value` = the URL, `description`), social_media_accounts
 (`provider`, `value`), addresses (`description`, `line_1`…`line_4`,
 `zip_code`, `city`, `state`, `country`), phone_numbers (`value`,
-`number_type`).
+`number_type`). `number_type` must be one of `Work`, `Cell`, `Home`,
+`Fax` (case-sensitive); any other value is rejected with `422`.
 
 ### POST /me/tags · DELETE /me/tags/:id
 
