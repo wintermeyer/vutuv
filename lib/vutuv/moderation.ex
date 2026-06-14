@@ -641,11 +641,11 @@ defmodule Vutuv.Moderation do
         case_id: case_record.id,
         reporter_id: reporter.id,
         owner_id: owner_id,
-        had_connection: ties.connection != nil,
+        had_connection?: ties.connection != nil,
         connection_status: ties.connection && ties.connection.status,
         connection_requested_by_id: ties.connection && ties.connection.requested_by_id,
-        had_follow_reporter_to_owner: ties.follow_a_to_b,
-        had_follow_owner_to_reporter: ties.follow_b_to_a,
+        had_follow_reporter_to_owner?: ties.follow_a_to_b,
+        had_follow_owner_to_reporter?: ties.follow_b_to_a,
         conversation_id: conversation && conversation.id
       })
 
@@ -723,10 +723,10 @@ defmodule Vutuv.Moderation do
 
   defp restore_ties(%Severance{} = severance) do
     Vutuv.Social.restore_between(severance.reporter_id, severance.owner_id,
-      connection_status: if(severance.had_connection, do: severance.connection_status),
+      connection_status: if(severance.had_connection?, do: severance.connection_status),
       connection_requested_by_id: severance.connection_requested_by_id,
-      follow_a_to_b: severance.had_follow_reporter_to_owner,
-      follow_b_to_a: severance.had_follow_owner_to_reporter
+      follow_a_to_b: severance.had_follow_reporter_to_owner?,
+      follow_b_to_a: severance.had_follow_owner_to_reporter?
     )
 
     if severance.conversation_id do
@@ -950,12 +950,12 @@ defmodule Vutuv.Moderation do
   agent-format siblings).
   """
   def profile_visible_to?(%User{} = user, viewer) do
-    activated?(user) and (not account_hidden?(user) or bypass?(user, viewer))
+    email_confirmed?(user) and (not account_hidden?(user) or bypass?(user, viewer))
   end
 
   # nil counts as activated: rows from before the activation gate existed.
-  defp activated?(%User{activated?: false}), do: false
-  defp activated?(%User{}), do: true
+  defp email_confirmed?(%User{email_confirmed?: false}), do: false
+  defp email_confirmed?(%User{}), do: true
 
   defp bypass?(%User{id: id}, %User{id: id}), do: true
   defp bypass?(_user, %User{admin?: true}), do: true

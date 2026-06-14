@@ -99,7 +99,7 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "deactivated users never surface", %{conn: conn} do
-      searchable_user("Hidden", "Person", activated?: false)
+      searchable_user("Hidden", "Person", email_confirmed?: false)
 
       {:ok, _view, html} = live(conn, ~p"/search?q=hidden")
 

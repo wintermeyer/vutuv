@@ -6,9 +6,9 @@ defmodule Vutuv.Tags.TagTest do
   describe "related_users/2" do
     test "returns the current user's connections that are endorsed for the tag" do
       # Activated: the tag-page user queries hide unactivated accounts.
-      viewer = insert(:user, activated?: true)
-      a_follower = insert(:user, activated?: true)
-      a_followee = insert(:user, activated?: true)
+      viewer = insert(:user, email_confirmed?: true)
+      a_follower = insert(:user, email_confirmed?: true)
+      a_followee = insert(:user, email_confirmed?: true)
 
       # a_follower -> viewer (so a_follower is in viewer.followers)
       insert(:follow, follower: a_follower, followee: viewer)

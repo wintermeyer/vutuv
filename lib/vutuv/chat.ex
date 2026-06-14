@@ -46,7 +46,7 @@ defmodule Vutuv.Chat do
 
   def find_or_create_conversation(%User{} = me, %User{} = other) do
     cond do
-      not (me.activated? && other.activated?) ->
+      not (me.email_confirmed? && other.email_confirmed?) ->
         {:error, :not_activated}
 
       # A block stands between the pair: same opaque refusal as a report

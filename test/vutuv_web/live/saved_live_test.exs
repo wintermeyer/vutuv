@@ -12,7 +12,7 @@ defmodule VutuvWeb.SavedLiveTest do
 
   alias Vutuv.Posts
 
-  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
+  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
   test "a liked post is removed live when its author deletes it", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)

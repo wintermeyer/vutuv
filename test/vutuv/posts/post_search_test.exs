@@ -46,7 +46,7 @@ defmodule Vutuv.Posts.PostSearchTest do
   end
 
   test "posts by unactivated authors are hidden" do
-    a = insert(:user, activated?: false)
+    a = insert(:user, email_confirmed?: false)
     create_post!(a, %{body: "Koblenz spam from an unverified account"})
 
     assert Posts.search_public("koblenz") == []

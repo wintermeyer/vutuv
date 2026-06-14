@@ -73,7 +73,7 @@ defmodule VutuvWeb.AvatarControllerTest do
 
     assert get(conn, "/nobody_here/avatar.jpg").status == 404
 
-    sleepy = insert_activated_user(activated?: false, avatar: "selfie.jpg")
+    sleepy = insert_activated_user(email_confirmed?: false, avatar: "selfie.jpg")
     assert get(conn, "/#{sleepy.active_slug}/avatar.jpg").status == 404
   end
 end

@@ -9,7 +9,7 @@ defmodule Vutuv.AccountsLoginEmailTest do
   @pin_cookie "_vutuv_login_pin"
 
   test "login_by_email delivers a login email to a known address", %{conn: conn} do
-    user = insert(:user, activated?: true)
+    user = insert(:user, email_confirmed?: true)
     insert(:email, value: "login-flow@example.com", user: user)
 
     assert {:ok, returned} = Vutuv.Accounts.login_by_email(conn, "login-flow@example.com")
@@ -36,7 +36,7 @@ defmodule Vutuv.AccountsLoginEmailTest do
 
     test "an unknown address locks out after the same number of wrong PINs as a real one" do
       # A real account: the per-PIN DB counter locks on the third wrong PIN.
-      user = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
       insert(:email, value: "real@example.com", user: user)
       Vutuv.Accounts.gen_pin_for(user, "login")
 

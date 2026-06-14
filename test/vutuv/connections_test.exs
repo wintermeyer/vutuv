@@ -229,10 +229,10 @@ defmodule Vutuv.ConnectionsTest do
       # Activated like every real connection participant (request/accept
       # require a login, which activates) — list_connections only shows
       # activated, non-hidden people.
-      a = insert(:user, first_name: "Ann", activated?: true)
-      b = insert(:user, first_name: "Bob", activated?: true)
-      c2 = insert(:user, first_name: "Cy", activated?: true)
-      d = insert(:user, first_name: "Di", activated?: true)
+      a = insert(:user, first_name: "Ann", email_confirmed?: true)
+      b = insert(:user, first_name: "Bob", email_confirmed?: true)
+      c2 = insert(:user, first_name: "Cy", email_confirmed?: true)
+      d = insert(:user, first_name: "Di", email_confirmed?: true)
 
       # a connected with b
       connect!(a, b)
@@ -253,9 +253,9 @@ defmodule Vutuv.ConnectionsTest do
     end
 
     test "request lists hide a counterparty hidden by moderation (no dead links)" do
-      a = insert(:user, activated?: true)
-      incoming = insert(:user, activated?: true)
-      outgoing = insert(:user, activated?: true)
+      a = insert(:user, email_confirmed?: true)
+      incoming = insert(:user, email_confirmed?: true)
+      outgoing = insert(:user, email_confirmed?: true)
 
       {:ok, _} = Social.request_connection(incoming, a)
       {:ok, _} = Social.request_connection(a, outgoing)

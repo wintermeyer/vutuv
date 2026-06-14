@@ -28,7 +28,7 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
         json_patch(conn, token, "/api/2.0/me", %{
           first_name: "Renamed",
           active_slug: "stolen_handle",
-          activated?: false
+          email_confirmed?: false
         })
 
       body = json_response(conn, 200)
@@ -37,7 +37,7 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
 
       reloaded = Repo.get!(Vutuv.Accounts.User, user.id)
       assert reloaded.active_slug == user.active_slug
-      assert reloaded.activated?
+      assert reloaded.email_confirmed?
     end
 
     test "invalid values are a 422 with field errors", %{conn: conn, write_token: token} do

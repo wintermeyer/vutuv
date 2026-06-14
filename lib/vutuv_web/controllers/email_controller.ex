@@ -42,7 +42,7 @@ defmodule VutuvWeb.EmailController do
   end
 
   # Step 1: mail a PIN for the new address and render the PIN-entry form. The new
-  # address rides along in the login_pin's `value` column until it is confirmed.
+  # address rides along in the login_pin's `payload` column until it is confirmed.
   def create(conn, %{"email" => email_params}) do
     user = conn.assigns[:current_user]
     email = email_params["value"]

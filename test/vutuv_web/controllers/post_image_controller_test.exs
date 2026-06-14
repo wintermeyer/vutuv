@@ -51,7 +51,7 @@ defmodule VutuvWeb.PostImageControllerTest do
 
   describe "a public post's image" do
     test "is served to anonymous visitors with immutable private caching", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/feed.avif")
@@ -65,7 +65,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn: conn,
       tmp: tmp
     } do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/feed.webp")
@@ -82,7 +82,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "only served versions resolve — the original never does", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       assert get(conn, "/post_images/#{image.token}/original.jpg").status == 404
@@ -95,7 +95,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn: conn,
       tmp: tmp
     } do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
 
       {_post, image} =
         post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
@@ -131,7 +131,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn: conn,
       tmp: tmp
     } do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
 
       # A wide source carrying EXIF that must not survive into the JPEG.
       src = Path.join(tmp, "wide.jpg")
@@ -161,7 +161,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "a small image is never upscaled", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/og.jpg")
@@ -172,7 +172,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "is guarded by the post's audience like every version", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
 
       {_post, image} =
         post_with_image!(author, tmp, %{denials: [%{"wildcard" => "logged_out"}]})
@@ -181,7 +181,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "falls back to a served version when the original is missing", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
       File.rm_rf!(Path.join(tmp, "originals"))
 
@@ -189,7 +189,7 @@ defmodule VutuvWeb.PostImageControllerTest do
     end
 
     test "404 when nothing usable is on disk", %{conn: conn, tmp: tmp} do
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
       File.rm_rf!(tmp)
 
@@ -202,7 +202,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
       on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
 
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       conn = get(conn, "/post_images/#{image.token}/large.avif")
@@ -222,7 +222,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       Application.put_env(:vutuv, :post_image_serving, :accel_redirect)
       on_exit(fn -> Application.delete_env(:vutuv, :post_image_serving) end)
 
-      author = insert(:user, activated?: true)
+      author = insert(:user, email_confirmed?: true)
       {_post, image} = post_with_image!(author, tmp)
 
       # The store wrote .avif files, so the legacy URL redirects to those.

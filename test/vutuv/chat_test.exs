@@ -77,7 +77,7 @@ defmodule Vutuv.ChatTest do
 
     test "rejects unactivated accounts on either side" do
       activated = user()
-      unactivated = insert(:user, activated?: false)
+      unactivated = insert(:user, email_confirmed?: false)
 
       assert {:error, :not_activated} =
                Chat.find_or_create_conversation(unactivated, activated)

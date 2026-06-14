@@ -65,9 +65,9 @@ defmodule Vutuv.SocialTest do
 
   describe "follower_count/1 and followee_count/1" do
     test "returns correct counts" do
-      user = insert(:user, activated?: true)
-      follower1 = insert(:user, activated?: true)
-      follower2 = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
+      follower1 = insert(:user, email_confirmed?: true)
+      follower2 = insert(:user, email_confirmed?: true)
 
       {:ok, _} = Social.follow(follower1.id, user.id)
       {:ok, _} = Social.follow(follower2.id, user.id)
@@ -78,7 +78,7 @@ defmodule Vutuv.SocialTest do
     end
 
     test "ignores follows from unactivated accounts" do
-      user = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
       unactivated = insert(:user)
 
       {:ok, _} = Social.follow(unactivated.id, user.id)
@@ -88,8 +88,8 @@ defmodule Vutuv.SocialTest do
     end
 
     test "ignores moderation-hidden accounts, but only on the listed side" do
-      user = insert(:user, activated?: true)
-      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      user = insert(:user, email_confirmed?: true)
+      frozen = insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00])
 
       {:ok, _} = Social.follow(frozen.id, user.id)
       {:ok, _} = Social.follow(user.id, frozen.id)
@@ -106,9 +106,9 @@ defmodule Vutuv.SocialTest do
 
   describe "follows_page/3" do
     test "lists no moderation-hidden people" do
-      user = insert(:user, activated?: true)
-      visible = insert(:user, activated?: true)
-      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      user = insert(:user, email_confirmed?: true)
+      visible = insert(:user, email_confirmed?: true)
+      frozen = insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00])
 
       {:ok, _} = Social.follow(visible.id, user.id)
       {:ok, _} = Social.follow(frozen.id, user.id)
@@ -149,9 +149,9 @@ defmodule Vutuv.SocialTest do
 
   describe "list_connections/1 and connection_count/1" do
     test "hide members an admin hid after the connection formed" do
-      user = insert(:user, activated?: true)
-      visible = insert(:user, activated?: true)
-      later_frozen = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
+      visible = insert(:user, email_confirmed?: true)
+      later_frozen = insert(:user, email_confirmed?: true)
 
       connect!(user, visible)
       connect!(user, later_frozen)
@@ -192,20 +192,20 @@ defmodule Vutuv.SocialTest do
   describe "most_followed_users/1" do
     test "hides unactivated and moderation-hidden accounts despite their followers" do
       # Every other public surface (search, follower counts) gates on
-      # activated? + Moderation.Query.account_hidden; the public most-followed
+      # email_confirmed? + Moderation.Query.account_hidden; the public most-followed
       # listing and the "Who to follow" rail must too.
-      popular = insert(:user, activated?: true)
+      popular = insert(:user, email_confirmed?: true)
       unactivated = insert(:user)
-      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
-      deactivated = insert(:user, activated?: true, deactivated_at: ~N[2026-01-01 00:00:00])
-      suspended = insert(:user, activated?: true, suspended_until: ~N[2099-01-01 00:00:00])
+      frozen = insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      deactivated = insert(:user, email_confirmed?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+      suspended = insert(:user, email_confirmed?: true, suspended_until: ~N[2099-01-01 00:00:00])
 
       # A real (visible) follower, so the popular control legitimately ranks:
       # the listing shows members with at least one visible follower.
-      follow!(insert(:user, activated?: true), popular)
+      follow!(insert(:user, email_confirmed?: true), popular)
 
       for hidden <- [unactivated, frozen, deactivated, suspended] do
-        for _ <- 1..2, do: follow!(insert(:user, activated?: true), hidden)
+        for _ <- 1..2, do: follow!(insert(:user, email_confirmed?: true), hidden)
       end
 
       ids = Social.most_followed_users(10) |> Enum.map(& &1.id)
@@ -220,17 +220,17 @@ defmodule Vutuv.SocialTest do
     test "ranks by VISIBLE followers only, not ghost/hidden ones" do
       # The ranking must match the follower_count shown on each profile, and
       # must not be inflatable with never-activated follower accounts.
-      x = insert(:user, activated?: true, first_name: "Xavier")
-      y = insert(:user, activated?: true, first_name: "Yara")
+      x = insert(:user, email_confirmed?: true, first_name: "Xavier")
+      y = insert(:user, email_confirmed?: true, first_name: "Yara")
 
       # X: one real follower + two that don't count (unactivated + hidden).
-      follow!(insert(:user, activated?: true), x)
+      follow!(insert(:user, email_confirmed?: true), x)
       follow!(insert(:user), x)
-      follow!(insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00]), x)
+      follow!(insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00]), x)
 
       # Y: two real followers.
-      follow!(insert(:user, activated?: true), y)
-      follow!(insert(:user, activated?: true), y)
+      follow!(insert(:user, email_confirmed?: true), y)
+      follow!(insert(:user, email_confirmed?: true), y)
 
       ids = Social.most_followed_users(10)
       assert Social.follower_count(x) == 1
@@ -242,8 +242,8 @@ defmodule Vutuv.SocialTest do
     end
 
     test "returns the fields the listing rows render" do
-      user = insert(:user, activated?: true, honorific_prefix: "Dr.")
-      follow!(insert(:user, activated?: true), user)
+      user = insert(:user, email_confirmed?: true, honorific_prefix: "Dr.")
+      follow!(insert(:user, email_confirmed?: true), user)
 
       assert [row] = Social.most_followed_users(1)
       assert row.id == user.id

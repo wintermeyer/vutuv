@@ -99,7 +99,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
 
-  def login_email(pin, email, %Vutuv.Accounts.User{activated?: false} = user) do
+  def login_email(pin, email, %Vutuv.Accounts.User{email_confirmed?: false} = user) do
     gen_email(pin, email, user, "registration_email", fn ->
       gettext("Confirm your vutuv account")
     end)

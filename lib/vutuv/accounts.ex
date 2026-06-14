@@ -295,12 +295,12 @@ defmodule Vutuv.Accounts do
     |> Conn.delete_session(:user_id)
   end
 
-  # A genuine first confirmation (activated? false -> true) is when a sign-up
+  # A genuine first confirmation (email_confirmed? false -> true) is when a sign-up
   # becomes a real member, so the live counter ticks up here, not at
   # registration (issue #781). A legacy `nil`-activated account (already in the
   # count) or an already-activated returning login falls through the second
   # clause and is never re-counted; the cast is a no-op for an already-true row.
-  defp activate_user(%User{activated?: false} = user) do
+  defp activate_user(%User{email_confirmed?: false} = user) do
     activated = do_activate(user)
     MemberCounter.increment()
     activated
@@ -310,7 +310,7 @@ defmodule Vutuv.Accounts do
 
   defp do_activate(user) do
     user
-    |> Ecto.Changeset.cast(%{activated?: true}, [:activated?])
+    |> Ecto.Changeset.cast(%{email_confirmed?: true}, [:email_confirmed?])
     |> Repo.update!()
   end
 
@@ -370,10 +370,10 @@ defmodule Vutuv.Accounts do
   @doc """
   Mints (or refreshes) the single one-time PIN for a `(user, type)` pair and
   returns the **plaintext** PIN so it can be emailed. Only the peppered, salted
-  hash is persisted. `value` carries flow-specific data (e.g. the new address for
-  an email change).
+  hash is persisted. `payload` carries flow-specific data (e.g. the new address
+  for an email change).
   """
-  def gen_pin_for(user, type, value \\ nil) do
+  def gen_pin_for(user, type, payload \\ nil) do
     pin = gen_pin()
     salt = :crypto.strong_rand_bytes(16)
 
@@ -383,15 +383,15 @@ defmodule Vutuv.Accounts do
     %LoginPin{user_id: user.id}
     |> LoginPin.changeset(%{
       type: type,
-      value: value,
-      created_at: NaiveDateTime.from_erl!(:calendar.universal_time()),
-      pin: hash_pin(pin, salt),
+      payload: payload,
+      minted_at: NaiveDateTime.from_erl!(:calendar.universal_time()),
+      pin_hash: hash_pin(pin, salt),
       pin_salt: salt,
       pin_login_attempts: 0
     })
     |> Repo.insert!(
       on_conflict:
-        {:replace, [:value, :created_at, :pin, :pin_salt, :pin_login_attempts, :updated_at]},
+        {:replace, [:payload, :minted_at, :pin_hash, :pin_salt, :pin_login_attempts, :updated_at]},
       conflict_target: [:user_id, :type]
     )
 
@@ -435,13 +435,13 @@ defmodule Vutuv.Accounts do
 
   defp expire_pin(login_pin) do
     login_pin
-    |> LoginPin.changeset(%{created_at: nil})
+    |> LoginPin.changeset(%{minted_at: nil})
     |> Repo.update!()
   end
 
-  defp pin_expired?(%{created_at: nil}), do: true
+  defp pin_expired?(%{minted_at: nil}), do: true
 
-  defp pin_expired?(%{created_at: date_time}) do
+  defp pin_expired?(%{minted_at: date_time}) do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), date_time, :second) > @pin_expire_time
   end
 
@@ -532,7 +532,7 @@ defmodule Vutuv.Accounts do
 
   @doc """
   Deletes accounts that registered but never confirmed their PIN (so they are
-  still `activated?: false`) once they are older than `max_age_minutes`.
+  still `email_confirmed?: false`) once they are older than `max_age_minutes`.
 
   Only accounts whose first "login" PIN was minted alongside the account itself
   are touched, so this never reaps a legacy member who only ever failed a login
@@ -552,7 +552,7 @@ defmodule Vutuv.Accounts do
       join: p in LoginPin,
       on: p.user_id == u.id and p.type == "login",
       where:
-        u.activated? == false and u.inserted_at < ^cutoff and
+        u.email_confirmed? == false and u.inserted_at < ^cutoff and
           p.inserted_at >= datetime_add(u.inserted_at, ^(-window), "second") and
           p.inserted_at <= datetime_add(u.inserted_at, ^window, "second")
     )
@@ -564,7 +564,7 @@ defmodule Vutuv.Accounts do
   # between the sweep's read and now, so only delete while still unactivated.
   defp delete_if_still_unconfirmed(%User{id: id}) do
     case Repo.get(User, id) do
-      %User{activated?: false} = user ->
+      %User{email_confirmed?: false} = user ->
         delete_user(user)
         true
 
@@ -580,8 +580,8 @@ defmodule Vutuv.Accounts do
   account-deletion flows (identity comes from the session), or pass the typed
   email for `"login"` (identity is carried by the signed cookie).
 
-  Returns `{:ok, user}` for login/delete, `{:ok, value, user}` for the
-  email-change flow (where `value` is the new address), `{:error, message}` on a
+  Returns `{:ok, user}` for login/delete, `{:ok, payload, user}` for the
+  email-change flow (where `payload` is the new address), `{:error, message}` on a
   wrong PIN, `{:expired, message}` once the PIN has timed out, or `:lockout`
   after too many wrong attempts.
   """
@@ -659,7 +659,7 @@ defmodule Vutuv.Accounts do
 
   # Constant-time comparison of the peppered hashes (issue #759 C.2). A plain
   # `==` would leak timing information about the stored hash.
-  defp valid_pin?(%LoginPin{pin: stored, pin_salt: salt}, pin)
+  defp valid_pin?(%LoginPin{pin_hash: stored, pin_salt: salt}, pin)
        when is_binary(stored) and is_binary(salt) and is_binary(pin) do
     Plug.Crypto.secure_compare(stored, hash_pin(pin, salt))
   end
@@ -682,12 +682,12 @@ defmodule Vutuv.Accounts do
     end
   end
 
-  defp pin_response(%LoginPin{value: nil, user_id: user_id}) do
+  defp pin_response(%LoginPin{payload: nil, user_id: user_id}) do
     {:ok, Repo.get(User, user_id)}
   end
 
-  defp pin_response(%LoginPin{value: value, user_id: user_id}) do
-    {:ok, value, Repo.get(User, user_id)}
+  defp pin_response(%LoginPin{payload: payload, user_id: user_id}) do
+    {:ok, payload, Repo.get(User, user_id)}
   end
 
   # ── User CRUD ──
@@ -695,14 +695,14 @@ defmodule Vutuv.Accounts do
   @doc """
   The authoritative "number of members" the landing-page counter reconciles
   against: confirmed members only. Never-confirmed registrations
-  (`activated? == false`) are excluded so the advertised total matches every
+  (`email_confirmed? == false`) are excluded so the advertised total matches every
   other "real member" gate (followers, tags, endorsements); a legacy
   `nil`-activated account still counts (issue #781).
   """
   def count_users do
     Repo.one(
       from(u in User,
-        where: is_nil(u.activated?) or u.activated? == true,
+        where: is_nil(u.email_confirmed?) or u.email_confirmed? == true,
         select: count(u.id)
       )
     )
@@ -720,7 +720,7 @@ defmodule Vutuv.Accounts do
   # The plain profile fields a member may edit about themselves. The API's
   # PATCH /me writes through this list; the username (quota'd,
   # Twitter-validated), email addresses (PIN-verified identities) and
-  # account flags (activated?, notification_emails?) are deliberately not
+  # account flags (email_confirmed?, notification_emails?) are deliberately not
   # on it.
   @profile_fields ~w(headline first_name last_name middle_name nickname
                      honorific_prefix honorific_suffix gender birthdate

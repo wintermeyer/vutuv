@@ -293,7 +293,7 @@ defmodule Vutuv.ApiAuth do
   # deactivated accounts cannot act over the API either.
   defp check_user(%User{} = user) do
     cond do
-      not user.activated? -> {:error, :account_inactive}
+      not user.email_confirmed? -> {:error, :account_inactive}
       Moderation.login_block(user) -> {:error, :account_inactive}
       true -> :ok
     end

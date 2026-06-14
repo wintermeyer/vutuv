@@ -15,11 +15,11 @@ defmodule Vutuv.Moderation.Severance do
     belongs_to(:reporter, Vutuv.Accounts.User)
     belongs_to(:owner, Vutuv.Accounts.User)
 
-    field(:had_connection, :boolean, default: false)
+    field(:had_connection?, :boolean, default: false)
     field(:connection_status, :string)
     belongs_to(:connection_requested_by, Vutuv.Accounts.User)
-    field(:had_follow_reporter_to_owner, :boolean, default: false)
-    field(:had_follow_owner_to_reporter, :boolean, default: false)
+    field(:had_follow_reporter_to_owner?, :boolean, default: false)
+    field(:had_follow_owner_to_reporter?, :boolean, default: false)
     belongs_to(:conversation, Vutuv.Chat.Conversation)
     field(:restored_at, :naive_datetime)
 

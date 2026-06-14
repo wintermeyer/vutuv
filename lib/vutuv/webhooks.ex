@@ -79,7 +79,7 @@ defmodule Vutuv.Webhooks do
   @doc "Re-enables a disabled subscription (the developer fixed their endpoint)."
   def reactivate!(%Subscription{} = subscription) do
     subscription
-    |> Ecto.Changeset.change(active: true, disabled_reason: nil, consecutive_failures: 0)
+    |> Ecto.Changeset.change(active?: true, disabled_reason: nil, consecutive_failures: 0)
     |> Repo.update!()
   end
 
@@ -102,7 +102,7 @@ defmodule Vutuv.Webhooks do
   end
 
   defp subscriptions_exist?(event) do
-    Repo.exists?(from(s in Subscription, where: s.active and ^event in s.events))
+    Repo.exists?(from(s in Subscription, where: s.active? and ^event in s.events))
   end
 
   defp do_emit(member_id, event, data) do
@@ -115,7 +115,7 @@ defmodule Vutuv.Webhooks do
           on: a.id == s.app_id,
           join: g in Grant,
           on: g.app_id == a.id,
-          where: s.active and ^event in s.events,
+          where: s.active? and ^event in s.events,
           where: is_nil(a.suspended_at),
           where: g.user_id == ^member_id and is_nil(g.revoked_at) and ^scope in g.scopes,
           select: s.id,
@@ -196,7 +196,7 @@ defmodule Vutuv.Webhooks do
           join: s in assoc(d, :subscription),
           where: is_nil(d.delivered_at) and d.attempts < @max_attempts,
           where: d.next_attempt_at <= ^now,
-          where: s.active,
+          where: s.active?,
           preload: [subscription: s],
           limit: 100
         )
@@ -322,10 +322,10 @@ defmodule Vutuv.Webhooks do
       |> Repo.update_all(inc: [consecutive_failures: 1])
 
     if failures >= @max_consecutive_failures do
-      from(s in Subscription, where: s.id == ^subscription.id and s.active)
+      from(s in Subscription, where: s.id == ^subscription.id and s.active?)
       |> Repo.update_all(
         set: [
-          active: false,
+          active?: false,
           disabled_reason: "disabled after #{failures} consecutive delivery failures"
         ]
       )

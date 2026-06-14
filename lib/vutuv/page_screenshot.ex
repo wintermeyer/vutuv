@@ -35,7 +35,7 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Renders, frames, and stores the screenshot for `url`.
 
-  Marks the URL `broken: false` on success and `broken: true` on failure, so a
+  Marks the URL `broken?: false` on success and `broken?: true` on failure, so a
   failed page is not retried by the bulk `urls.create_screenshots` task. Safe
   to run from an unsupervised `Task` — all failures are logged, never raised.
   """
@@ -102,7 +102,7 @@ defmodule Vutuv.PageScreenshot do
 
   defp set_broken(url, value) do
     url
-    |> Url.changeset(%{broken: value})
+    |> Url.changeset(%{broken?: value})
     |> Repo.update()
   end
 

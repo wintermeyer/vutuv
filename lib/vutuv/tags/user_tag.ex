@@ -45,7 +45,7 @@ defmodule Vutuv.Tags.UserTag do
       # without discarding the user_tag row (it still shows 0).
       left_join: endorser in assoc(e, :user),
       on:
-        (is_nil(endorser.activated?) or endorser.activated? == true) and
+        (is_nil(endorser.email_confirmed?) or endorser.email_confirmed? == true) and
           not account_hidden(endorser.id),
       left_join: t in assoc(u, :tag),
       order_by: [desc: count(endorser.id), asc: t.slug],

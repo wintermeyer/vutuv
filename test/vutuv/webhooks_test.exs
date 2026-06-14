@@ -240,7 +240,7 @@ defmodule Vutuv.WebhooksTest do
 
       assert Webhooks.deliver_due() == 1
       reloaded = Repo.get(Subscription, subscription.id)
-      refute reloaded.active
+      refute reloaded.active?
       assert reloaded.disabled_reason =~ "consecutive"
 
       # A disabled subscription's queue is not attempted.
@@ -248,7 +248,7 @@ defmodule Vutuv.WebhooksTest do
 
       # The developer can re-enable after fixing their endpoint.
       Webhooks.reactivate!(reloaded)
-      assert Repo.get(Subscription, subscription.id).active
+      assert Repo.get(Subscription, subscription.id).active?
     end
 
     test "every failing delivery counts toward the failure budget", %{member: member, app: app} do

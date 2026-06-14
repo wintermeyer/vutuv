@@ -17,7 +17,7 @@ defmodule VutuvWeb.AvatarController do
   alias Vutuv.Accounts.User
 
   def show(conn, %{"slug" => slug}) do
-    with %User{activated?: true, avatar: avatar} = user when not is_nil(avatar) <-
+    with %User{email_confirmed?: true, avatar: avatar} = user when not is_nil(avatar) <-
            Vutuv.Repo.get_by(User, active_slug: slug),
          {:ok, jpeg} <- Vutuv.Avatar.og_jpeg(user) do
       conn

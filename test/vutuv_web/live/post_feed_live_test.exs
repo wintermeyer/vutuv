@@ -10,7 +10,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
   alias Vutuv.Posts
 
-  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
+  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
   describe "engagement query batching" do
     test "feed engagement queries do not grow with post count", %{conn: conn} do

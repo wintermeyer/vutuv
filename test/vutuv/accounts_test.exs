@@ -20,16 +20,16 @@ defmodule Vutuv.AccountsTest do
     |> Plug.Test.init_test_session(%{})
   end
 
-  # Moves a user's PIN's `created_at` `seconds_ago` into the past so the
+  # Moves a user's PIN's `minted_at` `seconds_ago` into the past so the
   # private `pin_expired?/1` threshold can be exercised without sleeping.
   defp backdate_pin(user, type, seconds_ago) do
-    created_at =
+    minted_at =
       NaiveDateTime.utc_now()
       |> NaiveDateTime.add(-seconds_ago, :second)
       |> NaiveDateTime.truncate(:second)
 
     Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type))
-    |> LoginPin.changeset(%{created_at: created_at})
+    |> LoginPin.changeset(%{minted_at: minted_at})
     |> Repo.update!()
   end
 
@@ -38,9 +38,9 @@ defmodule Vutuv.AccountsTest do
   # can be exercised without sleeping.
   defp pending_registration(opts) do
     minutes = Keyword.get(opts, :age_minutes, 0)
-    activated? = Keyword.get(opts, :activated?, false)
+    email_confirmed? = Keyword.get(opts, :email_confirmed?, false)
 
-    user = insert(:user, activated?: activated?)
+    user = insert(:user, email_confirmed?: email_confirmed?)
     Accounts.gen_pin_for(user, "login")
     set_inserted_at(from(u in User, where: u.id == ^user.id), minutes)
     set_inserted_at(from(p in LoginPin, where: p.user_id == ^user.id), minutes)
@@ -70,12 +70,12 @@ defmodule Vutuv.AccountsTest do
       assert {:error, _changeset} = Accounts.register_user(conn, attrs)
     end
 
-    test "ignores an activated? flag smuggled into the params" do
+    test "ignores an email_confirmed? flag smuggled into the params" do
       conn = build_conn()
-      attrs = Map.put(@valid_registration, "activated?", "true")
+      attrs = Map.put(@valid_registration, "email_confirmed?", "true")
 
       assert {:ok, %User{} = user} = Accounts.register_user(conn, attrs)
-      refute user.activated?
+      refute user.email_confirmed?
     end
   end
 
@@ -86,13 +86,13 @@ defmodule Vutuv.AccountsTest do
       assert updated.first_name == "Updated"
     end
 
-    test "ignores an activated? flag smuggled into the params" do
-      user = insert(:user, activated?: false)
+    test "ignores an email_confirmed? flag smuggled into the params" do
+      user = insert(:user, email_confirmed?: false)
 
       assert {:ok, updated} =
-               Accounts.update_user(user, %{"first_name" => "Updated", "activated?" => "true"})
+               Accounts.update_user(user, %{"first_name" => "Updated", "email_confirmed?" => "true"})
 
-      refute updated.activated?
+      refute updated.email_confirmed?
     end
 
     test "rebuilds the people-search index when the name changes (API rename stays in sync)" do
@@ -169,10 +169,10 @@ defmodule Vutuv.AccountsTest do
       assert pin =~ ~r/\A\d{6}\z/
 
       login_pin = Repo.one(from(m in LoginPin, where: m.user_id == ^user.id))
-      # The stored value is a 64-hex-char HMAC, a per-PIN salt is present, and
+      # The stored hash is a 64-hex-char HMAC, a per-PIN salt is present, and
       # neither equals the plaintext PIN.
-      assert login_pin.pin =~ ~r/\A[0-9a-f]{64}\z/
-      assert login_pin.pin != pin
+      assert login_pin.pin_hash =~ ~r/\A[0-9a-f]{64}\z/
+      assert login_pin.pin_hash != pin
       assert byte_size(login_pin.pin_salt) == 16
     end
 
@@ -203,11 +203,11 @@ defmodule Vutuv.AccountsTest do
              ) == 1
     end
 
-    test "carries a value for the email-change flow" do
+    test "carries a payload for the email-change flow" do
       user = insert(:user)
       Accounts.gen_pin_for(user, "email", "new@example.com")
 
-      assert Repo.one(from(m in LoginPin, where: m.user_id == ^user.id, select: m.value)) ==
+      assert Repo.one(from(m in LoginPin, where: m.user_id == ^user.id, select: m.payload)) ==
                "new@example.com"
     end
   end
@@ -275,11 +275,11 @@ defmodule Vutuv.AccountsTest do
       base = Accounts.count_users()
       insert(:activated_user)
       insert(:activated_user)
-      insert(:user, activated?: nil)
+      insert(:user, email_confirmed?: nil)
       assert Accounts.count_users() == base + 3
     end
 
-    test "excludes never-confirmed registrations (activated? == false, issue #781)" do
+    test "excludes never-confirmed registrations (email_confirmed? == false, issue #781)" do
       base = Accounts.count_users()
       insert(:user)
       insert(:user)
@@ -303,18 +303,18 @@ defmodule Vutuv.AccountsTest do
     end
 
     test "spares an account that has been activated, however old" do
-      user = pending_registration(age_minutes: 1_000, activated?: true)
+      user = pending_registration(age_minutes: 1_000, email_confirmed?: true)
 
       assert Accounts.delete_unconfirmed_registrations() == 0
       assert Repo.get(User, user.id)
     end
 
     # The critical safety case: an established (e.g. legacy) member is
-    # `activated?: false` and mints a fresh "login" PIN when they try to sign in.
+    # `email_confirmed?: false` and mints a fresh "login" PIN when they try to sign in.
     # Because that PIN was created long after the account, it must NOT be reaped
     # as an abandoned registration.
     test "never deletes a legacy member who merely failed to log in" do
-      user = insert(:user, activated?: false)
+      user = insert(:user, email_confirmed?: false)
       set_inserted_at(from(u in User, where: u.id == ^user.id), 60 * 24 * 365 * 5)
       # They attempt a login now: a brand-new PIN, years after the account.
       Accounts.gen_pin_for(user, "login")
@@ -324,7 +324,7 @@ defmodule Vutuv.AccountsTest do
     end
 
     test "never deletes an unconfirmed account that has no login PIN at all" do
-      user = insert(:user, activated?: false)
+      user = insert(:user, email_confirmed?: false)
       set_inserted_at(from(u in User, where: u.id == ^user.id), 1_000)
 
       assert Accounts.delete_unconfirmed_registrations() == 0

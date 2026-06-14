@@ -6,7 +6,7 @@ defmodule VutuvWeb.Plug.EnsureActivatedTest do
   # raised instead of returning a 404. An unactivated user's profile goes
   # through EnsureActivated and must return a clean 404.
   test "an unactivated user's profile returns 404, not a crash" do
-    insert(:user, active_slug: "unactivated-user", activated?: false)
+    insert(:user, active_slug: "unactivated-user", email_confirmed?: false)
 
     conn = get(build_conn(), "/unactivated-user")
 

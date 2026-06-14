@@ -7,7 +7,7 @@ defmodule Vutuv.Search.SearchQuery do
 
   schema "search_queries" do
     field(:value, :string)
-    field(:is_email?, :boolean)
+    field(:email?, :boolean)
 
     has_many(:search_query_results, Vutuv.Search.SearchQueryResult, on_replace: :delete)
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)
@@ -21,8 +21,8 @@ defmodule Vutuv.Search.SearchQuery do
   """
   def changeset(model, params \\ %{}) do
     model
-    |> cast(params, [:value, :is_email?])
-    |> validate_required([:value, :is_email?])
+    |> cast(params, [:value, :email?])
+    |> validate_required([:value, :email?])
     |> cast_assoc(:search_query_results)
     |> cast_assoc(:search_query_requesters)
     |> unique_constraint(:value)

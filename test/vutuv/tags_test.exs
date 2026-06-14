@@ -56,9 +56,9 @@ defmodule Vutuv.TagsTest do
       # Same visibility gate as search and the most-followed listing: a frozen
       # or never-activated account must not surface on the public tag page.
       tag = insert(:tag)
-      visible = insert(:user, activated?: true)
+      visible = insert(:user, email_confirmed?: true)
       unactivated = insert(:user)
-      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      frozen = insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00])
 
       for owner <- [visible, unactivated, frozen] do
         insert(:user_tag, user: owner, tag: tag)
@@ -78,15 +78,15 @@ defmodule Vutuv.TagsTest do
     # already applied to the follower / connection / tag-member / most-followed
     # counts. A tag endorsed by one visible and four hidden members reads "1".
     defp tag_with_mixed_endorsers do
-      tag_owner = insert(:user, activated?: true)
+      tag_owner = insert(:user, email_confirmed?: true)
       tag = insert(:tag)
       user_tag = insert(:user_tag, user: tag_owner, tag: tag)
 
-      visible = insert(:user, activated?: true)
+      visible = insert(:user, email_confirmed?: true)
       unactivated = insert(:user)
-      frozen = insert(:user, activated?: true, frozen_at: ~N[2026-01-01 00:00:00])
-      suspended = insert(:user, activated?: true, suspended_until: ~N[2099-12-31 23:59:59])
-      deactivated = insert(:user, activated?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+      frozen = insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00])
+      suspended = insert(:user, email_confirmed?: true, suspended_until: ~N[2099-12-31 23:59:59])
+      deactivated = insert(:user, email_confirmed?: true, deactivated_at: ~N[2026-01-01 00:00:00])
 
       for endorser <- [visible, unactivated, frozen, suspended, deactivated] do
         insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)

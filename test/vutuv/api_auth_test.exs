@@ -102,7 +102,7 @@ defmodule Vutuv.ApiAuthTest do
     end
 
     test "rejects tokens of unactivated users" do
-      user = insert(:user, activated?: false)
+      user = insert(:user, email_confirmed?: false)
       {:ok, plaintext, _token} = ApiAuth.create_pat(user, pat_attrs())
 
       assert {:error, :account_inactive} = ApiAuth.verify_token(plaintext)

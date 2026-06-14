@@ -17,7 +17,7 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
 
   describe "login" do
     test "completes the two-step PIN login with CSRF enforced" do
-      user = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
       insert(:email, value: "pin-login@example.com", user: user)
 
       conn = post(build_conn(), ~p"/login", session: %{"email" => "pin-login@example.com"})
@@ -35,7 +35,7 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
     end
 
     test "greets a returning member by name and counts their unread conversations" do
-      user = insert(:user, activated?: true)
+      user = insert(:user, email_confirmed?: true)
       insert(:email, value: "greet@example.com", user: user)
 
       # One conversation holding a message the member has not read — the same

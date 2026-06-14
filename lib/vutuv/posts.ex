@@ -854,7 +854,7 @@ defmodule Vutuv.Posts do
       join: u in assoc(p, :user),
       where: fragment("? @@ websearch_to_tsquery('simple', ?)", p.search_tsv, ^value),
       where: is_nil(p.frozen_at),
-      where: u.activated? == true,
+      where: u.email_confirmed? == true,
       where: not account_hidden(u.id),
       where: not exists(from(d in PostDenial, where: d.post_id == parent_as(:post).id)),
       order_by: [
@@ -899,7 +899,7 @@ defmodule Vutuv.Posts do
     from(p in Post,
       join: u in assoc(p, :user),
       where: p.user_id == ^viewer_id or p.user_id in subquery(followees_of(viewer_id)),
-      where: p.user_id == ^viewer_id or is_nil(u.activated?) or u.activated? == true,
+      where: p.user_id == ^viewer_id or is_nil(u.email_confirmed?) or u.email_confirmed? == true,
       order_by: [desc: p.inserted_at, desc: p.id],
       limit: ^fetch_n
     )
@@ -923,8 +923,8 @@ defmodule Vutuv.Posts do
       join: u in assoc(p, :user),
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
       where:
-        r.user_id == ^viewer_id or is_nil(reposter.activated?) or reposter.activated? == true,
-      where: p.user_id == ^viewer_id or is_nil(u.activated?) or u.activated? == true,
+        r.user_id == ^viewer_id or is_nil(reposter.email_confirmed?) or reposter.email_confirmed? == true,
+      where: p.user_id == ^viewer_id or is_nil(u.email_confirmed?) or u.email_confirmed? == true,
       # A third party's repost must not carry a blocked author's post into
       # the viewer's feed (the direct path is already cut: blocking severed
       # the follow).
@@ -1022,7 +1022,7 @@ defmodule Vutuv.Posts do
   def recent_public_posts(:all, opts) do
     Post
     |> join(:inner, [p], u in assoc(p, :user))
-    |> where([p, u], u.activated? and not u.noindex? and not u.noai?)
+    |> where([p, u], u.email_confirmed? and not u.noindex? and not u.noai?)
     |> recent_public(opts)
   end
 
@@ -1344,7 +1344,7 @@ defmodule Vutuv.Posts do
       Repo.all(
         from(u in User,
           where: u.id != ^author_id,
-          where: is_nil(u.activated?) or u.activated? == true,
+          where: is_nil(u.email_confirmed?) or u.email_confirmed? == true,
           where:
             ilike(u.first_name, ^pattern) or ilike(u.last_name, ^pattern) or
               ilike(u.active_slug, ^pattern) or

@@ -4,11 +4,11 @@ defmodule Vutuv.Accounts.LoginPin do
   use VutuvWeb, :model
 
   schema "login_pins" do
-    field(:value, :string)
+    field(:payload, :string)
     field(:type, :string)
-    field(:created_at, :naive_datetime)
-    # `pin` stores the peppered, salted HMAC of the PIN (hex), never plaintext.
-    field(:pin, :string)
+    field(:minted_at, :naive_datetime)
+    # `pin_hash` stores the peppered, salted HMAC of the PIN (hex), never plaintext.
+    field(:pin_hash, :string)
     field(:pin_salt, :binary)
     field(:pin_login_attempts, :integer, default: 0)
 
@@ -19,10 +19,10 @@ defmodule Vutuv.Accounts.LoginPin do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, [
-      :value,
+      :payload,
       :type,
-      :created_at,
-      :pin,
+      :minted_at,
+      :pin_hash,
       :pin_salt,
       :pin_login_attempts
     ])

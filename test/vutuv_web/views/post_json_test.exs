@@ -9,8 +9,8 @@ defmodule VutuvWeb.PostJSONTest do
   alias VutuvWeb.PostJSON
 
   test "serializes a post with images, tags and the author's audience" do
-    author = insert(:user, activated?: true)
-    denied = insert(:user, activated?: true)
+    author = insert(:user, email_confirmed?: true)
+    denied = insert(:user, email_confirmed?: true)
     image = insert(:post_image, user: author, post: nil, alt: "Sunset", width: 400, height: 300)
 
     {:ok, post} =
@@ -43,8 +43,8 @@ defmodule VutuvWeb.PostJSONTest do
   end
 
   test "serializes the reply reference through its three states" do
-    parent_author = insert(:user, activated?: true, first_name: "Petra", last_name: "Parent")
-    replier = insert(:user, activated?: true)
+    parent_author = insert(:user, email_confirmed?: true, first_name: "Petra", last_name: "Parent")
+    replier = insert(:user, email_confirmed?: true)
 
     {:ok, parent} = Posts.create_post(parent_author, %{body: "the root"})
     {:ok, reply} = Posts.create_reply(replier, parent, %{body: "the answer"})
@@ -72,7 +72,7 @@ defmodule VutuvWeb.PostJSONTest do
   end
 
   test "the deny array never serializes for other viewers" do
-    author = insert(:user, activated?: true)
+    author = insert(:user, email_confirmed?: true)
 
     {:ok, restricted} =
       Posts.create_post(author, %{body: "x", denials: [%{"wildcard" => "logged_out"}]})

@@ -402,8 +402,8 @@ defmodule Vutuv.PostsTest do
     end
 
     test "hides posts from unactivated authors but always shows own" do
-      viewer = user(activated?: false)
-      unactivated = user(activated?: false)
+      viewer = user(email_confirmed?: false)
+      unactivated = user(email_confirmed?: false)
       follow!(viewer, unactivated)
 
       mine = create_post!(viewer, %{body: "mine"})
@@ -452,7 +452,7 @@ defmodule Vutuv.PostsTest do
 
     test "ignores reposts by strangers and by unactivated reposters" do
       viewer = user()
-      unactivated = user(activated?: false)
+      unactivated = user(email_confirmed?: false)
       stranger = user()
       follow!(viewer, unactivated)
 

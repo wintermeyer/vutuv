@@ -18,7 +18,7 @@ defmodule VutuvWeb.StaleSessionTest do
   end
 
   test "a UUID session user_id still logs in", %{conn: conn} do
-    user = insert(:user, activated?: true)
+    user = insert(:user, email_confirmed?: true)
 
     conn =
       conn

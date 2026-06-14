@@ -94,7 +94,7 @@ defmodule Vutuv.Sitemap do
   end
 
   defp indexable_users do
-    from(u in User, where: u.activated? and not u.noindex? and not account_hidden(u.id))
+    from(u in User, where: u.email_confirmed? and not u.noindex? and not account_hidden(u.id))
   end
 
   # scope_visible(nil) already drops restricted posts, frozen posts and
@@ -103,7 +103,7 @@ defmodule Vutuv.Sitemap do
     Post
     |> Posts.scope_visible(nil)
     |> join(:inner, [p], u in assoc(p, :user))
-    |> where([p, u], u.activated? and not u.noindex?)
+    |> where([p, u], u.email_confirmed? and not u.noindex?)
   end
 
   defp chunks(0), do: 0

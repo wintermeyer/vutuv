@@ -107,7 +107,7 @@ defmodule VutuvWeb.ApiV2Test do
       conn: conn,
       plaintext: plaintext
     } do
-      unactivated = insert(:user, activated?: false)
+      unactivated = insert(:user, email_confirmed?: false)
 
       conn1 = conn |> authed(plaintext) |> get("/api/2.0/users/#{unactivated.active_slug}")
       assert conn1.status == 404

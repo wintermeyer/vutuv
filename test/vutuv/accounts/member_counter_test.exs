@@ -36,9 +36,9 @@ defmodule Vutuv.Accounts.MemberCounterTest do
       # The advertised total counts confirmed members, so a sign-up that has not
       # confirmed its PIN must not move the live counter.
       assert MemberCounter.count() == before
-      refute user.activated?
+      refute user.email_confirmed?
 
-      # First login confirms the account (activated? false -> true) and counts it.
+      # First login confirms the account (email_confirmed? false -> true) and counts it.
       Accounts.login(build_conn(), user)
       assert MemberCounter.count() == before + 1
     end
@@ -53,7 +53,7 @@ defmodule Vutuv.Accounts.MemberCounterTest do
     end
 
     test "a legacy nil-activated account is not re-counted when it logs in" do
-      user = insert(:user, activated?: nil)
+      user = insert(:user, email_confirmed?: nil)
       before = MemberCounter.count()
 
       Accounts.login(build_conn(), user)

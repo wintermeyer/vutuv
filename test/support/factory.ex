@@ -15,7 +15,7 @@ defmodule Vutuv.Factory do
   end
 
   def activated_user_factory do
-    struct!(user_factory(), activated?: true)
+    struct!(user_factory(), email_confirmed?: true)
   end
 
   def email_factory do
@@ -91,8 +91,8 @@ defmodule Vutuv.Factory do
   def login_pin_factory do
     %Vutuv.Accounts.LoginPin{
       type: "login",
-      created_at: NaiveDateTime.utc_now(),
-      pin:
+      minted_at: NaiveDateTime.utc_now(),
+      pin_hash:
         sequence(:login_pin_hash, &Base.encode16(:crypto.hash(:sha256, "#{&1}"), case: :lower)),
       pin_salt: :crypto.strong_rand_bytes(16),
       pin_login_attempts: 0

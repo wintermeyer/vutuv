@@ -86,7 +86,7 @@ defmodule VutuvWeb.ApiV2.MessageController do
         Problem.send_problem(conn, 422, "Cannot message yourself")
 
       {:error, :not_activated} ->
-        # Reachable for legacy rows whose activated? is nil: visible as a
+        # Reachable for legacy rows whose email_confirmed? is nil: visible as a
         # profile (the predicate treats nil as activated), but Chat's
         # stricter gate refuses to open a conversation with them.
         Problem.not_found(conn)

@@ -56,8 +56,8 @@ defmodule Vutuv.Social.Follow do
         join: fr in assoc(fl, :follower),
         as: :follower,
         where:
-          (is_nil(fe.activated?) or fe.activated? == true) and
-            (is_nil(fr.activated?) or fr.activated? == true),
+          (is_nil(fe.email_confirmed?) or fe.email_confirmed? == true) and
+            (is_nil(fr.email_confirmed?) or fr.email_confirmed? == true),
         order_by: [desc: :inserted_at],
         limit: ^n
       )

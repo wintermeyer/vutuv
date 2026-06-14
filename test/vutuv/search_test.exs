@@ -64,7 +64,7 @@ defmodule Vutuv.SearchTest do
     end
 
     test "skips deactivated users" do
-      searchable_user("Hidden", "Person", activated?: false)
+      searchable_user("Hidden", "Person", email_confirmed?: false)
 
       results = Search.instant("hidden")
 
@@ -105,7 +105,7 @@ defmodule Vutuv.SearchTest do
       tag = insert(:tag, name: "Elixir", slug: "elixir")
 
       visible = searchable_user("Vera", "Visible")
-      unactivated = insert(:user, activated?: false)
+      unactivated = insert(:user, email_confirmed?: false)
       frozen = searchable_user("Fred", "Frozen", frozen_at: ~N[2026-01-01 00:00:00])
 
       for u <- [visible, unactivated, frozen], do: insert(:user_tag, tag: tag, user: u)
@@ -317,7 +317,7 @@ defmodule Vutuv.SearchTest do
 
       query = Repo.preload(query, [:user_results, :search_query_requesters])
       assert query.value == "meier"
-      refute query.is_email?
+      refute query.email?
       assert Enum.map(query.user_results, & &1.id) == [user.id]
       assert [%{user_id: nil}] = query.search_query_requesters
     end
@@ -338,7 +338,7 @@ defmodule Vutuv.SearchTest do
 
       assert {:ok, query} = Search.record_query("findme@example.com", nil)
 
-      assert query.is_email?
+      assert query.email?
       assert Enum.map(Repo.preload(query, :user_results).user_results, & &1.id) == [user.id]
     end
   end

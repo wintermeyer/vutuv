@@ -9,7 +9,7 @@ defmodule Vutuv.Profiles.Url do
     field(:value, :string)
     field(:description, :string)
     field(:screenshot, :string)
-    field(:broken, :boolean)
+    field(:broken?, :boolean)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
@@ -23,7 +23,7 @@ defmodule Vutuv.Profiles.Url do
   """
   def changeset(model, params \\ %{}) do
     model
-    |> cast(params, [:value, :description, :broken])
+    |> cast(params, [:value, :description, :broken?])
     |> put_screenshot(params)
     |> validate_required([:value])
     |> validate_length(:description, max: 45)

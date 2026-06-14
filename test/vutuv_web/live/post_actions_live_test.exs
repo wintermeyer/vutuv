@@ -12,7 +12,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
 
   alias Vutuv.Posts
 
-  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([activated?: true], attrs))
+  defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
   defp feed_actions(conn, post) do
     {:ok, feed, _html} = live(conn, ~p"/feed")

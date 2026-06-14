@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Urls.CreateScreenshots do
   defp process_user_urls(user) do
     IO.puts("#{user.first_name} #{user.last_name}")
 
-    for url <- user.urls, !url.screenshot, !url.broken do
+    for url <- user.urls, !url.screenshot, !url.broken? do
       IO.puts("-> #{url.value}")
       Vutuv.PageScreenshot.generate_screenshot(url)
       :timer.sleep(500)

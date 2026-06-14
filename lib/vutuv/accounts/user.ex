@@ -18,7 +18,7 @@ defmodule Vutuv.Accounts.User do
     # An admin checked this person's physical ID against their name: this IS that
     # person. Admin-only (deliberately NOT in @optional_fields); drives the
     # "Verified profile" badge and the admin review queue. Not to be confused
-    # with activated? below.
+    # with email_confirmed? below.
     field(:identity_verified?, :boolean, default: false)
     field(:avatar, :string)
     field(:cover_photo, :string)
@@ -39,7 +39,7 @@ defmodule Vutuv.Accounts.User do
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
     # messaging. Not to be confused with identity_verified? above.
-    field(:activated?, :boolean, default: false)
+    field(:email_confirmed?, :boolean, default: false)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
     # Moderation state, managed by Vutuv.Moderation, never cast from params.
@@ -90,7 +90,7 @@ defmodule Vutuv.Accounts.User do
   # :active_slug is deliberately NOT here: the username is unique, rate-limited
   # and Twitter-validated, so it only changes through slug_changeset/2 (used by
   # Accounts.update_active_slug/2), never through the generic profile form.
-  # :activated? is NOT here either: it flips only via the login-PIN path
+  # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
   @optional_fields ~w(noindex? noai? notification_emails? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a

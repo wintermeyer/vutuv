@@ -36,7 +36,7 @@ defmodule Vutuv.PageScreenshotTest do
 
   test "refuses a profile URL whose host resolves to an internal address (DNS rebinding)" do
     user = insert(:user)
-    url = insert(:url, user: user, value: "https://rebind.attacker.example/page", broken: false)
+    url = insert(:url, user: user, value: "https://rebind.attacker.example/page", broken?: false)
 
     # Resolve the public-looking host to an internal IP; the guard must fire
     # before Chromium is launched. `:internal_target` in the log distinguishes
@@ -49,6 +49,6 @@ defmodule Vutuv.PageScreenshotTest do
       end)
 
     assert log =~ "internal_target"
-    assert Repo.get!(Vutuv.Profiles.Url, url.id).broken == true
+    assert Repo.get!(Vutuv.Profiles.Url, url.id).broken? == true
   end
 end
