@@ -1169,10 +1169,10 @@ defmodule VutuvWeb.UI do
 
   @doc """
   The settings sub-navigation shared by the profile editor and the settings
-  pages: a row of underline tabs (Profile / Privacy / Notifications / Account)
-  so the once-single edit form now reads as a small set of focused pages you
-  can move between. `active` is the current tab key
-  (`:profile | :privacy | :notifications | :account`).
+  pages: a row of underline tabs (Profile / Privacy / Notifications / Apps /
+  Account) so the once-single edit form now reads as a small set of focused
+  pages you can move between. `active` is the current tab key
+  (`:profile | :privacy | :notifications | :apps | :account`).
   """
   attr(:user, Vutuv.Accounts.User, required: true)
   attr(:active, :atom, required: true)
@@ -1183,6 +1183,7 @@ defmodule VutuvWeb.UI do
       {gettext("Profile"), ~p"/#{assigns.user}/edit", :profile},
       {gettext("Privacy"), ~p"/#{assigns.user}/settings/privacy", :privacy},
       {gettext("Notifications"), ~p"/#{assigns.user}/settings/notifications", :notifications},
+      {gettext("Apps"), ~p"/#{assigns.user}/settings/apps", :apps},
       {gettext("Account"), ~p"/#{assigns.user}/settings", :account}
     ]
 

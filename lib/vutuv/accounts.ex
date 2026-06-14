@@ -819,9 +819,24 @@ defmodule Vutuv.Accounts do
   recipient locked out of their account can still stop the mail.
   """
   def set_notification_emails(%User{} = user, enabled?) when is_boolean(enabled?) do
-    user
-    |> Ecto.Changeset.change(notification_emails?: enabled?)
-    |> Repo.update()
+    set_email_pref(user, :notification_emails?, enabled?)
+  end
+
+  @doc """
+  Switches one notification-email preference on or off. `field` must be one of
+  `User.email_pref_fields/0` (the unsubscribe allowlist), so a tokenized
+  one-click unsubscribe link can only ever flip a real email preference, never
+  an arbitrary column. Returns `{:error, :invalid_field}` for anything else.
+  """
+  def set_email_pref(%User{} = user, field, enabled?)
+      when is_atom(field) and is_boolean(enabled?) do
+    if field in User.email_pref_fields() do
+      user
+      |> Ecto.Changeset.change(%{field => enabled?})
+      |> Repo.update()
+    else
+      {:error, :invalid_field}
+    end
   end
 
   # ── Usernames ──

@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+@<%= @actor_slug %> endorsed you for <%= @tag_name %> on vutuv.
+
+See their profile:
+
+<%= @url %><%= @actor_slug %>
+
+You can switch these notification emails off here:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

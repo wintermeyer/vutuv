@@ -1,38 +1,102 @@
-<%!-- Notification settings. `notification_emails?` is a positive flag (true =
-send email), so a plain checkbox: checked submits "true". --%>
+<%!-- Notification settings. Two cards: which emails vutuv may send (one positive
+flag per type, all default off except messages, checked submits "true"), and an
+honest read-only explainer of the always-on in-app notifications. Each helper
+line is forced font-normal because the surrounding <label> defaults to bold
+(components.css), which would otherwise render the hint heavier than its
+heading. --%>
 <div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Notifications")}</h1>
   <.settings_nav user={@user} active={:notifications} class="mb-6" />
 
-  <.card>
-    <.section_title>{gettext("Notifications")}</.section_title>
-    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext("Decide when vutuv may email you. In-app notifications are always on.")}
-    </p>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Email notifications")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Pick which emails vutuv may send you. We never send marketing email, and each email has a one-click unsubscribe.")}
+      </p>
 
-    <.form
-      :let={f}
-      for={@changeset}
-      action={~p"/#{@user}/settings/notifications"}
-      class="mt-5 space-y-5"
-    >
-      <.form_error changeset={@changeset} />
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/#{@user}/settings/notifications"}
+        class="mt-5 space-y-5"
+      >
+        <.form_error changeset={@changeset} />
 
-      <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-        <%= checkbox f, :notification_emails?, class: checkbox_class() %>
-        <span>
-          <span class="block font-medium text-slate-900 dark:text-white">
-            {gettext("Email me about activity")}
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :notification_emails?, class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Unread messages")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When someone messages you and you have not read it yet.")}
+            </span>
           </span>
-          <span class="block">
-            {gettext("For example when you have unread messages. We never send marketing email.")}
-          </span>
-        </span>
-      </label>
+        </label>
 
-      <div class="pt-1">
-        <.button type="submit">{gettext("Save")}</.button>
-      </div>
-    </.form>
-  </.card>
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :email_on_connection_request?, class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Connection requests")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When someone asks to connect with you.")}
+            </span>
+          </span>
+        </label>
+
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :email_on_endorsement?, class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Endorsements")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When someone endorses you for one of your tags.")}
+            </span>
+          </span>
+        </label>
+
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :email_on_follower?, class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("New followers")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When someone starts following you.")}
+            </span>
+          </span>
+        </label>
+
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+
+    <%!-- In-app notifications are not configurable (they are the product), so
+          this card just explains them and links to the bell. Read-only. --%>
+    <.card>
+      <.section_title>{gettext("In-app notifications")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("These are always on. You see them under the bell at the top of every page, in real time.")}
+      </p>
+      <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
+        <li>{gettext("New messages and connection requests")}</li>
+        <li>{gettext("Endorsements and new followers")}</li>
+        <li>{gettext("Replies to and likes on your posts")}</li>
+      </ul>
+      <p class="mt-4">
+        <.link
+          navigate={~p"/notifications"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Open your notifications")} ›
+        </.link>
+      </p>
+    </.card>
+  </div>
 </div>

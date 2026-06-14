@@ -142,7 +142,9 @@ defmodule Vutuv.Notifications.EmailerTest do
 
       # The link in the mail really authorizes that recipient, nobody else.
       [_, token] = Regex.run(~r{/unsubscribe/([\w._-]+)}, email.text_body)
-      assert {:ok, user_id} = VutuvWeb.UnsubscribeToken.verify(token)
+      # The unread-message email uses the legacy id-only token, which resolves
+      # to the master :notification_emails? switch.
+      assert {:ok, user_id, :notification_emails?} = VutuvWeb.UnsubscribeToken.verify(token)
       assert user_id == user.id
     end
 

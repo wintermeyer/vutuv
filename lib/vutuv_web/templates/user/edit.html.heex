@@ -1,10 +1,11 @@
-<%!-- Edit profile = the "Profile" tab of Settings: the profile content only
-(photos, name, about), grouped into cards. The boolean settings moved to the
-Privacy and Notifications tabs; the account hub (username, emails, data,
-security, delete) moved to the Account tab. One form, one Save, posting the
-whole profile to PATCH /:slug as before. --%>
+<%!-- Edit profile = the "Profile" tab of Settings: the public profile content
+only (photos, name, about you), grouped into cards. Privacy/visibility moved to
+the Privacy tab, email notifications to the Notifications tab, and the account
+hub (username, emails, interface language, data, apps/API, delete) to the
+Account tab. One form, one Save, posting the whole profile to PATCH /:slug as
+before. --%>
 <div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Profile")}</h1>
   <.settings_nav user={@user} active={:profile} class="mb-6" />
 
   <.form :let={f} for={@changeset} action={~p"/#{@user}"} multipart class="space-y-6">
@@ -13,14 +14,43 @@ whole profile to PATCH /:slug as before. --%>
     <.card>
       <.section_title>{gettext("Photos")}</.section_title>
       <div class="mt-4 grid gap-5 sm:grid-cols-2">
+        <%!-- Avatar: preview the current avatar (the real photo, or the initials
+        tile visitors currently see) above the upload, so the owner sees what
+        they are replacing. --%>
         <div>
           <%= label f, :avatar, gettext("Avatar"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= file_input f, :avatar, class: "mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <div class="mt-2 flex items-center gap-3">
+            <.avatar
+              user={@user}
+              size="lg"
+              shape="square"
+              alt={gettext("Current avatar")}
+              class="ring-1 ring-slate-200 dark:ring-slate-800"
+            />
+            <span class="text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Current avatar")}
+            </span>
+          </div>
+          <%= file_input f, :avatar, class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
           <%= error_tag f, :avatar %>
         </div>
+        <%!-- Cover photo: preview the current cover (the same object-cover crop
+        as the profile banner) only when one is uploaded; the gradient default
+        is not a photo worth previewing. --%>
         <div>
           <%= label f, :cover_photo, gettext("Cover photo"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= file_input f, :cover_photo, class: "mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <% cover_url = Vutuv.Cover.display_url(@user, :wide) %>
+          <figure :if={cover_url} class="mt-2">
+            <img
+              src={cover_url}
+              alt={gettext("Current cover photo")}
+              class="h-24 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+            />
+            <figcaption class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Current cover photo")}
+            </figcaption>
+          </figure>
+          <%= file_input f, :cover_photo, class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
           <%= error_tag f, :cover_photo %>
         </div>
       </div>
@@ -56,12 +86,12 @@ whole profile to PATCH /:slug as before. --%>
         </div>
         <div>
           <%= label f, :honorific_prefix, gettext("Prefix"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= text_input f, :honorific_prefix, class: input_class() %>
+          <%= text_input f, :honorific_prefix, class: input_class(), placeholder: gettext("e.g. Dr. or Prof.") %>
           <%= error_tag f, :honorific_prefix %>
         </div>
         <div>
           <%= label f, :honorific_suffix, gettext("Suffix"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= text_input f, :honorific_suffix, class: input_class() %>
+          <%= text_input f, :honorific_suffix, class: input_class(), placeholder: gettext("e.g. Jr. or PhD") %>
           <%= error_tag f, :honorific_suffix %>
         </div>
       </div>
@@ -83,11 +113,6 @@ whole profile to PATCH /:slug as before. --%>
             <%= label f, :birthdate, gettext("Birthdate"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
             <%= date_input f, :birthdate, max: Date.to_iso8601(Date.utc_today()), class: input_class() %>
             <%= error_tag f, :birthdate %>
-          </div>
-          <div>
-            <%= label f, :locale, gettext("Language"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-            <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}], class: input_class() %>
-            <%= error_tag f, :locale %>
           </div>
         </div>
       </div>

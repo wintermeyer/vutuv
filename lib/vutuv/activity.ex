@@ -19,8 +19,10 @@ defmodule Vutuv.Activity do
   the "Load more" button.
   """
   import Ecto.Query
+  require Logger
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Notifications.Emailer
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
@@ -170,6 +172,10 @@ defmodule Vutuv.Activity do
         at: DateTime.utc_now()
       })
     )
+
+    maybe_email(followee_id, follower, :email_on_follower?, fn email, user ->
+      Emailer.new_follower_email(email, user, follower)
+    end)
   end
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
@@ -188,6 +194,10 @@ defmodule Vutuv.Activity do
         at: DateTime.utc_now()
       })
     )
+
+    maybe_email(owner_id, endorser, :email_on_endorsement?, fn email, user ->
+      Emailer.endorsement_email(email, user, endorser, tag_name)
+    end)
   end
 
   @doc ~S"""
@@ -261,6 +271,10 @@ defmodule Vutuv.Activity do
         at: DateTime.utc_now()
       })
     )
+
+    maybe_email(recipient_id, requester, :email_on_connection_request?, fn email, user ->
+      Emailer.connection_request_email(email, user, requester)
+    end)
   end
 
   @doc ~S(Convenience: an "accepted your connection request" notification for the requester.)
@@ -296,6 +310,37 @@ defmodule Vutuv.Activity do
       })
     )
   end
+
+  # Opt-in activity email. The in-app notification above always fires; this only
+  # adds the email copy when the recipient switched the matching preference on
+  # (all default off, set on the notifications settings page). Confirmed
+  # accounts only (the dormant legacy members are email_confirmed? false), never
+  # the actor themselves, and a delivery failure must never break the social
+  # action that triggered it. `build` turns the looked-up address + recipient
+  # into the `%Swoosh.Email{}` to deliver. Sent inline: these are low-frequency
+  # events and the preference defaults off, so most actions never reach here.
+  defp maybe_email(recipient_id, actor, field, build) when is_map(actor) do
+    actor_id = Map.get(actor, :id)
+
+    if recipient_id && recipient_id != actor_id do
+      # The whole lookup + send is best-effort: any failure (a bad id, an SMTP
+      # error) is logged and swallowed so it never breaks the social action that
+      # already fired its in-app notification above.
+      try do
+        with %User{email_confirmed?: true} = user <- Vutuv.Accounts.get_user(recipient_id),
+             true <- Map.get(user, field),
+             email when is_binary(email) <- Vutuv.Accounts.first_email_value(user) do
+          email |> build.(user) |> Emailer.deliver()
+        end
+      rescue
+        e -> Logger.error("activity email (#{field}) failed: #{Exception.message(e)}")
+      end
+    end
+
+    :ok
+  end
+
+  defp maybe_email(_recipient_id, _actor, _field, _build), do: :ok
 
   ## Derived notifications feed
 

@@ -192,6 +192,74 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
+  @doc """
+  "@handle started following you" notice. Opt-in: only sent when the recipient
+  set `email_on_follower?` (its own one-click unsubscribe switches just that
+  back off). Names the follower by @handle only — system text never uses clear
+  names. The caller passes the recipient's address.
+  """
+  def new_follower_email(email, user, follower) do
+    notification_email(
+      email,
+      user,
+      "new_follower",
+      :email_on_follower?,
+      fn -> gettext("@%{slug} started following you on vutuv", slug: follower.active_slug) end,
+      %{actor_slug: follower.active_slug}
+    )
+  end
+
+  @doc """
+  "@handle endorsed you for <tag>" notice. Opt-in via `email_on_endorsement?`.
+  """
+  def endorsement_email(email, user, endorser, tag_name) do
+    notification_email(
+      email,
+      user,
+      "endorsement",
+      :email_on_endorsement?,
+      fn -> gettext("@%{slug} endorsed you on vutuv", slug: endorser.active_slug) end,
+      %{actor_slug: endorser.active_slug, tag_name: tag_name}
+    )
+  end
+
+  @doc """
+  "@handle wants to connect with you" notice. Opt-in via
+  `email_on_connection_request?`.
+  """
+  def connection_request_email(email, user, requester) do
+    notification_email(
+      email,
+      user,
+      "connection_request",
+      :email_on_connection_request?,
+      fn -> gettext("@%{slug} wants to connect on vutuv", slug: requester.active_slug) end,
+      %{actor_slug: requester.active_slug}
+    )
+  end
+
+  # The shared shape of the opt-in activity notices: localized subject, the
+  # matching per-locale text template (always handed `user`, `url` and
+  # `unsubscribe_url`), and the per-type one-click unsubscribe header/footer.
+  defp notification_email(email, user, template_base, field, subject_fun, extra_assigns) do
+    locale = get_locale(user.locale)
+    unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user, field)
+
+    base_email()
+    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> unsubscribe_headers(unsubscribe_url)
+    |> subject(recipient_subject(locale, subject_fun))
+    |> text_body(
+      VutuvWeb.EmailText.render(
+        "#{template_base}_#{locale}.text",
+        Map.merge(
+          %{user: user, url: public_url(), unsubscribe_url: unsubscribe_url},
+          extra_assigns
+        )
+      )
+    )
+  end
+
   # RFC 8058 one-click unsubscribe for notification (non-transactional) mail:
   # the HTTPS form is what Gmail/Yahoo's unsubscribe buttons POST to, the
   # mailto is the fallback for everything else. Transactional mail (PINs,

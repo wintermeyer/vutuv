@@ -1,13 +1,16 @@
-<%!-- Account hub: the settings landing page. Everything that used to crowd the
-edit form's sidebar (username, emails, data export, the security pages that are
-linked nowhere else, and the delete danger zone) lives here now, grouped. --%>
+<%!-- Account hub: the settings landing page. Groups what is purely about the
+account itself into focused cards, in reading order: who you are (sign-in &
+identity), your interface language, your data, and finally the delete danger
+zone. Developer concerns (apps & API access) moved to their own Apps tab;
+moderation status moved to the Privacy tab; blocking lives on the Privacy tab
+too. So this page stays short and unambiguous. --%>
 <div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Account")}</h1>
   <.settings_nav user={@user} active={:account} class="mb-6" />
 
   <div class="space-y-6">
     <.card>
-      <.section_title>{gettext("Account")}</.section_title>
+      <.section_title>{gettext("Sign-in & identity")}</.section_title>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
         <.account_row
           title={gettext("Username")}
@@ -21,41 +24,48 @@ linked nowhere else, and the delete danger zone) lives here now, grouped. --%>
           href={~p"/#{@user}/emails"}
           label={gettext("Manage")}
         />
-        <.account_row
-          title={gettext("Your data")}
-          subtitle={gettext("Download everything vutuv stores about you, as one file.")}
-          href={~p"/#{@user}/export"}
-          label={gettext("Download")}
-        />
       </ul>
     </.card>
 
+    <%!-- Interface language: the user's own UI-language preference (it overrides
+          Accept-Language for the whole site), not public profile content, so it
+          lives here and not under the profile editor's "About you". Its own small
+          form posts to PUT /settings/language. --%>
     <.card>
-      <.section_title>{gettext("Privacy & security")}</.section_title>
+      <.section_title>{gettext("Language & region")}</.section_title>
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/#{@user}/settings/language"}
+        class="mt-4 space-y-3"
+      >
+        <.form_error changeset={@changeset} />
+
+        <div class="sm:max-w-xs">
+          <%= label f, :locale, gettext("Interface language"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}], class: input_class() %>
+          <%= error_tag f, :locale %>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "This sets the language of the whole vutuv interface, not your public profile."
+            )}
+          </p>
+        </div>
+
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+
+    <.card>
+      <.section_title>{gettext("Your data")}</.section_title>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
         <.account_row
-          title={gettext("Blocked members")}
-          subtitle={gettext("People who cannot interact with you.")}
-          href={~p"/blocks"}
-          label={gettext("View")}
-        />
-        <.account_row
-          title={gettext("Connected apps")}
-          subtitle={gettext("Third-party apps you authorized.")}
-          href={~p"/connected_apps"}
-          label={gettext("View")}
-        />
-        <.account_row
-          title={gettext("Access tokens")}
-          subtitle={gettext("Personal tokens for the vutuv API.")}
-          href={~p"/access_tokens"}
-          label={gettext("View")}
-        />
-        <.account_row
-          title={gettext("Content under review")}
-          subtitle={gettext("Your posts or profile a moderator is looking at.")}
-          href={~p"/moderation/cases"}
-          label={gettext("View")}
+          title={gettext("Download your data")}
+          subtitle={gettext("Download everything vutuv stores about you, as one file.")}
+          href={~p"/#{@user}/export"}
+          label={gettext("Download")}
         />
       </ul>
     </.card>

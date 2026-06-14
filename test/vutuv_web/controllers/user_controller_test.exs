@@ -276,6 +276,29 @@ defmodule VutuvWeb.UserControllerTest do
     # The slimmed edit page is the profile content only, grouped into sections.
     assert html =~ "Your name"
     assert html =~ "First Name"
+    # The obscure honorific fields carry an example placeholder, like the
+    # registration form does for its fields, so their meaning is obvious.
+    assert html =~ "e.g. Dr. or Prof."
+    assert html =~ "e.g. Jr. or PhD"
+  end
+
+  test "the Photos section previews the current avatar, and the cover only when set",
+       %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    # The avatar preview always reflects the live state (the initials tile when
+    # there is no upload), so the owner sees what visitors currently see before
+    # picking a replacement.
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    assert html =~ "Current avatar"
+    # No cover uploaded yet, so no cover preview (we don't preview the gradient
+    # placeholder as if it were a photo).
+    refute html =~ "Current cover photo"
+
+    # Once a cover photo exists, it is shown above the upload field.
+    {:ok, _} = user |> Ecto.Changeset.change(cover_photo: "cover.avif") |> Repo.update()
+    html = conn |> recycle() |> get(~p"/#{user}/edit") |> html_response(200)
+    assert html =~ "Current cover photo"
   end
 
   test "updates chosen resource and redirects when data is valid", %{conn: conn} do
@@ -347,18 +370,23 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ~s(href="#{~p"/#{user}/export"}")
   end
 
-  test "the account hub links to the otherwise-unfindable privacy/security pages", %{
+  test "the otherwise-unfindable account & privacy pages are reachable from settings", %{
     conn: conn
   } do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings") |> html_response(200)
 
-    # These pages are reachable only from here for a normal user (no shell or
-    # profile link), so the account hub must surface them.
-    assert html =~ ~s(href="#{~p"/blocks"}")
-    assert html =~ ~s(href="#{~p"/connected_apps"}")
-    assert html =~ ~s(href="#{~p"/access_tokens"}")
-    assert html =~ ~s(href="#{~p"/moderation/cases"}")
+    # Blocked members and the owner's moderation cases now live on the Privacy
+    # tab under a "Safety" card, where members look for them (both used to be in
+    # the account hub, blocking under a mislabelled "Privacy & security" card).
+    privacy = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+    assert privacy =~ ~s(href="#{~p"/blocks"}")
+    assert privacy =~ ~s(href="#{~p"/moderation/cases"}")
+
+    # Connected apps and API tokens moved to their own Apps tab, reachable only
+    # from there for a normal user (no shell or profile link).
+    apps = conn |> recycle() |> get(~p"/#{user}/settings/apps") |> html_response(200)
+    assert apps =~ ~s(href="#{~p"/connected_apps"}")
+    assert apps =~ ~s(href="#{~p"/access_tokens"}")
   end
 
   # The two consents are independent booleans; a mixed combination must

@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+@<%= @actor_slug %> started following you on vutuv.
+
+See their profile:
+
+<%= @url %><%= @actor_slug %>
+
+You can switch these notification emails off here:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

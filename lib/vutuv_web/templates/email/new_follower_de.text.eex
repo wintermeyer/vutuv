@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+@<%= @actor_slug %> folgt Ihnen jetzt auf vutuv.
+
+Hier geht es zum Profil:
+
+<%= @url %><%= @actor_slug %>
+
+Diese Benachrichtigungs-E-Mails können Sie hier abschalten:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

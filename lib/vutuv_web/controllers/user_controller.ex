@@ -207,7 +207,14 @@ defmodule VutuvWeb.UserController do
 
     changeset = User.changeset(user)
 
-    render(conn, "edit.html", user: user, changeset: changeset)
+    # Own its <title> so the browser tab/history reads "Edit profile - vutuv"
+    # rather than falling back to the member name (this is the Profile settings
+    # tab, not the public profile).
+    render(conn, "edit.html",
+      user: user,
+      changeset: changeset,
+      page_title: gettext("Edit profile")
+    )
   end
 
   def update(conn, %{"user" => user_params}) do

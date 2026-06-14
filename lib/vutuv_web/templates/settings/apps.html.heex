@@ -1,0 +1,34 @@
+<%!-- Apps & API: the developer hub, split off the account hub so neither page
+is overloaded. Third-party apps the member authorized, their personal API
+tokens, and a cross-link to the public API docs. Read-only here (each row links
+to where the thing is actually managed), so no changeset. --%>
+<div class="py-6">
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Apps")}</h1>
+  <.settings_nav user={@user} active={:apps} class="mb-6" />
+
+  <.card>
+    <.section_title>{gettext("Apps & API access")}</.section_title>
+    <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+      <.account_row
+        title={gettext("Connected apps")}
+        subtitle={gettext("Third-party apps you authorized.")}
+        href={~p"/connected_apps"}
+        label={gettext("Manage")}
+      />
+      <.account_row
+        title={gettext("Access tokens")}
+        subtitle={gettext("Personal tokens for the vutuv API.")}
+        href={~p"/access_tokens"}
+        label={gettext("Manage")}
+      />
+    </ul>
+    <p class="mt-4">
+      <.link
+        navigate={~p"/developers"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+      >
+        {gettext("Read the API docs")} ›
+      </.link>
+    </p>
+  </.card>
+</div>

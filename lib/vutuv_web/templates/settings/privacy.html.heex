@@ -1,47 +1,74 @@
-<%!-- Privacy & visibility settings. Split off the old single edit form. The
-checkboxes use the same inverted mechanism as the sign-up form: the field is
-`noindex?` / `noai?` (an opt-OUT), but the box is framed positively ("Allow
-…"), so checked submits "false" (allow) and unchecked submits "true". --%>
+<%!-- Privacy: who can find, reuse, and reach you. Two cards:
+"Search engines & AI" (the robot consents, the same inverted checkbox as the
+sign-up form: the field is the opt-OUT noindex?/noai?, but the box reads
+positively "Allow ...", so checked submits "false") and "Safety" (blocked
+members + the moderation status), both moved here from the account hub where
+members did not look for them. The helper line under each checkbox is forced
+font-normal because the surrounding <label> defaults to bold (components.css),
+which would otherwise render the hint heavier than its own heading. --%>
 <div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Privacy")}</h1>
   <.settings_nav user={@user} active={:privacy} class="mb-6" />
 
-  <.card>
-    <.section_title>{gettext("Privacy & visibility")}</.section_title>
-    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-      {gettext("Choose who may discover and reuse your public profile. You can change this any time.")}
-    </p>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Search engines & AI")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("Your profile is always public to people. These switches decide whether automated systems may use it too.")}
+      </p>
 
-    <.form :let={f} for={@changeset} action={~p"/#{@user}/settings/privacy"} class="mt-5 space-y-5">
-      <.form_error changeset={@changeset} />
+      <.form :let={f} for={@changeset} action={~p"/#{@user}/settings/privacy"} class="mt-5 space-y-5">
+        <.form_error changeset={@changeset} />
 
-      <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-        <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-        <span>
-          <span class="block font-medium text-slate-900 dark:text-white">
-            {gettext("Allow search engines to index your profile")}
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Allow search engines to index your profile")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When on, your public profile can appear in Google and other search engines.")}
+            </span>
           </span>
-          <span class="block">
-            {gettext("When on, your public profile can appear in Google and other search engines.")}
-          </span>
-        </span>
-      </label>
+        </label>
 
-      <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-        <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-        <span>
-          <span class="block font-medium text-slate-900 dark:text-white">
-            {gettext("Allow AI agents and LLMs to use your profile")}
+        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+          <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+          <span>
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Allow AI agents and LLMs to use your profile")}
+            </span>
+            <span class="block font-normal">
+              {gettext("When on, AI assistants and crawlers may read and train on your public profile.")}
+            </span>
           </span>
-          <span class="block">
-            {gettext("When on, AI assistants and crawlers may read and train on your public profile.")}
-          </span>
-        </span>
-      </label>
+        </label>
 
-      <div class="pt-1">
-        <.button type="submit">{gettext("Save")}</.button>
-      </div>
-    </.form>
-  </.card>
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+
+    <%!-- Safety: the two things you reach for when someone is a problem or your
+          content is being looked at. Grouped in one card (two rows) so neither
+          reads as a lonely one-line card. --%>
+    <.card>
+      <.section_title>{gettext("Safety")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.account_row
+          title={gettext("Blocked members")}
+          subtitle={gettext("People who cannot interact with you.")}
+          href={~p"/blocks"}
+          label={gettext("Manage")}
+        />
+        <.account_row
+          title={gettext("Content under review")}
+          subtitle={gettext("Your posts or profile a moderator is looking at.")}
+          href={~p"/moderation/cases"}
+          label={gettext("View")}
+        />
+      </ul>
+    </.card>
+  </div>
 </div>

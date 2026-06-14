@@ -32,9 +32,17 @@ defmodule Vutuv.Accounts.User do
     # see the add_noai_to_users migration.
     field(:noai?, :boolean, default: false)
     # Non-essential notification mail (the unread-message nudge). Off via the
-    # edit-profile form or the tokenized unsubscribe link in every such email
-    # (RFC 8058 one-click); transactional mail (PINs, moderation) ignores it.
+    # notifications settings form or the tokenized unsubscribe link in every
+    # such email (RFC 8058 one-click); transactional mail (PINs, moderation)
+    # ignores it. This is the "unread messages" switch in the granular set below.
     field(:notification_emails?, :boolean, default: true)
+    # The opt-in granular notification mails (set on the notifications settings
+    # page, each with its own one-click unsubscribe). Default false so enabling
+    # the feature never mass-mails existing members. The events themselves are
+    # always pushed in-app regardless; these only gate the email copy.
+    field(:email_on_connection_request?, :boolean, default: false)
+    field(:email_on_endorsement?, :boolean, default: false)
+    field(:email_on_follower?, :boolean, default: false)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -93,7 +101,17 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+
+  @doc """
+  The notification-email preference fields, by the param/column name a
+  one-click unsubscribe link may switch off. Shared by `UnsubscribeToken`
+  (the allowlist of fields a token may name) and `Accounts.set_email_pref/3`,
+  so the unsubscribe capability can never name a non-pref column.
+  """
+  def email_pref_fields,
+    do:
+      ~w(notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower?)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

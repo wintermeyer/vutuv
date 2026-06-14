@@ -18,24 +18,32 @@ defmodule VutuvWeb.UnsubscribeController do
 
   def show(conn, %{"token" => token}) do
     case user_for_token(token) do
-      %User{} = user -> render(conn, "show.html", user: user, token: token)
+      {%User{} = user, _field} -> render(conn, "show.html", user: user, token: token)
       _ -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
 
   def create(conn, %{"token" => token}) do
-    with %User{} = user <- user_for_token(token),
-         {:ok, user} <- Accounts.set_notification_emails(user, false) do
+    with {%User{} = user, field} <- user_for_token(token),
+         {:ok, user} <- Accounts.set_email_pref(user, field, false) do
       render(conn, "done.html", user: user)
     else
       _ -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
 
+  # The token names both the user and the single preference field it may switch
+  # off (a legacy id-only token resolves to :notification_emails?).
   defp user_for_token(token) do
     case UnsubscribeToken.verify(token) do
-      {:ok, user_id} -> Accounts.get_user(user_id)
-      _ -> nil
+      {:ok, user_id, field} ->
+        case Accounts.get_user(user_id) do
+          %User{} = user -> {user, field}
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
   end
 end

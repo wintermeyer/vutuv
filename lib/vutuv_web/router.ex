@@ -493,6 +493,13 @@ defmodule VutuvWeb.Router do
       get("/settings/notifications", SettingsController, :notifications)
       put("/settings/notifications", SettingsController, :update_notifications)
       patch("/settings/notifications", SettingsController, :update_notifications)
+      # Read-only developer hub: connected apps + personal API tokens, split off
+      # the account hub so neither page is overloaded.
+      get("/settings/apps", SettingsController, :apps)
+      # The interface-language form lives on the account hub (GET /settings); it
+      # only needs a write target, not its own page.
+      put("/settings/language", SettingsController, :update_language)
+      patch("/settings/language", SettingsController, :update_language)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])
