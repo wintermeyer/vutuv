@@ -546,6 +546,11 @@ defmodule VutuvWeb.UI do
   attr(:size, :string, default: "md", values: ~w(xs sm md lg))
   attr(:shape, :string, default: "circle", values: ~w(circle square))
   attr(:class, :string, default: nil)
+  # Lazy by default: list/grid pages (followers, search, the most-followed
+  # listing) render ~100 avatars, almost all below the fold, so eager-loading
+  # them all fires ~100 image requests on open. An above-the-fold hero (the
+  # profile-header avatar) passes loading="eager" so it is not deprioritised.
+  attr(:loading, :string, default: "lazy", values: ~w(lazy eager))
 
   # Neutral placeholder so a call with neither `user` nor `src` still renders a
   # valid <img> instead of a broken one.
@@ -592,6 +597,8 @@ defmodule VutuvWeb.UI do
       data-avatar
       src={@resolved_src}
       alt={@alt}
+      loading={@loading}
+      decoding="async"
       class={[
         avatar_size(@size),
         if(@shape == "square", do: "rounded-2xl", else: "rounded-full"),

@@ -81,6 +81,19 @@ defmodule VutuvWeb.UITest do
       assert html =~ ~s(src="/avatars/x/Jane%20Doe_thumb.avif")
     end
 
+    test "lazy-loads by default so list pages don't eager-fetch every avatar" do
+      html = render_component(&UI.avatar/1, src: "/avatars/x/pic_thumb.avif")
+
+      assert html =~ ~s(loading="lazy")
+      assert html =~ ~s(decoding="async")
+    end
+
+    test "an above-the-fold avatar can opt into eager loading" do
+      html = render_component(&UI.avatar/1, src: "/avatars/x/pic_thumb.avif", loading: "eager")
+
+      assert html =~ ~s(loading="eager")
+    end
+
     test "falls back to the user's initials when they have no picture" do
       html =
         render_component(&UI.avatar/1,
