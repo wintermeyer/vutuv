@@ -35,7 +35,8 @@ defmodule Vutuv.Tags.UserTagEndorsement do
 
     from(e in query,
       join: u in assoc(e, :user),
-      where: (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden(u.id)
+      where:
+        (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden(u.id)
     )
   end
 end

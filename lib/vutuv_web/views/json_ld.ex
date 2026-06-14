@@ -25,6 +25,7 @@ defmodule VutuvWeb.JsonLd do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
@@ -86,7 +87,7 @@ defmodule VutuvWeb.JsonLd do
           "jobTitle" => job && UserHelpers.current_title(job),
           "worksFor" => works_for(job),
           "knowsAbout" => Enum.map(user_tags, &UserTag.name/1),
-          "sameAs" => Enum.map(social_accounts, &Vutuv.Profiles.SocialMediaAccount.url/1)
+          "sameAs" => Enum.map(social_accounts, &SocialMediaAccount.url/1)
         })
     }
   end

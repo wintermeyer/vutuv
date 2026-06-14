@@ -110,10 +110,16 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
 
       conn1 = get(authed(conn, token), "/api/2.0/users/#{other.active_slug}/emails")
       # Email entries are typed maps (schema_version 2), like phone_numbers.
-      assert Enum.map(json_response(conn1, 200)["entries"], & &1["value"]) == ["public@example.com"]
+      assert Enum.map(json_response(conn1, 200)["entries"], & &1["value"]) == [
+               "public@example.com"
+             ]
 
       conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{user.active_slug}/emails")
-      assert Enum.any?(json_response(conn2, 200)["entries"], &(&1["value"] == "mine-private@example.com"))
+
+      assert Enum.any?(
+               json_response(conn2, 200)["entries"],
+               &(&1["value"] == "mine-private@example.com")
+             )
     end
 
     test "unknown slugs 404", %{conn: conn, read_token: token} do

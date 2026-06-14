@@ -54,6 +54,21 @@ defmodule VutuvWeb.Plug.AgentFormat do
   # Literal routes whose name ends in a known extension.
   @skip_paths ["/robots.txt", "/llms.txt", "/security.txt", "/sitemap.xml"]
 
+  # Accept-header media types in priority order: the FIRST one present in the
+  # header wins, even when it maps to `nil`. text/markdown is requested by
+  # agents only (the Cloudflare convention) and wins outright; text/html is
+  # always listed by browsers, so its presence (once markdown is ruled out)
+  # suppresses json/txt/vcf by mapping to `nil`.
+  @accept_formats [
+    {"text/markdown", :md},
+    {"text/html", nil},
+    {"text/vcard", :vcf},
+    {"application/json", :json},
+    {"application/xml", :xml},
+    {"text/xml", :xml},
+    {"text/plain", :txt}
+  ]
+
   @impl Plug
   def init(opts), do: opts
 
@@ -80,25 +95,12 @@ defmodule VutuvWeb.Plug.AgentFormat do
 
   def call(conn, _opts), do: conn
 
-  # Browsers always list text/html, so its presence wins for json/txt/vcf;
-  # text/markdown is requested by agents only (the Cloudflare convention)
-  # and wins outright. The header is then normalized to text/html so the
-  # browser pipeline's `accepts ["html"]` lets the request through.
+  # Maps the request's Accept header to an agent format (see @accept_formats).
+  # The header is then normalized to text/html so the browser pipeline's
+  # `accepts ["html"]` lets the request through.
   defp negotiate_accept(conn) do
     accept = conn |> get_req_header("accept") |> Enum.join(",") |> String.downcase()
-
-    format =
-      cond do
-        accept == "" -> nil
-        String.contains?(accept, "text/markdown") -> :md
-        String.contains?(accept, "text/html") -> nil
-        String.contains?(accept, "text/vcard") -> :vcf
-        String.contains?(accept, "application/json") -> :json
-        String.contains?(accept, "application/xml") -> :xml
-        String.contains?(accept, "text/xml") -> :xml
-        String.contains?(accept, "text/plain") -> :txt
-        true -> nil
-      end
+    format = accept != "" && accept_format(accept)
 
     if format do
       conn
@@ -106,6 +108,16 @@ defmodule VutuvWeb.Plug.AgentFormat do
       |> put_req_header("accept", "text/html")
     else
       conn
+    end
+  end
+
+  # The first listed media type the header contains, returning its mapped
+  # format (which may be `nil`, e.g. text/html). `Enum.find` (not find_value)
+  # so a `nil` mapping still short-circuits the rest of the list.
+  defp accept_format(accept) do
+    case Enum.find(@accept_formats, fn {media, _fmt} -> String.contains?(accept, media) end) do
+      {_media, format} -> format
+      nil -> nil
     end
   end
 

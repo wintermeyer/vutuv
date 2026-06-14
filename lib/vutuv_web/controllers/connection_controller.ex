@@ -115,11 +115,6 @@ defmodule VutuvWeb.ConnectionController do
   defp redirect_back(conn, message, level \\ :info) do
     conn
     |> put_flash(level, message)
-    |> redirect(
-      to: ControllerHelpers.referrer_url(conn, fallback_url(conn.assigns[:current_user]))
-    )
+    |> redirect(to: ControllerHelpers.referrer_or_profile(conn, conn.assigns[:current_user]))
   end
-
-  defp fallback_url(%User{} = user), do: ~p"/#{user}"
-  defp fallback_url(_), do: ~p"/"
 end

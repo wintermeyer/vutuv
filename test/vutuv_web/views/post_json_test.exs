@@ -43,7 +43,9 @@ defmodule VutuvWeb.PostJSONTest do
   end
 
   test "serializes the reply reference through its three states" do
-    parent_author = insert(:user, email_confirmed?: true, first_name: "Petra", last_name: "Parent")
+    parent_author =
+      insert(:user, email_confirmed?: true, first_name: "Petra", last_name: "Parent")
+
     replier = insert(:user, email_confirmed?: true)
 
     {:ok, parent} = Posts.create_post(parent_author, %{body: "the root"})

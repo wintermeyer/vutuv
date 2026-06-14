@@ -252,5 +252,4 @@ defmodule Vutuv.SocialTest do
       assert row.honorific_prefix == "Dr."
     end
   end
-
 end

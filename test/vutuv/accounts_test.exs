@@ -3,6 +3,7 @@ defmodule Vutuv.AccountsTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.LoginPin
+  alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
 
@@ -90,7 +91,10 @@ defmodule Vutuv.AccountsTest do
       user = insert(:user, email_confirmed?: false)
 
       assert {:ok, updated} =
-               Accounts.update_user(user, %{"first_name" => "Updated", "email_confirmed?" => "true"})
+               Accounts.update_user(user, %{
+                 "first_name" => "Updated",
+                 "email_confirmed?" => "true"
+               })
 
       refute updated.email_confirmed?
     end
@@ -99,7 +103,7 @@ defmodule Vutuv.AccountsTest do
       user = insert(:user, first_name: "Jane", last_name: "Doe")
 
       for cs <-
-            Vutuv.Accounts.SearchTerm.create_search_terms(%{
+            SearchTerm.create_search_terms(%{
               "first_name" => "Jane",
               "last_name" => "Doe"
             }) do
@@ -109,9 +113,7 @@ defmodule Vutuv.AccountsTest do
       {:ok, _} = Accounts.update_user(user, %{"last_name" => "Smith"})
 
       terms =
-        Repo.all(
-          from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id, select: s.value)
-        )
+        Repo.all(from(s in SearchTerm, where: s.user_id == ^user.id, select: s.value))
         |> Enum.map(&String.downcase/1)
 
       assert Enum.any?(terms, &String.contains?(&1, "smith"))
@@ -123,7 +125,7 @@ defmodule Vutuv.AccountsTest do
 
       {:ok, _} = Accounts.update_user(user, %{"first_name" => "Janet"})
 
-      terms = Repo.all(from(s in Vutuv.Accounts.SearchTerm, where: s.user_id == ^user.id))
+      terms = Repo.all(from(s in SearchTerm, where: s.user_id == ^user.id))
       refute terms == []
     end
   end

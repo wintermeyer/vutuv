@@ -12,7 +12,9 @@ defmodule Vutuv.AccountsAvatarTest do
   alias Vutuv.Uploads
 
   setup do
-    tmp = Path.join(System.tmp_dir!(), "vutuv_accounts_avatar_#{System.unique_integer([:positive])}")
+    tmp =
+      Path.join(System.tmp_dir!(), "vutuv_accounts_avatar_#{System.unique_integer([:positive])}")
+
     prev = Application.get_env(:vutuv, :uploads_dir_prefix)
     Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
 
@@ -82,7 +84,10 @@ defmodule Vutuv.AccountsAvatarTest do
   test "a rolled-back update writes no cover-photo files either" do
     user = insert_activated_user(first_name: "Ada")
 
-    attrs = %{"cover_photo" => jpeg_upload("banner.jpg"), "first_name" => String.duplicate("a", 51)}
+    attrs = %{
+      "cover_photo" => jpeg_upload("banner.jpg"),
+      "first_name" => String.duplicate("a", 51)
+    }
 
     assert {:error, %Ecto.Changeset{}} = Accounts.update_user(user, attrs)
 

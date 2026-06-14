@@ -14,6 +14,8 @@ defmodule VutuvWeb.OgCard do
   gradient).
   """
 
+  alias Vix.Vips.Operation
+
   @width 1200
   @height 630
   @logo_width 560
@@ -65,7 +67,7 @@ defmodule VutuvWeb.OgCard do
     with {:ok, page} <- Image.thumbnail(path, 2400),
          {:ok, on_white} <- Image.flatten(page, background_color: :white),
          {:ok, {left, top, w, h}} <-
-           Vix.Vips.Operation.find_trim(on_white,
+           Operation.find_trim(on_white,
              background: [255.0, 255.0, 255.0],
              threshold: 10
            ),

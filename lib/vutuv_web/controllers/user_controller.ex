@@ -156,7 +156,11 @@ defmodule VutuvWeb.UserController do
   # which vanished long before most people finished setting up.
   defp completion_steps(user, posts_total) do
     [
-      %{label: gettext("Add a profile photo"), done: present?(user.avatar), href: ~p"/#{user}/edit"},
+      %{
+        label: gettext("Add a profile photo"),
+        done: present?(user.avatar),
+        href: ~p"/#{user}/edit"
+      },
       %{label: gettext("Add a headline"), done: present?(user.headline), href: ~p"/#{user}/edit"},
       %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/#{user}/tags/new"},
       %{

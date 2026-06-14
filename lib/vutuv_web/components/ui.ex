@@ -61,21 +61,23 @@ defmodule VutuvWeb.UI do
       marked =
         text
         |> String.split(pattern, include_captures: true)
-        |> Enum.map(fn part ->
-          escaped = part |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
-
-          if String.downcase(part) in downcased do
-            [
-              ~s(<mark class="rounded-sm bg-brand-100 text-brand-900 dark:bg-brand-500/30 dark:text-brand-100">),
-              escaped,
-              "</mark>"
-            ]
-          else
-            escaped
-          end
-        end)
+        |> Enum.map(&mark_part(&1, downcased))
 
       {:safe, marked}
+    end
+  end
+
+  defp mark_part(part, downcased) do
+    escaped = part |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+    if String.downcase(part) in downcased do
+      [
+        ~s(<mark class="rounded-sm bg-brand-100 text-brand-900 dark:bg-brand-500/30 dark:text-brand-100">),
+        escaped,
+        "</mark>"
+      ]
+    else
+      escaped
     end
   end
 

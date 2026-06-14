@@ -26,6 +26,7 @@ defmodule VutuvWeb.OpenGraph do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostImage
   alias VutuvWeb.OgCard
   alias VutuvWeb.UserHelpers
 
@@ -119,7 +120,7 @@ defmodule VutuvWeb.OpenGraph do
   # of the tags like its body does.
   defp image(%{post: %Post{} = post, restricted?: false} = ca) do
     case first_image(post) do
-      %Vutuv.Posts.PostImage{} = post_image -> post_image_entry(post_image, ca)
+      %PostImage{} = post_image -> post_image_entry(post_image, ca)
       nil -> member_image(ca) || brand_card()
     end
   end
@@ -136,7 +137,7 @@ defmodule VutuvWeb.OpenGraph do
     {width, height} = Vutuv.PostImageStore.og_dimensions(post_image)
 
     %{
-      url: abs_url(Vutuv.Posts.PostImage.og_url(post_image)),
+      url: abs_url(PostImage.og_url(post_image)),
       width: width,
       height: height,
       type: "image/jpeg",

@@ -177,23 +177,12 @@ defmodule Vutuv.Search do
          |> list_people(), []}
 
       is_binary(parsed.first_name) or is_binary(parsed.last_name) ->
-        query =
-          [first_name: parsed.first_name, last_name: parsed.last_name]
-          |> Enum.filter(fn {_field, value} -> is_binary(value) end)
-          |> Enum.reduce(filtered_users(parsed), fn {field, value}, query ->
-            by_field(query, field, value, parsed.exact?)
-          end)
-
-        {list_people(query), []}
+        {people_by_name(parsed), []}
 
       # Pure filter search: "tag:php" / "ort:koblenz" without a name lists
       # everyone matching the filter(s).
       parsed.text == "" ->
-        if parsed.tag || parsed.city do
-          {parsed |> filtered_users() |> list_people(), []}
-        else
-          {[], []}
-        end
+        {people_by_filter(parsed), []}
 
       String.length(parsed.text) < @min_chars ->
         {[], []}
@@ -206,6 +195,23 @@ defmodule Vutuv.Search do
 
       true ->
         substring_and_phonetic_people(parsed)
+    end
+  end
+
+  defp people_by_name(parsed) do
+    [first_name: parsed.first_name, last_name: parsed.last_name]
+    |> Enum.filter(fn {_field, value} -> is_binary(value) end)
+    |> Enum.reduce(filtered_users(parsed), fn {field, value}, query ->
+      by_field(query, field, value, parsed.exact?)
+    end)
+    |> list_people()
+  end
+
+  defp people_by_filter(parsed) do
+    if parsed.tag || parsed.city do
+      parsed |> filtered_users() |> list_people()
+    else
+      []
     end
   end
 

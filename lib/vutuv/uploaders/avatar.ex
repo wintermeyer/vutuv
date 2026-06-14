@@ -29,6 +29,7 @@ defmodule Vutuv.Avatar do
   the vCard export and `user_url/2`.
   """
 
+  alias Vix.Vips.Operation
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
@@ -133,7 +134,7 @@ defmodule Vutuv.Avatar do
     with path when not is_nil(path) <- source_path(user),
          {:ok, rotated} <- Spec.open_rotated(path),
          {:ok, small} <- Image.thumbnail(rotated, "#{width}x#{height}", crop: gravity),
-         {:ok, data} <- Vix.Vips.Operation.jpegsave_buffer(small, keep: [], Q: 80) do
+         {:ok, data} <- Operation.jpegsave_buffer(small, keep: [], Q: 80) do
       {:ok, data}
     else
       _ -> :error

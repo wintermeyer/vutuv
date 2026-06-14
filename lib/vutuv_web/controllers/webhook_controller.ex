@@ -14,6 +14,8 @@ defmodule VutuvWeb.WebhookController do
 
   use VutuvWeb, :controller
 
+  alias Vutuv.Notifications.Bounces
+
   # Generous cap; a DSN is small, but it embeds the bounced original.
   @max_body 1_000_000
 
@@ -22,7 +24,7 @@ defmodule VutuvWeb.WebhookController do
          :ok <- authorize(conn, token) do
       {conn, raw} = read_raw_body(conn)
 
-      case Vutuv.Notifications.Bounces.record(raw) do
+      case Bounces.record(raw) do
         {:ok, _} -> send_resp(conn, 200, "ok")
         {:error, :unparseable} -> send_resp(conn, 422, "unparseable")
       end

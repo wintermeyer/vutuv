@@ -3,7 +3,13 @@ defmodule VutuvWeb.ControllerHelpers do
   Small helpers shared across controllers.
   """
 
+  use Phoenix.VerifiedRoutes,
+    endpoint: VutuvWeb.Endpoint,
+    router: VutuvWeb.Router,
+    statics: ~w(assets fonts images favicon.ico)
+
   alias Plug.Conn
+  alias Vutuv.Accounts.User
   alias Vutuv.Repo
 
   @doc """
@@ -19,6 +25,30 @@ defmodule VutuvWeb.ControllerHelpers do
       [] -> fallback
     end
   end
+
+  @doc """
+  Sends the user back where they came from, falling back to their own profile
+  (or the landing page when logged out). The shared shape behind the
+  follow/connection controllers, whose redirects all want "back to the page you
+  acted from, else your profile".
+  """
+  def referrer_or_profile(%Conn{} = conn, user) do
+    referrer_url(conn, profile_path(user))
+  end
+
+  defp profile_path(%User{} = user), do: ~p"/#{user}"
+  defp profile_path(_), do: ~p"/"
+
+  @doc """
+  Validates a caller-supplied redirect target, returning the path only when it
+  is a same-origin absolute path (`/foo`) and `nil` otherwise.
+
+  Protocol-relative URLs (`//evil.com`) are external and rejected; matching the
+  prefixes (rather than slicing) also keeps the bare `"/"` from raising.
+  """
+  def safe_return_to("//" <> _), do: nil
+  def safe_return_to("/" <> _ = path), do: path
+  def safe_return_to(_), do: nil
 
   @doc """
   Loads an owned member resource: `Repo.get!` scoped to the path user's

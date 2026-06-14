@@ -16,6 +16,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.SlugChange
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation
+  alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
 
@@ -603,7 +604,7 @@ defmodule Vutuv.Accounts do
 
     # The PIN arrived by mail and was typed back: delivery to this address
     # provably works, so a bounce-set undeliverable mark is stale.
-    with {:ok, _user} <- result, do: Vutuv.Notifications.Bounces.clear(email)
+    with {:ok, _user} <- result, do: Bounces.clear(email)
 
     result
   end

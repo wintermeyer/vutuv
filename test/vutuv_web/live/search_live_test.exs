@@ -4,6 +4,7 @@ defmodule VutuvWeb.SearchLiveTest do
   import Phoenix.LiveViewTest
   import Vutuv.PostsHelpers
 
+  alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Search.SearchQuery
 
   # A user findable by name search: the factory does not create search terms
@@ -12,7 +13,7 @@ defmodule VutuvWeb.SearchLiveTest do
     user = insert(:activated_user, Keyword.merge([first_name: first, last_name: last], attrs))
 
     for changeset <-
-          Vutuv.Accounts.SearchTerm.create_search_terms(%{
+          SearchTerm.create_search_terms(%{
             "first_name" => first,
             "last_name" => last
           }) do

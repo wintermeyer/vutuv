@@ -923,7 +923,8 @@ defmodule Vutuv.Posts do
       join: u in assoc(p, :user),
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
       where:
-        r.user_id == ^viewer_id or is_nil(reposter.email_confirmed?) or reposter.email_confirmed? == true,
+        r.user_id == ^viewer_id or is_nil(reposter.email_confirmed?) or
+          reposter.email_confirmed? == true,
       where: p.user_id == ^viewer_id or is_nil(u.email_confirmed?) or u.email_confirmed? == true,
       # A third party's repost must not carry a blocked author's post into
       # the viewer's feed (the direct path is already cut: blocking severed

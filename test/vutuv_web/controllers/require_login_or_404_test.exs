@@ -25,5 +25,4 @@ defmodule VutuvWeb.RequireLoginOr404Test do
       assert conn.halted
     end
   end
-
 end

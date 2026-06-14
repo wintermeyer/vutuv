@@ -7,6 +7,7 @@ defmodule VutuvWeb.PostImageControllerTest do
   """
   use VutuvWeb.ConnCase
 
+  alias Vix.Vips.Image, as: VipsImage
   alias Vix.Vips.MutableImage
   alias Vutuv.Posts
 
@@ -156,7 +157,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       assert {Image.width(jpeg), Image.height(jpeg)} == {1200, 300}
       assert {Image.width(jpeg), Image.height(jpeg)} == Vutuv.PostImageStore.og_dimensions(image)
 
-      {:ok, fields} = Vix.Vips.Image.header_field_names(jpeg)
+      {:ok, fields} = VipsImage.header_field_names(jpeg)
       assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
     end
 

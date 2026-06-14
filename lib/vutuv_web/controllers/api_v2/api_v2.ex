@@ -12,6 +12,7 @@ defmodule VutuvWeb.ApiV2 do
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation
   alias VutuvWeb.AgentDocs.JSON
+  alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.ApiV2.Problem
 
   def send_json(conn, doc, status \\ 200) do
@@ -26,7 +27,7 @@ defmodule VutuvWeb.ApiV2 do
   """
   def profile_doc(user, viewer) do
     user
-    |> VutuvWeb.AgentDocs.ProfileDoc.build(viewer: viewer)
+    |> ProfileDoc.build(viewer: viewer)
     |> JSON.expose_consent()
   end
 

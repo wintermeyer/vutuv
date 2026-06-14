@@ -35,7 +35,7 @@ defmodule VutuvWeb.ReportController do
           content_id: id,
           preview: preview(content),
           severed_owner: if(severs, do: Moderation.content_owner(content)),
-          return_to: safe_return_to(params["return_to"])
+          return_to: ControllerHelpers.safe_return_to(params["return_to"])
         )
     end
   end
@@ -44,7 +44,7 @@ defmodule VutuvWeb.ReportController do
 
   def create(conn, %{"report" => %{"type" => type, "id" => id} = report_params}) do
     reporter = conn.assigns[:current_user]
-    return_to = safe_return_to(report_params["return_to"]) || ~p"/"
+    return_to = ControllerHelpers.safe_return_to(report_params["return_to"]) || ~p"/"
 
     case Moderation.fetch_content(type, id) do
       nil ->
@@ -108,8 +108,4 @@ defmodule VutuvWeb.ReportController do
   defp clip(nil), do: ""
   defp clip(body) when byte_size(body) <= 280, do: body
   defp clip(body), do: String.slice(body, 0, 280) <> "…"
-
-  # Only same-origin paths may be used as a post-report redirect target.
-  defp safe_return_to("/" <> rest = path) when binary_part(rest, 0, 1) != "/", do: path
-  defp safe_return_to(_), do: nil
 end

@@ -626,7 +626,9 @@ defmodule Vutuv.Chat do
     # An opted-out recipient (notification_emails? false) is skipped without
     # setting notified_at, so switching the emails back on makes a still-
     # unread burst eligible again on the next tick.
-    if email = recipient.notification_emails? && Vutuv.Accounts.first_email_value(recipient) do
+    email = recipient.notification_emails? && Vutuv.Accounts.first_email_value(recipient)
+
+    if email do
       email
       |> Emailer.unread_messages_email(recipient, other, conversation.id)
       |> Emailer.deliver()

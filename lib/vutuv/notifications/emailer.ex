@@ -23,6 +23,7 @@ defmodule Vutuv.Notifications.Emailer do
 
   require Logger
 
+  alias Vutuv.Notifications.Bounces
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
@@ -79,7 +80,7 @@ defmodule Vutuv.Notifications.Emailer do
   defp suppressed?(%Swoosh.Email{private: %{user_initiated: true}}), do: false
 
   defp suppressed?(%Swoosh.Email{to: to}) when is_list(to) and to != [] do
-    Enum.all?(to, fn {_name, address} -> Vutuv.Notifications.Bounces.suppressed?(address) end)
+    Enum.all?(to, fn {_name, address} -> Bounces.suppressed?(address) end)
   end
 
   defp suppressed?(_email), do: false

@@ -5,21 +5,46 @@ paths:
 ---
 
 <!--
-  This project currently has NO LiveView. These rules load only if/when you add
-  a *_live.ex module. Relocated from CLAUDE.md so they don't cost context every session.
+  These rules load when you edit a *_live.ex module. They cost no context the rest
+  of the time. The generic LiveView guidance below (streams, JS interop, hooks,
+  tests, forms) applies as written; the "vutuv specifics" section corrects the
+  stock Phoenix-1.8 assumptions that do NOT hold in this codebase.
 -->
 
-## Phoenix v1.8 guidelines
+## vutuv specifics (read first — these override the generic notes below)
 
-- **Always** begin your LiveView templates with `<Layouts.app flash={@flash} ...>` which wraps all inner content
-- The `VutuvWeb.Layouts` module is aliased in the `lib/vutuv_web.ex` file, so you can use it without needing to alias it again
-- Anytime you run into errors with no `current_scope` assign:
-  - You failed to follow the Authenticated Routes guidelines, or you failed to pass `current_scope` to `<Layouts.app>`
-  - **Always** fix the `current_scope` error by moving your routes to the proper `live_session` and ensure you pass `current_scope` as needed
-- Phoenix v1.8 moved the `<.flash_group>` component to the `Layouts` module. You are **forbidden** from calling `<.flash_group>` outside of the `layouts.ex` module
-- Out of the box, `core_components.ex` imports an `<.icon name="hero-x-mark" class="w-5 h-5"/>` component for hero icons. **Always** use the `<.icon>` component for icons, **never** use `Heroicons` modules or similar
-- **Always** use the imported `<.input>` component for form inputs from `core_components.ex` when available. `<.input>` is imported and using it will save steps and prevent errors
-- If you override the default input classes (`<.input class="myclass px-2 py-1 rounded-lg">`) class with your own values, no default classes are inherited, so your custom classes must fully style the input
+LiveView is adopted **incrementally** here; it is not a fresh `phx.gen.auth` app.
+The live modules in `lib/vutuv_web/live/`: `ShellLive` (the chrome), `MemberCountLive`
+(landing pill), `SearchLive`, `PostLive.Feed`, `PostLive.Edit`, `PostLive.Reply`,
+`PostLive.Saved`, `PostLive.Composer` (a LiveComponent), `PostLive.Actions` (per-post
+action bar, one embedded `live_render` per card), `MessageLive.Index`,
+`NotificationLive.Index`, plus the `on_mount` hooks `Live.InitAssigns` and `LiveLocale`.
+
+- **There is no `core_components.ex`.** Do **not** use `<.input>`, `<.icon name="hero-…">`,
+  or `<Layouts.app>` — they don't exist. Use the **`VutuvWeb.UI`** components (imported
+  everywhere) and the recipes in `.claude/rules/design.md`; that design rule is the
+  source of truth for every visual choice. Read it before touching a LiveView template.
+- **No `<Layouts.app>` wrapper and no `<.flash_group>`.** The chrome (sticky top bar +
+  mobile bottom tab bar with live badges) is `VutuvWeb.ShellLive`, embedded once in
+  `app.html.heex`. Pages render **inside** it; never add their own nav. Flash is shown
+  as top-right toasts (`#toast-tray` in `app.html.heex`) — never add inline flash banners.
+- **No `current_scope`.** Authentication assigns flow through `VutuvWeb.Live.InitAssigns`
+  (`:current_user`, `:current_user_id`) wired as the `on_mount` for the `live_session`.
+  A LiveView that must require a login checks `current_user` in `mount/3`; there is no
+  `current_scope` assign and routes are not auto-scoped by it.
+- **Gettext locale is per process.** `VutuvWeb.LiveLocale` re-applies the session locale
+  on mount (called from `Live.InitAssigns` and `ShellLive.mount`). A LiveView mounted
+  **outside** the `live_session` must call it too, or the whole shared chrome silently
+  falls back to English.
+- **Real-time** goes through `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"` and
+  `"post:<id>"`) and `VutuvWeb.Presence` — not ad-hoc `Phoenix.PubSub` topics.
+- **Icons** are either CSS glyphs (`i.icon.icon--…`, styled in `components.css`) or the
+  shared `VutuvWeb.UI` SVG components (`<.icon_repost>`, `<.icon_reply>`,
+  `<.icon_bookmark>`); icons used by a single LiveView stay private to it. Never pull in
+  `Heroicons`.
+- **Forms** use `<.form for={@form} …>` + `to_form/2` (see below). For inputs, vutuv has
+  no `<.input>`; style raw inputs with `class={input_class()}`
+  (`VutuvWeb.UI.input_class/0`) / `checkbox_class/0`, and nest with `<.inputs_for>`.
 
 ## Phoenix LiveView guidelines
 

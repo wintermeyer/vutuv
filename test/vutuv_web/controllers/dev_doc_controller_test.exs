@@ -74,6 +74,24 @@ defmodule VutuvWeb.DevDocControllerTest do
     end
   end
 
+  test "a logged-in developer gets quick links to their credential pages", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    response = conn |> get(~p"/developers") |> html_response(200)
+
+    # The chrome surfaces the three places credentials actually live, so a
+    # developer reading the docs does not have to dig through profile settings.
+    assert response =~ "Your access tokens"
+    assert response =~ "Your apps"
+    assert response =~ ~p"/access_tokens"
+    assert response =~ ~p"/connected_apps"
+  end
+
+  test "logged-out visitors do not see the credential quick links", %{conn: conn} do
+    response = conn |> get(~p"/developers") |> html_response(200)
+    refute response =~ "Your access tokens"
+    refute response =~ "Your apps"
+  end
+
   test "unknown pages 404", %{conn: conn} do
     assert get(conn, "/developers/nonsense").status == 404
   end

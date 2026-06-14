@@ -120,7 +120,7 @@ defmodule VutuvWeb.Router do
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 
-    resources "/follows", FollowController, only: [:create, :delete]
+    resources("/follows", FollowController, only: [:create, :delete])
 
     # The mutual-connection lifecycle (the list lives at /:slug/connections in
     # the profile scope below). create = request, then accept/decline/withdraw.

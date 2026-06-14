@@ -23,9 +23,13 @@ defmodule Vutuv.Profiles.UrlTest do
     # The old substring guard skipped the prefix here, so validate_url then
     # rejected the (now scheme-less) value. It must be accepted and completed.
     changeset =
-      Url.changeset(%Url{}, %{"value" => "example.com/r?to=https://other.example", "description" => "x"})
+      Url.changeset(%Url{}, %{
+        "value" => "example.com/r?to=https://other.example",
+        "description" => "x"
+      })
 
     assert changeset.valid?
+
     assert Ecto.Changeset.get_change(changeset, :value) ==
              "http://example.com/r?to=https://other.example"
   end

@@ -57,7 +57,6 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
   end
 
-
   describe "admin dashboard" do
     setup %{conn: conn} do
       {conn, admin} = create_and_login_admin(conn)

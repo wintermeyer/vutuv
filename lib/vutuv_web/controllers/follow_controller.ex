@@ -39,9 +39,6 @@ defmodule VutuvWeb.FollowController do
   # :user, so the old `conn.assigns[:user]` fallback was always nil and raised
   # when interpolated into the route on a refererless request.
   defp referrer_url(conn) do
-    ControllerHelpers.referrer_url(conn, fallback_url(conn.assigns[:current_user]))
+    ControllerHelpers.referrer_or_profile(conn, conn.assigns[:current_user])
   end
-
-  defp fallback_url(%Vutuv.Accounts.User{} = user), do: ~p"/#{user}"
-  defp fallback_url(_), do: ~p"/"
 end

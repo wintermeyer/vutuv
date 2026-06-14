@@ -2,7 +2,7 @@
 
 <div class="card-list">
   <section class="card">
-    <nav class="mb-6 flex flex-wrap gap-4 border-b border-slate-100 pb-4 text-sm font-semibold dark:border-slate-800">
+    <nav class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 pb-4 text-sm font-semibold dark:border-slate-800">
       <.link
         :for={{slug, label} <- @nav}
         href={if(slug == "index", do: ~p"/developers", else: ~p"/developers/#{slug}")}
@@ -10,6 +10,27 @@
       >
         {label}
       </.link>
+
+      <%!-- A logged-in developer reading the docs gets one-click access to the
+            pages where credentials actually live, instead of hunting through
+            the profile settings sidebar for them. --%>
+      <%!-- The docs nav is English-first (like the labels above), so these
+            credential links use plain English too rather than gettext, which
+            would translate "Connected apps" and leave the row half-German. --%>
+      <span
+        :if={@conn.assigns[:current_user]}
+        class="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-slate-600 dark:text-slate-400"
+      >
+        <.link navigate={~p"/access_tokens"} class="hover:text-brand-700">
+          Your access tokens
+        </.link>
+        <.link navigate={~p"/developers/apps"} class="hover:text-brand-700">
+          Your apps
+        </.link>
+        <.link navigate={~p"/connected_apps"} class="hover:text-brand-700">
+          Connected apps
+        </.link>
+      </span>
     </nav>
 
     <div class="markdown text-slate-800 dark:text-slate-200">

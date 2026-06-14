@@ -2,6 +2,7 @@ defmodule VutuvWeb.OauthControllerTest do
   use VutuvWeb.ConnCase
 
   alias Vutuv.ApiAuth
+  alias Vutuv.ApiAuth.OAuth
 
   @redirect "https://app.example.org/callback"
 
@@ -206,12 +207,12 @@ defmodule VutuvWeb.OauthControllerTest do
 
       # Grant via the context (the HTTP flow is covered above).
       {:ok, request} =
-        Vutuv.ApiAuth.OAuth.validate_authorize(authorize_query(app))
+        OAuth.validate_authorize(authorize_query(app))
 
-      {:ok, code} = Vutuv.ApiAuth.OAuth.approve(user, request)
+      {:ok, code} = OAuth.approve(user, request)
 
       {:ok, tokens} =
-        Vutuv.ApiAuth.OAuth.exchange(%{
+        OAuth.exchange(%{
           "grant_type" => "authorization_code",
           "client_id" => app.client_id,
           "client_secret" => secret,
@@ -274,11 +275,11 @@ defmodule VutuvWeb.OauthControllerTest do
     } do
       member = insert_activated_user()
 
-      {:ok, request} = Vutuv.ApiAuth.OAuth.validate_authorize(authorize_query(app))
-      {:ok, code} = Vutuv.ApiAuth.OAuth.approve(member, request)
+      {:ok, request} = OAuth.validate_authorize(authorize_query(app))
+      {:ok, code} = OAuth.approve(member, request)
 
       {:ok, tokens} =
-        Vutuv.ApiAuth.OAuth.exchange(%{
+        OAuth.exchange(%{
           "grant_type" => "authorization_code",
           "client_id" => app.client_id,
           "client_secret" => secret,

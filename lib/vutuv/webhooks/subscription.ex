@@ -9,10 +9,11 @@ defmodule Vutuv.Webhooks.Subscription do
 
   use VutuvWeb, :model
 
+  alias Vutuv.ApiAuth.App
   alias Vutuv.Webhooks
 
   schema "webhook_subscriptions" do
-    belongs_to(:app, Vutuv.ApiAuth.App)
+    belongs_to(:app, App)
 
     field(:url, :string)
     field(:secret, :string)
@@ -42,7 +43,7 @@ defmodule Vutuv.Webhooks.Subscription do
   defp validate_url(changeset) do
     validate_change(changeset, :url, fn :url, url ->
       cond do
-        not Vutuv.ApiAuth.App.valid_redirect_uri?(url) ->
+        not App.valid_redirect_uri?(url) ->
           [url: "must be an https:// URL (http://localhost is allowed for development)"]
 
         Vutuv.Ssrf.internal_host?(URI.parse(url).host) ->

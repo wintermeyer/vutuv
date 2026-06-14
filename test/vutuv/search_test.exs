@@ -1,6 +1,7 @@
 defmodule Vutuv.SearchTest do
   use Vutuv.DataCase, async: true
 
+  alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Search
   alias Vutuv.Search.SearchQuery
 
@@ -10,7 +11,7 @@ defmodule Vutuv.SearchTest do
     user = insert(:activated_user, Keyword.merge([first_name: first, last_name: last], attrs))
 
     for changeset <-
-          Vutuv.Accounts.SearchTerm.create_search_terms(%{
+          SearchTerm.create_search_terms(%{
             "first_name" => first,
             "last_name" => last
           }) do

@@ -25,7 +25,7 @@ defmodule Vutuv.Webhooks do
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.{App, Grant}
   alias Vutuv.Repo
-  alias Vutuv.Webhooks.{Delivery, Subscription}
+  alias Vutuv.Webhooks.{Deliverer, Delivery, Subscription}
 
   @secret_prefix "vutuv_whsec_"
 
@@ -158,7 +158,7 @@ defmodule Vutuv.Webhooks do
       end)
 
     Repo.insert_all(Delivery, rows)
-    Vutuv.Webhooks.Deliverer.nudge()
+    Deliverer.nudge()
     :ok
   end
 
@@ -177,7 +177,7 @@ defmodule Vutuv.Webhooks do
       next_attempt_at: now
     })
 
-    Vutuv.Webhooks.Deliverer.nudge()
+    Deliverer.nudge()
     :ok
   end
 

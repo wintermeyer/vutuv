@@ -4,6 +4,7 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.RateLimit
 
   # The login page is logged-out-only, like registration. An already-logged-in
@@ -108,35 +109,7 @@ defmodule VutuvWeb.SessionController do
     case Accounts.check_pin(email, pin, "login") do
       # correct, drop cookie, log the user in (unless moderation blocks it)
       {:ok, user} ->
-        case Vutuv.Moderation.login_block(user) do
-          nil ->
-            # A page that sent the visitor to log in (the OAuth consent
-            # screen) gets them back; renew-style session handling keeps
-            # the marker alive through the PIN round trip.
-            {return_to, conn} = pop_login_return_to(conn)
-
-            Accounts.login(conn, user)
-            |> Accounts.delete_pin_cookie()
-            |> put_flash(:info, welcome_flash(context, user))
-            |> redirect(to: return_to || ~p"/#{user}")
-
-          {:suspended, until} ->
-            conn
-            |> Accounts.delete_pin_cookie()
-            |> put_flash(
-              :error,
-              gettext("This account is suspended until %{date}.",
-                date: Calendar.strftime(until, "%Y-%m-%d")
-              )
-            )
-            |> redirect(to: ~p"/")
-
-          :deactivated ->
-            conn
-            |> Accounts.delete_pin_cookie()
-            |> put_flash(:error, gettext("This account has been deactivated."))
-            |> redirect(to: ~p"/")
-        end
+        handle_login(conn, user, context)
 
       # incorrect, let them retry — but count the failure against a
       # server-side per-identity budget so an address WITHOUT an account
@@ -167,6 +140,39 @@ defmodule VutuvWeb.SessionController do
     end
   end
 
+  # The correct-PIN path: log the user in unless moderation blocks the account.
+  defp handle_login(conn, user, context) do
+    case Vutuv.Moderation.login_block(user) do
+      nil ->
+        # A page that sent the visitor to log in (the OAuth consent screen)
+        # gets them back; renew-style session handling keeps the marker alive
+        # through the PIN round trip.
+        {return_to, conn} = pop_login_return_to(conn)
+
+        Accounts.login(conn, user)
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(:info, welcome_flash(context, user))
+        |> redirect(to: return_to || ~p"/#{user}")
+
+      {:suspended, until} ->
+        conn
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(
+          :error,
+          gettext("This account is suspended until %{date}.",
+            date: Calendar.strftime(until, "%Y-%m-%d")
+          )
+        )
+        |> redirect(to: ~p"/")
+
+      :deactivated ->
+        conn
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(:error, gettext("This account has been deactivated."))
+        |> redirect(to: ~p"/")
+    end
+  end
+
   # The one lockout response, shared by the per-PIN DB counter (real account)
   # and the per-identity counter (any address) so the two are byte-identical
   # — the account-enumeration tell would otherwise reappear here.
@@ -181,14 +187,8 @@ defmodule VutuvWeb.SessionController do
   # followed — the session value is ours, but defense in depth is cheap.
   defp pop_login_return_to(conn) do
     path = get_session(conn, :login_return_to)
-    {safe_return_to(path), delete_session(conn, :login_return_to)}
+    {ControllerHelpers.safe_return_to(path), delete_session(conn, :login_return_to)}
   end
-
-  # "//evil.com" is protocol-relative (external); the bare "/" and any "/path"
-  # are local. Matching the prefixes avoids binary_part/3 raising on "/".
-  defp safe_return_to("//" <> _), do: nil
-  defp safe_return_to("/" <> _ = path), do: path
-  defp safe_return_to(_), do: nil
 
   # First-time sign-ups get their own greeting; returning members get a
   # personal one with their name and, when they have any, a nudge about the

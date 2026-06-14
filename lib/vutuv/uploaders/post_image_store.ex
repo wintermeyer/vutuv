@@ -33,6 +33,7 @@ defmodule Vutuv.PostImageStore do
   """
 
   alias Vix.Vips.Image, as: VipsImage
+  alias Vix.Vips.Operation
   alias Vutuv.Posts.PostImage
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
@@ -193,7 +194,7 @@ defmodule Vutuv.PostImageStore do
     with path when not is_nil(path) <- og_source(image, token),
          {:ok, rotated} <- Spec.open_rotated(path),
          {:ok, capped} <- Image.thumbnail(rotated, "#{@og_width}", resize: :down),
-         {:ok, data} <- Vix.Vips.Operation.jpegsave_buffer(capped, keep: [], Q: 80) do
+         {:ok, data} <- Operation.jpegsave_buffer(capped, keep: [], Q: 80) do
       {:ok, data}
     else
       _ -> :error

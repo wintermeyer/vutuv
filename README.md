@@ -12,6 +12,13 @@ vutuv is a [Phoenix Framework](https://www.phoenixframework.org/) 1.8 applicatio
 - Elixir 1.20.0-otp-28
 - [PostgreSQL](https://www.postgresql.org/) 17
 
+Two system libraries are also required (not managed by mise):
+
+- **libvips** — all image processing (avatars, cover photos, post images, URL screenshots) goes through the [`image`](https://hex.pm/packages/image) package, which needs libvips. Install with `brew install vips` (macOS) or `apt-get install libvips-dev` (Debian/Ubuntu).
+- **Chromium** (optional) — only needed for URL screenshots and moderation evidence screenshots; set `CHROMIUM_PATH` if the binary is not on `$PATH`.
+
+No Node.js is required: esbuild and Tailwind are installed as Elixir deps via `mix assets.setup`.
+
 All database ids are UUID v7 (`Vutuv.UUIDv7`): time-ordered, minted in the app, never integers or UUID v4.
 
 ### Secret config
@@ -48,9 +55,10 @@ Every vutuv email is machine-generated, so all of it carries the `Auto-Submitted
 
 ### Admin access
 
-Flag your account as admin:
+Flag your account as admin (the column is `admin?`, so it must be quoted; match
+on your handle since ids are UUIDs):
 ```sql
-UPDATE users SET administrator = true WHERE id = <user_id>;
+UPDATE users SET "admin?" = true WHERE active_slug = 'your-handle';
 ```
 
 Admin panel: http://localhost:4000/admin
@@ -113,8 +121,13 @@ mix test
 
 ## Deployment
 
-> **One-time cutover pending:** see [`DEPLOY_TODO.md`](DEPLOY_TODO.md) before
-> the first production deploy of the AVIF image pipeline (nginx edit required).
+> **One-time cutovers pending (read first):** [`DEPLOY_TODO.md`](DEPLOY_TODO.md)
+> covers the two non-routine steps the first `version-6` production deploy needs,
+> in order: (1) the **UUID v7 re-key** — a deliberate planned-downtime migration
+> (every integer id becomes a UUID v7; back up with `pg_dump` first, and the
+> on-disk image directories get relabelled to their new ids), and (2) the
+> **AVIF image pipeline** (an nginx vhost edit plus an idempotent image
+> regeneration run). Both are one-time; the file deletes itself once done.
 
 Deployment is automatic. Two GitHub Actions workflows drive it:
 

@@ -281,9 +281,7 @@ defmodule Vutuv.ApiAuth.OAuthTest do
       {:ok, request} = OAuth.validate_authorize(authorize_params(app))
 
       results =
-        Task.await_many(
-          for _ <- 1..4, do: Task.async(fn -> OAuth.approve(member, request) end)
-        )
+        Task.await_many(for _ <- 1..4, do: Task.async(fn -> OAuth.approve(member, request) end))
 
       # No first-mint race may surface a raw unique-violation 500: every
       # consent either creates the grant or folds into the winner's row.
