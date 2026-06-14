@@ -129,9 +129,6 @@ defmodule VutuvWeb.ShellLive do
           </.link>
 
           <nav aria-label={gettext("Main navigation")} class="hidden items-center gap-1 text-sm font-medium md:flex">
-            <.link href={~p"/"} class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-              {gettext("Home")}
-            </.link>
             <.link
               :if={@user_id}
               href={~p"/feed"}
