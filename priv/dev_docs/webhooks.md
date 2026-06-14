@@ -51,7 +51,7 @@ X-Vutuv-Signature: sha256=8d7c…
 {
   "event": "follower.created",
   "occurred_at": "2026-06-11T14:00:00Z",
-  "member": "stefan.wintermeyer",
+  "member": "wintermeyer",
   "data": {"follower": "greta-tester"}
 }
 ```

@@ -79,7 +79,7 @@ Scope `messages:write`. Send to a member by their username — this finds the
 existing conversation or starts a new one:
 
 ```bash
-auth -X POST $API/users/stefan.wintermeyer/messages \
+auth -X POST $API/users/wintermeyer/messages \
   -H "Content-Type: application/json" \
   -d '{"body": "Hello Stefan! Your talk was great."}'
 ```
@@ -140,21 +140,21 @@ Scope `social:write`. **Follow** = one-directional subscription (their
 posts appear in your feed), no consent needed:
 
 ```bash
-auth -X PUT $API/users/stefan.wintermeyer/follow      # follow
-auth -X DELETE $API/users/stefan.wintermeyer/follow   # unfollow
+auth -X PUT $API/users/wintermeyer/follow      # follow
+auth -X DELETE $API/users/wintermeyer/follow   # unfollow
 ```
 
 **Connection** = mutual and consented, like on LinkedIn — you request,
 they accept:
 
 ```bash
-auth -X POST $API/users/stefan.wintermeyer/connection
+auth -X POST $API/users/wintermeyer/connection
 ```
 
 Where do you stand with someone? One call:
 
 ```bash
-auth $API/users/stefan.wintermeyer/relationship
+auth $API/users/wintermeyer/relationship
 ```
 
 ## How do I read my feed?
@@ -232,8 +232,8 @@ Every public page is also served machine-readable under its own URL plus
 view, no account needed:
 
 ```bash
-curl https://vutuv.de/stefan.wintermeyer.json        # a profile
-curl https://vutuv.de/stefan.wintermeyer/posts.json  # their post archive
+curl https://vutuv.de/wintermeyer.json        # a profile
+curl https://vutuv.de/wintermeyer/posts.json  # their post archive
 curl https://vutuv.de/tags/phoenix.json              # a tag page
 ```
 

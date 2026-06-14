@@ -1,40 +1,101 @@
-<.page_header title={@page_title} crumbs={[gettext("Developers")]} />
+<%!-- Developer docs (Track 2). The page takes the same full max-w-6xl
+footprint as a profile page (a wide content column + a right rail) instead of
+the old narrow, centered 48rem strip. The 4-column split gives the docs body
+more room than before while leaving a slim rail for credentials and the
+project links. The horizontal page-nav stays at the top of the content card so
+it is the first thing on a phone, never buried under the body in the rail. --%>
+<div class="py-6">
+  <header class="mb-6">
+    <.link
+      :if={@page != "index"}
+      navigate={~p"/developers"}
+      class="text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+    >
+      ← {gettext("Developers")}
+    </.link>
+    <h1 class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{@page_title}</h1>
+  </header>
 
-<div class="card-list">
-  <section class="card">
-    <nav class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 pb-4 text-sm font-semibold dark:border-slate-800">
-      <.link
-        :for={{slug, label} <- @nav}
-        href={if(slug == "index", do: ~p"/developers", else: ~p"/developers/#{slug}")}
-        class={nav_class(@page == slug)}
-      >
-        {label}
-      </.link>
+  <div class="grid gap-6 md:grid-cols-4">
+    <div class="md:col-span-3">
+      <.card>
+        <nav class="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-100 pb-4 text-sm font-semibold dark:border-slate-800">
+          <.link
+            :for={{slug, label} <- @nav}
+            href={if(slug == "index", do: ~p"/developers", else: ~p"/developers/#{slug}")}
+            class={nav_class(@page == slug)}
+          >
+            {label}
+          </.link>
+        </nav>
 
+        <div class="markdown text-slate-800 dark:text-slate-200">
+          {raw(@body)}
+        </div>
+      </.card>
+    </div>
+
+    <aside class="space-y-6">
       <%!-- A logged-in developer reading the docs gets one-click access to the
             pages where credentials actually live, instead of hunting through
-            the profile settings sidebar for them. --%>
-      <%!-- The docs nav is English-first (like the labels above), so these
-            credential links use plain English too rather than gettext, which
-            would translate "Connected apps" and leave the row half-German. --%>
-      <span
-        :if={@conn.assigns[:current_user]}
-        class="ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-slate-600 dark:text-slate-400"
-      >
-        <.link navigate={~p"/access_tokens"} class="hover:text-brand-700">
-          Your access tokens
-        </.link>
-        <.link navigate={~p"/developers/apps"} class="hover:text-brand-700">
-          Your apps
-        </.link>
-        <.link navigate={~p"/connected_apps"} class="hover:text-brand-700">
-          Connected apps
-        </.link>
-      </span>
-    </nav>
+            the profile settings sidebar for them. English labels to match the
+            English-first docs (gettext would leave the rail half-German). --%>
+      <.card :if={@conn.assigns[:current_user]}>
+        <.section_title>Your account</.section_title>
+        <ul class="mt-3 space-y-2 text-sm font-medium">
+          <li>
+            <.link
+              navigate={~p"/access_tokens"}
+              class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              Your access tokens
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/developers/apps"}
+              class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              Your apps
+            </.link>
+          </li>
+          <li>
+            <.link
+              navigate={~p"/connected_apps"}
+              class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              Connected apps
+            </.link>
+          </li>
+        </ul>
+      </.card>
 
-    <div class="markdown text-slate-800 dark:text-slate-200">
-      {raw(@body)}
-    </div>
-  </section>
+      <%!-- The invitation to participate, on every docs page: the repository and
+            where to file bugs and feature requests. Pull requests welcome. --%>
+      <.card>
+        <.section_title>Project</.section_title>
+        <ul class="mt-3 space-y-2 text-sm font-medium">
+          <li>
+            <.link
+              href="https://github.com/wintermeyer/vutuv"
+              class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              GitHub repository
+            </.link>
+          </li>
+          <li>
+            <.link
+              href="https://github.com/wintermeyer/vutuv/issues"
+              class="text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              Bug reports and feature requests
+            </.link>
+          </li>
+        </ul>
+        <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+          A project by developers, for developers. Pull requests are very welcome.
+        </p>
+      </.card>
+    </aside>
+  </div>
 </div>

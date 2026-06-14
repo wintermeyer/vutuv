@@ -29,7 +29,7 @@ The central entity. A member (`type: "profile"` in API responses) has:
 * **Identity:** `name` (assembled), `first_name`, `middle_name`,
   `last_name`, `nickname`, `honorific_prefix`/`_suffix`, `gender`,
   `birthdate`, `locale`.
-* **The username** (`slug`, e.g. `stefan.wintermeyer`): unique, the
+* **The username** (`slug`, e.g. `wintermeyer`): unique, the
   profile URL (`vutuv.de/<slug>`) and the `:slug` in every API path.
   Changeable on the website only; old usernames redirect.
 * **`headline_markdown`:** the one-liner under the name, Markdown.

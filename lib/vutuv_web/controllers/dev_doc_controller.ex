@@ -32,10 +32,14 @@ defmodule VutuvWeb.DevDocController do
 
   @docs Map.new(@pages, fn page -> {page, File.read!("priv/dev_docs/#{page}.md")} end)
 
-  # The HTML rendering is static too, so Earmark runs once at compile time,
-  # not per request on a public, crawlable page.
+  # The HTML rendering is static too, so it runs once at compile time, not per
+  # request on a public, crawlable page. VutuvWeb.DevDocMarkdown adds the
+  # GitHub-style heading anchors that the docs' in-page `#section` links need.
   @docs_html Map.new(@docs, fn {page, markdown} ->
-               {page, markdown |> String.replace(~r/\A# [^\n]*\n/, "") |> Earmark.as_html!()}
+               {page,
+                markdown
+                |> String.replace(~r/\A# [^\n]*\n/, "")
+                |> VutuvWeb.DevDocMarkdown.to_html()}
              end)
 
   @doc """

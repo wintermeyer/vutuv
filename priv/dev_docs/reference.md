@@ -44,7 +44,7 @@ into an LLM.
 
 ```bash
 auth $API/me
-auth $API/users/stefan.wintermeyer
+auth $API/users/wintermeyer
 ```
 
 ```json
@@ -52,7 +52,7 @@ auth $API/users/stefan.wintermeyer
   "type": "profile",
   "schema_version": 1,
   "name": "Stefan Wintermeyer",
-  "slug": "stefan.wintermeyer",
+  "slug": "wintermeyer",
   "headline_markdown": "Phoenix, Elixir & web performance.",
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
   "emails": ["stefan@example.com"],
@@ -93,7 +93,7 @@ viewer-dependent: public addresses, or all of them when you are the owner
 or the owner follows you.
 
 ```bash
-auth $API/users/stefan.wintermeyer/work_experiences
+auth $API/users/wintermeyer/work_experiences
 ```
 
 ### POST /me/&lt;section&gt; · PATCH /me/&lt;section&gt;/:id · DELETE /me/&lt;section&gt;/:id
@@ -146,7 +146,7 @@ Scope: `social:read`. Your standing with that member — what the profile
 header shows you:
 
 ```bash
-auth $API/users/stefan.wintermeyer/relationship
+auth $API/users/wintermeyer/relationship
 ```
 
 ```json
@@ -169,8 +169,8 @@ when already following) and unfollow (`204`; `404` when not following).
 A block between the accounts answers `403`.
 
 ```bash
-auth -X PUT $API/users/stefan.wintermeyer/follow
-auth -X DELETE $API/users/stefan.wintermeyer/follow
+auth -X PUT $API/users/wintermeyer/follow
+auth -X DELETE $API/users/wintermeyer/follow
 ```
 
 ### Connections
@@ -179,7 +179,7 @@ Scope: `social:write`. A connection is mutual and consented: request,
 then the other side accepts or declines.
 
 ```bash
-auth -X POST $API/users/stefan.wintermeyer/connection   # request (201)
+auth -X POST $API/users/wintermeyer/connection   # request (201)
 auth -X POST $API/connections/0190…/accept              # as the recipient
 auth -X POST $API/connections/0190…/decline
 auth -X DELETE $API/connections/0190…                   # disconnect / withdraw
@@ -329,7 +329,7 @@ Scope: `messages:write`. Send by member (finds or opens the conversation)
 or into a known conversation. Markdown body.
 
 ```bash
-auth -X POST $API/users/stefan.wintermeyer/messages \
+auth -X POST $API/users/wintermeyer/messages \
   -H "Content-Type: application/json" \
   -d '{"body": "Hello Stefan!"}'
 ```
@@ -375,8 +375,8 @@ also served as `.json` (and `.md`, `.txt`, the profile as `.vcf`) under
 its own URL — the anonymous view, cache-friendly, no auth:
 
 ```bash
-curl https://vutuv.de/stefan.wintermeyer.json            # profile
-curl https://vutuv.de/stefan.wintermeyer/posts.json      # post archive
+curl https://vutuv.de/wintermeyer.json            # profile
+curl https://vutuv.de/wintermeyer/posts.json      # post archive
 curl https://vutuv.de/tags/phoenix.json                  # a tag page
 ```
 
