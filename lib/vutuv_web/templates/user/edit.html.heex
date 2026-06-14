@@ -1,68 +1,106 @@
-<.page_header crumbs={[
-  gettext("Users"),
-  {full_name(@user), ~p"/#{@user}"},
-  gettext("Edit")
-]} />
+<%!-- Edit profile = the "Profile" tab of Settings: the profile content only
+(photos, name, about), grouped into cards. The boolean settings moved to the
+Privacy and Notifications tabs; the account hub (username, emails, data,
+security, delete) moved to the Account tab. One form, one Save, posting the
+whole profile to PATCH /:slug as before. --%>
+<div class="py-6">
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <.settings_nav user={@user} active={:profile} class="mb-6" />
 
-<div class="card-list">
-  <section class="card">
-    <%= render "form_content.html", changeset: @changeset, action: ~p"/#{@user}", backlink: ~p"/#{@user}" %>
-	</section>
-  <aside>
-    <section class="card">
-      <h1><%= gettext "Username" %></h1>
-      <%!-- The handle is the profile URL and the @mention name; changing it is
-            its own flow (uniqueness, quota), so it cannot live in this form. --%>
-      <p>@<%= @user.active_slug %></p>
-      <p><%= link gettext("Change your username"), to: ~p"/#{@user}/slugs/new" %></p>
-    </section>
+  <.form :let={f} for={@changeset} action={~p"/#{@user}"} multipart class="space-y-6">
+    <.form_error changeset={@changeset} />
 
-    <section class="card">
-      <h1><%= gettext "Emails" %></h1>
-      <%!-- Addresses are managed on their own page: adding one is a
-            PIN-verified two-step flow, so it cannot live in this form. --%>
-      <p><%= link gettext("Manage your email addresses"), to: ~p"/#{@user}/emails" %></p>
-    </section>
+    <.card>
+      <.section_title>{gettext("Photos")}</.section_title>
+      <div class="mt-4 grid gap-5 sm:grid-cols-2">
+        <div>
+          <%= label f, :avatar, gettext("Avatar"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= file_input f, :avatar, class: "mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <%= error_tag f, :avatar %>
+        </div>
+        <div>
+          <%= label f, :cover_photo, gettext("Cover photo"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= file_input f, :cover_photo, class: "mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <%= error_tag f, :cover_photo %>
+        </div>
+      </div>
+    </.card>
 
-    <section class="card">
-      <h1><%= gettext "Your data" %></h1>
-      <%!-- The GDPR data download: every piece of data vutuv stores about
-            this account, as one JSON file. --%>
-      <p><%= link gettext("Download your data"), to: ~p"/#{@user}/export" %></p>
-    </section>
+    <.card>
+      <.section_title>{gettext("Your name")}</.section_title>
+      <div class="mt-4 grid gap-5 sm:grid-cols-2">
+        <div class="sm:col-span-2">
+          <%= label f, :gender, gettext("Gender"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= select f, :gender, [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}], prompt: gettext("Choose a gender"), class: input_class() %>
+          <%= error_tag f, :gender %>
+        </div>
+        <div>
+          <%= label f, :first_name, gettext("First Name"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :first_name, autofocus: true, class: input_class() %>
+          <%= error_tag f, :first_name %>
+        </div>
+        <div>
+          <%= label f, :last_name, gettext("Last Name"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :last_name, class: input_class() %>
+          <%= error_tag f, :last_name %>
+        </div>
+        <div>
+          <%= label f, :middle_name, gettext("Middle Name"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :middle_name, class: input_class() %>
+          <%= error_tag f, :middle_name %>
+        </div>
+        <div>
+          <%= label f, :nickname, gettext("Nickname"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :nickname, class: input_class() %>
+          <%= error_tag f, :nickname %>
+        </div>
+        <div>
+          <%= label f, :honorific_prefix, gettext("Prefix"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :honorific_prefix, class: input_class() %>
+          <%= error_tag f, :honorific_prefix %>
+        </div>
+        <div>
+          <%= label f, :honorific_suffix, gettext("Suffix"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= text_input f, :honorific_suffix, class: input_class() %>
+          <%= error_tag f, :honorific_suffix %>
+        </div>
+      </div>
+    </.card>
 
-    <%!-- These account/security pages have no link anywhere else in the app
-          (not the shell, not the profile), so a user could only reach them by
-          guessing the URL. Surfacing them here makes the edit page the real
-          account hub. --%>
-    <section class="card">
-      <h1><%= gettext "Privacy and security" %></h1>
-      <p><%= link gettext("Blocked members"), to: ~p"/blocks" %></p>
-      <p><%= link gettext("Connected apps"), to: ~p"/connected_apps" %></p>
-      <p><%= link gettext("Access tokens"), to: ~p"/access_tokens" %></p>
-      <p><%= link gettext("Content under review"), to: ~p"/moderation/cases" %></p>
-    </section>
+    <.card>
+      <.section_title>{gettext("About you")}</.section_title>
+      <div class="mt-4 space-y-5">
+        <div>
+          <%= label f, :headline, gettext("Headline"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= textarea f, :headline, rows: 3, class: input_class() %>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Markdown is supported: bold, italics, links and lists.")}
+          </p>
+          <%= error_tag f, :headline %>
+        </div>
+        <div class="grid gap-5 sm:grid-cols-2">
+          <div>
+            <%= label f, :birthdate, gettext("Birthdate"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+            <%= date_input f, :birthdate, max: Date.to_iso8601(Date.utc_today()), class: input_class() %>
+            <%= error_tag f, :birthdate %>
+          </div>
+          <div>
+            <%= label f, :locale, gettext("Language"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+            <%= select f, :locale, [{gettext("English"), "en"}, {gettext("German"), "de"}], class: input_class() %>
+            <%= error_tag f, :locale %>
+          </div>
+        </div>
+      </div>
+    </.card>
 
-    <%!-- The destructive action gets its own clearly-labelled card (a "danger
-          zone"), the canonical red `.button--danger` control, a plain-language
-          warning, and a confirm dialog — so it is easy to find on the settings
-          page but hard to trigger by accident. --%>
-    <section class="card">
-      <h1><%= gettext "Delete account" %></h1>
-      <p class="editform__hint">
-        <%= gettext(
-          "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
-        ) %>
-      </p>
+    <div class="flex items-center gap-4">
+      <.button type="submit">{gettext("Save")}</.button>
       <.link
-        id="delete-account"
-        href={~p"/#{@user}"}
-        method="delete"
-        data-confirm={
-          gettext("Start deleting your account? We will email you a PIN to confirm.")
-        }
-        class="button button--danger"
-      ><%= gettext("Delete my account") %></.link>
-    </section>
-  </aside>
+        navigate={~p"/#{@user}"}
+        class="text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Cancel")}
+      </.link>
+    </div>
+  </.form>
 </div>

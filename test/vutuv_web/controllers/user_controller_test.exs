@@ -272,8 +272,10 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "renders form for editing chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/#{user}/edit")
-    assert html_response(conn, 200) =~ "Edit"
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    # The slimmed edit page is the profile content only, grouped into sections.
+    assert html =~ "Your name"
+    assert html =~ "First Name"
   end
 
   test "updates chosen resource and redirects when data is valid", %{conn: conn} do
@@ -319,39 +321,37 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
   end
 
-  test "the edit form asks the search-engine and the AI question separately", %{conn: conn} do
+  test "the privacy page asks the search-engine and the AI question separately", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
 
-    assert html =~ "Would you like to allow search engines to index your profile?"
-    assert html =~ "Would you like to allow AI agents and LLMs to use your profile?"
+    # The two consents now live on the Privacy tab as positively-framed
+    # checkboxes (the field is the opt-out noindex?/noai?, the box is "Allow").
+    assert html =~ "Allow search engines to index your profile"
+    assert html =~ "Allow AI agents and LLMs to use your profile"
   end
 
-  test "account settings are discoverable: a clear, confirmed Delete account control", %{
-    conn: conn
-  } do
+  test "the account hub carries a clear, confirmed Delete account control", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/#{user}/settings") |> html_response(200)
 
-    # The data-management cards are clearly labelled (not buried under a vague
-    # "Administration" heading), and the GDPR export is still reachable.
     assert html =~ "Delete account"
-    assert html =~ "Download your data"
-
     # The consequence is spelled out before the user acts...
     assert html =~ "cannot be undone"
     # ...and the control is the canonical red danger button with a confirm
-    # dialog, replacing the old ad-hoc link styling.
-    assert html =~ "button--danger"
+    # dialog (id pinned so the shell's logout delete-link doesn't match).
+    assert html =~ ~s(id="delete-account")
     assert html =~ "data-confirm"
-    refute html =~ "delete_link_button"
+
+    # The GDPR export stays reachable from the hub.
+    assert html =~ ~s(href="#{~p"/#{user}/export"}")
   end
 
-  test "the settings hub links to the otherwise-unfindable privacy/security pages", %{
+  test "the account hub links to the otherwise-unfindable privacy/security pages", %{
     conn: conn
   } do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/#{user}/settings") |> html_response(200)
 
     # These pages are reachable only from here for a normal user (no shell or
     # profile link), so the account hub must surface them.
@@ -410,13 +410,17 @@ defmodule VutuvWeb.UserControllerTest do
     refute Repo.get_by(Email, value: "injected@example.com")
   end
 
-  test "edit form has no email inputs, just a link to the email management page", %{conn: conn} do
+  test "the edit form has no email inputs; the account hub links to email management", %{
+    conn: conn
+  } do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/#{user}/edit")
-    html = html_response(conn, 200)
 
-    refute html =~ "user[emails]"
-    assert html =~ ~p"/#{user}/emails"
+    edit = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    refute edit =~ "user[emails]"
+
+    # Email management (a PIN-verified flow) lives on the account hub now.
+    hub = conn |> recycle() |> get(~p"/#{user}/settings") |> html_response(200)
+    assert hub =~ ~p"/#{user}/emails"
   end
 
   test "the landing-page registration form still asks for the email address", %{conn: conn} do
@@ -440,7 +444,8 @@ defmodule VutuvWeb.UserControllerTest do
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = put(conn, ~p"/#{user}", user: @invalid_update_attrs)
-    assert html_response(conn, 422) =~ "Edit"
+    # The edit form re-renders (422) with its grouped sections intact.
+    assert html_response(conn, 422) =~ "Your name"
   end
 
   test "deletes chosen resource after confirming the PIN", %{conn: conn} do

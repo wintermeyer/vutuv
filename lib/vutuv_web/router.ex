@@ -482,6 +482,17 @@ defmodule VutuvWeb.Router do
       # availability check behind the form's as-you-type verdict.
       get("/slugs/availability", SlugController, :availability)
       resources("/slugs", SlugController, only: [:new, :create])
+
+      # Account settings, split off the old single edit form into focused,
+      # owner-only pages (SettingsController). put + patch both, to match
+      # whichever method <.form for={changeset} emits for a persisted record.
+      get("/settings", SettingsController, :index)
+      get("/settings/privacy", SettingsController, :privacy)
+      put("/settings/privacy", SettingsController, :update_privacy)
+      patch("/settings/privacy", SettingsController, :update_privacy)
+      get("/settings/notifications", SettingsController, :notifications)
+      put("/settings/notifications", SettingsController, :update_notifications)
+      patch("/settings/notifications", SettingsController, :update_notifications)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])

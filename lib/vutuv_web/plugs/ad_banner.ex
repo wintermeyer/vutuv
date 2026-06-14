@@ -20,7 +20,9 @@ defmodule VutuvWeb.Plug.AdBanner do
 
   GET only, never on the landing page `/` (the sign-up funnel stays ad-free),
   and not on `/ads` itself - a house ad above the page that sells ads would
-  advertise advertising on the advertising page.
+  advertise advertising on the advertising page. It also stays off the account
+  pages (`/:slug/edit` and `/:slug/settings/*`): those are focused, owner-only
+  tasks where an ad is noise, not a place anyone is browsing.
   """
 
   import Plug.Conn
@@ -37,7 +39,7 @@ defmodule VutuvWeb.Plug.AdBanner do
     conn = fetch_cookies(conn)
 
     if agent_format?(conn) or landing_page?(conn) or booking_pages?(conn) or
-         dismissed_today?(conn) or recently_seen?(conn) do
+         account_pages?(conn) or dismissed_today?(conn) or recently_seen?(conn) do
       conn
     else
       conn
@@ -61,6 +63,12 @@ defmodule VutuvWeb.Plug.AdBanner do
   defp landing_page?(conn), do: conn.path_info == []
 
   defp booking_pages?(conn), do: conn.path_info |> List.first() == "ads"
+
+  # The profile editor (/:slug/edit) and the settings pages (/:slug/settings/*):
+  # focused, owner-only forms, not somewhere a visitor is browsing. The second
+  # path segment is the discriminator, so a deeper "edit" (e.g.
+  # /:slug/links/:id/edit) is unaffected.
+  defp account_pages?(conn), do: Enum.at(conn.path_info, 1) in ["edit", "settings"]
 
   defp recently_seen?(conn) do
     case get_session(conn, :ad_seen_at) do

@@ -1,0 +1,86 @@
+<%!-- Account hub: the settings landing page. Everything that used to crowd the
+edit form's sidebar (username, emails, data export, the security pages that are
+linked nowhere else, and the delete danger zone) lives here now, grouped. --%>
+<div class="py-6">
+  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+  <.settings_nav user={@user} active={:account} class="mb-6" />
+
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Account")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.account_row
+          title={gettext("Username")}
+          subtitle={"@" <> @user.active_slug}
+          href={~p"/#{@user}/slugs/new"}
+          label={gettext("Change")}
+        />
+        <.account_row
+          title={gettext("Email addresses")}
+          subtitle={gettext("Add, remove or pick your primary address.")}
+          href={~p"/#{@user}/emails"}
+          label={gettext("Manage")}
+        />
+        <.account_row
+          title={gettext("Your data")}
+          subtitle={gettext("Download everything vutuv stores about you, as one file.")}
+          href={~p"/#{@user}/export"}
+          label={gettext("Download")}
+        />
+      </ul>
+    </.card>
+
+    <.card>
+      <.section_title>{gettext("Privacy & security")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.account_row
+          title={gettext("Blocked members")}
+          subtitle={gettext("People who cannot interact with you.")}
+          href={~p"/blocks"}
+          label={gettext("View")}
+        />
+        <.account_row
+          title={gettext("Connected apps")}
+          subtitle={gettext("Third-party apps you authorized.")}
+          href={~p"/connected_apps"}
+          label={gettext("View")}
+        />
+        <.account_row
+          title={gettext("Access tokens")}
+          subtitle={gettext("Personal tokens for the vutuv API.")}
+          href={~p"/access_tokens"}
+          label={gettext("View")}
+        />
+        <.account_row
+          title={gettext("Content under review")}
+          subtitle={gettext("Your posts or profile a moderator is looking at.")}
+          href={~p"/moderation/cases"}
+          label={gettext("View")}
+        />
+      </ul>
+    </.card>
+
+    <%!-- The destructive action: its own clearly-labelled card with a red ring,
+          the canonical red control, a plain-language warning and a confirm
+          dialog - easy to find on the settings page, hard to trigger by
+          accident. Written as a raw card so the red ring doesn't fight the
+          slate ring baked into <.card>. --%>
+    <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-red-200 dark:bg-slate-900 dark:ring-red-900/50">
+      <.section_title>{gettext("Delete account")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
+        )}
+      </p>
+      <.link
+        id="delete-account"
+        href={~p"/#{@user}"}
+        method="delete"
+        data-confirm={gettext("Start deleting your account? We will email you a PIN to confirm.")}
+        class="mt-4 inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+      >
+        {gettext("Delete my account")}
+      </.link>
+    </section>
+  </div>
+</div>

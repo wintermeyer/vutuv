@@ -1166,4 +1166,49 @@ defmodule VutuvWeb.UI do
     </svg>
     """
   end
+
+  @doc """
+  The settings sub-navigation shared by the profile editor and the settings
+  pages: a row of underline tabs (Profile / Privacy / Notifications / Account)
+  so the once-single edit form now reads as a small set of focused pages you
+  can move between. `active` is the current tab key
+  (`:profile | :privacy | :notifications | :account`).
+  """
+  attr(:user, Vutuv.Accounts.User, required: true)
+  attr(:active, :atom, required: true)
+  attr(:class, :string, default: nil)
+
+  def settings_nav(assigns) do
+    tabs = [
+      {gettext("Profile"), ~p"/#{assigns.user}/edit", :profile},
+      {gettext("Privacy"), ~p"/#{assigns.user}/settings/privacy", :privacy},
+      {gettext("Notifications"), ~p"/#{assigns.user}/settings/notifications", :notifications},
+      {gettext("Account"), ~p"/#{assigns.user}/settings", :account}
+    ]
+
+    assigns = assign(assigns, :tabs, tabs)
+
+    ~H"""
+    <nav class={[
+      "-mb-px flex flex-wrap gap-x-6 gap-y-1 border-b border-slate-200 text-sm font-semibold dark:border-slate-800",
+      @class
+    ]}>
+      <.link
+        :for={{label, href, key} <- @tabs}
+        navigate={href}
+        aria-current={@active == key && "page"}
+        class={[
+          "border-b-2 px-1 py-3",
+          if(@active == key,
+            do: "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300",
+            else:
+              "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+          )
+        ]}
+      >
+        {label}
+      </.link>
+    </nav>
+    """
+  end
 end

@@ -131,10 +131,11 @@ defmodule VutuvWeb.SlugControllerTest do
   end
 
   describe "discoverability" do
-    test "the edit-profile page links to the username change", %{conn: conn} do
+    test "the account hub shows the current username and links to the change flow", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      html = conn |> get("/#{user.active_slug}/edit") |> html_response(200)
+      # The username moved off the edit form to the Account tab of Settings.
+      html = conn |> get("/#{user.active_slug}/settings") |> html_response(200)
 
       assert html =~ "@#{user.active_slug}"
       assert html =~ "/#{user.active_slug}/slugs/new"
