@@ -252,4 +252,148 @@ defmodule Vutuv.SocialTest do
       assert row.honorific_prefix == "Dr."
     end
   end
+
+  describe "liking and bookmarking a person" do
+    alias Vutuv.Social.UserBookmark
+
+    test "like/bookmark a stranger with no follow or connection, idempotently" do
+      me = insert(:user)
+      stranger = insert(:user)
+
+      assert :ok = Social.like_user(me, stranger)
+      assert :ok = Social.like_user(me, stranger)
+      assert :ok = Social.bookmark_user(me, stranger)
+
+      assert %{liked?: true, bookmarked?: true} = Social.user_saved_flags(me, stranger)
+      # A save changes neither the follow nor the connection graph.
+      refute Social.user_follows_user?(me.id, stranger.id)
+      refute Social.connected?(me.id, stranger.id)
+    end
+
+    test "you cannot save yourself" do
+      me = insert(:user)
+      assert {:error, :self} = Social.like_user(me, me)
+      assert {:error, :self} = Social.bookmark_user(me, me)
+    end
+
+    test "a save is refused across a block in either direction" do
+      me = insert(:user)
+      other = insert(:user)
+      {:ok, _} = Social.block_user(me, other)
+
+      assert {:error, :blocked} = Social.like_user(me, other)
+      assert {:error, :blocked} = Social.bookmark_user(other, me)
+      assert %{liked?: false, bookmarked?: false} = Social.user_saved_flags(me, other)
+    end
+
+    test "unlike / unbookmark clears the flag (idempotent)" do
+      me = insert(:user)
+      other = insert(:user)
+      :ok = Social.like_user(me, other)
+      :ok = Social.bookmark_user(me, other)
+
+      assert :ok = Social.unlike_user(me, other)
+      assert :ok = Social.unlike_user(me, other)
+      assert :ok = Social.unbookmark_user(me, other)
+      assert %{liked?: false, bookmarked?: false} = Social.user_saved_flags(me, other)
+    end
+
+    test "a real save broadcasts on the actor's activity topic; a no-op does not" do
+      me = insert(:user)
+      other = insert(:user)
+      Vutuv.Activity.subscribe(me.id)
+
+      :ok = Social.bookmark_user(me, other)
+      assert_receive {:user_engagement_changed, %{kind: :bookmark, active?: true}}
+
+      # The idempotent repeat is not news.
+      :ok = Social.bookmark_user(me, other)
+      refute_receive {:user_engagement_changed, _}
+
+      :ok = Social.unbookmark_user(me, other)
+      assert_receive {:user_engagement_changed, %{kind: :bookmark, active?: false}}
+    end
+
+    test "bookmarked_users_page paginates newest-saved-first and sorts by name" do
+      me = insert(:user)
+      anna = insert(:user, email_confirmed?: true, first_name: "Anna", last_name: "Zett")
+      bert = insert(:user, email_confirmed?: true, first_name: "Bert", last_name: "Adam")
+
+      # Save Anna earlier than Bert so the recency order is deterministic.
+      :ok = Social.bookmark_user(me, anna)
+      backdate_save(UserBookmark, me, anna, -60)
+      :ok = Social.bookmark_user(me, bert)
+
+      page1 = Social.bookmarked_users_page(me, limit: 1)
+      assert [%{id: bert_id}] = page1.entries
+      assert bert_id == bert.id
+      assert page1.more?
+
+      page2 = Social.bookmarked_users_page(me, limit: 1, offset: page1.next_offset)
+      assert [%{id: anna_id}] = page2.entries
+      assert anna_id == anna.id
+      refute page2.more?
+
+      # Oldest first flips the order; alphabetical sorts by name.
+      assert [%{id: ^anna_id}, %{id: ^bert_id}] =
+               Social.bookmarked_users_page(me, sort: :oldest).entries
+
+      names = Social.bookmarked_users_page(me, sort: :name).entries |> Enum.map(& &1.first_name)
+      assert names == ["Anna", "Bert"]
+    end
+
+    test "liked_users_page filters by search over name, @handle and headline" do
+      me = insert(:user)
+
+      match =
+        insert(:user,
+          email_confirmed?: true,
+          first_name: "Charlie",
+          last_name: "Brown",
+          headline: "PHP wizard"
+        )
+
+      miss =
+        insert(:user,
+          email_confirmed?: true,
+          first_name: "Dana",
+          last_name: "Smith",
+          headline: "Ruby dev"
+        )
+
+      :ok = Social.like_user(me, match)
+      :ok = Social.like_user(me, miss)
+
+      assert [%{id: id}] = Social.liked_users_page(me, search: "charlie").entries
+      assert id == match.id
+      assert [%{id: ^id}] = Social.liked_users_page(me, search: "php").entries
+    end
+
+    test "saved lists hide a member who is now blocked" do
+      me = insert(:user)
+      blocked = insert(:user, email_confirmed?: true)
+      :ok = Social.bookmark_user(me, blocked)
+      assert [_] = Social.bookmarked_users_page(me).entries
+
+      {:ok, _} = Social.block_user(me, blocked)
+      assert [] = Social.bookmarked_users_page(me).entries
+    end
+
+    # Backdates an engagement row so the newest-saved order is deterministic
+    # (bookmark_user stamps NaiveDateTime second-precision; same-second rows
+    # would otherwise tie).
+    defp backdate_save(schema, %{id: user_id}, %{id: target_id}, seconds) do
+      at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), seconds)
+
+      {1, _} =
+        Vutuv.Repo.update_all(
+          Ecto.Query.from(e in schema,
+            where: e.user_id == ^user_id and e.target_user_id == ^target_id
+          ),
+          set: [inserted_at: at]
+        )
+
+      :ok
+    end
+  end
 end

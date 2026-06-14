@@ -25,7 +25,7 @@ defmodule Vutuv.Accounts.ReservedSlugs do
     notifications oauth phoenix post_images posts press privacy reports robots.txt
     screenshots search search_queries security.txt sent_emails sessions settings
     sitemap.xml sitemaps socket status support tags team terms tidewave unsubscribe
-    users webhooks www
+    user_bookmarks user_likes users webhooks www
   )
 
   def list, do: @reserved

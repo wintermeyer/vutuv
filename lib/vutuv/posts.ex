@@ -1136,9 +1136,9 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  One page of the posts `user` liked, newest like first, visibility-filtered
-  at read time (a since-restricted post drops out). Cursor-paginated like
-  the feed; entries are plain preloaded posts.
+  One page of the posts `user` liked, for the saved-items hub. See
+  `engaged_posts_page/3` for `opts` (`:search`, `:sort`, `:limit`, `:offset`).
+  Visibility-filtered at read time (a since-restricted post drops out).
   """
   def liked_posts_page(%User{} = user, opts \\ []), do: engaged_posts_page(PostLike, user, opts)
 
@@ -1146,46 +1146,71 @@ defmodule Vutuv.Posts do
   def bookmarked_posts_page(%User{} = user, opts \\ []),
     do: engaged_posts_page(PostBookmark, user, opts)
 
+  # `opts`: `:search` (matches post body and author name, case-insensitive),
+  # `:sort` (`:recent` default newest-saved-first | `:oldest` | `:name` by
+  # author), `:limit` (default #{@default_feed_limit}) and `:offset`. Offset
+  # paginated (a text filter plus three sort orders would need a cursor that
+  # encodes every order; the saved lists are personal and modest), returning
+  # `%{entries: [%Post{}], more?:, next_offset:}` — pass `:offset` back for the
+  # next page. Entries are plain preloaded posts.
   defp engaged_posts_page(schema, %User{id: user_id} = user, opts) do
     limit = Keyword.get(opts, :limit, @default_feed_limit)
-    cursor = Keyword.get(opts, :cursor)
+    offset = Keyword.get(opts, :offset, 0)
+    sort = Keyword.get(opts, :sort, :recent)
+    search = opts |> Keyword.get(:search) |> normalize_search()
 
     rows =
       from(p in Post,
         join: e in ^schema,
         as: :engagement,
         on: e.post_id == p.id,
+        join: a in assoc(p, :user),
+        as: :author,
         where: e.user_id == ^user_id,
-        order_by: [desc: e.inserted_at, desc: e.id],
-        limit: ^(limit + 1),
         select: {p, e.inserted_at, e.id}
       )
       |> scope_visible(user)
-      |> engaged_before(cursor)
+      |> filter_engaged_search(search)
+      |> order_engaged(sort)
+      |> limit(^(limit + 1))
+      |> offset(^offset)
       |> Repo.all()
 
     taken = Enum.take(rows, limit)
     posts = taken |> Enum.map(&elem(&1, 0)) |> Repo.preload(post_preloads())
-    more? = length(rows) > limit
 
-    next_cursor =
-      if more? do
-        {_post, at, id} = List.last(taken)
-        %{at: at, id: id}
-      end
-
-    %{entries: posts, more?: more?, next_cursor: next_cursor}
+    %{entries: posts, more?: length(rows) > limit, next_offset: offset + limit}
   end
 
-  defp engaged_before(query, nil), do: query
+  defp filter_engaged_search(query, nil), do: query
 
-  defp engaged_before(query, %{at: at, id: id}) do
-    where(
-      query,
-      [engagement: e],
-      e.inserted_at < ^at or (e.inserted_at == ^at and e.id < ^id)
+  defp filter_engaged_search(query, term) do
+    pattern = "%" <> escape_like(term) <> "%"
+
+    from([p, author: a] in query,
+      where:
+        ilike(p.body, ^pattern) or ilike(a.first_name, ^pattern) or ilike(a.last_name, ^pattern) or
+          ilike(fragment("? || ' ' || ?", a.first_name, a.last_name), ^pattern)
     )
   end
+
+  defp order_engaged(query, :oldest),
+    do: order_by(query, [engagement: e], asc: e.inserted_at, asc: e.id)
+
+  defp order_engaged(query, :name),
+    do: order_by(query, [author: a], asc: a.first_name, asc: a.last_name, asc: a.id)
+
+  defp order_engaged(query, _recent),
+    do: order_by(query, [engagement: e], desc: e.inserted_at, desc: e.id)
+
+  defp normalize_search(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      term -> term
+    end
+  end
+
+  defp normalize_search(_), do: nil
 
   @doc "The permalink lookup: `author`'s preloaded post by id, or `nil`."
   def get_post(%User{id: author_id}, id) do

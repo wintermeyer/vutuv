@@ -77,10 +77,18 @@ defmodule VutuvWeb.UserController do
         Vutuv.Social.get_block(conn.assigns[:current_user].id, user.id)
       end
 
+    # The header's private save toggles: whether I have liked / bookmarked this
+    # member (nil = logged out / own profile, where no control shows).
+    user_saved =
+      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
+        Vutuv.Social.user_saved_flags(conn.assigns[:current_user], user)
+      end
+
     posts_total = Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user])
 
     conn
     |> assign(:viewer_block, viewer_block)
+    |> assign(:user_saved, user_saved)
     |> assign(:emails, emails)
     |> assign(:posts, Vutuv.Posts.profile_posts(user, conn.assigns[:current_user]))
     |> assign(:posts_total, posts_total)

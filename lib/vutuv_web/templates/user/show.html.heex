@@ -79,6 +79,11 @@ the resulting ~200px rail width. --%>
                   follow_id={user_follows_user?(@current_user, @user)}
                 />
                 <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
+                <%!-- Private, silent saves (no follow/connection, no notification):
+                bookmark or like this member. Shown to any logged-in non-owner; the
+                block branch above renders no controls at all. --%>
+                <.user_bookmark_button :if={@user_saved} saved?={@user_saved.bookmarked?} target_id={@user.id} />
+                <.user_like_button :if={@user_saved} saved?={@user_saved.liked?} target_id={@user.id} />
               <% true -> %>
             <% end %>
           </div>

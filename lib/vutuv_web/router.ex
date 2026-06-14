@@ -122,6 +122,15 @@ defmodule VutuvWeb.Router do
 
     resources("/follows", FollowController, only: [:create, :delete])
 
+    # Liking / bookmarking a *member* (the private, silent save the profile
+    # header offers, the people-equivalent of a post like/bookmark). POST to
+    # save, DELETE /:id (the target member's id) to remove. Logged-in only
+    # (checked in the controller).
+    post("/user_bookmarks", UserSaveController, :bookmark)
+    delete("/user_bookmarks/:id", UserSaveController, :unbookmark)
+    post("/user_likes", UserSaveController, :like)
+    delete("/user_likes/:id", UserSaveController, :unlike)
+
     # The mutual-connection lifecycle (the list lives at /:slug/connections in
     # the profile scope below). create = request, then accept/decline/withdraw.
     post("/connections", ConnectionController, :create)

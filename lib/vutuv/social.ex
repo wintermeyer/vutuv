@@ -19,6 +19,9 @@ defmodule Vutuv.Social do
   alias Vutuv.Social.Block
   alias Vutuv.Social.Connection
   alias Vutuv.Social.Follow
+  alias Vutuv.Social.UserBookmark
+  alias Vutuv.Social.UserLike
+  alias Vutuv.UUIDv7
 
   # ── Follows ──
 
@@ -568,6 +571,188 @@ defmodule Vutuv.Social do
     )
     |> Repo.all()
   end
+
+  # ── Liking / bookmarking a person ──
+  #
+  # The lightweight, **private** save that the post like/bookmark have always
+  # had, now for a member too: one row per (actor, target), idempotent toggle,
+  # silent (no notification, no public count) and free of any follow/connection
+  # prerequisite — you can save a stranger. Refused across a block in either
+  # direction (a save is harmless, but enumerating/keeping a blocked member is
+  # not), and you cannot save yourself. Every real change broadcasts
+  # `{:user_engagement_changed, …}` on the actor's activity topic so an open
+  # /likes or /bookmarks page in another tab adds or drops the row live.
+
+  @doc "Bookmarks `target` as `user` (idempotent). `:ok` | `{:error, :self | :blocked}`."
+  def bookmark_user(%User{} = user, %User{} = target),
+    do: save_user(UserBookmark, :bookmark, user, target)
+
+  @doc "Removes `user`'s bookmark of `target` (idempotent)."
+  def unbookmark_user(%User{} = user, %User{} = target),
+    do: unsave_user(UserBookmark, :bookmark, user, target)
+
+  @doc "Likes `target` as `user` (idempotent). `:ok` | `{:error, :self | :blocked}`."
+  def like_user(%User{} = user, %User{} = target),
+    do: save_user(UserLike, :like, user, target)
+
+  @doc "Removes `user`'s like of `target` (idempotent)."
+  def unlike_user(%User{} = user, %User{} = target),
+    do: unsave_user(UserLike, :like, user, target)
+
+  defp save_user(_schema, _kind, %User{id: id}, %User{id: id}), do: {:error, :self}
+
+  defp save_user(schema, kind, %User{} = user, %User{} = target) do
+    if blocked_between?(user.id, target.id) do
+      {:error, :blocked}
+    else
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      row = %{
+        id: UUIDv7.generate(),
+        user_id: user.id,
+        target_user_id: target.id,
+        inserted_at: now,
+        updated_at: now
+      }
+
+      # Ids are minted in code, so the inserted row count (0 on conflict) is
+      # what tells a fresh save from the idempotent repeat.
+      case Repo.insert_all(schema, [row],
+             on_conflict: :nothing,
+             conflict_target: [:user_id, :target_user_id]
+           ) do
+        {0, _} -> :ok
+        {1, _} -> broadcast_user_engagement(kind, user.id, target.id, true)
+      end
+    end
+  end
+
+  defp unsave_user(schema, kind, %User{} = user, %User{} = target) do
+    {count, _} =
+      Repo.delete_all(
+        from(e in schema, where: e.user_id == ^user.id and e.target_user_id == ^target.id)
+      )
+
+    if count > 0, do: broadcast_user_engagement(kind, user.id, target.id, false), else: :ok
+  end
+
+  defp broadcast_user_engagement(kind, user_id, target_user_id, active?) do
+    Vutuv.Activity.broadcast(
+      user_id,
+      {:user_engagement_changed, %{kind: kind, target_user_id: target_user_id, active?: active?}}
+    )
+
+    :ok
+  end
+
+  @doc """
+  Whether `user` has liked / bookmarked `target` — the two toggle states the
+  profile header renders, in one round trip. `%{liked?: bool, bookmarked?:
+  bool}`.
+  """
+  def user_saved_flags(%User{} = user, %User{} = target) do
+    Repo.one(
+      from(t in User,
+        where: t.id == ^target.id,
+        select: %{
+          liked?:
+            fragment(
+              "EXISTS (SELECT 1 FROM user_likes l WHERE l.user_id = ? AND l.target_user_id = ?)",
+              type(^user.id, UUIDv7),
+              t.id
+            ),
+          bookmarked?:
+            fragment(
+              "EXISTS (SELECT 1 FROM user_bookmarks b WHERE b.user_id = ? AND b.target_user_id = ?)",
+              type(^user.id, UUIDv7),
+              t.id
+            )
+        }
+      )
+    ) || %{liked?: false, bookmarked?: false}
+  end
+
+  @doc """
+  One page of the members `user` bookmarked, for the saved-items hub. See
+  `saved_users_page/3` for `opts` (`:search`, `:sort`, `:limit`, `:offset`).
+  """
+  def bookmarked_users_page(%User{} = user, opts \\ []),
+    do: saved_users_page(UserBookmark, user, opts)
+
+  @doc "One page of the members `user` liked — see `bookmarked_users_page/2`."
+  def liked_users_page(%User{} = user, opts \\ []), do: saved_users_page(UserLike, user, opts)
+
+  # `opts`: `:search` (matches first/last name, @handle and headline,
+  # case-insensitive), `:sort` (`:recent` default newest-saved-first | `:oldest`
+  # | `:name` alphabetical), `:limit` (default 20) and `:offset`. Saves of a
+  # member now blocked (either direction) or hidden by moderation are filtered
+  # out, the same gate the connections/followers lists apply. Offset paginated
+  # (any sort + a text filter, the cursor would have to encode every order) and
+  # returns `%{entries: [%User{}], more?:, next_offset:}` — pass `:offset` back
+  # for the next page.
+  defp saved_users_page(schema, %User{id: user_id}, opts) do
+    limit = Keyword.get(opts, :limit, 20)
+    offset = Keyword.get(opts, :offset, 0)
+    sort = Keyword.get(opts, :sort, :recent)
+    search = opts |> Keyword.get(:search) |> normalize_search()
+
+    rows =
+      from(e in schema,
+        join: t in User,
+        as: :target,
+        on: t.id == e.target_user_id,
+        where: e.user_id == ^user_id,
+        where:
+          (is_nil(t.email_confirmed?) or t.email_confirmed? == true) and not account_hidden(t.id),
+        where:
+          not exists(
+            from(b in Block,
+              where:
+                (b.blocker_id == ^user_id and b.blocked_id == parent_as(:target).id) or
+                  (b.blocker_id == parent_as(:target).id and b.blocked_id == ^user_id)
+            )
+          ),
+        select: t
+      )
+      |> filter_saved_search(search)
+      |> order_saved(sort)
+      |> limit(^(limit + 1))
+      |> offset(^offset)
+      |> Repo.all()
+
+    %{entries: Enum.take(rows, limit), more?: length(rows) > limit, next_offset: offset + limit}
+  end
+
+  defp normalize_search(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      term -> term
+    end
+  end
+
+  defp normalize_search(_), do: nil
+
+  defp filter_saved_search(query, nil), do: query
+
+  defp filter_saved_search(query, term) do
+    pattern = "%" <> escape_like(term) <> "%"
+
+    from([target: t] in query,
+      where:
+        ilike(t.first_name, ^pattern) or ilike(t.last_name, ^pattern) or
+          ilike(t.active_slug, ^pattern) or ilike(t.headline, ^pattern) or
+          ilike(fragment("? || ' ' || ?", t.first_name, t.last_name), ^pattern)
+    )
+  end
+
+  defp escape_like(term), do: String.replace(term, ~r/([\\%_])/, "\\\\\\1")
+
+  defp order_saved(query, :oldest), do: order_by(query, [e], asc: e.inserted_at, asc: e.id)
+
+  defp order_saved(query, :name),
+    do: order_by(query, [target: t], asc: t.first_name, asc: t.last_name, asc: t.id)
+
+  defp order_saved(query, _recent), do: order_by(query, [e], desc: e.inserted_at, desc: e.id)
 
   defp quiet_follow(follower_id, followee_id) do
     unless user_follows_user?(follower_id, followee_id) do

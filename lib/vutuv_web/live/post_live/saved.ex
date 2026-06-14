@@ -1,21 +1,31 @@
 defmodule VutuvWeb.PostLive.Saved do
   @moduledoc """
-  The private "my likes" / "my bookmarks" pages (`/likes`, `/bookmarks`):
-  one LiveView, two live actions, tab links patching between them. Lists
-  the posts the current user liked or bookmarked, newest engagement first,
-  visibility-filtered at read time, with the feed's cursor "Load more".
+  The private saved-items hub: `/likes` and `/bookmarks`. Two top-level tabs
+  (the live actions `:likes` / `:bookmarks`), each with a **Posts / People**
+  sub-tab (`?tab=people`), a **search** box (`?q=`) and a **sort** control
+  (`?sort=recent|oldest|name`). All three ride in the URL via `push_patch`, so a
+  filtered list stays shareable and reloadable.
 
-  Un-liking / un-bookmarking — from the card's action bar here, or from any
-  other session — removes the card live: the actor's own activity topic
-  carries `{:engagement_changed, …}` for exactly this (likewise a new like
-  in another tab prepends here).
+  Saved **posts** and saved **people** are both shown (issue #792): a member can
+  like / bookmark another member from any profile, no follow or connection
+  required, and they surface here beside the saved posts.
+
+  Un-saving removes the row live: a post drops on `{:engagement_changed, …}`
+  (every shown card subscribes to its own post topic; a liker/bookmarker rarely
+  follows the author, so the feed broadcast does not reach them), and a person
+  drops on the People tab's own Remove control or on `{:user_engagement_changed,
+  …}` from another session — both on the actor's activity topic.
   """
 
   use VutuvWeb, :live_view
 
   import VutuvWeb.PostComponents
+  import VutuvWeb.UserHelpers, only: [full_name: 1]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Posts
+  alias Vutuv.Repo
+  alias Vutuv.Social
 
   @page_size 20
 
@@ -24,59 +34,122 @@ defmodule VutuvWeb.PostLive.Saved do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Vutuv.Activity.subscribe(socket.assigns.current_user.id)
-    {:ok, socket}
+    {:ok, socket |> stream(:posts, []) |> stream(:people, [])}
   end
 
   @impl true
-  def handle_params(_params, _uri, socket) do
-    page = load_page(socket, nil)
-    if connected?(socket), do: subscribe_posts(page.entries)
+  def handle_params(params, _uri, socket) do
+    socket =
+      socket
+      |> assign(:type, parse_type(params["tab"]))
+      |> assign(:q, params["q"] || "")
+      |> assign(:sort, parse_sort(params["sort"]))
+
+    {stream_name, page} = load_page(socket, 0)
+    if connected?(socket) and stream_name == :posts, do: subscribe_posts(page.entries)
 
     {:noreply,
      socket
      |> assign(:page_title, title(socket.assigns.live_action))
      |> assign(:more?, page.more?)
-     |> assign(:cursor, page.next_cursor)
-     |> stream(:posts, page.entries, reset: true)}
+     |> assign(:offset, page.next_offset)
+     |> stream(stream_name, page.entries, reset: true)}
   end
 
-  # Unlike the feed (which hears about deletions on the viewer's own topic, as a
-  # follower of the author), a liker/bookmarker usually does not follow the
-  # author, so the only signal that reaches is each shown post's topic.
-  defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
-
-  defp load_page(socket, cursor) do
+  defp load_page(socket, offset) do
     user = socket.assigns.current_user
-    opts = [limit: @page_size, cursor: cursor]
 
-    case socket.assigns.live_action do
-      :likes -> Posts.liked_posts_page(user, opts)
-      :bookmarks -> Posts.bookmarked_posts_page(user, opts)
+    opts = [
+      limit: @page_size,
+      offset: offset,
+      search: socket.assigns.q,
+      sort: socket.assigns.sort
+    ]
+
+    case {socket.assigns.live_action, socket.assigns.type} do
+      {:likes, :posts} -> {:posts, Posts.liked_posts_page(user, opts)}
+      {:bookmarks, :posts} -> {:posts, Posts.bookmarked_posts_page(user, opts)}
+      {:likes, :people} -> {:people, Social.liked_users_page(user, opts)}
+      {:bookmarks, :people} -> {:people, Social.bookmarked_users_page(user, opts)}
     end
   end
+
+  defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
+
+  defp parse_type("people"), do: :people
+  defp parse_type(_), do: :posts
+
+  defp parse_sort("oldest"), do: :oldest
+  defp parse_sort("name"), do: :name
+  defp parse_sort(_), do: :recent
 
   defp title(:likes), do: gettext("Likes")
   defp title(:bookmarks), do: gettext("Bookmarks")
 
+  defp tab_kind(:likes), do: :like
+  defp tab_kind(:bookmarks), do: :bookmark
+
+  # ── Events ──
+
   @impl true
   def handle_event("load-more", _params, socket) do
-    page = load_page(socket, socket.assigns.cursor)
-    subscribe_posts(page.entries)
+    {stream_name, page} = load_page(socket, socket.assigns.offset)
+    if stream_name == :posts, do: subscribe_posts(page.entries)
 
     {:noreply,
      socket
      |> assign(:more?, page.more?)
-     |> assign(:cursor, page.next_cursor)
-     |> stream(:posts, page.entries, at: -1)}
+     |> assign(:offset, page.next_offset)
+     |> stream(stream_name, page.entries, at: -1)}
   end
+
+  # The search box and the sort select share one form; either change patches the
+  # URL (so the filter is shareable and handle_params does the actual reload).
+  def handle_event("filter", params, socket) do
+    to =
+      saved_path(
+        socket.assigns.live_action,
+        socket.assigns.type,
+        params["q"] || "",
+        params["sort"]
+      )
+
+    {:noreply, push_patch(socket, to: to)}
+  end
+
+  # The People tab's inline Remove: un-save right here and drop the row. The
+  # context scopes the delete to (me, target), so a bogus id is a harmless no-op.
+  def handle_event("unsave-person", %{"id" => id}, socket) do
+    target = %User{id: id}
+
+    case socket.assigns.live_action do
+      :likes -> Social.unlike_user(socket.assigns.current_user, target)
+      :bookmarks -> Social.unbookmark_user(socket.assigns.current_user, target)
+    end
+
+    {:noreply, stream_delete_by_dom_id(socket, :people, "people-#{id}")}
+  end
+
+  # ── Live sync ──
 
   @impl true
   def handle_info(
         {:engagement_changed, %{kind: kind, post_id: post_id, active?: active?}},
         socket
       ) do
-    if kind == tab_kind(socket.assigns.live_action) do
-      {:noreply, apply_change(socket, post_id, active?)}
+    if socket.assigns.type == :posts and kind == tab_kind(socket.assigns.live_action) do
+      {:noreply, apply_post_change(socket, post_id, active?)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        {:user_engagement_changed, %{kind: kind, target_user_id: target_id, active?: active?}},
+        socket
+      ) do
+    if socket.assigns.type == :people and kind == tab_kind(socket.assigns.live_action) do
+      {:noreply, apply_person_change(socket, target_id, active?)}
     else
       {:noreply, socket}
     end
@@ -90,14 +163,11 @@ defmodule VutuvWeb.PostLive.Saved do
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  defp tab_kind(:likes), do: :like
-  defp tab_kind(:bookmarks), do: :bookmark
-
-  defp apply_change(socket, post_id, false) do
+  defp apply_post_change(socket, post_id, false) do
     stream_delete_by_dom_id(socket, :posts, "posts-#{post_id}")
   end
 
-  defp apply_change(socket, post_id, true) do
+  defp apply_post_change(socket, post_id, true) do
     case Posts.get_post(post_id) do
       nil ->
         socket
@@ -108,6 +178,55 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  defp apply_person_change(socket, target_id, false) do
+    stream_delete_by_dom_id(socket, :people, "people-#{target_id}")
+  end
+
+  defp apply_person_change(socket, target_id, true) do
+    # Only prepend on the default, unfiltered recent view, where a fresh save
+    # belongs at the top; under a search or a non-recency sort the right
+    # position is ambiguous, so leave it for the next reload.
+    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+      case Repo.get(User, target_id) do
+        %User{} = user -> stream_insert(socket, :people, user, at: 0)
+        nil -> socket
+      end
+    else
+      socket
+    end
+  end
+
+  # ── Path / labels ──
+
+  # The current page's URL with the non-default filters as query params, so tab
+  # links and the filter form keep search + sort in sync.
+  defp saved_path(action, type, q, sort) do
+    query =
+      []
+      |> put_param(:tab, type == :people && "people")
+      |> put_param(:q, q != "" && q)
+      |> put_param(:sort, sort not in [nil, "", "recent"] && to_string(sort))
+
+    case action do
+      :likes -> ~p"/likes?#{query}"
+      :bookmarks -> ~p"/bookmarks?#{query}"
+    end
+  end
+
+  defp put_param(list, _key, false), do: list
+  defp put_param(list, _key, nil), do: list
+  defp put_param(list, key, value), do: list ++ [{key, value}]
+
+  defp sort_options do
+    [
+      {gettext("Newest first"), "recent"},
+      {gettext("Oldest first"), "oldest"},
+      {gettext("Name (A-Z)"), "name"}
+    ]
+  end
+
+  # ── Render ──
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -117,23 +236,65 @@ defmodule VutuvWeb.PostLive.Saved do
           {title(@live_action)}
         </h1>
 
-        <nav class="flex gap-1 text-sm font-semibold" aria-label={gettext("Saved posts")}>
-          <.tab patch={~p"/likes"} active?={@live_action == :likes} id="tab-likes">
+        <nav class="flex gap-1 text-sm font-semibold" aria-label={gettext("Saved items")}>
+          <.tab patch={saved_path(:likes, @type, @q, @sort)} active?={@live_action == :likes} id="tab-likes">
             {gettext("Likes")}
           </.tab>
-          <.tab patch={~p"/bookmarks"} active?={@live_action == :bookmarks} id="tab-bookmarks">
+          <.tab patch={saved_path(:bookmarks, @type, @q, @sort)} active?={@live_action == :bookmarks} id="tab-bookmarks">
             {gettext("Bookmarks")}
           </.tab>
         </nav>
 
-        <div id="saved-posts" phx-update="stream" class="space-y-4">
-          <p class="hidden text-slate-600 dark:text-slate-400 only:block" id="saved-empty">
-            {empty_text(@live_action)}
-          </p>
-          <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>
-            <.post_card post={post} viewer={@current_user} mode={:preview} conn_or_socket={@socket} />
+        <%!-- Posts / People sub-tabs: each keeps the active search + sort. --%>
+        <nav class="flex gap-4 border-b border-slate-200 text-sm font-semibold dark:border-slate-800" aria-label={gettext("Saved type")}>
+          <.subtab patch={saved_path(@live_action, :posts, @q, @sort)} active?={@type == :posts} id="subtab-posts">
+            {gettext("Posts")}
+          </.subtab>
+          <.subtab patch={saved_path(@live_action, :people, @q, @sort)} active?={@type == :people} id="subtab-people">
+            {gettext("People")}
+          </.subtab>
+        </nav>
+
+        <.form for={%{}} id="saved-filter" phx-change="filter" class="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <input
+            type="search"
+            name="q"
+            value={@q}
+            phx-debounce="300"
+            placeholder={gettext("Search saved items")}
+            aria-label={gettext("Search saved items")}
+            class={[input_class(), "sm:flex-1"]}
+          />
+          <select name="sort" aria-label={gettext("Sort")} class={[input_class(), "sm:w-auto"]}>
+            <option :for={{label, value} <- sort_options()} value={value} selected={to_string(@sort) == value}>
+              {label}
+            </option>
+          </select>
+        </.form>
+
+        <%= if @type == :posts do %>
+          <div id="saved-posts" phx-update="stream" class="space-y-4">
+            <p class="hidden text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
+              {posts_empty_text(@live_action, @q)}
+            </p>
+            <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>
+              <.post_card post={post} viewer={@current_user} mode={:preview} conn_or_socket={@socket} />
+            </div>
           </div>
-        </div>
+        <% else %>
+          <ul id="saved-people" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
+            <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-people-empty">
+              {people_empty_text(@live_action, @q)}
+            </li>
+            <.person_row
+              :for={{dom_id, person} <- @streams.people}
+              id={dom_id}
+              person={person}
+              kind={@live_action}
+              needle={@q}
+            />
+          </ul>
+        <% end %>
 
         <.load_more :if={@more?} />
       </div>
@@ -141,8 +302,20 @@ defmodule VutuvWeb.PostLive.Saved do
     """
   end
 
-  defp empty_text(:likes), do: gettext("Nothing here yet. Posts you like show up here.")
-  defp empty_text(:bookmarks), do: gettext("Nothing here yet. Posts you bookmark show up here.")
+  defp posts_empty_text(:likes, ""), do: gettext("Nothing here yet. Posts you like show up here.")
+
+  defp posts_empty_text(:bookmarks, ""),
+    do: gettext("Nothing here yet. Posts you bookmark show up here.")
+
+  defp posts_empty_text(_action, _q), do: gettext("No saved posts match your search.")
+
+  defp people_empty_text(:likes, ""),
+    do: gettext("Nothing here yet. People you like show up here.")
+
+  defp people_empty_text(:bookmarks, ""),
+    do: gettext("Nothing here yet. People you bookmark show up here.")
+
+  defp people_empty_text(_action, _q), do: gettext("No saved people match your search.")
 
   attr(:patch, :string, required: true)
   attr(:active?, :boolean, required: true)
@@ -166,4 +339,78 @@ defmodule VutuvWeb.PostLive.Saved do
     </.link>
     """
   end
+
+  attr(:patch, :string, required: true)
+  attr(:active?, :boolean, required: true)
+  attr(:id, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp subtab(assigns) do
+    ~H"""
+    <.link
+      patch={@patch}
+      id={@id}
+      aria-current={@active? && "page"}
+      class={[
+        "-mb-px border-b-2 px-1 py-2",
+        @active? && "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-200",
+        !@active? &&
+          "border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
+  # A saved member: avatar, name + @handle, headline, and the inline Remove
+  # toggle (filled bookmark / heart, matching the active tab) that un-saves and
+  # drops the row live.
+  attr(:id, :string, required: true)
+  attr(:person, User, required: true)
+  attr(:kind, :atom, required: true)
+  attr(:needle, :string, default: "")
+
+  defp person_row(assigns) do
+    ~H"""
+    <li id={@id} class="flex items-center gap-3 py-4">
+      <.link navigate={~p"/#{@person}"} class="shrink-0">
+        <.avatar user={@person} size="sm" alt={"Avatar of #{full_name(@person)}"} />
+      </.link>
+      <div class="min-w-0 flex-1 text-sm">
+        <.link navigate={~p"/#{@person}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">
+          {highlight(full_name(@person), @needle)}
+          <span class="font-normal text-slate-500 dark:text-slate-400">@{@person.active_slug}</span>
+        </.link>
+        <p :if={present_headline(@person)} class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">
+          {highlight(present_headline(@person), @needle)}
+        </p>
+      </div>
+      <button
+        type="button"
+        phx-click="unsave-person"
+        phx-value-id={@person.id}
+        title={remove_label(@kind)}
+        aria-label={remove_label(@kind)}
+        class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-brand-600 ring-1 ring-inset ring-brand-200 transition hover:bg-brand-50 dark:text-brand-300 dark:ring-brand-900/50 dark:hover:bg-brand-900/30"
+      >
+        <.icon_heart :if={@kind == :likes} filled?={true} class="h-5 w-5" />
+        <.icon_bookmark :if={@kind == :bookmarks} filled?={true} class="h-5 w-5" />
+      </button>
+    </li>
+    """
+  end
+
+  defp remove_label(:likes), do: gettext("Unlike")
+  defp remove_label(:bookmarks), do: gettext("Remove bookmark")
+
+  # Headlines are short Markdown; on this compact row show the plain text only.
+  defp present_headline(%User{headline: headline}) when is_binary(headline) do
+    case String.trim(headline) do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp present_headline(_), do: nil
 end

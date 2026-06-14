@@ -539,6 +539,89 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The profile header's **bookmark this member** toggle — the private, silent
+  save (no follow/connection, no notification; see `Vutuv.Social`). Owns the
+  `~p"/user_bookmarks…"` route shapes (POST to save, CSRF DELETE to remove,
+  branched on `saved?`). A square icon button matching the header controls; the
+  solid bookmark marks the saved state. Keep the logged-in / not-owner /
+  not-blocked guard on the `:if` at the call site.
+  """
+  attr(:saved?, :boolean, required: true)
+  attr(:target_id, :any, required: true)
+
+  def user_bookmark_button(%{saved?: true} = assigns) do
+    ~H"""
+    <%= button to: ~p"/user_bookmarks/#{@target_id}", method: :delete,
+          title: gettext("Remove bookmark"), aria: [label: gettext("Remove bookmark")],
+          class: save_toggle_class(:bookmark, true) do %>
+      <.icon_bookmark filled?={true} />
+    <% end %>
+    """
+  end
+
+  def user_bookmark_button(assigns) do
+    ~H"""
+    <%= button to: ~p"/user_bookmarks?#{[user_bookmark: %{target_user_id: @target_id}]}", method: :post,
+          title: gettext("Bookmark"), aria: [label: gettext("Bookmark")],
+          class: save_toggle_class(:bookmark, false) do %>
+      <.icon_bookmark filled?={false} />
+    <% end %>
+    """
+  end
+
+  @doc """
+  The profile header's **like this member** toggle — the counterpart to
+  `<.user_bookmark_button>`, owning the `~p"/user_likes…"` route shapes. Same
+  private, silent save; the solid heart marks the liked state. Guard at the
+  call site like the bookmark toggle.
+  """
+  attr(:saved?, :boolean, required: true)
+  attr(:target_id, :any, required: true)
+
+  def user_like_button(%{saved?: true} = assigns) do
+    ~H"""
+    <%= button to: ~p"/user_likes/#{@target_id}", method: :delete,
+          title: gettext("Unlike"), aria: [label: gettext("Unlike")],
+          class: save_toggle_class(:like, true) do %>
+      <.icon_heart filled?={true} />
+    <% end %>
+    """
+  end
+
+  def user_like_button(assigns) do
+    ~H"""
+    <%= button to: ~p"/user_likes?#{[user_like: %{target_user_id: @target_id}]}", method: :post,
+          title: gettext("Like"), aria: [label: gettext("Like")],
+          class: save_toggle_class(:like, false) do %>
+      <.icon_heart filled?={false} />
+    <% end %>
+    """
+  end
+
+  # Square icon-toggle styling for the two profile save controls, sized to sit
+  # beside the header's text buttons. The active fill keeps each control's own
+  # colour — coral for a like, brand for a bookmark — matching the post action
+  # bar; inactive is the calm secondary outline.
+  defp save_toggle_class(kind, active?) do
+    base =
+      "inline-flex h-9 w-9 items-center justify-center rounded-lg ring-1 ring-inset transition"
+
+    state =
+      cond do
+        active? and kind == :like ->
+          "text-accent bg-accent/10 ring-accent/30 hover:bg-accent/20"
+
+        active? ->
+          "text-brand-600 bg-brand-50 ring-brand-200 hover:bg-brand-100 dark:text-brand-300 dark:bg-brand-900/30 dark:ring-brand-900/50"
+
+        true ->
+          "text-slate-500 ring-slate-200 hover:bg-slate-50 hover:text-slate-700 dark:text-slate-400 dark:ring-slate-700 dark:hover:bg-slate-800"
+      end
+
+    [base, state] |> Enum.join(" ")
+  end
+
+  @doc """
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)
   or a raw `src`. Sizes `xs|sm|md|lg`; `shape` `circle` (default) or `square`.
   """
@@ -1162,6 +1245,32 @@ defmodule VutuvWeb.UI do
         stroke-linecap="round"
         stroke-linejoin="round"
         d="M17.593 3.322c.1.128.157.288.157.456v16.444a.75.75 0 0 1-1.218.585L12 17.21l-4.532 3.597A.75.75 0 0 1 6.25 20.222V3.778c0-.168.057-.328.157-.456A2.25 2.25 0 0 1 8.25 2.5h7.5a2.25 2.25 0 0 1 1.843.822Z"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
+  The outline heart icon (24×24 stroke), shared by the post action bar's Like
+  toggle and the profile's "like this member" toggle; `filled?` switches to the
+  solid fill. Size it via `class`.
+  """
+  attr(:class, :any, default: "h-5 w-5")
+  attr(:filled?, :boolean, default: false)
+
+  def icon_heart(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      fill={if(@filled?, do: "currentColor", else: "none")}
+      stroke="currentColor"
+      stroke-width="1.8"
+      viewBox="0 0 24 24"
+    >
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12Z"
       />
     </svg>
     """

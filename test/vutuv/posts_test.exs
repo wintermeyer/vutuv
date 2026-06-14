@@ -509,7 +509,7 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "liked and bookmarked posts pages" do
-    test "lists liked posts newest-liked-first with cursor pagination" do
+    test "lists liked posts newest-liked-first with offset pagination" do
       reader = user()
       posts = for n <- 1..3, do: create_post!(user(), %{body: "post #{n}"})
 
@@ -528,9 +528,31 @@ defmodule Vutuv.PostsTest do
       assert page1.more?
       assert Enum.map(page1.entries, & &1.body) == ["post 3", "post 2"]
 
-      page2 = Posts.liked_posts_page(reader, limit: 2, cursor: page1.next_cursor)
+      page2 = Posts.liked_posts_page(reader, limit: 2, offset: page1.next_offset)
       refute page2.more?
       assert Enum.map(page2.entries, & &1.body) == ["post 1"]
+    end
+
+    test "the saved posts list filters by search and sorts oldest-first" do
+      reader = user()
+      alice = user(first_name: "Alice")
+      first = create_post!(alice, %{body: "elixir tips"})
+      second = create_post!(user(), %{body: "ruby tips"})
+      :ok = Posts.bookmark_post(reader, first)
+      :ok = Posts.bookmark_post(reader, second)
+
+      # Match on the post body...
+      assert [%Post{} = p] = Posts.bookmarked_posts_page(reader, search: "elixir").entries
+      assert p.id == first.id
+      # ...and on the author name.
+      assert [%Post{} = p2] = Posts.bookmarked_posts_page(reader, search: "alice").entries
+      assert p2.id == first.id
+
+      # Oldest-first returns the earliest-saved post first.
+      assert [%Post{id: oldest_id} | _] =
+               Posts.bookmarked_posts_page(reader, sort: :oldest).entries
+
+      assert oldest_id == first.id
     end
 
     test "hides liked posts that are no longer visible to the user" do
