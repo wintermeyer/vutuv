@@ -27,6 +27,35 @@ too. So this page stays short and unambiguous. --%>
       </ul>
     </.card>
 
+    <%!-- Signed-in devices: where this account is logged in, each revocable
+          remotely (issue #794). The current device is marked and has no logout
+          (you sign it out via the normal logout); every other device has one,
+          plus a "log out all other devices" sweep. Sits in the account area
+          next to sign-in & identity, the security-sensitive cluster members
+          already associate with their credentials. --%>
+    <.card>
+      <.section_title>{gettext("Signed-in devices")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <%= for session <- @sessions do %>
+          <.device_row
+            session={session}
+            current?={session.id == @current_session_id}
+            user={@user}
+          />
+        <% end %>
+      </ul>
+      <div :if={Enum.any?(@sessions, &(&1.id != @current_session_id))} class="mt-4">
+        <.link
+          href={~p"/#{@user}/settings/devices"}
+          method="delete"
+          data-confirm={gettext("Log out of every device except this one?")}
+          class="inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {gettext("Log out all other devices")}
+        </.link>
+      </div>
+    </.card>
+
     <%!-- Interface language: the user's own UI-language preference (it overrides
           Accept-Language for the whole site), not public profile content, so it
           lives here and not under the profile editor's "About you". Its own small

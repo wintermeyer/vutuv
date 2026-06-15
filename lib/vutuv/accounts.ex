@@ -172,13 +172,21 @@ defmodule Vutuv.Accounts do
   def login(conn, user) do
     user = activate_user(user)
 
+    # Mint a server-side session row so this device can be listed and revoked
+    # remotely (issue #794) and a noteworthy login can be emailed about (issue
+    # #786). The raw token rides in the cookie; only its hash is stored.
+    {token, session} = Vutuv.Sessions.start_session(user, conn)
+
     conn
     |> Conn.assign(:current_user, user)
     |> Conn.put_session(:user_id, user.id)
-    # The LiveView socket subscribes to this topic on connect; logout (and
-    # the stale-session sweep in ConfigureSession) broadcasts "disconnect"
-    # on it so live views never outlive the session that mounted them.
-    |> Conn.put_session(:live_socket_id, "users_socket:#{user.id}")
+    |> Conn.put_session(:session_token, token)
+    # Each session gets its OWN live-socket topic (not the shared per-user one),
+    # so revoking a single device disconnects only its sockets. The LiveView
+    # socket subscribes to this topic on connect; logout, remote revocation and
+    # the stale-session sweep broadcast "disconnect" on it so live views never
+    # outlive the session that mounted them.
+    |> Conn.put_session(:live_socket_id, Vutuv.Sessions.socket_id(session))
     |> Conn.configure_session(renew: true)
   end
 
@@ -284,16 +292,32 @@ defmodule Vutuv.Accounts do
   end
 
   def logout(conn) do
-    # Kill this session's live sockets (the embedded shell, /messages,
-    # /notifications): the client reloads, re-mounts through the dropped
-    # session and renders the anonymous chrome.
-    if live_socket_id = Conn.get_session(conn, :live_socket_id) do
-      VutuvWeb.Endpoint.broadcast(live_socket_id, "disconnect", %{})
+    # Revoke this device's server-side session row so it drops out of the
+    # owner's signed-in-devices list (issue #794); revoke/1 also kills its live
+    # sockets (the embedded shell, /messages, /notifications), so the client
+    # reloads, re-mounts through the dropped session and renders the anonymous
+    # chrome. Fall back to the raw live_socket_id for a legacy cookie that has
+    # no session token yet.
+    case Conn.get_session(conn, :session_token) do
+      token when is_binary(token) ->
+        case Vutuv.Sessions.active_session(token) do
+          %Vutuv.Sessions.UserSession{} = session -> Vutuv.Sessions.revoke(session)
+          nil -> disconnect_legacy(conn)
+        end
+
+      _ ->
+        disconnect_legacy(conn)
     end
 
     conn
     |> Conn.configure_session(drop: true)
     |> Conn.delete_session(:user_id)
+  end
+
+  defp disconnect_legacy(conn) do
+    if live_socket_id = Conn.get_session(conn, :live_socket_id) do
+      Vutuv.Sessions.disconnect(live_socket_id)
+    end
   end
 
   # A genuine first confirmation (email_confirmed? false -> true) is when a sign-up
@@ -503,6 +527,11 @@ defmodule Vutuv.Accounts do
           select: c.id
         )
       )
+
+    # Kill every device's live sockets before the cascade removes the session
+    # rows (after which their per-session topics are unknowable), so open tabs
+    # drop the logged-in chrome at once instead of on their next reload.
+    Vutuv.Sessions.disconnect_user(user.id)
 
     {:ok, _} =
       Repo.transaction(fn ->

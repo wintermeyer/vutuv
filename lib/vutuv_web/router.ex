@@ -509,6 +509,10 @@ defmodule VutuvWeb.Router do
       # only needs a write target, not its own page.
       put("/settings/language", SettingsController, :update_language)
       patch("/settings/language", SettingsController, :update_language)
+      # Signed-in devices: the list lives on the account hub (GET /settings).
+      # DELETE one device by id, or all-but-this-one (issue #794).
+      delete("/settings/devices/:id", SettingsController, :revoke_session)
+      delete("/settings/devices", SettingsController, :revoke_other_sessions)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])

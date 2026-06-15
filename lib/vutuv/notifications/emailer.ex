@@ -270,6 +270,60 @@ defmodule Vutuv.Notifications.Emailer do
     |> header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
   end
 
+  ## Login security (see Vutuv.Sessions.start_session/3, the only caller)
+
+  @doc """
+  Alerts the account owner that their account was just signed into in a way
+  worth a second look — a new device/browser or a login from an unfamiliar
+  location (issue #786). Carries the device, approximate location, source IP
+  and time so the owner can recognize (or not) the login, and deep-links to
+  their signed-in-devices page so a "this wasn't me" is one click away (issue
+  #794). Transactional security mail, so it carries no unsubscribe and is built
+  with `build_email` (subject to bounce suppression, never user-initiated).
+  """
+  def security_alert_email(%Vutuv.Accounts.User{} = user, email, session, reasons) do
+    locale = get_locale(user.locale)
+
+    assigns = %{
+      device: Vutuv.Sessions.device_summary(session.user_agent),
+      location: session.approx_location,
+      ip: session.ip_address,
+      when_text: format_login_time(session.inserted_at),
+      reason_lines: security_reason_lines(reasons, locale),
+      devices_url: "#{public_url()}#{user.active_slug}/settings"
+    }
+
+    build_email(user, email, "security_alert", assigns, fn ->
+      gettext("New sign-in to your vutuv account")
+    end)
+  end
+
+  # The login time as plain UTC ("2026-06-15 05:41 UTC"). The server runs UTC and
+  # we do not know the recipient's timezone, so stating the zone is honest.
+  # strftime accepts both the naive (timestamps) and aware structs.
+  defp format_login_time(at) when is_struct(at, NaiveDateTime) or is_struct(at, DateTime),
+    do: Calendar.strftime(at, "%Y-%m-%d %H:%M UTC")
+
+  defp format_login_time(_), do: nil
+
+  # The reasons, rendered in the recipient's language (the body template is
+  # per-language, but the reason atoms are shared, so they are localized here
+  # the same way the subject is).
+  defp security_reason_lines(reasons, locale) do
+    Gettext.with_locale(VutuvWeb.Gettext, locale, fn ->
+      Enum.map(reasons, &security_reason_text/1)
+    end)
+  end
+
+  defp security_reason_text(:new_device),
+    do: gettext("This is the first sign-in we have seen from this device or browser.")
+
+  defp security_reason_text(:concurrent),
+    do: gettext("Another session was already active on your account.")
+
+  defp security_reason_text(:suspicious_location),
+    do: gettext("The location looks different from where you usually sign in.")
+
   ## Ad bookings (see Vutuv.Ads.book_ad/2, the only caller)
 
   @ad_booking_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}

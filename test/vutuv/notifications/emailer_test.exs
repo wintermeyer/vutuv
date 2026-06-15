@@ -125,6 +125,24 @@ defmodule Vutuv.Notifications.EmailerTest do
       assert email.text_body =~ "@the-sender"
       refute email.text_body =~ other.first_name
     end
+
+    test "security alert email (issue #786)" do
+      user = insert(:user, locale: "en", active_slug: "alice")
+
+      {_token, session} =
+        Vutuv.Sessions.start_session(user, Plug.Test.conn(:get, "/"), alert: false)
+
+      email =
+        Emailer.security_alert_email(user, "alice@example.com", session, [:new_device])
+
+      assert_robot_headers(email)
+      assert email.subject =~ "New sign-in"
+      # It deep-links to the owner's signed-in-devices page (issue #794).
+      assert email.text_body =~ "/alice/settings"
+      # Transactional security mail carries no unsubscribe (it cannot be opted
+      # out of), unlike the activity notifications below.
+      refute Map.has_key?(email.headers, "List-Unsubscribe")
+    end
   end
 
   describe "notification mail carries the one-click unsubscribe (RFC 8058)" do

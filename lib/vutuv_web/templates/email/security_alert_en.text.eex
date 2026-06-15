@@ -1,0 +1,19 @@
+<%= email_greeting(@user) %>,
+
+your vutuv account was just signed in to. If this was you, you can ignore this email.
+
+When:     <%= @when_text %>
+Device:   <%= @device %>
+<%= if @location do %>Location: <%= @location %>
+<% end %><%= if @ip do %>IP:       <%= @ip %>
+<% end %>
+Why we are telling you:
+<%= for line <- @reason_lines do %>- <%= line %>
+<% end %>
+If this wasn't you, review the devices signed in to your account and log out the ones you don't recognize:
+
+<%= @devices_url %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

@@ -22,6 +22,7 @@ defmodule VutuvWeb.SettingsController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Sessions
 
   # The account hub also carries the interface-language form, so it needs a
   # changeset like the other settings pages. Each page sets its own :page_title
@@ -33,6 +34,8 @@ defmodule VutuvWeb.SettingsController do
     render(conn, "index.html",
       user: user,
       changeset: User.changeset(user),
+      sessions: Sessions.list_active(user),
+      current_session_id: conn.assigns[:current_session_id],
       page_title: gettext("Account settings")
     )
   end
@@ -99,6 +102,35 @@ defmodule VutuvWeb.SettingsController do
       ~p"/#{user}/settings",
       gettext("Language updated.")
     )
+  end
+
+  # ── Signed-in devices (issue #794) ──
+
+  # Log out one device. Only the owner's own sessions are reachable
+  # (Sessions.get_session/2 scopes by user), and an unknown/foreign id is a
+  # quiet no-op redirect rather than an error.
+  def revoke_session(conn, %{"id" => id}) do
+    user = conn.assigns[:user]
+
+    case Sessions.get_session(user, id) do
+      nil -> nil
+      session -> Sessions.revoke(session)
+    end
+
+    conn
+    |> put_flash(:info, gettext("That device has been logged out."))
+    |> redirect(to: ~p"/#{user}/settings")
+  end
+
+  # Log out every other device, keeping the current one (so the member is not
+  # logged out of the very page they clicked from).
+  def revoke_other_sessions(conn, _params) do
+    user = conn.assigns[:user]
+    Sessions.revoke_all_except(user, conn.assigns[:current_session_id])
+
+    conn
+    |> put_flash(:info, gettext("All other devices have been logged out."))
+    |> redirect(to: ~p"/#{user}/settings")
   end
 
   # The settings sub-forms each submit only their own fields; Accounts.update_user/2

@@ -90,6 +90,12 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Online-Status"
       refute body =~ "Verweildauer"
 
+      # Recording session device/IP/location for the signed-in-devices feature
+      # and the new-device security email is a data-protection change that must
+      # be disclosed (issues #794 / #786).
+      assert body =~ "Angemeldete Geräte"
+      assert body =~ "User-Agent"
+
       # The old generic shop/e-commerce boilerplate is gone for good: vutuv has
       # no shopping cart, ships no goods and runs no third-party transport.
       refute body =~ "Warenkorb"

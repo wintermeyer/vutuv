@@ -1,0 +1,19 @@
+<%= email_greeting(@user) %>,
+
+soeben hat sich jemand in Ihr vutuv-Konto eingeloggt. Waren das Sie, können Sie diese E-Mail ignorieren.
+
+Wann:    <%= @when_text %>
+Gerät:   <%= @device %>
+<%= if @location do %>Ort:     <%= @location %>
+<% end %><%= if @ip do %>IP:      <%= @ip %>
+<% end %>
+Warum wir Ihnen schreiben:
+<%= for line <- @reason_lines do %>- <%= line %>
+<% end %>
+Waren Sie das nicht, prüfen Sie die in Ihrem Konto angemeldeten Geräte und melden Sie die ab, die Sie nicht kennen:
+
+<%= @devices_url %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

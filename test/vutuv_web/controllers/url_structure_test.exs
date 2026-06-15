@@ -73,14 +73,16 @@ defmodule VutuvWeb.UrlStructureTest do
       refute get_session(conn, :user_id)
     end
 
-    test "login stamps a live_socket_id and logout disconnects those sockets", %{conn: conn} do
+    test "login stamps a per-session live_socket_id and logout disconnects it", %{conn: conn} do
       # Without the disconnect broadcast, the embedded shell and any open
       # live page keep the logged-in chrome and the user's PubSub events
-      # until the tab happens to reload.
-      {conn, user} = create_and_login_user(conn)
-      assert get_session(conn, :live_socket_id) == "users_socket:#{user.id}"
+      # until the tab happens to reload. The topic is now per session (issue
+      # #794), so revoking one device never disconnects the others.
+      {conn, _user} = create_and_login_user(conn)
+      live_socket_id = get_session(conn, :live_socket_id)
+      assert live_socket_id =~ ~r/^users_socket:[0-9a-f-]{36}$/
 
-      VutuvWeb.Endpoint.subscribe("users_socket:#{user.id}")
+      VutuvWeb.Endpoint.subscribe(live_socket_id)
       delete(conn, "/logout")
 
       assert_receive %Phoenix.Socket.Broadcast{event: "disconnect"}
