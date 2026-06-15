@@ -9,6 +9,9 @@ defmodule VutuvWeb.Admin.AdController do
 
   use VutuvWeb, :controller
 
+  # Nothing to review while the ad system is switched off.
+  plug(VutuvWeb.Plug.RequireAdsEnabled)
+
   alias Vutuv.Ads
   alias VutuvWeb.ControllerHelpers
 

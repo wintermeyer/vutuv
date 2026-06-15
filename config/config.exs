@@ -40,6 +40,12 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# The global on/off switch for the daily text-ad system (see Vutuv.Ads).
+# Off for now: no banner serves, the public /ads flow and the admin review
+# dashboard 404. "ads" stays a reserved username slug either way, so the
+# handle is kept free for when the system is switched back on.
+config :vutuv, :ads_enabled, false
+
 # The site-wide AI-crawler stance (see VutuvWeb.ContentPolicy): :permissive
 # welcomes search, live AI input AND model training; :block_training keeps
 # retrieval but declares ai-train=no and blocks the training crawlers in

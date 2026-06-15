@@ -8,6 +8,9 @@ config :vutuv, :serve_uploads_locally, true
 # under async tests) and make a live HTTP request / launch headless Chromium.
 config :vutuv, :generate_screenshots, false
 config :vutuv, :fetch_gravatar, false
+# Ads ship disabled (config/config.exs); the test suite exercises the full ad
+# flow, so it runs with the system on. ads_disabled_test.exs flips it off.
+config :vutuv, :ads_enabled, true
 config :vutuv, :sweep_pending_images, false
 config :vutuv, :sweep_unconfirmed_registrations, false
 config :vutuv, :send_unread_message_emails, false

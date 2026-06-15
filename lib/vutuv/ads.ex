@@ -40,6 +40,17 @@ defmodule Vutuv.Ads do
 
   def price_cents, do: @price_cents
 
+  @doc """
+  Whether the daily text-ad system is switched on, from
+  `config :vutuv, :ads_enabled` (default **off**). The single gate the rest
+  of the app asks: when off, no banner serves (`VutuvWeb.Plug.AdBanner`), the
+  public `/ads` flow and the admin review dashboard answer 404
+  (`VutuvWeb.Plug.RequireAdsEnabled`), and nothing can be booked. `"ads"`
+  stays a reserved slug regardless (see `Vutuv.Accounts.ReservedSlugs`), so
+  the handle stays free for when the system is turned back on.
+  """
+  def enabled?, do: Application.get_env(:vutuv, :ads_enabled, false)
+
   @doc "The earliest day a new booking may pick (today + #{@approval_lead_days}, Berlin)."
   def first_bookable_day, do: Date.add(today(), @approval_lead_days)
 

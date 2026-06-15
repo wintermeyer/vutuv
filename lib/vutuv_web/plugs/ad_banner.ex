@@ -4,6 +4,10 @@ defmodule VutuvWeb.Plug.AdBanner do
   navigation and the content, see `Vutuv.Ads`) and enforces the frequency
   cap: at most one sighting per hour per session.
 
+  The whole banner is gated by the global `:ads_enabled` switch
+  (`Vutuv.Ads.enabled?/0`): with the ad system off nothing is ever assigned,
+  so no banner serves anywhere.
+
   The cap counts **sightings, not attempts**: the plug only assigns
   `:ad_banner` here, and the `before_send` hook marks the hour as used only
   when the rendered page actually contains the banner (the `id="vutuv-ad"`
@@ -38,8 +42,9 @@ defmodule VutuvWeb.Plug.AdBanner do
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
     conn = fetch_cookies(conn)
 
-    if agent_format?(conn) or landing_page?(conn) or booking_pages?(conn) or
-         account_pages?(conn) or dismissed_today?(conn) or recently_seen?(conn) do
+    if not Vutuv.Ads.enabled?() or agent_format?(conn) or landing_page?(conn) or
+         booking_pages?(conn) or account_pages?(conn) or dismissed_today?(conn) or
+         recently_seen?(conn) do
       conn
     else
       conn

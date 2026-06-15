@@ -1,6 +1,8 @@
 defmodule VutuvWeb.AdController do
   use VutuvWeb, :controller
 
+  # The whole public ad flow is dark while the system is switched off.
+  plug(VutuvWeb.Plug.RequireAdsEnabled)
   plug(VutuvWeb.Plug.RequireLogin when action in [:new, :preview, :create, :bookings])
 
   alias Vutuv.Ads

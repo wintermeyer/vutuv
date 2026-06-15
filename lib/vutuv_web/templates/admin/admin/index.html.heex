@@ -28,7 +28,7 @@
     </p>
   </section>
 
-  <section class="card">
+  <section :if={@ads_enabled} class="card">
     <div class="flex items-center justify-between gap-4">
       <h1 class="flex items-center gap-2">
         {gettext("Ads")}
