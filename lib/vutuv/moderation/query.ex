@@ -51,4 +51,19 @@ defmodule Vutuv.Moderation.Query do
       )
     end
   end
+
+  @doc """
+  True when the account row `u` is **confirmed**: its `email_confirmed?` flag is
+  set, or `NULL` for the legacy members who predate the flag (they count as
+  confirmed). The visibility companion to `account_hidden_row/1` — a member is
+  listed publicly when `account_confirmed_row(u) and not account_hidden_row(u)`.
+  Use it on an already-in-scope users row `u` (a join or the main binding); the
+  one spelling of the confirmed-or-legacy-NULL gate that was hand-written at
+  every people-listing query.
+  """
+  defmacro account_confirmed_row(u) do
+    quote do
+      is_nil(unquote(u).email_confirmed?) or unquote(u).email_confirmed? == true
+    end
+  end
 end

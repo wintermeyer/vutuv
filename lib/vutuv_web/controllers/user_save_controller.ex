@@ -9,7 +9,6 @@ defmodule VutuvWeb.UserSaveController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Repo
   alias Vutuv.Social
 
   plug(VutuvWeb.Plug.RequireLoginOr404)
@@ -37,7 +36,7 @@ defmodule VutuvWeb.UserSaveController do
   # or of yourself is refused by the context with an opaque error. Both legs
   # land back on the target's profile, where the toggle lives.
   defp save(conn, target_id, fun, ok_msg) do
-    with %User{} = target <- fetch_target(target_id),
+    with %User{} = target <- VutuvWeb.ControllerHelpers.get_user(target_id),
          :ok <- fun.(conn.assigns.current_user, target) do
       conn |> put_flash(:info, ok_msg) |> redirect(to: ~p"/#{target}")
     else
@@ -49,21 +48,13 @@ defmodule VutuvWeb.UserSaveController do
   end
 
   defp unsave(conn, target_id, fun, ok_msg) do
-    case fetch_target(target_id) do
+    case VutuvWeb.ControllerHelpers.get_user(target_id) do
       %User{} = target ->
         :ok = fun.(conn.assigns.current_user, target)
         conn |> put_flash(:info, ok_msg) |> redirect(to: ~p"/#{target}")
 
       nil ->
         redirect(conn, to: ~p"/")
-    end
-  end
-
-  # A garbage id is a no-op (nil), not a 500.
-  defp fetch_target(target_id) do
-    case Vutuv.UUIDv7.cast_or_nil(target_id) do
-      nil -> nil
-      id -> Repo.get(User, id)
     end
   end
 end

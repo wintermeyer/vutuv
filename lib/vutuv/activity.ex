@@ -114,13 +114,9 @@ defmodule Vutuv.Activity do
       Vutuv.Moderation.owner_notified_cases_query(user_id)
       |> select([c], %{ts: max(c.inserted_at)})
 
-    severance_max =
-      Vutuv.Moderation.reporter_severances_query(user_id)
-      |> select([s], %{ts: max(s.inserted_at)})
-
-    severance_restore_max =
-      Vutuv.Moderation.reporter_severances_query(user_id)
-      |> select([s], %{ts: max(s.restored_at)})
+    severances = Vutuv.Moderation.reporter_severances_query(user_id)
+    severance_max = select(severances, [s], %{ts: max(s.inserted_at)})
+    severance_restore_max = select(severances, [s], %{ts: max(s.restored_at)})
 
     union =
       follower_max

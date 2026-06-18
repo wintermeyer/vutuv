@@ -36,7 +36,5 @@ defmodule VutuvWeb.Plug.EnsureActivated do
     end
   end
 
-  defp agent_format?(conn) do
-    conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil
-  end
+  defp agent_format?(conn), do: VutuvWeb.Plug.AgentFormat.agent_format?(conn)
 end

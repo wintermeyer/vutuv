@@ -12,6 +12,8 @@ defmodule VutuvWeb.DevAppController do
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.App
 
+  import VutuvWeb.ControllerHelpers, only: [with_app: 3]
+
   plug(VutuvWeb.Plug.RequireLoginOr404)
 
   def index(conn, _params) do
@@ -89,14 +91,5 @@ defmodule VutuvWeb.DevAppController do
       |> put_flash(:info, gettext("The application and all its access were deleted."))
       |> redirect(to: ~p"/developers/apps")
     end)
-  end
-
-  # Owner-scoped lookup with the uniform 404 (same shape as the sibling
-  # DevWebhookController.with_app/3).
-  defp with_app(conn, id, fun) do
-    case ApiAuth.get_app(conn.assigns.current_user, id) do
-      %App{} = app -> fun.(conn, app)
-      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
-    end
   end
 end

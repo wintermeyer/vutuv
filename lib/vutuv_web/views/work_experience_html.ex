@@ -9,20 +9,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   translated, unlike the English literals it replaces.
   """
   def month_options do
-    [
-      {gettext("January"), 1},
-      {gettext("February"), 2},
-      {gettext("March"), 3},
-      {gettext("April"), 4},
-      {gettext("May"), 5},
-      {gettext("June"), 6},
-      {gettext("July"), 7},
-      {gettext("August"), 8},
-      {gettext("September"), 9},
-      {gettext("October"), 10},
-      {gettext("November"), 11},
-      {gettext("December"), 12}
-    ]
+    for n <- 1..12, do: {month_name(n), n}
   end
 
   @doc """

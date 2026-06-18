@@ -53,6 +53,15 @@ defmodule Vutuv.UUIDv7 do
   end
 
   @doc """
+  The two ids as a `{smaller, larger}` tuple — the one home of the "smaller id
+  first" convention. Canonical lowercase-hex UUIDs compare in the same order as
+  their bytes, so a plain `<` agrees with the Postgres `uuid` ordering that the
+  `sorted_pair` check constraints on the conversation/connection tables rely on.
+  """
+  def sorted_pair(id1, id2) when id1 < id2, do: {id1, id2}
+  def sorted_pair(id1, id2), do: {id2, id1}
+
+  @doc """
   Casts a value to a UUID string, or `nil` if it cannot be cast.
 
   Session cookies issued before the UUID cutover hold integer user ids; this

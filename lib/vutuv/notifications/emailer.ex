@@ -53,9 +53,7 @@ defmodule Vutuv.Notifications.Emailer do
   def base_email do
     new()
     |> from(@from_address)
-    |> robot_headers()
-    |> envelope_sender()
-    |> message_id()
+    |> stamp_headers()
   end
 
   @doc """
@@ -73,11 +71,20 @@ defmodule Vutuv.Notifications.Emailer do
       :suppressed
     else
       email
-      |> robot_headers()
-      |> envelope_sender()
-      |> message_id()
+      |> stamp_headers()
       |> Vutuv.Mailer.deliver()
     end
+  end
+
+  # The idempotent header-stamping pipeline shared by `base_email/0` and the
+  # `deliver/1` chokepoint, so the robot headers, bounce envelope sender and
+  # Message-Id are applied in exactly one place (each step is a no-op when its
+  # header is already present).
+  defp stamp_headers(email) do
+    email
+    |> robot_headers()
+    |> envelope_sender()
+    |> message_id()
   end
 
   defp suppressed?(%Swoosh.Email{private: %{user_initiated: true}}), do: false

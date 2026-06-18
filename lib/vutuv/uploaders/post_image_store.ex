@@ -126,13 +126,8 @@ defmodule Vutuv.PostImageStore do
   end
 
   defp write_derived_versions(rotated, dir) do
-    Enum.reduce_while(Spec.versions(:post_image), :ok, fn spec, :ok ->
-      dest = Path.join(dir, "#{spec.name}#{Spec.served_ext()}")
-
-      case Spec.write_derived(spec, rotated, dest) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
+    Spec.write_all(:post_image, rotated, fn spec ->
+      Path.join(dir, "#{spec.name}#{Spec.served_ext()}")
     end)
   end
 

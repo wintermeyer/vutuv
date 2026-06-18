@@ -582,10 +582,9 @@ defmodule Vutuv.Moderation do
   def active_strike_count(%User{id: user_id}) do
     now = NaiveDateTime.utc_now(:second)
 
-    Repo.aggregate(
-      from(s in Strike, where: s.user_id == ^user_id and s.expires_at > ^now),
-      :count
-    )
+    Strike.where_user(user_id)
+    |> where([s], s.expires_at > ^now)
+    |> Repo.aggregate(:count)
   end
 
   # Strike + ladder consequence in one place. Strikes expire after a year, so

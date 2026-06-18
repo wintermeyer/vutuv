@@ -95,6 +95,16 @@ defmodule VutuvWeb.Plug.AgentFormat do
 
   def call(conn, _opts), do: conn
 
+  @doc """
+  Whether this request resolved to an agent document format — by URL extension
+  (`vutuv_agent_format`) or `Accept` negotiation (`vutuv_agent_accept`). The one
+  predicate the plugs that suppress browser-only chrome (the ad banner) and
+  downgrade the viewer to anonymous (`EnsureActivated`) share.
+  """
+  def agent_format?(%Plug.Conn{} = conn) do
+    conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil
+  end
+
   # Maps the request's Accept header to an agent format (see @accept_formats).
   # The header is then normalized to text/html so the browser pipeline's
   # `accepts ["html"]` lets the request through.

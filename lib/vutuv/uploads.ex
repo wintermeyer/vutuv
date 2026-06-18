@@ -422,13 +422,8 @@ defmodule Vutuv.Uploads do
   defp cache_bust(_), do: ""
 
   defp write_derived_versions(rotated, dir, scope, fingerprint, config) do
-    Enum.reduce_while(Spec.versions(config.spec_key), :ok, fn spec, :ok ->
-      dest = Path.join(dir, fingerprinted_filename(scope, spec.name, fingerprint, config))
-
-      case Spec.write_derived(spec, rotated, dest) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
+    Spec.write_all(config.spec_key, rotated, fn spec ->
+      Path.join(dir, fingerprinted_filename(scope, spec.name, fingerprint, config))
     end)
   end
 

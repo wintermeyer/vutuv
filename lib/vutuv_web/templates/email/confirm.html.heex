@@ -5,28 +5,26 @@
   gettext("Confirm")
 ]} />
 
-<div class="card-list">
-  <section class="card">
-    <h1><%= gettext "Check your inbox" %></h1>
-    <p><%= gettext "We sent a PIN to your new email address. Enter it below to confirm the address." %></p>
+<.card_section>
+  <h1><%= gettext "Check your inbox" %></h1>
+  <p><%= gettext "We sent a PIN to your new email address. Enter it below to confirm the address." %></p>
 
-    <.form
-      :let={f}
-      for={%{}}
-      as={:email_confirmation}
-      action={~p"/#{@user}/emails/confirmation"}
-      id="email-confirmation-form"
-      class="editform"
-    >
-      <div class="editform__field">
-        <%= label f, :pin, gettext("PIN") %>
-        <%= text_input f, :pin,
-          autofocus: true,
-          autocomplete: "one-time-code",
-          inputmode: "numeric",
-          placeholder: gettext("Enter your PIN") %>
-      </div>
-      <.form_actions backlink={~p"/#{@user}/emails"} />
-    </.form>
-  </section>
-</div>
+  <.form
+    :let={f}
+    for={%{}}
+    as={:email_confirmation}
+    action={~p"/#{@user}/emails/confirmation"}
+    id="email-confirmation-form"
+    class="editform"
+  >
+    <div class="editform__field">
+      <%= label f, :pin, gettext("PIN") %>
+      <%= text_input f, :pin,
+        autofocus: true,
+        autocomplete: "one-time-code",
+        inputmode: "numeric",
+        placeholder: gettext("Enter your PIN") %>
+    </div>
+    <.form_actions backlink={~p"/#{@user}/emails"} />
+  </.form>
+</.card_section>
