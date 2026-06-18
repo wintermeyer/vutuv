@@ -105,3 +105,7 @@ msgstr "muss mindestens drei Tage im Voraus gebucht werden"
 
 msgid "has already been booked"
 msgstr "ist bereits gebucht"
+
+## Custom message from the phone-number rules (Vutuv.Profiles.PhoneNumber.changeset/2).
+msgid "Please enter a valid phone number"
+msgstr "Bitte geben Sie eine gültige Telefonnummer ein"

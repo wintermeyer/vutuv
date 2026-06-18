@@ -11,7 +11,7 @@ defmodule Vutuv.Profiles.PhoneNumber do
     timestamps()
   end
 
-  @format_message ~s/Please enter a phone number/
+  @format_message ~s/Please enter a valid phone number/
   @requred_message ~s/This field is required/
 
   # The allowed `number_type` labels, in the order the HTML form lists them.
@@ -33,7 +33,23 @@ defmodule Vutuv.Profiles.PhoneNumber do
     |> validate_required([:value, :number_type], message: @requred_message)
     |> validate_inclusion(:number_type, @number_types)
     |> update_change(:value, &String.trim/1)
-    # |> update_change(:value, &String.replace(&1,~r/[^+0-9]/, ""))
-    |> validate_format(:value, ~r/^\S[+\d\(\)\s-]*\S$/u, message: @format_message)
+    |> normalize_value()
+  end
+
+  # Rewrites a typed number to canonical international format (`0261-123456` ->
+  # `+49 261 123456`) and rejects anything that is not a real phone number, so
+  # only validated, normalized values reach the database. See
+  # `Vutuv.Phone.normalize/1`.
+  defp normalize_value(changeset) do
+    case get_change(changeset, :value) do
+      value when is_binary(value) ->
+        case Vutuv.Phone.normalize(value) do
+          {:ok, normalized} -> put_change(changeset, :value, normalized)
+          :error -> add_error(changeset, :value, @format_message)
+        end
+
+      _ ->
+        changeset
+    end
   end
 end
