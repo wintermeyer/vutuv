@@ -96,7 +96,10 @@ defmodule Vutuv.Accounts.User do
   so their group-by doesn't drag all user columns through aggregate and sort.
   """
   def listing_fields do
-    ~w(id first_name last_name honorific_prefix honorific_suffix active_slug avatar)a
+    # :updated_at is loaded so listing-rendered avatars carry the cache-busting
+    # ?v= token (see Vutuv.Uploads). Without it a member's re-uploaded thumbnail
+    # would keep serving the cached old image on every listing for up to 30 days.
+    ~w(id first_name last_name honorific_prefix honorific_suffix active_slug avatar updated_at)a
   end
 
   # :active_slug is deliberately NOT here: the username is unique, rate-limited

@@ -250,6 +250,12 @@ defmodule Vutuv.SocialTest do
       assert row.active_slug == user.active_slug
       assert row.first_name == user.first_name
       assert row.honorific_prefix == "Dr."
+
+      # updated_at is loaded so listing-rendered avatars get the cache-busting
+      # ?v= token (Vutuv.Uploads). Without it a member's re-uploaded thumbnail
+      # would stay cached-stale on every listing for up to 30 days.
+      assert row.updated_at
+      assert Vutuv.Avatar.url({"selfie.jpg", row}, :thumb) =~ ~r/\?v=\d+$/
     end
   end
 
