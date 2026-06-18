@@ -485,12 +485,13 @@ the resulting ~200px rail width. --%>
             />
           </a>
           <div class="mt-2 min-w-0 text-sm">
-            <p :if={url.description} class="truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
+            <p :if={url.description} class="mb-0.5 truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
             <a
               href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+              title={url.value}
               class="block truncate font-medium text-brand-600 hover:text-brand-700"
             >
-              {url.value}
+              {VutuvWeb.UrlHTML.display_url(url.value)}
             </a>
           </div>
         </div>
