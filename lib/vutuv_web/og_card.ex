@@ -6,15 +6,34 @@ defmodule VutuvWeb.OgCard do
   `/og-card.png`.
 
   Generated once per node on first request and cached in `:persistent_term`.
-  The wordmark comes from the vector logo (`priv/static/images/vutuv-logo.svg`,
-  rasterized by the librsvg inside vix's bundled libvips) — deliberately no
-  text rendering, which would depend on the host's fonts and make the card
-  differ between dev and production. The gradient colors are the brand
-  tokens from `assets/css/app.css` (brand-700 → brand-500, the auth-hero
-  gradient).
-  """
 
-  alias Vix.Vips.Operation
+  The wordmark is the pre-rasterized white logo
+  (`priv/static/images/vutuv-wordmark-white.png`): white letters on a
+  transparent background, tightly cropped. It is composed onto the gradient
+  with only the PNG loader, which every libvips build ships, so the card
+  renders identically across dev, test, CI and production. We deliberately do
+  **not** rasterize the SVG at runtime: that needs the librsvg loader, which is
+  only present when libvips can find it on the dynamic-library path, so it made
+  the card succeed in the dev server yet fail under `mix test` on the same
+  machine (issue #802). There is also no text rendering, which would depend on
+  the host's fonts. The gradient colors are the brand tokens from
+  `assets/css/app.css` (brand-700 → brand-500, the auth-hero gradient).
+
+  To regenerate the wordmark PNG after the logo changes, rasterize the vector
+  source (`priv/static/images/vutuv-logo.svg`) on a host whose libvips has the
+  SVG loader and recolor it white through its own alpha:
+
+      src = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-logo.svg")
+      out = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+      {:ok, page} = Image.thumbnail(src, 2400)
+      {:ok, on_white} = Image.flatten(page, background_color: :white)
+      {:ok, {l, t, w, h}} = Vix.Vips.Operation.find_trim(on_white, background: [255.0, 255.0, 255.0], threshold: 10)
+      {:ok, wordmark} = Image.crop(page, l, t, w, h)
+      {_rgb, alpha} = Image.split_alpha(wordmark)
+      {:ok, white} = Image.new(w, h, color: :white)
+      {:ok, logo} = Image.add_alpha(white, alpha)
+      Image.write(logo, out)
+  """
 
   @width 1200
   @height 630
@@ -53,31 +72,16 @@ defmodule VutuvWeb.OgCard do
       _ -> :error
     end
   rescue
-    # A host whose libvips cannot rasterize the SVG must degrade to "no
-    # default image", never to a 500 on every page render.
+    # Any libvips failure must degrade to "no default image", never to a 500
+    # on every page render.
     _ -> :error
   end
 
-  # Rasterize the SVG large (the wordmark sits small inside an A4-shaped
-  # page), find its bounding box against white, crop it out and recolor it
-  # white through its own alpha channel.
+  # Load the pre-rasterized white wordmark (white letters on transparent,
+  # tightly cropped) and size it for the card. Only the PNG loader is used, so
+  # this never depends on the librsvg loader being on the libvips path.
   defp white_wordmark do
-    path = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-logo.svg")
-
-    with {:ok, page} <- Image.thumbnail(path, 2400),
-         {:ok, on_white} <- Image.flatten(page, background_color: :white),
-         {:ok, {left, top, w, h}} <-
-           Operation.find_trim(on_white,
-             background: [255.0, 255.0, 255.0],
-             threshold: 10
-           ),
-         {:ok, wordmark} <- Image.crop(page, left, top, w, h),
-         {_rgb, alpha} <- Image.split_alpha(wordmark),
-         {:ok, white} <- Image.new(w, h, color: :white),
-         {:ok, logo} <- Image.add_alpha(white, alpha) do
-      Image.thumbnail(logo, @logo_width)
-    else
-      _ -> :error
-    end
+    path = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+    Image.thumbnail(path, @logo_width)
   end
 end
