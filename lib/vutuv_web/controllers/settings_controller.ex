@@ -65,7 +65,12 @@ defmodule VutuvWeb.SettingsController do
       params,
       "privacy.html",
       ~p"/#{user}/settings/privacy",
-      gettext("Privacy settings saved.")
+      gettext("Privacy settings saved."),
+      # The member's open shells only re-read "Show when I'm online" on a full
+      # reload, so push the new value to them to start/stop their dot live.
+      fn saved ->
+        Vutuv.Activity.broadcast(saved.id, {:presence_pref, saved.show_online_status?})
+      end
     )
   end
 
@@ -139,11 +144,13 @@ defmodule VutuvWeb.SettingsController do
   # casts that subset and leaves the rest of the profile untouched. On success we
   # stay on the same settings page (not the public profile) so the change reads as
   # "saved, here", with the toggle reflecting the new value.
-  defp save(conn, params, template, redirect_to, flash) do
+  defp save(conn, params, template, redirect_to, flash, on_success \\ fn _user -> :ok end) do
     user = conn.assigns[:user]
 
     case Accounts.update_user(user, params) do
-      {:ok, _user} ->
+      {:ok, saved} ->
+        on_success.(saved)
+
         conn
         |> put_flash(:info, flash)
         |> redirect(to: redirect_to)

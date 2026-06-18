@@ -21,9 +21,11 @@ defmodule VutuvWeb.ShellLive do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1, name_initials: 1]
+  import VutuvWeb.UI, only: [count_badge: 1, icon_bookmark: 1, name_initials: 1, presence_dot: 1]
 
   alias Vutuv.Activity
+  alias Vutuv.Social
+  alias VutuvWeb.Presence
 
   @impl true
   def mount(_params, session, socket) do
@@ -49,20 +51,59 @@ defmodule VutuvWeb.ShellLive do
     # shell's subscribe on full page loads (the broadcast can fire first).
     path = session["path"] || ""
 
-    {:ok,
-     socket
-     |> assign(:user_id, user_id)
-     |> assign(:user_name, session["user_name"])
-     |> assign(:user_param, user_param)
-     |> assign(:user_avatar, session["user_avatar"])
-     |> assign(
-       :messages_count,
-       initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
-     )
-     |> assign(
-       :notifications_count,
-       initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
-     )}
+    socket =
+      socket
+      |> assign(:user_id, user_id)
+      |> assign(:user_name, session["user_name"])
+      |> assign(:user_param, user_param)
+      |> assign(:user_avatar, session["user_avatar"])
+      |> assign(:self_online?, false)
+      |> assign(:presence_hidden_ids, MapSet.new())
+      |> assign(
+        :messages_count,
+        initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
+      )
+      |> assign(
+        :notifications_count,
+        initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
+      )
+      |> maybe_start_presence(user_id, session["show_online"] == true)
+
+    {:ok, socket}
+  end
+
+  # Site-wide online presence. The shell is the one component on every page, so
+  # it is where the current member is tracked online. Tracking (broadcasting my
+  # own dot) is gated by the member's "Show when I'm online" setting; seeing
+  # other members' dots is not — every logged-in viewer subscribes and receives
+  # the online set, minus anyone a block hides from them (either direction).
+  defp maybe_start_presence(socket, nil, _show_online?), do: socket
+
+  defp maybe_start_presence(socket, user_id, show_online?) do
+    if connected?(socket) do
+      if show_online?, do: Presence.track_user(self(), user_id)
+      Presence.subscribe_online()
+
+      socket
+      |> assign(:self_online?, show_online?)
+      |> assign(:presence_hidden_ids, Social.blocked_user_ids(user_id))
+      |> push_online()
+    else
+      socket
+    end
+  end
+
+  # The online set this viewer may see: everyone online, minus the members a
+  # block hides from them. Includes the viewer themselves (when tracked), so
+  # their own avatar shows the dot everywhere too. Pushed to the Presence JS
+  # hook, which toggles the dot on every avatar in the page by user id.
+  defp push_online(socket) do
+    online =
+      Presence.online_ids()
+      |> MapSet.difference(socket.assigns.presence_hidden_ids)
+      |> MapSet.to_list()
+
+    push_event(socket, "presence:set", %{online: online})
   end
 
   defp initial_count(path, prefix, user_id, counter) do
@@ -98,6 +139,31 @@ defmodule VutuvWeb.ShellLive do
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
 
+  # A member joined or left site-wide presence: re-push this viewer's (block-
+  # filtered) online set so the JS hook updates every avatar's dot live.
+  def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket),
+    do: {:noreply, push_online(socket)}
+
+  # The member flipped "Show when I'm online" (here or in another tab): start or
+  # stop broadcasting their own dot live, no reload needed.
+  def handle_info({:presence_pref, show_online?}, socket) do
+    if show_online?,
+      do: Presence.track_user(self(), socket.assigns.user_id),
+      else: Presence.untrack_user(self(), socket.assigns.user_id)
+
+    {:noreply, socket |> assign(:self_online?, show_online?) |> push_online()}
+  end
+
+  # A block changed for this member (either direction): refresh their block
+  # filter so a newly blocked member's dot disappears (and an unblocked one's
+  # can reappear) without waiting for the next full page load.
+  def handle_info(:presence_blocks_changed, socket) do
+    {:noreply,
+     socket
+     |> assign(:presence_hidden_ids, Social.blocked_user_ids(socket.assigns.user_id))
+     |> push_online()}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp recount_messages(socket) do
@@ -122,6 +188,12 @@ defmodule VutuvWeb.ShellLive do
   def render(assigns) do
     ~H"""
     <div id="app-shell">
+      <%!-- Drives the green "online" dot on every avatar in the page. Receives
+      this viewer's online-id set from ShellLive (push_event "presence:set") and
+      writes a generated stylesheet that reveals each online member's
+      [data-presence-user-id] dot, across classic controller pages too. Empty +
+      phx-update="ignore": it manages a document-wide stylesheet, not children. --%>
+      <div :if={@user_id} id="presence-hook" phx-hook="Presence" phx-update="ignore" class="hidden"></div>
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
           <.link href={~p"/"} class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white">
@@ -192,13 +264,18 @@ defmodule VutuvWeb.ShellLive do
                   title={@user_name}
                   class="flex cursor-pointer list-none items-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 [&::-webkit-details-marker]:hidden"
                 >
-                  <%= if @user_avatar do %>
-                    <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
-                  <% else %>
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
-                      {name_initials(@user_name)}
-                    </span>
-                  <% end %>
+                  <%!-- Your own avatar carries the online dot too (server-driven
+                  by @self_online?, since the shell owns this DOM — no JS hook). --%>
+                  <span class="relative inline-flex">
+                    <%= if @user_avatar do %>
+                      <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
+                    <% else %>
+                      <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
+                        {name_initials(@user_name)}
+                      </span>
+                    <% end %>
+                    <.presence_dot online={@self_online?} size="sm" />
+                  </span>
                   <span class="sr-only">{gettext("Account menu")}</span>
                 </summary>
 

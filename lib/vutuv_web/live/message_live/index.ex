@@ -21,7 +21,6 @@ defmodule VutuvWeb.MessageLive.Index do
   alias Vutuv.Chat.{Conversation, Message}
   alias VutuvWeb.Presence
 
-  @presence_topic "messages:online"
   @typing_clear_ms 2500
   @page_size 30
 
@@ -35,8 +34,10 @@ defmodule VutuvWeb.MessageLive.Index do
       # The activity topic carries {:new_message, %{conversation_id: ...}}
       # for conversations other than the open one — it keeps the sidebar live.
       Vutuv.Activity.subscribe(user.id)
-      Phoenix.PubSub.subscribe(Vutuv.PubSub, @presence_topic)
-      Presence.track(self(), @presence_topic, to_string(user.id), %{})
+      # Online presence: ShellLive (embedded on this page too) is the sole
+      # tracker, so here we only watch the shared topic to keep a conversation
+      # partner's dot/header status live.
+      Presence.subscribe_online()
     end
 
     {:ok,
@@ -44,7 +45,7 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign(:page_title, gettext("Messages"))
      |> assign(:user_name, display_name(user))
      |> assign(:typing_tokens, %{})
-     |> assign(:online_ids, list_online())
+     |> assign(:online_ids, Presence.online_ids())
      |> assign(:conversation, nil)
      |> assign(:other, nil)
      |> assign(:more?, false)
@@ -315,7 +316,7 @@ defmodule VutuvWeb.MessageLive.Index do
   end
 
   def handle_info(%Phoenix.Socket.Broadcast{event: "presence_diff"}, socket) do
-    {:noreply, assign(socket, :online_ids, list_online())}
+    {:noreply, assign(socket, :online_ids, Presence.online_ids())}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -349,12 +350,6 @@ defmodule VutuvWeb.MessageLive.Index do
     do: match?(%Conversation{id: ^conversation_id}, socket.assigns.conversation)
 
   defp assign_form(socket), do: assign(socket, :form, to_form(%{"body" => ""}, as: :message))
-
-  defp list_online do
-    @presence_topic |> Presence.list() |> Map.keys() |> MapSet.new()
-  end
-
-  defp online?(online_ids, user_id), do: MapSet.member?(online_ids, to_string(user_id))
 
   defp display_name(nil), do: gettext("Deleted account")
 
@@ -448,10 +443,7 @@ defmodule VutuvWeb.MessageLive.Index do
             >
               <span class="relative shrink-0">
                 <.avatar user={entry.other} size="sm" />
-                <span
-                  :if={online?(@online_ids, entry.other.id)}
-                  class="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900"
-                />
+                <.presence_dot online={Presence.online?(@online_ids, entry.other.id)} size="sm" />
               </span>
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
@@ -503,7 +495,11 @@ defmodule VutuvWeb.MessageLive.Index do
             <%= if typing_label(@typing_tokens) do %>
               <span class="text-xs font-medium text-brand-600 dark:text-brand-400">{typing_label(@typing_tokens)}</span>
             <% else %>
-              <span :if={online?(@online_ids, @other.id)} class="text-xs text-emerald-600 dark:text-emerald-400">
+              <span
+                :if={Presence.online?(@online_ids, @other.id)}
+                id="other-online"
+                class="text-xs text-emerald-600 dark:text-emerald-400"
+              >
                 {gettext("Online")}
               </span>
             <% end %>

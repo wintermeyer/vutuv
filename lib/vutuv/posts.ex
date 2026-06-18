@@ -947,17 +947,19 @@ defmodule Vutuv.Posts do
   end
 
   # Everyone with a block either way relative to `user_id` (feed exclusion).
+  # The "either direction" filter is owned by Vutuv.Social; this only adds the
+  # select that returns the *other* party's id for the `NOT IN` subquery.
   defp blocked_either_way(user_id) do
-    from(b in Vutuv.Social.Block,
-      where: b.blocker_id == ^user_id or b.blocked_id == ^user_id,
-      select:
-        fragment(
-          "CASE WHEN ? = ? THEN ? ELSE ? END",
-          b.blocker_id,
-          type(^user_id, Vutuv.UUIDv7),
-          b.blocked_id,
-          b.blocker_id
-        )
+    Vutuv.Social.blocks_involving(user_id)
+    |> select(
+      [b],
+      fragment(
+        "CASE WHEN ? = ? THEN ? ELSE ? END",
+        b.blocker_id,
+        type(^user_id, Vutuv.UUIDv7),
+        b.blocked_id,
+        b.blocker_id
+      )
     )
   end
 

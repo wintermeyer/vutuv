@@ -117,6 +117,48 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
+  describe "privacy: online status" do
+    # A positive flag (checked = shown), unlike the inverted robot switches:
+    # checking submits "true", unchecking submits the hidden "false".
+
+    test "the toggle shows on the privacy page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+
+      assert html =~ ~s(id="online-status-form")
+      assert html =~ "show_online_status?"
+    end
+
+    test "unchecking opts the member out of the online dot", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      assert Repo.get(User, user.id).show_online_status? == true
+
+      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "false"})
+
+      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert Repo.get(User, user.id).show_online_status? == false
+    end
+
+    test "checking turns the online dot back on", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Accounts.update_user(user, %{"show_online_status?" => "false"})
+
+      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "true"})
+
+      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert Repo.get(User, user.id).show_online_status? == true
+    end
+
+    test "saving broadcasts the new value so open shells start/stop the dot live", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      Vutuv.Activity.subscribe(user.id)
+
+      put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "false"})
+
+      assert_receive {:presence_pref, false}
+    end
+  end
+
   describe "notifications: granular email toggles" do
     test "saving the per-type toggles persists each one and stays on the page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

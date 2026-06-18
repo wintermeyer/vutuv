@@ -25,6 +25,46 @@ defmodule Vutuv.Social.BlockTest do
     block
   end
 
+  describe "blocked_user_ids/1" do
+    test "returns block ids in both directions, excluding the member", %{blocker: a, blocked: b} do
+      block!(a, b)
+
+      # a blocked b: b is hidden from a, and a is hidden from b (block hides the
+      # online dot both ways).
+      assert Social.blocked_user_ids(a.id) == MapSet.new([to_string(b.id)])
+      assert Social.blocked_user_ids(b.id) == MapSet.new([to_string(a.id)])
+    end
+
+    test "is empty for a member with no blocks", %{blocker: a} do
+      assert Social.blocked_user_ids(a.id) == MapSet.new()
+    end
+  end
+
+  describe "presence-block broadcast" do
+    test "block_user tells both members to refresh their online-dot filter", %{
+      blocker: a,
+      blocked: b
+    } do
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+
+      {:ok, _} = Social.block_user(a, b)
+
+      # One :presence_blocks_changed lands on each member's topic.
+      assert_receive :presence_blocks_changed
+      assert_receive :presence_blocks_changed
+    end
+
+    test "unblock_user broadcasts a refresh too", %{blocker: a, blocked: b} do
+      block!(a, b)
+      Vutuv.Activity.subscribe(a.id)
+
+      :ok = Social.unblock_user(a, b)
+
+      assert_receive :presence_blocks_changed
+    end
+  end
+
   describe "block_user/2" do
     test "concurrent double-block is idempotent, not a crash", %{blocker: a, blocked: b} do
       results = Task.await_many(for _ <- 1..2, do: Task.async(fn -> Social.block_user(a, b) end))

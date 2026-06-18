@@ -733,6 +733,20 @@ td.text-right {
   border-radius: 50%;
 }
 
+/* ---------- Online-presence dot ---------- */
+/* The hook-driven green "online" dot inside <.avatar presence> / <.presence_wrap>.
+   Hidden by default; the Presence JS hook (app.js) reveals each online member's
+   dot by appending a `[data-presence-user-id="<id>"] .presence-dot{display:block}`
+   rule to a generated stylesheet — an attribute selector a utility class cannot
+   express, keyed on the server-rendered id so it survives LiveView re-renders.
+   That generated rule is unlayered, so it beats this components-layer default.
+   The server-driven dots (the shell's own avatar, the messages sidebar) render
+   WITHOUT this class and so are always visible when their `:if`/`online` says so.
+   Dark mode needs nothing extra: the dot's utilities carry their own dark: ring. */
+.presence-dot {
+  display: none;
+}
+
 /* ---------- Work experience rows (Lebenslauf) ---------- */
 .job {
   border-bottom: 1px solid #e2e8f0;

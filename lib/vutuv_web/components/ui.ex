@@ -624,6 +624,13 @@ defmodule VutuvWeb.UI do
   @doc """
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)
   or a raw `src`. Sizes `xs|sm|md|lg`; `shape` `circle` (default) or `square`.
+
+  Set `presence` to overlay the real-time green "online" dot: the avatar is
+  wrapped in a `[data-presence-user-id]` span that the Presence JS hook toggles
+  on and off as that member comes and goes (see `assets/js/app.js` and the
+  `.presence-dot` rule). The id is read from `user.id`; pass `presence_id` when
+  you only have a `src`. The dot stays hidden until the hook confirms the member
+  is online, so it never falsely shows on a classic (non-live) page.
   """
   attr(:user, :any, default: nil)
   attr(:src, :string, default: nil)
@@ -631,6 +638,8 @@ defmodule VutuvWeb.UI do
   attr(:size, :string, default: "md", values: ~w(xs sm md lg))
   attr(:shape, :string, default: "circle", values: ~w(circle square))
   attr(:class, :string, default: nil)
+  attr(:presence, :boolean, default: false)
+  attr(:presence_id, :any, default: nil)
   # Lazy by default: list/grid pages (followers, search, the most-followed
   # listing) render ~100 avatars, almost all below the fold, so eager-loading
   # them all fires ~100 image requests on open. An above-the-fold hero (the
@@ -641,10 +650,97 @@ defmodule VutuvWeb.UI do
   # valid <img> instead of a broken one.
   @fallback_avatar "data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%2024%2024'%3E%3Crect%20width='24'%20height='24'%20fill='%23e2e8f0'/%3E%3Ccircle%20cx='12'%20cy='9'%20r='4'%20fill='%2394a3b8'/%3E%3Cpath%20d='M4%2022c0-4%204-6%208-6s8%202%208%206'%20fill='%2394a3b8'/%3E%3C/svg%3E"
 
+  # Public entry point: wraps the rendered avatar in the presence shell when
+  # asked (and an id is resolvable), otherwise renders the bare avatar so the
+  # hundreds of dot-less call sites are byte-for-byte unchanged.
+  def avatar(assigns) do
+    presence_id =
+      if assigns.presence do
+        raw = assigns.presence_id || (assigns.user && assigns.user.id)
+        if raw, do: to_string(raw)
+      end
+
+    assigns = assign(assigns, :presence_resolved_id, presence_id)
+
+    ~H"""
+    <.presence_wrap id={@presence_resolved_id} size={@size}>
+      <.avatar_inner
+        user={@user}
+        src={@src}
+        alt={@alt}
+        size={@size}
+        shape={@shape}
+        class={@class}
+        loading={@loading}
+      />
+    </.presence_wrap>
+    """
+  end
+
+  @doc """
+  Online-presence shell shared by `<.avatar presence>` and the notifications
+  kind-glyph: wraps the inner content in a `[data-presence-user-id]` span the
+  Presence JS hook toggles the green `.presence-dot` on as that member comes and
+  goes. Renders the content **bare** when `id` is nil (no actor, or a source
+  without a resolvable id), so non-presence call sites are byte-for-byte
+  unchanged. `isolate` + the dot's `z-10` keep the dot above an inner element
+  that carries its own z-index (the profile-header avatar over the cover banner,
+  which would otherwise hide the dot behind the photo).
+  """
+  attr(:id, :any, default: nil)
+  attr(:size, :string, default: "sm", values: ~w(xs sm md lg))
+  slot(:inner_block, required: true)
+
+  def presence_wrap(%{id: nil} = assigns) do
+    ~H"{render_slot(@inner_block)}"
+  end
+
+  def presence_wrap(assigns) do
+    ~H"""
+    <span class="relative isolate inline-flex shrink-0" data-presence-user-id={to_string(@id)}>
+      {render_slot(@inner_block)}
+      <.presence_dot size={@size} hook />
+    </span>
+    """
+  end
+
+  @doc """
+  The green "online" dot itself, the one definition of its colour, ring, size
+  and position. Each mode owns its own visibility, so a call can never render an
+  always-on dot by forgetting a guard:
+
+    * `hook` (inside `<.presence_wrap>`): adds the `.presence-dot` class, hidden
+      by default and revealed by the Presence JS hook's generated stylesheet,
+      keyed on the wrapper's `data-presence-user-id`.
+    * `online` (the shell's own avatar, the messages sidebar): server-driven —
+      renders only when `online` is true, from the caller's own online state.
+
+  With neither, it renders nothing (the safe default).
+  """
+  attr(:size, :string, default: "sm", values: ~w(xs sm md lg))
+  attr(:hook, :boolean, default: false)
+  attr(:online, :boolean, default: false)
+
+  # Server-driven and offline: render nothing, so no call site can leave an
+  # ungated dot stuck on.
+  def presence_dot(%{hook: false, online: false} = assigns), do: ~H""
+
+  def presence_dot(assigns) do
+    ~H"""
+    <span class={[
+      @hook && "presence-dot",
+      "absolute z-10 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900",
+      presence_dot_pos(@size)
+    ]}>
+      <span class="sr-only">{gettext("Online")}</span>
+    </span>
+    """
+  end
+
   # A user without a picture gets an initials tile (matching the shell's
   # top-bar avatar) instead of the anonymous placeholder image — initials
   # tell people apart in lists, a shared grey silhouette does not.
-  def avatar(%{src: nil, user: %{avatar: nil} = user} = assigns) do
+  defp avatar_inner(%{src: nil, user: %{avatar: nil} = user} = assigns) do
     full_name =
       [Map.get(user, :first_name), Map.get(user, :last_name)]
       |> Enum.reject(&(&1 in [nil, ""]))
@@ -669,7 +765,7 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  def avatar(assigns) do
+  defp avatar_inner(assigns) do
     src =
       assigns.src ||
         (assigns.user && Vutuv.Avatar.display_url(assigns.user, avatar_url_size(assigns.size))) ||
@@ -725,6 +821,13 @@ defmodule VutuvWeb.UI do
 
   defp avatar_url_size(size) when size in ["xs", "sm"], do: :thumb
   defp avatar_url_size(_), do: :medium
+
+  # Presence-dot position + size, scaled to the avatar. Nudged just outside the
+  # lower-right so the white ring reads as a status badge on the corner.
+  defp presence_dot_pos("xs"), do: "-bottom-0.5 -right-0.5 h-2.5 w-2.5"
+  defp presence_dot_pos("sm"), do: "-bottom-0.5 -right-0.5 h-3 w-3"
+  defp presence_dot_pos("lg"), do: "bottom-1 right-1 h-5 w-5"
+  defp presence_dot_pos(_), do: "-bottom-0.5 -right-0.5 h-3.5 w-3.5"
 
   @doc """
   Compact display form for counted numbers, used site-wide wherever a count is

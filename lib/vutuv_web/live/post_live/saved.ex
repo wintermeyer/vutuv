@@ -375,7 +375,7 @@ defmodule VutuvWeb.PostLive.Saved do
     ~H"""
     <li id={@id} class="flex items-center gap-3 py-4">
       <.link navigate={~p"/#{@person}"} class="shrink-0">
-        <.avatar user={@person} size="sm" alt={"Avatar of #{full_name(@person)}"} />
+        <.avatar user={@person} size="sm" alt={"Avatar of #{full_name(@person)}"} presence />
       </.link>
       <div class="min-w-0 flex-1 text-sm">
         <.link navigate={~p"/#{@person}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">

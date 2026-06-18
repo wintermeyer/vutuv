@@ -19,6 +19,7 @@ DB-backed helpers per row. --%>
             src={user.avatar && Vutuv.Avatar.display_url(user, :thumb)}
             size="md"
             alt={"Avatar of #{full_name(user)}"}
+            presence
           />
         <% end %>
       </div>

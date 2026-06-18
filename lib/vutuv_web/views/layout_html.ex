@@ -159,6 +159,7 @@ defmodule VutuvWeb.LayoutHTML do
           "user_name" => full_name(user),
           "user_param" => Phoenix.Param.to_param(user),
           "user_avatar" => Vutuv.Avatar.user_url(user, :thumb),
+          "show_online" => user.show_online_status?,
           "path" => current_path(assigns)
         }
 

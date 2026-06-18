@@ -43,6 +43,10 @@ defmodule Vutuv.Accounts.User do
     field(:email_on_connection_request?, :boolean, default: false)
     field(:email_on_endorsement?, :boolean, default: false)
     field(:email_on_follower?, :boolean, default: false)
+    # Whether this member's avatar shows the real-time "online" green dot while
+    # they have the site open. Default on; opting out (Privacy settings) means
+    # VutuvWeb.Presence never tracks them, so they show as online to no one.
+    field(:show_online_status?, :boolean, default: true)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -101,7 +105,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? show_online_status? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @doc """
   The notification-email preference fields, by the param/column name a

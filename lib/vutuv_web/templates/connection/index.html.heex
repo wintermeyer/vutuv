@@ -13,7 +13,7 @@
         :for={%{connection: c, user: u} <- @incoming}
         class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
       >
-        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" presence /></.link>
         <.link
           href={~p"/#{u}"}
           class="min-w-0 flex-1 truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
@@ -36,7 +36,7 @@
         :for={%{connection: c, user: u} <- @outgoing}
         class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
       >
-        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" presence /></.link>
         <.link
           href={~p"/#{u}"}
           class="min-w-0 flex-1 truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
@@ -61,7 +61,7 @@
         :for={%{connection: c, user: u} <- @connections}
         class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
       >
-        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" /></.link>
+        <.link href={~p"/#{u}"} class="shrink-0"><.avatar user={u} size="sm" presence /></.link>
         <div class="min-w-0 flex-1">
           <.link
             href={~p"/#{u}"}

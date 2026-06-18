@@ -626,18 +626,23 @@ defmodule Vutuv.Activity do
     Map.merge(actor_fields(actor), %{id: id, kind: kind, at: at})
   end
 
-  # The actor triple (name / route param / avatar) that the live `notify_*`
+  # The actor fields (id / name / route param / avatar) that the live `notify_*`
   # payloads and the derived feed items must carry identically. Both sides merge
   # their own kind/text/at (and :tag for endorsements) onto this, so the shapes
   # stay in lock-step. Accepts a bare map too: the activity tests pass plain
-  # maps as actors, where only the name is derivable.
+  # maps as actors, where only the name is derivable. `actor_id` keys the
+  # online-presence dot on the actor's avatar (nil for non-User actors).
   defp actor_fields(actor) do
     %{
+      actor_id: actor_id(actor),
       actor_name: display_name(actor),
       actor_param: actor_param(actor),
       actor_avatar: actor_avatar(actor)
     }
   end
+
+  defp actor_id(%User{id: id}), do: id
+  defp actor_id(_), do: nil
 
   # Each count helper returns a query selecting a single count, so total_count/2
   # can fold all three into one round trip via scalar subqueries.

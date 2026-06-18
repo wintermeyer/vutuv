@@ -44,6 +44,36 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ ~s(/avatars/#{follower.id}/)
     end
 
+    test "the actor's avatar carries the online-presence dot keyed by their id", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      follower =
+        insert(:user, first_name: "Grace", last_name: "Hopper", avatar: "grace.jpg")
+
+      insert(:follow, follower: follower, followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The shell's Presence hook toggles the dot by this id, so the actor's
+      # avatar must carry it (actor_id flows through Activity.actor_fields/1).
+      assert has_element?(live, ~s([data-presence-user-id="#{follower.id}"]))
+    end
+
+    test "a picture-less actor still gets the presence dot on the kind glyph", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # No avatar -> the colored kind glyph stands in for the actor, so the dot
+      # must ride the glyph too, not only the <.avatar> branch.
+      follower = insert(:user, first_name: "Ada", last_name: "Lovelace")
+      insert(:follow, follower: follower, followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert has_element?(live, ~s([data-presence-user-id="#{follower.id}"]))
+      # It really is the glyph, not a photo avatar.
+      refute render(live) =~ ~s(/avatars/#{follower.id}/)
+    end
+
     test "shows an accepted connection as a connection event", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

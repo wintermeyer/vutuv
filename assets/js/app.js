@@ -62,6 +62,32 @@ const Hooks = {
       this.el.scrollTop = this.el.scrollHeight
     },
   },
+  // Online presence dots. ShellLive (on every page) pushes this viewer's online
+  // user-id set ("presence:set", already filtered against their blocks); this
+  // hook reveals each online member's dot via ONE generated stylesheet keyed on
+  // the server-rendered data-presence-user-id. Because the rules match by
+  // attribute selector (not a JS-set attribute on each node), they keep working
+  // for avatars added or re-rendered later — LiveView stream patches (which
+  // strip JS-set attributes via morphdom), navigation, classic pages — with no
+  // MutationObserver and no per-node bookkeeping to fall out of sync.
+  Presence: {
+    mounted() {
+      this.style = document.createElement("style")
+      document.head.appendChild(this.style)
+
+      this.handleEvent("presence:set", ({ online }) => {
+        this.style.textContent = (online || [])
+          .map(
+            (id) =>
+              `[data-presence-user-id="${CSS.escape(String(id))}"] .presence-dot{display:block}`
+          )
+          .join("")
+      })
+    },
+    destroyed() {
+      this.style?.remove()
+    },
+  },
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {

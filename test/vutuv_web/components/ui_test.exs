@@ -120,6 +120,67 @@ defmodule VutuvWeb.UITest do
       assert html =~ "data-avatar"
       assert html =~ "data:image/svg+xml"
     end
+
+    test "wraps the avatar in a presence shell keyed by the user id when asked" do
+      user = %Vutuv.Accounts.User{
+        id: "0190abc",
+        avatar: nil,
+        first_name: "Greta",
+        last_name: "Tester"
+      }
+
+      html = render_component(&UI.avatar/1, user: user, presence: true)
+
+      # The hook toggles the dot off this wrapper by id; the dot starts hidden.
+      assert html =~ ~s(data-presence-user-id="0190abc")
+      assert html =~ "presence-dot"
+    end
+
+    test "renders no presence wrapper by default so dot-less avatars are unchanged" do
+      user = %Vutuv.Accounts.User{id: "x", avatar: nil, first_name: "A", last_name: "B"}
+      html = render_component(&UI.avatar/1, user: user)
+
+      refute html =~ "data-presence-user-id"
+      refute html =~ "presence-dot"
+    end
+
+    test "presence_id supplies the id when only a src is available" do
+      html =
+        render_component(&UI.avatar/1,
+          src: "/avatars/x/p_thumb.avif",
+          presence: true,
+          presence_id: "user-7"
+        )
+
+      assert html =~ ~s(data-presence-user-id="user-7")
+    end
+
+    test "presence is a no-op without any resolvable id" do
+      html = render_component(&UI.avatar/1, src: "/avatars/x/p_thumb.avif", presence: true)
+
+      refute html =~ "data-presence-user-id"
+    end
+  end
+
+  describe "presence_wrap/1" do
+    test "wraps content with the dot, keyed by id, when given one" do
+      assigns = %{}
+      html = rendered_to_string(~H|<UI.presence_wrap id="abc"><span>x</span></UI.presence_wrap>|)
+
+      assert html =~ ~s(data-presence-user-id="abc")
+      assert html =~ "presence-dot"
+    end
+
+    test "renders content bare when no id (system events keep their glyph)" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H|<UI.presence_wrap><span id="inner">x</span></UI.presence_wrap>|)
+
+      refute html =~ "data-presence-user-id"
+      refute html =~ "presence-dot"
+      assert html =~ ~s(id="inner")
+    end
   end
 
   # Page size is the compile-time `max_page_items` (250 in config.exs), so

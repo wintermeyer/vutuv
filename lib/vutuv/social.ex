@@ -439,20 +439,29 @@ defmodule Vutuv.Social do
   def block_user(%User{id: id}, %User{id: id}), do: {:error, :self}
 
   def block_user(%User{} = blocker, %User{} = blocked) do
-    case get_block(blocker.id, blocked.id) do
-      %Block{} = block ->
-        {:ok, block}
+    result =
+      case get_block(blocker.id, blocked.id) do
+        %Block{} = block ->
+          {:ok, block}
 
-      nil ->
-        case insert_block(blocker.id, blocked.id) do
-          # Lost the race against a concurrent identical block: the winner's
-          # row is committed (the unique index only rejects after the other
-          # transaction completed), so idempotency means returning it.
-          {:error, :raced} -> {:ok, get_block(blocker.id, blocked.id)}
-          result -> result
-        end
-    end
+        nil ->
+          case insert_block(blocker.id, blocked.id) do
+            # Lost the race against a concurrent identical block: the winner's
+            # row is committed (the unique index only rejects after the other
+            # transaction completed), so idempotency means returning it.
+            {:error, :raced} -> {:ok, get_block(blocker.id, blocked.id)}
+            result -> result
+          end
+      end
+
+    if match?({:ok, _}, result), do: broadcast_presence_blocks([blocker.id, blocked.id])
+    result
   end
+
+  # Tell both members' open shells to refresh their online-dot block filter, so
+  # a block/unblock hides (or restores) the pair's dots without a page reload.
+  defp broadcast_presence_blocks(user_ids),
+    do: Enum.each(user_ids, &Vutuv.Activity.broadcast(&1, :presence_blocks_changed))
 
   defp insert_block(blocker_id, blocked_id) do
     Repo.transaction(fn ->
@@ -491,6 +500,7 @@ defmodule Vutuv.Social do
             maybe_unfreeze_conversation(block)
           end)
 
+        broadcast_presence_blocks([blocker.id, blocked.id])
         :ok
     end
   end
@@ -560,6 +570,33 @@ defmodule Vutuv.Social do
   end
 
   def blocked_between?(_a_id, _b_id), do: false
+
+  @doc """
+  Query of every `Block` row that involves `user_id` (as blocker or blocked) —
+  the "either direction" filter, defined once. Shared by `blocked_user_ids/1`
+  here and `Vutuv.Posts` feed exclusion.
+  """
+  def blocks_involving(user_id) do
+    from(b in Block, where: b.blocker_id == ^user_id or b.blocked_id == ^user_id)
+  end
+
+  @doc """
+  Every user id that has a block relationship with `user_id` in either direction
+  (members `user_id` blocked + members who blocked `user_id`), as a `MapSet` of
+  string ids, excluding `user_id` itself. The shell subtracts this from the
+  site-wide online set so a blocked pair never sees each other's online dot.
+  """
+  def blocked_user_ids(user_id) when is_binary(user_id) do
+    blocks_involving(user_id)
+    |> select([b], {b.blocker_id, b.blocked_id})
+    |> Repo.all()
+    |> Enum.flat_map(fn {blocker_id, blocked_id} -> [blocker_id, blocked_id] end)
+    |> Enum.reject(&(&1 == user_id))
+    |> Enum.map(&to_string/1)
+    |> MapSet.new()
+  end
+
+  def blocked_user_ids(_user_id), do: MapSet.new()
 
   @doc "The members `user` blocked, newest first, `:blocked` preloaded."
   def list_blocked(%User{} = user) do

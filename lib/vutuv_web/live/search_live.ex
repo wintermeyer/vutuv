@@ -307,7 +307,7 @@ defmodule VutuvWeb.SearchLive do
           </.section_title>
           <ul class="mt-4 divide-y divide-slate-100 dark:divide-slate-800">
             <li :for={post <- @results.posts} class="flex items-start gap-3 py-4 first:pt-0 last:pb-0">
-              <.avatar user={post.user} size="sm" shape="circle" />
+              <.avatar user={post.user} size="sm" shape="circle" presence />
               <div class="min-w-0">
                 <p class="mb-0 text-sm">
                   <.link

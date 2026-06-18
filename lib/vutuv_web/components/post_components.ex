@@ -218,7 +218,7 @@ defmodule VutuvWeb.PostComponents do
         assistive tech and the tab order so the name link is the one profile
         link (otherwise the avatar link has no accessible name). --%>
         <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
-          <.avatar user={@post.user} size="sm" />
+          <.avatar user={@post.user} size="sm" presence />
         </.link>
 
         <div class="min-w-0 flex-1">

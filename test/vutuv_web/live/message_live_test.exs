@@ -358,7 +358,9 @@ defmodule VutuvWeb.MessageLiveTest do
 
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-      refute render(view) =~ "Online"
+      # The thread-header "Online" status for the *other* party — not the shell's
+      # own-avatar dot label, which also reads "Online".
+      refute has_element?(view, "#other-online")
     end
 
     test "the other member on the page shows as online", %{conn: conn} do
@@ -372,7 +374,7 @@ defmodule VutuvWeb.MessageLiveTest do
       # The presence join reaches the first view asynchronously; flush it.
       _ = :sys.get_state(view.pid)
 
-      assert render(view) =~ "Online"
+      assert has_element?(view, "#other-online")
     end
   end
 end

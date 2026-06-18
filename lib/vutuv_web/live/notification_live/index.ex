@@ -99,18 +99,24 @@ defmodule VutuvWeb.NotificationLive.Index do
         >
           <%!-- Show the actor's avatar (linked) when we have a picture; events
           whose payload carries no user struct (e.g. a bare-map broadcast) keep
-          the colored kind glyph. --%>
+          the colored kind glyph. Either way, a present actor (actor_id) gets the
+          online-presence dot via <.presence_wrap> — picture-less actors render
+          the glyph, so the dot must ride that too, not only the avatar. --%>
           <%= if n[:actor_avatar] do %>
             <.link href={~p"/#{n.actor_param}"} class="mt-0.5 shrink-0">
-              <.avatar src={n[:actor_avatar]} size="sm" alt={"Avatar of #{n.actor_name}"} />
+              <.presence_wrap id={n[:actor_id]} size="sm">
+                <.avatar src={n[:actor_avatar]} size="sm" alt={"Avatar of #{n.actor_name}"} />
+              </.presence_wrap>
             </.link>
           <% else %>
-            <span class={[
-              "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-              kind_classes(n.kind)
-            ]}>
-              {kind_glyph(n.kind)}
-            </span>
+            <.presence_wrap id={n[:actor_id]} size="sm">
+              <span class={[
+                "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                kind_classes(n.kind)
+              ]}>
+                {kind_glyph(n.kind)}
+              </span>
+            </.presence_wrap>
           <% end %>
           <div>
             <p class="text-slate-800 dark:text-slate-100">
