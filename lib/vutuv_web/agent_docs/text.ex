@@ -212,7 +212,8 @@ defmodule VutuvWeb.AgentDocs.Text do
       counts.following > 0 && "#{gettext("Following")}: #{counts.following}",
       counts.connections > 0 && "#{gettext("Connections")}: #{counts.connections}",
       doc.gender && "#{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
-      doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}"
+      doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}",
+      doc.age && "#{gettext("Age")}: #{doc.age}"
     ]
     |> Enum.filter(& &1)
     |> Enum.join("\n")

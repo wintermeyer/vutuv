@@ -66,7 +66,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
-  test "profile: every public fact appears in HTML, Markdown, text and JSON" do
+  test "profile: every public fact appears in HTML, Markdown, text and JSON", %{user: user} do
     rendered = formats_for("/drift_tester")
 
     facts = [
@@ -97,6 +97,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["counts"]["followers"] == 1
     assert rendered.md =~ "Followers: 1"
     assert rendered.txt =~ "Followers: 1"
+
+    # The age, derived from the birthday in Berlin time, is an extra field in
+    # every machine format and reads naturally in the HTML.
+    age = VutuvWeb.UserHelpers.age(user)
+    assert rendered.html =~ "#{age} years old"
+    assert rendered.md =~ "Age: #{age}"
+    assert rendered.txt =~ "Age: #{age}"
+    assert Jason.decode!(rendered.json)["age"] == age
+    assert rendered.xml =~ "<age>#{age}</age>"
   end
 
   test "profile vCard carries the same contact facts", %{user: _user} do

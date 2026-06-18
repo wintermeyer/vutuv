@@ -69,6 +69,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       current_position: current_position(job),
       gender: public_gender(user),
       birthdate: user.birthdate,
+      age: UserHelpers.age(user),
       member_since: NaiveDateTime.to_date(user.inserted_at),
       avatar_url: avatar_url(user),
       counts: %{
