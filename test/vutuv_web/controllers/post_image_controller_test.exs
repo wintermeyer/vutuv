@@ -62,6 +62,19 @@ defmodule VutuvWeb.PostImageControllerTest do
       assert get_resp_header(conn, "cache-control") == ["private, max-age=31536000, immutable"]
     end
 
+    test "carries a Content-Disposition naming the download after the owner's handle", %{
+      conn: conn,
+      tmp: tmp
+    } do
+      author = insert(:user, email_confirmed?: true)
+      {_post, image} = post_with_image!(author, tmp)
+
+      conn = get(conn, "/post_images/#{image.token}/feed.avif")
+
+      assert get_resp_header(conn, "content-disposition") ==
+               [~s(inline; filename="#{author.active_slug}-feed.avif")]
+    end
+
     test "a legacy .webp URL (old post bodies, bookmarks) still serves the stored file", %{
       conn: conn,
       tmp: tmp

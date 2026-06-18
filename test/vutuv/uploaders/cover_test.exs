@@ -26,6 +26,10 @@ defmodule Vutuv.CoverTest do
   # 30-day browser/nginx cache. See `Vutuv.Uploads.served_url/4`.
   @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
 
+  # A stand-in content fingerprint for scheme B (see Vutuv.Uploads): when set,
+  # the served filename bakes in the handle + fingerprint and the URL drops `?v=`.
+  @fingerprint "1a2b3c4d5e6f"
+
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_cover_test_#{System.unique_integer([:positive])}")
     prev = Application.get_env(:vutuv, :uploads_dir_prefix)
@@ -104,6 +108,35 @@ defmodule Vutuv.CoverTest do
     end
   end
 
+  describe "fingerprinted URL (scheme B: handle + content hash in the filename)" do
+    setup do
+      {:ok, user: %{@user | cover_photo: "banner.jpg", cover_fingerprint: @fingerprint}}
+    end
+
+    test "bakes <handle>-wide-<fingerprint>.avif and drops the ?v= query", %{user: user} do
+      assert Vutuv.Cover.url({"banner.jpg", user}, :wide) ==
+               "/covers/7/john.doe-wide-#{@fingerprint}.avif"
+
+      refute Vutuv.Cover.url({"banner.jpg", user}, :wide) =~ "?"
+    end
+
+    test "the download filename moves with the handle when the slug changes", %{user: user} do
+      renamed = %{user | active_slug: "jane.smith"}
+
+      assert Vutuv.Cover.url({"banner.jpg", renamed}, :wide) ==
+               "/covers/7/jane.smith-wide-#{@fingerprint}.avif"
+    end
+
+    test "display_url/2 emits the fingerprinted URL", %{user: user} do
+      assert Vutuv.Cover.display_url(user, :wide) ==
+               "/covers/7/john.doe-wide-#{@fingerprint}.avif"
+    end
+
+    test "a nil fingerprint still serves the legacy ?v= URL (row not yet migrated)" do
+      assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) == "/covers/7/cover_wide.avif" <> @v
+    end
+  end
+
   describe "display_url/2 (what the profile puts in <img src>)" do
     test "returns the nginx-served URL when the user has a cover photo" do
       user = %{@user | cover_photo: "banner.jpg"}
@@ -130,10 +163,11 @@ defmodule Vutuv.CoverTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, "banner.jpg"} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, "banner.jpg", fp} = Vutuv.Cover.store({upload, @user})
+      assert fp =~ ~r/\A[0-9a-f]{12}\z/
 
       dir = Path.join(tmp, "covers/7")
-      assert File.exists?(Path.join(dir, "cover_wide.avif"))
+      assert File.exists?(Path.join(dir, "john.doe-wide-#{fp}.avif"))
       assert File.exists?(Path.join(tmp, "originals/covers/7/original.jpg"))
 
       # Nothing original may land in the publicly served tree.
@@ -145,10 +179,10 @@ defmodule Vutuv.CoverTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, _, fp} = Vutuv.Cover.store({upload, @user})
 
       # Source is 1200 wide (< 1600), so it is not upscaled; aspect ratio holds.
-      {w, h} = dimensions(Path.join(tmp, "covers/7/cover_wide.avif"))
+      {w, h} = dimensions(Path.join(tmp, "covers/7/john.doe-wide-#{fp}.avif"))
       assert w == 1200
       assert h == 600
     end
@@ -166,9 +200,9 @@ defmodule Vutuv.CoverTest do
       on_exit(fn -> File.rm(src) end)
 
       upload = %Plug.Upload{filename: "banner.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _} = Vutuv.Cover.store({upload, @user})
+      assert {:ok, _, fp} = Vutuv.Cover.store({upload, @user})
 
-      {:ok, stored} = Image.open(Path.join(tmp, "covers/7/cover_wide.avif"))
+      {:ok, stored} = Image.open(Path.join(tmp, "covers/7/john.doe-wide-#{fp}.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)
       assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
     end

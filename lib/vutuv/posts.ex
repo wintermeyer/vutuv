@@ -1349,13 +1349,15 @@ defmodule Vutuv.Posts do
     :ok
   end
 
-  @doc "The image behind a proxy token, with its post preloaded; `nil` when unknown."
+  @doc "The image behind a proxy token, with its post and owner preloaded; `nil` when unknown."
   def get_image_by_token(token) when is_binary(token) do
     PostImage
     |> Repo.get_by(token: token)
     |> case do
       nil -> nil
-      image -> Repo.preload(image, :post)
+      # :user lets the proxy name the download after the owner's handle
+      # (Content-Disposition); :post drives the visibility check.
+      image -> Repo.preload(image, [:post, :user])
     end
   end
 

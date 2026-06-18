@@ -7,6 +7,7 @@ defmodule Vutuv.Release do
       bin/vutuv eval "Vutuv.Release.migrate()"
   """
   alias Vutuv.Uploads.LegacyRelabel
+  alias Vutuv.Uploads.LegacySweeper
   alias Vutuv.Uploads.Regenerator
 
   @app :vutuv
@@ -44,6 +45,26 @@ defmodule Vutuv.Release do
 
     {:ok, summary, _apps} =
       Ecto.Migrator.with_repo(repo, fn _repo -> Regenerator.run(opts) end)
+
+    summary
+  end
+
+  @doc """
+  Deletes the legacy avatar/cover files the regenerator kept during the expand
+  phase — the **contract** step of the fingerprint migration (see
+  `Vutuv.Uploads.LegacySweeper`). Run this **only once** the fingerprinted
+  scheme is confirmed healthy in production; it is never part of the deploy:
+
+      bin/vutuv eval "Vutuv.Release.sweep_legacy_images(dry_run: true)"
+      bin/vutuv eval "Vutuv.Release.sweep_legacy_images()"
+  """
+  def sweep_legacy_images(opts \\ []) do
+    load_app()
+
+    [repo] = repos()
+
+    {:ok, summary, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo -> LegacySweeper.run(opts) end)
 
     summary
   end

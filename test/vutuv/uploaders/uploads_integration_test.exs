@@ -60,14 +60,22 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{avatar: upload})
 
     assert updated.avatar == "me.png"
-    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/avatar_thumb.avif"))
+    assert updated.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+
+    assert File.exists?(
+             Path.join(
+               tmp,
+               "avatars/#{user.id}/#{updated.active_slug}-thumb-#{updated.avatar_fingerprint}.avif"
+             )
+           )
+
     assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.png"))
   end
 
-  test "re-uploading a same-named avatar still bumps updated_at (cache-buster moves)" do
+  test "re-uploading a different image moves the content fingerprint (cache-buster)" do
     user = insert(:user, first_name: "Ada", last_name: "King")
 
-    assert {:ok, _} =
+    assert {:ok, first} =
              Vutuv.Accounts.update_user(user, %{
                avatar: %Plug.Upload{
                  filename: "me.png",
@@ -76,26 +84,44 @@ defmodule Vutuv.UploadsIntegrationTest do
                }
              })
 
-    # Rewind updated_at so a no-op write would leave it in the past. The avatar
-    # column is already "me.png", so without `force: true` the store would not
-    # touch the row and the cache-busting ?v= token would never change.
-    user
-    |> Ecto.Changeset.change(updated_at: ~N[2020-01-01 00:00:00])
-    |> Repo.update!()
+    assert first.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
 
-    reloaded = Repo.get!(User, user.id)
-
+    # A different image under the same filename: the fingerprint — and so the
+    # immutable URL — must change, even though the avatar column stays "me.png".
     assert {:ok, again} =
-             Vutuv.Accounts.update_user(reloaded, %{
+             Vutuv.Accounts.update_user(first, %{
                avatar: %Plug.Upload{
                  filename: "me.png",
-                 path: png_fixture(),
+                 path: png_fixture(color: [200, 30, 30]),
                  content_type: "image/png"
                }
              })
 
     assert again.avatar == "me.png"
-    assert NaiveDateTime.compare(again.updated_at, ~N[2020-01-01 00:00:00]) == :gt
+    refute again.avatar_fingerprint == first.avatar_fingerprint
+  end
+
+  test "changing the username re-derives the avatar under the new handle", %{tmp: tmp} do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+
+    {:ok, user} =
+      Vutuv.Accounts.update_user(user, %{
+        avatar: %Plug.Upload{filename: "me.png", path: png_fixture(), content_type: "image/png"}
+      })
+
+    old_slug = user.active_slug
+    fp = user.avatar_fingerprint
+    assert File.exists?(Path.join(tmp, "avatars/#{user.id}/#{old_slug}-medium-#{fp}.avif"))
+
+    {:ok, renamed} = Vutuv.Accounts.update_active_slug(user, %{active_slug: "ada_new_handle"})
+    assert renamed.active_slug == "ada_new_handle"
+
+    # The image moved with the handle (same content, same fingerprint), and the
+    # URL the app now emits points at a file that exists.
+    assert File.exists?(Path.join(tmp, "avatars/#{renamed.id}/ada_new_handle-medium-#{fp}.avif"))
+
+    assert Vutuv.Avatar.url({renamed.avatar, renamed}, :medium) ==
+             "/avatars/#{renamed.id}/ada_new_handle-medium-#{fp}.avif"
   end
 
   test "an invalid avatar extension is rejected with a changeset error" do
@@ -118,7 +144,15 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert {:ok, updated} = Vutuv.Accounts.update_user(user, %{cover_photo: upload})
 
     assert updated.cover_photo == "banner.png"
-    assert File.exists?(Path.join(tmp, "covers/#{user.id}/cover_wide.avif"))
+    assert updated.cover_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+
+    assert File.exists?(
+             Path.join(
+               tmp,
+               "covers/#{user.id}/#{updated.active_slug}-wide-#{updated.cover_fingerprint}.avif"
+             )
+           )
+
     assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.png"))
   end
 
@@ -189,8 +223,8 @@ defmodule Vutuv.UploadsIntegrationTest do
     |> VCard.render()
   end
 
-  defp png_fixture do
-    {:ok, img} = Image.new(300, 200, color: [10, 120, 200])
+  defp png_fixture(opts \\ []) do
+    {:ok, img} = Image.new(300, 200, color: opts[:color] || [10, 120, 200])
     path = Path.join(System.tmp_dir!(), "fixture_#{System.unique_integer([:positive])}.png")
     {:ok, _} = Image.write(img, path)
     path
