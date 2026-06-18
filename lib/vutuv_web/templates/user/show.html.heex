@@ -551,12 +551,24 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
-      <ul class="space-y-2">
+      <%!-- Icon line: envelope + address on one line; the type (Work/Personal) is
+      a small muted suffix shown only when meaningful ("Other" is the unspecified
+      default). No separate label line. --%>
+      <ul class="-my-1 text-sm">
         <li :for={email <- @emails}>
-          <%!-- "Other" is the unspecified default; only a meaningful label
-                (Work/Personal) earns a line on the clean showcase card. --%>
-          <p :if={email.email_type && email.email_type != "Other"} class="text-sm text-slate-600 dark:text-slate-400">{email.email_type}</p>
-          <a href={"mailto:#{email.value}"} class="break-all text-sm font-medium text-brand-600 hover:text-brand-700">{email.value}</a>
+          <a
+            href={"mailto:#{email.value}"}
+            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+          >
+            <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+            <span class="min-w-0 break-all font-medium">{email.value}</span>
+            <span
+              :if={email.email_type && email.email_type != "Other"}
+              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
+            >
+              {email.email_type}
+            </span>
+          </a>
         </li>
       </ul>
       <.manage_footer
@@ -580,14 +592,20 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? && !has_general_info} href={~p"/#{@user}/edit"}>
         {gettext("Add personal details")}
       </.empty_add>
-      <dl class="space-y-3 text-sm">
-        <div :if={@user.gender && @user.gender != "other"}>
-          <dt class="text-slate-600 dark:text-slate-400">{gettext("Gender")}</dt>
-          <dd class="font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
+      <%!-- Icon rows: one line per datum (person = gender, cake = birthday); the
+      label is screen-reader-only since the icon carries it. The dd needs `my-0`
+      to cancel the legacy global `dl dd { margin: 10px 0 }` in components.css,
+      which otherwise pads each row; a tight `gap-1.5` then sets the row rhythm. --%>
+      <dl :if={has_general_info} class="flex flex-col gap-1.5 text-sm">
+        <div :if={@user.gender && @user.gender != "other"} class="flex items-center gap-2.5">
+          <.detail_icon name="user" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+          <dt class="sr-only">{gettext("Gender")}</dt>
+          <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
         </div>
-        <div :if={@user.birthdate}>
-          <dt class="text-slate-600 dark:text-slate-400">{gettext("Birthday")}</dt>
-          <dd class="font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
+        <div :if={@user.birthdate} class="flex items-center gap-2.5">
+          <.detail_icon name="cake" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+          <dt class="sr-only">{gettext("Birthday")}</dt>
+          <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
         </div>
       </dl>
       <.card_footer_link :if={@as_owner? && has_general_info} href={~p"/#{@user}/edit"}>
@@ -635,10 +653,22 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
         {gettext("Add a phone number")}
       </.empty_add>
-      <ul class="space-y-3 text-sm">
+      <%!-- Icon line: phone glyph + number, the type a small muted suffix. --%>
+      <ul class="-my-1 text-sm">
         <li :for={number <- @user.phone_numbers}>
-          <p class="text-slate-600 dark:text-slate-400">{number.number_type}</p>
-          <a href={"tel:#{number.value}"} class="font-medium text-brand-600 hover:text-brand-700">{number.value}</a>
+          <a
+            href={"tel:#{number.value}"}
+            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+          >
+            <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+            <span class="font-medium">{number.value}</span>
+            <span
+              :if={number.number_type}
+              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
+            >
+              {number.number_type}
+            </span>
+          </a>
         </li>
       </ul>
       <.manage_footer
@@ -654,10 +684,16 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
         {gettext("Add an address")}
       </.empty_add>
-      <ul class="space-y-3 text-sm">
-        <li :for={address <- @user.addresses}>
-          <p class="text-slate-600 dark:text-slate-400">{address.description}</p>
-          <div class="font-medium text-slate-800 dark:text-slate-100">{format_address(address)}</div>
+      <%!-- Icon block: a map-pin leads the entry; the description is the bold
+      title and the full address sits muted below it, tightened with
+      leading-snug. --%>
+      <ul class="-my-1.5 text-sm">
+        <li :for={address <- @user.addresses} class="flex items-start gap-2.5 py-1.5">
+          <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+          <div class="min-w-0 leading-snug">
+            <p class="mb-0 font-medium text-slate-800 dark:text-slate-100">{address.description}</p>
+            <div class="text-slate-600 dark:text-slate-400">{format_address(address)}</div>
+          </div>
         </li>
       </ul>
       <.manage_footer
@@ -677,24 +713,23 @@ the resulting ~200px rail width. --%>
     <.card id="profile-other-formats">
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
       <%!-- The vCard carries no translatable labels, so it skips ?lang=. --%>
-      <ul class="space-y-2 text-sm">
-        <li :for={
-          {label, href} <- [
-            {gettext("Markdown"), "/#{@user.active_slug}.md#{format_lang}"},
-            {gettext("Text only"), "/#{@user.active_slug}.txt#{format_lang}"},
-            {"JSON", "/#{@user.active_slug}.json#{format_lang}"},
-            {"XML", "/#{@user.active_slug}.xml#{format_lang}"},
-            {gettext("vCard"), "/#{@user.active_slug}.vcf"}
-          ]
-        }>
-          <a
-            href={href}
-            class="font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            {label}
-          </a>
-        </li>
-      </ul>
+      <% formats = [
+        {gettext("Markdown"), "/#{@user.active_slug}.md#{format_lang}"},
+        {gettext("Text only"), "/#{@user.active_slug}.txt#{format_lang}"},
+        {"JSON", "/#{@user.active_slug}.json#{format_lang}"},
+        {"XML", "/#{@user.active_slug}.xml#{format_lang}"},
+        {gettext("vCard"), "/#{@user.active_slug}.vcf"}
+      ] %>
+      <%!-- Chips: a wrapping row of small tags instead of a five-row list. --%>
+      <div class="flex flex-wrap gap-1.5">
+        <.link
+          :for={{label, href} <- formats}
+          href={href}
+          class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+        >
+          {label}
+        </.link>
+      </div>
     </.card>
 
     <%!-- "Who to follow" sits at the foot of the rail on purpose: the profile's
