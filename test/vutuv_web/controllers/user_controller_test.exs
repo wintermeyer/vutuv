@@ -295,7 +295,10 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "https://www.google.com/maps/search/"
     assert html =~ "https://www.openstreetmap.org/search"
     assert html =~ "https://maps.apple.com/"
-    assert html =~ "Google Maps"
+    # Google Maps is the single primary call to action; the other services are
+    # demoted to a quiet "also on" line so the row reads as one map action.
+    assert html =~ "In Google Maps öffnen"
+    assert html =~ "Auch auf"
     assert html =~ "OpenStreetMap"
     assert html =~ "Apple Maps"
   end

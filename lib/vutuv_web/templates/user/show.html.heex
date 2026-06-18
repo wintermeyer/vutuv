@@ -699,16 +699,31 @@ the resulting ~200px rail width. --%>
             <div class="text-slate-600 dark:text-slate-400">
               {format_address(address, @conn.assigns[:locale])}
             </div>
-            <%!-- Open the address on the major map services. The geocoding
-            query keeps the country even when it is hidden above. --%>
-            <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+            <%!-- Open the address on a map. One decisive primary "Open in
+            Google Maps" action; OpenStreetMap and Apple Maps are demoted to a
+            quiet alternatives line so the row reads as a single map action
+            instead of three look-alike links. The geocoding query keeps the
+            country even when it is hidden above. --%>
+            <div class="mt-1.5">
               <a
-                :for={{label, url} <- address_map_links(address)}
-                href={url}
+                href={elem(List.first(address_map_links(address)), 1)}
                 target="_blank"
                 rel="noopener noreferrer"
-                class="font-medium text-brand-600 hover:text-brand-700"
-              >{label}</a>
+                class="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+              >
+                <.detail_icon name="map-pin" class="h-3.5 w-3.5" />
+                {gettext("Open in Google Maps")}
+              </a>
+              <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+                <span>{gettext("Also on")}</span>
+                <a
+                  :for={{label, url} <- Enum.drop(address_map_links(address), 1)}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="font-medium text-brand-600 hover:text-brand-700"
+                >{label}</a>
+              </div>
             </div>
           </div>
         </li>

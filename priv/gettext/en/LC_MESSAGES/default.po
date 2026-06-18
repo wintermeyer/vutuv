@@ -81,7 +81,7 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:113
+#: lib/vutuv_web/templates/user/edit.html.heex:155
 #, elixir-autogen
 msgid "Birthdate"
 msgstr ""
@@ -98,7 +98,9 @@ msgstr ""
 #: lib/vutuv_web/templates/connection/index.html.heex:47
 #: lib/vutuv_web/templates/report/new.html.heex:103
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
-#: lib/vutuv_web/templates/user/edit.html.heex:127
+#: lib/vutuv_web/templates/user/edit.html.heex:43
+#: lib/vutuv_web/templates/user/edit.html.heex:83
+#: lib/vutuv_web/templates/user/edit.html.heex:169
 #, elixir-autogen
 msgid "Cancel"
 msgstr ""
@@ -275,7 +277,7 @@ msgstr ""
 msgid "Fax"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:68
+#: lib/vutuv_web/templates/user/edit.html.heex:110
 #, elixir-autogen
 msgid "First Name"
 msgstr ""
@@ -301,7 +303,7 @@ msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:181
 #: lib/vutuv_web/agent_docs/text.ex:214
-#: lib/vutuv_web/templates/user/edit.html.heex:63
+#: lib/vutuv_web/templates/user/edit.html.heex:105
 #: lib/vutuv_web/templates/user/show.html.heex:606
 #, elixir-autogen
 msgid "Gender"
@@ -343,7 +345,7 @@ msgstr ""
 msgid "Language"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:73
+#: lib/vutuv_web/templates/user/edit.html.heex:115
 #, elixir-autogen
 msgid "Last Name"
 msgstr ""
@@ -398,7 +400,7 @@ msgstr ""
 msgid "Log in"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:78
+#: lib/vutuv_web/templates/user/edit.html.heex:120
 #, elixir-autogen
 msgid "Middle Name"
 msgstr ""
@@ -437,7 +439,7 @@ msgstr ""
 msgid "New message from @%{slug} on vutuv"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:83
+#: lib/vutuv_web/templates/user/edit.html.heex:125
 #, elixir-autogen
 msgid "Nickname"
 msgstr ""
@@ -522,7 +524,7 @@ msgstr ""
 msgid "Phone number updated successfully."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:88
+#: lib/vutuv_web/templates/user/edit.html.heex:130
 #, elixir-autogen
 msgid "Prefix"
 msgstr ""
@@ -573,7 +575,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/notifications.html.heex:75
 #: lib/vutuv_web/templates/settings/privacy.html.heex:48
 #: lib/vutuv_web/templates/settings/privacy.html.heex:83
-#: lib/vutuv_web/templates/user/edit.html.heex:122
+#: lib/vutuv_web/templates/user/edit.html.heex:164
 #, elixir-autogen
 msgid "Save"
 msgstr ""
@@ -663,7 +665,7 @@ msgstr ""
 msgid "Submit a bugreport or a feature request."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:93
+#: lib/vutuv_web/templates/user/edit.html.heex:135
 #, elixir-autogen
 msgid "Suffix"
 msgstr ""
@@ -693,12 +695,12 @@ msgstr ""
 msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:390
+#: lib/vutuv_web/controllers/user_controller.ex:394
 #, elixir-autogen
 msgid "User deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:334
+#: lib/vutuv_web/controllers/user_controller.ex:338
 #, elixir-autogen
 msgid "User updated successfully."
 msgstr ""
@@ -760,7 +762,7 @@ msgid "Value"
 msgstr ""
 
 #: lib/vutuv_web/templates/user/show.html.heex:280
-#: lib/vutuv_web/templates/user/show.html.heex:725
+#: lib/vutuv_web/templates/user/show.html.heex:753
 #, elixir-autogen
 msgid "vCard"
 msgstr ""
@@ -961,7 +963,7 @@ msgid "Verify"
 msgstr ""
 
 #: lib/vutuv_web/templates/page/index.html.heex:41
-#: lib/vutuv_web/templates/user/edit.html.heex:64
+#: lib/vutuv_web/templates/user/edit.html.heex:106
 #, elixir-autogen
 msgid "Choose a gender"
 msgstr ""
@@ -1058,19 +1060,19 @@ msgid "Search Tips"
 msgstr ""
 
 #: lib/vutuv_web/templates/page/index.html.heex:41
-#: lib/vutuv_web/templates/user/edit.html.heex:64
+#: lib/vutuv_web/templates/user/edit.html.heex:106
 #, elixir-autogen
 msgid "female"
 msgstr ""
 
 #: lib/vutuv_web/templates/page/index.html.heex:40
-#: lib/vutuv_web/templates/user/edit.html.heex:64
+#: lib/vutuv_web/templates/user/edit.html.heex:106
 #, elixir-autogen
 msgid "male"
 msgstr ""
 
 #: lib/vutuv_web/templates/page/index.html.heex:41
-#: lib/vutuv_web/templates/user/edit.html.heex:64
+#: lib/vutuv_web/templates/user/edit.html.heex:106
 #, elixir-autogen
 msgid "other"
 msgstr ""
@@ -1404,7 +1406,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/email_controller.ex:118
 #: lib/vutuv_web/controllers/session_controller.ex:271
-#: lib/vutuv_web/controllers/user_controller.ex:405
+#: lib/vutuv_web/controllers/user_controller.ex:409
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr ""
@@ -1639,7 +1641,7 @@ msgstr ""
 msgid "Disable slugs"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:320
+#: lib/vutuv_web/controllers/user_controller.ex:324
 #: lib/vutuv_web/templates/user/show.html.heex:135
 #, elixir-autogen, elixir-format
 msgid "Edit profile"
@@ -1771,8 +1773,8 @@ msgstr ""
 #: lib/vutuv_web/controllers/session_controller.ex:48
 #: lib/vutuv_web/controllers/session_controller.ex:115
 #: lib/vutuv_web/controllers/session_controller.ex:131
-#: lib/vutuv_web/controllers/user_controller.ex:360
-#: lib/vutuv_web/controllers/user_controller.ex:375
+#: lib/vutuv_web/controllers/user_controller.ex:364
+#: lib/vutuv_web/controllers/user_controller.ex:379
 #, elixir-autogen, elixir-format
 msgid "Too many attempts. Please try again later."
 msgstr ""
@@ -1802,7 +1804,7 @@ msgstr ""
 msgid "We sent a PIN to your new email address. Enter it below to confirm the address."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:743
+#: lib/vutuv_web/templates/user/show.html.heex:771
 #, elixir-autogen, elixir-format
 msgid "Who to follow"
 msgstr ""
@@ -1937,7 +1939,7 @@ msgstr ""
 msgid "Change cover photo"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:41
+#: lib/vutuv_web/templates/user/edit.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "Cover photo"
 msgstr ""
@@ -2027,7 +2029,7 @@ msgstr ""
 msgid "September"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:107
+#: lib/vutuv_web/templates/user/edit.html.heex:149
 #, elixir-autogen, elixir-format
 msgid "Markdown is supported: bold, italics, links and lists."
 msgstr ""
@@ -2712,14 +2714,14 @@ msgstr ""
 msgid "Add personal details"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:271
+#: lib/vutuv_web/controllers/user_controller.ex:275
 #: lib/vutuv_web/templates/user/show.html.heex:405
 #: lib/vutuv_web/templates/work_experience/index.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "Add work experience"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:275
+#: lib/vutuv_web/controllers/user_controller.ex:279
 #: lib/vutuv_web/templates/user/show.html.heex:339
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
@@ -2833,7 +2835,7 @@ msgstr ""
 msgid "Ignore"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:721
+#: lib/vutuv_web/templates/user/show.html.heex:749
 #, elixir-autogen, elixir-format
 msgid "Markdown"
 msgstr ""
@@ -2843,7 +2845,7 @@ msgstr ""
 msgid "No connections yet."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:718
+#: lib/vutuv_web/templates/user/show.html.heex:746
 #, elixir-autogen, elixir-format
 msgid "Other formats"
 msgstr ""
@@ -2868,7 +2870,7 @@ msgstr ""
 msgid "Sent requests"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:722
+#: lib/vutuv_web/templates/user/show.html.heex:750
 #, elixir-autogen, elixir-format
 msgid "Text only"
 msgstr ""
@@ -4735,7 +4737,7 @@ msgstr ""
 msgid "searches first names only (last: for last names)"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:269
+#: lib/vutuv_web/controllers/user_controller.ex:273
 #: lib/vutuv_web/templates/user/show.html.heex:371
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Add a tag"
@@ -5427,7 +5429,7 @@ msgstr ""
 msgid "A few quick steps so people can find and recognize you."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:264
+#: lib/vutuv_web/controllers/user_controller.ex:268
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Add a profile photo"
 msgstr ""
@@ -5493,7 +5495,7 @@ msgstr ""
 msgid "Type of email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:101
+#: lib/vutuv_web/templates/user/edit.html.heex:143
 #, elixir-autogen, elixir-format
 msgid "About you"
 msgstr ""
@@ -5575,7 +5577,7 @@ msgstr ""
 msgid "When on, your public profile can appear in Google and other search engines."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:60
+#: lib/vutuv_web/templates/user/edit.html.heex:102
 #, elixir-autogen, elixir-format
 msgid "Your name"
 msgstr ""
@@ -5636,18 +5638,18 @@ msgstr ""
 msgid "Current avatar"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:46
-#: lib/vutuv_web/templates/user/edit.html.heex:50
+#: lib/vutuv_web/templates/user/edit.html.heex:67
+#: lib/vutuv_web/templates/user/edit.html.heex:71
 #, elixir-autogen, elixir-format
 msgid "Current cover photo"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:89
+#: lib/vutuv_web/templates/user/edit.html.heex:131
 #, elixir-autogen, elixir-format
 msgid "e.g. Dr. or Prof."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:94
+#: lib/vutuv_web/templates/user/edit.html.heex:136
 #, elixir-autogen, elixir-format
 msgid "e.g. Jr. or PhD"
 msgstr ""
@@ -6105,12 +6107,12 @@ msgstr ""
 msgid "or"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:268
+#: lib/vutuv_web/controllers/user_controller.ex:272
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:104
+#: lib/vutuv_web/templates/user/edit.html.heex:146
 #, elixir-autogen, elixir-format
 msgid "Tagline"
 msgstr ""
@@ -6154,3 +6156,57 @@ msgid "Post"
 msgid_plural "Posts"
 msgstr[0] ""
 msgstr[1] ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:48
+#: lib/vutuv_web/templates/user/edit.html.heex:88
+#, elixir-autogen, elixir-format
+msgid "After choosing a file you can reposition and zoom it."
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:718
+#, elixir-autogen, elixir-format
+msgid "Also on"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:41
+#: lib/vutuv_web/templates/user/edit.html.heex:81
+#, elixir-autogen, elixir-format
+msgid "Drag to move, use the slider to zoom. The framed area is what others see."
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "New avatar preview"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:93
+#, elixir-autogen, elixir-format
+msgid "New cover photo preview"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:715
+#, elixir-autogen, elixir-format
+msgid "Open in Google Maps"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:80
+#, elixir-autogen, elixir-format
+msgid "Position your cover photo"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:40
+#, elixir-autogen, elixir-format
+msgid "Position your photo"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:42
+#: lib/vutuv_web/templates/user/edit.html.heex:82
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Use photo"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:44
+#: lib/vutuv_web/templates/user/edit.html.heex:84
+#, elixir-autogen, elixir-format
+msgid "Zoom"
+msgstr ""
