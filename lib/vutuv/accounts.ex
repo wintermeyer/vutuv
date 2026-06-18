@@ -19,6 +19,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
+  alias Vutuv.Uploads.Crop
 
   # ── Registration ──
 
@@ -781,26 +782,46 @@ defmodule Vutuv.Accounts do
   # rolled-back update (a name too long, a constraint, ...) never orphans them
   # (issue #776). User.changeset already validated the uploads in memory; here
   # we store them against the just-committed user (final id + handle, which the
-  # served filename embeds) and set both the filename and the content
-  # fingerprint columns in a second write.
+  # served filename embeds) and set the filename, content fingerprint and crop
+  # columns in a second write.
   defp store_pending_images(user, attrs) do
     user
-    |> store_pending_image(:avatar, image_upload(attrs, :avatar), &Vutuv.Avatar.store/1)
-    |> store_pending_image(:cover_photo, image_upload(attrs, :cover_photo), &Vutuv.Cover.store/1)
+    |> store_pending_image(
+      :avatar,
+      :avatar_crop,
+      image_upload(attrs, :avatar),
+      crop_param(attrs, "avatar_crop"),
+      &Vutuv.Avatar.store/2
+    )
+    |> store_pending_image(
+      :cover_photo,
+      :cover_crop,
+      image_upload(attrs, :cover_photo),
+      crop_param(attrs, "cover_crop"),
+      &Vutuv.Cover.store/2
+    )
   end
 
-  defp store_pending_image(user, _field, nil, _store), do: user
+  defp store_pending_image(user, _field, _crop_field, nil, _crop, _store), do: user
 
-  defp store_pending_image(user, field, %Plug.Upload{} = upload, store) do
-    # The store returns the content fingerprint alongside the filename; both are
-    # persisted, putting the row on the fingerprinted scheme (its URL carries the
-    # fingerprint in the filename, so no `updated_at`-based `?v=` is needed — an
-    # identical re-upload yields the same fingerprint and the same cacheable URL).
-    # A failure of either step (a rare disk/db error after a decode the changeset
-    # already proved) keeps the prior image rather than committing columns that
-    # point at a file that was never written.
-    with {:ok, file_name, fingerprint} <- store.({upload, user}),
-         attrs = %{field => file_name, fingerprint_field(field) => fingerprint},
+  defp store_pending_image(user, field, crop_field, %Plug.Upload{} = upload, crop, store) do
+    # The store returns the content fingerprint alongside the filename; the
+    # filename, fingerprint and crop are persisted together, putting the row on
+    # the fingerprinted scheme (its URL carries the fingerprint in the filename,
+    # so no `updated_at`-based `?v=` is needed). The crop is folded into the
+    # fingerprint, so re-cropping the same original still yields a fresh, cache-
+    # safe URL. The crop column is always reset to the freshly-submitted value:
+    # a new upload must not inherit the previous image's crop, and it is persisted
+    # so a later re-derive (`Vutuv.Uploads.Regenerator`) re-applies it (see
+    # `Vutuv.Uploads.Crop`). A failure of either step (a rare disk/db error after
+    # a decode the changeset already proved) keeps the prior image rather than
+    # committing columns that point at a file that was never written.
+    with {:ok, file_name, fingerprint} <- store.({upload, user}, crop),
+         attrs = %{
+           field => file_name,
+           fingerprint_field(field) => fingerprint,
+           crop_field => crop
+         },
          {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
       saved
     else
@@ -812,6 +833,14 @@ defmodule Vutuv.Accounts do
 
   defp fingerprint_field(:avatar), do: :avatar_fingerprint
   defp fingerprint_field(:cover_photo), do: :cover_fingerprint
+
+  # The user-chosen crop rectangle for an image, normalised to its canonical
+  # `"x,y,w,h"` form (or nil for no/invalid crop). Only the web form sends it
+  # (string keys); internal callers (e.g. the gravatar import) pass atom-keyed
+  # attrs with no crop, which Map.get reads as nil — i.e. centered.
+  defp crop_param(attrs, key) when is_binary(key) do
+    attrs |> Map.get(key) |> Crop.normalize()
+  end
 
   defp image_upload(attrs, field) do
     case attrs do

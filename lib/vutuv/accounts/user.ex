@@ -27,8 +27,18 @@ defmodule Vutuv.Accounts.User do
     # (Vutuv.Uploads). nil = not yet migrated to the fingerprinted scheme: the URL
     # builder then emits the legacy `?v=` URL, so a nil here serves exactly as
     # before. Set programmatically on store/regenerate, never cast from params.
+    # The crop string (below) is folded into this hash, so re-cropping the same
+    # original yields a fresh fingerprint and therefore a fresh, cache-safe URL.
     field(:avatar_fingerprint, :string)
     field(:cover_fingerprint, :string)
+    # The user-chosen crop rectangle for each image, "x,y,w,h" fractions (0..1)
+    # of the EXIF-rotated original; nil = no crop (centered, the pre-crop-UI
+    # behavior). Set programmatically alongside the file post-commit
+    # (Accounts.store_pending_image/6), never cast from params — like :avatar /
+    # :cover_photo themselves. Persisted so Vutuv.Uploads.Regenerator can
+    # re-apply the crop when it re-derives served versions from the original.
+    field(:avatar_crop, :string)
+    field(:cover_crop, :string)
     field(:active_slug, :string)
     field(:admin?, :boolean)
     field(:headline, :string)

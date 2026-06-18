@@ -13,6 +13,7 @@ defmodule Vutuv.Uploads do
   """
 
   alias Vutuv.Repo
+  alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -24,20 +25,24 @@ defmodule Vutuv.Uploads do
   @hash_length 12
 
   @typedoc """
-  Per-uploader layout passed to the shared `store/2`, `url/3` and
+  Per-uploader layout passed to the shared `store/3`, `url/3` and
   `regenerate/3` pipeline (`Vutuv.Avatar` and `Vutuv.Cover` differ only in
-  these four knobs):
+  these knobs):
 
     * `:spec_key` — the `Vutuv.Uploads.Spec.versions/1` key (`:avatar | :cover`)
     * `:prefix` — the served-tree storage prefix (`"avatars"` / `"covers"`)
     * `:default_version` — the version `url/3` serves when none is given
     * `:stale_glob` — the `regenerate/3` sweep glob (relative to the dir)
+    * `:crop_field` — the scope field holding the persisted crop string that
+      `regenerate/3` re-applies (`:avatar_crop` / `:cover_crop`); absent for
+      uploaders without a user-chosen crop
   """
   @type uploader_config :: %{
-          spec_key: atom(),
-          prefix: String.t(),
-          default_version: atom(),
-          stale_glob: String.t()
+          required(:spec_key) => atom(),
+          required(:prefix) => String.t(),
+          required(:default_version) => atom(),
+          required(:stale_glob) => String.t(),
+          optional(:crop_field) => atom()
         }
 
   @doc """
@@ -78,17 +83,23 @@ defmodule Vutuv.Uploads do
   (privately). Clearing prior versions keeps exactly one image set per dir, so a
   re-upload never accumulates stale fingerprinted/legacy files.
   """
-  def store({%Plug.Upload{} = upload, scope}, config) do
+  def store({%Plug.Upload{} = upload, scope}, config, crop \\ nil) do
     if valid_extension?(upload.filename) do
       ext = Path.extname(upload.filename)
       storage_dir = storage_dir(scope, config)
       dir = disk_dir(storage_dir)
       File.mkdir_p!(dir)
-      fingerprint = content_hash(upload.path)
+      # The crop is folded into the fingerprint so re-cropping the *same*
+      # original yields a different filename (and a cache-safe URL); see
+      # content_hash/2. The crop only shapes the derived (served) versions —
+      # the original is kept verbatim and uncropped, so a future re-derive (or
+      # re-crop) starts from the full upload.
+      fingerprint = content_hash(upload.path, crop)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
+           {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
            :ok <- clear_public_versions(dir),
-           :ok <- write_derived_versions(rotated, dir, scope, fingerprint, config),
+           :ok <- write_derived_versions(cropped, dir, scope, fingerprint, config),
            :ok <- Originals.store(storage_dir, upload.path, ext) do
         {:ok, upload.filename, fingerprint}
       else
@@ -99,14 +110,17 @@ defmodule Vutuv.Uploads do
     end
   end
 
-  # The first 12 hex of the SHA-256 of the uploaded bytes — the content
-  # fingerprint baked into the served filename. Hashing the **original** (not a
-  # derived version) makes it deterministic, so a regeneration of the same image
-  # produces the same name (idempotent migration) and an identical re-upload
-  # reuses the same URL.
-  defp content_hash(path) do
+  # The first 12 hex of the SHA-256 of the uploaded bytes **plus the crop
+  # string** — the content fingerprint baked into the served filename. Hashing
+  # the **original** (not a derived version) makes it deterministic, so a
+  # regeneration of the same image and crop produces the same name (idempotent
+  # migration) and an identical re-upload reuses the same URL. Folding the crop
+  # in means re-cropping the same original yields a fresh fingerprint, so the
+  # immutable (`?v=`-less) URL changes and no stale crop is served from cache.
+  # A nil crop appends "", leaving the no-crop hash byte-identical to before.
+  defp content_hash(path, crop) do
     :sha256
-    |> :crypto.hash(File.read!(path))
+    |> :crypto.hash(File.read!(path) <> (crop || ""))
     |> Base.encode16(case: :lower)
     |> binary_part(0, @hash_length)
   end
@@ -279,10 +293,18 @@ defmodule Vutuv.Uploads do
 
       original ->
         File.mkdir_p!(dir)
-        fingerprint = content_hash(original)
+        # Re-apply the user's persisted crop so a re-derive from the kept
+        # original never silently un-crops the served versions. The crop is
+        # folded into the fingerprint (as it was at store time), so the
+        # recomputed fingerprint matches the persisted column and the migration
+        # stays idempotent. A nil crop_field (uploaders without a crop) is a
+        # no-op centered derive, byte-identical to the pre-crop behaviour.
+        crop = crop_for(user, config)
+        fingerprint = content_hash(original, crop)
 
         with {:ok, rotated} <- Spec.open_rotated(original),
-             :ok <- write_derived_versions(rotated, dir, user, fingerprint, config),
+             {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
+             :ok <- write_derived_versions(cropped, dir, user, fingerprint, config),
              {:ok, _user} <- persist_fingerprint(user, fingerprint, config) do
           :ok
         end
@@ -300,6 +322,13 @@ defmodule Vutuv.Uploads do
       fingerprint_converged?(user, dir, fingerprint, config) -> :unchanged
       Originals.locate(storage_dir, [Path.join(dir, "*_original.*")]) -> :ok
       true -> {:skipped, :missing_original}
+    end
+  end
+
+  defp crop_for(scope, config) do
+    case Map.get(config, :crop_field) do
+      nil -> nil
+      field -> Map.get(scope, field)
     end
   end
 
