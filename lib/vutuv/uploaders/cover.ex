@@ -5,19 +5,20 @@ defmodule Vutuv.Cover do
   The wide banner behind the avatar at the top of the profile page. Mirrors
   `Vutuv.Avatar` (explicit local-disk storage + libvips, versions from
   `Vutuv.Uploads.Spec`), but stores a single wide version instead of square
-  crops, because the banner is displayed full-bleed with CSS `object-cover`:
+  crops, because the banner is displayed full-bleed with CSS `object-cover`. The
+  served file is named for the owner's handle and the content fingerprint
+  (immutable URL, no `?v=`), so a download carries the username:
 
-      <uploads_dir_prefix>/covers/<user.id>/cover_wide.avif
+      <uploads_dir_prefix>/covers/<user.id>/<active_slug>-wide-<fingerprint>.avif
       <uploads_dir_prefix>/originals/covers/<user.id>/original<ext>
 
-  The served version is AVIF in the public tree (nginx `location /covers/`,
-  mirroring `/avatars/`; locally the endpoint serves it when
-  `:serve_uploads_locally` is set). The uploaded original is kept verbatim in
-  the private `originals/` tree (`Vutuv.Uploads.Originals`) and never served.
-  URLs are root-relative (`/covers/<id>/...`) and URI-encoded; files from an
-  earlier pipeline (pre-AVIF, or the pre-#773 name-derived `<First Last>_wide`)
-  keep resolving through a transitional fallback until the one-shot
-  regeneration has re-derived them under the stable name.
+  The fingerprint is stored in `:cover_fingerprint`; the served version is AVIF
+  in the public tree (nginx `location /covers/`, mirroring `/avatars/`; locally
+  the endpoint serves it when `:serve_uploads_locally` is set). The uploaded
+  original is kept verbatim in the private `originals/` tree
+  (`Vutuv.Uploads.Originals`) and never served. URLs are root-relative
+  (`/covers/<id>/...`) and URI-encoded. A row with no fingerprint has not been
+  migrated yet and falls back to the legacy `cover_wide.avif?v=...` URL.
 
   The store/serve/url/regenerate pipeline is shared with `Vutuv.Avatar` and
   lives in `Vutuv.Uploads`; this module supplies only the cover layout
@@ -30,28 +31,44 @@ defmodule Vutuv.Cover do
     spec_key: :cover,
     prefix: "covers",
     default_version: :wide,
+    # See Vutuv.Avatar's @config: the user column holding this image's content
+    # fingerprint, baked into `<slug>-<version>-<fp>.avif` when set.
+    fingerprint_field: :cover_fingerprint,
     stale_glob: "*_{wide,original}.*"
   }
 
   @doc """
   Stores every cover version for `{upload, user}` and returns
-  `{:ok, original_file_name}` (kept verbatim in the `:cover_photo` column), or
-  `{:error, :invalid_file}` when the extension is not whitelisted or the file
-  cannot be decoded as an image.
+  `{:ok, original_file_name, fingerprint}` (kept in the `:cover_photo` /
+  `:cover_fingerprint` columns), or `{:error, :invalid_file}` when the extension
+  is not whitelisted or the file cannot be decoded as an image.
   """
   def store({%Plug.Upload{}, _scope} = upload_and_scope) do
     Uploads.store(upload_and_scope, @config)
   end
 
   @doc """
-  Re-derives the served version from the original per the current
-  `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
+  Migrates the cover to the fingerprinted scheme, or re-derives a row already on
+  it, per the current `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate/3`,
   which this configures with the cover layout. Used by
   `Vutuv.Uploads.Regenerator`.
   """
   def regenerate(user, opts \\ []) do
     Uploads.regenerate(user, opts, @config)
   end
+
+  @doc """
+  Re-derives the cover under the user's current handle after a username change.
+  See `Vutuv.Uploads.reslug/2` and `Accounts.update_active_slug/2`.
+  """
+  def reslug(user), do: Uploads.reslug(user, @config)
+
+  @doc """
+  Removes the legacy cover files once the row is on the fingerprinted scheme —
+  the contract half of the migration. See `Vutuv.Uploads.sweep_legacy/3` and
+  `mix vutuv.images.sweep_legacy`.
+  """
+  def sweep_legacy(user, opts \\ []), do: Uploads.sweep_legacy(user, opts, @config)
 
   @doc """
   Root-relative, URI-encoded URL for a given `{cover_photo, user}` and served

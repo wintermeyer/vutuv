@@ -52,36 +52,42 @@ defmodule Vutuv.Uploads.RegeneratorTest do
   end
 
   describe "avatars" do
-    test "relocates the original, derives AVIF, sweeps stale files", %{tmp: tmp} do
+    test "migrates to the fingerprinted scheme and keeps legacy files (expand)", %{tmp: tmp} do
       user = legacy_avatar_user!(tmp)
 
       summary = Regenerator.run(only: :avatars)
       assert summary.avatars == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
 
+      user = Repo.reload!(user)
+      assert user.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
+      fp = user.avatar_fingerprint
+      slug = user.active_slug
+
       dir = Path.join(tmp, "avatars/#{user.id}")
-      assert File.exists?(Path.join(dir, "avatar_thumb.avif"))
-      assert File.exists?(Path.join(dir, "avatar_medium.avif"))
+      assert File.exists?(Path.join(dir, "#{slug}-thumb-#{fp}.avif"))
+      assert File.exists?(Path.join(dir, "#{slug}-medium-#{fp}.avif"))
       assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.jpg"))
 
-      # The pre-AVIF and pre-#773 name-derived files (incl. the publicly
-      # downloadable original) are gone; only the stable id-scoped files remain.
-      assert dir |> File.ls!() |> Enum.sort() ==
-               ["avatar_medium.avif", "avatar_thumb.avif"]
+      # Expand deliberately keeps the legacy derived files (the previous release
+      # and a rollback still serve them); only the publicly downloadable original
+      # is relocated into the private tree. The contract sweep removes the rest.
+      assert File.exists?(Path.join(dir, "Ada King_thumb.jpg"))
+      refute File.exists?(Path.join(dir, "Ada King_original.jpg"))
     end
 
     test "a second run leaves converged rows alone (cheap deploy hook)", %{tmp: tmp} do
       user = legacy_avatar_user!(tmp)
-
       assert Regenerator.run(only: :avatars).avatars.regenerated == 1
 
       dir = Path.join(tmp, "avatars/#{user.id}")
-      mtimes = for f <- File.ls!(dir), into: %{}, do: {f, File.stat!(Path.join(dir, f)).mtime}
+      avifs = Path.wildcard(Path.join(dir, "*.avif"))
+      assert length(avifs) == 2
+      mtimes = for f <- avifs, into: %{}, do: {f, File.stat!(f).mtime}
 
       assert Regenerator.run(only: :avatars).avatars ==
                %{regenerated: 0, unchanged: 1, skipped: 0, failed: 0}
 
-      assert length(File.ls!(dir)) == 2
-      for f <- File.ls!(dir), do: assert(File.stat!(Path.join(dir, f)).mtime == mtimes[f])
+      for f <- avifs, do: assert(File.stat!(f).mtime == mtimes[f])
       assert File.ls!(Path.join(tmp, "originals/avatars/#{user.id}")) == ["original.jpg"]
     end
 
@@ -100,11 +106,13 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :avatars)
 
       assert summary.avatars == %{regenerated: 0, unchanged: 0, skipped: 1, failed: 0}
-      # The only derived file the row has keeps serving via the fallback.
+      # The only derived file the row has keeps serving via the legacy fallback,
+      # and the row stays off the fingerprinted scheme.
       assert File.exists?(Path.join(dir, "Ada King_thumb.jpg"))
+      assert Repo.reload!(user).avatar_fingerprint == nil
     end
 
-    test "dry run reports without writing anything", %{tmp: tmp} do
+    test "dry run reports without writing or persisting anything", %{tmp: tmp} do
       user = legacy_avatar_user!(tmp)
 
       summary = Regenerator.run(only: :avatars, dry_run: true)
@@ -112,23 +120,31 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       assert summary.avatars == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
       dir = Path.join(tmp, "avatars/#{user.id}")
       assert File.exists?(Path.join(dir, "Ada King_original.jpg"))
-      refute File.exists?(Path.join(dir, "Ada King_thumb.avif"))
+      assert Path.wildcard(Path.join(dir, "*.avif")) == []
       refute File.exists?(Path.join(tmp, "originals/avatars/#{user.id}"))
+      assert Repo.reload!(user).avatar_fingerprint == nil
     end
 
-    test "an already-AVIF row (original already private) is simply re-derived", %{tmp: tmp} do
+    test "an already-AVIF row (original already private) is migrated in place", %{tmp: tmp} do
       user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
       jpeg!(Path.join(tmp, "originals/avatars/#{user.id}/original.jpg"))
 
       summary = Regenerator.run(only: :avatars)
 
       assert summary.avatars == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert File.exists?(Path.join(tmp, "avatars/#{user.id}/avatar_thumb.avif"))
+      user = Repo.reload!(user)
+
+      assert File.exists?(
+               Path.join(
+                 tmp,
+                 "avatars/#{user.id}/#{user.active_slug}-thumb-#{user.avatar_fingerprint}.avif"
+               )
+             )
     end
   end
 
   describe "covers" do
-    test "relocates the original, derives the AVIF wide version", %{tmp: tmp} do
+    test "migrates to the fingerprinted wide version, keeps legacy", %{tmp: tmp} do
       user = insert(:user, first_name: "Ada", last_name: "King", cover_photo: "banner.jpg")
       dir = Path.join(tmp, "covers/#{user.id}")
       jpeg!(Path.join(dir, "Ada King_wide.jpg"))
@@ -137,12 +153,19 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       summary = Regenerator.run(only: :covers)
 
       assert summary.covers == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
-      assert File.ls!(dir) == ["cover_wide.avif"]
+      user = Repo.reload!(user)
+      fp = user.cover_fingerprint
+      assert fp =~ ~r/\A[0-9a-f]{12}\z/
+
+      wide = Path.join(dir, "#{user.active_slug}-wide-#{fp}.avif")
+      assert File.exists?(wide)
       assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.jpg"))
+      # Legacy derived file kept for rollback (expand).
+      assert File.exists?(Path.join(dir, "Ada King_wide.jpg"))
 
       # 1800px original is capped at the Spec's 1600px wide.
-      {:ok, wide} = Image.open(Path.join(dir, "cover_wide.avif"))
-      assert Image.width(wide) == 1600
+      {:ok, img} = Image.open(wide)
+      assert Image.width(img) == 1600
     end
   end
 
@@ -208,11 +231,18 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       # An older upload under a previous name, next to the current one.
       jpeg!(Path.join(dir, "Old Name_original.png"))
 
-      summary = Regenerator.run(only: :avatars)
-      assert summary.avatars.regenerated == 1
-      # The row sweep already removed the stray (it matches the stale glob),
-      # so the orphan pass finds nothing.
-      assert Regenerator.run(only: :orphans).orphan_originals == %{moved: 0}
+      assert Regenerator.run(only: :avatars).avatars.regenerated == 1
+
+      # Expand no longer sweeps, so the stray original survives the row pass; the
+      # orphan pass relocates it privately (the canonical slot is taken by the
+      # row's own original) under an orphan-* name, so no original stays public.
+      assert Regenerator.run(only: :orphans).orphan_originals == %{moved: 1}
+
+      assert File.exists?(
+               Path.join(tmp, "originals/avatars/#{user.id}/orphan-Old Name_original.png")
+             )
+
+      refute File.exists?(Path.join(dir, "Old Name_original.png"))
     end
 
     test "dry run only reports", %{tmp: tmp} do
@@ -250,11 +280,13 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     assert summary.avatars == %{regenerated: 0, unchanged: 0, skipped: 0, failed: 1}
   end
 
-  test "a fresh upload is already converged — nothing to regenerate", %{tmp: tmp} do
+  test "a fresh upload (fingerprint persisted) is already converged", %{tmp: tmp} do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "fresh.jpg")
     src = jpeg!(Path.join(tmp, "fresh.jpg"))
     upload = %Plug.Upload{filename: "fresh.jpg", path: src, content_type: "image/jpeg"}
-    {:ok, _} = Vutuv.Avatar.store({upload, user})
+    {:ok, "fresh.jpg", fp} = Vutuv.Avatar.store({upload, user})
+    # Mirror what Accounts.store_pending_image persists after the store.
+    {:ok, _user} = user |> Ecto.Changeset.change(%{avatar_fingerprint: fp}) |> Repo.update()
 
     summary = Regenerator.run(only: :avatars)
 

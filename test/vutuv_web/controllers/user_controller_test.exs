@@ -268,6 +268,70 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
+  test "hides the country of a German address from a de viewer and links to maps",
+       %{conn: conn} do
+    user = insert_activated_user()
+
+    insert(:address,
+      user: user,
+      description: "Office",
+      line_1: "Johannes-Müller-Str. 10",
+      zip_code: "56068",
+      city: "Koblenz",
+      country: "Germany"
+    )
+
+    html =
+      conn
+      |> put_req_header("accept-language", "de")
+      |> get(~p"/#{user}")
+      |> html_response(200)
+
+    assert html =~ "Koblenz"
+    # A German viewer looking at a German address does not need "Deutschland".
+    refute html =~ "Deutschland"
+
+    # Every address links out to the major map services.
+    assert html =~ "https://www.google.com/maps/search/"
+    assert html =~ "https://www.openstreetmap.org/search"
+    assert html =~ "https://maps.apple.com/"
+    assert html =~ "Google Maps"
+    assert html =~ "OpenStreetMap"
+    assert html =~ "Apple Maps"
+  end
+
+  test "keeps the country line of a German address for a non-de viewer", %{conn: conn} do
+    user = insert_activated_user()
+    insert(:address, user: user, description: "Office", city: "Koblenz", country: "Germany")
+
+    html =
+      conn
+      |> put_req_header("accept-language", "en")
+      |> get(~p"/#{user}")
+      |> html_response(200)
+
+    assert html =~ "Koblenz"
+    assert html =~ "Deutschland"
+  end
+
+  test "viewing the profile of a member who follows you renders their private email",
+       %{conn: conn} do
+    {conn, viewer} = create_and_login_user(conn)
+
+    owner = insert_activated_user(first_name: "Paula", last_name: "Permissions")
+    insert(:email, user: owner, value: "paula.private@example.com", public?: false)
+
+    # The owner follows the viewer, so the viewer is permitted to see the
+    # owner's private email. user_has_permissions?/2 returns the follow id (a
+    # truthy UUID, not a strict boolean); it used to leak into profile_emails/3
+    # — which only matches true/false — and 500 the whole profile page.
+    insert(:follow, follower: owner, followee: viewer)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    assert html =~ "paula.private@example.com"
+  end
+
   test "renders the headline as Markdown", %{conn: conn} do
     user =
       insert_activated_user(headline: "**Senior** dev, see [my site](https://example.org)")

@@ -37,6 +37,25 @@ defmodule VutuvWeb.UploadsServingTest do
     assert conn.status == 404
   end
 
+  test "serves a fingerprinted (scheme B) avatar filename — no config change needed", %{
+    conn: conn
+  } do
+    id = System.unique_integer([:positive])
+    dir = Path.join(@avatars_dir, Integer.to_string(id))
+    File.mkdir_p!(dir)
+    {:ok, img} = Image.new(20, 20, color: [10, 120, 200])
+    # The on-disk name equals the URL's last segment, so the SAME static mount
+    # (the production nginx `alias`) serves it with no rewrite.
+    {:ok, _} = Image.write(img, Path.join(dir, "swintermeyer-medium-1a2b3c4d5e6f.avif"))
+    on_exit(fn -> File.rm_rf(dir) end)
+
+    conn = get(conn, "/avatars/#{id}/swintermeyer-medium-1a2b3c4d5e6f.avif")
+
+    assert conn.status == 200
+    assert byte_size(conn.resp_body) > 0
+    assert get_resp_header(conn, "content-type") |> hd() =~ "image/avif"
+  end
+
   test "serves an uploaded cover photo file from disk", %{conn: conn} do
     id = System.unique_integer([:positive])
     dir = Path.join(@covers_dir, Integer.to_string(id))

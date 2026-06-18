@@ -355,55 +355,32 @@ defmodule VutuvWeb.UserHelpers do
   def same_user?(%User{id: id}, %User{id: id}), do: true
   def same_user?(_, _), do: false
 
-  def format_address(%Address{
-        country: "United States",
-        line_1: line_1,
-        line_2: line_2,
-        city: city,
-        state: state,
-        zip_code: zip_code
-      }) do
-    "#{line_1}#{if line_2, do: "\n" <> line_2}
-    #{city}, #{state} #{zip_code}
-    United States"
+  # Renders the address as stacked lines. For a German viewer (`locale == "de"`)
+  # looking at a German address the country line is dropped — see
+  # `Vutuv.Address.lines/2` for the rule. Pass the viewer's locale
+  # (`@conn.assigns[:locale]`) on pages that have it; `format_address/1` keeps
+  # the country for callers that don't.
+  def format_address(address, locale \\ nil)
+
+  def format_address(%Address{} = address, locale) do
+    address
+    |> Vutuv.Address.lines(locale)
+    |> Enum.join("\n")
     |> HTMLFormat.text_to_html()
   end
 
-  def format_address(%Address{
-        country: "Germany",
-        line_1: nil,
-        line_2: nil,
-        city: nil,
-        zip_code: nil
-      }) do
-    "Deutschland"
-    |> HTMLFormat.text_to_html()
+  @doc """
+  The address' map-service deep links as `{label, url}` pairs for rendering a
+  row of links (Google Maps, OpenStreetMap, Apple Maps). Delegates the URL
+  shapes to `Vutuv.Address.map_links/1`.
+  """
+  def address_map_links(%Address{} = address) do
+    for {service, url} <- Vutuv.Address.map_links(address), do: {map_service_label(service), url}
   end
 
-  def format_address(%Address{
-        country: "Germany",
-        line_1: line_1,
-        line_2: line_2,
-        city: city,
-        zip_code: zip_code
-      }) do
-    "#{line_1}#{if line_2, do: "\n" <> line_2}
-    #{zip_code} #{city}\nDeutschland"
-    |> HTMLFormat.text_to_html()
-  end
-
-  def format_address(%Address{
-        country: country,
-        line_1: line_1,
-        line_2: line_2,
-        city: city,
-        zip_code: zip_code
-      }) do
-    "#{line_1}#{if line_2, do: "\n" <> line_2}
-    #{zip_code} #{city}
-    #{country}"
-    |> HTMLFormat.text_to_html()
-  end
+  defp map_service_label(:google), do: "Google Maps"
+  defp map_service_label(:openstreetmap), do: "OpenStreetMap"
+  defp map_service_label(:apple), do: "Apple Maps"
 
   def format_birthdate(%User{locale: "de", birthdate: birthdate}) do
     format_pyramid(birthdate)

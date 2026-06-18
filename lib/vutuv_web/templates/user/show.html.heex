@@ -696,7 +696,20 @@ the resulting ~200px rail width. --%>
           <.detail_icon name="map-pin" class="mt-0.5 h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <div class="min-w-0 leading-snug">
             <p class="mb-0 font-medium text-slate-800 dark:text-slate-100">{address.description}</p>
-            <div class="text-slate-600 dark:text-slate-400">{format_address(address)}</div>
+            <div class="text-slate-600 dark:text-slate-400">
+              {format_address(address, @conn.assigns[:locale])}
+            </div>
+            <%!-- Open the address on the major map services. The geocoding
+            query keeps the country even when it is hidden above. --%>
+            <div class="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+              <a
+                :for={{label, url} <- address_map_links(address)}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="font-medium text-brand-600 hover:text-brand-700"
+              >{label}</a>
+            </div>
           </div>
         </li>
       </ul>

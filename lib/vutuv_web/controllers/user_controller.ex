@@ -162,7 +162,11 @@ defmodule VutuvWeb.UserController do
   # Follower / Public previews see the public set only. Drives the vCard too.
   defp private_emails?(:connection, _current_user, _user), do: true
   defp private_emails?(preview, _current_user, _user) when not is_nil(preview), do: false
-  defp private_emails?(nil, current_user, user), do: user_has_permissions?(user, current_user)
+  # `user_has_permissions?/2` returns the follow id (a truthy UUID) rather than
+  # a strict boolean, so coerce it: `profile_emails/3` and `:vcard_full?` both
+  # expect a real `true`/`false`, and a leaked id 500s the profile page.
+  defp private_emails?(nil, current_user, user),
+    do: !!user_has_permissions?(user, current_user)
 
   defp profile_emails(true, current_user, user), do: emails_for_display(user, current_user)
   defp profile_emails(false, _current_user, user), do: emails_for_display(user, nil)
