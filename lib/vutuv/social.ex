@@ -80,8 +80,7 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :follower),
-        where:
-          account_confirmed_row(u) and not account_hidden_row(u),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         where: c.followee_id == ^user.id,
         select: count(c.id)
       )
@@ -92,8 +91,7 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :followee),
-        where:
-          account_confirmed_row(u) and not account_hidden_row(u),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         where: c.follower_id == ^user.id,
         select: count(c.id)
       )
@@ -179,8 +177,7 @@ defmodule Vutuv.Social do
       from(u in Vutuv.Accounts.User,
         join: fc in subquery(follower_counts),
         on: fc.followee_id == u.id,
-        where:
-          account_confirmed_row(u) and not account_hidden_row(u),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         order_by: [desc: fc.count, asc: u.first_name, asc: u.last_name],
         limit: ^limit,
         select: struct(u, ^User.listing_fields())
@@ -740,8 +737,7 @@ defmodule Vutuv.Social do
         as: :target,
         on: t.id == e.target_user_id,
         where: e.user_id == ^user_id,
-        where:
-          account_confirmed_row(t) and not account_hidden_row(t),
+        where: account_confirmed_row(t) and not account_hidden_row(t),
         where:
           not exists(
             from(b in Block,
@@ -882,8 +878,7 @@ defmodule Vutuv.Social do
             c.user_b_id,
             c.user_a_id
           ),
-      where:
-        account_confirmed_row(o) and not account_hidden_row(o)
+      where: account_confirmed_row(o) and not account_hidden_row(o)
     )
   end
 

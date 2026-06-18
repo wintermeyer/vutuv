@@ -962,8 +962,7 @@ defmodule Vutuv.Posts do
       on: reposter.id == r.user_id,
       join: u in assoc(p, :user),
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
-      where:
-        r.user_id == ^viewer_id or account_confirmed_row(reposter),
+      where: r.user_id == ^viewer_id or account_confirmed_row(reposter),
       where: p.user_id == ^viewer_id or account_confirmed_row(u),
       # A third party's repost must not carry a blocked author's post into
       # the viewer's feed (the direct path is already cut: blocking severed

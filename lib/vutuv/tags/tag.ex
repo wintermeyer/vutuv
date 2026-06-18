@@ -123,8 +123,7 @@ defmodule Vutuv.Tags.Tag do
         left_join: us in assoc(u, :user_tags),
         left_join: e in assoc(us, :endorsements),
         where: us.tag_id == ^tag.id,
-        where:
-          account_confirmed_row(u) and not account_hidden(u.id),
+        where: account_confirmed_row(u) and not account_hidden(u.id),
         # most endorsed
         order_by: fragment("count(?) DESC", e.id),
         group_by: u.id,
