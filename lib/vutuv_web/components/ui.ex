@@ -826,7 +826,7 @@ defmodule VutuvWeb.UI do
   # lower-right so the white ring reads as a status badge on the corner.
   defp presence_dot_pos("xs"), do: "-bottom-0.5 -right-0.5 h-2.5 w-2.5"
   defp presence_dot_pos("sm"), do: "-bottom-0.5 -right-0.5 h-3 w-3"
-  defp presence_dot_pos("lg"), do: "bottom-1 right-1 h-5 w-5"
+  defp presence_dot_pos("lg"), do: "bottom-1 right-1 h-4 w-4"
   defp presence_dot_pos(_), do: "-bottom-0.5 -right-0.5 h-3.5 w-3.5"
 
   @doc """
