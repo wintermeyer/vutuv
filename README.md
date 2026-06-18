@@ -124,14 +124,14 @@ mix test
 
 ## Deployment
 
-> **Post-cutover soak (read first):** the two non-routine one-time migrations
-> in [`DEPLOY_TODO.md`](DEPLOY_TODO.md), the **UUID v7 re-key** (every integer
-> id became a UUID v7, and the on-disk image directories were relabelled) and
-> the **AVIF image pipeline**, **shipped to production on 2026-06-18**. The
-> system is in a 14-day rollback soak until **2026-07-02**; the remaining
-> cleanup in that file (drop the `legacy_id_map` table, remove the transitional
-> `.webp` fallbacks, narrow the nginx regex, then delete the file) runs only
-> after a clean soak, so nothing in it should be executed before then.
+> **v6 cutover (history):** the two non-routine one-time migrations, the
+> **UUID v7 re-key** (every integer id became a UUID v7, image directories
+> relabelled) and the **AVIF image pipeline**, **shipped to production on
+> 2026-06-18**. The rollback soak was ended early the same day after
+> verification: the `legacy_id_map` map table was dropped and a fresh v6 backup
+> was taken (the pre-v6 backup is kept as a cold archive). One transitional bit
+> is deliberately left in place: the `.webp` image fallback, still needed by a
+> handful of old screenshots whose originals could not be re-encoded.
 
 Deployment is automatic. Two GitHub Actions workflows drive it:
 
@@ -140,16 +140,15 @@ Deployment is automatic. Two GitHub Actions workflows drive it:
 
 The Deploy job runs on the self-hosted `vutuv3` runner (on bremen2) and executes `scripts/deploy.sh`, a **blue/green zero-downtime deploy**: it builds a `prod` release, runs migrations against `vutuv3_prod`, starts the release on the idle slot (`vutuv3@blue` on port 4003 / `vutuv3@green` on port 4005), waits until `GET /health` answers 200 with a live database connection, switches the nginx upstream (`/etc/nginx/snippets/vutuv3-upstream.conf`) with a graceful reload, drains for 30 s and stops the old slot. A failed build or boot leaves the old slot serving, untouched. A `deploy-production` concurrency group ensures two production deploys never overlap.
 
-Because the old code briefly serves against the already-migrated database, **migrations must be backward-compatible**; a deploy that cannot be (such as the one-time UUID v7 re-key, which shipped on 2026-06-18; see `DEPLOY_TODO.md`) is a planned-downtime deploy and must be run deliberately. The systemd slot template lives in `scripts/systemd/vutuv3@.service`.
+Because the old code briefly serves against the already-migrated database, **migrations must be backward-compatible**; a deploy that cannot be (such as the one-time UUID v7 re-key, which shipped on 2026-06-18 as a planned-downtime deploy) must be run deliberately, not pushed casually to `main`. The systemd slot template lives in `scripts/systemd/vutuv3@.service`.
 
 ### nginx for post images (one-time setup)
 
-> **Reconcile during the post-soak nginx cleanup (2026-07-02).** The snippet
-> below still names `/srv/legacy-vutuv`, but the current production host serves
-> uploads from `/srv/vutuv3` (`UPLOADS_DIR_PREFIX`) and its vhost has no
-> `internal_post_images` location yet. Update the paths to `/srv/vutuv3` and
-> narrow the format pattern to `\.avif$` as part of that step, after confirming
-> how post images are actually served in prod.
+> **Note (forward-looking).** This snippet still names `/srv/legacy-vutuv`, but
+> the current production host serves uploads from `/srv/vutuv3`
+> (`UPLOADS_DIR_PREFIX`) and there are no post images in prod yet (its vhost has
+> no `internal_post_images` location). When post images do ship, use
+> `/srv/vutuv3` paths and an `\.avif$` pattern.
 
 Post images are auth-proxied: the app checks the post's audience and answers with `X-Accel-Redirect`; nginx streams the file from an `internal` location (config `:post_image_serving` is `:accel_redirect` in prod). Unlike `/avatars/` and `/covers/` there must be **no public alias** for post images. Add to the vhost:
 
