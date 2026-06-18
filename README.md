@@ -142,6 +142,36 @@ The Deploy job runs on the self-hosted `vutuv3` runner (on bremen2) and executes
 
 Because the old code briefly serves against the already-migrated database, **migrations must be backward-compatible**; a deploy that cannot be (such as the one-time UUID v7 re-key, which shipped on 2026-06-18 as a planned-downtime deploy) must be run deliberately, not pushed casually to `main`. The systemd slot template lives in `scripts/systemd/vutuv3@.service`.
 
+### nginx for avatars, covers and screenshots (one-time setup)
+
+These are **public** images served straight off disk. The vhost needs one
+prefix-location `alias` per directory, all three pointing into
+`<UPLOADS_DIR_PREFIX>` (`/srv/vutuv3` in prod). **All three are required** — a
+missing block (it has happened with `/covers/`) means those images 404 even
+though the file exists on disk and the app emits the right URL, because the
+request falls through to the app, which does not serve them. Add to the vhost:
+
+```nginx
+location /avatars/ {
+    alias /srv/vutuv3/avatars/;
+    expires 30d;
+    add_header Cache-Control "public";
+}
+location /covers/ {
+    alias /srv/vutuv3/covers/;
+    expires 30d;
+    add_header Cache-Control "public";
+}
+location /screenshots/ {
+    alias /srv/vutuv3/screenshots/;
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+}
+```
+
+The private originals tree (`/srv/vutuv3/originals/`) must **not** get any
+`location`/`alias`: uploaded originals are never served.
+
 ### nginx for post images (one-time setup)
 
 > **Note (forward-looking).** This snippet still names `/srv/legacy-vutuv`, but
@@ -163,9 +193,6 @@ location ~ ^/internal_post_images/(?<token>[A-Za-z0-9_-]+)/(?<version>thumb|feed
     alias /srv/legacy-vutuv/post_images/$token/$version.$fmt;
 }
 ```
-
-The private originals tree (`/srv/legacy-vutuv/originals/`) must **not** get any
-nginx `location`/`alias`: uploaded originals are never served to anyone.
 
 Uploads run over the LiveView websocket (no `client_max_body_size` change needed for the 6 MB images unless the websocket location caps buffers unusually small).
 
