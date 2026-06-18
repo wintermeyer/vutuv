@@ -603,12 +603,25 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
         {gettext("Add a social media account")}
       </.empty_add>
-      <ul class="space-y-3 text-sm">
+
+      <%!-- One line per account: brand glyph + handle. The provider name is
+      dropped (the icon carries it), so this is half the height of the old
+      two-line-per-account stack. --%>
+      <ul class="-my-1.5 text-sm">
         <li :for={account <- @user.social_media_accounts}>
-          <p class="text-slate-600 dark:text-slate-400">{account.provider}</p>
-          <p class="font-medium text-brand-600 hover:text-brand-700">{Vutuv.Profiles.SocialMediaAccount.social_media_link(account)}</p>
+          <.social_link
+            account={account}
+            class="group flex items-center gap-2.5 py-1.5 text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+          >
+            <.social_icon
+              provider={account.provider}
+              class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
+            />
+            <span class="truncate font-medium">{social_handle(account)}</span>
+          </.social_link>
         </li>
       </ul>
+
       <.manage_footer
         href={~p"/#{@user}/social_media_accounts"}
         total={Enum.count(@user.social_media_accounts)}
