@@ -132,6 +132,58 @@ defmodule Vutuv.Sessions do
     end
   end
 
+  # ── The profile-completion onboarding window ──
+
+  # How long after a fresh sign-in a member keeps seeing the profile-completion
+  # checklist. Kept equal to the "new account" window in VutuvWeb.UserController
+  # so a returning member gets the same brief nudge a brand-new one does, never a
+  # permanent one.
+  @onboarding_window_seconds 24 * 60 * 60
+
+  # No session activity for over a year is the gap after which a returning member
+  # is treated as freshly re-onboarding.
+  @dormant_seconds 365 * 24 * 60 * 60
+
+  @doc """
+  Whether `user` is in a brief "fresh return" window worth re-surfacing the
+  profile-completion checklist for (see `VutuvWeb.UserController`).
+
+  True when the account has a session that started within the last
+  #{div(@onboarding_window_seconds, 3600)}h **and** every session that started
+  before that was last seen over a year ago (or there is none). That is exactly
+  two members and no one else:
+
+    * one returning after more than a year away (their old sessions are stale), and
+    * a legacy account signing in for the first time since per-session tracking
+      shipped — its lazily-upgraded session is its only one, with nothing behind it.
+
+  A member who has merely stayed signed in is **not** fresh: their session
+  started over #{div(@onboarding_window_seconds, 3600)}h ago. The older sessions
+  are gated on `last_seen_at`, not `inserted_at`, on purpose: a long-lived
+  session kept alive all year has a recent `last_seen_at`, so it reads as "active
+  within the year", not as a year-old login.
+  """
+  def fresh_return?(%Accounts.User{} = user) do
+    recent_cutoff =
+      NaiveDateTime.add(NaiveDateTime.utc_now(), -@onboarding_window_seconds, :second)
+
+    year_cutoff = DateTime.add(DateTime.utc_now(:second), -@dormant_seconds, :second)
+
+    {recent, older} =
+      Repo.all(
+        from(s in UserSession,
+          where: s.user_id == ^user.id,
+          select: %{inserted_at: s.inserted_at, last_seen_at: s.last_seen_at}
+        )
+      )
+      |> Enum.split_with(&(NaiveDateTime.compare(&1.inserted_at, recent_cutoff) == :gt))
+
+    recent != [] and
+      Enum.all?(older, fn s ->
+        is_nil(s.last_seen_at) or DateTime.compare(s.last_seen_at, year_cutoff) == :lt
+      end)
+  end
+
   # ── Revocation ──
 
   @doc """

@@ -84,11 +84,18 @@ defmodule VutuvWeb.UserController do
 
     posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
 
+    as_owner? = owner? and is_nil(preview_as)
+    steps = completion_steps(user, posts_total)
+    # The checklist is a brief nudge, not permanent furniture: only the owner,
+    # only while a step is undone, and only inside the onboarding window. The
+    # window query is the last term so it runs only when the cheap checks pass.
+    show_completion? = as_owner? and Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
+
     conn
     |> assign(:can_preview?, owner?)
     |> assign(:preview_as, preview_as)
     |> assign(:preview?, not is_nil(preview_as))
-    |> assign(:as_owner?, owner? and is_nil(preview_as))
+    |> assign(:as_owner?, as_owner?)
     |> assign(:view_viewer, view_viewer)
     |> assign(:view_viewer_id, view_viewer && view_viewer.id)
     |> assign(:header_follow_id, header_follow_id(preview_as, current_user, user))
@@ -107,7 +114,8 @@ defmodule VutuvWeb.UserController do
     |> assign(:user, user)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
-    |> assign(:completion_steps, completion_steps(user, posts_total))
+    |> assign(:completion_steps, steps)
+    |> assign(:show_completion?, show_completion?)
     |> assign(:recommended_users, recommended_users)
     |> assign(:followers, followers)
     |> assign(:followees, followees)
@@ -283,6 +291,19 @@ defmodule VutuvWeb.UserController do
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
   defp present?(_), do: true
+
+  # When to surface the onboarding checklist at all: the first 24h of a new
+  # account, plus the 24h after a long-dormant member (or a legacy account that
+  # predates per-session tracking) signs back in. `or` short-circuits, so the
+  # session query in fresh_return?/1 runs only for accounts past the cheap
+  # account-age check.
+  defp onboarding_window?(user) do
+    account_fresh?(user) or Vutuv.Sessions.fresh_return?(user)
+  end
+
+  defp account_fresh?(user) do
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), user.inserted_at, :second) < 24 * 60 * 60
+  end
 
   defp recommended_users(user) do
     case first_tag(user) do

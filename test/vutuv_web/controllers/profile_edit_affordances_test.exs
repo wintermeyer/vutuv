@@ -149,6 +149,50 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       refute html =~ "Complete your profile"
     end
+
+    test "a long-dormant or legacy owner signing back in sees it again", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # Age only the account out of the 24h "new account" window. The session
+      # the login just minted is the member's one and only, and it is fresh —
+      # the dormant-return / legacy-first-sign-in window, so it shows again.
+      backdate_account(user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "Complete your profile"
+    end
+
+    test "an established owner past the onboarding window no longer sees it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # Old account, signed in two days ago, still active now: neither the
+      # new-account nor the dormant-return window applies.
+      backdate_account(user)
+      backdate_sessions(user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      refute html =~ "Complete your profile"
+    end
+  end
+
+  # Push the account's creation out of the 24h "new account" window.
+  defp backdate_account(user), do: backdate(Vutuv.Accounts.User, user.id, :id)
+
+  # Age every one of the member's sessions so the most recent sign-in is more
+  # than a day old (last_seen_at stays recent — the GET bumps it — so the member
+  # reads as established-and-active, not as a year-dormant returner).
+  defp backdate_sessions(user), do: backdate(Vutuv.Sessions.UserSession, user.id, :user_id)
+
+  defp backdate(schema, id, key) do
+    two_days_ago =
+      NaiveDateTime.utc_now()
+      |> NaiveDateTime.add(-2 * 24 * 60 * 60, :second)
+      |> NaiveDateTime.truncate(:second)
+
+    Repo.update_all(
+      from(r in schema, where: field(r, ^key) == ^id),
+      set: [inserted_at: two_days_ago]
+    )
   end
 
   describe "edit forms carry the delete action" do
