@@ -15,5 +15,28 @@ defmodule VutuvWeb.UrlHTML do
     end
   end
 
+  # The compact, human-friendly label for a profile link: just the host,
+  # without the `http(s)://` scheme and without the path. When the original
+  # URL carried a path, query or fragment a trailing ellipsis is appended so a
+  # long link reads as `example.com…` and signals there is more behind it. The
+  # full URL stays the clickable target via `linkable_url/1`; this is only the
+  # visible text.
+  def display_url(string) do
+    uri = URI.parse(linkable_url(string))
+
+    case uri.host do
+      host when is_binary(host) and host != "" ->
+        if uri.path in [nil, "", "/"] and uri.query in [nil, ""] and
+             uri.fragment in [nil, ""] do
+          host
+        else
+          host <> "…"
+        end
+
+      _ ->
+        to_string(string)
+    end
+  end
+
   embed_templates("../templates/url/*")
 end

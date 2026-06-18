@@ -24,4 +24,27 @@ defmodule VutuvWeb.UrlHTMLTest do
     assert UrlHTML.linkable_url("data:text/html,<script>alert(1)</script>") == "#"
     assert UrlHTML.linkable_url("vbscript:msgbox(1)") == "#"
   end
+
+  describe "display_url/1 — the compact visible label" do
+    test "shows just the host, without the http(s):// scheme" do
+      assert UrlHTML.display_url("https://example.org") == "example.org"
+      assert UrlHTML.display_url("http://example.org") == "example.org"
+      assert UrlHTML.display_url("example.org") == "example.org"
+    end
+
+    test "treats a bare / path as no path (no ellipsis)" do
+      assert UrlHTML.display_url("https://example.org/") == "example.org"
+    end
+
+    test "appends an ellipsis when the URL carries a path, query or fragment" do
+      assert UrlHTML.display_url("https://example.org/some/long/path") == "example.org…"
+      assert UrlHTML.display_url("https://example.org?q=1") == "example.org…"
+      assert UrlHTML.display_url("https://example.org/#section") == "example.org…"
+      assert UrlHTML.display_url("example.org/path") == "example.org…"
+    end
+
+    test "keeps subdomains" do
+      assert UrlHTML.display_url("https://blog.example.org") == "blog.example.org"
+    end
+  end
 end
