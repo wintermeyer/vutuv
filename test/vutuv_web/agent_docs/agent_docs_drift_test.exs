@@ -364,7 +364,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   test "?lang=de translates the labels, English stays the default" do
     de_txt = get(build_conn(), "/drift_tester.txt?lang=de").resp_body
     assert de_txt =~ "Mitglied seit:"
-    assert de_txt =~ "TAGS & EMPFEHLUNGEN"
+    assert de_txt =~ "TAGS"
 
     de_md = get(build_conn(), "/drift_tester.md?lang=de").resp_body
     assert de_md =~ "## Lebenslauf"

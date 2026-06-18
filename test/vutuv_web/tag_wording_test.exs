@@ -17,7 +17,8 @@ defmodule VutuvWeb.TagWordingTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert html =~ "Tags &amp; endorsements"
+      assert html =~ ~r{<h2[^>]*>\s*Tags\s*</h2>}
+      refute html =~ "endorsements"
       refute html =~ ~r/skill/i
     end
 
@@ -31,7 +32,8 @@ defmodule VutuvWeb.TagWordingTest do
         |> get(~p"/#{user}")
         |> html_response(200)
 
-      assert html =~ "Tags &amp; Empfehlungen"
+      assert html =~ ~r{<h2[^>]*>\s*Tags\s*</h2>}
+      refute html =~ "Empfehlungen"
       refute html =~ "Fähigkeit"
     end
 
