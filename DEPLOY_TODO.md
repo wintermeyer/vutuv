@@ -1,5 +1,16 @@
 # Production cutover: UUID v7 ids
 
+> **STATUS (2026-06-18): the cutover SHIPPED.** vutuv.de is live on v6 (UUID
+> v7) since 2026-06-18 ~11:54. The "before the deploy" and cutover steps below
+> are **done** and kept here only as the historical record. What remains is the
+> **post-soak CLEANUP**, which runs **only on or after 2026-07-02** (the end of
+> the 14-day rollback soak) and **only if the soak was clean**: drop the
+> `legacy_id_map` table, ship the AVIF follow-up commit (remove the
+> transitional `.webp` fallbacks + narrow the nginx regex), then delete this
+> file and retire the T0 backups. **Do not run any of it before 2026-07-02.**
+> The operator runbook with the live facts and rollback steps lives on the
+> server at `/var/www/vutuv3/V6-CUTOVER-RUNBOOK.md`.
+
 One-time steps for the first production deploy that includes the
 `convert_ids_to_uuid_v7` migration (every PK/FK becomes a UUID v7; the dead
 legacy skill tables are dropped first). The migration runs in one

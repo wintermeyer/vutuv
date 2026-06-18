@@ -38,9 +38,11 @@ jobs:
       - name: Set up Elixir/OTP
         uses: erlef/setup-beam@v1
         with:
-          # Pinned to match .tool-versions.
-          otp-version: "27.3.4.8"
-          elixir-version: "1.20.0-rc.6-otp-27"
+          # Pinned to match .tool-versions. Keep these two in sync with that
+          # file: a drift here installs the wrong toolchain and reds CI without
+          # affecting the deploy (the self-hosted runner builds its own).
+          otp-version: "28.5.0.1"
+          elixir-version: "1.20.0-otp-28"
 
       - name: Cache deps and _build
         uses: actions/cache@v4
