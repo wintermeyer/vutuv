@@ -32,6 +32,22 @@ defmodule Vutuv.Notifications.EmailerTest do
       assert email.headers["Precedence"] == "bulk"
       assert email.headers["List-Unsubscribe"] =~ "mailto:"
     end
+
+    test "base_email stamps a Message-ID with an FQDN, not the bare local hostname" do
+      message_id = Emailer.base_email().headers["Message-ID"]
+
+      # <token@vutuv.de> — the right-hand side must be the From domain. Without
+      # a Message-ID set here, the Swoosh SMTP adapter lets gen_smtp fall back
+      # to the machine's short hostname (e.g. "@bremen2"), which costs a point
+      # on spam scoring.
+      assert message_id =~ ~r/^<[^@\s>]+@vutuv\.de>$/,
+             "expected <token@vutuv.de>, got: #{inspect(message_id)}"
+    end
+
+    test "base_email gives every message its own unique Message-ID" do
+      refute Emailer.base_email().headers["Message-ID"] ==
+               Emailer.base_email().headers["Message-ID"]
+    end
   end
 
   describe "deliver/1 chokepoint" do
@@ -67,6 +83,36 @@ defmodule Vutuv.Notifications.EmailerTest do
       Emailer.deliver(raw)
 
       assert_email_sent(fn email -> assert_robot_headers(email) end)
+    end
+
+    test "stamps an FQDN Message-ID even when a builder forgot the base" do
+      raw =
+        Swoosh.Email.new()
+        |> Swoosh.Email.from({"vutuv", "info@vutuv.de"})
+        |> Swoosh.Email.to("nobody@example.com")
+        |> Swoosh.Email.subject("Naked email")
+        |> Swoosh.Email.text_body("hi")
+
+      assert raw.headers["Message-ID"] == nil
+
+      Emailer.deliver(raw)
+
+      assert_email_sent(fn sent -> assert sent.headers["Message-ID"] =~ ~r/@vutuv\.de>$/ end)
+    end
+
+    test "preserves the Message-ID the base already stamped (idempotent)" do
+      email =
+        Emailer.base_email()
+        |> Swoosh.Email.to("nobody@example.com")
+        |> Swoosh.Email.subject("Has an id")
+        |> Swoosh.Email.text_body("hi")
+
+      original = email.headers["Message-ID"]
+      assert original =~ ~r/@vutuv\.de>$/
+
+      Emailer.deliver(email)
+
+      assert_email_sent(fn sent -> assert sent.headers["Message-ID"] == original end)
     end
   end
 
