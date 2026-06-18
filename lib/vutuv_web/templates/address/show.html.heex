@@ -16,5 +16,5 @@
     delete_to={~p"/#{@user}/addresses/#{@address}"}
   />
 
-  <p><%= format_address @address %></p>
+  <p><%= format_address @address, @conn.assigns[:locale] %></p>
 </.card_section>
