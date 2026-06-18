@@ -285,11 +285,13 @@ the resulting ~200px rail width. --%>
     </section>
 
     <%!-- New-member onboarding checklist: the few highest-impact steps so a fresh
-    profile becomes findable and recognizable fast. Owner-only, shown while
-    anything is still undone and gone once every step is done; each todo links
-    straight to where it is done. Replaces the old 10-minute welcome note. --%>
+    profile becomes findable and recognizable fast. Owner-only, shown only inside
+    the onboarding window (a new account's first 24h, or the 24h after a dormant
+    member signs back in) while anything is still undone, and gone once every step
+    is done; @show_completion? carries that gate (see UserController). Each todo
+    links straight to where it is done. Replaces the old 10-minute welcome note. --%>
     <section
-      :if={@as_owner? and Enum.any?(@completion_steps, &(not &1.done))}
+      :if={@show_completion?}
       class="rounded-2xl bg-brand-50 p-6 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50"
     >
       <% done_count = Enum.count(@completion_steps, & &1.done) %>
