@@ -1,0 +1,106 @@
+defmodule Vutuv.ReportsTest do
+  @moduledoc """
+  The basic daily activity report: confirmed-by-PIN new registrations and the
+  posts, reposts, likes and bookmarks created on one German calendar day, plus
+  the overnight email that skips all-zero days.
+  """
+  use Vutuv.DataCase, async: false
+
+  import Swoosh.TestAssertions
+
+  alias Vutuv.Reports
+  alias Vutuv.Reports.DailyReport
+
+  # A winter day, so the Berlin offset is a flat +1h and the UTC bounds are
+  # easy to reason about: [2026-01-14 23:00, 2026-01-15 23:00).
+  @date ~D[2026-01-15]
+  @on_day ~N[2026-01-15 12:00:00]
+  @other_day ~N[2026-01-20 12:00:00]
+
+  defp at(naive), do: [inserted_at: naive, updated_at: naive]
+
+  defp like(post, user, naive) do
+    Repo.insert!(struct(Vutuv.Posts.PostLike, [post_id: post.id, user_id: user.id] ++ at(naive)))
+  end
+
+  defp bookmark(post, user, naive) do
+    Repo.insert!(
+      struct(Vutuv.Posts.PostBookmark, [post_id: post.id, user_id: user.id] ++ at(naive))
+    )
+  end
+
+  defp repost(post, user, naive) do
+    Repo.insert!(
+      struct(Vutuv.Posts.PostRepost, [post_id: post.id, user_id: user.id] ++ at(naive))
+    )
+  end
+
+  describe "daily/1" do
+    test "tallies each metric for the Berlin day, ignoring other days and unconfirmed sign-ups" do
+      # Registrations: two PIN-confirmed on the day count; the unconfirmed
+      # sign-up and the confirmed one a different day do not.
+      insert(:activated_user, at(@on_day))
+      insert(:activated_user, at(@on_day))
+      insert(:user, [email_confirmed?: false] ++ at(@on_day))
+      insert(:activated_user, at(@other_day))
+
+      author = insert(:user)
+      post = insert(:post, [user: author] ++ at(@on_day))
+      insert(:post, [user: author] ++ at(@on_day))
+      insert(:post, [user: author] ++ at(@other_day))
+
+      reposter = insert(:user)
+      repost(post, reposter, @on_day)
+      repost(post, insert(:user), @other_day)
+
+      like(post, insert(:user), @on_day)
+      bookmark(post, insert(:user), @on_day)
+
+      assert Reports.daily(@date) == %DailyReport{
+               date: @date,
+               registrations: 2,
+               posts: 2,
+               reposts: 1,
+               likes: 1,
+               bookmarks: 1
+             }
+    end
+
+    test "the day range is half-open: the start instant counts, the end instant does not" do
+      author = insert(:user)
+      # day_start = 2026-01-14 23:00 UTC (inclusive), day_end = 2026-01-15 23:00 (exclusive).
+      insert(:post, [user: author] ++ at(~N[2026-01-14 23:00:00]))
+      insert(:post, [user: author] ++ at(~N[2026-01-15 23:00:00]))
+
+      assert Reports.daily(@date).posts == 1
+    end
+
+    test "an empty day is all zeros" do
+      report = Reports.daily(@date)
+      assert DailyReport.all_zero?(report)
+      assert DailyReport.total(report) == 0
+    end
+  end
+
+  describe "deliver_daily_email/1" do
+    test "mails the operator a German report when the day had activity" do
+      insert(:post, at(@on_day))
+
+      assert {:ok, report} = Reports.deliver_daily_email(@date)
+      assert report.posts == 1
+
+      assert_email_sent(fn email ->
+        assert {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"} = hd(email.to)
+        assert email.subject =~ "Tagesbericht"
+        assert email.subject =~ "15.01.2026"
+        assert email.text_body =~ "Neue Beiträge"
+        assert email.text_body =~ "admin/reports?date=2026-01-15"
+      end)
+    end
+
+    test "skips an all-zero day, sending nothing" do
+      assert Reports.deliver_daily_email(@date) == :skipped
+      assert_no_email_sent()
+    end
+  end
+end

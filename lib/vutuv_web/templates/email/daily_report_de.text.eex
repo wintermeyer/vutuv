@@ -1,0 +1,11 @@
+vutuv Tagesbericht für den <%= Calendar.strftime(@report.date, "%d.%m.%Y") %>
+================================================
+
+Neue bestätigte Registrierungen (per PIN): <%= @report.registrations %>
+Neue Beiträge:                              <%= @report.posts %>
+Reposts:                                    <%= @report.reposts %>
+Likes:                                      <%= @report.likes %>
+Lesezeichen:                                <%= @report.bookmarks %>
+
+Vollständiger Bericht (mit Zeitreise zu anderen Tagen):
+<%= @url %>admin/reports?date=<%= Date.to_iso8601(@report.date) %>

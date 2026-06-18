@@ -401,6 +401,25 @@ defmodule Vutuv.Notifications.Emailer do
     "#{euros},#{decimals}"
   end
 
+  ## Daily operator report (see Vutuv.Reports.DailyReporter, the only caller)
+
+  @daily_report_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
+
+  @doc """
+  The operator's daily activity report: confirmed-by-PIN new registrations and
+  the day's posts, reposts, likes and bookmarks (`Vutuv.Reports.DailyReport`).
+  Fixed German recipient and template, like the ad-booking notice; the caller
+  only sends it for days that actually had activity.
+  """
+  def daily_report_email(%Vutuv.Reports.DailyReport{} = report) do
+    base_email()
+    |> to(@daily_report_recipient)
+    |> subject("vutuv Tagesbericht für den #{Calendar.strftime(report.date, "%d.%m.%Y")}")
+    |> text_body(
+      VutuvWeb.EmailText.render("daily_report_de.text", %{report: report, url: public_url()})
+    )
+  end
+
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
 
   @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."

@@ -303,6 +303,11 @@ defmodule VutuvWeb.Router do
     pipe_through([:browser, :admin])
     resources("/", AdminController, only: [:index])
 
+    # The daily activity report: confirmed-by-PIN registrations and the day's
+    # posts, reposts, likes and bookmarks. ?date time-travels to any past day;
+    # Vutuv.Reports.DailyReporter mails the previous day's copy each night.
+    get("/reports", ReportController, :index)
+
     # The moderation queue + rulings. /reporters (the misuse dashboard) must
     # precede /:id so the literal segment wins.
     get("/moderation", ModerationController, :index)

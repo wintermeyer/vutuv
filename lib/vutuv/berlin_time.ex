@@ -27,6 +27,32 @@ defmodule Vutuv.BerlinTime do
     |> DateTime.to_date()
   end
 
+  @doc """
+  The UTC half-open instant range `[start, finish)` that spans a whole German
+  calendar day, as `NaiveDateTime`s (the type Ecto stores `inserted_at` in).
+  Use it to bucket UTC timestamps by German calendar day, e.g. counting a
+  day's registrations and posts (`Vutuv.Reports`).
+
+  The offset is the one in effect at Berlin-local midday of `date` (CET +1h
+  in winter, CEST +2h in summer). On the two yearly DST-switch days that can
+  misplace rows landing in the one-hour window right after local midnight,
+  which is immaterial to a daily tally.
+  """
+  def day_bounds_utc(%Date{} = date) do
+    {local_midnight_utc(date), local_midnight_utc(Date.add(date, 1))}
+  end
+
+  # Berlin-local 00:00 of `date`, expressed as a UTC NaiveDateTime.
+  defp local_midnight_utc(date) do
+    midday_utc = DateTime.new!(date, ~T[12:00:00], "Etc/UTC")
+    offset_hours = if summer_time?(midday_utc), do: 2, else: 1
+
+    date
+    |> DateTime.new!(~T[00:00:00], "Etc/UTC")
+    |> DateTime.add(-offset_hours * 3600, :second)
+    |> DateTime.to_naive()
+  end
+
   defp summer_time?(utc) do
     dst_start = last_sunday_at_one_utc(utc.year, 3)
     dst_end = last_sunday_at_one_utc(utc.year, 10)

@@ -26,6 +26,31 @@ defmodule Vutuv.BerlinTimeTest do
     end
   end
 
+  describe "day_bounds_utc/1" do
+    test "brackets a winter day with the CET (+1h) offset" do
+      assert BerlinTime.day_bounds_utc(~D[2026-01-15]) ==
+               {~N[2026-01-14 23:00:00], ~N[2026-01-15 23:00:00]}
+    end
+
+    test "brackets a summer day with the CEST (+2h) offset" do
+      assert BerlinTime.day_bounds_utc(~D[2026-07-15]) ==
+               {~N[2026-07-14 22:00:00], ~N[2026-07-15 22:00:00]}
+    end
+
+    test "the bounds round-trip: every instant inside maps back to that Berlin day" do
+      for date <- [~D[2026-01-15], ~D[2026-07-15]] do
+        {start, finish} = BerlinTime.day_bounds_utc(date)
+        first = DateTime.from_naive!(start, "Etc/UTC")
+        last = finish |> DateTime.from_naive!("Etc/UTC") |> DateTime.add(-1, :second)
+        before = DateTime.add(first, -1, :second)
+
+        assert BerlinTime.date(first) == date
+        assert BerlinTime.date(last) == date
+        assert BerlinTime.date(before) == Date.add(date, -1)
+      end
+    end
+  end
+
   describe "today/0" do
     test "is a Date on or after the current UTC day (Berlin is never behind UTC)" do
       today = BerlinTime.today()

@@ -28,6 +28,24 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1>{gettext("Daily report")}</h1>
+      <a
+        href={~p"/admin/reports"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-reports-link"
+      >
+        {gettext("Open the daily report")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      {gettext(
+        "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
+      )}
+    </p>
+  </section>
+
   <section :if={@ads_enabled} class="card">
     <div class="flex items-center justify-between gap-4">
       <h1 class="flex items-center gap-2">

@@ -1,0 +1,69 @@
+<.page_header
+  title={gettext("Daily report")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    gettext("Daily report")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1>{Calendar.strftime(@date, "%A, %d %B %Y")}</h1>
+
+      <div class="flex items-center gap-4">
+        <.link
+          href={~p"/admin/reports?#{%{date: Date.to_iso8601(Date.add(@date, -1))}}"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          id="report-prev-day"
+        >
+          ‹ {gettext("Previous day")}
+        </.link>
+        <.link
+          :if={Date.compare(@date, @today) == :lt}
+          href={~p"/admin/reports?#{%{date: Date.to_iso8601(Date.add(@date, 1))}}"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          id="report-next-day"
+        >
+          {gettext("Next day")} ›
+        </.link>
+      </div>
+    </div>
+
+    <form method="get" action={~p"/admin/reports"} class="mt-4 flex flex-wrap items-end gap-3">
+      <label class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        {gettext("Jump to a day")}
+        <input
+          type="date"
+          name="date"
+          id="report-date"
+          value={Date.to_iso8601(@date)}
+          max={Date.to_iso8601(@today)}
+          class={[input_class(), "mt-1"]}
+        />
+      </label>
+      <.button type="submit">{gettext("Show")}</.button>
+    </form>
+
+    <div class="card__tablewrap mt-4">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Metric")}</th>
+            <th>{gettext("Count")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={{label, value} <- VutuvWeb.Admin.ReportHTML.metrics(@report)}>
+            <td>{label}</td>
+            <td class="font-mono">{delimited_count(value)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p :if={Vutuv.Reports.DailyReport.all_zero?(@report)} class="card__empty">
+      {gettext("No activity on this day.")}
+    </p>
+  </section>
+</div>
