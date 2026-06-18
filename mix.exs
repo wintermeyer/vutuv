@@ -67,6 +67,11 @@ defmodule Vutuv.MixProject do
       # HTTP client
       {:req, "~> 0.5"},
 
+      # Phone numbers: parse/validate/format to E.164 and national formats
+      # (Google's libphonenumber port). Used by Vutuv.Phone to render German
+      # numbers in local format for `de` viewers while keeping E.164 in tel: links.
+      {:ex_phone_number, "~> 0.4"},
+
       # Passkey / WebAuthn (FIDO2) login: server-side verification of the
       # registration and authentication ceremonies (see Vutuv.Credentials). The
       # browser ceremony is plain JS in assets/js/webauthn.js. Pulls cbor/x509.

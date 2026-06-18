@@ -657,11 +657,11 @@ the resulting ~200px rail width. --%>
       <ul class="-my-1 text-sm">
         <li :for={number <- @user.phone_numbers}>
           <a
-            href={"tel:#{number.value}"}
+            href={"tel:" <> Vutuv.Phone.tel(number.value)}
             class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
           >
             <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-            <span class="font-medium">{number.value}</span>
+            <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
             <span
               :if={number.number_type}
               class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"

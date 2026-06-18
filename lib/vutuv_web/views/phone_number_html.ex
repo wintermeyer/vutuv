@@ -15,12 +15,11 @@ defmodule VutuvWeb.PhoneNumberHTML do
   def phone_type_label(other), do: other
 
   @doc """
-  A dialable form of the displayed number: keep digits and a leading `+`,
-  drop spacing and punctuation (`tel:` targets must not contain spaces).
+  A dialable `tel:` target for the number: the canonical E.164 form when it
+  parses, else a digit-stripped fallback. Delegates to `Vutuv.Phone.tel/1` so
+  the link form lives in one place (see the profile card in `user/show`).
   """
-  def tel_href(value) do
-    String.replace(value, ~r/(?!^\+)[^\d]/, "")
-  end
+  defdelegate tel_href(value), to: Vutuv.Phone, as: :tel
 
   embed_templates("../templates/phone_number/*")
 end
