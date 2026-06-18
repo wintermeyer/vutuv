@@ -184,6 +184,90 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "/#{user.active_slug}.json"
   end
 
+  describe "section card titles pluralize with the entry count" do
+    # Each profile section card titles itself after a count: a card with a
+    # single entry must read "Phone Number", not "Phone Numbers". The titles go
+    # through `ngettext/3`, so the singular/plural split is the i18n library's,
+    # not a hand-rolled `if`.
+
+    # The text of the first <h2> (the section title) inside the card with the
+    # given DOM id. The section title is always the first heading in a card.
+    defp card_title(html, id) do
+      [_, rest] = String.split(html, ~s(id="#{id}"), parts: 2)
+      [head, _] = String.split(rest, "</h2>", parts: 2)
+      head |> String.split(">") |> List.last() |> String.trim()
+    end
+
+    test "read singular when a section holds exactly one entry", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:phone_number, user: user, value: "+49 30 5551234")
+      insert(:address, user: user, city: "Berlin")
+      insert(:url, user: user, value: "https://example.org/", description: "My Site")
+      {:ok, _} = Vutuv.Posts.create_post(user, %{body: "only post"})
+      insert(:follow, follower: insert(:user, email_confirmed?: true), followee: user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert card_title(html, "profile-phone-numbers") == "Phone Number"
+      assert card_title(html, "profile-addresses") == "Address"
+      assert card_title(html, "profile-links") == "Link"
+      assert card_title(html, "profile-posts") == "Post"
+      assert card_title(html, "profile-followers") == "Follower"
+    end
+
+    test "read plural when a section holds more than one entry", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:phone_number, user: user, value: "+49 30 5551234")
+      insert(:phone_number, user: user, value: "+49 30 5559999")
+      insert(:address, user: user, city: "Berlin")
+      insert(:address, user: user, city: "Hamburg")
+      insert(:url, user: user, value: "https://example.org/a", description: "Site A")
+      insert(:url, user: user, value: "https://example.org/b", description: "Site B")
+      {:ok, _} = Vutuv.Posts.create_post(user, %{body: "first post"})
+      {:ok, _} = Vutuv.Posts.create_post(user, %{body: "second post"})
+      insert(:follow, follower: insert(:user, email_confirmed?: true), followee: user)
+      insert(:follow, follower: insert(:user, email_confirmed?: true), followee: user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert card_title(html, "profile-phone-numbers") == "Phone Numbers"
+      assert card_title(html, "profile-addresses") == "Addresses"
+      assert card_title(html, "profile-links") == "Links"
+      assert card_title(html, "profile-posts") == "Posts"
+      assert card_title(html, "profile-followers") == "Followers"
+    end
+
+    test "German titles switch between singular and plural too", %{conn: conn} do
+      # The screenshot that prompted this fix was German ("TELEFONNUMMERN" /
+      # "ADRESSEN"); guard the German plural forms in the .po, not just the
+      # English ngettext wiring.
+      one = insert_activated_user()
+      insert(:phone_number, user: one, value: "+49 30 5551234")
+      insert(:address, user: one, city: "Berlin")
+      {:ok, _} = Vutuv.Posts.create_post(one, %{body: "einziger Beitrag"})
+
+      many = insert_activated_user()
+      insert(:phone_number, user: many, value: "+49 30 5551234")
+      insert(:phone_number, user: many, value: "+49 30 5559999")
+      insert(:address, user: many, city: "Berlin")
+      insert(:address, user: many, city: "Hamburg")
+      {:ok, _} = Vutuv.Posts.create_post(many, %{body: "erster Beitrag"})
+      {:ok, _} = Vutuv.Posts.create_post(many, %{body: "zweiter Beitrag"})
+
+      de = put_req_header(conn, "accept-language", "de")
+
+      singular = de |> get(~p"/#{one}") |> html_response(200)
+      assert card_title(singular, "profile-phone-numbers") == "Telefonnummer"
+      assert card_title(singular, "profile-addresses") == "Adresse"
+      assert card_title(singular, "profile-posts") == "Beitrag"
+
+      plural = de |> get(~p"/#{many}") |> html_response(200)
+      assert card_title(plural, "profile-phone-numbers") == "Telefonnummern"
+      assert card_title(plural, "profile-addresses") == "Adressen"
+      assert card_title(plural, "profile-posts") == "Beiträge"
+    end
+  end
+
   test "hides the country of a German address from a de viewer and links to maps",
        %{conn: conn} do
     user = insert_activated_user()

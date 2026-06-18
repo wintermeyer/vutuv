@@ -328,7 +328,10 @@ the resulting ~200px rail width. --%>
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed
     composer, which the owner's "Add" link points to) --%>
     <.card :if={@posts != [] or @as_owner?} id="profile-posts">
-      <.section_header title={gettext("Posts")} />
+      <%!-- A "profile" context disambiguates the noun (Beitrag/Beiträge) from the
+      bare gettext("Post") verb on the composer's submit button ("Posten"), which
+      shares the "Post" msgid and must not be repurposed. --%>
+      <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)} />
 
       <%!-- Compose affordance on top, the convention everywhere (the feed opens
       in the /feed composer). --%>
@@ -460,7 +463,7 @@ the resulting ~200px rail width. --%>
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
     to the bundled placeholder while a screenshot is still missing. --%>
     <.card :if={@totals.links > 0 or @as_owner?} id="profile-links">
-      <.section_header title={gettext("Links")} />
+      <.section_header title={ngettext("Link", "Links", @totals.links)} />
       <.empty_add :if={@as_owner? and @totals.links == 0} href={~p"/#{@user}/links/new"}>
         {gettext("Add a link")}
       </.empty_add>
@@ -508,7 +511,7 @@ the resulting ~200px rail width. --%>
     Side by side in two columns on sm+, stacked on mobile. --%>
     <div class="grid gap-6 sm:grid-cols-2">
       <.card :if={@follower_count > 0} id="profile-followers">
-        <.section_title class="mb-4">{gettext("Followers")}</.section_title>
+        <.section_title class="mb-4">{ngettext("Follower", "Followers", @follower_count)}</.section_title>
         <ul class="space-y-4">
           <.user_row
             :for={user <- @followers}
@@ -650,7 +653,7 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <.card :if={@totals.numbers > 0 or @as_owner?} id="profile-phone-numbers">
-      <.section_header title={gettext("Phone Numbers")} />
+      <.section_header title={ngettext("Phone Number", "Phone Numbers", @totals.numbers)} />
       <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
         {gettext("Add a phone number")}
       </.empty_add>
@@ -681,7 +684,7 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <.card :if={@totals.addresses > 0 or @as_owner?} id="profile-addresses">
-      <.section_header title={gettext("Addresses")} />
+      <.section_header title={ngettext("Address", "Addresses", @totals.addresses)} />
       <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
         {gettext("Add an address")}
       </.empty_add>
