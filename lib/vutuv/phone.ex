@@ -43,6 +43,29 @@ defmodule Vutuv.Phone do
   def national(value, _locale), do: value
 
   @doc """
+  Canonicalises a typed phone number for storage, or rejects it.
+
+  Parses `value` against the default region (`#{@default_region}`) and, **only**
+  when it is a number libphonenumber recognises as *valid* (the right length and
+  pattern for its region, so junk like `"12"` or `"not a phone"` never passes),
+  returns `{:ok, formatted}` in international format: a German local number such
+  as `"0261-123456"` becomes `{:ok, "+49 261 123456"}`. A foreign number keeps
+  its own country code (`"+421903419345"` -> `{:ok, "+421 903 419 345"}`), so we
+  never reinterpret it as German. Anything unparseable or not a valid number
+  returns `:error`, so `Vutuv.Profiles.PhoneNumber.changeset/2` can refuse it.
+  """
+  def normalize(value) when is_binary(value) do
+    with {:ok, number} <- parse(value),
+         true <- ExPhoneNumber.is_valid_number?(number) do
+      {:ok, ExPhoneNumber.format(number, :international)}
+    else
+      _ -> :error
+    end
+  rescue
+    _ -> :error
+  end
+
+  @doc """
   The `tel:` target for a number: the canonical E.164 form (`+492619886803`)
   whenever the value parses, otherwise a digit-stripped fallback that keeps a
   leading `+`. `tel:` URIs must carry no spaces or punctuation.
