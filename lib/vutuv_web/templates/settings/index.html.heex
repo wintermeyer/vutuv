@@ -56,6 +56,74 @@ too. So this page stays short and unambiguous. --%>
       </div>
     </.card>
 
+    <%!-- Passkeys (issue #795): enrol a phishing-resistant credential (Touch ID,
+          Windows Hello, a security key) for a faster return login that skips the
+          email PIN. Sits in the security cluster, right under signed-in devices.
+          The add control and the WebAuthn ceremony are driven by
+          assets/js/webauthn.js: the enrol block is hidden until the browser is
+          confirmed to support passkeys (otherwise the unsupported note shows
+          instead), so the email-PIN flow is always the dependable fallback. --%>
+    <.card>
+      <.section_title>{gettext("Passkeys")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Sign in with Touch ID, Windows Hello or a security key instead of waiting for an email PIN. Your email PIN stays available as a backup."
+        )}
+      </p>
+
+      <ul
+        :if={@passkeys != []}
+        class="mt-3 divide-y divide-slate-100 dark:divide-slate-800"
+      >
+        <%= for passkey <- @passkeys do %>
+          <.passkey_row passkey={passkey} user={@user} />
+        <% end %>
+      </ul>
+      <p :if={@passkeys == []} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("You have not added any passkeys yet.")}
+      </p>
+
+      <div id="passkey-enroll" hidden class="mt-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div class="sm:max-w-xs">
+            <label
+              for="passkey-nickname"
+              class="block text-sm font-medium text-slate-900 dark:text-white"
+            >
+              {gettext("Name (optional)")}
+            </label>
+            <input
+              id="passkey-nickname"
+              type="text"
+              maxlength="100"
+              placeholder={gettext("e.g. MacBook")}
+              class={input_class()}
+            />
+          </div>
+          <button
+            type="button"
+            data-webauthn-register
+            data-nickname-input="passkey-nickname"
+            data-challenge-url={~p"/#{@user}/settings/passkeys/challenge"}
+            data-create-url={~p"/#{@user}/settings/passkeys"}
+            data-error-generic={gettext("Could not add the passkey. Please try again.")}
+            class="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            {gettext("Add a passkey")}
+          </button>
+        </div>
+        <p data-webauthn-error hidden class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
+      </div>
+
+      <p
+        data-webauthn-unsupported
+        hidden
+        class="mt-4 text-sm text-slate-600 dark:text-slate-400"
+      >
+        {gettext("This browser does not support passkeys.")}
+      </p>
+    </.card>
+
     <%!-- Interface language: the user's own UI-language preference (it overrides
           Accept-Language for the whole site), not public profile content, so it
           lives here and not under the profile editor's "About you". Its own small

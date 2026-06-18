@@ -37,6 +37,28 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # One enrolled passkey (issue #795). The crypto round-trip can only be
+  # exercised by a real browser, so this stands in for a verified credential:
+  # a unique credential_id and a minimal serialized COSE key, the shape
+  # Vutuv.Credentials persists after Wax.register/3.
+  def user_credential_factory do
+    cose_key = %{
+      1 => 2,
+      3 => -7,
+      -1 => 1,
+      -2 => :crypto.strong_rand_bytes(32),
+      -3 => :crypto.strong_rand_bytes(32)
+    }
+
+    %Vutuv.Credentials.UserCredential{
+      user: build(:activated_user),
+      credential_id: sequence(:credential_id, &:crypto.hash(:sha256, "credential-#{&1}")),
+      public_key: :erlang.term_to_binary(cose_key),
+      sign_count: 0,
+      nickname: sequence(:passkey_nickname, &"Passkey #{&1}")
+    }
+  end
+
   @doc """
   Inserts an activated user. Resolution is by `users.active_slug` alone, so
   nothing else is needed for slug-routed pages.

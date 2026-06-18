@@ -22,6 +22,7 @@ defmodule VutuvWeb.SettingsController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Credentials
   alias Vutuv.Sessions
 
   # The account hub also carries the interface-language form, so it needs a
@@ -36,6 +37,7 @@ defmodule VutuvWeb.SettingsController do
       changeset: User.changeset(user),
       sessions: Sessions.list_active(user),
       current_session_id: conn.assigns[:current_session_id],
+      passkeys: Credentials.list_for_user(user),
       page_title: gettext("Account settings")
     )
   end

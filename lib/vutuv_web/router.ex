@@ -155,6 +155,14 @@ defmodule VutuvWeb.Router do
     post("/login/cancel", SessionController, :cancel)
     delete("/logout", SessionController, :delete)
 
+    # Passkey login (issue #795): the two-request WebAuthn ceremony, an
+    # alternative first factor to the email PIN. /challenge mints + stores a
+    # challenge, /passkey verifies the assertion and logs in. JSON, driven by
+    # assets/js/webauthn.js. The email-PIN flow above is the always-available
+    # fallback and the only way a passkey is ever enrolled.
+    post("/login/passkey/challenge", SessionController, :passkey_challenge)
+    post("/login/passkey", SessionController, :passkey_verify)
+
     # PIN-entry step for the account-deletion flow (issue #759).
     post("/account_deletion", UserController, :confirm_delete)
 
@@ -513,6 +521,13 @@ defmodule VutuvWeb.Router do
       # DELETE one device by id, or all-but-this-one (issue #794).
       delete("/settings/devices/:id", SettingsController, :revoke_session)
       delete("/settings/devices", SettingsController, :revoke_other_sessions)
+      # Passkeys (issue #795): enrol from the account hub (the WebAuthn
+      # registration ceremony is challenge → create, both JSON) and remove one
+      # by id. The list itself renders on GET /settings. Owner-only, like the
+      # rest of this controller — a passkey can only be added while logged in.
+      post("/settings/passkeys/challenge", PasskeyController, :challenge)
+      post("/settings/passkeys", PasskeyController, :create)
+      delete("/settings/passkeys/:id", PasskeyController, :delete)
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])

@@ -4,6 +4,7 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat
+  alias Vutuv.Credentials
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.RateLimit
 
@@ -88,6 +89,94 @@ defmodule VutuvWeb.SessionController do
     |> put_flash(:info, gettext("Okay, let's start over."))
     |> redirect(to: ~p"/login")
   end
+
+  # ── Passkey login (issue #795) ──
+  # Two requests driven by assets/js/webauthn.js: step 1 mints a WebAuthn
+  # challenge and stashes it in the session; step 2 verifies the authenticator's
+  # assertion against it and funnels into the SAME Accounts.login/2 exit the PIN
+  # flow uses. Both answer JSON; the JS fetch must not send `Accept:
+  # application/json` (the :browser pipeline's `accepts ["html"]` would 406 it),
+  # exactly like the username-availability endpoint.
+
+  # Step 1: hand the browser a fresh authentication challenge (no allow-list, so
+  # any discoverable passkey for this site can be used — no email typed first).
+  def passkey_challenge(conn, _params) do
+    case RateLimit.check(conn, :login_passkey) do
+      :ok ->
+        {challenge, options} = Credentials.authentication_options()
+
+        conn
+        |> put_session(:webauthn_auth_challenge, challenge)
+        |> json(options)
+
+      :rate_limited ->
+        conn
+        |> put_status(:too_many_requests)
+        |> json(%{error: gettext("Too many attempts. Please try again later.")})
+    end
+  end
+
+  # Step 2: verify the assertion against the stored challenge and log the member
+  # in (subject to the same moderation gate the PIN flow applies). Returns a
+  # redirect target the JS navigates to so the flash and chrome render fresh.
+  def passkey_verify(conn, params) do
+    with :ok <- RateLimit.check(conn, :login_passkey),
+         %Wax.Challenge{} = challenge <- get_session(conn, :webauthn_auth_challenge),
+         {:ok, user} <- Credentials.verify_authentication(challenge, params) do
+      complete_passkey_login(conn, user)
+    else
+      :rate_limited ->
+        conn
+        |> put_status(:too_many_requests)
+        |> json(%{ok: false, error: gettext("Too many attempts. Please try again later.")})
+
+      nil ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{ok: false, error: gettext("Your sign-in attempt expired. Please try again.")})
+
+      {:error, _reason} ->
+        conn
+        |> clear_auth_challenge()
+        |> put_status(:unprocessable_entity)
+        |> json(%{ok: false, error: gettext("That passkey could not be verified.")})
+    end
+  end
+
+  # The correct-assertion path: the SAME moderation gate and Accounts.login/2
+  # exit as handle_login/3, but answering JSON for the fetch ceremony.
+  defp complete_passkey_login(conn, user) do
+    case Vutuv.Moderation.login_block(user) do
+      nil ->
+        {return_to, conn} = pop_login_return_to(conn)
+
+        conn
+        |> clear_auth_challenge()
+        |> Accounts.login(user)
+        |> put_flash(:info, welcome_flash(nil, user))
+        |> json(%{ok: true, redirect: return_to || ~p"/#{user}"})
+
+      {:suspended, until} ->
+        conn
+        |> clear_auth_challenge()
+        |> put_status(:forbidden)
+        |> json(%{
+          ok: false,
+          error:
+            gettext("This account is suspended until %{date}.",
+              date: Calendar.strftime(until, "%Y-%m-%d")
+            )
+        })
+
+      :deactivated ->
+        conn
+        |> clear_auth_challenge()
+        |> put_status(:forbidden)
+        |> json(%{ok: false, error: gettext("This account has been deactivated.")})
+    end
+  end
+
+  defp clear_auth_challenge(conn), do: delete_session(conn, :webauthn_auth_challenge)
 
   defp resend_pin(conn, email) do
     {:ok, conn} = Accounts.login_by_email(conn, email)

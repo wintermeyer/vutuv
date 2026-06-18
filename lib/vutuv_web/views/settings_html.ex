@@ -84,6 +84,52 @@ defmodule VutuvWeb.SettingsHTML do
     """
   end
 
+  @doc """
+  One row of the passkeys list (issue #795): the member-given name, when it was
+  enrolled and last used, and a "Remove" action. Mirrors `device_row/1`.
+  """
+  attr(:passkey, :map, required: true)
+  attr(:user, :map, required: true)
+
+  def passkey_row(assigns) do
+    ~H"""
+    <li class="flex items-start justify-between gap-4 py-4">
+      <div class="flex min-w-0 gap-3">
+        <span class="mt-0.5 shrink-0 text-slate-400 dark:text-slate-500" aria-hidden="true">
+          <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H9v1.5H7.5v1.5H6v-1.5l4.66-4.66c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z"
+            />
+          </svg>
+        </span>
+        <span class="min-w-0">
+          <span class="block truncate font-medium text-slate-900 dark:text-white">
+            {@passkey.nickname || gettext("Passkey")}
+          </span>
+          <span class="block text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Added")}: {Calendar.strftime(@passkey.inserted_at, "%Y-%m-%d")}<span :if={
+              @passkey.last_used_at
+            }>
+              · {gettext("Last used")}: {last_active(@passkey.last_used_at)}</span>
+          </span>
+        </span>
+      </div>
+      <div class="shrink-0">
+        <.link
+          href={~p"/#{@user}/settings/passkeys/#{@passkey.id}"}
+          method="delete"
+          data-confirm={gettext("Remove this passkey?")}
+          class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+        >
+          {gettext("Remove")}
+        </.link>
+      </div>
+    </li>
+    """
+  end
+
   attr(:mobile?, :boolean, default: false)
 
   # A small monitor / phone glyph so the list scans at a glance. Decorative, so

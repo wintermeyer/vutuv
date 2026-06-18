@@ -67,6 +67,11 @@ defmodule Vutuv.MixProject do
       # HTTP client
       {:req, "~> 0.5"},
 
+      # Passkey / WebAuthn (FIDO2) login: server-side verification of the
+      # registration and authentication ceremonies (see Vutuv.Credentials). The
+      # browser ceremony is plain JS in assets/js/webauthn.js. Pulls cbor/x509.
+      {:wax_, "~> 0.7"},
+
       # File uploads / image processing (libvips via vix)
       {:image, "~> 0.67"},
 

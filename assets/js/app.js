@@ -5,6 +5,9 @@ import { LiveSocket } from "phoenix_live_view"
 // Desktop-only keyboard shortcuts + the "?" help overlay (self-contained,
 // gated off touch devices; see keyboard_shortcuts.js).
 import "./keyboard_shortcuts"
+// Passkey (WebAuthn/FIDO2) login + enrolment ceremony on /login and /settings
+// (self-contained, reveals itself only on supporting browsers; see webauthn.js).
+import "./webauthn"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the
