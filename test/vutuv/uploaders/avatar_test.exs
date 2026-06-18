@@ -36,6 +36,12 @@ defmodule Vutuv.AvatarTest do
   # `Vutuv.Uploads.served_url/4`. Constant here because `@user.updated_at` is.
   @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
 
+  # A stand-in content fingerprint (sha256(original)[0..11]) for scheme B: when a
+  # user carries one, the served filename bakes in the handle + fingerprint and
+  # the URL drops the `?v=` (Vutuv.Uploads). 12 lowercase hex chars, like the
+  # real thing and like Vutuv.Screenshot.
+  @fingerprint "1a2b3c4d5e6f"
+
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_avatar_test_#{System.unique_integer([:positive])}")
     prev = Application.get_env(:vutuv, :uploads_dir_prefix)
@@ -131,6 +137,46 @@ defmodule Vutuv.AvatarTest do
     test "no token when the scope carries no updated_at (e.g. an unpersisted struct)" do
       assert Vutuv.Avatar.url({"selfie.jpg", %{@user | updated_at: nil}}, :medium) ==
                "/avatars/7/avatar_medium.avif"
+    end
+  end
+
+  describe "fingerprinted URL (scheme B: handle + content hash in the filename)" do
+    setup do
+      {:ok, user: %{@user | avatar: "selfie.jpg", avatar_fingerprint: @fingerprint}}
+    end
+
+    test "bakes <handle>-<version>-<fingerprint>.avif and drops the ?v= query", %{user: user} do
+      assert Vutuv.Avatar.url({"selfie.jpg", user}, :medium) ==
+               "/avatars/7/john.doe-medium-#{@fingerprint}.avif"
+
+      assert Vutuv.Avatar.url({"selfie.jpg", user}, :thumb) ==
+               "/avatars/7/john.doe-thumb-#{@fingerprint}.avif"
+
+      refute Vutuv.Avatar.url({"selfie.jpg", user}, :medium) =~ "?"
+    end
+
+    test "the download filename moves with the handle when the slug changes", %{user: user} do
+      renamed = %{user | active_slug: "jane.smith"}
+
+      assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :medium) ==
+               "/avatars/7/jane.smith-medium-#{@fingerprint}.avif"
+    end
+
+    test "a new fingerprint changes the URL (the cache-buster lives in the name)", %{user: user} do
+      reuploaded = %{user | avatar_fingerprint: "ffffffffffff"}
+
+      refute Vutuv.Avatar.url({"selfie.jpg", reuploaded}, :medium) ==
+               Vutuv.Avatar.url({"selfie.jpg", user}, :medium)
+    end
+
+    test "display_url/2 emits the fingerprinted URL", %{user: user} do
+      assert Vutuv.Avatar.display_url(user, :medium) ==
+               "/avatars/7/john.doe-medium-#{@fingerprint}.avif"
+    end
+
+    test "a nil fingerprint still serves the legacy ?v= URL (row not yet migrated)" do
+      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+               "/avatars/7/avatar_medium.avif" <> @v
     end
   end
 
@@ -247,17 +293,45 @@ defmodule Vutuv.AvatarTest do
       {:ok, src: src}
     end
 
-    test "writes AVIF versions publicly and the original privately", %{tmp: tmp, src: src} do
+    test "writes fingerprinted AVIF versions publicly and the original privately",
+         %{tmp: tmp, src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, "selfie.jpg"} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, "selfie.jpg", fp} = Vutuv.Avatar.store({upload, @user})
+      assert fp =~ ~r/\A[0-9a-f]{12}\z/
 
       dir = Path.join(tmp, "avatars/7")
-      assert File.exists?(Path.join(dir, "avatar_thumb.avif"))
-      assert File.exists?(Path.join(dir, "avatar_medium.avif"))
+      assert File.exists?(Path.join(dir, "john.doe-thumb-#{fp}.avif"))
+      assert File.exists?(Path.join(dir, "john.doe-medium-#{fp}.avif"))
       assert File.exists?(Path.join(tmp, "originals/avatars/7/original.jpg"))
 
       # Nothing original may land in the publicly served tree.
       assert dir |> File.ls!() |> Enum.filter(&String.contains?(&1, "original")) == []
+    end
+
+    test "the returned fingerprint is what url/2 then serves (write == URL)", %{src: src} do
+      upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
+      assert {:ok, file_name, fp} = Vutuv.Avatar.store({upload, @user})
+      stored = %{@user | avatar: file_name, avatar_fingerprint: fp}
+
+      assert Vutuv.Avatar.url({file_name, stored}, :medium) ==
+               "/avatars/7/john.doe-medium-#{fp}.avif"
+    end
+
+    test "a re-upload clears the prior fingerprinted versions (no accumulation)",
+         %{tmp: tmp, src: src} do
+      upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
+      assert {:ok, _, _fp1} = Vutuv.Avatar.store({upload, @user})
+
+      png = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}.png")
+      {:ok, img} = Image.new(400, 400, color: [9, 9, 9])
+      {:ok, _} = Image.write(img, png)
+      on_exit(fn -> File.rm(png) end)
+      upload2 = %Plug.Upload{filename: "new.png", path: png, content_type: "image/png"}
+      assert {:ok, _, fp2} = Vutuv.Avatar.store({upload2, @user})
+
+      # Exactly the two versions of the latest upload remain.
+      assert Path.join(tmp, "avatars/7") |> File.ls!() |> Enum.sort() ==
+               ["john.doe-medium-#{fp2}.avif", "john.doe-thumb-#{fp2}.avif"]
     end
 
     test "a re-upload with a different extension leaves no stale private original", %{
@@ -265,25 +339,25 @@ defmodule Vutuv.AvatarTest do
       src: src
     } do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, _} = Vutuv.Avatar.store({upload, @user})
 
       png = Path.join(System.tmp_dir!(), "src_#{System.unique_integer([:positive])}.png")
       {:ok, img} = Image.new(300, 300, color: [1, 2, 3])
       {:ok, _} = Image.write(img, png)
       on_exit(fn -> File.rm(png) end)
       upload2 = %Plug.Upload{filename: "new.png", path: png, content_type: "image/png"}
-      assert {:ok, _} = Vutuv.Avatar.store({upload2, @user})
+      assert {:ok, _, _} = Vutuv.Avatar.store({upload2, @user})
 
       assert File.ls!(Path.join(tmp, "originals/avatars/7")) == ["original.png"]
     end
 
     test "thumb/medium are cropped to the Spec dimensions", %{tmp: tmp, src: src} do
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, fp} = Vutuv.Avatar.store({upload, @user})
 
       dir = Path.join(tmp, "avatars/7")
-      assert dimensions(Path.join(dir, "avatar_thumb.avif")) == {96, 96}
-      assert dimensions(Path.join(dir, "avatar_medium.avif")) == {192, 192}
+      assert dimensions(Path.join(dir, "john.doe-thumb-#{fp}.avif")) == {96, 96}
+      assert dimensions(Path.join(dir, "john.doe-medium-#{fp}.avif")) == {192, 192}
     end
 
     test "served versions carry no EXIF metadata", %{tmp: tmp} do
@@ -299,9 +373,9 @@ defmodule Vutuv.AvatarTest do
       on_exit(fn -> File.rm(src) end)
 
       upload = %Plug.Upload{filename: "selfie.jpg", path: src, content_type: "image/jpeg"}
-      assert {:ok, _} = Vutuv.Avatar.store({upload, @user})
+      assert {:ok, _, fp} = Vutuv.Avatar.store({upload, @user})
 
-      {:ok, stored} = Image.open(Path.join(tmp, "avatars/7/avatar_thumb.avif"))
+      {:ok, stored} = Image.open(Path.join(tmp, "avatars/7/john.doe-thumb-#{fp}.avif"))
       {:ok, fields} = VipsImage.header_field_names(stored)
       assert Enum.filter(fields, &String.contains?(&1, "exif")) == []
     end

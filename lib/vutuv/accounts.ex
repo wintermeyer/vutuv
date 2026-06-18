@@ -780,8 +780,9 @@ defmodule Vutuv.Accounts do
   # Avatar/cover files are written to disk only AFTER the row commits, so a
   # rolled-back update (a name too long, a constraint, ...) never orphans them
   # (issue #776). User.changeset already validated the uploads in memory; here
-  # we store them against the just-committed user (final id + name, which the
-  # on-disk file name is derived from) and set the column in a second write.
+  # we store them against the just-committed user (final id + handle, which the
+  # served filename embeds) and set both the filename and the content
+  # fingerprint columns in a second write.
   defp store_pending_images(user, attrs) do
     user
     |> store_pending_image(:avatar, image_upload(attrs, :avatar), &Vutuv.Avatar.store/1)
@@ -791,23 +792,26 @@ defmodule Vutuv.Accounts do
   defp store_pending_image(user, _field, nil, _store), do: user
 
   defp store_pending_image(user, field, %Plug.Upload{} = upload, store) do
-    # `force: true` bumps `updated_at` even when the column is unchanged (a
-    # re-upload of a same-named file). Avatar/cover URLs carry a cache-buster
-    # derived from `updated_at` (see `Vutuv.Uploads`), so the timestamp must
-    # advance on every successful store or the browser keeps the cached image.
-    with {:ok, file_name} <- store.({upload, user}),
-         {:ok, user} <-
-           user |> Ecto.Changeset.change(%{field => file_name}) |> Repo.update(force: true) do
-      user
+    # The store returns the content fingerprint alongside the filename; both are
+    # persisted, putting the row on the fingerprinted scheme (its URL carries the
+    # fingerprint in the filename, so no `updated_at`-based `?v=` is needed — an
+    # identical re-upload yields the same fingerprint and the same cacheable URL).
+    # A failure of either step (a rare disk/db error after a decode the changeset
+    # already proved) keeps the prior image rather than committing columns that
+    # point at a file that was never written.
+    with {:ok, file_name, fingerprint} <- store.({upload, user}),
+         attrs = %{field => file_name, fingerprint_field(field) => fingerprint},
+         {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
+      saved
     else
-      # The changeset already proved the upload decodes, so this is a rare disk
-      # failure; keep the prior image rather than committing a column that
-      # points at a file that was never written.
       _ ->
         Logger.warning("#{field} store failed for user ##{user.id}")
         user
     end
   end
+
+  defp fingerprint_field(:avatar), do: :avatar_fingerprint
+  defp fingerprint_field(:cover_photo), do: :cover_fingerprint
 
   defp image_upload(attrs, field) do
     case attrs do
@@ -899,9 +903,25 @@ defmodule Vutuv.Accounts do
     end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{user: user}} -> {:ok, user}
-      {:error, :user, changeset, _} -> {:error, changeset}
+      {:ok, %{user: user}} ->
+        rebuild_images_for_new_slug(user)
+        {:ok, user}
+
+      {:error, :user, changeset, _} ->
+        {:error, changeset}
     end
+  end
+
+  # A username change moves the handle baked into fingerprinted image filenames
+  # (`<handle>-<version>-<fp>.avif`), so re-derive avatar and cover under the new
+  # handle — off the private original, so it never depends on the old-handle
+  # files — before returning, or the slug-in-the-URL would 404. A no-op for
+  # images still on the legacy (name/id-based) scheme. Slug changes are
+  # rate-limited (4 per 90 days), so the synchronous re-derive is cheap enough.
+  defp rebuild_images_for_new_slug(user) do
+    Vutuv.Avatar.reslug(user)
+    Vutuv.Cover.reslug(user)
+    :ok
   end
 
   # Re-submitting the current handle would be a no-op rename that still burns

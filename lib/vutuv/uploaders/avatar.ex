@@ -4,9 +4,18 @@ defmodule Vutuv.Avatar do
 
   Explicit local-disk storage with libvips; resolution, format and quality of
   the served versions come from `Vutuv.Uploads.Spec`. The derived versions are
-  AVIF and live in the publicly served tree (nginx `location /avatars/`):
+  AVIF and live in the publicly served tree (nginx `location /avatars/`), named
+  for the owner's handle and the image's content fingerprint, so a download
+  carries the username and the URL is immutable (no `?v=` cache-buster):
 
-      <uploads_dir_prefix>/avatars/<user.id>/avatar_<version>.avif
+      <uploads_dir_prefix>/avatars/<user.id>/<active_slug>-<version>-<fingerprint>.avif
+
+  The fingerprint (`sha256(original)[0..11]`) is stored in `:avatar_fingerprint`;
+  the on-disk filename equals the URL's last segment, so the existing nginx
+  `alias` serves it directly (no rewrite). A row with no fingerprint has not been
+  migrated to this scheme yet and falls back to the legacy
+  `avatar_<version>.avif?v=...` URL (see `Vutuv.Uploads`); a username change
+  re-derives the files under the new handle (`reslug/1`).
 
   The uploaded **original** is kept verbatim (format + metadata) so better
   formats can be re-derived later (`Vutuv.Uploads.Regenerator`), but in a
@@ -18,10 +27,7 @@ defmodule Vutuv.Avatar do
   `uploads_dir_prefix` is the absolute storage root, configured per environment
   (`config :vutuv, :uploads_dir_prefix`); it is empty in dev/test and
   `/srv/legacy-vutuv` in production. URLs are always root-relative
-  (`/avatars/<id>/...`) and URI-encoded. Files written by an earlier pipeline
-  (pre-AVIF `_thumb.jpg`, or the pre-#773 name-derived `<First Last>_thumb.avif`)
-  keep resolving through a transitional fallback until the one-shot
-  regeneration has re-derived them under the stable name.
+  (`/avatars/<id>/...`) and URI-encoded.
 
   The store/serve/url/regenerate pipeline is shared with `Vutuv.Cover` and
   lives in `Vutuv.Uploads`; this module supplies the avatar layout (`@config`)
@@ -38,6 +44,11 @@ defmodule Vutuv.Avatar do
     spec_key: :avatar,
     prefix: "avatars",
     default_version: :medium,
+    # The user column holding this image's content fingerprint. When set, the
+    # served filename embeds the handle + fingerprint (`<slug>-<version>-<fp>.avif`)
+    # and the URL needs no `?v=`; when nil the row predates the scheme and falls
+    # back to the legacy URL. See Vutuv.Uploads.served_url/4.
+    fingerprint_field: :avatar_fingerprint,
     # Everything version-shaped a past pipeline may have left: old-extension
     # versions, publicly stored originals, files named for a previous user
     # name, and the Waffle-era `_large` (512px) the current code never serves.
@@ -48,24 +59,38 @@ defmodule Vutuv.Avatar do
 
   @doc """
   Stores every avatar version for `{upload, user}` and returns
-  `{:ok, original_file_name}` (kept verbatim in the `:avatar` column), or
-  `{:error, :invalid_file}` when the extension is not whitelisted **or the file
-  cannot be decoded as an image** (corrupt/truncated uploads used to crash the
-  request with a `MatchError`).
+  `{:ok, original_file_name, fingerprint}` (kept in the `:avatar` /
+  `:avatar_fingerprint` columns), or `{:error, :invalid_file}` when the
+  extension is not whitelisted **or the file cannot be decoded as an image**
+  (corrupt/truncated uploads used to crash the request with a `MatchError`).
   """
   def store({%Plug.Upload{}, _scope} = upload_and_scope) do
     Uploads.store(upload_and_scope, @config)
   end
 
   @doc """
-  Re-derives the served versions from the original per the current
-  `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
+  Migrates the avatar to the fingerprinted scheme, or re-derives a row already
+  on it, per the current `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate/3`,
   which this configures with the avatar layout. Used by
   `Vutuv.Uploads.Regenerator`.
   """
   def regenerate(user, opts \\ []) do
     Uploads.regenerate(user, opts, @config)
   end
+
+  @doc """
+  Re-derives the avatar under the user's current handle after a username change
+  (the handle is baked into the served filename). See
+  `Vutuv.Uploads.reslug/2` and `Accounts.update_active_slug/2`.
+  """
+  def reslug(user), do: Uploads.reslug(user, @config)
+
+  @doc """
+  Removes the legacy avatar files once the row is on the fingerprinted scheme —
+  the contract half of the migration. See `Vutuv.Uploads.sweep_legacy/3` and
+  `mix vutuv.images.sweep_legacy`.
+  """
+  def sweep_legacy(user, opts \\ []), do: Uploads.sweep_legacy(user, opts, @config)
 
   @doc """
   Root-relative, URI-encoded URL for a given `{avatar, user}` and served

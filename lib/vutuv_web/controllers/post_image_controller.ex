@@ -58,6 +58,7 @@ defmodule VutuvWeb.PostImageController do
       {:ok, jpeg} ->
         conn
         |> put_resp_header("cache-control", @cache_control)
+        |> put_download_name(image, "og", "jpg")
         |> put_resp_content_type("image/jpeg")
         |> send_resp(200, jpeg)
 
@@ -75,6 +76,7 @@ defmodule VutuvWeb.PostImageController do
 
         conn
         |> put_resp_content_type(MIME.from_path(accel_path))
+        |> put_download_name(image, version, Path.extname(accel_path))
         |> put_resp_header("x-accel-redirect", accel_path)
         |> send_resp(200, "")
 
@@ -86,8 +88,23 @@ defmodule VutuvWeb.PostImageController do
           path ->
             conn
             |> put_resp_content_type(MIME.from_path(path))
+            |> put_download_name(image, version, Path.extname(path))
             |> send_file(200, path)
         end
+    end
+  end
+
+  # Suggest a download filename carrying the owner's handle, e.g.
+  # `ada_king-feed.avif`. `inline` (not `attachment`), so it only changes the
+  # name a browser proposes on "Save as", not whether the image renders inline.
+  defp put_download_name(conn, image, version, ext) do
+    case image.user do
+      %{active_slug: slug} when is_binary(slug) ->
+        name = "#{slug}-#{version}.#{String.trim_leading(ext, ".")}"
+        put_resp_header(conn, "content-disposition", ~s(inline; filename="#{name}"))
+
+      _ ->
+        conn
     end
   end
 
