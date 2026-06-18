@@ -34,17 +34,20 @@ defmodule Vutuv.Cover do
     # See Vutuv.Avatar's @config: the user column holding this image's content
     # fingerprint, baked into `<slug>-<version>-<fp>.avif` when set.
     fingerprint_field: :cover_fingerprint,
-    stale_glob: "*_{wide,original}.*"
+    stale_glob: "*_{wide,original}.*",
+    crop_field: :cover_crop
   }
 
   @doc """
-  Stores every cover version for `{upload, user}` and returns
-  `{:ok, original_file_name, fingerprint}` (kept in the `:cover_photo` /
-  `:cover_fingerprint` columns), or `{:error, :invalid_file}` when the extension
-  is not whitelisted or the file cannot be decoded as an image.
+  Stores every cover version for `{upload, user}`, cropping the served banner
+  to `crop` (a `"x,y,w,h"` string or `nil` for the full-width default; see
+  `Vutuv.Uploads.Crop`) and returns `{:ok, original_file_name, fingerprint}`
+  (kept in the `:cover_photo` / `:cover_fingerprint` columns; the crop is folded
+  into the fingerprint), or `{:error, :invalid_file}` when the
+  extension is not whitelisted or the file cannot be decoded as an image.
   """
-  def store({%Plug.Upload{}, _scope} = upload_and_scope) do
-    Uploads.store(upload_and_scope, @config)
+  def store({%Plug.Upload{}, _scope} = upload_and_scope, crop \\ nil) do
+    Uploads.store(upload_and_scope, @config, crop)
   end
 
   @doc """

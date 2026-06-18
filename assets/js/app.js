@@ -8,6 +8,9 @@ import "./keyboard_shortcuts"
 // Passkey (WebAuthn/FIDO2) login + enrolment ceremony on /login and /settings
 // (self-contained, reveals itself only on supporting browsers; see webauthn.js).
 import "./webauthn"
+// Avatar/cover crop modal on the profile editor (self-contained progressive
+// enhancement of the two file inputs; see image_crop.js).
+import "./image_crop"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the

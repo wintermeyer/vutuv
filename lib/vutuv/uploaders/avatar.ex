@@ -37,6 +37,7 @@ defmodule Vutuv.Avatar do
 
   alias Vix.Vips.Operation
   alias Vutuv.Uploads
+  alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -52,20 +53,23 @@ defmodule Vutuv.Avatar do
     # Everything version-shaped a past pipeline may have left: old-extension
     # versions, publicly stored originals, files named for a previous user
     # name, and the Waffle-era `_large` (512px) the current code never serves.
-    stale_glob: "*_*.*"
+    stale_glob: "*_*.*",
+    crop_field: :avatar_crop
   }
 
   @default_avatar ~s"data:image/svg+xml,%3Csvg%20width%3D%27200%27%20height%3D%27200%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20xmlns%3Axlink%3D%27http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%27%3E%3Cdefs%3E%3Ccircle%20id%3D%27a%27%20cx%3D%27100%27%20cy%3D%27100%27%20r%3D%27100%27%2F%3E%3C%2Fdefs%3E%3Cg%20fill%3D%27none%27%20fill-rule%3D%27evenodd%27%3E%3Cmask%20id%3D%27b%27%20fill%3D%27%23fff%27%3E%3Cuse%20xlink%3Ahref%3D%27%23a%27%2F%3E%3C%2Fmask%3E%3Cuse%20fill%3D%27%23EEE%27%20xlink%3Ahref%3D%27%23a%27%2F%3E%3Cpath%20d%3D%27M88.96%20154c-6.357-12.418-12.81-26.952-19.355-43.597C63.06%2093.76%2056.858%2075.626%2051%2056h29.437c1.247%204.844%202.714%2010.093%204.4%2015.743%201.682%205.653%203.428%2011.365%205.24%2017.143%201.808%205.772%203.615%2011.394%205.425%2016.86%201.81%205.466%203.59%2010.434%205.336%2014.904%201.618-4.47%203.365-9.438%205.234-14.905%201.87-5.465%203.71-11.087%205.518-16.86%201.807-5.777%203.554-11.49%205.237-17.142%201.682-5.65%203.15-10.9%204.395-15.743h28.71c-5.857%2019.626-12.055%2037.76-18.594%2054.403C124.8%20127.048%20118.352%20141.583%20112%20154H88.96z%27%20fill%3D%27%231A1918%27%20opacity%3D%27.1%27%20mask%3D%27url(%23b)%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E"
 
   @doc """
-  Stores every avatar version for `{upload, user}` and returns
-  `{:ok, original_file_name, fingerprint}` (kept in the `:avatar` /
-  `:avatar_fingerprint` columns), or `{:error, :invalid_file}` when the
+  Stores every avatar version for `{upload, user}`, cropping the served
+  versions to `crop` (a `"x,y,w,h"` string or `nil` for the centered default;
+  see `Vutuv.Uploads.Crop`) and returns `{:ok, original_file_name, fingerprint}`
+  (kept in the `:avatar` / `:avatar_fingerprint` columns; the crop is folded
+  into the fingerprint), or `{:error, :invalid_file}` when the
   extension is not whitelisted **or the file cannot be decoded as an image**
   (corrupt/truncated uploads used to crash the request with a `MatchError`).
   """
-  def store({%Plug.Upload{}, _scope} = upload_and_scope) do
-    Uploads.store(upload_and_scope, @config)
+  def store({%Plug.Upload{}, _scope} = upload_and_scope, crop \\ nil) do
+    Uploads.store(upload_and_scope, @config, crop)
   end
 
   @doc """
@@ -151,23 +155,43 @@ defmodule Vutuv.Avatar do
   def og_jpeg(%{avatar: nil}), do: :error
   def og_jpeg(user), do: derive_jpeg(user, @og_size, @og_size, :center)
 
-  # JPEG from the best available source: decode + EXIF-autorotate,
-  # crop-resize, save **stripped** (`keep: []`). The original's metadata
-  # (camera, GPS) must never leak into a served or exported derivative —
-  # the same rule the AVIF pipeline enforces in Vutuv.Uploads.Spec.
+  # JPEG from the best available source: decode + EXIF-autorotate, apply the
+  # user's crop, crop-resize, save **stripped** (`keep: []`). The original's
+  # metadata (camera, GPS) must never leak into a served or exported
+  # derivative — the same rule the AVIF pipeline enforces in Vutuv.Uploads.Spec.
+  #
+  # The crop is applied only when deriving from the **original**; a served
+  # version fallback (legacy uploads with no kept original) is already cropped,
+  # so re-applying the fractions would double-crop it.
   defp derive_jpeg(user, width, height, gravity) do
-    with path when not is_nil(path) <- source_path(user),
-         {:ok, rotated} <- Spec.open_rotated(path),
-         {:ok, small} <- Image.thumbnail(rotated, "#{width}x#{height}", crop: gravity),
-         {:ok, data} <- Operation.jpegsave_buffer(small, keep: [], Q: 80) do
-      {:ok, data}
-    else
-      _ -> :error
+    case source(user) do
+      nil ->
+        :error
+
+      {origin, path} ->
+        crop = if origin == :original, do: Crop.parse(Map.get(user, :avatar_crop))
+
+        with {:ok, rotated} <- Spec.open_rotated(path),
+             {:ok, cropped} <- Crop.apply_to(rotated, crop),
+             {:ok, small} <- Image.thumbnail(cropped, "#{width}x#{height}", crop: gravity),
+             {:ok, data} <- Operation.jpegsave_buffer(small, keep: [], Q: 80) do
+          {:ok, data}
+        else
+          _ -> :error
+        end
     end
   end
 
-  defp source_path(user) do
-    Originals.path("#{@config.prefix}/#{user.id}") ||
-      Uploads.version_path({user.avatar, user}, :medium, @config)
+  defp source(user) do
+    case Originals.path("#{@config.prefix}/#{user.id}") do
+      nil ->
+        case Uploads.version_path({user.avatar, user}, :medium, @config) do
+          nil -> nil
+          path -> {:served, path}
+        end
+
+      path ->
+        {:original, path}
+    end
   end
 end

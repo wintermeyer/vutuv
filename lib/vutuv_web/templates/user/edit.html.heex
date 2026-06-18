@@ -31,7 +31,28 @@ before. --%>
               {gettext("Current avatar")}
             </span>
           </div>
-          <%= file_input f, :avatar, class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <%= file_input f, :avatar,
+            accept: "image/*",
+            class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100",
+            data: [
+              crop_target: "user_avatar_crop",
+              crop_aspect: "1",
+              crop_title: gettext("Position your photo"),
+              crop_hint: gettext("Drag to move, use the slider to zoom. The framed area is what others see."),
+              crop_save: gettext("Use photo"),
+              crop_cancel: gettext("Cancel"),
+              crop_zoom: gettext("Zoom")
+            ] %>
+          <%= hidden_input f, :avatar_crop, id: "user_avatar_crop" %>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("After choosing a file you can reposition and zoom it.")}
+          </p>
+          <img
+            data-crop-preview="user_avatar_crop"
+            hidden
+            alt={gettext("New avatar preview")}
+            class="mt-3 h-20 w-20 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+          />
           <%= error_tag f, :avatar %>
         </div>
         <%!-- Cover photo: preview the current cover (the same object-cover crop
@@ -50,7 +71,28 @@ before. --%>
               {gettext("Current cover photo")}
             </figcaption>
           </figure>
-          <%= file_input f, :cover_photo, class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100" %>
+          <%= file_input f, :cover_photo,
+            accept: "image/*",
+            class: "mt-3 block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-brand-700 hover:file:bg-brand-100 dark:text-slate-300 dark:file:bg-brand-900/40 dark:file:text-brand-100",
+            data: [
+              crop_target: "user_cover_crop",
+              crop_aspect: "4",
+              crop_title: gettext("Position your cover photo"),
+              crop_hint: gettext("Drag to move, use the slider to zoom. The framed area is what others see."),
+              crop_save: gettext("Use photo"),
+              crop_cancel: gettext("Cancel"),
+              crop_zoom: gettext("Zoom")
+            ] %>
+          <%= hidden_input f, :cover_crop, id: "user_cover_crop" %>
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("After choosing a file you can reposition and zoom it.")}
+          </p>
+          <img
+            data-crop-preview="user_cover_crop"
+            hidden
+            alt={gettext("New cover photo preview")}
+            class="mt-3 h-16 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+          />
           <%= error_tag f, :cover_photo %>
         </div>
       </div>
