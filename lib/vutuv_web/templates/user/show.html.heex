@@ -12,11 +12,73 @@ content+rail columns too; user_row and the rail cards truncate cleanly at
 the resulting ~200px rail width. --%>
 <div class="grid gap-6 py-6 md:grid-cols-3">
   <div class="space-y-6 md:col-span-2">
+    <%!-- Owner-only "view as" switcher: see your own profile the way others do.
+    The bare URL is your own view; ?view_as=follower / connection / public reload server-side
+    (the controller filters private data out before render, so it never reaches
+    a preview's HTML). A stranger's ?view_as= is ignored, so this is owner-only.
+    The bar doubles as the persistent entry point and the active-mode banner. --%>
+    <div
+      :if={@can_preview?}
+      id="view-as-switcher"
+      class={[
+        "rounded-2xl px-4 py-3 ring-1",
+        if(@preview?,
+          do: "bg-brand-50 ring-brand-200 dark:bg-brand-900/30 dark:ring-brand-900/50",
+          else: "bg-white ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+        )
+      ]}
+    >
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <span class="inline-flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          {gettext("View as")}
+        </span>
+        <div class="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
+          <.link
+            :for={
+              {label, mode, href} <- [
+                {gettext("You"), nil, ~p"/#{@user}"},
+                {gettext("Follower"), :follower, ~p"/#{@user}?#{[view_as: "follower"]}"},
+                {gettext("Connected"), :connection, ~p"/#{@user}?#{[view_as: "connection"]}"},
+                {gettext("Public"), :public, ~p"/#{@user}?#{[view_as: "public"]}"}
+              ]
+            }
+            href={href}
+            aria-current={@preview_as == mode && "true"}
+            class={[
+              "px-3 py-1.5 font-semibold",
+              if(@preview_as == mode,
+                do: "bg-brand-600 text-white",
+                else:
+                  "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              )
+            ]}
+          >
+            {label}
+          </.link>
+        </div>
+      </div>
+      <p :if={@preview?} id="view-as-banner" class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <%= case @preview_as do %>
+          <% :follower -> %>
+            {gettext("Preview: how a member who follows you sees your profile. The controls here are inactive.")}
+          <% :connection -> %>
+            {gettext("Preview: how a member you are connected with sees your profile. The controls here are inactive.")}
+          <% :public -> %>
+            {gettext("Preview: how logged-out visitors and search engines see your profile.")}
+          <% _ -> %>
+        <% end %>
+      </p>
+    </div>
+
     <%!-- The owner's moderation notice: a frozen / suspended profile is
     invisible to everyone else, so tell the owner what is going on and where
     to act. Visitors never reach this page (EnsureActivated 404s first). --%>
     <.frozen_banner
-      :if={same_user?(@user, @current_user) and Vutuv.Moderation.account_hidden?(@user)}
+      :if={@as_owner? and Vutuv.Moderation.account_hidden?(@user)}
       class="rounded-2xl px-4 py-3 text-sm"
     >
       {gettext("Only you can see your profile right now - it is hidden while a report is handled.")}
@@ -36,7 +98,7 @@ the resulting ~200px rail width. --%>
           <div class="h-full w-full bg-gradient-to-r from-brand-700 to-brand-500"></div>
         <% end %>
         <.link
-          :if={same_user?(@user, @current_user)}
+          :if={@as_owner?}
           href={~p"/#{@user}/edit"}
           title={if cover_url, do: gettext("Change cover photo"), else: gettext("Add a cover photo")}
           class="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/50"
@@ -58,14 +120,20 @@ the resulting ~200px rail width. --%>
           <%!-- flex-wrap: on narrow phones the visitor's three controls
           (Connect/Follow/Message) don't fit beside the avatar in one row;
           without it the last button is clipped off-screen. --%>
-          <div id="profile-actions" class="ml-auto flex flex-wrap justify-end gap-2 pb-1">
+          <%!-- pointer-events-none in preview: the visitor controls render so
+          the owner sees exactly what a member gets, but they are inert (you
+          cannot connect to / message yourself). --%>
+          <div
+            id="profile-actions"
+            class={["ml-auto flex flex-wrap justify-end gap-2 pb-1", @preview? && "pointer-events-none"]}
+          >
             <%= cond do %>
-              <% same_user?(@user, @current_user) -> %>
+              <% @as_owner? -> %>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
               <% assigns[:viewer_block] -> %>
                 <%!-- I blocked this member: no Connect/Follow/Message (they
                 would all refuse anyway) - the footer offers Unblock. --%>
-              <% visitor?(@conn, @current_user) -> %>
+              <% @preview_as in [:follower, :connection] or visitor?(@conn, @current_user) -> %>
                 <.connect_control
                   :if={@connection_state}
                   state={@connection_state.status}
@@ -76,7 +144,7 @@ the resulting ~200px rail width. --%>
                   variant="button"
                   follower_id={@current_user_id}
                   followee_id={@user.id}
-                  follow_id={user_follows_user?(@current_user, @user)}
+                  follow_id={@header_follow_id}
                 />
                 <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
                 <%!-- Private, silent saves (no follow/connection, no notification):
@@ -196,7 +264,7 @@ the resulting ~200px rail width. --%>
           <.link
             id="download-vcard"
             href={
-              if user_has_permissions?(@user, @current_user),
+              if @vcard_full?,
                 do: ~p"/#{@user}/vcard",
                 else: "/#{@user.active_slug}.vcf"
             }
@@ -218,7 +286,7 @@ the resulting ~200px rail width. --%>
     anything is still undone and gone once every step is done; each todo links
     straight to where it is done. Replaces the old 10-minute welcome note. --%>
     <section
-      :if={same_user?(@user, @current_user) and Enum.any?(@completion_steps, &(not &1.done))}
+      :if={@as_owner? and Enum.any?(@completion_steps, &(not &1.done))}
       class="rounded-2xl bg-brand-50 p-6 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50"
     >
       <% done_count = Enum.count(@completion_steps, & &1.done) %>
@@ -256,12 +324,12 @@ the resulting ~200px rail width. --%>
 
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed
     composer, which the owner's "Add" link points to) --%>
-    <.card :if={@posts != [] or same_user?(@user, @current_user)} id="profile-posts">
+    <.card :if={@posts != [] or @as_owner?} id="profile-posts">
       <.section_header title={gettext("Posts")} />
 
       <%!-- Compose affordance on top, the convention everywhere (the feed opens
       in the /feed composer). --%>
-      <.empty_add :if={same_user?(@user, @current_user)} href={~p"/feed"} class={@posts != [] && "mb-4"}>
+      <.empty_add :if={@as_owner?} href={~p"/feed"} class={@posts != [] && "mb-4"}>
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
       </.empty_add>
 
@@ -272,7 +340,7 @@ the resulting ~200px rail width. --%>
           reposted_by={entry.reposted_by}
           entry_id={entry.id}
           conn_or_socket={@conn}
-          viewer={@current_user}
+          viewer={@view_viewer}
           mode={:preview}
           surface={:flat}
           class="py-4 first:pt-0 last:pb-0"
@@ -286,14 +354,14 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- Tags & endorsements --%>
-    <.card :if={Enum.count(@user_tags) > 0 or same_user?(@user, @current_user)}>
+    <.card :if={Enum.count(@user_tags) > 0 or @as_owner?}>
       <%!-- The dashed add tile is onboarding scaffolding: it shows only while the
       card is empty. Once there are entries the card is a clean showcase and
       "Verwalten" (manage_footer) leads to the page where tags are added/removed
       (tags have no edit form). --%>
       <.section_header title={gettext("Tags & endorsements")} />
 
-      <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@user_tags) == 0} href={~p"/#{@user}/tags/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@user_tags) == 0} href={~p"/#{@user}/tags/new"}>
         {gettext("Add a tag")}
       </.empty_add>
 
@@ -319,15 +387,15 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/tags"}
         total={@totals.user_tags}
         preview={10}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
     <%!-- Experience --%>
-    <.card :if={@work_experience != [] or same_user?(@user, @current_user)} id="profile-experience">
+    <.card :if={@work_experience != [] or @as_owner?} id="profile-experience">
       <.section_header title={gettext("Experience")} />
 
-      <.empty_add :if={same_user?(@user, @current_user) and @work_experience == []} href={~p"/#{@user}/work_experiences/new"}>
+      <.empty_add :if={@as_owner? and @work_experience == []} href={~p"/#{@user}/work_experiences/new"}>
         {gettext("Add work experience")}
       </.empty_add>
 
@@ -380,7 +448,7 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/work_experiences"}
         total={@totals.jobs}
         preview={3}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
@@ -388,9 +456,9 @@ the resulting ~200px rail width. --%>
     Vutuv.PageScreenshot captures on link create/update. Lives in the wide
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
     to the bundled placeholder while a screenshot is still missing. --%>
-    <.card :if={@totals.links > 0 or same_user?(@user, @current_user)} id="profile-links">
+    <.card :if={@totals.links > 0 or @as_owner?} id="profile-links">
       <.section_header title={gettext("Links")} />
-      <.empty_add :if={same_user?(@user, @current_user) and @totals.links == 0} href={~p"/#{@user}/links/new"}>
+      <.empty_add :if={@as_owner? and @totals.links == 0} href={~p"/#{@user}/links/new"}>
         {gettext("Add a link")}
       </.empty_add>
       <%!-- sm:gap-x-18 widens only the desktop column gutter to 72px so both
@@ -428,7 +496,7 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/links"}
         total={@totals.links}
         preview={3}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
@@ -441,8 +509,8 @@ the resulting ~200px rail width. --%>
           <.user_row
             :for={user <- @followers}
             user={user}
-            current_user={@current_user}
-            current_user_id={@current_user_id}
+            current_user={@view_viewer}
+            current_user_id={@view_viewer_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
           />
@@ -454,14 +522,14 @@ the resulting ~200px rail width. --%>
 
       <.card :if={@followee_count > 0} id="profile-following">
         <.section_title class="mb-4">
-          {if same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows")}
+          {if @as_owner?, do: gettext("Following"), else: gettext("Follows")}
         </.section_title>
         <ul class="space-y-4">
           <.user_row
             :for={user <- @followees}
             user={user}
-            current_user={@current_user}
-            current_user_id={@current_user_id}
+            current_user={@view_viewer}
+            current_user_id={@view_viewer_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
           />
@@ -475,9 +543,9 @@ the resulting ~200px rail width. --%>
 
   <%!-- Right rail --%>
   <aside class="space-y-6">
-    <.card :if={Enum.count(@emails) > 0 or same_user?(@user, @current_user)} id="profile-contact">
+    <.card :if={Enum.count(@emails) > 0 or @as_owner?} id="profile-contact">
       <.section_header title={gettext("Contact")} />
-      <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
       <ul class="space-y-2">
@@ -492,13 +560,13 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/emails"}
         total={Enum.count(@emails)}
         preview={Enum.count(@emails)}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
     <%!-- General info: gender + birthday; the headline already lives in the header --%>
     <.card
-      :if={@user.birthdate || (@user.gender && @user.gender != "other") || same_user?(@user, @current_user)}
+      :if={@user.birthdate || (@user.gender && @user.gender != "other") || @as_owner?}
       id="profile-about"
     >
       <%!-- General Info edits the profile form (no list). While empty it shows
@@ -506,7 +574,7 @@ the resulting ~200px rail width. --%>
       set it is a clean showcase with a quiet "Ändern" footer to /edit. --%>
       <% has_general_info = @user.birthdate || (@user.gender && @user.gender != "other") %>
       <.section_header title={gettext("General Info")} />
-      <.empty_add :if={same_user?(@user, @current_user) && !has_general_info} href={~p"/#{@user}/edit"}>
+      <.empty_add :if={@as_owner? && !has_general_info} href={~p"/#{@user}/edit"}>
         {gettext("Add personal details")}
       </.empty_add>
       <dl class="space-y-3 text-sm">
@@ -519,17 +587,17 @@ the resulting ~200px rail width. --%>
           <dd class="font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
         </div>
       </dl>
-      <.card_footer_link :if={same_user?(@user, @current_user) && has_general_info} href={~p"/#{@user}/edit"}>
+      <.card_footer_link :if={@as_owner? && has_general_info} href={~p"/#{@user}/edit"}>
         {gettext("Edit")}
       </.card_footer_link>
     </.card>
 
     <.card
-      :if={Enum.count(@user.social_media_accounts) > 0 or same_user?(@user, @current_user)}
+      :if={Enum.count(@user.social_media_accounts) > 0 or @as_owner?}
       id="profile-social-media"
     >
       <.section_header title={gettext("Social Media")} />
-      <.empty_add :if={same_user?(@user, @current_user) and Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
         {gettext("Add a social media account")}
       </.empty_add>
       <ul class="space-y-3 text-sm">
@@ -542,13 +610,13 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/social_media_accounts"}
         total={Enum.count(@user.social_media_accounts)}
         preview={Enum.count(@user.social_media_accounts)}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
-    <.card :if={@totals.numbers > 0 or same_user?(@user, @current_user)} id="profile-phone-numbers">
+    <.card :if={@totals.numbers > 0 or @as_owner?} id="profile-phone-numbers">
       <.section_header title={gettext("Phone Numbers")} />
-      <.empty_add :if={same_user?(@user, @current_user) and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
+      <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
         {gettext("Add a phone number")}
       </.empty_add>
       <ul class="space-y-3 text-sm">
@@ -561,13 +629,13 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/phone_numbers"}
         total={@totals.numbers}
         preview={3}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
-    <.card :if={@totals.addresses > 0 or same_user?(@user, @current_user)} id="profile-addresses">
+    <.card :if={@totals.addresses > 0 or @as_owner?} id="profile-addresses">
       <.section_header title={gettext("Addresses")} />
-      <.empty_add :if={same_user?(@user, @current_user) and @totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
+      <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
         {gettext("Add an address")}
       </.empty_add>
       <ul class="space-y-3 text-sm">
@@ -580,7 +648,7 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/addresses"}
         total={@totals.addresses}
         preview={3}
-        owner={same_user?(@user, @current_user)}
+        owner={@as_owner?}
       />
     </.card>
 
@@ -622,8 +690,8 @@ the resulting ~200px rail width. --%>
         <.user_row
           :for={user <- @recommended_users}
           user={user}
-          current_user={@current_user}
-          current_user_id={@current_user_id}
+          current_user={@view_viewer}
+          current_user_id={@view_viewer_id}
           work_info_by_id={@work_info_by_id}
           following_by_id={@following_by_id}
         />

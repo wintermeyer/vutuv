@@ -505,6 +505,120 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get(User, user.id)
   end
 
+  describe "owner 'view as' profile preview" do
+    # Two emails so the private/public split is unambiguous: the owner and a
+    # a connection (vernetzt, mutual follow) see both, a plain Follower / the
+    # public see only the public one.
+    defp owner_with_emails(conn) do
+      {conn, user} = create_and_login_user(conn)
+      insert(:email, user: user, value: "secret@example.com", public?: false)
+      insert(:email, user: user, value: "shown@example.com", public?: true)
+      {conn, user}
+    end
+
+    test "owner's default view carries the switcher and the full private profile", %{conn: conn} do
+      {conn, user} = owner_with_emails(conn)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      # The switcher is the persistent entry point; no banner until a preview
+      # is active.
+      assert html =~ "view-as-switcher"
+      refute html =~ "view-as-banner"
+      assert html =~ "Edit profile"
+      assert html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
+    end
+
+    test "previewing as a Follower hides private emails and owner chrome but shows visitor controls",
+         %{conn: conn} do
+      {conn, user} = owner_with_emails(conn)
+
+      html = conn |> get(~p"/#{user}?#{[view_as: "follower"]}") |> html_response(200)
+
+      assert html =~ "view-as-banner"
+      refute html =~ "Edit profile"
+      # A plain follower is not someone the owner follows, so no private email.
+      refute html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
+      # The action controls render (inert in preview): the Message link to this
+      # profile only appears in the header control cluster.
+      assert html =~ ~p"/messages/with/#{user}"
+      assert html =~ "pointer-events-none"
+    end
+
+    test "previewing as a connection (vernetzt) reveals private emails too", %{conn: conn} do
+      {conn, user} = owner_with_emails(conn)
+
+      html = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
+
+      assert html =~ "view-as-banner"
+      refute html =~ "Edit profile"
+      # A connection is a mutual follow, so the owner follows them and the
+      # private-email rule grants it.
+      assert html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
+      assert html =~ ~p"/messages/with/#{user}"
+    end
+
+    test "previewing as the public hides private data, owner chrome and every action control",
+         %{conn: conn} do
+      {conn, user} = owner_with_emails(conn)
+
+      html = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
+
+      assert html =~ "view-as-banner"
+      refute html =~ "Edit profile"
+      refute html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
+      refute html =~ ~p"/messages/with/#{user}"
+    end
+
+    test "post visibility follows the previewed relationship", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Vutuv.Posts.create_post(user, %{body: "everyone post"})
+
+      {:ok, _} =
+        Vutuv.Posts.create_post(user, %{
+          body: "followers post",
+          denials: [%{"wildcard" => "non_followers"}]
+        })
+
+      {:ok, _} =
+        Vutuv.Posts.create_post(user, %{
+          body: "connections post",
+          denials: [%{"wildcard" => "non_connections"}]
+        })
+
+      public = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
+      assert public =~ "everyone post"
+      refute public =~ "followers post"
+      refute public =~ "connections post"
+
+      follower = conn |> get(~p"/#{user}?#{[view_as: "follower"]}") |> html_response(200)
+      assert follower =~ "everyone post"
+      assert follower =~ "followers post"
+      refute follower =~ "connections post"
+
+      connection = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
+      assert connection =~ "everyone post"
+      assert connection =~ "followers post"
+      assert connection =~ "connections post"
+    end
+
+    test "a stranger's ?view_as= is ignored: no switcher, no preview, no leak", %{conn: conn} do
+      {conn, _visitor} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      insert(:email, user: owner, value: "secret@example.com", public?: false)
+
+      html = conn |> get(~p"/#{owner}?#{[view_as: "connection"]}") |> html_response(200)
+
+      refute html =~ "view-as-switcher"
+      refute html =~ "view-as-banner"
+      refute html =~ "secret@example.com"
+    end
+  end
+
   defp search_term_values(user) do
     user
     |> Ecto.assoc(:search_terms)

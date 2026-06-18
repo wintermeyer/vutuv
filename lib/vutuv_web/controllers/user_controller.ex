@@ -37,7 +37,7 @@ defmodule VutuvWeb.UserController do
     )
   end
 
-  defp show_html(conn, _params) do
+  defp show_html(conn, params) do
     # The profile also advertises the member's RSS feed next to the agent
     # formats respond/2 already put there.
     conn =
@@ -51,11 +51,30 @@ defmodule VutuvWeb.UserController do
     # below are cut off after a few entries.
     totals = assoc_totals(conn.assigns[:user])
     user = preload_user_for_show(conn.assigns[:user])
+    current_user = conn.assigns[:current_user]
+    # A strict boolean (not the nil/false `&&` would yield): the template gates
+    # owner-only chrome with the strict `and`, which rejects a nil left side.
+    owner? = !!(current_user && current_user.id == user.id)
+
+    # Owner-only "view as" preview: render the profile as another viewer would
+    # see it, by the relationship tiers the app already names — a Follower
+    # (follows you), a connection (vernetzt) or the public (logged-out visitors
+    # and search engines). Honored ONLY for the owner; the small helpers below
+    # do the per-tier resolution. The reload is server-side on purpose: private
+    # data must never reach a preview's HTML to be hidden client-side.
+    preview_as = view_as(owner?, params)
+    posts_viewer = posts_scope(preview_as, current_user)
+    # The secondary chrome (post author menu, the rail's follow controls)
+    # renders from the logged-out viewpoint in any preview, so no live control
+    # fires as the owner. The header's controls are set explicitly below.
+    view_viewer = preview_viewer(preview_as, current_user)
+    private_emails? = private_emails?(preview_as, current_user, user)
+
     # Resolve the header's current job once (DB-backed, over all the user's
     # work experiences) and derive the work line from it, so the template
     # does not run the current_job/1 query chain itself.
     header_job = current_job(user)
-    emails = VutuvWeb.UserHelpers.emails_for_display(user, conn.assigns[:current_user])
+
     recommended_users = recommended_users(user)
     followers = Enum.map(user.inbound_follows, & &1.follower)
     followees = Enum.map(user.outbound_follows, & &1.followee)
@@ -63,41 +82,28 @@ defmodule VutuvWeb.UserController do
     # the page (the "Who to follow" rail plus both follow previews).
     preview_users = Enum.uniq_by(recommended_users ++ followers ++ followees, & &1.id)
 
-    # The visitor's connection situation with this profile, for the header
-    # Connect / Pending / Connected control (nil on your own profile / logged out).
-    connection_state =
-      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
-        Vutuv.Social.connection_state(conn.assigns[:current_user], user)
-      end
-
-    # The footer Block/Unblock control: my own block row on this profile
-    # (nil = not blocking; logged out / own profile need no control at all).
-    viewer_block =
-      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
-        Vutuv.Social.get_block(conn.assigns[:current_user].id, user.id)
-      end
-
-    # The header's private save toggles: whether I have liked / bookmarked this
-    # member (nil = logged out / own profile, where no control shows).
-    user_saved =
-      if conn.assigns[:current_user] && conn.assigns[:current_user].id != user.id do
-        Vutuv.Social.user_saved_flags(conn.assigns[:current_user], user)
-      end
-
-    posts_total = Vutuv.Posts.count_author_posts(user, conn.assigns[:current_user])
+    posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
 
     conn
-    |> assign(:viewer_block, viewer_block)
-    |> assign(:user_saved, user_saved)
-    |> assign(:emails, emails)
-    |> assign(:posts, Vutuv.Posts.profile_posts(user, conn.assigns[:current_user]))
+    |> assign(:can_preview?, owner?)
+    |> assign(:preview_as, preview_as)
+    |> assign(:preview?, not is_nil(preview_as))
+    |> assign(:as_owner?, owner? and is_nil(preview_as))
+    |> assign(:view_viewer, view_viewer)
+    |> assign(:view_viewer_id, view_viewer && view_viewer.id)
+    |> assign(:header_follow_id, header_follow_id(preview_as, current_user, user))
+    |> assign(:vcard_full?, private_emails?)
+    |> assign(:viewer_block, viewer_block(current_user, user))
+    |> assign(:user_saved, header_user_saved(preview_as, current_user, user))
+    |> assign(:emails, profile_emails(private_emails?, current_user, user))
+    |> assign(:posts, Vutuv.Posts.profile_posts(user, posts_viewer))
     |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
     |> assign(:work_experience, user.work_experiences)
     |> assign(:follower_count, Vutuv.Social.follower_count(user))
     |> assign(:followee_count, Vutuv.Social.followee_count(user))
     |> assign(:connection_count, Vutuv.Social.connection_count(user))
-    |> assign(:connection_state, connection_state)
+    |> assign(:connection_state, header_connection_state(preview_as, current_user, user))
     |> assign(:user, user)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
@@ -112,9 +118,99 @@ defmodule VutuvWeb.UserController do
     )
     |> assign(
       :following_by_id,
-      VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], preview_users)
+      VutuvWeb.UserHelpers.following_map(view_viewer, preview_users)
     )
     |> render("show.html", conn: conn)
+  end
+
+  # ── "View as" preview helpers (owner-only) ──
+  # Each resolves one slice of the previewed viewer, kept small and pattern
+  # matched so show_html/2 stays a straight assign chain.
+
+  # The preview tier (nil = the owner's own view). Honored only for the owner,
+  # so a stranger's ?view_as= can never widen what they see.
+  defp view_as(false, _params), do: nil
+
+  defp view_as(true, params) do
+    case params["view_as"] do
+      "follower" -> :follower
+      "connection" -> :connection
+      "public" -> :public
+      _ -> nil
+    end
+  end
+
+  # The timeline scope: a simulated relationship in a preview (so the owner's
+  # own connections-only post shows under "Vernetzt" but stays hidden under
+  # "Follower"/"Public"), the real viewer otherwise. Public reuses anonymous.
+  defp posts_scope(:follower, _current_user),
+    do: {:preview, %{follower?: true, followee?: false, connection?: false}}
+
+  defp posts_scope(:connection, _current_user),
+    do: {:preview, %{follower?: true, followee?: true, connection?: true}}
+
+  defp posts_scope(:public, _current_user), do: nil
+  defp posts_scope(nil, current_user), do: current_user
+
+  # The viewer for the secondary chrome (rail follow controls, post author
+  # menu): nobody in a preview, the real viewer otherwise.
+  defp preview_viewer(nil, current_user), do: current_user
+  defp preview_viewer(_preview, _current_user), do: nil
+
+  # Private emails go to the owner, anyone the owner follows, and the Vernetzt
+  # preview (a connection is a mutual follow, so the rule already grants it).
+  # Follower / Public previews see the public set only. Drives the vCard too.
+  defp private_emails?(:connection, _current_user, _user), do: true
+  defp private_emails?(preview, _current_user, _user) when not is_nil(preview), do: false
+  defp private_emails?(nil, current_user, user), do: user_has_permissions?(user, current_user)
+
+  defp profile_emails(true, current_user, user), do: emails_for_display(user, current_user)
+  defp profile_emails(false, _current_user, user), do: emails_for_display(user, nil)
+
+  # The header Connect / Pending / Connected control. Previews show the tier's
+  # state: a Follower is not connected (Connect offered), a Kontakt is.
+  defp header_connection_state(:follower, _current_user, _user),
+    do: %{status: :none, connection: nil}
+
+  defp header_connection_state(:connection, _current_user, _user),
+    do: %{status: :accepted, connection: nil}
+
+  defp header_connection_state(_preview, current_user, user) do
+    if current_user && current_user.id != user.id do
+      Vutuv.Social.connection_state(current_user, user)
+    end
+  end
+
+  # Whether the header follow button reads "Following": a real follower, and
+  # both relationship previews (inert there via pointer-events-none).
+  defp header_follow_id(preview, _current_user, _user) when preview in [:follower, :connection],
+    do: "preview"
+
+  defp header_follow_id(_preview, current_user, user) do
+    if current_user && current_user.id != user.id do
+      user_follows_user?(current_user, user)
+    else
+      false
+    end
+  end
+
+  # The footer Block/Unblock control: my own block row on this profile (nil =
+  # not blocking / logged out / own profile).
+  defp viewer_block(current_user, user) do
+    if current_user && current_user.id != user.id do
+      Vutuv.Social.get_block(current_user.id, user.id)
+    end
+  end
+
+  # The header's private save toggles (like / bookmark a member). A
+  # relationship preview shows the fresh state: nothing saved yet.
+  defp header_user_saved(preview, _current_user, _user) when preview in [:follower, :connection],
+    do: %{bookmarked?: false, liked?: false}
+
+  defp header_user_saved(_preview, current_user, user) do
+    if current_user && current_user.id != user.id do
+      Vutuv.Social.user_saved_flags(current_user, user)
+    end
   end
 
   # Only what show.html.heex (and the root layout's meta description) actually
