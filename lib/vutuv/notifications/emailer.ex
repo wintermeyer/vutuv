@@ -27,6 +27,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
+  @from_domain @from_address |> elem(1) |> String.split("@") |> List.last()
 
   # Always-safe headers for every message.
   #
@@ -54,6 +55,7 @@ defmodule Vutuv.Notifications.Emailer do
     |> from(@from_address)
     |> robot_headers()
     |> envelope_sender()
+    |> message_id()
   end
 
   @doc """
@@ -73,6 +75,7 @@ defmodule Vutuv.Notifications.Emailer do
       email
       |> robot_headers()
       |> envelope_sender()
+      |> message_id()
       |> Vutuv.Mailer.deliver()
     end
   end
@@ -92,6 +95,18 @@ defmodule Vutuv.Notifications.Emailer do
   defp envelope_sender(email), do: header(email, "Sender", bounce_address())
 
   defp bounce_address, do: Application.fetch_env!(:vutuv, :bounce_address)
+
+  # A globally-unique RFC 5322 Message-ID whose right-hand side is the From
+  # domain (vutuv.de). Without one set here, the Swoosh SMTP adapter lets
+  # gen_smtp fall back to "<token@<hostname>>", the machine's bare short
+  # hostname (e.g. "@bremen2"): a non-FQDN id that costs a point on spam
+  # scoring. Idempotent: mail built through base_email keeps that id when it
+  # reaches the deliver/1 chokepoint; only a message that arrived without one
+  # (a builder that skipped the base) gets stamped there.
+  defp message_id(%Swoosh.Email{headers: %{"Message-ID" => _}} = email), do: email
+
+  defp message_id(email),
+    do: header(email, "Message-ID", "<#{Vutuv.UUIDv7.generate()}@#{@from_domain}>")
 
   @doc """
   Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
