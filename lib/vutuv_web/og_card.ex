@@ -81,7 +81,9 @@ defmodule VutuvWeb.OgCard do
   # tightly cropped) and size it for the card. Only the PNG loader is used, so
   # this never depends on the librsvg loader being on the libvips path.
   defp white_wordmark do
-    path = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+    path =
+      Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+
     Image.thumbnail(path, @logo_width)
   end
 end

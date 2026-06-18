@@ -19,7 +19,9 @@ defmodule VutuvWeb.OgCardTest do
   test "the wordmark asset is a pre-rasterized PNG, not an SVG" do
     # The guard against regressing to a runtime SVG rasterization: the asset the
     # card composes must be a PNG (always loadable) and must exist on disk.
-    path = Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+    path =
+      Path.join(Application.app_dir(:vutuv, "priv"), "static/images/vutuv-wordmark-white.png")
+
     assert File.exists?(path), "expected the pre-rasterized wordmark at #{path}"
     assert <<@png_magic, _rest::binary>> = File.read!(path)
   end
