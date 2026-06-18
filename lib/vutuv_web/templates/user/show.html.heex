@@ -36,20 +36,23 @@ the resulting ~200px rail width. --%>
           </svg>
           {gettext("View as")}
         </span>
-        <div class="inline-flex overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-700">
+<% view_as_modes = [
+          {gettext("You"), nil, ~p"/#{@user}"},
+          {gettext("Follower"), :follower, ~p"/#{@user}?#{[view_as: "follower"]}"},
+          {gettext("Connected"), :connection, ~p"/#{@user}?#{[view_as: "connection"]}"},
+          {gettext("Public"), :public, ~p"/#{@user}?#{[view_as: "public"]}"}
+        ] %>
+        <%!-- Segmented control: grows to fill the bar (flex-1) with even-width
+        segments, so it spans the empty space to the right of the "View as" label
+        instead of sitting in a narrow cluster. Hairline dividers keep the segments
+        distinct; the active segment is solid brand. --%>
+        <div class="flex flex-1 divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:divide-slate-700 dark:ring-slate-700">
           <.link
-            :for={
-              {label, mode, href} <- [
-                {gettext("You"), nil, ~p"/#{@user}"},
-                {gettext("Follower"), :follower, ~p"/#{@user}?#{[view_as: "follower"]}"},
-                {gettext("Connected"), :connection, ~p"/#{@user}?#{[view_as: "connection"]}"},
-                {gettext("Public"), :public, ~p"/#{@user}?#{[view_as: "public"]}"}
-              ]
-            }
+            :for={{label, mode, href} <- view_as_modes}
             href={href}
             aria-current={@preview_as == mode && "true"}
             class={[
-              "px-3 py-1.5 font-semibold",
+              "flex-1 px-3 py-1.5 text-center font-semibold transition-colors",
               if(@preview_as == mode,
                 do: "bg-brand-600 text-white",
                 else:
