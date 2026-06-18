@@ -13,7 +13,7 @@
       <td>
       <%= link address.description, to: ~p"/#{@user}/addresses/#{address}" %>
       </td>
-      <td><%= format_address address %></td>
+      <td><%= format_address address, @conn.assigns[:locale] %></td>
       <td class="text-right">
         <.row_actions
           :if={same_user?(@user, @current_user)}
