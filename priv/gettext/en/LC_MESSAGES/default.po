@@ -315,11 +315,6 @@ msgstr ""
 msgid "Get started now. It only takes 30 seconds."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/edit.html.heex:104
-#, elixir-autogen
-msgid "Headline"
-msgstr ""
-
 #: lib/vutuv_web/templates/layout/app.html.heex:102
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:2
 #: lib/vutuv_web/templates/phone_number/form_content.html.heex:11
@@ -5434,11 +5429,6 @@ msgstr ""
 msgid "Add a profile photo"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:172
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Add a headline"
-msgstr ""
-
 #: lib/vutuv_web/templates/layout/app.html.heex:112
 #, elixir-autogen, elixir-format
 msgid "Next post in the feed"
@@ -6110,4 +6100,14 @@ msgstr ""
 #: lib/vutuv_web/templates/session/new.html.heex:31
 #, elixir-autogen, elixir-format, fuzzy
 msgid "or"
+msgstr ""
+
+#: lib/vutuv_web/controllers/user_controller.ex:172
+#, elixir-autogen, elixir-format
+msgid "Add a tagline"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/edit.html.heex:104
+#, elixir-autogen, elixir-format
+msgid "Tagline"
 msgstr ""

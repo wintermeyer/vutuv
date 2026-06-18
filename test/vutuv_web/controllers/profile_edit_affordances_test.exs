@@ -121,7 +121,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       assert html =~ "Complete your profile"
       assert html =~ "Add a profile photo"
-      assert html =~ "Add a headline"
+      assert html =~ "Add a tagline"
       # A blank factory profile has none of the five done.
       assert html =~ "0/5"
     end
