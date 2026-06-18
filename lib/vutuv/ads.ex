@@ -209,33 +209,12 @@ defmodule Vutuv.Ads do
   end
 
   @doc "Today as a German calendar day (Europe/Berlin)."
-  def today, do: berlin_date(DateTime.utc_now())
+  defdelegate today, to: Vutuv.BerlinTime
 
   @doc """
-  The German calendar date of a UTC instant, without a timezone database:
-  CEST (UTC+2) between the last Sunday of March, 01:00 UTC, and the last
-  Sunday of October, 01:00 UTC; CET (UTC+1) otherwise. That EU rule has been
-  fixed since 1996, so hardcoding it beats pulling in tzdata for one offset.
+  The German calendar date of a UTC instant. The Berlin day rule lives in
+  `Vutuv.BerlinTime` now (the ad rotation and the profile age display share
+  it); kept here as a thin alias so existing callers keep working.
   """
-  def berlin_date(%DateTime{} = utc) do
-    offset_hours = if german_summer_time?(utc), do: 2, else: 1
-
-    utc
-    |> DateTime.add(offset_hours * 3600, :second)
-    |> DateTime.to_date()
-  end
-
-  defp german_summer_time?(utc) do
-    dst_start = last_sunday_at_one_utc(utc.year, 3)
-    dst_end = last_sunday_at_one_utc(utc.year, 10)
-
-    DateTime.compare(utc, dst_start) != :lt and DateTime.compare(utc, dst_end) == :lt
-  end
-
-  defp last_sunday_at_one_utc(year, month) do
-    last_of_month = Date.new!(year, month, Date.days_in_month(Date.new!(year, month, 1)))
-    # day_of_week: Monday = 1 ... Sunday = 7; rem/2 turns Sunday into 0.
-    last_sunday = Date.add(last_of_month, -rem(Date.day_of_week(last_of_month), 7))
-    DateTime.new!(last_sunday, ~T[01:00:00], "Etc/UTC")
-  end
+  defdelegate berlin_date(utc), to: Vutuv.BerlinTime, as: :date
 end

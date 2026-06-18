@@ -611,7 +611,16 @@ the resulting ~200px rail width. --%>
         <div :if={@user.birthdate} class="flex items-center gap-2.5">
           <.detail_icon name="cake" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <dt class="sr-only">{gettext("Birthday")}</dt>
-          <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{format_birthdate(@user)}</dd>
+          <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">
+            {format_birthdate(@user)}
+            <%= if years = age(@user) do %>
+              <span class="font-normal text-slate-600 dark:text-slate-400">({ngettext(
+                "%{count} year old",
+                "%{count} years old",
+                years
+              )})</span>
+            <% end %>
+          </dd>
         </div>
       </dl>
       <.card_footer_link :if={@as_owner? && has_general_info} href={~p"/#{@user}/edit"}>

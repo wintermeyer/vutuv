@@ -5,6 +5,7 @@ defmodule VutuvWeb.UserHelpersTest do
   """
   use Vutuv.DataCase, async: true
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias VutuvWeb.UserHelpers
 
@@ -122,6 +123,47 @@ defmodule VutuvWeb.UserHelpersTest do
 
     test "empty list -> empty map" do
       assert UserHelpers.work_information_map([], 60) == %{}
+    end
+  end
+
+  describe "age/2 (whole years on a reference day)" do
+    test "counts a birthday that has already passed this year" do
+      assert UserHelpers.age(~D[1990-04-15], ~D[2026-06-18]) == 36
+    end
+
+    test "the birthday itself already counts (inclusive)" do
+      assert UserHelpers.age(~D[1990-06-18], ~D[2026-06-18]) == 36
+    end
+
+    test "a birthday still ahead this year has not been reached yet" do
+      assert UserHelpers.age(~D[1990-12-25], ~D[2026-06-18]) == 35
+    end
+
+    test "the day before the birthday is still the lower age" do
+      assert UserHelpers.age(~D[1990-06-19], ~D[2026-06-18]) == 35
+    end
+
+    test "a February 29 birthday rolls over on March 1 in non-leap years" do
+      # Feb 28 in a non-leap year: the leapling has not turned older yet.
+      assert UserHelpers.age(~D[2000-02-29], ~D[2026-02-28]) == 25
+      assert UserHelpers.age(~D[2000-02-29], ~D[2026-03-01]) == 26
+      # On a real Feb 29 the birthday lands exactly.
+      assert UserHelpers.age(~D[2000-02-29], ~D[2024-02-29]) == 24
+    end
+
+    test "a birthdate in the future has no meaningful age" do
+      assert UserHelpers.age(~D[2030-01-01], ~D[2026-06-18]) == nil
+    end
+  end
+
+  describe "age/1 (current Berlin day)" do
+    test "nil for a member without a birthdate" do
+      assert UserHelpers.age(%User{birthdate: nil}) == nil
+    end
+
+    test "returns the whole-year age for a member with a birthdate" do
+      birthdate = Date.add(Vutuv.BerlinTime.today(), -366 * 30)
+      assert UserHelpers.age(%User{birthdate: birthdate}) in [29, 30]
     end
   end
 

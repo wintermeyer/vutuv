@@ -157,10 +157,11 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ~s(id="profile-social-media")
     assert html =~ "octocat"
 
-    # General info (gender, birthday in the en format)
+    # General info (gender, birthday in the en format, and the derived age)
     assert html =~ ~s(id="profile-about")
     assert html =~ "Female"
     assert html =~ "04/15/1990"
+    assert html =~ "#{VutuvWeb.UserHelpers.age(user)} years old"
 
     # Follower / following previews
     assert html =~ ~s(id="profile-followers")

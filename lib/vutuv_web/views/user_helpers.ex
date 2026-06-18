@@ -409,6 +409,34 @@ defmodule VutuvWeb.UserHelpers do
 
   defp format_usa(_), do: ""
 
+  @doc """
+  The member's age in whole years on the current German calendar day
+  (`Vutuv.BerlinTime.today/0`), or `nil` when there is no birthdate or it
+  lies in the future. Berlin time, so a German member's age rolls over at
+  local midnight rather than at UTC midnight.
+  """
+  def age(%User{birthdate: birthdate}), do: age(birthdate)
+  def age(%Date{} = birthdate), do: age(birthdate, Vutuv.BerlinTime.today())
+  def age(_), do: nil
+
+  @doc """
+  The whole-year age of `birthdate` as of the `reference` day (both `Date`s),
+  or `nil` when `reference` precedes `birthdate`. A February 29 birthday
+  rolls over on March 1 in non-leap years (the `{month, day}` tuple compare).
+  """
+  def age(%Date{} = birthdate, %Date{} = reference) do
+    years = reference.year - birthdate.year
+
+    years =
+      if {reference.month, reference.day} < {birthdate.month, birthdate.day} do
+        years - 1
+      else
+        years
+      end
+
+    if years >= 0, do: years, else: nil
+  end
+
   def gen_breadcrumbs(args) do
     Enum.reduce(tl(args), gen_breadcrumb(hd(args)), fn f, acc ->
       "#{acc} / #{gen_breadcrumb(f)}"
