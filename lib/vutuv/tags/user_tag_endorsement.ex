@@ -31,12 +31,11 @@ defmodule Vutuv.Tags.UserTagEndorsement do
   `Vutuv.Tags.UserTag.ordered_by_endorsements/0`.
   """
   def visible(query \\ __MODULE__) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1]
+    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
 
     from(e in query,
       join: u in assoc(e, :user),
-      where:
-        (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden(u.id)
+      where: account_confirmed_row(u) and not account_hidden(u.id)
     )
   end
 end

@@ -12,7 +12,8 @@ defmodule Vutuv.Social do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_hidden_row: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -79,8 +80,7 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :follower),
-        where:
-          (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden(u.id),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         where: c.followee_id == ^user.id,
         select: count(c.id)
       )
@@ -91,8 +91,7 @@ defmodule Vutuv.Social do
     Repo.one(
       from(c in Follow,
         join: u in assoc(c, :followee),
-        where:
-          (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden(u.id),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         where: c.follower_id == ^user.id,
         select: count(c.id)
       )
@@ -168,7 +167,7 @@ defmodule Vutuv.Social do
       from(fl in Follow,
         join: fr in Vutuv.Accounts.User,
         on:
-          fr.id == fl.follower_id and (is_nil(fr.email_confirmed?) or fr.email_confirmed? == true) and
+          fr.id == fl.follower_id and account_confirmed_row(fr) and
             not account_hidden_row(fr),
         group_by: fl.followee_id,
         select: %{followee_id: fl.followee_id, count: count()}
@@ -178,8 +177,7 @@ defmodule Vutuv.Social do
       from(u in Vutuv.Accounts.User,
         join: fc in subquery(follower_counts),
         on: fc.followee_id == u.id,
-        where:
-          (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and not account_hidden_row(u),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
         order_by: [desc: fc.count, asc: u.first_name, asc: u.last_name],
         limit: ^limit,
         select: struct(u, ^User.listing_fields())
@@ -739,8 +737,7 @@ defmodule Vutuv.Social do
         as: :target,
         on: t.id == e.target_user_id,
         where: e.user_id == ^user_id,
-        where:
-          (is_nil(t.email_confirmed?) or t.email_confirmed? == true) and not account_hidden(t.id),
+        where: account_confirmed_row(t) and not account_hidden_row(t),
         where:
           not exists(
             from(b in Block,
@@ -760,15 +757,6 @@ defmodule Vutuv.Social do
     %{entries: Enum.take(rows, limit), more?: length(rows) > limit, next_offset: offset + limit}
   end
 
-  defp normalize_search(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      term -> term
-    end
-  end
-
-  defp normalize_search(_), do: nil
-
   defp filter_saved_search(query, nil), do: query
 
   defp filter_saved_search(query, term) do
@@ -781,8 +769,6 @@ defmodule Vutuv.Social do
           ilike(fragment("? || ' ' || ?", t.first_name, t.last_name), ^pattern)
     )
   end
-
-  defp escape_like(term), do: String.replace(term, ~r/([\\%_])/, "\\\\\\1")
 
   defp order_saved(query, :oldest), do: order_by(query, [e], asc: e.inserted_at, asc: e.id)
 
@@ -892,8 +878,7 @@ defmodule Vutuv.Social do
             c.user_b_id,
             c.user_a_id
           ),
-      where:
-        (is_nil(o.email_confirmed?) or o.email_confirmed? == true) and not account_hidden(o.id)
+      where: account_confirmed_row(o) and not account_hidden_row(o)
     )
   end
 
@@ -1034,10 +1019,7 @@ defmodule Vutuv.Social do
     end
   end
 
-  # Sorted pair: smaller id first, matching the DB sorted_pair check (uuid byte
-  # order equals canonical lowercase-hex string order, so a plain `<` agrees).
-  defp connection_pair(id1, id2) when id1 < id2, do: {id1, id2}
-  defp connection_pair(id1, id2), do: {id2, id1}
+  defp connection_pair(id1, id2), do: Vutuv.UUIDv7.sorted_pair(id1, id2)
 
   defp get_connection_by_pair(a_id, b_id) do
     Repo.get_by(Connection, user_a_id: a_id, user_b_id: b_id)

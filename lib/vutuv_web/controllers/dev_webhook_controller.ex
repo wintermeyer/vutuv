@@ -12,6 +12,8 @@ defmodule VutuvWeb.DevWebhookController do
   alias Vutuv.Webhooks
   alias Vutuv.Webhooks.Subscription
 
+  import VutuvWeb.ControllerHelpers, only: [with_app: 3]
+
   plug(VutuvWeb.Plug.RequireLoginOr404)
 
   def new(conn, %{"app_id" => app_id}) do
@@ -64,13 +66,6 @@ defmodule VutuvWeb.DevWebhookController do
       |> put_flash(:info, gettext("The webhook is active again."))
       |> redirect(to: ~p"/developers/apps/#{app.id}")
     end)
-  end
-
-  defp with_app(conn, app_id, fun) do
-    case ApiAuth.get_app(conn.assigns.current_user, app_id) do
-      %App{} = app -> fun.(conn, app)
-      nil -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
-    end
   end
 
   defp with_subscription(conn, app_id, id, fun) do

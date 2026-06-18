@@ -116,6 +116,12 @@ defmodule VutuvWeb.BlockControllerTest do
     refute Social.blocked_between?(user.id, user.id)
   end
 
+  test "a malformed user_id is a graceful error, not a 500", %{conn: conn} do
+    conn = post(conn, ~p"/blocks", block: %{"user_id" => "not-a-uuid"})
+
+    assert redirected_to(conn) == ~p"/"
+  end
+
   test "the blocked list requires a login" do
     conn = Phoenix.ConnTest.build_conn() |> Plug.Test.init_test_session(%{})
     conn = get(conn, ~p"/blocks")

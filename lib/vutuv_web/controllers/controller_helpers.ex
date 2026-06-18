@@ -10,6 +10,7 @@ defmodule VutuvWeb.ControllerHelpers do
 
   alias Plug.Conn
   alias Vutuv.Accounts.User
+  alias Vutuv.ApiAuth.App
   alias Vutuv.Repo
 
   @doc """
@@ -71,6 +72,31 @@ defmodule VutuvWeb.ControllerHelpers do
     |> Phoenix.Controller.put_view(html: VutuvWeb.ErrorHTML)
     |> Phoenix.Controller.render("#{status}.html")
     |> Conn.halt()
+  end
+
+  @doc """
+  Looks up a member by a caller-supplied id, returning `nil` for a missing
+  *or malformed* id — a garbage (non-UUID) id is a no-op, never an
+  `Ecto.CastError` 500. The safe lookup the block/connection/save create paths
+  (which act on a user the viewer named in a form param) share.
+  """
+  def get_user(id) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get(User, uuid)
+    end
+  end
+
+  @doc """
+  Owner-scoped OAuth app lookup with the uniform 404: fetches the app the
+  current user owns by `id` and calls `fun.(conn, app)`, or renders the shared
+  404 page. The shape the developer app + webhook controllers share.
+  """
+  def with_app(%Conn{} = conn, id, fun) when is_function(fun, 2) do
+    case Vutuv.ApiAuth.get_app(conn.assigns.current_user, id) do
+      %App{} = app -> fun.(conn, app)
+      nil -> render_error(conn, 404)
+    end
   end
 
   @doc """

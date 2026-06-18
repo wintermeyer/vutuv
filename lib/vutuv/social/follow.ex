@@ -9,7 +9,7 @@ defmodule Vutuv.Social.Follow do
 
   use VutuvWeb, :model
 
-  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
 
   schema "follows" do
     belongs_to(:follower, Vutuv.Accounts.User)
@@ -56,8 +56,8 @@ defmodule Vutuv.Social.Follow do
         join: fr in assoc(fl, :follower),
         as: :follower,
         where:
-          (is_nil(fe.email_confirmed?) or fe.email_confirmed? == true) and
-            (is_nil(fr.email_confirmed?) or fr.email_confirmed? == true),
+          account_confirmed_row(fe) and
+            account_confirmed_row(fr),
         order_by: [desc: :inserted_at],
         limit: ^n
       )

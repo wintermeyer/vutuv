@@ -20,7 +20,7 @@ defmodule VutuvWeb.BlockController do
 
   # The profile-footer control posts a user_id and lands back on the profile.
   def create(conn, %{"block" => %{"user_id" => user_id}}) do
-    with %User{} = target <- Vutuv.Repo.get(User, user_id),
+    with %User{} = target <- VutuvWeb.ControllerHelpers.get_user(user_id),
          {:ok, _block} <- Social.block_user(conn.assigns.current_user, target) do
       conn
       |> put_flash(

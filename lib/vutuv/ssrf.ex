@@ -33,7 +33,7 @@ defmodule Vutuv.Ssrf do
   (e.g. a URL with no host) is not a target.
   """
   def internal_host?(host) when is_binary(host) do
-    bare = host |> String.trim_leading("[") |> String.trim_trailing("]")
+    bare = bare_host(host)
 
     cond do
       bare in ~w(localhost ip6-localhost ip6-loopback) ->

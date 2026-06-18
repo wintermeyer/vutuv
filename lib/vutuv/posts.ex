@@ -41,7 +41,8 @@ defmodule Vutuv.Posts do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.PostImageStore
@@ -938,7 +939,7 @@ defmodule Vutuv.Posts do
     from(p in Post,
       join: u in assoc(p, :user),
       where: p.user_id == ^viewer_id or p.user_id in subquery(followees_of(viewer_id)),
-      where: p.user_id == ^viewer_id or is_nil(u.email_confirmed?) or u.email_confirmed? == true,
+      where: p.user_id == ^viewer_id or account_confirmed_row(u),
       order_by: [desc: p.inserted_at, desc: p.id],
       limit: ^fetch_n
     )
@@ -961,10 +962,8 @@ defmodule Vutuv.Posts do
       on: reposter.id == r.user_id,
       join: u in assoc(p, :user),
       where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
-      where:
-        r.user_id == ^viewer_id or is_nil(reposter.email_confirmed?) or
-          reposter.email_confirmed? == true,
-      where: p.user_id == ^viewer_id or is_nil(u.email_confirmed?) or u.email_confirmed? == true,
+      where: r.user_id == ^viewer_id or account_confirmed_row(reposter),
+      where: p.user_id == ^viewer_id or account_confirmed_row(u),
       # A third party's repost must not carry a blocked author's post into
       # the viewer's feed (the direct path is already cut: blocking severed
       # the follow).
@@ -1249,15 +1248,6 @@ defmodule Vutuv.Posts do
   defp order_engaged(query, _recent),
     do: order_by(query, [engagement: e], desc: e.inserted_at, desc: e.id)
 
-  defp normalize_search(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      term -> term
-    end
-  end
-
-  defp normalize_search(_), do: nil
-
   @doc "The permalink lookup: `author`'s preloaded post by id, or `nil`."
   def get_post(%User{id: author_id}, id) do
     case UUIDv7.cast_or_nil(id) do
@@ -1342,11 +1332,20 @@ defmodule Vutuv.Posts do
 
   @doc "Deletes a pending (unattached) image: row and files."
   def delete_pending_image(%PostImage{post_id: nil} = image) do
+    delete_if_pending(image)
+    :ok
+  end
+
+  # Deletes the row only while it is still pending — the `is_nil(post_id)` guard
+  # is re-checked inside the DELETE so we never race a concurrent attach — and
+  # drops its files when this call is the one that removed it. Returns whether
+  # this call performed the delete.
+  defp delete_if_pending(%PostImage{} = image) do
     {count, _} =
       Repo.delete_all(from(i in PostImage, where: i.id == ^image.id and is_nil(i.post_id)))
 
     if count == 1, do: PostImageStore.delete(image.token)
-    :ok
+    count == 1
   end
 
   @doc "The image behind a proxy token, with its post and owner preloaded; `nil` when unknown."
@@ -1391,15 +1390,7 @@ defmodule Vutuv.Posts do
 
     from(i in PostImage, where: is_nil(i.post_id) and i.inserted_at < ^cutoff)
     |> Repo.all()
-    |> Enum.count(fn image ->
-      # Re-check pending state in the delete itself: the image may have been
-      # attached between the read and now.
-      {count, _} =
-        Repo.delete_all(from(i in PostImage, where: i.id == ^image.id and is_nil(i.post_id)))
-
-      if count == 1, do: PostImageStore.delete(image.token)
-      count == 1
-    end)
+    |> Enum.count(&delete_if_pending/1)
   end
 
   @doc """
@@ -1418,7 +1409,7 @@ defmodule Vutuv.Posts do
       Repo.all(
         from(u in User,
           where: u.id != ^author_id,
-          where: is_nil(u.email_confirmed?) or u.email_confirmed? == true,
+          where: account_confirmed_row(u),
           where:
             ilike(u.first_name, ^pattern) or ilike(u.last_name, ^pattern) or
               ilike(u.active_slug, ^pattern) or
@@ -1429,8 +1420,6 @@ defmodule Vutuv.Posts do
       )
     end
   end
-
-  defp escape_like(term), do: String.replace(term, ~r/([\\%_])/, "\\\\\\1")
 
   ## Tags
 

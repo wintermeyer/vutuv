@@ -31,6 +31,8 @@ defmodule VutuvWeb.Plug.AdBanner do
 
   import Plug.Conn
 
+  alias VutuvWeb.Plug.AgentFormat
+
   @hour 3600
   # The banner's DOM id as rendered by the layout's ad_banner component.
   @marker ~s(id="vutuv-ad")
@@ -59,9 +61,7 @@ defmodule VutuvWeb.Plug.AdBanner do
     conn.req_cookies[@dismissed_cookie] == Date.to_iso8601(Vutuv.Ads.today())
   end
 
-  defp agent_format?(conn) do
-    conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil
-  end
+  defp agent_format?(conn), do: AgentFormat.agent_format?(conn)
 
   # The logged-out landing / sign-up page is the primary registration funnel:
   # keep it ad-free so the house ad doesn't compete with the sign-up hero.

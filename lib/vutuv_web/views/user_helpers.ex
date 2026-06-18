@@ -425,14 +425,8 @@ defmodule VutuvWeb.UserHelpers do
   rolls over on March 1 in non-leap years (the `{month, day}` tuple compare).
   """
   def age(%Date{} = birthdate, %Date{} = reference) do
-    years = reference.year - birthdate.year
-
-    years =
-      if {reference.month, reference.day} < {birthdate.month, birthdate.day} do
-        years - 1
-      else
-        years
-      end
+    had_birthday_this_year? = {reference.month, reference.day} >= {birthdate.month, birthdate.day}
+    years = reference.year - birthdate.year - if(had_birthday_this_year?, do: 0, else: 1)
 
     if years >= 0, do: years, else: nil
   end

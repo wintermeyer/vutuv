@@ -13,7 +13,8 @@ defmodule Vutuv.Search do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query, only: [account_hidden_row: 1]
+  import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+  import Vutuv.SearchText, only: [escape_like: 1]
 
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
@@ -293,7 +294,7 @@ defmodule Vutuv.Search do
       join: u in assoc(t, :user),
       as: :user,
       where:
-        (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and t.score == 100 and
+        account_confirmed_row(u) and t.score == 100 and
           t.value == ^parsed.text,
       limit: @term_limit,
       preload: [user: u]
@@ -321,7 +322,7 @@ defmodule Vutuv.Search do
         join: u in assoc(t, :user),
         as: :user,
         where:
-          (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and
+          account_confirmed_row(u) and
             (like(t.value, ^infix) or ^cologne_fuzzy_value == t.value or
                ^soundex_fuzzy_value == t.value),
         order_by: [desc: t.score, asc: t.value],
@@ -349,7 +350,7 @@ defmodule Vutuv.Search do
   end
 
   defp visible_users do
-    from(u in User, as: :user, where: is_nil(u.email_confirmed?) or u.email_confirmed? == true)
+    from(u in User, as: :user, where: account_confirmed_row(u))
     |> exclude_moderated()
   end
 
@@ -396,7 +397,7 @@ defmodule Vutuv.Search do
         join: u in User,
         on: u.id == ut.user_id,
         where:
-          ut.tag_id in ^ids and (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and
+          ut.tag_id in ^ids and account_confirmed_row(u) and
             not account_hidden_row(u),
         group_by: ut.tag_id,
         select: {ut.tag_id, count(ut.id)}
@@ -414,9 +415,6 @@ defmodule Vutuv.Search do
     limit = if parsed.scope == :posts, do: @post_scope_limit, else: @post_limit
     Vutuv.Posts.search_public(parsed.text, limit: limit)
   end
-
-  # A typed "%" or "_" must match literally, not act as a LIKE wildcard.
-  defp escape_like(value), do: String.replace(value, ~r/[\\%_]/, &("\\" <> &1))
 
   @doc """
   Persists a settled query for the search history: the query row (reused
@@ -514,7 +512,7 @@ defmodule Vutuv.Search do
             left_join: u in assoc(t, :user),
             as: :user,
             where:
-              (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and
+              account_confirmed_row(u) and
                 (like(t.value, ^infix) or ^cologne_fuzzy_value == t.value or
                    ^soundex_fuzzy_value == t.value),
             # Only the two columns the result rows need — the full SearchTerm
@@ -550,7 +548,7 @@ defmodule Vutuv.Search do
         as: :user,
         join: e in assoc(u, :emails),
         where:
-          (is_nil(u.email_confirmed?) or u.email_confirmed? == true) and ^value == e.value and
+          account_confirmed_row(u) and ^value == e.value and
             e.public? == true
       )
       |> exclude_moderated()

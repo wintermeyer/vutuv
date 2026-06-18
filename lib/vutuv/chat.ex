@@ -92,7 +92,7 @@ defmodule Vutuv.Chat do
   # gets their one request message back and `last_message_at` is cleared. The
   # row, its id and its participants stay, so existing links keep resolving.
   defp reopen_declined(%Conversation{} = conversation, %User{} = me, %User{} = other) do
-    status = if Vutuv.Social.user_follows_user?(other.id, me.id), do: "accepted", else: "pending"
+    status = request_status(me, other)
 
     with :ok <- check_request_limit(me, status) do
       Repo.transaction(fn ->
@@ -105,20 +105,24 @@ defmodule Vutuv.Chat do
     end
   end
 
-  # Canonical hex UUIDs compare like their bytes, so sorting the string ids
-  # matches the DB's uuid ordering that the sorted_pair constraint checks.
-  defp pair(id1, id2) when id1 < id2, do: {id1, id2}
-  defp pair(id1, id2), do: {id2, id1}
+  defp pair(id1, id2), do: Vutuv.UUIDv7.sorted_pair(id1, id2)
 
   defp get_by_pair(a_id, b_id),
     do: Repo.get_by(Conversation, user_a_id: a_id, user_b_id: b_id)
 
   defp create_conversation(me, other, a_id, b_id) do
-    status = if Vutuv.Social.user_follows_user?(other.id, me.id), do: "accepted", else: "pending"
+    status = request_status(me, other)
 
     with :ok <- check_request_limit(me, status) do
       insert_conversation(me, other, a_id, b_id, status)
     end
+  end
+
+  # "accepted" when the recipient already follows the initiator (so the DM is
+  # opt-in), otherwise "pending" — the same rule for a brand-new request and a
+  # reopened declined one.
+  defp request_status(me, other) do
+    if Vutuv.Social.user_follows_user?(other.id, me.id), do: "accepted", else: "pending"
   end
 
   defp check_request_limit(_me, "accepted"), do: :ok

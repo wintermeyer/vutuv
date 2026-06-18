@@ -120,6 +120,21 @@ defmodule Vutuv.Uploads.Spec do
     end
   end
 
+  @doc """
+  Writes every version of image `type` from the already-rotated `image`,
+  placing each at `dest_fun.(spec)`. Stops at the first failure. Returns `:ok`
+  or `{:error, reason}` — the one home of the derive-all halt-on-error loop the
+  avatar/cover and post-image stores share.
+  """
+  def write_all(type, image, dest_fun) when is_function(dest_fun, 1) do
+    Enum.reduce_while(versions(type), :ok, fn spec, :ok ->
+      case write_derived(spec, image, dest_fun.(spec)) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
   defp resize(image, {:crop, width, height, gravity}) do
     Image.thumbnail(image, "#{width}x#{height}", crop: gravity)
   end

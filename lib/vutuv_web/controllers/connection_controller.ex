@@ -63,7 +63,7 @@ defmodule VutuvWeb.ConnectionController do
   end
 
   def create(conn, %{"connection" => %{"user_id" => target_id}}) do
-    case Vutuv.Repo.get(User, target_id) do
+    case VutuvWeb.ControllerHelpers.get_user(target_id) do
       %User{} = target -> handle_request(conn, target)
       _ -> redirect_back(conn, gettext("Something went wrong"), :error)
     end

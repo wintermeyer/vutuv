@@ -5,6 +5,7 @@ defmodule Vutuv.Accounts do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1]
   require Logger
 
   alias Plug.Conn
@@ -410,7 +411,7 @@ defmodule Vutuv.Accounts do
     |> LoginPin.changeset(%{
       type: type,
       payload: payload,
-      minted_at: NaiveDateTime.from_erl!(:calendar.universal_time()),
+      minted_at: NaiveDateTime.utc_now(:second),
       pin_hash: hash_pin(pin, salt),
       pin_salt: salt,
       pin_login_attempts: 0
@@ -731,11 +732,9 @@ defmodule Vutuv.Accounts do
   `nil`-activated account still counts (issue #781).
   """
   def count_users do
-    Repo.one(
-      from(u in User,
-        where: is_nil(u.email_confirmed?) or u.email_confirmed? == true,
-        select: count(u.id)
-      )
+    Repo.aggregate(
+      from(u in User, where: account_confirmed_row(u)),
+      :count
     )
   end
 

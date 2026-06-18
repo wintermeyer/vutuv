@@ -842,6 +842,24 @@ defmodule VutuvWeb.UI do
   def compact_count(n), do: to_string(n)
 
   @doc """
+  The translated name of a calendar month (`1..12`) — the one home of the
+  month-name strings the work-experience form options and the profile/ad date
+  labels share, instead of a copy of the twelve `gettext` literals per view.
+  """
+  def month_name(1), do: gettext("January")
+  def month_name(2), do: gettext("February")
+  def month_name(3), do: gettext("March")
+  def month_name(4), do: gettext("April")
+  def month_name(5), do: gettext("May")
+  def month_name(6), do: gettext("June")
+  def month_name(7), do: gettext("July")
+  def month_name(8), do: gettext("August")
+  def month_name(9), do: gettext("September")
+  def month_name(10), do: gettext("October")
+  def month_name(11), do: gettext("November")
+  def month_name(12), do: gettext("December")
+
+  @doc """
   Exact, thousands-grouped form of a count (`60123` -> `"60,123"`, or
   `"60.123"` under the German locale), for the rare place that wants the full
   number rather than the floored `compact_count/1` — the live member counter on

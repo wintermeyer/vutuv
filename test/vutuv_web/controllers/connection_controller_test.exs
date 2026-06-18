@@ -15,6 +15,15 @@ defmodule VutuvWeb.ConnectionControllerTest do
       assert Repo.aggregate(Connection, :count) == 1
       assert %{status: :pending_sent} = Social.connection_state(me, other)
     end
+
+    test "a malformed user_id is a graceful error, not a 500", %{conn: conn} do
+      {conn, _me} = create_and_login_user(conn)
+
+      conn = post(conn, ~p"/connections", connection: %{user_id: "not-a-uuid"})
+
+      assert redirected_to(conn)
+      assert Repo.aggregate(Connection, :count) == 0
+    end
   end
 
   describe "accept / decline" do

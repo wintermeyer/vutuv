@@ -10,11 +10,7 @@ defmodule VutuvWeb.SlugController do
 
   def new(conn, _params) do
     user = conn.assigns[:user]
-
-    render(conn, "new.html",
-      changeset: User.slug_changeset(user),
-      quota: Accounts.slug_change_quota(user)
-    )
+    render_new(conn, user, User.slug_changeset(user))
   end
 
   def create(conn, %{"user" => params}) do
@@ -30,11 +26,12 @@ defmodule VutuvWeb.SlugController do
         |> redirect(to: ~p"/#{user}")
 
       {:error, changeset} ->
-        render(conn, "new.html",
-          changeset: changeset,
-          quota: Accounts.slug_change_quota(user)
-        )
+        render_new(conn, user, changeset)
     end
+  end
+
+  defp render_new(conn, user, changeset) do
+    render(conn, "new.html", changeset: changeset, quota: Accounts.slug_change_quota(user))
   end
 
   # Backs the live "is this name free?" check in the change form.

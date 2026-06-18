@@ -12,6 +12,7 @@ defmodule VutuvWeb.Plug.EnsureActivated do
   """
 
   alias Vutuv.Accounts.User
+  alias VutuvWeb.Plug.AgentFormat
 
   def init(opts) do
     opts
@@ -36,7 +37,5 @@ defmodule VutuvWeb.Plug.EnsureActivated do
     end
   end
 
-  defp agent_format?(conn) do
-    conn.private[:vutuv_agent_format] != nil or conn.private[:vutuv_agent_accept] != nil
-  end
+  defp agent_format?(conn), do: AgentFormat.agent_format?(conn)
 end

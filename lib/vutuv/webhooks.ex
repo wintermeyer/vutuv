@@ -123,7 +123,14 @@ defmodule Vutuv.Webhooks do
         )
       )
 
-    queue_all(subscription_ids, event, envelope(member_id, event, data))
+    # Build the envelope (a slug lookup) only when there is a recipient — most
+    # emits match no grant-qualified subscription, and `queue_all([])` would
+    # just throw the envelope away.
+    if subscription_ids == [] do
+      :ok
+    else
+      queue_all(subscription_ids, event, envelope(member_id, event, data))
+    end
   end
 
   defp envelope(member_id, event, data) do
@@ -137,8 +144,6 @@ defmodule Vutuv.Webhooks do
       "data" => data
     }
   end
-
-  defp queue_all([], _event, _payload), do: :ok
 
   defp queue_all(subscription_ids, event, payload) do
     now = DateTime.utc_now(:second)
