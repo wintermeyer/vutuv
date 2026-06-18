@@ -21,6 +21,11 @@ defmodule Vutuv.CoverTest do
     updated_at: ~N[2024-03-02 10:20:30]
   }
 
+  # Cache-busting suffix appended to every served avatar/cover URL, derived from
+  # the scope's `updated_at` so a re-upload changes the URL and defeats the
+  # 30-day browser/nginx cache. See `Vutuv.Uploads.served_url/4`.
+  @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
+
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_cover_test_#{System.unique_integer([:positive])}")
     prev = Application.get_env(:vutuv, :uploads_dir_prefix)
@@ -40,19 +45,19 @@ defmodule Vutuv.CoverTest do
   describe "url/2 (the contract nginx + templates depend on)" do
     test "builds the stable, id-scoped version path with the served .avif extension" do
       assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) ==
-               "/covers/7/cover_wide.avif"
+               "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
       renamed = %{@user | first_name: "Jane", last_name: "Smith"}
 
       assert Vutuv.Cover.url({"banner.jpg", renamed}, :wide) ==
-               "/covers/7/cover_wide.avif"
+               "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the stored filename's extension does not leak into served URLs" do
       assert Vutuv.Cover.url({"banner.PNG", @user}, :wide) ==
-               "/covers/7/cover_wide.avif"
+               "/covers/7/cover_wide.avif" <> @v
     end
 
     test "the original is not URL-addressable" do
@@ -64,7 +69,16 @@ defmodule Vutuv.CoverTest do
     end
 
     test "default version is :wide" do
-      assert Vutuv.Cover.url({"banner.jpg", @user}) == "/covers/7/cover_wide.avif"
+      assert Vutuv.Cover.url({"banner.jpg", @user}) == "/covers/7/cover_wide.avif" <> @v
+    end
+
+    test "appends a cache-busting ?v= token that changes with updated_at" do
+      touched = %{@user | updated_at: ~N[2024-03-02 10:20:31]}
+
+      assert Vutuv.Cover.url({"banner.jpg", @user}, :wide) =~ "/covers/7/cover_wide.avif?v="
+
+      refute Vutuv.Cover.url({"banner.jpg", touched}, :wide) ==
+               Vutuv.Cover.url({"banner.jpg", @user}, :wide)
     end
 
     test "falls back to a not-yet-regenerated legacy file (incl. ?timestamp suffix)", %{tmp: tmp} do
@@ -74,26 +88,26 @@ defmodule Vutuv.CoverTest do
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_wide.jpg"))
 
       assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
-               "/covers/7/John%20Doe_wide.jpg"
+               "/covers/7/John%20Doe_wide.jpg" <> @v
 
       # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_wide.avif"))
 
       assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
-               "/covers/7/John%20Doe_wide.avif"
+               "/covers/7/John%20Doe_wide.avif" <> @v
 
       # ...and the stable id-scoped file wins over every name-derived file (#773).
       {:ok, _} = Image.write(img, Path.join(dir, "cover_wide.avif"))
 
       assert Vutuv.Cover.url({"banner.jpg?63876543210", @user}, :wide) ==
-               "/covers/7/cover_wide.avif"
+               "/covers/7/cover_wide.avif" <> @v
     end
   end
 
   describe "display_url/2 (what the profile puts in <img src>)" do
     test "returns the nginx-served URL when the user has a cover photo" do
       user = %{@user | cover_photo: "banner.jpg"}
-      assert Vutuv.Cover.display_url(user, :wide) == "/covers/7/cover_wide.avif"
+      assert Vutuv.Cover.display_url(user, :wide) == "/covers/7/cover_wide.avif" <> @v
     end
 
     test "returns nil when the user has no cover photo (gradient fallback)" do

@@ -46,9 +46,9 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert reloaded.avatar == "selfie.jpg?63876543210"
 
     # ...and the URL ignores the legacy timestamp, falling back to the
-    # not-yet-regenerated legacy file.
+    # not-yet-regenerated legacy file (plus the cache-busting ?v= token).
     assert Vutuv.Avatar.url({reloaded.avatar, reloaded}, :thumb) ==
-             "/avatars/#{user.id}/Ada%20King_thumb.jpg"
+             "/avatars/#{user.id}/Ada%20King_thumb.jpg?v=#{:erlang.phash2(reloaded.updated_at)}"
   end
 
   test "uploading an avatar stores the file name and writes files to disk", %{tmp: tmp} do
@@ -62,6 +62,40 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert updated.avatar == "me.png"
     assert File.exists?(Path.join(tmp, "avatars/#{user.id}/avatar_thumb.avif"))
     assert File.exists?(Path.join(tmp, "originals/avatars/#{user.id}/original.png"))
+  end
+
+  test "re-uploading a same-named avatar still bumps updated_at (cache-buster moves)" do
+    user = insert(:user, first_name: "Ada", last_name: "King")
+
+    assert {:ok, _} =
+             Vutuv.Accounts.update_user(user, %{
+               avatar: %Plug.Upload{
+                 filename: "me.png",
+                 path: png_fixture(),
+                 content_type: "image/png"
+               }
+             })
+
+    # Rewind updated_at so a no-op write would leave it in the past. The avatar
+    # column is already "me.png", so without `force: true` the store would not
+    # touch the row and the cache-busting ?v= token would never change.
+    user
+    |> Ecto.Changeset.change(updated_at: ~N[2020-01-01 00:00:00])
+    |> Repo.update!()
+
+    reloaded = Repo.get!(User, user.id)
+
+    assert {:ok, again} =
+             Vutuv.Accounts.update_user(reloaded, %{
+               avatar: %Plug.Upload{
+                 filename: "me.png",
+                 path: png_fixture(),
+                 content_type: "image/png"
+               }
+             })
+
+    assert again.avatar == "me.png"
+    assert NaiveDateTime.compare(again.updated_at, ~N[2020-01-01 00:00:00]) == :gt
   end
 
   test "an invalid avatar extension is rejected with a changeset error" do

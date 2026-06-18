@@ -158,10 +158,28 @@ defmodule Vutuv.Uploads do
     local_path =
       Path.join(storage_dir(scope, config), served_filename(scope, version, file, config))
 
-    "/"
-    |> Path.join(local_path)
-    |> URI.encode()
+    encoded =
+      "/"
+      |> Path.join(local_path)
+      |> URI.encode()
+
+    encoded <> cache_bust(scope)
   end
+
+  # The served avatar/cover URL is stable and id-scoped (`/avatars/<id>/...`),
+  # and nginx caches it hard (`location /avatars/`, `expires 30d`,
+  # `Cache-Control: public`). A re-upload overwrites the file in place, so
+  # without a cache-buster the URL never changes and the browser keeps serving
+  # the *old* image from cache for up to 30 days — "I uploaded a new avatar but
+  # can't see it". The token is derived from the scope's `updated_at`, which a
+  # successful store always bumps (`Accounts.store_pending_image/4` updates with
+  # `force: true`), so the URL changes exactly when the image does and stays
+  # cacheable between changes. No `updated_at` (e.g. an unpersisted struct) =>
+  # no token.
+  defp cache_bust(%{updated_at: updated_at}) when not is_nil(updated_at),
+    do: "?v=#{:erlang.phash2(updated_at)}"
+
+  defp cache_bust(_), do: ""
 
   defp write_derived_versions(rotated, dir, config) do
     Enum.reduce_while(Spec.versions(config.spec_key), :ok, fn spec, :ok ->

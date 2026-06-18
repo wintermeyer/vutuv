@@ -30,6 +30,12 @@ defmodule Vutuv.AvatarTest do
     updated_at: ~N[2024-03-02 10:20:30]
   }
 
+  # Cache-busting suffix appended to every served avatar/cover URL, derived from
+  # the scope's `updated_at` so a re-upload (which bumps `updated_at`) changes
+  # the URL and defeats the 30-day browser/nginx cache. See
+  # `Vutuv.Uploads.served_url/4`. Constant here because `@user.updated_at` is.
+  @v "?v=#{:erlang.phash2(~N[2024-03-02 10:20:30])}"
+
   setup do
     tmp = Path.join(System.tmp_dir!(), "vutuv_avatar_test_#{System.unique_integer([:positive])}")
     prev = Application.get_env(:vutuv, :uploads_dir_prefix)
@@ -49,22 +55,22 @@ defmodule Vutuv.AvatarTest do
   describe "url/2 (the contract nginx + templates depend on)" do
     test "builds the stable, id-scoped version path with the served .avif extension" do
       assert Vutuv.Avatar.url({"selfie.jpg", @user}, :thumb) ==
-               "/avatars/7/avatar_thumb.avif"
+               "/avatars/7/avatar_thumb.avif" <> @v
 
       assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
-               "/avatars/7/avatar_medium.avif"
+               "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "the served filename does not embed the display name, so a rename keeps it (issue #773)" do
       renamed = %{@user | first_name: "Jane", last_name: "Smith"}
 
       assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :thumb) ==
-               "/avatars/7/avatar_thumb.avif"
+               "/avatars/7/avatar_thumb.avif" <> @v
     end
 
     test "the stored filename's extension does not leak into served URLs" do
       assert Vutuv.Avatar.url({"selfie.PNG", @user}, :medium) ==
-               "/avatars/7/avatar_medium.avif"
+               "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "the original is not URL-addressable" do
@@ -77,7 +83,7 @@ defmodule Vutuv.AvatarTest do
 
     test "default version is :medium" do
       assert Vutuv.Avatar.url({"selfie.jpg", @user}) ==
-               "/avatars/7/avatar_medium.avif"
+               "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "falls back to a not-yet-regenerated legacy file (incl. ?timestamp suffix)", %{tmp: tmp} do
@@ -87,26 +93,50 @@ defmodule Vutuv.AvatarTest do
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_thumb.jpg"))
 
       assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
-               "/avatars/7/John%20Doe_thumb.jpg"
+               "/avatars/7/John%20Doe_thumb.jpg" <> @v
 
       # The name-derived .avif wins over the pre-AVIF legacy file.
       {:ok, _} = Image.write(img, Path.join(dir, "John Doe_thumb.avif"))
 
       assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
-               "/avatars/7/John%20Doe_thumb.avif"
+               "/avatars/7/John%20Doe_thumb.avif" <> @v
 
       # ...and once the regenerator has written the stable id-scoped file, that
       # wins over every name-derived legacy file (issue #773).
       {:ok, _} = Image.write(img, Path.join(dir, "avatar_thumb.avif"))
 
       assert Vutuv.Avatar.url({"selfie.jpg?63876543210", @user}, :thumb) ==
-               "/avatars/7/avatar_thumb.avif"
+               "/avatars/7/avatar_thumb.avif" <> @v
+    end
+  end
+
+  describe "cache-busting (a re-upload must not keep showing the cached image)" do
+    test "appends a ?v= token derived from the scope's updated_at" do
+      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+               "/avatars/7/avatar_medium.avif?v=#{:erlang.phash2(@user.updated_at)}"
+    end
+
+    test "the token changes when updated_at changes (so the URL does too)" do
+      touched = %{@user | updated_at: ~N[2024-03-02 10:20:31]}
+
+      refute Vutuv.Avatar.url({"selfie.jpg", touched}, :medium) ==
+               Vutuv.Avatar.url({"selfie.jpg", @user}, :medium)
+    end
+
+    test "the token is stable for an unchanged updated_at (URL stays cacheable)" do
+      assert Vutuv.Avatar.url({"selfie.jpg", @user}, :medium) ==
+               Vutuv.Avatar.url({"selfie.jpg", @user}, :medium)
+    end
+
+    test "no token when the scope carries no updated_at (e.g. an unpersisted struct)" do
+      assert Vutuv.Avatar.url({"selfie.jpg", %{@user | updated_at: nil}}, :medium) ==
+               "/avatars/7/avatar_medium.avif"
     end
   end
 
   test "user_url/2 reads the avatar field off the user" do
     user = %{@user | avatar: "selfie.jpg"}
-    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/avatar_medium.avif"
+    assert Vutuv.Avatar.user_url(user, :medium) == "/avatars/7/avatar_medium.avif" <> @v
   end
 
   describe "binary/2 (base64 JPEG used by the vCard export)" do
@@ -198,7 +228,7 @@ defmodule Vutuv.AvatarTest do
   describe "display_url/2 (what templates put in <img src>)" do
     test "returns the nginx-served URL when the user has an avatar" do
       user = %{@user | avatar: "selfie.jpg"}
-      assert Vutuv.Avatar.display_url(user, :medium) == "/avatars/7/avatar_medium.avif"
+      assert Vutuv.Avatar.display_url(user, :medium) == "/avatars/7/avatar_medium.avif" <> @v
     end
 
     test "falls back to the default SVG when the user has no avatar" do

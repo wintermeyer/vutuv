@@ -791,8 +791,13 @@ defmodule Vutuv.Accounts do
   defp store_pending_image(user, _field, nil, _store), do: user
 
   defp store_pending_image(user, field, %Plug.Upload{} = upload, store) do
+    # `force: true` bumps `updated_at` even when the column is unchanged (a
+    # re-upload of a same-named file). Avatar/cover URLs carry a cache-buster
+    # derived from `updated_at` (see `Vutuv.Uploads`), so the timestamp must
+    # advance on every successful store or the browser keeps the cached image.
     with {:ok, file_name} <- store.({upload, user}),
-         {:ok, user} <- user |> Ecto.Changeset.change(%{field => file_name}) |> Repo.update() do
+         {:ok, user} <-
+           user |> Ecto.Changeset.change(%{field => file_name}) |> Repo.update(force: true) do
       user
     else
       # The changeset already proved the upload decodes, so this is a rare disk
