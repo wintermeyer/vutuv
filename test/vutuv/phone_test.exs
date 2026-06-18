@@ -32,6 +32,32 @@ defmodule Vutuv.PhoneTest do
     end
   end
 
+  describe "normalize/1" do
+    test "rewrites a German number typed in local format to international form" do
+      assert Phone.normalize("0261-123456") == {:ok, "+49 261 123456"}
+      assert Phone.normalize("0261/123456") == {:ok, "+49 261 123456"}
+      assert Phone.normalize("0171 1783428") == {:ok, "+49 171 1783428"}
+      assert Phone.normalize("017629544122") == {:ok, "+49 176 29544122"}
+    end
+
+    test "canonicalizes an already-international number" do
+      assert Phone.normalize("+49 261 9886803") == {:ok, "+49 261 9886803"}
+      assert Phone.normalize("+492619886803") == {:ok, "+49 261 9886803"}
+    end
+
+    test "never reinterprets a foreign number as German" do
+      assert Phone.normalize("+421903419345") == {:ok, "+421 903 419 345"}
+      assert Phone.normalize("+1 202-555-0143") == {:ok, "+1 202-555-0143"}
+    end
+
+    test "rejects anything that is not a real phone number" do
+      assert Phone.normalize("not a phone") == :error
+      assert Phone.normalize("12") == :error
+      assert Phone.normalize("555") == :error
+      assert Phone.normalize("") == :error
+    end
+  end
+
   describe "tel/1" do
     test "returns the E.164 form for the tel: link" do
       assert Phone.tel("+49 261 9886803") == "+492619886803"

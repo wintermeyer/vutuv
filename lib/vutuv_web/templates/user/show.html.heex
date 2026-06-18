@@ -359,13 +359,13 @@ the resulting ~200px rail width. --%>
       </.card_footer_link>
     </.card>
 
-    <%!-- Tags & endorsements --%>
+    <%!-- Tags --%>
     <.card :if={Enum.count(@user_tags) > 0 or @as_owner?}>
       <%!-- The dashed add tile is onboarding scaffolding: it shows only while the
       card is empty. Once there are entries the card is a clean showcase and
       "Verwalten" (manage_footer) leads to the page where tags are added/removed
       (tags have no edit form). --%>
-      <.section_header title={gettext("Tags & endorsements")} />
+      <.section_header title={gettext("Tags")} />
 
       <.empty_add :if={@as_owner? and Enum.count(@user_tags) == 0} href={~p"/#{@user}/tags/new"}>
         {gettext("Add a tag")}
@@ -488,12 +488,13 @@ the resulting ~200px rail width. --%>
             />
           </a>
           <div class="mt-2 min-w-0 text-sm">
-            <p :if={url.description} class="truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
+            <p :if={url.description} class="mb-0.5 truncate font-medium text-slate-800 dark:text-slate-100">{url.description}</p>
             <a
               href={VutuvWeb.UrlHTML.linkable_url(url.value)}
+              title={url.value}
               class="block truncate font-medium text-brand-600 hover:text-brand-700"
             >
-              {url.value}
+              {VutuvWeb.UrlHTML.display_url(url.value)}
             </a>
           </div>
         </div>
