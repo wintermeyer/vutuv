@@ -125,6 +125,17 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET / founder attribution" do
+    # The founder's name under the landing-page quote links to his vutuv
+    # profile so visitors can see a real account behind the welcome.
+    test "links the founder name to his vutuv profile", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert body =~ ~s(href="https://vutuv.de/wintermeyer")
+      assert body =~ "Stefan Wintermeyer"
+    end
+  end
+
   describe "GET / sign-up opt-in checkboxes" do
     # Both opt-in boxes on the sign-up form are framed positively (you grant a
     # permission by checking). Privacy by default (GDPR Art. 25): the email
