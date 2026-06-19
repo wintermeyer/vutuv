@@ -16,7 +16,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Instagram Youtube Snapchat LinkedIn XING GitHub)
+  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub)
 
   @doc """
   The providers `changeset/2` accepts. The form's provider dropdown renders
@@ -24,9 +24,13 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   """
   def accepted_providers, do: @accepted_providers
 
+  # Providers whose profile URL is a fixed base plus the bare handle. Mastodon
+  # is deliberately absent: it is federated, so the instance is part of the
+  # handle and the link is built by mastodon_url/1 instead.
   base_urls = [
     {"Facebook", "http://facebook.com/"},
     {"Twitter", "http://twitter.com/"},
+    {"Bluesky", "https://bsky.app/profile/"},
     {"Instagram", "http://instagram.com/"},
     {"Youtube", "http://youtube.com/channel/"},
     {"Snapchat", nil},
@@ -38,6 +42,8 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   display_rules = [
     {"Facebook", ""},
     {"Twitter", "@"},
+    {"Mastodon", "@"},
+    {"Bluesky", ""},
     {"Instagram", "@"},
     {"Youtube", ""},
     {"Snapchat", ""},
@@ -45,6 +51,11 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"XING", ""},
     {"GitHub", ""}
   ]
+
+  # A single-token handle (every provider but Mastodon); a leading "@" is optional.
+  @handle_format ~r/^@?[A-Za-z0-9._-]+$/u
+  # A federated Mastodon handle: user@instance.tld.
+  @mastodon_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -57,10 +68,27 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> cast(params, @required_fields ++ @optional_fields)
     |> validate_required([:provider, :value])
     |> unique_constraint(:value_provider, message: "Someone has already claimed this account")
-    |> update_change(:value, &parse_value/1)
-    |> validate_change(:value, &validate_parse/2)
-    |> validate_format(:value, ~r/^@?[A-z0-9-\.]*$/u)
+    |> normalize_value()
+    |> validate_value()
     |> validate_inclusion(:provider, @accepted_providers)
+  end
+
+  # Reduce whatever the member typed (a bare handle, a leading "@", a pasted
+  # profile URL) down to the stored handle the provider's URL scheme needs.
+  defp normalize_value(changeset) do
+    case get_change(changeset, :value) do
+      nil ->
+        changeset
+
+      value ->
+        parsed =
+          case get_field(changeset, :provider) do
+            "Mastodon" -> parse_mastodon(value)
+            _ -> parse_value(value)
+          end
+
+        put_change(changeset, :value, parsed)
+    end
   end
 
   def parse_value(value) do
@@ -71,9 +99,31 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> List.last()
   end
 
-  def validate_parse(_, value) do
-    if value, do: [], else: [value: {"Invalid account name", []}]
+  # Mastodon is federated: the handle is user@instance, the profile lives at
+  # https://instance/@user. Accept @user@instance, the bare user@instance, or a
+  # pasted profile URL, and store user@instance.
+  defp parse_mastodon(value) do
+    case Regex.run(~r{^https?://([^/]+)/@?([^/@]+)}, String.trim(value)) do
+      [_, instance, user] -> user <> "@" <> instance
+      nil -> value |> String.trim() |> String.trim_leading("@")
+    end
   end
+
+  defp validate_value(changeset) do
+    provider = get_field(changeset, :provider)
+
+    validate_change(changeset, :value, fn :value, value ->
+      if valid_value?(provider, value), do: [], else: [value: invalid_message(provider)]
+    end)
+  end
+
+  defp valid_value?("Mastodon", value), do: Regex.match?(@mastodon_format, value)
+  defp valid_value?(_provider, value), do: Regex.match?(@handle_format, value)
+
+  defp invalid_message("Mastodon"),
+    do: "Enter your full Mastodon handle, e.g. @user@instance.social"
+
+  defp invalid_message(_), do: "Invalid account name"
 
   # This generates special display rule matches
   for {provider, pretext} <- display_rules do
@@ -82,6 +132,11 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   defp get_display(_), do: ""
+
+  # Mastodon's federated link; its URL scheme lives in mastodon_url/1 (the
+  # instance is part of the handle, not a fixed base).
+  def social_media_link(%__MODULE__{provider: "Mastodon"} = account),
+    do: HTMLLink.link(get_display(account), to: url(account))
 
   # The rendered profile link; the provider → URL scheme knowledge lives
   # only in url/1 below. Providers without a canonical URL scheme (a nil
@@ -100,6 +155,8 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   # The profile URL as a plain string (the bare value when the provider has
   # no canonical URL scheme, e.g. Snapchat) — the agent documents
   # (VutuvWeb.AgentDocs) need a string, not a rendered link.
+  def url(%__MODULE__{provider: "Mastodon", value: value}), do: mastodon_url(value)
+
   for url <- base_urls do
     case url do
       {provider, nil} ->
@@ -112,4 +169,12 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   def url(_), do: ""
+
+  # https://instance/@user from the stored user@instance handle.
+  defp mastodon_url(value) do
+    case String.split(value, "@", parts: 2, trim: true) do
+      [user, instance] -> "https://" <> instance <> "/@" <> user
+      _ -> ""
+    end
+  end
 end

@@ -3,12 +3,38 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
 
   alias Vutuv.Profiles.SocialMediaAccount
 
+  defp value_for(params) do
+    SocialMediaAccount.changeset(%SocialMediaAccount{}, params)
+    |> Ecto.Changeset.apply_changes()
+    |> Map.get(:value)
+  end
+
   describe "changeset/2 provider validation" do
     test "accepts a supported provider" do
       changeset =
         SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
           provider: "Facebook",
           value: "vutuv"
+        })
+
+      assert changeset.valid?
+    end
+
+    test "accepts Mastodon" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Mastodon",
+          value: "@Gargron@mastodon.social"
+        })
+
+      assert changeset.valid?
+    end
+
+    test "accepts Bluesky" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Bluesky",
+          value: "gargron.bsky.social"
         })
 
       assert changeset.valid?
@@ -21,11 +47,61 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       refute changeset.valid?
       assert changeset.errors[:provider]
     end
+
+    test "rejects a Mastodon handle without an instance" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Mastodon",
+          value: "Gargron"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+  end
+
+  describe "Mastodon value parsing" do
+    test "stores the bare user@instance handle, stripping a leading @" do
+      assert value_for(%{provider: "Mastodon", value: "@Gargron@mastodon.social"}) ==
+               "Gargron@mastodon.social"
+    end
+
+    test "accepts the bare user@instance form" do
+      assert value_for(%{provider: "Mastodon", value: "Gargron@mastodon.social"}) ==
+               "Gargron@mastodon.social"
+    end
+
+    test "extracts the handle from a pasted profile URL" do
+      assert value_for(%{provider: "Mastodon", value: "https://mastodon.social/@Gargron"}) ==
+               "Gargron@mastodon.social"
+    end
+  end
+
+  describe "url/1" do
+    test "builds the federated profile URL for Mastodon" do
+      account = %SocialMediaAccount{provider: "Mastodon", value: "Gargron@mastodon.social"}
+      assert SocialMediaAccount.url(account) == "https://mastodon.social/@Gargron"
+    end
+
+    test "builds the profile URL for Bluesky" do
+      account = %SocialMediaAccount{provider: "Bluesky", value: "gargron.bsky.social"}
+      assert SocialMediaAccount.url(account) == "https://bsky.app/profile/gargron.bsky.social"
+    end
   end
 
   describe "social_media_link/1" do
     test "builds a link for a supported provider" do
       account = %SocialMediaAccount{provider: "Facebook", value: "vutuv"}
+      assert {:safe, _} = SocialMediaAccount.social_media_link(account)
+    end
+
+    test "builds a link for Mastodon" do
+      account = %SocialMediaAccount{provider: "Mastodon", value: "Gargron@mastodon.social"}
+      assert {:safe, _} = SocialMediaAccount.social_media_link(account)
+    end
+
+    test "builds a link for Bluesky" do
+      account = %SocialMediaAccount{provider: "Bluesky", value: "gargron.bsky.social"}
       assert {:safe, _} = SocialMediaAccount.social_media_link(account)
     end
 
