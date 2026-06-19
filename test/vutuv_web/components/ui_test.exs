@@ -61,6 +61,25 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "row_actions/1 alignment" do
+    test "defaults to right-aligned for table-row cells" do
+      assigns = %{}
+      html = rendered_to_string(~H|<UI.row_actions edit_to="/e" delete_to="/d" />|)
+
+      assert html =~ "justify-end"
+      assert html =~ "Edit"
+      assert html =~ "Delete"
+    end
+
+    test "align={:start} left-aligns the controls (no justify-end)" do
+      assigns = %{}
+      html = rendered_to_string(~H|<UI.row_actions edit_to="/e" delete_to="/d" align={:start} />|)
+
+      refute html =~ "justify-end"
+      assert html =~ "Edit"
+    end
+  end
+
   describe "button/1" do
     test "the secondary variant darkens its hover in dark mode" do
       assigns = %{}

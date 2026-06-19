@@ -1164,18 +1164,25 @@ defmodule VutuvWeb.UI do
   unified replacement for the loud pencil + red trash-circle icon pair
   (`<.edit_delete_actions>`). Editing/removing an entry now reads the same on
   every management page and matches the calm Direction A surface instead of
-  shouting. Renders a right-aligned "Edit" (brand link) and "Delete" (muted red,
-  CSRF DELETE behind a `data-confirm` prompt) text link; omit `edit_to` for
-  delete-only rows (tags). Keep the owner guard at the call site.
+  shouting. Renders an "Edit" (brand link) and "Delete" (muted red, CSRF DELETE
+  behind a `data-confirm` prompt) text link; omit `edit_to` for delete-only rows
+  (tags). Keep the owner guard at the call site. `align` is `:end` (default,
+  right-aligned for table-row cells) or `:start` (left-aligned, e.g. under a
+  role on the work-experience timeline).
   """
   attr(:edit_to, :string, default: nil)
   attr(:delete_to, :string, default: nil)
   attr(:confirm, :string, default: nil)
+  attr(:align, :atom, default: :end)
   attr(:class, :any, default: nil)
 
   def row_actions(assigns) do
     ~H"""
-    <div class={["flex items-center justify-end gap-4 text-sm font-semibold", @class]}>
+    <div class={[
+      "flex items-center gap-4 text-sm font-semibold",
+      @align == :end && "justify-end",
+      @class
+    ]}>
       <.link :if={@edit_to} href={@edit_to} class="text-brand-600 hover:text-brand-700">
         {gettext("Edit")}
       </.link>
