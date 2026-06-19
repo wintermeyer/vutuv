@@ -10,9 +10,22 @@ defmodule Vutuv.Profiles.Url do
     field(:description, :string)
     field(:screenshot, :string)
     field(:broken?, :boolean)
+    # The owner's chosen display order. Set programmatically (on create and via
+    # the reorder/move actions), never cast from user params. NULLs sort last so
+    # legacy rows fall back to creation order until reordered.
+    field(:position, :integer)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
+  end
+
+  @doc """
+  Links in the owner's chosen order: by `position` (NULLs last), then by `id`
+  (creation order) as a stable tiebreaker. Accepts a base query so callers can
+  scope to one user first.
+  """
+  def ordered(query \\ __MODULE__) do
+    from(u in query, order_by: [asc_nulls_last: u.position, asc: u.id])
   end
 
   @doc """

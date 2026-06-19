@@ -26,6 +26,18 @@ defmodule VutuvWeb.ProfileLinksTest do
     assert html =~ ~s(src="/images/screenshot.png")
   end
 
+  test "the profile preview shows links in the owner's chosen order", %{conn: conn} do
+    user = insert_activated_user()
+    insert(:url, user: user, description: "Second", position: 2)
+    insert(:url, user: user, description: "First", position: 1)
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    {first, _} = :binary.match(html, "First")
+    {second, _} = :binary.match(html, "Second")
+    assert first < second, "expected the position-1 link to render before position-2"
+  end
+
   test "the links section sits in the main column, not the right rail", %{conn: conn} do
     user = insert_activated_user()
     insert(:url, user: user)

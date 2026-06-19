@@ -21,7 +21,12 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.imagebox`,
    `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
-   thumbnail + truncating URL), `.card__tablewrap` (every in-card `<table>`
+   thumbnail + truncating URL), `.link-reorder*` (the owner's drag-and-drop
+   link-ordering tool on `/:slug/links`: `.link-reorder__item` draggable tile =
+   `.link-reorder__handle` grip + `.link-reorder__thumb` + text + `.link-reorder__move`
+   up/down `.link-reorder__btn` arrows + `<.row_actions>`; the arrows are real
+   forms so they work without JS, and `setupLinkReorder` in `app.js` layers
+   drag-and-drop on top), `.card__tablewrap` (every in-card `<table>`
    sits in this overflow-x scroller so a wide table scrolls instead of being
    clipped by the card's `overflow:hidden` — `card_table_scroll_test.exs`
    enforces it), `.breakwrap` (break a long unbroken string and cap the line at a

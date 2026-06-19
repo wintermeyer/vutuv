@@ -11,6 +11,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.Tag
@@ -246,7 +247,7 @@ defmodule VutuvWeb.UserController do
         |> WorkExperience.order_by_date(),
       phone_numbers:
         from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at], limit: 3),
-      urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at], limit: 3),
+      urls: Url.ordered() |> limit(3),
       addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at], limit: 3),
       inbound_follows: {Follow.latest(3, :follower), [:follower]},
       outbound_follows: {Follow.latest(3, :followee), [:followee]}

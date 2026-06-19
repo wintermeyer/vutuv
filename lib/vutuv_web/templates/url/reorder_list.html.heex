@@ -1,0 +1,58 @@
+<%!-- The owner's link-ordering tool. Drag a row by its handle (progressive
+enhancement, see setupLinkReorder in app.js) or use the up/down arrows, which
+submit a real form and so work without JavaScript and from the keyboard. The
+server renumbers positions 1..n on every change. --%>
+<p class="link-reorder__hint">
+  {gettext("Drag a link to reorder it, or use the arrows. The order is shown on your profile.")}
+</p>
+
+<ul id="link-reorder" class="link-reorder" data-reorder-url={~p"/#{@user}/links/reorder"}>
+  <%= for {url, index} <- Enum.with_index(@urls) do %>
+    <li class="link-reorder__item" draggable="true" data-id={url.id}>
+      <span class="link-reorder__handle" aria-hidden="true" title={gettext("Drag to reorder")}>⠿</span>
+
+      <a class="link-reorder__thumb" href={linkable_url(url.value)}>
+        <%= if url.screenshot do %>
+          <img src={Vutuv.Screenshot.url({url.screenshot, url}, :thumb)} alt="" width="400" height="264" />
+        <% else %>
+          <img src="/images/screenshot.png" alt="" width="400" height="264" />
+        <% end %>
+      </a>
+
+      <div class="link-reorder__text">
+        <div :if={url.description} class="title">{url.description}</div>
+        <div class="url">
+          <a href={linkable_url(url.value)}>{display_url(url.value)}</a>
+        </div>
+      </div>
+
+      <div class="link-reorder__move">
+        <.form for={%{}} action={~p"/#{@user}/links/#{url}/move"} method="put">
+          <input type="hidden" name="direction" value="up" />
+          <button
+            type="submit"
+            data-move="up"
+            class="link-reorder__btn"
+            disabled={index == 0}
+            aria-label={gettext("Move up")}
+          >↑</button>
+        </.form>
+        <.form for={%{}} action={~p"/#{@user}/links/#{url}/move"} method="put">
+          <input type="hidden" name="direction" value="down" />
+          <button
+            type="submit"
+            data-move="down"
+            class="link-reorder__btn"
+            disabled={index == length(@urls) - 1}
+            aria-label={gettext("Move down")}
+          >↓</button>
+        </.form>
+      </div>
+
+      <.row_actions
+        edit_to={~p"/#{@user}/links/#{url}/edit"}
+        delete_to={~p"/#{@user}/links/#{url}"}
+      />
+    </li>
+  <% end %>
+</ul>

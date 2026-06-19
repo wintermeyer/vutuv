@@ -243,6 +243,94 @@ document.addEventListener("keydown", (e) => {
     .forEach((menu) => menu.removeAttribute("open"))
 })
 
+// Link ordering tool (owner's /:slug/links page, see the reorder_list template).
+// Progressive enhancement: the up/down arrows are real forms that work without
+// JS, and this turns the list into a drag-and-drop reorderer on top. On drop we
+// PUT the new id order to data-reorder-url (CSRF via the meta token); the server
+// renumbers positions 1..n. Classic controller page, so plain JS — no LiveView.
+function setupLinkReorder() {
+  const list = document.getElementById("link-reorder")
+  if (!list) return
+
+  const csrf = document
+    .querySelector("meta[name='csrf-token']")
+    ?.getAttribute("content")
+  let dragging = null
+
+  const items = () => [...list.querySelectorAll(".link-reorder__item")]
+
+  // Keep the keyboard/no-JS arrows honest after a drag: only the first row's
+  // "up" and the last row's "down" are disabled.
+  function refreshMoveButtons() {
+    const rows = items()
+    rows.forEach((row, i) => {
+      const up = row.querySelector("button[data-move='up']")
+      const down = row.querySelector("button[data-move='down']")
+      if (up) up.disabled = i === 0
+      if (down) down.disabled = i === rows.length - 1
+    })
+  }
+
+  function persist() {
+    const ids = items().map((el) => el.dataset.id)
+    fetch(list.dataset.reorderUrl, {
+      method: "PUT",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrf,
+      },
+      body: ids.map((id) => `order[]=${encodeURIComponent(id)}`).join("&"),
+    })
+      .then((resp) => {
+        if (!resp.ok) window.location.reload()
+      })
+      .catch(() => window.location.reload())
+  }
+
+  // The row the dragged element should sit before, by vertical midpoint.
+  function rowAfter(y) {
+    return items()
+      .filter((row) => row !== dragging)
+      .reduce(
+        (closest, row) => {
+          const box = row.getBoundingClientRect()
+          const offset = y - box.top - box.height / 2
+          return offset < 0 && offset > closest.offset
+            ? { offset, element: row }
+            : closest
+        },
+        { offset: Number.NEGATIVE_INFINITY, element: null }
+      ).element
+  }
+
+  items().forEach((row) => {
+    row.addEventListener("dragstart", () => {
+      dragging = row
+      row.classList.add("is-dragging")
+    })
+    row.addEventListener("dragend", () => {
+      row.classList.remove("is-dragging")
+      dragging = null
+      refreshMoveButtons()
+      persist()
+    })
+  })
+
+  list.addEventListener("dragover", (e) => {
+    e.preventDefault()
+    if (!dragging) return
+    const after = rowAfter(e.clientY)
+    if (after == null) {
+      list.appendChild(dragging)
+    } else if (after !== dragging) {
+      list.insertBefore(dragging, after)
+    }
+  })
+
+  refreshMoveButtons()
+}
+window.addEventListener("DOMContentLoaded", setupLinkReorder)
+
 // Avatar fallback. A user's stored avatar file can be missing — a legacy row
 // whose image was never imported, a failed upload, a derived version not yet
 // regenerated — so the <img> 404s and the browser draws a broken-image icon.

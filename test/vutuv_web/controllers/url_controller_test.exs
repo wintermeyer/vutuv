@@ -70,6 +70,105 @@ defmodule VutuvWeb.UrlControllerTest do
     refute Repo.get(Url, url.id)
   end
 
+  describe "ordering" do
+    test "new links get the next position", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post(conn, ~p"/#{user}/links", url: %{"value" => "one.example", "description" => "one"})
+      post(conn, ~p"/#{user}/links", url: %{"value" => "two.example", "description" => "two"})
+
+      [first, second] = Repo.all(Url.ordered(Ecto.assoc(user, :urls)))
+      assert first.value == "http://one.example"
+      assert first.position == 1
+      assert second.value == "http://two.example"
+      assert second.position == 2
+    end
+
+    test "the index lists links in their chosen order", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:url, user: user, description: "Bravo", position: 2)
+      insert(:url, user: user, description: "Alpha", position: 1)
+
+      html = conn |> get(~p"/#{user}/links") |> html_response(200)
+
+      {alpha, _} = :binary.match(html, "Alpha")
+      {bravo, _} = :binary.match(html, "Bravo")
+      assert alpha < bravo, "expected the position-1 link to render before position-2"
+    end
+
+    test "reorder persists the submitted order as positions", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+      c = insert(:url, user: user, position: 3)
+
+      conn = put(conn, ~p"/#{user}/links/reorder", order: [c.id, a.id, b.id])
+      assert response(conn, 204)
+
+      assert Repo.get(Url, c.id).position == 1
+      assert Repo.get(Url, a.id).position == 2
+      assert Repo.get(Url, b.id).position == 3
+    end
+
+    test "reorder ignores ids that belong to someone else", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      mine = insert(:url, user: user, position: 1)
+      other_user = insert_activated_user()
+      theirs = insert(:url, user: other_user, position: 1)
+
+      conn = put(conn, ~p"/#{user}/links/reorder", order: [theirs.id, mine.id])
+      assert response(conn, 204)
+
+      # The foreign link is untouched; mine is renumbered from 1.
+      assert Repo.get(Url, theirs.id).position == 1
+      assert Repo.get(Url, mine.id).position == 1
+    end
+
+    test "move up swaps a link with its predecessor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+
+      conn = put(conn, ~p"/#{user}/links/#{b}/move", direction: "up")
+      assert redirected_to(conn) == ~p"/#{user}/links"
+
+      assert Repo.get(Url, b.id).position == 1
+      assert Repo.get(Url, a.id).position == 2
+    end
+
+    test "move down at the bottom is a no-op", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      a = insert(:url, user: user, position: 1)
+      b = insert(:url, user: user, position: 2)
+
+      conn = put(conn, ~p"/#{user}/links/#{b}/move", direction: "down")
+      assert redirected_to(conn) == ~p"/#{user}/links"
+
+      assert Repo.get(Url, a.id).position == 1
+      assert Repo.get(Url, b.id).position == 2
+    end
+
+    test "the owner sees the reorder tool, a visitor does not", %{conn: conn} do
+      {owner_conn, user} = create_and_login_user(conn)
+      insert_list(2, :url, user: user)
+
+      owner_html = owner_conn |> get(~p"/#{user}/links") |> html_response(200)
+      assert owner_html =~ "data-reorder-url"
+
+      visitor_html = build_conn() |> get(~p"/#{user}/links") |> html_response(200)
+      refute visitor_html =~ "data-reorder-url"
+    end
+
+    test "a non-owner cannot reorder or move", %{conn: conn} do
+      owner = insert_activated_user()
+      url = insert(:url, user: owner, position: 1)
+      {conn, _intruder} = create_and_login_user(conn)
+
+      assert conn |> put(~p"/#{owner}/links/reorder", order: [url.id]) |> response(403)
+      assert conn |> put(~p"/#{owner}/links/#{url}/move", direction: "up") |> response(403)
+    end
+  end
+
   defp create_url(conn, url_value) do
     {conn, user} = create_and_login_user(conn)
 
