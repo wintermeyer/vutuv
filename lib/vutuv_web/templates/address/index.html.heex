@@ -7,9 +7,16 @@
   ]}
 />
 
+<.view_as_switcher
+  :if={@can_preview?}
+  base_path={~p"/#{@user}/addresses"}
+  preview_as={@preview_as}
+  class="mb-6"
+/>
+
 <.card_section
   empty={Enum.empty?(@addresses)}
-  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/addresses/new"}
+  add_href={@as_owner? && ~p"/#{@current_user}/addresses/new"}
   add_label={gettext("Add an address")}
 >
   <%= render "card_list.html", assigns %>

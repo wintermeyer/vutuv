@@ -7,9 +7,16 @@
   ]}
 />
 
+<.view_as_switcher
+  :if={@can_preview?}
+  base_path={~p"/#{@user}/tags"}
+  preview_as={@preview_as}
+  class="mb-6"
+/>
+
 <.card_section
   empty={Enum.empty?(@user_tags)}
-  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/tags/new"}
+  add_href={@as_owner? && ~p"/#{@current_user}/tags/new"}
 >
   <div class="card__tablewrap">
   <table>
@@ -27,7 +34,7 @@
           </td>
           <td class="text-right">
             <.row_actions
-              :if={@current_user && same_user?(@user, @current_user)}
+              :if={@as_owner?}
               delete_to={~p"/#{@user}/tags/#{user_tag}"}
             />
           </td>

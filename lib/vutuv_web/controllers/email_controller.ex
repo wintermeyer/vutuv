@@ -17,10 +17,13 @@ defmodule VutuvWeb.EmailController do
   def index(conn, _params) do
     AgentDocs.respond(conn,
       html: fn conn ->
+        conn = VutuvWeb.ViewAs.assign_preview(conn)
+
         emails =
-          VutuvWeb.UserHelpers.emails_for_display(
+          VutuvWeb.UserHelpers.emails_for_preview(
             conn.assigns[:user],
-            conn.assigns[:current_user]
+            conn.assigns[:current_user],
+            conn.assigns[:preview_as]
           )
 
         render(conn, "index.html", emails: emails, emails_counter: length(emails))

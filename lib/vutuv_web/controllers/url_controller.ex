@@ -14,7 +14,11 @@ defmodule VutuvWeb.UrlController do
     urls = Repo.all(assoc(conn.assigns[:user], :urls))
 
     AgentDocs.respond(conn,
-      html: &render(&1, "index.html", urls: urls),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", urls: urls)
+      end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :links, urls) end
     )
   end

@@ -8,9 +8,16 @@
 />
 
 
+<.view_as_switcher
+  :if={@can_preview?}
+  base_path={~p"/#{@user}/emails"}
+  preview_as={@preview_as}
+  class="mb-6"
+/>
+
 <.card_section
   empty={Enum.empty?(@emails)}
-  add_href={same_user?(@user, @current_user) && ~p"/#{@current_user}/emails/new"}
+  add_href={@as_owner? && ~p"/#{@current_user}/emails/new"}
   add_label={gettext("Add an email address")}
 >
   <%= render "card_list.html", assigns %>

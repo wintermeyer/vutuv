@@ -12,7 +12,7 @@
     </div>
     <div class="text">
       <.row_actions
-        :if={same_user?(@user, @current_user)}
+        :if={@as_owner?}
         edit_to={~p"/#{@user}/links/#{url}/edit"}
         delete_to={~p"/#{@user}/links/#{url}"}
       />

@@ -14,7 +14,11 @@ defmodule VutuvWeb.PhoneNumberController do
     phone_numbers = Repo.all(assoc(conn.assigns[:user], :phone_numbers))
 
     AgentDocs.respond(conn,
-      html: &render(&1, "index.html", phone_numbers: phone_numbers),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", phone_numbers: phone_numbers)
+      end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers) end
     )
   end

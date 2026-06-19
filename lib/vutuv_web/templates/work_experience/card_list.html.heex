@@ -1,20 +1,55 @@
-<ol>
-<%= for job <- @work_experience do %>
-  <li class="job">
-    <h2 class="job__title"><%= link job.title, to: ~p"/#{@user}/work_experiences/#{job}" %></h2>
-    <span class="job__organization"><%= job.organization %></span>
-    <span class="job__date">
-      <%= format_duration(job.start_month, job.start_year, job.end_month, job.end_year) %>
-    </span>
-    <%= if job.description do %>
-      <p class="job__description"><%= job.description %></p>
-    <% end %>
-    <.row_actions
-      :if={same_user?(@user, @current_user)}
-      class="mt-2"
-      edit_to={~p"/#{@user}/work_experiences/#{job}/edit"}
-      delete_to={~p"/#{@user}/work_experiences/#{job}"}
-    />
-  </li>
-<% end %>
-</ol>
+<%!-- Timeline layout, shared with the profile's Experience card: a year-led
+date range on the left (full month/year as a hover tooltip), a dotted rail
+with the role title, organization, duration and the full description, and a
+duration circle on the right whose size ranks roles by how long they ran.
+The owner's calm Edit/Delete sit under each role and drop in the visitor
+preview modes (gated on @as_owner?). Roles arrive newest-first
+(WorkExperience.order_by_date). --%>
+<div>
+  <div
+    :for={circle <- circle_durations(@work_experience, :compact)}
+    class="grid grid-cols-[6.5rem_1fr_4rem] items-start gap-3"
+  >
+    <% dates =
+      duration_with_detail(
+        circle.job.start_month,
+        circle.job.start_year,
+        circle.job.end_month,
+        circle.job.end_year
+      ) %>
+    <div
+      class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-500 dark:text-slate-400"
+      title={dates.detail}
+    >
+      {dates.label}
+    </div>
+    <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
+      <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
+      <.link
+        href={~p"/#{@user}/work_experiences/#{circle.job}"}
+        class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+      >
+        {circle.job.title}
+      </.link>
+      <p class="text-sm text-slate-500">
+        {circle.job.organization}<%= if circle.length do %> · {circle.length}<% end %>
+      </p>
+      <p :if={circle.job.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {circle.job.description}
+      </p>
+      <.row_actions
+        :if={@as_owner?}
+        class="mt-2"
+        edit_to={~p"/#{@user}/work_experiences/#{circle.job}/edit"}
+        delete_to={~p"/#{@user}/work_experiences/#{circle.job}"}
+      />
+    </div>
+    <div
+      class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
+      style={"width: #{circle.size}rem; height: #{circle.size}rem"}
+      title={gettext("Time in this role")}
+    >
+      <span class="text-[11px]">{circle.label}</span>
+    </div>
+  </div>
+</div>

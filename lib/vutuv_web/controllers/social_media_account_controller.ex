@@ -15,8 +15,11 @@ defmodule VutuvWeb.SocialMediaAccountController do
       |> Repo.preload([:social_media_accounts])
 
     AgentDocs.respond(conn,
-      html:
-        &render(&1, "index.html", user: user, social_media_accounts: user.social_media_accounts),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", user: user, social_media_accounts: user.social_media_accounts)
+      end,
       doc: fn ->
         SectionDocs.build_index(user, :social_media_accounts, user.social_media_accounts)
       end

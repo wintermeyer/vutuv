@@ -16,7 +16,7 @@
       <td><%= format_address address, @conn.assigns[:locale] %></td>
       <td class="text-right">
         <.row_actions
-          :if={same_user?(@user, @current_user)}
+          :if={@as_owner?}
           edit_to={~p"/#{@user}/addresses/#{address}/edit"}
           delete_to={~p"/#{@user}/addresses/#{address}"}
         />

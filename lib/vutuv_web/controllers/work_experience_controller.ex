@@ -31,7 +31,11 @@ defmodule VutuvWeb.WorkExperienceController do
       )
 
     AgentDocs.respond(conn,
-      html: &render(&1, "index.html", user: user, work_experience: user.work_experiences),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", user: user, work_experience: user.work_experiences)
+      end,
       doc: fn -> SectionDocs.build_index(user, :work_experiences, user.work_experiences) end
     )
   end

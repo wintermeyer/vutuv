@@ -29,7 +29,11 @@ defmodule VutuvWeb.UserTagController do
       |> Repo.preload(user_tags: UserTag.ordered_by_endorsements())
 
     AgentDocs.respond(conn,
-      html: &render(&1, "index.html", user: user, user_tags: user.user_tags),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", user: user, user_tags: user.user_tags)
+      end,
       doc: fn -> SectionDocs.build_index(user, :tags, user.user_tags) end
     )
   end

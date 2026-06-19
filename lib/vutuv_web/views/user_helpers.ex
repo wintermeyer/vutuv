@@ -49,6 +49,22 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
+  @doc """
+  The emails list for the owner's "View as" preview on `/:slug/emails`
+  (`VutuvWeb.ViewAs`). Mirrors the profile's `private_emails?/3` rule: the
+  member's own view and the connection preview show every address (a connection
+  is a mutual follow, so the owner follows them and the private-email rule
+  grants it); the follower and public previews show only the public addresses.
+  Outside a preview (`nil`) it falls back to the real visitor's permission via
+  `emails_for_display/2`.
+  """
+  def emails_for_preview(user, _visitor, :connection), do: Repo.all(assoc(user, :emails))
+
+  def emails_for_preview(user, _visitor, mode) when mode in [:follower, :public],
+    do: Repo.all(from(e in assoc(user, :emails), where: e.public?))
+
+  def emails_for_preview(user, visitor, nil), do: emails_for_display(user, visitor)
+
   def user_has_permissions?(user, visitor) do
     user_follows_user?(user, visitor) || same_user?(user, visitor)
   end

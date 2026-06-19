@@ -17,7 +17,11 @@ defmodule VutuvWeb.AddressController do
       |> Repo.preload(:addresses)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "index.html", user: user, addresses: user.addresses),
+      html: fn conn ->
+        conn
+        |> VutuvWeb.ViewAs.assign_preview()
+        |> render("index.html", user: user, addresses: user.addresses)
+      end,
       doc: fn -> SectionDocs.build_index(user, :addresses, user.addresses) end
     )
   end

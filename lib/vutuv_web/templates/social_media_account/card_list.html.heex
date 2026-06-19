@@ -16,7 +16,7 @@
       <td><%= account.provider %></td>
       <td class="text-right">
         <.row_actions
-          :if={same_user?(@user, @current_user)}
+          :if={@as_owner?}
           edit_to={~p"/#{@user}/social_media_accounts/#{account}/edit"}
           delete_to={~p"/#{@user}/social_media_accounts/#{account}"}
         />

@@ -1252,6 +1252,97 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The owner-only **"View as" preview switcher** shared by the profile section
+  pages (`/:slug/work_experiences`, `/phone_numbers`, …). A segmented control —
+  You / Follower / Connected / Public — that reloads the current page
+  server-side with `?view_as=<mode>` (resolved by `VutuvWeb.ViewAs`), plus an
+  active-mode banner. Render it with `:if={@can_preview?}` so only the owner
+  ever sees it.
+
+  `base_path` is the current page's path (e.g. `~p"/\#{@user}/work_experiences"`);
+  the segments link to that path with the `view_as` query appended. `preview_as`
+  is the active tier (`nil | :follower | :connection | :public`). `class` adds
+  utilities to the outer container (e.g. a bottom margin above the list).
+
+  The profile (`user/show.html.heex`) predates this and keeps its own inline
+  switcher with profile-specific banner copy; this is the reusable version every
+  section page shares.
+  """
+  attr(:base_path, :string, required: true)
+  attr(:preview_as, :atom, default: nil)
+  attr(:class, :any, default: nil)
+
+  def view_as_switcher(assigns) do
+    assigns = assign(assigns, :preview?, not is_nil(assigns.preview_as))
+
+    ~H"""
+    <div
+      id="view-as-switcher"
+      class={[
+        "rounded-2xl px-4 py-3 ring-1",
+        if(@preview?,
+          do: "bg-brand-50 ring-brand-200 dark:bg-brand-900/30 dark:ring-brand-900/50",
+          else: "bg-white ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+        ),
+        @class
+      ]}
+    >
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+        <span class="inline-flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          </svg>
+          {gettext("View as")}
+        </span>
+        <div class="flex flex-1 divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:divide-slate-700 dark:ring-slate-700">
+          <.link
+            :for={
+              {label, mode} <- [
+                {gettext("You"), nil},
+                {gettext("Follower"), :follower},
+                {gettext("Connected"), :connection},
+                {gettext("Public"), :public}
+              ]
+            }
+            href={view_as_href(@base_path, mode)}
+            aria-current={@preview_as == mode && "true"}
+            class={[
+              "flex-1 px-3 py-1.5 text-center font-semibold transition-colors",
+              if(@preview_as == mode,
+                do: "bg-brand-600 text-white",
+                else:
+                  "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              )
+            ]}
+          >
+            {label}
+          </.link>
+        </div>
+      </div>
+      <p
+        :if={@preview?}
+        id="view-as-banner"
+        class="mt-2 text-sm text-slate-600 dark:text-slate-400"
+      >
+        <%= case @preview_as do %>
+          <% :follower -> %>
+            {gettext("Preview: how a member who follows you sees this page.")}
+          <% :connection -> %>
+            {gettext("Preview: how a member you are connected with sees this page.")}
+          <% :public -> %>
+            {gettext("Preview: how logged-out visitors and search engines see this page.")}
+          <% _ -> %>
+        <% end %>
+      </p>
+    </div>
+    """
+  end
+
+  defp view_as_href(base_path, nil), do: base_path
+  defp view_as_href(base_path, mode), do: base_path <> "?view_as=" <> Atom.to_string(mode)
+
+  @doc """
   Legacy (Track 1) card shell shared by the owned-resource index pages and the
   new/edit form wrappers: the `<div class="card-list"><section class="card">…</section></div>`
   boilerplate that used to be copy-pasted into ~30 templates, styled by
