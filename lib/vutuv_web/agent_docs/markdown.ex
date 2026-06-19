@@ -172,6 +172,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "title: #{yaml(doc.title)}",
       doc.description && "description: #{yaml(doc.description)}",
       "url: #{doc.url}",
+      # Identity/media metadata for the doc types that carry it (the profile):
+      # the handle and avatar live only in the structured formats otherwise, so
+      # the frontmatter is where the human formats surface them.
+      doc[:username] && "username: #{yaml(doc.username)}",
+      doc[:avatar_url] && "avatar_url: #{doc.avatar_url}",
       "type: #{doc.type}",
       "schema_version: #{doc.schema_version}",
       "generated_at: #{DateTime.to_iso8601(doc.generated_at)}",

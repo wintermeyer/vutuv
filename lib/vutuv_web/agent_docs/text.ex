@@ -324,10 +324,19 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp footer(doc) do
-    "--\n" <>
-      "vutuv agent document · type: #{doc.type} · schema_version: #{doc.schema_version}\n" <>
-      "generated_at: #{DateTime.to_iso8601(doc.generated_at)}\n" <>
+    # Mirrors the Markdown frontmatter: the handle and avatar live only in the
+    # structured formats otherwise, so the text footer (this format's metadata
+    # zone) surfaces them for the doc types that carry them (the profile).
+    [
+      "--",
+      "vutuv agent document · type: #{doc.type} · schema_version: #{doc.schema_version}",
+      doc[:username] && "username: #{doc.username}",
+      doc[:avatar_url] && "avatar_url: #{doc.avatar_url}",
+      "generated_at: #{DateTime.to_iso8601(doc.generated_at)}",
       "canonical: #{doc.url}"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
   end
 
   defp blank_to_nil(""), do: nil

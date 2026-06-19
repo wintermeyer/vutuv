@@ -106,6 +106,15 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.txt =~ "Age: #{age}"
     assert Jason.decode!(rendered.json)["age"] == age
     assert rendered.xml =~ "<age>#{age}</age>"
+
+    # The handle is surfaced as an explicit field in the agent formats, not only
+    # embedded inside the profile URL (Markdown frontmatter + text footer carry
+    # it; JSON/XML serialize it). The HTML carries it in the profile URLs.
+    assert rendered.md =~ ~s(username: "drift_tester")
+    assert rendered.txt =~ "username: drift_tester"
+    assert Jason.decode!(rendered.json)["username"] == "drift_tester"
+    assert rendered.xml =~ "<username>drift_tester</username>"
+    assert rendered.html =~ "drift_tester"
   end
 
   test "profile vCard carries the same contact facts", %{user: _user} do
