@@ -16,10 +16,10 @@
     delete_to={~p"/#{@user}/links/#{@url}"}
   />
 
-  <h1><%= gettext("URL") %></h1>
+  <h2 class="card__label"><%= gettext("URL") %></h2>
   <p><%= link @url.value, to: VutuvWeb.UrlHTML.linkable_url(@url.value) %></p>
   <%= if @url.description do %>
-    <h1><%= gettext("Description") %></h1>
+    <h2 class="card__label"><%= gettext("Description") %></h2>
     <p><%= @url.description %></p>
   <% end %>
 </.card_section>

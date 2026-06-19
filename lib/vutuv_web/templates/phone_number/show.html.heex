@@ -16,8 +16,8 @@
     delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
   />
 
-  <h1><%= gettext("Number Type") %></h1>
+  <h2 class="card__label"><%= gettext("Number Type") %></h2>
   <p><%= phone_type_label(@phone_number.number_type) %></p>
-  <h1><%= gettext("Number") %></h1>
+  <h2 class="card__label"><%= gettext("Number") %></h2>
   <p><a href={"tel:" <> tel_href(@phone_number.value)}><%= @phone_number.value %></a></p>
 </.card_section>

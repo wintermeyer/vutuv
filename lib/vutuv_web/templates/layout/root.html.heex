@@ -20,6 +20,13 @@
       content={content}
     />
     <meta name="twitter:card" content={OpenGraph.twitter_card(assigns)} />
+    <%!-- Explicit canonical URL, shared one-for-one with og:url
+    (VutuvWeb.OpenGraph.canonical_url/1): the request path without volatile
+    query params (?lang, ?page), so search engines and AI crawlers index one
+    address per page. --%>
+    <%= if canonical = OpenGraph.canonical_url(assigns) do %>
+      <link rel="canonical" href={canonical} />
+    <% end %>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <link rel="shortcut icon" href="/favicon.ico" />

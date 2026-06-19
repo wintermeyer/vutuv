@@ -266,6 +266,19 @@ body.stretch main {
   color: #0f172a;
   margin: 0 0 0.25rem;
 }
+/* Field/section labels inside legacy cards keep the small uppercase caption
+   look that `.card h1` used to carry, now that those headings are <h2> for a
+   valid one-<h1>-per-page hierarchy (the detail show pages, the tag card). Two
+   selectors so it beats the prominent `.card h2` rule above (which `.job__title`
+   relies on). */
+.card .card__label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 1rem;
+}
 .card p {
   color: #334155;
 }
@@ -918,6 +931,7 @@ ul.thumbs li .text .url a {
   }
   .card h1 { color: #94a3b8; }
   .card h2 { color: #f1f5f9; }
+  .card .card__label { color: #94a3b8; }
   .card p { color: #cbd5e1; }
   /* No `.card a` here either (see the light-mode note): the global `a`
      dark rule above covers card links without outranking `.button`. */

@@ -16,8 +16,8 @@
     delete_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}"}
   />
 
-  <h1><%= gettext("Provider") %></h1>
+  <h2 class="card__label"><%= gettext("Provider") %></h2>
   <p><%= @social_media_account.provider %></p>
-  <h1><%= gettext("Username") %></h1>
+  <h2 class="card__label"><%= gettext("Username") %></h2>
   <p><%= Vutuv.Profiles.SocialMediaAccount.social_media_link(@social_media_account) %></p>
 </.card_section>

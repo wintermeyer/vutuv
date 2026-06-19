@@ -1,5 +1,9 @@
 <div class="py-6">
   <div class="mx-auto max-w-2xl">
+    <%!-- Posts carry no title, so give the permalink page its one <h1> for the
+    heading hierarchy (crawlers, screen readers) without a visible title on the
+    card — the same sr-only pattern <.page_header> uses for crumbs-only pages. --%>
+    <h1 class="sr-only">{gettext("Post by %{name}", name: full_name(@author))}</h1>
     <%!-- The author's Edit/Delete live in the card's own ⋯ menu. --%>
     <.post_card post={@post} viewer={@current_user} mode={:full} conn_or_socket={@conn} />
 

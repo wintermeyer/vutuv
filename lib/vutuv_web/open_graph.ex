@@ -101,11 +101,24 @@ defmodule VutuvWeb.OpenGraph do
     end
   end
 
-  defp url_tags(%{conn: %Plug.Conn{} = conn}) do
-    [{"og:url", VutuvWeb.Endpoint.url() <> canonical_path(conn.request_path)}]
-  end
+  @doc """
+  The canonical absolute URL for this page — the single value shared by
+  `og:url` and the `<link rel="canonical">` tag (rendered in the root
+  layout). Built from the request path only, so volatile query params
+  (`?lang`, `?page`) never leak into the canonical. Returns `nil` when there
+  is no conn (e.g. an error page rendered without one).
+  """
+  def canonical_url(%{conn: %Plug.Conn{} = conn}),
+    do: VutuvWeb.Endpoint.url() <> canonical_path(conn.request_path)
 
-  defp url_tags(_assigns), do: []
+  def canonical_url(_assigns), do: nil
+
+  defp url_tags(assigns) do
+    case canonical_url(assigns) do
+      nil -> []
+      url -> [{"og:url", url}]
+    end
+  end
 
   defp canonical_path("/"), do: "/"
   defp canonical_path(path), do: String.replace_suffix(path, "/", "")

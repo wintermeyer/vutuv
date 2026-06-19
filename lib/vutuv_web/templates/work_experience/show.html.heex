@@ -16,12 +16,12 @@
     delete_to={~p"/#{@user}/work_experiences/#{@work_experience}"}
   />
 
-  <h1><%= gettext("Time Period") %></h1>
+  <h2 class="card__label"><%= gettext("Time Period") %></h2>
   <p>
     <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>
   </p>
   <%= if @work_experience.description do %>
-    <h1><%= gettext("Description") %></h1>
+    <h2 class="card__label"><%= gettext("Description") %></h2>
     <p><%= @work_experience.description %></p>
   <% end %>
 </.card_section>
