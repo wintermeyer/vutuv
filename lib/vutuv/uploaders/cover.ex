@@ -32,7 +32,7 @@ defmodule Vutuv.Cover do
     prefix: "covers",
     default_version: :wide,
     # See Vutuv.Avatar's @config: the user column holding this image's content
-    # fingerprint, baked into `<slug>-<version>-<fp>.avif` when set.
+    # fingerprint, baked into `<username>-<version>-<fp>.avif` when set.
     fingerprint_field: :cover_fingerprint,
     stale_glob: "*_{wide,original}.*",
     crop_field: :cover_crop

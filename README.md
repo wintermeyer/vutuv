@@ -105,7 +105,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 
 | Context | Schemas | Purpose |
 |---|---|---|
-| `Vutuv.Accounts` | User, Email, Slug, SearchTerm, LoginPin, Locale, Exonym | Registration, PIN-based authentication, user management |
+| `Vutuv.Accounts` | User, Email, UsernameChange, SearchTerm, LoginPin, Locale, Exonym | Registration, PIN-based authentication, user management |
 | `Vutuv.Sessions` | UserSession | Server-side per-device sessions: signed-in-devices list, remote logout, new-device security email |
 | `Vutuv.Credentials` | UserCredential | Passkeys (WebAuthn/FIDO2): enrolment + assertion verification for passkey login |
 | `Vutuv.ApiAuth` | Token, App, Grant, AuthCode | API credentials: personal access tokens, OAuth 2 apps/grants/codes, scopes |

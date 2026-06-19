@@ -217,9 +217,9 @@ defmodule Vutuv.Uploads do
 
   @doc """
   Re-derives the fingerprinted files under `user`'s **current** handle after a
-  username change, so the slug-in-the-filename URL keeps resolving. A no-op for a
+  username change, so the username-in-the-filename URL keeps resolving. A no-op for a
   row not yet on the fingerprinted scheme (its legacy URL is name/id-based, not
-  slug-based). Works off the private original, so it never depends on the
+  username-based). Works off the private original, so it never depends on the
   old-handle files still being present. See `Accounts.update_username/2`.
   """
   def reslug(user, config) do

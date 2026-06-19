@@ -46,7 +46,7 @@ defmodule Vutuv.Avatar do
     prefix: "avatars",
     default_version: :medium,
     # The user column holding this image's content fingerprint. When set, the
-    # served filename embeds the handle + fingerprint (`<slug>-<version>-<fp>.avif`)
+    # served filename embeds the handle + fingerprint (`<username>-<version>-<fp>.avif`)
     # and the URL needs no `?v=`; when nil the row predates the scheme and falls
     # back to the legacy URL. See Vutuv.Uploads.served_url/4.
     fingerprint_field: :avatar_fingerprint,

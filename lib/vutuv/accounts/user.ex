@@ -123,7 +123,7 @@ defmodule Vutuv.Accounts.User do
   """
   def listing_fields do
     # :avatar_fingerprint is loaded so listing-rendered avatars build the
-    # fingerprinted URL `<slug>-<version>-<fp>.avif` (see Vutuv.Uploads).
+    # fingerprinted URL `<username>-<version>-<fp>.avif` (see Vutuv.Uploads).
     # :updated_at is still loaded for rows not yet migrated to that scheme: their
     # avatar falls back to the legacy `?v=#{phash2(updated_at)}` cache-buster, so
     # a re-uploaded thumbnail doesn't keep serving the cached old image.
