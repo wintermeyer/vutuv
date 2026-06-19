@@ -32,9 +32,23 @@ defmodule Vutuv.Profiles.WorkExperience do
     |> cast(params, @cast_fields)
     |> validate_required([:title, :organization])
     |> validate_dates
+    |> validate_inclusion(:start_month, 1..12)
+    |> validate_inclusion(:end_month, 1..12)
+    |> validate_number(:start_year,
+      greater_than_or_equal_to: 1920,
+      less_than_or_equal_to: current_year()
+    )
+    |> validate_number(:end_year,
+      greater_than_or_equal_to: 1920,
+      less_than_or_equal_to: current_year()
+    )
     |> create_slug
     |> unique_constraint(:slug)
   end
+
+  # The upper bound on a work-experience year, matching the form's year <select>
+  # (@current_year..1920): a job can't start or end in a future year.
+  defp current_year, do: Date.utc_today().year
 
   def validate_dates(changeset) do
     end_month = get_field(changeset, :end_month)

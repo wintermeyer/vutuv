@@ -32,7 +32,9 @@ defmodule Vutuv.Accounts.Email do
     |> validate_required([:value, :email_type])
     |> validate_inclusion(:email_type, @email_types)
     |> downcase_value
-    |> validate_format(:value, ~r/@/)
+    |> validate_format(:value, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+      message: "must be a valid email address"
+    )
     |> unique_constraint(:value)
     |> fill_md5sum
   end

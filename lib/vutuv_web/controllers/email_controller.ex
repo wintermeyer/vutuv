@@ -46,23 +46,36 @@ defmodule VutuvWeb.EmailController do
 
   # Step 1: mail a PIN for the new address and render the PIN-entry form. The new
   # address rides along in the login_pin's `payload` column until it is confirmed.
+  #
+  # The address format is validated up front (the same Email.changeset that
+  # step 2 inserts through) so a malformed address is rejected here instead of
+  # after the member has chased down and entered a PIN we mailed to a bogus
+  # address — and so we never mail a PIN to something that isn't an address.
   def create(conn, %{"email" => email_params}) do
     user = conn.assigns[:current_user]
     email = email_params["value"]
 
-    case RateLimit.check(conn, :email_change, email) do
-      :ok ->
-        user
-        |> Accounts.gen_pin_for("email", email)
-        |> Emailer.email_creation_email(email, user)
-        |> Emailer.deliver()
+    changeset =
+      user
+      |> build_assoc(:emails)
+      |> Email.changeset(email_params)
 
-        conn
-        # The login_pin payload is a single string already carrying the new
-        # address, so the chosen Work/Personal/Other label waits in the
-        # session until step 2's PIN confirms the address.
-        |> put_session(:pending_email_type, email_params["email_type"])
-        |> render("confirm.html", user: conn.assigns[:user])
+    with {:ok, _} <- Ecto.Changeset.apply_action(changeset, :insert),
+         :ok <- RateLimit.check(conn, :email_change, email) do
+      user
+      |> Accounts.gen_pin_for("email", email)
+      |> Emailer.email_creation_email(email, user)
+      |> Emailer.deliver()
+
+      conn
+      # The login_pin payload is a single string already carrying the new
+      # address, so the chosen Work/Personal/Other label waits in the
+      # session until step 2's PIN confirms the address.
+      |> put_session(:pending_email_type, email_params["email_type"])
+      |> render("confirm.html", user: conn.assigns[:user])
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        render(conn, "new.html", changeset: changeset)
 
       :rate_limited ->
         conn

@@ -3,6 +3,21 @@ defmodule Vutuv.Accounts.EmailTest do
 
   alias Vutuv.Accounts.Email
 
+  describe "value format" do
+    test "accepts a normal dotted-domain address" do
+      assert Email.changeset(%Email{}, %{"value" => "jane@example.com"}).valid?
+    end
+
+    test "rejects addresses that are not a plausible local@domain.tld" do
+      for bad <- ["a@b", "foo@bar", "a b@c.com", "foo", "@bar.com", "no-at-sign"] do
+        changeset = Email.changeset(%Email{}, %{"value" => bad})
+
+        refute changeset.valid?, "expected #{inspect(bad)} to be rejected"
+        assert %{value: [_]} = errors_on(changeset)
+      end
+    end
+  end
+
   describe "email_type" do
     test "defaults to \"Other\" when none is given" do
       changeset = Email.changeset(%Email{}, %{"value" => "a@example.com"})

@@ -30,6 +30,21 @@ defmodule VutuvWeb.EmailControllerTest do
       assert redirected_to(conn) == ~p"/"
       assert Repo.get_by(Email, value: "work@example.com").email_type == "Work"
     end
+
+    test "rejects a malformed address before mailing a PIN", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # Drain the login PIN (and any stragglers) so the refute below is precise.
+      flush_emails()
+
+      conn =
+        post(conn, ~p"/#{user}/emails", email: %{"value" => "foo@bar", "email_type" => "Other"})
+
+      # Re-renders the new form with the format error instead of advancing to
+      # the PIN step...
+      assert html_response(conn, 200) =~ "valid email"
+      # ...and crucially never mails a PIN to the bogus address.
+      refute_received {:email, _}
+    end
   end
 
   describe "edit" do

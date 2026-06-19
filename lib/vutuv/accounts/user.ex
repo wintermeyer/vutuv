@@ -160,6 +160,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
     |> nullify_default_birthdate()
+    |> validate_birthdate()
   end
 
   @doc """
@@ -259,6 +260,24 @@ defmodule Vutuv.Accounts.User do
       ~D[1900-01-01] -> put_change(changeset, :birthdate, nil)
       _ -> changeset
     end
+  end
+
+  # A birthdate can't be in the future and can't be implausibly old (more than
+  # 120 years back). validate_change only fires when :birthdate actually changes
+  # — and nullify_default_birthdate/1 runs first — so the 1900-01-01 "unset"
+  # sentinel (already nilled) never trips this, and a legacy row with a bad date
+  # isn't blocked from unrelated edits. "Today" is the German calendar day
+  # (Vutuv.BerlinTime), the same clock the profile age display rolls over on.
+  defp validate_birthdate(changeset) do
+    validate_change(changeset, :birthdate, fn :birthdate, birthdate ->
+      today = Vutuv.BerlinTime.today()
+
+      cond do
+        Date.compare(birthdate, today) == :gt -> [birthdate: "can't be in the future"]
+        today.year - birthdate.year > 120 -> [birthdate: "is not a valid birthdate"]
+        true -> []
+      end
+    end)
   end
 
   defimpl String.Chars, for: Vutuv.Accounts.User do

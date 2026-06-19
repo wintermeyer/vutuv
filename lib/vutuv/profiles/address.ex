@@ -38,5 +38,14 @@ defmodule Vutuv.Profiles.Address do
       :country
     ])
     |> validate_required([:description, :country])
+    |> validate_length(:description, max: 100)
+    |> validate_length(:line_1, max: 255)
+    |> validate_length(:line_2, max: 255)
+    |> validate_length(:line_3, max: 255)
+    |> validate_length(:line_4, max: 255)
+    |> validate_length(:zip_code, max: 32)
+    |> validate_length(:city, max: 100)
+    |> validate_length(:state, max: 100)
+    |> validate_length(:country, max: 100)
   end
 end
