@@ -145,10 +145,11 @@ defmodule VutuvWeb.UserControllerTest do
     conn = get(conn, ~p"/#{user}")
     html = html_response(conn, 200)
 
-    # Contact, phone numbers, links, addresses, social media
+    # Contact (e-mails + phone numbers merged into one card), links,
+    # addresses, social media.
     assert html =~ ~s(id="profile-contact")
     assert html =~ "public.contact@example.com"
-    assert html =~ ~s(id="profile-phone-numbers")
+    refute html =~ ~s(id="profile-phone-numbers")
     assert html =~ "+49 30 5551234"
     assert html =~ ~s(id="profile-links")
     assert html =~ "https://example.org/my-site"
@@ -185,6 +186,40 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "/#{user.active_slug}.json"
   end
 
+  # Byte offset of the first occurrence of `needle` in `html`, used to assert the
+  # top-to-bottom order of the rail cards by where they appear in the markup.
+  defp source_pos(html, needle) do
+    case :binary.match(html, needle) do
+      {start, _} -> start
+      :nomatch -> flunk("expected to find #{inspect(needle)} in the page")
+    end
+  end
+
+  test "merges e-mail and phone into one Contact card, ordered about-first", %{conn: conn} do
+    user = insert_activated_user(gender: "female", birthdate: ~D[1990-04-15])
+    insert(:email, user: user, value: "public.contact@example.com")
+    insert(:phone_number, user: user, value: "+49 30 5551234")
+    insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+    insert(:address, user: user, city: "Berlin")
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    # Phone numbers no longer get their own card: e-mail and phone share the one
+    # "Contact" card, so the phone number renders between the Contact card and
+    # the next rail card (Social Media), i.e. inside Contact and after the
+    # e-mail rows.
+    refute html =~ ~s(id="profile-phone-numbers")
+    assert source_pos(html, "profile-contact") < source_pos(html, "public.contact@example.com")
+    assert source_pos(html, "public.contact@example.com") < source_pos(html, "+49 30 5551234")
+    assert source_pos(html, "+49 30 5551234") < source_pos(html, "profile-social-media")
+
+    # About-first rail order: General Info, then Contact, then Social Media,
+    # then Addresses.
+    assert source_pos(html, "profile-about") < source_pos(html, "profile-contact")
+    assert source_pos(html, "profile-contact") < source_pos(html, "profile-social-media")
+    assert source_pos(html, "profile-social-media") < source_pos(html, "profile-addresses")
+  end
+
   describe "section card titles pluralize with the entry count" do
     # Each profile section card titles itself after a count: a card with a
     # single entry must read "Phone Number", not "Phone Numbers". The titles go
@@ -209,7 +244,6 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert card_title(html, "profile-phone-numbers") == "Phone Number"
       assert card_title(html, "profile-addresses") == "Address"
       assert card_title(html, "profile-links") == "Link"
       assert card_title(html, "profile-posts") == "Post"
@@ -231,7 +265,6 @@ defmodule VutuvWeb.UserControllerTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert card_title(html, "profile-phone-numbers") == "Phone Numbers"
       assert card_title(html, "profile-addresses") == "Addresses"
       assert card_title(html, "profile-links") == "Links"
       assert card_title(html, "profile-posts") == "Posts"
@@ -258,12 +291,10 @@ defmodule VutuvWeb.UserControllerTest do
       de = put_req_header(conn, "accept-language", "de")
 
       singular = de |> get(~p"/#{one}") |> html_response(200)
-      assert card_title(singular, "profile-phone-numbers") == "Telefonnummer"
       assert card_title(singular, "profile-addresses") == "Adresse"
       assert card_title(singular, "profile-posts") == "Beitrag"
 
       plural = de |> get(~p"/#{many}") |> html_response(200)
-      assert card_title(plural, "profile-phone-numbers") == "Telefonnummern"
       assert card_title(plural, "profile-addresses") == "Adressen"
       assert card_title(plural, "profile-posts") == "Beiträge"
     end
@@ -358,7 +389,6 @@ defmodule VutuvWeb.UserControllerTest do
     html = html_response(conn, 200)
 
     refute html =~ ~s(id="profile-contact")
-    refute html =~ ~s(id="profile-phone-numbers")
     refute html =~ ~s(id="profile-links")
     refute html =~ ~s(id="profile-addresses")
     refute html =~ ~s(id="profile-social-media")
@@ -373,8 +403,9 @@ defmodule VutuvWeb.UserControllerTest do
     html = html_response(conn, 200)
 
     # A brand-new account's empty sections each carry the dashed add tile into
-    # their new-entry form. (Contact already holds the registration email, so it
-    # shows the "Manage" footer instead of the tile.)
+    # their new-entry form. Contact already holds the registration e-mail, so it
+    # shows that e-mail plus the "Add a phone number" tile (e-mail and phone
+    # share one card now) and a "Manage emails" footer.
     for path <- [
           ~p"/#{user}/phone_numbers/new",
           ~p"/#{user}/links/new",

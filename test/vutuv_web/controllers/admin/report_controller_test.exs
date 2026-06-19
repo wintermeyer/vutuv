@@ -57,5 +57,25 @@ defmodule VutuvWeb.Admin.ReportControllerTest do
 
       assert html =~ ~s(value="#{Date.to_iso8601(yesterday)}")
     end
+
+    test "renders the German labels for a de viewer", %{conn: conn} do
+      # The daily-report strings were added to the source but never extracted
+      # into the .po files, so a de operator saw English labels. Guard the
+      # German translations now that they exist.
+      {conn, _admin} = create_and_login_admin(conn)
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de")
+        |> get(~p"/admin/reports")
+        |> html_response(200)
+
+      assert html =~ "Tagesbericht"
+      assert html =~ "Vorheriger Tag"
+      assert html =~ "Kennzahl"
+      assert html =~ "Anzahl"
+      assert html =~ "Neue bestätigte Registrierungen (per PIN)"
+    end
   end
 end

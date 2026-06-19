@@ -552,40 +552,8 @@ the resulting ~200px rail width. --%>
 
   <%!-- Right rail --%>
   <aside class="space-y-6">
-    <.card :if={Enum.count(@emails) > 0 or @as_owner?} id="profile-contact">
-      <.section_header title={gettext("Contact")} />
-      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
-        {gettext("Add an email address")}
-      </.empty_add>
-      <%!-- Icon line: envelope + address on one line; the type (Work/Personal) is
-      a small muted suffix shown only when meaningful ("Other" is the unspecified
-      default). No separate label line. --%>
-      <ul class="-my-1 text-sm">
-        <li :for={email <- @emails}>
-          <a
-            href={"mailto:#{email.value}"}
-            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
-          >
-            <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-            <span class="min-w-0 break-all font-medium">{email.value}</span>
-            <span
-              :if={email.email_type && email.email_type != "Other"}
-              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
-            >
-              {email.email_type}
-            </span>
-          </a>
-        </li>
-      </ul>
-      <.manage_footer
-        href={~p"/#{@user}/emails"}
-        total={Enum.count(@emails)}
-        preview={Enum.count(@emails)}
-        owner={@as_owner?}
-      />
-    </.card>
-
-    <%!-- General info: gender + birthday; the headline already lives in the header --%>
+    <%!-- General info leads the rail: who the person is (gender + birthday).
+    The headline already lives in the header. --%>
     <.card
       :if={@user.birthdate || (@user.gender && @user.gender != "other") || @as_owner?}
       id="profile-about"
@@ -628,6 +596,89 @@ the resulting ~200px rail width. --%>
       </.card_footer_link>
     </.card>
 
+    <%!-- Contact: the two direct channels in one honest card. E-mail rows then
+    phone rows in a single list; the envelope/phone glyph plus the small type
+    badge tell them apart, so no divider or sub-labels. The footer carries one
+    manage link per channel: e-mails are always shown in full, so they only get
+    the owner's "Manage"; phones get the public "View all" once past the three
+    the rail previews, else the owner's "Manage". The whole row drops to nothing
+    for a visitor who already sees everything. --%>
+    <.card
+      :if={Enum.count(@emails) > 0 or @totals.numbers > 0 or @as_owner?}
+      id="profile-contact"
+    >
+      <.section_header title={gettext("Contact")} />
+      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
+        {gettext("Add an email address")}
+      </.empty_add>
+      <%!-- Icon line: envelope/phone glyph + value; the type (Work/Personal/
+      Mobile) is a small muted suffix shown only when meaningful ("Other" is the
+      unspecified default). E-mails first, then phone numbers. --%>
+      <ul :if={Enum.count(@emails) > 0 or @totals.numbers > 0} class="-my-1 text-sm">
+        <li :for={email <- @emails}>
+          <a
+            href={"mailto:#{email.value}"}
+            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+          >
+            <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+            <span class="min-w-0 break-all font-medium">{email.value}</span>
+            <span
+              :if={email.email_type && email.email_type != "Other"}
+              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
+            >
+              {email.email_type}
+            </span>
+          </a>
+        </li>
+        <li :for={number <- @user.phone_numbers}>
+          <a
+            href={"tel:" <> Vutuv.Phone.tel(number.value)}
+            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+          >
+            <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+            <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
+            <span
+              :if={number.number_type}
+              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
+            >
+              {number.number_type}
+            </span>
+          </a>
+        </li>
+      </ul>
+      <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
+        {gettext("Add a phone number")}
+      </.empty_add>
+      <%!-- One folded footer for both channels ("Manage emails · Manage phone
+      numbers"), each link shown only when the viewer can act on it. --%>
+      <% show_email_manage = @as_owner? and Enum.count(@emails) >= 1 %>
+      <% show_phone_link = @totals.numbers > 3 or (@as_owner? and @totals.numbers >= 1) %>
+      <div
+        :if={show_email_manage or show_phone_link}
+        class="mt-4 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 border-t border-slate-100 pt-3 text-sm font-medium dark:border-slate-800"
+      >
+        <.link
+          :if={show_email_manage}
+          href={~p"/#{@user}/emails"}
+          class="text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+        >
+          {gettext("Manage emails")}
+        </.link>
+        <span :if={show_email_manage and show_phone_link} aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
+        <.link
+          :if={show_phone_link}
+          href={~p"/#{@user}/phone_numbers"}
+          class="text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+        >
+          <%= if @totals.numbers > 3 do %>
+            {gettext("View all phone numbers")} ({compact_count(@totals.numbers)})
+          <% else %>
+            {gettext("Manage phone numbers")}
+          <% end %>
+        </.link>
+      </div>
+    </.card>
+
     <.card
       :if={Enum.count(@user.social_media_accounts) > 0 or @as_owner?}
       id="profile-social-media"
@@ -659,37 +710,6 @@ the resulting ~200px rail width. --%>
         href={~p"/#{@user}/social_media_accounts"}
         total={Enum.count(@user.social_media_accounts)}
         preview={Enum.count(@user.social_media_accounts)}
-        owner={@as_owner?}
-      />
-    </.card>
-
-    <.card :if={@totals.numbers > 0 or @as_owner?} id="profile-phone-numbers">
-      <.section_header title={ngettext("Phone Number", "Phone Numbers", @totals.numbers)} />
-      <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
-        {gettext("Add a phone number")}
-      </.empty_add>
-      <%!-- Icon line: phone glyph + number, the type a small muted suffix. --%>
-      <ul class="-my-1 text-sm">
-        <li :for={number <- @user.phone_numbers}>
-          <a
-            href={"tel:" <> Vutuv.Phone.tel(number.value)}
-            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
-          >
-            <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-            <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
-            <span
-              :if={number.number_type}
-              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
-            >
-              {number.number_type}
-            </span>
-          </a>
-        </li>
-      </ul>
-      <.manage_footer
-        href={~p"/#{@user}/phone_numbers"}
-        total={@totals.numbers}
-        preview={3}
         owner={@as_owner?}
       />
     </.card>
@@ -747,10 +767,27 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- "Who to follow" comes after the profile's own details (contact, info,
+    links): the member's own card leads, discovery of other people follows. --%>
+    <.card :if={Enum.count(@recommended_users) > 0}>
+      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
+      <ul class="space-y-4">
+        <.user_row
+          :for={user <- @recommended_users}
+          user={user}
+          current_user={@view_viewer}
+          current_user_id={@view_viewer_id}
+          work_info_by_id={@work_info_by_id}
+          following_by_id={@following_by_id}
+        />
+      </ul>
+    </.card>
+
     <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):
-    the same page as Markdown, plain text, JSON, XML and vCard. A human visitor
-    browsing in German gets the German rendering via ?lang=; the canonical
-    extension URLs (head alternates, llms.txt) stay English. --%>
+    the same page as Markdown, plain text, JSON, XML and vCard, kept last as the
+    rail's quiet utility footer. A human visitor browsing in German gets the
+    German rendering via ?lang=; the canonical extension URLs (head alternates,
+    llms.txt) stay English. --%>
     <% format_lang =
       if @conn.assigns[:locale] in [nil, "en"], do: "", else: "?lang=#{@conn.assigns[:locale]}" %>
     <.card id="profile-other-formats">
@@ -773,23 +810,6 @@ the resulting ~200px rail width. --%>
           {label}
         </.link>
       </div>
-    </.card>
-
-    <%!-- "Who to follow" sits at the foot of the rail on purpose: the profile's
-    own details (contact, info, links) lead, and discovery of other people
-    follows after them rather than above them. --%>
-    <.card :if={Enum.count(@recommended_users) > 0}>
-      <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
-      <ul class="space-y-4">
-        <.user_row
-          :for={user <- @recommended_users}
-          user={user}
-          current_user={@view_viewer}
-          current_user_id={@view_viewer_id}
-          work_info_by_id={@work_info_by_id}
-          following_by_id={@following_by_id}
-        />
-      </ul>
     </.card>
   </aside>
 </div>

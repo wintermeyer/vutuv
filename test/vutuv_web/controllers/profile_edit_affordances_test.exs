@@ -25,7 +25,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
   @menu_ids ~w(profile-skills-menu profile-experience-menu profile-links-menu
                profile-contact-menu profile-about-menu profile-social-media-menu
-               profile-phone-numbers-menu profile-addresses-menu)
+               profile-addresses-menu)
 
   # The shell's avatar account menu is a legitimate `<details data-menu>` that
   # renders on every page now, so a page-wide `data-menu` check no longer means

@@ -6224,3 +6224,80 @@ msgstr[1] ""
 #, elixir-autogen, elixir-format
 msgid "Age"
 msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:43
+#, elixir-autogen, elixir-format
+msgid "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:53
+#, elixir-autogen, elixir-format
+msgid "Count"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:33
+#: lib/vutuv_web/templates/admin/report/index.html.heex:2
+#: lib/vutuv_web/templates/admin/report/index.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Daily report"
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/report_controller.ex:20
+#, elixir-autogen, elixir-format
+msgid "Daily report for %{day}"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:35
+#, elixir-autogen, elixir-format
+msgid "Jump to a day"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:665
+#, elixir-autogen, elixir-format
+msgid "Manage emails"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:676
+#, elixir-autogen, elixir-format
+msgid "Manage phone numbers"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "Metric"
+msgstr ""
+
+#: lib/vutuv_web/views/admin/report_html.ex:14
+#, elixir-autogen, elixir-format
+msgid "New confirmed registrations (by PIN)"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:28
+#, elixir-autogen, elixir-format
+msgid "Next day"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:66
+#, elixir-autogen, elixir-format
+msgid "No activity on this day."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "Open the daily report"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:20
+#, elixir-autogen, elixir-format
+msgid "Previous day"
+msgstr ""
+
+#: lib/vutuv_web/views/admin/report_html.ex:16
+#, elixir-autogen, elixir-format
+msgid "Reposts"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:674
+#, elixir-autogen, elixir-format
+msgid "View all phone numbers"
+msgstr ""
