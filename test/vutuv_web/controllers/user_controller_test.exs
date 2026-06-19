@@ -423,6 +423,32 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ">my site</a>"
   end
 
+  test "renders a tag's endorsement count as an inline pill with a clickable endorser roster",
+       %{conn: conn} do
+    owner = insert_activated_user(active_slug: "tag.pill.owner")
+
+    endorser =
+      insert_activated_user(
+        active_slug: "tag.pill.endorser",
+        first_name: "Ada",
+        last_name: "Lovelace"
+      )
+
+    user_tag = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+    insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    # The visible count reads as the calm brand-tint inline pill (the chosen design),
+    # in the chip flow — not the old floating corner badge.
+    assert html =~ "rounded-full bg-brand-100 px-1"
+
+    # The hover roster lists the endorser as a link to their profile (clickable people);
+    # the endorser has no tag of their own, so they never leak into "Who to follow".
+    assert html =~ ~s(href="/tag.pill.endorser")
+    assert html =~ "Ada Lovelace"
+  end
+
   test "hides empty profile sections from visitors", %{conn: conn} do
     user = insert_activated_user()
 

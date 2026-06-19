@@ -358,24 +358,32 @@ defmodule VutuvWeb.UI do
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
   @doc """
-  The profile **Tags** upvote pill: a tag-name link joined to a caret + count
-  vote segment, so the number plainly reads as "upvotes" instead of a floating
-  badge whose meaning was unclear.
+  The profile **Tags** upvote control: a tag chip whose name links to the tag page,
+  the visible-endorsement count shown as a calm brand-blue badge (the shell unread
+  counter's shape, recoloured — a vouch count is social proof, not an alert), and the
+  named voter roster (`<.voter_popover>`) revealed on hover/focus, pure CSS, no JS.
 
   A logged-in non-owner gets a real toggle — a CSRF `<.form>` the `TagVote`
   enhancement in `app.js` drives over fetch (POST to endorse, DELETE to undo),
-  flipping `data-endorsed` (which the `data-[endorsed=true]:` utilities restyle)
-  and popping the count when it changes. The form's action/method are the no-JS
-  fallback. Everyone else (the owner, logged-out visitors) sees the same caret +
-  count read-only. The count is the visible endorsement tally (`compact_count`).
+  flipping `data-endorsed` and popping the count badge when it changes. The form's
+  action/method are the no-JS fallback. The owner and logged-out visitors see the
+  same badge read-only. The count is the visible endorsement tally (`compact_count`);
+  the hover roster shows the latest endorsers' avatars and names.
   """
   attr(:user, :map, required: true, doc: "the profile owner whose tag this is")
-  attr(:user_tag, :map, required: true, doc: "a UserTag with `endorsements` preloaded")
+
+  attr(:user_tag, :map,
+    required: true,
+    doc: "a UserTag with `endorsements` (and their `:user`) preloaded"
+  )
+
   attr(:viewer_id, :any, default: nil, doc: "the current user's id, or nil when logged out")
 
   def tag_vote(assigns) do
     user_tag = assigns.user_tag
     viewer_id = assigns.viewer_id
+    total = Enum.count(user_tag.endorsements)
+    endorsers = endorsers_for(user_tag, 6)
 
     assigns =
       assigns
@@ -384,61 +392,172 @@ defmodule VutuvWeb.UI do
         :endorsed?,
         viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
       )
-      |> assign(:count, compact_count(Enum.count(user_tag.endorsements)))
+      |> assign(:total, total)
+      |> assign(:count, compact_count(total))
+      |> assign(:endorsers, endorsers)
+      |> assign(:extra, max(total - length(endorsers), 0))
 
     ~H"""
-    <div class="inline-flex items-stretch overflow-hidden rounded-lg text-sm font-medium">
+    <div class="group relative inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium hover:z-30 focus-within:z-30 dark:bg-brand-900/40">
       <.link
         navigate={~p"/#{@user}/tags/#{@user_tag}"}
-        class="flex items-center bg-brand-50 px-3 py-1.5 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/60"
+        class="text-brand-700 hover:underline dark:text-brand-100"
       >
         {UserTag.truncated_name(@user_tag)}
       </.link>
-      <.form
-        :if={@can_vote?}
-        for={%{}}
-        action={
-          if(@endorsed?,
-            do: ~p"/#{@user}/user_tag_endorsements/#{@user_tag}",
-            else: ~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"
-          )
-        }
-        method={if(@endorsed?, do: "delete", else: "post")}
-        class="contents"
-        data-tag-vote="true"
-        data-endorse-url={~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"}
-        data-unendorse-url={~p"/#{@user}/user_tag_endorsements/#{@user_tag}"}
-        data-label-endorse={gettext("Endorse")}
-        data-label-unendorse={gettext("Remove endorsement")}
-      >
+      <.vote_form :if={@can_vote?} user={@user} user_tag={@user_tag} endorsed?={@endorsed?}>
         <button
           type="submit"
           data-endorsed={to_string(@endorsed?)}
           aria-pressed={to_string(@endorsed?)}
           title={if(@endorsed?, do: gettext("Remove endorsement"), else: gettext("Endorse"))}
           class={[
-            "flex items-center gap-1 border-l px-2.5 py-1.5 transition-colors",
-            "border-brand-100 bg-brand-50 text-slate-600 hover:bg-brand-100 hover:text-brand-700",
-            "dark:border-brand-900/60 dark:bg-brand-900/40 dark:text-slate-300 dark:hover:text-brand-100",
-            "data-[endorsed=true]:border-brand-600 data-[endorsed=true]:bg-brand-600 data-[endorsed=true]:text-white",
-            "data-[endorsed=true]:hover:bg-brand-700 data-[endorsed=true]:hover:text-white"
+            "inline-flex h-5 w-5 items-center justify-center rounded transition-colors",
+            "text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-200",
+            "data-[endorsed=true]:text-brand-600 dark:data-[endorsed=true]:text-brand-300"
           ]}
         >
           <.caret_up />
-          <span data-tag-vote-count class="tabular-nums">{@count}</span>
         </button>
-      </.form>
-      <%!-- Read-only count (owner / logged-out): the caret marks it as the upvote
-      tally. No endorsement-word tooltip here, so the Tags section stays about tags
-      (tag_wording_test); the actionable button above carries the "Endorse" label. --%>
+        <.tag_count_badge
+          total={@total}
+          count={@count}
+          class="absolute -right-1.5 -top-1.5 ring-2 ring-white dark:ring-slate-900"
+        />
+      </.vote_form>
+      <%!-- Read-only count (owner / logged-out): the tally as a calm brand-tint pill
+      inline after the name, no endorsement-word so the Tags section stays about tags
+      (tag_wording_test); the actionable button carries the "Endorse" label. --%>
       <span
-        :if={!@can_vote?}
-        class="flex items-center gap-1 border-l border-brand-100 bg-brand-50 px-2.5 py-1.5 text-slate-600 dark:border-brand-900/60 dark:bg-brand-900/40 dark:text-slate-400"
-      >
-        <.caret_up />
-        <span class="tabular-nums">{@count}</span>
-      </span>
+        :if={!@can_vote? and @total > 0}
+        class="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-100 px-1 text-[11px] font-bold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
+      >{@count}</span>
+      <.voter_popover
+        :if={@total > 0}
+        user={@user}
+        user_tag={@user_tag}
+        endorsers={@endorsers}
+        extra={@extra}
+      />
     </div>
+    """
+  end
+
+  # The latest endorsers (preloaded users) for a tag, capped. Sorted newest first by
+  # the endorsement id — a UUID v7, so id order is creation order. Relies on the
+  # profile's `visible_with_endorser` preload, so it is in-memory (no per-tag query).
+  defp endorsers_for(user_tag, limit) do
+    user_tag.endorsements
+    |> Enum.sort_by(& &1.id, :desc)
+    |> Enum.map(& &1.user)
+    |> Enum.take(limit)
+  end
+
+  # An endorser's display name, falling back to their @handle when nameless.
+  defp endorser_name(user) do
+    [Map.get(user, :first_name), Map.get(user, :last_name)]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" ")
+    |> case do
+      "" -> "@" <> to_string(Map.get(user, :active_slug))
+      name -> name
+    end
+  end
+
+  # The count badge — the shell unread counter's shape, but recoloured to calm
+  # brand-blue: a vouch count is informational social proof, not an alert, so it
+  # stays off the reserved coral accent. A count of zero is a quiet neutral
+  # placeholder (it only shows in the actionable case, where the JS needs an element
+  # to update on the first vote). Carries `data-tag-vote-count` so the TagVote JS
+  # updates and pops it on toggle, and lives inside the `<.vote_form>` for the
+  # actionable case so the JS can find it.
+  attr(:total, :integer, required: true)
+  attr(:count, :string, required: true)
+  attr(:class, :string, default: nil)
+
+  defp tag_count_badge(assigns) do
+    ~H"""
+    <span
+      data-tag-vote-count
+      class={[
+        "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums",
+        if(@total > 0,
+          do: "bg-brand-600 text-white",
+          else: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+        ),
+        @class
+      ]}
+    >{@count}</span>
+    """
+  end
+
+  # The hover roster: a small card of the voters' avatars + names that rises above
+  # the chip on hover/focus. Visibility is driven by the chip's `group-hover` /
+  # `group-focus-within`; each row is a link to the endorser's profile, so the card
+  # accepts pointer events and an invisible `after:` strip bridges the `mb-2` gap so
+  # the cursor can travel from chip to card without the hover collapsing. Long names
+  # truncate; the roster is capped (endorsers_for) with an "and N more" link to the
+  # tag page, which carries the full endorser list.
+  attr(:user, :map, required: true)
+  attr(:user_tag, :map, required: true)
+  attr(:endorsers, :list, required: true)
+  attr(:extra, :integer, default: 0)
+
+  defp voter_popover(assigns) do
+    ~H"""
+    <div class="absolute bottom-full left-0 z-30 mb-2 hidden w-max max-w-[14rem] rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200 after:absolute after:inset-x-0 after:top-full after:h-2 after:content-[''] group-hover:block group-focus-within:block dark:bg-slate-800 dark:ring-slate-700">
+      <ul class="space-y-0.5">
+        <li :for={endorser <- @endorsers}>
+          <.link
+            navigate={~p"/#{endorser}"}
+            class="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+          >
+            <.avatar user={endorser} size="xs" />
+            <span class="min-w-0 truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+              {endorser_name(endorser)}
+            </span>
+          </.link>
+        </li>
+      </ul>
+      <.link
+        :if={@extra > 0}
+        navigate={~p"/#{@user}/tags/#{@user_tag}"}
+        class="mt-1 block px-1 text-[11px] text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-300"
+      >
+        {gettext("and %{count} more", count: @extra)}
+      </.link>
+    </div>
+    """
+  end
+
+  # The CSRF endorse/undo form shared by every tag_vote variant: action/method are
+  # the no-JS fallback (POST to endorse, DELETE to undo), the data-* attributes feed
+  # the `TagVote` fetch enhancement in app.js. The inner button is variant-specific.
+  attr(:user, :map, required: true)
+  attr(:user_tag, :map, required: true)
+  attr(:endorsed?, :any, required: true)
+  slot(:inner_block, required: true)
+
+  defp vote_form(assigns) do
+    ~H"""
+    <.form
+      for={%{}}
+      action={
+        if(@endorsed?,
+          do: ~p"/#{@user}/user_tag_endorsements/#{@user_tag}",
+          else: ~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"
+        )
+      }
+      method={if(@endorsed?, do: "delete", else: "post")}
+      class="contents"
+      data-tag-vote="true"
+      data-endorse-url={~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"}
+      data-unendorse-url={~p"/#{@user}/user_tag_endorsements/#{@user_tag}"}
+      data-label-endorse={gettext("Endorse")}
+      data-label-unendorse={gettext("Remove endorsement")}
+    >
+      {render_slot(@inner_block)}
+    </.form>
     """
   end
 

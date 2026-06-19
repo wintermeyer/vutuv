@@ -244,7 +244,7 @@ defmodule VutuvWeb.UserController do
       user_tags:
         UserTag.ordered_by_endorsements()
         |> limit(10)
-        |> preload(endorsements: ^UserTagEndorsement.visible()),
+        |> preload(endorsements: ^UserTagEndorsement.visible_with_endorser()),
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),
