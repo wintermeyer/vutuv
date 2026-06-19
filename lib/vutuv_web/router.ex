@@ -131,6 +131,12 @@ defmodule VutuvWeb.Router do
     post("/user_likes", UserSaveController, :like)
     delete("/user_likes/:id", UserSaveController, :unlike)
 
+    # Promote a map service to the viewer's default (the primary "Open in …"
+    # button on address cards). Fired by the MapLinks enhancement in app.js when
+    # a logged-in member opens a non-default service. Logged-in only. See
+    # VutuvWeb.MapPreferenceController.
+    post("/maps/default", MapPreferenceController, :update)
+
     # The mutual-connection lifecycle (the list lives at /:slug/connections in
     # the profile scope below). create = request, then accept/decline/withdraw.
     post("/connections", ConnectionController, :create)
@@ -522,6 +528,10 @@ defmodule VutuvWeb.Router do
       # only needs a write target, not its own page.
       put("/settings/language", SettingsController, :update_language)
       patch("/settings/language", SettingsController, :update_language)
+      # Map preferences (which map services to show on addresses + the default)
+      # also live on the account hub (GET /settings); they only need a write target.
+      put("/settings/maps", SettingsController, :update_maps)
+      patch("/settings/maps", SettingsController, :update_maps)
       # Signed-in devices: the list lives on the account hub (GET /settings).
       # DELETE one device by id, or all-but-this-one (issue #794).
       delete("/settings/devices/:id", SettingsController, :revoke_session)

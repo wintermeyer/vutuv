@@ -356,6 +356,87 @@ function setupTagVotes() {
 window.addEventListener("DOMContentLoaded", setupTagVotes)
 window.addEventListener("phx:page-loading-stop", setupTagVotes)
 
+// Map links on the profile address card (user/show + Vutuv.Maps). A logged-in
+// viewer has a default map service rendered as the primary "Open in …" button,
+// the rest as a quiet "Also on" line. Clicking an alternative promotes it: the
+// map opens in a new tab, the clicked service becomes the primary button on
+// every address row at once, and the new default is persisted (keepalive POST,
+// so it survives the tab switch). The links are real <a> tags, so with JS off
+// they still open — the default just stays put. Rows without a persist URL
+// (logged-out visitors) are left as plain links. Classic controller page, so
+// plain JS (no LiveView here).
+function mapSnapshot(link) {
+  return {
+    service: link.dataset.service,
+    href: link.getAttribute("href"),
+    labelPrimary: link.dataset.labelPrimary,
+    labelAlt: link.dataset.labelAlt,
+  }
+}
+
+function mapApply(link, data, asPrimary) {
+  link.dataset.service = data.service
+  link.setAttribute("href", data.href)
+  link.dataset.labelPrimary = data.labelPrimary
+  link.dataset.labelAlt = data.labelAlt
+  const text = link.querySelector("[data-map-text]")
+  if (text) text.textContent = asPrimary ? data.labelPrimary : data.labelAlt
+}
+
+// Across every address row, swap the primary button with the matching
+// alternative so `service` reads as the primary everywhere at once.
+function promoteMapDefault(service) {
+  document.querySelectorAll("[data-map-row]").forEach((row) => {
+    const primary = row.querySelector("[data-map-primary]")
+    if (!primary || primary.dataset.service === service) return
+    const alt = row.querySelector(`[data-map-alt][data-service="${service}"]`)
+    if (!alt) return
+    const wasPrimary = mapSnapshot(primary)
+    const wasAlt = mapSnapshot(alt)
+    mapApply(primary, wasAlt, true)
+    mapApply(alt, wasPrimary, false)
+  })
+}
+
+function persistMapDefault(url, service) {
+  try {
+    fetch(url, {
+      method: "POST",
+      keepalive: true,
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        "x-csrf-token": csrfToken,
+        "x-requested-with": "fetch",
+      },
+      body: `service=${encodeURIComponent(service)}`,
+    })
+  } catch (_e) {
+    // Best effort: a reload re-reads the stored default anyway.
+  }
+}
+
+function wireMapRow(row) {
+  if (row.dataset.mapWired) return
+  row.dataset.mapWired = "1"
+  const persistUrl = row.dataset.mapPersistUrl
+  if (!persistUrl) return // logged-out: plain links, no promotion
+  row.querySelectorAll("[data-map-alt]").forEach((alt) => {
+    alt.addEventListener("click", (e) => {
+      e.preventDefault()
+      const service = alt.dataset.service
+      window.open(alt.getAttribute("href"), "_blank", "noopener,noreferrer")
+      promoteMapDefault(service)
+      persistMapDefault(persistUrl, service)
+    })
+  })
+}
+
+function setupMapLinks() {
+  document.querySelectorAll("[data-map-row]").forEach(wireMapRow)
+}
+window.addEventListener("DOMContentLoaded", setupMapLinks)
+window.addEventListener("phx:page-loading-stop", setupMapLinks)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

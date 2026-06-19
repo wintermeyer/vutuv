@@ -240,4 +240,51 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert Repo.get(User, user.id).locale == "de"
     end
   end
+
+  describe "map preferences" do
+    test "the account hub offers the maps form with every service and the default", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+
+      assert html =~ ~s(action="#{~p"/#{user}/settings/maps"}")
+      assert html =~ "map_google?"
+      assert html =~ "map_openstreetmap?"
+      assert html =~ "map_apple?"
+      assert html =~ "default_map_service"
+    end
+
+    test "saving persists the enabled services and the default, and stays on the hub", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/#{user}/settings/maps",
+          user: %{
+            "map_google?" => "true",
+            "map_openstreetmap?" => "false",
+            "map_apple?" => "true",
+            "default_map_service" => "apple"
+          }
+        )
+
+      assert redirected_to(conn) == ~p"/#{user}/settings"
+
+      assert %User{
+               map_google?: true,
+               map_openstreetmap?: false,
+               map_apple?: true,
+               default_map_service: "apple"
+             } = Repo.get(User, user.id)
+    end
+
+    test "an unknown default is rejected by the changeset", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/#{user}/settings/maps", user: %{"default_map_service" => "bing"})
+
+      assert html_response(conn, 422)
+      assert Repo.get(User, user.id).default_map_service == "google"
+    end
+  end
 end

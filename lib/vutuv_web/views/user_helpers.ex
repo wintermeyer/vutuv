@@ -386,19 +386,6 @@ defmodule VutuvWeb.UserHelpers do
     |> HTMLFormat.text_to_html()
   end
 
-  @doc """
-  The address' map-service deep links as `{label, url}` pairs for rendering a
-  row of links (Google Maps, OpenStreetMap, Apple Maps). Delegates the URL
-  shapes to `Vutuv.Address.map_links/1`.
-  """
-  def address_map_links(%Address{} = address) do
-    for {service, url} <- Vutuv.Address.map_links(address), do: {map_service_label(service), url}
-  end
-
-  defp map_service_label(:google), do: "Google Maps"
-  defp map_service_label(:openstreetmap), do: "OpenStreetMap"
-  defp map_service_label(:apple), do: "Apple Maps"
-
   def format_birthdate(%User{locale: "de", birthdate: birthdate}) do
     format_pyramid(birthdate)
   end

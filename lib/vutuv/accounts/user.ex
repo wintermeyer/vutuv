@@ -64,6 +64,15 @@ defmodule Vutuv.Accounts.User do
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
     field(:show_online_status?, :boolean, default: true)
+    # The viewer's map preferences (set on the account settings hub, applied to
+    # every address this member looks at): which map services to show and which
+    # one is the default rendered as the primary "Open in …" button. Defaults
+    # mean "all three on, Google the default" — the behaviour before the feature.
+    # `Vutuv.Maps` owns the resolution and never trusts these to be consistent.
+    field(:map_google?, :boolean, default: true)
+    field(:map_openstreetmap?, :boolean, default: true)
+    field(:map_apple?, :boolean, default: true)
+    field(:default_map_service, :string, default: "google")
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -127,7 +136,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? show_online_status? headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @doc """
   The notification-email preference fields, by the param/column name a
@@ -159,6 +168,10 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:honorific_suffix, max: 50)
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
+    # The literal mirrors the canonical service list in `Vutuv.Maps`; it is kept
+    # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
+    # pattern-matches the `User` struct.
+    |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
     |> nullify_default_birthdate()
     |> validate_birthdate()
   end

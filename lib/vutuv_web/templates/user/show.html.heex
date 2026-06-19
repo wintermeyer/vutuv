@@ -725,30 +725,53 @@ the resulting ~200px rail width. --%>
             <div class="text-slate-600 dark:text-slate-400">
               {format_address(address, @conn.assigns[:locale])}
             </div>
-            <%!-- Open the address on a map. One decisive primary "Open in
-            Google Maps" action; OpenStreetMap and Apple Maps are demoted to a
-            quiet alternatives line so the row reads as a single map action
-            instead of three look-alike links. The geocoding query keeps the
-            country even when it is hidden above. --%>
-            <div class="mt-1.5">
+            <%!-- Open the address on a map. The viewer's default service
+            (Vutuv.Maps, set on their account settings or by clicking) is the one
+            decisive primary "Open in …" button; their other enabled services are
+            demoted to a quiet alternatives line so the row reads as a single map
+            action instead of look-alike links. A logged-in viewer's row carries
+            data-map-persist-url: the MapLinks enhancement in app.js then promotes
+            whichever alternative they open to their new default (live across all
+            rows, and persisted). The geocoding query keeps the country even when
+            it is hidden above. --%>
+            <% map = Vutuv.Maps.address_links(address, @current_user) %>
+            <div
+              :if={map.primary}
+              class="mt-1.5"
+              data-map-row
+              data-map-persist-url={@current_user && ~p"/maps/default"}
+            >
               <a
-                href={elem(List.first(address_map_links(address)), 1)}
+                data-map-link
+                data-map-primary
+                data-service={map.primary.service}
+                data-label-primary={gettext("Open in %{name}", name: map.primary.label)}
+                data-label-alt={map.primary.label}
+                href={map.primary.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
               >
                 <.detail_icon name="map-pin" class="h-3.5 w-3.5" />
-                {gettext("Open in Google Maps")}
+                <span data-map-text>{gettext("Open in %{name}", name: map.primary.label)}</span>
               </a>
-              <div class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+              <div
+                :if={map.alternatives != []}
+                class="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400"
+              >
                 <span>{gettext("Also on")}</span>
                 <a
-                  :for={{label, url} <- Enum.drop(address_map_links(address), 1)}
-                  href={url}
+                  :for={alt <- map.alternatives}
+                  data-map-link
+                  data-map-alt
+                  data-service={alt.service}
+                  data-label-primary={gettext("Open in %{name}", name: alt.label)}
+                  data-label-alt={alt.label}
+                  href={alt.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   class="font-medium text-brand-600 hover:text-brand-700"
-                >{label}</a>
+                ><span data-map-text>{alt.label}</span></a>
               </div>
             </div>
           </div>

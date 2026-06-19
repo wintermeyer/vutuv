@@ -905,6 +905,24 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  @doc """
+  Sets the viewer's default map service (the one rendered as the primary
+  "Open in …" button). `service` must be one of `Vutuv.Maps.service_strings/0`,
+  so the click-to-promote endpoint can never write an arbitrary value. A narrow
+  changeset, deliberately not `update_user/2`: this fires on every map click, so
+  it skips the image-store and search-term rebuild that the full path carries.
+  Returns `{:error, :invalid_service}` for anything else.
+  """
+  def set_default_map_service(%User{} = user, service) when is_binary(service) do
+    if Vutuv.Maps.valid_service?(service) do
+      user
+      |> Ecto.Changeset.change(%{default_map_service: service})
+      |> Repo.update()
+    else
+      {:error, :invalid_service}
+    end
+  end
+
   # ── Usernames ──
 
   @slug_change_limit 4

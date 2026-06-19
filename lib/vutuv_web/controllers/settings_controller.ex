@@ -17,7 +17,7 @@ defmodule VutuvWeb.SettingsController do
 
   plug(
     :scrub_params,
-    "user" when action in [:update_privacy, :update_notifications, :update_language]
+    "user" when action in [:update_privacy, :update_notifications, :update_language, :update_maps]
   )
 
   alias Vutuv.Accounts
@@ -31,15 +31,23 @@ defmodule VutuvWeb.SettingsController do
   # than falling back to the bare member name (LayoutHTML.page_title/1).
   def index(conn, _params) do
     user = conn.assigns[:user]
+    render(conn, "index.html", [changeset: User.changeset(user)] ++ hub_assigns(conn))
+  end
 
-    render(conn, "index.html",
+  # The account hub renders more than user + changeset (devices, passkeys, its
+  # own title). Both the GET and the language/maps forms' error re-render need
+  # these, so they live in one place — without them an invalid hub-form submit
+  # would crash on a missing assign.
+  defp hub_assigns(conn) do
+    user = conn.assigns[:user]
+
+    [
       user: user,
-      changeset: User.changeset(user),
       sessions: Sessions.list_active(user),
       current_session_id: conn.assigns[:current_session_id],
       passkeys: Credentials.list_for_user(user),
       page_title: gettext("Account settings")
-    )
+    ]
   end
 
   def privacy(conn, _params) do
@@ -111,6 +119,23 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # Map preferences (which map services to show on addresses and which is the
+  # default) are a viewing preference, not public profile content, so they sit
+  # on the account hub next to language. The form posts the three enable
+  # checkboxes plus the default select; `Vutuv.Maps` reconciles a default that
+  # points at a disabled service at render time, so no extra validation here.
+  def update_maps(conn, %{"user" => params}) do
+    user = conn.assigns[:user]
+
+    save(
+      conn,
+      params,
+      "index.html",
+      ~p"/#{user}/settings",
+      gettext("Map preferences saved.")
+    )
+  end
+
   # ── Signed-in devices (issue #794) ──
 
   # Log out one device. Only the owner's own sessions are reachable
@@ -158,7 +183,16 @@ defmodule VutuvWeb.SettingsController do
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> render(template, user: user, changeset: changeset)
+        |> render(template, error_assigns(conn, template, changeset))
     end
   end
+
+  # Privacy/notifications re-render their own templates (user + changeset is
+  # enough); the language and maps forms re-render the account hub, which needs
+  # its full assign set.
+  defp error_assigns(conn, "index.html", changeset),
+    do: [changeset: changeset] ++ hub_assigns(conn)
+
+  defp error_assigns(conn, _template, changeset),
+    do: [user: conn.assigns[:user], changeset: changeset]
 end

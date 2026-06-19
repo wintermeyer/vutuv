@@ -21,7 +21,7 @@ defmodule Vutuv.Accounts.ReservedSlugs do
     connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
     follows fonts groups health help images impressum jobs js legal likes listings live
-    llms.txt login logout mail memberships messages moderation new news
+    llms.txt login logout mail maps memberships messages moderation new news
     notifications oauth phoenix post_images posts press privacy reports robots.txt
     screenshots search search_queries security.txt sent_emails sessions settings
     sitemap.xml sitemaps socket status support tags team terms tidewave unsubscribe

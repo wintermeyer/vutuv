@@ -327,12 +327,53 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "https://www.google.com/maps/search/"
     assert html =~ "https://www.openstreetmap.org/search"
     assert html =~ "https://maps.apple.com/"
-    # Google Maps is the single primary call to action; the other services are
-    # demoted to a quiet "also on" line so the row reads as one map action.
+    # For a logged-out viewer the default (Google Maps) is the single primary
+    # call to action; the other services are demoted to a quiet "also on" line
+    # so the row reads as one map action (Vutuv.Maps).
     assert html =~ "In Google Maps öffnen"
     assert html =~ "Auch auf"
     assert html =~ "OpenStreetMap"
     assert html =~ "Apple Maps"
+    # A logged-out viewer cannot promote a default, so the row carries no
+    # persist hook (the click-to-promote enhancement stays off).
+    refute html =~ "data-map-persist-url"
+  end
+
+  test "renders the viewer's chosen default map service as the primary button", %{conn: conn} do
+    {conn, viewer} = create_and_login_user(conn)
+    {:ok, _} = Vutuv.Accounts.update_user(viewer, %{"default_map_service" => "apple"})
+
+    owner = insert_activated_user()
+    insert(:address, user: owner, description: "Office", city: "Koblenz", country: "Germany")
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    # The viewer defaulted to Apple Maps, so that is the primary "Open in …"
+    # button; the row carries the persist hook so a click promotes a new default.
+    assert html =~ "Open in Apple Maps"
+    assert html =~ "data-map-persist-url"
+    assert html =~ ~s(data-service="apple")
+  end
+
+  test "shows no map buttons when the viewer has disabled every map service", %{conn: conn} do
+    {conn, viewer} = create_and_login_user(conn)
+
+    {:ok, _} =
+      Vutuv.Accounts.update_user(viewer, %{
+        "map_google?" => "false",
+        "map_openstreetmap?" => "false",
+        "map_apple?" => "false"
+      })
+
+    owner = insert_activated_user()
+    insert(:address, user: owner, description: "Office", city: "Koblenz", country: "Germany")
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    # The address itself still shows; only the map links are gone.
+    assert html =~ "Koblenz"
+    refute html =~ "https://maps.apple.com/"
+    refute html =~ "data-map-row"
   end
 
   test "keeps the country line of a German address for a non-de viewer", %{conn: conn} do
