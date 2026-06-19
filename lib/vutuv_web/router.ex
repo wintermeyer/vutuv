@@ -562,6 +562,13 @@ defmodule VutuvWeb.Router do
         only: [:new, :create, :show, :delete, :index],
         as: :tag
       )
+
+      # The public list of everyone who endorses this member for one tag (the
+      # profile Tags popover's "and N more" link). It lives under the user-tag
+      # show path; `:id` is the tag slug, resolved by UserTagController's
+      # ResolveOwnedSlug plug exactly like :show. Served as HTML + the agent
+      # formats (.md/.txt/.json/.xml), so a single GET covers them all.
+      get("/tags/:id/endorsers", UserTagController, :endorsers)
     end
 
     # The author's post archive — whole, or scoped to a year / month / day —

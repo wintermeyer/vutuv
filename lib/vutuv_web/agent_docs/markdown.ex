@@ -113,6 +113,18 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # The per-tag endorser list is a people list with one extra fact per row:
+  # when the endorsement was cast (ListDocs.build_tag_endorsers).
+  def render(%{type: "tag_endorsers"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      Enum.map_join(doc.people, "\n", &endorser_line/1)
+    ]
+    |> join_blocks()
+  end
+
   def render(%{type: "tag"} = doc) do
     [
       frontmatter(doc),
@@ -272,6 +284,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     "[#{md_text(person.name)}](#{person.url})" <>
       if person.work_info, do: " — #{person.work_info}", else: ""
   end
+
+  defp endorser_line(person),
+    do: "- #{person_text(person)}" <> endorsed_suffix(person.endorsed_at)
+
+  defp endorsed_suffix(nil), do: ""
+
+  defp endorsed_suffix(at),
+    do: " (" <> gettext("endorsed %{date}", date: Calendar.strftime(at, "%Y-%m-%d %H:%M")) <> ")"
 
   defp in_reply_to_line(%{author: nil}), do: "> " <> gettext("In reply to a deleted post.")
 

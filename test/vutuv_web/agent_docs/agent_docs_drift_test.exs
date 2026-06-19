@@ -313,6 +313,36 @@ defmodule VutuvWeb.AgentDocsDriftTest do
              "EMAIL;TYPE=Work:greta.public@example.com"
   end
 
+  test "tag endorser list in every format", %{user: user, tag: tag, follower: follower} do
+    [user_tag] = Repo.all(from(ut in Vutuv.Tags.UserTag, where: ut.user_id == ^user.id))
+    endorsement = insert(:user_tag_endorsement, user_tag: user_tag, user: follower)
+
+    rendered = formats_for("/drift_tester/tags/#{tag.slug}/endorsers")
+    assert_fact_everywhere(rendered, "Fanny Follower")
+
+    doc = Jason.decode!(rendered.json)
+    assert doc["type"] == "tag_endorsers"
+    assert doc["total"] == 1
+    # The list names the tag it belongs to.
+    assert_fact_everywhere(rendered, "Bridgebuilding")
+
+    # Each row carries when the endorsement was cast. The date (YYYY-MM-DD)
+    # appears in every format: the HTML <time> fallback, the md/txt "(endorsed
+    # …)" suffix, and the ISO8601 endorsed_at in JSON/XML all contain it.
+    date = Calendar.strftime(endorsement.inserted_at, "%Y-%m-%d")
+    assert_fact_everywhere(rendered, date)
+    assert [%{"endorsed_at" => endorsed_at}] = doc["people"]
+    assert is_binary(endorsed_at)
+  end
+
+  test "the tag endorser list is noindexed like the other per-user people lists", %{tag: tag} do
+    conn = get(build_conn(), "/drift_tester/tags/#{tag.slug}/endorsers.md")
+
+    assert conn.status == 200
+    assert get_resp_header(conn, "content-signal") == ["ai-train=no, search=no, ai-input=no"]
+    assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
+  end
+
   test "connections list in every format", %{user: user} do
     buddy = insert_activated_user(first_name: "Conni", last_name: "Connection")
     connect!(user, buddy)

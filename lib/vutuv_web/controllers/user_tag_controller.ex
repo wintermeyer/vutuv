@@ -10,14 +10,16 @@ defmodule VutuvWeb.UserTagController do
     assign: :user_tag
   )
 
-  plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show])
+  plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show, :endorsers])
   plug(:scrub_params, "tag_param" when action in [:create])
 
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.UserHelpers
 
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs). The
@@ -102,6 +104,46 @@ defmodule VutuvWeb.UserTagController do
     AgentDocs.respond(conn,
       html: &render(&1, "show.html", user_tag: user_tag),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :tags, user_tag) end
+    )
+  end
+
+  # Everyone who currently endorses this member for one tag — the public page
+  # behind the profile Tags popover's "and N more" link. Viewer-independent
+  # (the anonymous list), paginated like the follower / connection lists, and
+  # served as Markdown / text / JSON / XML through ListDocs.build_tag_endorsers.
+  def endorsers(conn, _params) do
+    user = conn.assigns[:user]
+    user_tag = Repo.preload(conn.assigns[:user_tag], :tag)
+
+    %{users: endorsers, total: total, endorsed_at: endorsed_at_by_id, sort: sort, dir: dir} =
+      Vutuv.Tags.endorsers_page(user_tag, conn.params)
+
+    work_info_by_id = UserHelpers.work_information_map(endorsers, 45)
+
+    AgentDocs.respond(conn,
+      html: fn conn ->
+        render(conn, "endorsers.html",
+          user: user,
+          user_tag: user_tag,
+          endorsers: endorsers,
+          total: total,
+          sort: sort,
+          dir: dir,
+          work_info_by_id: work_info_by_id,
+          endorsed_at_by_id: endorsed_at_by_id,
+          following_by_id: UserHelpers.following_map(conn.assigns[:current_user], endorsers)
+        )
+      end,
+      doc: fn ->
+        ListDocs.build_tag_endorsers(
+          user,
+          user_tag,
+          endorsers,
+          total,
+          work_info_by_id,
+          endorsed_at_by_id
+        )
+      end
     )
   end
 

@@ -112,6 +112,18 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The per-tag endorser list: a people list whose rows also carry the
+  # endorsement timestamp (ListDocs.build_tag_endorsers).
+  def render(%{type: "tag_endorsers"} = doc) do
+    [
+      heading(doc.title),
+      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      Enum.map(doc.people, &endorser_lines/1),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   def render(%{type: "tag"} = doc) do
     [
       heading(doc.name),
@@ -256,6 +268,16 @@ defmodule VutuvWeb.AgentDocs.Text do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
     "#{prefix}#{person.name}#{work}\n  #{person.url}"
   end
+
+  defp endorser_lines(person) do
+    work = if person.work_info, do: " — #{person.work_info}", else: ""
+    "* #{person.name}#{work}#{endorsed_suffix(person.endorsed_at)}\n  #{person.url}"
+  end
+
+  defp endorsed_suffix(nil), do: ""
+
+  defp endorsed_suffix(at),
+    do: " (" <> gettext("endorsed %{date}", date: Calendar.strftime(at, "%Y-%m-%d %H:%M")) <> ")"
 
   defp in_reply_to_line(%{author: nil}), do: gettext("In reply to a deleted post.")
 

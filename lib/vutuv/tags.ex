@@ -13,6 +13,11 @@ defmodule Vutuv.Tags do
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
 
+  # The endorsers list: which columns it can be sorted by, and a denser page
+  # size than the site-wide default so a popular tag's list actually paginates.
+  @endorser_sorts ~w(name username date)
+  @endorsers_per_page 25
+
   @doc """
   Splits a comma-separated tag string into clean names: `" PHP, , Go "` →
   `["PHP", "Go"]`. Safe to call with `nil` (returns `[]`).
@@ -88,6 +93,78 @@ defmodule Vutuv.Tags do
     |> where([e], e.user_tag_id == ^user_tag_id)
     |> Repo.aggregate(:count)
   end
+
+  @doc """
+  One page of the *currently-visible* endorsers of `user_tag`, newest first.
+
+  Backs the public endorser list (`/:slug/tags/:tag/endorsers`, the profile
+  Tags popover's "and N more" link). Goes through
+  `UserTagEndorsement.visible_with_endorser/1`, so hidden / unconfirmed
+  endorsers are neither listed nor counted (issue #783), and is offset
+  paginated by `Vutuv.Pages.paginate/3` like the follower / connection lists.
+  The list is sortable from `params`: `"sort"` is one of `name` (last name
+  then first name), `username` (the `active_slug`) or `date` (the endorsement
+  itself), and `"dir"` is `"asc"`/`"desc"`. Default is `date` descending —
+  newest endorser first — and `e.id` (a time-ordered UUID v7) is the stable
+  tiebreaker for every sort. Offset paginated at `endorsers_per_page/0` (a
+  denser page than the site-wide default, so a long list actually paginates).
+
+  Returns `%{users: [...], total: total, endorsed_at: %{user_id =>
+  inserted_at}, sort: sort, dir: dir}` — `endorsed_at` carries when each
+  listed endorser cast their vote (the per-row timestamp); `sort`/`dir` are
+  the normalized values the page renders its sort controls from.
+  """
+  def endorsers_page(%UserTag{} = user_tag, params) do
+    total = count_visible_endorsements(user_tag.id)
+    {sort, dir} = endorser_sort(params)
+
+    endorsements =
+      UserTagEndorsement.visible_with_endorser()
+      |> where([e], e.user_tag_id == ^user_tag.id)
+      |> endorser_order(sort, dir)
+      |> Vutuv.Pages.paginate(params, total, @endorsers_per_page)
+      |> Repo.all()
+
+    %{
+      users: Enum.map(endorsements, & &1.user),
+      total: total,
+      endorsed_at: Map.new(endorsements, &{&1.user_id, &1.inserted_at}),
+      sort: sort,
+      dir: dir
+    }
+  end
+
+  @doc "Rows per page of the endorsers list (shared by the query and the pager)."
+  def endorsers_per_page, do: @endorsers_per_page
+
+  # Normalize the sort params, defaulting to newest-endorser-first.
+  defp endorser_sort(params) do
+    sort = if params["sort"] in @endorser_sorts, do: params["sort"], else: "date"
+    dir = if params["dir"] in ~w(asc desc), do: params["dir"], else: default_dir(sort)
+    {sort, dir}
+  end
+
+  defp default_dir("date"), do: "desc"
+  defp default_dir(_sort), do: "asc"
+
+  # Order the endorsements; `u` is the endorser joined in by visible_with_endorser/0.
+  # e.id (UUID v7 = creation order) is the stable tiebreaker on every sort.
+  defp endorser_order(query, "name", dir) do
+    d = dir_atom(dir)
+    order_by(query, [e, u], [{^d, u.last_name}, {^d, u.first_name}, desc: e.id])
+  end
+
+  defp endorser_order(query, "username", dir) do
+    d = dir_atom(dir)
+    order_by(query, [e, u], [{^d, u.active_slug}, desc: e.id])
+  end
+
+  defp endorser_order(query, "date", dir) do
+    order_by(query, [e], [{^dir_atom(dir), e.id}])
+  end
+
+  defp dir_atom("asc"), do: :asc
+  defp dir_atom(_dir), do: :desc
 
   defp notify_endorsement(endorsement) do
     %{user_tag: %{user_id: owner_id, tag: tag}} =

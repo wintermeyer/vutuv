@@ -1,0 +1,89 @@
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/#{@user}"},
+  {gettext("Tags"), ~p"/#{@user}/tags"},
+  {Vutuv.Tags.UserTag.name(@user_tag), ~p"/#{@user}/tags/#{@user_tag}"},
+  gettext("Endorsements")
+]} />
+
+<div class="card-list">
+  <section class="card">
+    <h1>{gettext("Members who endorsed %{name} for %{tag}",
+      name: full_name(@user),
+      tag: Vutuv.Tags.UserTag.name(@user_tag)
+    )}</h1>
+
+    <%!-- A sortable table (Member / Username / Endorsed), not the shared
+    UserHTML.card_list: this page needs clickable column headers, a username
+    column and a per-row timestamp. The <time data-localtime> server text is
+    the no-JS fallback; the DOMContentLoaded sweep in app.js localizes it. --%>
+    <div :if={not Enum.empty?(@endorsers)} class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th><.sort_link field="name" label={gettext("Member")} sort={@sort} dir={@dir} /></th>
+            <th>
+              <.sort_link field="username" label={gettext("Username")} sort={@sort} dir={@dir} />
+            </th>
+            <th>
+              <.sort_link field="date" label={gettext("Endorsed")} sort={@sort} dir={@dir} />
+            </th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={user <- @endorsers}>
+            <td>
+              <div class="flex items-center gap-2">
+                <.link href={~p"/#{user}"}>
+                  <.avatar
+                    user={user}
+                    src={user.avatar && Vutuv.Avatar.display_url(user, :thumb)}
+                    size="sm"
+                    alt={"Avatar of #{full_name(user)}"}
+                    presence
+                  />
+                </.link>
+                <.link href={~p"/#{user}"}>{full_name(user)}</.link>
+                <% work = Map.get(@work_info_by_id, user.id) %>
+                <span :if={work not in [nil, ""]} class="breakwrap text-slate-600 dark:text-slate-400">
+                  · {work}
+                </span>
+              </div>
+            </td>
+            <td><.link href={~p"/#{user}"}>@{user.active_slug}</.link></td>
+            <td>
+              <% at = Map.get(@endorsed_at_by_id, user.id) %>
+              <time
+                :if={at}
+                data-localtime
+                datetime={NaiveDateTime.to_iso8601(at) <> "Z"}
+                title={NaiveDateTime.to_iso8601(at) <> "Z"}
+              >{Calendar.strftime(at, "%Y-%m-%d %H:%M")}</time>
+            </td>
+            <td class="text-right">
+              <.follow_button
+                :if={@current_user && not same_user?(@current_user, user)}
+                variant="icon"
+                follower_id={@current_user_id}
+                followee_id={user.id}
+                follow_id={Map.get(@following_by_id, user.id)}
+              />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p :if={Enum.empty?(@endorsers)} class="card__empty">
+      {gettext("No endorsements yet.")}
+    </p>
+
+    <.pager
+      params={@conn.params}
+      total={@total}
+      per_page={Vutuv.Tags.endorsers_per_page()}
+      query={%{"sort" => @sort, "dir" => @dir}}
+    />
+  </section>
+</div>

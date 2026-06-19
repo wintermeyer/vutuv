@@ -496,8 +496,9 @@ defmodule VutuvWeb.UI do
   # `group-focus-within`; each row is a link to the endorser's profile, so the card
   # accepts pointer events and an invisible `after:` strip bridges the `mb-2` gap so
   # the cursor can travel from chip to card without the hover collapsing. Long names
-  # truncate; the roster is capped (endorsers_for) with an "and N more" link to the
-  # tag page, which carries the full endorser list.
+  # truncate; the roster is capped (endorsers_for) with an "and N more" link to this
+  # member's per-tag endorser list (/:slug/tags/:tag/endorsers), which carries the
+  # full roster.
   attr(:user, :map, required: true)
   attr(:user_tag, :map, required: true)
   attr(:endorsers, :list, required: true)
@@ -521,7 +522,7 @@ defmodule VutuvWeb.UI do
       </ul>
       <.link
         :if={@extra > 0}
-        navigate={~p"/#{@user}/tags/#{@user_tag}"}
+        navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
         class="mt-1 block px-1 text-[11px] text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-300"
       >
         {gettext("and %{count} more", count: @extra)}
@@ -1181,15 +1182,24 @@ defmodule VutuvWeb.UI do
   @doc """
   Numbered pagination for offset-paginated browse pages (followers, tags,
   users). Pass the conn params (for the current `?page`) and the total row
-  count; page size and windowing come from `Vutuv.Pages`. Renders nothing
-  when one page fits everything. Feed pages use a "Load more" button instead.
+  count; windowing comes from `Vutuv.Pages`. Renders nothing when one page
+  fits everything. Feed pages use a "Load more" button instead.
+
+  `per_page` overrides the page size (default the site-wide
+  `Vutuv.Pages.max_page_items/0`); it must match the `per_page` the query was
+  paginated with. `query` is extra query params to carry onto every page link
+  (e.g. the active sort), so pagination does not drop the current sort/filter
+  — `?page=N` alone would.
   """
   attr(:params, :map, required: true)
   attr(:total, :integer, required: true)
+  attr(:per_page, :integer, default: nil)
+  attr(:query, :map, default: %{})
 
   def pager(assigns) do
-    total_pages = Vutuv.Pages.total_pages(assigns.total)
-    current = Vutuv.Pages.effective_page(assigns.params, assigns.total)
+    per_page = assigns.per_page || Vutuv.Pages.max_page_items()
+    total_pages = Vutuv.Pages.total_pages(assigns.total, per_page)
+    current = Vutuv.Pages.effective_page(assigns.params, assigns.total, per_page)
     window = Enum.filter((current - 5)..(current + 5), &(&1 in 1..total_pages))
 
     assigns =
@@ -1215,7 +1225,7 @@ defmodule VutuvWeb.UI do
           </span>
         <% else %>
           <a
-            href={"?page=#{num}"}
+            href={"?" <> URI.encode_query(Map.put(@query, "page", num))}
             class="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             {num}

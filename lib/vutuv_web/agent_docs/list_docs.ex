@@ -18,11 +18,16 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
+  alias Vutuv.Tags.UserTag
+
   # The noindexed per-user people lists; the renderers derive their dispatch
-  # from people_list_types/0, so this is the one place the set lives.
+  # from people_list_types/0, so this is the one place the set lives. (The
+  # per-tag endorser list is a people list too, but it carries a per-row
+  # endorsement timestamp, so the Markdown / text renderers give it its own
+  # clause rather than the bare follow-list one.)
   @sides [:followers, :following, :connections]
 
-  @doc "The doc types of the per-user people lists (for the renderers' dispatch)."
+  @doc "The doc types of the per-user follow lists (for the renderers' dispatch)."
   def people_list_types, do: Enum.map(@sides, &Atom.to_string/1)
 
   @doc """
@@ -59,6 +64,40 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       name: tag.name,
       slug: tag.slug,
       most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id))
+    })
+  end
+
+  @doc """
+  The per-tag endorser list (`/:slug/tags/:tag/endorsers`): everyone who
+  currently endorses `user` for `user_tag`'s tag, plus a `tag` reference for
+  context. Each person entry carries `endorsed_at` (the endorsement's
+  `inserted_at`, a naive UTC `NaiveDateTime`) from `endorsed_at_by_id`, so the
+  agent formats show when each vote was cast — the same fact the HTML page's
+  per-row timestamp shows.
+  """
+  def build_tag_endorsers(user, user_tag, people, total, work_info_by_id, endorsed_at_by_id) do
+    name = UserHelpers.full_name(user)
+    tag = user_tag.tag
+    label = gettext("Members who endorsed %{name} for %{tag}", name: name, tag: tag.name)
+    path = "/#{user.active_slug}/tags/#{tag.slug}/endorsers"
+
+    AgentDocs.doc_meta("tag_endorsers", path, noindex: true, noai: true)
+    |> Map.merge(%{
+      title: label,
+      description: label,
+      user: AgentDocs.person_ref(user),
+      tag: %{
+        name: UserTag.name(user_tag),
+        slug: tag.slug,
+        url: AgentDocs.abs_url("/tags/#{tag.slug}")
+      },
+      total: total,
+      people:
+        Enum.map(people, fn endorser ->
+          endorser
+          |> person_entry(work_info_by_id)
+          |> Map.put(:endorsed_at, Map.get(endorsed_at_by_id, endorser.id))
+        end)
     })
   end
 
