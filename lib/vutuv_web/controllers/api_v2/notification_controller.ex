@@ -45,7 +45,7 @@ defmodule VutuvWeb.ApiV2.NotificationController do
   defp entry(item) do
     item
     |> Map.update(:actor_avatar, nil, &avatar_url/1)
-    |> Map.put(:actor_slug, item[:actor_param])
+    |> Map.put(:actor_username, item[:actor_param])
     |> Map.delete(:actor_param)
   end
 

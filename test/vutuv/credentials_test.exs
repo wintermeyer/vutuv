@@ -25,7 +25,7 @@ defmodule Vutuv.CredentialsTest do
 
       assert %Wax.Challenge{} = challenge
       assert options.rp.id == "localhost"
-      assert options.user.name == user.active_slug
+      assert options.user.name == user.username
       # The challenge bytes and the user handle are base64url, JSON/WebAuthn-ready.
       assert {:ok, _} = Base.url_decode64(options.challenge, padding: false)
       assert {:ok, _} = Base.url_decode64(options.user.id, padding: false)

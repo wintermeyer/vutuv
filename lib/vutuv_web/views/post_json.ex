@@ -59,7 +59,7 @@ defmodule VutuvWeb.PostJSON do
   defp in_reply_to(_post), do: nil
 
   defp author_ref(%User{} = user) do
-    %{slug: user.active_slug, name: VutuvWeb.UserHelpers.full_name(user)}
+    %{username: user.username, name: VutuvWeb.UserHelpers.full_name(user)}
   end
 
   defp image(%PostImage{} = image) do
@@ -90,5 +90,5 @@ defmodule VutuvWeb.PostJSON do
     do: %{type: "wildcard", value: wildcard}
 
   defp denial(%{denied_user_id: user_id} = denial),
-    do: %{type: "user", id: user_id, slug: denial.denied_user.active_slug}
+    do: %{type: "user", id: user_id, username: denial.denied_user.username}
 end

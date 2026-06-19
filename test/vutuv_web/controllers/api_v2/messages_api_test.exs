@@ -28,7 +28,7 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       follow!(other, me)
 
       conn1 =
-        json_post(conn, token, "/api/2.0/users/#{other.active_slug}/messages", %{body: "Hi!"})
+        json_post(conn, token, "/api/2.0/users/#{other.username}/messages", %{body: "Hi!"})
 
       sent = json_response(conn1, 201)
       assert %{"id" => id, "conversation_id" => conversation_id, "mine" => true} = sent
@@ -53,7 +53,7 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       other_token: other_token
     } do
       conn1 =
-        json_post(conn, token, "/api/2.0/users/#{other.active_slug}/messages", %{body: "Hello?"})
+        json_post(conn, token, "/api/2.0/users/#{other.username}/messages", %{body: "Hello?"})
 
       %{"conversation_id" => conversation_id} = json_response(conn1, 201)
 
@@ -96,7 +96,7 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       other_token: other_token
     } do
       conn1 =
-        json_post(conn, token, "/api/2.0/users/#{other.active_slug}/messages", %{body: "Hi"})
+        json_post(conn, token, "/api/2.0/users/#{other.username}/messages", %{body: "Hi"})
 
       %{"conversation_id" => conversation_id} = json_response(conn1, 201)
 
@@ -125,12 +125,12 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
     } do
       {:ok, _} = Vutuv.Social.block_user(other, me)
 
-      conn = json_post(conn, token, "/api/2.0/users/#{other.active_slug}/messages", %{body: "x"})
+      conn = json_post(conn, token, "/api/2.0/users/#{other.username}/messages", %{body: "x"})
       assert conn.status == 403
     end
 
     test "messaging yourself is a 422", %{conn: conn, me: me, token: token} do
-      conn = json_post(conn, token, "/api/2.0/users/#{me.active_slug}/messages", %{body: "x"})
+      conn = json_post(conn, token, "/api/2.0/users/#{me.username}/messages", %{body: "x"})
       assert conn.status == 422
     end
   end
@@ -146,7 +146,7 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       follow!(me, other)
 
       conn1 =
-        json_post(conn, other_token, "/api/2.0/users/#{me.active_slug}/messages", %{body: "Ping"})
+        json_post(conn, other_token, "/api/2.0/users/#{me.username}/messages", %{body: "Ping"})
 
       %{"conversation_id" => conversation_id} = json_response(conn1, 201)
 
@@ -168,7 +168,7 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       assert conn1.status == 200
 
       conn2 =
-        json_post(build_conn(), read_token, "/api/2.0/users/#{other.active_slug}/messages", %{
+        json_post(build_conn(), read_token, "/api/2.0/users/#{other.username}/messages", %{
           body: "x"
         })
 
@@ -198,8 +198,8 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
       conn1 = get(authed(conn, social_token), "/api/2.0/notifications")
       body = json_response(conn1, 200)
       assert body["unread"] >= 1
-      assert [%{"kind" => "follower", "actor_slug" => slug} | _] = body["notifications"]
-      assert slug == other.active_slug
+      assert [%{"kind" => "follower", "actor_username" => slug} | _] = body["notifications"]
+      assert slug == other.username
 
       conn2 = post(authed(build_conn(), social_token), "/api/2.0/notifications/read")
       assert conn2.status == 204

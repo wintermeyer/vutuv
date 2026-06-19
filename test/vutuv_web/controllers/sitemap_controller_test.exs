@@ -38,7 +38,7 @@ defmodule VutuvWeb.SitemapControllerTest do
 
   describe "GET /sitemaps/users-N.xml" do
     test "lists indexable members with lastmod" do
-      user = insert_activated_user(active_slug: "mapped_member")
+      user = insert_activated_user(username: "mapped_member")
 
       conn = get(build_conn(), "/sitemaps/users-1.xml")
 
@@ -49,15 +49,15 @@ defmodule VutuvWeb.SitemapControllerTest do
     end
 
     test "excludes unactivated, noindexed and moderation-hidden members" do
-      insert(:user, active_slug: "never_activated")
-      insert_activated_user(active_slug: "opted_out", noindex?: true)
+      insert(:user, username: "never_activated")
+      insert_activated_user(username: "opted_out", noindex?: true)
 
       insert_activated_user(
-        active_slug: "frozen_member",
+        username: "frozen_member",
         frozen_at: NaiveDateTime.utc_now(:second)
       )
 
-      insert_activated_user(active_slug: "visible_member")
+      insert_activated_user(username: "visible_member")
 
       conn = get(build_conn(), "/sitemaps/users-1.xml")
 
@@ -70,7 +70,7 @@ defmodule VutuvWeb.SitemapControllerTest do
 
   describe "GET /sitemaps/posts-N.xml" do
     test "lists public post permalinks and skips restricted posts" do
-      author = insert_activated_user(active_slug: "posting_member")
+      author = insert_activated_user(username: "posting_member")
       post = create_post!(author, %{"body" => "Public words"})
 
       restricted =
@@ -87,7 +87,7 @@ defmodule VutuvWeb.SitemapControllerTest do
     end
 
     test "skips posts whose author is unactivated or noindexed" do
-      hidden_author = insert_activated_user(active_slug: "quiet_member", noindex?: true)
+      hidden_author = insert_activated_user(username: "quiet_member", noindex?: true)
       hidden_post = create_post!(hidden_author, %{"body" => "Quiet words"})
 
       conn = get(build_conn(), "/sitemaps/posts-1.xml")

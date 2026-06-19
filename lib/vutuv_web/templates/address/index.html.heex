@@ -22,7 +22,7 @@
   <%= if @as_owner? and @addresses != [] do %>
     <%= live_render(@conn, VutuvWeb.SectionReorderLive,
       id: "reorder-addresses",
-      session: %{"section" => "addresses", "slug" => @user.active_slug}) %>
+      session: %{"section" => "addresses", "slug" => @user.username}) %>
   <% else %>
     <%= render "card_list.html", assigns %>
   <% end %>

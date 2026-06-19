@@ -11,15 +11,15 @@ defmodule VutuvWeb.UrlStructureTest do
   describe "profiles at the URL root" do
     test "GET /:slug renders the profile", %{conn: conn} do
       user = insert_activated_user()
-      conn = get(conn, "/#{user.active_slug}")
+      conn = get(conn, "/#{user.username}")
       assert html_response(conn, 200) =~ user.first_name
     end
 
     test "sub-pages render under /:slug/...", %{conn: conn} do
       user = insert_activated_user()
 
-      assert conn |> get("/#{user.active_slug}/followers") |> html_response(200)
-      assert conn |> get("/#{user.active_slug}/following") |> html_response(200)
+      assert conn |> get("/#{user.username}/followers") |> html_response(200)
+      assert conn |> get("/#{user.username}/following") |> html_response(200)
     end
 
     test "static routes keep winning over the slug catch-all", %{conn: conn} do
@@ -40,20 +40,20 @@ defmodule VutuvWeb.UrlStructureTest do
   describe "legacy /users/:slug URLs" do
     test "the profile URL 301s to /:slug", %{conn: conn} do
       user = insert_activated_user()
-      conn = get(conn, "/users/#{user.active_slug}")
-      assert redirected_to(conn, 301) == "/#{user.active_slug}"
+      conn = get(conn, "/users/#{user.username}")
+      assert redirected_to(conn, 301) == "/#{user.username}"
     end
 
     test "sub-page URLs 301 to /:slug/... and keep the query string", %{conn: conn} do
       user = insert_activated_user()
-      conn = get(conn, "/users/#{user.active_slug}/links?page=2")
-      assert redirected_to(conn, 301) == "/#{user.active_slug}/links?page=2"
+      conn = get(conn, "/users/#{user.username}/links?page=2")
+      assert redirected_to(conn, 301) == "/#{user.username}/links?page=2"
     end
 
     test "the renamed followees page redirects to /:slug/following", %{conn: conn} do
       user = insert_activated_user()
-      conn = get(conn, "/users/#{user.active_slug}/followees")
-      assert redirected_to(conn, 301) == "/#{user.active_slug}/following"
+      conn = get(conn, "/users/#{user.username}/followees")
+      assert redirected_to(conn, 301) == "/#{user.username}/following"
     end
   end
 
@@ -69,7 +69,7 @@ defmodule VutuvWeb.UrlStructureTest do
     test "DELETE /logout signs the user out", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       conn = delete(conn, "/logout")
-      assert redirected_to(conn) == "/#{user.active_slug}"
+      assert redirected_to(conn) == "/#{user.username}"
       refute get_session(conn, :user_id)
     end
 

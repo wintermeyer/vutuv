@@ -14,7 +14,7 @@ defmodule VutuvWeb.ExportController do
     user = conn.assigns[:user]
     json = user |> Vutuv.Export.build() |> Jason.encode!(pretty: true)
 
-    filename = "vutuv-export-#{user.active_slug}-#{Date.utc_today()}.json"
+    filename = "vutuv-export-#{user.username}-#{Date.utc_today()}.json"
 
     conn
     |> put_resp_content_type("application/json")

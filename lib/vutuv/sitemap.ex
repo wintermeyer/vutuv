@@ -70,7 +70,7 @@ defmodule Vutuv.Sitemap do
     indexable_users()
     |> order_by([u], u.id)
     |> window(chunk)
-    |> select([u], {u.active_slug, u.updated_at})
+    |> select([u], {u.username, u.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, updated_at} -> {"/" <> slug, NaiveDateTime.to_date(updated_at)} end)
   end
@@ -80,7 +80,7 @@ defmodule Vutuv.Sitemap do
     indexable_posts()
     |> order_by([p], p.id)
     |> window(chunk)
-    |> select([p, u], {u.active_slug, p.id, p.updated_at})
+    |> select([p, u], {u.username, p.id, p.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, id, updated_at} ->
       {"/#{slug}/posts/#{id}", NaiveDateTime.to_date(updated_at)}

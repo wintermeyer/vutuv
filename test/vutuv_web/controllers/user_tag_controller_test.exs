@@ -84,7 +84,7 @@ defmodule VutuvWeb.UserTagControllerTest do
   # link: everyone who currently endorses this member for this tag.
   describe "endorsers" do
     setup do
-      owner = insert_activated_user(active_slug: "tag_owner")
+      owner = insert_activated_user(username: "tag_owner")
       tag = insert(:tag, name: "Ruby", slug: "ruby")
       user_tag = insert(:user_tag, user: owner, tag: tag)
       {:ok, owner: owner, tag: tag, user_tag: user_tag}
@@ -148,8 +148,8 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "is sortable by name, username and date", %{conn: conn, owner: owner, user_tag: user_tag} do
-      zoe = insert_activated_user(first_name: "Zoe", last_name: "Adams", active_slug: "zoe.adams")
-      amy = insert_activated_user(first_name: "Amy", last_name: "Baker", active_slug: "amy.baker")
+      zoe = insert_activated_user(first_name: "Zoe", last_name: "Adams", username: "zoe.adams")
+      amy = insert_activated_user(first_name: "Amy", last_name: "Baker", username: "amy.baker")
 
       # zoe endorses first, amy second (UUID v7 ids are time-ordered).
       insert(:user_tag_endorsement, user_tag: user_tag, user: zoe)
@@ -157,7 +157,7 @@ defmodule VutuvWeb.UserTagControllerTest do
 
       # The .json sibling lists people in the same order the HTML table renders.
       names = fn query ->
-        "/#{owner.active_slug}/tags/ruby/endorsers.json?#{URI.encode_query(query)}"
+        "/#{owner.username}/tags/ruby/endorsers.json?#{URI.encode_query(query)}"
         |> then(&get(conn, &1).resp_body)
         |> Jason.decode!()
         |> Map.fetch!("people")
@@ -167,7 +167,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       # By last name (then first name).
       assert names.(%{"sort" => "name", "dir" => "asc"}) == ["Zoe Adams", "Amy Baker"]
       assert names.(%{"sort" => "name", "dir" => "desc"}) == ["Amy Baker", "Zoe Adams"]
-      # By username (active_slug).
+      # By username (username).
       assert names.(%{"sort" => "username", "dir" => "asc"}) == ["Amy Baker", "Zoe Adams"]
       # By date: default is newest endorsement first.
       assert names.(%{"sort" => "date", "dir" => "desc"}) == ["Amy Baker", "Zoe Adams"]

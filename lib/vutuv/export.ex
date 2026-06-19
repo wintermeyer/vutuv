@@ -31,7 +31,7 @@ defmodule Vutuv.Export do
         :social_media_accounts,
         :urls,
         :search_terms,
-        :slug_changes,
+        :username_changes,
         user_tags: [:tag]
       ])
 
@@ -80,7 +80,7 @@ defmodule Vutuv.Export do
       endorsements_given: endorsements_given(user),
       search_terms: Enum.map(user.search_terms, & &1.value),
       username_history:
-        Enum.map(user.slug_changes, &%{username: &1.value, changed_at: &1.inserted_at}),
+        Enum.map(user.username_changes, &%{username: &1.value, changed_at: &1.inserted_at}),
       followers: follow_side(user, :followee_id, :follower),
       following: follow_side(user, :follower_id, :followee),
       connections: connections(user),
@@ -95,7 +95,7 @@ defmodule Vutuv.Export do
 
   defp profile(user) do
     %{
-      slug: user.active_slug,
+      username: user.username,
       first_name: user.first_name,
       middle_name: user.middle_name,
       last_name: user.last_name,
@@ -125,7 +125,7 @@ defmodule Vutuv.Export do
       join: ut in assoc(e, :user_tag),
       join: t in assoc(ut, :tag),
       join: owner in assoc(ut, :user),
-      select: %{tag: t.name, member: owner.active_slug, at: e.inserted_at}
+      select: %{tag: t.name, member: owner.username, at: e.inserted_at}
     )
     |> Repo.all()
   end
@@ -134,7 +134,7 @@ defmodule Vutuv.Export do
     from(f in Follow,
       where: field(f, ^filter_field) == ^user.id,
       join: u in assoc(f, ^other_assoc),
-      select: %{slug: u.active_slug, since: f.inserted_at}
+      select: %{username: u.username, since: f.inserted_at}
     )
     |> Repo.all()
   end
@@ -149,7 +149,7 @@ defmodule Vutuv.Export do
       other = if c.user_a_id == user.id, do: c.user_b, else: c.user_a
 
       %{
-        with: other && other.active_slug,
+        with: other && other.username,
         status: c.status,
         requested_by_me: c.requested_by_id == user.id,
         since: c.status_changed_at || c.inserted_at
@@ -190,7 +190,7 @@ defmodule Vutuv.Export do
       where: x.user_id == ^user.id,
       join: p in assoc(x, :post),
       join: author in assoc(p, :user),
-      select: %{post_id: p.id, author: author.active_slug, at: x.inserted_at}
+      select: %{post_id: p.id, author: author.username, at: x.inserted_at}
     )
     |> Repo.all()
   end
@@ -205,7 +205,7 @@ defmodule Vutuv.Export do
     |> Repo.all()
     |> Enum.map(fn c ->
       others =
-        for p <- c.participants, p.user_id != user.id, p.user, do: p.user.active_slug
+        for p <- c.participants, p.user_id != user.id, p.user, do: p.user.username
 
       %{
         with: others,
@@ -214,7 +214,7 @@ defmodule Vutuv.Export do
         messages:
           Enum.map(
             c.messages,
-            &%{from: &1.sender && &1.sender.active_slug, body: &1.body, at: &1.inserted_at}
+            &%{from: &1.sender && &1.sender.username, body: &1.body, at: &1.inserted_at}
           )
       }
     end)

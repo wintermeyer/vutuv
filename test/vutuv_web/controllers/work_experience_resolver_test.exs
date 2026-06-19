@@ -54,7 +54,7 @@ defmodule VutuvWeb.WorkExperienceResolverTest do
 
       conn = get(conn, ~p"/#{user}")
 
-      assert html_response(conn, 200) =~ "/#{user.active_slug}/work_experiences/#{job.id}"
+      assert html_response(conn, 200) =~ "/#{user.username}/work_experiences/#{job.id}"
     end
 
     test "the show page resolves via the id", %{conn: conn} do

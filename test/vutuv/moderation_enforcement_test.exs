@@ -161,7 +161,7 @@ defmodule Vutuv.ModerationEnforcementTest do
   describe "search" do
     defp searchable_user!(fields) do
       user = insert(:activated_user, fields)
-      insert(:search_term, user: user, value: "findme-#{user.active_slug}")
+      insert(:search_term, user: user, value: "findme-#{user.username}")
       user
     end
 

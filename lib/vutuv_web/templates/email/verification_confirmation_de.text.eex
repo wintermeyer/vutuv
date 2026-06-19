@@ -3,7 +3,7 @@
 herzlichen Glückwunsch! Ihr vutuv Account wird jetzt als 
 verified (verifiziert) angezeigt.
 
-<%= @url %><%= @user.active_slug %>
+<%= @url %><%= @user.username %>
 
 Wir wünschen Ihnen weiterhin viel Spass mit vutuv!
 

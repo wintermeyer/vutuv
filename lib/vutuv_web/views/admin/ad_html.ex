@@ -18,7 +18,7 @@ defmodule VutuvWeb.Admin.AdHTML do
       <%= if @ad.user do %>
         {gettext("Booked by")}
         <.link href={~p"/#{@ad.user}"} class="font-semibold text-brand-600 hover:text-brand-700">
-          @{@ad.user.active_slug}
+          @{@ad.user.username}
         </.link>
       <% else %>
         {gettext("Booked by a since-deleted account")}

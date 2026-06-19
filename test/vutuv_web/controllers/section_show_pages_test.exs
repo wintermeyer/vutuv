@@ -12,7 +12,7 @@ defmodule VutuvWeb.SectionShowPagesTest do
   setup do
     user =
       insert_activated_user(
-        active_slug: "show_page_owner",
+        username: "show_page_owner",
         first_name: "Greta",
         last_name: "Gradient"
       )

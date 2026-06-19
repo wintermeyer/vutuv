@@ -329,7 +329,7 @@ defmodule VutuvWeb.Router do
     get("/ads/:id", AdController, :show)
     post("/ads/:id/approve", AdController, :approve)
 
-    post("/slugs", SlugController, :update)
+    post("/usernames", UsernameController, :update)
     post("/users", UserController, :update)
     resources("/locales", LocaleController, only: [:index, :show])
     resources("/exonyms", ExonymController)
@@ -508,8 +508,8 @@ defmodule VutuvWeb.Router do
       post("/emails/confirmation", EmailController, :confirm)
       # Changing the username: the form, the POST, and the live
       # availability check behind the form's as-you-type verdict.
-      get("/slugs/availability", SlugController, :availability)
-      resources("/slugs", SlugController, only: [:new, :create])
+      get("/usernames/availability", UsernameController, :availability)
+      resources("/usernames", UsernameController, only: [:new, :create])
 
       # Account settings, split off the old single edit form into focused,
       # owner-only pages (SettingsController). put + patch both, to match

@@ -27,7 +27,7 @@ defmodule VutuvWeb.JsonLdTest do
 
   describe "profile page" do
     test "embeds a Person mirroring the profile doc" do
-      user = insert_activated_user(active_slug: "ld_member", first_name: "Lara")
+      user = insert_activated_user(username: "ld_member", first_name: "Lara")
 
       insert(:work_experience,
         user: user,
@@ -63,7 +63,7 @@ defmodule VutuvWeb.JsonLdTest do
     end
 
     test "keeps the BreadcrumbList next to the Person" do
-      insert_activated_user(active_slug: "ld_crumbs")
+      insert_activated_user(username: "ld_crumbs")
 
       blocks = build_conn() |> get("/ld_crumbs") |> html_response(200) |> ld_blocks()
 
@@ -71,7 +71,7 @@ defmodule VutuvWeb.JsonLdTest do
     end
 
     test "a noindexed member gets no Person markup" do
-      insert_activated_user(active_slug: "ld_quiet", noindex?: true)
+      insert_activated_user(username: "ld_quiet", noindex?: true)
 
       blocks = build_conn() |> get("/ld_quiet") |> html_response(200) |> ld_blocks()
 
@@ -81,7 +81,7 @@ defmodule VutuvWeb.JsonLdTest do
 
   describe "post permalink" do
     test "embeds a BlogPosting mirroring the post doc" do
-      author = insert_activated_user(active_slug: "ld_author", first_name: "Pia")
+      author = insert_activated_user(username: "ld_author", first_name: "Pia")
       post = create_post!(author, %{body: "Hello **bold** world", tags: "elixir"})
 
       html = build_conn() |> get(Posts.path(post)) |> html_response(200)

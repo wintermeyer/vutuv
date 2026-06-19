@@ -9,7 +9,7 @@ defmodule Vutuv.Cover do
   served file is named for the owner's handle and the content fingerprint
   (immutable URL, no `?v=`), so a download carries the username:
 
-      <uploads_dir_prefix>/covers/<user.id>/<active_slug>-wide-<fingerprint>.avif
+      <uploads_dir_prefix>/covers/<user.id>/<username>-wide-<fingerprint>.avif
       <uploads_dir_prefix>/originals/covers/<user.id>/original<ext>
 
   The fingerprint is stored in `:cover_fingerprint`; the served version is AVIF
@@ -62,7 +62,7 @@ defmodule Vutuv.Cover do
 
   @doc """
   Re-derives the cover under the user's current handle after a username change.
-  See `Vutuv.Uploads.reslug/2` and `Accounts.update_active_slug/2`.
+  See `Vutuv.Uploads.reslug/2` and `Accounts.update_username/2`.
   """
   def reslug(user), do: Uploads.reslug(user, @config)
 

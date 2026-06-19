@@ -16,7 +16,7 @@ defmodule VutuvWeb.Feeds do
   alias VutuvWeb.Xml
 
   @doc "The one source of a member's feed path (controller, head tag, llms.txt)."
-  def user_feed_path(user), do: "/#{user.active_slug}/posts/feed.xml"
+  def user_feed_path(user), do: "/#{user.username}/posts/feed.xml"
 
   @doc "The site-wide feed path."
   def site_feed_path, do: "/posts/feed.xml"
@@ -26,7 +26,7 @@ defmodule VutuvWeb.Feeds do
 
     render_feed(
       title: "#{name} · vutuv",
-      link: AgentDocs.abs_url("/" <> author.active_slug),
+      link: AgentDocs.abs_url("/" <> author.username),
       self: AgentDocs.abs_url(user_feed_path(author)),
       description: "Posts by #{name} on vutuv",
       posts: posts

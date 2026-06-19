@@ -51,7 +51,7 @@ only you can see):
   "type": "profile",
   "schema_version": 1,
   "name": "Stefan Wintermeyer",
-  "slug": "wintermeyer",
+  "username": "wintermeyer",
   "emails": ["stefan@example.com"],
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
   "tags": [{"name": "Phoenix", "endorsements": 31}],

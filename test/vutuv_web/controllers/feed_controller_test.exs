@@ -14,7 +14,7 @@ defmodule VutuvWeb.FeedControllerTest do
   @base "http://localhost:4001"
 
   setup do
-    author = insert_activated_user(active_slug: "feed_author", first_name: "Fiona")
+    author = insert_activated_user(username: "feed_author", first_name: "Fiona")
     %{author: author}
   end
 
@@ -72,7 +72,7 @@ defmodule VutuvWeb.FeedControllerTest do
     end
 
     test "restricted posts and other members' posts stay out", %{author: author} do
-      other = insert_activated_user(active_slug: "other_member")
+      other = insert_activated_user(username: "other_member")
       visible = create_post!(author, %{"body" => "Mine, public"})
 
       restricted =
@@ -91,14 +91,14 @@ defmodule VutuvWeb.FeedControllerTest do
     end
 
     test "an unknown or unactivated member 404s" do
-      insert(:user, active_slug: "sleepy_member")
+      insert(:user, username: "sleepy_member")
 
       assert get(build_conn(), "/nobody_here/posts/feed.xml").status == 404
       assert get(build_conn(), "/sleepy_member/posts/feed.xml").status == 404
     end
 
     test "a noindexed member's feed serves, marked noindex, AI choice intact" do
-      quiet = insert_activated_user(active_slug: "quiet_author", noindex?: true, noai?: false)
+      quiet = insert_activated_user(username: "quiet_author", noindex?: true, noai?: false)
       create_post!(quiet, %{"body" => "Quiet words"})
 
       conn = get(build_conn(), "/quiet_author/posts/feed.xml")
@@ -109,7 +109,7 @@ defmodule VutuvWeb.FeedControllerTest do
     end
 
     test "an AI-opted-out member's feed serves with the noai directives" do
-      human = insert_activated_user(active_slug: "human_author", noindex?: false, noai?: true)
+      human = insert_activated_user(username: "human_author", noindex?: false, noai?: true)
       create_post!(human, %{"body" => "For people"})
 
       conn = get(build_conn(), "/human_author/posts/feed.xml")
@@ -122,7 +122,7 @@ defmodule VutuvWeb.FeedControllerTest do
 
   describe "GET /posts/feed.xml" do
     test "collects the latest public posts across members", %{author: author} do
-      other = insert_activated_user(active_slug: "second_author")
+      other = insert_activated_user(username: "second_author")
       mine = create_post!(author, %{"body" => "From Fiona"})
       theirs = create_post!(other, %{"body" => "From the other one"})
 
@@ -138,10 +138,10 @@ defmodule VutuvWeb.FeedControllerTest do
     # signal per item, so members who opted out (of search engines or of
     # AI use) are left out entirely — same reasoning for both axes.
     test "skips noindexed members, AI-opted-out members and restricted posts", %{author: author} do
-      quiet = insert_activated_user(active_slug: "quiet_author", noindex?: true)
+      quiet = insert_activated_user(username: "quiet_author", noindex?: true)
       quiet_post = create_post!(quiet, %{"body" => "Quiet words"})
 
-      human = insert_activated_user(active_slug: "human_author", noai?: true)
+      human = insert_activated_user(username: "human_author", noai?: true)
       human_post = create_post!(human, %{"body" => "For people only"})
 
       restricted =

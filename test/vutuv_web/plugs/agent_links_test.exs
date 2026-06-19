@@ -10,7 +10,7 @@ defmodule VutuvWeb.Plug.AgentLinksTest do
   use VutuvWeb.ConnCase, async: true
 
   setup do
-    user = insert_activated_user(active_slug: "linked_member", first_name: "Lina")
+    user = insert_activated_user(username: "linked_member", first_name: "Lina")
     %{user: user}
   end
 

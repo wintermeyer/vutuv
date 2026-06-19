@@ -92,7 +92,7 @@ defmodule Vutuv.Credentials do
       rp: %{id: rp_id(), name: "vutuv"},
       user: %{
         id: b64(user.id),
-        name: user.active_slug,
+        name: user.username,
         displayName: display_name(user)
       },
       pubKeyCredParams: Enum.map(@pub_key_cred_params, &%{type: "public-key", alg: &1}),
@@ -297,7 +297,7 @@ defmodule Vutuv.Credentials do
 
   # A friendly display name for the authenticator's account picker, from the
   # member's name, falling back to their handle.
-  defp display_name(%User{first_name: first, last_name: last, active_slug: slug}) do
+  defp display_name(%User{first_name: first, last_name: last, username: slug}) do
     case [first, last] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" ") do
       "" -> slug
       name -> name

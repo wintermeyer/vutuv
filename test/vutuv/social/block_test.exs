@@ -224,8 +224,8 @@ defmodule Vutuv.Social.BlockTest do
       block!(a, b)
       block!(a, c)
 
-      slugs = a |> Social.list_blocked() |> Enum.map(& &1.blocked.active_slug)
-      assert slugs == [c.active_slug, b.active_slug]
+      slugs = a |> Social.list_blocked() |> Enum.map(& &1.blocked.username)
+      assert slugs == [c.username, b.username]
     end
   end
 end

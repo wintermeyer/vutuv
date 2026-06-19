@@ -24,13 +24,13 @@
     >
       <p class="font-semibold">
         {gettext("Sending this report separates you and @%{handle} on the spot.",
-          handle: @severed_owner.active_slug
+          handle: @severed_owner.username
         )}
       </p>
       <p class="mt-1">
         {gettext(
           "To protect you, your connection, follows and messages are paused in both directions - nobody should have to stay in contact with someone they just reported. Because of this, @%{handle} may recognize that the report came from you.",
-          handle: @severed_owner.active_slug
+          handle: @severed_owner.username
         )}
       </p>
       <p class="mt-1">

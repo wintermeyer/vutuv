@@ -60,8 +60,8 @@ defmodule VutuvWeb.OpenGraphTest do
       assert og(html, "og:type") == "profile"
       assert og(html, "og:title") == "Greta Tester"
       assert og(html, "og:description") =~ "Acme Corp"
-      assert og(html, "og:url") == @base <> "/#{user.active_slug}"
-      assert og(html, "og:image") == @base <> "/#{user.active_slug}/avatar.jpg"
+      assert og(html, "og:url") == @base <> "/#{user.username}"
+      assert og(html, "og:image") == @base <> "/#{user.username}/avatar.jpg"
       assert og(html, "og:image:width") == "512"
       assert og(html, "og:image:type") == "image/jpeg"
       assert html =~ ~s(<meta name="twitter:card" content="summary")
@@ -98,7 +98,7 @@ defmodule VutuvWeb.OpenGraphTest do
       assert og(html, "og:description") =~ "Hello preview world"
       assert og(html, "article:published_time") == Date.to_iso8601(post.published_on)
       # The author's avatar gives the preview a face.
-      assert og(html, "og:image") == @base <> "/#{author.active_slug}/avatar.jpg"
+      assert og(html, "og:image") == @base <> "/#{author.username}/avatar.jpg"
     end
 
     test "a post with images previews its first image instead of the avatar", %{conn: conn} do

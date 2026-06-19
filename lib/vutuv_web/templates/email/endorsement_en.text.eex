@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_slug %> endorsed you for <%= @tag_name %> on vutuv.
+@<%= @actor_username %> endorsed you for <%= @tag_name %> on vutuv.
 
 See their profile:
 
-<%= @url %><%= @actor_slug %>
+<%= @url %><%= @actor_username %>
 
 You can switch these notification emails off here:
 

@@ -10,7 +10,7 @@ defmodule VutuvWeb.AgentDocHeadersTest do
   use VutuvWeb.ConnCase, async: true
 
   setup do
-    user = insert_activated_user(active_slug: "header_tester", first_name: "Hedda")
+    user = insert_activated_user(username: "header_tester", first_name: "Hedda")
     %{user: user}
   end
 

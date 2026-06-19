@@ -51,7 +51,7 @@
                 </span>
               </div>
             </td>
-            <td><.link href={~p"/#{user}"}>@{user.active_slug}</.link></td>
+            <td><.link href={~p"/#{user}"}>@{user.username}</.link></td>
             <td>
               <% at = Map.get(@endorsed_at_by_id, user.id) %>
               <time

@@ -41,7 +41,7 @@ defmodule VutuvWeb.ReportControllerTest do
       # The consequence, the why, the de-facto loss of anonymity, the undo -
       # all spelled out before the reporter commits.
       assert response =~ "report-severance-notice"
-      assert response =~ "@#{author.active_slug}"
+      assert response =~ "@#{author.username}"
       assert response =~ "paused in both directions"
       assert response =~ "may recognize"
       assert response =~ "unfounded"

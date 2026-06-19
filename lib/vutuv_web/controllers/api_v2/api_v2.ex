@@ -97,7 +97,7 @@ defmodule VutuvWeb.ApiV2 do
   token's user as viewer: the API reads through their eyes.
   """
   def fetch_visible_user(slug, viewer) do
-    with %User{} = user <- Accounts.get_user_by_slug(slug),
+    with %User{} = user <- Accounts.get_user_by_username(slug),
          true <- Moderation.profile_visible_to?(user, viewer) do
       {:ok, user}
     else

@@ -46,7 +46,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     title = index_title(section, UserHelpers.full_name(user))
     entries = Enum.map(entries, &entry(section, &1))
 
-    AgentDocs.doc_meta(segment, "/#{user.active_slug}/#{segment}", noindex: true, noai: true)
+    AgentDocs.doc_meta(segment, "/#{user.username}/#{segment}", noindex: true, noai: true)
     |> Map.merge(%{
       section: segment,
       title: title,
@@ -60,7 +60,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @doc "A single entry's show page (`/:slug/<section>/<id-or-slug>`)."
   def build_show(user, section, record) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
-    path = "/#{user.active_slug}/#{segment}/#{Phoenix.Param.to_param(record)}"
+    path = "/#{user.username}/#{segment}/#{Phoenix.Param.to_param(record)}"
     entry = entry(section, record)
 
     AgentDocs.doc_meta(@sections[section], path, noindex: true, noai: true)

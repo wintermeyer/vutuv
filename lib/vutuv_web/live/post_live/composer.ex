@@ -672,7 +672,7 @@ defmodule VutuvWeb.PostLive.Composer do
                     class="block w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
                   >
                     {full_name(user)}
-                    <span class="text-xs text-slate-600 dark:text-slate-400">@{user.active_slug}</span>
+                    <span class="text-xs text-slate-600 dark:text-slate-400">@{user.username}</span>
                   </button>
                 </li>
               </ul>

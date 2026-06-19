@@ -20,7 +20,7 @@ defmodule VutuvWeb.FeedController do
   @feed_limit 20
 
   def user(conn, %{"slug" => slug}) do
-    case Vutuv.Repo.get_by(Vutuv.Accounts.User, active_slug: slug) do
+    case Vutuv.Repo.get_by(Vutuv.Accounts.User, username: slug) do
       %{email_confirmed?: true} = author ->
         posts = Posts.recent_public_posts(author, limit: @feed_limit)
         send_feed(conn, Feeds.render_user_feed(author, posts), author.noindex?, author.noai?)

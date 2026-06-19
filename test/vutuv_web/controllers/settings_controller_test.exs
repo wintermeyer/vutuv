@@ -200,7 +200,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       html = conn |> get(~p"/#{user}/settings") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/slugs/new"}")
+      assert html =~ ~s(href="#{~p"/#{user}/usernames/new"}")
       assert html =~ ~s(href="#{~p"/#{user}/emails"}")
       assert html =~ ~s(href="#{~p"/#{user}/export"}")
       assert html =~ ~s(action="#{~p"/#{user}/settings/language"}")

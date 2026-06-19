@@ -4,7 +4,7 @@ Neue Anzeigenbuchung auf vutuv
 Tag:    <%= Calendar.strftime(@ad.day, "%d.%m.%Y") %>
 Preis:  <%= @price %> EUR (netto), Zahlung per Rechnung
 
-Gebucht von @<%= @booker.active_slug %> (<%= @url %><%= @booker.active_slug %>)
+Gebucht von @<%= @booker.username %> (<%= @url %><%= @booker.username %>)
 E-Mail: <%= @booker_email %>
 
 Rechnungsadresse

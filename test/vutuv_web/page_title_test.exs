@@ -20,7 +20,7 @@ defmodule VutuvWeb.PageTitleTest do
   test "a user page without an explicit title names the user", %{conn: conn} do
     user = insert_activated_user(first_name: "Tina", last_name: "Titel")
 
-    assert conn |> get("/#{user.active_slug}") |> title() == "Tina Titel - vutuv"
+    assert conn |> get("/#{user.username}") |> title() == "Tina Titel - vutuv"
   end
 
   test "an explicit page_title wins over the user fallback", %{conn: conn} do

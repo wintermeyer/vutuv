@@ -2,7 +2,7 @@
 
 Congratulations! Your vutuv account is now listed as verified.
 
-<%= @url %><%= @user.active_slug %>
+<%= @url %><%= @user.username %>
 
 <%= render "_signature_en.text" %>
 

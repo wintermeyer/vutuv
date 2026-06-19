@@ -24,9 +24,9 @@ defmodule VutuvWeb.PostJSONTest do
     json = PostJSON.post(post, author)
 
     assert json.id == post.id
-    assert json.url =~ "/#{author.active_slug}/"
+    assert json.url =~ "/#{author.username}/"
     assert String.ends_with?(json.url, Posts.path(post))
-    assert json.author.slug == author.active_slug
+    assert json.author.username == author.username
     assert json.body_markdown == "**Hi** there"
     assert json.body_html =~ "<strong>Hi</strong>"
     assert String.ends_with?(json.published_at, "Z")
@@ -58,14 +58,14 @@ defmodule VutuvWeb.PostJSONTest do
     assert json.reply_count == 0
     assert json.in_reply_to.post_id == parent.id
     assert String.ends_with?(json.in_reply_to.url, Posts.path(parent))
-    assert json.in_reply_to.author == %{slug: parent_author.active_slug, name: "Petra Parent"}
+    assert json.in_reply_to.author == %{username: parent_author.username, name: "Petra Parent"}
 
     # Parent deleted, account alive: no post left, the author still named.
     {:ok, _} = Posts.delete_post(parent)
     json = PostJSON.post(Posts.get_post(reply.id), nil)
     assert json.in_reply_to.post_id == nil
     assert json.in_reply_to.url == nil
-    assert json.in_reply_to.author.slug == parent_author.active_slug
+    assert json.in_reply_to.author.username == parent_author.username
 
     # Account gone too (the real cascade): nothing nameable remains.
     Repo.delete!(parent_author)

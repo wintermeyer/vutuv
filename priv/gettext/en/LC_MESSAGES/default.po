@@ -75,8 +75,8 @@ msgstr ""
 msgid "Avatar"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/slug/edit.html.heex:6
 #: lib/vutuv_web/templates/admin/user/edit.html.heex:6
+#: lib/vutuv_web/templates/admin/username/edit.html.heex:6
 #, elixir-autogen
 msgid "Back"
 msgstr ""
@@ -153,7 +153,7 @@ msgstr ""
 msgid "Description"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/slug/form_content.html.heex:9
+#: lib/vutuv_web/templates/admin/username/form_content.html.heex:9
 #, elixir-autogen
 msgid "Disable"
 msgstr ""
@@ -182,8 +182,8 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/slug/edit.html.heex:1
 #: lib/vutuv_web/templates/admin/user/edit.html.heex:1
+#: lib/vutuv_web/templates/admin/username/edit.html.heex:1
 #, elixir-autogen
 msgid "Edit user"
 msgstr ""
@@ -710,11 +710,11 @@ msgid "User verified successfully."
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/index.html.heex:16
-#: lib/vutuv_web/templates/slug/new.html.heex:2
-#: lib/vutuv_web/templates/slug/new.html.heex:6
 #: lib/vutuv_web/templates/social_media_account/card_list.html.heex:5
 #: lib/vutuv_web/templates/social_media_account/show.html.heex:21
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:26
+#: lib/vutuv_web/templates/username/new.html.heex:2
+#: lib/vutuv_web/templates/username/new.html.heex:6
 #, elixir-autogen
 msgid "Username"
 msgstr ""
@@ -735,7 +735,6 @@ msgstr ""
 #: lib/vutuv_web/templates/phone_number/index.html.heex:4
 #: lib/vutuv_web/templates/phone_number/new.html.heex:2
 #: lib/vutuv_web/templates/phone_number/show.html.heex:4
-#: lib/vutuv_web/templates/slug/new.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/edit.html.heex:2
 #: lib/vutuv_web/templates/social_media_account/index.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:2
@@ -748,6 +747,7 @@ msgstr ""
 #: lib/vutuv_web/templates/user_tag/index.html.heex:4
 #: lib/vutuv_web/templates/user_tag/new.html.heex:4
 #: lib/vutuv_web/templates/user_tag/show.html.heex:4
+#: lib/vutuv_web/templates/username/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:2
 #: lib/vutuv_web/templates/work_experience/index.html.heex:4
 #: lib/vutuv_web/templates/work_experience/new.html.heex:2
@@ -1639,7 +1639,7 @@ msgstr ""
 msgid "Delete my account"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/slug/index.html.heex:2
+#: lib/vutuv_web/templates/admin/username/index.html.heex:2
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Disable slugs"
 msgstr ""
@@ -1746,7 +1746,7 @@ msgstr ""
 msgid "Send"
 msgstr ""
 
-#: lib/vutuv_web/templates/admin/slug/form_content.html.heex:4
+#: lib/vutuv_web/templates/admin/username/form_content.html.heex:4
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Slug name"
 msgstr ""
@@ -3581,67 +3581,67 @@ msgstr ""
 msgid "Your vutuv account is suspended"
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/form_content.html.heex:20
+#: lib/vutuv_web/templates/username/form_content.html.heex:20
 #, elixir-autogen, elixir-format
 msgid "3 to 15 characters: letters (a-z), numbers (0-9) and underscores."
 msgstr ""
 
-#: lib/vutuv_web/controllers/slug_controller.ex:54
+#: lib/vutuv_web/controllers/username_controller.ex:54
 #, elixir-autogen, elixir-format
 msgid "@%{handle} is already taken."
 msgstr ""
 
-#: lib/vutuv_web/controllers/slug_controller.ex:57
+#: lib/vutuv_web/controllers/username_controller.ex:57
 #, elixir-autogen, elixir-format
 msgid "@%{handle} is available."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/form_content.html.heex:7
+#: lib/vutuv_web/templates/username/form_content.html.heex:7
 #, elixir-autogen, elixir-format, fuzzy
 msgid "New username"
 msgstr ""
 
-#: lib/vutuv_web/controllers/slug_controller.ex:24
+#: lib/vutuv_web/controllers/username_controller.ex:24
 #, elixir-autogen, elixir-format
 msgid "Your username is now @%{handle}."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:13
+#: lib/vutuv_web/templates/username/new.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "Your username is your profile address (vutuv.de/username) and how others mention you, like %{handle}."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:28
+#: lib/vutuv_web/templates/username/new.html.heex:28
 #, elixir-autogen, elixir-format
 msgid "%{remaining} of %{limit} changes left."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:17
+#: lib/vutuv_web/templates/username/new.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Changing it frees the old name immediately: links to your old address stop working and anyone can claim the name."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/slug_controller.ex:19
+#: lib/vutuv_web/controllers/admin/username_controller.ex:19
 #, elixir-autogen, elixir-format
 msgid "No member uses this username."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/slug_controller.ex:36
+#: lib/vutuv_web/controllers/admin/username_controller.ex:36
 #, elixir-autogen, elixir-format
 msgid "Username replaced with @%{handle}."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:48
+#: lib/vutuv_web/templates/username/new.html.heex:48
 #, elixir-autogen, elixir-format
 msgid "You can change it again on %{date}."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:23
+#: lib/vutuv_web/templates/username/new.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "You can change your username up to %{limit} times within %{days} days."
 msgstr ""
 
-#: lib/vutuv_web/templates/slug/new.html.heex:44
+#: lib/vutuv_web/templates/username/new.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "You have used all %{limit} username changes of the last %{days} days."
 msgstr ""
@@ -4021,7 +4021,7 @@ msgstr ""
 msgid "until %{date}"
 msgstr ""
 
-#: lib/vutuv_web/agent_docs/agent_docs.ex:355
+#: lib/vutuv_web/agent_docs/agent_docs.ex:358
 #, elixir-autogen, elixir-format
 msgid "This page in %{language}: %{url}"
 msgstr ""

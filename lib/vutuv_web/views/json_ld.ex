@@ -70,7 +70,7 @@ defmodule VutuvWeb.JsonLd do
 
   @doc "The profile as ProfilePage/Person, from the show page's assigns."
   def person(user, job, user_tags, social_accounts) do
-    url = AgentDocs.abs_url("/" <> user.active_slug)
+    url = AgentDocs.abs_url("/" <> user.username)
 
     %{
       "@context" => "https://schema.org",
@@ -95,7 +95,7 @@ defmodule VutuvWeb.JsonLd do
   @doc "The permalink's post as a BlogPosting."
   def blog_posting(post, author) do
     permalink = AgentDocs.abs_url(Posts.path(post))
-    author_url = AgentDocs.abs_url("/" <> author.active_slug)
+    author_url = AgentDocs.abs_url("/" <> author.username)
 
     compact(%{
       "@context" => "https://schema.org",
@@ -118,7 +118,7 @@ defmodule VutuvWeb.JsonLd do
   end
 
   def breadcrumbs(user) do
-    profile_url = AgentDocs.abs_url("/" <> user.active_slug)
+    profile_url = AgentDocs.abs_url("/" <> user.username)
 
     %{
       "@context" => "https://schema.org",

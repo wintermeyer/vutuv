@@ -103,7 +103,7 @@ defmodule VutuvWeb.ReportController do
   defp preview(%Chat.Message{body: body}), do: clip(body)
 
   defp preview(%User{} = user),
-    do: "@#{user.active_slug} - #{VutuvWeb.UserHelpers.full_name(user)}"
+    do: "@#{user.username} - #{VutuvWeb.UserHelpers.full_name(user)}"
 
   defp clip(nil), do: ""
   defp clip(body) when byte_size(body) <= 280, do: body

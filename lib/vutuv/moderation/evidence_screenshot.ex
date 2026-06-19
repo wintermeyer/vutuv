@@ -50,7 +50,7 @@ defmodule Vutuv.Moderation.EvidenceScreenshot do
   def evidence_url(%Case{content_type: "user"} = case_record) do
     case Repo.get(Vutuv.Accounts.User, case_record.owner_id) do
       nil -> nil
-      owner -> VutuvWeb.Endpoint.url() <> "/#{owner.active_slug}"
+      owner -> VutuvWeb.Endpoint.url() <> "/#{owner.username}"
     end
   end
 

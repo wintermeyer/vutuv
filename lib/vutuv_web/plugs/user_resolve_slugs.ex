@@ -1,7 +1,7 @@
 defmodule VutuvWeb.Plug.UserResolveSlug do
   @moduledoc """
   Resolves the `:slug` / `:user_slug` path segment to the member whose
-  `active_slug` it is. There is exactly one live handle per member - old
+  `username` it is. There is exactly one live handle per member - old
   handles are neither reserved nor redirected, so an unknown handle is a
   plain 404.
   """
@@ -17,7 +17,7 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   def call(conn, _opts), do: invalid_slug(conn)
 
   defp resolve(conn, slug) do
-    case Repo.get_by(Vutuv.Accounts.User, active_slug: slug) do
+    case Repo.get_by(Vutuv.Accounts.User, username: slug) do
       nil ->
         invalid_slug(conn)
 

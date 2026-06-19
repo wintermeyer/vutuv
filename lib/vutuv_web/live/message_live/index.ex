@@ -93,7 +93,7 @@ defmodule VutuvWeb.MessageLive.Index do
   # Entry point for the profile "Message" button: find or create the
   # conversation with that member, then land in its thread.
   defp apply_action(socket, :new, %{"slug" => slug}) do
-    case Vutuv.Accounts.get_user_by_slug(slug) do
+    case Vutuv.Accounts.get_user_by_username(slug) do
       nil ->
         socket
         |> put_flash(:error, gettext("Member not found."))
@@ -221,7 +221,7 @@ defmodule VutuvWeb.MessageLive.Index do
          |> put_flash(
            :info,
            gettext("You blocked @%{slug}. You can undo this on your blocked list.",
-             slug: other.active_slug
+             slug: other.username
            )
          )
          |> push_navigate(to: ~p"/messages")}
@@ -527,12 +527,12 @@ defmodule VutuvWeb.MessageLive.Index do
                   data-confirm={
                     gettext(
                       "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-                      slug: @other.active_slug
+                      slug: @other.username
                     )
                   }
                   class="block w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
                 >
-                  {gettext("Block @%{slug}", slug: @other.active_slug)}
+                  {gettext("Block @%{slug}", slug: @other.username)}
                 </button>
               </div>
             </details>
@@ -614,7 +614,7 @@ defmodule VutuvWeb.MessageLive.Index do
           id="request-banner"
           class="flex flex-wrap items-center justify-center gap-2 border-t border-slate-200 p-3 text-sm text-slate-600 dark:border-slate-800 dark:text-slate-300"
         >
-          <span>{gettext("@%{slug} wants to message you.", slug: @other.active_slug)}</span>
+          <span>{gettext("@%{slug} wants to message you.", slug: @other.username)}</span>
           <.request_actions id={@conversation.id} />
         </div>
 
@@ -648,7 +648,7 @@ defmodule VutuvWeb.MessageLive.Index do
           id="awaiting-acceptance"
           class="border-t border-slate-200 p-4 text-center text-sm text-slate-600 dark:text-slate-400 dark:border-slate-800"
         >
-          {gettext("@%{slug} has not accepted your message request yet.", slug: @other.active_slug)}
+          {gettext("@%{slug} has not accepted your message request yet.", slug: @other.username)}
         </p>
       </section>
 

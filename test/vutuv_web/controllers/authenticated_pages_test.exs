@@ -252,7 +252,9 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "admin verify user and disable slug", %{conn: conn, target: target} do
       assert post(conn, ~p"/admin/users", user_id: target.id).status < 500
-      assert post(conn, ~p"/admin/slugs", slug_disable: %{value: target.active_slug}).status < 500
+
+      assert post(conn, ~p"/admin/usernames", username_disable: %{value: target.username}).status <
+               500
     end
   end
 end

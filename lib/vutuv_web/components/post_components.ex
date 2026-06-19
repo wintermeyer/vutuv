@@ -388,7 +388,7 @@ defmodule VutuvWeb.PostComponents do
   defp reply_banner(_post), do: nil
 
   # Reply system messages name the account handle, never the clear name.
-  defp handle(%User{active_slug: slug}), do: "@" <> slug
+  defp handle(%User{username: slug}), do: "@" <> slug
 
   # Full mode: attachments the body references inline render in place; the
   # rest form the gallery. Preview mode handles images separately (thumbs).

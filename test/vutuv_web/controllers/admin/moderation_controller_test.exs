@@ -152,7 +152,7 @@ defmodule VutuvWeb.Admin.ModerationControllerTest do
 
       conn = get(conn, ~p"/admin/moderation/reporters")
       response = html_response(conn, 200)
-      assert response =~ reporter.active_slug
+      assert response =~ reporter.username
     end
   end
 end

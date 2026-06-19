@@ -84,7 +84,7 @@ defmodule VutuvWeb.ApiV2Test do
       conn = conn |> authed(plaintext) |> get("/api/2.0/me")
       body = json_response(conn, 200)
 
-      assert body["slug"] == user.active_slug
+      assert body["username"] == user.username
       # Emails are typed maps (schema_version 2), matching phone_numbers.
       assert Enum.any?(body["emails"], &(&1["value"] == "private@example.com"))
     end
@@ -96,10 +96,10 @@ defmodule VutuvWeb.ApiV2Test do
       insert(:email, user: other, public?: false, value: "private@example.com")
       insert(:email, user: other, public?: true, value: "public@example.com")
 
-      conn = conn |> authed(plaintext) |> get("/api/2.0/users/#{other.active_slug}")
+      conn = conn |> authed(plaintext) |> get("/api/2.0/users/#{other.username}")
       body = json_response(conn, 200)
 
-      assert body["slug"] == other.active_slug
+      assert body["username"] == other.username
       assert Enum.any?(body["emails"], &(&1["value"] == "public@example.com"))
       refute Enum.any?(body["emails"], &(&1["value"] == "private@example.com"))
     end
@@ -110,11 +110,11 @@ defmodule VutuvWeb.ApiV2Test do
     } do
       unactivated = insert(:user, email_confirmed?: false)
 
-      conn1 = conn |> authed(plaintext) |> get("/api/2.0/users/#{unactivated.active_slug}")
+      conn1 = conn |> authed(plaintext) |> get("/api/2.0/users/#{unactivated.username}")
       assert conn1.status == 404
 
       frozen = insert_activated_user(frozen_at: NaiveDateTime.utc_now(:second))
-      conn2 = build_conn() |> authed(plaintext) |> get("/api/2.0/users/#{frozen.active_slug}")
+      conn2 = build_conn() |> authed(plaintext) |> get("/api/2.0/users/#{frozen.username}")
       assert conn2.status == 404
     end
 
@@ -124,7 +124,7 @@ defmodule VutuvWeb.ApiV2Test do
       {:ok, plaintext, _} =
         ApiAuth.create_pat(owner, %{"name" => "n", "scopes" => ["profile:read"]})
 
-      conn = conn |> authed(plaintext) |> get("/api/2.0/users/#{owner.active_slug}")
+      conn = conn |> authed(plaintext) |> get("/api/2.0/users/#{owner.username}")
       assert conn.status == 200
     end
   end

@@ -20,7 +20,7 @@ defmodule VutuvWeb.ShellLivePresenceTest do
       %{
         "user_id" => user.id,
         "user_name" => "Greta Tester",
-        "user_param" => user.active_slug,
+        "user_param" => user.username,
         "show_online" => true
       },
       extra

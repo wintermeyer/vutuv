@@ -12,7 +12,7 @@
     <p>
       <%= gettext(
         "Your username is your profile address (vutuv.de/username) and how others mention you, like %{handle}.",
-        handle: "@#{@user.active_slug}"
+        handle: "@#{@user.username}"
       ) %>
       <%= gettext(
         "Changing it frees the old name immediately: links to your old address stop working and anyone can claim the name."
@@ -36,7 +36,7 @@
       <%= render("form_content.html",
         backlink: ~p"/#{@user}/edit",
         changeset: @changeset,
-        action: ~p"/#{@user}/slugs",
+        action: ~p"/#{@user}/usernames",
         user: @user
       ) %>
     <% else %>

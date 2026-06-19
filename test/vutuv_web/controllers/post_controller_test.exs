@@ -38,11 +38,11 @@ defmodule VutuvWeb.PostControllerTest do
       post = create_post!(user, %{body: "x"})
 
       # The permalink is the post id under the author archive.
-      assert Posts.path(post) == "/#{user.active_slug}/posts/#{post.id}"
+      assert Posts.path(post) == "/#{user.username}/posts/#{post.id}"
 
       # An uppercase UUID still resolves and 302s to the canonical
       # (lowercase) form.
-      shouty = "/#{user.active_slug}/posts/#{String.upcase(post.id)}"
+      shouty = "/#{user.username}/posts/#{String.upcase(post.id)}"
       assert redirected_to(get(conn, shouty)) == Posts.path(post)
     end
 
@@ -51,10 +51,10 @@ defmodule VutuvWeb.PostControllerTest do
       other = insert_activated_user()
       post = create_post!(other, %{body: "not under this slug"})
 
-      assert get(conn, "/#{user.active_slug}/posts/#{Vutuv.UUIDv7.generate()}").status == 404
-      assert get(conn, "/#{user.active_slug}/posts/not-a-uuid-or-year").status == 404
+      assert get(conn, "/#{user.username}/posts/#{Vutuv.UUIDv7.generate()}").status == 404
+      assert get(conn, "/#{user.username}/posts/not-a-uuid-or-year").status == 404
       # A post resolves only under its author's slug.
-      assert get(conn, "/#{user.active_slug}/posts/#{post.id}").status == 404
+      assert get(conn, "/#{user.username}/posts/#{post.id}").status == 404
     end
 
     # The member's AI choice covers their posts: the permalink page and its
@@ -191,7 +191,7 @@ defmodule VutuvWeb.PostControllerTest do
       # entry id; the permalink shows the bare post.
       for {path, menu_id} <- [
             {Posts.path(post), "post-menu-#{post.id}"},
-            {"/#{author.active_slug}/posts", "post-menu-post-#{post.id}"}
+            {"/#{author.username}/posts", "post-menu-post-#{post.id}"}
           ] do
         html = html_response(get(author_conn, path), 200)
 
@@ -220,7 +220,7 @@ defmodule VutuvWeb.PostControllerTest do
       original = create_post!(insert_activated_user(), %{body: "originally elsewhere"})
       :ok = Posts.repost_post(reposter, original)
 
-      html = html_response(get(conn, "/#{reposter.active_slug}/posts"), 200)
+      html = html_response(get(conn, "/#{reposter.username}/posts"), 200)
 
       assert html =~ "originally elsewhere"
       assert html =~ "Reposted by Renate Repost"
@@ -253,13 +253,13 @@ defmodule VutuvWeb.PostControllerTest do
         Posts.create_post(user, %{body: "members words", denials: [%{"wildcard" => "logged_out"}]})
 
       # Anonymous: only the public post.
-      anonymous = get(conn, "/#{user.active_slug}/posts")
+      anonymous = get(conn, "/#{user.username}/posts")
       assert html_response(anonymous, 200) =~ "open words"
       refute anonymous.resp_body =~ "members words"
 
       # A logged-in member sees both.
       {member_conn, _member} = create_and_login_user(conn)
-      member_view = get(member_conn, "/#{user.active_slug}/posts")
+      member_view = get(member_conn, "/#{user.username}/posts")
       assert member_view.resp_body =~ "open words"
       assert member_view.resp_body =~ "members words"
     end
@@ -281,19 +281,19 @@ defmodule VutuvWeb.PostControllerTest do
 
       today = current.published_on
 
-      year_view = get(conn, "/#{user.active_slug}/posts/2025")
+      year_view = get(conn, "/#{user.username}/posts/2025")
       assert html_response(year_view, 200) =~ "from last year"
       refute year_view.resp_body =~ "from today"
 
-      month_view = get(conn, "/#{user.active_slug}/posts/#{today.year}/#{pad(today.month)}")
+      month_view = get(conn, "/#{user.username}/posts/#{today.year}/#{pad(today.month)}")
       assert month_view.resp_body =~ "from today"
       refute month_view.resp_body =~ "from last year"
 
-      day_view = get(conn, "/#{user.active_slug}/posts/2025/12/31")
+      day_view = get(conn, "/#{user.username}/posts/2025/12/31")
       assert day_view.resp_body =~ "from last year"
       refute day_view.resp_body =~ "from today"
 
-      empty_view = get(conn, "/#{user.active_slug}/posts/2024")
+      empty_view = get(conn, "/#{user.username}/posts/2024")
       assert html_response(empty_view, 200) =~ "Nothing here yet."
     end
 
@@ -303,22 +303,22 @@ defmodule VutuvWeb.PostControllerTest do
       date = post.published_on
 
       conn =
-        get(conn, "/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}/#{pad(date.day)}")
+        get(conn, "/#{user.username}/posts/#{date.year}/#{pad(date.month)}/#{pad(date.day)}")
 
       assert conn.resp_body =~ "All posts"
-      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts")
-      assert conn.resp_body =~ ~s(href="/#{user.active_slug}/posts/#{date.year}")
+      assert conn.resp_body =~ ~s(href="/#{user.username}/posts")
+      assert conn.resp_body =~ ~s(href="/#{user.username}/posts/#{date.year}")
 
       assert conn.resp_body =~
-               ~s(href="/#{user.active_slug}/posts/#{date.year}/#{pad(date.month)}")
+               ~s(href="/#{user.username}/posts/#{date.year}/#{pad(date.month)}")
     end
 
     test "404s for nonsense period segments", %{conn: conn} do
       user = insert_activated_user()
 
-      assert get(conn, "/#{user.active_slug}/posts/abcd").status == 404
-      assert get(conn, "/#{user.active_slug}/posts/2026/13").status == 404
-      assert get(conn, "/#{user.active_slug}/posts/2026/02/30").status == 404
+      assert get(conn, "/#{user.username}/posts/abcd").status == 404
+      assert get(conn, "/#{user.username}/posts/2026/13").status == 404
+      assert get(conn, "/#{user.username}/posts/2026/02/30").status == 404
     end
   end
 
@@ -329,13 +329,13 @@ defmodule VutuvWeb.PostControllerTest do
 
       # The exact archive href (closing quote included): permalinks also
       # start with /posts/ but continue with the post id.
-      archive_href = ~s(href="/#{user.active_slug}/posts")
+      archive_href = ~s(href="/#{user.username}/posts")
 
-      conn_without = get(conn, "/#{user.active_slug}")
+      conn_without = get(conn, "/#{user.username}")
       refute conn_without.resp_body =~ archive_href
 
       {:ok, _} = Posts.create_post(user, %{body: "post 4"})
-      conn_with = get(conn, "/#{user.active_slug}")
+      conn_with = get(conn, "/#{user.username}")
       assert conn_with.resp_body =~ archive_href
       assert conn_with.resp_body =~ "View all"
     end
@@ -350,7 +350,7 @@ defmodule VutuvWeb.PostControllerTest do
       html = conn |> get(Posts.path(reply)) |> html_response(200)
 
       # The banner names the account handle, not the clear name.
-      assert html =~ "Replying to @#{parent_author.active_slug}"
+      assert html =~ "Replying to @#{parent_author.username}"
       refute html =~ "Replying to Petra Parent"
       assert html =~ Posts.path(parent)
     end
@@ -364,9 +364,9 @@ defmodule VutuvWeb.PostControllerTest do
 
       html = conn |> get(Posts.path(reply)) |> html_response(200)
 
-      assert html =~ "Reply to a now-deleted post by @#{parent_author.active_slug}"
+      assert html =~ "Reply to a now-deleted post by @#{parent_author.username}"
       refute html =~ "by Petra Parent"
-      assert html =~ ~s(href="/#{parent_author.active_slug}")
+      assert html =~ ~s(href="/#{parent_author.username}")
     end
 
     test "after the parent author's account deletion the banner is nameless", %{conn: conn} do
@@ -419,7 +419,7 @@ defmodule VutuvWeb.PostControllerTest do
 
       conn = delete(conn, "/posts/#{post.id}")
 
-      assert redirected_to(conn) == "/#{user.active_slug}"
+      assert redirected_to(conn) == "/#{user.username}"
       refute Posts.get_post(post.id)
     end
 

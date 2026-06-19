@@ -38,7 +38,7 @@ defmodule Vutuv.AdsTest do
       assert email.text_body =~ "10115"
       assert email.text_body =~ "1.250,00"
       assert email.text_body =~ @valid_attrs["content"]
-      assert email.text_body =~ "@#{user.active_slug}"
+      assert email.text_body =~ "@#{user.username}"
       assert email.subject =~ Calendar.strftime(ad.day, "%d.%m.%Y")
     end
 

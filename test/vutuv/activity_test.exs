@@ -79,7 +79,7 @@ defmodule Vutuv.ActivityTest do
       assert n.kind == "follower"
       assert n.id == "follower-#{connection.id}"
       assert n.actor_name == "Grace Hopper"
-      assert n.actor_param == follower.active_slug
+      assert n.actor_param == follower.username
       assert %NaiveDateTime{} = n.at
     end
 
@@ -94,7 +94,7 @@ defmodule Vutuv.ActivityTest do
       assert n.kind == "endorsement"
       assert n.tag == "Phoenix"
       assert n.actor_name == "Ada Lovelace"
-      assert n.actor_param == endorser.active_slug
+      assert n.actor_param == endorser.username
       # Read side must carry the same actor triple as the live notify_* payload.
       assert Map.has_key?(n, :actor_avatar)
     end
@@ -221,7 +221,7 @@ defmodule Vutuv.ActivityTest do
       assert n.kind == "reply"
       assert n.id == "reply-#{ref.id}"
       assert n.actor_name == "Joe Armstrong"
-      assert n.actor_param == replier.active_slug
+      assert n.actor_param == replier.username
       assert %NaiveDateTime{} = n.at
     end
 

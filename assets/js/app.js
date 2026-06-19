@@ -235,12 +235,12 @@ window.addEventListener("phx:page-loading-stop", setupToasts)
 
 // Username availability. The new-username form (slug/form_content) marks its
 // input with data-availability-url; as the user types, ask the server whether
-// the handle is valid and free and show the verdict in the #slug-availability
+// the handle is valid and free and show the verdict in the #username-availability
 // hint line, so "already taken" appears before the form is submitted. Plain
 // JS on a classic controller page (no LiveView there).
 function setupSlugAvailability() {
   const input = document.querySelector("input[data-availability-url]")
-  const hint = document.getElementById("slug-availability")
+  const hint = document.getElementById("username-availability")
   if (!input || !hint) return
 
   let timer = null

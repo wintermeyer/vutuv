@@ -66,7 +66,10 @@ defmodule VutuvWeb.AgentDocs do
 
   # v2 (2026-06): email entries gained a `type` and changed shape from a bare
   # address string to a `{id, type, value}` map, matching phone_numbers.
-  @schema_version 2
+  # v3 (2026-06): a member's handle is now `username` (was `slug`); post replies'
+  # `author_slug` likewise became `author_username`. The DB column + the whole
+  # codebase moved from `active_slug` to `username` to match what humans call it.
+  @schema_version 3
 
   @content_types %{
     md: "text/markdown",
@@ -281,8 +284,8 @@ defmodule VutuvWeb.AgentDocs do
   def person_ref(user) do
     %{
       name: VutuvWeb.UserHelpers.full_name(user),
-      slug: user.active_slug,
-      url: abs_url("/" <> user.active_slug)
+      username: user.username,
+      url: abs_url("/" <> user.username)
     }
   end
 

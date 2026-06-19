@@ -61,7 +61,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       user = Repo.reload!(user)
       assert user.avatar_fingerprint =~ ~r/\A[0-9a-f]{12}\z/
       fp = user.avatar_fingerprint
-      slug = user.active_slug
+      slug = user.username
 
       dir = Path.join(tmp, "avatars/#{user.id}")
       assert File.exists?(Path.join(dir, "#{slug}-thumb-#{fp}.avif"))
@@ -137,7 +137,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       assert File.exists?(
                Path.join(
                  tmp,
-                 "avatars/#{user.id}/#{user.active_slug}-thumb-#{user.avatar_fingerprint}.avif"
+                 "avatars/#{user.id}/#{user.username}-thumb-#{user.avatar_fingerprint}.avif"
                )
              )
     end
@@ -157,7 +157,7 @@ defmodule Vutuv.Uploads.RegeneratorTest do
       fp = user.cover_fingerprint
       assert fp =~ ~r/\A[0-9a-f]{12}\z/
 
-      wide = Path.join(dir, "#{user.active_slug}-wide-#{fp}.avif")
+      wide = Path.join(dir, "#{user.username}-wide-#{fp}.avif")
       assert File.exists?(wide)
       assert File.exists?(Path.join(tmp, "originals/covers/#{user.id}/original.jpg"))
       # Legacy derived file kept for rollback (expand).

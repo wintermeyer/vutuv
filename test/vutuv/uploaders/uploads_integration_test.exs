@@ -65,7 +65,7 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert File.exists?(
              Path.join(
                tmp,
-               "avatars/#{user.id}/#{updated.active_slug}-thumb-#{updated.avatar_fingerprint}.avif"
+               "avatars/#{user.id}/#{updated.username}-thumb-#{updated.avatar_fingerprint}.avif"
              )
            )
 
@@ -109,12 +109,12 @@ defmodule Vutuv.UploadsIntegrationTest do
         avatar: %Plug.Upload{filename: "me.png", path: png_fixture(), content_type: "image/png"}
       })
 
-    old_slug = user.active_slug
+    old_slug = user.username
     fp = user.avatar_fingerprint
     assert File.exists?(Path.join(tmp, "avatars/#{user.id}/#{old_slug}-medium-#{fp}.avif"))
 
-    {:ok, renamed} = Vutuv.Accounts.update_active_slug(user, %{active_slug: "ada_new_handle"})
-    assert renamed.active_slug == "ada_new_handle"
+    {:ok, renamed} = Vutuv.Accounts.update_username(user, %{username: "ada_new_handle"})
+    assert renamed.username == "ada_new_handle"
 
     # The image moved with the handle (same content, same fingerprint), and the
     # URL the app now emits points at a file that exists.
@@ -149,7 +149,7 @@ defmodule Vutuv.UploadsIntegrationTest do
     assert File.exists?(
              Path.join(
                tmp,
-               "covers/#{user.id}/#{updated.active_slug}-wide-#{updated.cover_fingerprint}.avif"
+               "covers/#{user.id}/#{updated.username}-wide-#{updated.cover_fingerprint}.avif"
              )
            )
 

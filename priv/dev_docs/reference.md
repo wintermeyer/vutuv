@@ -34,7 +34,7 @@ auth() { curl -sS -H "Authorization: Bearer $VUTUV_TOKEN" "$@"; }
 
 ## Profile
 
-### GET /me · GET /users/:slug
+### GET /me · GET /users/:username
 
 Scope: `profile:read`. Your own profile (through your own eyes: private
 email addresses included) — or another member's, where you see exactly what
@@ -52,7 +52,7 @@ auth $API/users/wintermeyer
   "type": "profile",
   "schema_version": 1,
   "name": "Stefan Wintermeyer",
-  "slug": "wintermeyer",
+  "username": "wintermeyer",
   "headline_markdown": "Phoenix, Elixir & web performance.",
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
   "emails": ["stefan@example.com"],
@@ -85,10 +85,10 @@ auth -X PATCH $API/me \
 Sections: `work_experiences`, `links`, `social_media_accounts`,
 `addresses`, `phone_numbers`, `emails` (read-only), `tags`.
 
-### GET /users/:slug/&lt;section&gt;
+### GET /users/:username/&lt;section&gt;
 
 Scope: `profile:read`. The section's entries (the same shape as the public
-`/slug/<section>.json` pages, plus entry `id`s). The email list is
+`/username/<section>.json` pages, plus entry `id`s). The email list is
 viewer-dependent: public addresses, or all of them when you are the owner
 or the owner follows you.
 
@@ -135,12 +135,12 @@ auth -X DELETE $API/me/tags/0190abcd-…
 
 ## Social graph
 
-### GET /users/:slug/followers · /following · /connections
+### GET /users/:username/followers · /following · /connections
 
 Scope: `social:read`. The people lists (same doc shape as the public
 `.json` pages; followers/following paginate with `?page=N`).
 
-### GET /users/:slug/relationship
+### GET /users/:username/relationship
 
 Scope: `social:read`. Your standing with that member — what the profile
 header shows you:
@@ -162,7 +162,7 @@ auth $API/users/wintermeyer/relationship
 `connection.status` is one of `none`, `pending_sent`, `pending_received`,
 `accepted`, `declined`.
 
-### PUT /users/:slug/follow · DELETE /users/:slug/follow
+### PUT /users/:username/follow · DELETE /users/:username/follow
 
 Scope: `social:write`. Follow (idempotent; `201` on a new follow, `200`
 when already following) and unfollow (`204`; `404` when not following).
@@ -197,7 +197,7 @@ both directions, like on the website.
 Scope: `posts:read`. The permalink doc — body, tags, images, the reply
 list you are allowed to see.
 
-### GET /users/:slug/posts
+### GET /users/:username/posts
 
 Scope: `posts:read`. The author archive (posts + reposts, `?page=N`),
 entries with `id`, `url`, `excerpt`, `reposted_by`.
@@ -216,9 +216,9 @@ auth "$API/feed?cursor=NEXT_CURSOR_FROM_LAST_PAGE"
 {
   "type": "feed",
   "posts": [{"id": "0190…", "url": "…", "published_on": "2026-06-12",
-             "author": {"name": "…", "slug": "…", "url": "…"},
+             "author": {"name": "…", "username": "…", "url": "…"},
              "body_markdown": "…", "tags": [],
-             "reposted_by": {"name": "…", "slug": "…", "url": "…"}}],
+             "reposted_by": {"name": "…", "username": "…", "url": "…"}}],
   "more": true,
   "next_cursor": "SFMyNTY…"
 }
@@ -323,7 +323,7 @@ Scope: `messages:read`. The thread, newest first, cursor-paginated.
 auth "$API/conversations/0190…/messages?limit=30"
 ```
 
-### POST /users/:slug/messages · POST /conversations/:id/messages
+### POST /users/:username/messages · POST /conversations/:id/messages
 
 Scope: `messages:write`. Send by member (finds or opens the conversation)
 or into a known conversation. Markdown body.
@@ -361,7 +361,7 @@ auth $API/notifications
   "type": "notifications",
   "unread": 2,
   "notifications": [{"id": "follower-0190…", "kind": "follower",
-                     "actor_name": "Greta Tester", "actor_slug": "greta-tester",
+                     "actor_name": "Greta Tester", "actor_username": "greta-tester",
                      "at": "2026-06-11T14:00:00"}],
   "more": false,
   "next_cursor": null

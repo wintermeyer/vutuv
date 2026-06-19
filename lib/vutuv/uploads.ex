@@ -220,7 +220,7 @@ defmodule Vutuv.Uploads do
   username change, so the slug-in-the-filename URL keeps resolving. A no-op for a
   row not yet on the fingerprinted scheme (its legacy URL is name/id-based, not
   slug-based). Works off the private original, so it never depends on the
-  old-handle files still being present. See `Accounts.update_active_slug/2`.
+  old-handle files still being present. See `Accounts.update_username/2`.
   """
   def reslug(user, config) do
     if Map.get(user, config.fingerprint_field) do
@@ -368,7 +368,7 @@ defmodule Vutuv.Uploads do
   @doc """
   The served filename scheme B writes and serves: `<handle>-<version>-<fp>.avif`.
   One source of truth for both the on-disk write (store/regenerate) and the URL,
-  so they always match. The handle is the scope's `active_slug` (filesystem-safe
+  so they always match. The handle is the scope's `username` (filesystem-safe
   by validation, `^[a-z0-9_]+$`); a missing slug degrades to the asset kind.
   """
   def fingerprinted_filename(scope, version, fp, config) do
@@ -382,7 +382,7 @@ defmodule Vutuv.Uploads do
     |> URI.encode()
   end
 
-  defp handle(scope, config), do: Map.get(scope, :active_slug) || to_string(config.spec_key)
+  defp handle(scope, config), do: Map.get(scope, :username) || to_string(config.spec_key)
 
   # The fingerprint stored on the scope for this asset (`:avatar_fingerprint` /
   # `:cover_fingerprint`), or nil when the row predates scheme B or the config

@@ -94,7 +94,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
     %{
       url: AgentDocs.abs_url(Posts.path(reply)),
       author: UserHelpers.full_name(reply.user),
-      author_slug: reply.user.active_slug,
+      author_username: reply.user.username,
       published_on: reply.published_on,
       body_markdown: reply.body
     }

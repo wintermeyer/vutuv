@@ -247,7 +247,7 @@ defmodule Vutuv.SocialTest do
 
       assert [row] = Social.most_followed_users(1)
       assert row.id == user.id
-      assert row.active_slug == user.active_slug
+      assert row.username == user.username
       assert row.first_name == user.first_name
       assert row.honorific_prefix == "Dr."
 

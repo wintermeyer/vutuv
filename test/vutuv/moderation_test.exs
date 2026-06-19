@@ -916,7 +916,7 @@ defmodule Vutuv.ModerationTest do
       alias Vutuv.Moderation.EvidenceScreenshot
 
       profile_case = report!(reporter, owner)
-      assert EvidenceScreenshot.evidence_url(profile_case) =~ "/#{owner.active_slug}"
+      assert EvidenceScreenshot.evidence_url(profile_case) =~ "/#{owner.username}"
 
       conversation = insert_conversation_between(owner, reporter)
       message = insert(:message, conversation: conversation, sender: owner)
@@ -947,7 +947,7 @@ defmodule Vutuv.ModerationTest do
         Enum.find(flush_emails(), &(&1.subject =~ "profile")) ||
           flunk("no urgent admin email was sent")
 
-      assert email.text_body =~ "@#{owner.active_slug}"
+      assert email.text_body =~ "@#{owner.username}"
       assert email.text_body =~ "Bullying or harassment"
       assert email.text_body =~ "harasses me in DMs"
       assert email.text_body =~ "admin/moderation/"

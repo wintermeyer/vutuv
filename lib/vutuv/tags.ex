@@ -103,7 +103,7 @@ defmodule Vutuv.Tags do
   endorsers are neither listed nor counted (issue #783), and is offset
   paginated by `Vutuv.Pages.paginate/3` like the follower / connection lists.
   The list is sortable from `params`: `"sort"` is one of `name` (last name
-  then first name), `username` (the `active_slug`) or `date` (the endorsement
+  then first name), `username` (the `username`) or `date` (the endorsement
   itself), and `"dir"` is `"asc"`/`"desc"`. Default is `date` descending —
   newest endorser first — and `e.id` (a time-ordered UUID v7) is the stable
   tiebreaker for every sort. Offset paginated at `endorsers_per_page/0` (a
@@ -156,7 +156,7 @@ defmodule Vutuv.Tags do
 
   defp endorser_order(query, "username", dir) do
     d = dir_atom(dir)
-    order_by(query, [e, u], [{^d, u.active_slug}, desc: e.id])
+    order_by(query, [e, u], [{^d, u.username}, desc: e.id])
   end
 
   defp endorser_order(query, "date", dir) do

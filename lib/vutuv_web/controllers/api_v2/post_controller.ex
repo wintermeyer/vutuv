@@ -41,7 +41,7 @@ defmodule VutuvWeb.ApiV2.PostController do
 
     ApiV2.with_visible_user(conn, slug, fn author ->
       {entries, total} = Posts.author_posts_page(author, viewer, params)
-      path = "/#{author.active_slug}/posts"
+      path = "/#{author.username}/posts"
       ApiV2.send_json(conn, PostDoc.build_archive(author, path, entries, total, nil))
     end)
   end

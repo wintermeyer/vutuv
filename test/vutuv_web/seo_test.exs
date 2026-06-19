@@ -64,13 +64,13 @@ defmodule VutuvWeb.SeoTest do
     test "profile canonical is the absolute profile URL", %{conn: conn} do
       user = insert_activated_user()
       body = conn |> get(~p"/#{user}") |> html_response(200)
-      assert canonical_href(body) == Endpoint.url() <> "/#{user.active_slug}"
+      assert canonical_href(body) == Endpoint.url() <> "/#{user.username}"
     end
 
     test "the ?lang query is dropped from the canonical", %{conn: conn} do
       user = insert_activated_user()
-      body = conn |> get("/#{user.active_slug}?lang=de") |> html_response(200)
-      assert canonical_href(body) == Endpoint.url() <> "/#{user.active_slug}"
+      body = conn |> get("/#{user.username}?lang=de") |> html_response(200)
+      assert canonical_href(body) == Endpoint.url() <> "/#{user.username}"
     end
 
     test "post permalink canonical is the absolute permalink", %{conn: conn} do

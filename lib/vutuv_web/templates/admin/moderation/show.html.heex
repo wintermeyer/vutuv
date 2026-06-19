@@ -18,7 +18,7 @@
               href={~p"/#{@case.owner}"}
               class="font-semibold text-brand-600 hover:text-brand-700"
             >
-              @{@case.owner.active_slug}
+              @{@case.owner.username}
             </a>
             <span class={[
               "ml-2",
@@ -137,7 +137,7 @@
           ]}
         >
           <span class="font-semibold">
-            @{(message.sender && message.sender.active_slug) || gettext("(deleted account)")}:
+            @{(message.sender && message.sender.username) || gettext("(deleted account)")}:
           </span>
           {message.body}
         </p>
@@ -159,7 +159,7 @@
             href={~p"/#{report.reporter}"}
             class="ml-1 font-semibold text-brand-600 hover:text-brand-700"
           >
-            @{report.reporter.active_slug}
+            @{report.reporter.username}
           </a>
           <% stats = @reporter_stats[report.id] %>
           <span class="text-slate-500">
@@ -209,7 +209,7 @@
             href={~p"/#{event.actor}"}
             class="text-slate-500 hover:text-brand-700"
           >
-            · @{event.actor.active_slug}
+            · @{event.actor.username}
           </a>
           <% detail = event_detail(event.action, event.detail) %>
           <span :if={detail not in [nil, ""]} class="text-slate-500">· {detail}</span>
@@ -254,7 +254,7 @@
           <input type="checkbox" name="abusive_report_ids[]" value={report.id} class="mt-0.5" />
           <span>
             {gettext("The report by @%{slug} was a deliberate weapon (strikes the reporter)",
-              slug: report.reporter.active_slug
+              slug: report.reporter.username
             )}
           </span>
         </label>

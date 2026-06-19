@@ -22,7 +22,7 @@ defmodule Vutuv.ActivityEmailTest do
   describe "new follower email" do
     test "sent when the recipient opted in, naming the follower by @handle" do
       followee = recipient(email_on_follower?: true)
-      follower = insert(:activated_user, active_slug: "ann.actor")
+      follower = insert(:activated_user, username: "ann.actor")
 
       Activity.notify_new_follower(followee.id, follower)
 
@@ -51,7 +51,7 @@ defmodule Vutuv.ActivityEmailTest do
   describe "endorsement email" do
     test "sent when opted in and names the tag" do
       owner = recipient(email_on_endorsement?: true)
-      endorser = insert(:activated_user, active_slug: "ed.actor")
+      endorser = insert(:activated_user, username: "ed.actor")
 
       Activity.notify_endorsement(owner.id, endorser, "Elixir")
 
@@ -71,7 +71,7 @@ defmodule Vutuv.ActivityEmailTest do
   describe "connection request email" do
     test "sent when opted in" do
       target = recipient(email_on_connection_request?: true)
-      requester = insert(:activated_user, active_slug: "req.actor")
+      requester = insert(:activated_user, username: "req.actor")
 
       Activity.notify_connection_request(target.id, requester)
 

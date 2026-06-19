@@ -135,7 +135,7 @@ defmodule Vutuv.Webhooks do
 
   defp envelope(member_id, event, data) do
     # Only the slug is needed for the thin envelope, not the wide user row.
-    member_slug = Repo.one!(from(u in User, where: u.id == ^member_id, select: u.active_slug))
+    member_slug = Repo.one!(from(u in User, where: u.id == ^member_id, select: u.username))
 
     %{
       "event" => event,

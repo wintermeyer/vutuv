@@ -82,7 +82,7 @@ defmodule VutuvWeb.PasskeyControllerTest do
 
       body = json_response(conn, 200)
       assert body["rp"]["id"] == "localhost"
-      assert body["user"]["name"] == user.active_slug
+      assert body["user"]["name"] == user.username
       assert %Wax.Challenge{} = get_session(conn, :webauthn_reg_challenge)
     end
 

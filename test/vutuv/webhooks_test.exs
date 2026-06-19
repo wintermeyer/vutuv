@@ -129,7 +129,7 @@ defmodule Vutuv.WebhooksTest do
       assert [delivery] = Repo.all(Delivery)
       assert delivery.subscription_id == subscription.id
       assert delivery.event == "follower.created"
-      assert delivery.payload["member"] == member.active_slug
+      assert delivery.payload["member"] == member.username
       assert delivery.payload["data"] == %{"follower" => "someone"}
 
       # The granted scope does not cover posts events: nothing for a like.
@@ -178,7 +178,7 @@ defmodule Vutuv.WebhooksTest do
 
       assert [delivery] = Repo.all(Delivery)
       assert delivery.event == "follower.created"
-      assert delivery.payload["data"]["follower"] == follower.active_slug
+      assert delivery.payload["data"]["follower"] == follower.username
     end
   end
 

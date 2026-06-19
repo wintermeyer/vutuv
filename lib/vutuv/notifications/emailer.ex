@@ -199,14 +199,14 @@ defmodule Vutuv.Notifications.Emailer do
     |> subject(
       recipient_subject(locale, fn ->
         gettext("New message from @%{slug} on vutuv",
-          slug: other.active_slug
+          slug: other.username
         )
       end)
     )
     |> text_body(
       VutuvWeb.EmailText.render("unread_messages_#{locale}.text", %{
         user: user,
-        other_slug: other.active_slug,
+        other_slug: other.username,
         conversation_id: conversation_id,
         url: public_url(),
         unsubscribe_url: unsubscribe_url
@@ -226,8 +226,8 @@ defmodule Vutuv.Notifications.Emailer do
       user,
       "new_follower",
       :email_on_follower?,
-      fn -> gettext("@%{slug} started following you on vutuv", slug: follower.active_slug) end,
-      %{actor_slug: follower.active_slug}
+      fn -> gettext("@%{slug} started following you on vutuv", slug: follower.username) end,
+      %{actor_username: follower.username}
     )
   end
 
@@ -240,8 +240,8 @@ defmodule Vutuv.Notifications.Emailer do
       user,
       "endorsement",
       :email_on_endorsement?,
-      fn -> gettext("@%{slug} endorsed you on vutuv", slug: endorser.active_slug) end,
-      %{actor_slug: endorser.active_slug, tag_name: tag_name}
+      fn -> gettext("@%{slug} endorsed you on vutuv", slug: endorser.username) end,
+      %{actor_username: endorser.username, tag_name: tag_name}
     )
   end
 
@@ -255,8 +255,8 @@ defmodule Vutuv.Notifications.Emailer do
       user,
       "connection_request",
       :email_on_connection_request?,
-      fn -> gettext("@%{slug} wants to connect on vutuv", slug: requester.active_slug) end,
-      %{actor_slug: requester.active_slug}
+      fn -> gettext("@%{slug} wants to connect on vutuv", slug: requester.username) end,
+      %{actor_username: requester.username}
     )
   end
 
@@ -312,7 +312,7 @@ defmodule Vutuv.Notifications.Emailer do
       ip: session.ip_address,
       when_text: format_login_time(session.inserted_at),
       reason_lines: security_reason_lines(reasons, locale),
-      devices_url: "#{public_url()}#{user.active_slug}/settings"
+      devices_url: "#{public_url()}#{user.username}/settings"
     }
 
     build_email(user, email, "security_alert", assigns, fn ->
@@ -477,7 +477,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     assigns = %{
       case_id: case_record.id,
-      owner_slug: case_record.owner.active_slug,
+      owner_slug: case_record.owner.username,
       category_label: localized_category_label(report, user),
       note: report && presence(report.note),
       report_count: length(case_record.reports)
