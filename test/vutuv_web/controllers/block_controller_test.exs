@@ -34,7 +34,7 @@ defmodule VutuvWeb.BlockControllerTest do
     {:ok, block} = Social.block_user(user, other)
 
     body = conn |> get(~p"/blocks") |> html_response(200)
-    assert body =~ "@#{other.active_slug}"
+    assert body =~ "@#{other.username}"
     assert body =~ ~p"/blocks/#{block.id}"
   end
 
@@ -50,7 +50,7 @@ defmodule VutuvWeb.BlockControllerTest do
     other: other
   } do
     # A leading "@" and odd casing both have to resolve to the active slug.
-    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{String.upcase(other.active_slug)}"})
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{String.upcase(other.username)}"})
 
     assert redirected_to(conn) == ~p"/blocks"
     assert Social.blocked_between?(user.id, other.id)
@@ -72,7 +72,7 @@ defmodule VutuvWeb.BlockControllerTest do
   end
 
   test "POST /blocks refuses blocking yourself by handle", %{conn: conn, user: user} do
-    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{user.active_slug}"})
+    conn = post(conn, ~p"/blocks", block: %{"handle" => "@#{user.username}"})
 
     assert redirected_to(conn) == ~p"/blocks"
     refute Social.blocked_between?(user.id, user.id)
@@ -85,7 +85,7 @@ defmodule VutuvWeb.BlockControllerTest do
   } do
     {:ok, _block} = Social.block_user(user, other)
 
-    conn = post(conn, ~p"/blocks", block: %{"handle" => other.active_slug})
+    conn = post(conn, ~p"/blocks", block: %{"handle" => other.username})
 
     assert redirected_to(conn) == ~p"/blocks"
     assert length(Social.list_blocked(user)) == 1

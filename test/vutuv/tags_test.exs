@@ -171,7 +171,7 @@ defmodule Vutuv.TagsTest do
       assert_receive {:new_notification,
                       %{kind: "endorsement", tag: "Phoenix", actor_name: "Ada Lovelace"} = n}
 
-      assert n.actor_param == endorser.active_slug
+      assert n.actor_param == endorser.username
     end
 
     test "create_endorsement/1 does not notify on a self-endorsement" do

@@ -27,7 +27,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert has_element?(live, "#notification-follower-#{connection.id}")
 
       # The actor's name links to their profile.
-      assert render(live) =~ ~s(href="/#{follower.active_slug}")
+      assert render(live) =~ ~s(href="/#{follower.username}")
     end
 
     test "a derived row shows the actor's real avatar when they have one", %{conn: conn} do
@@ -109,7 +109,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       assert html =~ "wants to connect with you"
       # The event text links to where the request can be answered.
-      assert html =~ ~s(href="/#{user.active_slug}/connections")
+      assert html =~ ~s(href="/#{user.username}/connections")
     end
 
     test "a reply notification links to the parent post's thread", %{conn: conn} do
@@ -120,7 +120,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      assert render(live) =~ ~s(href="/#{user.active_slug}/posts/#{parent.id}")
+      assert render(live) =~ ~s(href="/#{user.username}/posts/#{parent.id}")
     end
 
     test "a like is shown and links to the liked post", %{conn: conn} do
@@ -134,7 +134,7 @@ defmodule VutuvWeb.NotificationLiveTest do
       html = render(live)
 
       assert html =~ "liked your post"
-      assert html =~ ~s(href="/#{user.active_slug}/posts/#{post.id}")
+      assert html =~ ~s(href="/#{user.username}/posts/#{post.id}")
     end
 
     test "kind labels render as human text, not raw kind strings", %{conn: conn} do
@@ -334,7 +334,7 @@ defmodule VutuvWeb.NotificationLiveTest do
 
       html = render(live)
       assert html =~ "Grace Hopper"
-      assert html =~ ~s(href="/#{follower.active_slug}")
+      assert html =~ ~s(href="/#{follower.username}")
     end
   end
 

@@ -4,7 +4,7 @@ defmodule VutuvWeb.VCardControllerTest do
   use VutuvWeb.ConnCase, async: false
 
   setup do
-    user = insert_activated_user(active_slug: "vcard-tester")
+    user = insert_activated_user(username: "vcard-tester")
     %{user: user}
   end
 
@@ -59,7 +59,7 @@ defmodule VutuvWeb.VCardControllerTest do
 
   test "the N field carries all five components incl. the honorific suffix" do
     insert_activated_user(
-      active_slug: "phd-tester",
+      username: "phd-tester",
       first_name: "Ada",
       last_name: "Lovelace",
       honorific_prefix: "Dr.",

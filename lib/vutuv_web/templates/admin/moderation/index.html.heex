@@ -48,7 +48,7 @@
             |> Enum.map_join(", ", &category_label/1)}
           </td>
           <td>
-            <a href={~p"/#{case_record.owner}"}>@{case_record.owner.active_slug}</a>
+            <a href={~p"/#{case_record.owner}"}>@{case_record.owner.username}</a>
           </td>
           <td>{length(case_record.reports)}</td>
           <td>{Calendar.strftime(case_record.inserted_at, "%Y-%m-%d %H:%M")}</td>

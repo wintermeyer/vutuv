@@ -7,7 +7,7 @@ defmodule Vutuv.SlugHelpers do
   @short_sha_length 8
 
   # User handles follow the Twitter username mechanism (see
-  # Vutuv.Accounts.User.slug_changeset/2): 15 characters max, so a suffixed
+  # Vutuv.Accounts.User.username_changeset/2): 15 characters max, so a suffixed
   # handle is 6 (base) + 1 ("_") + 8 (short sha) characters.
   @handle_max_length 15
   @handle_base_with_suffix 6

@@ -1,4 +1,4 @@
-defmodule VutuvWeb.SlugControllerTest do
+defmodule VutuvWeb.UsernameControllerTest do
   @moduledoc """
   Changing the username (@handle). One owner-only page: the change form with
   the live availability check and the visible quota (4 changes per 90 days).
@@ -14,17 +14,17 @@ defmodule VutuvWeb.SlugControllerTest do
       {conn, _user} = create_and_login_user(conn)
       other = insert_activated_user()
 
-      assert conn |> get("/#{other.active_slug}/slugs/new") |> html_response(403)
+      assert conn |> get("/#{other.username}/usernames/new") |> html_response(403)
     end
 
     test "guests cannot see or use the username page", %{conn: conn} do
       user = insert_activated_user()
 
-      assert conn |> get("/#{user.active_slug}/slugs/new") |> html_response(403)
+      assert conn |> get("/#{user.username}/usernames/new") |> html_response(403)
 
-      conn = post(conn, "/#{user.active_slug}/slugs", user: %{"active_slug" => "hijacked"})
+      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "hijacked"})
       assert conn.status == 403
-      refute Repo.get(User, user.id).active_slug == "hijacked"
+      refute Repo.get(User, user.id).username == "hijacked"
     end
   end
 
@@ -32,9 +32,9 @@ defmodule VutuvWeb.SlugControllerTest do
     test "shows the current handle and the quota", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      html = conn |> get("/#{user.active_slug}/slugs/new") |> html_response(200)
+      html = conn |> get("/#{user.username}/usernames/new") |> html_response(200)
 
-      assert html =~ "@#{user.active_slug}"
+      assert html =~ "@#{user.username}"
       assert html =~ ~s(id="slug-form")
       # The changeset wraps the persisted user, so the form would infer PUT
       # (a hidden _method override) - but the route is a plain POST create.
@@ -49,10 +49,10 @@ defmodule VutuvWeb.SlugControllerTest do
       db_user = Repo.get(User, user.id)
 
       for n <- 1..4 do
-        {:ok, _} = Vutuv.Accounts.update_active_slug(db_user, %{"active_slug" => "used_up_#{n}"})
+        {:ok, _} = Vutuv.Accounts.update_username(db_user, %{"username" => "used_up_#{n}"})
       end
 
-      html = conn |> get("/used_up_4/slugs/new") |> html_response(200)
+      html = conn |> get("/used_up_4/usernames/new") |> html_response(200)
 
       refute html =~ ~s(id="slug-form")
       assert html =~ gettext("You have used all 4 username changes of the last 90 days.")
@@ -62,12 +62,12 @@ defmodule VutuvWeb.SlugControllerTest do
   describe "create (changing the username)" do
     test "renames the account; the old URL is freed and 404s", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      old_handle = user.active_slug
+      old_handle = user.username
 
-      conn = post(conn, "/#{old_handle}/slugs", user: %{"active_slug" => "Brand_New"})
+      conn = post(conn, "/#{old_handle}/usernames", user: %{"username" => "Brand_New"})
 
       assert redirected_to(conn) == "/brand_new"
-      assert Repo.get(User, user.id).active_slug == "brand_new"
+      assert Repo.get(User, user.id).username == "brand_new"
 
       assert conn |> get("/brand_new") |> html_response(200)
       # No redirect, no reservation: the old handle is gone.
@@ -77,17 +77,17 @@ defmodule VutuvWeb.SlugControllerTest do
     test "an invalid handle re-renders the form with the error", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = post(conn, "/#{user.active_slug}/slugs", user: %{"active_slug" => "not valid!"})
+      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "not valid!"})
 
       assert html_response(conn, 200) =~ "may only contain letters, numbers, and underscores"
-      assert Repo.get(User, user.id).active_slug == user.active_slug
+      assert Repo.get(User, user.id).username == user.username
     end
 
     test "a handle in use by someone else re-renders with the error", %{conn: conn} do
-      insert(:user, active_slug: "wanted_handle")
+      insert(:user, username: "wanted_handle")
       {conn, user} = create_and_login_user(conn)
 
-      conn = post(conn, "/#{user.active_slug}/slugs", user: %{"active_slug" => "wanted_handle"})
+      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "wanted_handle"})
 
       assert html_response(conn, 200) =~ "has already been taken"
     end
@@ -97,21 +97,21 @@ defmodule VutuvWeb.SlugControllerTest do
       db_user = Repo.get(User, user.id)
 
       for n <- 1..4 do
-        {:ok, _} = Vutuv.Accounts.update_active_slug(db_user, %{"active_slug" => "spent_#{n}"})
+        {:ok, _} = Vutuv.Accounts.update_username(db_user, %{"username" => "spent_#{n}"})
       end
 
-      conn = post(conn, "/spent_4/slugs", user: %{"active_slug" => "one_too_many"})
+      conn = post(conn, "/spent_4/usernames", user: %{"username" => "one_too_many"})
 
       assert conn.status == 200
-      assert Repo.get(User, user.id).active_slug == "spent_4"
+      assert Repo.get(User, user.id).username == "spent_4"
     end
   end
 
   describe "availability check" do
     test "answers free, taken, and invalid", %{conn: conn} do
-      insert(:user, active_slug: "claimed_handle")
+      insert(:user, username: "claimed_handle")
       {conn, user} = create_and_login_user(conn)
-      base = "/#{user.active_slug}/slugs/availability"
+      base = "/#{user.username}/usernames/availability"
 
       # The route lives in the :browser pipeline (`accepts ["html"]`), so the
       # form's fetch() must negotiate via its default */* Accept header - an
@@ -135,10 +135,10 @@ defmodule VutuvWeb.SlugControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       # The username moved off the edit form to the Account tab of Settings.
-      html = conn |> get("/#{user.active_slug}/settings") |> html_response(200)
+      html = conn |> get("/#{user.username}/settings") |> html_response(200)
 
-      assert html =~ "@#{user.active_slug}"
-      assert html =~ "/#{user.active_slug}/slugs/new"
+      assert html =~ "@#{user.username}"
+      assert html =~ "/#{user.username}/usernames/new"
     end
   end
 

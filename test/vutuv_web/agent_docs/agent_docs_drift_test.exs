@@ -16,7 +16,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   setup do
     user =
       insert_activated_user(
-        active_slug: "drift_tester",
+        username: "drift_tester",
         first_name: "Greta",
         last_name: "Gradient",
         headline: "Builds bridges between humans and agents",
@@ -247,7 +247,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       doc = Jason.decode!(rendered.json)
       assert doc["type"] == Atom.to_string(section)
       assert doc["total"] == length(doc["entries"])
-      assert doc["user"]["slug"] == "drift_tester"
+      assert doc["user"]["username"] == "drift_tester"
     end
   end
 
@@ -356,7 +356,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "work experiences sort newest first, the ongoing role on top" do
-    user = insert_activated_user(active_slug: "sorted_cv")
+    user = insert_activated_user(username: "sorted_cv")
 
     insert(:work_experience,
       user: user,
@@ -383,7 +383,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "tags sort by endorsement count, ties alphabetically" do
-    user = insert_activated_user(active_slug: "sorted_skills")
+    user = insert_activated_user(username: "sorted_skills")
     endorser = insert_activated_user()
 
     for {name, slug} <- [{"Beta", "beta"}, {"Alpha", "alpha"}, {"Gamma", "gamma"}] do

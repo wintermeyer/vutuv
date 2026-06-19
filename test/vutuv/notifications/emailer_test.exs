@@ -160,7 +160,7 @@ defmodule Vutuv.Notifications.EmailerTest do
 
     test "unread messages email" do
       user = insert(:user, locale: "en")
-      other = insert(:user, active_slug: "the-sender")
+      other = insert(:user, username: "the-sender")
 
       email =
         Emailer.unread_messages_email("unread@example.com", user, other, Vutuv.UUIDv7.generate())
@@ -173,7 +173,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
 
     test "security alert email (issue #786)" do
-      user = insert(:user, locale: "en", active_slug: "alice")
+      user = insert(:user, locale: "en", username: "alice")
 
       {_token, session} =
         Vutuv.Sessions.start_session(user, Plug.Test.conn(:get, "/"), alert: false)
@@ -310,7 +310,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     # /sessions/new paths, which only still work via 301 redirects.
 
     test "the verification notice links the recipient's profile at the root path" do
-      user = insert(:user, locale: "en", active_slug: "verified-user")
+      user = insert(:user, locale: "en", username: "verified-user")
       insert(:email, user: user, value: "verify@example.com")
 
       body = Emailer.verification_notice(user).text_body

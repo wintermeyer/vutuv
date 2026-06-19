@@ -72,7 +72,7 @@ defmodule VutuvWeb.PostImageControllerTest do
       conn = get(conn, "/post_images/#{image.token}/feed.avif")
 
       assert get_resp_header(conn, "content-disposition") ==
-               [~s(inline; filename="#{author.active_slug}-feed.avif")]
+               [~s(inline; filename="#{author.username}-feed.avif")]
     end
 
     test "a legacy .webp URL (old post bodies, bookmarks) still serves the stored file", %{

@@ -14,8 +14,8 @@ too. So this page stays short and unambiguous. --%>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
         <.account_row
           title={gettext("Username")}
-          subtitle={"@" <> @user.active_slug}
-          href={~p"/#{@user}/slugs/new"}
+          subtitle={"@" <> @user.username}
+          href={~p"/#{@user}/usernames/new"}
           label={gettext("Change")}
         />
         <.account_row

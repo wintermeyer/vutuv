@@ -3,19 +3,19 @@
 <.form :let={f} for={@changeset} action={@action} method="post" class="editform" id="slug-form">
   <.form_error changeset={@changeset} />
 
-  <div class={"editform__field#{if error_tag(f, :active_slug), do: " editform__field--error"}"}>
-    <%= label(f, :active_slug, gettext("New username")) %>
-    <%= text_input(f, :active_slug,
+  <div class={"editform__field#{if error_tag(f, :username), do: " editform__field--error"}"}>
+    <%= label(f, :username, gettext("New username")) %>
+    <%= text_input(f, :username,
       autofocus: true,
       maxlength: "15",
       autocomplete: "off",
       autocapitalize: "none",
       spellcheck: "false",
-      data: [availability_url: ~p"/#{@user}/slugs/availability"]
+      data: [availability_url: ~p"/#{@user}/usernames/availability"]
     ) %>
-    <%= error_tag(f, :active_slug) %>
+    <%= error_tag(f, :username) %>
     <%!-- Filled in live by the availability checker in app.js. --%>
-    <p class="editform__hint" id="slug-availability" aria-live="polite"></p>
+    <p class="editform__hint" id="username-availability" aria-live="polite"></p>
     <p class="editform__hint">
       <%= gettext("3 to 15 characters: letters (a-z), numbers (0-9) and underscores.") %>
     </p>

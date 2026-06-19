@@ -167,7 +167,7 @@ defmodule VutuvWeb.OpenGraph do
     size = Vutuv.Avatar.og_size()
 
     %{
-      url: abs_url("/#{user.active_slug}/avatar.jpg"),
+      url: abs_url("/#{user.username}/avatar.jpg"),
       width: size,
       height: size,
       type: "image/jpeg",

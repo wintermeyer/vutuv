@@ -51,14 +51,14 @@
                 {full_name(block.blocked)}
               </.link>
               <p class="truncate text-sm text-slate-500 dark:text-slate-400">
-                @{block.blocked.active_slug}
+                @{block.blocked.username}
               </p>
             </div>
             <.button
               href={~p"/blocks/#{block.id}"}
               method="delete"
               variant="secondary"
-              data-confirm={gettext("Unblock @%{slug}?", slug: block.blocked.active_slug)}
+              data-confirm={gettext("Unblock @%{slug}?", slug: block.blocked.username)}
             >
               {gettext("Unblock")}
             </.button>

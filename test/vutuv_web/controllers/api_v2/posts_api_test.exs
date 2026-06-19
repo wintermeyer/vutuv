@@ -79,7 +79,7 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
     test "the author archive lists posts with ids", %{conn: conn, other: other, token: token} do
       post = insert(:post, user: other, body: "Archived post")
 
-      conn = get(authed(conn, token), "/api/2.0/users/#{other.active_slug}/posts")
+      conn = get(authed(conn, token), "/api/2.0/users/#{other.username}/posts")
       body = json_response(conn, 200)
 
       assert body["total"] == 1

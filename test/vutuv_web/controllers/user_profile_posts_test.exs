@@ -11,7 +11,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
     user = insert_activated_user()
     {:ok, _} = Posts.create_post(user, %{body: "profile post"})
 
-    conn = get(conn, "/#{user.active_slug}")
+    conn = get(conn, "/#{user.username}")
 
     assert html_response(conn, 200) =~ "profile-posts"
     assert conn.resp_body =~ "profile post"
@@ -21,7 +21,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
     user = insert_activated_user()
     {:ok, post} = Posts.create_post(user, %{body: "timed post"})
 
-    conn = get(conn, "/#{user.active_slug}")
+    conn = get(conn, "/#{user.username}")
     body = html_response(conn, 200)
 
     # The <time> tag must carry a UTC-marked datetime ("Z") and the
@@ -34,7 +34,7 @@ defmodule VutuvWeb.UserProfilePostsTest do
   test "the owner sees the card with an Add link even when empty", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    conn = get(conn, "/#{user.active_slug}")
+    conn = get(conn, "/#{user.username}")
 
     assert html_response(conn, 200) =~ "profile-posts"
     assert conn.resp_body =~ ~s(href="/feed")
@@ -46,13 +46,13 @@ defmodule VutuvWeb.UserProfilePostsTest do
     {owner_conn, user} = create_and_login_user(conn)
     {:ok, post} = Vutuv.Posts.create_post(user, %{body: "my post"})
 
-    owner_view = get(owner_conn, "/#{user.active_slug}")
+    owner_view = get(owner_conn, "/#{user.username}")
     assert html_response(owner_view, 200) =~ ~s(id="post-menu-post-#{post.id}")
     assert owner_view.resp_body =~ ~s(href="/posts/#{post.id}/edit")
     assert owner_view.resp_body =~ ~s(data-method="delete")
 
     # The original conn never logged in: a plain visitor.
-    visitor_view = get(conn, "/#{user.active_slug}")
+    visitor_view = get(conn, "/#{user.username}")
     refute html_response(visitor_view, 200) =~ "post-menu-post-#{post.id}"
   end
 
@@ -63,13 +63,13 @@ defmodule VutuvWeb.UserProfilePostsTest do
       Posts.create_post(user, %{body: "members club", denials: [%{"wildcard" => "logged_out"}]})
 
     # Anonymous: the only post is hidden, so no section at all.
-    anonymous = get(conn, "/#{user.active_slug}")
+    anonymous = get(conn, "/#{user.username}")
     refute anonymous.resp_body =~ "profile-posts"
     refute anonymous.resp_body =~ "members club"
 
     # A logged-in member sees it.
     {member_conn, _member} = create_and_login_user(conn)
-    member_view = get(member_conn, "/#{user.active_slug}")
+    member_view = get(member_conn, "/#{user.username}")
     assert member_view.resp_body =~ "members club"
   end
 end

@@ -26,14 +26,14 @@ defmodule VutuvWeb.UnsubscribeControllerTest do
   } do
     conn = get(conn, ~p"/unsubscribe/#{token}")
 
-    assert html_response(conn, 200) =~ "@#{user.active_slug}"
+    assert html_response(conn, 200) =~ "@#{user.username}"
     assert reload(user).notification_emails?
   end
 
   test "POST switches notification emails off", %{conn: conn, user: user, token: token} do
     conn = post(conn, ~p"/unsubscribe/#{token}")
 
-    assert html_response(conn, 200) =~ "@#{user.active_slug}"
+    assert html_response(conn, 200) =~ "@#{user.username}"
     refute reload(user).notification_emails?
   end
 

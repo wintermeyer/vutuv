@@ -274,7 +274,7 @@ defmodule VutuvWeb.SearchLiveTest do
       insert(:activated_user,
         first_name: "Stefan",
         last_name: "Wintermeyer",
-        active_slug: "stefan.wintermeyer"
+        username: "stefan.wintermeyer"
       )
 
       {:ok, view, _html} = live(conn, ~p"/search?q=@stefan")

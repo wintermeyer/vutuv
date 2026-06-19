@@ -36,7 +36,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   def build(user, opts \\ []) do
     user = preload(user)
     viewer = Keyword.get(opts, :viewer)
-    path = "/" <> user.active_slug
+    path = "/" <> user.username
     # The header job, resolved against the already-preloaded experiences
     # (current_job_in_memory mirrors the page's DB-backed current_job/1 on
     # an id-ordered list — UUID v7 ids sort by creation time).
@@ -64,7 +64,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       nickname: user.nickname,
       honorific_prefix: user.honorific_prefix,
       honorific_suffix: user.honorific_suffix,
-      slug: user.active_slug,
+      username: user.username,
       verified: user.identity_verified?,
       headline_markdown: user.headline,
       work_info: work_info,

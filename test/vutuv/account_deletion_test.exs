@@ -17,7 +17,7 @@ defmodule Vutuv.AccountDeletionTest do
   import Vutuv.PostsHelpers, only: [create_post!: 2]
 
   alias Vutuv.Accounts
-  alias Vutuv.Accounts.{Email, SlugChange, User}
+  alias Vutuv.Accounts.{Email, User, UsernameChange}
   alias Vutuv.Chat.{Conversation, Message}
   alias Vutuv.Moderation
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
@@ -69,7 +69,7 @@ defmodule Vutuv.AccountDeletionTest do
 
     # --- Profile data (every direct user-owned table) ---
     insert(:email, user: user)
-    insert(:slug_change, user: user)
+    insert(:username_change, user: user)
 
     # A moderation case against the account, with an on-disk evidence
     # screenshot that must be purged with everything else.
@@ -148,7 +148,7 @@ defmodule Vutuv.AccountDeletionTest do
 
     # --- No orphaned rows anywhere the account reached. ---
     assert count(from(e in Email, where: e.user_id == ^user.id)) == 0
-    assert count(from(s in SlugChange, where: s.user_id == ^user.id)) == 0
+    assert count(from(s in UsernameChange, where: s.user_id == ^user.id)) == 0
 
     assert count(from(f in Follow, where: f.follower_id == ^user.id or f.followee_id == ^user.id)) ==
              0

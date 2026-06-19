@@ -134,7 +134,7 @@ defmodule VutuvWeb.OauthControllerTest do
         |> put_req_header("authorization", "Bearer " <> access)
         |> get("/api/2.0/me")
 
-      assert json_response(conn, 200)["slug"] == user.active_slug
+      assert json_response(conn, 200)["username"] == user.username
 
       # Refresh rotates the pair.
       conn =

@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_slug %> hat Sie für <%= @tag_name %> auf vutuv empfohlen.
+@<%= @actor_username %> hat Sie für <%= @tag_name %> auf vutuv empfohlen.
 
 Hier geht es zum Profil:
 
-<%= @url %><%= @actor_slug %>
+<%= @url %><%= @actor_username %>
 
 Diese Benachrichtigungs-E-Mails können Sie hier abschalten:
 

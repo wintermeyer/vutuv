@@ -35,7 +35,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   (for connections: the accepted ones — the public part of the page).
   """
   def build_follow_list(user, side, people, total, work_info_by_id) when side in @sides do
-    path = "/#{user.active_slug}/#{side}"
+    path = "/#{user.username}/#{side}"
     name = UserHelpers.full_name(user)
 
     label =
@@ -79,7 +79,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     name = UserHelpers.full_name(user)
     tag = user_tag.tag
     label = gettext("Members who endorsed %{name} for %{tag}", name: name, tag: tag.name)
-    path = "/#{user.active_slug}/tags/#{tag.slug}/endorsers"
+    path = "/#{user.username}/tags/#{tag.slug}/endorsers"
 
     AgentDocs.doc_meta("tag_endorsers", path, noindex: true, noai: true)
     |> Map.merge(%{

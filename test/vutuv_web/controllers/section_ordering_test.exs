@@ -24,7 +24,7 @@ defmodule VutuvWeb.SectionOrderingTest do
       insert(:url, user: owner)
 
       for section <- ~w(phone_numbers addresses social_media_accounts emails links) do
-        html = conn |> get("/#{owner.active_slug}/#{section}") |> html_response(200)
+        html = conn |> get("/#{owner.username}/#{section}") |> html_response(200)
 
         assert html =~ ~s(phx-hook="Reorder"),
                "expected the embedded reorder tool on the owner's #{section} page"
@@ -38,7 +38,7 @@ defmodule VutuvWeb.SectionOrderingTest do
       insert(:url, user: owner)
 
       for section <- ~w(phone_numbers links) do
-        html = conn |> get("/#{owner.active_slug}/#{section}") |> html_response(200)
+        html = conn |> get("/#{owner.username}/#{section}") |> html_response(200)
         refute html =~ ~s(phx-hook="Reorder")
       end
     end

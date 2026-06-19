@@ -202,8 +202,8 @@ defmodule Vutuv.SearchTest do
     end
 
     test "@handle searches the username" do
-      user = insert(:activated_user, active_slug: "stefan.wintermeyer")
-      insert(:activated_user, active_slug: "unrelated")
+      user = insert(:activated_user, username: "stefan.wintermeyer")
+      insert(:activated_user, username: "unrelated")
 
       results = Search.instant("@stefan")
 
@@ -300,7 +300,7 @@ defmodule Vutuv.SearchTest do
     end
 
     test "a short operator value is enough to search" do
-      user = insert(:activated_user, active_slug: "st-w")
+      user = insert(:activated_user, username: "st-w")
 
       assert Search.instant("@st") |> Map.fetch!(:exact_people) |> Enum.map(& &1.id) ==
                [user.id]

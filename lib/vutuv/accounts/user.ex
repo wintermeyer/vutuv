@@ -3,7 +3,7 @@ defmodule Vutuv.Accounts.User do
 
   use VutuvWeb, :model
   alias Vutuv.Accounts.ReservedSlugs
-  @derive {Phoenix.Param, key: :active_slug}
+  @derive {Phoenix.Param, key: :username}
 
   schema "users" do
     field(:first_name, :string)
@@ -23,7 +23,7 @@ defmodule Vutuv.Accounts.User do
     field(:avatar, :string)
     field(:cover_photo, :string)
     # Content fingerprint (sha256(original)[0..11]) of the current avatar/cover,
-    # baked into the served filename `<active_slug>-<version>-<fingerprint>.avif`
+    # baked into the served filename `<username>-<version>-<fingerprint>.avif`
     # (Vutuv.Uploads). nil = not yet migrated to the fingerprinted scheme: the URL
     # builder then emits the legacy `?v=` URL, so a nil here serves exactly as
     # before. Set programmatically on store/regenerate, never cast from params.
@@ -39,7 +39,7 @@ defmodule Vutuv.Accounts.User do
     # re-apply the crop when it re-derives served versions from the original.
     field(:avatar_crop, :string)
     field(:cover_crop, :string)
-    field(:active_slug, :string)
+    field(:username, :string)
     field(:admin?, :boolean)
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)
@@ -94,7 +94,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:login_pins, Vutuv.Accounts.LoginPin)
     has_many(:emails, Vutuv.Accounts.Email)
     has_many(:user_tags, Vutuv.Tags.UserTag)
-    has_many(:slug_changes, Vutuv.Accounts.SlugChange)
+    has_many(:username_changes, Vutuv.Accounts.UsernameChange)
     has_many(:urls, Vutuv.Profiles.Url)
     has_many(:phone_numbers, Vutuv.Profiles.PhoneNumber)
     has_many(:addresses, Vutuv.Profiles.Address)
@@ -123,16 +123,16 @@ defmodule Vutuv.Accounts.User do
   """
   def listing_fields do
     # :avatar_fingerprint is loaded so listing-rendered avatars build the
-    # fingerprinted URL `<slug>-<version>-<fp>.avif` (see Vutuv.Uploads).
+    # fingerprinted URL `<username>-<version>-<fp>.avif` (see Vutuv.Uploads).
     # :updated_at is still loaded for rows not yet migrated to that scheme: their
     # avatar falls back to the legacy `?v=#{phash2(updated_at)}` cache-buster, so
     # a re-uploaded thumbnail doesn't keep serving the cached old image.
-    ~w(id first_name last_name honorific_prefix honorific_suffix active_slug avatar avatar_fingerprint updated_at)a
+    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at)a
   end
 
-  # :active_slug is deliberately NOT here: the username is unique, rate-limited
-  # and Twitter-validated, so it only changes through slug_changeset/2 (used by
-  # Accounts.update_active_slug/2), never through the generic profile form.
+  # :username is deliberately NOT here: the username is unique, rate-limited
+  # and Twitter-validated, so it only changes through username_changeset/2 (used by
+  # Accounts.update_username/2), never through the generic profile form.
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
@@ -184,17 +184,17 @@ defmodule Vutuv.Accounts.User do
   word (profiles live at the URL root, so a handle equal to a route prefix
   would shadow that route forever).
   """
-  def slug_changeset(model, params \\ %{}) do
+  def username_changeset(model, params \\ %{}) do
     model
-    |> cast(params, [:active_slug])
-    |> validate_required(:active_slug)
-    |> downcase_active_slug()
-    |> validate_format(:active_slug, ~r/^[a-z0-9_]+$/,
+    |> cast(params, [:username])
+    |> validate_required(:username)
+    |> downcase_username()
+    |> validate_format(:username, ~r/^[a-z0-9_]+$/,
       message: "may only contain letters, numbers, and underscores"
     )
-    |> validate_length(:active_slug, min: 3, max: 15)
-    |> validate_exclusion(:active_slug, ReservedSlugs.list(), message: "is reserved")
-    |> unique_constraint(:active_slug)
+    |> validate_length(:username, min: 3, max: 15)
+    |> validate_exclusion(:username, ReservedSlugs.list(), message: "is reserved")
+    |> unique_constraint(:username)
   end
 
   # Registration is the one place where an email address may ride along with
@@ -264,8 +264,8 @@ defmodule Vutuv.Accounts.User do
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")
   def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Other")
 
-  defp downcase_active_slug(changeset) do
-    update_change(changeset, :active_slug, &String.downcase/1)
+  defp downcase_username(changeset) do
+    update_change(changeset, :username, &String.downcase/1)
   end
 
   defp nullify_default_birthdate(changeset) do

@@ -25,7 +25,7 @@ auth $API/me
 ```
 
 You get your profile as JSON — through your own eyes, so private email
-addresses are included. `GET $API/users/<slug>` reads anyone else's
+addresses are included. `GET $API/users/<username>` reads anyone else's
 (you see what their profile page would show you, never more).
 
 ## How do I post something?
@@ -103,7 +103,7 @@ auth $API/conversations
 {
   "type": "conversations",
   "conversations": [{"id": "0190…", "status": "accepted",
-                     "with": {"name": "Greta Tester", "slug": "greta-tester", "url": "…"},
+                     "with": {"name": "Greta Tester", "username": "greta-tester", "url": "…"},
                      "preview": "See you there!", "last_message_at": "2026-06-12T09:30:00", "unread": 2}],
   "requests": []
 }

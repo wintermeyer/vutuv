@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_slug %> wants to connect with you on vutuv.
+@<%= @actor_username %> wants to connect with you on vutuv.
 
 Accept or decline on their profile:
 
-<%= @url %><%= @actor_slug %>
+<%= @url %><%= @actor_username %>
 
 You can switch these notification emails off here:
 

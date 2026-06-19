@@ -314,7 +314,7 @@ defmodule VutuvWeb.MessageLiveTest do
       other = insert_activated_user()
 
       assert {:error, {:live_redirect, %{to: "/messages/" <> id}}} =
-               live(conn, ~p"/messages/with/#{other.active_slug}")
+               live(conn, ~p"/messages/with/#{other.username}")
 
       assert Vutuv.Repo.get!(Vutuv.Chat.Conversation, id)
     end
@@ -330,9 +330,9 @@ defmodule VutuvWeb.MessageLiveTest do
       {conn, _me} = create_and_login_user(conn)
       other = insert_activated_user()
 
-      html = conn |> get(~p"/#{other.active_slug}") |> html_response(200)
+      html = conn |> get(~p"/#{other.username}") |> html_response(200)
 
-      assert html =~ ~s(href="/messages/with/#{other.active_slug}")
+      assert html =~ ~s(href="/messages/with/#{other.username}")
     end
   end
 

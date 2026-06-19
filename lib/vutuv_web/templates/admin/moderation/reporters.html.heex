@@ -24,7 +24,7 @@
       </thead>
       <tbody>
         <tr :for={row <- @stats}>
-          <td><a href={~p"/#{row.reporter}"}>@{row.reporter.active_slug}</a></td>
+          <td><a href={~p"/#{row.reporter}"}>@{row.reporter.username}</a></td>
           <td>{row.total}</td>
           <td>{row.rejected}</td>
           <td>{row.abusive}</td>

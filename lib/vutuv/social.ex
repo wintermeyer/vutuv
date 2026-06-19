@@ -765,7 +765,7 @@ defmodule Vutuv.Social do
     from([target: t] in query,
       where:
         ilike(t.first_name, ^pattern) or ilike(t.last_name, ^pattern) or
-          ilike(t.active_slug, ^pattern) or ilike(t.headline, ^pattern) or
+          ilike(t.username, ^pattern) or ilike(t.headline, ^pattern) or
           ilike(fragment("? || ' ' || ?", t.first_name, t.last_name), ^pattern)
     )
   end

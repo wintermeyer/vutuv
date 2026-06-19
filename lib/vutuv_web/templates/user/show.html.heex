@@ -227,7 +227,7 @@ the resulting ~200px rail width. --%>
             <.link
               :if={@current_user && not same_user?(@user, @current_user)}
               id="report-profile"
-              href={~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.active_slug}"]}"}
+              href={~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}"}
               class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
             >
             <span aria-hidden="true">⚑</span>
@@ -244,7 +244,7 @@ the resulting ~200px rail width. --%>
             data-confirm={
               gettext(
                 "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-                slug: @user.active_slug
+                slug: @user.username
               )
             }
             class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
@@ -256,7 +256,7 @@ the resulting ~200px rail width. --%>
             id="unblock-user"
             href={~p"/blocks/#{@viewer_block.id}"}
             method="delete"
-            data-confirm={gettext("Unblock @%{slug}?", slug: @user.active_slug)}
+            data-confirm={gettext("Unblock @%{slug}?", slug: @user.username)}
             class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-brand-700 dark:hover:text-brand-300"
           >
             {gettext("Unblock")}
@@ -269,7 +269,7 @@ the resulting ~200px rail width. --%>
             href={
               if @vcard_full?,
                 do: ~p"/#{@user}/vcard",
-                else: "/#{@user.active_slug}.vcf"
+                else: "/#{@user.username}.vcf"
             }
             title={gettext("Download")}
             class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
@@ -812,11 +812,11 @@ the resulting ~200px rail width. --%>
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
       <%!-- The vCard carries no translatable labels, so it skips ?lang=. --%>
       <% formats = [
-        {gettext("Markdown"), "/#{@user.active_slug}.md#{format_lang}"},
-        {gettext("Text only"), "/#{@user.active_slug}.txt#{format_lang}"},
-        {"JSON", "/#{@user.active_slug}.json#{format_lang}"},
-        {"XML", "/#{@user.active_slug}.xml#{format_lang}"},
-        {gettext("vCard"), "/#{@user.active_slug}.vcf"}
+        {gettext("Markdown"), "/#{@user.username}.md#{format_lang}"},
+        {gettext("Text only"), "/#{@user.username}.txt#{format_lang}"},
+        {"JSON", "/#{@user.username}.json#{format_lang}"},
+        {"XML", "/#{@user.username}.xml#{format_lang}"},
+        {gettext("vCard"), "/#{@user.username}.vcf"}
       ] %>
       <%!-- Chips: a wrapping row of small tags instead of a five-row list. --%>
       <div class="flex flex-wrap gap-1.5">

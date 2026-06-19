@@ -38,7 +38,7 @@ defmodule VutuvWeb.PostLive.Reply do
     <div id="post-reply" class="py-6">
       <div class="mx-auto max-w-2xl space-y-4">
         <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">
-          {gettext("Reply to %{handle}", handle: "@" <> @parent.user.active_slug)}
+          {gettext("Reply to %{handle}", handle: "@" <> @parent.user.username)}
         </h1>
 
         <.post_card post={@parent} viewer={@current_user} mode={:preview} conn_or_socket={@socket} />

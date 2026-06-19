@@ -49,7 +49,7 @@ defmodule VutuvWeb.RobotsTxt do
   Disallow: /*/following
   Disallow: /*/links
   Disallow: /*/phone_numbers
-  Disallow: /*/slugs
+  Disallow: /*/usernames
   Disallow: /*/social_media_accounts
   Disallow: /*/tags
   Disallow: /*/work_experiences

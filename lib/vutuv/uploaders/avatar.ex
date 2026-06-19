@@ -8,7 +8,7 @@ defmodule Vutuv.Avatar do
   for the owner's handle and the image's content fingerprint, so a download
   carries the username and the URL is immutable (no `?v=` cache-buster):
 
-      <uploads_dir_prefix>/avatars/<user.id>/<active_slug>-<version>-<fingerprint>.avif
+      <uploads_dir_prefix>/avatars/<user.id>/<username>-<version>-<fingerprint>.avif
 
   The fingerprint (`sha256(original)[0..11]`) is stored in `:avatar_fingerprint`;
   the on-disk filename equals the URL's last segment, so the existing nginx
@@ -46,7 +46,7 @@ defmodule Vutuv.Avatar do
     prefix: "avatars",
     default_version: :medium,
     # The user column holding this image's content fingerprint. When set, the
-    # served filename embeds the handle + fingerprint (`<slug>-<version>-<fp>.avif`)
+    # served filename embeds the handle + fingerprint (`<username>-<version>-<fp>.avif`)
     # and the URL needs no `?v=`; when nil the row predates the scheme and falls
     # back to the legacy URL. See Vutuv.Uploads.served_url/4.
     fingerprint_field: :avatar_fingerprint,
@@ -85,7 +85,7 @@ defmodule Vutuv.Avatar do
   @doc """
   Re-derives the avatar under the user's current handle after a username change
   (the handle is baked into the served filename). See
-  `Vutuv.Uploads.reslug/2` and `Accounts.update_active_slug/2`.
+  `Vutuv.Uploads.reslug/2` and `Accounts.update_username/2`.
   """
   def reslug(user), do: Uploads.reslug(user, @config)
 

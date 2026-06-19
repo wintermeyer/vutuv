@@ -27,16 +27,16 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       conn =
         json_patch(conn, token, "/api/2.0/me", %{
           first_name: "Renamed",
-          active_slug: "stolen_handle",
+          username: "stolen_handle",
           email_confirmed?: false
         })
 
       body = json_response(conn, 200)
       assert body["first_name"] == "Renamed"
-      assert body["slug"] == user.active_slug
+      assert body["username"] == user.username
 
       reloaded = Repo.get!(Vutuv.Accounts.User, user.id)
-      assert reloaded.active_slug == user.active_slug
+      assert reloaded.username == user.username
       assert reloaded.email_confirmed?
     end
 
@@ -76,7 +76,7 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       body =
         build_conn()
         |> authed(read_token)
-        |> get("/api/2.0/users/#{user.active_slug}")
+        |> get("/api/2.0/users/#{user.username}")
         |> json_response(200)
 
       assert body["noai?"] == true
@@ -89,7 +89,7 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       other = insert_activated_user()
       work = insert(:work_experience, user: other)
 
-      conn = get(authed(conn, token), "/api/2.0/users/#{other.active_slug}/work_experiences")
+      conn = get(authed(conn, token), "/api/2.0/users/#{other.username}/work_experiences")
       body = json_response(conn, 200)
 
       assert body["total"] == 1
@@ -108,13 +108,13 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       insert(:email, user: other, public?: false, value: "private@example.com")
       insert(:email, user: user, public?: false, value: "mine-private@example.com")
 
-      conn1 = get(authed(conn, token), "/api/2.0/users/#{other.active_slug}/emails")
+      conn1 = get(authed(conn, token), "/api/2.0/users/#{other.username}/emails")
       # Email entries are typed maps (schema_version 2), like phone_numbers.
       assert Enum.map(json_response(conn1, 200)["entries"], & &1["value"]) == [
                "public@example.com"
              ]
 
-      conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{user.active_slug}/emails")
+      conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{user.username}/emails")
 
       assert Enum.any?(
                json_response(conn2, 200)["entries"],
@@ -200,14 +200,14 @@ defmodule VutuvWeb.ApiV2.ProfileApiTest do
       conn1 = json_post(conn, token, "/api/2.0/me/tags", %{name: "Phoenix"})
       assert %{"entry" => %{"id" => id, "name" => "Phoenix"}} = json_response(conn1, 201)
 
-      conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{user.active_slug}/tags")
+      conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{user.username}/tags")
       assert [%{"name" => "Phoenix"}] = json_response(conn2, 200)["entries"]
 
       conn3 = delete(authed(build_conn(), token), "/api/2.0/me/tags/#{id}")
       assert conn3.status == 204
 
       assert json_response(
-               get(authed(build_conn(), token), "/api/2.0/users/#{user.active_slug}/tags"),
+               get(authed(build_conn(), token), "/api/2.0/users/#{user.username}/tags"),
                200
              )["entries"] == []
     end

@@ -1,4 +1,4 @@
-defmodule VutuvWeb.SlugController do
+defmodule VutuvWeb.UsernameController do
   use VutuvWeb, :controller
 
   # Changing the username is owner-only.
@@ -10,18 +10,18 @@ defmodule VutuvWeb.SlugController do
 
   def new(conn, _params) do
     user = conn.assigns[:user]
-    render_new(conn, user, User.slug_changeset(user))
+    render_new(conn, user, User.username_changeset(user))
   end
 
   def create(conn, %{"user" => params}) do
     user = conn.assigns[:current_user]
 
-    case Accounts.update_active_slug(user, params) do
+    case Accounts.update_username(user, params) do
       {:ok, user} ->
         conn
         |> put_flash(
           :info,
-          gettext("Your username is now @%{handle}.", handle: user.active_slug)
+          gettext("Your username is now @%{handle}.", handle: user.username)
         )
         |> redirect(to: ~p"/#{user}")
 
@@ -31,7 +31,7 @@ defmodule VutuvWeb.SlugController do
   end
 
   defp render_new(conn, user, changeset) do
-    render(conn, "new.html", changeset: changeset, quota: Accounts.slug_change_quota(user))
+    render(conn, "new.html", changeset: changeset, quota: Accounts.username_change_quota(user))
   end
 
   # Backs the live "is this name free?" check in the change form.
@@ -41,16 +41,16 @@ defmodule VutuvWeb.SlugController do
   end
 
   defp availability_payload(value) do
-    changeset = User.slug_changeset(%User{}, %{"active_slug" => value})
+    changeset = User.username_changeset(%User{}, %{"username" => value})
 
     cond do
       not changeset.valid? ->
         %{
           available: false,
-          message: VutuvWeb.ErrorHelpers.translate_error(changeset.errors[:active_slug])
+          message: VutuvWeb.ErrorHelpers.translate_error(changeset.errors[:username])
         }
 
-      Accounts.slug_taken?(value) ->
+      Accounts.username_taken?(value) ->
         %{available: false, message: gettext("@%{handle} is already taken.", handle: value)}
 
       true ->

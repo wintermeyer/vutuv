@@ -1294,7 +1294,7 @@ defmodule Vutuv.Posts do
   date-scoped index views. Requires `:user` to be preloaded.
   """
   def path(%Post{user: %User{} = user, id: id}) do
-    "/#{user.active_slug}/posts/#{id}"
+    "/#{user.username}/posts/#{id}"
   end
 
   ## Images
@@ -1412,7 +1412,7 @@ defmodule Vutuv.Posts do
           where: account_confirmed_row(u),
           where:
             ilike(u.first_name, ^pattern) or ilike(u.last_name, ^pattern) or
-              ilike(u.active_slug, ^pattern) or
+              ilike(u.username, ^pattern) or
               ilike(fragment("? || ' ' || ?", u.first_name, u.last_name), ^pattern),
           order_by: [u.first_name, u.last_name],
           limit: ^limit

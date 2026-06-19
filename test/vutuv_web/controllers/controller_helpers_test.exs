@@ -37,7 +37,7 @@ defmodule VutuvWeb.ControllerHelpersTest do
 
     test "falls back to the user's profile without a referer" do
       conn = build_conn()
-      user = %User{active_slug: "alice"}
+      user = %User{username: "alice"}
       assert ControllerHelpers.referrer_or_profile(conn, user) == "/alice"
     end
 

@@ -62,7 +62,7 @@ defmodule Vutuv.AccountsTest do
       assert {:ok, %User{} = user} = Accounts.register_user(conn, @valid_registration)
       assert user.first_name == "Test"
       assert user.last_name == "User"
-      assert user.active_slug != nil
+      assert user.username != nil
     end
 
     test "fails with missing name" do

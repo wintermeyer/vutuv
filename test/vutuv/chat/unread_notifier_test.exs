@@ -43,7 +43,7 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
     assert Chat.send_unread_notifications() == 1
 
     assert_email_sent(fn email ->
-      assert email.subject =~ "@#{a.active_slug}"
+      assert email.subject =~ "@#{a.username}"
       assert email.text_body =~ "messages/#{conversation.id}"
       assert email.headers["Auto-Submitted"] == "auto-generated"
     end)
@@ -63,7 +63,7 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
     assert Chat.send_unread_notifications() == 1
 
     assert_email_sent(fn email ->
-      assert email.subject == "Neue Nachricht von @#{a.active_slug} auf vutuv"
+      assert email.subject == "Neue Nachricht von @#{a.username} auf vutuv"
       assert email.text_body =~ "Nachricht"
     end)
   end

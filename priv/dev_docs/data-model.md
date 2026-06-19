@@ -29,9 +29,9 @@ The central entity. A member (`type: "profile"` in API responses) has:
 * **Identity:** `name` (assembled), `first_name`, `middle_name`,
   `last_name`, `nickname`, `honorific_prefix`/`_suffix`, `gender`,
   `birthdate`, `locale`.
-* **The username** (`slug`, e.g. `wintermeyer`): unique, the
-  profile URL (`vutuv.de/<slug>`) and the `:slug` in every API path.
-  Changeable on the website only; old usernames redirect.
+* **The username** (`username`, e.g. `wintermeyer`): unique, the
+  profile URL (`vutuv.de/<username>`) and the `:username` in every API path.
+  Changeable on the website only; old usernames are released, not redirected.
 * **`headline_markdown`:** the one-liner under the name, Markdown.
 * **`verified`:** `true` when vutuv has verified the member's identity
   against a physical ID document. A trust signal — treat unverified
@@ -52,7 +52,7 @@ moderated, is invisible through the API — see
 ## Profile sections
 
 Each section is a list of entries belonging to one member. All of them are
-readable via `GET /users/:slug/<section>` and (except emails) writable on
+readable via `GET /users/:username/<section>` and (except emails) writable on
 your own profile via `POST/PATCH/DELETE /me/<section>`:
 
 | Section | Entry fields | Notes |
@@ -84,7 +84,7 @@ Two distinct relationships — do not conflate them:
 
 * A **follow** is one-directional and needs no consent (Twitter-style).
   Following someone puts their posts into your feed. Idempotent
-  `PUT`/`DELETE /users/:slug/follow`.
+  `PUT`/`DELETE /users/:username/follow`.
 * A **connection** is mutual and consented (LinkedIn-style). One side
   requests, the other accepts or declines. States you will see in
   `relationship` responses: `none`, `pending_sent`, `pending_received`,
@@ -94,7 +94,7 @@ Two distinct relationships — do not conflate them:
   before they can be re-sent; two members requesting each other
   auto-accepts.
 
-`GET /users/:slug/relationship` answers your complete standing with one
+`GET /users/:username/relationship` answers your complete standing with one
 member: `following`, `followed_by` and the connection state.
 
 A member can also **block** another — deliberately opaque to the other
@@ -110,7 +110,7 @@ website.
 A post is Markdown `body_markdown` (up to 20,000 characters), optional
 **tags** (the same global tags as on profiles), optional **images**, and an
 optional **audience**. Posts have a permalink
-(`/<slug>/posts/<date>/<id>`), appear in the author's archive and in their
+(`/<username>/posts/<date>/<id>`), appear in the author's archive and in their
 followers' feeds.
 
 ### Audiences: the denial model

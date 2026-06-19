@@ -37,15 +37,15 @@ defmodule VutuvWeb.ExportControllerTest do
 
     assert [disposition] = get_resp_header(conn, "content-disposition")
     assert disposition =~ "attachment"
-    assert disposition =~ user.active_slug
+    assert disposition =~ user.username
 
     data = Jason.decode!(conn.resp_body)
-    assert data["profile"]["slug"] == user.active_slug
+    assert data["profile"]["username"] == user.username
     assert data["profile"]["first_name"] == "Erika"
     assert Enum.any?(data["emails"], &(&1["value"] == "exporter@example.com"))
     assert Enum.any?(data["posts"], &(&1["body"] == "My exported thoughts"))
     assert Enum.any?(data["posts"], &(&1["id"] == post.id))
-    assert Enum.any?(data["followers"], &(&1["slug"] == follower.active_slug))
+    assert Enum.any?(data["followers"], &(&1["username"] == follower.username))
 
     assert [conversation_doc] = data["conversations"]
     assert Enum.any?(conversation_doc["messages"], &(&1["body"] == "hello from me"))

@@ -26,7 +26,7 @@ defmodule Vutuv.AvatarTest do
     id: 7,
     first_name: "John",
     last_name: "Doe",
-    active_slug: "john.doe",
+    username: "john.doe",
     updated_at: ~N[2024-03-02 10:20:30]
   }
 
@@ -156,7 +156,7 @@ defmodule Vutuv.AvatarTest do
     end
 
     test "the download filename moves with the handle when the slug changes", %{user: user} do
-      renamed = %{user | active_slug: "jane.smith"}
+      renamed = %{user | username: "jane.smith"}
 
       assert Vutuv.Avatar.url({"selfie.jpg", renamed}, :medium) ==
                "/avatars/7/jane.smith-medium-#{@fingerprint}.avif"

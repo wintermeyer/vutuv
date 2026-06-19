@@ -173,7 +173,7 @@ defmodule VutuvWeb.UserControllerTest do
     # The vCard download now lives in the profile header, not a separate
     # "Exports" rail card, and points at the agent-format URL.
     assert html =~ ~s(id="download-vcard")
-    assert html =~ "/#{user.active_slug}.vcf"
+    assert html =~ "/#{user.username}.vcf"
     refute html =~ ~s(id="profile-exports")
 
     # The "Other formats" card links the agent documents (VutuvWeb.AgentDocs).
@@ -181,9 +181,9 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Other formats"
     assert html =~ "Text only"
     assert html =~ "Markdown"
-    assert html =~ "/#{user.active_slug}.md"
-    assert html =~ "/#{user.active_slug}.txt"
-    assert html =~ "/#{user.active_slug}.json"
+    assert html =~ "/#{user.username}.md"
+    assert html =~ "/#{user.username}.txt"
+    assert html =~ "/#{user.username}.json"
   end
 
   # Byte offset of the first occurrence of `needle` in `html`, used to assert the
@@ -425,11 +425,11 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "renders a tag's endorsement count as an inline pill with a clickable endorser roster",
        %{conn: conn} do
-    owner = insert_activated_user(active_slug: "tag.pill.owner")
+    owner = insert_activated_user(username: "tag.pill.owner")
 
     endorser =
       insert_activated_user(
-        active_slug: "tag.pill.endorser",
+        username: "tag.pill.endorser",
         first_name: "Ada",
         last_name: "Lovelace"
       )
@@ -516,7 +516,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "renders page not found when id is nonexistent", %{conn: conn} do
-    conn = get(conn, ~p"/#{%User{active_slug: "1"}}")
+    conn = get(conn, ~p"/#{%User{username: "1"}}")
     assert html_response(conn, :not_found)
   end
 

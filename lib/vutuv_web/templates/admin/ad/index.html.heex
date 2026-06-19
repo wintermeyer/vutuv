@@ -67,7 +67,7 @@
             <td>{VutuvWeb.AdHTML.status_label(ad)}</td>
             <td>
               <%= if ad.user do %>
-                <.link href={~p"/#{ad.user}"}>@{ad.user.active_slug}</.link>
+                <.link href={~p"/#{ad.user}"}>@{ad.user.username}</.link>
               <% else %>
                 {gettext("deleted account")}
               <% end %>

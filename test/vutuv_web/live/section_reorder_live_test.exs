@@ -16,7 +16,7 @@ defmodule VutuvWeb.SectionReorderLiveTest do
 
   defp mount_tool(conn, user, section) do
     live_isolated(conn, VutuvWeb.SectionReorderLive,
-      session: %{"user_id" => user.id, "section" => section, "slug" => user.active_slug}
+      session: %{"user_id" => user.id, "section" => section, "slug" => user.username}
     )
   end
 

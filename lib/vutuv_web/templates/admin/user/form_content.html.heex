@@ -1,4 +1,4 @@
-<.form :let={f} for={%{}} action={~p"/admin/slugs"} as={:slug_disable} multipart class="editform">
+<.form :let={f} for={%{}} action={~p"/admin/usernames"} as={:username_disable} multipart class="editform">
 
   <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
     <%= label f, :slug_name %>

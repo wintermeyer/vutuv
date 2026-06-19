@@ -8,7 +8,7 @@ defmodule VutuvWeb.AgentFormatTest do
   use VutuvWeb.ConnCase, async: true
 
   setup do
-    user = insert_activated_user(active_slug: "agent_tester", first_name: "Agatha")
+    user = insert_activated_user(username: "agent_tester", first_name: "Agatha")
     %{user: user}
   end
 
@@ -20,7 +20,7 @@ defmodule VutuvWeb.AgentFormatTest do
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "text/markdown"
       assert conn.resp_body =~ "# Agatha Test"
-      assert conn.resp_body =~ "schema_version: 2"
+      assert conn.resp_body =~ "schema_version: 3"
       assert get_resp_header(conn, "vary") == ["accept, accept-language"]
       assert get_resp_header(conn, "content-signal") == ["ai-train=yes, search=yes, ai-input=yes"]
       assert [tokens] = get_resp_header(conn, "x-markdown-tokens")
@@ -34,7 +34,7 @@ defmodule VutuvWeb.AgentFormatTest do
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "text/plain"
       assert conn.resp_body =~ "Agatha Test"
-      assert conn.resp_body =~ "schema_version: 2"
+      assert conn.resp_body =~ "schema_version: 3"
 
       for line <- String.split(conn.resp_body, "\n"), not (line =~ "http") do
         assert String.length(line) <= 80, "line longer than 80 columns: #{inspect(line)}"
@@ -50,7 +50,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
       doc = Jason.decode!(conn.resp_body)
       assert doc["type"] == "profile"
-      assert doc["schema_version"] == 2
+      assert doc["schema_version"] == 3
       assert doc["name"] == "Agatha Test"
       assert doc["generated_at"]
       assert doc["formats"]["markdown"] =~ "/agent_tester.md"
@@ -68,7 +68,7 @@ defmodule VutuvWeb.AgentFormatTest do
       # The root element is the doc type, the fields are child elements.
       assert body =~ "<profile>"
       assert body =~ "</profile>"
-      assert body =~ "<schema_version>2</schema_version>"
+      assert body =~ "<schema_version>3</schema_version>"
       assert body =~ "<name>Agatha Test</name>"
       # The sibling-format URLs ride along, the new XML one included.
       assert body =~ "<xml>#{VutuvWeb.Endpoint.url()}/agent_tester.xml</xml>"
@@ -84,7 +84,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
     test "XML escapes markup-breaking characters in user content" do
       insert_activated_user(
-        active_slug: "xml_evil",
+        username: "xml_evil",
         first_name: "Eve",
         headline: ~s(Tags & <angle> "brackets")
       )
@@ -111,7 +111,7 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "slugs containing dots keep working, with and without extension" do
-      insert_activated_user(active_slug: "stefan.wintermeyer", first_name: "Stefan")
+      insert_activated_user(username: "stefan.wintermeyer", first_name: "Stefan")
 
       assert get(build_conn(), "/stefan.wintermeyer") |> html_response(200) =~ "Stefan"
       conn = get(build_conn(), "/stefan.wintermeyer.md")
@@ -124,7 +124,7 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "a verified member's Markdown states it as a fact line, like the text version" do
-      insert_activated_user(active_slug: "verified_member", identity_verified?: true)
+      insert_activated_user(username: "verified_member", identity_verified?: true)
 
       body = get(build_conn(), "/verified_member.md").resp_body
 
@@ -189,7 +189,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
     test "the vCard download filename drops quotes and control chars" do
       insert_activated_user(
-        active_slug: "weird_name",
+        username: "weird_name",
         first_name: ~s(Ann "X"),
         last_name: "Smith"
       )
@@ -239,19 +239,19 @@ defmodule VutuvWeb.AgentFormatTest do
 
       # The owner still reaches their own frozen HTML profile (banner/review),
       # but the agent formats are the anonymous view and must 404 like everyone.
-      assert html_response(get(conn, "/#{me.active_slug}"), 200)
-      assert get(conn, "/#{me.active_slug}.md").status == 404
-      assert get(conn, "/#{me.active_slug}.json").status == 404
+      assert html_response(get(conn, "/#{me.username}"), 200)
+      assert get(conn, "/#{me.username}.md").status == 404
+      assert get(conn, "/#{me.username}.json").status == 404
     end
 
     test "a private email's show page advertises no agent-format alternates", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       private = insert(:email, user: me, public?: false, value: "secret@example.com")
 
-      html = get(conn, "/#{me.active_slug}/emails/#{private.id}") |> html_response(200)
+      html = get(conn, "/#{me.username}/emails/#{private.id}") |> html_response(200)
 
       refute html =~ ~s(rel="alternate")
-      assert get(conn, "/#{me.active_slug}/emails/#{private.id}.md").status == 404
+      assert get(conn, "/#{me.username}/emails/#{private.id}.md").status == 404
     end
   end
 
@@ -259,9 +259,9 @@ defmodule VutuvWeb.AgentFormatTest do
     test "the owner downloads the all-emails (session-aware) vCard", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
 
-      html = get(conn, "/#{me.active_slug}") |> html_response(200)
+      html = get(conn, "/#{me.username}") |> html_response(200)
 
-      assert html =~ ~s(href="/#{me.active_slug}/vcard")
+      assert html =~ ~s(href="/#{me.username}/vcard")
     end
 
     test "an anonymous visitor downloads the public .vcf" do
@@ -465,7 +465,7 @@ defmodule VutuvWeb.AgentFormatTest do
 
     test "other query params survive in the hint URL, JSON stays hint-free" do
       follower = insert_activated_user(first_name: "Fan")
-      follow!(follower, insert_activated_user(active_slug: "followed_one"))
+      follow!(follower, insert_activated_user(username: "followed_one"))
 
       conn =
         build_conn()
@@ -489,7 +489,7 @@ defmodule VutuvWeb.AgentFormatTest do
   # (the full 2x2 table is unit-tested in robots_txt_test.exs).
   describe "Content-Signal" do
     test "a noindexed member signals search=no but keeps their AI choice" do
-      insert_activated_user(active_slug: "private_person", noindex?: true, noai?: false)
+      insert_activated_user(username: "private_person", noindex?: true, noai?: false)
 
       conn = get(build_conn(), "/private_person.md")
 
@@ -499,7 +499,7 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "an AI-opted-out member signals ai=no but stays searchable" do
-      insert_activated_user(active_slug: "no_ai_person", noindex?: false, noai?: true)
+      insert_activated_user(username: "no_ai_person", noindex?: false, noai?: true)
 
       conn = get(build_conn(), "/no_ai_person.md")
 

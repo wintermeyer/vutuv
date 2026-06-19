@@ -53,7 +53,7 @@ defmodule VutuvWeb.AvatarControllerTest do
   test "serves the avatar as a square, metadata-free JPEG", %{conn: conn} do
     user = member_with_avatar()
 
-    conn = get(conn, "/#{user.active_slug}/avatar.jpg")
+    conn = get(conn, "/#{user.username}/avatar.jpg")
 
     assert conn.status == 200
     assert get_resp_header(conn, "content-type") == ["image/jpeg; charset=utf-8"]
@@ -71,11 +71,11 @@ defmodule VutuvWeb.AvatarControllerTest do
 
   test "404 for members without an avatar, unknown and unactivated slugs", %{conn: conn} do
     bare = insert_activated_user()
-    assert get(conn, "/#{bare.active_slug}/avatar.jpg").status == 404
+    assert get(conn, "/#{bare.username}/avatar.jpg").status == 404
 
     assert get(conn, "/nobody_here/avatar.jpg").status == 404
 
     sleepy = insert_activated_user(email_confirmed?: false, avatar: "selfie.jpg")
-    assert get(conn, "/#{sleepy.active_slug}/avatar.jpg").status == 404
+    assert get(conn, "/#{sleepy.username}/avatar.jpg").status == 404
   end
 end

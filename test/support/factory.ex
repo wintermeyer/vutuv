@@ -9,7 +9,7 @@ defmodule Vutuv.Factory do
     %Vutuv.Accounts.User{
       first_name: sequence(:first_name, &"User#{&1}"),
       last_name: "Test",
-      active_slug: sequence(:active_slug, &"user-#{&1}"),
+      username: sequence(:username, &"user-#{&1}"),
       locale: "en"
     }
   end
@@ -31,9 +31,9 @@ defmodule Vutuv.Factory do
   end
 
   # One row per username change: the ledger behind the 4-per-90-days quota.
-  def slug_change_factory do
-    %Vutuv.Accounts.SlugChange{
-      value: sequence(:slug_change_value, &"old_handle_#{&1}")
+  def username_change_factory do
+    %Vutuv.Accounts.UsernameChange{
+      value: sequence(:username_change_value, &"old_handle_#{&1}")
     }
   end
 
@@ -60,7 +60,7 @@ defmodule Vutuv.Factory do
   end
 
   @doc """
-  Inserts an activated user. Resolution is by `users.active_slug` alone, so
+  Inserts an activated user. Resolution is by `users.username` alone, so
   nothing else is needed for slug-routed pages.
   """
   def insert_activated_user(attrs \\ []) do

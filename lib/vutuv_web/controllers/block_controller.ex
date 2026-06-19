@@ -26,7 +26,7 @@ defmodule VutuvWeb.BlockController do
       |> put_flash(
         :info,
         gettext("You blocked @%{slug}. You can undo this on your blocked list.",
-          slug: target.active_slug
+          slug: target.username
         )
       )
       |> redirect(to: ~p"/#{target}")
@@ -41,12 +41,12 @@ defmodule VutuvWeb.BlockController do
   # The "Block someone" form on /blocks: block by @handle so a member can act
   # without first finding the person's profile (the "block my ex" case). Lands
   # back on the blocked list, where the new entry now shows. The leading "@" is
-  # optional and the handle is matched case-insensitively (active_slug is
+  # optional and the handle is matched case-insensitively (username is
   # always lower-case).
   def create(conn, %{"block" => %{"handle" => handle}}) do
     current_user = conn.assigns.current_user
     cleaned = handle |> String.trim() |> String.trim_leading("@")
-    target = cleaned != "" && Accounts.get_user_by_slug(String.downcase(cleaned))
+    target = cleaned != "" && Accounts.get_user_by_username(String.downcase(cleaned))
 
     cond do
       not match?(%User{}, target) ->
@@ -65,7 +65,7 @@ defmodule VutuvWeb.BlockController do
         {:ok, _block} = Social.block_user(current_user, target)
 
         conn
-        |> put_flash(:info, block_notice(already_blocked?, target.active_slug))
+        |> put_flash(:info, block_notice(already_blocked?, target.username))
         |> redirect(to: ~p"/blocks")
     end
   end
@@ -88,7 +88,7 @@ defmodule VutuvWeb.BlockController do
     :ok = Social.unblock_user(conn.assigns.current_user, target)
 
     conn
-    |> put_flash(:info, gettext("You unblocked @%{slug}.", slug: target.active_slug))
+    |> put_flash(:info, gettext("You unblocked @%{slug}.", slug: target.username))
     |> redirect(to: ~p"/blocks")
   end
 end

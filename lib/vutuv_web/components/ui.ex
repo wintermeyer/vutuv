@@ -459,7 +459,7 @@ defmodule VutuvWeb.UI do
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" ")
     |> case do
-      "" -> "@" <> to_string(Map.get(user, :active_slug))
+      "" -> "@" <> to_string(Map.get(user, :username))
       name -> name
     end
   end

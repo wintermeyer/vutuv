@@ -1,4 +1,4 @@
-defmodule VutuvWeb.Admin.SlugController do
+defmodule VutuvWeb.Admin.UsernameController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.ReservedSlugs
@@ -12,28 +12,28 @@ defmodule VutuvWeb.Admin.SlugController do
   # to a generated handle. The old name is not blocked afterwards (usernames
   # are neither reserved nor redirected anymore); a name bad enough to ban
   # globally belongs in the moderation tooling, not here.
-  def update(conn, %{"slug_disable" => %{"value" => value}}) do
-    case Repo.get_by(User, active_slug: value) do
+  def update(conn, %{"username_disable" => %{"value" => value}}) do
+    case Repo.get_by(User, username: value) do
       nil ->
         conn
         |> put_flash(:error, gettext("No member uses this username."))
         |> render("index.html")
 
       user ->
-        replace_slug(conn, user)
+        replace_username(conn, user)
     end
   end
 
-  defp replace_slug(conn, user) do
+  defp replace_username(conn, user) do
     new_handle =
-      Vutuv.SlugHelpers.gen_handle_unique(user, User, :active_slug, ReservedSlugs.list())
+      Vutuv.SlugHelpers.gen_handle_unique(user, User, :username, ReservedSlugs.list())
 
-    case Repo.update(Ecto.Changeset.change(user, active_slug: new_handle)) do
+    case Repo.update(Ecto.Changeset.change(user, username: new_handle)) do
       {:ok, user} ->
         conn
         |> put_flash(
           :info,
-          gettext("Username replaced with @%{handle}.", handle: user.active_slug)
+          gettext("Username replaced with @%{handle}.", handle: user.username)
         )
         |> redirect(to: ~p"/admin")
 

@@ -36,7 +36,7 @@ defmodule VutuvWeb.Admin.AdControllerTest do
       assert html =~ "<strong>Acme</strong>"
       assert html =~ "**Acme** sucht Leute"
       assert html =~ "Acme GmbH"
-      assert html =~ "@#{booker.active_slug}"
+      assert html =~ "@#{booker.username}"
       # The pending ad offers the approve action and links its detail page.
       assert html =~ ~p"/admin/ads/#{ad}/approve"
       assert html =~ ~p"/admin/ads/#{ad}"
@@ -76,9 +76,9 @@ defmodule VutuvWeb.Admin.AdControllerTest do
       assert html =~ "**Acme** sucht Leute"
       assert html =~ "Acme GmbH"
       assert html =~ "DE123456789"
-      assert html =~ "@#{booker.active_slug}"
+      assert html =~ "@#{booker.username}"
       # The approval block names the approving admin.
-      assert html =~ "@#{admin_user.active_slug}"
+      assert html =~ "@#{admin_user.username}"
       refute html =~ ~p"/admin/ads/#{ad}/approve"
     end
 

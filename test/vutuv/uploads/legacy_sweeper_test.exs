@@ -41,8 +41,8 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
     user = insert(:user, first_name: "Ada", last_name: "King", avatar: "selfie.jpg")
     {:ok, user} = user |> Ecto.Changeset.change(avatar_fingerprint: fp) |> Repo.update()
     dir = Path.join(tmp, "avatars/#{user.id}")
-    touch!(Path.join(dir, "#{user.active_slug}-thumb-#{fp}.avif"))
-    touch!(Path.join(dir, "#{user.active_slug}-medium-#{fp}.avif"))
+    touch!(Path.join(dir, "#{user.username}-thumb-#{fp}.avif"))
+    touch!(Path.join(dir, "#{user.username}-medium-#{fp}.avif"))
     touch!(Path.join(dir, "Ada King_thumb.jpg"))
     touch!(Path.join(dir, "Ada King_medium.jpg"))
     {user, dir, fp}
@@ -55,7 +55,7 @@ defmodule Vutuv.Uploads.LegacySweeperTest do
              LegacySweeper.run(only: :avatars)
 
     assert Enum.sort(File.ls!(dir)) ==
-             ["#{user.active_slug}-medium-#{fp}.avif", "#{user.active_slug}-thumb-#{fp}.avif"]
+             ["#{user.username}-medium-#{fp}.avif", "#{user.username}-thumb-#{fp}.avif"]
   end
 
   test "dry run reports without deleting", %{tmp: tmp} do

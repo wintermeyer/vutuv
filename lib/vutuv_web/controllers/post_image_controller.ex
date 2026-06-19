@@ -99,7 +99,7 @@ defmodule VutuvWeb.PostImageController do
   # name a browser proposes on "Save as", not whether the image renders inline.
   defp put_download_name(conn, image, version, ext) do
     case image.user do
-      %{active_slug: slug} when is_binary(slug) ->
+      %{username: slug} when is_binary(slug) ->
         name = "#{slug}-#{version}.#{String.trim_leading(ext, ".")}"
         put_resp_header(conn, "content-disposition", ~s(inline; filename="#{name}"))
 

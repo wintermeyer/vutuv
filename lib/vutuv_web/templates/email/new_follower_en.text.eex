@@ -1,10 +1,10 @@
 <%= email_greeting(@user) %>,
 
-@<%= @actor_slug %> started following you on vutuv.
+@<%= @actor_username %> started following you on vutuv.
 
 See their profile:
 
-<%= @url %><%= @actor_slug %>
+<%= @url %><%= @actor_username %>
 
 You can switch these notification emails off here:
 

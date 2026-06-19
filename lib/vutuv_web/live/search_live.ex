@@ -316,7 +316,7 @@ defmodule VutuvWeb.SearchLive do
                   >
                     {UserHelpers.full_name(post.user)}
                   </.link>
-                  <span class="text-slate-500 dark:text-slate-400">@{post.user.active_slug}</span>
+                  <span class="text-slate-500 dark:text-slate-400">@{post.user.username}</span>
                   <span class="text-slate-600 dark:text-slate-500">· {post.published_on}</span>
                 </p>
                 <.link

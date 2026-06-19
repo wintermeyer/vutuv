@@ -75,7 +75,7 @@ defmodule VutuvWeb.HttpStatusContractTest do
 
     test "a failed form validation answers 422, not 200", %{conn: conn, user: user} do
       # Through the shared save/3 chokepoint (an address without a value) …
-      conn1 = post(conn, "/#{user.active_slug}/phone_numbers", phone_number: %{"value" => ""})
+      conn1 = post(conn, "/#{user.username}/phone_numbers", phone_number: %{"value" => ""})
       assert conn1.status == 422
 
       # … and through a hand-written error branch (a token without scopes).
