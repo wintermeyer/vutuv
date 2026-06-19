@@ -113,6 +113,35 @@ defmodule Vutuv.TagsTest do
 
       assert length(user_tag.endorsements) == 1
     end
+
+    test "count_visible_endorsements/1 counts only currently-visible endorsers" do
+      {_tag_owner, user_tag} = tag_with_mixed_endorsers()
+
+      assert Tags.count_visible_endorsements(user_tag.id) == 1
+    end
+  end
+
+  describe "endorsed?/2 and delete_endorsement/2" do
+    setup do
+      endorser = insert(:user, email_confirmed?: true)
+      user_tag = insert(:user_tag, user: insert(:user), tag: insert(:tag))
+      %{endorser: endorser, user_tag: user_tag}
+    end
+
+    test "endorsed?/2 reflects whether the row exists", ctx do
+      refute Tags.endorsed?(ctx.user_tag.id, ctx.endorser.id)
+      insert(:user_tag_endorsement, user_tag: ctx.user_tag, user: ctx.endorser)
+      assert Tags.endorsed?(ctx.user_tag.id, ctx.endorser.id)
+    end
+
+    test "delete_endorsement/2 removes the endorser's row and is idempotent", ctx do
+      insert(:user_tag_endorsement, user_tag: ctx.user_tag, user: ctx.endorser)
+
+      assert Tags.delete_endorsement(ctx.user_tag.id, ctx.endorser.id) == 1
+      refute Tags.endorsed?(ctx.user_tag.id, ctx.endorser.id)
+      # Deleting again is a no-op, never a raise.
+      assert Tags.delete_endorsement(ctx.user_tag.id, ctx.endorser.id) == 0
+    end
   end
 
   describe "user_tag_endorsements" do

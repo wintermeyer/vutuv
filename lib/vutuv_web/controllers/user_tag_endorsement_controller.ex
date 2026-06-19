@@ -13,43 +13,49 @@ defmodule VutuvWeb.UserTagEndorsementController do
 
   plug(VutuvWeb.Plug.RequireLoginOr404)
 
+  alias Vutuv.Tags
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.UI
 
   def create(conn, _params) do
     # Through the Tags.create_endorsement/1 chokepoint so the tag's owner also
     # gets the live in-app notification.
-    case Vutuv.Tags.create_endorsement(%{
-           user_tag_id: conn.assigns[:user_tag_id],
-           user_id: conn.assigns[:current_user_id]
-         }) do
-      {:ok, _user_tag_endorsement} ->
-        conn
-        |> put_flash(:info, gettext("Endorsement successful."))
-        |> redirect(to: referrer_url(conn))
+    Tags.create_endorsement(%{
+      user_tag_id: conn.assigns[:user_tag_id],
+      user_id: conn.assigns[:current_user_id]
+    })
 
-      {:error, _changeset} ->
-        conn
-        |> put_flash(:info, gettext("Endorsement unsuccessful."))
-        |> redirect(to: referrer_url(conn))
-    end
+    respond(conn, gettext("Endorsement successful."))
   end
 
   def delete(conn, _params) do
-    Repo.one!(
-      from(e in Vutuv.Tags.UserTagEndorsement,
-        where:
-          e.user_tag_id == ^conn.assigns[:user_tag_id] and
-            e.user_id == ^conn.assigns[:current_user_id]
-      )
-    )
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    |> Repo.delete!()
+    Tags.delete_endorsement(conn.assigns[:user_tag_id], conn.assigns[:current_user_id])
 
-    conn
-    |> put_flash(:info, gettext("Unendorsed tag successfully."))
-    |> redirect(to: referrer_url(conn))
+    respond(conn, gettext("Unendorsed tag successfully."))
   end
+
+  # The profile's upvote pill toggles over fetch (the `TagVote` enhancement in
+  # app.js): for that AJAX request answer with the fresh visible count + this
+  # viewer's state as JSON so the pill animates in place. A plain (no-JS) form
+  # submit still gets the classic flash + redirect. State is read back from the
+  # DB, so the response is correct whether the write succeeded, was a duplicate,
+  # or raced another tab.
+  defp respond(conn, flash) do
+    user_tag_id = conn.assigns[:user_tag_id]
+
+    if ajax?(conn) do
+      json(conn, %{
+        count: UI.compact_count(Tags.count_visible_endorsements(user_tag_id)),
+        endorsed: Tags.endorsed?(user_tag_id, conn.assigns[:current_user_id])
+      })
+    else
+      conn
+      |> put_flash(:info, flash)
+      |> redirect(to: referrer_url(conn))
+    end
+  end
+
+  defp ajax?(conn), do: "fetch" in get_req_header(conn, "x-requested-with")
 
   defp referrer_url(conn) do
     ControllerHelpers.referrer_url(conn, ~p"/#{conn.assigns[:user]}")

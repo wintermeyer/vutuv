@@ -22,6 +22,8 @@ defmodule VutuvWeb.UI do
 
   import PhoenixHTMLHelpers.Link, only: [button: 2]
 
+  alias Vutuv.Tags.UserTag
+
   @doc """
   Shared input class for hand-written (Track 2) form fields — the Direction A
   input recipe (full width, rounded, slate border, brand focus ring, dark-aware).
@@ -354,6 +356,106 @@ defmodule VutuvWeb.UI do
   defp chip_class,
     do:
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  @doc """
+  The profile **Tags** upvote pill: a tag-name link joined to a caret + count
+  vote segment, so the number plainly reads as "upvotes" instead of a floating
+  badge whose meaning was unclear.
+
+  A logged-in non-owner gets a real toggle — a CSRF `<.form>` the `TagVote`
+  enhancement in `app.js` drives over fetch (POST to endorse, DELETE to undo),
+  flipping `data-endorsed` (which the `data-[endorsed=true]:` utilities restyle)
+  and popping the count when it changes. The form's action/method are the no-JS
+  fallback. Everyone else (the owner, logged-out visitors) sees the same caret +
+  count read-only. The count is the visible endorsement tally (`compact_count`).
+  """
+  attr(:user, :map, required: true, doc: "the profile owner whose tag this is")
+  attr(:user_tag, :map, required: true, doc: "a UserTag with `endorsements` preloaded")
+  attr(:viewer_id, :any, default: nil, doc: "the current user's id, or nil when logged out")
+
+  def tag_vote(assigns) do
+    user_tag = assigns.user_tag
+    viewer_id = assigns.viewer_id
+
+    assigns =
+      assigns
+      |> assign(:can_vote?, viewer_id && viewer_id != assigns.user.id)
+      |> assign(
+        :endorsed?,
+        viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
+      )
+      |> assign(:count, compact_count(Enum.count(user_tag.endorsements)))
+
+    ~H"""
+    <div class="inline-flex items-stretch overflow-hidden rounded-lg text-sm font-medium">
+      <.link
+        navigate={~p"/#{@user}/tags/#{@user_tag}"}
+        class="flex items-center bg-brand-50 px-3 py-1.5 text-brand-700 hover:bg-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:hover:bg-brand-900/60"
+      >
+        {UserTag.truncated_name(@user_tag)}
+      </.link>
+      <.form
+        :if={@can_vote?}
+        for={%{}}
+        action={
+          if(@endorsed?,
+            do: ~p"/#{@user}/user_tag_endorsements/#{@user_tag}",
+            else: ~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"
+          )
+        }
+        method={if(@endorsed?, do: "delete", else: "post")}
+        class="contents"
+        data-tag-vote="true"
+        data-endorse-url={~p"/#{@user}/user_tag_endorsements?#{[id: @user_tag]}"}
+        data-unendorse-url={~p"/#{@user}/user_tag_endorsements/#{@user_tag}"}
+        data-label-endorse={gettext("Endorse")}
+        data-label-unendorse={gettext("Remove endorsement")}
+      >
+        <button
+          type="submit"
+          data-endorsed={to_string(@endorsed?)}
+          aria-pressed={to_string(@endorsed?)}
+          title={if(@endorsed?, do: gettext("Remove endorsement"), else: gettext("Endorse"))}
+          class={[
+            "flex items-center gap-1 border-l px-2.5 py-1.5 transition-colors",
+            "border-brand-100 bg-brand-50 text-slate-600 hover:bg-brand-100 hover:text-brand-700",
+            "dark:border-brand-900/60 dark:bg-brand-900/40 dark:text-slate-300 dark:hover:text-brand-100",
+            "data-[endorsed=true]:border-brand-600 data-[endorsed=true]:bg-brand-600 data-[endorsed=true]:text-white",
+            "data-[endorsed=true]:hover:bg-brand-700 data-[endorsed=true]:hover:text-white"
+          ]}
+        >
+          <.caret_up />
+          <span data-tag-vote-count class="tabular-nums">{@count}</span>
+        </button>
+      </.form>
+      <%!-- Read-only count (owner / logged-out): the caret marks it as the upvote
+      tally. No endorsement-word tooltip here, so the Tags section stays about tags
+      (tag_wording_test); the actionable button above carries the "Endorse" label. --%>
+      <span
+        :if={!@can_vote?}
+        class="flex items-center gap-1 border-l border-brand-100 bg-brand-50 px-2.5 py-1.5 text-slate-600 dark:border-brand-900/60 dark:bg-brand-900/40 dark:text-slate-400"
+      >
+        <.caret_up />
+        <span class="tabular-nums">{@count}</span>
+      </span>
+    </div>
+    """
+  end
+
+  defp caret_up(assigns) do
+    ~H"""
+    <svg
+      class="h-3.5 w-3.5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
+    </svg>
+    """
+  end
 
   @doc """
   Button. Renders a `<.link>` when given `navigate`/`patch`/`href` (with optional

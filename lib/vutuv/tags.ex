@@ -5,6 +5,8 @@ defmodule Vutuv.Tags do
   endorsements.
   """
 
+  import Ecto.Query
+
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias Vutuv.Tags.Tag
@@ -50,6 +52,41 @@ defmodule Vutuv.Tags do
     end
 
     result
+  end
+
+  @doc """
+  Removes `user_id`'s endorsement of `user_tag_id`. Returns the number of rows
+  deleted (0 or 1), so an undo of an endorsement that is already gone is a
+  no-op rather than a raise (the profile's upvote pill toggles idempotently).
+  """
+  def delete_endorsement(user_tag_id, user_id) do
+    {count, _} =
+      from(e in UserTagEndorsement,
+        where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id
+      )
+      |> Repo.delete_all()
+
+    count
+  end
+
+  @doc "Whether `user_id` currently endorses `user_tag_id`."
+  def endorsed?(user_tag_id, user_id) do
+    Repo.exists?(
+      from(e in UserTagEndorsement,
+        where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id
+      )
+    )
+  end
+
+  @doc """
+  Number of *currently-visible* endorsers of `user_tag_id` (the public count
+  shown on the upvote pill). Goes through `UserTagEndorsement.visible/1`, so a
+  hidden or never-activated endorser never inflates the tally (issue #783).
+  """
+  def count_visible_endorsements(user_tag_id) do
+    UserTagEndorsement.visible()
+    |> where([e], e.user_tag_id == ^user_tag_id)
+    |> Repo.aggregate(:count)
   end
 
   defp notify_endorsement(endorsement) do

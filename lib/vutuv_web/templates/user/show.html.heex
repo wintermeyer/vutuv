@@ -373,22 +373,17 @@ the resulting ~200px rail width. --%>
         {gettext("Add a tag")}
       </.empty_add>
 
+      <%!-- The caret + count is the upvote control: a logged-in non-owner toggles
+      their endorsement (TagVote in app.js animates it over fetch); the count is
+      the visible endorsement tally. Endorsements are preloaded, so tag_vote
+      checks "did I endorse?" in memory (no per-tag query). --%>
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
-        <div :for={user_tag <- @user_tags} class="inline-flex items-center">
-          <.chip href={~p"/#{@user}/tags/#{user_tag}"}>
-            {Vutuv.Tags.UserTag.truncated_name(user_tag)}
-            <span class="rounded bg-brand-600 px-1.5 text-xs font-semibold text-white">{compact_count(Enum.count(user_tag.endorsements))}</span>
-          </.chip>
-          <%!-- Endorsements are preloaded, so check in memory (no per-tag query). --%>
-          <%= if @current_user && not same_user?(@user, @current_user) && not Enum.any?(user_tag.endorsements, &(&1.user_id == @current_user_id)) do %>
-            <%= button to: ~p"/#{@user}/user_tag_endorsements?#{[id: user_tag]}",
-                  method: :post,
-                  title: gettext("Endorse"),
-                  class: "ml-1 flex h-7 w-7 items-center justify-center rounded-full text-slate-600 dark:text-slate-400 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-slate-800" do %>
-              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.5h1.5v9h-3v-7.5a1.5 1.5 0 0 1 1.5-1.5Zm0 0V9a3 3 0 0 1 3-3l.4.04a2 2 0 0 1 1.6 2.6l-.9 2.86h4.27a2 2 0 0 1 1.98 2.3l-.86 5.5a2 2 0 0 1-1.98 1.7H8.133"/></svg>
-            <% end %>
-          <% end %>
-        </div>
+        <.tag_vote
+          :for={user_tag <- @user_tags}
+          user={@user}
+          user_tag={user_tag}
+          viewer_id={@current_user && @current_user.id}
+        />
       </div>
 
       <.manage_footer

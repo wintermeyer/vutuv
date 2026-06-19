@@ -291,6 +291,71 @@ function markFocusableScrollers() {
 window.addEventListener("DOMContentLoaded", markFocusableScrollers)
 window.addEventListener("phx:page-loading-stop", markFocusableScrollers)
 
+// Tag endorsement upvote pills on the profile (VutuvWeb.UI.tag_vote): each is a
+// CSRF <form data-tag-vote> wrapping a caret+count button. Enhance it to toggle
+// the endorsement over fetch (POST to endorse, DELETE to undo) instead of a full
+// page reload, then pop the count when it changes. The form's action/method are
+// the no-JS fallback; once wired we always intercept. The server returns the
+// fresh {count, endorsed}; flipping data-endorsed restyles the button via the
+// data-[endorsed=true]: utilities. Classic controller page, so plain JS (no
+// LiveView here).
+function popCount(el) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+  el.animate(
+    [{ transform: "scale(1)" }, { transform: "scale(1.4)" }, { transform: "scale(1)" }],
+    { duration: 260, easing: "ease-out" }
+  )
+}
+
+function wireTagVote(form) {
+  if (form.dataset.tagVoteWired) return
+  form.dataset.tagVoteWired = "1"
+
+  const button = form.querySelector("button")
+  const countEl = form.querySelector("[data-tag-vote-count]")
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault()
+    if (form.dataset.busy) return
+    form.dataset.busy = "1"
+
+    const endorsed = button.dataset.endorsed === "true"
+    const url = endorsed ? form.dataset.unendorseUrl : form.dataset.endorseUrl
+    const method = endorsed ? "DELETE" : "POST"
+
+    try {
+      // Default Accept (*/*) on purpose: the route is in the :browser pipeline
+      // whose `accepts ["html"]` 406s an explicit application/json Accept; the
+      // action responds with JSON regardless.
+      const resp = await fetch(url, {
+        method,
+        headers: { "x-csrf-token": csrfToken, "x-requested-with": "fetch" },
+      })
+      if (!resp.ok) throw new Error(`tag vote ${resp.status}`)
+      const { count, endorsed: nowEndorsed } = await resp.json()
+
+      button.dataset.endorsed = String(nowEndorsed)
+      button.setAttribute("aria-pressed", String(nowEndorsed))
+      button.title = nowEndorsed ? form.dataset.labelUnendorse : form.dataset.labelEndorse
+
+      if (countEl.textContent !== String(count)) {
+        countEl.textContent = count
+        popCount(countEl)
+      }
+    } catch (_e) {
+      // Network/permission hiccup: leave the pill as it was; a reload re-syncs.
+    } finally {
+      delete form.dataset.busy
+    }
+  })
+}
+
+function setupTagVotes() {
+  document.querySelectorAll("form[data-tag-vote]").forEach(wireTagVote)
+}
+window.addEventListener("DOMContentLoaded", setupTagVotes)
+window.addEventListener("phx:page-loading-stop", setupTagVotes)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for
