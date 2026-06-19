@@ -13,10 +13,17 @@ defmodule Vutuv.Profiles.Address do
     field(:city, :string)
     field(:state, :string)
     field(:country, :string)
+    # The owner's chosen display order. Set programmatically (on create and via
+    # the reorder/move actions), never cast from user params. NULLs sort last so
+    # legacy rows fall back to creation order until reordered. See Vutuv.Ordering.
+    field(:position, :integer)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
   end
+
+  @doc "Addresses in the owner's chosen order (see `Vutuv.Ordering`)."
+  def ordered(query \\ __MODULE__), do: Vutuv.Ordering.by_position(query)
 
   @doc """
   Creates a changeset based on the `model` and `params`.

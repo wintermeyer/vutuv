@@ -231,8 +231,8 @@ defmodule VutuvWeb.UserController do
   # all social media accounts (there can be at most one per provider).
   defp preload_user_for_show(user) do
     user
-    |> Repo.preload([
-      :social_media_accounts,
+    |> Repo.preload(
+      social_media_accounts: Vutuv.Profiles.SocialMediaAccount.ordered(),
       # Most endorsed first, so the 10-tag cut keeps the strongest tags. The
       # endorsement rows drive both the chip's displayed count (Enum.count) and
       # the template's "already endorsed?" check, so preload only the visible
@@ -245,13 +245,15 @@ defmodule VutuvWeb.UserController do
       work_experiences:
         from(u in Vutuv.Profiles.WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),
-      phone_numbers:
-        from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at], limit: 3),
+      # The contact sections lead with the owner's chosen order (see
+      # Vutuv.Ordering), so the profile preview shows the same first entries the
+      # section pages do.
+      phone_numbers: Vutuv.Profiles.PhoneNumber.ordered() |> limit(3),
       urls: Url.ordered() |> limit(3),
-      addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at], limit: 3),
+      addresses: Vutuv.Profiles.Address.ordered() |> limit(3),
       inbound_follows: {Follow.latest(3, :follower), [:follower]},
       outbound_follows: {Follow.latest(3, :followee), [:followee]}
-    ])
+    )
   end
 
   defp assoc_totals(user) do

@@ -543,12 +543,6 @@ defmodule VutuvWeb.Router do
       )
 
       resources("/phone_numbers", PhoneNumberController)
-      # Link ordering. These must precede `resources "/links"` so the literal
-      # "reorder" path isn't swallowed by the `:id` of the PUT update route.
-      # `reorder` takes the full id order (drag-and-drop); `move` nudges one
-      # link up/down (the no-JS / keyboard fallback). Owner-only via AuthUser.
-      put("/links/reorder", UrlController, :reorder)
-      put("/links/:id/move", UrlController, :move)
       resources("/links", UrlController)
       resources("/social_media_accounts", SocialMediaAccountController)
       resources("/work_experiences", WorkExperienceController)

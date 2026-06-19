@@ -91,6 +91,96 @@ const Hooks = {
       this.style?.remove()
     },
   },
+  // Drag-and-drop ordering for the owner's profile-section reorder tool
+  // (VutuvWeb.SectionReorderLive). Listeners are delegated to the <ul> so they
+  // survive the server re-renders that follow each change. On drop we push the
+  // new id order to the LiveView, which renumbers positions 1..n and re-renders
+  // (the rows are keyed by id, so the DOM the drag already moved just settles).
+  // Touch devices can't fire native HTML5 drag, so the up/down arrows — plain
+  // phx-click events — are the reorder path there; this layers desktop drag on
+  // top. No CSRF token to manage: it rides the live socket.
+  Reorder: {
+    mounted() {
+      this.dragging = null
+      const list = this.el
+      const items = () => [...list.querySelectorAll(".reorder__item")]
+
+      // The row the dragged element should sit before, by vertical midpoint.
+      const rowAfter = (y) =>
+        items()
+          .filter((row) => row !== this.dragging)
+          .reduce(
+            (closest, row) => {
+              const box = row.getBoundingClientRect()
+              const offset = y - box.top - box.height / 2
+              return offset < 0 && offset > closest.offset
+                ? { offset, element: row }
+                : closest
+            },
+            { offset: Number.NEGATIVE_INFINITY, element: null }
+          ).element
+
+      list.addEventListener("dragstart", (e) => {
+        const row = e.target.closest(".reorder__item")
+        if (!row) return
+        this.dragging = row
+        row.classList.add("is-dragging")
+      })
+
+      list.addEventListener("dragend", () => {
+        if (!this.dragging) return
+        this.dragging.classList.remove("is-dragging")
+        this.dragging = null
+        this.pushEvent("reorder", { order: items().map((el) => el.dataset.id) })
+      })
+
+      list.addEventListener("dragover", (e) => {
+        e.preventDefault()
+        if (!this.dragging) return
+        const after = rowAfter(e.clientY)
+        if (after == null) {
+          list.appendChild(this.dragging)
+        } else if (after !== this.dragging) {
+          list.insertBefore(this.dragging, after)
+        }
+      })
+    },
+    // Animate the arrow/keyboard reorders with FLIP: snapshot each row's top
+    // before the server patch (beforeUpdate), then after it (updated) jump each
+    // moved row back to where it was and transition to its new spot, so the
+    // swap glides instead of teleporting. A drag ends in the same order the DOM
+    // already shows, so its delta is 0 and nothing animates. Honors
+    // prefers-reduced-motion.
+    beforeUpdate() {
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+      this._tops = new Map()
+      this.el
+        .querySelectorAll(".reorder__item")
+        .forEach((el) => this._tops.set(el.dataset.id, el.getBoundingClientRect().top))
+    },
+    updated() {
+      if (!this._tops) return
+      const rows = [...this.el.querySelectorAll(".reorder__item")]
+      // Invert: place each moved row at its old position with no transition.
+      rows.forEach((el) => {
+        const prev = this._tops.get(el.dataset.id)
+        if (prev == null) return
+        const delta = prev - el.getBoundingClientRect().top
+        if (!delta) return
+        el.style.transition = "none"
+        el.style.transform = `translateY(${delta}px)`
+      })
+      // Play: next frame, release to the natural position.
+      requestAnimationFrame(() => {
+        rows.forEach((el) => {
+          if (!el.style.transform) return
+          el.style.transition = "transform 180ms ease"
+          el.style.transform = ""
+        })
+      })
+      this._tops = null
+    },
+  },
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
@@ -242,94 +332,6 @@ document.addEventListener("keydown", (e) => {
     .querySelectorAll("details[data-menu][open]")
     .forEach((menu) => menu.removeAttribute("open"))
 })
-
-// Link ordering tool (owner's /:slug/links page, see the reorder_list template).
-// Progressive enhancement: the up/down arrows are real forms that work without
-// JS, and this turns the list into a drag-and-drop reorderer on top. On drop we
-// PUT the new id order to data-reorder-url (CSRF via the meta token); the server
-// renumbers positions 1..n. Classic controller page, so plain JS — no LiveView.
-function setupLinkReorder() {
-  const list = document.getElementById("link-reorder")
-  if (!list) return
-
-  const csrf = document
-    .querySelector("meta[name='csrf-token']")
-    ?.getAttribute("content")
-  let dragging = null
-
-  const items = () => [...list.querySelectorAll(".link-reorder__item")]
-
-  // Keep the keyboard/no-JS arrows honest after a drag: only the first row's
-  // "up" and the last row's "down" are disabled.
-  function refreshMoveButtons() {
-    const rows = items()
-    rows.forEach((row, i) => {
-      const up = row.querySelector("button[data-move='up']")
-      const down = row.querySelector("button[data-move='down']")
-      if (up) up.disabled = i === 0
-      if (down) down.disabled = i === rows.length - 1
-    })
-  }
-
-  function persist() {
-    const ids = items().map((el) => el.dataset.id)
-    fetch(list.dataset.reorderUrl, {
-      method: "PUT",
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-csrf-token": csrf,
-      },
-      body: ids.map((id) => `order[]=${encodeURIComponent(id)}`).join("&"),
-    })
-      .then((resp) => {
-        if (!resp.ok) window.location.reload()
-      })
-      .catch(() => window.location.reload())
-  }
-
-  // The row the dragged element should sit before, by vertical midpoint.
-  function rowAfter(y) {
-    return items()
-      .filter((row) => row !== dragging)
-      .reduce(
-        (closest, row) => {
-          const box = row.getBoundingClientRect()
-          const offset = y - box.top - box.height / 2
-          return offset < 0 && offset > closest.offset
-            ? { offset, element: row }
-            : closest
-        },
-        { offset: Number.NEGATIVE_INFINITY, element: null }
-      ).element
-  }
-
-  items().forEach((row) => {
-    row.addEventListener("dragstart", () => {
-      dragging = row
-      row.classList.add("is-dragging")
-    })
-    row.addEventListener("dragend", () => {
-      row.classList.remove("is-dragging")
-      dragging = null
-      refreshMoveButtons()
-      persist()
-    })
-  })
-
-  list.addEventListener("dragover", (e) => {
-    e.preventDefault()
-    if (!dragging) return
-    const after = rowAfter(e.clientY)
-    if (after == null) {
-      list.appendChild(dragging)
-    } else if (after !== dragging) {
-      list.insertBefore(dragging, after)
-    }
-  })
-
-  refreshMoveButtons()
-}
-window.addEventListener("DOMContentLoaded", setupLinkReorder)
 
 // Avatar fallback. A user's stored avatar file can be missing — a legacy row
 // whose image was never imported, a failed upload, a derived version not yet

@@ -16,6 +16,10 @@ defmodule Vutuv.Accounts.Email do
     # Set by a failure DSN (Vutuv.Notifications.Bounces), cleared by a
     # successful login PIN through the address. Never cast from params.
     field(:undeliverable_at, :naive_datetime)
+    # The owner's chosen display order. Set programmatically (on create and via
+    # the reorder/move actions), never cast from user params. NULLs sort last so
+    # legacy rows fall back to creation order until reordered. See Vutuv.Ordering.
+    field(:position, :integer)
     belongs_to(:user, Vutuv.Accounts.User)
 
     timestamps()
@@ -25,6 +29,9 @@ defmodule Vutuv.Accounts.Email do
 
   @doc "The allowed `email_type` values, in the order the forms list them."
   def email_types, do: @email_types
+
+  @doc "Email addresses in the owner's chosen order (see `Vutuv.Ordering`)."
+  def ordered(query \\ __MODULE__), do: Vutuv.Ordering.by_position(query)
 
   def changeset(model, params \\ %{}) do
     model

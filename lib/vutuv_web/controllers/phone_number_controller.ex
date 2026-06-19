@@ -11,7 +11,7 @@ defmodule VutuvWeb.PhoneNumberController do
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
-    phone_numbers = Repo.all(assoc(conn.assigns[:user], :phone_numbers))
+    phone_numbers = Repo.all(PhoneNumber.ordered(assoc(conn.assigns[:user], :phone_numbers)))
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -33,9 +33,14 @@ defmodule VutuvWeb.PhoneNumberController do
   end
 
   def create(conn, %{"phone_number" => phone_number_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
-      |> build_assoc(:phone_numbers)
+      user
+      # New entries append to the owner's chosen order. `position` is set on the
+      # struct (not cast) so a forged param can't move it; reordering lives in
+      # VutuvWeb.SectionReorderLive via Vutuv.Ordering.
+      |> build_assoc(:phone_numbers, position: Vutuv.Ordering.next_position(PhoneNumber, user.id))
       |> PhoneNumber.changeset(phone_number_params)
 
     ControllerHelpers.save(conn, Repo.insert(changeset),

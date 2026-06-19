@@ -21,12 +21,19 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.imagebox`,
    `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
-   thumbnail + truncating URL), `.link-reorder*` (the owner's drag-and-drop
-   link-ordering tool on `/:slug/links`: `.link-reorder__item` draggable tile =
-   `.link-reorder__handle` grip + `.link-reorder__thumb` + text + `.link-reorder__move`
-   up/down `.link-reorder__btn` arrows + `<.row_actions>`; the arrows are real
-   forms so they work without JS, and `setupLinkReorder` in `app.js` layers
-   drag-and-drop on top), `.card__tablewrap` (every in-card `<table>`
+   thumbnail + truncating URL), `.reorder*` (the owner's drag-and-drop ordering
+   tool shared by every orderable section page — links, phone numbers, addresses,
+   social media accounts, emails: `.reorder__item` draggable tile =
+   `.reorder__handle` grip + `.reorder__body` (section-specific, with a
+   `.reorder__thumb` for links) + `.reorder__move` up/down `.reorder__btn` arrows
+   (sized as touch targets) + `<.row_actions>`. It is **not** a classic page: it is
+   the embedded `VutuvWeb.SectionReorderLive` (`live_render`, owner-only, like the
+   shell), so both drag and arrows persist over the socket with no reload — the
+   `Reorder` hook in `app.js` does the drag, the arrows are `phx-click`. The hook
+   also FLIP-animates the arrow reorders (snapshot row tops in `beforeUpdate`,
+   glide them from old to new spot in `updated`, ~180ms; honors
+   prefers-reduced-motion). Mobile-first: touch can't fire native drag, so the
+   arrows are the reorder path on phones), `.card__tablewrap` (every in-card `<table>`
    sits in this overflow-x scroller so a wide table scrolls instead of being
    clipped by the card's `overflow:hidden` — `card_table_scroll_test.exs`
    enforces it), `.breakwrap` (break a long unbroken string and cap the line at a

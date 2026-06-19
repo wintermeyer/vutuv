@@ -43,9 +43,9 @@ defmodule VutuvWeb.UserHelpers do
 
   def emails_for_display(user, visitor) do
     if user_has_permissions?(user, visitor) do
-      Repo.all(assoc(user, :emails))
+      Repo.all(Vutuv.Ordering.by_position(assoc(user, :emails)))
     else
-      Repo.all(from(e in assoc(user, :emails), where: e.public?))
+      Repo.all(Vutuv.Ordering.by_position(from(e in assoc(user, :emails), where: e.public?)))
     end
   end
 
@@ -58,10 +58,11 @@ defmodule VutuvWeb.UserHelpers do
   Outside a preview (`nil`) it falls back to the real visitor's permission via
   `emails_for_display/2`.
   """
-  def emails_for_preview(user, _visitor, :connection), do: Repo.all(assoc(user, :emails))
+  def emails_for_preview(user, _visitor, :connection),
+    do: Repo.all(Vutuv.Ordering.by_position(assoc(user, :emails)))
 
   def emails_for_preview(user, _visitor, mode) when mode in [:follower, :public],
-    do: Repo.all(from(e in assoc(user, :emails), where: e.public?))
+    do: Repo.all(Vutuv.Ordering.by_position(from(e in assoc(user, :emails), where: e.public?)))
 
   def emails_for_preview(user, visitor, nil), do: emails_for_display(user, visitor)
 

@@ -96,8 +96,17 @@ defmodule VutuvWeb.ApiV2.SectionController do
     |> Repo.preload(:tag)
   end
 
+  # Work experiences carry no `position` (they sort by date elsewhere); keep
+  # their existing order so only the position-bearing sections get reordered.
+  defp entries(user, :work_experiences, _viewer) do
+    Repo.all(assoc(user, :work_experiences))
+  end
+
+  # The position-ordered sections (links, social, addresses, phone numbers)
+  # follow the owner's chosen order, matching the HTML pages.
   defp entries(user, section, _viewer) do
-    Repo.all(assoc(user, Map.fetch!(@writable, section).assoc))
+    %{assoc: assoc, schema: schema} = Map.fetch!(@writable, section)
+    Repo.all(schema.ordered(assoc(user, assoc)))
   end
 
   # Same side effect as the HTML link forms (create AND update, so an API

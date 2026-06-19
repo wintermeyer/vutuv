@@ -12,7 +12,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
   def index(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload([:social_media_accounts])
+      |> Repo.preload(social_media_accounts: SocialMediaAccount.ordered())
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -32,9 +32,15 @@ defmodule VutuvWeb.SocialMediaAccountController do
   end
 
   def create(conn, %{"social_media_account" => social_media_account_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
-      |> build_assoc(:social_media_accounts)
+      user
+      # New entries append to the owner's chosen order (position set on the
+      # struct, never cast); reordering lives in VutuvWeb.SectionReorderLive.
+      |> build_assoc(:social_media_accounts,
+        position: Vutuv.Ordering.next_position(SocialMediaAccount, user.id)
+      )
       |> SocialMediaAccount.changeset(social_media_account_params)
 
     case Repo.insert(changeset) do

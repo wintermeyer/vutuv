@@ -103,7 +103,9 @@ defmodule VutuvWeb.EmailController do
         email_type = get_session(conn, :pending_email_type) || "Other"
 
         user
-        |> build_assoc(:emails)
+        # Append to the owner's chosen order (position set on the struct, never
+        # cast); reordering lives in VutuvWeb.SectionReorderLive.
+        |> build_assoc(:emails, position: Vutuv.Ordering.next_position(Email, user.id))
         |> Email.changeset(%{value: new_email, email_type: email_type})
         |> Repo.insert()
         |> case do

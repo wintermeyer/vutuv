@@ -14,7 +14,7 @@ defmodule VutuvWeb.AddressController do
   def index(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload(:addresses)
+      |> Repo.preload(addresses: Address.ordered())
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -32,9 +32,13 @@ defmodule VutuvWeb.AddressController do
   end
 
   def create(conn, %{"address" => address_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
-      |> build_assoc(:addresses)
+      user
+      # New entries append to the owner's chosen order (position set on the
+      # struct, never cast); reordering lives in VutuvWeb.SectionReorderLive.
+      |> build_assoc(:addresses, position: Vutuv.Ordering.next_position(Address, user.id))
       |> Address.changeset(address_params)
 
     ControllerHelpers.save(conn, Repo.insert(changeset),

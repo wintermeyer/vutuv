@@ -10,8 +10,10 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
-  import Ecto.Query
-
+  alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
@@ -93,14 +95,16 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   # The same associations the profile page preloads (user_controller.ex),
   # without the page's preview limits.
   defp preload(user) do
-    Repo.preload(user, [
-      :social_media_accounts,
+    Repo.preload(user,
+      social_media_accounts: SocialMediaAccount.ordered(),
       user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
-      phone_numbers: from(p in Vutuv.Profiles.PhoneNumber, order_by: [desc: p.updated_at]),
-      urls: from(u in Vutuv.Profiles.Url, order_by: [desc: u.updated_at]),
-      addresses: from(a in Vutuv.Profiles.Address, order_by: [desc: a.updated_at])
-    ])
+      # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
+      # documents list these contact sections the same way the HTML pages do.
+      phone_numbers: PhoneNumber.ordered(),
+      urls: Url.ordered(),
+      addresses: Address.ordered()
+    )
   end
 
   defp current_position(nil), do: nil

@@ -20,5 +20,11 @@
   add_href={@as_owner? && ~p"/#{@current_user}/social_media_accounts/new"}
   add_label={gettext("Add a social media account")}
 >
-  <%= render "card_list.html", assigns %>
+  <%= if @as_owner? and @social_media_accounts != [] do %>
+    <%= live_render(@conn, VutuvWeb.SectionReorderLive,
+      id: "reorder-social_media_accounts",
+      session: %{"section" => "social_media_accounts", "slug" => @user.active_slug}) %>
+  <% else %>
+    <%= render "card_list.html", assigns %>
+  <% end %>
 </.card_section>

@@ -21,7 +21,9 @@
   add_label={gettext("Add a link")}
 >
   <%= if @as_owner? and @urls != [] do %>
-    <%= render "reorder_list.html", assigns %>
+    <%= live_render(@conn, VutuvWeb.SectionReorderLive,
+      id: "reorder-links",
+      session: %{"section" => "links", "slug" => @user.active_slug}) %>
   <% else %>
     <%= render "card_list.html", assigns %>
   <% end %>

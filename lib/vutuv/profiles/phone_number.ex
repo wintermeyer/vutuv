@@ -6,10 +6,17 @@ defmodule Vutuv.Profiles.PhoneNumber do
   schema "phone_numbers" do
     field(:value, :string)
     field(:number_type, :string)
+    # The owner's chosen display order. Set programmatically (on create and via
+    # the reorder/move actions), never cast from user params. NULLs sort last so
+    # legacy rows fall back to creation order until reordered. See Vutuv.Ordering.
+    field(:position, :integer)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
   end
+
+  @doc "Phone numbers in the owner's chosen order (see `Vutuv.Ordering`)."
+  def ordered(query \\ __MODULE__), do: Vutuv.Ordering.by_position(query)
 
   @format_message ~s/Please enter a valid phone number/
   @requred_message ~s/This field is required/

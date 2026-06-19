@@ -20,5 +20,11 @@
   add_href={@as_owner? && ~p"/#{@current_user}/emails/new"}
   add_label={gettext("Add an email address")}
 >
-  <%= render "card_list.html", assigns %>
+  <%= if @as_owner? and @emails != [] do %>
+    <%= live_render(@conn, VutuvWeb.SectionReorderLive,
+      id: "reorder-emails",
+      session: %{"section" => "emails", "slug" => @user.active_slug}) %>
+  <% else %>
+    <%= render "card_list.html", assigns %>
+  <% end %>
 </.card_section>
