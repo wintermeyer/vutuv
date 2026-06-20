@@ -247,4 +247,45 @@ defmodule VutuvWeb.UITest do
       assert html =~ ~s(page=2")
     end
   end
+
+  describe "local_time/1" do
+    test "emits an ISO-8601 UTC datetime (T-separated, trailing Z) for a naive stamp" do
+      # The bug this component centralizes: a space-separated stamp with no Z is
+      # read as LOCAL time by the browser. The datetime attribute must be the
+      # unambiguous ISO form so the LocalTime pass converts from UTC.
+      at = ~N[2026-06-20 09:30:00]
+      html = render_component(&UI.local_time/1, at: at)
+
+      assert html =~ ~s(datetime="2026-06-20T09:30:00Z")
+      assert html =~ ~s(title="2026-06-20T09:30:00Z")
+      assert html =~ "data-localtime"
+    end
+
+    test "renders a UTC DateTime as ISO with its Z offset" do
+      {:ok, at, 0} = DateTime.from_iso8601("2026-06-20T09:30:00Z")
+      html = render_component(&UI.local_time/1, at: at)
+
+      assert html =~ ~s(datetime="2026-06-20T09:30:00Z")
+    end
+
+    test "attaches the LocalTime hook only when an id is given" do
+      at = ~N[2026-06-20 09:30:00]
+
+      with_id = render_component(&UI.local_time/1, at: at, id: "post-1-at")
+      assert with_id =~ ~s(id="post-1-at")
+      assert with_id =~ ~s(phx-hook="LocalTime")
+
+      without_id = render_component(&UI.local_time/1, at: at)
+      refute without_id =~ "phx-hook"
+    end
+
+    test "the visible body is the server-rendered fallback in the requested format" do
+      at = ~N[2026-06-20 09:30:00]
+
+      assert render_component(&UI.local_time/1, at: at) =~ "2026-06-20 09:30"
+
+      assert render_component(&UI.local_time/1, at: at, format: "%d.%m.%Y %H:%M") =~
+               "20.06.2026 09:30"
+    end
+  end
 end

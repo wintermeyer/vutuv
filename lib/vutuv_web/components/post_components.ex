@@ -230,19 +230,7 @@ defmodule VutuvWeb.PostComponents do
               {full_name(@post.user)}
             </.link>
             <.link href={@permalink} class="text-sm text-slate-500 hover:text-brand-700">
-              <%!-- Stored timestamps are naive UTC; the trailing "Z" lets the
-              LocalTime pass (LiveView hook on live pages, the DOMContentLoaded
-              sweep on dead ones) rewrite it into the viewer's timezone. The
-              server-rendered text is the no-JS fallback. --%>
-              <time
-                id={@time_id}
-                phx-hook="LocalTime"
-                data-localtime
-                datetime={NaiveDateTime.to_iso8601(@post.inserted_at) <> "Z"}
-                title={NaiveDateTime.to_iso8601(@post.inserted_at) <> "Z"}
-              >
-                {Calendar.strftime(@post.inserted_at, "%Y-%m-%d %H:%M")}
-              </time>
+              <.local_time id={@time_id} at={@post.inserted_at} />
             </.link>
             <span :if={@edited?} class="text-xs text-slate-500">{gettext("edited")}</span>
             <span

@@ -24,7 +24,7 @@ defmodule VutuvWeb.Admin.AdHTML do
         {gettext("Booked by a since-deleted account")}
       <% end %>
       · {gettext("booked on")}
-      <time datetime={"#{@ad.inserted_at}Z"} data-localtime>{@ad.inserted_at}</time>
+      <.local_time at={@ad.inserted_at} />
     </p>
 
     <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">

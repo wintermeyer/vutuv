@@ -1147,6 +1147,48 @@ defmodule VutuvWeb.UI do
     """
   end
 
+  @doc """
+  The single rendering of a viewer-localized timestamp — the `<time>` element
+  the `LocalTime` pass rewrites into the viewer's timezone (the LiveView hook on
+  live pages, the `time[data-localtime]` DOMContentLoaded sweep on classic ones;
+  see `assets/js/app.js`). The server text inside is the no-JS fallback.
+
+  Stored timestamps are UTC, so the `datetime`/`title` is always emitted as
+  unambiguous ISO-8601 with a trailing `Z` (a naive datetime is treated as UTC,
+  a `DateTime` is rendered with its own offset), the form every browser parses as
+  UTC. Hand-rolling the element with a space-separated stamp (no `T`) made some
+  browsers read it as *local* time — the bug this component centralizes away.
+
+  Pass `id` when the element lives inside a LiveView so the `LocalTime` hook can
+  attach (the hook needs a DOM id); omit it on classic pages, where the
+  `data-localtime` sweep handles it. `format` is the `Calendar.strftime/2` form
+  of the fallback text (default `"%Y-%m-%d %H:%M"`).
+  """
+  attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
+  attr(:id, :string, default: nil, doc: "DOM id; when set, the LocalTime hook attaches")
+  attr(:format, :string, default: "%Y-%m-%d %H:%M")
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+
+  def local_time(assigns) do
+    assigns = assign(assigns, :iso, iso_utc(assigns.at))
+
+    ~H"""
+    <time
+      id={@id}
+      phx-hook={@id && "LocalTime"}
+      data-localtime
+      datetime={@iso}
+      title={@iso}
+      class={@class}
+      {@rest}
+    >{Calendar.strftime(@at, @format)}</time>
+    """
+  end
+
+  defp iso_utc(%DateTime{} = dt), do: dt |> DateTime.truncate(:second) |> DateTime.to_iso8601()
+  defp iso_utc(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt) <> "Z"
+
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)
   attr(:class, :string, default: nil)

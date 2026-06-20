@@ -13,6 +13,8 @@
 // Cross-page navigation is a plain location change so it works identically on
 // classic controller pages and LiveView pages.
 
+import { onReady } from "./util"
+
 const DESKTOP = window.matchMedia("(hover: hover) and (pointer: fine)")
 
 const SEQUENCE_WINDOW_MS = 1500
@@ -212,9 +214,8 @@ function handleKey(e) {
 document.addEventListener("keydown", handleKey)
 
 // Focus the composer when arriving at /feed#compose (the "n" shortcut fired
-// from another page). Both events fire on a LiveView page load.
-window.addEventListener("DOMContentLoaded", focusComposerFromHash)
-window.addEventListener("phx:page-loading-stop", focusComposerFromHash)
+// from another page). Runs on DOM ready and after every live navigation.
+onReady(focusComposerFromHash)
 
 // The account-menu "Keyboard shortcuts" item, the overlay's close button, and a
 // backdrop click. Delegated so it keeps working for markup the LiveView shell

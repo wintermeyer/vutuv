@@ -54,12 +54,7 @@
             <td><.link href={~p"/#{user}"}>@{user.username}</.link></td>
             <td>
               <% at = Map.get(@endorsed_at_by_id, user.id) %>
-              <time
-                :if={at}
-                data-localtime
-                datetime={NaiveDateTime.to_iso8601(at) <> "Z"}
-                title={NaiveDateTime.to_iso8601(at) <> "Z"}
-              >{Calendar.strftime(at, "%Y-%m-%d %H:%M")}</time>
+              <.local_time :if={at} at={at} />
             </td>
             <td class="text-right">
               <.follow_button

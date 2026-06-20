@@ -7,8 +7,7 @@
 // when the browser actually supports WebAuthn, so an unsupported browser falls
 // back cleanly to the email-PIN flow.
 
-const csrfToken = () =>
-  document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
+import { onReady, once, postJSON } from "./util"
 
 // base64url <-> ArrayBuffer. The WebAuthn API speaks ArrayBuffers; we send and
 // receive base64url strings (no padding) over JSON.
@@ -26,18 +25,6 @@ function bufToB64url(buf) {
   let bin = ""
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i])
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "")
-}
-
-// POST JSON with the page CSRF token. No `Accept: application/json` header — the
-// :browser pipeline's `accepts ["html"]` would 406 it; the controller answers
-// JSON regardless (the same trick the username-availability fetch uses).
-async function postJSON(url, body) {
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", "x-csrf-token": csrfToken() },
-    body: JSON.stringify(body),
-  })
-  return resp.json()
 }
 
 function showError(scope, message) {
@@ -141,10 +128,10 @@ function setupPasskeys() {
 
   document
     .querySelectorAll("[data-webauthn-register]")
-    .forEach((btn) => btn.addEventListener("click", () => registerPasskey(btn)))
+    .forEach((btn) => once(btn, "wa") && btn.addEventListener("click", () => registerPasskey(btn)))
   document
     .querySelectorAll("[data-webauthn-login]")
-    .forEach((btn) => btn.addEventListener("click", () => loginWithPasskey(btn)))
+    .forEach((btn) => once(btn, "wa") && btn.addEventListener("click", () => loginWithPasskey(btn)))
 }
 
-window.addEventListener("DOMContentLoaded", setupPasskeys)
+onReady(setupPasskeys)

@@ -11,13 +11,13 @@ import "./webauthn"
 // Avatar/cover crop modal on the profile editor (self-contained progressive
 // enhancement of the two file inputs; see image_crop.js).
 import "./image_crop"
+// Shared plumbing (CSRF token, page lifecycle, "wire once" guard, CSRF fetch,
+// reduced-motion) reused by every classic-page enhancement below.
+import { csrfToken, onReady, once, request, reducedMotion } from "./util"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the
-// root layout's <meta name="csrf-token">.
-const csrfToken = document
-  .querySelector("meta[name='csrf-token']")
-  ?.getAttribute("content")
+// root layout's <meta name="csrf-token"> and read via csrfToken() from ./util.
 
 // Rewrites a <time datetime="…Z"> into the viewer's locale and timezone.
 // Server-rendered timestamps are UTC; this runs as the LocalTime hook inside
@@ -33,9 +33,9 @@ function localizeTime(el) {
   }
 }
 
-window.addEventListener("DOMContentLoaded", () => {
+onReady(() =>
   document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
-})
+)
 
 // Hooks. ClearOnSubmit resets a form right after it is submitted (used by the
 // message composer so the input empties once a message is sent). LocalTime
@@ -152,7 +152,7 @@ const Hooks = {
     // already shows, so its delta is 0 and nothing animates. Honors
     // prefers-reduced-motion.
     beforeUpdate() {
-      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+      if (reducedMotion()) return
       this._tops = new Map()
       this.el
         .querySelectorAll(".reorder__item")
@@ -184,7 +184,7 @@ const Hooks = {
 }
 
 const liveSocket = new LiveSocket("/live", Socket, {
-  params: { _csrf_token: csrfToken },
+  params: { _csrf_token: csrfToken() },
   hooks: Hooks,
 })
 
@@ -196,8 +196,7 @@ window.liveSocket = liveSocket
 // watch the tray so toasts pushed by a LiveView (added to the DOM later) get the
 // same treatment. Errors stay until dismissed.
 function wireToast(el) {
-  if (el.dataset.toastWired) return
-  el.dataset.toastWired = "1"
+  if (!once(el, "toast")) return
 
   const closeBtn = el.querySelector("[data-toast-close]")
   if (closeBtn) closeBtn.addEventListener("click", () => el.remove())
@@ -216,8 +215,7 @@ function setupToasts() {
 
   tray.querySelectorAll(".toast").forEach(wireToast)
 
-  if (!tray.dataset.observed) {
-    tray.dataset.observed = "1"
+  if (once(tray, "toastObserver")) {
     new MutationObserver((mutations) => {
       mutations.forEach((m) =>
         m.addedNodes.forEach((node) => {
@@ -230,8 +228,7 @@ function setupToasts() {
   }
 }
 
-window.addEventListener("DOMContentLoaded", setupToasts)
-window.addEventListener("phx:page-loading-stop", setupToasts)
+onReady(setupToasts)
 
 // Username availability. The new-username form (slug/form_content) marks its
 // input with data-availability-url; as the user types, ask the server whether
@@ -241,7 +238,7 @@ window.addEventListener("phx:page-loading-stop", setupToasts)
 function setupSlugAvailability() {
   const input = document.querySelector("input[data-availability-url]")
   const hint = document.getElementById("username-availability")
-  if (!input || !hint) return
+  if (!input || !hint || !once(input, "slug")) return
 
   let timer = null
 
@@ -277,7 +274,7 @@ function setupSlugAvailability() {
   })
 }
 
-window.addEventListener("DOMContentLoaded", setupSlugAvailability)
+onReady(setupSlugAvailability)
 
 // Make horizontally-scrollable code blocks and tables in rendered Markdown
 // keyboard-focusable, so they can be scrolled without a mouse (WCAG 2.1.1).
@@ -288,8 +285,7 @@ function markFocusableScrollers() {
     }
   })
 }
-window.addEventListener("DOMContentLoaded", markFocusableScrollers)
-window.addEventListener("phx:page-loading-stop", markFocusableScrollers)
+onReady(markFocusableScrollers)
 
 // Tag endorsement pills on the profile (VutuvWeb.UI.tag_vote): each is a CSRF
 // <form data-tag-vote> whose single count pill is the toggle button. Enhance it to
@@ -300,7 +296,7 @@ window.addEventListener("phx:page-loading-stop", markFocusableScrollers)
 // data-[endorsed=true]: utilities. Classic controller page, so plain JS (no
 // LiveView here).
 function popCount(el) {
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+  if (reducedMotion()) return
   el.animate(
     [{ transform: "scale(1)" }, { transform: "scale(1.4)" }, { transform: "scale(1)" }],
     { duration: 260, easing: "ease-out" }
@@ -323,8 +319,7 @@ function updateRoster(form, endorsed) {
 }
 
 function wireTagVote(form) {
-  if (form.dataset.tagVoteWired) return
-  form.dataset.tagVoteWired = "1"
+  if (!once(form, "tagVote")) return
 
   const button = form.querySelector("button")
   const countEl = form.querySelector("[data-tag-vote-count]")
@@ -339,13 +334,7 @@ function wireTagVote(form) {
     const method = endorsed ? "DELETE" : "POST"
 
     try {
-      // Default Accept (*/*) on purpose: the route is in the :browser pipeline
-      // whose `accepts ["html"]` 406s an explicit application/json Accept; the
-      // action responds with JSON regardless.
-      const resp = await fetch(url, {
-        method,
-        headers: { "x-csrf-token": csrfToken, "x-requested-with": "fetch" },
-      })
+      const resp = await request(url, { method })
       if (!resp.ok) throw new Error(`tag vote ${resp.status}`)
       const { count, endorsed: nowEndorsed } = await resp.json()
 
@@ -377,8 +366,7 @@ function wireTagVote(form) {
 function setupTagVotes() {
   document.querySelectorAll("form[data-tag-vote]").forEach(wireTagVote)
 }
-window.addEventListener("DOMContentLoaded", setupTagVotes)
-window.addEventListener("phx:page-loading-stop", setupTagVotes)
+onReady(setupTagVotes)
 
 // Map links on the profile address card (user/show + Vutuv.Maps). A logged-in
 // viewer has a default map service rendered as the primary "Open in …" button,
@@ -424,14 +412,10 @@ function promoteMapDefault(service) {
 
 function persistMapDefault(url, service) {
   try {
-    fetch(url, {
+    request(url, {
       method: "POST",
       keepalive: true,
-      headers: {
-        "content-type": "application/x-www-form-urlencoded",
-        "x-csrf-token": csrfToken,
-        "x-requested-with": "fetch",
-      },
+      headers: { "content-type": "application/x-www-form-urlencoded" },
       body: `service=${encodeURIComponent(service)}`,
     })
   } catch (_e) {
@@ -440,8 +424,7 @@ function persistMapDefault(url, service) {
 }
 
 function wireMapRow(row) {
-  if (row.dataset.mapWired) return
-  row.dataset.mapWired = "1"
+  if (!once(row, "map")) return
   const persistUrl = row.dataset.mapPersistUrl
   if (!persistUrl) return // logged-out: plain links, no promotion
   row.querySelectorAll("[data-map-alt]").forEach((alt) => {
@@ -458,8 +441,7 @@ function wireMapRow(row) {
 function setupMapLinks() {
   document.querySelectorAll("[data-map-row]").forEach(wireMapRow)
 }
-window.addEventListener("DOMContentLoaded", setupMapLinks)
-window.addEventListener("phx:page-loading-stop", setupMapLinks)
+onReady(setupMapLinks)
 
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
@@ -467,9 +449,9 @@ window.addEventListener("phx:page-loading-stop", setupMapLinks)
 // the rest of the (Berlin) day: the cookie value is the day stamped onto the
 // button by the server, which the plug compares against its own "today".
 // Classic controller pages only, so plain JS suffices.
-window.addEventListener("DOMContentLoaded", () => {
+onReady(() => {
   const ad = document.querySelector("[data-ad-banner]")
-  if (!ad) return
+  if (!ad || !once(ad, "adBanner")) return
 
   const close = ad.querySelector("[data-ad-close]")
   if (close) {

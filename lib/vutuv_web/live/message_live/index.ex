@@ -572,16 +572,15 @@ defmodule VutuvWeb.MessageLive.Index do
               <span :if={m.frozen_at} class="mt-1 block text-[10px] font-semibold text-white/80">
                 ⚑ <.link navigate={~p"/moderation/cases"} class="underline">{gettext("Hidden: reported, under review")}</.link>
               </span>
-              <time
+              <.local_time
                 id={"#{dom_id}-at"}
-                phx-hook="LocalTime"
-                datetime={NaiveDateTime.to_iso8601(m.inserted_at) <> "Z"}
-                title={NaiveDateTime.to_iso8601(m.inserted_at) <> "Z"}
+                at={m.inserted_at}
+                format="%d.%m.%Y %H:%M"
                 class={[
                   "mt-1 block text-right text-[10px] leading-none",
                   if(mine?(m, @current_user.id), do: "text-white/70", else: "text-slate-600 dark:text-slate-400")
                 ]}
-              >{Calendar.strftime(m.inserted_at, "%d.%m.%Y %H:%M")}</time>
+              />
             </div>
             <%!-- The quiet per-message report flag, beside the other side's
             bubbles. Faint until the row is hovered or the flag is focused, so

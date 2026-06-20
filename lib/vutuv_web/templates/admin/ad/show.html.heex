@@ -21,7 +21,7 @@
 
     <p :if={@ad.approved_at} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
       {gettext("Approved on")}
-      <time datetime={"#{@ad.approved_at}"} data-localtime>{@ad.approved_at}</time>
+      <.local_time at={@ad.approved_at} />
       <%= if @ad.approved_by do %>
         {gettext("by")}
         <.link
