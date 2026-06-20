@@ -220,6 +220,51 @@ defmodule VutuvWeb.UserControllerTest do
     assert source_pos(html, "profile-social-media") < source_pos(html, "profile-addresses")
   end
 
+  describe "contact card splits into Beruflich/Privat" do
+    # E-mails are work unless typed "Personal"; phone numbers are private only
+    # when typed "Home". When both buckets hold something the card grows two
+    # labeled groups (work first); a single bucket stays one bare list.
+
+    test "shows a work and a private group when both kinds are present", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:email, user: user, value: "work.addr@example.com", email_type: "Work")
+      insert(:email, user: user, value: "private.addr@example.com", email_type: "Personal")
+      insert(:phone_number, user: user, value: "+49 30 5551234", number_type: "Home")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ ~s(data-contact-group="work")
+      assert html =~ ~s(data-contact-group="private")
+      assert html =~ "Professional"
+
+      # The work address sits in the work group, ahead of the private group; the
+      # Personal address and the Home phone land after the private heading.
+      assert source_pos(html, ~s(data-contact-group="work")) <
+               source_pos(html, "work.addr@example.com")
+
+      assert source_pos(html, "work.addr@example.com") <
+               source_pos(html, ~s(data-contact-group="private"))
+
+      assert source_pos(html, ~s(data-contact-group="private")) <
+               source_pos(html, "private.addr@example.com")
+
+      assert source_pos(html, ~s(data-contact-group="private")) <
+               source_pos(html, "+49 30 5551234")
+    end
+
+    test "stays one ungrouped list when every channel is work", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:email, user: user, value: "only.work@example.com", email_type: "Work")
+      insert(:phone_number, user: user, value: "+49 30 5551234", number_type: "Cell")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "only.work@example.com"
+      refute html =~ ~s(data-contact-group="work")
+      refute html =~ ~s(data-contact-group="private")
+    end
+  end
+
   describe "section card titles pluralize with the entry count" do
     # Each profile section card titles itself after a count: a card with a
     # single entry must read "Phone Number", not "Phone Numbers". The titles go

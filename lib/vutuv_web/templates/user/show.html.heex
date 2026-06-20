@@ -539,8 +539,8 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- Contact: the two direct channels in one honest card. E-mail rows then
-    phone rows in a single list; the envelope/phone glyph plus the small type
-    badge tell them apart, so no divider or sub-labels. The footer carries one
+    phone rows, grouped into Beruflich/Privat once both buckets hold something
+    (a single bucket stays one bare list). The footer carries one
     manage link per channel: e-mails are always shown in full, so they only get
     the owner's "Manage"; phones get the public "View all" once past the three
     the rail previews, else the owner's "Manage". The whole row drops to nothing
@@ -553,41 +553,46 @@ the resulting ~200px rail width. --%>
       <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
-      <%!-- Icon line: envelope/phone glyph + value; the type (Work/Personal/
-      Mobile) is a small muted suffix shown only when meaningful ("Other" is the
-      unspecified default). E-mails first, then phone numbers. --%>
-      <ul :if={Enum.count(@emails) > 0 or @totals.numbers > 0} class="-my-1 text-sm">
-        <li :for={email <- @emails}>
-          <a
-            href={"mailto:#{email.value}"}
-            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+      <%!-- Contact channels grouped into Beruflich/Privat: e-mails are work
+      unless typed "Personal", phones are private only when typed "Home". The
+      heading carries the work/private split, so rows show no per-row type
+      label. E-mails first, then phones. A single bucket renders bare, with no
+      heading (the common case, since e-mails default to the work bucket). --%>
+      <% groups = contact_groups(@emails, @user.phone_numbers) %>
+      <% grouped? = length(groups) > 1 %>
+      <div :if={groups != []} class="space-y-4">
+        <div
+          :for={{label, group_emails, group_phones} <- groups}
+          data-contact-group={grouped? && to_string(label)}
+        >
+          <h3
+            :if={grouped?}
+            class="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
           >
-            <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-            <span class="min-w-0 break-all font-medium">{email.value}</span>
-            <span
-              :if={email.email_type && email.email_type != "Other"}
-              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
-            >
-              {email.email_type}
-            </span>
-          </a>
-        </li>
-        <li :for={number <- @user.phone_numbers}>
-          <a
-            href={"tel:" <> Vutuv.Phone.tel(number.value)}
-            class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
-          >
-            <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-            <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
-            <span
-              :if={number.number_type}
-              class="ml-auto shrink-0 text-xs font-normal text-slate-500 dark:text-slate-400"
-            >
-              {number.number_type}
-            </span>
-          </a>
-        </li>
-      </ul>
+            {contact_group_label(label)}
+          </h3>
+          <ul class="-my-1 text-sm">
+            <li :for={email <- group_emails}>
+              <a
+                href={"mailto:#{email.value}"}
+                class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+              >
+                <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+                <span class="min-w-0 break-all font-medium">{email.value}</span>
+              </a>
+            </li>
+            <li :for={number <- group_phones}>
+              <a
+                href={"tel:" <> Vutuv.Phone.tel(number.value)}
+                class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+              >
+                <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+                <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
       <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
         {gettext("Add a phone number")}
       </.empty_add>
