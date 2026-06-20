@@ -42,7 +42,8 @@ defmodule VutuvWeb.SessionControllerTest do
 
       conn = get(conn, ~p"/login")
 
-      assert html_response(conn, 200) =~ ~s(href="/sent_emails")
+      # Opens in a new tab so the visitor keeps the PIN form open.
+      assert html_response(conn, 200) =~ ~s(href="/sent_emails" target="_blank")
     end
   end
 

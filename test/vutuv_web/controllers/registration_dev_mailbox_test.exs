@@ -26,7 +26,8 @@ defmodule VutuvWeb.RegistrationDevMailboxTest do
 
       conn = post(conn, ~p"/new_registration", user: @valid_attrs)
 
-      assert html_response(conn, 200) =~ ~s(href="/sent_emails")
+      # Opens in a new tab so the newcomer keeps the PIN form open.
+      assert html_response(conn, 200) =~ ~s(href="/sent_emails" target="_blank")
     end
   end
 end
