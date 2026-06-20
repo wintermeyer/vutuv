@@ -637,9 +637,8 @@ defmodule Vutuv.Moderation do
 
     if ties.follow_a_to_b || ties.follow_b_to_a || conversation do
       # A mutual follow is what made the pair vernetzt, so recording the two
-      # follow edges is enough to restore the connection on a rejected case; the
-      # legacy connection_* columns are no longer written (dropped in a later
-      # expand/contract deploy).
+      # follow edges is enough to restore the connection on a rejected case.
+      # There is no separate connection state to capture any more.
       Repo.insert!(%Severance{
         case_id: case_record.id,
         reporter_id: reporter.id,

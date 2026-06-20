@@ -16,10 +16,12 @@ defmodule Vutuv.Export do
   alias Vutuv.Chat.{Conversation, Participant}
   alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
   alias Vutuv.Repo
-  alias Vutuv.Social.{Connection, Follow}
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
 
-  @schema_version 1
+  # Bumped to 2 when "connections" stopped being a stored table and became a
+  # derived mutual follow, and the connection-request email opt-in was removed.
+  @schema_version 2
 
   def build(%User{} = user) do
     user =
@@ -109,7 +111,6 @@ defmodule Vutuv.Export do
       noindex: user.noindex?,
       noai: user.noai?,
       notification_emails: user.notification_emails?,
-      email_on_connection_request: user.email_on_connection_request?,
       email_on_endorsement: user.email_on_endorsement?,
       email_on_follower: user.email_on_follower?,
       identity_verified: user.identity_verified?,
@@ -139,22 +140,22 @@ defmodule Vutuv.Export do
     |> Repo.all()
   end
 
+  # A "connection" (vernetzt) is a mutual follow now, not a stored row: the
+  # self-join keeps only the followees who follow back. `since` is the later of
+  # the two follow times - the moment the relationship became mutual.
   defp connections(user) do
-    from(c in Connection,
-      where: c.user_a_id == ^user.id or c.user_b_id == ^user.id,
-      preload: [:user_a, :user_b]
+    from(out in Follow,
+      join: back in Follow,
+      on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
+      where: out.follower_id == ^user.id,
+      join: o in assoc(out, :followee),
+      select: %{
+        with: o.username,
+        since:
+          type(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at), :naive_datetime)
+      }
     )
     |> Repo.all()
-    |> Enum.map(fn c ->
-      other = if c.user_a_id == user.id, do: c.user_b, else: c.user_a
-
-      %{
-        with: other && other.username,
-        status: c.status,
-        requested_by_me: c.requested_by_id == user.id,
-        since: c.status_changed_at || c.inserted_at
-      }
-    end)
   end
 
   defp posts(user) do

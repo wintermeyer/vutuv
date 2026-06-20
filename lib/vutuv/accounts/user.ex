@@ -57,7 +57,6 @@ defmodule Vutuv.Accounts.User do
     # page, each with its own one-click unsubscribe). Default false so enabling
     # the feature never mass-mails existing members. The events themselves are
     # always pushed in-app regardless; these only gate the email copy.
-    field(:email_on_connection_request?, :boolean, default: false)
     field(:email_on_endorsement?, :boolean, default: false)
     field(:email_on_follower?, :boolean, default: false)
     # Whether this member's avatar shows the real-time "online" green dot while
@@ -143,7 +142,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? email_on_endorsement? email_on_follower? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @doc """
   The notification-email preference fields, by the param/column name a
@@ -152,8 +151,7 @@ defmodule Vutuv.Accounts.User do
   so the unsubscribe capability can never name a non-pref column.
   """
   def email_pref_fields,
-    do:
-      ~w(notification_emails? email_on_connection_request? email_on_endorsement? email_on_follower?)a
+    do: ~w(notification_emails? email_on_endorsement? email_on_follower?)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 
