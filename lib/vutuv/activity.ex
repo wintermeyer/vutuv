@@ -10,8 +10,9 @@ defmodule Vutuv.Activity do
   (`VutuvWeb.ShellLive`) and the notification / message LiveViews subscribe.
 
   The feed is **derived at read time** from the event tables that already exist
-  (`follows`, `connections` — accepted ones and pending incoming requests —,
-  `user_tag_endorsements`, `post_replies`, `post_likes`) instead of being
+  (`follows` — a one-way follow is a "follower" event, a mutual follow a
+  "connection"/vernetzt one —, `user_tag_endorsements`, `post_replies`,
+  `post_likes`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
@@ -26,7 +27,6 @@ defmodule Vutuv.Activity do
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
-  alias Vutuv.Social.Connection
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.UserTagEndorsement
 
@@ -82,18 +82,15 @@ defmodule Vutuv.Activity do
         select: %{ts: max(e.inserted_at)}
       )
 
+    # "Became vernetzt" events are derived from mutual follows: the pair's
+    # timestamp is the later of the two follow times (GREATEST), matching
+    # connection_items/3 below.
     connection_max =
-      from(c in Connection,
-        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
-        select: %{ts: max(c.status_changed_at)}
-      )
-
-    request_max =
-      from(c in Connection,
-        where:
-          c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
-            c.requested_by_id != ^user_id,
-        select: %{ts: max(c.inserted_at)}
+      from(out in Follow,
+        join: back in Follow,
+        on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
+        where: out.follower_id == ^user_id,
+        select: %{ts: max(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at))}
       )
 
     reply_max =
@@ -122,7 +119,6 @@ defmodule Vutuv.Activity do
       follower_max
       |> union_all(^endorsement_max)
       |> union_all(^connection_max)
-      |> union_all(^request_max)
       |> union_all(^reply_max)
       |> union_all(^like_max)
       |> union_all(^moderation_max)
@@ -237,12 +233,18 @@ defmodule Vutuv.Activity do
   end
 
   @doc ~S"""
-  An "is now connected with you" notification — the `"connection"` kind the
-  derived feed also uses for accepted connections. The live accept path pushes
-  `notify_connection_accepted/2` to the requester instead; this stays for
-  completeness and the feed's shared kind vocabulary.
+  An "is now connected with you" notification — fired when a follow-back
+  completes a mutual follow, so the pair is now vernetzt (connected). A
+  follow-back is also a new follow, so it carries the same `connection.created`
+  webhook and honors the recipient's `:email_on_follower?` opt-in (reusing the
+  new-follower email); only the in-app text/kind announces the connection
+  milestone. The derived feed reuses the `"connection"` kind for mutual pairs.
   """
   def notify_connection(user_id, other) do
+    Vutuv.Webhooks.emit(user_id, "connection.created", %{
+      "with" => actor_param(other)
+    })
+
     notify(
       user_id,
       Map.merge(actor_fields(other), %{
@@ -251,42 +253,10 @@ defmodule Vutuv.Activity do
         at: DateTime.utc_now()
       })
     )
-  end
 
-  @doc ~S(Convenience: a "wants to connect with you" notification for the request recipient.)
-  def notify_connection_request(recipient_id, requester) do
-    Vutuv.Webhooks.emit(recipient_id, "connection.requested", %{
-      "from" => actor_param(requester)
-    })
-
-    notify(
-      recipient_id,
-      Map.merge(actor_fields(requester), %{
-        kind: "connection_request",
-        text: "wants to connect with you.",
-        at: DateTime.utc_now()
-      })
-    )
-
-    maybe_email(recipient_id, requester, :email_on_connection_request?, fn email, user ->
-      Emailer.connection_request_email(email, user, requester)
+    maybe_email(user_id, other, :email_on_follower?, fn email, user ->
+      Emailer.new_follower_email(email, user, other)
     end)
-  end
-
-  @doc ~S(Convenience: an "accepted your connection request" notification for the requester.)
-  def notify_connection_accepted(requester_id, accepter) do
-    Vutuv.Webhooks.emit(requester_id, "connection.accepted", %{
-      "by" => actor_param(accepter)
-    })
-
-    notify(
-      requester_id,
-      Map.merge(actor_fields(accepter), %{
-        kind: "connection_accepted",
-        text: "accepted your connection request.",
-        at: DateTime.utc_now()
-      })
-    )
   end
 
   @doc """
@@ -367,7 +337,6 @@ defmodule Vutuv.Activity do
         &follower_items(user_id, &1, &2),
         &endorsement_items(user_id, &1, &2),
         &connection_items(user_id, &1, &2),
-        &connection_request_items(user_id, &1, &2),
         &reply_items(user_id, &1, &2),
         &like_items(user_id, &1, &2),
         &moderation_items(user_id, &1, &2),
@@ -409,7 +378,6 @@ defmodule Vutuv.Activity do
         select:
           s.count + subquery(count_endorsements(user_id, read_at)) +
             subquery(count_connections(user_id, read_at)) +
-            subquery(count_connection_requests(user_id, read_at)) +
             subquery(count_replies(user_id, read_at)) +
             subquery(count_likes(user_id, read_at)) +
             subquery(count_moderation(user_id, read_at)) +
@@ -454,58 +422,47 @@ defmodule Vutuv.Activity do
     end)
   end
 
-  # Accepted connections where the user is a party, timestamped at acceptance
-  # (`status_changed_at`). The CASE join resolves the *other* party so the feed
-  # item names the friend, not the user themselves. The requester reads the
-  # event as "accepted your connection request"; the acceptor as the plain
-  # "is now connected with you".
+  # "Became vernetzt" events, derived from mutual follows (the user follows
+  # someone who follows them back). Timestamped at the later of the two follow
+  # times (`GREATEST`), so the item lands in the feed when the pair actually
+  # became mutual; the later follow's id is the stable item id. There is no
+  # separate connection record any more, so a one-way follow simply does not
+  # surface here (it is a `follower_items/3` entry instead).
   defp connection_items(user_id, limit, cursor) do
     query =
-      from(c in Connection,
-        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
+      from(out in Follow,
+        join: back in Follow,
+        on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
         join: u in User,
-        on:
-          u.id ==
-            fragment(
-              "CASE WHEN ? = ? THEN ? ELSE ? END",
-              c.user_a_id,
-              type(^user_id, Vutuv.UUIDv7),
-              c.user_b_id,
-              c.user_a_id
-            ),
-        order_by: [desc: c.status_changed_at, desc: c.id],
+        on: u.id == out.followee_id,
+        where: out.follower_id == ^user_id,
+        order_by: [
+          desc: fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at),
+          desc: fragment("GREATEST(?, ?)", out.id, back.id)
+        ],
         limit: ^limit,
-        select: {c.id, c.status_changed_at, u, c.requested_by_id}
+        select: %{
+          id: type(fragment("GREATEST(?, ?)", out.id, back.id), Vutuv.UUIDv7),
+          at:
+            type(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at), :naive_datetime),
+          friend: u
+        }
       )
 
-    query = if cursor, do: where(query, [c], c.status_changed_at <= ^cursor.at), else: query
+    query =
+      if cursor,
+        do:
+          where(
+            query,
+            [out, back],
+            fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at) <= ^cursor.at
+          ),
+        else: query
 
     query
     |> Repo.all()
-    |> Enum.map(fn {id, at, friend, requested_by_id} ->
-      kind = if requested_by_id == user_id, do: "connection_accepted", else: "connection"
-      actor_item("connection-#{id}", kind, at, friend)
-    end)
-  end
-
-  # Pending requests waiting on this user's answer. They live in the feed so
-  # an offline recipient still discovers them; once answered, the row leaves
-  # the pending state and the item disappears (accepted ones re-enter above).
-  defp connection_request_items(user_id, limit, cursor) do
-    from(c in Connection,
-      where:
-        c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
-          c.requested_by_id != ^user_id,
-      join: u in User,
-      on: u.id == c.requested_by_id,
-      order_by: [desc: c.inserted_at, desc: c.id],
-      limit: ^limit,
-      select: {c.id, c.inserted_at, u}
-    )
-    |> at_or_before(cursor)
-    |> Repo.all()
-    |> Enum.map(fn {id, at, requester} ->
-      actor_item("connection_request-#{id}", "connection_request", at, requester)
+    |> Enum.map(fn %{id: id, at: at, friend: friend} ->
+      actor_item("connection-#{id}", "connection", at, friend)
     end)
   end
 
@@ -656,28 +613,27 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
+  # Mutual follows (vernetzt), counted from the same self-join as
+  # connection_items/3; the "became mutual" time is the later of the two
+  # follows (GREATEST), so the unread filter matches the items.
   defp count_connections(user_id, read_at) do
     query =
-      from(c in Connection,
-        where: c.status == "accepted" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id),
+      from(out in Follow,
+        join: back in Follow,
+        on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
+        where: out.follower_id == ^user_id,
         select: %{count: count()}
       )
 
     if read_at do
-      where(query, [c], c.status_changed_at > ^read_at)
+      where(
+        query,
+        [out, back],
+        fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at) > ^read_at
+      )
     else
       query
     end
-  end
-
-  defp count_connection_requests(user_id, read_at) do
-    from(c in Connection,
-      where:
-        c.status == "pending" and (c.user_a_id == ^user_id or c.user_b_id == ^user_id) and
-          c.requested_by_id != ^user_id,
-      select: %{count: count()}
-    )
-    |> since(read_at)
   end
 
   defp count_replies(user_id, read_at) do

@@ -246,21 +246,6 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  @doc """
-  "@handle wants to connect with you" notice. Opt-in via
-  `email_on_connection_request?`.
-  """
-  def connection_request_email(email, user, requester) do
-    notification_email(
-      email,
-      user,
-      "connection_request",
-      :email_on_connection_request?,
-      fn -> gettext("@%{slug} wants to connect on vutuv", slug: requester.username) end,
-      %{actor_username: requester.username}
-    )
-  end
-
   # The shared shape of the opt-in activity notices: localized subject, the
   # matching per-locale text template (always handed `user`, `url` and
   # `unsubscribe_url`), and the per-type one-click unsubscribe header/footer.

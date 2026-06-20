@@ -174,31 +174,17 @@ defmodule Vutuv.Factory do
     insert(:follow, follower: follower, followee: followee)
   end
 
-  def connection_factory do
-    %Vutuv.Social.Connection{status: "pending"}
-  end
-
   @doc """
-  Inserts an accepted, mutual `Connection` between two users (canonical
-  ordering) plus the two follow edges acceptance creates, without the
-  notification side effects of `Social.accept_connection/2`. `requested_by`
-  defaults to `a`.
+  Makes two users **vernetzt** (connected) by inserting both follow edges,
+  without the notification side effects of `Social.follow/2`. Vernetzt is a
+  mutual follow now — there is no separate connection record. The optional
+  third argument (the old requester) is accepted and ignored for call-site
+  compatibility. Returns `:ok`.
   """
-  def connect!(a, b, requested_by \\ nil) do
-    {user_a, user_b} = if a.id < b.id, do: {a, b}, else: {b, a}
-
-    connection =
-      insert(:connection,
-        user_a: user_a,
-        user_b: user_b,
-        requested_by: requested_by || a,
-        status: "accepted",
-        status_changed_at: NaiveDateTime.utc_now(:second)
-      )
-
+  def connect!(a, b, _requested_by \\ nil) do
     follow!(a, b)
     follow!(b, a)
-    connection
+    :ok
   end
 
   def tag_factory do

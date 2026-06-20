@@ -169,9 +169,9 @@ defmodule VutuvWeb.NotificationLive.Index do
     )
   end
 
-  # The connection family — request, accept and the legacy mutual event — all
-  # share one badge colour and glyph.
-  @connection_kinds ~w(connection connection_request connection_accepted)
+  # "connection" is the vernetzt (mutual-follow) event; it shares the follower
+  # badge colour and gets the handshake glyph.
+  @connection_kinds ~w(connection)
 
   defp kind_classes("follower"),
     do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
@@ -210,8 +210,6 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("reply"), do: gettext("Reply")
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("connection"), do: gettext("Connection")
-  defp kind_label("connection_request"), do: gettext("Connection request")
-  defp kind_label("connection_accepted"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
   defp kind_label("report_protection"), do: gettext("Report protection")
   defp kind_label(_), do: gettext("Activity")
@@ -233,9 +231,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     if is_binary(n[:post_id]) and viewer != nil, do: ~p"/#{viewer}/posts/#{n.post_id}"
   end
 
-  defp primary_target(%{kind: "connection_request"}, viewer) when viewer != nil,
-    do: ~p"/#{viewer}/connections"
-
   defp primary_target(%{kind: "endorsement"}, viewer) when viewer != nil,
     do: ~p"/#{viewer}/tags"
 
@@ -253,12 +248,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: gettext("endorsed you for %{tag}.", tag: tag)
 
   defp notification_text(%{kind: "connection"}), do: gettext("is now connected with you.")
-
-  defp notification_text(%{kind: "connection_request"}),
-    do: gettext("wants to connect with you.")
-
-  defp notification_text(%{kind: "connection_accepted"}),
-    do: gettext("accepted your connection request.")
 
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
   defp notification_text(%{kind: "like"}), do: gettext("liked your post.")

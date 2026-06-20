@@ -5,6 +5,9 @@ runs no per-row queries. Callers that don't pass them fall back to the
 DB-backed helpers per row. --%>
 <% work_info_by_id = assigns[:work_info_by_id] || %{} %>
 <% following_by_id = assigns[:following_by_id] %>
+<%!-- Optional per-row mute toggle: only the owner's own "Following" list passes
+muted_by_id (followee_id => muted?), so other listings render no mute control. --%>
+<% muted_by_id = assigns[:muted_by_id] || %{} %>
 <ul class="button-list profiles">
   <%= for user <- @users do %>
     <li>
@@ -26,6 +29,11 @@ DB-backed helpers per row. --%>
       <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
       </p>
+      <.mute_button
+        :if={Map.has_key?(muted_by_id, user.id) and following_by_id && Map.get(following_by_id, user.id)}
+        follow_id={Map.get(following_by_id, user.id)}
+        muted?={Map.get(muted_by_id, user.id, false)}
+      />
       <.follow_button
         :if={!same_user?(@current_user, user) and @current_user}
         variant="icon"

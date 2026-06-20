@@ -35,6 +35,25 @@ defmodule VutuvWeb.FollowController do
     |> redirect(to: referrer_url(conn))
   end
 
+  def toggle_mute(conn, %{"id" => id}) do
+    # Scoped to the session user like unfollow!/2: you can only mute a follow
+    # you own. Muting is silent — the followee is never notified; only their
+    # posts leave the muter's feed, while the follow (and any vernetzt status)
+    # stays put.
+    follow = Vutuv.Social.toggle_follow_mute!(conn.assigns.current_user_id, id)
+
+    message =
+      if follow.muted do
+        gettext("Muted. Their posts no longer appear in your feed.")
+      else
+        gettext("Unmuted. Their posts appear in your feed again.")
+      end
+
+    conn
+    |> put_flash(:info, message)
+    |> redirect(to: referrer_url(conn))
+  end
+
   # Fall back to the logged-in user's profile. This controller never assigns
   # :user, so the old `conn.assigns[:user]` fallback was always nil and raised
   # when interpolated into the route on a refererless request.

@@ -121,6 +121,9 @@ defmodule VutuvWeb.Router do
     post("/new_registration", PageController, :new_registration)
 
     resources("/follows", FollowController, only: [:create, :delete])
+    # Mute / unmute a follow you own: toggles `muted`, which drops the followee's
+    # posts out of your feed while the follow (and any vernetzt status) stays.
+    put("/follows/:id/mute", FollowController, :toggle_mute)
 
     # Liking / bookmarking a *member* (the private, silent save the profile
     # header offers, the people-equivalent of a post like/bookmark). POST to
@@ -137,12 +140,9 @@ defmodule VutuvWeb.Router do
     # VutuvWeb.MapPreferenceController.
     post("/maps/default", MapPreferenceController, :update)
 
-    # The mutual-connection lifecycle (the list lives at /:slug/connections in
-    # the profile scope below). create = request, then accept/decline/withdraw.
-    post("/connections", ConnectionController, :create)
-    post("/connections/:id/accept", ConnectionController, :accept)
-    post("/connections/:id/decline", ConnectionController, :decline)
-    delete("/connections/:id", ConnectionController, :delete)
+    # Vernetzt = a mutual follow, so there is no connection lifecycle any more:
+    # you just follow (above), and a follow-back makes you vernetzt. The list
+    # lives at /:slug/connections in the profile scope below (read-only).
 
     # Search is a LiveView (live "/search" in the live_session below): results
     # stream in while typing and ?q= keeps the URL shareable. The pre-LiveView
@@ -399,8 +399,9 @@ defmodule VutuvWeb.Router do
     delete("/me/post_images/:id", ImageController, :delete, assigns: %{api_scope: "posts:write"})
 
     # The social graph: people lists (same doc shape as the public .json
-    # pages), the viewer's standing with a member, follow/unfollow and the
-    # connection lifecycle.
+    # pages), the viewer's standing with a member, and follow/unfollow. Vernetzt
+    # is a mutual follow now, so there is no separate connection lifecycle —
+    # following someone who follows you back makes you vernetzt.
     for route <- ~w(followers following connections relationship)a do
       get("/users/:slug/#{route}", SocialController, route, assigns: %{api_scope: "social:read"})
     end
@@ -408,22 +409,6 @@ defmodule VutuvWeb.Router do
     put("/users/:slug/follow", SocialController, :follow, assigns: %{api_scope: "social:write"})
 
     delete("/users/:slug/follow", SocialController, :unfollow,
-      assigns: %{api_scope: "social:write"}
-    )
-
-    post("/users/:slug/connection", SocialController, :request_connection,
-      assigns: %{api_scope: "social:write"}
-    )
-
-    post("/connections/:id/accept", SocialController, :accept_connection,
-      assigns: %{api_scope: "social:write"}
-    )
-
-    post("/connections/:id/decline", SocialController, :decline_connection,
-      assigns: %{api_scope: "social:write"}
-    )
-
-    delete("/connections/:id", SocialController, :remove_connection,
       assigns: %{api_scope: "social:write"}
     )
 

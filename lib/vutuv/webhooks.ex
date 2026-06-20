@@ -34,8 +34,10 @@ defmodule Vutuv.Webhooks do
   # it carries nothing and goes only where the developer points it).
   @events %{
     "follower.created" => "social:read",
-    "connection.requested" => "social:read",
-    "connection.accepted" => "social:read",
+    # Fired when a follow-back completes a mutual follow (the pair is now
+    # vernetzt). Replaced the old connection.requested/accepted pair, which
+    # belonged to the removed request/accept flow.
+    "connection.created" => "social:read",
     "endorsement.created" => "social:read",
     "post.liked" => "posts:read",
     "post.replied" => "posts:read",

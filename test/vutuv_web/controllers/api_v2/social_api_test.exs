@@ -31,15 +31,16 @@ defmodule VutuvWeb.ApiV2.SocialApiTest do
       assert %{"total" => 1} = json_response(conn2, 200)
     end
 
-    test "connections list shows accepted connections only", %{
+    test "connections list shows the member's mutual follows only", %{
       conn: conn,
       me: me,
       other: other,
       token: token
     } do
       connect!(me, other)
-      pending = insert_activated_user()
-      {:ok, _} = Social.request_connection(pending, me)
+      # A one-way follow is not a connection and must not appear.
+      one_way = insert_activated_user()
+      follow!(me, one_way)
 
       conn = get(authed(conn, token), "/api/2.0/users/#{me.username}/connections")
       assert %{"total" => 1, "people" => [%{"username" => slug}]} = json_response(conn, 200)
@@ -90,73 +91,44 @@ defmodule VutuvWeb.ApiV2.SocialApiTest do
     end
   end
 
-  describe "connection lifecycle" do
-    test "request, accept, list, disconnect", %{
+  describe "relationship + vernetzt (mutual follow)" do
+    test "relationship reports following / followed_by / connected", %{
       conn: conn,
       me: me,
       other: other,
       token: token,
       other_token: other_token
     } do
-      conn1 = post(authed(conn, token), "/api/2.0/users/#{other.username}/connection")
+      # Self.
+      conn1 = get(authed(conn, token), "/api/2.0/users/#{me.username}/relationship")
+      assert json_response(conn1, 200)["self"] == true
 
-      assert %{"id" => id, "status" => "pending", "requested_by_me" => true} =
-               json_response(conn1, 201)
+      # I follow them one-way: not connected yet.
+      put(authed(build_conn(), token), "/api/2.0/users/#{other.username}/follow")
+      conn2 = get(authed(build_conn(), token), "/api/2.0/users/#{other.username}/relationship")
 
-      conn2 = post(authed(build_conn(), other_token), "/api/2.0/connections/#{id}/accept")
-      assert %{"status" => "accepted", "requested_by_me" => false} = json_response(conn2, 200)
+      assert %{"following" => true, "followed_by" => false, "connected" => false} =
+               json_response(conn2, 200)
 
-      # Acceptance materialized the mutual follow, like on the website.
-      assert Social.user_follows_user?(me.id, other.id)
-      assert Social.user_follows_user?(other.id, me.id)
+      # They follow back → vernetzt.
+      put(authed(build_conn(), other_token), "/api/2.0/users/#{me.username}/follow")
+      conn3 = get(authed(build_conn(), token), "/api/2.0/users/#{other.username}/relationship")
 
-      conn3 = get(authed(build_conn(), token), "/api/2.0/users/#{me.username}/relationship")
-      assert json_response(conn3, 200)["self"] == true
-
-      conn4 = get(authed(build_conn(), token), "/api/2.0/users/#{other.username}/relationship")
-
-      assert %{"connection" => %{"status" => "accepted"}, "following" => true} =
-               json_response(conn4, 200)
-
-      conn5 = delete(authed(build_conn(), token), "/api/2.0/connections/#{id}")
-      assert conn5.status == 204
+      assert %{"following" => true, "followed_by" => true, "connected" => true} =
+               json_response(conn3, 200)
     end
 
-    test "a mutual request auto-accepts", %{conn: conn, me: me, other: other, token: token} do
-      {:ok, _} = Social.request_connection(other, me)
-
-      conn = post(authed(conn, token), "/api/2.0/users/#{other.username}/connection")
-      assert json_response(conn, 200)["status"] == "accepted"
-    end
-
-    test "double request is a 409 with the reason", %{conn: conn, other: other, token: token} do
-      post(authed(conn, token), "/api/2.0/users/#{other.username}/connection")
-
-      conn = post(authed(build_conn(), token), "/api/2.0/users/#{other.username}/connection")
-      assert conn.status == 409
-      assert api_problem(conn)["reason"] == "already_requested"
-    end
-
-    test "only the recipient can accept", %{conn: conn, other: other, token: token} do
-      conn1 = post(authed(conn, token), "/api/2.0/users/#{other.username}/connection")
-      %{"id" => id} = json_response(conn1, 201)
-
-      # The requester accepting their own request is a 404, like on the web.
-      conn2 = post(authed(build_conn(), token), "/api/2.0/connections/#{id}/accept")
-      assert conn2.status == 404
-    end
-
-    test "decline answers with the declined state", %{
+    test "a follow-back reports connected on the follow doc", %{
       conn: conn,
+      me: me,
       other: other,
-      token: token,
-      other_token: other_token
+      token: token
     } do
-      conn1 = post(authed(conn, token), "/api/2.0/users/#{other.username}/connection")
-      %{"id" => id} = json_response(conn1, 201)
+      # They already follow me; I follow back → the follow response is connected.
+      follow!(other, me)
 
-      conn2 = post(authed(build_conn(), other_token), "/api/2.0/connections/#{id}/decline")
-      assert json_response(conn2, 200)["status"] == "declined"
+      conn = put(authed(conn, token), "/api/2.0/users/#{other.username}/follow")
+      assert %{"following" => true, "connected" => true} = json_response(conn, 201)
     end
   end
 end

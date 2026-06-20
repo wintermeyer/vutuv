@@ -21,7 +21,7 @@ leak). --%>
           </h1>
           <p class="mt-1 text-slate-500 dark:text-slate-400">
             <%= if @teaser_kind == :connect do %>
-              {gettext("Connect with %{name} to read it.", name: full_name(@author))}
+              {gettext("Follow each other to connect with %{name} and read it.", name: full_name(@author))}
             <% else %>
               {gettext("Follow %{name} to read it.", name: full_name(@author))}
             <% end %>
@@ -32,10 +32,11 @@ leak). --%>
           <% is_nil(@current_user) -> %>
             <.button href={~p"/login"}>{gettext("Log in")}</.button>
           <% @teaser_kind == :connect -> %>
-            <%!-- The Connect control lives on the profile (it pairs with the
-            Follow toggle there); send the reader to it. --%>
+            <%!-- Vernetzt is a mutual follow, and the reader may already follow
+            the author one-way; the profile's follow control carries the real
+            state, so send them there rather than a stateless follow button. --%>
             <.button :if={@current_user.id != @author.id} href={~p"/#{@author}"}>
-              {gettext("Go to profile to connect")}
+              {gettext("Go to profile to follow")}
             </.button>
           <% true -> %>
             <.follow_button

@@ -24,7 +24,11 @@ defmodule VutuvWeb.FolloweeController do
           total_followees: total,
           work_info_by_id: work_info_by_id,
           following_by_id:
-            VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees)
+            VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees),
+          # The per-row mute toggle is the owner's lever over their own feed, so
+          # it shows only on the owner's own "Following" list. follow_id comes
+          # from following_by_id; this adds the muted state for each row.
+          muted_by_id: muted_by_id(conn.assigns[:current_user], user, followees)
         )
       end,
       doc: fn ->
@@ -32,4 +36,14 @@ defmodule VutuvWeb.FolloweeController do
       end
     )
   end
+
+  # Only the owner viewing their own list gets the mute toggle; for anyone else
+  # an empty map means no toggle renders. Returns `followee_id => muted?`.
+  defp muted_by_id(%{id: id} = current_user, %{id: id}, followees) do
+    current_user.id
+    |> Vutuv.Social.follow_edges(Enum.map(followees, & &1.id))
+    |> Map.new(fn {followee_id, edge} -> {followee_id, edge.muted?} end)
+  end
+
+  defp muted_by_id(_current_user, _user, _followees), do: %{}
 end

@@ -220,12 +220,12 @@ defmodule Vutuv.PostsTest do
       refute Posts.visible_to?(post, nil)
     end
 
-    test "wildcard non_connections: only the author's accepted connections" do
+    test "wildcard non_connections: only the author's mutual follows (vernetzt)" do
       author = user()
       connected = user()
       follower = user()
       connect!(author, connected)
-      # A mere follower (no accepted connection) must not get in.
+      # A mere one-way follower (not mutual) must not get in.
       follow!(follower, author)
 
       post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
@@ -237,14 +237,29 @@ defmodule Vutuv.PostsTest do
       refute Posts.visible_to?(post, nil)
     end
 
-    test "a still-pending connection does not unlock a connections-only post" do
+    test "a one-way follow does not unlock a connections-only post" do
       author = user()
-      requester = user()
-      {:ok, _} = Vutuv.Social.request_connection(requester, author)
+      follower = user()
+      # follower follows author, but author does not follow back → not vernetzt.
+      follow!(follower, author)
 
       post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
 
-      refute Posts.visible_to?(post, requester)
+      refute Posts.visible_to?(post, follower)
+    end
+
+    test "a muted mutual follow still unlocks a connections-only post" do
+      # Mute only affects the muter's feed, not post visibility: a vernetzt
+      # member who muted the author still counts as connected.
+      author = user()
+      connected = user()
+      connect!(author, connected)
+      fid = Vutuv.Social.follow_id(connected.id, author.id)
+      Vutuv.Social.toggle_follow_mute!(connected.id, fid)
+
+      post = create_post!(author, %{body: "x", denials: [%{"wildcard" => "non_connections"}]})
+
+      assert Posts.visible_to?(post, connected)
     end
 
     test "scope_visible agrees with visible_to? for non_connections (list path)" do
@@ -381,6 +396,32 @@ defmodule Vutuv.PostsTest do
 
       %{entries: entries} = Posts.feed_page(viewer)
       assert Enum.map(entries, & &1.post.id) |> Enum.sort() == Enum.sort([mine.id, theirs.id])
+    end
+
+    test "a muted follow drops the followee's posts from the feed, follow intact" do
+      viewer = user()
+      noisy = user()
+      follow!(viewer, noisy)
+
+      before = create_post!(noisy, %{body: "before mute"})
+      %{entries: entries} = Posts.feed_page(viewer)
+      assert before.id in Enum.map(entries, & &1.post.id)
+
+      fid = Vutuv.Social.follow_id(viewer.id, noisy.id)
+      Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
+
+      after_mute = create_post!(noisy, %{body: "after mute"})
+      ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id)
+      refute after_mute.id in ids
+      refute before.id in ids
+      # Muting only changes the feed; the follow survives.
+      assert Vutuv.Social.user_follows_user?(viewer.id, noisy.id)
+
+      # Unmuting brings the posts back.
+      Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
+      ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id)
+      assert after_mute.id in ids
+      assert before.id in ids
     end
 
     test "applies denials inside the feed query" do

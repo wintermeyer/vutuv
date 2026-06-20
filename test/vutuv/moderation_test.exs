@@ -675,25 +675,24 @@ defmodule Vutuv.ModerationTest do
 
   describe "reporting severs the relationship between reporter and owner" do
     # Reporting someone is a statement that the contact is unwanted: the two
-    # accounts are separated at report time - connection gone, follows gone,
+    # accounts are separated at report time - the mutual follow (vernetzt) gone,
     # conversation frozen for both - before any second report or admin ruling.
     setup %{owner: owner, reporter: reporter} do
-      connection = connect!(reporter, owner)
+      connect!(reporter, owner)
       conversation = insert_conversation_between(reporter, owner)
       message = insert(:message, conversation: conversation, sender: owner)
       insert(:message, conversation: conversation, sender: reporter)
-      {:ok, %{connection: connection, conversation: conversation, message: message}}
+      {:ok, %{conversation: conversation, message: message}}
     end
 
-    test "a post report cuts connection and follows and freezes the conversation", %{
+    test "a post report cuts the follows and freezes the conversation", %{
       owner: owner,
       reporter: reporter,
-      connection: connection,
       conversation: conversation
     } do
       report!(reporter, insert_post(owner))
 
-      refute Repo.get(Vutuv.Social.Connection, connection.id)
+      refute Social.connected?(reporter.id, owner.id)
       refute Social.user_follows_user?(reporter.id, owner.id)
       refute Social.user_follows_user?(owner.id, reporter.id)
       assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
@@ -717,7 +716,6 @@ defmodule Vutuv.ModerationTest do
     test "a profile report severs immediately, before any second report or ruling", %{
       owner: owner,
       reporter: reporter,
-      connection: connection,
       conversation: conversation
     } do
       case_record = report!(reporter, owner)
@@ -727,7 +725,7 @@ defmodule Vutuv.ModerationTest do
       refute Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
 
       # ...but the relationship is already cut.
-      refute Repo.get(Vutuv.Social.Connection, connection.id)
+      refute Social.connected?(owner.id, reporter.id)
       refute Social.user_follows_user?(owner.id, reporter.id)
       assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
     end
@@ -767,7 +765,7 @@ defmodule Vutuv.ModerationTest do
       assert Repo.all(Vutuv.Moderation.Severance) == []
     end
 
-    test "rejecting the case restores connection, follows and conversation", %{
+    test "rejecting the case restores the follows (and the vernetzt status) and conversation", %{
       owner: owner,
       reporter: reporter,
       conversation: conversation
@@ -779,7 +777,7 @@ defmodule Vutuv.ModerationTest do
 
       assert Social.user_follows_user?(reporter.id, owner.id)
       assert Social.user_follows_user?(owner.id, reporter.id)
-      assert %{status: :accepted} = Social.connection_state(reporter, owner)
+      assert Social.connected?(reporter.id, owner.id)
       refute Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
       assert [%{restored_at: %NaiveDateTime{}}] = Repo.all(Vutuv.Moderation.Severance)
     end
@@ -790,8 +788,8 @@ defmodule Vutuv.ModerationTest do
       conversation: conversation
     } do
       # The reporter reports, then blocks the owner: the block deliberately
-      # severs follows + connection and keeps the conversation frozen. An
-      # admin rejecting the report must not silently undo the block.
+      # severs the follows and keeps the conversation frozen. An admin rejecting
+      # the report must not silently undo the block.
       case_record = report!(reporter, insert_post(owner))
       {:ok, _block} = Social.block_user(reporter, owner)
       admin = insert(:activated_user, admin?: true)
@@ -800,7 +798,7 @@ defmodule Vutuv.ModerationTest do
 
       refute Social.user_follows_user?(reporter.id, owner.id)
       refute Social.user_follows_user?(owner.id, reporter.id)
-      assert %{status: :none} = Social.connection_state(reporter, owner)
+      refute Social.connected?(reporter.id, owner.id)
       assert Repo.get!(Vutuv.Chat.Conversation, conversation.id).frozen_at
 
       # Freeze-ownership passed to the block: unblocking now thaws the
@@ -825,18 +823,16 @@ defmodule Vutuv.ModerationTest do
       assert [%{restored_at: nil}] = Repo.all(Vutuv.Moderation.Severance)
     end
 
-    test "restoring never duplicates a connection the two already rebuilt", %{
+    test "restoring never duplicates a follow the two already rebuilt", %{
       owner: owner,
       reporter: reporter
     } do
       case_record = report!(reporter, insert_post(owner))
-      # They reconciled on their own while the case was open.
+      # They reconnected on their own (followed each other again) while open.
       connect!(reporter, owner)
       admin = insert(:activated_user, admin?: true)
 
       {:ok, _} = Moderation.reject_case(case_record, admin)
-
-      assert Repo.aggregate(Vutuv.Social.Connection, :count) == 1
 
       follows =
         Repo.all(
@@ -846,6 +842,7 @@ defmodule Vutuv.ModerationTest do
         )
 
       assert length(follows) == 1
+      assert Social.connected?(reporter.id, owner.id)
     end
 
     test "the reporter is told about the protection and the restore in their feed", %{

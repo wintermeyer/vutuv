@@ -447,11 +447,11 @@ defmodule Vutuv.Posts do
              )) or
           (d.wildcard == "non_connections" and
              fragment(
-               "NOT EXISTS (SELECT 1 FROM connections c WHERE c.status = 'accepted' AND ((c.user_a_id = ? AND c.user_b_id = ?) OR (c.user_a_id = ? AND c.user_b_id = ?)))",
+               "NOT (EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = ?) AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ? AND f.followee_id = ?))",
+               type(^viewer_id, UUIDv7),
                type(^author_id, UUIDv7),
-               type(^viewer_id, UUIDv7),
-               type(^viewer_id, UUIDv7),
-               type(^author_id, UUIDv7)
+               type(^author_id, UUIDv7),
+               type(^viewer_id, UUIDv7)
              ))
     )
   end
@@ -485,11 +485,11 @@ defmodule Vutuv.Posts do
                   OR (d.wildcard = 'non_followees' AND NOT EXISTS (
                         SELECT 1 FROM follows c
                         WHERE c.follower_id = ? AND c.followee_id = ?))
-                  OR (d.wildcard = 'non_connections' AND NOT EXISTS (
-                        SELECT 1 FROM connections c
-                        WHERE c.status = 'accepted'
-                          AND ((c.user_a_id = ? AND c.user_b_id = ?)
-                            OR (c.user_a_id = ? AND c.user_b_id = ?))))
+                  OR (d.wildcard = 'non_connections' AND NOT (
+                        EXISTS (SELECT 1 FROM follows f
+                          WHERE f.follower_id = ? AND f.followee_id = ?)
+                        AND EXISTS (SELECT 1 FROM follows f
+                          WHERE f.follower_id = ? AND f.followee_id = ?)))
                 )
             )
             """,
@@ -499,10 +499,10 @@ defmodule Vutuv.Posts do
             p.user_id,
             p.user_id,
             type(^viewer_id, UUIDv7),
+            type(^viewer_id, UUIDv7),
             p.user_id,
-            type(^viewer_id, UUIDv7),
-            type(^viewer_id, UUIDv7),
-            p.user_id
+            p.user_id,
+            type(^viewer_id, UUIDv7)
           )
     )
     |> scope_unfrozen(viewer)
@@ -981,7 +981,12 @@ defmodule Vutuv.Posts do
   end
 
   defp followees_of(viewer_id) do
-    from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
+    # Muted follows stay in place (the relationship and any "vernetzt" status
+    # are untouched) but their author's posts drop out of the viewer's feed.
+    from(c in Follow,
+      where: c.follower_id == ^viewer_id and c.muted == false,
+      select: c.followee_id
+    )
   end
 
   # Everyone with a block either way relative to `user_id` (feed exclusion).

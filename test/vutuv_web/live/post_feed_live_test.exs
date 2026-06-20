@@ -267,6 +267,33 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "mute from the feed" do
+    test "a followed author's post carries a Mute toggle wired to the mute route", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      {:ok, follow} = Vutuv.Social.follow(user, friend.id)
+      {:ok, post} = Posts.create_post(friend, %{body: "noise"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # The non-author ⋯ menu carries the Mute toggle on the viewer's follow edge.
+      assert has_element?(
+               live,
+               "#post-report-post-#{post.id} a[href='/follows/#{follow.id}/mute'][data-method='put']"
+             )
+    end
+
+    test "no Mute toggle on your own post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "mine"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      refute has_element?(live, "a[href*='/mute']")
+      assert has_element?(live, "#post-menu-post-#{post.id}")
+    end
+  end
+
   describe "live updates" do
     test "a followed author's new post shows the pill, not the post", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

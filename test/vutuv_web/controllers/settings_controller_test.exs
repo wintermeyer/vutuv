@@ -188,7 +188,6 @@ defmodule VutuvWeb.SettingsControllerTest do
         put(conn, ~p"/#{user}/settings/notifications",
           user: %{
             "notification_emails?" => "false",
-            "email_on_connection_request?" => "true",
             "email_on_endorsement?" => "true",
             "email_on_follower?" => "true"
           }
@@ -198,7 +197,6 @@ defmodule VutuvWeb.SettingsControllerTest do
 
       assert %User{
                notification_emails?: false,
-               email_on_connection_request?: true,
                email_on_endorsement?: true,
                email_on_follower?: true
              } = Repo.get(User, user.id)
@@ -209,7 +207,8 @@ defmodule VutuvWeb.SettingsControllerTest do
       html = conn |> get(~p"/#{user}/settings/notifications") |> html_response(200)
 
       assert html =~ "notification_emails?"
-      assert html =~ "email_on_connection_request?"
+      # The connection-request opt-in is gone (no request flow any more).
+      refute html =~ "email_on_connection_request?"
       assert html =~ "email_on_endorsement?"
       assert html =~ "email_on_follower?"
       assert html =~ ~s(href="#{~p"/notifications"}")

@@ -102,11 +102,11 @@ defmodule Vutuv.AccountDeletionTest do
     other_tag = insert(:user_tag, user: other, tag: tag)
     given_endorsement = insert(:user_tag_endorsement, user: user, user_tag: other_tag)
 
-    # --- Social graph ---
+    # --- Social graph (a mutual follow = vernetzt, plus extra one-way edges) ---
     follow!(third, user)
     connect!(user, other)
-    {:ok, _} = Social.request_connection(user, fourth)
-    {:ok, _} = Social.request_connection(third, user)
+    follow!(user, fourth)
+    follow!(fourth, user)
 
     # --- A post that hides itself from one person (a per-user denial), an
     #     attached image, and a pending (unattached) image. ---

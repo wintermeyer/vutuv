@@ -1,15 +1,18 @@
 defmodule Vutuv.Social.Connection do
   @moduledoc """
-  A mutual, consented connection between two users — the LinkedIn-style
-  relationship, distinct from the one-directional `Vutuv.Social.Follow`.
+  **Legacy schema, kept only so historical migrations compile.** The live model
+  no longer has a separate connection record: two people are "vernetzt"
+  (connected) exactly when they follow each other (`Vutuv.Social.connected?/2`),
+  derived from `Vutuv.Social.Follow`. The request / accept / decline flow this
+  schema backed is gone.
 
-  Stored once per unordered pair, sorted (`user_a_id < user_b_id`, enforced by
-  a check constraint) so the unique index allows exactly one connection per
-  pair. `requested_by_id` is the party who sent the request (always one of the
-  pair). `status` is pending → accepted | declined; accepting auto-creates a
-  follow in both directions (see `Vutuv.Social.accept_connection/2`).
-  `status_changed_at` anchors the re-request cooldown after a decline. All user
-  fields are set programmatically, never cast.
+  The `connections` table still exists (it is dropped in a later expand/contract
+  deploy), and `Vutuv.Social.backfill_connections_from_mutual_follows/0` — called
+  by a historical migration — still references this schema. Nothing else does.
+
+  Stored once per unordered pair, sorted (`user_a_id < user_b_id`, enforced by a
+  check constraint). `requested_by_id` is the party who sent the request;
+  `status` is pending → accepted | declined.
   """
 
   use VutuvWeb, :model

@@ -223,25 +223,26 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, @bell_badge, "2")
   end
 
-  test "a :notifications_changed event recomputes (lowers) the bell badge after a withdrawn request",
-       %{conn: conn} do
-    # Regression for #782: a withdrawn/declined connection request lowers the
-    # unread count with no new notification to push. The shell must recompute on
-    # :notifications_changed, not only ever increment, or the badge stays stale
-    # until a full page reload re-seeds it.
+  test "a :notifications_changed event recomputes (lowers) the bell badge", %{conn: conn} do
+    # Regression for #782: the shell must recompute its unread count on a
+    # :notifications_changed nudge, not only ever increment, so a silent drop
+    # (here an unfollow that undoes a mutual follow) is reflected without a full
+    # page reload re-seeding it.
     recipient = insert(:user)
-    requester = insert(:user)
-    {:ok, connection} = Vutuv.Social.request_connection(requester, recipient)
+    other = insert(:user)
+    connect!(recipient, other)
 
     {:ok, view, _html} =
       live_isolated(conn, VutuvWeb.ShellLive, session: session_for(recipient))
 
-    # Seeded from the DB: one pending request addressed to the recipient.
-    assert has_element?(view, @bell_badge, "1")
+    # Seeded from the DB: a new follower plus the derived connection event.
+    assert has_element?(view, @bell_badge)
 
-    # The requester withdraws; the pending row is gone. On the recompute event
-    # the badge must drop to 0.
-    {:ok, _} = Vutuv.Social.remove_connection(requester, connection.id)
+    # The other side unfollows: the pair is no longer mutual, so both the
+    # follower and the connection events are gone. On the recompute the badge
+    # must drop to 0.
+    fid = Vutuv.Social.follow_id(other.id, recipient.id)
+    Vutuv.Social.unfollow!(other.id, fid)
     send(view.pid, :notifications_changed)
 
     refute has_element?(view, @bell_badge)

@@ -5,7 +5,7 @@
     card — the same sr-only pattern <.page_header> uses for crumbs-only pages. --%>
     <h1 class="sr-only">{gettext("Post by %{name}", name: full_name(@author))}</h1>
     <%!-- The author's Edit/Delete live in the card's own ⋯ menu. --%>
-    <.post_card post={@post} viewer={@current_user} mode={:full} conn_or_socket={@conn} />
+    <.post_card post={@post} viewer={@current_user} viewer_follow={@viewer_follow} mode={:full} conn_or_socket={@conn} />
 
     <%!-- The deny list is the author's private configuration — never shown
     to other viewers (the card shows them only the generic lock). --%>

@@ -72,17 +72,28 @@ the resulting ~200px rail width. --%>
                 <%!-- I blocked this member: no Connect/Follow/Message (they
                 would all refuse anyway) - the footer offers Unblock. --%>
               <% @preview_as in [:follower, :connection] or visitor?(@conn, @current_user) -> %>
-                <.connect_control
-                  :if={@connection_state}
-                  state={@connection_state.status}
-                  target_id={@user.id}
-                  connection_id={@connection_state.connection && @connection_state.connection.id}
-                />
+                <%!-- "✓ Vernetzt" is a status, not an action: you are connected
+                exactly when you both follow each other, so it is dissolved by
+                unfollowing (the Following button), never by its own button. --%>
+                <span
+                  :if={@header_connected?}
+                  class="inline-flex items-center gap-1 self-start rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+                >
+                  ✓ {gettext("Connected")}
+                </span>
                 <.follow_button
                   variant="button"
                   follower_id={@current_user_id}
                   followee_id={@user.id}
                   follow_id={@header_follow_id}
+                />
+                <%!-- Mute is a property of your own follow, so it shows only once
+                you follow them; it silences their posts in your feed without
+                touching the follow or the vernetzt status. --%>
+                <.mute_button
+                  :if={is_binary(@header_follow_id)}
+                  follow_id={@header_follow_id}
+                  muted?={@header_follow_muted?}
                 />
                 <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
                 <%!-- Private, silent saves (no follow/connection, no notification):

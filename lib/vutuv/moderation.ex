@@ -635,21 +635,21 @@ defmodule Vutuv.Moderation do
     ties = Vutuv.Social.sever_between(reporter.id, owner_id)
     conversation = Vutuv.Chat.freeze_conversation_between(reporter.id, owner_id)
 
-    if ties.connection || ties.follow_a_to_b || ties.follow_b_to_a || conversation do
+    if ties.follow_a_to_b || ties.follow_b_to_a || conversation do
+      # A mutual follow is what made the pair vernetzt, so recording the two
+      # follow edges is enough to restore the connection on a rejected case; the
+      # legacy connection_* columns are no longer written (dropped in a later
+      # expand/contract deploy).
       Repo.insert!(%Severance{
         case_id: case_record.id,
         reporter_id: reporter.id,
         owner_id: owner_id,
-        had_connection?: ties.connection != nil,
-        connection_status: ties.connection && ties.connection.status,
-        connection_requested_by_id: ties.connection && ties.connection.requested_by_id,
         had_follow_reporter_to_owner?: ties.follow_a_to_b,
         had_follow_owner_to_reporter?: ties.follow_b_to_a,
         conversation_id: conversation && conversation.id
       })
 
       log(case_record, reporter, "relationship_severed", %{
-        "connection" => ties.connection != nil,
         "follows" => Enum.count([ties.follow_a_to_b, ties.follow_b_to_a], & &1),
         "conversation" => conversation != nil
       })
@@ -722,8 +722,6 @@ defmodule Vutuv.Moderation do
 
   defp restore_ties(%Severance{} = severance) do
     Vutuv.Social.restore_between(severance.reporter_id, severance.owner_id,
-      connection_status: if(severance.had_connection?, do: severance.connection_status),
-      connection_requested_by_id: severance.connection_requested_by_id,
       follow_a_to_b: severance.had_follow_reporter_to_owner?,
       follow_b_to_a: severance.had_follow_owner_to_reporter?
     )

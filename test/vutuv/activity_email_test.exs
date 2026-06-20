@@ -68,21 +68,22 @@ defmodule Vutuv.ActivityEmailTest do
     end
   end
 
-  describe "connection request email" do
-    test "sent when opted in" do
-      target = recipient(email_on_connection_request?: true)
-      requester = insert(:activated_user, username: "req.actor")
+  describe "connection (follow-back) email" do
+    test "a follow-back sends the new-follower email when opted in" do
+      # Vernetzt is a mutual follow; the follow-back is also a new follow, so it
+      # reuses the opted-in `email_on_follower?` new-follower email.
+      target = recipient(email_on_follower?: true)
+      actor = insert(:activated_user, username: "back.actor")
 
-      Activity.notify_connection_request(target.id, requester)
+      Activity.notify_connection(target.id, actor)
 
-      assert_email_sent(fn email -> assert email.subject =~ "@req.actor" end)
+      assert_email_sent(fn email -> assert email.subject =~ "@back.actor" end)
     end
 
     test "not sent to an unconfirmed (dormant) recipient even when the flag is set" do
-      # email_confirmed? false: the dormant legacy members must not be mailed.
-      dormant = insert(:user, email_on_connection_request?: true)
+      dormant = insert(:user, email_on_follower?: true)
       insert(:email, user: dormant)
-      Activity.notify_connection_request(dormant.id, insert(:activated_user))
+      Activity.notify_connection(dormant.id, insert(:activated_user))
       refute_email_sent()
     end
   end

@@ -13,7 +13,7 @@ defmodule Vutuv.Social.BlockTest do
 
   alias Vutuv.{Chat, Posts, Social}
   alias Vutuv.Chat.Conversation
-  alias Vutuv.Social.{Block, Connection, Follow}
+  alias Vutuv.Social.{Block, Follow}
 
   setup do
     Vutuv.RateLimiter.reset()
@@ -73,19 +73,19 @@ defmodule Vutuv.Social.BlockTest do
       assert Repo.aggregate(from(b in Block, where: b.blocker_id == ^a.id), :count) == 1
     end
 
-    test "severs follows and connection both ways and freezes the conversation", %{
+    test "severs both follow edges (the vernetzt status) and freezes the conversation", %{
       blocker: a,
       blocked: b
     } do
+      # A mutual follow = vernetzt; blocking drops both edges.
       insert(:follow, follower: a, followee: b)
       insert(:follow, follower: b, followee: a)
-      {:ok, _} = Social.request_connection(a, b)
       conversation = insert_conversation_between(a, b)
 
       block!(a, b)
 
       assert Repo.all(Follow) == []
-      assert Repo.all(Connection) == []
+      refute Social.connected?(a.id, b.id)
       assert Repo.get!(Conversation, conversation.id).frozen_at
     end
 
@@ -117,11 +117,6 @@ defmodule Vutuv.Social.BlockTest do
       assert {:error, :blocked} = Social.follow(a, b.id)
       assert {:error, :blocked} = Social.follow(b, a.id)
       assert Repo.all(Follow) == []
-    end
-
-    test "neither side can request a connection", %{blocker: a, blocked: b} do
-      assert {:error, :blocked} = Social.request_connection(a, b)
-      assert {:error, :blocked} = Social.request_connection(b, a)
     end
 
     test "no new conversation can be opened, indistinguishable from a freeze", %{

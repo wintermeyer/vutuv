@@ -46,10 +46,17 @@ defmodule Vutuv.Social do
       |> Repo.insert()
 
     with {:ok, _follow} <- result do
-      # A follow is just a subscription now; the mutual "connection" is its own
-      # consented relationship (request/accept), not a side effect of a
-      # follow-back. So this only pushes the "started following you" event.
-      Vutuv.Activity.notify_new_follower(followee_id, follower_struct(follower))
+      actor = follower_struct(follower)
+
+      # A follow-back that completes a mutual follow makes the pair "vernetzt"
+      # (connected): announce that meaningful milestone to the followee instead
+      # of a second plain "started following you". A first/one-way follow stays
+      # the ordinary new-follower event.
+      if user_follows_user?(followee_id, follower_id(follower)) do
+        Vutuv.Activity.notify_connection(followee_id, actor)
+      else
+        Vutuv.Activity.notify_new_follower(followee_id, actor)
+      end
     end
 
     result
@@ -68,6 +75,22 @@ defmodule Vutuv.Social do
   def unfollow!(follower_id, follow_id) do
     Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
     |> Repo.delete!()
+  end
+
+  @doc """
+  Flips the mute flag on the caller's own follow and returns the updated
+  `%Follow{}`. Like `unfollow!/2` the lookup is scoped to `follower_id`, so a
+  caller can only mute a follow they own. Muting is silent (no notification):
+  the followee never learns they were muted; the relationship and any mutual
+  "vernetzt" status are untouched — only the followee's posts leave the muter's
+  feed (`Vutuv.Posts` reads `muted`).
+  """
+  def toggle_follow_mute!(follower_id, follow_id) do
+    follow = Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
+
+    follow
+    |> Follow.changeset(%{muted: not follow.muted})
+    |> Repo.update!()
   end
 
   # The public pages only count/show follows from activated accounts (nil
@@ -145,6 +168,38 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  The `follower → followee` follow edge as `%{id:, muted?:}`, or `nil` when
+  there is none. The profile header needs the id (for the unfollow / mute
+  links) and the mute state in one lookup.
+  """
+  def follow_edge(follower_id, followee_id) do
+    Repo.one(
+      from(c in Follow,
+        where: c.follower_id == ^follower_id and c.followee_id == ^followee_id,
+        select: %{id: c.id, muted?: c.muted}
+      )
+    )
+  end
+
+  @doc """
+  `follower_id`'s follow edges to each of `followee_ids`, as a map
+  `followee_id => %{id:, muted?:}` (missing key = not following). One query for
+  a whole page of authors / a follow list, so a per-row mute control never
+  queries on its own. Empty map for no follower or no ids.
+  """
+  def follow_edges(nil, _followee_ids), do: %{}
+  def follow_edges(_follower_id, []), do: %{}
+
+  def follow_edges(follower_id, followee_ids) do
+    from(c in Follow,
+      where: c.follower_id == ^follower_id and c.followee_id in ^followee_ids,
+      select: {c.followee_id, %{id: c.id, muted?: c.muted}}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  @doc """
   The `limit` users with the most followers, ties broken by name. Backs both
   the public listing page and the profile's default "who to follow" rail.
 
@@ -185,199 +240,25 @@ defmodule Vutuv.Social do
     )
   end
 
-  # ── Connections (mutual, consented) ──
-
-  @decline_cooldown_days 14
-
-  @doc "How many days after a decline the original requester must wait to retry."
-  def request_cooldown_days, do: @decline_cooldown_days
-
-  @doc """
-  Requests a connection from `me` to `other`, or accepts immediately when
-  `other` already has a pending request to `me` (both want it).
-
-  Returns `{:ok, %Connection{}}` on a fresh request, a re-sent request, or a
-  mutual auto-accept; `{:error, reason}` for `:self`, `:already_connected`,
-  `:already_requested`, or `:cooldown` (a decline whose cooldown has not
-  elapsed). A request pushes a live "wants to connect" notification; an
-  auto-accept notifies the original requester it was accepted.
-  """
-  def request_connection(%User{id: id}, %User{id: id}), do: {:error, :self}
-
-  def request_connection(%User{} = me, %User{} = other) do
-    if blocked_between?(me.id, other.id) do
-      {:error, :blocked}
-    else
-      do_request_connection(me, other)
-    end
-  end
-
-  defp do_request_connection(%User{} = me, %User{} = other, retried? \\ false) do
-    {a_id, b_id} = connection_pair(me.id, other.id)
-
-    case get_connection_by_pair(a_id, b_id) do
-      nil ->
-        create_request(me, other, a_id, b_id, retried?)
-
-      %Connection{status: "accepted"} ->
-        {:error, :already_connected}
-
-      %Connection{status: "pending", requested_by_id: req_id} = connection ->
-        # If the other side already asked, this is mutual desire: accept now.
-        # Otherwise it is my own outstanding request.
-        if req_id == me.id, do: {:error, :already_requested}, else: do_accept(connection, me)
-
-      %Connection{status: "declined"} = connection ->
-        resend_request(connection, me, other)
-    end
-  end
-
-  defp create_request(%User{} = me, %User{} = other, a_id, b_id, retried?) do
-    changeset =
-      %Connection{user_a_id: a_id, user_b_id: b_id, requested_by_id: me.id}
-      |> Connection.changeset(%{status: "pending", status_changed_at: now()})
-
-    case Repo.insert(changeset) do
-      {:ok, connection} ->
-        Vutuv.Activity.notify_connection_request(other.id, me)
-        {:ok, connection}
-
-      {:error, _changeset} when not retried? ->
-        # Lost the race against the other party's simultaneous request (the
-        # unique pair index only rejects after their row committed):
-        # re-dispatch, where the pending-by-them branch accepts it as the
-        # mutual desire it is.
-        do_request_connection(me, other, true)
-
-      {:error, changeset} ->
-        {:error, changeset}
-    end
-  end
-
-  # Re-requesting after a decline. Only the original requester is rate-limited
-  # (the cooldown runs from the decline); the party who *did* the declining may
-  # turn around and request freely, since that is a request in the other
-  # direction. Either way `requested_by` flips to whoever is re-opening it.
-  defp resend_request(%Connection{requested_by_id: req_id} = connection, %User{} = me, other) do
-    if req_id == me.id and not cooldown_elapsed?(connection) do
-      {:error, :cooldown}
-    else
-      changeset =
-        connection
-        |> Connection.changeset(%{status: "pending", status_changed_at: now()})
-        |> Ecto.Changeset.put_change(:requested_by_id, me.id)
-
-      with {:ok, connection} <- Repo.update(changeset) do
-        Vutuv.Activity.notify_connection_request(other.id, me)
-        {:ok, connection}
-      end
-    end
-  end
+  # ── Vernetzt = mutual follow (derived) ──
+  #
+  # There is no separate connection record any more: two people are "vernetzt"
+  # (connected) exactly when they follow each other. So there is no request /
+  # accept / decline / cooldown — you just follow, and a follow-back makes the
+  # pair vernetzt (`do_follow/2` fires the live "you are now connected" event).
+  # The read side (`connected?/2`, `connection_count/1`, `list_connections/1`)
+  # is derived from `follows`; see those functions further down.
 
   @doc """
-  Accepts the pending request `connection_id` addressed to `me` — only the
-  recipient (not the requester) may accept. Creates the two follow edges in one
-  transaction and notifies the requester. `{:ok, connection}` or
-  `{:error, :not_found}`.
-  """
-  def accept_connection(%User{} = me, connection_id) do
-    case fetch_pending_for_recipient(me, connection_id) do
-      %Connection{} = connection -> do_accept(connection, me)
-      nil -> {:error, :not_found}
-    end
-  end
-
-  # Flips the row to accepted and materializes the bidirectional follow that a
-  # connection implies (idempotent: either edge may already exist). `me` is the
-  # accepter; the original requester is notified.
-  defp do_accept(%Connection{} = connection, %User{} = me) do
-    changeset = Connection.changeset(connection, %{status: "accepted", status_changed_at: now()})
-
-    result =
-      Repo.transaction(fn ->
-        case Repo.update(changeset) do
-          {:ok, accepted} ->
-            ensure_follow!(accepted.user_a_id, accepted.user_b_id)
-            ensure_follow!(accepted.user_b_id, accepted.user_a_id)
-            accepted
-
-          {:error, changeset} ->
-            Repo.rollback(changeset)
-        end
-      end)
-
-    with {:ok, accepted} <- result do
-      Vutuv.Activity.notify_connection_accepted(accepted.requested_by_id, me)
-      {:ok, accepted}
-    end
-  end
-
-  @doc """
-  Declines the pending request `connection_id` addressed to `me`. Silent: the
-  requester is not notified, and the cooldown lets them retry later.
-  `{:ok, connection}` or `{:error, :not_found}`.
-  """
-  def decline_connection(%User{} = me, connection_id) do
-    case fetch_pending_for_recipient(me, connection_id) do
-      %Connection{} = connection ->
-        connection
-        |> Connection.changeset(%{status: "declined", status_changed_at: now()})
-        |> Repo.update()
-        # The decliner's own pending-request notification is gone; nudge only
-        # them. Stays silent toward the requester (`me` is the recipient).
-        |> broadcast_notifications_changed([me.id])
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  @doc """
-  Removes the connection `connection_id` as long as `me` is one of its parties:
-  disconnecting (accepted), withdrawing an outgoing request (pending), or
-  clearing a declined record. The auto-created follow edges are left intact —
-  unfollow separately. `{:ok, connection}` or `{:error, :not_found}`.
-  """
-  def remove_connection(%User{} = me, connection_id) do
-    case fetch_for_party(me, connection_id) do
-      %Connection{} = connection ->
-        connection
-        |> Repo.delete()
-        # Withdraw drops the recipient's request badge; disconnect drops both
-        # parties' accepted-connection count. Nudge both and let each shell
-        # recompute (a no-op for whoever's count didn't change).
-        |> broadcast_notifications_changed([connection.user_a_id, connection.user_b_id])
-
-      nil ->
-        {:error, :not_found}
-    end
-  end
-
-  # On a silent change to the unread set (a withdrawn or declined pending
-  # request, a disconnect), nudge the affected parties' shells to recompute the
-  # notification badge. No notification is pushed, so without this the badge
-  # would stay stale until a reload (issue #782).
-  defp broadcast_notifications_changed({:ok, _} = result, user_ids) do
-    Enum.each(user_ids, &Vutuv.Activity.mark_notifications_changed/1)
-    result
-  end
-
-  defp broadcast_notifications_changed(result, _user_ids), do: result
-
-  @doc """
-  Cuts every social tie between the two users in one go: the connection row
-  (any status) and both follow edges are deleted. Returns what existed -
-  `%{connection: %Connection{} | nil, follow_a_to_b: bool, follow_b_to_a:
-  bool}`, directions relative to the argument order - so the caller
-  (`Vutuv.Moderation`, when a report severs the relationship) can record it
-  and a rejected report can restore it. Deliberately quiet: no notifications
-  for a protective measure.
+  Cuts every social tie between the two users in one go: both follow edges are
+  deleted (a mutual follow is what makes them vernetzt, so dropping both ends
+  the connection too). Returns which edges existed -
+  `%{follow_a_to_b: bool, follow_b_to_a: bool}`, directions relative to the
+  argument order - so the caller (`Vutuv.Moderation`, when a report severs the
+  relationship) can record it and a rejected report can restore it.
+  Deliberately quiet: no notifications for a protective measure.
   """
   def sever_between(user_id, other_id) do
-    {a_id, b_id} = connection_pair(user_id, other_id)
-    connection = get_connection_by_pair(a_id, b_id)
-    if connection, do: Repo.delete!(connection)
-
     {a_to_b, _} =
       Repo.delete_all(
         from(f in Follow, where: f.follower_id == ^user_id and f.followee_id == ^other_id)
@@ -388,32 +269,17 @@ defmodule Vutuv.Social do
         from(f in Follow, where: f.follower_id == ^other_id and f.followee_id == ^user_id)
       )
 
-    %{connection: connection, follow_a_to_b: a_to_b > 0, follow_b_to_a: b_to_a > 0}
+    %{follow_a_to_b: a_to_b > 0, follow_b_to_a: b_to_a > 0}
   end
 
   @doc """
-  Restores ties `sever_between/2` cut, skipping anything the two have since
-  rebuilt on their own. `opts`: `:connection_status` plus
-  `:connection_requested_by_id` (nil status = there was no connection), and
-  the `:follow_a_to_b` / `:follow_b_to_a` booleans relative to
-  `{user_id, other_id}`. Quiet like the severing - a restore must not fire
-  "started following you" notifications.
+  Restores the follow edges `sever_between/2` cut, skipping anything the two
+  have since rebuilt on their own. `opts`: the `:follow_a_to_b` /
+  `:follow_b_to_a` booleans relative to `{user_id, other_id}`. Restoring both
+  edges restores the vernetzt status. Quiet like the severing - a restore must
+  not fire "started following you" notifications.
   """
   def restore_between(user_id, other_id, opts) do
-    if status = opts[:connection_status] do
-      {a_id, b_id} = connection_pair(user_id, other_id)
-
-      unless get_connection_by_pair(a_id, b_id) do
-        Repo.insert!(%Connection{
-          user_a_id: a_id,
-          user_b_id: b_id,
-          requested_by_id: opts[:connection_requested_by_id],
-          status: status,
-          status_changed_at: NaiveDateTime.utc_now(:second)
-        })
-      end
-    end
-
     if opts[:follow_a_to_b], do: quiet_follow(user_id, other_id)
     if opts[:follow_b_to_a], do: quiet_follow(other_id, user_id)
     :ok
@@ -784,135 +650,63 @@ defmodule Vutuv.Social do
   end
 
   @doc """
-  Whether any severable tie exists between the two: a connection row (any
-  status) or a follow edge in either direction. Backs the report form's
-  "this will separate you" warning (`Vutuv.Moderation`).
+  Whether any severable tie exists between the two: a follow edge in either
+  direction. Backs the report form's "this will separate you" warning
+  (`Vutuv.Moderation`).
   """
   def tie_between?(id1, id2) do
-    {a_id, b_id} = connection_pair(id1, id2)
-
-    get_connection_by_pair(a_id, b_id) != nil or
-      user_follows_user?(id1, id2) or
-      user_follows_user?(id2, id1)
-  end
-
-  @doc "Whether `id1` and `id2` have an accepted connection."
-  def connected?(id1, id2) do
-    {a_id, b_id} = connection_pair(id1, id2)
-
-    Repo.exists?(
-      from(c in Connection,
-        where: c.user_a_id == ^a_id and c.user_b_id == ^b_id and c.status == "accepted"
-      )
-    )
+    user_follows_user?(id1, id2) or user_follows_user?(id2, id1)
   end
 
   @doc """
-  The connection situation between `me` and `other`, for the profile control:
-  `%{status: state, connection: conn | nil}` where state is `:none`,
-  `:pending_sent` (I asked), `:pending_received` (they asked — show
-  accept/decline), `:accepted`, or `:declined` (my spent request, awaiting the
-  cooldown). When *I* declined *them*, their row reads `:none` to me, so I can
-  open a fresh request in the other direction.
+  Whether `id1` and `id2` are vernetzt (connected) — i.e. they follow each
+  other. There is no separate connection record; mutuality *is* the connection.
   """
-  def connection_state(%User{id: me_id}, %User{id: other_id}) do
-    {a_id, b_id} = connection_pair(me_id, other_id)
-
-    case get_connection_by_pair(a_id, b_id) do
-      nil ->
-        %{status: :none, connection: nil}
-
-      %Connection{status: "accepted"} = c ->
-        %{status: :accepted, connection: c}
-
-      %Connection{status: "pending", requested_by_id: ^me_id} = c ->
-        %{status: :pending_sent, connection: c}
-
-      %Connection{status: "pending"} = c ->
-        %{status: :pending_received, connection: c}
-
-      %Connection{status: "declined", requested_by_id: ^me_id} = c ->
-        %{status: :declined, connection: c}
-
-      %Connection{status: "declined"} = c ->
-        %{status: :none, connection: c}
-    end
+  def connected?(id1, id2) do
+    user_follows_user?(id1, id2) and user_follows_user?(id2, id1)
   end
 
   @doc """
-  Accepted connections of `user` as `%{connection:, user: other}`, newest
-  first. Connections whose other endpoint is unactivated or hidden by
-  moderation are excluded — a member the platform hid must not stay
-  enumerable through someone else's connections page. The owner's own state
-  is deliberately not checked: a frozen member still sees their own list
-  through the moderation bypass.
+  A user's vernetzt list (people they mutually follow) as
+  `%{user: other, follow_id: my_follow_id, muted?: bool}`, the pair that
+  became mutual most recently first. The other endpoint must be activated and
+  not moderation-hidden — a member the platform hid must not stay enumerable
+  through someone else's connections page. The owner's own state is deliberately
+  not checked: a frozen member still sees their own list through the moderation
+  bypass. `follow_id` is the owner's outbound follow, so the page can offer
+  "unfollow" (which ends the vernetzt status).
   """
   def list_connections(%User{id: user_id}) do
-    accepted_visible_connections(user_id)
-    |> order_by([c], desc: c.status_changed_at, desc: c.id)
+    mutual_follows_query(user_id)
+    |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
+    |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
     |> Repo.all()
-    |> with_other_user(user_id)
-  end
-
-  defp accepted_visible_connections(user_id) do
-    from(c in Connection,
-      where: c.status == "accepted",
-      where: c.user_a_id == ^user_id or c.user_b_id == ^user_id
-    )
-    |> with_visible_other(user_id)
-  end
-
-  # Joins the connection's *other* endpoint and keeps only rows whose other
-  # party is activated and not moderation-hidden — so request/connection lists
-  # never show (or link to) a member the platform has hidden, matching the
-  # counts. The viewer's own state is intentionally not checked.
-  defp with_visible_other(query, user_id) do
-    from(c in query,
-      join: o in User,
-      on:
-        o.id ==
-          fragment(
-            "CASE WHEN ? = ? THEN ? ELSE ? END",
-            c.user_a_id,
-            type(^user_id, Vutuv.UUIDv7),
-            c.user_b_id,
-            c.user_a_id
-          ),
-      where: account_confirmed_row(o) and not account_hidden_row(o)
-    )
-  end
-
-  @doc "Pending requests addressed to `user` (someone else asked), newest first."
-  def list_incoming_requests(%User{id: user_id}) do
-    from(c in Connection,
-      where: c.status == "pending" and c.requested_by_id != ^user_id,
-      where: c.user_a_id == ^user_id or c.user_b_id == ^user_id,
-      order_by: [desc: c.status_changed_at, desc: c.id]
-    )
-    |> with_visible_other(user_id)
-    |> Repo.all()
-    |> with_other_user(user_id)
-  end
-
-  @doc "Pending requests `user` sent that are still awaiting an answer, newest first."
-  def list_outgoing_requests(%User{id: user_id}) do
-    from(c in Connection,
-      where: c.status == "pending" and c.requested_by_id == ^user_id,
-      order_by: [desc: c.status_changed_at, desc: c.id]
-    )
-    |> with_visible_other(user_id)
-    |> Repo.all()
-    |> with_other_user(user_id)
   end
 
   @doc """
-  How many accepted connections `user` has — same visibility rule as
-  `list_connections/1`, so the profile count never disagrees with the list.
+  How many people `user` is vernetzt with (mutual follows) — same visibility
+  rule as `list_connections/1`, so the profile count never disagrees with the
+  list.
   """
   def connection_count(%User{id: user_id}) do
-    accepted_visible_connections(user_id)
-    |> select([c], count(c.id))
+    mutual_follows_query(user_id)
+    |> select([out], count(out.id))
     |> Repo.one()
+  end
+
+  # The mutual-follow set for `user_id`: their outbound follow joined to the
+  # matching inbound follow, with the *other* party (the followee) joined and
+  # gated to activated, non-hidden accounts. One row per vernetzt pair, bound as
+  # [out, back, o] (my follow, their follow back, the other user).
+  defp mutual_follows_query(user_id) do
+    from(out in Follow,
+      join: back in Follow,
+      on: back.follower_id == out.followee_id and back.followee_id == out.follower_id,
+      join: o in User,
+      on: o.id == out.followee_id,
+      where: out.follower_id == ^user_id,
+      where: account_confirmed_row(o) and not account_hidden_row(o)
+    )
   end
 
   @doc """
@@ -980,78 +774,68 @@ defmodule Vutuv.Social do
     count
   end
 
-  defp with_other_user(connections, user_id) do
-    connections
-    |> Repo.preload([:user_a, :user_b])
-    |> Enum.map(fn c ->
-      other = if c.user_a_id == user_id, do: c.user_b, else: c.user_a
-      %{connection: c, user: other}
-    end)
-  end
+  @doc """
+  One-time data migration for the follow/connect simplification: the mutual
+  connection request/accept flow is gone, so promote every still-*pending*
+  connection request to a follow from the requester to the other party. The
+  requester's intent ("I want a relationship with you") survives as a follow,
+  and a follow-back now makes the pair vernetzt. Accepted connections already
+  carry both follow edges; declined ones held no intent worth keeping.
 
-  defp fetch_pending_for_recipient(%User{id: me_id}, connection_id) do
-    case Vutuv.UUIDv7.cast_or_nil(connection_id) do
-      nil ->
-        nil
-
-      id ->
-        Repo.one(
-          from(c in Connection,
-            where: c.id == ^id and c.status == "pending" and c.requested_by_id != ^me_id,
-            where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
-          )
-        )
-    end
-  end
-
-  defp fetch_for_party(%User{id: me_id}, connection_id) do
-    case Vutuv.UUIDv7.cast_or_nil(connection_id) do
-      nil ->
-        nil
-
-      id ->
-        Repo.one(
-          from(c in Connection,
-            where: c.id == ^id,
-            where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
-          )
-        )
-    end
-  end
-
-  defp connection_pair(id1, id2), do: Vutuv.UUIDv7.sorted_pair(id1, id2)
-
-  defp get_connection_by_pair(a_id, b_id) do
-    Repo.get_by(Connection, user_a_id: a_id, user_b_id: b_id)
-  end
-
-  defp cooldown_elapsed?(%Connection{status_changed_at: nil}), do: true
-
-  defp cooldown_elapsed?(%Connection{status_changed_at: at}) do
-    cutoff = NaiveDateTime.add(now(), -@decline_cooldown_days * 24 * 3600)
-    NaiveDateTime.compare(at, cutoff) != :gt
-  end
-
-  # Materializes one follow edge if it is not already there (UUID v7 id minted
-  # in code per the chokepoint; the unique (follower, followee) index makes the
-  # ON CONFLICT a no-op for an existing edge).
-  defp ensure_follow!(follower_id, followee_id) do
+  Reads the `connections` table schemaless (the live model no longer touches it;
+  it is dropped in a later expand/contract deploy), mints v7 ids per the
+  chokepoint, and is idempotent — the `(follower, followee)` unique index makes
+  the `ON CONFLICT` a no-op for a pair that already follows. Returns the number
+  of follows inserted.
+  """
+  def convert_pending_connections_to_follows do
     now = now()
 
-    Repo.insert_all(
-      Follow,
-      [
+    rows =
+      Repo.all(
+        from(c in "connections",
+          where: c.status == "pending",
+          select: %{
+            requester: type(c.requested_by_id, Vutuv.UUIDv7),
+            followee:
+              type(
+                fragment(
+                  "CASE WHEN ? = ? THEN ? ELSE ? END",
+                  c.requested_by_id,
+                  c.user_a_id,
+                  c.user_b_id,
+                  c.user_a_id
+                ),
+                Vutuv.UUIDv7
+              )
+          }
+        )
+      )
+
+    entries =
+      Enum.map(rows, fn r ->
         %{
           id: Vutuv.UUIDv7.generate(),
-          follower_id: follower_id,
-          followee_id: followee_id,
+          follower_id: r.requester,
+          followee_id: r.followee,
           inserted_at: now,
           updated_at: now
         }
-      ],
-      on_conflict: :nothing,
-      conflict_target: [:follower_id, :followee_id]
-    )
+      end)
+
+    case entries do
+      [] ->
+        0
+
+      entries ->
+        {count, _} =
+          Repo.insert_all(Follow, entries,
+            on_conflict: :nothing,
+            conflict_target: [:follower_id, :followee_id]
+          )
+
+        count
+    end
   end
 
   defp now, do: NaiveDateTime.utc_now(:second)

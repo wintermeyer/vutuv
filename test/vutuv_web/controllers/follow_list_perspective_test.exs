@@ -58,4 +58,25 @@ defmodule VutuvWeb.FollowListPerspectiveTest do
 
     assert html =~ "Follows"
   end
+
+  test "the owner's own Following list offers a mute toggle per followed person", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    friend = insert_activated_user()
+    {:ok, follow} = Vutuv.Social.follow(user, friend.id)
+
+    html = get(conn, ~p"/#{user}/following") |> html_response(200)
+
+    assert html =~ "/follows/#{follow.id}/mute"
+  end
+
+  test "a visitor gets no mute toggles on someone else's Following list", %{conn: conn} do
+    {conn, _visitor} = create_and_login_user(conn)
+    owner = insert_activated_user()
+    friend = insert_activated_user()
+    follow!(owner, friend)
+
+    html = get(conn, ~p"/#{owner}/following") |> html_response(200)
+
+    refute html =~ "/mute"
+  end
 end

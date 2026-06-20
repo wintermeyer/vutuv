@@ -24,6 +24,7 @@ defmodule VutuvWeb.PostController do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.PostDoc
 
@@ -204,6 +205,12 @@ defmodule VutuvWeb.PostController do
     restricted? = Posts.restricted?(post)
     {noindex?, noai?} = PostDoc.robots_axes(author, restricted?)
 
+    # The viewer's follow edge to the author drives the card's mute toggle —
+    # only when the viewer follows them and is not the author themselves.
+    viewer_follow =
+      if viewer && not Posts.author?(post, viewer),
+        do: Social.follow_edge(viewer.id, author.id)
+
     conn
     |> VutuvWeb.ContentPolicy.put_robots_header(noindex?, noai?)
     |> render("show.html",
@@ -211,6 +218,7 @@ defmodule VutuvWeb.PostController do
       author: author,
       owner?: Posts.author?(post, viewer),
       restricted?: restricted?,
+      viewer_follow: viewer_follow,
       replies: Posts.list_replies(post, viewer),
       page_title:
         "#{VutuvWeb.UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}"

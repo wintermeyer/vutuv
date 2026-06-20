@@ -21,6 +21,7 @@ defmodule VutuvWeb.PostLive.Feed do
   import VutuvWeb.PostComponents
 
   alias Vutuv.Posts
+  alias Vutuv.Social
 
   @page_size 20
 
@@ -44,13 +45,26 @@ defmodule VutuvWeb.PostLive.Feed do
      |> stream(:posts, with_engagement(page.entries, user))}
   end
 
-  # Pre-load the action-bar engagement for the whole page in one query and hang
-  # it on each entry, so the per-card Actions LiveViews don't each run their own
-  # query on mount (was one query per post). Live-arriving single posts carry
-  # `engagement: nil` and fall back to the bar's own query.
+  # Pre-load the action-bar engagement AND the viewer's follow edge to each
+  # author for the whole page in one query each, and hang them on each entry, so
+  # the per-card Actions LiveViews don't each run their own query (was one query
+  # per post) and the card's mute toggle knows its follow id + state without a
+  # per-row lookup. Live-arriving single posts carry `engagement: nil` (falls
+  # back to the bar's own query) and get their follow edge in `insert_entry/3`.
   defp with_engagement(entries, user) do
     engagement = Posts.post_engagement_map(Enum.map(entries, & &1.post.id), user)
-    Enum.map(entries, &Map.put(&1, :engagement, engagement[&1.post.id]))
+
+    follows =
+      entries
+      |> Enum.map(& &1.post.user_id)
+      |> Enum.uniq()
+      |> then(&Social.follow_edges(user.id, &1))
+
+    Enum.map(entries, fn entry ->
+      entry
+      |> Map.put(:engagement, engagement[entry.post.id])
+      |> Map.put(:viewer_follow, follows[entry.post.user_id])
+    end)
   end
 
   @impl true
@@ -135,6 +149,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # people's waits behind the pill — and only when the post is visible.
   defp insert_entry(socket, entry, actor_id) do
     user = socket.assigns.current_user
+    # Attach the viewer's follow edge so the card's mute toggle works on a
+    # live-arrived post too (nil for an own post — no self-follow).
+    entry =
+      entry && Map.put(entry, :viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
 
     cond do
       is_nil(entry) ->
@@ -149,7 +167,7 @@ defmodule VutuvWeb.PostLive.Feed do
       # Mirror the pull path's blocked-author filter: a third party's repost
       # must not carry a blocked author's post into the feed (blocking already
       # severed the direct follow). visible_to?/2 alone never checks blocks.
-      Vutuv.Social.blocked_between?(user.id, entry.post.user_id) ->
+      Social.blocked_between?(user.id, entry.post.user_id) ->
         {:noreply, socket}
 
       Posts.visible_to?(entry.post, user) ->
@@ -198,6 +216,7 @@ defmodule VutuvWeb.PostLive.Feed do
             <.post_card
               post={entry.post}
               viewer={@current_user}
+              viewer_follow={entry[:viewer_follow]}
               mode={:preview}
               reposted_by={entry.reposted_by}
               entry_id={entry.id}

@@ -31,6 +31,13 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
+
+  attr(:viewer_follow, :any,
+    default: nil,
+    doc:
+      "the viewer's follow edge to this post's author, %{id:, muted?:} | nil — drives the menu's mute toggle"
+  )
+
   attr(:mode, :atom, default: :preview, values: [:preview, :full])
 
   attr(:surface, :atom,
@@ -112,6 +119,7 @@ defmodule VutuvWeb.PostComponents do
       edited?={@edited?}
       author?={@author?}
       reporter?={@reporter?}
+      viewer_follow={@viewer_follow}
       frozen?={@frozen?}
       reposted_by={@reposted_by}
       reply_banner={@reply_banner}
@@ -137,6 +145,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
   attr(:reporter?, :boolean, required: true)
+  attr(:viewer_follow, :any, default: nil)
   attr(:frozen?, :boolean, required: true)
   attr(:reposted_by, :any, required: true)
   attr(:reply_banner, :any, required: true)
@@ -342,10 +351,21 @@ defmodule VutuvWeb.PostComponents do
           </.card_menu>
         </div>
 
-        <%!-- Everyone else gets the same quiet ⋯ menu with the Report action:
-        out of the way until needed, easy to find when it is. --%>
+        <%!-- Everyone else gets the same quiet ⋯ menu with the Report action —
+        plus a Mute toggle when the viewer follows this author, so an annoying
+        post can be silenced straight from the feed. Mute keeps the follow (and
+        any vernetzt status); it only drops the author's posts from your feed. --%>
         <div :if={@reporter?} class="shrink-0">
           <.card_menu id={@report_menu_id}>
+            <:item
+              :if={@viewer_follow}
+              href={~p"/follows/#{@viewer_follow.id}/mute"}
+              method="put"
+            >
+              {if @viewer_follow.muted?,
+                do: gettext("Unmute @%{handle}", handle: @post.user.username),
+                else: gettext("Mute @%{handle}", handle: @post.user.username)}
+            </:item>
             <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
               {gettext("Report")}
             </:item>

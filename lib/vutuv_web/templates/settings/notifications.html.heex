@@ -36,18 +36,6 @@ heading. --%>
         </label>
 
         <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <%= checkbox f, :email_on_connection_request?, class: checkbox_class() %>
-          <span>
-            <span class="block font-medium text-slate-900 dark:text-white">
-              {gettext("Connection requests")}
-            </span>
-            <span class="block font-normal">
-              {gettext("When someone asks to connect with you.")}
-            </span>
-          </span>
-        </label>
-
-        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
           <%= checkbox f, :email_on_endorsement?, class: checkbox_class() %>
           <span>
             <span class="block font-medium text-slate-900 dark:text-white">
@@ -85,7 +73,7 @@ heading. --%>
         {gettext("These are always on. You see them under the bell at the top of every page, in real time.")}
       </p>
       <ul class="mt-3 list-disc space-y-1 pl-5 text-sm text-slate-600 dark:text-slate-400">
-        <li>{gettext("New messages and connection requests")}</li>
+        <li>{gettext("New messages and new connections")}</li>
         <li>{gettext("Endorsements and new followers")}</li>
         <li>{gettext("Replies to and likes on your posts")}</li>
       </ul>

@@ -46,7 +46,7 @@ defmodule Vutuv.SocialTest do
       refute_receive {:new_notification, %{kind: "connection"}}
     end
 
-    test "a follow-back no longer fires a connection event (connections are explicit now)" do
+    test "a follow-back that completes a mutual follow fires a connection event" do
       a = insert(:user, first_name: "Anna", last_name: "A")
       b = insert(:user, first_name: "Ben", last_name: "B")
       {:ok, _} = Social.follow(a, b.id)
@@ -56,10 +56,11 @@ defmodule Vutuv.SocialTest do
 
       assert {:ok, _} = Social.follow(b, a.id)
 
-      # The follow-back is just a follow now; a connection only comes from the
-      # consented request/accept flow (see Vutuv.ConnectionsTest).
-      assert_receive {:new_notification, %{kind: "follower", actor_name: "Ben B"}}
-      refute_receive {:new_notification, %{kind: "connection"}}
+      # Vernetzt is a mutual follow now, so the follow-back is the connection
+      # milestone — the followee (a) hears "is now connected", not a plain
+      # "started following you".
+      assert_receive {:new_notification, %{kind: "connection", actor_name: "Ben B"}}
+      refute_receive {:new_notification, %{kind: "follower"}}
     end
   end
 
@@ -126,24 +127,6 @@ defmodule Vutuv.SocialTest do
                Social.follows_page(frozen, :followers, %{})
 
       assert user_id == user.id
-    end
-  end
-
-  describe "request_connection/2" do
-    test "simultaneous mutual requests converge to an accepted connection" do
-      a = insert(:activated_user)
-      b = insert(:activated_user)
-
-      results =
-        Task.await_many([
-          Task.async(fn -> Social.request_connection(a, b) end),
-          Task.async(fn -> Social.request_connection(b, a) end)
-        ])
-
-      # Whoever loses the insert race must land in the mutual-desire branch
-      # (auto-accept), not surface a unique-constraint changeset error.
-      assert Enum.all?(results, &match?({:ok, _}, &1))
-      assert [%{status: "accepted"}] = Repo.all(Vutuv.Social.Connection)
     end
   end
 

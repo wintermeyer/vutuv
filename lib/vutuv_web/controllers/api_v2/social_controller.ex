@@ -5,23 +5,20 @@ defmodule VutuvWeb.ApiV2.SocialController do
   Reads (`social:read`): the follower / following / connections lists
   (same doc shape as the public `.json` pages) and
   `GET /users/:slug/relationship` — the viewer's standing with that member
-  (following / followed-by / connection state), which the HTML profile
-  header shows but no public doc carries.
+  (following / followed-by / connected), which the HTML profile header shows
+  but no public doc carries.
 
-  Writes (`social:write`): `PUT`/`DELETE /users/:slug/follow` (idempotent
-  follow, scoped unfollow) and the connection lifecycle —
-  `POST /users/:slug/connection` (request; a mutual request auto-accepts),
-  `POST /connections/:id/accept` / `/decline`, `DELETE /connections/:id`
-  (disconnect or withdraw). All through `Vutuv.Social`, so blocking,
-  cooldowns and live notifications behave exactly like the website.
+  Writes (`social:write`): `PUT` / `DELETE /users/:slug/follow` (idempotent
+  follow, scoped unfollow). There is no separate connection lifecycle — vernetzt
+  is simply a mutual follow, so following a member who follows you back makes
+  you connected. All through `Vutuv.Social`, so blocking and live notifications
+  behave exactly like the website.
   """
 
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts.User
   alias Vutuv.Social
-  alias Vutuv.Social.Connection
-  alias Vutuv.UUIDv7
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ApiV2
@@ -46,8 +43,8 @@ defmodule VutuvWeb.ApiV2.SocialController do
 
   def connections(conn, %{"slug" => slug}) do
     ApiV2.with_visible_user(conn, slug, fn user ->
-      # Like the public page: accepted connections only, never the
-      # owner's pending requests (those are in /relationship terms).
+      # Like the public page: the member's vernetzt list (people they mutually
+      # follow).
       users = user |> Social.list_connections() |> Enum.map(& &1.user)
       work_info = UserHelpers.work_information_map(users, 45)
 
@@ -70,15 +67,17 @@ defmodule VutuvWeb.ApiV2.SocialController do
         })
 
       user ->
-        state = Social.connection_state(viewer, user)
+        following? = Social.user_follows_user?(viewer.id, user.id)
+        followed_by? = Social.user_follows_user?(user.id, viewer.id)
 
         ApiV2.send_json(conn, %{
           type: "relationship",
           user: AgentDocs.person_ref(user),
           self: false,
-          following: Social.user_follows_user?(viewer.id, user.id),
-          followed_by: Social.user_follows_user?(user.id, viewer.id),
-          connection: connection_state_doc(state, viewer)
+          following: following?,
+          followed_by: followed_by?,
+          # Vernetzt is a mutual follow.
+          connected: following? and followed_by?
         })
     end)
   end
@@ -128,111 +127,18 @@ defmodule VutuvWeb.ApiV2.SocialController do
     end
   end
 
-  # ── Connections ──
-
-  def request_connection(conn, %{"slug" => slug}) do
-    viewer = conn.assigns.current_user
-
-    ApiV2.with_visible_user(conn, slug, fn user ->
-      case Social.request_connection(viewer, user) do
-        {:ok, %Connection{status: "accepted"} = connection} ->
-          # The other side had already asked: mutual desire, accepted now.
-          ApiV2.send_json(conn, connection_doc(connection, viewer, user))
-
-        {:ok, %Connection{} = connection} ->
-          ApiV2.send_json(conn, connection_doc(connection, viewer, user), 201)
-
-        {:error, :self} ->
-          Problem.send_problem(conn, 422, "Cannot connect with yourself")
-
-        {:error, :blocked} ->
-          Problem.blocked(conn)
-
-        {:error, reason} when reason in [:already_connected, :already_requested, :cooldown] ->
-          Problem.send_problem(conn, 409, "Conflict",
-            detail: conflict_detail(reason),
-            extra: %{reason: reason}
-          )
-
-        {:error, %Ecto.Changeset{} = changeset} ->
-          Problem.validation_failed(conn, changeset)
-      end
-    end)
-  end
-
-  def accept_connection(conn, %{"id" => id}) do
-    connection_action(conn, id, &Social.accept_connection/2)
-  end
-
-  def decline_connection(conn, %{"id" => id}) do
-    connection_action(conn, id, &Social.decline_connection/2)
-  end
-
-  def remove_connection(conn, %{"id" => id}) do
-    viewer = conn.assigns.current_user
-
-    with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(id),
-         {:ok, _connection} <- Social.remove_connection(viewer, uuid) do
-      send_resp(conn, 204, "")
-    else
-      _missing -> Problem.not_found(conn)
-    end
-  end
-
-  defp connection_action(conn, id, fun) do
-    viewer = conn.assigns.current_user
-
-    with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(id),
-         {:ok, connection} <- fun.(viewer, uuid) do
-      ApiV2.send_json(conn, connection_doc(connection, viewer))
-    else
-      _missing -> Problem.not_found(conn)
-    end
-  end
-
   # ── Doc shapes ──
 
   defp follow_doc(user, viewer) do
+    followed_by? = Social.user_follows_user?(user.id, viewer.id)
+
     %{
       type: "follow",
       user: AgentDocs.person_ref(user),
       following: true,
-      followed_by: Social.user_follows_user?(user.id, viewer.id)
+      followed_by: followed_by?,
+      # A follow-back makes the pair vernetzt.
+      connected: followed_by?
     }
   end
-
-  # The request path already holds the other user; accept/decline (id-only
-  # routes) resolve them here.
-  defp connection_doc(%Connection{} = connection, viewer, other \\ nil) do
-    other_id =
-      if connection.user_a_id == viewer.id, do: connection.user_b_id, else: connection.user_a_id
-
-    other = other || Repo.get!(User, other_id)
-
-    %{
-      type: "connection",
-      id: connection.id,
-      status: connection.status,
-      requested_by_me: connection.requested_by_id == viewer.id,
-      user: AgentDocs.person_ref(other)
-    }
-  end
-
-  defp connection_state_doc(%{status: :none}, _viewer), do: %{status: :none, id: nil}
-
-  # Every non-:none state carries its row (connection_state/2 only ever
-  # returns connection: nil together with :none).
-  defp connection_state_doc(%{status: status, connection: %Connection{} = connection}, viewer) do
-    %{
-      status: status,
-      id: connection.id,
-      requested_by_me: connection.requested_by_id == viewer.id
-    }
-  end
-
-  defp conflict_detail(:already_connected), do: "You are already connected."
-  defp conflict_detail(:already_requested), do: "Your request is already pending."
-
-  defp conflict_detail(:cooldown),
-    do: "A declined request's cooldown has not elapsed yet. Try again later."
 end

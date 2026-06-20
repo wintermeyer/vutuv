@@ -2,9 +2,14 @@ defmodule Vutuv.Social.Follow do
   @moduledoc """
   A one-directional follow edge: `follower_id` follows `followee_id`. Anyone may
   follow anyone, with no approval — it is a subscription that decides whose
-  posts land in your feed. The mutual, consented relationship is
-  `Vutuv.Social.Connection`; accepting one auto-creates a follow in both
-  directions (which either side may then drop while staying connected).
+  posts land in your feed, and it is the *only* social action there is. A
+  **mutual** follow (both directions present) is what the app calls "vernetzt"
+  (connected); it is derived from these two edges, not a separate record.
+
+  `muted` is a per-follow flag the follower owns: a muted follow keeps the
+  relationship (and any mutual "vernetzt" status) but drops the followee's posts
+  out of the follower's feed. It is silent and one-directional — unlike a block,
+  which severs everything both ways.
   """
 
   use VutuvWeb, :model
@@ -14,12 +19,13 @@ defmodule Vutuv.Social.Follow do
   schema "follows" do
     belongs_to(:follower, Vutuv.Accounts.User)
     belongs_to(:followee, Vutuv.Accounts.User)
+    field(:muted, :boolean, default: false)
 
     timestamps()
   end
 
   @required_fields ~w(follower_id followee_id)a
-  @optional_fields ~w()a
+  @optional_fields ~w(muted)a
 
   def changeset(model, params \\ %{}) do
     model

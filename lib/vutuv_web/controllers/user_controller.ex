@@ -117,7 +117,8 @@ defmodule VutuvWeb.UserController do
     |> assign(:follower_count, Vutuv.Social.follower_count(user))
     |> assign(:followee_count, Vutuv.Social.followee_count(user))
     |> assign(:connection_count, Vutuv.Social.connection_count(user))
-    |> assign(:connection_state, header_connection_state(preview_as, current_user, user))
+    |> assign(:header_connected?, header_connected?(preview_as, current_user, user))
+    |> assign(:header_follow_muted?, header_follow_muted?(preview_as, current_user, user))
     |> assign(:user, user)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
@@ -186,17 +187,31 @@ defmodule VutuvWeb.UserController do
   defp profile_emails(true, current_user, user), do: emails_for_display(user, current_user)
   defp profile_emails(false, _current_user, user), do: emails_for_display(user, nil)
 
-  # The header Connect / Pending / Connected control. Previews show the tier's
-  # state: a Follower is not connected (Connect offered), a Kontakt is.
-  defp header_connection_state(:follower, _current_user, _user),
-    do: %{status: :none, connection: nil}
+  # Whether the header shows the "✓ Vernetzt" badge: the viewer and this member
+  # follow each other. Previews show the tier's state — a Follower is not
+  # vernetzt, the Vernetzt preview is.
+  defp header_connected?(:connection, _current_user, _user), do: true
+  defp header_connected?(:follower, _current_user, _user), do: false
 
-  defp header_connection_state(:connection, _current_user, _user),
-    do: %{status: :accepted, connection: nil}
+  defp header_connected?(_preview, current_user, user) do
+    current_user != nil and current_user.id != user.id and
+      Vutuv.Social.connected?(current_user.id, user.id)
+  end
 
-  defp header_connection_state(_preview, current_user, user) do
+  # Whether the viewer has muted their follow of this member (drives the mute
+  # toggle's state). Inert in a preview.
+  defp header_follow_muted?(preview, _current_user, _user)
+       when preview in [:follower, :connection],
+       do: false
+
+  defp header_follow_muted?(_preview, current_user, user) do
     if current_user && current_user.id != user.id do
-      Vutuv.Social.connection_state(current_user, user)
+      case Vutuv.Social.follow_edge(current_user.id, user.id) do
+        %{muted?: muted?} -> muted?
+        _ -> false
+      end
+    else
+      false
     end
   end
 

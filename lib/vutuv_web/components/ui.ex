@@ -721,56 +721,41 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The mutual-connection control on the profile header — the counterpart to
-  `<.follow_button>` (the one-directional follow). It owns the `~p"/connections…"`
-  route shapes and renders per the `state` from
-  `Vutuv.Social.connection_state/2`:
-
-    * `:none` / `:declined` → a primary **Connect** (POST `/connections`,
-      `connection[user_id]`)
-    * `:pending_sent` → a secondary **Pending** that withdraws the request
-      (DELETE `/connections/<id>`)
-    * `:pending_received` → a primary **Accept** (POST `/connections/<id>/accept`)
-      and a secondary **Ignore** (POST `/connections/<id>/decline`)
-    * `:accepted` → a disabled secondary **✓ Connected** (disconnect lives on
-      the connections page)
-
-  Keep the owner / visitor / logged-in guard on a `:if` at the call site.
+  The **mute / unmute** toggle for a follow you own — silences the followee's
+  posts in your feed while keeping the follow (and any mutual "vernetzt"
+  status). Owns the `~p"/follows/:id/mute"` PUT route; `muted?` flips the
+  state (the icon fills brand-tint while muted) and the title/label. A square
+  icon button sized to sit beside the header's follow / message controls. Keep
+  the "only when you follow them" guard (`:if={is_binary(@follow_id)}`) at the
+  call site, like `<.follow_button>`.
   """
-  attr(:state, :atom, required: true)
-  attr(:target_id, :any, required: true)
-  attr(:connection_id, :any, default: nil)
+  attr(:follow_id, :any, required: true)
+  attr(:muted?, :boolean, default: false)
 
-  def connect_control(%{state: :pending_received} = assigns) do
+  def mute_button(assigns) do
     ~H"""
-    <.button href={~p"/connections/#{@connection_id}/accept"} method="post">
-      {gettext("Accept")}
-    </.button>
-    <.button variant="secondary" href={~p"/connections/#{@connection_id}/decline"} method="post">
-      {gettext("Ignore")}
-    </.button>
+    <%= button to: ~p"/follows/#{@follow_id}/mute", method: :put,
+          title: mute_label(@muted?), aria: [label: mute_label(@muted?)],
+          class: save_toggle_class(:bookmark, @muted?) do %>
+      <.icon_bell_slash />
+    <% end %>
     """
   end
 
-  def connect_control(%{state: :pending_sent} = assigns) do
-    ~H"""
-    <.button variant="secondary" href={~p"/connections/#{@connection_id}"} method="delete">
-      {gettext("Pending")}
-    </.button>
-    """
-  end
+  defp mute_label(true), do: gettext("Unmute")
+  defp mute_label(false), do: gettext("Mute")
 
-  def connect_control(%{state: :accepted} = assigns) do
+  # Bell-with-slash glyph (heroicons "bell-slash", outline). The muted state is
+  # carried by the button's brand-tint background, not a separate solid icon.
+  defp icon_bell_slash(assigns) do
     ~H"""
-    <.button variant="secondary" disabled>✓ {gettext("Connected")}</.button>
-    """
-  end
-
-  def connect_control(assigns) do
-    ~H"""
-    <.button href={~p"/connections?#{[connection: %{user_id: @target_id}]}"} method="post">
-      {gettext("Connect")}
-    </.button>
+    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true">
+      <path
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        d="M9.143 17.082a24.248 24.248 0 0 0 3.844.148m-3.844-.148a23.856 23.856 0 0 1-5.455-1.31 8.964 8.964 0 0 0 2.3-5.542m3.155 6.852a3 3 0 0 0 5.667 1.97m1.965-2.277L21 21m-4.225-4.225a23.81 23.81 0 0 0 3.536-1.003 8.967 8.967 0 0 1-2.302-5.39m0 0V9a6 6 0 0 0-9.5-4.875m8.5 4.875c0-1.79-.78-3.4-2.018-4.508M3 3l3.75 3.75M9.5 4.125 12 1.5"
+      />
+    </svg>
     """
   end
 
