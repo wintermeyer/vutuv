@@ -431,7 +431,7 @@ msgstr ""
 msgid "New"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:201
+#: lib/vutuv/notifications/emailer.ex:202
 #, elixir-autogen
 msgid "New message from @%{slug} on vutuv"
 msgstr ""
@@ -971,22 +971,22 @@ msgstr ""
 msgid "Choose a gender"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:145
+#: lib/vutuv/notifications/emailer.ex:146
 #, elixir-autogen
 msgid "Confirm your account deletion"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:139
+#: lib/vutuv/notifications/emailer.ex:140
 #, elixir-autogen
 msgid "Confirm your email"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:127
+#: lib/vutuv/notifications/emailer.ex:128
 #, elixir-autogen
 msgid "Confirm your vutuv account"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:133
+#: lib/vutuv/notifications/emailer.ex:134
 #, elixir-autogen
 msgid "Login to vutuv"
 msgstr ""
@@ -1553,7 +1553,7 @@ msgstr ""
 msgid "tag name"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:175
+#: lib/vutuv/notifications/emailer.ex:176
 #, elixir-autogen
 msgid "vutuv Account verified"
 msgstr ""
@@ -3547,42 +3547,42 @@ msgstr ""
 msgid "yes"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:449
+#: lib/vutuv/notifications/emailer.ex:451
 #, elixir-autogen, elixir-format
 msgid "A warning for your vutuv account"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:509
+#: lib/vutuv/notifications/emailer.ex:511
 #, elixir-autogen, elixir-format
 msgid "Moderation: %{count} cases are waiting"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:487
+#: lib/vutuv/notifications/emailer.ex:489
 #, elixir-autogen, elixir-format
 msgid "Moderation: a profile was reported"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:442
+#: lib/vutuv/notifications/emailer.ex:444
 #, elixir-autogen, elixir-format
 msgid "The content you reported was revised"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:435
+#: lib/vutuv/notifications/emailer.ex:437
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv is under review"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:428
+#: lib/vutuv/notifications/emailer.ex:430
 #, elixir-autogen, elixir-format
 msgid "Your content on vutuv was reported and is hidden"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:463
+#: lib/vutuv/notifications/emailer.ex:465
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account has been deactivated"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:456
+#: lib/vutuv/notifications/emailer.ex:458
 #, elixir-autogen, elixir-format
 msgid "Your vutuv account is suspended"
 msgstr ""
@@ -5458,7 +5458,7 @@ msgstr ""
 msgid "View post"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:163
+#: lib/vutuv/notifications/emailer.ex:164
 #, elixir-autogen, elixir-format
 msgid "Someone tried to register with your email address"
 msgstr ""
@@ -5651,17 +5651,17 @@ msgstr ""
 msgid "e.g. Jr. or PhD"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:243
+#: lib/vutuv/notifications/emailer.ex:244
 #, elixir-autogen, elixir-format
 msgid "@%{slug} endorsed you on vutuv"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:229
+#: lib/vutuv/notifications/emailer.ex:230
 #, elixir-autogen, elixir-format
 msgid "@%{slug} started following you on vutuv"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:258
+#: lib/vutuv/notifications/emailer.ex:259
 #, elixir-autogen, elixir-format
 msgid "@%{slug} wants to connect on vutuv"
 msgstr ""
@@ -5925,7 +5925,7 @@ msgstr[1] ""
 msgid "All other devices have been logged out."
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:344
+#: lib/vutuv/notifications/emailer.ex:345
 #, elixir-autogen, elixir-format
 msgid "Another session was already active on your account."
 msgstr ""
@@ -5950,7 +5950,7 @@ msgstr ""
 msgid "Log this device out of your account?"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:319
+#: lib/vutuv/notifications/emailer.ex:320
 #, elixir-autogen, elixir-format
 msgid "New sign-in to your vutuv account"
 msgstr ""
@@ -5965,7 +5965,7 @@ msgstr ""
 msgid "That device has been logged out."
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:347
+#: lib/vutuv/notifications/emailer.ex:348
 #, elixir-autogen, elixir-format
 msgid "The location looks different from where you usually sign in."
 msgstr ""
@@ -5975,7 +5975,7 @@ msgstr ""
 msgid "This device"
 msgstr ""
 
-#: lib/vutuv/notifications/emailer.ex:341
+#: lib/vutuv/notifications/emailer.ex:342
 #, elixir-autogen, elixir-format
 msgid "This is the first sign-in we have seen from this device or browser."
 msgstr ""
@@ -6479,6 +6479,7 @@ msgid "Confirmed members whose every email address bounced, so they can no longe
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/deliverability/index.html.heex:48
+#: lib/vutuv_web/views/admin/report_html.ex:20
 #, elixir-autogen, elixir-format
 msgid "Deactivated addresses"
 msgstr ""
@@ -6502,6 +6503,7 @@ msgid "Every deactivation, recovery, freeze and thaw, newest first."
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/deliverability/index.html.heex:6
+#: lib/vutuv_web/views/admin/report_html.ex:21
 #, elixir-autogen, elixir-format
 msgid "Frozen accounts"
 msgstr ""
@@ -6610,4 +6612,14 @@ msgstr ""
 #: lib/vutuv_web/views/admin/deliverability_html.ex:38
 #, elixir-autogen, elixir-format
 msgid "system"
+msgstr ""
+
+#: lib/vutuv_web/views/admin/report_html.ex:19
+#, elixir-autogen, elixir-format
+msgid "Bounces"
+msgstr ""
+
+#: lib/vutuv_web/views/admin/report_html.ex:22
+#, elixir-autogen, elixir-format
+msgid "Thawed accounts"
 msgstr ""

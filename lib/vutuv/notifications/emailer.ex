@@ -24,6 +24,7 @@ defmodule Vutuv.Notifications.Emailer do
   require Logger
 
   alias Vutuv.Notifications.Bounces
+  alias Vutuv.Reports.DailyReport
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "info@vutuv.de"}
@@ -406,15 +407,16 @@ defmodule Vutuv.Notifications.Emailer do
   @daily_report_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
 
   @doc """
-  The operator's daily activity report: confirmed-by-PIN new registrations and
-  the day's posts, reposts, likes and bookmarks (`Vutuv.Reports.DailyReport`).
+  The operator's daily report: confirmed-by-PIN new registrations, the day's
+  posts/reposts/likes/bookmarks, and the day's email-deliverability events
+  (`Vutuv.Reports.DailyReport`). The subject lists only the non-zero numbers.
   Fixed German recipient and template, like the ad-booking notice; the caller
   only sends it for days that actually had activity.
   """
-  def daily_report_email(%Vutuv.Reports.DailyReport{} = report) do
+  def daily_report_email(%DailyReport{} = report) do
     base_email()
     |> to(@daily_report_recipient)
-    |> subject("vutuv Tagesbericht für den #{Calendar.strftime(report.date, "%d.%m.%Y")}")
+    |> subject(DailyReport.email_subject(report))
     |> text_body(
       VutuvWeb.EmailText.render("daily_report_de.text", %{report: report, url: public_url()})
     )

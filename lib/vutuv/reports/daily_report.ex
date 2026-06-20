@@ -1,8 +1,9 @@
 defmodule Vutuv.Reports.DailyReport do
   @moduledoc """
-  A single day's basic activity tally: confirmed-by-PIN new registrations and
-  how many posts, reposts, likes and bookmarks were created on one German
-  calendar day (`Vutuv.BerlinTime`).
+  A single day's tally for the operator: confirmed-by-PIN new registrations,
+  how many posts, reposts, likes and bookmarks were created, and the day's
+  email-deliverability events (hard bounces, address deactivations, account
+  freezes and thaws) on one German calendar day (`Vutuv.BerlinTime`).
 
   Built by `Vutuv.Reports.daily/1`, rendered on the admin reports page
   (`VutuvWeb.Admin.ReportController`) and mailed each night by
@@ -10,7 +11,18 @@ defmodule Vutuv.Reports.DailyReport do
   """
 
   @enforce_keys [:date]
-  defstruct [:date, registrations: 0, posts: 0, reposts: 0, likes: 0, bookmarks: 0]
+  defstruct [
+    :date,
+    registrations: 0,
+    posts: 0,
+    reposts: 0,
+    likes: 0,
+    bookmarks: 0,
+    bounces: 0,
+    deactivations: 0,
+    freezes: 0,
+    thaws: 0
+  ]
 
   @type t :: %__MODULE__{
           date: Date.t(),
@@ -18,12 +30,32 @@ defmodule Vutuv.Reports.DailyReport do
           posts: non_neg_integer(),
           reposts: non_neg_integer(),
           likes: non_neg_integer(),
-          bookmarks: non_neg_integer()
+          bookmarks: non_neg_integer(),
+          bounces: non_neg_integer(),
+          deactivations: non_neg_integer(),
+          freezes: non_neg_integer(),
+          thaws: non_neg_integer()
         }
 
-  @doc "The five tallied metrics, summed."
+  # Each metric with its German singular/plural label, in subject order. The
+  # report email is German-only, so the labels live here rather than in gettext.
+  # This list also drives total/1 and all_zero?/1, so a new metric is added in
+  # exactly one place.
+  @metrics [
+    {:registrations, "Registrierung", "Registrierungen"},
+    {:posts, "Beitrag", "Beiträge"},
+    {:reposts, "Repost", "Reposts"},
+    {:likes, "Like", "Likes"},
+    {:bookmarks, "Lesezeichen", "Lesezeichen"},
+    {:bounces, "Bounce", "Bounces"},
+    {:deactivations, "deaktivierte Adresse", "deaktivierte Adressen"},
+    {:freezes, "eingefrorenes Konto", "eingefrorene Konten"},
+    {:thaws, "aufgetautes Konto", "aufgetaute Konten"}
+  ]
+
+  @doc "Every tallied metric, summed."
   def total(%__MODULE__{} = report) do
-    report.registrations + report.posts + report.reposts + report.likes + report.bookmarks
+    @metrics |> Enum.map(fn {key, _, _} -> Map.fetch!(report, key) end) |> Enum.sum()
   end
 
   @doc """
@@ -32,4 +64,26 @@ defmodule Vutuv.Reports.DailyReport do
   never mails an all-zeros report.
   """
   def all_zero?(%__MODULE__{} = report), do: total(report) == 0
+
+  @doc """
+  The German email subject: the date followed by a comma-separated summary of
+  only the metrics that are non-zero, so the operator reads the numbers that
+  actually matter that day (the zero ones are left out). Falls back to the bare
+  "Tagesbericht <date>" if nothing happened (that day is never mailed anyway).
+  """
+  def email_subject(%__MODULE__{} = report) do
+    date = Calendar.strftime(report.date, "%d.%m.%Y")
+
+    case summary_parts(report) do
+      [] -> "vutuv Tagesbericht #{date}"
+      parts -> "vutuv Tagesbericht #{date}: #{Enum.join(parts, ", ")}"
+    end
+  end
+
+  defp summary_parts(report) do
+    for {key, singular, plural} <- @metrics,
+        count = Map.fetch!(report, key),
+        count > 0,
+        do: "#{count} #{if count == 1, do: singular, else: plural}"
+  end
 end

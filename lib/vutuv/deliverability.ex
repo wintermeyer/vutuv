@@ -267,6 +267,36 @@ defmodule Vutuv.Deliverability do
     Repo.all(from(ev in Event, where: ev.user_id == ^user_id, order_by: [asc: ev.inserted_at]))
   end
 
+  @doc """
+  Per-day deliverability tallies for the operator's daily report: hard bounces
+  recorded, and the address-deactivation / account-freeze / account-thaw
+  transitions logged, in the half-open window `[start, stop)`.
+  """
+  def activity_between(%NaiveDateTime{} = start, %NaiveDateTime{} = stop) do
+    %{
+      bounces: count_in(EmailBounce, start, stop),
+      deactivations: count_events("address_deactivated", start, stop),
+      freezes: count_events("account_frozen", start, stop),
+      thaws: count_events("account_thawed", start, stop)
+    }
+  end
+
+  defp count_in(schema, start, stop) do
+    Repo.aggregate(
+      from(r in schema, where: r.inserted_at >= ^start and r.inserted_at < ^stop),
+      :count
+    )
+  end
+
+  defp count_events(action, start, stop) do
+    Repo.aggregate(
+      from(ev in Event,
+        where: ev.action == ^action and ev.inserted_at >= ^start and ev.inserted_at < ^stop
+      ),
+      :count
+    )
+  end
+
   defp user_for_address(address) do
     Repo.one(from(u in User, join: e in assoc(u, :emails), where: e.value == ^address, limit: 1))
   end

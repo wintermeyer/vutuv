@@ -7,5 +7,12 @@ Reposts:                                    <%= @report.reposts %>
 Likes:                                      <%= @report.likes %>
 Lesezeichen:                                <%= @report.bookmarks %>
 
+Zustellbarkeit (E-Mail)
+-----------------------
+Bounces:                                    <%= @report.bounces %>
+Deaktivierte Adressen:                      <%= @report.deactivations %>
+Eingefrorene Konten:                        <%= @report.freezes %>
+Aufgetaute Konten:                          <%= @report.thaws %>
+
 Vollständiger Bericht (mit Zeitreise zu anderen Tagen):
 <%= @url %>admin/reports?date=<%= Date.to_iso8601(@report.date) %>

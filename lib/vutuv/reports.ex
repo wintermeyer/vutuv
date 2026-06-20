@@ -14,6 +14,7 @@ defmodule Vutuv.Reports do
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
+  alias Vutuv.Deliverability
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
   alias Vutuv.Repo
@@ -30,6 +31,7 @@ defmodule Vutuv.Reports do
   """
   def daily(%Date{} = date) do
     {day_start, day_end} = BerlinTime.day_bounds_utc(date)
+    deliverability = Deliverability.activity_between(day_start, day_end)
 
     %DailyReport{
       date: date,
@@ -37,7 +39,11 @@ defmodule Vutuv.Reports do
       posts: count_between(Post, day_start, day_end),
       reposts: count_between(PostRepost, day_start, day_end),
       likes: count_between(PostLike, day_start, day_end),
-      bookmarks: count_between(PostBookmark, day_start, day_end)
+      bookmarks: count_between(PostBookmark, day_start, day_end),
+      bounces: deliverability.bounces,
+      deactivations: deliverability.deactivations,
+      freezes: deliverability.freezes,
+      thaws: deliverability.thaws
     }
   end
 

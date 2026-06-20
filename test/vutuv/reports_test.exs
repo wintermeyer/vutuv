@@ -93,7 +93,10 @@ defmodule Vutuv.ReportsTest do
         assert {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"} = hd(email.to)
         assert email.subject =~ "Tagesbericht"
         assert email.subject =~ "15.01.2026"
+        # The subject now carries the non-zero number(s).
+        assert email.subject =~ "1 Beitrag"
         assert email.text_body =~ "Neue Beiträge"
+        assert email.text_body =~ "Zustellbarkeit"
         assert email.text_body =~ "admin/reports?date=2026-01-15"
       end)
     end
@@ -101,6 +104,43 @@ defmodule Vutuv.ReportsTest do
     test "skips an all-zero day, sending nothing" do
       assert Reports.deliver_daily_email(@date) == :skipped
       assert_no_email_sent()
+    end
+  end
+
+  describe "deliverability metrics" do
+    test "daily/1 tallies bounces and deactivation/freeze/thaw events for the Berlin day" do
+      insert(:email_bounce, inserted_at: @on_day)
+      insert(:email_bounce, inserted_at: @on_day)
+      insert(:email_bounce, inserted_at: @other_day)
+      insert(:deliverability_event, action: "address_deactivated", inserted_at: @on_day)
+      insert(:deliverability_event, action: "account_frozen", inserted_at: @on_day)
+      insert(:deliverability_event, action: "account_thawed", inserted_at: @on_day)
+      insert(:deliverability_event, action: "account_frozen", inserted_at: @other_day)
+
+      report = Reports.daily(@date)
+      assert report.bounces == 2
+      assert report.deactivations == 1
+      assert report.freezes == 1
+      assert report.thaws == 1
+    end
+
+    test "a day with only deliverability events still counts as activity (gets mailed)" do
+      insert(:deliverability_event, action: "account_frozen", inserted_at: @on_day)
+      refute DailyReport.all_zero?(Reports.daily(@date))
+    end
+  end
+
+  describe "email_subject/1" do
+    test "lists only the non-zero metrics, with singular/plural German labels" do
+      report = %DailyReport{date: @date, registrations: 1, posts: 3, freezes: 1}
+
+      assert DailyReport.email_subject(report) ==
+               "vutuv Tagesbericht 15.01.2026: 1 Registrierung, 3 Beiträge, 1 eingefrorenes Konto"
+    end
+
+    test "omits the zero metrics entirely" do
+      report = %DailyReport{date: @date, bounces: 2}
+      assert DailyReport.email_subject(report) == "vutuv Tagesbericht 15.01.2026: 2 Bounces"
     end
   end
 end

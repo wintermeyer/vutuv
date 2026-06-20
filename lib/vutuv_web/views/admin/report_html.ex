@@ -15,7 +15,11 @@ defmodule VutuvWeb.Admin.ReportHTML do
       {gettext("Posts"), report.posts},
       {gettext("Reposts"), report.reposts},
       {gettext("Likes"), report.likes},
-      {gettext("Bookmarks"), report.bookmarks}
+      {gettext("Bookmarks"), report.bookmarks},
+      {gettext("Bounces"), report.bounces},
+      {gettext("Deactivated addresses"), report.deactivations},
+      {gettext("Frozen accounts"), report.freezes},
+      {gettext("Thawed accounts"), report.thaws}
     ]
   end
 end
