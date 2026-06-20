@@ -826,6 +826,10 @@ defmodule VutuvWeb.UserControllerTest do
       # is active.
       assert html =~ "view-as-switcher"
       refute html =~ "view-as-banner"
+      # The switcher is rendered once from the app layout; on the profile its
+      # segments target the bare profile path (base_path = conn.request_path).
+      assert html =~ ~p"/#{user}?#{[view_as: "follower"]}"
+      assert html =~ ~p"/#{user}?#{[view_as: "public"]}"
       assert html =~ "Edit profile"
       assert html =~ "secret@example.com"
       assert html =~ "shown@example.com"

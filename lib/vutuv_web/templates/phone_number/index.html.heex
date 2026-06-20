@@ -7,14 +7,6 @@
   ]}
 />
 
-
-<.view_as_switcher
-  :if={@can_preview?}
-  base_path={~p"/#{@user}/phone_numbers"}
-  preview_as={@preview_as}
-  class="mb-6"
-/>
-
 <.card_section
   empty={Enum.empty?(@phone_numbers)}
   add_href={@as_owner? && ~p"/#{@current_user}/phone_numbers/new"}

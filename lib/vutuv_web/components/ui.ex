@@ -1546,21 +1546,20 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The owner-only **"View as" preview switcher** shared by the profile section
-  pages (`/:slug/work_experiences`, `/phone_numbers`, …). A segmented control —
-  You / Follower / Connected / Public — that reloads the current page
-  server-side with `?view_as=<mode>` (resolved by `VutuvWeb.ViewAs`), plus an
-  active-mode banner. Render it with `:if={@can_preview?}` so only the owner
-  ever sees it.
+  The owner-only **"View as" preview switcher** shared by the profile
+  (`/:slug`) and every profile section page (`/:slug/work_experiences`,
+  `/phone_numbers`, …). A segmented control — You / Follower / Connected /
+  Public — that reloads the current page server-side with `?view_as=<mode>`
+  (resolved by `VutuvWeb.ViewAs` for sections, `VutuvWeb.UserController` for the
+  profile), plus an active-mode banner.
 
-  `base_path` is the current page's path (e.g. `~p"/\#{@user}/work_experiences"`);
-  the segments link to that path with the `view_as` query appended. `preview_as`
-  is the active tier (`nil | :follower | :connection | :public`). `class` adds
-  utilities to the outer container (e.g. a bottom margin above the list).
-
-  The profile (`user/show.html.heex`) predates this and keeps its own inline
-  switcher with profile-specific banner copy; this is the reusable version every
-  section page shares.
+  **Rendered once, from the `app` layout** (`layout/app.html.heex`), pinned at
+  the top of `<main>` right below the top navigation bar so it looks and sits
+  identically on every owner page. The layout gates it on `@can_preview?` and
+  derives `base_path` from `conn.request_path`, so individual templates no
+  longer embed it. `preview_as` is the active tier
+  (`nil | :follower | :connection | :public`); `class` adds utilities to the
+  outer container (the layout passes a top margin).
   """
   attr(:base_path, :string, required: true)
   attr(:preview_as, :atom, default: nil)
@@ -1573,7 +1572,7 @@ defmodule VutuvWeb.UI do
     <div
       id="view-as-switcher"
       class={[
-        "rounded-2xl px-4 py-3 ring-1",
+        "rounded-2xl px-3 py-3 ring-1 sm:px-4",
         if(@preview?,
           do: "bg-brand-50 ring-brand-200 dark:bg-brand-900/30 dark:ring-brand-900/50",
           else: "bg-white ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
@@ -1581,6 +1580,12 @@ defmodule VutuvWeb.UI do
         @class
       ]}
     >
+      <%!-- Mobile-first: the "View as" label sits on its own line and the
+      segmented control drops below it full-width (w-full forces the flex-wrap),
+      so the four segments share the whole row instead of being squeezed beside
+      the label. From sm up the control rejoins the label's line (sm:flex-1).
+      Each segment truncates so a long localized label (German "Öffentlich")
+      ellipsizes on a narrow phone rather than breaking the layout. --%>
       <div class="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
         <span class="inline-flex items-center gap-1.5 font-semibold text-slate-700 dark:text-slate-200">
           <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
@@ -1589,7 +1594,7 @@ defmodule VutuvWeb.UI do
           </svg>
           {gettext("View as")}
         </span>
-        <div class="flex flex-1 divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 dark:divide-slate-700 dark:ring-slate-700">
+        <div class="flex w-full divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 sm:w-auto sm:flex-1 dark:divide-slate-700 dark:ring-slate-700">
           <.link
             :for={
               {label, mode} <- [
@@ -1602,7 +1607,7 @@ defmodule VutuvWeb.UI do
             href={view_as_href(@base_path, mode)}
             aria-current={@preview_as == mode && "true"}
             class={[
-              "flex-1 px-3 py-1.5 text-center font-semibold transition-colors",
+              "min-w-0 flex-1 truncate px-1.5 py-1.5 text-center text-xs font-semibold transition-colors sm:px-3 sm:text-sm",
               if(@preview_as == mode,
                 do: "bg-brand-600 text-white",
                 else:

@@ -56,6 +56,23 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 <% end %>
 
 <main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 md:pb-10">
+  <%!-- Owner-only "View as" preview switcher, rendered here (not per page) so it
+  sits the same way on the profile and every section page: a full-width bar
+  right below the top navigation bar. `@can_preview?` is set only on the owner's
+  own profile/section pages (VutuvWeb.ViewAs + UserController), all dead pages,
+  so `@conn` is present whenever this branch runs. base_path is the current
+  page's path, so each segment reloads *this* page with `?view_as=<mode>`. --%>
+  <%= if assigns[:can_preview?] do %>
+    <%!-- max-w-3xl + mx-auto so the bar is the same width on every owner page
+    and lines up with the section pages' content column (`.card-list` etc. are
+    also 48rem centered); the profile's grid is wider but the centered bar reads
+    as a tidy toolbar above it. mt-6 lifts it off the nav / ad strip. --%>
+    <.view_as_switcher
+      base_path={@conn.request_path}
+      preview_as={assigns[:preview_as]}
+      class="mx-auto mt-6 max-w-3xl"
+    />
+  <% end %>
   {@inner_content}
 </main>
 

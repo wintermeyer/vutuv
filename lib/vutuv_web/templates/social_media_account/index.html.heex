@@ -7,14 +7,6 @@
   ]}
 />
 
-
-<.view_as_switcher
-  :if={@can_preview?}
-  base_path={~p"/#{@user}/social_media_accounts"}
-  preview_as={@preview_as}
-  class="mb-6"
-/>
-
 <.card_section
   empty={Enum.empty?(@social_media_accounts)}
   add_href={@as_owner? && ~p"/#{@current_user}/social_media_accounts/new"}

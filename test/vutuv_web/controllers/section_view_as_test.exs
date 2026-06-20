@@ -33,6 +33,11 @@ defmodule VutuvWeb.SectionViewAsTest do
 
       assert html =~ "view-as-switcher"
       refute html =~ "view-as-banner"
+      # The switcher is rendered once from the app layout, so its segments must
+      # target *this* page (base_path = conn.request_path), not some other
+      # section. Guards the layout-level rendering against a wrong base path.
+      assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "follower"]}"
+      assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "public"]}"
       # Owner chrome: the add tile and the inline edit/delete controls.
       assert html =~ ~p"/#{owner}/work_experiences/new"
       assert html =~ ~p"/#{owner}/work_experiences/#{job}/edit"
