@@ -830,6 +830,9 @@ defmodule VutuvWeb.UserControllerTest do
       # segments target the bare profile path (base_path = conn.request_path).
       assert html =~ ~p"/#{user}?#{[view_as: "follower"]}"
       assert html =~ ~p"/#{user}?#{[view_as: "public"]}"
+      # The profile grid is full width, so the bar spans the full main column
+      # (max-w-6xl); the section pages get the narrower max-w-3xl instead.
+      assert html =~ "mt-6 max-w-6xl"
       assert html =~ "Edit profile"
       assert html =~ "secret@example.com"
       assert html =~ "shown@example.com"
@@ -877,6 +880,23 @@ defmodule VutuvWeb.UserControllerTest do
       refute html =~ "secret@example.com"
       assert html =~ "shown@example.com"
       refute html =~ ~p"/messages/with/#{user}"
+      # This member allows indexing and AI, so the banner makes no exception
+      # and there is no link to the privacy settings.
+      refute html =~ ~p"/#{user}/settings/privacy"
+    end
+
+    test "public preview links to privacy settings when indexing or AI use is restricted",
+         %{conn: conn} do
+      # The public banner says search engines see the page, but this member has
+      # turned indexing off (noai? is the symmetric case), so the banner adds a
+      # "More about this." link to the privacy page that explains/manages it.
+      {conn, user} = owner_with_emails(conn)
+      user = user |> change(noindex?: true) |> Repo.update!()
+
+      html = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
+
+      assert html =~ "More about this."
+      assert html =~ ~p"/#{user}/settings/privacy"
     end
 
     test "post visibility follows the previewed relationship", %{conn: conn} do

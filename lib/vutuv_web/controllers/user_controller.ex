@@ -97,6 +97,9 @@ defmodule VutuvWeb.UserController do
 
     conn
     |> assign(:can_preview?, owner?)
+    # The profile content spans the full main column, so the layout's "View as"
+    # bar goes full width here (max-w-6xl) instead of the section pages' 48rem.
+    |> assign(:view_as_full_width?, true)
     |> assign(:preview_as, preview_as)
     |> assign(:preview?, not is_nil(preview_as))
     |> assign(:as_owner?, as_owner?)

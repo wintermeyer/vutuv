@@ -63,14 +63,20 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
   so `@conn` is present whenever this branch runs. base_path is the current
   page's path, so each segment reloads *this* page with `?view_as=<mode>`. --%>
   <%= if assigns[:can_preview?] do %>
-    <%!-- max-w-3xl + mx-auto so the bar is the same width on every owner page
-    and lines up with the section pages' content column (`.card-list` etc. are
-    also 48rem centered); the profile's grid is wider but the centered bar reads
-    as a tidy toolbar above it. mt-6 lifts it off the nav / ad strip. --%>
+    <%!-- Width follows the page's content so the bar lines up with what's below
+    it: the profile grid spans the full main column (max-w-6xl, flagged with
+    @view_as_full_width? by UserController), while the seven section pages
+    center their content at max-w-3xl (`.card-list` etc.) and get that. mt-6
+    lifts it off the nav / ad strip; mx-auto centers the narrow case. --%>
     <.view_as_switcher
       base_path={@conn.request_path}
       preview_as={assigns[:preview_as]}
-      class="mx-auto mt-6 max-w-3xl"
+      public_restricted?={@user.noindex? or @user.noai?}
+      settings_path={~p"/#{@user}/settings/privacy"}
+      class={[
+        "mx-auto mt-6",
+        if(assigns[:view_as_full_width?], do: "max-w-6xl", else: "max-w-3xl")
+      ]}
     />
   <% end %>
   {@inner_content}

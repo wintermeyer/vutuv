@@ -38,6 +38,9 @@ defmodule VutuvWeb.SectionViewAsTest do
       # section. Guards the layout-level rendering against a wrong base path.
       assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "follower"]}"
       assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "public"]}"
+      # Section content is the narrower 48rem column, so the bar matches it
+      # (max-w-3xl); only the full-width profile grid gets max-w-6xl.
+      assert html =~ "mt-6 max-w-3xl"
       # Owner chrome: the add tile and the inline edit/delete controls.
       assert html =~ ~p"/#{owner}/work_experiences/new"
       assert html =~ ~p"/#{owner}/work_experiences/#{job}/edit"

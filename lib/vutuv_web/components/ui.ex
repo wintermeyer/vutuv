@@ -1563,6 +1563,8 @@ defmodule VutuvWeb.UI do
   """
   attr(:base_path, :string, required: true)
   attr(:preview_as, :atom, default: nil)
+  attr(:public_restricted?, :boolean, default: false)
+  attr(:settings_path, :string, default: nil)
   attr(:class, :any, default: nil)
 
   def view_as_switcher(assigns) do
@@ -1631,6 +1633,16 @@ defmodule VutuvWeb.UI do
             {gettext("Preview: how a member you are connected with sees this page.")}
           <% :public -> %>
             {gettext("Preview: how logged-out visitors and search engines see this page.")}
+            <%!-- When this member has turned off search-engine indexing or AI
+            use, the sentence above no longer fully applies to them, so point to
+            the privacy settings that explain and manage it. --%>
+            <.link
+              :if={@public_restricted? and @settings_path}
+              href={@settings_path}
+              class="font-semibold text-brand-700 underline underline-offset-2 hover:text-brand-800 dark:text-brand-300 dark:hover:text-brand-200"
+            >
+              {gettext("More about this.")}
+            </.link>
           <% _ -> %>
         <% end %>
       </p>
