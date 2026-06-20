@@ -6565,7 +6565,7 @@ msgstr "Zum Profil, um zu folgen"
 #: lib/vutuv_web/components/post_components.ex:367
 #, elixir-autogen, elixir-format
 msgid "Mute @%{handle}"
-msgstr ""
+msgstr "@%{handle} stummschalten"
 
 #: lib/vutuv_web/views/user_html.ex:230
 #, elixir-autogen, elixir-format
@@ -6575,4 +6575,4 @@ msgstr "Beruflich"
 #: lib/vutuv_web/components/post_components.ex:366
 #, elixir-autogen, elixir-format
 msgid "Unmute @%{handle}"
-msgstr ""
+msgstr "@%{handle} nicht mehr stummschalten"
