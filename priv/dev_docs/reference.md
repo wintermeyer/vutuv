@@ -155,12 +155,13 @@ auth $API/users/wintermeyer/relationship
   "self": false,
   "following": true,
   "followed_by": false,
-  "connection": {"status": "pending_sent", "id": "0190…", "requested_by_me": true}
+  "connected": false
 }
 ```
 
-`connection.status` is one of `none`, `pending_sent`, `pending_received`,
-`accepted`, `declined`.
+`connected` is `true` only when you follow each other (vernetzt). Asking
+about yourself answers `{"type": "relationship", "self": true, ...}` with no
+flags.
 
 ### PUT /users/:username/follow · DELETE /users/:username/follow
 
@@ -173,22 +174,21 @@ auth -X PUT $API/users/wintermeyer/follow
 auth -X DELETE $API/users/wintermeyer/follow
 ```
 
-### Connections
+### Connections (vernetzt) and muting
 
-Scope: `social:write`. A connection is mutual and consented: request,
-then the other side accepts or declines.
+A connection is not a separate object and has no endpoints of its own: two
+members are connected ("vernetzt") exactly when they **follow each other**.
+Follow someone who already follows you, or who later follows back, and you
+are connected; either side unfollowing ends it. The `relationship` response
+reports it as `connected`, and `GET /users/:username/connections` lists a
+member's mutual follows.
+
+Scope `social:write`. A follow you own can be **muted** without unfollowing,
+which keeps the connection but drops that member's posts from your feed:
 
 ```bash
-auth -X POST $API/users/wintermeyer/connection   # request (201)
-auth -X POST $API/connections/0190…/accept              # as the recipient
-auth -X POST $API/connections/0190…/decline
-auth -X DELETE $API/connections/0190…                   # disconnect / withdraw
+auth -X PUT $API/follows/0190…/mute   # toggles muted on a follow you own
 ```
-
-A mutual request auto-accepts (`200` with `"status": "accepted"`).
-Conflicts answer `409` with a `reason` of `already_connected`,
-`already_requested` or `cooldown`. Accepting materializes the follow in
-both directions, like on the website.
 
 ## Posts
 

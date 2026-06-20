@@ -17,7 +17,7 @@ member ─┬─ profile sections: emails, links, social media accounts,
         │         ├─ replies (posts themselves)
         │         └─ likes · bookmarks · reposts
         ├─ follows → member          (one-directional subscription)
-        ├─ connections ↔ member      (mutual, consented)
+        ├─ connections ↔ member      (derived: a mutual follow)
         ├─ groups (of followers)     (custom audiences for posts)
         └─ conversations ── messages (direct messages, request model)
 ```

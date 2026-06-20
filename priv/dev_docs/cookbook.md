@@ -134,7 +134,7 @@ auth -X POST $API/conversations/0190…/decline   # silently decline
 Declining is invisible to the sender: to them the request just stays
 pending.
 
-## How do I follow someone — or connect?
+## How do I follow someone, and what is a connection?
 
 Scope `social:write`. **Follow** = one-directional subscription (their
 posts appear in your feed), no consent needed:
@@ -144,12 +144,9 @@ auth -X PUT $API/users/wintermeyer/follow      # follow
 auth -X DELETE $API/users/wintermeyer/follow   # unfollow
 ```
 
-**Connection** = mutual and consented, like on LinkedIn — you request,
-they accept:
-
-```bash
-auth -X POST $API/users/wintermeyer/connection
-```
+**Connection** ("vernetzt") is not a separate action: you are connected with
+someone exactly when you both follow each other. Follow them back, or have
+them follow you back, and you are connected; unfollow to end it.
 
 Where do you stand with someone? One call:
 

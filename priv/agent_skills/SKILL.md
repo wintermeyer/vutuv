@@ -1,6 +1,6 @@
 ---
 name: vutuv
-description: Read and work with vutuv, the free social/business network. Use this skill to fetch member profiles, posts, tags and listings as Markdown/JSON/vCard instead of scraping HTML, to subscribe to post feeds, and to call the authenticated /api/2.0 REST API for writing (posts, follows, connections, messages).
+description: Read and work with vutuv, the free social/business network. Use this skill to fetch member profiles, posts, tags and listings as Markdown/JSON/vCard instead of scraping HTML, to subscribe to post feeds, and to call the authenticated /api/2.0 REST API for writing (posts, follows, messages).
 ---
 
 # vutuv for agents
@@ -47,7 +47,7 @@ List pages paginate with `?page=N`.
 
 ## Writing: the REST API
 
-Authenticated writing (posts, follows, connections, messages, profile
+Authenticated writing (posts, follows, messages, profile
 edits) goes through `/api/2.0` — Bearer tokens, scoped permissions,
 5,000 requests/hour, RFC 7807 problem+json errors. Read the docs as
 Markdown:

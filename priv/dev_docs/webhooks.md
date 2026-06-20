@@ -1,7 +1,7 @@
 # Webhooks
 
 Instead of polling, vutuv can POST signed event notifications to your
-server as things happen: a new follower, a connection request, a reply,
+server as things happen: a new follower, a new connection, a reply,
 a message.
 
 Webhooks belong to a registered [OAuth application](/developers/authentication#oauth-2-for-third-party-apps).
@@ -28,8 +28,7 @@ Two rules shape everything:
 | Event | Needs the member's scope | `data` |
 |-------|--------------------------|--------|
 | `follower.created` | `social:read` | `follower` (username) |
-| `connection.requested` | `social:read` | `from` |
-| `connection.accepted` | `social:read` | `by` |
+| `connection.created` | `social:read` | `with` (username) |
 | `endorsement.created` | `social:read` | `endorser`, `tag` |
 | `post.liked` | `posts:read` | `by`, `post_id` |
 | `post.replied` | `posts:read` | `by`, `post_id` |

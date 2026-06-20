@@ -49,7 +49,7 @@ A token only ever does what its scopes allow. A `*:write` scope implies its
 | `profile:read`   | Read your profile, including entries only you can see |
 | `profile:write`  | Edit your profile and its sections |
 | `social:read`    | See your followers, who you follow, and your connections |
-| `social:write`   | Follow people, manage connections, endorse tags |
+| `social:write`   | Follow and unfollow people, mute follows, endorse tags |
 | `posts:read`     | Read posts visible to you |
 | `posts:write`    | Write, edit and delete your posts |
 | `messages:read`  | Read your messages |
