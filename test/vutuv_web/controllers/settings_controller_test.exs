@@ -82,6 +82,27 @@ defmodule VutuvWeb.SettingsControllerTest do
     # opt-out noindex?/noai?, so a CHECKED box submits "false" (allow) and an
     # UNCHECKED box submits the hidden "true" (opt out).
 
+    test "the card explains the opt-out in plain terms, with exact specifics for the technical reader",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+
+      # Plain-language nuance for the layperson (no jargon): a public page can
+      # still be read, but we tell engines/AI we do not want it, and the
+      # reputable ones comply.
+      assert html =~ "the machine-readable way they look for"
+      assert html =~ "Reputable search engines and AI companies follow that request"
+      # The technical reader gets the exact directives as a copy-and-read
+      # example, not just prose.
+      assert html =~ "X-Robots-Tag: noindex, noai, noimageai"
+      assert html =~ "Content-Signal: ai-train=no, search=no, ai-input=no"
+      assert html =~ "out of the sitemap and structured data"
+      # Each checkbox spells out what turning it off actually does.
+      assert html =~ "we ask them to leave it out"
+      assert html =~ "we ask them not to"
+    end
+
     test "checking both boxes stores allow (noindex?/noai? = false)", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, _} = Accounts.update_user(user, %{"noindex?" => "true", "noai?" => "true"})

@@ -572,8 +572,8 @@ msgstr "Public (jeder kann sie sehen) oder Privat (Nur Personen, denen Sie folge
 #: lib/vutuv_web/templates/settings/index.html.heex:153
 #: lib/vutuv_web/templates/settings/index.html.heex:210
 #: lib/vutuv_web/templates/settings/notifications.html.heex:75
-#: lib/vutuv_web/templates/settings/privacy.html.heex:48
-#: lib/vutuv_web/templates/settings/privacy.html.heex:83
+#: lib/vutuv_web/templates/settings/privacy.html.heex:80
+#: lib/vutuv_web/templates/settings/privacy.html.heex:115
 #: lib/vutuv_web/templates/user/edit.html.heex:164
 #, elixir-autogen
 msgid "Save"
@@ -2625,7 +2625,7 @@ msgid "“Tired of LinkedIn, Facebook, or X? Same here."
 msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso."
 
 #: lib/vutuv_web/templates/page/index.html.heex:91
-#: lib/vutuv_web/templates/settings/privacy.html.heex:27
+#: lib/vutuv_web/templates/settings/privacy.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "Allow search engines to index your profile"
 msgstr "Suchmaschinen dürfen dieses Profil indizieren"
@@ -2719,7 +2719,7 @@ msgstr "Ersten Beitrag schreiben"
 #: lib/vutuv_web/templates/settings/apps.html.heex:16
 #: lib/vutuv_web/templates/settings/apps.html.heex:22
 #: lib/vutuv_web/templates/settings/index.html.heex:25
-#: lib/vutuv_web/templates/settings/privacy.html.heex:98
+#: lib/vutuv_web/templates/settings/privacy.html.heex:130
 #, elixir-autogen, elixir-format
 msgid "Manage"
 msgstr "Verwalten"
@@ -4575,7 +4575,7 @@ msgstr "@%{slug} blockieren? Dadurch werden alle Follows und die Vernetzung zwis
 
 #: lib/vutuv_web/templates/block/index.html.heex:1
 #: lib/vutuv_web/templates/block/index.html.heex:1
-#: lib/vutuv_web/templates/settings/privacy.html.heex:95
+#: lib/vutuv_web/templates/settings/privacy.html.heex:127
 #, elixir-autogen, elixir-format
 msgid "Blocked members"
 msgstr "Blockierte Mitglieder"
@@ -5302,7 +5302,7 @@ msgid "vutuv POSTs signed JSON envelopes here (see the webhooks documentation). 
 msgstr "vutuv schickt signierte JSON-Umschläge per POST an diese Adresse (siehe Webhook-Dokumentation). Nur https://; http://localhost ist für die Entwicklung erlaubt."
 
 #: lib/vutuv_web/templates/page/index.html.heex:100
-#: lib/vutuv_web/templates/settings/privacy.html.heex:39
+#: lib/vutuv_web/templates/settings/privacy.html.heex:71
 #, elixir-autogen, elixir-format
 msgid "Allow AI agents and LLMs to use your profile"
 msgstr "KI-Agenten und LLMs dürfen dieses Profil nutzen"
@@ -5357,7 +5357,7 @@ msgstr "Sie können auf diesen Beitrag nicht mehr antworten."
 msgid "Your data"
 msgstr "Ihre Daten"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:101
+#: lib/vutuv_web/templates/settings/privacy.html.heex:133
 #, elixir-autogen, elixir-format
 msgid "Content under review"
 msgstr "Inhalte in Prüfung"
@@ -5530,7 +5530,7 @@ msgstr "E-Mail-Adressen"
 msgid "Notification settings saved."
 msgstr "Benachrichtigungseinstellungen gespeichert."
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:96
+#: lib/vutuv_web/templates/settings/privacy.html.heex:128
 #, elixir-autogen, elixir-format
 msgid "People who cannot interact with you."
 msgstr "Personen, die nicht mit Ihnen interagieren können."
@@ -5561,27 +5561,17 @@ msgstr "Datenschutzeinstellungen gespeichert."
 msgid "Third-party apps you authorized."
 msgstr "Apps von Drittanbietern, die Sie autorisiert haben."
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:104
+#: lib/vutuv_web/templates/settings/privacy.html.heex:136
 #, elixir-autogen, elixir-format
 msgid "View"
 msgstr "Ansehen"
-
-#: lib/vutuv_web/templates/settings/privacy.html.heex:42
-#, elixir-autogen, elixir-format
-msgid "When on, AI assistants and crawlers may read and train on your public profile."
-msgstr "Wenn aktiviert, dürfen KI-Assistenten und Crawler Ihr öffentliches Profil lesen und damit trainieren."
-
-#: lib/vutuv_web/templates/settings/privacy.html.heex:30
-#, elixir-autogen, elixir-format
-msgid "When on, your public profile can appear in Google and other search engines."
-msgstr "Wenn aktiviert, kann Ihr öffentliches Profil in Google und anderen Suchmaschinen erscheinen."
 
 #: lib/vutuv_web/templates/user/edit.html.heex:102
 #, elixir-autogen, elixir-format
 msgid "Your name"
 msgstr "Ihr Name"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:102
+#: lib/vutuv_web/templates/settings/privacy.html.heex:134
 #, elixir-autogen, elixir-format
 msgid "Your posts or profile a moderator is looking at."
 msgstr "Ihre Beiträge oder Ihr Profil, die ein Moderator gerade prüft."
@@ -5737,7 +5727,7 @@ msgstr "Privatsphäre-Einstellungen"
 msgid "Replies to and likes on your posts"
 msgstr "Antworten und Likes zu Ihren Beiträgen"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:92
+#: lib/vutuv_web/templates/settings/privacy.html.heex:124
 #, elixir-autogen, elixir-format
 msgid "Safety"
 msgstr "Sicherheit"
@@ -5776,11 +5766,6 @@ msgstr "Wenn Ihnen jemand schreibt und Sie es noch nicht gelesen haben."
 #, elixir-autogen, elixir-format
 msgid "When someone starts following you."
 msgstr "Wenn jemand beginnt, Ihnen zu folgen."
-
-#: lib/vutuv_web/templates/settings/privacy.html.heex:17
-#, elixir-autogen, elixir-format
-msgid "Your profile is always public to people. These switches decide whether automated systems may use it too."
-msgstr "Ihr Profil ist für Menschen immer öffentlich. Diese Schalter entscheiden, ob auch automatische Systeme es nutzen dürfen."
 
 #: lib/vutuv_web/templates/block/index.html.heex:23
 #, elixir-autogen, elixir-format
@@ -5989,24 +5974,24 @@ msgstr "Das ist die erste Anmeldung, die wir von diesem Gerät oder Browser gese
 msgid "just now"
 msgstr "gerade eben"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:60
+#: lib/vutuv_web/templates/settings/privacy.html.heex:92
 #, elixir-autogen, elixir-format
 msgid "A green dot on your avatar tells other members you are online right now."
 msgstr ""
 "Ein grüner Punkt auf Ihrem Avatar zeigt anderen Mitgliedern, dass Sie gerade "
 "online sind."
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:58
+#: lib/vutuv_web/templates/settings/privacy.html.heex:90
 #, elixir-autogen, elixir-format
 msgid "Online status"
 msgstr "Online-Status"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:74
+#: lib/vutuv_web/templates/settings/privacy.html.heex:106
 #, elixir-autogen, elixir-format
 msgid "Show when I'm online"
 msgstr "Anzeigen, wenn ich online bin"
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:77
+#: lib/vutuv_web/templates/settings/privacy.html.heex:109
 #, elixir-autogen, elixir-format
 msgid "When off, no one sees the green dot on your avatar, and you never show as online."
 msgstr ""
@@ -6626,3 +6611,33 @@ msgstr "Aufgetaute Konten"
 #, elixir-autogen, elixir-format
 msgid "More about this."
 msgstr "Zusatzinformationen dazu."
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:74
+#, elixir-autogen, elixir-format
+msgid "When on, AI assistants and crawlers may read and train on your public profile. When off, we ask them not to."
+msgstr "Wenn aktiviert, dürfen KI-Assistenten und Crawler Ihr öffentliches Profil lesen und damit trainieren. Wenn deaktiviert, bitten wir sie, dies zu unterlassen."
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:62
+#, elixir-autogen, elixir-format
+msgid "When on, your public profile can appear in Google and other search engines. When off, we ask them to leave it out."
+msgstr "Wenn aktiviert, kann Ihr öffentliches Profil in Google und anderen Suchmaschinen erscheinen. Wenn deaktiviert, bitten wir sie, es auszulassen."
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:37
+#, elixir-autogen, elixir-format
+msgid "Exactly what we send"
+msgstr "Was wir technisch genau senden"
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:47
+#, elixir-autogen, elixir-format
+msgid "Compliant crawlers honor these; they are not a hard block. A noindexed profile is also kept out of the sitemap and structured data."
+msgstr "An diese Angaben halten sich gut funktionierende Crawler; sie sind keine technische Sperre. Ein nicht indiziertes Profil bleibt außerdem aus Sitemap und strukturierten Daten heraus."
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:40
+#, elixir-autogen, elixir-format
+msgid "Turn a switch off and the matching opt-out rides along on the pages and responses about you. With both off, for example:"
+msgstr "Schalten Sie einen Schalter aus, geht der passende Opt-out auf den Seiten und Antworten über Sie mit. Mit beiden aus zum Beispiel:"
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:17
+#, elixir-autogen, elixir-format
+msgid "We can't stop a search engine or AI service from reading a page it can open. What we can do is tell them, in the machine-readable way they look for, that you don't want your profile listed in search results or used by AI. Reputable search engines and AI companies follow that request; we can't force the rest."
+msgstr "Wir können nicht verhindern, dass eine Suchmaschine oder ein KI-Dienst eine Seite liest, die sie öffnen kann. Wir können ihnen aber auf die dafür vorgesehene, maschinenlesbare Weise mitteilen, dass Ihr Profil nicht in Suchergebnissen erscheinen oder von KI verwendet werden soll. Seriöse Suchmaschinen und KI-Anbieter befolgen das; erzwingen können wir es nicht."

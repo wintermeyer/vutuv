@@ -14,8 +14,40 @@ which would otherwise render the hint heavier than its own heading. --%>
     <.card>
       <.section_title>{gettext("Search engines & AI")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("Your profile is always public to people. These switches decide whether automated systems may use it too.")}
+        {gettext("We can't stop a search engine or AI service from reading a page it can open. What we can do is tell them, in the machine-readable way they look for, that you don't want your profile listed in search results or used by AI. Reputable search engines and AI companies follow that request; we can't force the rest.")}
       </p>
+
+      <%!-- Plain language above for everyone; the exact directives folded into a
+      collapsed disclosure for the technical reader. An example beats prose, so
+      show the real signals verbatim. Native <details>, no JS. The example is a
+      plain string interpolated with {...} so HEEx escapes the angle brackets to
+      text instead of parsing <meta> as an element. --%>
+      <details class="group mt-2 text-sm text-slate-600 dark:text-slate-400">
+        <summary class="inline-flex cursor-pointer items-center gap-1 font-medium text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+          <svg
+            class="h-4 w-4 transition-transform group-open:rotate-90"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <path stroke-linecap="round" stroke-linejoin="round" d="m9 5 7 7-7 7" />
+          </svg>
+          {gettext("Exactly what we send")}
+        </summary>
+        <div class="mt-2 space-y-2 pl-5">
+          <p>{gettext("Turn a switch off and the matching opt-out rides along on the pages and responses about you. With both off, for example:")}</p>
+          <% optout_example =
+            ~s(<meta name="robots" content="noindex, noai, noimageai">) <>
+              "\n\nX-Robots-Tag: noindex, noai, noimageai" <>
+              "\nContent-Signal: ai-train=no, search=no, ai-input=no" %>
+          <pre class="overflow-x-auto rounded-lg bg-slate-900 p-3 text-xs leading-relaxed text-slate-100 ring-1 ring-slate-800 dark:bg-slate-950"><code>{optout_example}</code></pre>
+          <p class="text-xs">
+            {gettext("Compliant crawlers honor these; they are not a hard block. A noindexed profile is also kept out of the sitemap and structured data.")}
+          </p>
+        </div>
+      </details>
 
       <.form :let={f} for={@changeset} action={~p"/#{@user}/settings/privacy"} class="mt-5 space-y-5">
         <.form_error changeset={@changeset} />
@@ -27,7 +59,7 @@ which would otherwise render the hint heavier than its own heading. --%>
               {gettext("Allow search engines to index your profile")}
             </span>
             <span class="block font-normal">
-              {gettext("When on, your public profile can appear in Google and other search engines.")}
+              {gettext("When on, your public profile can appear in Google and other search engines. When off, we ask them to leave it out.")}
             </span>
           </span>
         </label>
@@ -39,7 +71,7 @@ which would otherwise render the hint heavier than its own heading. --%>
               {gettext("Allow AI agents and LLMs to use your profile")}
             </span>
             <span class="block font-normal">
-              {gettext("When on, AI assistants and crawlers may read and train on your public profile.")}
+              {gettext("When on, AI assistants and crawlers may read and train on your public profile. When off, we ask them not to.")}
             </span>
           </span>
         </label>
