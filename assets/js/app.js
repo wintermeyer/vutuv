@@ -291,12 +291,12 @@ function markFocusableScrollers() {
 window.addEventListener("DOMContentLoaded", markFocusableScrollers)
 window.addEventListener("phx:page-loading-stop", markFocusableScrollers)
 
-// Tag endorsement upvote pills on the profile (VutuvWeb.UI.tag_vote): each is a
-// CSRF <form data-tag-vote> wrapping a caret+count button. Enhance it to toggle
-// the endorsement over fetch (POST to endorse, DELETE to undo) instead of a full
-// page reload, then pop the count when it changes. The form's action/method are
-// the no-JS fallback; once wired we always intercept. The server returns the
-// fresh {count, endorsed}; flipping data-endorsed restyles the button via the
+// Tag endorsement pills on the profile (VutuvWeb.UI.tag_vote): each is a CSRF
+// <form data-tag-vote> whose single count pill is the toggle button. Enhance it to
+// toggle the endorsement over fetch (POST to endorse, DELETE to undo) instead of a
+// full page reload, then pop the count when it changes. The form's action/method
+// are the no-JS fallback; once wired we always intercept. The server returns the
+// fresh {count, endorsed}; flipping data-endorsed restyles the pill via the
 // data-[endorsed=true]: utilities. Classic controller page, so plain JS (no
 // LiveView here).
 function popCount(el) {
@@ -305,6 +305,21 @@ function popCount(el) {
     [{ transform: "scale(1)" }, { transform: "scale(1.4)" }, { transform: "scale(1)" }],
     { duration: 260, easing: "ease-out" }
   )
+}
+
+// Keep the chip's hover roster in step with a toggle: show/hide the viewer's own
+// pre-rendered row, then enable hover only while at least one row is visible.
+function updateRoster(form, endorsed) {
+  const chip = form.closest(".group")
+  const popover = chip && chip.querySelector("[data-roster]")
+  if (!popover) return
+
+  const selfRow = popover.querySelector("[data-self-endorser]")
+  if (selfRow) selfRow.classList.toggle("hidden", !endorsed)
+
+  const hasRows = popover.querySelector("[data-roster-row]:not(.hidden)") !== null
+  popover.classList.toggle("group-hover:block", hasRows)
+  popover.classList.toggle("group-focus-within:block", hasRows)
 }
 
 function wireTagVote(form) {
@@ -338,10 +353,19 @@ function wireTagVote(form) {
       button.setAttribute("aria-pressed", String(nowEndorsed))
       button.title = nowEndorsed ? form.dataset.labelUnendorse : form.dataset.labelEndorse
 
-      if (countEl.textContent !== String(count)) {
-        countEl.textContent = count
+      // The pill shows a "+" (invite to endorse) only while nobody has, so a
+      // count that drops to 0 reverts to "+" rather than showing a bare "0".
+      const display = !nowEndorsed && count === "0" ? "+" : count
+      if (countEl.textContent.trim() !== display) {
+        countEl.textContent = display
         popCount(countEl)
       }
+
+      // Reflect the change in the hover roster: reveal/hide the viewer's own
+      // pre-rendered row, and only enable hover while the popover has a row to show
+      // (so a freshly-unendorsed tag with no other endorsers stops popping an empty
+      // card on hover).
+      updateRoster(form, nowEndorsed)
     } catch (_e) {
       // Network/permission hiccup: leave the pill as it was; a reload re-syncs.
     } finally {

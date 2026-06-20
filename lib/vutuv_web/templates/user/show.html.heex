@@ -373,16 +373,17 @@ the resulting ~200px rail width. --%>
         {gettext("Add a tag")}
       </.empty_add>
 
-      <%!-- Each tag is a chip wearing the calm brand-blue endorsement-count badge; a
-      logged-in non-owner toggles their endorsement on the caret (TagVote in app.js
-      drives it over fetch), and hovering raises the named voter roster. Endorsements
-      (and their users) are preloaded, so tag_vote works in memory (no per-tag query). --%>
+      <%!-- Each tag is a chip wearing the calm brand-blue endorsement-count pill; a
+      logged-in non-owner toggles their endorsement on the pill itself (TagVote in
+      app.js drives it over fetch), and hovering raises the named voter roster (which
+      includes the viewer the moment they endorse). Endorsements (and their users) are
+      preloaded, so tag_vote works in memory (no per-tag query). --%>
       <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
         <.tag_vote
           :for={user_tag <- @user_tags}
           user={@user}
           user_tag={user_tag}
-          viewer_id={@current_user && @current_user.id}
+          viewer={@current_user}
         />
       </div>
 

@@ -449,6 +449,57 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Ada Lovelace"
   end
 
+  test "a logged-in visitor gets the count pill as an endorse toggle, with a + on zero-count tags",
+       %{conn: conn} do
+    owner = insert_activated_user(username: "endorse.pill.owner")
+
+    # One tag already endorsed (count 1) and one with no endorsements (count 0).
+    voted = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+    insert(:user_tag_endorsement, user_tag: voted, user: insert_activated_user())
+    insert(:user_tag, user: owner, tag: insert(:tag, name: "Erlang", slug: "erlang"))
+
+    {conn, _visitor} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    # The pill itself is the CSRF endorse toggle now (not a read-only span).
+    assert html =~ "data-tag-vote"
+    assert html =~ "data-tag-vote-count"
+    # The zero-count tag (Erlang) shows a "+" so there is something to click.
+    assert html =~ ~r/data-tag-vote-count[^>]*>\s*\+/
+  end
+
+  test "the hover roster pre-renders the viewer's own row (hidden) so endorsing reveals it",
+       %{conn: conn} do
+    # A tag with another endorser, but the visitor has not endorsed it yet. Their own
+    # roster row is rendered up front and hidden, ready for the JS toggle to reveal it
+    # without a page reload (so they see themselves in the roster the moment they vote).
+    owner = insert_activated_user(username: "roster.owner")
+    user_tag = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+    insert(:user_tag_endorsement, user_tag: user_tag, user: insert_activated_user())
+
+    {conn, _visitor} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    assert [self_li] = Regex.run(~r/<li[^>]*data-self-endorser[^>]*>/, html)
+    assert self_li =~ "hidden"
+  end
+
+  test "the viewer's own roster row shows (unhidden) on a tag they have already endorsed",
+       %{conn: conn} do
+    owner = insert_activated_user(username: "roster.owner2")
+    user_tag = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+
+    {conn, visitor} = create_and_login_user(conn)
+    insert(:user_tag_endorsement, user_tag: user_tag, user: visitor)
+
+    html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+    assert [self_li] = Regex.run(~r/<li[^>]*data-self-endorser[^>]*>/, html)
+    refute self_li =~ "hidden"
+    # ...and the roster lists the viewer by name.
+    assert html =~ VutuvWeb.UserHelpers.full_name(visitor)
+  end
+
   test "hides empty profile sections from visitors", %{conn: conn} do
     user = insert_activated_user()
 

@@ -371,17 +371,20 @@ defmodule VutuvWeb.UI do
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
   @doc """
-  The profile **Tags** upvote control: a tag chip whose name links to the tag page,
-  the visible-endorsement count shown as a calm brand-blue badge (the shell unread
-  counter's shape, recoloured — a vouch count is social proof, not an alert), and the
-  named voter roster (`<.voter_popover>`) revealed on hover/focus, pure CSS, no JS.
+  The profile **Tags** chip: a tag whose name links to the tag page, the
+  visible-endorsement count shown as a calm brand-blue pill right after the name (the
+  shell unread counter's shape, recoloured, a vouch count is social proof, not an
+  alert), and the named voter roster (`<.voter_popover>`) revealed on hover/focus,
+  pure CSS, no JS.
 
-  A logged-in non-owner gets a real toggle — a CSRF `<.form>` the `TagVote`
-  enhancement in `app.js` drives over fetch (POST to endorse, DELETE to undo),
-  flipping `data-endorsed` and popping the count badge when it changes. The form's
-  action/method are the no-JS fallback. The owner and logged-out visitors see the
-  same badge read-only. The count is the visible endorsement tally (`compact_count`);
-  the hover roster shows the latest endorsers' avatars and names.
+  For the owner and logged-out visitors the pill is **read-only and hidden at 0**. A
+  logged-in non-owner gets the **same pill as the endorse toggle**: clicking it
+  endorses (POST) or undoes (DELETE); it fills in (brand-600) once endorsed, and a
+  zero-count tag shows a "+" so there is something to click. It is a CSRF `<.form>`
+  (the no-JS fallback) that the `TagVote` enhancement in `app.js` drives over fetch,
+  flipping `data-endorsed` and popping the count when it changes. The count is the
+  visible endorsement tally (`compact_count`); the hover roster shows the latest
+  endorsers' avatars and names.
   """
   attr(:user, :map, required: true, doc: "the profile owner whose tag this is")
 
@@ -390,25 +393,35 @@ defmodule VutuvWeb.UI do
     doc: "a UserTag with `endorsements` (and their `:user`) preloaded"
   )
 
-  attr(:viewer_id, :any, default: nil, doc: "the current user's id, or nil when logged out")
+  attr(:viewer, :any,
+    default: nil,
+    doc: "the current viewer's user struct, or nil when logged out"
+  )
 
   def tag_vote(assigns) do
     user_tag = assigns.user_tag
-    viewer_id = assigns.viewer_id
+    viewer = assigns.viewer
+    viewer_id = viewer && viewer.id
     total = Enum.count(user_tag.endorsements)
-    endorsers = endorsers_for(user_tag, 6)
+    can_vote? = viewer_id && viewer_id != assigns.user.id
+    endorsed? = viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
+    # An actionable viewer's own row is pre-rendered in the popover (hidden until
+    # they endorse, then revealed by the JS toggle), so keep them out of the server
+    # roster to avoid showing them twice.
+    {others, others_total} = roster_for(user_tag, can_vote? && viewer_id, 6)
 
     assigns =
       assigns
-      |> assign(:can_vote?, viewer_id && viewer_id != assigns.user.id)
-      |> assign(
-        :endorsed?,
-        viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
-      )
+      |> assign(:can_vote?, can_vote?)
+      |> assign(:endorsed?, endorsed?)
       |> assign(:total, total)
       |> assign(:count, compact_count(total))
-      |> assign(:endorsers, endorsers)
-      |> assign(:extra, max(total - length(endorsers), 0))
+      |> assign(:others, others)
+      |> assign(:extra, max(others_total - length(others), 0))
+      # Whether the hover roster has anything to show right now. An actionable viewer
+      # on a still-unendorsed, no-other-endorser tag still gets the popover in the DOM
+      # (so the JS can reveal their row on endorse) but with hover disabled until then.
+      |> assign(:roster_active?, others != [] || endorsed?)
 
     ~H"""
     <div class="group relative inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium hover:z-30 focus-within:z-30 dark:bg-brand-900/40">
@@ -418,52 +431,59 @@ defmodule VutuvWeb.UI do
       >
         {UserTag.truncated_name(@user_tag)}
       </.link>
+      <%!-- Actionable viewer (logged-in non-owner): the count pill itself is the
+      endorse toggle. It looks just like the read-only pill until you endorse, then
+      fills in (brand-600); a zero-count tag shows a "+" so there is something to
+      click. The CSRF <.vote_form> is the no-JS fallback (POST endorse / DELETE undo);
+      the TagVote enhancement in app.js drives it over fetch and pops the count. --%>
       <.vote_form :if={@can_vote?} user={@user} user_tag={@user_tag} endorsed?={@endorsed?}>
         <button
           type="submit"
+          data-tag-vote-count
           data-endorsed={to_string(@endorsed?)}
           aria-pressed={to_string(@endorsed?)}
           title={if(@endorsed?, do: gettext("Remove endorsement"), else: gettext("Endorse"))}
           class={[
-            "inline-flex h-5 w-5 items-center justify-center rounded transition-colors",
-            "text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-200",
-            "data-[endorsed=true]:text-brand-600 dark:data-[endorsed=true]:text-brand-300"
+            "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums transition-colors",
+            "bg-brand-100 text-brand-700 hover:bg-brand-200 dark:bg-brand-800 dark:text-brand-100 dark:hover:bg-brand-700",
+            "data-[endorsed=true]:bg-brand-600 data-[endorsed=true]:text-white data-[endorsed=true]:hover:bg-brand-700 dark:data-[endorsed=true]:bg-brand-600"
           ]}
-        >
-          <.caret_up />
-        </button>
-        <.tag_count_badge
-          total={@total}
-          count={@count}
-          class="absolute -right-1.5 -top-1.5 ring-2 ring-white dark:ring-slate-900"
-        />
+        >{if(@total > 0, do: @count, else: "+")}</button>
       </.vote_form>
       <%!-- Read-only count (owner / logged-out): the tally as a calm brand-tint pill
       inline after the name, no endorsement-word so the Tags section stays about tags
-      (tag_wording_test); the actionable button carries the "Endorse" label. --%>
+      (tag_wording_test). The actionable viewer above gets the same pill as a button. --%>
       <span
         :if={!@can_vote? and @total > 0}
         class="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-100 px-1 text-[11px] font-bold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
       >{@count}</span>
       <.voter_popover
-        :if={@total > 0}
+        :if={@total > 0 or @can_vote?}
         user={@user}
         user_tag={@user_tag}
-        endorsers={@endorsers}
+        others={@others}
         extra={@extra}
+        self={@can_vote? && @viewer}
+        self_endorsed?={@endorsed?}
+        active?={@roster_active?}
       />
     </div>
     """
   end
 
-  # The latest endorsers (preloaded users) for a tag, capped. Sorted newest first by
-  # the endorsement id — a UUID v7, so id order is creation order. Relies on the
-  # profile's `visible_with_endorser` preload, so it is in-memory (no per-tag query).
-  defp endorsers_for(user_tag, limit) do
-    user_tag.endorsements
-    |> Enum.sort_by(& &1.id, :desc)
-    |> Enum.map(& &1.user)
-    |> Enum.take(limit)
+  # The endorsers (preloaded users) for a tag's hover roster, newest first by the
+  # endorsement id (a UUID v7, so id order is creation order), optionally excluding
+  # one user (the actionable viewer, who gets their own pre-rendered row). Returns
+  # `{capped_rows, total_rows}` so the caller can compute the "and N more" count.
+  # In-memory off the profile's `visible_with_endorser` preload (no per-tag query).
+  defp roster_for(user_tag, exclude_id, limit) do
+    rows =
+      user_tag.endorsements
+      |> Enum.reject(&(exclude_id && &1.user_id == exclude_id))
+      |> Enum.sort_by(& &1.id, :desc)
+      |> Enum.map(& &1.user)
+
+    {Enum.take(rows, limit), length(rows)}
   end
 
   # An endorser's display name, falling back to their @handle when nameless.
@@ -477,33 +497,6 @@ defmodule VutuvWeb.UI do
     end
   end
 
-  # The count badge — the shell unread counter's shape, but recoloured to calm
-  # brand-blue: a vouch count is informational social proof, not an alert, so it
-  # stays off the reserved coral accent. A count of zero is a quiet neutral
-  # placeholder (it only shows in the actionable case, where the JS needs an element
-  # to update on the first vote). Carries `data-tag-vote-count` so the TagVote JS
-  # updates and pops it on toggle, and lives inside the `<.vote_form>` for the
-  # actionable case so the JS can find it.
-  attr(:total, :integer, required: true)
-  attr(:count, :string, required: true)
-  attr(:class, :string, default: nil)
-
-  defp tag_count_badge(assigns) do
-    ~H"""
-    <span
-      data-tag-vote-count
-      class={[
-        "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums",
-        if(@total > 0,
-          do: "bg-brand-600 text-white",
-          else: "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-        ),
-        @class
-      ]}
-    >{@count}</span>
-    """
-  end
-
   # The hover roster: a small card of the voters' avatars + names that rises above
   # the chip on hover/focus. Visibility is driven by the chip's `group-hover` /
   # `group-focus-within`; each row is a link to the endorser's profile, so the card
@@ -514,23 +507,29 @@ defmodule VutuvWeb.UI do
   # full roster.
   attr(:user, :map, required: true)
   attr(:user_tag, :map, required: true)
-  attr(:endorsers, :list, required: true)
+  attr(:others, :list, required: true, doc: "endorser rows, the viewer excluded")
   attr(:extra, :integer, default: 0)
+  attr(:self, :any, default: nil, doc: "the actionable viewer's user struct, for their own row")
+  attr(:self_endorsed?, :any, default: false)
+  attr(:active?, :boolean, default: true, doc: "enable hover now (else the JS turns it on)")
 
   defp voter_popover(assigns) do
     ~H"""
-    <div class="absolute bottom-full left-0 z-30 mb-2 hidden w-max max-w-[14rem] rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200 after:absolute after:inset-x-0 after:top-full after:h-2 after:content-[''] group-hover:block group-focus-within:block dark:bg-slate-800 dark:ring-slate-700">
+    <div
+      data-roster
+      class={[
+        "absolute bottom-full left-0 z-30 mb-2 hidden w-max max-w-[14rem] rounded-xl bg-white p-2 shadow-lg ring-1 ring-slate-200 after:absolute after:inset-x-0 after:top-full after:h-2 after:content-[''] dark:bg-slate-800 dark:ring-slate-700",
+        @active? && "group-hover:block group-focus-within:block"
+      ]}
+    >
       <ul class="space-y-0.5">
-        <li :for={endorser <- @endorsers}>
-          <.link
-            navigate={~p"/#{endorser}"}
-            class="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
-          >
-            <.avatar user={endorser} size="xs" />
-            <span class="min-w-0 truncate text-xs font-medium text-slate-700 dark:text-slate-200">
-              {endorser_name(endorser)}
-            </span>
-          </.link>
+        <%!-- The viewer's own row is always pre-rendered (when they can endorse) but
+        hidden until they have, so the JS toggle reveals it without a reload. --%>
+        <li :if={@self} data-roster-row data-self-endorser class={[not @self_endorsed? && "hidden"]}>
+          <.roster_entry user={@self} />
+        </li>
+        <li :for={endorser <- @others} data-roster-row>
+          <.roster_entry user={endorser} />
         </li>
       </ul>
       <.link
@@ -541,6 +540,23 @@ defmodule VutuvWeb.UI do
         {gettext("and %{count} more", count: @extra)}
       </.link>
     </div>
+    """
+  end
+
+  # One endorser row in the hover roster: avatar + name, a link to their profile.
+  attr(:user, :map, required: true)
+
+  defp roster_entry(assigns) do
+    ~H"""
+    <.link
+      navigate={~p"/#{@user}"}
+      class="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60"
+    >
+      <.avatar user={@user} size="xs" />
+      <span class="min-w-0 truncate text-xs font-medium text-slate-700 dark:text-slate-200">
+        {endorser_name(@user)}
+      </span>
+    </.link>
     """
   end
 
@@ -572,21 +588,6 @@ defmodule VutuvWeb.UI do
     >
       {render_slot(@inner_block)}
     </.form>
-    """
-  end
-
-  defp caret_up(assigns) do
-    ~H"""
-    <svg
-      class="h-3.5 w-3.5 shrink-0"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2.5"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5" />
-    </svg>
     """
   end
 
