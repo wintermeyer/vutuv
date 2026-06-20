@@ -317,15 +317,15 @@ real Postfix as above.
 
 ## 8. Current status (2026-06-20)
 
-- **The code is implemented and tested** (`Vutuv.Deliverability` + `MailLog` +
-  `Watcher` + `Sweeper`, the admin dashboard, the PIN-screen hint). Both signal
-  sources (log watcher and DSN webhook) funnel through one path.
-- **Not yet switched on in production.** To activate on bremen2: set
-  `BOUNCE_WEBHOOK_TOKEN` (optional, only for the DSN webhook), make
-  `/var/log/mail.log` readable by the app (`usermod -aG adm vutuv3`, then restart
-  the release), and confirm `MAIL_LOG_PATH` (defaults to `/var/log/mail.log`).
-  The watcher starts at end-of-file, so switching it on never re-actions the
-  historical log. Then smoke-test a real bounce (§7).
+- **Live in production** (v7.1.0): `Vutuv.Deliverability` + `MailLog` + `Watcher`
+  + `Sweeper`, the admin dashboard, the PIN-screen hint. Both signal sources (log
+  watcher and DSN webhook) funnel through one path.
+- **Switched on on bremen2.** `vutuv3` was added to the `adm` group and the
+  release restarted, so the watcher reads `/var/log/mail.log` (`MAIL_LOG_PATH`
+  defaults to it). Verified end to end: a real `550 5.1.1` bounce was recorded in
+  the `email_bounces` ledger within ~1s (§7). The watcher starts at end-of-file,
+  so a restart never re-actions the historical log. `BOUNCE_WEBHOOK_TOKEN` / the
+  DSN pipe are unused (the log path was chosen instead).
 - **#760** (SPF/DKIM/DMARC for vutuv.de) is the prerequisite that keeps our own
   mail out of the `5.7.x` bucket.
 
