@@ -23,6 +23,11 @@ config :vutuv, :webhook_deliverer, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false
+# Bounce detection: the log watcher must not touch the filesystem and the
+# unreachable-account sweep would touch the sandbox from outside. Both the
+# Deliverability context and parser are called directly in their tests.
+config :vutuv, :bounce_watcher, false
+config :vutuv, :sweep_unreachable_accounts, false
 # No headless Chromium in tests; the evidence capture is exercised manually.
 config :vutuv, :capture_report_evidence, false
 # Resolve every host to a fixed public IP so the SSRF fetch-time check

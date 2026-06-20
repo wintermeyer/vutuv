@@ -340,6 +340,13 @@ defmodule VutuvWeb.Router do
     get("/api_apps", ApiAppController, :index)
     post("/api_apps/:id/suspend", ApiAppController, :suspend)
     post("/api_apps/:id/unsuspend", ApiAppController, :unsuspend)
+
+    # Email deliverability: bounced/deactivated addresses, accounts frozen
+    # because every address is dead, the bounce ledger and the audit trail.
+    # thaw lifts a freeze; clear lifts an address's undeliverable mark.
+    get("/deliverability", DeliverabilityController, :index)
+    post("/deliverability/users/:id/thaw", DeliverabilityController, :thaw)
+    post("/deliverability/emails/:id/clear", DeliverabilityController, :clear_address)
   end
 
   # /api/2.0 — the authenticated third-party API. Contract: additions are

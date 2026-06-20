@@ -87,6 +87,13 @@ defmodule Vutuv.Accounts.User do
     field(:frozen_at, :naive_datetime)
     field(:suspended_until, :naive_datetime)
     field(:deactivated_at, :naive_datetime)
+    # Deliverability state, managed by Vutuv.Deliverability, never cast from
+    # params. unreachable_at: the account has no deliverable email left (every
+    # address bounced), so it can never receive a login PIN. The profile is
+    # hidden from other members like a moderation freeze, but this is a
+    # deliverability fact, not an abuse ruling. Cleared when a login PIN proves
+    # an address works again, or by an admin.
+    field(:unreachable_at, :naive_datetime)
     field(:tag_list, :string, virtual: true)
 
     has_many(:search_query_requesters, Vutuv.Search.SearchQueryRequester)

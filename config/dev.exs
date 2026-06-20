@@ -58,3 +58,8 @@ config :vutuv, :dev_mailbox, true
 #     -H "Content-Type: message/rfc822" --data-binary @dsn.eml \
 #     http://localhost:4000/webhooks/bounces
 config :vutuv, :bounce_webhook_token, "dev-bounce-webhook-token"
+
+# No Postfix mail log to tail in dev; the log watcher stays off (it would also
+# start with no configured path and just :ignore). Test bounce handling via the
+# webhook above, or the Deliverability context directly.
+config :vutuv, :bounce_watcher, false

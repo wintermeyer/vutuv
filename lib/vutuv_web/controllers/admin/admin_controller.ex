@@ -22,7 +22,8 @@ defmodule VutuvWeb.Admin.AdminController do
       moderation_count: Vutuv.Moderation.open_queue_count(),
       ads_enabled: Vutuv.Ads.enabled?(),
       pending_ads_count: if(Vutuv.Ads.enabled?(), do: Vutuv.Ads.pending_ads_count(), else: 0),
-      api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count)
+      api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count),
+      frozen_accounts_count: Vutuv.Deliverability.frozen_count()
     )
   end
 end

@@ -934,10 +934,15 @@ defmodule Vutuv.Moderation do
 
   @doc """
   Whether this profile (and everything it owns) is hidden from other members:
-  frozen pending review, currently suspended, or deactivated for good.
+  frozen pending review, currently suspended, deactivated for good, or frozen
+  because it is unreachable (every email bounced; see `Vutuv.Deliverability`).
+  The unreachable case is a deliverability fact, not a moderation ruling, but it
+  hides the profile the same way - a zombie account nobody can reach should not
+  sit in the public network.
   """
   def account_hidden?(%User{} = user) do
-    user.frozen_at != nil or user.deactivated_at != nil or login_block(user) != nil
+    user.frozen_at != nil or user.deactivated_at != nil or user.unreachable_at != nil or
+      login_block(user) != nil
   end
 
   @doc """

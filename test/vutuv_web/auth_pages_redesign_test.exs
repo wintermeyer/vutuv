@@ -48,6 +48,21 @@ defmodule VutuvWeb.AuthPagesRedesignTest do
     end
   end
 
+  describe "the PIN entry screen" do
+    test "hints to try a different address (for a member whose inbox died)", %{conn: conn} do
+      # The screen renders identically whether or not the address is registered
+      # (enumeration guard), so an arbitrary address reaches it. The hint must
+      # always be present so a member whose address bounced knows what to do.
+      body =
+        conn
+        |> post(~p"/login", session: %{"email" => "whoever@example.com"})
+        |> html_response(200)
+
+      assert body =~ "may no longer be working"
+      assert body =~ "Use a different email address"
+    end
+  end
+
   describe "the stylesheets" do
     test "carry no .imagebox rules anymore" do
       refute File.read!(@components_css) =~ "imagebox",

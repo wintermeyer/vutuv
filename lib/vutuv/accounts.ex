@@ -16,6 +16,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Accounts.UsernameChange
+  alias Vutuv.Deliverability
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
@@ -634,8 +635,12 @@ defmodule Vutuv.Accounts do
       |> verify_pin(pin)
 
     # The PIN arrived by mail and was typed back: delivery to this address
-    # provably works, so a bounce-set undeliverable mark is stale.
-    with {:ok, _user} <- result, do: Bounces.clear(email)
+    # provably works, so a bounce-set undeliverable mark is stale. If the
+    # account was frozen as unreachable, a working address thaws it.
+    with {:ok, user} <- result do
+      Bounces.clear(email)
+      if user.unreachable_at, do: Deliverability.reassess_user(user)
+    end
 
     result
   end

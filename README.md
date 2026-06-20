@@ -94,7 +94,7 @@ A logged-in member without admin rights who opens `/admin` gets a 403 page that 
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
 - **Assets**: esbuild + Tailwind CSS v4; dark mode follows the system (`prefers-color-scheme`, no toggle) — legacy pages get their dark styles centrally from `assets/css/components.css`
 - **HTTP server**: Bandit
-- **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers and the bounce envelope sender (`Sender: bounces@vutuv.de` → SMTP MAIL FROM). **Notification mail is opt-out**: the unread-message nudge respects `users.notification_emails?`, carries RFC 8058 one-click unsubscribe headers and a tokenized footer link (`/unsubscribe/:token`, no login needed); transactional mail (PINs, moderation) cannot be opted out of. **Bounces feed back**: a failure DSN POSTed to `/webhooks/bounces` (by the production Postfix pipe, see Deployment) marks the address undeliverable, `deliver/1` then drops automatic mail to it; PIN mail still sends, and a successful login PIN through the address clears the mark
+- **Email**: Swoosh with compile-time EEx text templates; all mail built from `Emailer.base_email/0` and sent through one `Emailer.deliver/1` chokepoint that stamps the auto-generated robot headers and the bounce envelope sender (`Sender: bounces@vutuv.de` → SMTP MAIL FROM). **Notification mail is opt-out**: the unread-message nudge respects `users.notification_emails?`, carries RFC 8058 one-click unsubscribe headers and a tokenized footer link (`/unsubscribe/:token`, no login needed); transactional mail (PINs, moderation) cannot be opted out of. **Bounces feed back** (`Vutuv.Deliverability`): the production log watcher tails Postfix's `mail.log` (the `/webhooks/bounces` DSN endpoint feeds the same path) and marks a hard-bounced address undeliverable, `deliver/1` then drops automatic mail to it; PIN mail still sends, and a successful login PIN through the address clears the mark. A confirmed account whose **every** address is dead is frozen as unreachable (hidden from others, owner and admins still see it); admins track and undo all of it at `/admin/deliverability`. Full design in [`docs/production-email-and-bounces.md`](docs/production-email-and-bounces.md)
 - **Images**: avatars, profile cover photos, URL screenshots and post images are stored on local disk and processed with [`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` / `Vutuv.Cover` / `Vutuv.Screenshot` / `Vutuv.PostImageStore`. **Every served version is AVIF**; the resolution, crop and quality of every version live in one module, `Vutuv.Uploads.Spec`, so a future format/compression change is a Spec edit plus one `mix vutuv.images.regenerate` run. Every uploaded **original** is kept verbatim (format + metadata) under the private `<UPLOADS_DIR_PREFIX>/originals/` tree (`Vutuv.Uploads.Originals`) as the source for re-deriving — it must **never** be served (no `Plug.Static` mount, no nginx alias; a regression test enforces this). Cover photos are uploaded via the Edit profile form and served from `<UPLOADS_DIR_PREFIX>/covers/` (nginx needs a `location /covers/` alias in production, mirroring `/avatars/`)
 - **Fingerprinted avatar/cover filenames**: avatar and cover files are named `<handle>-<version>-<fingerprint>.avif` (e.g. `swintermeyer-medium-1a2b3c4d.avif`), where the fingerprint is `sha256(original)[0..11]`. The handle makes a downloaded file carry the username; the fingerprint makes the URL immutable, so it needs no `?v=` cache-buster and the **existing** nginx `alias` serves it directly (no rewrite). The fingerprint is stored in `users.avatar_fingerprint` / `cover_fingerprint`; a username change re-derives the files under the new handle. A row with no fingerprint has not been migrated yet and serves the legacy `avatar_<version>.avif?v=...` URL unchanged. The migration is **expand/contract**: the regenerator writes the new files and **keeps** the legacy ones (so the previous release and a rollback keep serving them); once the scheme is confirmed healthy in production, `mix vutuv.images.sweep_legacy` (`Vutuv.Release.sweep_legacy_images()`) deletes the legacy files — a deliberate, manual step, never part of the deploy
 - **URL screenshots**: rendered by local headless Chromium, wrapped in a browser window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on `$PATH`)
@@ -118,6 +118,7 @@ Business logic is organized into Phoenix context modules under `lib/vutuv/`:
 | `Vutuv.Chat` | Conversation, Participant, Message | 1:1 direct messages, message requests, unread email notifier |
 | `Vutuv.Moderation` | Case, Report, Strike | Reports, the content freezer, the strike ladder, reporter trust |
 | `Vutuv.Notifications` | Emailer | Email notifications |
+| `Vutuv.Deliverability` | Event, MailLog, Watcher, Sweeper | Bounce detection: deactivate dead addresses, freeze unreachable accounts, admin dashboard |
 | `Vutuv.Ads` | Ad | The daily text ad: booking, billing record, serving |
 
 ## Running tests
@@ -200,24 +201,25 @@ location ~ ^/internal_post_images/(?<token>[A-Za-z0-9_-]+)/(?<version>thumb|feed
 
 Uploads run over the LiveView websocket (no `client_max_body_size` change needed for the 6 MB images unless the websocket location caps buffers unusually small).
 
-### Email bounce handling (one-time setup)
+### Email bounce handling
 
-All outbound mail uses `bounces@vutuv.de` as its SMTP envelope sender, so
-every DSN lands in one mailbox. Pipe it into the app:
+All outbound mail uses `bounces@vutuv.de` as its SMTP envelope sender. When a
+recipient address dies, vutuv stops mailing it (and, eventually, freezes
+accounts that have become permanently unreachable). The signal comes from
+**Postfix's own delivery log** (`/var/log/mail.log`) — the production host
+(`bremen2`) is a multi-tenant relay and `vutuv.de`'s MX is on Google, so a DSN
+to `bounces@vutuv.de` would not reach a local pipe anyway. A confirmed hard
+bounce feeds the existing `POST /webhooks/bounces` endpoint, which marks the
+address undeliverable (`emails.undeliverable_at`, shown to the owner on their
+emails page): automatic mail to it is dropped, PIN mail still sends, and a
+successful login PIN through the address clears the mark. Without
+`BOUNCE_WEBHOOK_TOKEN` the endpoint 404s and bounce handling is simply off.
 
-1. `install -m 755 scripts/postfix/vutuv-bounce /usr/local/bin/vutuv-bounce`
-2. Generate a token, store it for both sides:
-   - `/etc/vutuv/bounce-webhook-token` (chmod 600, read by the pipe script)
-   - `BOUNCE_WEBHOOK_TOKEN=...` in the app env file (`/var/www/vutuv/shared/.env`)
-3. Route the address into the pipe, e.g. via `/etc/aliases`:
-   `bounces: "|/usr/local/bin/vutuv-bounce"` + `newaliases` (make sure
-   `bounces@vutuv.de` resolves to local delivery in your Postfix setup).
-
-Without `BOUNCE_WEBHOOK_TOKEN` the endpoint 404s and bounce handling is
-simply off. Failure DSNs mark the address undeliverable (`emails.
-undeliverable_at`, visible to the owner on their emails page); automatic
-mail to it is dropped, PIN mail still sends, and a successful login PIN
-through the address clears the mark.
+The full topology, DSN-code taxonomy, the decision not to change the MX, and a
+new-server runbook live in
+[`docs/production-email-and-bounces.md`](docs/production-email-and-bounces.md).
+**Bounce handling is not yet switched on in production** (no token, no
+detector).
 
 ## Maintenance / ops tasks
 

@@ -267,6 +267,22 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def email_bounce_factory do
+    %Vutuv.Notifications.EmailBounce{
+      email_value: sequence(:bounce_value, &"dead#{&1}@example.com"),
+      action: "failed",
+      status: "5.1.1",
+      raw: "550 5.1.1 User unknown"
+    }
+  end
+
+  def deliverability_event_factory do
+    %Vutuv.Deliverability.Event{
+      action: "account_frozen",
+      detail: %{}
+    }
+  end
+
   @doc """
   Inserts a conversation between the two users with both participant rows,
   taking care of the sorted-pair invariant. `initiator` defaults to `a`.

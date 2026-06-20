@@ -24,11 +24,8 @@ defmodule Vutuv.Notifications.Bounces do
   require Logger
 
   alias Vutuv.Accounts.Email
-  alias Vutuv.Notifications.EmailBounce
+  alias Vutuv.Deliverability
   alias Vutuv.Repo
-
-  # DSNs embed the bounced original; cap what we store of pathological ones.
-  @max_raw_bytes 100_000
 
   @doc """
   Records one raw DSN message. Returns `{:ok, :failed}` when a failure was
@@ -38,18 +35,13 @@ defmodule Vutuv.Notifications.Bounces do
   def record(raw) when is_binary(raw) do
     case parse(raw) do
       {recipients, "failed", status} ->
-        now = NaiveDateTime.utc_now(:second)
-
+        # The DSN webhook and the production log watcher share one path: each
+        # confirmed failure goes through Vutuv.Deliverability, which appends to
+        # the bounce ledger, marks the address undeliverable, and re-assesses
+        # the owner (possibly freezing an unreachable account).
         for address <- recipients do
-          Repo.insert!(%EmailBounce{
-            email_value: address,
-            action: "failed",
-            status: status,
-            raw: String.slice(raw, 0, @max_raw_bytes)
-          })
-
-          marked = mark_undeliverable(address, now)
-          Logger.warning("Email bounce: #{address} failed (#{status}), marked #{marked} row(s)")
+          Deliverability.record_hard_bounce(address, status, raw)
+          Logger.warning("Email bounce: #{address} failed (#{status})")
         end
 
         {:ok, :failed}
@@ -82,14 +74,6 @@ defmodule Vutuv.Notifications.Bounces do
 
     if count > 0, do: Logger.info("Email bounce: cleared undeliverable mark for #{address}")
     :ok
-  end
-
-  defp mark_undeliverable(address, now) do
-    {count, _} =
-      from(e in Email, where: e.value == ^address)
-      |> Repo.update_all(set: [undeliverable_at: now])
-
-    count
   end
 
   # Pulls the per-recipient report fields out of the message/delivery-status

@@ -93,6 +93,33 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="flex items-center gap-2">
+        {gettext("Deliverability")}
+        <.count_badge count={@frozen_accounts_count} />
+      </h1>
+      <a
+        href={~p"/admin/deliverability"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-deliverability-link"
+      >
+        {gettext("Open deliverability")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      <%= if @frozen_accounts_count == 0 do %>
+        {gettext("No accounts frozen for unreachability. Bounced addresses and the audit trail are here too.")}
+      <% else %>
+        {ngettext(
+          "%{count} account is frozen because every email address bounced.",
+          "%{count} accounts are frozen because every email address bounced.",
+          @frozen_accounts_count
+        )}
+      <% end %>
+    </p>
+  </section>
+
   {VutuvWeb.Admin.UsernameHTML.index(%{conn: @conn})}
   {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

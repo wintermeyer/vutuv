@@ -63,4 +63,12 @@ if config_env() == :prod do
   # README "Email bounce handling"). Unset => the endpoint 404s, bounce
   # handling is simply off; nothing else breaks.
   config :vutuv, :bounce_webhook_token, System.get_env("BOUNCE_WEBHOOK_TOKEN")
+
+  # The Postfix delivery log the bounce watcher tails (see
+  # docs/production-email-and-bounces.md). The watcher needs read access to it
+  # (add the app user to the `adm` group). Set MAIL_LOG_PATH="" to turn the
+  # watcher off (it then starts and immediately :ignores).
+  config :vutuv, Vutuv.Deliverability.Watcher,
+    path: System.get_env("MAIL_LOG_PATH", "/var/log/mail.log"),
+    poll_ms: String.to_integer(System.get_env("MAIL_LOG_POLL_MS") || "5000")
 end

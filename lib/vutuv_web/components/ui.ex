@@ -98,24 +98,37 @@ defmodule VutuvWeb.UI do
   PIN for the pending email (rate limited); "Use a different email address"
   abandons the pending login so the visitor is no longer pinned to the PIN form
   and can sign in or register as someone else. Both are CSRF-protected POSTs.
+
+  The hint above them is deliberately generic and always shown: it nudges a
+  member whose address has stopped working (a bounced, now-undeliverable inbox)
+  toward another of their addresses, without ever revealing whether the typed
+  address is registered - the PIN screen must stay byte-identical for known and
+  unknown addresses (the enumeration guard in `Vutuv.Accounts`).
   """
   def pin_actions(assigns) do
     ~H"""
-    <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-      <.form for={%{}} action={~p"/login/resend"} method="post" id="resend-pin-form">
-        <button type="submit" class="font-semibold text-brand-600 hover:text-brand-700">
-          {gettext("Resend PIN")}
-        </button>
-      </.form>
-      <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">&middot;</span>
-      <.form for={%{}} action={~p"/login/cancel"} method="post" id="cancel-pin-form">
-        <button
-          type="submit"
-          class="font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
-        >
-          {gettext("Use a different email address")}
-        </button>
-      </.form>
+    <div class="mt-4 text-sm">
+      <p class="text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Not getting the PIN? That email address may no longer be working. If you have added other addresses to your vutuv account, try logging in with one of those instead."
+        )}
+      </p>
+      <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <.form for={%{}} action={~p"/login/resend"} method="post" id="resend-pin-form">
+          <button type="submit" class="font-semibold text-brand-600 hover:text-brand-700">
+            {gettext("Resend PIN")}
+          </button>
+        </.form>
+        <span aria-hidden="true" class="text-slate-300 dark:text-slate-600">&middot;</span>
+        <.form for={%{}} action={~p"/login/cancel"} method="post" id="cancel-pin-form">
+          <button
+            type="submit"
+            class="font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+          >
+            {gettext("Use a different email address")}
+          </button>
+        </.form>
+      </div>
     </div>
     """
   end
