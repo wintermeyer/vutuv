@@ -2,25 +2,20 @@ defmodule Vutuv.Repo.Migrations.ConvertPendingConnectionsToFollows do
   use Ecto.Migration
 
   @moduledoc """
-  Follow/connect simplification: the mutual connection request/accept flow is
-  gone — there is only "follow", and a mutual follow *is* the connection
-  ("vernetzt"). Outstanding pending requests carried intent ("I want a
-  relationship"), so preserve each as a follow from the requester to the other
-  party; a follow-back then makes the pair vernetzt. Accepted connections
-  already have both follow edges; declined ones held no intent worth keeping.
+  Follow/connect simplification data migration, **retired to a no-op**. It once
+  promoted every still-pending connection request to a follow from the requester
+  to the other party (via
+  `Vutuv.Social.convert_pending_connections_to_follows/0`), so the requester's
+  intent survived the removal of the request/accept flow. The `connections`
+  table it read has since been dropped and the helper it called is gone, so the
+  body is retired.
 
-  The work lives in `Vutuv.Social.convert_pending_connections_to_follows/0` so
-  it is unit-tested; it is idempotent. On a fresh database `follows`/
-  `connections` are empty here, so this inserts nothing.
+  It is safe to retire: in production this already ran (deploy 1 of the
+  simplification), and on any from-scratch setup the `connections` table is
+  empty here, so it converted nothing. The original logic lives in this file's
+  git history.
   """
 
-  def up do
-    Vutuv.Social.convert_pending_connections_to_follows()
-  end
-
-  def down do
-    # Not reversible: a converted follow is indistinguishable from one a member
-    # later created through the app, so there is nothing safe to undo.
-    :ok
-  end
+  def up, do: :ok
+  def down, do: :ok
 end

@@ -11,9 +11,8 @@ defmodule Vutuv.Chat.Conversation do
     # per pair. All four user fields are set programmatically, never cast.
     belongs_to(:user_a, Vutuv.Accounts.User)
     belongs_to(:user_b, Vutuv.Accounts.User)
-    # The party who opened the conversation — the same role
-    # `Vutuv.Social.Connection.requested_by` plays in the connection
-    # lifecycle (two names for historical reasons; mind it when grepping).
+    # The party who opened the conversation (set when the first message is
+    # sent). A standing role on the conversation, not a per-message field.
     belongs_to(:initiator, Vutuv.Accounts.User)
 
     field(:status, :string, default: "pending")

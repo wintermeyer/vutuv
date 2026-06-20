@@ -80,22 +80,20 @@ Entry `id`s are stable — store them to update or delete later.
 
 ## The social graph: follows and connections
 
-Two distinct relationships — do not conflate them:
+Follow is the only relationship primitive:
 
 * A **follow** is one-directional and needs no consent (Twitter-style).
   Following someone puts their posts into your feed. Idempotent
-  `PUT`/`DELETE /users/:username/follow`.
-* A **connection** is mutual and consented (LinkedIn-style). One side
-  requests, the other accepts or declines. States you will see in
-  `relationship` responses: `none`, `pending_sent`, `pending_received`,
-  `accepted`, `declined`. Accepting a connection also materializes the
-  follow in both directions (each side can later unfollow independently
-  without breaking the connection). Declined requests have a cooldown
-  before they can be re-sent; two members requesting each other
-  auto-accepts.
+  `PUT`/`DELETE /users/:username/follow`. A follow can be **muted**
+  (`PUT /follows/:id/mute`), which keeps the relationship but drops that
+  person's posts from your feed.
+* A **connection** ("vernetzt") is not a separate record: two members are
+  connected exactly when they **follow each other**. There is no request,
+  accept or decline step. A follow-back is what makes a pair connected, and
+  either side unfollowing ends it.
 
 `GET /users/:username/relationship` answers your complete standing with one
-member: `following`, `followed_by` and the connection state.
+member: `following`, `followed_by` and `connected` (the mutual-follow flag).
 
 A member can also **block** another — deliberately opaque to the other
 side; see [Visibility](#visibility-through-the-members-eyes).
@@ -168,8 +166,8 @@ spam:
 ## Notifications
 
 A derived, read-only feed of what happened to *you*: new followers,
-endorsements, connection requests and acceptances, replies, likes, and
-moderation notices. Entries carry a `kind`, the acting member and a
+endorsements, new connections (a follow-back made you vernetzt), replies,
+likes, and moderation notices. Entries carry a `kind`, the acting member and a
 timestamp. The `unread` count matches the bell icon on the website;
 `POST /notifications/read` moves your read marker. Webhook-capable apps
 get most of this pushed instead — see [webhooks](/developers/webhooks).

@@ -2,25 +2,18 @@ defmodule Vutuv.Repo.Migrations.BackfillConnectionsFromMutualFollows do
   use Ecto.Migration
 
   @moduledoc """
-  Legacy data migration: every existing mutual follow (A↔B both directions)
-  was already treated as a "connection" by the old notification logic, so we
-  promote each to a real, accepted `Connection`. One-way follows stay plain
-  follows. The follow edges are left untouched.
+  Legacy data migration, **retired to a no-op**. It once promoted every mutual
+  follow to an accepted row in the `connections` table (via
+  `Vutuv.Social.backfill_connections_from_mutual_follows/0`). That table has
+  since been dropped (the follow/connect simplification: "vernetzt" is a mutual
+  follow, derived from `follows`), and the helper it called is gone, so the
+  body is retired.
 
-  The work lives in `Vutuv.Social.backfill_connections_from_mutual_follows/0`
-  so it is unit-tested (`test/vutuv/connections_backfill_test.exs`); it is
-  idempotent, so a re-run inserts nothing new.
+  It is safe to retire: in production this already ran, and on any from-scratch
+  setup it only ever saw an empty `follows` table here, so it inserted nothing.
+  The original logic lives in this file's git history.
   """
 
-  def up do
-    # Disable the per-statement transaction guard is unnecessary here — the
-    # backfill is a single idempotent insert_all.
-    Vutuv.Social.backfill_connections_from_mutual_follows()
-  end
-
-  def down do
-    # Not reversible: a backfilled connection is indistinguishable from one
-    # later created through the app, so there is nothing safe to undo.
-    :ok
-  end
+  def up, do: :ok
+  def down, do: :ok
 end

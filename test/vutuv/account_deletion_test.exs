@@ -22,8 +22,7 @@ defmodule Vutuv.AccountDeletionTest do
   alias Vutuv.Moderation
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
   alias Vutuv.Repo
-  alias Vutuv.Social
-  alias Vutuv.Social.{Connection, Follow}
+  alias Vutuv.Social.Follow
   alias Vutuv.Tags.{UserTag, UserTagEndorsement}
   alias Vutuv.Uploads
   alias Vutuv.Uploads.Originals
@@ -151,9 +150,6 @@ defmodule Vutuv.AccountDeletionTest do
     assert count(from(s in UsernameChange, where: s.user_id == ^user.id)) == 0
 
     assert count(from(f in Follow, where: f.follower_id == ^user.id or f.followee_id == ^user.id)) ==
-             0
-
-    assert count(from(c in Connection, where: c.user_a_id == ^user.id or c.user_b_id == ^user.id)) ==
              0
 
     assert count(from(p in Post, where: p.user_id == ^user.id)) == 0

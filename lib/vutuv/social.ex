@@ -1,14 +1,13 @@
 defmodule Vutuv.Social do
   @moduledoc """
-  The Social context. Handles follows (follow/unfollow), the mutual
-  connection lifecycle (request/accept/decline), groups, and memberships.
+  The Social context. Handles follows (follow/unfollow/mute), blocks, the
+  "vernetzt" (connected) relationship, and the user search/listing queries.
 
-  **Follow vs connection.** A *follow* (`Vutuv.Social.Follow`) is a
+  **Follow is the only relationship.** A *follow* (`Vutuv.Social.Follow`) is a
   one-directional subscription: follow anyone, no approval, it decides whose
-  posts reach your feed. A *connection* (`Vutuv.Social.Connection`) is a
-  symmetric, consented relationship: you request it, the other party accepts,
-  and acceptance auto-creates a follow in both directions — which either side
-  may then drop (`unfollow!/2`) while staying connected.
+  posts reach your feed. Two people are *connected* ("vernetzt") exactly when
+  they follow each other; it is derived from the two follow edges
+  (`connected?/2`), never stored as a separate record.
   """
 
   import Ecto.Query
@@ -18,7 +17,6 @@ defmodule Vutuv.Social do
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias Vutuv.Social.Block
-  alias Vutuv.Social.Connection
   alias Vutuv.Social.Follow
   alias Vutuv.Social.UserBookmark
   alias Vutuv.Social.UserLike
@@ -708,135 +706,4 @@ defmodule Vutuv.Social do
       where: account_confirmed_row(o) and not account_hidden_row(o)
     )
   end
-
-  @doc """
-  One-time backfill (legacy data migration): promote every existing mutual
-  follow (A↔B both directions) to an accepted `Connection`. The pair is stored
-  canonically and deduped; `requested_by` is the earlier follower and
-  `status_changed_at` the later of the two follow times — the moment the
-  relationship effectively became mutual. Idempotent (existing connections are
-  skipped). Returns the number of connections inserted.
-  """
-  def backfill_connections_from_mutual_follows do
-    now = now()
-
-    rows =
-      Repo.all(
-        from(f1 in Follow,
-          join: f2 in Follow,
-          on: f2.follower_id == f1.followee_id and f2.followee_id == f1.follower_id,
-          # follower < followee keeps exactly one row per mutual pair (the
-          # canonical orientation) and drops the reciprocal duplicate.
-          where: f1.follower_id < f1.followee_id,
-          select: %{
-            a: f1.follower_id,
-            b: f1.followee_id,
-            # Cast the fragment outputs so they load as a UUID v7 string and a
-            # NaiveDateTime — otherwise they come back as raw Postgrex values
-            # that insert_all cannot dump back through the schema types.
-            requested_by:
-              type(
-                fragment(
-                  "CASE WHEN ? <= ? THEN ? ELSE ? END",
-                  f1.inserted_at,
-                  f2.inserted_at,
-                  f1.follower_id,
-                  f2.follower_id
-                ),
-                Vutuv.UUIDv7
-              ),
-            changed_at:
-              type(fragment("GREATEST(?, ?)", f1.inserted_at, f2.inserted_at), :naive_datetime)
-          }
-        )
-      )
-
-    entries =
-      Enum.map(rows, fn r ->
-        %{
-          id: Vutuv.UUIDv7.generate(),
-          user_a_id: r.a,
-          user_b_id: r.b,
-          requested_by_id: r.requested_by,
-          status: "accepted",
-          status_changed_at: r.changed_at,
-          inserted_at: now,
-          updated_at: now
-        }
-      end)
-
-    {count, _} =
-      Repo.insert_all(Connection, entries,
-        on_conflict: :nothing,
-        conflict_target: [:user_a_id, :user_b_id]
-      )
-
-    count
-  end
-
-  @doc """
-  One-time data migration for the follow/connect simplification: the mutual
-  connection request/accept flow is gone, so promote every still-*pending*
-  connection request to a follow from the requester to the other party. The
-  requester's intent ("I want a relationship with you") survives as a follow,
-  and a follow-back now makes the pair vernetzt. Accepted connections already
-  carry both follow edges; declined ones held no intent worth keeping.
-
-  Reads the `connections` table schemaless (the live model no longer touches it;
-  it is dropped in a later expand/contract deploy), mints v7 ids per the
-  chokepoint, and is idempotent — the `(follower, followee)` unique index makes
-  the `ON CONFLICT` a no-op for a pair that already follows. Returns the number
-  of follows inserted.
-  """
-  def convert_pending_connections_to_follows do
-    now = now()
-
-    rows =
-      Repo.all(
-        from(c in "connections",
-          where: c.status == "pending",
-          select: %{
-            requester: type(c.requested_by_id, Vutuv.UUIDv7),
-            followee:
-              type(
-                fragment(
-                  "CASE WHEN ? = ? THEN ? ELSE ? END",
-                  c.requested_by_id,
-                  c.user_a_id,
-                  c.user_b_id,
-                  c.user_a_id
-                ),
-                Vutuv.UUIDv7
-              )
-          }
-        )
-      )
-
-    entries =
-      Enum.map(rows, fn r ->
-        %{
-          id: Vutuv.UUIDv7.generate(),
-          follower_id: r.requester,
-          followee_id: r.followee,
-          inserted_at: now,
-          updated_at: now
-        }
-      end)
-
-    case entries do
-      [] ->
-        0
-
-      entries ->
-        {count, _} =
-          Repo.insert_all(Follow, entries,
-            on_conflict: :nothing,
-            conflict_target: [:follower_id, :followee_id]
-          )
-
-        count
-    end
-  end
-
-  defp now, do: NaiveDateTime.utc_now(:second)
 end
