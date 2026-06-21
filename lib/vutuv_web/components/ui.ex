@@ -733,22 +733,25 @@ defmodule VutuvWeb.UI do
     <%!-- The outbound half fills the left of the <.follow_relationship> pill;
     flex-1 keeps it the same width as the inbound half. Its colour encodes your
     follow state: a green "active" cell (with a check) once you follow, the brand
-    call-to-action while you do not. --%>
+    call-to-action while you do not. The `title` carries the label for hover and
+    screen readers. --%>
     <.link
       :if={is_binary(@follow_id)}
       href={~p"/follows/#{@follow_id}"}
       method="delete"
-      class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap bg-emerald-700 px-2 py-1.5 text-white hover:bg-emerald-800"
+      title={gettext("Following")}
+      class="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-emerald-700 px-2 py-1.5 text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
     >
-      <span aria-hidden="true">✓</span>{gettext("Following")}
+      <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Following")}</span>
     </.link>
     <.link
       :if={!is_binary(@follow_id)}
       href={~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
       method="post"
-      class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap bg-brand-600 px-2 py-1.5 text-white hover:bg-brand-700"
+      title={gettext("Follow")}
+      class="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-brand-600 px-2 py-1.5 text-white transition-colors hover:bg-brand-700 active:bg-brand-800"
     >
-      {gettext("Follow")}
+      <span class="whitespace-nowrap">{gettext("Follow")}</span>
     </.link>
     """
   end
@@ -804,15 +807,20 @@ defmodule VutuvWeb.UI do
       |> assign(:seam_title, seam_title)
 
     ~H"""
-    <%!-- Fixed-width pill with two equal-width halves (flex-1) so it never changes
-    size between states. Green with a check = an active follow direction, grey
-    with a cross = an inactive one; a mutual "vernetzt" follow lights both halves
-    green and the ring emerald. The seam glyph (· → ← ⇄) shows the direction. --%>
+    <%!-- Two equal-width halves (flex-1) whose size never changes between follow
+    states. Green with a check = an active follow direction, grey with a cross =
+    an inactive one; a mutual "vernetzt" follow lights both halves green and the
+    ring emerald. The seam glyph (· → ← ⇄) shows the direction. The pill is a
+    horizontal row at every width. On a phone it sizes to its labels (`w-auto`,
+    each half one line via whitespace-nowrap) with the seam hidden, so it stays
+    one short row in the white area beside the avatar (measured ~115px at a 374px
+    viewport, well inside the space below the cover) rather than riding up into the
+    cover banner. From sm up it is the fixed w-80 pill with the seam. --%>
     <div class={[
-      "inline-flex w-80 items-stretch overflow-hidden rounded-lg text-sm font-semibold ring-1",
+      "flex w-52 items-stretch divide-x overflow-hidden rounded-lg text-xs font-semibold ring-1 sm:w-80 sm:text-sm",
       if(@mutual?,
-        do: "ring-emerald-300 dark:ring-emerald-700",
-        else: "ring-slate-200 dark:ring-slate-700"
+        do: "divide-emerald-300 ring-emerald-300 dark:divide-emerald-700 dark:ring-emerald-700",
+        else: "divide-slate-300 ring-slate-200 dark:divide-slate-600 dark:ring-slate-700"
       )
     ]}>
       <.follow_button
@@ -837,16 +845,22 @@ defmodule VutuvWeb.UI do
       <span
         title={if(@follows_viewer?, do: gettext("This member follows you"), else: gettext("This member doesn't follow you"))}
         class={[
-          "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-1.5",
+          "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden px-2 py-1.5",
           if(@follows_viewer?,
             do: "bg-emerald-700 text-white",
             else: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
           )
         ]}
       >
-        <span aria-hidden="true">{if @follows_viewer?, do: "✓", else: "✗"}</span>{if @follows_viewer?,
-          do: gettext("Follows you"),
-          else: gettext("Doesn't follow you")}
+        <%= if @follows_viewer? do %>
+          <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Follows you")}</span>
+        <% else %>
+          <%!-- They don't follow you: the full label, no cross. Dropping the ✗ (and
+          the segment divider added on the pill) keeps this half from blending into
+          the seam glyph beside it. It can truncate on a very narrow phone; the
+          title preserves the meaning. --%>
+          <span class="whitespace-nowrap">{gettext("Doesn't follow you")}</span>
+        <% end %>
       </span>
     </div>
     """

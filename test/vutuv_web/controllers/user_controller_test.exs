@@ -111,16 +111,34 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "md:col-span-2"
   end
 
-  test "the profile header's action buttons wrap on narrow screens", %{conn: conn} do
-    # A visitor sees up to three controls (Connect/Follow/Message) beside the
-    # avatar; without flex-wrap the last one is clipped off a 390px phone.
+  test "the profile header's action cluster is pinned beside the avatar on one row",
+       %{conn: conn} do
+    # The cluster is right-aligned in the avatar row (ml-auto), one short row. It
+    # now holds only the follow pill (the ⋯ menu moved to the name row), so the
+    # pill stays in the white space beside the avatar rather than riding up into
+    # the cover banner.
     {conn, _visitor} = create_and_login_user(conn)
     profile = insert_activated_user()
     html = conn |> get(~p"/#{profile}") |> html_response(200)
 
     assert html =~ ~s(id="profile-actions")
     assert [actions_div] = Regex.run(~r/<div id="profile-actions"[^>]*>/, html)
-    assert actions_div =~ "flex-wrap"
+    assert actions_div =~ "ml-auto"
+    refute actions_div =~ "flex-wrap"
+  end
+
+  test "Message lives inside the ⋯ actions menu, not as a standalone header button",
+       %{conn: conn} do
+    # Message used to be a full-width secondary button that crowded the header
+    # row on mobile; it now folds into the #profile-actions-menu dropdown, which
+    # sits on the name row beside the member's name (the avatar row is the Follow
+    # pill alone).
+    {conn, _visitor} = create_and_login_user(conn)
+    profile = insert_activated_user()
+    html = conn |> get(~p"/#{profile}") |> html_response(200)
+
+    assert [menu] = Regex.run(~r/id="profile-actions-menu".*?<\/details>/s, html)
+    assert menu =~ ~p"/messages/with/#{profile}"
   end
 
   test "lists the user's full profile information to visitors", %{conn: conn} do

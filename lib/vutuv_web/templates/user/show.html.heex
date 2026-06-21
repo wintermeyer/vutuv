@@ -23,13 +23,16 @@ the resulting ~200px rail width. --%>
     </.frozen_banner>
 
     <%!-- Header card (custom: gradient cover + overlapping avatar) --%>
-    <section class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+    <%!-- No overflow-hidden on the section: it would clip the ⋯ actions menu's
+    dropdown (which opens downward from the name row). The cover image is clipped
+    to the rounded top by its own wrapper below instead. --%>
+    <section class="rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
       <%!-- Cover banner: the uploaded cover photo (object-cover crop) when set,
       otherwise the brand gradient. The owner gets a discoverable upload
       affordance overlaid on the banner; it leads to the edit form where the
       cover photo file input lives (alongside the avatar). --%>
       <% cover_url = Vutuv.Cover.display_url(@user, :wide) %>
-      <div class="relative h-28">
+      <div class="relative h-28 overflow-hidden rounded-t-2xl">
         <%= if cover_url do %>
           <img src={cover_url} alt={gettext("Cover photo of %{name}", name: full_name(@user))} class="h-full w-full object-cover" />
         <% else %>
@@ -48,10 +51,11 @@ the resulting ~200px rail width. --%>
           {if cover_url, do: gettext("Change cover"), else: gettext("Add cover photo")}
         </.link>
       </div>
-      <%!-- Header card body. #profile-actions keeps the viewer's primary moves
-      (Follow / Following + Message) up front and folds the rest (mute, the
-      private save toggles, report, block) into one labeled ⋯ menu so the header
-      stays calm. The <.follow_relationship> pill is always shown in full and
+      <%!-- Header card body. #profile-actions keeps the viewer's primary move
+      (the Follow relationship pill) up front and folds everything else (Message,
+      mute, the private save toggles, report, block) into one labeled ⋯ menu so
+      the header stays calm — especially on mobile, where a full-width Message
+      button crowded the row. The <.follow_relationship> pill is always shown in full and
       reads both follow directions from each half's text + colour, so every
       status (no relationship, one-way out, follow-back, mutual "vernetzt") is
       legible at a glance without the pill changing shape. Action controls are
@@ -76,13 +80,18 @@ the resulting ~200px rail width. --%>
             "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
             slug: @user.username
           ) %>
+        <%!-- The action cluster is pinned to the right of the avatar row
+        (ml-auto), one short row. It now holds only the follow pill: the ⋯ menu
+        moved down to the name row, so the pill gets the full width beside the
+        avatar to breathe, below the cover, rather than riding up into the cover
+        banner. (Owner sees Edit profile; a blocker sees Unblock.) --%>
         <div class="-mt-12 flex items-end gap-4">
-          <.avatar user={@user} size="lg" shape="square" loading="eager" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 ring-4 ring-white dark:ring-slate-900" presence />
+          <.avatar user={@user} size="lg" shape="square" loading="eager" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900" presence />
           <%!-- pointer-events-none in preview: the controls render so the owner
           sees exactly what a member gets, but they are inert. --%>
           <div
             id="profile-actions"
-            class={["ml-auto flex flex-wrap items-center justify-end gap-2 pb-1", @preview? && "pointer-events-none"]}
+            class={["ml-auto flex items-center justify-end gap-2", @preview? && "pointer-events-none"]}
           >
             <%= cond do %>
               <% @as_owner? -> %>
@@ -113,44 +122,58 @@ the resulting ~200px rail width. --%>
                   follow_id={@header_follow_id}
                   follows_viewer?={@header_follows_viewer?}
                 />
-                <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
-                <.card_menu id="profile-actions-menu">
-                  <%!-- Mute is a property of your own follow, so it shows only once you
-                  follow them; it silences their posts in your feed only. --%>
-                  <:item :if={is_binary(@header_follow_id)} href={mute_path} method="put">
-                    {if @header_follow_muted?, do: gettext("Unmute"), else: gettext("Mute")}
-                  </:item>
-                  <%!-- Private, silent saves (no follow, no notification). --%>
-                  <:item
-                    :if={saved_present?}
-                    href={if(bookmarked?, do: bm_del, else: bm_save)}
-                    method={if(bookmarked?, do: "delete", else: "post")}
-                  >
-                    {if bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
-                  </:item>
-                  <:item
-                    :if={saved_present?}
-                    href={if(liked?, do: lk_del, else: lk_save)}
-                    method={if(liked?, do: "delete", else: "post")}
-                  >
-                    {if liked?, do: gettext("Unlike"), else: gettext("Like")}
-                  </:item>
-                  <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
-                  <:item id="block-user" href={block_path} method="post" confirm={block_confirm} danger>
-                    {gettext("Block")}
-                  </:item>
-                </.card_menu>
               <% true -> %>
             <% end %>
           </div>
         </div>
 
-        <h1 class="mt-4 flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
-          {full_name(@user)}
-          <span :if={@user.identity_verified?} title={gettext("Verified profile")} class="text-brand-600 dark:text-brand-400">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z" /></svg>
-          </span>
-        </h1>
+        <%!-- Name row. The ⋯ actions menu (Message / mute / private saves / report
+        / block) lives here on the right rather than in the cluster beside the
+        avatar, so the follow pill gets the full width up there to breathe. Guarded
+        by the same condition as the pill (the cond's can_act? branch: logged-in,
+        not the owner, not a blocker) so a blocker still only sees Unblock, and it
+        stays inert in preview. --%>
+        <div class="mt-4 flex items-center justify-between gap-3">
+          <h1 class="flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
+            {full_name(@user)}
+            <span :if={@user.identity_verified?} title={gettext("Verified profile")} class="text-brand-600 dark:text-brand-400">
+              <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z" /></svg>
+            </span>
+          </h1>
+          <div
+            :if={can_act? && !@as_owner? && !@viewer_block}
+            class={["shrink-0", @preview? && "pointer-events-none"]}
+          >
+            <.card_menu id="profile-actions-menu">
+              <%!-- Message is the primary positive action; it leads the menu. --%>
+              <:item id="message-user" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</:item>
+              <%!-- Mute is a property of your own follow, so it shows only once you
+              follow them; it silences their posts in your feed only. --%>
+              <:item :if={is_binary(@header_follow_id)} href={mute_path} method="put">
+                {if @header_follow_muted?, do: gettext("Unmute"), else: gettext("Mute")}
+              </:item>
+              <%!-- Private, silent saves (no follow, no notification). --%>
+              <:item
+                :if={saved_present?}
+                href={if(bookmarked?, do: bm_del, else: bm_save)}
+                method={if(bookmarked?, do: "delete", else: "post")}
+              >
+                {if bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
+              </:item>
+              <:item
+                :if={saved_present?}
+                href={if(liked?, do: lk_del, else: lk_save)}
+                method={if(liked?, do: "delete", else: "post")}
+              >
+                {if liked?, do: gettext("Unlike"), else: gettext("Like")}
+              </:item>
+              <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
+              <:item id="block-user" href={block_path} method="post" confirm={block_confirm} danger>
+                {gettext("Block")}
+              </:item>
+            </.card_menu>
+          </div>
+        </div>
         <%!-- Headline is user-written Markdown through the safe VutuvWeb.Markdown
         pipeline; the arbitrary-variant classes flatten Earmark's <p> and tint
         inline links/code to match the muted sub-line. --%>

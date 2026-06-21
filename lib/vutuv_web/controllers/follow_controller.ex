@@ -14,9 +14,10 @@ defmodule VutuvWeb.FollowController do
     # struct saves it a Repo.get).
     case Vutuv.Social.follow(conn.assigns.current_user, follow_params["followee_id"]) do
       {:ok, _follow} ->
-        conn
-        |> put_flash(:info, gettext("You are now following this person."))
-        |> redirect(to: referrer_url(conn))
+        # No success toast: the follow control shows the new state on the button
+        # itself (the green "✓ Following" segment), so a confirmation flash is just
+        # noise. Only the error branch below still flashes.
+        redirect(conn, to: referrer_url(conn))
 
       {:error, _changeset} ->
         conn
@@ -30,9 +31,10 @@ defmodule VutuvWeb.FollowController do
     # only delete their own follow edges, never an arbitrary follow by id.
     Vutuv.Social.unfollow!(conn.assigns.current_user_id, id)
 
-    conn
-    |> put_flash(:info, gettext("You are no longer following this person."))
-    |> redirect(to: referrer_url(conn))
+    # No toast either: the button flips back to "Follow", which is the
+    # confirmation the user needs. (Mute/unmute below keeps its flash, since that
+    # change is not as visible.)
+    redirect(conn, to: referrer_url(conn))
   end
 
   def toggle_mute(conn, %{"id" => id}) do
