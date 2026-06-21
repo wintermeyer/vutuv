@@ -22,6 +22,10 @@ defmodule VutuvWeb.UserHTML do
   # Search match marker(s): substring(s) of the name to wrap in a brand <mark>
   # (string or list, see `VutuvWeb.UI.highlight/2`). nil renders plainly.
   attr(:highlight, :any, default: nil)
+  # On a LiveView host (the profile) the follow button fires `phx-click`
+  # instead of a CSRF link, so the row toggles with no reload. Dead-page
+  # callers (search) leave it false.
+  attr(:live?, :boolean, default: false)
 
   def user_row(assigns) do
     ~H"""
@@ -44,6 +48,7 @@ defmodule VutuvWeb.UserHTML do
         follower_id={@current_user_id}
         followee_id={@user.id}
         follow_id={Map.get(@following_by_id, @user.id)}
+        live?={@live?}
       />
     </li>
     """

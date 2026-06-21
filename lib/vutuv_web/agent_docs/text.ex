@@ -271,13 +271,8 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp endorser_lines(person) do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
-    "* #{person.name}#{work}#{endorsed_suffix(person.endorsed_at)}\n  #{person.url}"
+    "* #{person.name}#{work}#{Markdown.endorsed_suffix(person.endorsed_at)}\n  #{person.url}"
   end
-
-  defp endorsed_suffix(nil), do: ""
-
-  defp endorsed_suffix(at),
-    do: " (" <> gettext("endorsed %{date}", date: Calendar.strftime(at, "%Y-%m-%d %H:%M")) <> ")"
 
   defp in_reply_to_line(%{author: nil}), do: gettext("In reply to a deleted post.")
 

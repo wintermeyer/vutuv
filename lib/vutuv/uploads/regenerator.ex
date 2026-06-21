@@ -171,10 +171,7 @@ defmodule Vutuv.Uploads.Regenerator do
   defp row_id(:post_images, image), do: image.token
   defp row_id(_type, row), do: row.id
 
-  # stdout progress for operators (mix task / `bin/vutuv eval`); silenced in
-  # the test env via `:regenerator_quiet`.
-  defp log(message) do
-    unless Application.get_env(:vutuv, :regenerator_quiet, false), do: IO.puts(message)
-    :ok
-  end
+  # Operator stdout progress (mix task / `bin/vutuv eval`); the quiet-flag logic
+  # lives once in Vutuv.Uploads.log/1.
+  defp log(message), do: Vutuv.Uploads.log(message)
 end

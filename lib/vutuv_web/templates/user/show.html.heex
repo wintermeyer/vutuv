@@ -63,18 +63,14 @@ the resulting ~200px rail width. --%>
       needs no doc change. --%>
       <div class="px-6 pb-6">
         <% member_since = member_since(@user) %>
-        <% can_act? = @preview_as in [:follower, :connection] or visitor?(@conn, @current_user) %>
+        <% can_act? =
+          @preview_as in [:follower, :connection] or
+            (@current_user != nil and not same_user?(@user, @current_user)) %>
         <% vcard_path = if @vcard_full?, do: ~p"/#{@user}/vcard", else: "/#{@user.username}.vcf" %>
-        <% mute_path = is_binary(@header_follow_id) && ~p"/follows/#{@header_follow_id}/mute" %>
-        <% bm_save = ~p"/user_bookmarks?#{[user_bookmark: %{target_user_id: @user.id}]}" %>
-        <% bm_del = ~p"/user_bookmarks/#{@user.id}" %>
-        <% lk_save = ~p"/user_likes?#{[user_like: %{target_user_id: @user.id}]}" %>
-        <% lk_del = ~p"/user_likes/#{@user.id}" %>
         <% bookmarked? = @user_saved && @user_saved.bookmarked? %>
         <% liked? = @user_saved && @user_saved.liked? %>
         <% saved_present? = not is_nil(@user_saved) %>
         <% report_path = ~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}" %>
-        <% block_path = ~p"/blocks?#{[block: [user_id: @user.id]]}" %>
         <% block_confirm =
           gettext(
             "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
@@ -99,15 +95,15 @@ the resulting ~200px rail width. --%>
               <% @viewer_block -> %>
                 <%!-- I blocked this member: the only control is Unblock; Follow /
                 Message / the menu would all refuse. --%>
-                <.link
+                <button
                   id="unblock-user"
-                  href={~p"/blocks/#{@viewer_block.id}"}
-                  method="delete"
+                  type="button"
+                  phx-click="unblock_user"
                   data-confirm={gettext("Unblock @%{slug}?", slug: @user.username)}
                   class="inline-flex items-center text-sm font-semibold text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
                 >
                   {gettext("Unblock")}
-                </.link>
+                </button>
               <% can_act? -> %>
                 <%!-- Directional relationship as one always-full segmented pill:
                 the clickable Follow / Following half (you follow him), a seam
@@ -121,6 +117,7 @@ the resulting ~200px rail width. --%>
                   followee_id={@user.id}
                   follow_id={@header_follow_id}
                   follows_viewer?={@header_follows_viewer?}
+                  live?
                 />
               <% true -> %>
             <% end %>
@@ -148,27 +145,20 @@ the resulting ~200px rail width. --%>
               <%!-- Message is the primary positive action; it leads the menu. --%>
               <:item id="message-user" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</:item>
               <%!-- Mute is a property of your own follow, so it shows only once you
-              follow them; it silences their posts in your feed only. --%>
-              <:item :if={is_binary(@header_follow_id)} href={mute_path} method="put">
+              follow them; it silences their posts in your feed only. A live
+              phx-click toggle, so the label flips with no reload. --%>
+              <:item :if={is_binary(@header_follow_id)} click="toggle_mute" value={@header_follow_id}>
                 {if @header_follow_muted?, do: gettext("Unmute"), else: gettext("Mute")}
               </:item>
-              <%!-- Private, silent saves (no follow, no notification). --%>
-              <:item
-                :if={saved_present?}
-                href={if(bookmarked?, do: bm_del, else: bm_save)}
-                method={if(bookmarked?, do: "delete", else: "post")}
-              >
+              <%!-- Private, silent saves (no follow, no notification); live toggles. --%>
+              <:item :if={saved_present?} click={if(bookmarked?, do: "unbookmark_user", else: "bookmark_user")}>
                 {if bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
               </:item>
-              <:item
-                :if={saved_present?}
-                href={if(liked?, do: lk_del, else: lk_save)}
-                method={if(liked?, do: "delete", else: "post")}
-              >
+              <:item :if={saved_present?} click={if(liked?, do: "unlike_user", else: "like_user")}>
                 {if liked?, do: gettext("Unlike"), else: gettext("Like")}
               </:item>
               <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
-              <:item id="block-user" href={block_path} method="post" confirm={block_confirm} danger>
+              <:item id="block-user" click="block_user" confirm={block_confirm} danger>
                 {gettext("Block")}
               </:item>
             </.card_menu>
@@ -292,7 +282,7 @@ the resulting ~200px rail width. --%>
           post={entry.post}
           reposted_by={entry.reposted_by}
           entry_id={entry.id}
-          conn_or_socket={@conn}
+          conn_or_socket={@socket}
           viewer={@view_viewer}
           mode={:preview}
           surface={:flat}
@@ -329,6 +319,7 @@ the resulting ~200px rail width. --%>
           user={@user}
           user_tag={user_tag}
           viewer={@current_user}
+          live?
         />
       </div>
 
@@ -463,6 +454,7 @@ the resulting ~200px rail width. --%>
             current_user_id={@view_viewer_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
+            live?
           />
         </ul>
         <.card_footer_link :if={@follower_count > 3} href={~p"/#{@user}/followers"}>
@@ -482,6 +474,7 @@ the resulting ~200px rail width. --%>
             current_user_id={@view_viewer_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
+            live?
           />
         </ul>
         <.card_footer_link :if={@followee_count > 3} href={~p"/#{@user}/following"}>
@@ -586,7 +579,7 @@ the resulting ~200px rail width. --%>
                 class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
               >
                 <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
-                <span class="font-medium">{Vutuv.Phone.national(number.value, @conn.assigns[:locale])}</span>
+                <span class="font-medium">{Vutuv.Phone.national(number.value, @locale)}</span>
               </a>
             </li>
           </ul>
@@ -674,7 +667,7 @@ the resulting ~200px rail width. --%>
           <div class="min-w-0 leading-snug">
             <p class="mb-0 font-medium text-slate-800 dark:text-slate-100">{address.description}</p>
             <div class="text-slate-600 dark:text-slate-400">
-              {format_address(address, @conn.assigns[:locale])}
+              {format_address(address, @locale)}
             </div>
             <%!-- Open the address on a map. The viewer's default service
             (Vutuv.Maps, set on their account settings or by clicking) is the one
@@ -748,6 +741,7 @@ the resulting ~200px rail width. --%>
           current_user_id={@view_viewer_id}
           work_info_by_id={@work_info_by_id}
           following_by_id={@following_by_id}
+          live?
         />
       </ul>
     </.card>
@@ -758,7 +752,7 @@ the resulting ~200px rail width. --%>
     German rendering via ?lang=; the canonical extension URLs (head alternates,
     llms.txt) stay English. --%>
     <% format_lang =
-      if @conn.assigns[:locale] in [nil, "en"], do: "", else: "?lang=#{@conn.assigns[:locale]}" %>
+      if @locale in [nil, "en"], do: "", else: "?lang=#{@locale}" %>
     <.card id="profile-other-formats">
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
       <%!-- The vCard carries no translatable labels, so it skips ?lang=. --%>

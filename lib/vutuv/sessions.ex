@@ -32,6 +32,7 @@ defmodule Vutuv.Sessions do
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
   alias Vutuv.Sessions.UserSession
+  alias Vutuv.Token
 
   # last_seen_at is an audit trail, not a precise counter; bumping it at most
   # once a minute keeps the hot session row from being written on every request
@@ -57,7 +58,7 @@ defmodule Vutuv.Sessions do
 
     reasons = if Keyword.get(opts, :alert, true), do: alert_reasons(user, ua, location), else: []
 
-    raw_token = random_token()
+    raw_token = Token.random_token()
     now = DateTime.utc_now(:second)
 
     session =
@@ -414,14 +415,8 @@ defmodule Vutuv.Sessions do
 
   # ── Token helpers ──
 
+  # The token shape lives in Vutuv.Token (shared with the API tokens); kept here
+  # as a thin pass-through only because a test recomputes a session's hash.
   @doc false
-  def hash_token(plaintext) do
-    :sha256 |> :crypto.hash(plaintext) |> Base.encode16(case: :lower)
-  end
-
-  # 32 random bytes, base32 (strictly alphanumeric, ~165 bits) — same shape as
-  # the API tokens.
-  defp random_token do
-    32 |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
-  end
+  def hash_token(plaintext), do: Token.hash_token(plaintext)
 end

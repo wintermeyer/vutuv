@@ -524,8 +524,9 @@ defmodule VutuvWeb.UserControllerTest do
     {conn, _visitor} = create_and_login_user(conn)
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
-    # The pill itself is the CSRF endorse toggle now (not a read-only span).
-    assert html =~ "data-tag-vote"
+    # The pill itself is the live endorse toggle now (a phx-click button driving
+    # the profile LiveView), not a read-only span or a CSRF form.
+    assert html =~ ~s(phx-click="endorse")
     assert html =~ "data-tag-vote-count"
     # The zero-count tag (Erlang) shows a "+" so there is something to click.
     assert html =~ ~r/data-tag-vote-count[^>]*>\s*\+/
@@ -892,8 +893,9 @@ defmodule VutuvWeb.UserControllerTest do
       assert html =~ "Doesn&#39;t follow you"
       refute html =~ "Follows you"
       refute html =~ "You follow each other"
-      # the toggle offers a follow (a create-follow link targeting other)
-      assert html =~ "follow[followee_id]=#{other.id}"
+      # the toggle offers a follow (a phx-click create-follow targeting other)
+      assert html =~ ~s(phx-click="follow")
+      assert html =~ ~s(phx-value-followee="#{other.id}")
     end
 
     test "shows 'Follows you' when this member follows the viewer (follow-back case)", %{
@@ -907,9 +909,10 @@ defmodule VutuvWeb.UserControllerTest do
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
       assert html =~ "Follows you"
-      # the toggle offers a follow-back (a create-follow link targeting other),
-      # not an unfollow (which would be DELETE /follows/<id>)
-      assert html =~ "follow[followee_id]=#{other.id}"
+      # the toggle offers a follow-back (a phx-click "follow" targeting other),
+      # not an unfollow
+      assert html =~ ~s(phx-value-followee="#{other.id}")
+      refute html =~ ~s(phx-click="unfollow")
       # a follow-back is not yet mutual, so no ⇄ connector
       refute html =~ "You follow each other"
     end
@@ -968,10 +971,12 @@ defmodule VutuvWeb.UserControllerTest do
       # is active.
       assert html =~ "view-as-switcher"
       refute html =~ "view-as-banner"
-      # The switcher is rendered once from the app layout; on the profile its
-      # segments target the bare profile path (base_path = conn.request_path).
-      assert html =~ ~p"/#{user}?#{[view_as: "follower"]}"
-      assert html =~ ~p"/#{user}?#{[view_as: "public"]}"
+      # The switcher is rendered once from the app layout; on the profile (a
+      # LiveView) its segments are phx-click buttons, so switching tiers
+      # re-renders with no reload (the dead section pages keep ?view_as= links).
+      assert html =~ ~s(phx-click="view_as")
+      assert html =~ ~s(phx-value-mode="follower")
+      assert html =~ ~s(phx-value-mode="public")
       # The profile grid is full width, so the bar spans the full main column
       # (max-w-6xl); the section pages get the narrower max-w-3xl instead.
       assert html =~ "mt-6 max-w-6xl"

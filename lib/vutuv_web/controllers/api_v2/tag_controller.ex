@@ -11,7 +11,6 @@ defmodule VutuvWeb.ApiV2.TagController do
 
   alias Vutuv.Tags
   alias Vutuv.Tags.UserTagEndorsement
-  alias Vutuv.UUIDv7
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
@@ -36,14 +35,13 @@ defmodule VutuvWeb.ApiV2.TagController do
   end
 
   def delete(conn, %{"id" => id}) do
-    user = conn.assigns.current_user
+    case VutuvWeb.ControllerHelpers.get_owned(conn.assigns.current_user, :user_tags, id) do
+      %{} = user_tag ->
+        Repo.delete!(user_tag)
+        send_resp(conn, 204, "")
 
-    with uuid when is_binary(uuid) <- UUIDv7.cast_or_nil(id),
-         %{} = user_tag <- Repo.get(assoc(user, :user_tags), uuid) do
-      Repo.delete!(user_tag)
-      send_resp(conn, 204, "")
-    else
-      _missing -> Problem.not_found(conn)
+      nil ->
+        Problem.not_found(conn)
     end
   end
 end

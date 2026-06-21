@@ -3,41 +3,41 @@
   
   <%= hidden_input f, :country %>
 
-  <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:description}>
     <%= label f, :description %>
     <%= text_input f, :description %>
     <%= error_tag f, :description %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :line_1), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:line_1}>
     <%= label f, :"street address, p.o. box, company name" %>
     <%= text_input f, :line_1 %>
     <%= error_tag f, :line_1 %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :line_2), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:line_2}>
     <%= label f, :"apartment, suite, unit, building, floor" %>
     <%= text_input f, :line_2 %>
     <%= error_tag f, :line_2 %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :city), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:city}>
     <%= label f, :city %>
     <%= text_input f, :city %>
     <%= error_tag f, :city %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :state), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:state}>
     <%= label f, :"state, province, region" %>
     <%= text_input f, :state %>
     <%= error_tag f, :state %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :zip_code), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:zip_code}>
     <%= label f, :"zip/postal_code" %>
     <%= text_input f, :zip_code %>
     <%= error_tag f, :zip_code %>
-  </div>
+  </.editform_field>
 
   <%= render "country_input.html", Map.put(assigns, :form, f) %>
   

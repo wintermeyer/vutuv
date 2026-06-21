@@ -21,7 +21,6 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
   alias Vutuv.Profiles.{Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience}
   alias Vutuv.Tags.UserTag
-  alias Vutuv.UUIDv7
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
@@ -109,25 +108,12 @@ defmodule VutuvWeb.ApiV2.SectionController do
     Repo.all(schema.ordered(assoc(user, assoc)))
   end
 
-  # Same side effect as the HTML link forms (create AND update, so an API
-  # edit never leaves a stale screenshot): capture the page screenshot off
-  # the request path, supervised, gated so tests launch no Chromium.
-  defp after_write(:links, url) do
-    if Application.get_env(:vutuv, :generate_screenshots, true) do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-        Vutuv.PageScreenshot.generate_screenshot(url)
-      end)
-    end
-
-    :ok
-  end
+  # Same side effect as the HTML link forms (create AND update, so an API edit
+  # never leaves a stale screenshot); shares the supervised, gated capture.
+  defp after_write(:links, url), do: Vutuv.PageScreenshot.generate_async(url)
 
   defp after_write(_section, _record), do: :ok
 
-  defp get_owned(user, assoc_name, id) do
-    case UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get(assoc(user, assoc_name), uuid)
-    end
-  end
+  defp get_owned(user, assoc_name, id),
+    do: VutuvWeb.ControllerHelpers.get_owned(user, assoc_name, id)
 end

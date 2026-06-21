@@ -45,7 +45,7 @@ defmodule VutuvWeb.UrlController do
 
     case Repo.insert(changeset) do
       {:ok, url} ->
-        generate_screenshot(url)
+        Vutuv.PageScreenshot.generate_async(url)
 
         conn
         |> put_flash(:info, gettext("Link created successfully."))
@@ -79,7 +79,7 @@ defmodule VutuvWeb.UrlController do
 
     case Repo.update(changeset) do
       {:ok, url} ->
-        generate_screenshot(url)
+        Vutuv.PageScreenshot.generate_async(url)
 
         conn
         |> put_flash(:info, gettext("Link updated successfully."))
@@ -94,28 +94,10 @@ defmodule VutuvWeb.UrlController do
 
   def delete(conn, %{"id" => id}) do
     url = ControllerHelpers.get_owned!(conn, :urls, id)
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
 
-    Repo.delete!(url)
-
-    conn
-    |> put_flash(:info, gettext("Link deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/links")
-  end
-
-  # Capture the page screenshot off the request path. Supervised by
-  # Vutuv.TaskSupervisor (rather than an orphaned `Task.start/3`) so the work
-  # has supervision and is not silently dropped on a node restart mid-request.
-  # Gated by `:generate_screenshots` so tests neither launch headless Chromium
-  # nor touch the SQL Sandbox connection from an unrelated process.
-  defp generate_screenshot(url) do
-    if Application.get_env(:vutuv, :generate_screenshots, true) do
-      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-        Vutuv.PageScreenshot.generate_screenshot(url)
-      end)
-    end
-
-    :ok
+    ControllerHelpers.delete(conn, url,
+      flash: gettext("Link deleted successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/links"
+    )
   end
 end

@@ -9,7 +9,7 @@
   <.form :let={f} for={@changeset} action={~p"/ads/preview"} class="editform" id="ad-form">
     <.form_error changeset={@changeset} />
 
-    <div class={"editform__field#{if error_tag(f, :day), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:day}>
       <%= label f, :day, gettext("Day") %>
       <%= error_tag f, :day %>
       <%!-- The editform column is 34rem, so the month grids stack: each day
@@ -61,9 +61,9 @@
           day: @next_available_day || gettext("fully booked")
         )}
       </p>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :content), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:content}>
       <%= label f, :content, gettext("Ad text") %>
       <%= textarea f, :content, rows: 8, maxlength: Vutuv.Ads.Ad.content_max_length() %>
       <%= error_tag f, :content %>
@@ -75,49 +75,49 @@
           {gettext("The ad must be family-friendly.")}
         </.link>
       </p>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_name), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_name}>
       <%= label f, :billing_name, gettext("Billing name") %>
       <%= text_input f, :billing_name %>
       <%= error_tag f, :billing_name %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_company), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_company}>
       <%= label f, :billing_company, gettext("Company (optional)") %>
       <%= text_input f, :billing_company %>
       <%= error_tag f, :billing_company %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_street), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_street}>
       <%= label f, :billing_street, gettext("Street and number") %>
       <%= text_input f, :billing_street %>
       <%= error_tag f, :billing_street %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_zip_code), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_zip_code}>
       <%= label f, :billing_zip_code, gettext("Zip code") %>
       <%= text_input f, :billing_zip_code %>
       <%= error_tag f, :billing_zip_code %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_city), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_city}>
       <%= label f, :billing_city, gettext("City") %>
       <%= text_input f, :billing_city %>
       <%= error_tag f, :billing_city %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :billing_country), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:billing_country}>
       <%= label f, :billing_country, gettext("Country") %>
       <%= text_input f, :billing_country %>
       <%= error_tag f, :billing_country %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :vat_id), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:vat_id}>
       <%= label f, :vat_id, gettext("VAT ID (optional)") %>
       <%= text_input f, :vat_id %>
       <%= error_tag f, :vat_id %>
-    </div>
+    </.editform_field>
 
     <p class="editform__hint">
       {gettext(

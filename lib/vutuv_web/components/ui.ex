@@ -259,8 +259,14 @@ defmodule VutuvWeb.UI do
 
   slot :item, required: true do
     attr(:id, :string, doc: "optional DOM id for the item link (tests, anchors)")
-    attr(:href, :any, required: true)
+    attr(:href, :any, doc: "link target (a navigation/CSRF item); omit when using `click`")
     attr(:method, :string)
+
+    attr(:click, :string,
+      doc: "phx-click event name — renders a `<button>` (a LiveView action) instead of a link"
+    )
+
+    attr(:value, :any, doc: "phx-value-id sent with the `click` event")
     attr(:confirm, :string, doc: "data-confirm prompt for destructive items")
     attr(:danger, :boolean, doc: "style the item red")
   end
@@ -282,25 +288,47 @@ defmodule VutuvWeb.UI do
         <span class="sr-only">{gettext("Options")}</span>
       </summary>
       <div class="absolute right-0 z-20 mt-1 w-52 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
-        <.link
-          :for={item <- @item}
-          id={item[:id]}
-          href={item.href}
-          method={item[:method]}
-          data-confirm={item[:confirm]}
-          class={[
-            "block px-4 py-2 text-sm font-medium",
-            if(item[:danger],
-              do: "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40",
-              else: "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-            )
-          ]}
-        >
-          {render_slot(item)}
-        </.link>
+        <%!-- An item with `click` is a LiveView action (a phx-click <button>, no
+        reload); otherwise it is a navigation / CSRF <.link>. Both wear the same
+        item styling so one menu can mix them. --%>
+        <%= for item <- @item do %>
+          <button
+            :if={item[:click]}
+            type="button"
+            id={item[:id]}
+            phx-click={item[:click]}
+            phx-value-id={item[:value]}
+            data-confirm={item[:confirm]}
+            class={["block w-full text-left", card_menu_item_class(item[:danger])]}
+          >
+            {render_slot(item)}
+          </button>
+          <.link
+            :if={!item[:click]}
+            id={item[:id]}
+            href={item[:href]}
+            method={item[:method]}
+            data-confirm={item[:confirm]}
+            class={["block", card_menu_item_class(item[:danger])]}
+          >
+            {render_slot(item)}
+          </.link>
+        <% end %>
       </div>
     </details>
     """
+  end
+
+  # Shared look for a `<.card_menu>` item, whether it renders as a link or a
+  # phx-click button: the calm row, red for a danger item.
+  defp card_menu_item_class(danger?) do
+    [
+      "px-4 py-2 text-sm font-medium",
+      if(danger?,
+        do: "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40",
+        else: "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+      )
+    ]
   end
 
   @doc """
@@ -400,6 +428,12 @@ defmodule VutuvWeb.UI do
     doc: "the current viewer's user struct, or nil when logged out"
   )
 
+  attr(:live?, :boolean,
+    default: false,
+    doc:
+      "on the profile LiveView, toggle the endorsement with a `phx-click` \"endorse\"/\"unendorse\" (the LiveView re-renders the pill + roster, no fetch); otherwise the CSRF form the `TagVote` enhancement drives"
+  )
+
   def tag_vote(assigns) do
     user_tag = assigns.user_tag
     viewer = assigns.viewer
@@ -436,20 +470,28 @@ defmodule VutuvWeb.UI do
       <%!-- Actionable viewer (logged-in non-owner): the count pill itself is the
       endorse toggle. It looks just like the read-only pill until you endorse, then
       fills in (brand-600); a zero-count tag shows a "+" so there is something to
-      click. The CSRF <.vote_form> is the no-JS fallback (POST endorse / DELETE undo);
-      the TagVote enhancement in app.js drives it over fetch and pops the count. --%>
-      <.vote_form :if={@can_vote?} user={@user} user_tag={@user_tag} endorsed?={@endorsed?}>
+      click. In `live?` mode (the profile LiveView) it is a phx-click <button> and
+      the LiveView re-renders the pill + roster; otherwise the CSRF <.vote_form>
+      (the no-JS fallback the TagVote enhancement in app.js drives over fetch). --%>
+      <button
+        :if={@can_vote? && @live?}
+        type="button"
+        phx-click={if(@endorsed?, do: "unendorse", else: "endorse")}
+        phx-value-id={@user_tag.id}
+        data-tag-vote-count
+        data-endorsed={to_string(@endorsed?)}
+        aria-pressed={to_string(@endorsed?)}
+        title={if(@endorsed?, do: gettext("Remove endorsement"), else: gettext("Endorse"))}
+        class={tag_vote_pill_class()}
+      >{if(@total > 0, do: @count, else: "+")}</button>
+      <.vote_form :if={@can_vote? && !@live?} user={@user} user_tag={@user_tag} endorsed?={@endorsed?}>
         <button
           type="submit"
           data-tag-vote-count
           data-endorsed={to_string(@endorsed?)}
           aria-pressed={to_string(@endorsed?)}
           title={if(@endorsed?, do: gettext("Remove endorsement"), else: gettext("Endorse"))}
-          class={[
-            "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums transition-colors",
-            "bg-brand-100 text-brand-700 hover:bg-brand-200 dark:bg-brand-800 dark:text-brand-100 dark:hover:bg-brand-700",
-            "data-[endorsed=true]:bg-brand-600 data-[endorsed=true]:text-white data-[endorsed=true]:hover:bg-brand-700 dark:data-[endorsed=true]:bg-brand-600"
-          ]}
+          class={tag_vote_pill_class()}
         >{if(@total > 0, do: @count, else: "+")}</button>
       </.vote_form>
       <%!-- Read-only count (owner / logged-out): the tally as a calm brand-tint pill
@@ -471,6 +513,17 @@ defmodule VutuvWeb.UI do
       />
     </div>
     """
+  end
+
+  # The endorse/undo pill's look, shared by the phx-click (live) and CSRF-form
+  # renderings so they stay identical: a calm brand-tint pill that fills in
+  # (brand-600) once `data-endorsed` flips true.
+  defp tag_vote_pill_class do
+    [
+      "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums transition-colors",
+      "bg-brand-100 text-brand-700 hover:bg-brand-200 dark:bg-brand-800 dark:text-brand-100 dark:hover:bg-brand-700",
+      "data-[endorsed=true]:bg-brand-600 data-[endorsed=true]:text-white data-[endorsed=true]:hover:bg-brand-700 dark:data-[endorsed=true]:bg-brand-600"
+    ]
   end
 
   # The endorsers (preloaded users) for a tag's hover roster, newest first by the
@@ -683,6 +736,12 @@ defmodule VutuvWeb.UI do
   attr(:followee_id, :any, required: true)
   attr(:follow_id, :any, default: nil, doc: "the follow id, or nil when not following")
 
+  attr(:live?, :boolean,
+    default: false,
+    doc:
+      "in a LiveView (the profile), fire `phx-click` \"follow\"/\"unfollow\" instead of a CSRF link, so the page never reloads. Currently honored by the `segment` variant only."
+  )
+
   def follow_button(%{variant: "icon"} = assigns) do
     ~H"""
     <%= if is_binary(@follow_id) do %>
@@ -699,16 +758,23 @@ defmodule VutuvWeb.UI do
 
   def follow_button(%{variant: "text"} = assigns) do
     ~H"""
-    <%= if is_binary(@follow_id) do %>
-      <%= button to: ~p"/follows/#{@follow_id}", method: :delete,
-            class: "ml-auto self-start text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-600" do %>
-        {gettext("Following")}
-      <% end %>
-    <% else %>
-      <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post,
-            class: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700" do %>
-        {gettext("Follow")}
-      <% end %>
+    <%= cond do %>
+      <% @live? and is_binary(@follow_id) -> %>
+        <button type="button" phx-click="unfollow" phx-value-id={@follow_id} class={text_follow_class(:following)}>
+          {gettext("Following")}
+        </button>
+      <% @live? -> %>
+        <button type="button" phx-click="follow" phx-value-followee={@followee_id} class={text_follow_class(:follow)}>
+          {gettext("Follow")}
+        </button>
+      <% is_binary(@follow_id) -> %>
+        <%= button to: ~p"/follows/#{@follow_id}", method: :delete, class: text_follow_class(:following) do %>
+          {gettext("Following")}
+        <% end %>
+      <% true -> %>
+        <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: text_follow_class(:follow) do %>
+          {gettext("Follow")}
+        <% end %>
     <% end %>
     """
   end
@@ -734,27 +800,69 @@ defmodule VutuvWeb.UI do
     flex-1 keeps it the same width as the inbound half. Its colour encodes your
     follow state: a green "active" cell (with a check) once you follow, the brand
     call-to-action while you do not. The `title` carries the label for hover and
-    screen readers. --%>
+    screen readers. In `live?` mode it is a phx-click <button> (the profile
+    LiveView, no reload); otherwise the CSRF <.link> (the no-JS fallback). Both
+    share segment_class/1 so the two render identically. --%>
     <.link
-      :if={is_binary(@follow_id)}
+      :if={is_binary(@follow_id) and not @live?}
       href={~p"/follows/#{@follow_id}"}
       method="delete"
       title={gettext("Following")}
-      class="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-emerald-700 px-2 py-1.5 text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
+      class={segment_class(:following)}
     >
       <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Following")}</span>
     </.link>
+    <button
+      :if={is_binary(@follow_id) and @live?}
+      type="button"
+      phx-click="unfollow"
+      phx-value-id={@follow_id}
+      title={gettext("Following")}
+      class={segment_class(:following)}
+    >
+      <span aria-hidden="true">✓</span><span class="whitespace-nowrap">{gettext("Following")}</span>
+    </button>
     <.link
-      :if={!is_binary(@follow_id)}
+      :if={!is_binary(@follow_id) and not @live?}
       href={~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
       method="post"
       title={gettext("Follow")}
-      class="flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-brand-600 px-2 py-1.5 text-white transition-colors hover:bg-brand-700 active:bg-brand-800"
+      class={segment_class(:follow)}
     >
       <span class="whitespace-nowrap">{gettext("Follow")}</span>
     </.link>
+    <button
+      :if={!is_binary(@follow_id) and @live?}
+      type="button"
+      phx-click="follow"
+      phx-value-followee={@followee_id}
+      title={gettext("Follow")}
+      class={segment_class(:follow)}
+    >
+      <span class="whitespace-nowrap">{gettext("Follow")}</span>
+    </button>
     """
   end
+
+  # The two outbound-cell looks of the <.follow_relationship> pill, shared by the
+  # CSRF-link and phx-click renderings so they stay pixel-identical: green
+  # "active" once you follow, the brand call-to-action while you do not.
+  defp segment_class(:following),
+    do:
+      "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-emerald-700 px-2 py-1.5 text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
+
+  defp segment_class(:follow),
+    do:
+      "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-brand-600 px-2 py-1.5 text-white transition-colors hover:bg-brand-700 active:bg-brand-800"
+
+  # The `text` follow-button look (the `user_row` rail), shared by the live
+  # phx-click and the classic CSRF renderings.
+  defp text_follow_class(:following),
+    do:
+      "ml-auto self-start text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-600"
+
+  defp text_follow_class(:follow),
+    do: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700"
 
   @doc """
   The profile header's **follow relationship** control — one fixed-width
@@ -785,6 +893,11 @@ defmodule VutuvWeb.UI do
   attr(:followee_id, :any, required: true)
   attr(:follow_id, :any, default: nil, doc: "the viewer's follow id, or nil when not following")
   attr(:follows_viewer?, :boolean, default: false, doc: "does this member follow the viewer back")
+
+  attr(:live?, :boolean,
+    default: false,
+    doc: "fire the outbound toggle as a `phx-click` (the profile LiveView) instead of a CSRF link"
+  )
 
   def follow_relationship(assigns) do
     follows? = is_binary(assigns.follow_id)
@@ -828,6 +941,7 @@ defmodule VutuvWeb.UI do
         follower_id={@follower_id}
         followee_id={@followee_id}
         follow_id={@follow_id}
+        live?={@live?}
       />
       <span
         aria-hidden="true"
@@ -1486,6 +1600,67 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Legacy (Track 1) `editform__field` wrapper shared by the `editform`
+  `form_content` templates: the `<div class="editform__field">` that turns
+  `editform__field--error` on when `field` has an error, with the label / input /
+  hints / error tags supplied verbatim in the inner block. Replaces the
+  hand-rolled `class={"editform__field\#{if error_tag(f, :x), do: " …--error"}"}`
+  interpolation across ~50 sites; the `--error` class is driven straight off the
+  form's `errors` (same condition `error_tag/2` checks), so the DOM is identical.
+  Styled by `components.css`. Use as:
+
+      <.editform_field form={f} field={:value}>
+        {label f, :value, gettext("URL")}
+        {text_input f, :value}
+        {error_tag f, :value}
+      </.editform_field>
+  """
+  attr(:form, :any,
+    required: true,
+    doc: "the Phoenix.HTML form (the `f` from `<.form :let={f}>`)"
+  )
+
+  attr(:field, :atom, required: true, doc: "the field whose error toggles the --error class")
+  slot(:inner_block, required: true)
+
+  def editform_field(assigns) do
+    ~H"""
+    <div class={["editform__field", @form.errors[@field] && "editform__field--error"]}>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  One settings opt-in row shared by the Privacy and Notifications pages: a
+  `<label>` holding a checkbox, a bold heading and a muted helper line. The
+  checkbox stays in the `:checkbox` slot at the call site (so the inverted
+  `checked_value`/`unchecked_value` consent boxes need no special handling here),
+  `label` is the heading, and the inner block is the helper text. Replaces the
+  ~6 hand-rolled copies of this `flex items-start gap-3` block. Use as:
+
+      <.setting_toggle label={gettext("New followers")}>
+        <:checkbox>{checkbox(f, :email_on_follower?, class: checkbox_class())}</:checkbox>
+        {gettext("When someone starts following you.")}
+      </.setting_toggle>
+  """
+  attr(:label, :string, required: true, doc: "the bold heading line")
+  slot(:checkbox, required: true, doc: "the checkbox input (kept at the call site)")
+  slot(:inner_block, required: true, doc: "the muted helper line under the heading")
+
+  def setting_toggle(assigns) do
+    ~H"""
+    <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
+      {render_slot(@checkbox)}
+      <span>
+        <span class="block font-medium text-slate-900 dark:text-white">{@label}</span>
+        <span class="block font-normal">{render_slot(@inner_block)}</span>
+      </span>
+    </label>
+    """
+  end
+
+  @doc """
   Legacy (Track 1) Cancel/Submit actions row shared by the `editform`
   `form_content` templates. Emits the same `.editform__actions` markup the
   `link/2` + `submit/2` helpers produced (a `.button.button--cancel` link to
@@ -1698,6 +1873,12 @@ defmodule VutuvWeb.UI do
   attr(:settings_path, :string, default: nil)
   attr(:class, :any, default: nil)
 
+  attr(:live?, :boolean,
+    default: false,
+    doc:
+      "on a LiveView host (the profile) each segment is a `phx-click=\"view_as\"` button (`phx-value-mode`), so switching tiers re-renders with no reload; dead section pages keep the `?view_as=` links"
+  )
+
   def view_as_switcher(assigns) do
     assigns = assign(assigns, :preview?, not is_nil(assigns.preview_as))
 
@@ -1727,29 +1908,31 @@ defmodule VutuvWeb.UI do
           </svg>
           {gettext("View as")}
         </span>
+        <%!-- On the profile (a LiveView, `live?`) each segment is a phx-click
+        button so switching tiers re-renders with no reload; the dead section
+        pages keep the `?view_as=` links. --%>
         <div class="flex w-full divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 sm:w-auto sm:flex-1 dark:divide-slate-700 dark:ring-slate-700">
-          <.link
-            :for={
-              {label, mode} <- [
+          <%= for {label, mode} <- [
                 {gettext("You"), nil},
                 {gettext("Follower"), :follower},
                 {gettext("Connected"), :connection},
                 {gettext("Public"), :public}
-              ]
-            }
-            href={view_as_href(@base_path, mode)}
-            aria-current={@preview_as == mode && "true"}
-            class={[
-              "min-w-0 flex-1 truncate px-1.5 py-1.5 text-center text-xs font-semibold transition-colors sm:px-3 sm:text-sm",
-              if(@preview_as == mode,
-                do: "bg-brand-600 text-white",
-                else:
-                  "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-              )
-            ]}
-          >
-            {label}
-          </.link>
+              ] do %>
+            <button
+              :if={@live?}
+              type="button"
+              phx-click="view_as"
+              phx-value-mode={mode || :you}
+              aria-current={@preview_as == mode && "true"}
+              class={view_as_segment_class(@preview_as == mode)}
+            >{label}</button>
+            <.link
+              :if={!@live?}
+              href={view_as_href(@base_path, mode)}
+              aria-current={@preview_as == mode && "true"}
+              class={view_as_segment_class(@preview_as == mode)}
+            >{label}</.link>
+          <% end %>
         </div>
       </div>
       <p
@@ -1783,6 +1966,19 @@ defmodule VutuvWeb.UI do
 
   defp view_as_href(base_path, nil), do: base_path
   defp view_as_href(base_path, mode), do: base_path <> "?view_as=" <> Atom.to_string(mode)
+
+  # One segment's look in `<.view_as_switcher>`, shared by the link (dead pages)
+  # and phx-click button (the profile LiveView) renderings.
+  defp view_as_segment_class(active?) do
+    [
+      "min-w-0 flex-1 truncate px-1.5 py-1.5 text-center text-xs font-semibold transition-colors sm:px-3 sm:text-sm",
+      if(active?,
+        do: "bg-brand-600 text-white",
+        else:
+          "bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+      )
+    ]
+  end
 
   @doc """
   Legacy (Track 1) card shell shared by the owned-resource index pages and the

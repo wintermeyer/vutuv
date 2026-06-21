@@ -107,12 +107,9 @@ defmodule VutuvWeb.SocialMediaAccountController do
   def delete(conn, %{"id" => id}) do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
 
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(social_media_account)
-
-    conn
-    |> put_flash(:info, gettext("Social media account deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts")
+    ControllerHelpers.delete(conn, social_media_account,
+      flash: gettext("Social media account deleted successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/social_media_accounts"
+    )
   end
 end

@@ -1,15 +1,15 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
-  <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:value}>
     <%= label f, :value, gettext("Phone Number") %>
     <%= telephone_input f, :value, placeholder: gettext("+49 30 12345678"), id: "textfield", autofocus: true %>
     <%= error_tag f, :value %>
-  </div>
-  <div class={"editform__field#{if error_tag(f, :number_type), do: " editform__field--error"}"}>
+  </.editform_field>
+  <.editform_field form={f} field={:number_type}>
     <%= label f, :number_type, gettext("Type of Number") %>
     <%= select f, :number_type, [{gettext("Choose One"), nil}, {gettext("Work"), "Work"}, {gettext("Cell"), "Cell"}, {gettext("Home"), "Home"}, {gettext("Fax"), "Fax"}]%>
     <%= error_tag f, :number_type %>
-  </div>
+  </.editform_field>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

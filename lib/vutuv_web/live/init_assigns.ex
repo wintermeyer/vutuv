@@ -58,9 +58,14 @@ defmodule VutuvWeb.Live.InitAssigns do
     {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end
 
-  # cast_or_nil: pre-UUID-cutover cookies hold integer ids — anonymous, not a
-  # CastError (mirrors VutuvWeb.Plug.ConfigureSession).
-  defp load_user(user_id) do
+  @doc """
+  Load the current user from a session `user_id`, or nil. Shared with the
+  off-router `VutuvWeb.UserProfileLive`, which can't use this module as an
+  on_mount hook but needs the same resolution. cast_or_nil: pre-UUID-cutover
+  cookies hold integer ids — anonymous, not a CastError (mirrors
+  `VutuvWeb.Plug.ConfigureSession`).
+  """
+  def load_user(user_id) do
     case Vutuv.UUIDv7.cast_or_nil(user_id) do
       nil -> nil
       user_id -> Repo.get(User, user_id)

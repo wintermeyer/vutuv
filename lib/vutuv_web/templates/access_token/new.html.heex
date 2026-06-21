@@ -4,16 +4,16 @@
   <.form :let={f} for={@changeset} as={:token} action={~p"/access_tokens"} class="editform">
     <.form_error changeset={@changeset} />
 
-    <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:name}>
       <%= label(f, :name, gettext("Name")) %>
       <%= text_input(f, :name, autofocus: true, placeholder: gettext("e.g. My import script")) %>
       <p class="editform__hint">
         {gettext("Only for you, so you recognize the token in the list later.")}
       </p>
       <%= error_tag(f, :name) %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :scopes), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:scopes}>
       <label>{gettext("Permissions")}</label>
       <div class="mt-1 space-y-2">
         <%= for scope <- Vutuv.ApiAuth.Scopes.all() do %>
@@ -33,7 +33,7 @@
         <% end %>
       </div>
       <%= error_tag(f, :scopes) %>
-    </div>
+    </.editform_field>
 
     <div class="editform__field">
       <%= label(f, :expires_in, gettext("Expires")) %>

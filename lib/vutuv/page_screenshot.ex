@@ -33,6 +33,21 @@ defmodule Vutuv.PageScreenshot do
   @capture_grace 5
 
   @doc """
+  Capture `url`'s screenshot off the request path, fire-and-forget: supervised
+  under `Vutuv.TaskSupervisor` (so it survives a mid-request node restart rather
+  than being a dropped `Task.start`) and gated by `:generate_screenshots` (tests
+  launch no headless Chromium and never touch the SQL Sandbox from an unrelated
+  process). Shared by the HTML link forms and the API's link writes.
+  """
+  def generate_async(%Url{} = url) do
+    if Application.get_env(:vutuv, :generate_screenshots, true) do
+      Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn -> generate_screenshot(url) end)
+    end
+
+    :ok
+  end
+
+  @doc """
   Renders, frames, and stores the screenshot for `url`.
 
   Marks the URL `broken?: false` on success and `broken?: true` on failure, so a

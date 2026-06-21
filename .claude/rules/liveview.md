@@ -18,7 +18,31 @@ The live modules in `lib/vutuv_web/live/`: `ShellLive` (the chrome), `MemberCoun
 (landing pill), `SearchLive`, `PostLive.Feed`, `PostLive.Edit`, `PostLive.Reply`,
 `PostLive.Saved`, `PostLive.Composer` (a LiveComponent), `PostLive.Actions` (per-post
 action bar, one embedded `live_render` per card), `MessageLive.Index`,
-`NotificationLive.Index`, plus the `on_mount` hooks `Live.InitAssigns` and `LiveLocale`.
+`NotificationLive.Index`, `UserProfileLive` (the member profile `/:slug`), plus the
+`on_mount` hooks `Live.InitAssigns` and `LiveLocale`.
+
+- **The profile (`UserProfileLive`) is embedded by a controller, not a `live/3` route.**
+  `VutuvWeb.UserController.show` keeps owning agent-format negotiation (the `.md`/`.txt`/
+  `.json`/`.xml`/`.vcf` siblings via `ProfileDoc`) and, for HTML, calls
+  `live_render(conn, UserProfileLive, …)` after `put_layout(html: false)` (so the `:app`
+  layout — ShellLive included — renders once, from the LiveView, not twice). Because it is
+  off-router it **cannot** use `Live.InitAssigns` as its `on_mount` (that hook attaches a
+  `:handle_params` hook, which an off-router LiveView rejects) and has no `handle_params`,
+  so `?view_as=` stays a full reload; mount mirrors InitAssigns (current_user + locale) and
+  reads the path/locale/profile id/view_as from the session the controller passes. It
+  renders the one profile markup — `VutuvWeb.UserHTML.show/1` (the embedded
+  `templates/user/show.html.heex`) — so keep `ProfileDoc` in sync (drift test). The header
+  **Every state-changing control is `phx-click`, handled here, no reload:** the header
+  follow pill, the tag-endorsement pills, the ⋯-menu Mute/Bookmark/Like/Block and the
+  Unblock control, the follower/following/who-to-follow `user_row` follow buttons, and the
+  owner "View as" switcher — all pass `live?` to their `VutuvWeb.UI` components
+  (`follow_button`/`follow_relationship`/`tag_vote`/`card_menu`/`user_row`/`view_as_switcher`).
+  Counts and tags also update live over PubSub (see the social-graph note below). What stays
+  a plain `<a>` is **navigation** (Message, Report, vCard, agent-format/map/manage/edit
+  links) and the embedded **post action bars** (their own `PostLive.Actions` live_render) +
+  the shared **post card ⋯ menu** (classic everywhere incl. the feed — don't special-case it
+  on the profile). The classic CSRF routes (Follow/UserSave/Block/UserTagEndorsement
+  controllers) stay as the no-JS / API path.
 
 - **There is no `core_components.ex`.** Do **not** use `<.input>`, `<.icon name="hero-…">`,
   or `<Layouts.app>` — they don't exist. Use the **`VutuvWeb.UI`** components (imported
@@ -37,7 +61,15 @@ action bar, one embedded `live_render` per card), `MessageLive.Index`,
   **outside** the `live_session` must call it too, or the whole shared chrome silently
   falls back to English.
 - **Real-time** goes through `Vutuv.Activity` (`Phoenix.PubSub` on `"user:<id>"` and
-  `"post:<id>"`) and `VutuvWeb.Presence` — not ad-hoc `Phoenix.PubSub` topics.
+  `"post:<id>"`) and `VutuvWeb.Presence` — not ad-hoc `Phoenix.PubSub` topics. The
+  profile listens for two events on the owner's `"user:<id>"` topic:
+  `{:social_graph_changed, _}` (broadcast by `Vutuv.Social.follow/2` + `unfollow!/2` to both
+  members, so a follow/unfollow anywhere recomputes the counts + pill) and
+  `{:endorsement_changed, user_tag_id}` (broadcast by `Vutuv.Tags.create_endorsement/1` +
+  `delete_endorsement/2` to the tag owner). Any new message type added to `"user:<id>"`
+  must be tolerated by **every** subscriber of that topic — ShellLive, MessageLive,
+  NotificationLive, PostLive.Feed/Saved and UserProfileLive all keep a catch-all
+  `handle_info(_other, socket)`; keep it that way.
 - **Icons** are either CSS glyphs (`i.icon.icon--…`, styled in `components.css`) or the
   shared `VutuvWeb.UI` SVG components (`<.icon_repost>`, `<.icon_reply>`,
   `<.icon_bookmark>`); icons used by a single LiveView stay private to it. Never pull in

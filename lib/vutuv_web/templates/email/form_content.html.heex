@@ -10,25 +10,25 @@
       <p><%= gettext "The address itself cannot be changed. To use a different one, add it as a new email address and delete this one." %></p>
     </div>
 
-    <div class={"editform__field#{if error_tag(f, :public?), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:public?}>
       <%= label f, :public?, gettext("Public (Everyone can view) or Private (Only those you follow can view)") %>
       <%= select f, :public?, [{gettext("Public"), true}, {gettext("Private"), false}] %>
       <%= error_tag f, :public? %>
-    </div>
+    </.editform_field>
   <% else %>
-    <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:value}>
       <%= label f, :value, gettext("Email Address") %>
       <%= email_input f, :value, autofocus: true %>
       <%= error_tag f, :value %>
-    </div>
+    </.editform_field>
   <% end %>
 
   <%!-- The Work/Personal/Other label is pure metadata, so it is editable on
         both the new and the edit form (the address itself stays read-only). --%>
-  <div class={"editform__field#{if error_tag(f, :email_type), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:email_type}>
     <%= label f, :email_type, gettext("Type of Email") %>
     <%= select f, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] %>
     <%= error_tag f, :email_type %>
-  </div>
+  </.editform_field>
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

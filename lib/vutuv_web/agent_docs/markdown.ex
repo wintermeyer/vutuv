@@ -293,9 +293,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp endorser_line(person),
     do: "- #{person_text(person)}" <> endorsed_suffix(person.endorsed_at)
 
-  defp endorsed_suffix(nil), do: ""
+  @doc false
+  # Shared with the plain-text renderer (VutuvWeb.AgentDocs.Text), like
+  # work_period/1, address_line/1 and endorsements_label/1, so the translated
+  # label and date format stay in one place.
+  def endorsed_suffix(nil), do: ""
 
-  defp endorsed_suffix(at),
+  def endorsed_suffix(at),
     do: " (" <> gettext("endorsed %{date}", date: Calendar.strftime(at, "%Y-%m-%d %H:%M")) <> ")"
 
   defp in_reply_to_line(%{author: nil}), do: "> " <> gettext("In reply to a deleted post.")

@@ -66,6 +66,16 @@ defmodule Vutuv.Uploads do
   def strip_query(value) when is_binary(value), do: String.replace(value, ~r/\?\d+$/, "")
 
   @doc """
+  Operator stdout progress for the uploads mix tasks (regenerate / sweep /
+  relabel), silenced in the test env via `:regenerator_quiet`. The single home
+  for this, so the quiet flag can't drift between the three task modules.
+  """
+  def log(message) do
+    unless Application.get_env(:vutuv, :regenerator_quiet, false), do: IO.puts(message)
+    :ok
+  end
+
+  @doc """
   Stores every derived version for `{upload, scope}` per `config` and returns
   `{:ok, original_file_name, fingerprint}` — the verbatim upload name and the
   content fingerprint (`sha256(original)[0..#{@hash_length - 1}]`) the caller

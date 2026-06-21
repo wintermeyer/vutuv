@@ -240,21 +240,18 @@ defmodule Vutuv.ApiAuth do
   def verify_token(_other), do: {:error, :invalid_token}
 
   @doc false
-  # Public for tests and the (later) OAuth token minting; not an API for
-  # callers outside this context.
-  def hash_token(plaintext) do
-    :sha256 |> :crypto.hash(plaintext) |> Base.encode16(case: :lower)
-  end
+  # Public for tests, OAuth (`Vutuv.ApiAuth.OAuth`) and webhooks; the token shape
+  # lives in `Vutuv.Token` (shared with the session tokens), this just keeps the
+  # `ApiAuth.*` name those callers use. (`Token` is the schema alias here, so the
+  # shared module is referenced fully-qualified.)
+  def hash_token(plaintext), do: Vutuv.Token.hash_token(plaintext)
 
   # ── Internals ──
 
   @doc false
-  # Base32 keeps tokens strictly alphanumeric (double-click selectable);
-  # 32 random bytes -> 52 characters, ~165 bits of entropy. Public for
-  # Vutuv.ApiAuth.OAuth (codes, access/refresh tokens); not a caller API.
-  def random_token(bytes \\ 32) do
-    bytes |> :crypto.strong_rand_bytes() |> Base.encode32(case: :lower, padding: false)
-  end
+  # Public for OAuth (codes, access/refresh tokens) and webhook secrets; not a
+  # caller API. Delegates to the shared `Vutuv.Token`.
+  def random_token(bytes \\ 32), do: Vutuv.Token.random_token(bytes)
 
   # One round trip for the hot path: the token, its user and (for OAuth
   # tokens) its app arrive together; all further checks are in-memory.

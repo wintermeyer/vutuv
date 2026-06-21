@@ -25,7 +25,7 @@
       </p>
 
       <.form :let={f} for={%{}} action={~p"/admin/exonyms"} as={:exonym} class="editform">
-        <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+        <.editform_field form={f} field={:name}>
           <%= hidden_input f, :locale_id, value: @loc.id %>
           <%= label f, :value, gettext("Add an exonym") %>
           <div class="editform__smallwrap">
@@ -38,7 +38,7 @@
           <%= select f, :exonym_locale_id, Vutuv.Accounts.Locale.locale_select_list %>
           </div>
           <%= error_tag f, :exonym_locale_id %>
-        </div>
+        </.editform_field>
       </.form>
     
   </section>

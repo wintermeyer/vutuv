@@ -3,7 +3,7 @@
 <.form :let={f} for={@changeset} action={@action} method="post" class="editform" id="slug-form">
   <.form_error changeset={@changeset} />
 
-  <div class={"editform__field#{if error_tag(f, :username), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:username}>
     <%= label(f, :username, gettext("New username")) %>
     <%= text_input(f, :username,
       autofocus: true,
@@ -19,7 +19,7 @@
     <p class="editform__hint">
       <%= gettext("3 to 15 characters: letters (a-z), numbers (0-9) and underscores.") %>
     </p>
-  </div>
+  </.editform_field>
 
   <.form_actions backlink={@backlink} />
 </.form>

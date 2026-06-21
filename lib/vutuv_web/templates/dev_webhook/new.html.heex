@@ -15,7 +15,7 @@
   >
     <.form_error changeset={@changeset} />
 
-    <div class={"editform__field#{if error_tag(f, :url), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:url}>
       <%= label(f, :url, gettext("Endpoint URL")) %>
       <%= text_input(f, :url, autofocus: true, placeholder: "https://…") %>
       <p class="editform__hint">
@@ -24,9 +24,9 @@
         )}
       </p>
       <%= error_tag(f, :url) %>
-    </div>
+    </.editform_field>
 
-    <div class={"editform__field#{if error_tag(f, :events), do: " editform__field--error"}"}>
+    <.editform_field form={f} field={:events}>
       <label>{gettext("Events")}</label>
       <div class="mt-1 space-y-2">
         <%= for event <- Vutuv.Webhooks.events() do %>
@@ -47,7 +47,7 @@
         )}
       </p>
       <%= error_tag(f, :events) %>
-    </div>
+    </.editform_field>
 
     <.form_actions backlink={~p"/developers/apps/#{@app.id}"} />
   </.form>

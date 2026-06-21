@@ -1,47 +1,47 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
-  <div class={"editform__field#{if error_tag(f, :organization), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:organization}>
     <%= label f, :organization, gettext("Organization") %>
     <%= text_input f, :organization, autofocus: true %>
     <%= error_tag f, :organization %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :title), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:title}>
     <%= label f, :title, gettext("Job Title") %>
     <%= text_input f, :title %>
     <%= error_tag f, :title %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
     <%= textarea f, :description, rows: 3 %>
     <%= error_tag f, :description %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :start_year), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:start_year}>
     <%= label f, :start_year, gettext("Start year") %>
     <%= select f, :start_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
     <%= error_tag f, :start_year %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :start_month), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:start_month}>
     <%= label f, :start_month, gettext("Start month") %>
     <%= select f, :start_month, month_options(), prompt: gettext("Select a month") %>
     <%= error_tag f, :start_month %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :end_year), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:end_year}>
     <%= label f, :end_year, gettext("End year") %>
     <%= select f, :end_year, @current_year..1920//-1, prompt: gettext("Select a year") %>
     <%= error_tag f, :end_year %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :end_month), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:end_month}>
     <%= label f, :end_month, gettext("End month") %>
     <%= select f, :end_month, month_options(), prompt: gettext("Select a month") %>
     <%= error_tag f, :end_month %>
-  </div>
+  </.editform_field>
 
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>

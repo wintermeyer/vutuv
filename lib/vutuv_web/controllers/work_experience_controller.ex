@@ -95,12 +95,9 @@ defmodule VutuvWeb.WorkExperienceController do
   defp current_year, do: Date.utc_today().year
 
   def delete(conn, _params) do
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(conn.assigns[:job])
-
-    conn
-    |> put_flash(:info, gettext("Work experience deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/work_experiences")
+    ControllerHelpers.delete(conn, conn.assigns[:job],
+      flash: gettext("Work experience deleted successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/work_experiences"
+    )
   end
 end

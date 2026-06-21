@@ -62,6 +62,19 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  The non-raising sibling of `get_owned!/3` for the API: returns the owned
+  resource or `nil` (so the caller can answer RFC 9457 `not_found` instead of a
+  500), and tolerates a malformed id via `UUIDv7.cast_or_nil/1` rather than a
+  CastError. `user` is the authorizing member; `assoc` its collection.
+  """
+  def get_owned(user, assoc, id) when is_atom(assoc) do
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> nil
+      uuid -> Repo.get(Ecto.assoc(user, assoc), uuid)
+    end
+  end
+
+  @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
   every auth/resolve plug and the controller-side guards use to refuse a
   request.
@@ -132,6 +145,21 @@ defmodule VutuvWeb.ControllerHelpers do
         |> Conn.put_status(:unprocessable_entity)
         |> Phoenix.Controller.render(Keyword.fetch!(opts, :render), assigns)
     end
+  end
+
+  @doc """
+  Folds the plain "delete then flash+redirect" case the section delete actions
+  share — the delete leg of `save/3`, with no error branch (`Repo.delete!`
+  raises if the row is already gone). Pass the loaded `record` (scoped to the
+  owner by the caller, e.g. via `get_owned!/3`) plus `:flash` (the success
+  message) and `:redirect_to` (the index path).
+  """
+  def delete(%Conn{} = conn, record, opts) do
+    Repo.delete!(record)
+
+    conn
+    |> Phoenix.Controller.put_flash(:info, Keyword.fetch!(opts, :flash))
+    |> Phoenix.Controller.redirect(to: Keyword.fetch!(opts, :redirect_to))
   end
 
   defp redirect_target(to, _record) when is_binary(to), do: to

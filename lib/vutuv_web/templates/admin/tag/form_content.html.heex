@@ -1,27 +1,27 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
   <%= if @conn.assigns[:tag] do %>
-  <div class={"editform__field#{if error_tag(f, :name), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:name}>
     <%= label f, :name %>
     <%= text_input f, :name %>
     <%= error_tag f, :name %>
-  </div>
-  <div class={"editform__field#{if error_tag(f, :slug), do: " editform__field--error"}"}>
+  </.editform_field>
+  <.editform_field form={f} field={:slug}>
     <%= label f, :slug %>
     <%= text_input f, :slug %>
     <%= error_tag f, :slug %>
-  </div>
-  <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+  </.editform_field>
+  <.editform_field form={f} field={:description}>
     <%= label f, :description %>
     <%= text_input f, :description %>
     <%= error_tag f, :description %>
-  </div>
+  </.editform_field>
   <% else %>
-  <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:value}>
     <%= label f, :value %>
     <%= text_input f, :value %>
     <%= error_tag f, :value %>
-  </div>
+  </.editform_field>
   <% end %>
 
 <.form_actions backlink={@backlink} />

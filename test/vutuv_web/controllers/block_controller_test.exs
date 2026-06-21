@@ -135,11 +135,14 @@ defmodule VutuvWeb.BlockControllerTest do
     other: other
   } do
     body = conn |> get(~p"/#{other}") |> html_response(200)
+    # The profile is a LiveView: Block / Unblock are phx-click controls now.
     assert body =~ "block-user"
+    assert body =~ ~s(phx-click="block_user")
 
-    {:ok, block} = Social.block_user(user, other)
+    {:ok, _block} = Social.block_user(user, other)
 
     body = conn |> get(~p"/#{other}") |> html_response(200)
-    assert body =~ ~p"/blocks/#{block.id}"
+    assert body =~ "unblock-user"
+    assert body =~ ~s(phx-click="unblock_user")
   end
 end

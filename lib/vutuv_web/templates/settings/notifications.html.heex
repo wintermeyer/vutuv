@@ -23,41 +23,20 @@ heading. --%>
       >
         <.form_error changeset={@changeset} />
 
-        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <%= checkbox f, :notification_emails?, class: checkbox_class() %>
-          <span>
-            <span class="block font-medium text-slate-900 dark:text-white">
-              {gettext("Unread messages")}
-            </span>
-            <span class="block font-normal">
-              {gettext("When someone messages you and you have not read it yet.")}
-            </span>
-          </span>
-        </label>
+        <.setting_toggle label={gettext("Unread messages")}>
+          <:checkbox><%= checkbox f, :notification_emails?, class: checkbox_class() %></:checkbox>
+          {gettext("When someone messages you and you have not read it yet.")}
+        </.setting_toggle>
 
-        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <%= checkbox f, :email_on_endorsement?, class: checkbox_class() %>
-          <span>
-            <span class="block font-medium text-slate-900 dark:text-white">
-              {gettext("Endorsements")}
-            </span>
-            <span class="block font-normal">
-              {gettext("When someone endorses you for one of your tags.")}
-            </span>
-          </span>
-        </label>
+        <.setting_toggle label={gettext("Endorsements")}>
+          <:checkbox><%= checkbox f, :email_on_endorsement?, class: checkbox_class() %></:checkbox>
+          {gettext("When someone endorses you for one of your tags.")}
+        </.setting_toggle>
 
-        <label class="flex items-start gap-3 text-sm text-slate-600 dark:text-slate-300">
-          <%= checkbox f, :email_on_follower?, class: checkbox_class() %>
-          <span>
-            <span class="block font-medium text-slate-900 dark:text-white">
-              {gettext("New followers")}
-            </span>
-            <span class="block font-normal">
-              {gettext("When someone starts following you.")}
-            </span>
-          </span>
-        </label>
+        <.setting_toggle label={gettext("New followers")}>
+          <:checkbox><%= checkbox f, :email_on_follower?, class: checkbox_class() %></:checkbox>
+          {gettext("When someone starts following you.")}
+        </.setting_toggle>
 
         <div class="pt-1">
           <.button type="submit">{gettext("Save")}</.button>

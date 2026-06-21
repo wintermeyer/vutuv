@@ -65,7 +65,11 @@ defmodule VutuvWeb.ConnectionControllerTest do
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      assert html =~ ~p"/follows/#{follow.id}/mute"
+      # The profile is a LiveView: mute is a phx-click menu item scoped to the
+      # viewer's own follow id (the PUT /follows/:id/mute route still backs the
+      # no-JS path).
+      assert html =~ ~s(phx-click="toggle_mute")
+      assert html =~ ~s(phx-value-id="#{follow.id}")
     end
 
     test "a mutual follow shows the connected (vernetzt) state via the ⇄ connector", %{conn: conn} do

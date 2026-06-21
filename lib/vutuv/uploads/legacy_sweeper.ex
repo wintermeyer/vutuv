@@ -71,10 +71,6 @@ defmodule Vutuv.Uploads.LegacySweeper do
   defp rows(:avatars), do: Repo.all(from(u in User, where: not is_nil(u.avatar_fingerprint)))
   defp rows(:covers), do: Repo.all(from(u in User, where: not is_nil(u.cover_fingerprint)))
 
-  # Silenced in the test env via the same `:regenerator_quiet` flag the
-  # regenerator uses.
-  defp log(message) do
-    unless Application.get_env(:vutuv, :regenerator_quiet, false), do: IO.puts(message)
-    :ok
-  end
+  # The quiet-flag logic lives once in Vutuv.Uploads.log/1.
+  defp log(message), do: Vutuv.Uploads.log(message)
 end

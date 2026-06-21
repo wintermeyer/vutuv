@@ -53,7 +53,9 @@ defmodule Vutuv.Tags do
     result = %UserTagEndorsement{} |> UserTagEndorsement.changeset(attrs) |> Repo.insert()
 
     with {:ok, endorsement} <- result do
-      notify_endorsement(endorsement)
+      # notify_endorsement preloaded the owner already, so reuse the id it
+      # returns for the live-count broadcast instead of re-querying it.
+      broadcast_endorsement_changed(notify_endorsement(endorsement), endorsement.user_tag_id)
     end
 
     result
@@ -70,6 +72,11 @@ defmodule Vutuv.Tags do
         where: e.user_tag_id == ^user_tag_id and e.user_id == ^user_id
       )
       |> Repo.delete_all()
+
+    if count > 0 do
+      owner_id = Repo.one(from(ut in UserTag, where: ut.id == ^user_tag_id, select: ut.user_id))
+      broadcast_endorsement_changed(owner_id, user_tag_id)
+    end
 
     count
   end
@@ -175,5 +182,15 @@ defmodule Vutuv.Tags do
       endorser = Repo.get(Vutuv.Accounts.User, endorsement.user_id)
       Vutuv.Activity.notify_endorsement(owner_id, endorser, tag.name)
     end
+
+    owner_id
+  end
+
+  # Tell the tag owner's open profile to re-render the affected pill's count and
+  # roster live, so an endorse / unendorse shows even on a different page or when
+  # made by another member. `VutuvWeb.UserProfileLive` listens for
+  # `:endorsement_changed`; other subscribers ignore it (catch-all handle_info).
+  defp broadcast_endorsement_changed(owner_id, user_tag_id) do
+    Vutuv.Activity.broadcast(owner_id, {:endorsement_changed, user_tag_id})
   end
 end

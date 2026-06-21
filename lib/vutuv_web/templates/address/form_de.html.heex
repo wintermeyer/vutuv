@@ -3,29 +3,29 @@
 
   <%= hidden_input f, :country %>
 
-  <div class={"editform__field#{if error_tag(f, :description), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:description}>
     <%= label f, "Beschreibung" %>
     <%= text_input f, :description, autofocus: true %>
     <%= error_tag f, :description %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :line_1), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:line_1}>
     <%= label f, "Strasse" %>
     <%= text_input f, :line_1 %>
     <%= error_tag f, :line_1 %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :zip_code), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:zip_code}>
     <%= label f, "Postleitzahl" %>
     <%= text_input f, :zip_code %>
     <%= error_tag f, :zip_code %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :city), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:city}>
     <%= label f, "Stadt" %>
     <%= text_input f, :city %>
     <%= error_tag f, :city %>
-  </div>
+  </.editform_field>
 
   <%= render "country_input.html", Map.put(assigns, :form, f) %>
 

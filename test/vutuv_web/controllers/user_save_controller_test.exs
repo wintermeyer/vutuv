@@ -56,8 +56,11 @@ defmodule VutuvWeb.UserSaveControllerTest do
   } do
     body = conn |> get(~p"/#{other}") |> html_response(200)
 
-    assert body =~ ~p"/user_bookmarks?#{[user_bookmark: %{target_user_id: other.id}]}"
-    assert body =~ ~p"/user_likes?#{[user_like: %{target_user_id: other.id}]}"
+    # The profile is a LiveView, so the saves are phx-click menu items now. The
+    # CSRF routes above still back the no-JS / API path (covered by the create /
+    # delete tests in this file).
+    assert body =~ ~s(phx-click="bookmark_user")
+    assert body =~ ~s(phx-click="like_user")
   end
 
   test "saving across a block is refused, leaving no save", %{

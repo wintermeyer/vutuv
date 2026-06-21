@@ -84,13 +84,10 @@ defmodule VutuvWeb.AddressController do
   def delete(conn, %{"id" => id}) do
     address = ControllerHelpers.get_owned!(conn, :addresses, id)
 
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(address)
-
-    conn
-    |> put_flash(:info, gettext("Address deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/addresses")
+    ControllerHelpers.delete(conn, address,
+      flash: gettext("Address deleted successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/addresses"
+    )
   end
 
   defp get_template(conn) do

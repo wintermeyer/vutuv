@@ -79,12 +79,10 @@ defmodule VutuvWeb.PhoneNumberController do
 
   def delete(conn, %{"id" => id}) do
     phone_number = ControllerHelpers.get_owned!(conn, :phone_numbers, id)
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(phone_number)
 
-    conn
-    |> put_flash(:info, gettext("Phone number deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/phone_numbers")
+    ControllerHelpers.delete(conn, phone_number,
+      flash: gettext("Phone number deleted successfully."),
+      redirect_to: ~p"/#{conn.assigns[:user]}/phone_numbers"
+    )
   end
 end

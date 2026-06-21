@@ -55,6 +55,10 @@ defmodule Vutuv.Social do
       else
         Vutuv.Activity.notify_new_follower(followee_id, actor)
       end
+
+      # Bump the live counts on both members' open profiles (follower / following
+      # / connection, and the viewer's follow-state pill).
+      broadcast_social_graph_changed([follower_id(follower), followee_id])
     end
 
     result
@@ -71,8 +75,12 @@ defmodule Vutuv.Social do
   only remove their own follows, never an arbitrary one by id.
   """
   def unfollow!(follower_id, follow_id) do
-    Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
-    |> Repo.delete!()
+    follow = Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
+    deleted = Repo.delete!(follow)
+    # The followee loses a follower and the pair may stop being mutual, so both
+    # profiles recompute their counts live.
+    broadcast_social_graph_changed([follower_id, follow.followee_id])
+    deleted
   end
 
   @doc """
@@ -324,6 +332,17 @@ defmodule Vutuv.Social do
   # a block/unblock hides (or restores) the pair's dots without a page reload.
   defp broadcast_presence_blocks(user_ids),
     do: Enum.each(user_ids, &Vutuv.Activity.broadcast(&1, :presence_blocks_changed))
+
+  # Tell both members' open profiles to recompute their follower / following /
+  # connection counts and the viewer's follow-state pill, so a follow/unfollow
+  # shows live — even when it was made on another page or by the other member.
+  # `VutuvWeb.UserProfileLive` listens for `:social_graph_changed`; every other
+  # subscriber of the user topic ignores it (catch-all handle_info).
+  defp broadcast_social_graph_changed(user_ids) do
+    user_ids
+    |> Enum.uniq()
+    |> Enum.each(&Vutuv.Activity.broadcast(&1, {:social_graph_changed, %{}}))
+  end
 
   defp insert_block(blocker_id, blocked_id) do
     Repo.transaction(fn ->

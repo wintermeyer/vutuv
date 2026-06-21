@@ -135,10 +135,7 @@ defmodule Vutuv.Uploads.LegacyRelabel do
     exists
   end
 
-  # stdout progress for operators; silenced in the test env via the same
-  # `:regenerator_quiet` flag the regenerator uses.
-  defp log(message) do
-    unless Application.get_env(:vutuv, :regenerator_quiet, false), do: IO.puts(message)
-    :ok
-  end
+  # stdout progress for operators; the quiet-flag logic lives once in
+  # Vutuv.Uploads.log/1.
+  defp log(message), do: Vutuv.Uploads.log(message)
 end

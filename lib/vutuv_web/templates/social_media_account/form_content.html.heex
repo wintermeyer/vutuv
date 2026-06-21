@@ -1,18 +1,18 @@
 <.form :let={f} for={@changeset} action={@action} class="editform">
   <.form_error changeset={@changeset} />
 
-  <div class={"editform__field#{if error_tag(f, :provider), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:provider}>
     <%= label f, :provider %>
     <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(), prompt: "Select a Social Media Provider", autofocus: true %>
     <%= error_tag f, :provider %>
-  </div>
+  </.editform_field>
 
-  <div class={"editform__field#{if error_tag(f, :value), do: " editform__field--error"}"}>
+  <.editform_field form={f} field={:value}>
     <%= label f, :account %>
     <%= text_input f, :value %>
     <%= error_tag f, :value %>
     <%= error_tag f, :value_provider %>
-  </div>
+  </.editform_field>
 
   <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
 </.form>
