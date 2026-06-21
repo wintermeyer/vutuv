@@ -258,6 +258,7 @@ defmodule VutuvWeb.UI do
   attr(:id, :string, required: true)
 
   slot :item, required: true do
+    attr(:id, :string, doc: "optional DOM id for the item link (tests, anchors)")
     attr(:href, :any, required: true)
     attr(:method, :string)
     attr(:confirm, :string, doc: "data-confirm prompt for destructive items")
@@ -283,6 +284,7 @@ defmodule VutuvWeb.UI do
       <div class="absolute right-0 z-20 mt-1 w-52 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
         <.link
           :for={item <- @item}
+          id={item[:id]}
           href={item.href}
           method={item[:method]}
           data-confirm={item[:confirm]}
@@ -669,8 +671,14 @@ defmodule VutuvWeb.UI do
       `<.button>` "Following" / a primary `<.button>` "Follow". `teaser` renders
       only the follow half — pass `follow_id={nil}` (a non-follower can only
       follow) and it emits exactly that one button.
+    * `"segment"` — the **clickable outbound cell** of the profile header's
+      segmented `<.follow_relationship>` control: a flush, square-cornered,
+      `flex-1` `<.link>` whose colour encodes your follow state — green
+      "✓ Following" once you follow, the brand call-to-action "Follow" while you
+      do not. Sized to sit inside the pill (the wrapper clips the corners). Not
+      used on its own.
   """
-  attr(:variant, :string, required: true, values: ~w(icon text button))
+  attr(:variant, :string, required: true, values: ~w(icon text button segment))
   attr(:follower_id, :any, required: true)
   attr(:followee_id, :any, required: true)
   attr(:follow_id, :any, default: nil, doc: "the follow id, or nil when not following")
@@ -717,6 +725,130 @@ defmodule VutuvWeb.UI do
     >
       {gettext("Follow")}
     </.button>
+    """
+  end
+
+  def follow_button(%{variant: "segment"} = assigns) do
+    ~H"""
+    <%!-- The outbound half fills the left of the <.follow_relationship> pill;
+    flex-1 keeps it the same width as the inbound half. Its colour encodes your
+    follow state: a green "active" cell (with a check) once you follow, the brand
+    call-to-action while you do not. --%>
+    <.link
+      :if={is_binary(@follow_id)}
+      href={~p"/follows/#{@follow_id}"}
+      method="delete"
+      class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap bg-emerald-700 px-2 py-1.5 text-white hover:bg-emerald-800"
+    >
+      <span aria-hidden="true">✓</span>{gettext("Following")}
+    </.link>
+    <.link
+      :if={!is_binary(@follow_id)}
+      href={~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}"}
+      method="post"
+      class="flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap bg-brand-600 px-2 py-1.5 text-white hover:bg-brand-700"
+    >
+      {gettext("Follow")}
+    </.link>
+    """
+  end
+
+  @doc """
+  The profile header's **follow relationship** control — one fixed-width
+  segmented pill (`w-80`) with two **equal-width halves** (`flex-1`) that is
+  **always rendered in full**, so its size never changes between states; the
+  relationship status reads at a glance from the text, colour and icon of each
+  half. Three segments, always present in this order:
+
+    1. **Outbound toggle** (`a`) — the clickable Follow / Following half, owned by
+       `<.follow_button variant="segment">`. Brand call-to-action "Follow" while
+       you do not follow; green "✓ Following" once you do.
+    2. **Seam** (`span`) — a fixed-width `aria-hidden` glyph that encodes the
+       follow direction: `·` none, `→` you follow them, `←` they follow you,
+       `⇄` mutual (the seam goes emerald to mark a "vernetzt" mutual follow).
+    3. **Inbound status** (`span`) — the read-only inbound half. Always states
+       the inbound direction: green "✓ Follows you" when this member follows you,
+       muted grey "✗ Doesn't follow you" otherwise.
+
+  A mutual follow lights **both** halves green and the ring emerald, so
+  "vernetzt" is unmistakable at a glance.
+
+  `follow_id` is the viewer's follow of this member (`nil` = not following);
+  `follows_viewer?` is whether this member follows the viewer back. Keep the
+  owner / visitor / logged-in guard on the `:if` at the call site, like
+  `<.follow_button>`.
+  """
+  attr(:follower_id, :any, required: true)
+  attr(:followee_id, :any, required: true)
+  attr(:follow_id, :any, default: nil, doc: "the viewer's follow id, or nil when not following")
+  attr(:follows_viewer?, :boolean, default: false, doc: "does this member follow the viewer back")
+
+  def follow_relationship(assigns) do
+    follows? = is_binary(assigns.follow_id)
+    follows_viewer? = assigns.follows_viewer?
+    mutual? = follows? and follows_viewer?
+
+    {seam_glyph, seam_title} =
+      cond do
+        mutual? -> {"⇄", gettext("You follow each other")}
+        follows? -> {"→", gettext("You follow this member")}
+        follows_viewer? -> {"←", gettext("This member follows you")}
+        true -> {"·", nil}
+      end
+
+    assigns =
+      assigns
+      |> assign(:follows_viewer?, follows_viewer?)
+      |> assign(:mutual?, mutual?)
+      |> assign(:seam_glyph, seam_glyph)
+      |> assign(:seam_title, seam_title)
+
+    ~H"""
+    <%!-- Fixed-width pill with two equal-width halves (flex-1) so it never changes
+    size between states. Green with a check = an active follow direction, grey
+    with a cross = an inactive one; a mutual "vernetzt" follow lights both halves
+    green and the ring emerald. The seam glyph (· → ← ⇄) shows the direction. --%>
+    <div class={[
+      "inline-flex w-80 items-stretch overflow-hidden rounded-lg text-sm font-semibold ring-1",
+      if(@mutual?,
+        do: "ring-emerald-300 dark:ring-emerald-700",
+        else: "ring-slate-200 dark:ring-slate-700"
+      )
+    ]}>
+      <.follow_button
+        variant="segment"
+        follower_id={@follower_id}
+        followee_id={@followee_id}
+        follow_id={@follow_id}
+      />
+      <span
+        aria-hidden="true"
+        title={@seam_title}
+        class={[
+          "flex w-7 shrink-0 items-center justify-center text-xs",
+          if(@mutual?,
+            do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300",
+            else: "bg-slate-50 text-slate-400 dark:bg-slate-800/60 dark:text-slate-500"
+          )
+        ]}
+      >
+        {@seam_glyph}
+      </span>
+      <span
+        title={if(@follows_viewer?, do: gettext("This member follows you"), else: gettext("This member doesn't follow you"))}
+        class={[
+          "flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap px-2 py-1.5",
+          if(@follows_viewer?,
+            do: "bg-emerald-700 text-white",
+            else: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+          )
+        ]}
+      >
+        <span aria-hidden="true">{if @follows_viewer?, do: "✓", else: "✗"}</span>{if @follows_viewer?,
+          do: gettext("Follows you"),
+          else: gettext("Doesn't follow you")}
+      </span>
+    </div>
     """
   end
 

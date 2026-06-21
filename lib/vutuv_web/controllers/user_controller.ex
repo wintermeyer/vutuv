@@ -118,6 +118,7 @@ defmodule VutuvWeb.UserController do
     |> assign(:followee_count, Vutuv.Social.followee_count(user))
     |> assign(:connection_count, Vutuv.Social.connection_count(user))
     |> assign(:header_connected?, header_connected?(preview_as, current_user, user))
+    |> assign(:header_follows_viewer?, header_follows_viewer?(preview_as, current_user, user))
     |> assign(:header_follow_muted?, header_follow_muted?(preview_as, current_user, user))
     |> assign(:user, user)
     |> assign(:header_job, header_job)
@@ -196,6 +197,22 @@ defmodule VutuvWeb.UserController do
   defp header_connected?(_preview, current_user, user) do
     current_user != nil and current_user.id != user.id and
       Vutuv.Social.connected?(current_user.id, user.id)
+  end
+
+  # Whether this member follows the viewer — the directional "Follows you"
+  # signal. With the follow-only model "vernetzt" is just a mutual follow, so
+  # rather than a single opaque "Connected" word the header now shows the two
+  # directions: this badge (he follows you) alongside the Following button (you
+  # follow him). It also surfaces the previously invisible follow-back case
+  # (he follows you, you do not follow back). Mirrors header_connected?'s
+  # preview handling: a :follower preview is one-way in (the owner does not
+  # follow them back), the :connection (vernetzt) preview is mutual.
+  defp header_follows_viewer?(:connection, _current_user, _user), do: true
+  defp header_follows_viewer?(:follower, _current_user, _user), do: false
+
+  defp header_follows_viewer?(_preview, current_user, user) do
+    current_user != nil and current_user.id != user.id and
+      is_binary(user_follows_user?(user, current_user))
   end
 
   # Whether the viewer has muted their follow of this member (drives the mute

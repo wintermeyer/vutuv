@@ -27,16 +27,18 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
                profile-contact-menu profile-about-menu profile-social-media-menu
                profile-addresses-menu)
 
-  # The shell's avatar account menu is a legitimate `<details data-menu>` that
-  # renders on every page now, so a page-wide `data-menu` check no longer means
-  # "the profile section has a ⋯ menu". Scope the check to data-menu dropdowns
-  # that are NOT the account menu (same spirit as the #delete-entry pinning in
-  # the second describe block).
+  # Two `<details data-menu>` dropdowns are legitimate non-section menus: the
+  # shell's avatar account menu (on every page) and the profile header's
+  # Report/Block actions menu (#profile-actions-menu, shown to any logged-in
+  # visitor). Neither is a profile-section ⋯ menu, so a page-wide `data-menu`
+  # check must exclude both. Scope the check to data-menu dropdowns that are
+  # neither (same spirit as the #delete-entry pinning in the second describe
+  # block).
   defp section_card_menus(html) do
     ~r/<details[^>]*\bdata-menu\b[^>]*>/
     |> Regex.scan(html)
     |> List.flatten()
-    |> Enum.reject(&(&1 =~ "data-account-menu"))
+    |> Enum.reject(&(&1 =~ "data-account-menu" or &1 =~ ~s(id="profile-actions-menu")))
   end
 
   describe "profile section owner affordances" do

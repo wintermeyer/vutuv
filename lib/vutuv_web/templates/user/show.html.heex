@@ -48,59 +48,98 @@ the resulting ~200px rail width. --%>
           {if cover_url, do: gettext("Change cover"), else: gettext("Add cover photo")}
         </.link>
       </div>
+      <%!-- Header card body. #profile-actions keeps the viewer's primary moves
+      (Follow / Following + Message) up front and folds the rest (mute, the
+      private save toggles, report, block) into one labeled ⋯ menu so the header
+      stays calm. The <.follow_relationship> pill is always shown in full and
+      reads both follow directions from each half's text + colour, so every
+      status (no relationship, one-way out, follow-back, mutual "vernetzt") is
+      legible at a glance without the pill changing shape. Action controls are
+      per-viewer and never appear in the agent-format ProfileDoc, so this rework
+      needs no doc change. --%>
       <div class="px-6 pb-6">
+        <% member_since = member_since(@user) %>
+        <% can_act? = @preview_as in [:follower, :connection] or visitor?(@conn, @current_user) %>
+        <% vcard_path = if @vcard_full?, do: ~p"/#{@user}/vcard", else: "/#{@user.username}.vcf" %>
+        <% mute_path = is_binary(@header_follow_id) && ~p"/follows/#{@header_follow_id}/mute" %>
+        <% bm_save = ~p"/user_bookmarks?#{[user_bookmark: %{target_user_id: @user.id}]}" %>
+        <% bm_del = ~p"/user_bookmarks/#{@user.id}" %>
+        <% lk_save = ~p"/user_likes?#{[user_like: %{target_user_id: @user.id}]}" %>
+        <% lk_del = ~p"/user_likes/#{@user.id}" %>
+        <% bookmarked? = @user_saved && @user_saved.bookmarked? %>
+        <% liked? = @user_saved && @user_saved.liked? %>
+        <% saved_present? = not is_nil(@user_saved) %>
+        <% report_path = ~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}" %>
+        <% block_path = ~p"/blocks?#{[block: [user_id: @user.id]]}" %>
+        <% block_confirm =
+          gettext(
+            "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
+            slug: @user.username
+          ) %>
         <div class="-mt-12 flex items-end gap-4">
-          <%!-- relative z-10: the cover banner above is `relative` (for its
-          upload overlay), which puts it in the positioned paint layer; without
-          this the static avatar would render behind the banner instead of
-          overlapping on top of it. --%>
           <.avatar user={@user} size="lg" shape="square" loading="eager" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 ring-4 ring-white dark:ring-slate-900" presence />
-          <%!-- flex-wrap: on narrow phones the visitor's three controls
-          (Connect/Follow/Message) don't fit beside the avatar in one row;
-          without it the last button is clipped off-screen. --%>
-          <%!-- pointer-events-none in preview: the visitor controls render so
-          the owner sees exactly what a member gets, but they are inert (you
-          cannot connect to / message yourself). --%>
+          <%!-- pointer-events-none in preview: the controls render so the owner
+          sees exactly what a member gets, but they are inert. --%>
           <div
             id="profile-actions"
-            class={["ml-auto flex flex-wrap justify-end gap-2 pb-1", @preview? && "pointer-events-none"]}
+            class={["ml-auto flex flex-wrap items-center justify-end gap-2 pb-1", @preview? && "pointer-events-none"]}
           >
             <%= cond do %>
               <% @as_owner? -> %>
                 <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
-              <% assigns[:viewer_block] -> %>
-                <%!-- I blocked this member: no Connect/Follow/Message (they
-                would all refuse anyway) - the footer offers Unblock. --%>
-              <% @preview_as in [:follower, :connection] or visitor?(@conn, @current_user) -> %>
-                <%!-- "✓ Vernetzt" is a status, not an action: you are connected
-                exactly when you both follow each other, so it is dissolved by
-                unfollowing (the Following button), never by its own button. --%>
-                <span
-                  :if={@header_connected?}
-                  class="inline-flex items-center gap-1 self-start rounded-lg bg-brand-50 px-3 py-2 text-sm font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+              <% @viewer_block -> %>
+                <%!-- I blocked this member: the only control is Unblock; Follow /
+                Message / the menu would all refuse. --%>
+                <.link
+                  id="unblock-user"
+                  href={~p"/blocks/#{@viewer_block.id}"}
+                  method="delete"
+                  data-confirm={gettext("Unblock @%{slug}?", slug: @user.username)}
+                  class="inline-flex items-center text-sm font-semibold text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
                 >
-                  ✓ {gettext("Connected")}
-                </span>
-                <.follow_button
-                  variant="button"
+                  {gettext("Unblock")}
+                </.link>
+              <% can_act? -> %>
+                <%!-- Directional relationship as one always-full segmented pill:
+                the clickable Follow / Following half (you follow him), a seam
+                glyph that encodes the direction (· → ← ⇄), and a read-only
+                inbound half that always states it ("Folgt dir" / "Folgt dir
+                nicht", he follows you or not). Mutual ("vernetzt") lights the
+                seam + inbound half brand. Status reads from text + colour, so
+                the pill never changes shape. Replaces the old badge + button. --%>
+                <.follow_relationship
                   follower_id={@current_user_id}
                   followee_id={@user.id}
                   follow_id={@header_follow_id}
-                />
-                <%!-- Mute is a property of your own follow, so it shows only once
-                you follow them; it silences their posts in your feed without
-                touching the follow or the vernetzt status. --%>
-                <.mute_button
-                  :if={is_binary(@header_follow_id)}
-                  follow_id={@header_follow_id}
-                  muted?={@header_follow_muted?}
+                  follows_viewer?={@header_follows_viewer?}
                 />
                 <.button variant="secondary" href={~p"/messages/with/#{@user}"}>{gettext("Message")}</.button>
-                <%!-- Private, silent saves (no follow/connection, no notification):
-                bookmark or like this member. Shown to any logged-in non-owner; the
-                block branch above renders no controls at all. --%>
-                <.user_bookmark_button :if={@user_saved} saved?={@user_saved.bookmarked?} target_id={@user.id} />
-                <.user_like_button :if={@user_saved} saved?={@user_saved.liked?} target_id={@user.id} />
+                <.card_menu id="profile-actions-menu">
+                  <%!-- Mute is a property of your own follow, so it shows only once you
+                  follow them; it silences their posts in your feed only. --%>
+                  <:item :if={is_binary(@header_follow_id)} href={mute_path} method="put">
+                    {if @header_follow_muted?, do: gettext("Unmute"), else: gettext("Mute")}
+                  </:item>
+                  <%!-- Private, silent saves (no follow, no notification). --%>
+                  <:item
+                    :if={saved_present?}
+                    href={if(bookmarked?, do: bm_del, else: bm_save)}
+                    method={if(bookmarked?, do: "delete", else: "post")}
+                  >
+                    {if bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
+                  </:item>
+                  <:item
+                    :if={saved_present?}
+                    href={if(liked?, do: lk_del, else: lk_save)}
+                    method={if(liked?, do: "delete", else: "post")}
+                  >
+                    {if liked?, do: gettext("Unlike"), else: gettext("Like")}
+                  </:item>
+                  <:item id="report-profile" href={report_path}>{gettext("Report")}</:item>
+                  <:item id="block-user" href={block_path} method="post" confirm={block_confirm} danger>
+                    {gettext("Block")}
+                  </:item>
+                </.card_menu>
               <% true -> %>
             <% end %>
           </div>
@@ -109,13 +148,12 @@ the resulting ~200px rail width. --%>
         <h1 class="mt-4 flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
           {full_name(@user)}
           <span :if={@user.identity_verified?} title={gettext("Verified profile")} class="text-brand-600 dark:text-brand-400">
-            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z"/></svg>
+            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4 5v6c0 5 3.4 8.7 8 10 4.6-1.3 8-5 8-10V5l-8-3Zm-1.2 13.4-3.5-3.5 1.4-1.4 2.1 2.1 4.6-4.6 1.4 1.4-6 6Z" /></svg>
           </span>
         </h1>
-        <%!-- Headline is user-written Markdown, rendered through the same safe
-        VutuvWeb.Markdown pipeline as chat messages. Earmark wraps the output in
-        a <p>, so the host is a <div>; the arbitrary-variant classes flatten that
-        paragraph and style inline links/code to match the muted sub-line. --%>
+        <%!-- Headline is user-written Markdown through the safe VutuvWeb.Markdown
+        pipeline; the arbitrary-variant classes flatten Earmark's <p> and tint
+        inline links/code to match the muted sub-line. --%>
         <div
           :if={@user.headline}
           class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
@@ -126,15 +164,8 @@ the resulting ~200px rail width. --%>
           {@work_info}
         </p>
 
-        <% member_since = member_since(@user) %>
         <% has_counts = @follower_count > 0 or @followee_count > 0 or @connection_count > 0 %>
-
-        <%!-- Counts row: each counter is hidden when its total is 0 (a bare "0"
-        with no label says nothing). Left-aligned. "Member since" used to ride
-        the right end of this line via ml-auto, but on a narrow phone it wrapped
-        to a lone right-aligned line that read as orphaned and left the card
-        lopsided; it now anchors the left of the footer row below, opposite the
-        actions. --%>
+        <%!-- Each counter is hidden when its total is 0 (a bare "0" says nothing). --%>
         <div :if={has_counts} class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
           <.link :if={@follower_count > 0} href={~p"/#{@user}/followers"} class="hover:underline">
             <span class="font-bold text-slate-900 dark:text-white">{compact_count(@follower_count)}</span>
@@ -155,77 +186,22 @@ the resulting ~200px rail width. --%>
           </.link>
         </div>
 
-        <%!-- Footer row: "Member since" anchors the left and the actions
-        (report / block / vCard) cluster on the right, so the hairline-divided
-        row carries weight on both ends instead of stacking everything against
-        the right edge (which left all the empty space on the left). vCard is
-        the download of this profile as a .vcf, shown to everyone including the
-        owner; it replaces the old standalone "Exports" rail card. --%>
+        <%!-- Footer: member-since anchors the left, the vCard download the right.
+        Report / Block moved into the #profile-actions ⋯ menu, so the footer is
+        just the universal member-since + vCard (shown to everyone, owner too). --%>
         <div class="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-          <%!-- my-0 neutralises the default <p> margin from components.css, which
-          would otherwise inflate the margin-box and lift the text above the
-          vCard baseline under the row's items-center. --%>
           <.member_since_line :if={member_since} value={member_since} class="my-0" />
-          <div class="ml-auto flex items-center gap-4">
-            <%!-- The quiet escape hatch: report this profile. Deliberately muted
-            (footer, slate, no fill) so it is findable when needed but never in
-            the way. Logged-in non-owners only. --%>
-            <.link
-              :if={@current_user && not same_user?(@user, @current_user)}
-              id="report-profile"
-              href={~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}"}
-              class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-            >
-            <span aria-hidden="true">⚑</span>
-            {gettext("Report")}
-          </.link>
-          <%!-- Block / Unblock: as quiet as Report. Blocking severs follows +
-          connection, freezes the conversation and stops all interaction both
-          ways (Vutuv.Social.block_user/2); unblocking restores nothing. --%>
-          <.link
-            :if={@current_user && not same_user?(@user, @current_user) && is_nil(@viewer_block)}
-            id="block-user"
-            href={~p"/blocks?#{[block: [user_id: @user.id]]}"}
-            method="post"
-            data-confirm={
-              gettext(
-                "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-                slug: @user.username
-              )
-            }
-            class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400"
-          >
-            {gettext("Block")}
-          </.link>
-          <.link
-            :if={@viewer_block}
-            id="unblock-user"
-            href={~p"/blocks/#{@viewer_block.id}"}
-            method="delete"
-            data-confirm={gettext("Unblock @%{slug}?", slug: @user.username)}
-            class="inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-brand-700 dark:hover:text-brand-300"
-          >
-            {gettext("Unblock")}
-          </.link>
-          <%!-- A permitted viewer (the owner, or a member they follow back)
-          gets the session-aware export with all their email addresses; an
-          anonymous visitor gets the public .vcf. --%>
           <.link
             id="download-vcard"
-            href={
-              if @vcard_full?,
-                do: ~p"/#{@user}/vcard",
-                else: "/#{@user.username}.vcf"
-            }
+            href={vcard_path}
             title={gettext("Download")}
-            class="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            class="ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
           >
             <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
             </svg>
             {gettext("vCard")}
           </.link>
-          </div>
         </div>
       </div>
     </section>

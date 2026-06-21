@@ -68,14 +68,19 @@ defmodule VutuvWeb.ConnectionControllerTest do
       assert html =~ ~p"/follows/#{follow.id}/mute"
     end
 
-    test "a mutual follow shows the ✓ Connected status", %{conn: conn} do
+    test "a mutual follow shows the connected (vernetzt) state via the ⇄ connector", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       other = insert_activated_user()
       connect!(me, other)
 
       html = conn |> get(~p"/#{other}") |> html_response(200)
 
-      assert html =~ "Connected"
+      # The follow-only model marks "vernetzt" with both follow directions lit in
+      # the segmented control plus a ⇄ connector, not a standalone "Connected"
+      # word (mirrors the header_directional_follow_state tests in
+      # user_controller_test).
+      assert html =~ "Follows you"
+      assert html =~ "You follow each other"
     end
   end
 

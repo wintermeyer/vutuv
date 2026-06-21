@@ -851,6 +851,85 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get(User, user.id)
   end
 
+  describe "header directional follow state" do
+    # The follow-only model shows BOTH directions in one segmented pill that is
+    # always present in full, so the relationship status reads at a glance from
+    # the text + colour of each half rather than from which parts appear: the
+    # clickable outbound toggle (Follow / Following, "I follow him"), a seam
+    # whose glyph encodes the direction (· none, → out, ← in, ⇄ mutual), and a
+    # read-only inbound half that always states the inbound direction
+    # ("Follows you" / "Doesn't follow you", "he follows me"). The inbound text
+    # and the ⇄ connector render only in the header, so they are unambiguous
+    # probes for header_follows_viewer? and the mutual state.
+
+    test "states the inbound direction even when there is no relationship yet", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      other = insert(:user, email_confirmed?: true)
+
+      html = conn |> get(~p"/#{other}") |> html_response(200)
+
+      # the inbound half is always present and reads the negative when this
+      # member does not follow the viewer
+      # Phoenix HTML-escapes the apostrophe, so match the rendered form
+      assert html =~ "Doesn&#39;t follow you"
+      refute html =~ "Follows you"
+      refute html =~ "You follow each other"
+      # the toggle offers a follow (a create-follow link targeting other)
+      assert html =~ "follow[followee_id]=#{other.id}"
+    end
+
+    test "shows 'Follows you' when this member follows the viewer (follow-back case)", %{
+      conn: conn
+    } do
+      {conn, viewer} = create_and_login_user(conn)
+      other = insert(:user, email_confirmed?: true)
+      # other (the profile) follows the viewer; the viewer does not follow back
+      insert(:follow, follower: other, followee: viewer)
+
+      html = conn |> get(~p"/#{other}") |> html_response(200)
+
+      assert html =~ "Follows you"
+      # the toggle offers a follow-back (a create-follow link targeting other),
+      # not an unfollow (which would be DELETE /follows/<id>)
+      assert html =~ "follow[followee_id]=#{other.id}"
+      # a follow-back is not yet mutual, so no ⇄ connector
+      refute html =~ "You follow each other"
+    end
+
+    test "shows the ⇄ connector for a mutual follow (the directional replacement for vernetzt)",
+         %{
+           conn: conn
+         } do
+      {conn, viewer} = create_and_login_user(conn)
+      other = insert(:user, email_confirmed?: true)
+      insert(:follow, follower: viewer, followee: other)
+      insert(:follow, follower: other, followee: viewer)
+
+      html = conn |> get(~p"/#{other}") |> html_response(200)
+
+      assert html =~ "Follows you"
+      # both directions active → the ⇄ connector marks the mutual follow
+      assert html =~ "You follow each other"
+    end
+
+    test "reads 'Doesn't follow you' when only the viewer follows (one-way out)", %{
+      conn: conn
+    } do
+      {conn, viewer} = create_and_login_user(conn)
+      other = insert(:user, email_confirmed?: true)
+      insert(:follow, follower: viewer, followee: other)
+
+      html = conn |> get(~p"/#{other}") |> html_response(200)
+
+      # the inbound half is still present, just negative; never "Follows you"
+      # (capital F, with the trailing s) and never the mutual connector
+      # Phoenix HTML-escapes the apostrophe, so match the rendered form
+      assert html =~ "Doesn&#39;t follow you"
+      refute html =~ "Follows you"
+      refute html =~ "You follow each other"
+    end
+  end
+
   describe "owner 'view as' profile preview" do
     # Two emails so the private/public split is unambiguous: the owner and a
     # a connection (vernetzt, mutual follow) see both, a plain Follower / the
