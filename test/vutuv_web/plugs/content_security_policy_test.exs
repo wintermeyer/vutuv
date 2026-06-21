@@ -39,4 +39,17 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicyTest do
     policy = conn |> get(~p"/unsubscribe/#{token}") |> csp()
     assert policy =~ "default-src 'self'"
   end
+
+  test "the strict default never allows eval (the dev escape hatch is off here)",
+       %{conn: conn} do
+    # `script-src 'self' 'unsafe-eval'` is added only when
+    # `config :vutuv, csp: [allow_eval: true]` (dev.exs, so the Tidewave
+    # browser_eval tool can run). Test and prod builds never load that config, so
+    # they must carry neither the directive nor `unsafe-eval` — eval is an XSS
+    # amplifier. See VutuvWeb.Plug.ContentSecurityPolicy.
+    policy = conn |> get(~p"/") |> csp()
+
+    refute policy =~ "unsafe-eval"
+    refute policy =~ "script-src"
+  end
 end

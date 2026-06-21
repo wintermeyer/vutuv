@@ -31,21 +31,46 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
     Plug.Conn.put_resp_header(conn, "content-security-policy", policy(conn))
   end
 
+  # DEV-ONLY escape hatch. When true we add `script-src 'self' 'unsafe-eval'` so
+  # Tidewave's `browser_eval` tool works locally: it injects JS and runs it with
+  # `eval()` to drive and inspect the page (e.g. measuring element geometry to
+  # confirm a mobile layout isn't clipped). Under the strict `default-src 'self'`
+  # (no `script-src`) the browser refuses `eval` and the tool throws "Refused to
+  # evaluate a string as JavaScript".
+  #
+  # WHY it is gated: `'unsafe-eval'` weakens the CSP, our second line of defense
+  # behind the Markdown sanitizer, so it MUST NEVER reach production. It is read
+  # with `compile_env`, and only config/dev.exs sets it, so a prod/test build
+  # (which never loads dev.exs) bakes in `false` and emits no `script-src` at all.
+  #
+  # TO UNDO / DISABLE: delete (or set to false) the `config :vutuv, csp: [...]`
+  # line in config/dev.exs and recompile. Nothing else reads this flag, and the
+  # policy falls back to the strict `default-src 'self'`. A regression test
+  # (content_security_policy_test.exs) keeps eval out of the non-dev policy.
+  @allow_eval Application.compile_env(:vutuv, [:csp, :allow_eval], false)
+
   defp policy(conn) do
-    Enum.join(
-      [
-        "default-src 'self'",
-        "img-src 'self' data:",
-        "style-src 'self' 'unsafe-inline'",
-        "connect-src 'self' #{ws_origin(conn)}",
-        "font-src 'self' data:",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'self'"
-      ],
-      "; "
-    )
+    [
+      "default-src 'self'",
+      "img-src 'self' data:",
+      "style-src 'self' 'unsafe-inline'",
+      "connect-src 'self' #{ws_origin(conn)}",
+      "font-src 'self' data:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'self'"
+    ]
+    |> maybe_allow_eval()
+    |> Enum.join("; ")
+  end
+
+  defp maybe_allow_eval(directives) do
+    if @allow_eval do
+      ["script-src 'self' 'unsafe-eval'" | directives]
+    else
+      directives
+    end
   end
 
   # ws://host[:port] for http, wss://host[:port] for https. The port rides

@@ -3,6 +3,14 @@ import Config
 # No nginx locally: serve uploaded avatars/screenshots from the project dir.
 config :vutuv, :serve_uploads_locally, true
 
+# Relax the dev Content-Security-Policy to allow `'unsafe-eval'` for scripts so
+# Tidewave's `browser_eval` tool (which runs page JS via eval, e.g. to measure
+# layout and confirm a change isn't clipped) is not blocked. DEV ONLY — the flag
+# is read with compile_env and is never set in prod/test. Remove this line (or
+# set it to false) to restore the strict `default-src 'self'` policy. See the
+# long note in VutuvWeb.Plug.ContentSecurityPolicy.
+config :vutuv, csp: [allow_eval: true]
+
 config :vutuv, VutuvWeb.Endpoint,
   http: [port: 4000],
   url: [host: "localhost", port: 4000],
