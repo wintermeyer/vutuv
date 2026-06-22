@@ -43,6 +43,10 @@ erl_crash.dump
 #
 log.csv
 
+# Local planning docs (not for version control)
+#
+/docs/plans/
+
 # Distillery
 #
 rel/vutuv
