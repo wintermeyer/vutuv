@@ -294,18 +294,14 @@ defmodule Vutuv.Moderation do
   reporters). Takes the raw params id; nil on garbage input or no such case.
   """
   def get_case_with_details(id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil ->
-        nil
-
-      uuid ->
-        Repo.one(
-          from(c in Case,
-            where: c.id == ^uuid,
-            preload: [:owner, :resolved_by, reports: :reporter]
-          )
+    Vutuv.UUIDv7.with_cast(id, fn uuid ->
+      Repo.one(
+        from(c in Case,
+          where: c.id == ^uuid,
+          preload: [:owner, :resolved_by, reports: :reporter]
         )
-    end
+      )
+    end)
   end
 
   @doc "The open case for this content item, if any."

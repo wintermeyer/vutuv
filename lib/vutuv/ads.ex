@@ -80,10 +80,7 @@ defmodule Vutuv.Ads do
   detail page) - or nil (also on a malformed id).
   """
   def get_ad_by_id(id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Ad |> Repo.get(uuid) |> Repo.preload([:user, :approved_by])
-    end
+    Vutuv.UUIDv7.with_cast(id, &(Ad |> Repo.get(&1) |> Repo.preload([:user, :approved_by])))
   end
 
   @doc """

@@ -68,10 +68,7 @@ defmodule VutuvWeb.ControllerHelpers do
   CastError. `user` is the authorizing member; `assoc` its collection.
   """
   def get_owned(user, assoc, id) when is_atom(assoc) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get(Ecto.assoc(user, assoc), uuid)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get(Ecto.assoc(user, assoc), &1))
   end
 
   @doc """
@@ -94,10 +91,7 @@ defmodule VutuvWeb.ControllerHelpers do
   (which act on a user the viewer named in a form param) share.
   """
   def get_user(id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get(User, uuid)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get(User, &1))
   end
 
   @doc """

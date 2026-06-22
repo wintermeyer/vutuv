@@ -73,4 +73,17 @@ defmodule Vutuv.UUIDv7 do
       :error -> nil
     end
   end
+
+  @doc """
+  Casts `value` to a UUID and calls `fun` with it, or returns `nil` when it
+  cannot be cast. Folds the `case cast_or_nil(id) do nil -> nil; uuid -> … end`
+  guard the scoped get_* lookups repeat, so a malformed id is a miss (nil) and
+  never an `Ecto.CastError`.
+  """
+  def with_cast(value, fun) when is_function(fun, 1) do
+    case cast_or_nil(value) do
+      nil -> nil
+      uuid -> fun.(uuid)
+    end
+  end
 end

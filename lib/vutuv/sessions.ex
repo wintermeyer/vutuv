@@ -127,10 +127,7 @@ defmodule Vutuv.Sessions do
 
   @doc "Fetches one of the user's own sessions, or nil (also on a malformed id)."
   def get_session(%Accounts.User{} = user, id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get_by(UserSession, id: uuid, user_id: user.id)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get_by(UserSession, id: &1, user_id: user.id))
   end
 
   # ── The profile-completion onboarding window ──

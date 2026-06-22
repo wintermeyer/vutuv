@@ -313,22 +313,16 @@ defmodule Vutuv.Search do
   # "similar". A user with any exact term never repeats in the similar group.
   defp substring_and_phonetic_people(parsed) do
     value = parsed.text
-    cologne_fuzzy_value = phoneticize_search_value(value, :cologne)
-    soundex_fuzzy_value = phoneticize_search_value(value, :soundex)
-    infix = "%" <> escape_like(value) <> "%"
 
     terms =
       from(t in SearchTerm,
         join: u in assoc(t, :user),
         as: :user,
-        where:
-          account_confirmed_row(u) and
-            (like(t.value, ^infix) or ^cologne_fuzzy_value == t.value or
-               ^soundex_fuzzy_value == t.value),
         order_by: [desc: t.score, asc: t.value],
         limit: @term_limit,
         preload: [user: u]
       )
+      |> phonetic_term_match(value)
       |> exclude_moderated()
       |> filter_tag(parsed.tag, parsed.exact?)
       |> filter_city(parsed.city, parsed.exact?)
@@ -352,6 +346,23 @@ defmodule Vutuv.Search do
   defp visible_users do
     from(u in User, as: :user, where: account_confirmed_row(u))
     |> exclude_moderated()
+  end
+
+  # The shared substring + phonetic SearchTerm match behind both search entry
+  # points: a confirmed user whose term matches `value` as a substring or by its
+  # Cologne / Soundex encoding. The caller supplies the query (bound `[t, user:
+  # u]`) and adds its own select / order / limit and the moderation/tag/city
+  # filters; this computes the fuzzy values once and adds only the WHERE.
+  defp phonetic_term_match(query, value) do
+    cologne = phoneticize_search_value(value, :cologne)
+    soundex = phoneticize_search_value(value, :soundex)
+    infix = "%" <> escape_like(value) <> "%"
+
+    from([t, user: u] in query,
+      where:
+        account_confirmed_row(u) and
+          (like(t.value, ^infix) or ^cologne == t.value or ^soundex == t.value)
+    )
   end
 
   defp tags(%{scope: scope}) when scope not in [:all, :tags], do: []
@@ -500,25 +511,17 @@ defmodule Vutuv.Search do
 
   # Checks database for matches between search.value and search_terms
   def search(value, false) do
-    value = String.downcase(value)
-    cologne_fuzzy_value = phoneticize_search_value(value, :cologne)
-    soundex_fuzzy_value = phoneticize_search_value(value, :soundex)
-    infix = "%" <> escape_like(value) <> "%"
-
     for(
       term <-
         Repo.all(
           from(t in SearchTerm,
             left_join: u in assoc(t, :user),
             as: :user,
-            where:
-              account_confirmed_row(u) and
-                (like(t.value, ^infix) or ^cologne_fuzzy_value == t.value or
-                   ^soundex_fuzzy_value == t.value),
             # Only the two columns the result rows need — the full SearchTerm
             # row (value, timestamps) is never read here.
             select: %{score: t.score, user_id: t.user_id}
           )
+          |> phonetic_term_match(String.downcase(value))
           |> exclude_moderated()
         )
     ) do

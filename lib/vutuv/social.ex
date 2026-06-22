@@ -12,7 +12,7 @@ defmodule Vutuv.Social do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
+  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -647,9 +647,8 @@ defmodule Vutuv.Social do
 
     from([target: t] in query,
       where:
-        ilike(t.first_name, ^pattern) or ilike(t.last_name, ^pattern) or
-          ilike(t.username, ^pattern) or ilike(t.headline, ^pattern) or
-          ilike(fragment("? || ' ' || ?", t.first_name, t.last_name), ^pattern)
+        name_ilike(t.first_name, t.last_name, ^pattern) or
+          ilike(t.username, ^pattern) or ilike(t.headline, ^pattern)
     )
   end
 

@@ -42,7 +42,7 @@ defmodule Vutuv.Posts do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
+  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
   alias Vutuv.PostImageStore
@@ -1238,9 +1238,7 @@ defmodule Vutuv.Posts do
     pattern = "%" <> escape_like(term) <> "%"
 
     from([p, author: a] in query,
-      where:
-        ilike(p.body, ^pattern) or ilike(a.first_name, ^pattern) or ilike(a.last_name, ^pattern) or
-          ilike(fragment("? || ' ' || ?", a.first_name, a.last_name), ^pattern)
+      where: ilike(p.body, ^pattern) or name_ilike(a.first_name, a.last_name, ^pattern)
     )
   end
 
@@ -1255,25 +1253,37 @@ defmodule Vutuv.Posts do
 
   @doc "The permalink lookup: `author`'s preloaded post by id, or `nil`."
   def get_post(%User{id: author_id}, id) do
-    case UUIDv7.cast_or_nil(id) do
-      nil ->
-        nil
-
-      id ->
-        from(p in Post, where: p.user_id == ^author_id and p.id == ^id)
-        |> Repo.one()
-        |> preload_post()
-    end
+    UUIDv7.with_cast(id, fn id ->
+      from(p in Post, where: p.user_id == ^author_id and p.id == ^id)
+      |> Repo.one()
+      |> preload_post()
+    end)
   end
 
   @doc "A preloaded post by id, or `nil` (live-feed pill, edit page)."
   def get_post(id) do
-    # cast_or_nil: a garbage id in /posts/:id/edit is a nil (404), not a 500.
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      id -> Post |> Repo.get(id) |> preload_post()
+    # with_cast: a garbage id in /posts/:id/edit is a nil (404), not a 500.
+    UUIDv7.with_cast(id, &(Post |> Repo.get(&1) |> preload_post()))
+  end
+
+  @doc """
+  Classifies a post's reply parent (from its preloaded `reply_ref`) into one of
+  `{:parent, parent_post}` (the parent still exists), `{:author_only, author}`
+  (the parent post is gone but its author remains), `:gone` (author gone too),
+  or `nil` (not a reply). The API (`PostJSON`), the agent docs (`PostDoc`) and
+  the post card all render from this, so they can't disagree on what a reply
+  points at. An un-preloaded `reply_ref` is a truthy `NotLoaded`, hence the
+  struct matches.
+  """
+  def reply_ref_state(%Post{reply_ref: %PostReply{} = ref}) do
+    cond do
+      match?(%Post{}, ref.parent_post) -> {:parent, ref.parent_post}
+      match?(%User{}, ref.parent_author) -> {:author_only, ref.parent_author}
+      true -> :gone
     end
   end
+
+  def reply_ref_state(_post), do: nil
 
   defp preload_post(nil), do: nil
   defp preload_post(%Post{} = post), do: Repo.preload(post, post_preloads(), force: true)
@@ -1415,10 +1425,7 @@ defmodule Vutuv.Posts do
         from(u in User,
           where: u.id != ^author_id,
           where: account_confirmed_row(u),
-          where:
-            ilike(u.first_name, ^pattern) or ilike(u.last_name, ^pattern) or
-              ilike(u.username, ^pattern) or
-              ilike(fragment("? || ' ' || ?", u.first_name, u.last_name), ^pattern),
+          where: name_ilike(u.first_name, u.last_name, ^pattern) or ilike(u.username, ^pattern),
           order_by: [u.first_name, u.last_name],
           limit: ^limit
         )

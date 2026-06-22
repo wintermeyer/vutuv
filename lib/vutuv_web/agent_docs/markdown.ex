@@ -333,8 +333,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp section(_title, []), do: nil
   defp section(title, lines), do: "## #{title}\n\n" <> Enum.join(lines, "\n")
 
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(value), do: value
+  @doc false
+  # Shared with the plain-text renderer, like the other helpers above.
+  def blank_to_nil(""), do: nil
+  def blank_to_nil(value), do: value
 
   # A YAML double-quoted scalar: escape backslash and double-quote, fold
   # newlines/tabs to spaces. (inspect/1 was wrong here — it emits `\#{` for a

@@ -14,7 +14,6 @@ defmodule VutuvWeb.PostJSON do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostReply
 
   @doc "Serializes a preloaded post for `viewer` (a `%User{}` or `nil`)."
   def post(%Post{} = post, viewer) do
@@ -39,24 +38,25 @@ defmodule VutuvWeb.PostJSON do
   # The reply reference mirrors the card banner's three states: a live
   # parent, a deleted post whose author still exists, or nothing nameable
   # once the account is gone too. `nil` when the post is not a reply.
-  defp in_reply_to(%Post{reply_ref: %PostReply{} = ref}) do
-    cond do
-      match?(%Post{}, ref.parent_post) ->
+  defp in_reply_to(post) do
+    case Posts.reply_ref_state(post) do
+      {:parent, parent} ->
         %{
-          post_id: ref.parent_post.id,
-          url: VutuvWeb.Endpoint.url() <> Posts.path(ref.parent_post),
-          author: author_ref(ref.parent_post.user)
+          post_id: parent.id,
+          url: VutuvWeb.Endpoint.url() <> Posts.path(parent),
+          author: author_ref(parent.user)
         }
 
-      match?(%User{}, ref.parent_author) ->
-        %{post_id: nil, url: nil, author: author_ref(ref.parent_author)}
+      {:author_only, author} ->
+        %{post_id: nil, url: nil, author: author_ref(author)}
 
-      true ->
+      :gone ->
         %{post_id: nil, url: nil, author: nil}
+
+      nil ->
+        nil
     end
   end
-
-  defp in_reply_to(_post), do: nil
 
   defp author_ref(%User{} = user) do
     %{username: user.username, name: VutuvWeb.UserHelpers.full_name(user)}

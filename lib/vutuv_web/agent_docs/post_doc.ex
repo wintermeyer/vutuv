@@ -14,7 +14,6 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostReply
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.UserHelpers
 
@@ -112,21 +111,22 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   defp absolutize("/" <> _ = path), do: AgentDocs.abs_url(path)
   defp absolutize(url), do: url
 
-  defp in_reply_to(%Post{reply_ref: %PostReply{} = ref}) do
-    cond do
-      match?(%Post{}, ref.parent_post) ->
+  defp in_reply_to(post) do
+    case Posts.reply_ref_state(post) do
+      {:parent, parent} ->
         %{
-          url: AgentDocs.abs_url(Posts.path(ref.parent_post)),
-          author: UserHelpers.full_name(ref.parent_post.user)
+          url: AgentDocs.abs_url(Posts.path(parent)),
+          author: UserHelpers.full_name(parent.user)
         }
 
-      match?(%Vutuv.Accounts.User{}, ref.parent_author) ->
-        %{url: nil, author: UserHelpers.full_name(ref.parent_author)}
+      {:author_only, author} ->
+        %{url: nil, author: UserHelpers.full_name(author)}
 
-      true ->
+      :gone ->
         %{url: nil, author: nil}
+
+      nil ->
+        nil
     end
   end
-
-  defp in_reply_to(_post), do: nil
 end

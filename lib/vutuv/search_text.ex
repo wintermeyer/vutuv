@@ -26,4 +26,18 @@ defmodule Vutuv.SearchText do
   wildcard matches literally instead of acting as a pattern metacharacter.
   """
   def escape_like(term), do: String.replace(term, ~r/[\\%_]/, &("\\" <> &1))
+
+  @doc """
+  Query macro: case-insensitive name match on `first`, `last`, or the
+  "first last" concatenation, against `pattern`. Compose it with `or` and a
+  site's own extra columns inside a `where`. The bound columns are passed
+  explicitly (`name_ilike(t.first_name, t.last_name, ^pattern)`) because the
+  query binding name differs per call site (`target`, `author`, plain user).
+  """
+  defmacro name_ilike(first, last, pattern) do
+    quote do
+      ilike(unquote(first), unquote(pattern)) or ilike(unquote(last), unquote(pattern)) or
+        ilike(fragment("? || ' ' || ?", unquote(first), unquote(last)), unquote(pattern))
+    end
+  end
 end

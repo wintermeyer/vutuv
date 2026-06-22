@@ -24,7 +24,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.name),
       doc.headline_markdown,
-      blank_to_nil(doc.work_info),
+      Markdown.blank_to_nil(doc.work_info),
       profile_facts(doc),
       section(
         gettext("Tags"),
@@ -333,9 +333,6 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n")
   end
-
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(value), do: value
 
   defp join_blocks(blocks) do
     blocks

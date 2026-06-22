@@ -505,37 +505,25 @@ defmodule VutuvWeb.MessageLive.Index do
             <% end %>
 
             <%!-- Calm overflow menu: blocking is reachable right where unwanted
-            contact arrives, without shouting. Native <details data-menu>; app.js
-            closes it on outside click and Escape. Blocking severs follows + the
-            connection, freezes this conversation and stops all interaction both
-            ways; unblocking restores nothing. --%>
-            <details :if={@other} data-menu class="relative" id="thread-menu">
-              <summary
-                title={gettext("Options")}
-                class="flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 hover:text-slate-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 [&::-webkit-details-marker]:hidden"
+            contact arrives, without shouting. The shared <.card_menu> (native
+            <details data-menu>; app.js closes it on outside click and Escape).
+            Blocking severs follows + the connection, freezes this conversation
+            and stops all interaction both ways; unblocking restores nothing. --%>
+            <.card_menu :if={@other} id="thread-menu">
+              <:item
+                id="block-from-thread"
+                click="block"
+                danger
+                confirm={
+                  gettext(
+                    "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
+                    slug: @other.username
+                  )
+                }
               >
-                <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M6.75 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm6.75 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Z" />
-                </svg>
-                <span class="sr-only">{gettext("Options")}</span>
-              </summary>
-              <div class="absolute right-0 z-20 mt-1 w-56 rounded-xl bg-white py-1 shadow-lg ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-700">
-                <button
-                  type="button"
-                  id="block-from-thread"
-                  phx-click="block"
-                  data-confirm={
-                    gettext(
-                      "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-                      slug: @other.username
-                    )
-                  }
-                  class="block w-full px-4 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-                >
-                  {gettext("Block @%{slug}", slug: @other.username)}
-                </button>
-              </div>
-            </details>
+                {gettext("Block @%{slug}", slug: @other.username)}
+              </:item>
+            </.card_menu>
           </div>
         </header>
 

@@ -181,18 +181,14 @@ defmodule Vutuv.Chat do
   # URLs and phx-value attributes; garbage must read as "no such
   # conversation", not an Ecto.Query.CastError.
   defp fetch_as_participant(me_id, conversation_id, narrow \\ & &1) do
-    case Vutuv.UUIDv7.cast_or_nil(conversation_id) do
-      nil ->
-        nil
-
-      conversation_id ->
-        from(c in Conversation,
-          where: c.id == ^conversation_id,
-          where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
-        )
-        |> narrow.()
-        |> Repo.one()
-    end
+    Vutuv.UUIDv7.with_cast(conversation_id, fn conversation_id ->
+      from(c in Conversation,
+        where: c.id == ^conversation_id,
+        where: c.user_a_id == ^me_id or c.user_b_id == ^me_id
+      )
+      |> narrow.()
+      |> Repo.one()
+    end)
   end
 
   @doc """

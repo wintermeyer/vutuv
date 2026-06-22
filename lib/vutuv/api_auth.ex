@@ -62,10 +62,7 @@ defmodule Vutuv.ApiAuth do
 
   @doc "Fetches one of the user's own PATs, or nil (also on a malformed id)."
   def get_pat(%User{} = user, id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get_by(Token, id: uuid, user_id: user.id, kind: "pat")
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get_by(Token, id: &1, user_id: user.id, kind: "pat"))
   end
 
   # ── Revocation ──
@@ -132,10 +129,7 @@ defmodule Vutuv.ApiAuth do
 
   @doc "One of the user's own apps, or nil (also on a malformed id)."
   def get_app(%User{} = user, id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get_by(App, id: uuid, user_id: user.id)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get_by(App, id: &1, user_id: user.id))
   end
 
   def get_app_by_client_id(client_id) when is_binary(client_id) do
@@ -154,10 +148,7 @@ defmodule Vutuv.ApiAuth do
   end
 
   def get_any_app(id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get(App, uuid)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get(App, &1))
   end
 
   @doc "Suspends the app: every one of its tokens fails on its next request."
@@ -183,13 +174,9 @@ defmodule Vutuv.ApiAuth do
   end
 
   def get_grant(%User{} = user, id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil ->
-        nil
-
-      uuid ->
-        Repo.one(from(g in Grant, where: g.id == ^uuid and g.user_id == ^user.id, preload: :app))
-    end
+    Vutuv.UUIDv7.with_cast(id, fn uuid ->
+      Repo.one(from(g in Grant, where: g.id == ^uuid and g.user_id == ^user.id, preload: :app))
+    end)
   end
 
   @doc """

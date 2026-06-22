@@ -25,9 +25,7 @@ defmodule VutuvWeb.PostComponents do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Posts
-  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
-  alias Vutuv.Posts.PostReply
 
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
@@ -380,20 +378,12 @@ defmodule VutuvWeb.PostComponents do
   # preloaded reply_ref (one level deep — `Vutuv.Posts.post_preloads/0`).
   # Pattern-match the structs: an un-preloaded has_one is a truthy
   # %Ecto.Association.NotLoaded{}.
-  defp reply_banner(%Post{reply_ref: %PostReply{} = ref}) do
-    cond do
-      match?(%Post{}, ref.parent_post) ->
-        {:parent, ref.parent_post.user, Posts.path(ref.parent_post)}
-
-      match?(%User{}, ref.parent_author) ->
-        {:author_only, ref.parent_author}
-
-      true ->
-        :gone
+  defp reply_banner(post) do
+    case Posts.reply_ref_state(post) do
+      {:parent, parent} -> {:parent, parent.user, Posts.path(parent)}
+      state -> state
     end
   end
-
-  defp reply_banner(_post), do: nil
 
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username

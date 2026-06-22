@@ -70,10 +70,7 @@ defmodule Vutuv.Webhooks do
   end
 
   def get_subscription(%App{} = app, id) do
-    case Vutuv.UUIDv7.cast_or_nil(id) do
-      nil -> nil
-      uuid -> Repo.get_by(Subscription, id: uuid, app_id: app.id)
-    end
+    Vutuv.UUIDv7.with_cast(id, &Repo.get_by(Subscription, id: &1, app_id: app.id))
   end
 
   def delete_subscription!(%Subscription{} = subscription), do: Repo.delete!(subscription)
