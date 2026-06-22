@@ -200,8 +200,12 @@ defmodule Vutuv.Chat do
       else: conversation.user_a_id
   end
 
-  def other_user(%Conversation{} = conversation, me_id),
-    do: Repo.get!(User, other_user_id(conversation, me_id))
+  def other_user(%Conversation{} = conversation, me_id) do
+    id = other_user_id(conversation, me_id)
+    # The thread header only renders the avatar, name and @handle, so select the
+    # listing columns rather than the whole wide user row.
+    Repo.one!(from(u in User, where: u.id == ^id, select: struct(u, ^User.listing_fields())))
+  end
 
   @doc """
   The status a conversation shows to its initiator: a declined request
@@ -398,7 +402,7 @@ defmodule Vutuv.Chat do
     other_ids = Enum.map(conversations, &other_user_id(&1, me_id))
 
     others =
-      from(u in User, where: u.id in ^other_ids)
+      from(u in User, where: u.id in ^other_ids, select: struct(u, ^User.listing_fields()))
       |> Repo.all()
       |> Map.new(&{&1.id, &1})
 
@@ -454,39 +458,50 @@ defmodule Vutuv.Chat do
   reversing). Keyset cursor `%{at:, id:}` — UUID v7 ids sort by creation time,
   so `id` is a valid tiebreaker. Non-participants get an empty page.
   """
-  def messages_page(%User{} = me, conversation_id, opts \\ []) do
+  def messages_page(me, conversation_or_id, opts \\ [])
+
+  def messages_page(%User{} = me, conversation_id, opts) when is_binary(conversation_id) do
+    case get_conversation(me, conversation_id) do
+      nil -> %{entries: [], more?: false, next_cursor: nil}
+      %Conversation{} = conversation -> messages_page(me, conversation, opts)
+    end
+  end
+
+  # When the caller already holds an authorized conversation (e.g. MessageLive
+  # just loaded it to render the thread), pass the struct so this skips the
+  # second get_conversation lookup the id form would run.
+  def messages_page(%User{} = me, %Conversation{} = conversation, opts) do
     limit = Keyword.get(opts, :limit, 30)
     cursor = Keyword.get(opts, :cursor)
 
-    case get_conversation(me, conversation_id) do
-      nil ->
-        %{entries: [], more?: false, next_cursor: nil}
+    entries =
+      from(m in Message,
+        where: m.conversation_id == ^conversation.id,
+        # The moderation freezer: a frozen message is hidden from the
+        # other participant but stays visible to its sender.
+        where: is_nil(m.frozen_at) or m.sender_id == ^me.id,
+        order_by: [desc: m.inserted_at, desc: m.id],
+        limit: ^(limit + 1),
+        preload: :sender
+      )
+      |> before_cursor(cursor)
+      |> Repo.all()
 
-      %Conversation{} = conversation ->
-        entries =
-          from(m in Message,
-            where: m.conversation_id == ^conversation.id,
-            # The moderation freezer: a frozen message is hidden from the
-            # other participant but stays visible to its sender.
-            where: is_nil(m.frozen_at) or m.sender_id == ^me.id,
-            order_by: [desc: m.inserted_at, desc: m.id],
-            limit: ^(limit + 1),
-            preload: :sender
-          )
-          |> before_cursor(cursor)
-          |> Repo.all()
+    more? = length(entries) > limit
+    entries = Enum.take(entries, limit)
 
-        more? = length(entries) > limit
-        entries = Enum.take(entries, limit)
+    next_cursor =
+      if more? do
+        oldest = List.last(entries)
+        %{at: oldest.inserted_at, id: oldest.id}
+      end
 
-        next_cursor =
-          if more? do
-            oldest = List.last(entries)
-            %{at: oldest.inserted_at, id: oldest.id}
-          end
+    %{entries: entries, more?: more?, next_cursor: next_cursor}
+  end
 
-        %{entries: entries, more?: more?, next_cursor: next_cursor}
-    end
+  @doc "A single message with its sender preloaded, or nil — one query."
+  def get_message_with_sender(message_id) do
+    Repo.one(from(m in Message, where: m.id == ^message_id, preload: :sender))
   end
 
   defp before_cursor(query, nil), do: query
@@ -509,7 +524,12 @@ defmodule Vutuv.Chat do
   precision, so a message inserted in the same wall-clock second as the read
   still has a strictly greater `inserted_at` and stays unread (issue #776).
   """
-  def mark_read(%User{id: me_id}, conversation_id) do
+  def mark_read(me, conversation_id, marker \\ nil)
+
+  # No marker given (opening a conversation): the newest message's time is the
+  # read marker, looked up with a MAX. A caller already holding the just-arrived
+  # message passes its inserted_at (the new newest) to skip that scan.
+  def mark_read(%User{} = me, conversation_id, nil) do
     marker =
       from(m in Message,
         where: m.conversation_id == ^conversation_id,
@@ -517,6 +537,10 @@ defmodule Vutuv.Chat do
       )
       |> Repo.one() || NaiveDateTime.utc_now(:microsecond)
 
+    mark_read(me, conversation_id, marker)
+  end
+
+  def mark_read(%User{id: me_id}, conversation_id, %NaiveDateTime{} = marker) do
     from(p in Participant,
       where: p.conversation_id == ^conversation_id and p.user_id == ^me_id
     )

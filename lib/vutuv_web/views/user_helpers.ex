@@ -41,8 +41,16 @@ defmodule VutuvWeb.UserHelpers do
     |> String.replace("  ", " ")
   end
 
-  def emails_for_display(user, visitor) do
-    if user_has_permissions?(user, visitor) do
+  def emails_for_display(user, visitor),
+    do: emails_for_permission(user, user_has_permissions?(user, visitor))
+
+  @doc """
+  The emails to show given an already-resolved permission verdict, so a caller
+  that has already decided whether the visitor may see private addresses doesn't
+  re-run the follow check. `true` = every address, falsy = public only.
+  """
+  def emails_for_permission(user, allowed?) do
+    if allowed? do
       Repo.all(Vutuv.Ordering.by_position(assoc(user, :emails)))
     else
       Repo.all(Vutuv.Ordering.by_position(from(e in assoc(user, :emails), where: e.public?)))
@@ -67,7 +75,10 @@ defmodule VutuvWeb.UserHelpers do
   def emails_for_preview(user, visitor, nil), do: emails_for_display(user, visitor)
 
   def user_has_permissions?(user, visitor) do
-    user_follows_user?(user, visitor) || same_user?(user, visitor)
+    # Check same_user? first: the owner viewing their own profile then needs no
+    # self-follow lookup. Non-owners still fall through to user_follows_user?/2,
+    # which returns the truthy follow id callers rely on.
+    same_user?(user, visitor) || user_follows_user?(user, visitor)
   end
 
   def current_job(user) do

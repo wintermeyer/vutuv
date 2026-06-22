@@ -77,7 +77,9 @@ defmodule VutuvWeb.MessageLive.Index do
           Chat.mark_read(user, conversation.id)
         end
 
-        page = Chat.messages_page(user, conversation.id, limit: @page_size)
+        # Pass the already-authorized conversation so messages_page doesn't
+        # re-run get_conversation for the same row.
+        page = Chat.messages_page(user, conversation, limit: @page_size)
 
         socket
         |> assign(:conversation, conversation)
@@ -190,7 +192,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
   def handle_event("load-older", _params, socket) do
     page =
-      Chat.messages_page(socket.assigns.current_user, socket.assigns.conversation.id,
+      Chat.messages_page(socket.assigns.current_user, socket.assigns.conversation,
         limit: @page_size,
         cursor: socket.assigns.cursor
       )
@@ -231,16 +233,18 @@ defmodule VutuvWeb.MessageLive.Index do
     user = socket.assigns.current_user
 
     # The member is watching the message arrive, so it is already read; this
-    # also broadcasts :messages_read, keeping the shell badge at zero.
+    # also broadcasts :messages_read, keeping the shell badge at zero. The
+    # arriving message is the newest, so hand its time straight to mark_read
+    # instead of making it re-scan the thread for the max.
     if message.sender_id != user.id && socket.assigns.conversation do
-      Chat.mark_read(user, socket.assigns.conversation.id)
+      Chat.mark_read(user, socket.assigns.conversation.id, message.inserted_at)
     end
 
     {:noreply,
      socket
      |> stream_insert(:messages, message)
      |> refresh_conversation()
-     |> assign_lists()}
+     |> bump_conversation(message)}
   end
 
   # A message in this thread was frozen by moderation: pull it off the
@@ -248,12 +252,9 @@ defmodule VutuvWeb.MessageLive.Index do
   # the "under review" note.
   def handle_info({:message_frozen, %{message_id: message_id, sender_id: sender_id}}, socket) do
     if socket.assigns.current_user.id == sender_id do
-      case Vutuv.Repo.get(Message, message_id) do
-        nil ->
-          {:noreply, socket}
-
-        message ->
-          {:noreply, stream_insert(socket, :messages, Vutuv.Repo.preload(message, :sender))}
+      case Chat.get_message_with_sender(message_id) do
+        nil -> {:noreply, socket}
+        message -> {:noreply, stream_insert(socket, :messages, message)}
       end
     else
       {:noreply, stream_delete_by_dom_id(socket, :messages, "message-#{message_id}")}
@@ -324,6 +325,27 @@ defmodule VutuvWeb.MessageLive.Index do
     socket
     |> assign(:conversations, Chat.list_conversations(user))
     |> assign(:requests, Chat.list_requests(user))
+  end
+
+  # A new message landed in the *open* conversation, which the member is reading,
+  # so the only sidebar change is that conversation's preview/time (the arriving
+  # message) and its unread (now zero, just marked read). Patch that one entry in
+  # memory and float it to the top — "newest activity first" — instead of
+  # re-querying both whole lists (the 8-query assign_lists) on every message. If
+  # the conversation isn't in the accepted list yet (a brand-new thread or a
+  # pending request being viewed), fall back to a full re-list.
+  defp bump_conversation(socket, %Message{} = message) do
+    case Enum.split_with(
+           socket.assigns.conversations,
+           &(&1.conversation.id == message.conversation_id)
+         ) do
+      {[entry], rest} ->
+        bumped = %{entry | last_body: message.body, last_at: message.inserted_at, unread: 0}
+        assign(socket, :conversations, [bumped | rest])
+
+      _ ->
+        assign_lists(socket)
+    end
   end
 
   # The active conversation's status and last_message_at drive the composer

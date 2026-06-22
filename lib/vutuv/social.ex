@@ -618,7 +618,10 @@ defmodule Vutuv.Social do
                   (b.blocker_id == parent_as(:target).id and b.blocked_id == ^user_id)
             )
           ),
-        select: t
+        # The saved-people row renders only name parts, @handle, headline and the
+        # avatar, so select just those columns (listing_fields/0 + headline)
+        # instead of every wide user column.
+        select: struct(t, ^[:headline | User.listing_fields()])
       )
       |> filter_saved_search(search)
       |> order_saved(sort)

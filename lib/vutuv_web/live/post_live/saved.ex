@@ -34,7 +34,12 @@ defmodule VutuvWeb.PostLive.Saved do
   @impl true
   def mount(_params, _session, socket) do
     if connected?(socket), do: Vutuv.Activity.subscribe(socket.assigns.current_user.id)
-    {:ok, socket |> stream(:posts, []) |> stream(:people, [])}
+
+    {:ok,
+     socket
+     |> assign(:post_engagement, %{})
+     |> stream(:posts, [])
+     |> stream(:people, [])}
   end
 
   @impl true
@@ -53,8 +58,20 @@ defmodule VutuvWeb.PostLive.Saved do
      |> assign(:page_title, title(socket.assigns.live_action))
      |> assign(:more?, page.more?)
      |> assign(:offset, page.next_offset)
+     |> assign(
+       :post_engagement,
+       page_engagement(stream_name, page.entries, socket.assigns.current_user)
+     )
      |> stream(stream_name, page.entries, reset: true)}
   end
+
+  # Batch the action-bar engagement for a whole posts page in one query, keyed by
+  # post id, so the per-card Actions LiveViews skip their own mount query (this
+  # tab used to fire one query per card). The People tab has no posts.
+  defp page_engagement(:posts, entries, user),
+    do: Posts.post_engagement_map(Enum.map(entries, & &1.id), user)
+
+  defp page_engagement(:people, _entries, _user), do: %{}
 
   defp load_page(socket, offset) do
     user = socket.assigns.current_user
@@ -95,11 +112,13 @@ defmodule VutuvWeb.PostLive.Saved do
   def handle_event("load-more", _params, socket) do
     {stream_name, page} = load_page(socket, socket.assigns.offset)
     if stream_name == :posts, do: subscribe_posts(page.entries)
+    user = socket.assigns.current_user
 
     {:noreply,
      socket
      |> assign(:more?, page.more?)
      |> assign(:offset, page.next_offset)
+     |> update(:post_engagement, &Map.merge(&1, page_engagement(stream_name, page.entries, user)))
      |> stream(stream_name, page.entries, at: -1)}
   end
 
@@ -278,7 +297,13 @@ defmodule VutuvWeb.PostLive.Saved do
               {posts_empty_text(@live_action, @q)}
             </p>
             <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>
-              <.post_card post={post} viewer={@current_user} mode={:preview} conn_or_socket={@socket} />
+              <.post_card
+                post={post}
+                viewer={@current_user}
+                mode={:preview}
+                conn_or_socket={@socket}
+                engagement={Map.get(@post_engagement, post.id)}
+              />
             </div>
           </div>
         <% else %>

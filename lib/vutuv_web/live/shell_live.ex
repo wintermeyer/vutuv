@@ -59,14 +59,15 @@ defmodule VutuvWeb.ShellLive do
       |> assign(:user_avatar, session["user_avatar"])
       |> assign(:self_online?, false)
       |> assign(:presence_hidden_ids, MapSet.new())
-      |> assign(
-        :messages_count,
-        initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
-      )
-      |> assign(
-        :notifications_count,
-        initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
-      )
+      # The badge counts are the most expensive query on every page (an 8-way
+      # aggregate for notifications, a COUNT(DISTINCT) join for messages). The
+      # dead (static HTTP) render is thrown away the instant the socket connects,
+      # so computing them there doubles that cost site-wide for no benefit:
+      # start at 0 (count_badge renders nothing at 0) and fill them in on
+      # connect. A real unread count appears within a fraction of a second.
+      |> assign(:messages_count, 0)
+      |> assign(:notifications_count, 0)
+      |> maybe_start_counts(user_id, path)
       |> maybe_start_presence(user_id, session["show_online"] == true)
 
     {:ok, socket}
@@ -77,6 +78,28 @@ defmodule VutuvWeb.ShellLive do
   # own dot) is gated by the member's "Show when I'm online" setting; seeing
   # other members' dots is not — every logged-in viewer subscribes and receives
   # the online set, minus anyone a block hides from them (either direction).
+  # Compute the unread badges only on the connected mount (never the dead
+  # render) and only for a logged-in member. When the shell mounts ON the
+  # messages/notifications page itself that badge starts at zero (initial_count),
+  # since the page's own read-broadcast can race the shell's subscribe.
+  defp maybe_start_counts(socket, nil, _path), do: socket
+
+  defp maybe_start_counts(socket, user_id, path) do
+    if connected?(socket) do
+      socket
+      |> assign(
+        :messages_count,
+        initial_count(path, "/messages", user_id, &Vutuv.Chat.unread_conversations_count/1)
+      )
+      |> assign(
+        :notifications_count,
+        initial_count(path, "/notifications", user_id, &Activity.unread_notification_count/1)
+      )
+    else
+      socket
+    end
+  end
+
   defp maybe_start_presence(socket, nil, _show_online?), do: socket
 
   defp maybe_start_presence(socket, user_id, show_online?) do

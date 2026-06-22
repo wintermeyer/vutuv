@@ -297,15 +297,20 @@ defmodule VutuvWeb.UserProfileLive do
     preview_users =
       Enum.uniq_by(socket.assigns.recommended_users ++ followers ++ followees, & &1.id)
 
+    # The header's whole follow state derives from at most the two directional
+    # follow edges (viewer→owner, owner→viewer); resolve both once here instead
+    # of the six overlapping lookups the four header_* helpers used to fire.
+    rel = header_relationship(preview_as, current_user, user)
+
     socket
     |> assign(:user, user)
     |> assign(:follower_count, Social.follower_count(user))
     |> assign(:followee_count, Social.followee_count(user))
     |> assign(:connection_count, Social.connection_count(user))
-    |> assign(:header_follow_id, header_follow_id(preview_as, current_user, user))
-    |> assign(:header_follows_viewer?, header_follows_viewer?(preview_as, current_user, user))
-    |> assign(:header_connected?, header_connected?(preview_as, current_user, user))
-    |> assign(:header_follow_muted?, header_follow_muted?(preview_as, current_user, user))
+    |> assign(:header_follow_id, rel.follow_id)
+    |> assign(:header_follows_viewer?, rel.follows_viewer?)
+    |> assign(:header_connected?, rel.connected?)
+    |> assign(:header_follow_muted?, rel.follow_muted?)
     |> assign(:followers, followers)
     |> assign(:followees, followees)
     |> assign(:work_info_by_id, work_information_map(preview_users, 24))
@@ -339,7 +344,11 @@ defmodule VutuvWeb.UserProfileLive do
     view_viewer = preview_viewer(preview_as, current_user)
     private_emails? = private_emails?(preview_as, current_user, user)
 
-    header_job = current_job(user)
+    # preload_user_for_show already loaded the date-ordered work experiences;
+    # resolve the header's current job from that list in memory (the same
+    # current_job_in_memory/1 the listing pages use) instead of re-running the
+    # 2-4 query current_job/1 chain against work_experiences.
+    header_job = current_job_in_memory(user.work_experiences)
     recommended_users = recommended_users(user)
 
     posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
@@ -401,48 +410,40 @@ defmodule VutuvWeb.UserProfileLive do
   defp private_emails?(nil, current_user, user),
     do: !!user_has_permissions?(user, current_user)
 
-  defp profile_emails(true, current_user, user), do: emails_for_display(user, current_user)
-  defp profile_emails(false, _current_user, user), do: emails_for_display(user, nil)
+  # private_emails? already resolved whether the viewer may see private
+  # addresses, so hand that verdict straight to the loader instead of having
+  # emails_for_display/2 re-run the follow permission check.
+  defp profile_emails(allowed?, _current_user, user), do: emails_for_permission(user, allowed?)
 
-  defp header_connected?(:connection, _current_user, _user), do: true
-  defp header_connected?(:follower, _current_user, _user), do: false
-
-  defp header_connected?(_preview, current_user, user) do
-    current_user != nil and current_user.id != user.id and
-      Social.connected?(current_user.id, user.id)
+  # The viewer's header follow relationship, resolved from at most the two
+  # directional follow edges — the viewer's outbound edge to the owner and the
+  # owner's inbound edge back — returned as one map. Replaces four helpers that
+  # re-read the same edges six times (two follow_id, the two-exists connected?,
+  # and a follow_edge for the mute state). The preview tiers ("View as
+  # follower/connection") return the tier's fixed state with no query, as before.
+  defp header_relationship(preview, _current_user, _user)
+       when preview in [:follower, :connection] do
+    %{
+      follow_id: "preview",
+      follow_muted?: false,
+      connected?: preview == :connection,
+      follows_viewer?: preview == :connection
+    }
   end
 
-  defp header_follows_viewer?(:connection, _current_user, _user), do: true
-  defp header_follows_viewer?(:follower, _current_user, _user), do: false
-
-  defp header_follows_viewer?(_preview, current_user, user) do
-    current_user != nil and current_user.id != user.id and
-      is_binary(user_follows_user?(user, current_user))
-  end
-
-  defp header_follow_muted?(preview, _current_user, _user)
-       when preview in [:follower, :connection],
-       do: false
-
-  defp header_follow_muted?(_preview, current_user, user) do
+  defp header_relationship(_preview, current_user, user) do
     if current_user && current_user.id != user.id do
-      case Social.follow_edge(current_user.id, user.id) do
-        %{muted?: muted?} -> muted?
-        _ -> false
-      end
-    else
-      false
-    end
-  end
+      outbound = Social.follow_edge(current_user.id, user.id)
+      inbound = Social.follow_edge(user.id, current_user.id)
 
-  defp header_follow_id(preview, _current_user, _user) when preview in [:follower, :connection],
-    do: "preview"
-
-  defp header_follow_id(_preview, current_user, user) do
-    if current_user && current_user.id != user.id do
-      user_follows_user?(current_user, user)
+      %{
+        follow_id: outbound && outbound.id,
+        follow_muted?: (outbound && outbound.muted?) || false,
+        connected?: not is_nil(outbound) and not is_nil(inbound),
+        follows_viewer?: not is_nil(inbound)
+      }
     else
-      false
+      %{follow_id: false, follow_muted?: false, connected?: false, follows_viewer?: false}
     end
   end
 
@@ -487,17 +488,35 @@ defmodule VutuvWeb.UserProfileLive do
     |> preload(endorsements: ^UserTagEndorsement.visible_with_endorser())
   end
 
-  defp assoc_totals(user) do
+  # The five section totals ("N total, showing 3") in one round trip instead of
+  # five separate count queries: a union_all of per-section counts, keyed back to
+  # the totals map. Each count returns exactly one row (0 when empty), so every
+  # section is always present.
+  defp assoc_totals(%User{id: uid}) do
+    counts =
+      section_count(UserTag, uid, "user_tags")
+      |> union_all(^section_count(WorkExperience, uid, "jobs"))
+      |> union_all(^section_count(PhoneNumber, uid, "numbers"))
+      |> union_all(^section_count(Url, uid, "links"))
+      |> union_all(^section_count(Address, uid, "addresses"))
+      |> Repo.all()
+      |> Map.new(fn %{section: section, total: total} -> {section, total} end)
+
     %{
-      user_tags: count_assoc(user, :user_tags),
-      jobs: count_assoc(user, :work_experiences),
-      numbers: count_assoc(user, :phone_numbers),
-      links: count_assoc(user, :urls),
-      addresses: count_assoc(user, :addresses)
+      user_tags: Map.get(counts, "user_tags", 0),
+      jobs: Map.get(counts, "jobs", 0),
+      numbers: Map.get(counts, "numbers", 0),
+      links: Map.get(counts, "links", 0),
+      addresses: Map.get(counts, "addresses", 0)
     }
   end
 
-  defp count_assoc(user, assoc), do: Repo.aggregate(Ecto.assoc(user, assoc), :count)
+  defp section_count(schema, uid, section) do
+    from(r in schema,
+      where: r.user_id == ^uid,
+      select: %{section: type(^section, :string), total: count()}
+    )
+  end
 
   defp completion_steps(user, posts_total) do
     [

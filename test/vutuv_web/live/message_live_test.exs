@@ -113,6 +113,40 @@ defmodule VutuvWeb.MessageLiveTest do
       assert render(receiver) =~ "Real-time hello"
     end
 
+    test "a new message in the open thread updates its sidebar preview and floats it to the top",
+         %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      {_alpha_conn, alpha} = login_other_user("Alpha")
+      {_beta_conn, beta} = login_other_user("Beta")
+
+      # Two accepted conversations. Beta's is the most recent, so it sits on top
+      # of the sidebar; Alpha's is older and below it.
+      conv_alpha = insert_conversation_between(me, alpha)
+      {:ok, _} = Chat.send_message(alpha, conv_alpha.id, "alpha original")
+      conv_beta = insert_conversation_between(me, beta)
+      {:ok, _} = Chat.send_message(beta, conv_beta.id, "beta latest")
+
+      # Open Alpha's thread, then Alpha sends a fresh message into it.
+      {:ok, view, _} = live(conn, ~p"/messages/#{conv_alpha.id}")
+      {:ok, _} = Chat.send_message(alpha, conv_alpha.id, "alpha bumped")
+      _ = :sys.get_state(view.pid)
+
+      html = render(view)
+
+      # The sidebar preview reflects the new message (the in-memory bump, not a
+      # stale reload)...
+      assert html =~ "alpha bumped"
+      # ...and Alpha's conversation has floated above Beta's in the sidebar (the
+      # sidebar renders before the open thread, so the first occurrence of each
+      # preview is its sidebar row).
+      assert at_index(html, "alpha bumped") < at_index(html, "beta latest")
+    end
+
+    defp at_index(html, needle) do
+      {index, _length} = :binary.match(html, needle)
+      index
+    end
+
     test "messages render markdown safely with a timestamp", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       conversation = insert_conversation_between(me, insert_activated_user())

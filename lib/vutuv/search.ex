@@ -284,8 +284,14 @@ defmodule Vutuv.Search do
     query
     |> order_by([user: u], asc: u.last_name, asc: u.first_name)
     |> limit(@people_limit)
+    |> select([user: u], struct(u, ^people_fields()))
     |> Repo.all()
   end
+
+  # The people results render through UserHTML.user_row (name parts, @handle,
+  # avatar) plus work_information_map (headline fallback) and following_map (id),
+  # so select only those columns instead of every wide user column per result.
+  defp people_fields, do: [:headline | User.listing_fields()]
 
   # "Exact matches only" free text: the query must equal a real-name term
   # (first, last or a full-name combination) - no substring, no phonetics.
@@ -297,13 +303,12 @@ defmodule Vutuv.Search do
         account_confirmed_row(u) and t.score == 100 and
           t.value == ^parsed.text,
       limit: @term_limit,
-      preload: [user: u]
+      select: struct(u, ^people_fields())
     )
     |> exclude_moderated()
     |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
     |> Repo.all()
-    |> Enum.map(& &1.user)
     |> Enum.uniq_by(& &1.id)
   end
 
@@ -320,7 +325,7 @@ defmodule Vutuv.Search do
         as: :user,
         order_by: [desc: t.score, asc: t.value],
         limit: @term_limit,
-        preload: [user: u]
+        select: %{score: t.score, value: t.value, user: struct(u, ^people_fields())}
       )
       |> phonetic_term_match(value)
       |> exclude_moderated()
