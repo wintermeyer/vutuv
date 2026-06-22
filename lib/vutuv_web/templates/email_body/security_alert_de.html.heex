@@ -1,0 +1,21 @@
+<.email_layout preheader="Neue Anmeldung bei Ihrem vutuv-Konto" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    soeben hat sich jemand in Ihr vutuv-Konto eingeloggt. Waren das Sie, können Sie diese
+    E-Mail ignorieren.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Wann">{@when_text}</.email_row>
+    <.email_row label="Gerät">{@device}</.email_row>
+    <.email_row :if={@location} label="Ort">{@location}</.email_row>
+    <.email_row :if={@ip} label="IP">{@ip}</.email_row>
+  </.email_panel>
+  <.email_p>Warum wir Ihnen schreiben:</.email_p>
+  <.email_list items={@reason_lines} />
+  <.email_p>
+    Waren Sie das nicht, prüfen Sie die in Ihrem Konto angemeldeten Geräte und melden Sie die ab,
+    die Sie nicht kennen:
+  </.email_p>
+  <.email_button href={@devices_url}>Angemeldete Geräte prüfen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

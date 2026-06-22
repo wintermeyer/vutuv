@@ -1,0 +1,16 @@
+<.email_layout preheader="Moderation: ein Profil wurde gemeldet" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    ein Mitgliedsprofil wurde gemeldet. Profil-Meldungen sind dringend: eine zweite unabhängige
+    Meldung friert das gesamte Profil ein.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Profil">@{@owner_slug}</.email_row>
+    <.email_row label="Gemeldet als">{@category_label}</.email_row>
+    <.email_row label="Meldungen">{@report_count}</.email_row>
+    <.email_row :if={@note} label="Notiz des Melders">{@note}</.email_row>
+  </.email_panel>
+  <.email_p>Bitte prüfen Sie den Fall:</.email_p>
+  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>Fall prüfen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

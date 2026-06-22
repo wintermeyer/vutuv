@@ -1,0 +1,14 @@
+<.email_layout preheader="Someone tried to register with your email address" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    someone just tried to create a vutuv account using this email address. You already have an
+    account, so we did not create a new one.
+  </.email_p>
+  <.email_p>If that was you, you can log in here:</.email_p>
+  <.email_button href={"#{@url}login"}>Log in</.email_button>
+  <.email_p>
+    If it wasn't you, you can safely ignore this email. No account was created and nothing about
+    your account has changed.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

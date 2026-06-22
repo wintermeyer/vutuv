@@ -1,0 +1,20 @@
+<.email_layout preheader="New sign-in to your vutuv account" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    your vutuv account was just signed in to. If this was you, you can ignore this email.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="When">{@when_text}</.email_row>
+    <.email_row label="Device">{@device}</.email_row>
+    <.email_row :if={@location} label="Location">{@location}</.email_row>
+    <.email_row :if={@ip} label="IP">{@ip}</.email_row>
+  </.email_panel>
+  <.email_p>Why we are telling you:</.email_p>
+  <.email_list items={@reason_lines} />
+  <.email_p>
+    If this wasn't you, review the devices signed in to your account and log out the ones you
+    don't recognize:
+  </.email_p>
+  <.email_button href={@devices_url}>Review signed-in devices</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

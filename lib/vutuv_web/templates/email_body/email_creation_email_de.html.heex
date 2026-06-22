@@ -1,0 +1,9 @@
+<.email_layout preheader="Bestätigen Sie Ihre E-Mail-Adresse" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>bitte bestätigen Sie Ihre neue E-Mail-Adresse mit dem folgenden PIN:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Geben Sie ihn auf vutuv ein, um das Hinzufügen abzuschließen. Der PIN verfällt nach 30 Minuten.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

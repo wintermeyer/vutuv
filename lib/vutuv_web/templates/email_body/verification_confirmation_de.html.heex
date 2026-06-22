@@ -1,0 +1,9 @@
+<.email_layout preheader="Ihr vutuv-Konto ist verifiziert" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    herzlichen Glückwunsch! Ihr vutuv Account wird jetzt als verified (verifiziert) angezeigt.
+  </.email_p>
+  <.email_button href={"#{@url}#{@user.username}"}>Profil ansehen</.email_button>
+  <.email_p>Wir wünschen Ihnen weiterhin viel Spaß mit vutuv!</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

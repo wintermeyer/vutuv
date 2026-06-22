@@ -1,0 +1,10 @@
+<.email_layout preheader="You have a new follower on vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>@{@actor_username} started following you on vutuv.</.email_p>
+  <.email_button href={"#{@url}#{@actor_username}"}>See their profile</.email_button>
+  <.email_signature locale={@locale} />
+  <.email_muted>
+    You can switch these notification emails off
+    <.email_link href={@unsubscribe_url}>here</.email_link>.
+  </.email_muted>
+</.email_layout>

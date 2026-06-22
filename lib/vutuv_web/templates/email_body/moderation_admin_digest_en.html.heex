@@ -1,0 +1,7 @@
+<.email_layout preheader="Moderation queue" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@open_count} moderation case(s) are waiting for an admin ruling.</.email_p>
+  <.email_p>The queue:</.email_p>
+  <.email_button href={"#{@url}admin/moderation"}>Open the queue</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

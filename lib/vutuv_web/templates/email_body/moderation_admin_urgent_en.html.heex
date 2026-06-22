@@ -1,0 +1,16 @@
+<.email_layout preheader="Moderation: a profile was reported" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    a member profile was reported. Profile reports are urgent: a second independent report freezes
+    the whole profile.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Profile">@{@owner_slug}</.email_row>
+    <.email_row label="Reported as">{@category_label}</.email_row>
+    <.email_row label="Reports">{@report_count}</.email_row>
+    <.email_row :if={@note} label="Reporter's note">{@note}</.email_row>
+  </.email_panel>
+  <.email_p>Please review the case:</.email_p>
+  <.email_button href={"#{@url}admin/moderation/#{@case_id}"}>Review the case</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

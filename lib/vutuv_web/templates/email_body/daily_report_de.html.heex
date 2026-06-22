@@ -1,0 +1,21 @@
+<.email_layout preheader="vutuv Tagesbericht" locale={@locale}>
+  <.email_heading>vutuv Tagesbericht für den {Calendar.strftime(@report.date, "%d.%m.%Y")}</.email_heading>
+  <.email_panel>
+    <.email_row label="Neue bestätigte Registrierungen (per PIN)">{@report.registrations}</.email_row>
+    <.email_row label="Neue Beiträge">{@report.posts}</.email_row>
+    <.email_row label="Reposts">{@report.reposts}</.email_row>
+    <.email_row label="Likes">{@report.likes}</.email_row>
+    <.email_row label="Lesezeichen">{@report.bookmarks}</.email_row>
+  </.email_panel>
+  <.email_p><strong>Zustellbarkeit (E-Mail)</strong></.email_p>
+  <.email_panel>
+    <.email_row label="Bounces">{@report.bounces}</.email_row>
+    <.email_row label="Deaktivierte Adressen">{@report.deactivations}</.email_row>
+    <.email_row label="Eingefrorene Konten">{@report.freezes}</.email_row>
+    <.email_row label="Aufgetaute Konten">{@report.thaws}</.email_row>
+  </.email_panel>
+  <.email_p>Vollständiger Bericht (mit Zeitreise zu anderen Tagen):</.email_p>
+  <.email_button href={"#{@url}admin/reports?date=#{Date.to_iso8601(@report.date)}"}>
+    Vollständiger Bericht
+  </.email_button>
+</.email_layout>

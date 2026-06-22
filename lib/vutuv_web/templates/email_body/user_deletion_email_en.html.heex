@@ -1,0 +1,11 @@
+<.email_layout preheader="Confirm your account deletion" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>Please use the following PIN to delete your account:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    <strong>WARNING:</strong> There is no turning back from this move. Your account will be deleted
+    as soon as you enter this PIN on vutuv. The PIN expires after 30 minutes.
+  </.email_p>
+  <.email_p>But of course you can always create a new account.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

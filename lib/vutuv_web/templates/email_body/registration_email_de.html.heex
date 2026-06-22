@@ -1,0 +1,13 @@
+<.email_layout preheader="Bestätigen Sie Ihr vutuv-Konto" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Danke, dass Sie bei vutuv mitmachen. Hier ist der PIN, den Sie zum Einloggen benötigen:
+  </.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    Sie können aber jederzeit
+    <.email_link href={"#{@url}login"}>einen neuen abrufen</.email_link>.
+  </.email_p>
+  <.email_p>Bitte erzählen Sie Ihren Freunden und Geschäftspartnern von vutuv!</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

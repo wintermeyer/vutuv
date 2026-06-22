@@ -1,0 +1,11 @@
+<.email_layout preheader="Ihr vutuv Login-PIN" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>zum Einloggen bitte den folgenden PIN eingeben:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>Vielen Dank, dass Sie vutuv benutzen!</.email_p>
+  <.email_signature locale={@locale} />
+  <.email_muted>
+    Der PIN verfällt nach 30 Minuten. Sie können aber jederzeit
+    <.email_link href={"#{@url}login"}>einen neuen abrufen</.email_link>.
+  </.email_muted>
+</.email_layout>

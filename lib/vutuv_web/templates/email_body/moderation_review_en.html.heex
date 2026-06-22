@@ -1,0 +1,10 @@
+<.email_layout preheader="Your content on vutuv is under review" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    one of your contributions on vutuv was reported and is hidden while our admins review it. You
+    do not need to do anything; we will let you know the outcome.
+  </.email_p>
+  <.email_p>You can see the case here:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>See the case</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

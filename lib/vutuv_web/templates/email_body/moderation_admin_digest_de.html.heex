@@ -1,0 +1,7 @@
+<.email_layout preheader="Moderations-Warteschlange" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>{@open_count} Moderationsfall/-fälle warten auf eine Admin-Entscheidung.</.email_p>
+  <.email_p>Die Warteschlange:</.email_p>
+  <.email_button href={"#{@url}admin/moderation"}>Warteschlange öffnen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

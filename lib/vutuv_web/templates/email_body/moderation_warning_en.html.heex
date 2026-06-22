@@ -1,0 +1,13 @@
+<.email_layout preheader="A warning for your vutuv account" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    our admins reviewed a report about content of yours and found that it breaks our community
+    guidelines:
+  </.email_p>
+  <.email_button href={"#{@url}community"}>Our community guidelines</.email_button>
+  <.email_p>
+    This is a formal warning, the first of three steps. A second confirmed violation suspends your
+    account for a week; a third deactivates it for good. Warnings expire after twelve months.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -1,0 +1,29 @@
+<.email_layout preheader="Neue Anzeigenbuchung auf vutuv" locale={@locale}>
+  <.email_heading>Neue Anzeigenbuchung auf vutuv</.email_heading>
+  <.email_panel>
+    <.email_row label="Tag">{Calendar.strftime(@ad.day, "%d.%m.%Y")}</.email_row>
+    <.email_row label="Preis">{@price} EUR (netto), Zahlung per Rechnung</.email_row>
+    <.email_row label="Gebucht von">
+      @{@booker.username} ({@url}{@booker.username})
+    </.email_row>
+    <.email_row label="E-Mail">{@booker_email}</.email_row>
+  </.email_panel>
+  <.email_p><strong>Rechnungsadresse</strong></.email_p>
+  <.email_p>
+    <span :for={line <- String.split(@billing_address, "\n")}>{line}<br /></span>
+  </.email_p>
+  <.email_p>
+    <strong>Anzeigentext</strong> (Markdown, {String.length(@ad.content)} Zeichen)
+  </.email_p>
+  <.email_p>
+    <span :for={line <- String.split(@ad.content, "\n")}>{line}<br /></span>
+  </.email_p>
+  <.email_p>
+    Die Anzeige ist noch NICHT freigeschaltet. Bitte prüfen (familienfreundlich?) und freischalten:
+  </.email_p>
+  <.email_button href={"#{@url}admin/ads"}>Anzeigen verwalten</.email_button>
+  <.email_p>
+    Die Rechnung wird manuell erstellt und versendet. Die Ausspielung am gebuchten Tag erfolgt nach
+    der Freischaltung automatisch.
+  </.email_p>
+</.email_layout>

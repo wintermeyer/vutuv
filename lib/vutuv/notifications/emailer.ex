@@ -25,6 +25,8 @@ defmodule Vutuv.Notifications.Emailer do
 
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Reports.DailyReport
+  alias VutuvWeb.EmailComponents
+  alias VutuvWeb.EmailText
   alias VutuvWeb.Plug.Locale
 
   @from_address {"vutuv", "no-reply@vutuv.de"}
@@ -176,12 +178,7 @@ defmodule Vutuv.Notifications.Emailer do
         gettext("vutuv Account verified")
       end)
     )
-    |> text_body(
-      VutuvWeb.EmailText.render("verification_confirmation_#{locale}.text", %{
-        user: user,
-        url: public_url()
-      })
-    )
+    |> render_bodies("verification_confirmation", locale, %{user: user, url: public_url()})
   end
 
   @doc """
@@ -204,15 +201,13 @@ defmodule Vutuv.Notifications.Emailer do
         )
       end)
     )
-    |> text_body(
-      VutuvWeb.EmailText.render("unread_messages_#{locale}.text", %{
-        user: user,
-        other_slug: other.username,
-        conversation_id: conversation_id,
-        url: public_url(),
-        unsubscribe_url: unsubscribe_url
-      })
-    )
+    |> render_bodies("unread_messages", locale, %{
+      user: user,
+      other_slug: other.username,
+      conversation_id: conversation_id,
+      url: public_url(),
+      unsubscribe_url: unsubscribe_url
+    })
   end
 
   @doc """
@@ -257,14 +252,10 @@ defmodule Vutuv.Notifications.Emailer do
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> unsubscribe_headers(unsubscribe_url)
     |> subject(recipient_subject(locale, subject_fun))
-    |> text_body(
-      VutuvWeb.EmailText.render(
-        "#{template_base}_#{locale}.text",
-        Map.merge(
-          %{user: user, url: public_url(), unsubscribe_url: unsubscribe_url},
-          extra_assigns
-        )
-      )
+    |> render_bodies(
+      template_base,
+      locale,
+      Map.merge(%{user: user, url: public_url(), unsubscribe_url: unsubscribe_url}, extra_assigns)
     )
   end
 
@@ -348,16 +339,14 @@ defmodule Vutuv.Notifications.Emailer do
     |> put_private(:user_initiated, true)
     |> to(@ad_booking_recipient)
     |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
-    |> text_body(
-      VutuvWeb.EmailText.render("ad_booking_de.text", %{
-        ad: ad,
-        booker: booker,
-        booker_email: Vutuv.Accounts.first_email_value(booker),
-        billing_address: billing_address(ad),
-        price: format_euro_cents(ad.price_cents),
-        url: public_url()
-      })
-    )
+    |> render_bodies("ad_booking", "de", %{
+      ad: ad,
+      booker: booker,
+      booker_email: Vutuv.Accounts.first_email_value(booker),
+      billing_address: billing_address(ad),
+      price: format_euro_cents(ad.price_cents),
+      url: public_url()
+    })
   end
 
   # The invoice address block, optional lines (company, VAT id) folded away.
@@ -402,9 +391,7 @@ defmodule Vutuv.Notifications.Emailer do
     base_email()
     |> to(@daily_report_recipient)
     |> subject(DailyReport.email_subject(report))
-    |> text_body(
-      VutuvWeb.EmailText.render("daily_report_de.text", %{report: report, url: public_url()})
-    )
+    |> render_bodies("daily_report", "de", %{report: report, url: public_url()})
   end
 
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
@@ -524,12 +511,24 @@ defmodule Vutuv.Notifications.Emailer do
     base_email()
     |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
     |> subject(recipient_subject(locale, subject_fun))
-    |> text_body(
-      VutuvWeb.EmailText.render(
-        "#{template_base}_#{locale}.text",
-        Map.merge(%{user: user, url: public_url()}, extra_assigns)
-      )
+    |> render_bodies(
+      template_base,
+      locale,
+      Map.merge(%{user: user, url: public_url()}, extra_assigns)
     )
+  end
+
+  # Renders the multipart bodies for a templated email: the text/plain body
+  # (the `*.text.eex` templates) and the text/html alternative (the
+  # `*.html.heex` bodies through VutuvWeb.EmailComponents). Both come from the
+  # same assigns, with the recipient locale merged in so the HTML chrome can
+  # localize. Setting both makes Swoosh send multipart/alternative.
+  defp render_bodies(email, template_base, locale, assigns) do
+    assigns = Map.put(assigns, :locale, locale)
+
+    email
+    |> text_body(EmailText.render("#{template_base}_#{locale}.text", assigns))
+    |> html_body(EmailComponents.render_to_string("#{template_base}_#{locale}.html", assigns))
   end
 
   # The configured canonical host (with a trailing slash), e.g.

@@ -1,0 +1,10 @@
+<.email_layout preheader="Confirm your vutuv account" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>Thank you for joining vutuv. Here is the PIN you need to log in:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    You can always get a new one by returning to vutuv and logging in again.
+  </.email_p>
+  <.email_p>If you like our service, feel free to share us with your friends!</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

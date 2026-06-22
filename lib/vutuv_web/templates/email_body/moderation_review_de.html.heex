@@ -1,0 +1,10 @@
+<.email_layout preheader="Ihr Inhalt auf vutuv wird geprüft" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    einer Ihrer Beiträge auf vutuv wurde gemeldet und ist verborgen, während unsere Admins den Fall
+    prüfen. Sie müssen nichts weiter tun; wir melden uns mit dem Ergebnis.
+  </.email_p>
+  <.email_p>Den Fall finden Sie hier:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Fall ansehen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

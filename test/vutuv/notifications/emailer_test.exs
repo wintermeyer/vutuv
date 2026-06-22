@@ -351,4 +351,89 @@ defmodule Vutuv.Notifications.EmailerTest do
       refute body =~ "vutuv.de/sessions/new"
     end
   end
+
+  describe "every email also carries an HTML alternative (multipart)" do
+    # The text body is no longer the whole message: every builder now sets an
+    # html_body too, so mail goes out as multipart/alternative. The HTML must
+    # carry the same shared chrome (wordmark + footer) and honour the same
+    # invariants the text body does (locale, @handle-not-clear-name, the
+    # unsubscribe and deep links).
+
+    test "the login email has an HTML body with the wordmark, footer and PIN" do
+      user = insert(:user, email_confirmed?: true, locale: "en")
+      html = Emailer.login_email(@pin, "login@example.com", user).html_body
+
+      assert is_binary(html) and html != ""
+      assert html =~ "vutuv"
+      assert html =~ "Wintermeyer Consulting"
+      assert html =~ @pin
+    end
+
+    test "PIN HTML bodies print the PIN and mention no link, in en and de" do
+      for locale <- ~w(en de) do
+        Gettext.put_locale(VutuvWeb.Gettext, locale)
+        user = insert(:user, email_confirmed?: true, locale: locale)
+        html = Emailer.login_email(@pin, "login@example.com", user).html_body
+
+        assert html =~ @pin
+        refute html =~ ~r/\blink\b/i, "PIN HTML (#{locale}) must not say link, got: #{html}"
+      end
+    end
+
+    test "the HTML body follows the recipient's locale (German signature)" do
+      user = insert(:user, email_confirmed?: true, locale: "de")
+      html = Emailer.login_email(@pin, "login@example.com", user).html_body
+
+      assert html =~ "Mit freundlichen Grüßen"
+      refute html =~ "The vutuv team"
+    end
+
+    test "the unread-message HTML names the sender by @handle, never the clear name" do
+      user = insert(:activated_user, locale: "en")
+      other = insert(:user, username: "the-sender")
+
+      html =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate()
+        ).html_body
+
+      assert html =~ "@the-sender"
+      refute html =~ other.first_name
+      # Notification mail keeps its one-click unsubscribe link in the HTML too.
+      assert html =~ "/unsubscribe/"
+    end
+
+    test "the new-follower HTML carries the unsubscribe link" do
+      user = insert(:activated_user, locale: "en")
+      follower = insert(:user, username: "a-follower")
+
+      html = Emailer.new_follower_email("f@example.com", user, follower).html_body
+
+      assert html =~ "@a-follower"
+      assert html =~ "/unsubscribe/"
+    end
+
+    test "the security-alert HTML deep-links to the signed-in-devices page" do
+      user = insert(:user, locale: "en", username: "alice")
+
+      {_token, session} =
+        Vutuv.Sessions.start_session(user, Plug.Test.conn(:get, "/"), alert: false)
+
+      html =
+        Emailer.security_alert_email(user, "alice@example.com", session, [:new_device]).html_body
+
+      assert html =~ "/alice/settings"
+    end
+
+    test "a moderation email has the shared HTML chrome" do
+      user = insert(:user, locale: "en")
+      html = Emailer.moderation_warning_email(user, "warned@example.com").html_body
+
+      assert html =~ "vutuv"
+      assert html =~ "Wintermeyer Consulting"
+    end
+  end
 end

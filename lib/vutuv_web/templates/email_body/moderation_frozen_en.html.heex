@@ -1,0 +1,14 @@
+<.email_layout preheader="Your content on vutuv was reported and is hidden" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    someone reported one of your contributions on vutuv. To be on the safe side it is hidden for
+    now; nobody else can see it.
+  </.email_p>
+  <.email_p>You can settle this yourself within 72 hours:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Review the report</.email_button>
+  <.email_p>
+    On that page you can delete the content, edit it (an edit makes it visible again right away),
+    or tell us that your content is fine. If we do not hear from you, our admins will take a look.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

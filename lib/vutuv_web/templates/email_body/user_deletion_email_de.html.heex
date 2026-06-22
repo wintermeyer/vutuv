@@ -1,0 +1,11 @@
+<.email_layout preheader="Bestätigen Sie die Löschung Ihres Kontos" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>bitte geben Sie den folgenden PIN ein, um Ihren Account zu löschen:</.email_p>
+  <.email_pin pin={@pin} />
+  <.email_p>
+    <strong>ACHTUNG:</strong> Diese Löschung ist unumkehrbar! Ihr Account wird gelöscht, sobald Sie
+    diesen PIN auf vutuv eingeben. Der PIN verfällt nach 30 Minuten.
+  </.email_p>
+  <.email_p>Aber Sie können natürlich jederzeit einen neuen Account anlegen.</.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

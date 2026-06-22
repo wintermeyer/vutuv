@@ -1,0 +1,15 @@
+<.email_layout preheader="Ihr Inhalt auf vutuv wurde gemeldet und ist verborgen" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    einer Ihrer Beiträge auf vutuv wurde gemeldet. Sicherheitshalber ist er vorerst verborgen;
+    niemand sonst kann ihn sehen.
+  </.email_p>
+  <.email_p>Sie können das innerhalb von 72 Stunden selbst klären:</.email_p>
+  <.email_button href={"#{@url}moderation/cases/#{@case_id}"}>Meldung ansehen</.email_button>
+  <.email_p>
+    Dort können Sie den Inhalt löschen, ihn bearbeiten (nach einer Bearbeitung ist er sofort wieder
+    sichtbar) oder uns mitteilen, dass Ihr Inhalt in Ordnung ist. Hören wir nichts von Ihnen,
+    schauen sich unsere Admins den Fall an.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>
