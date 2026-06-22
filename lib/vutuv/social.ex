@@ -523,24 +523,13 @@ defmodule Vutuv.Social do
     if blocked_between?(user.id, target.id) do
       {:error, :blocked}
     else
-      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-
-      row = %{
-        id: UUIDv7.generate(),
-        user_id: user.id,
-        target_user_id: target.id,
-        inserted_at: now,
-        updated_at: now
-      }
-
-      # Ids are minted in code, so the inserted row count (0 on conflict) is
-      # what tells a fresh save from the idempotent repeat.
-      case Repo.insert_all(schema, [row],
-             on_conflict: :nothing,
-             conflict_target: [:user_id, :target_user_id]
+      case Vutuv.Engagement.insert_if_new(
+             schema,
+             %{user_id: user.id, target_user_id: target.id},
+             [:user_id, :target_user_id]
            ) do
-        {0, _} -> :ok
-        {1, _} -> broadcast_user_engagement(kind, user.id, target.id, true)
+        :exists -> :ok
+        {:inserted, _} -> broadcast_user_engagement(kind, user.id, target.id, true)
       end
     end
   end

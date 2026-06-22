@@ -14,21 +14,19 @@ defmodule VutuvWeb.FollowerController do
     %{user: user, users: followers, total: total} =
       Vutuv.Social.follows_page(conn.assigns[:user], :followers, conn.params)
 
-    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(followers, 45)
-
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           user: user,
           followers: followers,
           total_followers: total,
-          work_info_by_id: work_info_by_id,
+          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followers, 45),
           following_by_id:
             VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followers)
         )
       end,
       doc: fn ->
-        ListDocs.build_follow_list(user, :followers, followers, total, work_info_by_id)
+        ListDocs.build_follow_list(user, :followers, followers, total)
       end
     )
   end

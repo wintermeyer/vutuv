@@ -1661,6 +1661,32 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  A profile section index's body: the owner's drag-and-drop reorder tool
+  (`VutuvWeb.SectionReorderLive`, embedded once they have entries) or, for a
+  visitor / an empty list, the read-only `card_list` passed as the inner block.
+  `section` is the SectionReorderLive key (`"emails"`, `"links"`, …), `slug` the
+  owner's username, `editable` whether to show the reorder tool. Folds the
+  identical owner-vs-visitor branch the five section index pages repeated.
+  """
+  attr(:conn, :any, required: true)
+  attr(:section, :string, required: true)
+  attr(:slug, :string, required: true)
+  attr(:editable, :boolean, required: true)
+  slot(:inner_block, required: true)
+
+  def reorderable_section(assigns) do
+    ~H"""
+    <%= if @editable do %>
+      {live_render(@conn, VutuvWeb.SectionReorderLive,
+        id: "reorder-#{@section}",
+        session: %{"section" => @section, "slug" => @slug})}
+    <% else %>
+      {render_slot(@inner_block)}
+    <% end %>
+    """
+  end
+
+  @doc """
   Legacy (Track 1) Cancel/Submit actions row shared by the `editform`
   `form_content` templates. Emits the same `.editform__actions` markup the
   `link/2` + `submit/2` helpers produced (a `.button.button--cancel` link to

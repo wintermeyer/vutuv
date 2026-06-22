@@ -26,7 +26,6 @@ defmodule VutuvWeb.ConnectionController do
     # list_connections/1 is unpaginated, so the loaded list is the full set —
     # no separate count query needed.
     total = length(connections)
-    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 45)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -35,11 +34,11 @@ defmodule VutuvWeb.ConnectionController do
           owner?: owner?,
           connections: connections,
           total: total,
-          work_info_by_id: work_info_by_id
+          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 45)
         )
       end,
       doc: fn ->
-        ListDocs.build_follow_list(profile, :connections, users, total, work_info_by_id)
+        ListDocs.build_follow_list(profile, :connections, users, total)
       end
     )
   end

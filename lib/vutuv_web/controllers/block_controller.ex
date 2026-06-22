@@ -23,12 +23,7 @@ defmodule VutuvWeb.BlockController do
     with %User{} = target <- VutuvWeb.ControllerHelpers.get_user(user_id),
          {:ok, _block} <- Social.block_user(conn.assigns.current_user, target) do
       conn
-      |> put_flash(
-        :info,
-        gettext("You blocked @%{slug}. You can undo this on your blocked list.",
-          slug: target.username
-        )
-      )
+      |> put_flash(:info, VutuvWeb.BlockText.blocked_flash(target.username))
       |> redirect(to: ~p"/#{target}")
     else
       _ ->

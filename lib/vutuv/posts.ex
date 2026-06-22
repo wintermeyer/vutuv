@@ -683,27 +683,15 @@ defmodule Vutuv.Posts do
 
   defp engage(schema, kind, %User{} = user, %Post{} = post) do
     if visible_to?(post, user) do
-      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
-
-      row = %{
-        id: UUIDv7.generate(),
-        user_id: user.id,
-        post_id: post.id,
-        inserted_at: now,
-        updated_at: now
-      }
-
-      # Ids are minted client-side, so a returned id no longer signals whether
-      # the insert happened — insert_all's row count does (0 on conflict).
-      case Repo.insert_all(schema, [row],
-             on_conflict: :nothing,
-             conflict_target: [:post_id, :user_id],
-             returning: true
+      case Vutuv.Engagement.insert_if_new(
+             schema,
+             %{user_id: user.id, post_id: post.id},
+             [:post_id, :user_id]
            ) do
-        {0, _} ->
+        :exists ->
           {:ok, :noop}
 
-        {1, [row]} ->
+        {:inserted, row} ->
           broadcast_engagement(kind, user.id, post.id, true)
           {:ok, row}
       end

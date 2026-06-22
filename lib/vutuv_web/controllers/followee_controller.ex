@@ -14,15 +14,13 @@ defmodule VutuvWeb.FolloweeController do
     %{user: user, users: followees, total: total} =
       Vutuv.Social.follows_page(conn.assigns[:user], :followees, conn.params)
 
-    work_info_by_id = VutuvWeb.UserHelpers.work_information_map(followees, 45)
-
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "index.html",
           user: user,
           followees: followees,
           total_followees: total,
-          work_info_by_id: work_info_by_id,
+          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followees, 45),
           following_by_id:
             VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees),
           # The per-row mute toggle is the owner's lever over their own feed, so
@@ -32,7 +30,7 @@ defmodule VutuvWeb.FolloweeController do
         )
       end,
       doc: fn ->
-        ListDocs.build_follow_list(user, :following, followees, total, work_info_by_id)
+        ListDocs.build_follow_list(user, :following, followees, total)
       end
     )
   end

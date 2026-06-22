@@ -71,11 +71,7 @@ the resulting ~200px rail width. --%>
         <% liked? = @user_saved && @user_saved.liked? %>
         <% saved_present? = not is_nil(@user_saved) %>
         <% report_path = ~p"/reports/new?#{[type: "user", id: @user.id, return_to: "/#{@user.username}"]}" %>
-        <% block_confirm =
-          gettext(
-            "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-            slug: @user.username
-          ) %>
+        <% block_confirm = VutuvWeb.BlockText.confirm(@user.username) %>
         <%!-- The action cluster is pinned to the right of the avatar row
         (ml-auto), one short row. It now holds only the follow pill: the ⋯ menu
         moved down to the name row, so the pill gets the full width beside the

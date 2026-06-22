@@ -186,12 +186,7 @@ defmodule VutuvWeb.UserProfileLive do
     if me && me.id != user.id && match?({:ok, _}, Social.block_user(me, user)) do
       {:noreply,
        socket
-       |> put_flash(
-         :info,
-         gettext("You blocked @%{slug}. You can undo this on your blocked list.",
-           slug: user.username
-         )
-       )
+       |> put_flash(:info, VutuvWeb.BlockText.blocked_flash(user.username))
        |> load_profile()}
     else
       {:noreply, socket}

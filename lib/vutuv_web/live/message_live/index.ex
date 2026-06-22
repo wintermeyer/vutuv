@@ -218,12 +218,7 @@ defmodule VutuvWeb.MessageLive.Index do
 
         {:noreply,
          socket
-         |> put_flash(
-           :info,
-           gettext("You blocked @%{slug}. You can undo this on your blocked list.",
-             slug: other.username
-           )
-         )
+         |> put_flash(:info, VutuvWeb.BlockText.blocked_flash(other.username))
          |> push_navigate(to: ~p"/messages")}
     end
   end
@@ -514,12 +509,7 @@ defmodule VutuvWeb.MessageLive.Index do
                 id="block-from-thread"
                 click="block"
                 danger
-                confirm={
-                  gettext(
-                    "Block @%{slug}? This removes any follows and connection between you, closes your conversation, and prevents all interaction in both directions. Unblocking will not restore what was removed.",
-                    slug: @other.username
-                  )
-                }
+                confirm={VutuvWeb.BlockText.confirm(@other.username)}
               >
                 {gettext("Block @%{slug}", slug: @other.username)}
               </:item>

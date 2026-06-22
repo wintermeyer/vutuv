@@ -23,7 +23,6 @@ defmodule VutuvWeb.ApiV2.SocialController do
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
-  alias VutuvWeb.UserHelpers
 
   # ── Reads ──
 
@@ -35,9 +34,8 @@ defmodule VutuvWeb.ApiV2.SocialController do
     ApiV2.with_visible_user(conn, slug, fn user ->
       %{users: people, total: total} = Social.follows_page(user, side, params)
       doc_side = if side == :followees, do: :following, else: :followers
-      work_info = UserHelpers.work_information_map(people, 45)
 
-      ApiV2.send_json(conn, ListDocs.build_follow_list(user, doc_side, people, total, work_info))
+      ApiV2.send_json(conn, ListDocs.build_follow_list(user, doc_side, people, total))
     end)
   end
 
@@ -46,11 +44,10 @@ defmodule VutuvWeb.ApiV2.SocialController do
       # Like the public page: the member's vernetzt list (people they mutually
       # follow).
       users = user |> Social.list_connections() |> Enum.map(& &1.user)
-      work_info = UserHelpers.work_information_map(users, 45)
 
       ApiV2.send_json(
         conn,
-        ListDocs.build_follow_list(user, :connections, users, length(users), work_info)
+        ListDocs.build_follow_list(user, :connections, users, length(users))
       )
     end)
   end

@@ -34,7 +34,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   One page of `/:slug/followers`, `/:slug/following` or `/:slug/connections`
   (for connections: the accepted ones — the public part of the page).
   """
-  def build_follow_list(user, side, people, total, work_info_by_id) when side in @sides do
+  def build_follow_list(user, side, people, total) when side in @sides do
     path = "/#{user.username}/#{side}"
     name = UserHelpers.full_name(user)
 
@@ -44,6 +44,10 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
         :following -> gettext("People %{name} follows", name: name)
         :connections -> gettext("Connections of %{name}", name: name)
       end
+
+    # Every caller built the same `work_information_map(people, 45)`, so the doc
+    # owns it: one home for the list's per-row work line.
+    work_info_by_id = UserHelpers.work_information_map(people, 45)
 
     AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true, noai: true)
     |> Map.merge(%{
