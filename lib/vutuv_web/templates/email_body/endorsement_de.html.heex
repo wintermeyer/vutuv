@@ -3,8 +3,5 @@
   <.email_p>@{@actor_username} hat Sie für {@tag_name} auf vutuv empfohlen.</.email_p>
   <.email_button href={"#{@url}#{@actor_username}"}>Profil ansehen</.email_button>
   <.email_signature locale={@locale} />
-  <.email_muted>
-    Diese Benachrichtigungs-E-Mails können Sie
-    <.email_link href={@unsubscribe_url}>hier abschalten</.email_link>.
-  </.email_muted>
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
 </.email_layout>

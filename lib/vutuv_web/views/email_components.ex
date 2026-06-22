@@ -270,6 +270,32 @@ defmodule VutuvWeb.EmailComponents do
   defp signature_line2("de"), do: "Ihr vutuv Team"
   defp signature_line2(_), do: "The vutuv team"
 
+  @doc """
+  The localized "switch these notification emails off here" footnote shared by
+  every opt-out notification body (new follower, endorsement, unread messages).
+  Wraps the tokenized one-click `unsubscribe_url` in an `email_muted`/`email_link`.
+  """
+  attr(:locale, :string, default: "en")
+  attr(:unsubscribe_url, :string, required: true)
+
+  def email_unsubscribe_note(%{locale: "de"} = assigns) do
+    ~H"""
+    <.email_muted>
+      Diese Benachrichtigungs-E-Mails können Sie
+      <.email_link href={@unsubscribe_url}>hier abschalten</.email_link>.
+    </.email_muted>
+    """
+  end
+
+  def email_unsubscribe_note(assigns) do
+    ~H"""
+    <.email_muted>
+      You can switch these notification emails off
+      <.email_link href={@unsubscribe_url}>here</.email_link>.
+    </.email_muted>
+    """
+  end
+
   # Style strings, built here (where the @font/@mono module attributes work) and
   # called from the templates as `style={p_style()}` etc.
   defp wordmark_style,

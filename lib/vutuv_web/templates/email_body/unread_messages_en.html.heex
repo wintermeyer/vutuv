@@ -3,8 +3,5 @@
   <.email_p>you have a new message from @{@other_slug} on vutuv.</.email_p>
   <.email_button href={"#{@url}messages/#{@conversation_id}"}>Read and reply</.email_button>
   <.email_signature locale={@locale} />
-  <.email_muted>
-    You can switch these notification emails off
-    <.email_link href={@unsubscribe_url}>here</.email_link>.
-  </.email_muted>
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
 </.email_layout>
