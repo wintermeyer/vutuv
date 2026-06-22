@@ -36,8 +36,10 @@ defmodule VutuvWeb.SectionViewAsTest do
       # The switcher is rendered once from the app layout, so its segments must
       # target *this* page (base_path = conn.request_path), not some other
       # section. Guards the layout-level rendering against a wrong base path.
-      assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "follower"]}"
+      # Only You / Public remain (Vernetzt was dropped), so there is no
+      # connection segment any more.
       assert html =~ ~p"/#{owner}/work_experiences?#{[view_as: "public"]}"
+      refute html =~ ~p"/#{owner}/work_experiences?#{[view_as: "connection"]}"
       # Section content is the narrower 48rem column, so the bar matches it
       # (max-w-3xl); only the full-width profile grid gets max-w-6xl.
       assert html =~ "mt-6 max-w-3xl"
@@ -100,9 +102,14 @@ defmodule VutuvWeb.SectionViewAsTest do
       refute html =~ "secret@example.com"
     end
 
-    test "previewing as a connection still reveals private addresses",
+    test "a stale ?view_as=connection falls back to the owner's own view (Vernetzt tier gone)",
          %{conn: conn, owner: owner} do
+      # The Vernetzt tier was removed, so "connection" is an unknown view_as
+      # value: it resolves to nil, the owner's own view (no banner, private
+      # address shown), rather than a visitor preview.
       html = conn |> get(~p"/#{owner}/emails?#{[view_as: "connection"]}") |> html_response(200)
+      refute html =~ "view-as-banner"
+      assert html =~ "shown@example.com"
       assert html =~ "secret@example.com"
     end
   end

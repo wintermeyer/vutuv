@@ -11,7 +11,7 @@
     </div>
 
     <.editform_field form={f} field={:public?}>
-      <%= label f, :public?, gettext("Public (Everyone can view) or Private (Only those you follow can view)") %>
+      <%= label f, :public?, gettext("Public (Everyone can view) or Private (Only you can view)") %>
       <%= select f, :public?, [{gettext("Public"), true}, {gettext("Private"), false}] %>
       <%= error_tag f, :public? %>
     </.editform_field>

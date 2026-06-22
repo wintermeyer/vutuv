@@ -3,9 +3,10 @@ defmodule VutuvWeb.VCardController do
   The session-aware vCard download (`/:slug/vcard`). The profile's
   canonical, cache-safe vCard lives at `/:slug.vcf` (see
   `VutuvWeb.AgentDocs`); this route keeps the one historical extra the
-  profile's download link relies on: a viewer the member follows back (or
-  the member themselves) gets **all** email addresses, not just the
-  public ones. Ported from the deleted `/api/1.0` namespace.
+  profile's download link relies on: the member themselves gets **all** their
+  email addresses (private ones included), not just the public ones. A private
+  address is owner-only, so any other viewer gets none here (the public ones are
+  on `/:slug.vcf`). Ported from the deleted `/api/1.0` namespace.
   """
 
   use VutuvWeb, :controller
@@ -33,8 +34,8 @@ defmodule VutuvWeb.VCardController do
     |> send_resp(200, VCard.render(doc))
   end
 
-  # The historical permission rule of this route: all addresses for a
-  # permitted viewer, none otherwise (the public addresses are on /:slug.vcf).
+  # The permission rule of this route: all addresses for the owner, none for
+  # anyone else (a private address is owner-only; public ones are on /:slug.vcf).
   defp visible_emails(user, requester) do
     if VutuvWeb.UserHelpers.user_has_permissions?(user, requester) do
       user |> Ecto.assoc(:emails) |> Repo.all()

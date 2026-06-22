@@ -59,27 +59,25 @@ defmodule VutuvWeb.UserHelpers do
 
   @doc """
   The emails list for the owner's "View as" preview on `/:slug/emails`
-  (`VutuvWeb.ViewAs`). Mirrors the profile's `private_emails?/3` rule: the
-  member's own view and the connection preview show every address (a connection
-  is a mutual follow, so the owner follows them and the private-email rule
-  grants it); the follower and public previews show only the public addresses.
-  Outside a preview (`nil`) it falls back to the real visitor's permission via
-  `emails_for_display/2`.
+  (`VutuvWeb.ViewAs`). A private (`public?: false`) address is owner-only, so the
+  Public preview shows only the public addresses; the preview deliberately
+  renders the visitor's view, not the owner's. Outside a preview (`nil`) it falls
+  back to the real visitor's permission via `emails_for_display/2` (which hands
+  the owner all of their own addresses).
   """
-  def emails_for_preview(user, _visitor, :connection),
-    do: Repo.all(Vutuv.Ordering.by_position(assoc(user, :emails)))
-
-  def emails_for_preview(user, _visitor, mode) when mode in [:follower, :public],
+  def emails_for_preview(user, _visitor, :public),
     do: Repo.all(Vutuv.Ordering.by_position(from(e in assoc(user, :emails), where: e.public?)))
 
   def emails_for_preview(user, visitor, nil), do: emails_for_display(user, visitor)
 
-  def user_has_permissions?(user, visitor) do
-    # Check same_user? first: the owner viewing their own profile then needs no
-    # self-follow lookup. Non-owners still fall through to user_follows_user?/2,
-    # which returns the truthy follow id callers rely on.
-    same_user?(user, visitor) || user_follows_user?(user, visitor)
-  end
+  @doc """
+  Whether `visitor` may see `user`'s private (`public?: false`) email addresses.
+  A private address is **owner-only**: visible to the member themselves and to
+  nobody else. (It previously also granted access to everyone the owner
+  *followed* — one-directional, no follow-back required — which silently exposed
+  a "private" address to every account the owner subscribed to.)
+  """
+  def user_has_permissions?(user, visitor), do: same_user?(user, visitor)
 
   def current_job(user) do
     if Repo.exists?(from(w in WorkExperience, where: w.user_id == ^user.id)) do

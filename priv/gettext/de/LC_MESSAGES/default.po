@@ -565,8 +565,8 @@ msgstr "Öffentlich"
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:14
 #, elixir-autogen
-msgid "Public (Everyone can view) or Private (Only those you follow can view)"
-msgstr "Public (jeder kann sie sehen) oder Privat (Nur Personen, denen Sie folgen können sie sehen)"
+msgid "Public (Everyone can view) or Private (Only you can view)"
+msgstr "Öffentlich (für alle sichtbar) oder Privat (nur für Sie sichtbar)"
 
 #: lib/vutuv_web/live/post_live/composer.ex:575
 #: lib/vutuv_web/templates/settings/index.html.heex:153

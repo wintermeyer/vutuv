@@ -63,9 +63,7 @@ the resulting ~200px rail width. --%>
       needs no doc change. --%>
       <div class="px-6 pb-6">
         <% member_since = member_since(@user) %>
-        <% can_act? =
-          @preview_as in [:follower, :connection] or
-            (@current_user != nil and not same_user?(@user, @current_user)) %>
+        <% can_act? = @current_user != nil and not same_user?(@user, @current_user) %>
         <% vcard_path = if @vcard_full?, do: ~p"/#{@user}/vcard", else: "/#{@user.username}.vcf" %>
         <% bookmarked? = @user_saved && @user_saved.bookmarked? %>
         <% liked? = @user_saved && @user_saved.liked? %>

@@ -210,6 +210,64 @@ defmodule VutuvWeb.UserHelpersTest do
     end
   end
 
+  describe "email visibility: a private address is owner-only" do
+    # Privacy fix: `public?: false` used to mean "visible to everyone the owner
+    # follows" (the email form literally said "Only those you follow can view").
+    # An owner who follows 2,700 people thereby leaked their private address to
+    # all 2,700. A private address is now visible to the owner and nobody else.
+    test "user_has_permissions?/2 is true only for the owner themselves" do
+      owner = insert(:user, email_confirmed?: true)
+      stranger = insert(:user, email_confirmed?: true)
+
+      assert UserHelpers.user_has_permissions?(owner, owner)
+      refute UserHelpers.user_has_permissions?(owner, stranger)
+      refute UserHelpers.user_has_permissions?(owner, nil)
+    end
+
+    test "neither a follower nor a member the owner follows (nor a mutual) gains access" do
+      owner = insert(:user, email_confirmed?: true)
+      follower = insert(:user, email_confirmed?: true)
+      followed = insert(:user, email_confirmed?: true)
+      mutual = insert(:user, email_confirmed?: true)
+
+      insert(:follow, follower: follower, followee: owner)
+      insert(:follow, follower: owner, followee: followed)
+      insert(:follow, follower: owner, followee: mutual)
+      insert(:follow, follower: mutual, followee: owner)
+
+      refute UserHelpers.user_has_permissions?(owner, follower)
+      refute UserHelpers.user_has_permissions?(owner, followed)
+      refute UserHelpers.user_has_permissions?(owner, mutual)
+    end
+
+    test "emails_for_display/2 hands a private address only to the owner" do
+      owner = insert(:user, email_confirmed?: true)
+      followed = insert(:user, email_confirmed?: true)
+      insert(:email, user: owner, public?: true, value: "public@example.com")
+      insert(:email, user: owner, public?: false, value: "secret@example.com")
+      insert(:follow, follower: owner, followee: followed)
+
+      owner_sees = Enum.map(UserHelpers.emails_for_display(owner, owner), & &1.value)
+      assert "public@example.com" in owner_sees
+      assert "secret@example.com" in owner_sees
+
+      followed_sees = Enum.map(UserHelpers.emails_for_display(owner, followed), & &1.value)
+      assert "public@example.com" in followed_sees
+      refute "secret@example.com" in followed_sees
+    end
+
+    test "emails_for_preview/3 shows the Public preview only public addresses" do
+      owner = insert(:user, email_confirmed?: true)
+      insert(:email, user: owner, public?: true, value: "public@example.com")
+      insert(:email, user: owner, public?: false, value: "secret@example.com")
+
+      # Public is the only visitor preview tier left (Vernetzt was dropped).
+      values = Enum.map(UserHelpers.emails_for_preview(owner, nil, :public), & &1.value)
+      assert "public@example.com" in values
+      refute "secret@example.com" in values
+    end
+  end
+
   # Re-read the work experiences in the same id order the listing helpers use
   # (work_information_map orders by w.id), so current_job_in_memory sees the
   # same physical ordering the DB-backed limit-1 queries rely on.

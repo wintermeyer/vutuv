@@ -196,6 +196,13 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute has_element?(view, "#view-as-banner")
       assert render(view) =~ "secret@example.com"
 
+      # Two tiers only: You / Public. The Follower and Vernetzt segments are both
+      # gone (Follower looked like Public; Vernetzt stopped revealing anything
+      # extra once private emails became owner-only).
+      assert has_element?(view, ~s(button[phx-value-mode="public"]))
+      refute has_element?(view, ~s(button[phx-value-mode="connection"]))
+      refute has_element?(view, ~s(button[phx-value-mode="follower"]))
+
       # Preview as the public: banner appears and the private email drops, live.
       view |> element(~s(button[phx-click="view_as"][phx-value-mode="public"])) |> render_click()
       assert has_element?(view, "#view-as-banner")

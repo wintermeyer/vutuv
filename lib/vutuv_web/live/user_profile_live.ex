@@ -387,16 +387,8 @@ defmodule VutuvWeb.UserProfileLive do
   # ── "View as" preview helpers (owner-only) ──
 
   defp view_as(false, _param), do: nil
-  defp view_as(true, "follower"), do: :follower
-  defp view_as(true, "connection"), do: :connection
   defp view_as(true, "public"), do: :public
   defp view_as(true, _param), do: nil
-
-  defp posts_scope(:follower, _current_user),
-    do: {:preview, %{follower?: true, followee?: false, connection?: false}}
-
-  defp posts_scope(:connection, _current_user),
-    do: {:preview, %{follower?: true, followee?: true, connection?: true}}
 
   defp posts_scope(:public, _current_user), do: nil
   defp posts_scope(nil, current_user), do: current_user
@@ -404,7 +396,9 @@ defmodule VutuvWeb.UserProfileLive do
   defp preview_viewer(nil, current_user), do: current_user
   defp preview_viewer(_preview, _current_user), do: nil
 
-  defp private_emails?(:connection, _current_user, _user), do: true
+  # A private address is owner-only, so no visitor preview tier ever reveals it;
+  # only the owner's own view (nil, resolved through user_has_permissions?/2,
+  # which is now same_user?/2) does.
   defp private_emails?(preview, _current_user, _user) when not is_nil(preview), do: false
 
   defp private_emails?(nil, current_user, user),
@@ -419,18 +413,8 @@ defmodule VutuvWeb.UserProfileLive do
   # directional follow edges — the viewer's outbound edge to the owner and the
   # owner's inbound edge back — returned as one map. Replaces four helpers that
   # re-read the same edges six times (two follow_id, the two-exists connected?,
-  # and a follow_edge for the mute state). The preview tiers ("View as
-  # follower/connection") return the tier's fixed state with no query, as before.
-  defp header_relationship(preview, _current_user, _user)
-       when preview in [:follower, :connection] do
-    %{
-      follow_id: "preview",
-      follow_muted?: false,
-      connected?: preview == :connection,
-      follows_viewer?: preview == :connection
-    }
-  end
-
+  # and a follow_edge for the mute state). The only preview tier is Public, which
+  # falls through here as the owner viewing their own profile (all-false).
   defp header_relationship(_preview, current_user, user) do
     if current_user && current_user.id != user.id do
       outbound = Social.follow_edge(current_user.id, user.id)
@@ -452,9 +436,6 @@ defmodule VutuvWeb.UserProfileLive do
       Social.get_block(current_user.id, user.id)
     end
   end
-
-  defp header_user_saved(preview, _current_user, _user) when preview in [:follower, :connection],
-    do: %{bookmarked?: false, liked?: false}
 
   defp header_user_saved(_preview, current_user, user) do
     if current_user && current_user.id != user.id do

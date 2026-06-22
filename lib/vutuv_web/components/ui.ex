@@ -1880,8 +1880,8 @@ defmodule VutuvWeb.UI do
   @doc """
   The owner-only **"View as" preview switcher** shared by the profile
   (`/:slug`) and every profile section page (`/:slug/work_experiences`,
-  `/phone_numbers`, …). A segmented control — You / Follower / Connected /
-  Public — that reloads the current page server-side with `?view_as=<mode>`
+  `/phone_numbers`, …). A segmented control — You / Public — that
+  reloads the current page server-side with `?view_as=<mode>`
   (resolved by `VutuvWeb.ViewAs` for sections, `VutuvWeb.UserController` for the
   profile), plus an active-mode banner.
 
@@ -1890,7 +1890,7 @@ defmodule VutuvWeb.UI do
   identically on every owner page. The layout gates it on `@can_preview?` and
   derives `base_path` from `conn.request_path`, so individual templates no
   longer embed it. `preview_as` is the active tier
-  (`nil | :follower | :connection | :public`); `class` adds utilities to the
+  (`nil | :public`); `class` adds utilities to the
   outer container (the layout passes a top margin).
   """
   attr(:base_path, :string, required: true)
@@ -1940,8 +1940,6 @@ defmodule VutuvWeb.UI do
         <div class="flex w-full divide-x divide-slate-200 overflow-hidden rounded-lg ring-1 ring-slate-200 sm:w-auto sm:flex-1 dark:divide-slate-700 dark:ring-slate-700">
           <%= for {label, mode} <- [
                 {gettext("You"), nil},
-                {gettext("Follower"), :follower},
-                {gettext("Connected"), :connection},
                 {gettext("Public"), :public}
               ] do %>
             <button
@@ -1967,10 +1965,6 @@ defmodule VutuvWeb.UI do
         class="mt-2 text-sm text-slate-600 dark:text-slate-400"
       >
         <%= case @preview_as do %>
-          <% :follower -> %>
-            {gettext("Preview: how a member who follows you sees this page.")}
-          <% :connection -> %>
-            {gettext("Preview: how a member you are connected with sees this page.")}
           <% :public -> %>
             {gettext("Preview: how logged-out visitors and search engines see this page.")}
             <%!-- When this member has turned off search-engine indexing or AI

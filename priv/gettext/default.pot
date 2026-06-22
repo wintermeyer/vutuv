@@ -566,7 +566,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:14
 #, elixir-autogen
-msgid "Public (Everyone can view) or Private (Only those you follow can view)"
+msgid "Public (Everyone can view) or Private (Only you can view)"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:575

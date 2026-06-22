@@ -57,6 +57,29 @@ defmodule VutuvWeb.VCardControllerTest do
     assert conn.resp_body =~ "PHOTO;ENCODING=b;TYPE=JPEG:"
   end
 
+  test "the owner's own session vCard download carries their private addresses", %{conn: conn} do
+    {conn, owner} = create_and_login_user(conn)
+    insert(:email, user: owner, value: "secret@example.com", public?: false)
+
+    body = conn |> get("/#{owner.username}/vcard") |> response(200)
+    assert body =~ "secret@example.com"
+  end
+
+  test "the session vCard hides private addresses from a member the owner follows", %{conn: conn} do
+    # Owner-only privacy: even a vernetzte viewer (mutual follow) must not get
+    # the private address in the session-aware vCard. Public addresses live on
+    # the cache-safe /:slug.vcf, so a permitted-but-not-owner viewer gets none.
+    owner = insert_activated_user(username: "vcard-private-owner")
+    insert(:email, user: owner, value: "secret@example.com", public?: false)
+
+    {conn, viewer} = create_and_login_user(conn)
+    insert(:follow, follower: owner, followee: viewer)
+    insert(:follow, follower: viewer, followee: owner)
+
+    body = conn |> get("/#{owner.username}/vcard") |> response(200)
+    refute body =~ "secret@example.com"
+  end
+
   test "the N field carries all five components incl. the honorific suffix" do
     insert_activated_user(
       username: "phd-tester",

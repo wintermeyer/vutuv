@@ -453,22 +453,25 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Deutschland"
   end
 
-  test "viewing the profile of a member who follows you renders their private email",
+  test "a member the owner follows does not see the owner's private email (page still renders)",
        %{conn: conn} do
     {conn, viewer} = create_and_login_user(conn)
 
     owner = insert_activated_user(first_name: "Paula", last_name: "Permissions")
     insert(:email, user: owner, value: "paula.private@example.com", public?: false)
+    insert(:email, user: owner, value: "paula.public@example.com", public?: true)
 
-    # The owner follows the viewer, so the viewer is permitted to see the
-    # owner's private email. user_has_permissions?/2 returns the follow id (a
-    # truthy UUID, not a strict boolean); it used to leak into profile_emails/3
-    # — which only matches true/false — and 500 the whole profile page.
+    # The owner follows the viewer. "Private" used to mean "visible to everyone
+    # the owner follows", so this leaked the address; it is owner-only now, so
+    # the page renders without it. This also guards the historical 500:
+    # user_has_permissions?/2 is a strict boolean again (same_user?/2), so it
+    # can never leak a follow id into profile_emails/3 (which matches true/false).
     insert(:follow, follower: owner, followee: viewer)
 
     html = conn |> get(~p"/#{owner}") |> html_response(200)
 
-    assert html =~ "paula.private@example.com"
+    refute html =~ "paula.private@example.com"
+    assert html =~ "paula.public@example.com"
   end
 
   test "renders the headline as Markdown", %{conn: conn} do
@@ -952,9 +955,9 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   describe "owner 'view as' profile preview" do
-    # Two emails so the private/public split is unambiguous: the owner and a
-    # a connection (vernetzt, mutual follow) see both, a plain Follower / the
-    # public see only the public one.
+    # Two emails so the private/public split is unambiguous: the owner sees
+    # both; every visitor (followers, connections, the public alike) sees only
+    # the public one, because a private address is owner-only.
     defp owner_with_emails(conn) do
       {conn, user} = create_and_login_user(conn)
       insert(:email, user: user, value: "secret@example.com", public?: false)
@@ -975,7 +978,11 @@ defmodule VutuvWeb.UserControllerTest do
       # LiveView) its segments are phx-click buttons, so switching tiers
       # re-renders with no reload (the dead section pages keep ?view_as= links).
       assert html =~ ~s(phx-click="view_as")
-      assert html =~ ~s(phx-value-mode="follower")
+      # Two tiers now (You / Öffentlich). "Follower" and "Vernetzt" were both
+      # dropped: Follower rendered like Public, and Vernetzt stopped revealing
+      # anything extra once private emails became owner-only.
+      refute html =~ ~s(phx-value-mode="follower")
+      refute html =~ ~s(phx-value-mode="connection")
       assert html =~ ~s(phx-value-mode="public")
       # The profile grid is full width, so the bar spans the full main column
       # (max-w-6xl); the section pages get the narrower max-w-3xl instead.
@@ -985,35 +992,37 @@ defmodule VutuvWeb.UserControllerTest do
       assert html =~ "shown@example.com"
     end
 
-    test "previewing as a Follower hides private emails and owner chrome but shows visitor controls",
+    test "the removed Follower tier (?view_as=follower) falls back to the owner's own view",
          %{conn: conn} do
       {conn, user} = owner_with_emails(conn)
 
+      # "Follower" was dropped from the switcher because it showed exactly what
+      # the public sees on the profile. A stale ?view_as=follower link is now an
+      # unknown tier, so it resolves to nil: the owner's own full view (banner
+      # gone, owner chrome and private email back).
       html = conn |> get(~p"/#{user}?#{[view_as: "follower"]}") |> html_response(200)
 
-      assert html =~ "view-as-banner"
-      refute html =~ "Edit profile"
-      # A plain follower is not someone the owner follows, so no private email.
-      refute html =~ "secret@example.com"
-      assert html =~ "shown@example.com"
-      # The action controls render (inert in preview): the Message link to this
-      # profile only appears in the header control cluster.
-      assert html =~ ~p"/messages/with/#{user}"
-      assert html =~ "pointer-events-none"
-    end
-
-    test "previewing as a connection (vernetzt) reveals private emails too", %{conn: conn} do
-      {conn, user} = owner_with_emails(conn)
-
-      html = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
-
-      assert html =~ "view-as-banner"
-      refute html =~ "Edit profile"
-      # A connection is a mutual follow, so the owner follows them and the
-      # private-email rule grants it.
+      refute html =~ "view-as-banner"
+      assert html =~ "Edit profile"
       assert html =~ "secret@example.com"
       assert html =~ "shown@example.com"
-      assert html =~ ~p"/messages/with/#{user}"
+    end
+
+    test "the removed Connected tier (?view_as=connection) falls back to the owner's own view",
+         %{conn: conn} do
+      {conn, user} = owner_with_emails(conn)
+
+      # "Vernetzt" was dropped from the switcher once private emails went
+      # owner-only and it no longer revealed anything a Public viewer wouldn't.
+      # A stale ?view_as=connection link is now an unknown tier, so it resolves
+      # to nil: the owner's own full view (banner gone, owner chrome and private
+      # email back).
+      html = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
+
+      refute html =~ "view-as-banner"
+      assert html =~ "Edit profile"
+      assert html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
     end
 
     test "previewing as the public hides private data, owner chrome and every action control",
@@ -1046,7 +1055,8 @@ defmodule VutuvWeb.UserControllerTest do
       assert html =~ ~p"/#{user}/settings/privacy"
     end
 
-    test "post visibility follows the previewed relationship", %{conn: conn} do
+    test "the public preview shows only public posts, hiding audience-restricted ones",
+         %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, _} = Vutuv.Posts.create_post(user, %{body: "everyone post"})
 
@@ -1062,20 +1072,14 @@ defmodule VutuvWeb.UserControllerTest do
           denials: [%{"wildcard" => "non_connections"}]
         })
 
+      # The only visitor preview now is Public: it shows the public post and
+      # hides every audience-restricted one. (Follower/connection-scoped posts
+      # still reach those audiences on the real profile; there is just no owner
+      # preview tier for them any more.)
       public = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
       assert public =~ "everyone post"
       refute public =~ "followers post"
       refute public =~ "connections post"
-
-      follower = conn |> get(~p"/#{user}?#{[view_as: "follower"]}") |> html_response(200)
-      assert follower =~ "everyone post"
-      assert follower =~ "followers post"
-      refute follower =~ "connections post"
-
-      connection = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
-      assert connection =~ "everyone post"
-      assert connection =~ "followers post"
-      assert connection =~ "connections post"
     end
 
     test "a stranger's ?view_as= is ignored: no switcher, no preview, no leak", %{conn: conn} do
@@ -1083,11 +1087,31 @@ defmodule VutuvWeb.UserControllerTest do
       owner = insert_activated_user()
       insert(:email, user: owner, value: "secret@example.com", public?: false)
 
-      html = conn |> get(~p"/#{owner}?#{[view_as: "connection"]}") |> html_response(200)
+      html = conn |> get(~p"/#{owner}?#{[view_as: "public"]}") |> html_response(200)
 
       refute html =~ "view-as-switcher"
       refute html =~ "view-as-banner"
       refute html =~ "secret@example.com"
+    end
+
+    # The actual screenshot bug, on the real profile (no preview): "private" used
+    # to mean "visible to everyone the owner follows", so a member the owner
+    # followed (and a mutual follow) saw the private address. It is owner-only
+    # now, so even a vernetzte viewer sees only the public address.
+    test "a member the owner follows (mutual) sees only public emails on the live profile",
+         %{conn: conn} do
+      owner = insert_activated_user(username: "owner-with-private")
+      insert(:email, user: owner, value: "secret@example.com", public?: false)
+      insert(:email, user: owner, value: "shown@example.com", public?: true)
+
+      {conn, viewer} = create_and_login_user(conn)
+      insert(:follow, follower: owner, followee: viewer)
+      insert(:follow, follower: viewer, followee: owner)
+
+      html = conn |> get(~p"/#{owner}") |> html_response(200)
+
+      refute html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
     end
   end
 

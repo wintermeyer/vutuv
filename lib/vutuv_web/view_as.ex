@@ -2,25 +2,25 @@ defmodule VutuvWeb.ViewAs do
   @moduledoc """
   Owner-only "View as" preview for the profile section pages
   (work_experiences, phone_numbers, addresses, links, social_media_accounts,
-  emails, tags). The bare page is the owner's own view; `?view_as=follower`,
-  `?view_as=connection` and `?view_as=public` reload server-side so the owner
-  can see the page as that audience would. A non-owner's `?view_as=` is
-  ignored, so the preview is owner-only and never leaks private data.
+  emails, tags). The bare page is the owner's own view; `?view_as=public`
+  reloads server-side so the owner can see the page as a logged-out visitor
+  would. A non-owner's `?view_as=` is ignored, so the preview is owner-only and
+  never leaks private data.
 
   `assign_preview/1` sets the assigns the section index templates and the shared
   `<.view_as_switcher>` component read:
 
     * `:can_preview?` - the viewer owns this profile (so the switcher renders)
-    * `:preview_as`   - `nil | :follower | :connection | :public`
+    * `:preview_as`   - `nil | :public`
     * `:preview?`     - a preview tier is active
     * `:as_owner?`    - owner AND not previewing; gates the Add / Edit / Delete
-      chrome so the visitor preview modes render the page read-only
+      chrome so the public preview mode renders the page read-only
 
   These mirror the profile's own switcher (`VutuvWeb.UserController`), kept here
   so every section page resolves the preview exactly the same way. Most sections
-  are fully public, so Follower / Connected / Public render identically there;
-  only the emails page differs (its private addresses drop in the visitor
-  modes, see `VutuvWeb.UserHelpers.emails_for_preview/3`).
+  are fully public, so the Public preview only toggles the owner's chrome there;
+  the emails page also drops its private addresses (which are owner-only, see
+  `VutuvWeb.UserHelpers.emails_for_preview/3`).
   """
 
   import Plug.Conn, only: [assign: 3]
@@ -51,8 +51,6 @@ defmodule VutuvWeb.ViewAs do
 
   def preview_as(true, params) do
     case params["view_as"] do
-      "follower" -> :follower
-      "connection" -> :connection
       "public" -> :public
       _ -> nil
     end
