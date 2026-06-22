@@ -67,6 +67,12 @@ config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 # Postfix pipes into POST /webhooks/bounces (see Vutuv.Notifications.Bounces).
 config :vutuv, :bounce_address, "bounces@vutuv.de"
 
+# The visible From (no-reply@vutuv.de) is not read, but the strike-3
+# deactivation mail invites the member to appeal by replying. That one mail
+# carries a Reply-To to this monitored contact so an appeal reaches a human
+# (see Vutuv.Notifications.Emailer.moderation_deactivation_email/2).
+config :vutuv, :appeal_reply_to, "sw@wintermeyer-consulting.de"
+
 # Mail is delivered via SMTP (prod) and the Local/Test adapters elsewhere, none
 # of which need an HTTP API client. Disabling it avoids pulling in hackney.
 config :swoosh, :api_client, false

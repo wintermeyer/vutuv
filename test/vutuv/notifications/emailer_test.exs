@@ -22,7 +22,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "base_email carries the From and the robot headers" do
       email = Emailer.base_email()
 
-      assert email.from == {"vutuv", "info@vutuv.de"}
+      assert email.from == {"vutuv", "no-reply@vutuv.de"}
       assert_robot_headers(email)
     end
 
@@ -54,14 +54,14 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "every message leaves with the bounce address as envelope sender" do
       # The Swoosh SMTP adapter uses the Sender header as SMTP MAIL FROM, so
       # bounces (DSNs) all come back to the one piped bounce mailbox instead
-      # of info@. The From stays untouched.
+      # of no-reply@. The From stays untouched.
       email = Emailer.base_email()
       assert email.headers["Sender"] == "bounces@vutuv.de"
-      assert email.from == {"vutuv", "info@vutuv.de"}
+      assert email.from == {"vutuv", "no-reply@vutuv.de"}
 
       raw =
         Swoosh.Email.new()
-        |> Swoosh.Email.from({"vutuv", "info@vutuv.de"})
+        |> Swoosh.Email.from({"vutuv", "no-reply@vutuv.de"})
         |> Swoosh.Email.to("nobody@example.com")
         |> Swoosh.Email.subject("Naked email")
         |> Swoosh.Email.text_body("hi")
@@ -73,7 +73,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "re-applies the robot headers even when a builder forgot the base" do
       raw =
         Swoosh.Email.new()
-        |> Swoosh.Email.from({"vutuv", "info@vutuv.de"})
+        |> Swoosh.Email.from({"vutuv", "no-reply@vutuv.de"})
         |> Swoosh.Email.to("nobody@example.com")
         |> Swoosh.Email.subject("Naked email")
         |> Swoosh.Email.text_body("hi")
@@ -88,7 +88,7 @@ defmodule Vutuv.Notifications.EmailerTest do
     test "stamps an FQDN Message-ID even when a builder forgot the base" do
       raw =
         Swoosh.Email.new()
-        |> Swoosh.Email.from({"vutuv", "info@vutuv.de"})
+        |> Swoosh.Email.from({"vutuv", "no-reply@vutuv.de"})
         |> Swoosh.Email.to("nobody@example.com")
         |> Swoosh.Email.subject("Naked email")
         |> Swoosh.Email.text_body("hi")
@@ -218,6 +218,29 @@ defmodule Vutuv.Notifications.EmailerTest do
 
       assert email.headers["List-Unsubscribe"] == nil
       assert email.headers["List-Unsubscribe-Post"] == nil
+    end
+  end
+
+  describe "moderation appeal mail routes replies away from the no-reply From" do
+    # The From is no-reply@vutuv.de and is not read. The only mail that invites
+    # a human reply is the strike-3 deactivation ("appeal by replying to this
+    # email"), so it carries a Reply-To to the monitored legal contact; every
+    # other message leaves the Reply-To unset so a reply bounces off no-reply@.
+
+    test "the deactivation email carries a Reply-To to the appeal contact" do
+      user = insert(:user, locale: "en")
+      email = Emailer.moderation_deactivation_email(user, "banned@example.com")
+
+      assert email.reply_to == {"", "sw@wintermeyer-consulting.de"}
+    end
+
+    test "ordinary mail (incl. other moderation mail) carries no Reply-To" do
+      user = insert(:user, locale: "en")
+
+      # A moderation mail that does not invite a reply.
+      assert Emailer.moderation_warning_email(user, "warned@example.com").reply_to == nil
+      # A plain transactional mail.
+      assert Emailer.login_email(@pin, "login@example.com", user).reply_to == nil
     end
   end
 

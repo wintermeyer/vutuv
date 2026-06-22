@@ -8,7 +8,7 @@ defmodule Vutuv.Notifications.Emailer do
 
     * `base_email/0` sets the `From` and the auto-generated robot headers that
       tell a recipient's mail system not to auto-reply (no out-of-office /
-      vacation responder bouncing back to `info@vutuv.de`).
+      vacation responder bouncing back to `no-reply@vutuv.de`).
     * `deliver/1` is the single delivery chokepoint. It re-applies the robot
       headers (belt and suspenders, in case a future builder forgets the base)
       and hands the message to `Vutuv.Mailer`.
@@ -27,7 +27,7 @@ defmodule Vutuv.Notifications.Emailer do
   alias Vutuv.Reports.DailyReport
   alias VutuvWeb.Plug.Locale
 
-  @from_address {"vutuv", "info@vutuv.de"}
+  @from_address {"vutuv", "no-reply@vutuv.de"}
   @from_domain @from_address |> elem(1) |> String.split("@") |> List.last()
 
   # Always-safe headers for every message.
@@ -44,7 +44,7 @@ defmodule Vutuv.Notifications.Emailer do
   # Opt-in headers for bulk mail only (see bulk_headers/1).
   @bulk_headers [
     {"Precedence", "bulk"},
-    {"List-Unsubscribe", "<mailto:info@vutuv.de?subject=unsubscribe>"}
+    {"List-Unsubscribe", "<mailto:no-reply@vutuv.de?subject=unsubscribe>"}
   ]
 
   @doc """
@@ -99,7 +99,7 @@ defmodule Vutuv.Notifications.Emailer do
   # The Swoosh SMTP adapter uses the Sender header as the SMTP envelope
   # sender (MAIL FROM), so every DSN comes back to the one bounce mailbox
   # production Postfix pipes into POST /webhooks/bounces. The visible From
-  # stays info@vutuv.de.
+  # stays no-reply@vutuv.de.
   defp envelope_sender(email), do: header(email, "Sender", bounce_address())
 
   defp bounce_address, do: Application.fetch_env!(:vutuv, :bounce_address)
@@ -274,7 +274,7 @@ defmodule Vutuv.Notifications.Emailer do
   # moderation notices) must NOT carry these - it cannot be opted out of.
   defp unsubscribe_headers(email, url) do
     email
-    |> header("List-Unsubscribe", "<#{url}>, <mailto:info@vutuv.de?subject=unsubscribe>")
+    |> header("List-Unsubscribe", "<#{url}>, <mailto:no-reply@vutuv.de?subject=unsubscribe>")
     |> header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
   end
 
@@ -449,7 +449,16 @@ defmodule Vutuv.Notifications.Emailer do
     build_email(user, email, "moderation_deactivation", %{}, fn ->
       gettext("Your vutuv account has been deactivated")
     end)
+    |> with_appeal_reply_to()
   end
+
+  # The From (no-reply@) is not read. The deactivation mail is the one message
+  # whose copy invites a reply ("appeal by replying to this email"), so route
+  # that reply to the monitored legal contact. No other mail sets a Reply-To,
+  # so a reply to it bounces off no-reply@ as intended.
+  defp with_appeal_reply_to(email), do: reply_to(email, appeal_reply_to())
+
+  defp appeal_reply_to, do: Application.fetch_env!(:vutuv, :appeal_reply_to)
 
   @doc "Admin alert: a whole profile was reported (urgent, sent immediately)."
   # `case_record` arrives with owner + reports/reporters preloaded (see

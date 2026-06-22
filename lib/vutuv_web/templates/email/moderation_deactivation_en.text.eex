@@ -5,7 +5,7 @@ vutuv account has been permanently deactivated. You can no longer log
 in and your profile is no longer visible.
 
 If you believe this decision is wrong, you can appeal by replying to
-info@vutuv.de.
+this email.
 
 <%= render "_signature_en.text" %>
 
