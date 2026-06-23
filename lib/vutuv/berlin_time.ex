@@ -18,6 +18,18 @@ defmodule Vutuv.BerlinTime do
   @doc "Today as a German calendar day (Europe/Berlin)."
   def today, do: date(DateTime.utc_now())
 
+  @doc "The current Europe/Berlin wall-clock time as a `NaiveDateTime`."
+  def now, do: naive(DateTime.utc_now())
+
+  @doc "A UTC instant as Europe/Berlin wall-clock time (a `NaiveDateTime`)."
+  def naive(%DateTime{} = utc) do
+    offset_hours = if summer_time?(utc), do: 2, else: 1
+
+    utc
+    |> DateTime.add(offset_hours * 3600, :second)
+    |> DateTime.to_naive()
+  end
+
   @doc "The German calendar date of a UTC instant."
   def date(%DateTime{} = utc) do
     offset_hours = if summer_time?(utc), do: 2, else: 1

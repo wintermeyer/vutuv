@@ -1,0 +1,70 @@
+<.page_header
+  title={gettext("Newsletters")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Newsletters")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1>{gettext("Newsletters")}</h1>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Compose a newsletter, save it as a draft, test it, then send it to all members. Right now a broadcast would reach %{count} members.",
+            count: @eligible_count
+          )}
+        </p>
+      </div>
+      <div class="flex flex-col items-end gap-1">
+        <a href={~p"/admin/newsletters/new"} class="button" id="new-newsletter">
+          {gettext("New newsletter")}
+        </a>
+        <a
+          href={~p"/admin/newsletter_groups"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          id="audiences-link"
+        >
+          {gettext("Audiences")} ›
+        </a>
+        <a
+          :if={dev_mailbox?()}
+          href="/sent_emails"
+          target="_blank"
+          rel="noopener"
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Dev email inbox")} ›
+        </a>
+      </div>
+    </div>
+
+    <p :if={@newsletters == []} class="card__empty">
+      {gettext("No newsletters yet.")}
+    </p>
+
+    <div :if={@newsletters != []} class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Subject")}</th>
+            <th>{gettext("Status")}</th>
+            <th>{gettext("Recipients")}</th>
+            <th>{gettext("Created")}</th>
+            <th>{gettext("Sent")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={n <- @newsletters} id={"newsletter-#{n.id}"}>
+            <td>
+              <a href={~p"/admin/newsletters/#{n}"} class="font-semibold">{n.subject}</a>
+            </td>
+            <td>{status_label(n.status)}</td>
+            <td>{if n.status == "sent", do: n.recipient_count, else: ""}</td>
+            <td>{fmt(n.inserted_at)}</td>
+            <td>{fmt(n.sent_at)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

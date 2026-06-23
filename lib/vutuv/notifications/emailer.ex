@@ -269,6 +269,50 @@ defmodule Vutuv.Notifications.Emailer do
     |> header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
   end
 
+  ## Newsletters (see Vutuv.Newsletters, the only caller)
+
+  @doc """
+  An admin newsletter ("Rundbrief"). Unlike the templated mails, the body is
+  composed by an admin and arrives here already rendered (inline-styled HTML +
+  plain text, merge variables substituted) from `Vutuv.Newsletters`; this only
+  wraps it in the shared email chrome and sets the headers. It is bulk mail, so
+  it carries `Precedence: bulk`; a `broadcast` also carries the tokenized
+  one-click unsubscribe, while a `test` send passes `unsubscribe_url: nil`.
+  """
+  def newsletter_email(%{
+        to_name: to_name,
+        to_email: to_email,
+        subject: subject_line,
+        locale: locale,
+        content_html: content_html,
+        content_text: content_text,
+        unsubscribe_url: unsubscribe_url
+      }) do
+    base_email()
+    |> to({to_name, to_email})
+    |> bulk_headers()
+    |> newsletter_unsubscribe(unsubscribe_url)
+    |> subject(subject_line)
+    |> html_body(
+      EmailComponents.render_to_string("newsletter_#{locale}.html", %{
+        preheader: subject_line,
+        locale: locale,
+        content_html: content_html,
+        unsubscribe_url: unsubscribe_url
+      })
+    )
+    |> text_body(
+      EmailText.render("newsletter_#{locale}.text", %{
+        locale: locale,
+        content_text: content_text,
+        unsubscribe_url: unsubscribe_url
+      })
+    )
+  end
+
+  defp newsletter_unsubscribe(email, nil), do: email
+  defp newsletter_unsubscribe(email, url), do: unsubscribe_headers(email, url)
+
   ## Login security (see Vutuv.Sessions.start_session/3, the only caller)
 
   @doc """

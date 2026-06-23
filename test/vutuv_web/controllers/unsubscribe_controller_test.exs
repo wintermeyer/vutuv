@@ -74,6 +74,15 @@ defmodule VutuvWeb.UnsubscribeControllerTest do
     assert post(conn, ~p"/unsubscribe/#{token}").status == 404
   end
 
+  test "a newsletter token names the newsletter and switches it off", %{conn: conn} do
+    user = insert(:activated_user)
+    token = UnsubscribeToken.sign(user, :newsletter_emails?)
+
+    assert get(conn, ~p"/unsubscribe/#{token}") |> html_response(200) =~ "the vutuv newsletter"
+    assert post(conn, ~p"/unsubscribe/#{token}") |> html_response(200) =~ "the vutuv newsletter"
+    refute reload(user).newsletter_emails?
+  end
+
   test "a per-type token switches only the named preference off", %{conn: conn} do
     user = insert(:activated_user, email_on_follower?: true, email_on_endorsement?: true)
     token = UnsubscribeToken.sign(user, :email_on_follower?)

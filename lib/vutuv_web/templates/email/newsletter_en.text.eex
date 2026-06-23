@@ -1,0 +1,7 @@
+<%= @content_text %>
+<%= if @unsubscribe_url do %>
+--
+You receive this newsletter as a vutuv member.
+Unsubscribe: <%= @unsubscribe_url %>
+<% end %>
+<%= render "_footer.text" %>

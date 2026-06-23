@@ -54,6 +54,19 @@ defmodule VutuvWeb.Live.InitAssigns do
     end
   end
 
+  @doc """
+  The `:require_admin` stage mirrors `VutuvWeb.Plug.AuthAdmin` for LiveViews in
+  an admin `live_session`. The dead `:admin` pipeline already 403s the
+  disconnected render, so this is the second guard on the socket connect. Run it
+  after `:default`, which assigns `:current_user`.
+  """
+  def on_mount(:require_admin, _params, _session, socket) do
+    case socket.assigns[:current_user] do
+      %User{admin?: true} -> {:cont, socket}
+      _ -> {:halt, Phoenix.LiveView.redirect(socket, to: ~p"/")}
+    end
+  end
+
   defp assign_shell_path(_params, uri, socket) do
     {:cont, assign(socket, :shell_path, URI.parse(uri).path)}
   end

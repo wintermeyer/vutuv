@@ -1,0 +1,7 @@
+<%= @content_text %>
+<%= if @unsubscribe_url do %>
+--
+Sie erhalten diesen Rundbrief als vutuv-Mitglied.
+Abbestellen: <%= @unsubscribe_url %>
+<% end %>
+<%= render "_footer.text" %>

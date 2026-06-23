@@ -18,7 +18,7 @@ defmodule VutuvWeb.UnsubscribeController do
 
   def show(conn, %{"token" => token}) do
     case user_for_token(token) do
-      {%User{} = user, _field} -> render(conn, "show.html", user: user, token: token)
+      {%User{} = user, field} -> render(conn, "show.html", user: user, token: token, field: field)
       _ -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
@@ -26,7 +26,7 @@ defmodule VutuvWeb.UnsubscribeController do
   def create(conn, %{"token" => token}) do
     with {%User{} = user, field} <- user_for_token(token),
          {:ok, user} <- Accounts.set_email_pref(user, field, false) do
-      render(conn, "done.html", user: user)
+      render(conn, "done.html", user: user, field: field)
     else
       _ -> VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
