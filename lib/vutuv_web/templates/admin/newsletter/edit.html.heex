@@ -1,0 +1,20 @@
+<.page_header
+  title={gettext("Edit newsletter")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Newsletters"), ~p"/admin/newsletters"},
+    {@newsletter.subject, ~p"/admin/newsletters/#{@newsletter}"},
+    gettext("Edit")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    {form_content(%{
+      changeset: @changeset,
+      action: ~p"/admin/newsletters/#{@newsletter}",
+      submit_label: gettext("Save draft"),
+      backlink: ~p"/admin/newsletters/#{@newsletter}"
+    })}
+  </section>
+</div>

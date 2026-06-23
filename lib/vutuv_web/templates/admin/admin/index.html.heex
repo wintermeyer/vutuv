@@ -120,6 +120,22 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1>{gettext("Newsletter")}</h1>
+      <a
+        href={~p"/admin/newsletters"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-newsletters-link"
+      >
+        {gettext("Open newsletters")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      {gettext("Compose a newsletter, save it as a draft, test it, then send it to all members.")}
+    </p>
+  </section>
+
   {VutuvWeb.Admin.UsernameHTML.index(%{conn: @conn})}
   {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

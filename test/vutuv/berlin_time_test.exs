@@ -9,6 +9,13 @@ defmodule Vutuv.BerlinTimeTest do
 
   alias Vutuv.BerlinTime
 
+  describe "naive/1" do
+    test "shifts a UTC instant to Berlin wall-clock (CET +1h winter, CEST +2h summer)" do
+      assert BerlinTime.naive(~U[2026-01-15 05:00:00Z]) == ~N[2026-01-15 06:00:00]
+      assert BerlinTime.naive(~U[2026-06-23 05:54:00Z]) == ~N[2026-06-23 07:54:00]
+    end
+  end
+
   describe "date/1" do
     test "applies CET in winter and CEST in summer" do
       assert BerlinTime.date(~U[2026-01-10 22:30:00Z]) == ~D[2026-01-10]

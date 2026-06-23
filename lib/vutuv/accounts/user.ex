@@ -59,6 +59,11 @@ defmodule Vutuv.Accounts.User do
     # always pushed in-app regardless; these only gate the email copy.
     field(:email_on_endorsement?, :boolean, default: false)
     field(:email_on_follower?, :boolean, default: false)
+    # The admin newsletter ("Rundbrief", Vutuv.Newsletters). Unlike the event
+    # notices above this is an opt-OUT (default true): existing members are
+    # subscribed and every newsletter carries a one-click unsubscribe that flips
+    # this off. Settable on the notifications settings page or that link.
+    field(:newsletter_emails?, :boolean, default: true)
     # Whether this member's avatar shows the real-time "online" green dot while
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
@@ -142,7 +147,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? email_on_endorsement? email_on_follower? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   @doc """
   The notification-email preference fields, by the param/column name a
@@ -151,7 +156,7 @@ defmodule Vutuv.Accounts.User do
   so the unsubscribe capability can never name a non-pref column.
   """
   def email_pref_fields,
-    do: ~w(notification_emails? email_on_endorsement? email_on_follower?)a
+    do: ~w(notification_emails? email_on_endorsement? email_on_follower? newsletter_emails?)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 

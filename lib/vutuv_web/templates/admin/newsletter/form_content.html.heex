@@ -1,0 +1,60 @@
+<.form :let={f} for={@changeset} action={@action} class="space-y-5">
+  <.form_error changeset={@changeset} />
+
+  <div>
+    <label
+      for="newsletter_subject"
+      class="block text-sm font-semibold text-slate-700 dark:text-slate-200"
+    >
+      {gettext("Subject")}
+    </label>
+    <%= text_input(f, :subject,
+      id: "newsletter_subject",
+      class: input_class(),
+      placeholder: gettext("Subject line (variables allowed)")
+    ) %>
+  </div>
+
+  <div>
+    <label
+      for="newsletter_body"
+      class="block text-sm font-semibold text-slate-700 dark:text-slate-200"
+    >
+      {gettext("Body")}
+    </label>
+    <%= textarea(f, :body,
+      id: "newsletter_body",
+      rows: 16,
+      class: [input_class(), "resize-y font-mono"],
+      placeholder: gettext("Write the newsletter in Markdown. Use {{greeting}}, for a personal salutation.")
+    ) %>
+    <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+      {gettext("Markdown is supported (headings, bold, lists, links).")}
+    </p>
+  </div>
+
+  <div class="rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/50">
+    <p class="font-semibold text-slate-700 dark:text-slate-200">
+      {gettext("Variables you can use in the subject and body")}
+    </p>
+    <ul class="mt-2 space-y-1 text-slate-600 dark:text-slate-400">
+      <li :for={{name, desc} <- variables()}>
+        <code
+          phx-no-curly-interpolation
+          class="rounded bg-slate-200 px-1.5 py-0.5 text-xs text-slate-800 dark:bg-slate-700 dark:text-slate-100"
+        >{{<%= name %>}}</code>
+        — {desc}
+      </li>
+    </ul>
+  </div>
+
+  <div class="flex items-center gap-4 pt-1">
+    <.button type="submit">{@submit_label}</.button>
+    <.link
+      href={@backlink}
+      class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      {gettext("Cancel")}
+    </.link>
+  </div>
+</.form>

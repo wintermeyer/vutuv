@@ -12,7 +12,7 @@ heading. --%>
     <.card>
       <.section_title>{gettext("Email notifications")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("Pick which emails vutuv may send you. We never send marketing email, and each email has a one-click unsubscribe.")}
+        {gettext("Pick which emails vutuv may send you. Each email has a one-click unsubscribe.")}
       </p>
 
       <.form
@@ -36,6 +36,11 @@ heading. --%>
         <.setting_toggle label={gettext("New followers")}>
           <:checkbox><%= checkbox f, :email_on_follower?, class: checkbox_class() %></:checkbox>
           {gettext("When someone starts following you.")}
+        </.setting_toggle>
+
+        <.setting_toggle label={gettext("Newsletter")}>
+          <:checkbox><%= checkbox f, :newsletter_emails?, class: checkbox_class() %></:checkbox>
+          {gettext("Occasional vutuv news and announcements.")}
         </.setting_toggle>
 
         <div class="pt-1">

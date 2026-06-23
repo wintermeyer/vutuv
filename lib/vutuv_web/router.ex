@@ -347,6 +347,33 @@ defmodule VutuvWeb.Router do
     get("/deliverability", DeliverabilityController, :index)
     post("/deliverability/users/:id/thaw", DeliverabilityController, :thaw)
     post("/deliverability/emails/:id/clear", DeliverabilityController, :clear_address)
+
+    # The email newsletter ("Rundbrief"): compose/store a draft, send a test to
+    # one address, broadcast to all members, and read the per-recipient delivery
+    # log. See Vutuv.Newsletters; test/broadcast are the two extra POST actions.
+    resources("/newsletters", NewsletterController)
+    post("/newsletters/:id/test", NewsletterController, :test)
+  end
+
+  # The newsletter audience builder is a LiveView (live "how many match" count as
+  # you adjust filters), so it gets its own admin live_session. The dead :admin
+  # pipeline 403s the disconnected render; :require_admin guards the socket.
+  live_session :admin,
+    on_mount: [
+      {VutuvWeb.Live.InitAssigns, :default},
+      {VutuvWeb.Live.InitAssigns, :require_admin}
+    ],
+    root_layout: {VutuvWeb.LayoutHTML, :root} do
+    scope "/admin", VutuvWeb.Admin, as: :admin do
+      pipe_through([:browser, :admin])
+
+      live("/newsletters/:id/send", NewsletterBroadcastLive)
+
+      live("/newsletter_groups", NewsletterGroupLive, :index)
+      live("/newsletter_groups/new", NewsletterGroupLive, :new)
+      live("/newsletter_groups/:id", NewsletterGroupLive, :show)
+      live("/newsletter_groups/:id/edit", NewsletterGroupLive, :edit)
+    end
   end
 
   # /api/2.0 — the authenticated third-party API. Contract: additions are
