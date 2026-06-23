@@ -6,8 +6,9 @@ defmodule VutuvWeb.SessionControllerTest do
 
   # The login page is a logged-out-only entry point, like registration
   # (UserController :new/:create) and the landing page (PageController :index).
-  # A visitor who is already logged in should be bounced to their profile rather
-  # than shown the login form. :delete (logout) is intentionally not guarded.
+  # A visitor who is already logged in should be bounced to their home (the feed
+  # once they follow someone, else their own profile) rather than shown the
+  # login form. :delete (logout) is intentionally not guarded.
 
   describe "GET /login" do
     test "shows the login form to a logged-out visitor", %{conn: conn} do
@@ -16,11 +17,12 @@ defmodule VutuvWeb.SessionControllerTest do
       assert html_response(conn, 200) =~ "session[email]"
     end
 
-    test "redirects an already-logged-in user to their profile", %{conn: conn} do
+    test "redirects an already-logged-in user to their home", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       conn = get(conn, ~p"/login")
 
+      # A fresh member follows nobody yet, so home is their profile.
       assert redirected_to(conn) == ~p"/#{user}"
     end
   end

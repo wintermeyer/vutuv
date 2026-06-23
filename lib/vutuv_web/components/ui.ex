@@ -346,29 +346,40 @@ defmodule VutuvWeb.UI do
   editor). Pass the call-to-action label as the inner block (e.g.
   `gettext("Add work experience")`); carries a `data-empty-add` hook for tests.
   """
-  attr(:href, :any, required: true)
+  # With `href` it is a link to the new-entry form (the usual case). Without
+  # `href` it renders a `<button>` instead, so the same dashed tile can drive a
+  # LiveView action via the global `rest` (e.g. the /feed composer reveal passes
+  # `phx-click` + `id`) — keeping one compose/add affordance across the app.
+  attr(:href, :any, default: nil)
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
+  @empty_add_class "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700 dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300"
+
   def empty_add(assigns) do
+    assigns = assign(assigns, :base_class, @empty_add_class)
+
     ~H"""
-    <.link
-      href={@href}
-      data-empty-add
-      class={[
-        "flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-200 px-4 py-4 text-sm font-semibold text-slate-500 transition",
-        "hover:border-brand-400 hover:bg-brand-50 hover:text-brand-700",
-        "dark:border-slate-700 dark:text-slate-400 dark:hover:border-brand-500 dark:hover:bg-brand-900/20 dark:hover:text-brand-300",
-        @class
-      ]}
-      {@rest}
-    >
-      <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-      </svg>
-      {render_slot(@inner_block)}
-    </.link>
+    <%= if @href do %>
+      <.link href={@href} data-empty-add class={[@base_class, @class]} {@rest}>
+        <.empty_add_glyph />
+        {render_slot(@inner_block)}
+      </.link>
+    <% else %>
+      <button type="button" data-empty-add class={[@base_class, "w-full", @class]} {@rest}>
+        <.empty_add_glyph />
+        {render_slot(@inner_block)}
+      </button>
+    <% end %>
+    """
+  end
+
+  defp empty_add_glyph(assigns) do
+    ~H"""
+    <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+    </svg>
     """
   end
 

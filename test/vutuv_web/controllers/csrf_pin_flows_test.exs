@@ -26,12 +26,27 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
 
       conn = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
 
+      # This member follows nobody yet, so home is their own profile rather than
+      # an empty feed (the feed-branch landing is covered just below).
       assert redirected_to(conn) == ~p"/#{user}"
       assert get_session(conn, :user_id) == user.id
       # The returning-user greeting is personal; first-time sign-ups get their
       # own. No unread conversations here, so no message count is appended.
       assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
                "Welcome back, #{user.first_name}!"
+    end
+
+    test "lands a member who follows someone on the feed" do
+      user = insert(:user, email_confirmed?: true)
+      insert(:email, value: "feeder@example.com", user: user)
+      # One follow of an activated account is enough to make the feed their home.
+      insert(:follow, follower: user, followee: insert(:activated_user))
+
+      conn = post(build_conn(), ~p"/login", session: %{"email" => "feeder@example.com"})
+      pin = sent_pin()
+      conn = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
+
+      assert redirected_to(conn) == ~p"/feed"
     end
 
     test "greets a returning member by name and counts their unread conversations" do

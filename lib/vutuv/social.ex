@@ -128,6 +128,26 @@ defmodule Vutuv.Social do
   end
 
   @doc """
+  Whether `user` follows at least one other account — the same activated,
+  non-hidden population `followee_count/1` counts, but as a cheap `EXISTS`.
+
+  Drives where a member's "home" is (`VutuvWeb.Home`): the newsfeed only has
+  something to show once you follow someone, so until then (most visibly right
+  after sign-up) home is the member's own profile instead of an empty feed.
+  """
+  def follows_anyone?(%User{id: id}), do: follows_anyone?(id)
+
+  def follows_anyone?(user_id) do
+    Repo.exists?(
+      from(c in Follow,
+        join: u in assoc(c, :followee),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
+        where: c.follower_id == ^user_id
+      )
+    )
+  end
+
+  @doc """
   One page of a user's follow lists for the browse pages: `side` is
   `:followers` (people following `user`) or `:followees` (people `user`
   follows), newest follow first. `params` are the request params understood

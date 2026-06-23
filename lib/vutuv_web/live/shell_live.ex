@@ -219,6 +219,8 @@ defmodule VutuvWeb.ShellLive do
       <div :if={@user_id} id="presence-hook" phx-hook="Presence" phx-update="ignore" class="hidden"></div>
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
+          <%!-- The logo is "home": for a logged-in member "/" redirects to their
+               home (feed or profile) via RequireUserLoggedOut; logged out it is the landing page. --%>
           <.link href={~p"/"} class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white">
             vutuv
           </.link>

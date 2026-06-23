@@ -3,10 +3,7 @@ defmodule VutuvWeb.Plug.RequireUserLoggedOut do
 
   import Plug.Conn
 
-  use Phoenix.VerifiedRoutes,
-    endpoint: VutuvWeb.Endpoint,
-    router: VutuvWeb.Router,
-    statics: ~w(assets fonts images favicon.ico robots.txt)
+  alias VutuvWeb.Home
 
   def init(default), do: default
 
@@ -22,9 +19,12 @@ defmodule VutuvWeb.Plug.RequireUserLoggedOut do
 
   defp redirect(conn, nil), do: conn
 
+  # A logged-in visitor on a logged-out-only page (the landing page, /login,
+  # registration) belongs on their home: the newsfeed once they follow someone,
+  # otherwise their own profile (VutuvWeb.Home decides).
   defp redirect(conn, user) do
     conn
-    |> Phoenix.Controller.redirect(to: ~p"/#{user}")
+    |> Phoenix.Controller.redirect(to: Home.path(user))
     |> halt
   end
 end

@@ -6,10 +6,12 @@ defmodule VutuvWeb.SessionController do
   alias Vutuv.Chat
   alias Vutuv.Credentials
   alias VutuvWeb.ControllerHelpers
+  alias VutuvWeb.Home
   alias VutuvWeb.RateLimit
 
   # The login page is logged-out-only, like registration. An already-logged-in
-  # visitor is redirected to their profile. :delete (logout) stays unguarded.
+  # visitor is redirected to their home (the feed or, with no follows yet, their
+  # profile). :delete (logout) stays unguarded.
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create, :resend, :cancel])
 
   def new(conn, _) do
@@ -154,7 +156,9 @@ defmodule VutuvWeb.SessionController do
         |> clear_auth_challenge()
         |> Accounts.login(user)
         |> put_flash(:info, welcome_flash(nil, user))
-        |> json(%{ok: true, redirect: return_to || ~p"/#{user}"})
+        # Same landing as the PIN path: home is the feed once you follow someone,
+        # otherwise your profile (see VutuvWeb.Home).
+        |> json(%{ok: true, redirect: return_to || Home.path(user)})
 
       {:suspended, until} ->
         conn
@@ -238,10 +242,16 @@ defmodule VutuvWeb.SessionController do
         # through the PIN round trip.
         {return_to, conn} = pop_login_return_to(conn)
 
+        # Land on the newsfeed, not the member's own profile: signing in, the
+        # first thing they want is what is new from the people they follow.
+        # A member who follows nobody yet (a fresh sign-up) would meet an empty
+        # feed, so Home.path/1 sends them to their profile instead. A page that
+        # sent them here to log in (the OAuth consent screen) still wins via
+        # return_to.
         Accounts.login(conn, user)
         |> Accounts.delete_pin_cookie()
         |> put_flash(:info, welcome_flash(context, user))
-        |> redirect(to: return_to || ~p"/#{user}")
+        |> redirect(to: return_to || Home.path(user))
 
       {:suspended, until} ->
         conn

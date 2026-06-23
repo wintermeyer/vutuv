@@ -250,6 +250,80 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "composer reveal" do
+    test "the composer is collapsed behind a button until clicked", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Collapsed: the trigger shows and the composer panel is hidden.
+      assert has_element?(live, "#open-composer")
+      assert has_element?(live, "#composer-panel.hidden")
+
+      live |> element("#open-composer") |> render_click()
+
+      # Revealed: the panel is no longer hidden and the trigger is gone.
+      refute has_element?(live, "#composer-panel.hidden")
+      refute has_element?(live, "#open-composer")
+    end
+
+    test "Cancel collapses the composer again", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      live |> element("#open-composer") |> render_click()
+      refute has_element?(live, "#open-composer")
+
+      live |> element(~s(button[phx-click="close-composer"])) |> render_click()
+
+      assert has_element?(live, "#open-composer")
+      assert has_element?(live, "#composer-panel.hidden")
+    end
+
+    test "posting collapses the composer back to the button", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      live |> element("#open-composer") |> render_click()
+      refute has_element?(live, "#open-composer")
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "first words"}})
+      |> render_submit()
+
+      # The viewer's own post arrived below, so the composer collapsed again.
+      assert has_element?(live, "#open-composer")
+      assert has_element?(live, "#composer-panel.hidden")
+    end
+  end
+
+  describe "who to follow rail" do
+    test "suggests a popular member the viewer does not follow", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      popular = other_user(first_name: "Pop", last_name: "Ular")
+      # most_followed_users ranks by follower count, so give them one follower.
+      insert(:follow, follower: other_user(), followee: popular)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+    end
+
+    test "following a suggestion is live and drops it from the rail", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      popular = other_user(first_name: "Pop", last_name: "Ular")
+      insert(:follow, follower: other_user(), followee: popular)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      live
+      |> element(~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
+      |> render_click()
+
+      assert Vutuv.Social.user_follows_user?(user.id, popular.id)
+      refute has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+    end
+  end
+
   describe "owner menu" do
     test "own posts carry the ⋯ menu with Edit and Delete, others' posts do not", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
