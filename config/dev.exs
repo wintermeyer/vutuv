@@ -12,8 +12,8 @@ config :vutuv, :serve_uploads_locally, true
 config :vutuv, csp: [allow_eval: true]
 
 config :vutuv, VutuvWeb.Endpoint,
-  http: [port: 4000],
-  url: [host: "localhost", port: 4000],
+  http: [port: String.to_integer(System.get_env("PORT") || "4000")],
+  url: [host: "localhost", port: String.to_integer(System.get_env("PORT") || "4000")],
   # Dev-only signing secret so `mix phx.server` boots without extra setup.
   # This is not a real secret: it only signs localhost dev sessions/cookies.
   # Production reads its secret_key_base from the environment in runtime.exs,

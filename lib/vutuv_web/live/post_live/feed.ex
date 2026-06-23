@@ -19,9 +19,12 @@ defmodule VutuvWeb.PostLive.Feed do
   use VutuvWeb, :live_view
 
   import VutuvWeb.PostComponents
+  # The "Who to follow" rail reuses the profile's compact user row.
+  import VutuvWeb.UserHTML, only: [user_row: 1]
 
   alias Vutuv.Posts
   alias Vutuv.Social
+  alias VutuvWeb.UserHelpers
 
   @page_size 20
 
@@ -41,8 +44,36 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:cursor, page.next_cursor)
      |> assign(:empty?, page.entries == [])
      |> assign(:pending_posts, [])
+     # The composer starts collapsed to a single "What's new?" button; posting
+     # (own activity arriving below) collapses it again.
+     |> assign(:composer_open?, false)
+     |> assign_who_to_follow()
      |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
      |> stream(:posts, with_engagement(page.entries, user))}
+  end
+
+  # The desktop "Who to follow" rail: the most-followed members the viewer does
+  # not already follow (nor themselves), capped to a short list. Excluding the
+  # current follows keeps it a suggestion box — every row's button reads
+  # "Follow", and following one (live, no reload) drops it so the next rises.
+  defp assign_who_to_follow(socket) do
+    user = socket.assigns.current_user
+
+    candidates =
+      Social.most_followed_users(12)
+      |> Enum.reject(&(&1.id == user.id))
+
+    already = UserHelpers.following_map(user, candidates)
+
+    suggestions =
+      candidates
+      |> Enum.reject(&Map.has_key?(already, &1.id))
+      |> Enum.take(5)
+
+    socket
+    |> assign(:recommended_users, suggestions)
+    |> assign(:work_info_by_id, UserHelpers.work_information_map(suggestions, 60))
+    |> assign(:following_by_id, %{})
   end
 
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
@@ -80,6 +111,24 @@ defmodule VutuvWeb.PostLive.Feed do
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> stream(:posts, with_engagement(page.entries, socket.assigns.current_user), at: -1)}
+  end
+
+  def handle_event("open-composer", _params, socket) do
+    {:noreply, assign(socket, :composer_open?, true)}
+  end
+
+  def handle_event("close-composer", _params, socket) do
+    {:noreply, assign(socket, :composer_open?, false)}
+  end
+
+  # The rail's "Follow" buttons (user_row live?): follow with no reload, then
+  # refresh the suggestions so the followed member drops off and the next rises.
+  def handle_event("follow", %{"followee" => followee_id}, socket) do
+    me = socket.assigns.current_user
+
+    if me && me.id != followee_id, do: Social.follow(me, followee_id)
+
+    {:noreply, assign_who_to_follow(socket)}
   end
 
   def handle_event("show-new", _params, socket) do
@@ -162,6 +211,8 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply,
          socket
          |> assign(:empty?, false)
+         # The viewer just posted (this or another session): collapse the composer.
+         |> assign(:composer_open?, false)
          |> stream_insert(:posts, entry, at: 0)}
 
       # Mirror the pull path's blocked-author filter: a third party's repost
@@ -182,61 +233,108 @@ defmodule VutuvWeb.PostLive.Feed do
   def render(assigns) do
     ~H"""
     <div id="feed" class="py-6">
-      <div class="mx-auto max-w-2xl space-y-4">
-        <div class="flex flex-wrap items-baseline justify-between gap-2">
-          <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
-          <p class="text-sm font-semibold">
-            <.link navigate={~p"/likes"} class="text-brand-600 hover:text-brand-700">
-              {gettext("Likes")}
-            </.link>
-            <span class="text-slate-300 dark:text-slate-600">·</span>
-            <.link navigate={~p"/bookmarks"} class="text-brand-600 hover:text-brand-700">
-              {gettext("Bookmarks")}
+      <%!-- Two columns on desktop: the feed, plus a "Who to follow" rail that
+      uses the otherwise-empty side space. The rail is desktop-only (the grid
+      collapses to one column under md, and the rail is hidden anyway). --%>
+      <div class="grid gap-6 md:grid-cols-3">
+        <div class="space-y-4 md:col-span-2">
+          <div class="flex flex-wrap items-baseline justify-between gap-2">
+            <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
+            <p class="text-sm font-semibold">
+              <.link navigate={~p"/likes"} class="text-brand-600 hover:text-brand-700">
+                {gettext("Likes")}
+              </.link>
+              <span class="text-slate-300 dark:text-slate-600">·</span>
+              <.link navigate={~p"/bookmarks"} class="text-brand-600 hover:text-brand-700">
+                {gettext("Bookmarks")}
+              </.link>
+            </p>
+          </div>
+
+          <%!-- Collapsed by default: the same dashed compose tile as the
+          profile's Beiträge section (<.empty_add>), reused as a reveal trigger
+          so the compose affordance reads identically across the app. The
+          composer stays mounted (just hidden) so a half-typed draft survives a
+          background feed re-render; posting or Cancel collapses it again. --%>
+          <.empty_add :if={!@composer_open?} id="open-composer" phx-click="open-composer">
+            {gettext("Write a post")}
+          </.empty_add>
+
+          <div id="composer-panel" class={[!@composer_open? && "hidden"]}>
+            <.live_component
+              module={VutuvWeb.PostLive.Composer}
+              id="composer"
+              current_user={@current_user}
+              post={nil}
+            />
+            <div class="mt-1 text-right">
+              <button
+                type="button"
+                phx-click="close-composer"
+                class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+              >
+                {gettext("Cancel")}
+              </button>
+            </div>
+          </div>
+
+          <div :if={@pending_posts != []} class="text-center">
+            <.button id="show-new-posts" variant="secondary" phx-click="show-new">
+              {ngettext("Show %{count} new post", "Show %{count} new posts", length(@pending_posts),
+                count: length(@pending_posts)
+              )}
+            </.button>
+          </div>
+
+          <div id="feed-posts" phx-update="stream" class="space-y-4">
+            <div :for={{dom_id, entry} <- @streams.posts} id={dom_id}>
+              <.post_card
+                post={entry.post}
+                viewer={@current_user}
+                viewer_follow={entry[:viewer_follow]}
+                mode={:preview}
+                reposted_by={entry.reposted_by}
+                entry_id={entry.id}
+                conn_or_socket={@socket}
+                engagement={entry.engagement}
+              />
+            </div>
+          </div>
+
+          <p :if={@empty? && @pending_posts == []} class="text-slate-600 dark:text-slate-400">
+            {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
+            <.link
+              navigate={~p"/listings/most_followed_users"}
+              class="font-semibold text-brand-600 hover:text-brand-700"
+            >
+              {gettext("Discover people to follow")}
             </.link>
           </p>
+
+          <.load_more :if={@more?} />
         </div>
 
-        <.live_component
-          module={VutuvWeb.PostLive.Composer}
-          id="composer"
-          current_user={@current_user}
-          post={nil}
-        />
-
-        <div :if={@pending_posts != []} class="text-center">
-          <.button id="show-new-posts" variant="secondary" phx-click="show-new">
-            {ngettext("Show %{count} new post", "Show %{count} new posts", length(@pending_posts),
-              count: length(@pending_posts)
-            )}
-          </.button>
-        </div>
-
-        <div id="feed-posts" phx-update="stream" class="space-y-4">
-          <div :for={{dom_id, entry} <- @streams.posts} id={dom_id}>
-            <.post_card
-              post={entry.post}
-              viewer={@current_user}
-              viewer_follow={entry[:viewer_follow]}
-              mode={:preview}
-              reposted_by={entry.reposted_by}
-              entry_id={entry.id}
-              conn_or_socket={@socket}
-              engagement={entry.engagement}
-            />
-          </div>
-        </div>
-
-        <p :if={@empty? && @pending_posts == []} class="text-slate-600 dark:text-slate-400">
-          {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}
-          <.link
-            navigate={~p"/listings/most_followed_users"}
-            class="font-semibold text-brand-600 hover:text-brand-700"
-          >
-            {gettext("Discover people to follow")}
-          </.link>
-        </p>
-
-        <.load_more :if={@more?} />
+        <%!-- Desktop-only "Who to follow" rail (hidden under md, where the grid
+        is one column anyway). The follow buttons are live (no reload). --%>
+        <aside id="who-to-follow" class="hidden md:block">
+          <.card :if={@recommended_users != []}>
+            <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
+            <ul class="space-y-4">
+              <.user_row
+                :for={user <- @recommended_users}
+                user={user}
+                current_user={@current_user}
+                current_user_id={@current_user.id}
+                work_info_by_id={@work_info_by_id}
+                following_by_id={@following_by_id}
+                live?
+              />
+            </ul>
+            <.card_footer_link href={~p"/listings/most_followed_users"}>
+              {gettext("Show all")}
+            </.card_footer_link>
+          </.card>
+        </aside>
       </div>
     </div>
     """

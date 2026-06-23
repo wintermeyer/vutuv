@@ -3,6 +3,29 @@ defmodule VutuvWeb.PageControllerTest do
 
   import Ecto.Query, only: [from: 2]
 
+  describe "GET / when logged in" do
+    # "/" is the logged-out landing page (sign-up). A member who is already
+    # logged in has no business there, so RequireUserLoggedOut bounces them to
+    # their home: the newsfeed once they follow someone, otherwise their own
+    # profile so a brand-new member never lands on an empty feed (VutuvWeb.Home).
+    test "sends a member who follows someone to the feed", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: user, followee: insert(:activated_user))
+
+      conn = get(conn, ~p"/")
+
+      assert redirected_to(conn) == ~p"/feed"
+    end
+
+    test "sends a member who follows nobody to their profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = get(conn, ~p"/")
+
+      assert redirected_to(conn) == ~p"/#{user}"
+    end
+  end
+
   describe "GET /robots.txt" do
     test "is served as plain text with a 200" do
       conn = get(build_conn(), "/robots.txt")
