@@ -6624,3 +6624,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "more posts available, append ?cursor=%{cursor}"
 msgstr ""
+
+#: lib/vutuv_web/templates/layout/app.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Last deployed (Berlin time)"
+msgstr ""

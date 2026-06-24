@@ -7426,3 +7426,8 @@ msgstr "%{count} Beiträge auf dieser Seite"
 #, elixir-autogen, elixir-format
 msgid "more posts available, append ?cursor=%{cursor}"
 msgstr "weitere Beiträge verfügbar, ?cursor=%{cursor} anhängen"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Last deployed (Berlin time)"
+msgstr "Zuletzt bereitgestellt (Berliner Zeit)"

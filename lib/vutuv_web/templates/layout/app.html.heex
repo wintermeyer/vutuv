@@ -116,6 +116,7 @@ it on desktop where that bar is hidden. Links wrap into a centered row. --%>
       © 2019 - {Date.utc_today().year} ·
       <a href="https://wintermeyer-consulting.de" class="underline hover:text-slate-600 dark:hover:text-slate-300">Wintermeyer Consulting</a>
       · vutuv {Application.spec(:vutuv, :vsn)}
+      <span title={gettext("Last deployed (Berlin time)")}>· {Vutuv.BuildInfo.deployed_at()}</span>
     </p>
   </div>
 </footer>
