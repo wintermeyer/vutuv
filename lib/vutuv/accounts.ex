@@ -752,6 +752,34 @@ defmodule Vutuv.Accounts do
     Repo.get_by(User, username: slug)
   end
 
+  @doc """
+  Resolves many usernames to their members in **one** query, keyed by the
+  lowercased username. Powers the `@handle` mention links the Markdown renderer
+  writes (`VutuvWeb.Markdown`), so a post or message with several mentions costs
+  a single lookup. Only currently-active usernames resolve (like
+  `get_user_by_username/1`); unknown handles are simply absent from the map.
+
+  The selected struct carries only the fields a mention needs — the username
+  (for the `/:slug` href) and the name parts (for the hover tooltip).
+  """
+  def get_users_by_usernames(usernames) when is_list(usernames) do
+    normalized = usernames |> Enum.map(&String.downcase/1) |> Enum.uniq()
+
+    case normalized do
+      [] ->
+        %{}
+
+      names ->
+        from(u in User,
+          where: u.username in ^names,
+          select:
+            struct(u, [:username, :first_name, :last_name, :honorific_prefix, :honorific_suffix])
+        )
+        |> Repo.all()
+        |> Map.new(&{&1.username, &1})
+    end
+  end
+
   # The plain profile fields a member may edit about themselves. The API's
   # PATCH /me writes through this list; the username (quota'd,
   # Twitter-validated), email addresses (PIN-verified identities) and

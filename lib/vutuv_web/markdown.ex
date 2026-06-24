@@ -12,18 +12,31 @@ defmodule VutuvWeb.Markdown do
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
   """
 
+  alias Vutuv.Accounts
   alias Vutuv.Posts.PostImage
+  alias VutuvWeb.UserHelpers
 
   @url_display_max 40
   @trailing_punct ~w(. , ; : ! ?)
   @preview_limit 1000
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
+  # A `@handle` mention: an `@` that is not part of an email/path (no word char,
+  # `@` or `/` directly before it), followed by a username-shaped run. The run
+  # is matched permissively (any case, any length) and validated against the DB
+  # by `linkify_mentions/1` — a non-member or an over-long run never links.
+  @mention ~r{(?<![\w@/])@([A-Za-z0-9_]+)}
+
+  # Inside these elements a mention is left as plain text (a handle in a code
+  # span/block is sample text, and we never nest a link in a link).
+  @mention_skip_tags ~w(a code pre)
+
   @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
   def render(text) when is_binary(text) do
     text
     |> render_pipeline()
     |> open_links_in_new_tab()
+    |> linkify_mentions()
     |> Phoenix.HTML.raw()
   end
 
@@ -52,6 +65,7 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline()
     |> strip_img_tags()
     |> open_links_in_new_tab()
+    |> linkify_mentions()
     |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
@@ -137,6 +151,119 @@ defmodule VutuvWeb.Markdown do
   # Safe to do post-sanitization: every remaining <a> came out of the scrubber.
   defp open_links_in_new_tab(html) do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
+  end
+
+  ## @handle mentions
+
+  # Turns every `@handle` of an existing member into a same-tab link to their
+  # profile, with the member's name as a `title` hover tooltip. Runs on the
+  # already-rendered, sanitized HTML (after `open_links_in_new_tab/1`, so the
+  # internal mention links don't get `target="_blank"`), and only on text that
+  # is **not** inside a `code`/`pre`/`a` element — a handle typed in code is
+  # sample text and we never nest a link in a link.
+  #
+  # All candidate handles in a body resolve in **one** DB query; when a body has
+  # no mention candidates at all there is no query (so the pure, DB-free unit
+  # tests in `markdown_test.exs` keep working without a sandbox).
+  defp linkify_mentions(html) do
+    # Cheap bail-out for the common case: a body with no `@` at all can't carry
+    # a mention, so the feed hot path skips tokenizing and scanning entirely.
+    if String.contains?(html, "@"), do: linkify_present_mentions(html), else: html
+  end
+
+  defp linkify_present_mentions(html) do
+    tokens = tokenize_html(html)
+
+    case mention_candidates(tokens) do
+      [] ->
+        html
+
+      candidates ->
+        users = Accounts.get_users_by_usernames(candidates)
+
+        tokens
+        |> map_linkable_text(&link_mentions_in_text(&1, users))
+        |> IO.iodata_to_binary()
+    end
+  end
+
+  # Splits HTML into alternating text / tag tokens (tags kept as their own
+  # tokens), so a tag-depth walk can tell text apart from markup.
+  defp tokenize_html(html), do: Regex.split(~r/<[^>]+>/, html, include_captures: true)
+
+  # The unique, lowercased handle candidates sitting in linkable text.
+  defp mention_candidates(tokens) do
+    tokens
+    |> reduce_linkable_text([], fn text, acc ->
+      [@mention |> Regex.scan(text, capture: :all_but_first) |> List.flatten() | acc]
+    end)
+    |> List.flatten()
+    |> Enum.map(&String.downcase/1)
+    |> Enum.uniq()
+  end
+
+  # Walks the token stream, applying `fun` to every text token outside a
+  # skip element and leaving tags and skipped text untouched.
+  defp map_linkable_text(tokens, fun) do
+    {mapped, _depth} =
+      Enum.map_reduce(tokens, 0, fn token, depth ->
+        cond do
+          tag_token?(token) -> {token, mention_skip_depth(depth, token)}
+          depth > 0 -> {token, depth}
+          true -> {fun.(token), depth}
+        end
+      end)
+
+    mapped
+  end
+
+  # Folds `fun` over every text token outside a skip element.
+  defp reduce_linkable_text(tokens, acc, fun) do
+    {acc, _depth} =
+      Enum.reduce(tokens, {acc, 0}, fn token, {acc, depth} ->
+        cond do
+          tag_token?(token) -> {acc, mention_skip_depth(depth, token)}
+          depth > 0 -> {acc, depth}
+          true -> {fun.(token, acc), depth}
+        end
+      end)
+
+    acc
+  end
+
+  defp tag_token?(token), do: String.starts_with?(token, "<")
+
+  # Tracks how deeply nested we are inside skip elements (a/code/pre).
+  defp mention_skip_depth(depth, tag) do
+    case Regex.run(~r{^<\s*(/?)\s*([a-zA-Z0-9]+)}, tag) do
+      [_, "/", name] -> if skip_tag?(name), do: max(depth - 1, 0), else: depth
+      [_, "", name] -> if skip_tag?(name), do: depth + 1, else: depth
+      _ -> depth
+    end
+  end
+
+  defp skip_tag?(name), do: String.downcase(name) in @mention_skip_tags
+
+  defp link_mentions_in_text(text, users) do
+    Regex.replace(@mention, text, fn whole, handle ->
+      case Map.get(users, String.downcase(handle)) do
+        nil -> whole
+        user -> mention_anchor(user, handle)
+      end
+    end)
+  end
+
+  # The display text is the handle the author typed (case preserved); the href
+  # is the canonical lowercase slug; the title is the member's full name (or the
+  # handle itself for a nameless member).
+  defp mention_anchor(user, typed_handle) do
+    name =
+      case UserHelpers.full_name(user) do
+        "" -> "@" <> user.username
+        full -> full
+      end
+
+    ~s(<a href="/#{user.username}" title="#{escape(name)}" class="mention">@#{typed_handle}</a>)
   end
 
   ## Inline post images

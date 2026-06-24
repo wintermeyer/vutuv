@@ -942,6 +942,11 @@ ul.thumbs li .text .url a {
 .markdown > *:last-child { margin-bottom: 0; }
 /* Underline links inside prose so they don't rely on colour alone (WCAG 1.4.1). */
 .markdown a { text-decoration: underline; }
+/* `@handle` mentions the Markdown renderer writes (VutuvWeb.Markdown): a profile
+   link that inherits the surrounding link colour, just a touch bolder so the
+   handle reads as a person. The `title` attribute carries the member's name on
+   hover. Not `.markdown`-scoped — mentions also appear in chat message bubbles. */
+.mention { font-weight: 600; }
 .markdown h1, .markdown h2, .markdown h3, .markdown h4 {
   font-weight: 700;
   margin: 1em 0 0.4em;
