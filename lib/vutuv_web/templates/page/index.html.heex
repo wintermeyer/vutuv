@@ -33,103 +33,115 @@
     {gettext("Create your free account")}
   </h2>
 
+  <%!-- The sign-up form is grouped into three blocks (who you are / your email
+        / privacy) divided by hairlines, so the fields read as three digestible
+        sections instead of one long, undifferentiated list. Shared class/option
+        bindings keep the repeated radio groups and consent checkboxes
+        consistent. --%>
+  <% gender_options = [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}] %>
+  <% email_type_options = [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] %>
+  <% radio_class = "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+  <% legend_class = "mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300" %>
+  <% radio_label_class = "flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200" %>
+  <% check_label_class = "flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300" %>
+
   <.form
     :let={f}
     for={@changeset}
     action={~p"/new_registration"}
     multipart
-    class="mt-5 space-y-4"
+    class="mt-5 space-y-6"
     id="registration-form"
   >
     <.form_error changeset={@changeset} />
 
-    <%!-- A radio group, not a dropdown: all options are visible and "männlich"
-          is preselected (set on the changeset by the controller), so a normal
-          user is not left on an empty "Geschlecht auswählen" prompt. --%>
-    <fieldset>
-      <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
-        {gettext("Gender")}
-      </legend>
-      <div class="flex flex-wrap gap-x-5 gap-y-2">
-        <%= for {label, value} <- [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}] do %>
-          <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
-            <%= radio_button f, :gender, value, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800", autofocus: value == "male" %>
-            <span>{label}</span>
-          </label>
-        <% end %>
-      </div>
-      <%= error_tag f, :gender %>
-    </fieldset>
-
-    <div>
-      <%= text_input f, :first_name, class: input_class(), placeholder: gettext("Enter your first name") %>
-      <%= error_tag f, :first_name %>
-    </div>
-
-    <div>
-      <%= text_input f, :last_name, class: input_class(), placeholder: gettext("Enter your last name") %>
-      <%= error_tag f, :last_name %>
-    </div>
-
-    <div>
-      <%= text_input f, :tag_list, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)") %>
-      <%= error_tag f, :tag_list %>
-    </div>
-
-    <.inputs_for :let={ef} field={f[:emails]}>
-      <%!-- The email-type choice comes first (above the address field): a
-            radio group, not a dropdown, so a normal user sees all three
-            choices at once, and "Work" is preselected (set on the changeset by
-            the controller) instead of the old unhelpful "Other" default. --%>
+    <%!-- Group 1: who you are. A radio group, not a dropdown: all options are
+          visible and "männlich" is preselected (set on the changeset by the
+          controller), so a normal user is not left on an empty
+          "Geschlecht auswählen" prompt. --%>
+    <div class="space-y-4">
       <fieldset>
-        <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
-          {gettext("Type of email address")}
-        </legend>
+        <legend class={legend_class}>{gettext("Gender")}</legend>
         <div class="flex flex-wrap gap-x-5 gap-y-2">
-          <%= for {label, value} <- [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] do %>
-            <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
-              <%= radio_button ef, :email_type, value, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
-              <span>{label}</span>
+          <%= for {glabel, gvalue} <- gender_options do %>
+            <label class={radio_label_class}>
+              <%= radio_button f, :gender, gvalue, class: radio_class, autofocus: gvalue == "male" %>
+              <span>{glabel}</span>
             </label>
           <% end %>
         </div>
-        <%= error_tag ef, :email_type %>
+        <%= error_tag f, :gender %>
       </fieldset>
-
-      <div>
-        <%= email_input ef, :value, class: input_class(), placeholder: gettext("Enter your email address") %>
-        <%= error_tag ef, :value %>
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <%= text_input f, :first_name, class: input_class(), placeholder: gettext("Enter your first name") %>
+          <%= error_tag f, :first_name %>
+        </div>
+        <div>
+          <%= text_input f, :last_name, class: input_class(), placeholder: gettext("Enter your last name") %>
+          <%= error_tag f, :last_name %>
+        </div>
       </div>
+      <div>
+        <%= text_input f, :tag_list, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)") %>
+        <%= error_tag f, :tag_list %>
+      </div>
+    </div>
 
-      <%!-- Checked by default (the controller primes public?: true on the
-            changeset), so a normal member's address shows on their profile
-            unless they opt out here. --%>
-      <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-        <%= checkbox ef, :public?, class: checkbox_class() %>
-        <span>{gettext("Allow others to view your email address")}</span>
-        <%= error_tag ef, :public? %>
+    <%!-- Group 2: email. The email-type choice comes first (above the address
+          field): a radio group, not a dropdown, so a normal user sees all three
+          choices at once, and "Work" is preselected (set on the changeset by
+          the controller) instead of the old unhelpful "Other" default. --%>
+    <div class="space-y-4 border-t border-slate-200 pt-6 dark:border-slate-800">
+      <.inputs_for :let={ef} field={f[:emails]}>
+        <fieldset>
+          <legend class={legend_class}>{gettext("Type of email address")}</legend>
+          <div class="flex flex-wrap gap-x-5 gap-y-2">
+            <%= for {elabel, evalue} <- email_type_options do %>
+              <label class={radio_label_class}>
+                <%= radio_button ef, :email_type, evalue, class: radio_class %>
+                <span>{elabel}</span>
+              </label>
+            <% end %>
+          </div>
+          <%= error_tag ef, :email_type %>
+        </fieldset>
+        <div>
+          <%= email_input ef, :value, class: input_class(), placeholder: gettext("Enter your email address") %>
+          <%= error_tag ef, :value %>
+        </div>
+        <%!-- Checked by default (the controller primes public?: true on the
+              changeset), so a normal member's address shows on their profile
+              unless they opt out here. --%>
+        <label class={check_label_class}>
+          <%= checkbox ef, :public?, class: checkbox_class() %>
+          <span>{gettext("Allow others to view your email address")}</span>
+          <%= error_tag ef, :public? %>
+        </label>
+      </.inputs_for>
+    </div>
+
+    <%!-- Group 3: privacy. Positive, opt-in phrasing to match the email
+          checkbox above, and checked by default. Both fields are inverted:
+          the box reads positively ("Allow ...") while the underlying
+          `noindex?` / `noai?` flags are negative, so a checked box submits
+          "false" (allow). The SEO question (search engines) and the GEO
+          question (AI agents / LLMs) are asked separately, since a member may
+          say yes to one and no to the other. --%>
+    <div class="space-y-3 border-t border-slate-200 pt-6 dark:border-slate-800">
+      <label class={check_label_class}>
+        <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+        <%!-- The "(SEO)" / "(GEO)" tags are international (same in DE/EN), so they
+              are literal text outside gettext rather than part of the string. --%>
+        <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
+        <%= error_tag f, :noindex? %>
       </label>
-    </.inputs_for>
-
-    <%!-- Positive, opt-in phrasing to match the email checkbox above, and
-          checked by default. The field is `noindex?`, so the box is inverted:
-          checked submits "false" (allow indexing), unchecked submits "true". --%>
-    <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-      <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-      <%!-- The "(SEO)" / "(GEO)" tags are international (same in DE/EN), so they
-            are literal text outside gettext rather than part of the string. --%>
-      <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
-      <%= error_tag f, :noindex? %>
-    </label>
-
-    <%!-- The AI question, asked separately (a member may say yes to search
-          engines and no to AI, or the other way around). Same inverted
-          mechanism on `noai?`: checked submits "false" (allow AI use). --%>
-    <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
-      <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-      <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
-      <%= error_tag f, :noai? %>
-    </label>
+      <label class={check_label_class}>
+        <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
+        <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
+        <%= error_tag f, :noai? %>
+      </label>
+    </div>
 
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
 
