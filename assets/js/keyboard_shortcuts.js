@@ -48,18 +48,41 @@ function go(path) {
   if (path) window.location.assign(path)
 }
 
-// "n" (new post): focus the feed composer if it is already on the page,
-// otherwise jump to the feed and focus it on arrival (#compose). The composer
-// is a LiveView component, so on a fresh load it can mount a beat after the page.
+// "n" (new post): focus the feed composer if it is on the page, otherwise jump
+// to the feed and focus it on arrival (#compose). Returning false (no composer
+// here) is what makes the handler navigate to the feed instead.
 function focusComposer() {
-  const el = document.getElementById("composer-body")
-  if (!el) return false
-  el.focus()
+  if (!document.getElementById("composer-body")) return false
+  revealAndFocusComposer()
   // Drop the hash so a later reload / back-button doesn't refocus out of the blue.
   if (location.hash === "#compose") {
     history.replaceState(null, "", location.pathname + location.search)
   }
   return true
+}
+
+// A node hidden with display:none has no box; that is how we tell the collapsed
+// composer from a ready-to-focus textarea.
+function isVisible(el) {
+  return !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length)
+}
+
+// On the feed the composer starts collapsed (display:none) behind a "Write a
+// post" tile, and focus() is a no-op on a display:none node, so click the
+// reveal trigger first, then focus once it paints. The reveal is a LiveView
+// round-trip, and on a cross-page arrival (#compose) the socket may still be
+// joining, which swallows the first click; so retry the click each tick until
+// the panel is actually visible, then focus. Re-clicking once it is open is a
+// harmless no-op (the trigger is gone from the DOM by then).
+function revealAndFocusComposer(tries = 0) {
+  const el = document.getElementById("composer-body")
+  if (el && isVisible(el)) {
+    el.focus()
+    return
+  }
+  if (tries > 40) return
+  document.getElementById("open-composer")?.click()
+  setTimeout(() => revealAndFocusComposer(tries + 1), 50)
 }
 
 function focusComposerFromHash() {

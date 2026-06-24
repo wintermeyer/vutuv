@@ -255,9 +255,15 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      # Collapsed: the trigger shows and the composer panel is hidden.
+      # Collapsed: the trigger shows and the composer panel is hidden. The "n"
+      # keyboard shortcut (assets/js/keyboard_shortcuts.js) relies on exactly
+      # this shape on a collapsed feed: the textarea (#composer-body) is already
+      # in the DOM (just display:none inside the hidden panel) and the reveal
+      # trigger is #open-composer, which the shortcut clicks before focusing.
+      # Renaming either id silently breaks the shortcut, so pin both here.
       assert has_element?(live, "#open-composer")
       assert has_element?(live, "#composer-panel.hidden")
+      assert has_element?(live, "#composer-panel.hidden #composer-body")
 
       live |> element("#open-composer") |> render_click()
 
