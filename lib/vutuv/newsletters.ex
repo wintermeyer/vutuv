@@ -12,6 +12,7 @@ defmodule Vutuv.Newsletters do
   """
 
   import Ecto.Query
+  import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
   alias Ecto.Changeset
   alias Vutuv.Accounts
@@ -215,7 +216,7 @@ defmodule Vutuv.Newsletters do
 
   # Resolves the typed tag_name to a tag_id (or an error when no tag matches).
   defp resolve_tag(changeset, params) do
-    case params |> Map.get("tag_name", Map.get(params, :tag_name)) |> trimmed() do
+    case params |> Map.get("tag_name", Map.get(params, :tag_name)) |> normalize_search() do
       nil ->
         Changeset.put_change(changeset, :tag_id, nil)
 
@@ -588,11 +589,7 @@ defmodule Vutuv.Newsletters do
   # "stefan.wintermeyer"); the wildcard check is on the raw input, so an escaped
   # literal `_` doesn't look like a wildcard.
   defp username_like(pattern) do
-    escaped =
-      pattern
-      |> String.replace("\\", "\\\\")
-      |> String.replace("%", "\\%")
-      |> String.replace("_", "\\_")
+    escaped = escape_like(pattern)
 
     if String.contains?(pattern, ["*", "?"]) do
       escaped |> String.replace("*", "%") |> String.replace("?", "_")
@@ -647,7 +644,7 @@ defmodule Vutuv.Newsletters do
     %{
       kind: validated(params["kind"], NewsletterDelivery.kinds()),
       status: validated(params["status"], NewsletterDelivery.statuses()),
-      q: trimmed(params["q"]),
+      q: normalize_search(params["q"]),
       sort: validated(params["sort"], delivery_sort_columns()) || "when",
       dir: if(params["dir"] == "asc", do: "asc", else: "desc")
     }
@@ -709,23 +706,6 @@ defmodule Vutuv.Newsletters do
     do: if(value in allowed, do: value, else: nil)
 
   defp validated(_value, _allowed), do: nil
-
-  defp trimmed(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp trimmed(_value), do: nil
-
-  # Escape the LIKE wildcards so a search for "a_b" or "50%" stays literal.
-  defp escape_like(value) do
-    value
-    |> String.replace("\\", "\\\\")
-    |> String.replace("%", "\\%")
-    |> String.replace("_", "\\_")
-  end
 
   # Flips the draft to "sending" only if it is still a draft (recording the
   # chosen audience), so exactly one caller wins the broadcast (update_all

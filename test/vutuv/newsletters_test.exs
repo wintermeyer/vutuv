@@ -58,6 +58,20 @@ defmodule Vutuv.NewslettersTest do
   end
 
   describe "merge variables" do
+    test "the documented catalog and the per-recipient substitution map stay in lockstep" do
+      # A documented {{merge var}} that nothing fills would silently never
+      # substitute; a filled key the catalog omits is invisible to admins. The
+      # two lists live in different modules, so this guards against drift.
+      user = insert(:activated_user, first_name: "Erika", last_name: "Mustermann")
+
+      catalog = Newsletters.variables() |> Enum.map(&elem(&1, 0)) |> MapSet.new()
+
+      filled =
+        user |> Newsletters.substitutions("erika@example.com") |> Map.keys() |> MapSet.new()
+
+      assert catalog == filled
+    end
+
     test "apply_vars/3 substitutes known variables and leaves unknown ones" do
       subs = %{"first_name" => "Ann", "greeting" => "Hi Ann"}
       assert Markdown.apply_vars("{{greeting}}, {{first_name}}!", subs) == "Hi Ann, Ann!"
