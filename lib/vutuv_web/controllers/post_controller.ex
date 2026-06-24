@@ -220,6 +220,12 @@ defmodule VutuvWeb.PostController do
       restricted?: restricted?,
       viewer_follow: viewer_follow,
       replies: Posts.list_replies(post, viewer),
+      # The "Other formats" card links to the post's agent siblings — shown only
+      # when the anonymous .md/.txt/.json/.xml would actually resolve (the same
+      # gate as maybe_put_alternates/2 advertising them in the head).
+      show_formats?: Posts.visible_to?(post, nil),
+      formats_base: Posts.path(post),
+      locale: conn.assigns[:locale],
       page_title:
         "#{VutuvWeb.UserHelpers.full_name(author)} · #{Date.to_iso8601(post.published_on)}"
     )

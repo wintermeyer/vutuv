@@ -212,6 +212,55 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The "Other formats" rail card: links to a page's `VutuvWeb.AgentDocs` agent
+  siblings (Markdown / plain text / JSON / XML, and the profile additionally
+  vCard) under the same URL plus an extension. Shared by the **profile** aside
+  (`base_path={"/" <> @user.username} vcard`), the **`/feed` rail**
+  (`base_path="/feed"`) and the **post permalink** (`base_path={Posts.path(@post)}`).
+
+  `base_path` is the page's extension-free path; each chip is that path plus the
+  format extension. A German visitor browsing with `?lang=de` keeps that locale
+  on the agent links via `locale`; the vCard carries no translatable labels, so
+  it skips the `?lang=` suffix. The feed renders it twice (desktop rail + a
+  `md:hidden` bottom copy), so pass `id` / `class` through the global `rest`.
+  """
+  attr(:base_path, :string, required: true)
+  attr(:locale, :any, default: nil)
+  attr(:vcard, :boolean, default: false)
+  attr(:rest, :global)
+
+  def other_formats_card(assigns) do
+    lang = if assigns.locale in [nil, "en"], do: "", else: "?lang=#{assigns.locale}"
+    base = assigns.base_path
+
+    formats =
+      [
+        {gettext("Markdown"), base <> ".md" <> lang},
+        {gettext("Text only"), base <> ".txt" <> lang},
+        {"JSON", base <> ".json" <> lang},
+        {"XML", base <> ".xml" <> lang}
+      ] ++ if assigns.vcard, do: [{gettext("vCard"), base <> ".vcf"}], else: []
+
+    assigns = assign(assigns, :formats, formats)
+
+    ~H"""
+    <.card {@rest}>
+      <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
+      <%!-- Chips: a wrapping row of small tags instead of a one-per-row list. --%>
+      <div class="flex flex-wrap gap-1.5">
+        <.link
+          :for={{label, href} <- @formats}
+          href={href}
+          class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+        >
+          {label}
+        </.link>
+      </div>
+    </.card>
+    """
+  end
+
+  @doc """
   Card header row: a `<.section_title>` plus an optional right-aligned `:action`
   slot. Under the unified card UX the owner's **Add** is no longer a header
   button — it is the dashed `<.empty_add>` tile in the card body, shown the same

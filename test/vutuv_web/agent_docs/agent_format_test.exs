@@ -399,6 +399,16 @@ defmodule VutuvWeb.AgentFormatTest do
       assert member.status == 200
       assert member.resp_body =~ "<rss"
     end
+
+    test "the top-level /feed.xml is the newsfeed agent format, not an RSS feed" do
+      # The RSS skip is scoped to a `posts/feed.xml` tail, so the newsfeed's own
+      # `.xml` sibling is still stripped and handled by NewsfeedController. It is
+      # login-only, so anonymously it is a 404 (private feed), never RSS.
+      conn = get(build_conn(), "/feed.xml")
+
+      assert conn.status == 404
+      refute Enum.any?(get_resp_header(conn, "content-type"), &(&1 =~ "application/rss+xml"))
+    end
   end
 
   describe "the language hint" do

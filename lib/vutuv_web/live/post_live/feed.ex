@@ -19,61 +19,80 @@ defmodule VutuvWeb.PostLive.Feed do
   use VutuvWeb, :live_view
 
   import VutuvWeb.PostComponents
-  # The "Who to follow" rail reuses the profile's compact user row.
+  # The desktop rail reuses the profile's compact user row (the "Other formats"
+  # card is a global VutuvWeb.UI component, imported already).
   import VutuvWeb.UserHTML, only: [user_row: 1]
 
   alias Vutuv.Posts
   alias Vutuv.Social
+  alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
 
   @page_size 20
 
-  on_mount({VutuvWeb.Live.InitAssigns, :require_login})
-
   @impl true
-  def mount(_params, _session, socket) do
-    user = socket.assigns.current_user
+  # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
+  # can negotiate the agent-format siblings), exactly like UserProfileLive. An
+  # off-router LiveView can't use `InitAssigns` as an `on_mount` — that hook
+  # attaches a `:handle_params` hook, which it rejects — so mount mirrors it:
+  # load the viewer + locale from the session the controller passes, and gate on
+  # login here instead of the `:require_login` stage.
+  def mount(_params, session, socket) do
+    user = InitAssigns.load_user(session["user_id"])
+    VutuvWeb.LiveLocale.put_locale(user, session)
+
+    if user do
+      {:ok, mount_feed(socket, user, session)}
+    else
+      {:ok,
+       socket
+       |> put_flash(:error, gettext("You must be logged in to access that page"))
+       |> redirect(to: ~p"/login")}
+    end
+  end
+
+  defp mount_feed(socket, user, session) do
     if connected?(socket), do: Vutuv.Activity.subscribe(user.id)
 
     page = Posts.feed_page(user, limit: @page_size)
 
-    {:ok,
-     socket
-     |> assign(:page_title, gettext("Feed"))
-     |> assign(:more?, page.more?)
-     |> assign(:cursor, page.next_cursor)
-     |> assign(:empty?, page.entries == [])
-     |> assign(:pending_posts, [])
-     # The composer starts collapsed to a single "What's new?" button; posting
-     # (own activity arriving below) collapses it again.
-     |> assign(:composer_open?, false)
-     |> assign_who_to_follow()
-     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
-     |> stream(:posts, with_engagement(page.entries, user))}
+    socket
+    |> assign(:current_user, user)
+    |> assign(:current_user_id, user.id)
+    # The shared app layout reads @shell_path (so ShellLive can zero the page's
+    # badge) and @locale (the rail's "Other formats" ?lang= suffix) off the
+    # socket; the controller hands both through the session.
+    |> assign(:shell_path, session["request_path"])
+    |> assign(:page_title, gettext("Feed"))
+    |> assign(:locale, session["locale"])
+    |> assign(:more?, page.more?)
+    |> assign(:cursor, page.next_cursor)
+    |> assign(:empty?, page.entries == [])
+    |> assign(:pending_posts, [])
+    # The composer starts collapsed to a single "What's new?" button; posting
+    # (own activity arriving below) collapses it again.
+    |> assign(:composer_open?, false)
+    |> assign_who_to_follow()
+    |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
+    |> stream(:posts, with_engagement(page.entries, user))
   end
 
-  # The desktop "Who to follow" rail: the most-followed members the viewer does
-  # not already follow (nor themselves), capped to a short list. Excluding the
-  # current follows keeps it a suggestion box — every row's button reads
-  # "Follow", and following one (live, no reload) drops it so the next rises.
+  # The desktop "Who to follow" rail, mirroring the profile's: the most-followed
+  # members (minus the viewer), each row showing the viewer's follow state
+  # ("Following"/"Follow") so following or unfollowing toggles live with no
+  # reload and the row stays put.
   defp assign_who_to_follow(socket) do
     user = socket.assigns.current_user
 
-    candidates =
-      Social.most_followed_users(12)
+    users =
+      Social.most_followed_users(10)
       |> Enum.reject(&(&1.id == user.id))
-
-    already = UserHelpers.following_map(user, candidates)
-
-    suggestions =
-      candidates
-      |> Enum.reject(&Map.has_key?(already, &1.id))
-      |> Enum.take(5)
+      |> Enum.take(6)
 
     socket
-    |> assign(:recommended_users, suggestions)
-    |> assign(:work_info_by_id, UserHelpers.work_information_map(suggestions, 60))
-    |> assign(:following_by_id, %{})
+    |> assign(:recommended_users, users)
+    |> assign(:work_info_by_id, UserHelpers.work_information_map(users, 60))
+    |> assign(:following_by_id, UserHelpers.following_map(user, users))
   end
 
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
@@ -121,12 +140,18 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :composer_open?, false)}
   end
 
-  # The rail's "Follow" buttons (user_row live?): follow with no reload, then
-  # refresh the suggestions so the followed member drops off and the next rises.
+  # The rail's follow/unfollow buttons (user_row live?): toggle with no reload,
+  # then recompute the follow state so the row flips between Following/Follow.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
     me = socket.assigns.current_user
 
     if me && me.id != followee_id, do: Social.follow(me, followee_id)
+
+    {:noreply, assign_who_to_follow(socket)}
+  end
+
+  def handle_event("unfollow", %{"id" => follow_id}, socket) do
+    if me = socket.assigns.current_user, do: Social.unfollow!(me.id, follow_id)
 
     {:noreply, assign_who_to_follow(socket)}
   end
@@ -312,12 +337,24 @@ defmodule VutuvWeb.PostLive.Feed do
           </p>
 
           <.load_more :if={@more?} />
+
+          <%!-- On mobile (where the desktop rail is hidden) the "Other formats"
+          card drops to the bottom of the page; the "Who to follow" rail stays
+          desktop-only. The links are the feed's own agent siblings (/feed.md
+          etc.) — the viewer's timeline in another format, not their profile. --%>
+          <.other_formats_card
+            base_path="/feed"
+            locale={@locale}
+            id="feed-other-formats-mobile"
+            class="md:hidden"
+          />
         </div>
 
-        <%!-- Desktop-only "Who to follow" rail (hidden under md, where the grid
-        is one column anyway). The follow buttons are live (no reload). --%>
-        <aside id="who-to-follow" class="hidden md:block">
-          <.card :if={@recommended_users != []}>
+        <%!-- Desktop-only rail (hidden under md, where the grid is one column):
+        the profile-style "Who to follow" card (live follow/unfollow, no reload)
+        plus the "Other formats" card — the same aside the profile shows. --%>
+        <aside class="hidden space-y-6 md:block">
+          <.card :if={@recommended_users != []} id="who-to-follow">
             <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
             <ul class="space-y-4">
               <.user_row
@@ -330,10 +367,8 @@ defmodule VutuvWeb.PostLive.Feed do
                 live?
               />
             </ul>
-            <.card_footer_link href={~p"/listings/most_followed_users"}>
-              {gettext("Show all")}
-            </.card_footer_link>
           </.card>
+          <.other_formats_card base_path="/feed" locale={@locale} id="feed-other-formats" />
         </aside>
       </div>
     </div>

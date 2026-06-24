@@ -103,6 +103,18 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # The signed-in member's personalized feed (VutuvWeb.AgentDocs.FeedDoc): a
+  # page of timeline posts, same line shape as the archive (post_line/1).
+  def render(%{type: "feed"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      feed_summary(doc),
+      Enum.map_join(doc.posts, "\n", &post_line/1)
+    ]
+    |> join_blocks()
+  end
+
   def render(%{type: type} = doc) when type in @people_lists do
     [
       frontmatter(doc),
@@ -320,6 +332,20 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp page_hint(_total, _listed), do: ""
+
+  defp feed_summary(%{posts: []}), do: gettext("Your feed is empty.")
+
+  defp feed_summary(doc) do
+    gettext("%{count} posts on this page", count: length(doc.posts)) <> cursor_hint(doc)
+  end
+
+  # The feed is cursor-paginated: when older posts remain, point at the next
+  # page via the signed, opaque `?cursor=` token (FeedDoc carries next_cursor).
+  defp cursor_hint(%{more: true, next_cursor: cursor}) when is_binary(cursor) do
+    " (" <> gettext("more posts available, append ?cursor=%{cursor}", cursor: cursor) <> ")"
+  end
+
+  defp cursor_hint(_doc), do: ""
 
   defp image_line(image) do
     alt = image.alt || "image"

@@ -297,7 +297,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
   end
 
   describe "who to follow rail" do
-    test "suggests a popular member the viewer does not follow", %{conn: conn} do
+    test "suggests a popular member with a Follow button", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       popular = other_user(first_name: "Pop", last_name: "Ular")
       # most_followed_users ranks by follower count, so give them one follower.
@@ -306,9 +306,10 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, live, _html} = live(conn, ~p"/feed")
 
       assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+      assert has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
     end
 
-    test "following a suggestion is live and drops it from the rail", %{conn: conn} do
+    test "following a suggestion toggles live, keeping the row in place", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       popular = other_user(first_name: "Pop", last_name: "Ular")
       insert(:follow, follower: other_user(), followee: popular)
@@ -319,8 +320,28 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> element(~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
       |> render_click()
 
+      # Following happened, the row stays (now in the "Following" state), so the
+      # Follow button is gone — unlike a suggestion box that drops followed rows.
       assert Vutuv.Social.user_follows_user?(user.id, popular.id)
-      refute has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+      assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+      refute has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
+    end
+  end
+
+  describe "other formats card" do
+    test "links to the feed's own agent siblings on desktop and mobile", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Desktop rail copy + the md:hidden bottom copy, both pointing at the
+      # feed's own formats (/feed.md etc.) — the viewer's timeline in another
+      # format, not their profile, and no vCard (a feed has no contact card).
+      for id <- ["feed-other-formats", "feed-other-formats-mobile"] do
+        assert has_element?(live, ~s(##{id} a[href="/feed.md"]))
+        assert has_element?(live, ~s(##{id} a[href="/feed.json"]))
+        refute has_element?(live, ~s(##{id} a[href$=".vcf"]))
+      end
     end
   end
 

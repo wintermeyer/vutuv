@@ -745,29 +745,12 @@ the resulting ~200px rail width. --%>
     rail's quiet utility footer. A human visitor browsing in German gets the
     German rendering via ?lang=; the canonical extension URLs (head alternates,
     llms.txt) stay English. --%>
-    <% format_lang =
-      if @locale in [nil, "en"], do: "", else: "?lang=#{@locale}" %>
-    <.card id="profile-other-formats">
-      <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
-      <%!-- The vCard carries no translatable labels, so it skips ?lang=. --%>
-      <% formats = [
-        {gettext("Markdown"), "/#{@user.username}.md#{format_lang}"},
-        {gettext("Text only"), "/#{@user.username}.txt#{format_lang}"},
-        {"JSON", "/#{@user.username}.json#{format_lang}"},
-        {"XML", "/#{@user.username}.xml#{format_lang}"},
-        {gettext("vCard"), "/#{@user.username}.vcf"}
-      ] %>
-      <%!-- Chips: a wrapping row of small tags instead of a five-row list. --%>
-      <div class="flex flex-wrap gap-1.5">
-        <.link
-          :for={{label, href} <- formats}
-          href={href}
-          class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
-        >
-          {label}
-        </.link>
-      </div>
-    </.card>
+    <.other_formats_card
+      base_path={"/" <> @user.username}
+      locale={@locale}
+      vcard
+      id="profile-other-formats"
+    />
   </aside>
 </div>
 
