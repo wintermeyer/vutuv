@@ -45,6 +45,37 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  Given candidate tag slugs (the `#hashtags` in a Markdown body), returns the
+  `MapSet` of those naming a real tag with **at least one visible member** — a
+  confirmed, non-hidden user carries the tag, so its `/tags/:slug` page actually
+  shows something. Powers the hashtag links `VutuvWeb.Markdown` writes; an
+  unknown or empty tag is absent from the set, so it stays plain text. The
+  visible-member gate is the same one the tag page lists by
+  (`Tag.recommended_users/1`). One query; an empty input skips the DB so the
+  renderer's no-hashtag path stays query-free.
+  """
+  def linkable_slugs(slugs) when is_list(slugs) do
+    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+
+    case slugs |> Enum.map(&String.downcase/1) |> Enum.uniq() do
+      [] ->
+        MapSet.new()
+
+      normalized ->
+        from(t in Tag,
+          join: ut in assoc(t, :user_tags),
+          join: u in assoc(ut, :user),
+          where: t.slug in ^normalized,
+          where: account_confirmed_row(u) and not account_hidden(u.id),
+          distinct: true,
+          select: t.slug
+        )
+        |> Repo.all()
+        |> MapSet.new()
+    end
+  end
+
+  @doc """
   Endorse a user's tag. The chokepoint for endorsements: besides inserting the
   row it pushes the live in-app notification to the tag's owner, so all
   endorsement paths must come through here (not a raw `Repo.insert`).

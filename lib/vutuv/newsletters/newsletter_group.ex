@@ -73,8 +73,8 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
     |> validate_required([:name])
     |> validate_length(:name, max: @max_name)
     |> clean_locales()
-    |> clean_country()
-    |> clean_username()
+    |> clean_blank_to_nil(:country)
+    |> clean_blank_to_nil(:username)
     |> clean_ids(:included_group_ids)
     |> clean_ids(:excluded_group_ids)
     |> clean_ids(:included_user_ids)
@@ -94,31 +94,19 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
     end
   end
 
-  defp clean_country(changeset) do
-    case fetch_change(changeset, :country) do
-      {:ok, country} when is_binary(country) ->
-        case String.trim(country) do
-          "" -> put_change(changeset, :country, nil)
-          trimmed -> put_change(changeset, :country, trimmed)
-        end
+  # Trim a free-text field, collapsing a blank to nil (country, @handle).
+  defp clean_blank_to_nil(changeset, field) do
+    case fetch_change(changeset, field) do
+      {:ok, value} when is_binary(value) ->
+        put_change(changeset, field, value |> String.trim() |> blank_to_nil())
 
       _ ->
         changeset
     end
   end
 
-  defp clean_username(changeset) do
-    case fetch_change(changeset, :username) do
-      {:ok, username} when is_binary(username) ->
-        case String.trim(username) do
-          "" -> put_change(changeset, :username, nil)
-          trimmed -> put_change(changeset, :username, trimmed)
-        end
-
-      _ ->
-        changeset
-    end
-  end
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   # Drop the empty hidden-input value and any blanks from an id-array field (the
   # included/excluded audiences and the per-account include/exclude lists).

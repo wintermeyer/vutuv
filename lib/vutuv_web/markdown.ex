@@ -12,18 +12,34 @@ defmodule VutuvWeb.Markdown do
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
   """
 
+  alias Vutuv.Accounts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Tags
+  alias VutuvWeb.UserHelpers
 
   @url_display_max 40
   @trailing_punct ~w(. , ; : ! ?)
   @preview_limit 1000
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
+  # A `@handle` mention or a `#hashtag`. The leading `@`/`#` must not sit
+  # mid-token: no email `a@b`, no numeric entity `&#39;`, no `@@`/`##`, no
+  # `/path#frag` — hence the negative lookbehinds. The name is matched
+  # permissively (any case/length) and validated against the DB by
+  # `linkify_entities/1`: a non-member, or a missing/empty tag, never links.
+  # Capture 1 = handle, capture 2 = hashtag (exactly one matches per hit).
+  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
+
+  # Inside these elements an entity is left as plain text (a handle/hashtag in a
+  # code span/block is sample text, and we never nest a link inside a link).
+  @entity_skip_tags ~w(a code pre)
+
   @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
   def render(text) when is_binary(text) do
     text
     |> render_pipeline()
     |> open_links_in_new_tab()
+    |> linkify_entities()
     |> Phoenix.HTML.raw()
   end
 
@@ -52,6 +68,7 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline()
     |> strip_img_tags()
     |> open_links_in_new_tab()
+    |> linkify_entities()
     |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
@@ -137,6 +154,153 @@ defmodule VutuvWeb.Markdown do
   # Safe to do post-sanitization: every remaining <a> came out of the scrubber.
   defp open_links_in_new_tab(html) do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
+  end
+
+  ## @handle mentions and #hashtags
+
+  # Turns every `@handle` of an existing member into a same-tab link to their
+  # profile (name in a `title` hover tooltip), and every `#hashtag` of a
+  # non-empty tag into a link to its `/tags/:slug` page. Runs on the
+  # already-rendered, sanitized HTML (after `open_links_in_new_tab/1`, so these
+  # internal links don't get `target="_blank"`), and only on text that is
+  # **not** inside a `code`/`pre`/`a` element — an entity typed in code is
+  # sample text and we never nest a link in a link.
+  #
+  # Each body resolves its handles and its hashtags in **one** DB query each;
+  # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
+  # in `markdown_test.exs` keep working without a sandbox).
+  defp linkify_entities(html) do
+    # Cheap bail-out for the common case: no `@`/`#` means no entity to link,
+    # so the feed hot path skips tokenizing and scanning entirely.
+    if String.contains?(html, "@") or String.contains?(html, "#") do
+      linkify_present_entities(html)
+    else
+      html
+    end
+  end
+
+  defp linkify_present_entities(html) do
+    tokens = tokenize_html(html)
+
+    case entity_candidates(tokens) do
+      {[], []} ->
+        html
+
+      {mentions, hashtags} ->
+        users = Accounts.get_users_by_usernames(mentions)
+        tags = Tags.linkable_slugs(hashtags)
+
+        tokens
+        |> map_linkable_text(&link_entities_in_text(&1, users, tags))
+        |> IO.iodata_to_binary()
+    end
+  end
+
+  # Splits HTML into alternating text / tag tokens (tags kept as their own
+  # tokens), so a tag-depth walk can tell text apart from markup.
+  defp tokenize_html(html), do: Regex.split(~r/<[^>]+>/, html, include_captures: true)
+
+  # The unique, lowercased {handles, hashtags} sitting in linkable text.
+  defp entity_candidates(tokens) do
+    {mentions, hashtags} =
+      reduce_linkable_text(tokens, {[], []}, fn text, acc ->
+        @entity
+        |> Regex.scan(text, capture: :all_but_first)
+        |> Enum.reduce(acc, &collect_candidate/2)
+      end)
+
+    {Enum.uniq(mentions), Enum.uniq(hashtags)}
+  end
+
+  # `Regex.scan` truncates trailing unmatched groups, so a mention hit arrives
+  # as `["handle"]` and a hashtag hit as `["", "hashtag"]` — match on the first
+  # group being present (mention) vs empty (hashtag).
+  defp collect_candidate([mention | _], {mentions, hashtags}) when mention != "",
+    do: {[String.downcase(mention) | mentions], hashtags}
+
+  defp collect_candidate([_, hashtag], {mentions, hashtags}),
+    do: {mentions, [String.downcase(hashtag) | hashtags]}
+
+  # Walks the token stream, applying `fun` to every text token outside a
+  # skip element and leaving tags and skipped text untouched.
+  defp map_linkable_text(tokens, fun) do
+    {mapped, _depth} =
+      Enum.map_reduce(tokens, 0, fn token, depth ->
+        cond do
+          tag_token?(token) -> {token, entity_skip_depth(depth, token)}
+          depth > 0 -> {token, depth}
+          true -> {fun.(token), depth}
+        end
+      end)
+
+    mapped
+  end
+
+  # Folds `fun` over every text token outside a skip element.
+  defp reduce_linkable_text(tokens, acc, fun) do
+    {acc, _depth} =
+      Enum.reduce(tokens, {acc, 0}, fn token, {acc, depth} ->
+        cond do
+          tag_token?(token) -> {acc, entity_skip_depth(depth, token)}
+          depth > 0 -> {acc, depth}
+          true -> {fun.(token, acc), depth}
+        end
+      end)
+
+    acc
+  end
+
+  defp tag_token?(token), do: String.starts_with?(token, "<")
+
+  # Tracks how deeply nested we are inside skip elements (a/code/pre).
+  defp entity_skip_depth(depth, tag) do
+    case Regex.run(~r{^<\s*(/?)\s*([a-zA-Z0-9]+)}, tag) do
+      [_, "/", name] -> if skip_tag?(name), do: max(depth - 1, 0), else: depth
+      [_, "", name] -> if skip_tag?(name), do: depth + 1, else: depth
+      _ -> depth
+    end
+  end
+
+  defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
+
+  defp link_entities_in_text(text, users, tags) do
+    Regex.replace(@entity, text, fn
+      whole, handle, "" -> mention_link(whole, handle, users)
+      whole, "", hashtag -> hashtag_link(whole, hashtag, tags)
+    end)
+  end
+
+  defp mention_link(whole, handle, users) do
+    case Map.get(users, String.downcase(handle)) do
+      nil -> whole
+      user -> mention_anchor(user, handle)
+    end
+  end
+
+  defp hashtag_link(whole, hashtag, tags) do
+    slug = String.downcase(hashtag)
+    if MapSet.member?(tags, slug), do: hashtag_anchor(slug, hashtag), else: whole
+  end
+
+  # The display text is the handle the author typed (case preserved); the href
+  # is the canonical lowercase slug; the title is the member's full name (or the
+  # handle itself for a nameless member).
+  defp mention_anchor(user, typed_handle) do
+    name =
+      case UserHelpers.full_name(user) do
+        "" -> "@" <> user.username
+        full -> full
+      end
+
+    ~s(<a href="/#{user.username}" title="#{escape(name)}" class="mention">@#{typed_handle}</a>)
+  end
+
+  # The display text is the hashtag the author typed (case preserved); the href
+  # is the canonical lowercase tag slug. Only non-empty tags reach here, so the
+  # link never lands on a tag page with nothing on it. Both parts are from a
+  # validated charset (`[a-z0-9-]` slug, `[A-Za-z0-9_]` typed), so no escaping.
+  defp hashtag_anchor(slug, typed_hashtag) do
+    ~s(<a href="/tags/#{slug}" class="hashtag">##{typed_hashtag}</a>)
   end
 
   ## Inline post images
