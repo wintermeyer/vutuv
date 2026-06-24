@@ -14,6 +14,7 @@ defmodule VutuvWeb.Markdown do
 
   alias Vutuv.Accounts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Tags
   alias VutuvWeb.UserHelpers
 
   @url_display_max 40
@@ -21,22 +22,24 @@ defmodule VutuvWeb.Markdown do
   @preview_limit 1000
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
-  # A `@handle` mention: an `@` that is not part of an email/path (no word char,
-  # `@` or `/` directly before it), followed by a username-shaped run. The run
-  # is matched permissively (any case, any length) and validated against the DB
-  # by `linkify_mentions/1` — a non-member or an over-long run never links.
-  @mention ~r{(?<![\w@/])@([A-Za-z0-9_]+)}
+  # A `@handle` mention or a `#hashtag`. The leading `@`/`#` must not sit
+  # mid-token: no email `a@b`, no numeric entity `&#39;`, no `@@`/`##`, no
+  # `/path#frag` — hence the negative lookbehinds. The name is matched
+  # permissively (any case/length) and validated against the DB by
+  # `linkify_entities/1`: a non-member, or a missing/empty tag, never links.
+  # Capture 1 = handle, capture 2 = hashtag (exactly one matches per hit).
+  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
 
-  # Inside these elements a mention is left as plain text (a handle in a code
-  # span/block is sample text, and we never nest a link in a link).
-  @mention_skip_tags ~w(a code pre)
+  # Inside these elements an entity is left as plain text (a handle/hashtag in a
+  # code span/block is sample text, and we never nest a link inside a link).
+  @entity_skip_tags ~w(a code pre)
 
   @doc "Render untrusted Markdown to safe HTML (`Phoenix.HTML.safe()`)."
   def render(text) when is_binary(text) do
     text
     |> render_pipeline()
     |> open_links_in_new_tab()
-    |> linkify_mentions()
+    |> linkify_entities()
     |> Phoenix.HTML.raw()
   end
 
@@ -65,7 +68,7 @@ defmodule VutuvWeb.Markdown do
     |> render_pipeline()
     |> strip_img_tags()
     |> open_links_in_new_tab()
-    |> linkify_mentions()
+    |> linkify_entities()
     |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
@@ -153,36 +156,42 @@ defmodule VutuvWeb.Markdown do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
   end
 
-  ## @handle mentions
+  ## @handle mentions and #hashtags
 
   # Turns every `@handle` of an existing member into a same-tab link to their
-  # profile, with the member's name as a `title` hover tooltip. Runs on the
-  # already-rendered, sanitized HTML (after `open_links_in_new_tab/1`, so the
-  # internal mention links don't get `target="_blank"`), and only on text that
-  # is **not** inside a `code`/`pre`/`a` element — a handle typed in code is
+  # profile (name in a `title` hover tooltip), and every `#hashtag` of a
+  # non-empty tag into a link to its `/tags/:slug` page. Runs on the
+  # already-rendered, sanitized HTML (after `open_links_in_new_tab/1`, so these
+  # internal links don't get `target="_blank"`), and only on text that is
+  # **not** inside a `code`/`pre`/`a` element — an entity typed in code is
   # sample text and we never nest a link in a link.
   #
-  # All candidate handles in a body resolve in **one** DB query; when a body has
-  # no mention candidates at all there is no query (so the pure, DB-free unit
-  # tests in `markdown_test.exs` keep working without a sandbox).
-  defp linkify_mentions(html) do
-    # Cheap bail-out for the common case: a body with no `@` at all can't carry
-    # a mention, so the feed hot path skips tokenizing and scanning entirely.
-    if String.contains?(html, "@"), do: linkify_present_mentions(html), else: html
+  # Each body resolves its handles and its hashtags in **one** DB query each;
+  # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
+  # in `markdown_test.exs` keep working without a sandbox).
+  defp linkify_entities(html) do
+    # Cheap bail-out for the common case: no `@`/`#` means no entity to link,
+    # so the feed hot path skips tokenizing and scanning entirely.
+    if String.contains?(html, "@") or String.contains?(html, "#") do
+      linkify_present_entities(html)
+    else
+      html
+    end
   end
 
-  defp linkify_present_mentions(html) do
+  defp linkify_present_entities(html) do
     tokens = tokenize_html(html)
 
-    case mention_candidates(tokens) do
-      [] ->
+    case entity_candidates(tokens) do
+      {[], []} ->
         html
 
-      candidates ->
-        users = Accounts.get_users_by_usernames(candidates)
+      {mentions, hashtags} ->
+        users = Accounts.get_users_by_usernames(mentions)
+        tags = Tags.linkable_slugs(hashtags)
 
         tokens
-        |> map_linkable_text(&link_mentions_in_text(&1, users))
+        |> map_linkable_text(&link_entities_in_text(&1, users, tags))
         |> IO.iodata_to_binary()
     end
   end
@@ -191,16 +200,26 @@ defmodule VutuvWeb.Markdown do
   # tokens), so a tag-depth walk can tell text apart from markup.
   defp tokenize_html(html), do: Regex.split(~r/<[^>]+>/, html, include_captures: true)
 
-  # The unique, lowercased handle candidates sitting in linkable text.
-  defp mention_candidates(tokens) do
-    tokens
-    |> reduce_linkable_text([], fn text, acc ->
-      [@mention |> Regex.scan(text, capture: :all_but_first) |> List.flatten() | acc]
-    end)
-    |> List.flatten()
-    |> Enum.map(&String.downcase/1)
-    |> Enum.uniq()
+  # The unique, lowercased {handles, hashtags} sitting in linkable text.
+  defp entity_candidates(tokens) do
+    {mentions, hashtags} =
+      reduce_linkable_text(tokens, {[], []}, fn text, acc ->
+        @entity
+        |> Regex.scan(text, capture: :all_but_first)
+        |> Enum.reduce(acc, &collect_candidate/2)
+      end)
+
+    {Enum.uniq(mentions), Enum.uniq(hashtags)}
   end
+
+  # `Regex.scan` truncates trailing unmatched groups, so a mention hit arrives
+  # as `["handle"]` and a hashtag hit as `["", "hashtag"]` — match on the first
+  # group being present (mention) vs empty (hashtag).
+  defp collect_candidate([mention | _], {mentions, hashtags}) when mention != "",
+    do: {[String.downcase(mention) | mentions], hashtags}
+
+  defp collect_candidate([_, hashtag], {mentions, hashtags}),
+    do: {mentions, [String.downcase(hashtag) | hashtags]}
 
   # Walks the token stream, applying `fun` to every text token outside a
   # skip element and leaving tags and skipped text untouched.
@@ -208,7 +227,7 @@ defmodule VutuvWeb.Markdown do
     {mapped, _depth} =
       Enum.map_reduce(tokens, 0, fn token, depth ->
         cond do
-          tag_token?(token) -> {token, mention_skip_depth(depth, token)}
+          tag_token?(token) -> {token, entity_skip_depth(depth, token)}
           depth > 0 -> {token, depth}
           true -> {fun.(token), depth}
         end
@@ -222,7 +241,7 @@ defmodule VutuvWeb.Markdown do
     {acc, _depth} =
       Enum.reduce(tokens, {acc, 0}, fn token, {acc, depth} ->
         cond do
-          tag_token?(token) -> {acc, mention_skip_depth(depth, token)}
+          tag_token?(token) -> {acc, entity_skip_depth(depth, token)}
           depth > 0 -> {acc, depth}
           true -> {fun.(token, acc), depth}
         end
@@ -234,7 +253,7 @@ defmodule VutuvWeb.Markdown do
   defp tag_token?(token), do: String.starts_with?(token, "<")
 
   # Tracks how deeply nested we are inside skip elements (a/code/pre).
-  defp mention_skip_depth(depth, tag) do
+  defp entity_skip_depth(depth, tag) do
     case Regex.run(~r{^<\s*(/?)\s*([a-zA-Z0-9]+)}, tag) do
       [_, "/", name] -> if skip_tag?(name), do: max(depth - 1, 0), else: depth
       [_, "", name] -> if skip_tag?(name), do: depth + 1, else: depth
@@ -242,15 +261,25 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  defp skip_tag?(name), do: String.downcase(name) in @mention_skip_tags
+  defp skip_tag?(name), do: String.downcase(name) in @entity_skip_tags
 
-  defp link_mentions_in_text(text, users) do
-    Regex.replace(@mention, text, fn whole, handle ->
-      case Map.get(users, String.downcase(handle)) do
-        nil -> whole
-        user -> mention_anchor(user, handle)
-      end
+  defp link_entities_in_text(text, users, tags) do
+    Regex.replace(@entity, text, fn
+      whole, handle, "" -> mention_link(whole, handle, users)
+      whole, "", hashtag -> hashtag_link(whole, hashtag, tags)
     end)
+  end
+
+  defp mention_link(whole, handle, users) do
+    case Map.get(users, String.downcase(handle)) do
+      nil -> whole
+      user -> mention_anchor(user, handle)
+    end
+  end
+
+  defp hashtag_link(whole, hashtag, tags) do
+    slug = String.downcase(hashtag)
+    if MapSet.member?(tags, slug), do: hashtag_anchor(slug, hashtag), else: whole
   end
 
   # The display text is the handle the author typed (case preserved); the href
@@ -264,6 +293,14 @@ defmodule VutuvWeb.Markdown do
       end
 
     ~s(<a href="/#{user.username}" title="#{escape(name)}" class="mention">@#{typed_handle}</a>)
+  end
+
+  # The display text is the hashtag the author typed (case preserved); the href
+  # is the canonical lowercase tag slug. Only non-empty tags reach here, so the
+  # link never lands on a tag page with nothing on it. Both parts are from a
+  # validated charset (`[a-z0-9-]` slug, `[A-Za-z0-9_]` typed), so no escaping.
+  defp hashtag_anchor(slug, typed_hashtag) do
+    ~s(<a href="/tags/#{slug}" class="hashtag">##{typed_hashtag}</a>)
   end
 
   ## Inline post images
