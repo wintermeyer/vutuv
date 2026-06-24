@@ -20,6 +20,10 @@ defmodule VutuvWeb.Markdown do
   @url_display_max 40
   @trailing_punct ~w(. , ; : ! ?)
   @preview_limit 1000
+  # When a whole block would overflow the preview, keep a word-cut of it (so a
+  # one-line intro above a long block doesn't leave a one-line preview) — but
+  # only if at least this many characters of budget remain, else just stop.
+  @preview_min_block 200
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
   # A `@handle` mention or a `#hashtag`. The leading `@`/`#` must not sit
@@ -396,11 +400,25 @@ defmodule VutuvWeb.Markdown do
 
   defp accumulate_blocks([block | rest], kept, length, limit) do
     new_length = length + 2 + String.length(block)
+    remaining = limit - length - 2
 
-    if new_length > limit do
-      join_blocks(kept)
-    else
-      accumulate_blocks(rest, [block | kept], new_length, limit)
+    cond do
+      new_length <= limit ->
+        accumulate_blocks(rest, [block | kept], new_length, limit)
+
+      # Near-full already: stop. There is plenty above for the CSS clamp.
+      remaining < @preview_min_block ->
+        join_blocks(kept)
+
+      # The next whole block overflows but there is room. Don't drop it — that is
+      # what left a one-line intro stranded above a long list. A fence is atomic
+      # (cutting it breaks rendering everything after), so include it whole and
+      # let the CSS line-clamp trim it; any other block is word-cut to the budget.
+      fence_block?(block) ->
+        join_blocks([block | kept])
+
+      true ->
+        join_blocks([word_cut(block, remaining) | kept])
     end
   end
 

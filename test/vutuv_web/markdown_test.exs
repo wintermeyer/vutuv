@@ -34,6 +34,47 @@ defmodule VutuvWeb.MarkdownTest do
     assert render("line one\nline two") =~ "<br"
   end
 
+  describe "render_preview/3 truncation" do
+    defp preview(text, opts \\ []) do
+      {html, truncated?} = Markdown.render_preview(text, [], opts)
+      {Phoenix.HTML.safe_to_string(html), truncated?}
+    end
+
+    test "short content is rendered whole and not marked truncated" do
+      {html, truncated?} = preview("Just a short post.")
+
+      assert html =~ "Just a short post."
+      refute truncated?
+    end
+
+    test "a one-line intro above a long block keeps part of that block (not just the intro)" do
+      intro = "Testing this self-improvement rule for my setup:"
+      long = "- " <> String.duplicate("word ", 400)
+
+      {html, truncated?} = preview(intro <> "\n\n" <> long)
+
+      assert truncated?
+      assert html =~ "Testing this self-improvement rule"
+      # The long block is word-cut into the preview instead of being dropped, so
+      # its text and list markup appear — it used to collapse to just the intro.
+      assert html =~ "<li>"
+      assert html =~ "word word"
+    end
+
+    test "an overflowing fenced code block is kept whole rather than cut mid-fence" do
+      intro = "Here is the code:"
+      fence = "```\n" <> String.duplicate("x = 1\n", 300) <> "```"
+
+      {html, truncated?} = preview(intro <> "\n\n" <> fence)
+
+      assert truncated?
+      assert html =~ "Here is the code"
+      # Cutting a fence breaks rendering, so it is included whole (the CSS clamp
+      # trims it visually) — the preview is never stranded on the intro line.
+      assert html =~ "x = 1"
+    end
+  end
+
   test "raw HTML shows as literal text and never executes" do
     html = render(~s|<script>alert("x")</script> **safe**|)
     refute html =~ "<script"
