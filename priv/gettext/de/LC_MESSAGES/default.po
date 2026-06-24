@@ -2646,7 +2646,7 @@ msgstr "Gründer von vutuv"
 #: lib/vutuv_web/templates/page/index.html.heex:1
 #, elixir-autogen, elixir-format
 msgid "“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”"
-msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso. Herzlich willkommen bei vutuv!“"
+msgstr "„Genervt von LinkedIn, Facebook und X? Ging mir genauso. Herzlich willkommen bei vutuv!“"
 
 #: lib/vutuv_web/templates/page/index.html.heex:4
 #, elixir-autogen, elixir-format
@@ -2656,7 +2656,7 @@ msgstr "Herzlich willkommen bei vutuv!“"
 #: lib/vutuv_web/templates/page/index.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "“Tired of LinkedIn, Facebook, or X? Same here."
-msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso."
+msgstr "„Genervt von LinkedIn, Facebook und X? Ging mir genauso."
 
 #: lib/vutuv_web/templates/page/index.html.heex:91
 #: lib/vutuv_web/templates/settings/privacy.html.heex:55
