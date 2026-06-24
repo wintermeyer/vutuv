@@ -40,6 +40,13 @@ defmodule Vutuv.Accounts.User do
     field(:avatar_crop, :string)
     field(:cover_crop, :string)
     field(:username, :string)
+    # The member's original legacy handle (the dotted / over-length import),
+    # preserved before Accounts.normalize_legacy_usernames/0 rewrote :username
+    # to a valid one - kept so the old handle is never lost. It also drives the
+    # old-URL redirect: VutuvWeb.Plug.UserResolveSlug resolves an unknown slug
+    # through here. nil for accounts that were already valid. Set once by the
+    # backfill, never cast from params.
+    field(:legacy_username, :string)
     field(:admin?, :boolean)
     field(:headline, :string)
     field(:noindex?, :boolean, default: false)

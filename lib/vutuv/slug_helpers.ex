@@ -33,7 +33,14 @@ defmodule Vutuv.SlugHelpers do
     end
   end
 
-  defp handleize(text) do
+  @doc """
+  Normalizes free text into a handle body (no uniqueness check): downcased,
+  transliterated, non-`[a-z0-9_]` runs collapsed to `_`, capped at
+  #{@handle_max_length} chars. The pure core of `gen_handle_unique/4`, exposed
+  so callers that manage their own uniqueness (the legacy-username backfill)
+  can reuse the exact same normalization.
+  """
+  def handleize(text) do
     text
     |> String.downcase()
     |> transliterate()
