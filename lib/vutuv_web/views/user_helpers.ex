@@ -128,36 +128,31 @@ defmodule VutuvWeb.UserHelpers do
   defp most_recent_job(job, _), do: job
 
   @doc """
-  The profile page's meta description: the work line plus the tag list.
+  The profile page's meta description: the current work line, optionally
+  followed by a `detail` string (the member's follower count).
 
   Takes the controller's already-resolved current job (`:header_job`) so the
   layout does not re-run the `current_job/1` query chain the profile action
-  just ran.
+  just ran, plus a `detail` string the caller has already localized (so the
+  gettext for the follower phrase stays in `VutuvWeb.OpenGraph`). Returns ""
+  when neither part exists, so a bare profile falls through to the site pitch.
   """
-  def meta_description(nil, _tags, _job), do: ""
-  def meta_description(_user, nil, _job), do: ""
+  def meta_description(nil, _detail, _job), do: ""
 
-  def meta_description(_user, tags, job) do
-    case {work_information_string_for_job(job), tags_to_string(tags)} do
+  def meta_description(_user, detail, job) do
+    case {work_information_string_for_job(job), detail || ""} do
       {"", ""} ->
         []
 
-      {"", tags} ->
-        ["tags: ", tags]
+      {"", detail} ->
+        [detail]
 
       {work, ""} ->
         [work]
 
-      {work, tags} ->
-        [work, ". tags: ", tags]
+      {work, detail} ->
+        [work, ". ", detail]
     end
-  end
-
-  defp tags_to_string(tags) do
-    for(tag <- tags) do
-      UserTag.name(tag)
-    end
-    |> Enum.join(", ")
   end
 
   def work_information_string(user, len \\ 256)

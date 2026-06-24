@@ -85,6 +85,33 @@ defmodule VutuvWeb.OpenGraphTest do
       assert description != ""
       assert description =~ "Career Network"
     end
+
+    test "a member's preview shows the follower count and never the tag list", %{conn: conn} do
+      user = insert_activated_user(first_name: "Greta", last_name: "Tester")
+
+      insert(:work_experience, user: user, title: "Developer", organization: "Acme Corp")
+      insert(:user_tag, user: user, tag: insert(:tag, name: "Elixir"))
+
+      for _ <- 1..3, do: follow!(insert_activated_user(), user)
+
+      description = conn |> get(~p"/#{user}") |> html_response(200) |> og("og:description")
+
+      assert description =~ "Acme Corp"
+      assert description =~ "3 followers"
+      # The tag list used to ride along in the preview ("... tags: Elixir");
+      # it must not any more.
+      refute description =~ "tags:"
+      refute description =~ "Elixir"
+    end
+
+    test "a member with followers but no work info previews the follower count", %{conn: conn} do
+      user = insert_activated_user(first_name: "Solo")
+      follow!(insert_activated_user(), user)
+
+      description = conn |> get(~p"/#{user}") |> html_response(200) |> og("og:description")
+
+      assert description == "1 follower"
+    end
   end
 
   describe "post pages" do

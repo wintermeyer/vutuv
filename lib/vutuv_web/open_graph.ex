@@ -6,8 +6,8 @@ defmodule VutuvWeb.OpenGraph do
   one chokepoint over the conn assigns:
 
     * a page about a member (`:user` — the profile, its sections, their
-      posts): the member's name as title, their work info as description,
-      their avatar as image. The avatar is linked as `/:slug/avatar.jpg`
+      posts): the member's name as title, their work info and follower
+      count as description, their avatar as image. The avatar is linked as `/:slug/avatar.jpg`
       (`VutuvWeb.AvatarController`) because preview scrapers don't decode
       the AVIF the site serves itself.
     * a visible, unrestricted post additionally previews its first line,
@@ -28,6 +28,7 @@ defmodule VutuvWeb.OpenGraph do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.OgCard
+  alias VutuvWeb.UI
   alias VutuvWeb.UserHelpers
 
   @doc "The Open Graph tags for this page, as `{property, content}` pairs."
@@ -57,7 +58,7 @@ defmodule VutuvWeb.OpenGraph do
   @doc """
   The page description, shared by `<meta name="description">` and
   `og:description`: the post's first line (public posts only), else the
-  member's work info, else the site pitch — never empty.
+  member's work info and follower count, else the site pitch — never empty.
   """
   def description(assigns) do
     ca = conn_assigns(assigns)
@@ -85,7 +86,7 @@ defmodule VutuvWeb.OpenGraph do
 
   defp member_info(%{user: %User{} = user} = ca) do
     case user
-         |> UserHelpers.meta_description(ca[:user_tags], ca[:header_job])
+         |> UserHelpers.meta_description(follower_detail(ca[:follower_count]), ca[:header_job])
          |> IO.iodata_to_binary() do
       "" -> nil
       text -> text
@@ -93,6 +94,15 @@ defmodule VutuvWeb.OpenGraph do
   end
 
   defp member_info(_ca), do: nil
+
+  # The member's follower count as a localized, compacted phrase ("3 followers",
+  # "1.2K followers"), matching the count shown in the profile header. Empty
+  # when the count is absent (a non-profile page) or zero, so a profile with no
+  # followers and no work info falls through to the site pitch like before.
+  defp follower_detail(count) when is_integer(count) and count > 0,
+    do: "#{UI.compact_count(count)} #{ngettext("follower", "followers", count)}"
+
+  defp follower_detail(_count), do: ""
 
   defp og_locale(assigns) do
     case assigns[:locale] do
