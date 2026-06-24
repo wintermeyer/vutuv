@@ -7429,5 +7429,10 @@ msgstr "weitere Beiträge verfügbar, ?cursor=%{cursor} anhängen"
 
 #: lib/vutuv_web/templates/layout/app.html.heex:119
 #, elixir-autogen, elixir-format
+msgid "Deployment: %{date} at %{time}"
+msgstr "Deployment: %{date} um %{time} Uhr"
+
+#: lib/vutuv_web/templates/layout/app.html.heex:119
+#, elixir-autogen, elixir-format
 msgid "Last deployed (Berlin time)"
 msgstr "Zuletzt bereitgestellt (Berliner Zeit)"

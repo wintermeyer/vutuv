@@ -20,13 +20,26 @@ defmodule Vutuv.BuildInfo do
   def built_at, do: @built_at
 
   @doc """
-  A UTC instant (defaulting to the build time) as Europe/Berlin wall clock,
-  formatted `HH:MM DD.MM.YYYY` for the footer.
+  The build instant (defaulting to the compile time) as a Europe/Berlin wall
+  clock date, `DD.MM.YYYY`. The footer pairs it with `deployed_time/1` inside a
+  gettext message so each locale supplies its own connective ("um … Uhr" / "at
+  …") rather than baking German into the value.
   """
-  @spec deployed_at(DateTime.t()) :: String.t()
-  def deployed_at(utc \\ @built_at) do
+  @spec deployed_date(DateTime.t()) :: String.t()
+  def deployed_date(utc \\ @built_at) do
     utc
     |> BerlinTime.naive()
-    |> Calendar.strftime("%H:%M %d.%m.%Y")
+    |> Calendar.strftime("%d.%m.%Y")
+  end
+
+  @doc """
+  The build instant (defaulting to the compile time) as a Europe/Berlin wall
+  clock time, `HH:MM`. See `deployed_date/1`.
+  """
+  @spec deployed_time(DateTime.t()) :: String.t()
+  def deployed_time(utc \\ @built_at) do
+    utc
+    |> BerlinTime.naive()
+    |> Calendar.strftime("%H:%M")
   end
 end

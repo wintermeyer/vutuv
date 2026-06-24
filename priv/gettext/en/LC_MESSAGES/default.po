@@ -6627,5 +6627,10 @@ msgstr ""
 
 #: lib/vutuv_web/templates/layout/app.html.heex:119
 #, elixir-autogen, elixir-format
+msgid "Deployment: %{date} at %{time}"
+msgstr ""
+
+#: lib/vutuv_web/templates/layout/app.html.heex:119
+#, elixir-autogen, elixir-format
 msgid "Last deployed (Berlin time)"
 msgstr ""
