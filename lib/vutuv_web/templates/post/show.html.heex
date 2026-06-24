@@ -33,6 +33,17 @@
         />
       </div>
     </section>
+
+    <%!-- This post in agent-/machine-readable formats (VutuvWeb.AgentDocs):
+    the same permalink as Markdown, plain text, JSON and XML. Shown only when
+    the anonymous siblings resolve (a restricted post has none). --%>
+    <.other_formats_card
+      :if={@show_formats?}
+      base_path={@formats_base}
+      locale={@locale}
+      id="post-other-formats"
+      class="mt-8"
+    />
   </div>
 </div>
 

@@ -117,6 +117,13 @@ defmodule VutuvWeb.Router do
     get("/impressum", PageController, :impressum)
     get("/datenschutzerklaerung", PageController, :datenschutzerklaerung)
     get("/listings/most_followed_users", PageController, :most_followed_users)
+
+    # The signed-in member's newsfeed. A controller (not a bare `live`) so it
+    # can negotiate the agent-format siblings (/feed.md/.txt/.json/.xml,
+    # VutuvWeb.AgentDocs) and live_render the LiveView for HTML. A literal route
+    # before the /:slug catch-all ("feed" is a ReservedSlug). Named
+    # NewsfeedController so it doesn't collide with FeedController (the RSS one).
+    get("/feed", NewsfeedController, :index)
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 
@@ -293,9 +300,10 @@ defmodule VutuvWeb.Router do
       live("/messages/with/:slug", MessageLive.Index, :new)
       live("/messages/:id", MessageLive.Index, :show)
 
-      # The newsfeed and the post editor ("feed"/"posts" are in
-      # ReservedSlugs). Auth is checked in the mounts.
-      live("/feed", PostLive.Feed, :index)
+      # The post editor ("posts" is a ReservedSlug). Auth is checked in the
+      # mounts. The newsfeed itself is NOT here: it serves agent-format
+      # siblings (/feed.md/.txt/.json/.xml) too, which need a controller in
+      # front to negotiate the format, so it lives under FeedController below.
       live("/posts/:id/edit", PostLive.Edit, :edit)
       live("/posts/:id/reply", PostLive.Reply, :new)
 

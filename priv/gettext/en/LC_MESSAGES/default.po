@@ -564,8 +564,8 @@ msgid "Public"
 msgstr ""
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:14
-#, elixir-autogen
-msgid "Public (Everyone can view) or Private (Only those you follow can view)"
+#, elixir-autogen, fuzzy
+msgid "Public (Everyone can view) or Private (Only you can view)"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:575
@@ -6595,4 +6595,32 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:787
 #, elixir-autogen, elixir-format
 msgid "You follow this member"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/feed_doc.ex:41
+#, elixir-autogen, elixir-format
+msgid "Feed of %{name}"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/feed_doc.ex:42
+#, elixir-autogen, elixir-format
+msgid "The vutuv newsfeed of %{name}"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:336
+#: lib/vutuv_web/agent_docs/text.ex:306
+#, elixir-autogen, elixir-format
+msgid "Your feed is empty."
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:339
+#: lib/vutuv_web/agent_docs/text.ex:309
+#, elixir-autogen, elixir-format
+msgid "%{count} posts on this page"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/markdown.ex:345
+#: lib/vutuv_web/agent_docs/text.ex:315
+#, elixir-autogen, elixir-format
+msgid "more posts available, append ?cursor=%{cursor}"
 msgstr ""

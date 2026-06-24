@@ -7365,3 +7365,30 @@ msgid "Sent on %{when} to %{count} member."
 msgid_plural "Sent on %{when} to %{count} members."
 msgstr[0] "Gesendet am %{when} an %{count} Mitglied."
 msgstr[1] "Gesendet am %{when} an %{count} Mitglieder."
+#: lib/vutuv_web/agent_docs/feed_doc.ex:41
+#, elixir-autogen, elixir-format
+msgid "Feed of %{name}"
+msgstr "Feed von %{name}"
+
+#: lib/vutuv_web/agent_docs/feed_doc.ex:42
+#, elixir-autogen, elixir-format
+msgid "The vutuv newsfeed of %{name}"
+msgstr "Der vutuv-Newsfeed von %{name}"
+
+#: lib/vutuv_web/agent_docs/markdown.ex:336
+#: lib/vutuv_web/agent_docs/text.ex:306
+#, elixir-autogen, elixir-format
+msgid "Your feed is empty."
+msgstr "Dein Feed ist leer."
+
+#: lib/vutuv_web/agent_docs/markdown.ex:339
+#: lib/vutuv_web/agent_docs/text.ex:309
+#, elixir-autogen, elixir-format
+msgid "%{count} posts on this page"
+msgstr "%{count} Beiträge auf dieser Seite"
+
+#: lib/vutuv_web/agent_docs/markdown.ex:345
+#: lib/vutuv_web/agent_docs/text.ex:315
+#, elixir-autogen, elixir-format
+msgid "more posts available, append ?cursor=%{cursor}"
+msgstr "weitere Beiträge verfügbar, ?cursor=%{cursor} anhängen"

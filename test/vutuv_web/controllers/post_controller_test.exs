@@ -182,6 +182,32 @@ defmodule VutuvWeb.PostControllerTest do
     end
   end
 
+  describe "the permalink's other-formats card" do
+    test "a public post links to its agent siblings", %{conn: conn} do
+      user = insert_activated_user()
+      post = create_post!(user, %{body: "shareable"})
+
+      body = get(conn, Posts.path(post)) |> html_response(200)
+
+      assert body =~ ~s(id="post-other-formats")
+      assert body =~ ~s(href="#{Posts.path(post)}.md")
+      assert body =~ ~s(href="#{Posts.path(post)}.json")
+      # A feed has a vCard sibling on the profile, a post never does.
+      refute body =~ ~s(href="#{Posts.path(post)}.vcf")
+    end
+
+    test "a restricted post shows no card — its anonymous siblings would 404", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "members only", denials: [%{"wildcard" => "logged_out"}]})
+
+      # The owner can see the post itself, but not an Other-formats card (the
+      # .md sibling renders the anonymous view, which 404s for a restricted post).
+      body = get(conn, Posts.path(post)) |> html_response(200)
+      assert body =~ "members only"
+      refute body =~ ~s(id="post-other-formats")
+    end
+  end
+
   describe "the author's ⋯ menu on the post card" do
     test "the author sees Edit and Delete on the permalink and in the archive" do
       {author_conn, author} = create_and_login_user(fresh_conn())

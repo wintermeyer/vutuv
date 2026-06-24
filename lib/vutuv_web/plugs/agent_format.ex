@@ -15,9 +15,11 @@ defmodule VutuvWeb.Plug.AgentFormat do
   `.xml` is shared with routes that serve their own XML and must not be
   rewritten: `/sitemap.xml` (a `@skip_paths` literal), the chunked
   `/sitemaps/*.xml` children (the `sitemaps` `@skip_prefix`) and the RSS
-  feeds `/posts/feed.xml` + `/:slug/posts/feed.xml` (skipped by their literal
-  `feed.xml` last segment, since the per-member one has a dynamic slug up
-  front). RSS is `application/rss+xml`, distinct from our `application/xml`.
+  feeds `/posts/feed.xml` + `/:slug/posts/feed.xml` (skipped by their
+  `posts/feed.xml` tail, since the per-member one has a dynamic slug up
+  front). The tail must include `posts/`: the newsfeed's own XML sibling is
+  the top-level `/feed.xml`, which *does* want stripping. RSS is
+  `application/rss+xml`, distinct from our `application/xml`.
 
   A `before_send` guard turns the response into a plain 404 if no controller
   actually delivered an agent document (`conn.private.vutuv_agent_doc_sent`):
@@ -76,7 +78,7 @@ defmodule VutuvWeb.Plug.AgentFormat do
   def call(%Plug.Conn{method: "GET", path_info: [_ | _] = path_info} = conn, _opts) do
     with false <- conn.request_path in @skip_paths,
          false <- hd(path_info) in @skip_prefixes,
-         false <- List.last(path_info) == "feed.xml" do
+         false <- rss_feed_path?(path_info) do
       case strip_extension(List.last(path_info)) do
         {format, stripped} ->
           rewritten = List.replace_at(path_info, -1, stripped)
@@ -94,6 +96,15 @@ defmodule VutuvWeb.Plug.AgentFormat do
   end
 
   def call(conn, _opts), do: conn
+
+  # The RSS feeds (`/posts/feed.xml`, `/:slug/posts/feed.xml`) serve their own
+  # XML and must keep the extension; both end in `posts/feed.xml`. The newsfeed's
+  # own `.xml` sibling is the top-level `/feed.xml` (no `posts/` parent), which
+  # must be stripped like any other agent format — so match the `posts/` tail,
+  # not a bare `feed.xml` last segment.
+  defp rss_feed_path?(path_info) do
+    match?(["feed.xml", "posts" | _], Enum.reverse(path_info))
+  end
 
   @doc """
   Whether this request resolved to an agent document format — by URL extension

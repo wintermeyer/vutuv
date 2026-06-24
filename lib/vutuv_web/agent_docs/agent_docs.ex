@@ -153,8 +153,13 @@ defmodule VutuvWeb.AgentDocs do
 
   @doc """
   Renders `doc` as `format` and sends it, with all agent headers set.
+
+  `opts[:cache]` overrides the `Cache-Control` header. It defaults to the
+  public 5-minute cache that fits the anonymous public docs; a **personalized**
+  doc (the signed-in member's feed) must pass `cache: "private, no-store"` so a
+  shared cache can never hand one member's document to another.
   """
-  def send_doc(conn, format, doc) do
+  def send_doc(conn, format, doc, opts \\ []) do
     doc = put_request_query(doc, conn)
     body = format |> render_doc(doc) |> append_language_hint(conn, format)
 
@@ -163,8 +168,9 @@ defmodule VutuvWeb.AgentDocs do
     |> put_resp_header("vary", vary_header(format))
     |> put_policy_headers(doc)
     # Docs render the anonymous public view only, so they are publicly
-    # cacheable (Plug's default would be private, must-revalidate).
-    |> put_resp_header("cache-control", "public, max-age=300")
+    # cacheable (Plug's default would be private, must-revalidate). A
+    # personalized doc overrides this with a private, no-store policy.
+    |> put_resp_header("cache-control", Keyword.get(opts, :cache, "public, max-age=300"))
     # The HTML original, as a Link header (VutuvWeb.Plug.AgentLinks adds
     # the global discovery links on these responses too).
     |> prepend_resp_headers([{"link", ~s(<#{doc.url}>; rel="canonical"; type="text/html")}])

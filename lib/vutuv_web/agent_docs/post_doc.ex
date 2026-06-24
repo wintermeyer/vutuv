@@ -71,14 +71,20 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       author: AgentDocs.person_ref(author),
       period: period_label,
       total: total,
-      posts: Enum.map(entries, &entry/1)
+      posts: Enum.map(entries, &timeline_entry/1)
     })
   end
 
   defp period_suffix(nil), do: ""
   defp period_suffix(label), do: " · #{label}"
 
-  defp entry(%{post: post, reposted_by: reposted_by}) do
+  @doc """
+  One timeline entry (`%{post:, reposted_by:}`) as a compact doc map: id, the
+  post URL, author + repost names, publish date and a one-line excerpt. Shared
+  by the author archive (above) and the personalized feed
+  (`VutuvWeb.AgentDocs.FeedDoc`), so the two render a post the same way.
+  """
+  def timeline_entry(%{post: post, reposted_by: reposted_by}) do
     %{
       id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
