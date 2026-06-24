@@ -8,6 +8,7 @@ defmodule VutuvWeb.LayoutHTMLTest do
     # The nav chrome is the embedded ShellLive (top bar + mobile tab bar).
     assert body =~ "id=\"app-shell\""
     assert body =~ ~p"/datenschutzerklaerung"
+    assert footer_html(body) =~ ~p"/nutzungsbedingungen"
   end
 
   test "the footer links to the current GitHub repo and its issue tracker", %{conn: conn} do

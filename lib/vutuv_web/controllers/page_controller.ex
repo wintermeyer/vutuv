@@ -58,6 +58,13 @@ defmodule VutuvWeb.PageController do
     render(conn, "datenschutzerklaerung.html")
   end
 
+  # The platform terms of use (AGB / Nutzungsbedingungen). German legal text,
+  # hardcoded like the Impressum / Datenschutzerklärung (legal copy is not
+  # translated); incorporated into the contract via the sign-up consent line.
+  def nutzungsbedingungen(conn, _params) do
+    render(conn, "nutzungsbedingungen.html", page_title: gettext("Nutzungsbedingungen"))
+  end
+
   def new_registration(conn, %{"user" => user_params}) do
     email = user_params["emails"]["0"]["value"]
 

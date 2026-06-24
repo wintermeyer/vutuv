@@ -80,6 +80,21 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET /nutzungsbedingungen" do
+    test "renders the terms of use page", %{conn: conn} do
+      body = conn |> get(~p"/nutzungsbedingungen") |> html_response(200)
+
+      assert body =~ "Nutzungsbedingungen"
+      # Operator identity matches the Impressum / Datenschutzerklärung.
+      assert body =~ "Wintermeyer Consulting"
+      # A few load-bearing sections of the actual terms.
+      assert body =~ "Haftung"
+      assert body =~ "Schlussbestimmungen"
+      # It is finished text now, not a marked-up draft.
+      refute body =~ "noch nicht rechtsverbindlich"
+    end
+  end
+
   describe "GET /datenschutzerklaerung" do
     test "renders the vutuv-specific privacy policy", %{conn: conn} do
       body = conn |> get(~p"/datenschutzerklaerung") |> html_response(200)
@@ -204,13 +219,15 @@ defmodule VutuvWeb.PageControllerTest do
       refute radio_checked?(body, "user[gender]", "other")
     end
 
-    # The Datenschutzerklärung link sits by the submit button (GDPR Art. 13
-    # information duty), satisfied by a link rather than a consent checkbox.
-    test "links the privacy policy near the sign-up button", %{conn: conn} do
+    # The consent line by the submit button accepts the Nutzungsbedingungen
+    # (AGB incorporation, §305 BGB) and links the Datenschutzerklärung (GDPR
+    # Art. 13 information duty), both as links rather than separate checkboxes.
+    test "links the terms and privacy policy near the sign-up button", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
+      assert body =~ ~s(href="/nutzungsbedingungen")
       assert body =~ ~s(href="/datenschutzerklaerung")
-      assert body =~ "you confirm that you have read"
+      assert body =~ "accept our"
     end
   end
 

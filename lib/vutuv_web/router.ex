@@ -116,6 +116,7 @@ defmodule VutuvWeb.Router do
     get("/", PageController, :index)
     get("/impressum", PageController, :impressum)
     get("/datenschutzerklaerung", PageController, :datenschutzerklaerung)
+    get("/nutzungsbedingungen", PageController, :nutzungsbedingungen)
     get("/listings/most_followed_users", PageController, :most_followed_users)
 
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it

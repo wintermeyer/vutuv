@@ -859,9 +859,11 @@ msgstr ""
 msgid "Allow others to view your email address"
 msgstr ""
 
-#: lib/vutuv_web/templates/page/index.html.heex:133
+#: lib/vutuv_web/templates/page/index.html.heex:138
 #, elixir-autogen, elixir-format
-msgid "By creating an account you confirm that you have read our {datenschutz}."
+msgid ""
+"By creating an account you accept our {nutzungsbedingungen} and confirm that "
+"you have read our {datenschutz}."
 msgstr ""
 
 #: web/templates/session/user_login.html.eex:16
@@ -1649,6 +1651,13 @@ msgstr ""
 #: lib/vutuv_web/templates/page/datenschutzerklaerung.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Datenschutzerklärung"
+msgstr ""
+
+#: lib/vutuv_web/controllers/page_controller.ex:59
+#: lib/vutuv_web/templates/layout/app.html.heex:107
+#: lib/vutuv_web/templates/page/nutzungsbedingungen.html.heex:2
+#, elixir-autogen, elixir-format
+msgid "Nutzungsbedingungen"
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/index.html.heex:246
