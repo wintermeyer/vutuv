@@ -8,9 +8,14 @@ defmodule VutuvWeb.PageController do
   alias VutuvWeb.AgentDocs.ListDocs
 
   def index(conn, _params) do
+    # Sign-up form defaults: preselect "männlich" (gender), pre-check "show on
+    # profile" (public?: true) and preselect the "Work" email type. These prime
+    # the form's controls only - the User/Email schemas keep their own defaults
+    # for every other code path, so an address created without an explicit
+    # choice still stays private.
     changeset =
-      User.changeset(%User{})
-      |> Ecto.Changeset.put_assoc(:emails, [%Email{}])
+      User.changeset(%User{gender: "male"})
+      |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Work"}])
 
     prefetch = "/listings/most_followed_users"
 

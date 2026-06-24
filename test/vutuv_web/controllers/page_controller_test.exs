@@ -160,16 +160,16 @@ defmodule VutuvWeb.PageControllerTest do
   end
 
   describe "GET / sign-up opt-in checkboxes" do
-    # Both opt-in boxes on the sign-up form are framed positively (you grant a
-    # permission by checking). Privacy by default (GDPR Art. 25): the email
-    # visibility box starts UNchecked - showing your address to everyone is an
-    # explicit opt-in. Being findable is the point of the product, so the
-    # indexing box stays checked; it is wired to the inverted `noindex?`
-    # field: checked means "allow indexing" (noindex? = false). The AI box
-    # works the same way on the inverted `noai?` field — new members answer
-    # the question themselves (only the unasked legacy rows were defaulted
-    # to "no AI" by the migration).
-    test "are positively framed; email private, indexing and AI on by default", %{conn: conn} do
+    # All three opt-in boxes on the sign-up form are framed positively (you
+    # grant a permission by checking) and all three start CHECKED. Showing the
+    # address on your profile is what most members want, so the sign-up form now
+    # defaults the email-visibility box ON; the schema default stays private, so
+    # any other code path that creates an email without a choice still keeps it
+    # private. Being findable is the point of the product, so the indexing box
+    # stays checked; it is wired to the inverted `noindex?` field: checked means
+    # "allow indexing" (noindex? = false). The AI box works the same way on the
+    # inverted `noai?` field.
+    test "are positively framed and all checked by default", %{conn: conn} do
       body = conn |> get(~p"/") |> html_response(200)
 
       # Positive, parallel phrasing; the old negative "Prevent ..." copy is gone.
@@ -178,9 +178,39 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Allow AI agents and LLMs to use your profile"
       refute body =~ "Prevent search engines from indexing your profile"
 
-      refute checkbox_checked?(body, "user[emails][0][public?]")
+      assert checkbox_checked?(body, "user[emails][0][public?]")
       assert checkbox_checked?(body, "user[noindex?]")
       assert checkbox_checked?(body, "user[noai?]")
+    end
+
+    # The email-type chooser is a radio group (clearer for a normal user than
+    # the old dropdown, whose unhelpful "Other" default it replaces) and
+    # preselects "Work".
+    test "email type is a Work-preselected radio group", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert radio_checked?(body, "user[emails][0][email_type]", "Work")
+      refute radio_checked?(body, "user[emails][0][email_type]", "Personal")
+      refute radio_checked?(body, "user[emails][0][email_type]", "Other")
+    end
+
+    # Gender is a radio group too (no empty "Choose a gender" prompt) and
+    # preselects "male" / männlich.
+    test "gender is a male-preselected radio group", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert radio_checked?(body, "user[gender]", "male")
+      refute radio_checked?(body, "user[gender]", "female")
+      refute radio_checked?(body, "user[gender]", "other")
+    end
+
+    # The Datenschutzerklärung link sits by the submit button (GDPR Art. 13
+    # information duty), satisfied by a link rather than a consent checkbox.
+    test "links the privacy policy near the sign-up button", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert body =~ ~s(href="/datenschutzerklaerung")
+      assert body =~ "you confirm that you have read"
     end
   end
 
@@ -417,6 +447,18 @@ defmodule VutuvWeb.PageControllerTest do
   # regardless of attribute order.
   defp checkbox_checked?(html, name) do
     regex = ~r/<input(?=[^>]*\btype="checkbox")(?=[^>]*\bname="#{Regex.escape(name)}")[^>]*>/
+
+    case Regex.run(regex, html) do
+      [tag] -> tag =~ "checked"
+      _ -> false
+    end
+  end
+
+  # True when the <input type="radio" name=name value=value> in `html` is
+  # checked, regardless of attribute order.
+  defp radio_checked?(html, name, value) do
+    regex =
+      ~r/<input(?=[^>]*\btype="radio")(?=[^>]*\bname="#{Regex.escape(name)}")(?=[^>]*\bvalue="#{Regex.escape(value)}")[^>]*>/
 
     case Regex.run(regex, html) do
       [tag] -> tag =~ "checked"

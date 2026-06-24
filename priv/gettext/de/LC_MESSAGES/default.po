@@ -856,7 +856,13 @@ msgstr "Eine E-Mail mit einem Löschlink wurde gerade an Sie verschickt."
 #: lib/vutuv_web/templates/page/index.html.heex:81
 #, elixir-autogen
 msgid "Allow others to view your email address"
-msgstr "Diese E-Mail-Adresse darf jeder sehen"
+msgstr "Diese E-Mail-Adresse soll auf meinem Profil öffentlich sichtbar sein."
+
+#: lib/vutuv_web/templates/page/index.html.heex:133
+#, elixir-autogen, elixir-format
+msgid "By creating an account you confirm that you have read our {datenschutz}."
+msgstr ""
+"Mit der Registrierung bestätigen Sie, unsere {datenschutz} gelesen zu haben."
 
 #: web/templates/session/user_login.html.eex:16
 msgid "An email has been sent with your login link. Once you login, you'll be logged in for the next 90 days on this device, or until you log out."
@@ -1080,7 +1086,7 @@ msgstr "männlich"
 #: lib/vutuv_web/templates/user/edit.html.heex:106
 #, elixir-autogen
 msgid "other"
-msgstr "andere"
+msgstr "divers"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:56
 #, elixir-autogen
@@ -2630,12 +2636,12 @@ msgstr "Gründer von vutuv"
 #: lib/vutuv_web/templates/page/index.html.heex:1
 #, elixir-autogen, elixir-format
 msgid "“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”"
-msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso. Herzlich willkommen!“"
+msgstr "„Genervt von LinkedIn, Facebook oder X? Ging mir genauso. Herzlich willkommen bei vutuv!“"
 
 #: lib/vutuv_web/templates/page/index.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Welcome aboard!”"
-msgstr "Herzlich willkommen!“"
+msgstr "Herzlich willkommen bei vutuv!“"
 
 #: lib/vutuv_web/templates/page/index.html.heex:3
 #, elixir-autogen, elixir-format
@@ -5384,12 +5390,17 @@ msgstr "Registrierungsversuch mit Ihrer E-Mail-Adresse"
 msgid "Your tags (e.g. JavaScript, Cooking, Origami, Cat)"
 msgstr "Ihre Tags (z.B. JavaScript, Kochen, Origami, Katze)"
 
+#: lib/vutuv/accounts/user.ex:282
+#, elixir-autogen, elixir-format
+msgid "Diverse"
+msgstr "divers"
+
 #: lib/vutuv_web/templates/email/form_content.html.heex:30
 #: lib/vutuv_web/templates/page/index.html.heex:75
 #: lib/vutuv_web/views/email_html.ex:13
 #, elixir-autogen, elixir-format
 msgid "Other"
-msgstr "andere"
+msgstr "Andere"
 
 #: lib/vutuv_web/templates/email/form_content.html.heex:30
 #: lib/vutuv_web/templates/page/index.html.heex:75

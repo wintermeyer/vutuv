@@ -43,11 +43,23 @@
   >
     <.form_error changeset={@changeset} />
 
-    <div>
-      <%= select f, :gender, [{gettext("male"), "male"},
-        {gettext("female"), "female"}, {gettext("other"), "other"}], class: input_class(), prompt: gettext("Choose a gender"), autofocus: true %>
+    <%!-- A radio group, not a dropdown: all options are visible and "männlich"
+          is preselected (set on the changeset by the controller), so a normal
+          user is not left on an empty "Geschlecht auswählen" prompt. --%>
+    <fieldset>
+      <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+        {gettext("Gender")}
+      </legend>
+      <div class="flex flex-wrap gap-x-5 gap-y-2">
+        <%= for {label, value} <- [{gettext("male"), "male"}, {gettext("female"), "female"}, {gettext("other"), "other"}] do %>
+          <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
+            <%= radio_button f, :gender, value, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800", autofocus: value == "male" %>
+            <span>{label}</span>
+          </label>
+        <% end %>
+      </div>
       <%= error_tag f, :gender %>
-    </div>
+    </fieldset>
 
     <div>
       <%= text_input f, :first_name, class: input_class(), placeholder: gettext("Enter your first name") %>
@@ -65,17 +77,33 @@
     </div>
 
     <.inputs_for :let={ef} field={f[:emails]}>
+      <%!-- The email-type choice comes first (above the address field): a
+            radio group, not a dropdown, so a normal user sees all three
+            choices at once, and "Work" is preselected (set on the changeset by
+            the controller) instead of the old unhelpful "Other" default. --%>
+      <fieldset>
+        <legend class="mb-1.5 text-sm font-semibold text-slate-700 dark:text-slate-300">
+          {gettext("Type of email address")}
+        </legend>
+        <div class="flex flex-wrap gap-x-5 gap-y-2">
+          <%= for {label, value} <- [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}] do %>
+            <label class="flex items-center gap-2 text-sm font-normal text-slate-700 dark:text-slate-200">
+              <%= radio_button ef, :email_type, value, class: "h-4 w-4 border-slate-300 text-brand-600 focus:ring-brand-500 dark:border-slate-600 dark:bg-slate-800" %>
+              <span>{label}</span>
+            </label>
+          <% end %>
+        </div>
+        <%= error_tag ef, :email_type %>
+      </fieldset>
+
       <div>
         <%= email_input ef, :value, class: input_class(), placeholder: gettext("Enter your email address") %>
         <%= error_tag ef, :value %>
       </div>
 
-      <div>
-        <label for={ef[:email_type].id} class="sr-only">{gettext("Type of email address")}</label>
-        <%= select ef, :email_type, [{gettext("Work"), "Work"}, {gettext("Personal"), "Personal"}, {gettext("Other"), "Other"}], class: input_class() %>
-        <%= error_tag ef, :email_type %>
-      </div>
-
+      <%!-- Checked by default (the controller primes public?: true on the
+            changeset), so a normal member's address shows on their profile
+            unless they opt out here. --%>
       <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
         <%= checkbox ef, :public?, class: checkbox_class() %>
         <span>{gettext("Allow others to view your email address")}</span>
@@ -88,7 +116,9 @@
           checked submits "false" (allow indexing), unchecked submits "true". --%>
     <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
       <%= checkbox f, :noindex?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-      <span>{gettext("Allow search engines to index your profile")}</span>
+      <%!-- The "(SEO)" / "(GEO)" tags are international (same in DE/EN), so they
+            are literal text outside gettext rather than part of the string. --%>
+      <span>{gettext("Allow search engines to index your profile")} (SEO)</span>
       <%= error_tag f, :noindex? %>
     </label>
 
@@ -97,11 +127,26 @@
           mechanism on `noai?`: checked submits "false" (allow AI use). --%>
     <label class="flex items-start gap-2 text-sm text-slate-600 dark:text-slate-300">
       <%= checkbox f, :noai?, checked_value: "false", unchecked_value: "true", class: checkbox_class() %>
-      <span>{gettext("Allow AI agents and LLMs to use your profile")}</span>
+      <span>{gettext("Allow AI agents and LLMs to use your profile")} (GEO)</span>
       <%= error_tag f, :noai? %>
     </label>
 
     <.button type="submit" class="w-full">{gettext("Sign up for a free account")}</.button>
+
+    <%!-- Consent / information notice. The Datenschutzerklärung is information we
+          must surface (GDPR Art. 13), not a separate consent checkbox, so a
+          linked one-liner by the button is enough. The sentence is one gettext
+          string with a {datenschutz} placeholder we split on, so the link sits
+          mid-sentence in German and at the end in English without two
+          half-sentence fragments. --%>
+    <% [policy_pre, policy_post] =
+      String.split(
+        gettext("By creating an account you confirm that you have read our {datenschutz}."),
+        "{datenschutz}"
+      ) %>
+    <p class="text-center text-xs text-slate-600 dark:text-slate-400">
+      {policy_pre}<a href={~p"/datenschutzerklaerung"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Datenschutzerklärung")}</a>{policy_post}
+    </p>
 
     <p class="text-center text-sm">
       <a href={~p"/login"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Already a member? Sign in here.")}</a>

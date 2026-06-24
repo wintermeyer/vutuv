@@ -279,7 +279,9 @@ defmodule Vutuv.Accounts.User do
 
   def gender_gettext("male"), do: Gettext.gettext(VutuvWeb.Gettext, "Male")
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")
-  def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Other")
+  # The third gender ("other") displays as "divers" - its own label, decoupled
+  # from the email-type "Other"/"Andere" string they used to share.
+  def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Diverse")
 
   defp downcase_username(changeset) do
     update_change(changeset, :username, &String.downcase/1)
