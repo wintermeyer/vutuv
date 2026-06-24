@@ -78,6 +78,15 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Link"
       assert body =~ "Content-Location"
     end
+
+    test "lists the policy pages, including the Nutzungsbedingungen" do
+      body = build_conn() |> get("/llms.txt") |> response(200)
+
+      assert body =~ "/nutzungsbedingungen"
+      assert body =~ "/datenschutzerklaerung"
+      assert body =~ "/impressum"
+      assert body =~ "/community"
+    end
   end
 
   describe "GET /nutzungsbedingungen" do

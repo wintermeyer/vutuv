@@ -158,6 +158,15 @@ defmodule VutuvWeb.PageController do
 
   List pages paginate with `?page=N`.
 
+  ## Policies
+
+  Plain HTML pages (German, no agent-format siblings):
+
+  - `/nutzungsbedingungen` — terms of use (Nutzungsbedingungen / AGB)
+  - `/datenschutzerklaerung` — privacy policy (Datenschutzerklärung)
+  - `/impressum` — provider identification / legal notice (Impressum)
+  - `/community` — community guidelines
+
   ## Discovery
 
   - `/sitemap.xml` — sitemap index (members, posts, tags, static pages)
