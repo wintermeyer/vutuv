@@ -116,15 +116,10 @@ defmodule VutuvWeb.EmailComponents do
                 </tr>
                 <tr>
                   <td class="email-footer" style={footer_style()}>
-                    <p style="margin:0 0 2px;">vutuv is a service provided by Wintermeyer Consulting.</p>
-                    <p style="margin:0 0 2px;">
+                    <p style="margin:0 0 2px;">vutuv is a service provided by Wintermeyer Consulting.
                       <a href="https://wintermeyer-consulting.de" style="color:#475569;">wintermeyer-consulting.de</a>
                     </p>
                     <p style="margin:0 0 2px;">Johannes-Müller-Str. 10 - 56068 Koblenz - Germany</p>
-                    <p style="margin:0;">
-                      Get updates at
-                      <a href="https://twitter.com/wintermeyer" style="color:#475569;">twitter.com/wintermeyer</a>
-                    </p>
                   </td>
                 </tr>
               </table>
@@ -265,7 +260,7 @@ defmodule VutuvWeb.EmailComponents do
     """
   end
 
-  defp signature_line1("de"), do: "Mit freundlichen Grüßen"
+  defp signature_line1("de"), do: "Viele Grüße"
   defp signature_line1(_), do: "Regards"
   defp signature_line2("de"), do: "Ihr vutuv Team"
   defp signature_line2(_), do: "The vutuv team"

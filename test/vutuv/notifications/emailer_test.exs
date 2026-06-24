@@ -323,7 +323,7 @@ defmodule Vutuv.Notifications.EmailerTest do
       assert email.subject == "vutuv Account verified"
       # Regression: the EN template used to render the German signature partial.
       assert email.text_body =~ "Regards"
-      refute email.text_body =~ "Mit freundlichen Grüßen"
+      refute email.text_body =~ "Viele Grüße"
     end
   end
 
@@ -384,7 +384,7 @@ defmodule Vutuv.Notifications.EmailerTest do
       user = insert(:user, email_confirmed?: true, locale: "de")
       html = Emailer.login_email(@pin, "login@example.com", user).html_body
 
-      assert html =~ "Mit freundlichen Grüßen"
+      assert html =~ "Viele Grüße"
       refute html =~ "The vutuv team"
     end
 
