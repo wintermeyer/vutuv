@@ -299,7 +299,17 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp person_text(person) do
     "[#{md_text(person.name)}](#{person.url})" <>
-      if person.work_info, do: " — #{person.work_info}", else: ""
+      if(person.work_info, do: " — #{person.work_info}", else: "") <>
+      tags_suffix(Map.get(person, :tags))
+  end
+
+  # Only the most-followed listing carries a per-person tag summary; every other
+  # people list leaves it nil and the suffix is empty.
+  defp tags_suffix(nil), do: ""
+
+  defp tags_suffix(%{top: top, total: total}) do
+    links = Enum.map_join(top, ", ", fn tag -> "[#{md_text(tag.name)}](#{tag.url})" end)
+    " · #{gettext("Tags")}: #{links} (#{gettext("%{count} total", count: total)})"
   end
 
   defp endorser_line(person),

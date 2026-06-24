@@ -20,7 +20,10 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
    username-availability verdict that app.js writes under the new-username field),
    `.button` + variants, `.breadcrumbs`, `.profile-header` page
    title, `.pure-table`, `.alert`, `.tags`/`.badges`, `.imagebox`,
-   `.profiles`, `.job`, `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
+   `.profiles` (+ the `.profiles--tags` variant whose rows grow to fit a
+   `.profile-tags` line: up to 4 small tag links plus a `.profile-tags__more`
+   "+N more tags" overflow count, used by the most-followed listing via
+   `card_list`), `.job`, `ol.tags`/`.upvote`, `ul.thumbs` (flex rows: capped
    thumbnail + truncating URL), `.reorder*` (the owner's drag-and-drop ordering
    tool shared by every orderable section page — links, phone numbers, addresses,
    social media accounts, emails: `.reorder__item` draggable tile =

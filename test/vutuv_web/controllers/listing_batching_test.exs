@@ -42,6 +42,68 @@ defmodule VutuvWeb.ListingBatchingTest do
       assert body =~ "Captain @ Acme"
     end
 
+    test "shows the explanatory note and a descriptive page title", %{conn: conn} do
+      body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
+
+      # The intro note explains why this is, for now, just a most-followed list.
+      assert body =~ "So for now"
+      assert body =~ "1,000 users with the most followers"
+
+      # The HTML <title> is no longer the bare site name.
+      assert body =~ ~r{<title[^>]*>[^<]*Most Followed Users[^<]*</title>}
+    end
+
+    test "lists a member's top tags linked to the tag page, with an overflow count",
+         %{conn: conn} do
+      fan = insert_activated_user(first_name: "Fan")
+      star = insert_activated_user(first_name: "Star")
+      # A follower so the star surfaces on the listing (it ranks members who
+      # have at least one visible follower).
+      insert(:follow, follower: fan, followee: star)
+
+      popular = insert(:tag, name: "Bridgebuilding", slug: "bridgebuilding")
+      popular_ut = insert(:user_tag, user: star, tag: popular)
+      # Endorse the popular tag so it ranks first among the member's tags.
+      insert(:user_tag_endorsement, user_tag: popular_ut, user: fan)
+
+      # Five more tags, so the member has six in all: four are shown, two overflow.
+      for n <- 1..5 do
+        insert(:user_tag, user: star, tag: insert(:tag, name: "Extra #{n}", slug: "extra-#{n}"))
+      end
+
+      body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
+
+      # The most endorsed tag is shown and links to its public tag page.
+      assert body =~ ~r{<a[^>]+href="/tags/bridgebuilding"[^>]*>[^<]*Bridgebuilding}
+      # Six tags total, only four shown, so two overflow into the "+N more" count.
+      assert body =~ "+2 more tags"
+    end
+
+    test "loading the tag summary keeps the query count constant", %{conn: conn} do
+      fan = insert_activated_user(first_name: "Fan")
+
+      tagged = fn n ->
+        u = insert_activated_user(first_name: "Tagged#{n}")
+        insert(:follow, follower: fan, followee: u)
+        ut = insert(:user_tag, user: u, tag: insert(:tag, name: "Tag#{n}"))
+        insert(:user_tag_endorsement, user_tag: ut, user: fan)
+      end
+
+      for n <- 1..10, do: tagged.(n)
+
+      conn_for = fn -> conn |> recycle() |> get(~p"/listings/most_followed_users") end
+      {_, few} = count_queries(fn -> conn_for.() end)
+
+      for n <- 11..25, do: tagged.(n)
+
+      {_, many} = count_queries(fn -> conn_for.() end)
+
+      # The per-user tag summary is one batched query, so adding tagged members
+      # must not grow the page's query count.
+      assert many <= few + 2,
+             "query count grew from #{few} to #{many}; the tag summary is not batched"
+    end
+
     test "query count stays constant as the user count grows", %{conn: conn} do
       # A shared follower so every listed member surfaces (the listing only
       # ranks members with at least one visible follower).

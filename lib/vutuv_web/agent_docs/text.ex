@@ -278,7 +278,16 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp person_line(person, prefix \\ "* ") do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
-    "#{prefix}#{person.name}#{work}\n  #{person.url}"
+    "#{prefix}#{person.name}#{work}#{tags_suffix(Map.get(person, :tags))}\n  #{person.url}"
+  end
+
+  # Only the most-followed listing carries a per-person tag summary; the plain
+  # names go inline (the structured links live in the JSON/XML formats).
+  defp tags_suffix(nil), do: ""
+
+  defp tags_suffix(%{top: top, total: total}) do
+    names = Enum.map_join(top, ", ", & &1.name)
+    " · #{gettext("Tags")}: #{names} (#{gettext("%{count} total", count: total)})"
   end
 
   defp endorser_lines(person) do

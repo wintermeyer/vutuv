@@ -233,6 +233,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   test "most followed listing in every format" do
     rendered = formats_for("/listings/most_followed_users")
     assert_fact_everywhere(rendered, "Greta Gradient")
+    # Each listed member's tags ride along in every format, like their name.
+    assert_fact_everywhere(rendered, "Bridgebuilding")
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 

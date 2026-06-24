@@ -739,6 +739,40 @@ td.text-right {
 .button-list .button {
   margin: auto 0 auto auto;
 }
+
+/* Most-followed listing: each row also shows the member's top tags + total
+   count, so the fixed compact row height grows to fit the extra line. */
+.profiles--tags li {
+  height: auto;
+  min-height: 69px;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
+}
+.profile-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 5px;
+}
+.profile-tags a {
+  background: var(--color-brand-50);
+  color: var(--color-brand-700);
+  border-radius: 0.375rem;
+  padding: 0.1rem 0.5rem;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.profile-tags a:hover {
+  background: var(--color-brand-100);
+}
+.profile-tags .profile-tags__more {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .profile-image {
   position: relative;
 }
@@ -1074,6 +1108,9 @@ ul.thumbs li .text .url a {
   .editform__hint.editform__hint--error { color: #f87171; }
   .profiles li strong { color: #f1f5f9; }
   .profiles li p { color: #94a3b8; }
+  .profile-tags a { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
+  .profile-tags a:hover { background: rgb(30 58 138 / 0.6); }
+  .profile-tags .profile-tags__more { color: #94a3b8; }
   .button-list li { border-color: #1e293b; }
   .job { border-color: #1e293b; }
   .job__title { color: #f1f5f9; }

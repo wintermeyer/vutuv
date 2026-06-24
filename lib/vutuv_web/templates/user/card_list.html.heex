@@ -8,7 +8,11 @@ DB-backed helpers per row. --%>
 <%!-- Optional per-row mute toggle: only the owner's own "Following" list passes
 muted_by_id (followee_id => muted?), so other listings render no mute control. --%>
 <% muted_by_id = assigns[:muted_by_id] || %{} %>
-<ul class="button-list profiles">
+<%!-- Optional per-row tag summary: only the most-followed listing passes
+tags_by_id (user_id => %{top: [user_tag], total: n}), so other listings render
+no tag line and the rows keep their compact height. --%>
+<% tags_by_id = assigns[:tags_by_id] %>
+<ul class={["button-list profiles", tags_by_id && "profiles--tags"]}>
   <%= for user <- @users do %>
     <li>
       <div class="profile-image">
@@ -26,8 +30,18 @@ muted_by_id (followee_id => muted?), so other listings render no mute control. -
           />
         <% end %>
       </div>
+      <% tag_summary = tags_by_id && Map.get(tags_by_id, user.id) %>
       <p><strong><%= link full_name(user), to: ~p"/#{user}" %></strong>
       <%= Map.get_lazy(work_info_by_id, user.id, fn -> work_information_string(user, @work_string_length) end) %>
+      <span :if={tag_summary} class="profile-tags">
+        <.link :for={user_tag <- tag_summary.top} href={~p"/tags/#{user_tag.tag.slug}"}>
+          {user_tag.tag.name}
+        </.link>
+        <% more = tag_summary.total - length(tag_summary.top) %>
+        <span :if={more > 0} class="profile-tags__more">
+          {ngettext("+1 more tag", "+%{count} more tags", more)}
+        </span>
+      </span>
       </p>
       <.mute_button
         :if={Map.has_key?(muted_by_id, user.id) and following_by_id && Map.get(following_by_id, user.id)}

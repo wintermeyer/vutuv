@@ -1000,7 +1000,13 @@ msgstr ""
 
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:9
 #, elixir-autogen
-msgid "The 100 Users with the most Followers"
+msgid "The 1,000 Users with the most Followers"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/list_docs.ex:113
+#: lib/vutuv_web/templates/page/most_followed_users.html.heex:12
+#, elixir-autogen
+msgid "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
 msgstr ""
 
 #: web/templates/page/index.html.eex:16
@@ -2768,6 +2774,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "1 connection"
 msgid_plural "%{count} connections"
+msgstr[0] ""
+msgstr[1] ""
+
+#: lib/vutuv_web/templates/user/card_list.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "+1 more tag"
+msgid_plural "+%{count} more tags"
 msgstr[0] ""
 msgstr[1] ""
 

@@ -92,18 +92,21 @@ defmodule VutuvWeb.PageController do
   # Keep most_followed_users.html and the doc builder in sync
   # (agent_docs_drift_test.exs).
   def most_followed_users(conn, _params) do
-    users = Vutuv.Social.most_followed_users(100)
+    users = Vutuv.Social.most_followed_users(1000)
     work_info_by_id = VutuvWeb.UserHelpers.work_information_map(users, 60)
+    tags_by_id = VutuvWeb.UserHelpers.tag_summary_map(users, 4)
 
     AgentDocs.respond(conn,
       html: fn conn ->
         render(conn, "most_followed_users.html",
+          page_title: gettext("Most Followed Users"),
           users: users,
           work_info_by_id: work_info_by_id,
+          tags_by_id: tags_by_id,
           following_by_id: VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], users)
         )
       end,
-      doc: fn -> ListDocs.build_most_followed(users, work_info_by_id) end
+      doc: fn -> ListDocs.build_most_followed(users, work_info_by_id, tags_by_id) end
     )
   end
 

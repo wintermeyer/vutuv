@@ -319,6 +319,35 @@ defmodule VutuvWeb.UserHelpers do
 
   def following_map(_, _), do: %{}
 
+  @doc """
+  Each member's most popular tags and total tag count, batched in one query.
+
+  Returns a map `user_id => %{top: [%UserTag{}], total: integer}` where `top`
+  is the member's up-to-`limit` most-endorsed tags (popularity = visible
+  endorsement count, ties by tag slug, the same ordering the profile page
+  uses) and `total` is how many tags the member has listed. Each returned
+  `UserTag` carries its `:tag` preload and the virtual `:endorsement_count`.
+
+  Members with no tags are simply absent from the map. Like
+  `work_information_map/2` and `following_map/2`, this keeps a listing's query
+  count constant regardless of how many members it renders.
+  """
+  def tag_summary_map(users, limit \\ 3)
+
+  def tag_summary_map([], _limit), do: %{}
+
+  def tag_summary_map(users, limit) do
+    ids = Enum.map(users, & &1.id)
+
+    UserTag.ordered_by_endorsements()
+    |> where([ut], ut.user_id in ^ids)
+    |> Repo.all()
+    |> Enum.group_by(& &1.user_id)
+    |> Map.new(fn {user_id, user_tags} ->
+      {user_id, %{top: Enum.take(user_tags, limit), total: length(user_tags)}}
+    end)
+  end
+
   defp validate_length(str, job, _org, len) do
     if String.length(str) > len do
       "#{job}"

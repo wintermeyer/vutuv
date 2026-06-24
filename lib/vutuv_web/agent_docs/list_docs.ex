@@ -106,19 +106,38 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   end
 
   @doc "The /listings/most_followed_users page."
-  def build_most_followed(users, work_info_by_id) do
+  def build_most_followed(users, work_info_by_id, tags_by_id \\ %{}) do
     AgentDocs.doc_meta("listing", "/listings/most_followed_users")
     |> Map.merge(%{
       title: gettext("Most followed members"),
-      description: gettext("The most followed vutuv members"),
-      people: Enum.map(users, &person_entry(&1, work_info_by_id))
+      description:
+        gettext(
+          "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
+        ),
+      people: Enum.map(users, &person_entry(&1, work_info_by_id, tags_by_id))
     })
   end
 
-  defp person_entry(user, work_info_by_id) do
+  defp person_entry(user, work_info_by_id, tags_by_id \\ %{}) do
     user
     |> AgentDocs.person_ref()
     |> Map.put(:work_info, presence(work_info_by_id[user.id]))
+    |> maybe_put_tags(tags_by_id[user.id])
+  end
+
+  # Only the most-followed listing passes a tag summary; the other people lists
+  # leave it nil so their person entries are unchanged.
+  defp maybe_put_tags(person, nil), do: person
+  defp maybe_put_tags(person, %{top: []}), do: person
+
+  defp maybe_put_tags(person, %{top: top, total: total}) do
+    Map.put(person, :tags, %{
+      total: total,
+      top:
+        Enum.map(top, fn user_tag ->
+          %{name: user_tag.tag.name, url: AgentDocs.abs_url("/tags/" <> user_tag.tag.slug)}
+        end)
+    })
   end
 
   defp presence(""), do: nil
