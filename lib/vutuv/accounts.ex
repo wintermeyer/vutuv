@@ -780,6 +780,92 @@ defmodule Vutuv.Accounts do
     end
   end
 
+  @doc """
+  One-off backfill that brings every legacy handle into line with the
+  Twitter-style rule (`User.username_changeset/2`: `^[a-z0-9_]+$`, max 15
+  chars) - chiefly the dotted and over-length imports from the old vutuv.
+
+  For each member whose current `username` fails the charset rule, it
+  regenerates a valid handle from the member's name (so `Oliver Gassner` ->
+  `oliver_gassner`) and preserves the retired handle in `users.legacy_username`,
+  so the old handle is never lost and the old profile URL 301s to the new one
+  (`VutuvWeb.Plug.UserResolveSlug`). Returns the number of members renamed.
+
+  **Uniqueness is guaranteed in code, not left to the DB constraint.** Every
+  handle already in use (the untouched valid accounts) plus every handle minted
+  during this run are held in one set; the plain name-handle is used only when
+  it is free, otherwise a 6-char stem plus a random number is re-rolled until it
+  lands on a free handle. So two members with the same name (or whose names
+  normalize the same) can never collide on the same new handle - the run never
+  trips the `users.username` unique index and so never aborts mid-migration.
+
+  Idempotent: a regenerated handle is itself charset-valid, so a second run
+  finds nothing left to rename. Referenced by the `NormalizeLegacyUsernames`
+  data migration; this is a system correction, not a member action, so it
+  deliberately bypasses the username-change quota ledger. (A member whose name
+  is a single letter regenerates to a 1-2 char handle: charset-valid and
+  resolvable, just shy of the 3-char editor minimum, exactly as registration
+  would mint it today.)
+  """
+  def normalize_legacy_usernames do
+    reserved = MapSet.new(ReservedSlugs.list())
+
+    # Handles we must not collide with: every already-valid handle. The invalid
+    # ones are being replaced, and a freshly minted handle (no dots, <=15 chars)
+    # can never equal one of them anyway, so they do not constrain us.
+    taken =
+      from(u in User, where: fragment("? ~ '^[a-z0-9_]+$'", u.username), select: u.username)
+      |> Repo.all()
+      |> MapSet.new()
+
+    invalid =
+      from(u in User,
+        where: fragment("? !~ '^[a-z0-9_]+$'", u.username),
+        select: %{id: u.id, old: u.username, first: u.first_name, last: u.last_name}
+      )
+      |> Repo.all()
+
+    {_taken, renamed} =
+      Enum.reduce(invalid, {taken, 0}, fn row, {taken, renamed} ->
+        new_username = unique_legacy_handle("#{row.first} #{row.last}", taken, reserved)
+
+        {1, _} =
+          Repo.update_all(from(u in User, where: u.id == ^row.id),
+            set: [username: new_username, legacy_username: row.old]
+          )
+
+        {MapSet.put(taken, new_username), renamed + 1}
+      end)
+
+    renamed
+  end
+
+  # A handle guaranteed free against `taken` and never a reserved word: the
+  # name's plain handle when that is free, otherwise a stem plus a random number
+  # re-rolled until it lands on a free handle.
+  defp unique_legacy_handle(name, taken, reserved) do
+    base = Vutuv.SlugHelpers.handleize(name)
+
+    if base != "" and not MapSet.member?(taken, base) and not MapSet.member?(reserved, base) do
+      base
+    else
+      stem = base |> String.slice(0, 6) |> String.trim("_")
+
+      Stream.repeatedly(fn -> random_handle(stem) end)
+      |> Enum.find(fn handle ->
+        not MapSet.member?(taken, handle) and not MapSet.member?(reserved, handle)
+      end)
+    end
+  end
+
+  # `stem_<random>`, trimmed so an empty stem yields just the number, and within
+  # the 15-char limit (stem <= 6, "_", up to 8 random digits). Crypto-strong so
+  # the draws do not depend on a process seed.
+  defp random_handle(stem) do
+    number = :crypto.strong_rand_bytes(4) |> :binary.decode_unsigned() |> rem(100_000_000)
+    String.trim_leading("#{stem}_#{number}", "_")
+  end
+
   # The plain profile fields a member may edit about themselves. The API's
   # PATCH /me writes through this list; the username (quota'd,
   # Twitter-validated), email addresses (PIN-verified identities) and
