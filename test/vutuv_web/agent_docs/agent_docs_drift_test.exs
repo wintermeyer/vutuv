@@ -210,12 +210,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   test "follower and following lists in every format", %{user: user, follower: follower} do
     follow!(user, follower)
 
+    # The listed member's tags ride along in every format, like their name. The
+    # HTML rows show them (via card_list), so the docs must carry them too.
+    insert(:user_tag,
+      user: follower,
+      tag: insert(:tag, name: "Trailblazing", slug: "trailblazing")
+    )
+
     rendered = formats_for("/drift_tester/followers")
     assert_fact_everywhere(rendered, "Fanny Follower")
+    assert_fact_everywhere(rendered, "Trailblazing")
     assert Jason.decode!(rendered.json)["total"] == 1
 
     rendered = formats_for("/drift_tester/following")
     assert_fact_everywhere(rendered, "Fanny Follower")
+    assert_fact_everywhere(rendered, "Trailblazing")
     assert Jason.decode!(rendered.json)["type"] == "following"
   end
 

@@ -49,13 +49,21 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     # owns it: one home for the list's per-row work line.
     work_info_by_id = UserHelpers.work_information_map(people, 45)
 
+    # The follower / following lists surface each member's four most popular tags
+    # (like the most-followed listing and the HTML rows); the connection list's
+    # HTML shows none, so it stays tag-free here too.
+    tags_by_id =
+      if side in [:followers, :following],
+        do: UserHelpers.tag_summary_map(people, 4),
+        else: %{}
+
     AgentDocs.doc_meta(Atom.to_string(side), path, noindex: true, noai: true)
     |> Map.merge(%{
       title: label,
       description: label,
       user: AgentDocs.person_ref(user),
       total: total,
-      people: Enum.map(people, &person_entry(&1, work_info_by_id))
+      people: Enum.map(people, &person_entry(&1, work_info_by_id, tags_by_id))
     })
   end
 
@@ -125,8 +133,9 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     |> maybe_put_tags(tags_by_id[user.id])
   end
 
-  # Only the most-followed listing passes a tag summary; the other people lists
-  # leave it nil so their person entries are unchanged.
+  # The most-followed listing and the follower / following lists pass a tag
+  # summary; the connection and tag-endorser lists leave it nil so their person
+  # entries are unchanged.
   defp maybe_put_tags(person, nil), do: person
   defp maybe_put_tags(person, %{top: []}), do: person
 

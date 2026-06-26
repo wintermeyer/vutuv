@@ -303,8 +303,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       tags_suffix(Map.get(person, :tags))
   end
 
-  # Only the most-followed listing carries a per-person tag summary; every other
-  # people list leaves it nil and the suffix is empty.
+  # The most-followed listing and the follower / following lists carry a
+  # per-person tag summary; the connection and tag-endorser lists leave it nil
+  # and the suffix is empty.
   defp tags_suffix(nil), do: ""
 
   defp tags_suffix(%{top: top, total: total}) do

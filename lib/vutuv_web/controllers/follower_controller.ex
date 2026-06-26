@@ -21,6 +21,9 @@ defmodule VutuvWeb.FollowerController do
           followers: followers,
           total_followers: total,
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followers, 45),
+          # Each row's four most popular tags plus a "+N more" overflow, the same
+          # batched summary the most-followed listing renders through card_list.
+          tags_by_id: VutuvWeb.UserHelpers.tag_summary_map(followers, 4),
           following_by_id:
             VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followers)
         )

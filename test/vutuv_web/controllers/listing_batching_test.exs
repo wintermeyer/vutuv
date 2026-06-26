@@ -152,6 +152,78 @@ defmodule VutuvWeb.ListingBatchingTest do
       assert followees_body =~ "Idol"
       assert followees_body =~ "Star @ Fame Inc"
     end
+
+    test "lists a follower's top tags linked to the tag page, with an overflow count",
+         %{conn: conn} do
+      owner = insert_activated_user(first_name: "Owner")
+      follower = insert_activated_user(first_name: "Fan")
+      insert(:follow, follower: follower, followee: owner)
+
+      popular = insert(:tag, name: "Bridgebuilding", slug: "bridgebuilding")
+      popular_ut = insert(:user_tag, user: follower, tag: popular)
+      # Endorse the popular tag so it ranks first among the follower's tags.
+      insert(:user_tag_endorsement, user_tag: popular_ut, user: owner)
+
+      # Five more tags, so the follower has six in all: four shown, two overflow.
+      for n <- 1..5 do
+        insert(:user_tag,
+          user: follower,
+          tag: insert(:tag, name: "Extra #{n}", slug: "f-extra-#{n}")
+        )
+      end
+
+      body = conn |> get(~p"/#{owner}/followers") |> html_response(200)
+
+      # The most endorsed tag is shown and links to its public tag page.
+      assert body =~ ~r{<a[^>]+href="/tags/bridgebuilding"[^>]*>[^<]*Bridgebuilding}
+      # Six tags total, only four shown, so two overflow into the "+N more" count.
+      assert body =~ "+2 more tags"
+    end
+
+    test "lists a followee's top tags linked to the tag page, with an overflow count",
+         %{conn: conn} do
+      owner = insert_activated_user(first_name: "Owner")
+      idol = insert_activated_user(first_name: "Idol")
+      insert(:follow, follower: owner, followee: idol)
+
+      popular = insert(:tag, name: "Stagecraft", slug: "stagecraft")
+      popular_ut = insert(:user_tag, user: idol, tag: popular)
+      insert(:user_tag_endorsement, user_tag: popular_ut, user: owner)
+
+      for n <- 1..5 do
+        insert(:user_tag, user: idol, tag: insert(:tag, name: "More #{n}", slug: "g-more-#{n}"))
+      end
+
+      body = conn |> get(~p"/#{owner}/following") |> html_response(200)
+
+      assert body =~ ~r{<a[^>]+href="/tags/stagecraft"[^>]*>[^<]*Stagecraft}
+      assert body =~ "+2 more tags"
+    end
+
+    test "loading the per-row tag summary keeps the query count constant", %{conn: conn} do
+      owner = insert_activated_user(first_name: "Owner")
+
+      tagged_follower = fn n ->
+        u = insert_activated_user(first_name: "Fan#{n}")
+        insert(:follow, follower: u, followee: owner)
+        ut = insert(:user_tag, user: u, tag: insert(:tag, name: "Tag#{n}"))
+        insert(:user_tag_endorsement, user_tag: ut, user: owner)
+      end
+
+      for n <- 1..10, do: tagged_follower.(n)
+
+      conn_for = fn -> conn |> recycle() |> get(~p"/#{owner}/followers") end
+      {_, few} = count_queries(fn -> conn_for.() end)
+
+      for n <- 11..25, do: tagged_follower.(n)
+
+      {_, many} = count_queries(fn -> conn_for.() end)
+
+      # The per-row tag summary is one batched query, so adding tagged followers
+      # must not grow the page's query count.
+      assert many <= few + 2,
+             "query count grew from #{few} to #{many}; the tag summary is not batched"
+    end
   end
 
   describe "GET /users/:id profile right rail (recommended users)" do

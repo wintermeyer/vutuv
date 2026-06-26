@@ -281,8 +281,9 @@ defmodule VutuvWeb.AgentDocs.Text do
     "#{prefix}#{person.name}#{work}#{tags_suffix(Map.get(person, :tags))}\n  #{person.url}"
   end
 
-  # Only the most-followed listing carries a per-person tag summary; the plain
-  # names go inline (the structured links live in the JSON/XML formats).
+  # The most-followed listing and the follower / following lists carry a
+  # per-person tag summary; the plain names go inline (the structured links live
+  # in the JSON/XML formats). The connection and tag-endorser lists leave it nil.
   defp tags_suffix(nil), do: ""
 
   defp tags_suffix(%{top: top, total: total}) do

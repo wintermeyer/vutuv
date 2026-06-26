@@ -8,7 +8,7 @@
   <section class="card">
     <h1><%= if same_user?(@user, @current_user), do: gettext("Following"), else: gettext("Follows") %></h1>
 
-    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, following_by_id: @following_by_id, muted_by_id: @muted_by_id})}
+    {VutuvWeb.UserHTML.card_list(%{conn: @conn, users: @followees, current_user: @current_user, current_user_id: @current_user_id, work_string_length: 45, work_info_by_id: @work_info_by_id, tags_by_id: @tags_by_id, following_by_id: @following_by_id, muted_by_id: @muted_by_id})}
 
     <%= if(Enum.count(@followees) == 0) do %>
       <%= if same_user?(@user, @current_user) do %>

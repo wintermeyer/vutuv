@@ -21,6 +21,9 @@ defmodule VutuvWeb.FolloweeController do
           followees: followees,
           total_followees: total,
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followees, 45),
+          # Each row's four most popular tags plus a "+N more" overflow, the same
+          # batched summary the most-followed listing renders through card_list.
+          tags_by_id: VutuvWeb.UserHelpers.tag_summary_map(followees, 4),
           following_by_id:
             VutuvWeb.UserHelpers.following_map(conn.assigns[:current_user], followees),
           # The per-row mute toggle is the owner's lever over their own feed, so
