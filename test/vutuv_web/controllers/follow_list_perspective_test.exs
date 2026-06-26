@@ -79,4 +79,39 @@ defmodule VutuvWeb.FollowListPerspectiveTest do
 
     refute html =~ "/mute"
   end
+
+  # The follow control in the list rows is the labeled text pill (the same one
+  # the "who to follow" rail uses), not a bare icon glyph — so a row states
+  # "Follow" / "Following" in words. (A member asked what the cryptic icons
+  # meant; the answer was to label them.)
+  test "the list shows the labeled follow pill, not a bare icon button", %{conn: conn} do
+    {conn, viewer} = create_and_login_user(conn)
+    owner = insert_activated_user()
+
+    # Someone the viewer already follows -> the row's pill reads "Following".
+    followed = insert_activated_user(first_name: "Ada", last_name: "Followed")
+    follow!(followed, owner)
+    follow = follow!(viewer, followed)
+
+    # Someone the viewer does not follow -> the row's pill is the "Follow" CTA.
+    stranger = insert_activated_user(first_name: "Stan", last_name: "Stranger")
+    follow!(stranger, owner)
+
+    html = get(conn, ~p"/#{owner}/followers") |> html_response(200)
+
+    # The old icon glyphs are gone; the pill carries visible labels instead.
+    refute html =~ "icon--unfollow"
+    refute html =~ "icon--follow"
+    refute html =~ "button--icon"
+
+    # The followed person's pill reads "Following" (with the hover "Unfollow"
+    # label) and unfollows through its CSRF delete route.
+    assert html =~ "Following"
+    assert html =~ "Unfollow"
+    assert html =~ ~s(/follows/#{follow.id})
+
+    # The stranger's row carries the "Follow" call to action (a create POST).
+    assert html =~ "/follows?follow"
+    assert html =~ stranger.id
+  end
 end

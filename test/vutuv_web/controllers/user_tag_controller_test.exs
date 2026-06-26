@@ -104,6 +104,25 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert html =~ "Ruby"
     end
 
+    test "the per-row follow icon names itself (title + aria-label)", %{
+      conn: conn,
+      owner: owner,
+      user_tag: user_tag
+    } do
+      # This table keeps the compact icon-only follow control, so it must carry
+      # an accessible name (hover tooltip + screen-reader label), like the mute
+      # bell does — otherwise the glyph is a mystery button.
+      {conn, _viewer} = create_and_login_user(conn)
+      endorser = insert_activated_user(first_name: "Rick", last_name: "Sanchez")
+      insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
+
+      html = conn |> get(~p"/#{owner}/tags/ruby/endorsers") |> html_response(200)
+
+      # The viewer does not follow the endorser, so the row offers "Follow".
+      assert html =~ ~s(title="Follow")
+      assert html =~ ~s(aria-label="Follow")
+    end
+
     test "shows when each endorsement was cast", %{
       conn: conn,
       owner: owner,

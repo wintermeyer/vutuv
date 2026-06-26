@@ -806,11 +806,16 @@ defmodule VutuvWeb.UI do
   def follow_button(%{variant: "icon"} = assigns) do
     ~H"""
     <%= if is_binary(@follow_id) do %>
-      <%= button to: ~p"/follows/#{@follow_id}", method: :delete, class: "button button--icon" do %>
+      <%!-- Icon-only, so it must name itself (hover tooltip + screen-reader
+      label), the same way <.mute_button> does — otherwise the glyph is a
+      mystery button. --%>
+      <%= button to: ~p"/follows/#{@follow_id}", method: :delete, class: "button button--icon",
+            title: gettext("Unfollow"), aria: [label: gettext("Unfollow")] do %>
         <i class="icon icon--unfollow"></i>
       <% end %>
     <% else %>
-      <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: "button button--icon" do %>
+      <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: "button button--icon",
+            title: gettext("Follow"), aria: [label: gettext("Follow")] do %>
         <i class="icon icon--follow"></i>
       <% end %>
     <% end %>

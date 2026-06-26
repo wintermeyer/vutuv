@@ -43,18 +43,28 @@ no tag line and the rows keep their compact height. --%>
         </span>
       </span>
       </p>
-      <.mute_button
-        :if={Map.has_key?(muted_by_id, user.id) and following_by_id && Map.get(following_by_id, user.id)}
-        follow_id={Map.get(following_by_id, user.id)}
-        muted?={Map.get(muted_by_id, user.id, false)}
-      />
-      <.follow_button
-        :if={!same_user?(@current_user, user) and @current_user}
-        variant="icon"
-        follower_id={@current_user_id}
-        followee_id={user.id}
-        follow_id={if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)}
-      />
+      <%!-- Right-aligned action cluster. The follow control is the labeled text
+      pill (the same `<.follow_button variant="text">` as the "who to follow"
+      rail), so each row says "Follow" / "Following" in words instead of a bare
+      glyph. A `<span>` (not a `<div>`) avoids the legacy `.profiles li div`
+      avatar sizing; the inner `<span class="flex">` gives the pill a
+      height-fitting box so its `self-start` (tuned for the taller two-line
+      `user_row`) doesn't float it above this vertically centered row. --%>
+      <span class="ml-auto flex items-center gap-2">
+        <.mute_button
+          :if={Map.has_key?(muted_by_id, user.id) and following_by_id && Map.get(following_by_id, user.id)}
+          follow_id={Map.get(following_by_id, user.id)}
+          muted?={Map.get(muted_by_id, user.id, false)}
+        />
+        <span :if={!same_user?(@current_user, user) and @current_user} class="flex">
+          <.follow_button
+            variant="text"
+            follower_id={@current_user_id}
+            followee_id={user.id}
+            follow_id={if following_by_id, do: Map.get(following_by_id, user.id), else: user_follows_user?(@current_user, user)}
+          />
+        </span>
+      </span>
     </li>
   <% end %>
 </ul>
