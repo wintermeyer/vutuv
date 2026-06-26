@@ -725,7 +725,7 @@ the resulting ~200px rail width. --%>
 
     <%!-- "Who to follow" comes after the profile's own details (contact, info,
     links): the member's own card leads, discovery of other people follows. --%>
-    <.card :if={Enum.count(@recommended_users) > 0}>
+    <.card :if={Enum.count(@recommended_users) > 0} id="profile-who-to-follow">
       <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
       <ul class="space-y-4">
         <.user_row

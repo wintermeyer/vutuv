@@ -182,6 +182,58 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # The row's button flipped to "Following" (an unfollow toggle), no reload.
       refute has_element?(view, row_follow)
     end
+
+    test "the following-state row pill is a toggle carrying both labels", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      # `other` follows the owner (so they show in the followers preview) and the
+      # viewer already follows `other` (so the row sits in its "following" state).
+      other = insert_activated_user()
+      insert(:follow, follower: other, followee: owner)
+      insert(:follow, follower: viewer, followee: other)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The pill is the unfollow toggle, and it carries both the resting
+      # "Following" label and the hover-revealed "Unfollow" label (the CSS swap),
+      # so the control states what clicking it does.
+      pill =
+        view
+        |> element(~s(#profile-followers button[phx-click="unfollow"][phx-value-id]))
+        |> render()
+
+      assert pill =~ "Following"
+      assert pill =~ "Unfollow"
+    end
+  end
+
+  describe "'Who to follow' rail suggestions" do
+    test "excludes members the viewer already follows", %{conn: conn} do
+      {conn, viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+
+      # The owner's leading tag drives the topical suggestions: everyone endorsed
+      # for it is a candidate.
+      tag = insert(:tag)
+      insert(:user_tag, user: owner, tag: tag)
+
+      already_followed = insert_activated_user()
+      not_followed = insert_activated_user()
+      insert(:user_tag, user: already_followed, tag: tag)
+      insert(:user_tag, user: not_followed, tag: tag)
+      # The viewer already follows one of the two candidates.
+      insert(:follow, follower: viewer, followee: already_followed)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      rail = "#profile-who-to-follow"
+      # The not-yet-followed candidate is suggested; the already-followed one is
+      # not (suggesting someone you already follow makes no sense).
+      assert has_element?(view, ~s(#{rail} a[href="/#{not_followed.username}"]))
+      refute has_element?(view, ~s(#{rail} a[href="/#{already_followed.username}"]))
+      # And the viewer is never suggested to follow themselves.
+      refute has_element?(view, ~s(#{rail} a[href="/#{viewer.username}"]))
+    end
   end
 
   describe "owner 'View as' preview without a reload" do

@@ -777,9 +777,10 @@ defmodule VutuvWeb.UI do
     * `"icon"` — the `button button--icon` icon-glyph track (`card_list`):
       `i.icon.icon--unfollow` / `i.icon.icon--follow`, rendered through
       `button/2` (a `<button>` with `data-method`).
-    * `"text"` — the bespoke text-button track (`user_row`): a `button/2`
-      `<button>` reading gettext("Following") / gettext("Follow") with the
-      muted/brand link classes.
+    * `"text"` — the bespoke pill-toggle track (`user_row`): a small
+      `rounded-full` pill that reads as one toggle in two states — the brand
+      call-to-action "Follow" while you do not follow, a calm slate "Following"
+      pill once you do that turns rose and swaps to "Unfollow" on hover.
     * `"button"` — the `<.button>` track (`show`, `teaser`): a secondary
       `<.button>` "Following" / a primary `<.button>` "Follow". `teaser` renders
       only the follow half — pass `follow_id={nil}` (a non-follower can only
@@ -821,7 +822,8 @@ defmodule VutuvWeb.UI do
     <%= cond do %>
       <% @live? and is_binary(@follow_id) -> %>
         <button type="button" phx-click="unfollow" phx-value-id={@follow_id} class={text_follow_class(:following)}>
-          {gettext("Following")}
+          <.following_label />
+
         </button>
       <% @live? -> %>
         <button type="button" phx-click="follow" phx-value-followee={@followee_id} class={text_follow_class(:follow)}>
@@ -829,7 +831,8 @@ defmodule VutuvWeb.UI do
         </button>
       <% is_binary(@follow_id) -> %>
         <%= button to: ~p"/follows/#{@follow_id}", method: :delete, class: text_follow_class(:following) do %>
-          {gettext("Following")}
+          <.following_label />
+
         <% end %>
       <% true -> %>
         <%= button to: ~p"/follows?#{[follow: %{follower_id: @follower_id, followee_id: @followee_id}]}", method: :post, class: text_follow_class(:follow) do %>
@@ -916,13 +919,32 @@ defmodule VutuvWeb.UI do
       "flex min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden bg-brand-600 px-2 py-1.5 text-white transition-colors hover:bg-brand-700 active:bg-brand-800"
 
   # The `text` follow-button look (the `user_row` rail), shared by the live
-  # phx-click and the classic CSRF renderings.
+  # phx-click and the classic CSRF renderings. Both states are the same small
+  # rounded-full pill so they read as one toggle in two states (not a button
+  # next to a dead status label): the brand call-to-action "Follow" while you do
+  # not follow, a calm slate "Following" pill once you do — which turns rose +
+  # swaps its label to "Unfollow" on hover (see `following_label/1`), the
+  # X/GitHub unfollow affordance. `self-start` keeps the pill level with the
+  # name's first line in the two-line `user_row`. Deliberately brand/slate, not
+  # emerald: the green "✓" status language is reserved for the header pill.
   defp text_follow_class(:following),
     do:
-      "ml-auto self-start text-sm font-semibold text-slate-600 dark:text-slate-400 hover:text-slate-600"
+      "group ml-auto self-start inline-flex shrink-0 items-center justify-center gap-1 min-w-[5.5rem] rounded-full border px-3 py-1 text-xs font-semibold transition-colors border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-rose-800 dark:hover:text-rose-400"
 
   defp text_follow_class(:follow),
-    do: "ml-auto self-start text-sm font-semibold text-brand-600 hover:text-brand-700"
+    do:
+      "ml-auto self-start inline-flex shrink-0 items-center justify-center gap-1 min-w-[5.5rem] rounded-full border px-3 py-1 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-900"
+
+  # The label inside the "Following" pill: the resting "Following" swaps to a red
+  # "Unfollow" on hover/focus (CSS group-hover, no JS), so the pill states what
+  # clicking it does. The two German labels ("Folge ich" / "Entfolgen") are close
+  # in width, so the pill barely resizes on hover.
+  defp following_label(assigns) do
+    ~H"""
+    <span class="group-hover:hidden group-focus:hidden">{gettext("Following")}</span>
+    <span class="hidden group-hover:inline group-focus:inline">{gettext("Unfollow")}</span>
+    """
+  end
 
   @doc """
   The profile header's **follow relationship** control — one fixed-width

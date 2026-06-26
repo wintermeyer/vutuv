@@ -2461,6 +2461,11 @@ msgstr "Repost zurücknehmen"
 msgid "Unlike"
 msgstr "Gefällt mir entfernen"
 
+#: lib/vutuv_web/components/ui.ex:945
+#, elixir-autogen, elixir-format
+msgid "Unfollow"
+msgstr "Entfolgen"
+
 #: lib/vutuv_web/controllers/session_controller.ex:291
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv!"

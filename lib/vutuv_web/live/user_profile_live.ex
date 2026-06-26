@@ -349,7 +349,7 @@ defmodule VutuvWeb.UserProfileLive do
     # current_job_in_memory/1 the listing pages use) instead of re-running the
     # 2-4 query current_job/1 chain against work_experiences.
     header_job = current_job_in_memory(user.work_experiences)
-    recommended_users = recommended_users(user)
+    recommended_users = recommended_users(user, view_viewer)
 
     posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
     as_owner? = owner? and is_nil(preview_as)
@@ -529,16 +529,53 @@ defmodule VutuvWeb.UserProfileLive do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), user.inserted_at, :second) < 24 * 60 * 60
   end
 
-  defp recommended_users(user) do
-    case first_tag(user) do
-      nil ->
-        Social.most_followed_users(6)
+  # The rail's count, and the size of the popularity pool we top up from when the
+  # topical pool is thin.
+  @recommended_count 6
+  @recommended_pool 60
 
-      tag ->
-        tag_users = Tag.recommended_users(tag)
-        if tag_users == [user], do: Social.most_followed_users(6), else: tag_users
-    end
-    |> Enum.reject(&(&1.id == user.id))
+  # The "Who to follow" rail. We suggest members most endorsed for this profile's
+  # leading tag (so the suggestion is topically tied to whoever you're viewing),
+  # falling back to the most-followed members when the profile has no tag. Then we
+  # drop everyone the rail must never suggest: the profile owner, the `viewer`
+  # themselves and — the bug this fixes — anyone the viewer *already follows*
+  # (listing someone you already follow as a suggestion is pointless; the rail
+  # used to come back all "Following" rows). When the topical pool is mostly
+  # already-followed and runs thin, we top it up from the most-followed pool so
+  # the rail still fills with fresh faces. `viewer` is the effective viewer
+  # (`view_viewer`, nil when logged out or previewing as the public), so a
+  # logged-out visitor gets unfiltered suggestions and no follow state.
+  defp recommended_users(user, viewer) do
+    topical =
+      case first_tag(user) do
+        nil -> []
+        tag -> Tag.recommended_users(tag)
+      end
+      |> suggestable(user, viewer)
+
+    users =
+      if length(topical) >= @recommended_count do
+        topical
+      else
+        popular = suggestable(Social.most_followed_users(@recommended_pool), user, viewer)
+        Enum.uniq_by(topical ++ popular, & &1.id)
+      end
+
+    Enum.take(users, @recommended_count)
+  end
+
+  # Keep only members the rail may suggest: not the profile owner, not the viewer,
+  # and not anyone the viewer already follows (one batched lookup via `following_map`).
+  defp suggestable(candidates, user, viewer) do
+    following = following_map(viewer, candidates)
+    # `viewer` is nil for a logged-out visitor; a nil id never equals a real UUID,
+    # so the comparison stays a plain boolean (a bare `viewer && …` would yield nil
+    # and blow up the strict `or`).
+    viewer_id = viewer && viewer.id
+
+    Enum.reject(candidates, fn u ->
+      u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id)
+    end)
   end
 
   defp first_tag(user) do
