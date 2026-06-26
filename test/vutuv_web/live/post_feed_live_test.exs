@@ -315,7 +315,23 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
     end
 
-    test "following a suggestion toggles live, keeping the row in place", %{conn: conn} do
+    test "does not suggest members the viewer already follows", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      already = other_user(first_name: "Al", last_name: "Ready")
+      fresh = other_user(first_name: "Fresh", last_name: "Face")
+      # Both are popular (need a visible follower to rank), but the viewer
+      # already follows `already` — that follow also counts as their follower.
+      insert(:follow, follower: user, followee: already)
+      insert(:follow, follower: other_user(), followee: fresh)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert Vutuv.Social.user_follows_user?(user.id, already.id)
+      assert has_element?(live, ~s(#who-to-follow a[href="/#{fresh.username}"]))
+      refute has_element?(live, ~s(#who-to-follow a[href="/#{already.username}"]))
+    end
+
+    test "following a suggestion drops it from the rail", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       popular = other_user(first_name: "Pop", last_name: "Ular")
       insert(:follow, follower: other_user(), followee: popular)
@@ -326,11 +342,54 @@ defmodule VutuvWeb.PostFeedLiveTest do
       |> element(~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
       |> render_click()
 
-      # Following happened, the row stays (now in the "Following" state), so the
-      # Follow button is gone — unlike a suggestion box that drops followed rows.
+      # Following makes them a followee, so the suggestion is no longer relevant
+      # and the row drops out (no point listing someone you already follow).
       assert Vutuv.Social.user_follows_user?(user.id, popular.id)
-      assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+      refute has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
       refute has_element?(live, ~s(#who-to-follow button[phx-value-followee="#{popular.id}"]))
+    end
+
+    test "randomizes which eligible members it suggests across visits", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      # A pool larger than the 6 shown, so the rail must pick a subset. Each is
+      # popular enough to rank (one visible follower); none is followed by the
+      # viewer, so all are eligible suggestions.
+      pool =
+        for n <- 1..10 do
+          member = other_user(first_name: "Member", last_name: "No#{n}")
+          insert(:follow, follower: other_user(), followee: member)
+          member
+        end
+
+      # The rail shuffles its candidates, so revisiting the feed surfaces a
+      # different slate. Over several visits the union of who was shown must
+      # exceed the 6 shown at once — a fixed top-6 ordering never would.
+      shown =
+        Enum.reduce(1..12, MapSet.new(), fn _i, acc ->
+          {:ok, live, _html} = live(recycle(conn), ~p"/feed")
+
+          pool
+          |> Enum.filter(&has_element?(live, ~s(#who-to-follow a[href="/#{&1.username}"])))
+          |> Enum.reduce(acc, &MapSet.put(&2, &1.id))
+        end)
+
+      assert MapSet.size(shown) > 6
+    end
+
+    test "a periodic refresh reshuffles the suggestions in place", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      popular = other_user(first_name: "Pop", last_name: "Ular")
+      insert(:follow, follower: other_user(), followee: popular)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+
+      # The mount schedules a refresh timer; firing it by hand must recompute the
+      # rail (and not crash), keeping the eligible suggestion visible.
+      send(live.pid, :refresh_suggestions)
+      _ = render(live)
+
+      assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
     end
   end
 

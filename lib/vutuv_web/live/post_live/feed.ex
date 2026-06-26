@@ -29,6 +29,13 @@ defmodule VutuvWeb.PostLive.Feed do
   alias VutuvWeb.UserHelpers
 
   @page_size 20
+  # "Who to follow" rail: how many suggestions to show, the size of the popular
+  # pool we shuffle them out of, and how often an open feed reshuffles. Defined
+  # here (not beside `assign_who_to_follow`) so `mount_feed/3` above reads a real
+  # value — a module attribute is `nil` until the line that sets it.
+  @who_to_follow 6
+  @suggestion_pool 60
+  @suggestions_refresh :timer.minutes(5)
 
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
@@ -52,7 +59,13 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   defp mount_feed(socket, user, session) do
-    if connected?(socket), do: Vutuv.Activity.subscribe(user.id)
+    if connected?(socket) do
+      Vutuv.Activity.subscribe(user.id)
+      # Reshuffle the "Who to follow" rail every few minutes while the page stays
+      # open, so a long-lived session keeps seeing fresh suggestions even without
+      # a reload (a new visit reshuffles too, via this same mount).
+      Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
+    end
 
     page = Posts.feed_page(user, limit: @page_size)
 
@@ -77,22 +90,36 @@ defmodule VutuvWeb.PostLive.Feed do
     |> stream(:posts, with_engagement(page.entries, user))
   end
 
-  # The desktop "Who to follow" rail, mirroring the profile's: the most-followed
-  # members (minus the viewer), each row showing the viewer's follow state
-  # ("Following"/"Follow") so following or unfollowing toggles live with no
-  # reload and the row stays put.
+  # The desktop "Who to follow" rail: a randomized handful of the most-followed
+  # members the viewer does *not* already follow (nor the viewer themselves) —
+  # listing someone you already follow as a suggestion makes no sense. We pull a
+  # generous pool of popular members, drop the viewer and everyone they follow,
+  # then *shuffle* what's left and take `@who_to_follow`. The shuffle means each
+  # visit (and the periodic `:refresh_suggestions` tick) surfaces a different
+  # slate instead of the same fixed top-6 every time. Following one (live, no
+  # reload) recomputes the rail, so the new followee drops out and a fresh draw
+  # fills the slot.
   defp assign_who_to_follow(socket) do
     user = socket.assigns.current_user
 
-    users =
-      Social.most_followed_users(10)
+    candidates =
+      Social.most_followed_users(@suggestion_pool)
       |> Enum.reject(&(&1.id == user.id))
-      |> Enum.take(6)
+
+    following = UserHelpers.following_map(user, candidates)
+
+    users =
+      candidates
+      |> Enum.reject(&Map.has_key?(following, &1.id))
+      |> Enum.shuffle()
+      |> Enum.take(@who_to_follow)
 
     socket
     |> assign(:recommended_users, users)
     |> assign(:work_info_by_id, UserHelpers.work_information_map(users, 60))
-    |> assign(:following_by_id, UserHelpers.following_map(user, users))
+    # Every suggestion is by construction someone the viewer does not follow, so
+    # the follow buttons all render the "Follow" state from an empty map.
+    |> assign(:following_by_id, %{})
   end
 
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
@@ -140,18 +167,13 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :composer_open?, false)}
   end
 
-  # The rail's follow/unfollow buttons (user_row live?): toggle with no reload,
-  # then recompute the follow state so the row flips between Following/Follow.
+  # The rail's "Follow" button (user_row live?): follow with no reload, then
+  # recompute the rail so the new followee drops out (we only suggest members
+  # the viewer doesn't already follow) and the next candidate fills the slot.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
     me = socket.assigns.current_user
 
     if me && me.id != followee_id, do: Social.follow(me, followee_id)
-
-    {:noreply, assign_who_to_follow(socket)}
-  end
-
-  def handle_event("unfollow", %{"id" => follow_id}, socket) do
-    if me = socket.assigns.current_user, do: Social.unfollow!(me.id, follow_id)
 
     {:noreply, assign_who_to_follow(socket)}
   end
@@ -215,6 +237,15 @@ defmodule VutuvWeb.PostLive.Feed do
      socket
      |> stream_delete_by_dom_id(:posts, "feed-post-#{post_id}")
      |> update(:pending_posts, &Enum.reject(&1, fn entry -> entry.post.id == post_id end))}
+  end
+
+  # Periodic reshuffle of the "Who to follow" rail: draw a fresh random slate of
+  # not-yet-followed members and reschedule the next tick. Cheap (one ranking
+  # query + one follow-edge query, both already small), so a 5-minute cadence on
+  # an open feed is fine.
+  def handle_info(:refresh_suggestions, socket) do
+    Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
+    {:noreply, assign_who_to_follow(socket)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -351,8 +382,9 @@ defmodule VutuvWeb.PostLive.Feed do
         </div>
 
         <%!-- Desktop-only rail (hidden under md, where the grid is one column):
-        the profile-style "Who to follow" card (live follow/unfollow, no reload)
-        plus the "Other formats" card — the same aside the profile shows. --%>
+        the profile-style "Who to follow" card (suggestions the viewer doesn't
+        already follow; a live follow, no reload, drops the row and surfaces the
+        next) plus the "Other formats" card — the same aside the profile shows. --%>
         <aside class="hidden space-y-6 md:block">
           <.card :if={@recommended_users != []} id="who-to-follow">
             <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
