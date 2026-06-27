@@ -103,6 +103,11 @@ defmodule Vutuv.Accounts.UserTest do
       assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
     end
 
+    test "changing the gender revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"gender" => "female"})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
     test "editing a non-identity field (headline) keeps the verification" do
       changeset = User.changeset(verified_user(), %{"headline" => "Now hiring"})
       refute Ecto.Changeset.get_change(changeset, :identity_verified?)

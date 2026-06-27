@@ -194,13 +194,13 @@ defmodule Vutuv.Accounts.User do
     |> revoke_verification_on_identity_change()
   end
 
-  # Every field that shapes the name the verified badge vouches for, plus the
-  # birthday: the legal name parts, the nickname and the honorific titles. An
-  # admin checked the ID against these, so changing any of them invalidates that
-  # check. Deliberately broad ("sicher ist sicher") — even a nickname or title
-  # edit shifts the displayed identity, so it re-opens the verification.
+  # Every identity detail the verified badge vouches for: the legal name parts,
+  # the nickname, the honorific titles, the gender and the birthday. An admin
+  # checked these against the member's ID, so changing any of them invalidates
+  # that check. Deliberately broad ("sicher ist sicher") — even a nickname,
+  # title or gender edit shifts the verified identity, so it re-opens it.
   @identity_fields ~w(first_name middle_name last_name nickname
-    honorific_prefix honorific_suffix birthdate)a
+    honorific_prefix honorific_suffix gender birthdate)a
 
   # Auto-revoke a prior identity verification when the member edits their name or
   # birthday. The admin's ID check was made against exactly those details, so it

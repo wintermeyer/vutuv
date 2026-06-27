@@ -112,7 +112,7 @@ defmodule VutuvWeb.UserController do
       conn,
       :error,
       gettext(
-        "Your verified badge was removed because you changed your name or date of birth. We re-check identity against those details so members can trust verified profiles and nobody can set up a fake verified account. An admin can verify you again anytime."
+        "Your verified badge was removed because you changed your name, gender or date of birth. We re-check identity against those details so members can trust verified profiles and nobody can set up a fake verified account. An admin can verify you again anytime."
       )
     )
   end
