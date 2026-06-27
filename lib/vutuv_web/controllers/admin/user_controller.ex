@@ -1,19 +1,18 @@
 defmodule VutuvWeb.Admin.UserController do
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
-  alias Vutuv.Notifications.Emailer
 
+  # The member browser itself is a LiveView (`VutuvWeb.Admin.UserLive`); this
+  # controller keeps only the identity-verification write action, which the
+  # LiveView's inline Verify button and this legacy POST both route through
+  # `Accounts.verify_identity/1`.
   def update(conn, %{"user_id" => user_id}) do
     user = Repo.get!(User, user_id)
-    changeset = Ecto.Changeset.cast(user, %{identity_verified?: true}, [:identity_verified?])
 
-    case Repo.update(changeset) do
+    case Accounts.verify_identity(user) do
       {:ok, user} ->
-        user
-        |> Emailer.verification_notice()
-        |> Emailer.deliver()
-
         conn
         |> put_flash(:info, gettext("User verified successfully."))
         |> redirect(to: ~p"/#{user}")

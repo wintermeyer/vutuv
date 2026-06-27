@@ -136,6 +136,42 @@
     </p>
   </section>
 
+  <section class="card">
+    <div class="flex items-center justify-between gap-4">
+      <h1 class="flex items-center gap-2">
+        {gettext("Members")}
+        <.count_badge count={@unverified_count} />
+      </h1>
+      <a
+        href={~p"/admin/users"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="admin-users-link"
+      >
+        {gettext("Open the member browser")} ›
+      </a>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">
+      <%= if @unverified_count == 0 do %>
+        {ngettext(
+          "%{count} member. Search, filter and sort every account.",
+          "%{count} members. Search, filter and sort every account.",
+          @members_count
+        )}
+      <% else %>
+        {ngettext(
+          "%{count} member awaiting identity verification.",
+          "%{count} members awaiting identity verification.",
+          @unverified_count
+        )}
+        <a
+          href={~p"/admin/users?#{[reg: "all", flag: "unverified"]}"}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Open the queue")} ›
+        </a>
+      <% end %>
+    </p>
+  </section>
+
   {VutuvWeb.Admin.UsernameHTML.index(%{conn: @conn})}
-  {VutuvWeb.Admin.UserHTML.index(%{conn: @conn, users: @users, users_count: @users_count})}
 </div>

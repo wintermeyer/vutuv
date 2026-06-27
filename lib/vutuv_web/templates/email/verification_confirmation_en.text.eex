@@ -2,6 +2,8 @@
 
 Congratulations! Your vutuv account is now listed as verified.
 
+Your profile now shows a blue verified badge next to your name, so visitors can see at a glance that this account genuinely belongs to you.
+
 <%= @url %><%= @user.username %>
 
 <%= render "_signature_en.text" %>

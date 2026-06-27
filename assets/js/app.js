@@ -65,6 +65,22 @@ const Hooks = {
       this.el.scrollTop = this.el.scrollHeight
     },
   },
+  // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the
+  // socket; without this you stay parked at the pager (bottom) after clicking
+  // Next/Prev. Scroll the browser card back to the top whenever its page number
+  // changes, so each page starts at the top (scroll-mt clears the sticky nav).
+  // Typing in the search box keeps page 1, so it never yanks the view.
+  PageScroll: {
+    mounted() {
+      this._page = this.el.dataset.page
+    },
+    updated() {
+      if (this.el.dataset.page !== this._page) {
+        this._page = this.el.dataset.page
+        this.el.scrollIntoView({ block: "start" })
+      }
+    },
+  },
   // Online presence dots. ShellLive (on every page) pushes this viewer's online
   // user-id set ("presence:set", already filtered against their blocks); this
   // hook reveals each online member's dot via ONE generated stylesheet keyed on

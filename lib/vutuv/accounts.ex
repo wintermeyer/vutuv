@@ -6,6 +6,7 @@ defmodule Vutuv.Accounts do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1]
+  import Vutuv.SearchText, only: [escape_like: 1, name_ilike: 3, normalize_search: 1]
   require Logger
 
   alias Plug.Conn
@@ -20,6 +21,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Uploads.Crop
 
@@ -1168,4 +1170,159 @@ defmodule Vutuv.Accounts do
   def first_email_value(%User{id: id}) do
     Repo.one(from(e in Email, where: e.user_id == ^id, limit: 1, select: e.value))
   end
+
+  @doc """
+  The admin "Verify identity" action: marks the member as `identity_verified?`
+  and emails them the confirmation. Reloads the user fresh so a partial listing
+  struct (handed in by the admin member browser, which selects only a few
+  columns) still carries the `locale` the notice renders in. Returns
+  `{:ok, user}` or `{:error, changeset}`. Used by both `Admin.UserController`
+  (the legacy POST) and `Admin.UserLive` (the inline button).
+  """
+  def verify_identity(%User{id: id}) do
+    User
+    |> Repo.get!(id)
+    |> Ecto.Changeset.cast(%{identity_verified?: true}, [:identity_verified?])
+    |> Repo.update()
+    |> case do
+      {:ok, user} ->
+        user |> Emailer.verification_notice() |> Emailer.deliver()
+        {:ok, user}
+
+      error ->
+        error
+    end
+  end
+
+  # ── Admin member browser (/admin/users) ──
+
+  @admin_users_per_page 50
+
+  # The sortable columns of the member browser, by the `?sort=` value a header
+  # link sets. "name" is special-cased (last then first name) in the order_by.
+  @admin_user_sort_columns %{
+    "joined" => :inserted_at,
+    "name" => :last_name,
+    "username" => :username,
+    "updated" => :updated_at
+  }
+
+  # The columns a member-browser row needs: the listing fields (avatar, name
+  # parts, slug) plus the timestamps and the status flags the table renders.
+  @admin_listing_fields ~w(id first_name last_name honorific_prefix honorific_suffix username
+    avatar avatar_fingerprint updated_at inserted_at email_confirmed? admin?
+    identity_verified? frozen_at suspended_until deactivated_at unreachable_at)a
+
+  @doc "The member-browser page size, shared by the query and the pager."
+  def admin_users_per_page, do: @admin_users_per_page
+
+  @doc "The sortable member-browser columns (the `?sort=` values)."
+  def admin_user_sort_columns, do: Map.keys(@admin_user_sort_columns)
+
+  @doc """
+  Normalizes raw request params into a validated filter map for the member
+  browser: `reg` (registration: "pin" PIN-confirmed — the default — / "unconfirmed"
+  / "all"), `flag` (account flag: "all" — the default — / "admin" / "verified" /
+  "unverified" identity-verification queue), `q` (search term, trimmed), `sort`
+  (a known column, default "joined") and `dir` ("asc"/"desc", default "desc", so
+  the default landing shows the newest members first). Anything invalid falls
+  back to a safe default, so the params can never inject into the query.
+  """
+  def admin_user_filters(params) when is_map(params) do
+    %{
+      reg: validated_param(params["reg"], ~w(pin unconfirmed all)) || "pin",
+      flag:
+        validated_param(
+          params["flag"],
+          ~w(all admin verified unverified frozen suspended deactivated unreachable)
+        ) || "all",
+      q: normalize_search(params["q"]),
+      sort: validated_param(params["sort"], admin_user_sort_columns()) || "joined",
+      dir: if(params["dir"] == "asc", do: "asc", else: "desc")
+    }
+  end
+
+  @doc "How many members match the filters (for the pager)."
+  def count_admin_users(filters) do
+    filters |> admin_users_base() |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  One page of the member browser, filtered, searched, sorted and paginated.
+  Rows carry only the columns the table renders (`@admin_listing_fields`). `opts`
+  may carry `:total` (skip the recount) and `:per_page` (default
+  `admin_users_per_page/0`).
+  """
+  def list_admin_users(filters, params \\ %{}, opts \\ []) do
+    per_page = Keyword.get(opts, :per_page, @admin_users_per_page)
+    total = Keyword.get(opts, :total) || count_admin_users(filters)
+
+    filters
+    |> admin_users_base()
+    |> order_admin_users(filters)
+    |> select([u], struct(u, ^@admin_listing_fields))
+    |> Pages.paginate(params, total, per_page)
+    |> Repo.all()
+  end
+
+  defp admin_users_base(filters) do
+    from(u in User)
+    |> filter_registration(Map.get(filters, :reg))
+    |> filter_flag(Map.get(filters, :flag))
+    |> search_members(Map.get(filters, :q))
+  end
+
+  defp filter_registration(query, "pin"), do: where(query, [u], u.email_confirmed? == true)
+
+  defp filter_registration(query, "unconfirmed"),
+    do: where(query, [u], u.email_confirmed? == false)
+
+  defp filter_registration(query, _all), do: query
+
+  defp filter_flag(query, "admin"), do: where(query, [u], u.admin? == true)
+  defp filter_flag(query, "verified"), do: where(query, [u], u.identity_verified? == true)
+  defp filter_flag(query, "unverified"), do: where(query, [u], u.identity_verified? != true)
+  defp filter_flag(query, "frozen"), do: where(query, [u], not is_nil(u.frozen_at))
+  defp filter_flag(query, "suspended"), do: where(query, [u], not is_nil(u.suspended_until))
+  defp filter_flag(query, "deactivated"), do: where(query, [u], not is_nil(u.deactivated_at))
+  defp filter_flag(query, "unreachable"), do: where(query, [u], not is_nil(u.unreachable_at))
+  defp filter_flag(query, _all), do: query
+
+  defp search_members(query, nil), do: query
+
+  defp search_members(query, term) do
+    # A typed "@handle" is just the username; drop the leading @ so it matches.
+    like = "%" <> escape_like(String.trim_leading(term, "@")) <> "%"
+
+    # Admins routinely need to find an account by its email address (support,
+    # moderation). Matched server-side via a subquery — the address is never
+    # shown in the listing, so this finds the account without leaking the email.
+    by_email = from(e in Email, where: ilike(e.value, ^like), select: e.user_id)
+
+    where(
+      query,
+      [u],
+      name_ilike(u.first_name, u.last_name, ^like) or ilike(u.username, ^like) or
+        u.id in subquery(by_email)
+    )
+  end
+
+  defp order_admin_users(query, %{sort: "name"} = filters) do
+    dir = sort_dir(filters)
+    from(u in query, order_by: [{^dir, u.last_name}, {^dir, u.first_name}, {^dir, u.id}])
+  end
+
+  defp order_admin_users(query, filters) do
+    column = Map.get(@admin_user_sort_columns, Map.get(filters, :sort), :inserted_at)
+    dir = sort_dir(filters)
+    from(u in query, order_by: [{^dir, field(u, ^column)}, {^dir, u.id}])
+  end
+
+  defp sort_dir(%{dir: "asc"}), do: :asc
+  defp sort_dir(_filters), do: :desc
+
+  defp validated_param(value, allowed) when is_binary(value),
+    do: if(value in allowed, do: value, else: nil)
+
+  defp validated_param(_value, _allowed), do: nil
 end

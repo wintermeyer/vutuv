@@ -1,7 +1,9 @@
 <%= email_greeting(@user) %>,
 
-herzlichen Glückwunsch! Ihr vutuv Account wird jetzt als 
+herzlichen Glückwunsch! Ihr vutuv Account wird jetzt als
 verified (verifiziert) angezeigt.
+
+Ihr Profil zeigt jetzt ein blaues Verifizierungs-Abzeichen neben Ihrem Namen, damit Besucher auf einen Blick sehen, dass dieses Konto wirklich zu Ihnen gehört.
 
 <%= @url %><%= @user.username %>
 

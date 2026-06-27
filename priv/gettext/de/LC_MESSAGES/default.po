@@ -7441,3 +7441,147 @@ msgstr "Deployment: %{date} um %{time} Uhr"
 #, elixir-autogen, elixir-format
 msgid "Last deployed (Berlin time)"
 msgstr "Zuletzt bereitgestellt (Berliner Zeit)"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:13
+#, elixir-autogen, elixir-format
+msgid "Every account. Filter, search by name or @handle, and click a column to sort. The default shows PIN-registered members, newest first."
+msgstr "Alle Konten. Filtern, nach Name oder @Handle suchen und zum Sortieren auf eine Spalte klicken. Standardmäßig werden PIN-registrierte Mitglieder angezeigt, die neuesten zuerst."
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "Registration"
+msgstr "Registrierung"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:36
+#, elixir-autogen, elixir-format
+msgid "PIN registered"
+msgstr "PIN-registriert"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:38
+#, elixir-autogen, elixir-format
+msgid "Not confirmed"
+msgstr "Nicht bestätigt"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:41
+#, elixir-autogen, elixir-format
+msgid "All registrations"
+msgstr "Alle Registrierungen"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:48
+#, elixir-autogen, elixir-format
+msgid "All members"
+msgstr "Alle Mitglieder"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:49
+#, elixir-autogen, elixir-format
+msgid "Admins"
+msgstr "Administratoren"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:51
+#, elixir-autogen, elixir-format
+msgid "Identity-verified"
+msgstr "Identität verifiziert"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:54
+#, elixir-autogen, elixir-format
+msgid "Awaiting verification"
+msgstr "Prüfung ausstehend"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:69
+#, elixir-autogen, elixir-format
+msgid "name or @handle"
+msgstr "Name oder @Handle"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:77
+#, elixir-autogen, elixir-format
+msgid "No members match your filters."
+msgstr "Keine Mitglieder entsprechen Ihren Filtern."
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:88
+#, elixir-autogen, elixir-format
+msgid "Joined"
+msgstr "Beigetreten"
+
+#: lib/vutuv_web/templates/admin/user/index.html.heex:121
+#, elixir-autogen, elixir-format
+msgid "Unconfirmed"
+msgstr "Unbestätigt"
+
+#: lib/vutuv_web/views/admin/user_html.ex:71
+#, elixir-autogen, elixir-format
+msgid "Verified"
+msgstr "Verifiziert"
+
+#: lib/vutuv_web/views/admin/user_html.ex:72
+#, elixir-autogen, elixir-format
+msgid "Frozen"
+msgstr "Eingefroren"
+
+#: lib/vutuv_web/views/admin/user_html.ex:74
+#, elixir-autogen, elixir-format
+msgid "Deactivated"
+msgstr "Deaktiviert"
+
+#: lib/vutuv_web/views/admin/user_html.ex:75
+#, elixir-autogen, elixir-format
+msgid "Unreachable"
+msgstr "Nicht erreichbar"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:147
+#, elixir-autogen, elixir-format
+msgid "Open the member browser"
+msgstr "Mitgliederübersicht öffnen"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:153
+#, elixir-autogen, elixir-format
+msgid "%{count} member. Search, filter and sort every account."
+msgid_plural "%{count} members. Search, filter and sort every account."
+msgstr[0] "%{count} Mitglied. Durchsuchen, filtern und sortieren Sie alle Konten."
+msgstr[1] "%{count} Mitglieder. Durchsuchen, filtern und sortieren Sie alle Konten."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:160
+#, elixir-autogen, elixir-format
+msgid "%{count} member awaiting identity verification."
+msgid_plural "%{count} members awaiting identity verification."
+msgstr[0] "%{count} Mitglied wartet auf Identitätsprüfung."
+msgstr[1] "%{count} Mitglieder warten auf Identitätsprüfung."
+
+#: lib/vutuv_web/live/admin/user_live.ex:201
+#, elixir-autogen, elixir-format
+msgid "Search by name or @handle, filter and sort. The list updates as you type, and the default shows PIN-registered members, newest first."
+msgstr "Nach Name oder @Handle suchen, filtern und sortieren. Die Liste aktualisiert sich beim Tippen, und standardmäßig werden PIN-registrierte Mitglieder angezeigt, die neuesten zuerst."
+
+#: lib/vutuv_web/live/admin/user_live.ex:188
+#, elixir-autogen, elixir-format
+msgid "Clear filters"
+msgstr "Filter zurücksetzen"
+
+#: lib/vutuv_web/live/admin/user_live.ex:347
+#, elixir-autogen, elixir-format
+msgid "Page %{page} of %{pages}"
+msgstr "Seite %{page} von %{pages}"
+
+#: lib/vutuv_web/live/admin/user_live.ex:95
+#, elixir-autogen, elixir-format
+msgid "Identity verified. The member has been emailed."
+msgstr "Identität verifiziert. Das Mitglied wurde per E-Mail benachrichtigt."
+
+#: lib/vutuv_web/live/admin/user_live.ex:99
+#, elixir-autogen, elixir-format
+msgid "Could not verify this member."
+msgstr "Dieses Mitglied konnte nicht verifiziert werden."
+
+#: lib/vutuv_web/live/admin/user_live.ex:321
+#, elixir-autogen, elixir-format
+msgid "Mark this member's identity as verified? They will be emailed."
+msgstr "Die Identität dieses Mitglieds als verifiziert markieren? Das Mitglied wird per E-Mail benachrichtigt."
+
+#: lib/vutuv_web/live/admin/user_live.ex:213
+#, elixir-autogen, elixir-format
+msgid "Search by name, @handle or email, filter and sort. The list updates as you type, and the default shows PIN-registered members, newest first."
+msgstr "Nach Name, @Handle oder E-Mail suchen, filtern und sortieren. Die Liste aktualisiert sich beim Tippen, und standardmäßig werden PIN-registrierte Mitglieder angezeigt, die neuesten zuerst."
+
+#: lib/vutuv_web/live/admin/user_live.ex:231
+#, elixir-autogen, elixir-format
+msgid "name, @handle or email"
+msgstr "Name, @Handle oder E-Mail"

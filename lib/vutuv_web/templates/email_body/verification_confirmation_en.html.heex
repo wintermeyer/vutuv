@@ -1,6 +1,9 @@
 <.email_layout preheader="Your vutuv account is verified" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
   <.email_p>Congratulations! Your vutuv account is now listed as verified.</.email_p>
+  <.email_p>
+    Your profile now shows a blue verified badge next to your name, so visitors can see at a glance that this account genuinely belongs to you.
+  </.email_p>
   <.email_button href={"#{@url}#{@user.username}"}>View your profile</.email_button>
   <.email_signature locale={@locale} />
 </.email_layout>

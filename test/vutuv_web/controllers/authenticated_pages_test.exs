@@ -128,12 +128,13 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "admin pages render", %{conn: conn} do
       renders(conn, ~p"/admin")
+      renders(conn, ~p"/admin/users")
       renders(conn, ~p"/admin/locales")
       renders(conn, ~p"/admin/exonyms")
       renders(conn, ~p"/admin/tags")
     end
 
-    test "the verification queue lists newest registrations first", %{conn: conn} do
+    test "the member browser lists newest registrations first", %{conn: conn} do
       older = insert(:user, first_name: "Older", identity_verified?: false)
       insert(:user, first_name: "Newer", identity_verified?: false)
 
@@ -142,18 +143,18 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
         set: [inserted_at: ~N[2020-01-01 12:00:00]]
       )
 
-      body = conn |> get(~p"/admin") |> html_response(200)
+      body = conn |> get(~p"/admin/users?reg=all") |> html_response(200)
 
       {newer_pos, _} = :binary.match(body, "Newer")
       {older_pos, _} = :binary.match(body, "Older")
       assert newer_pos < older_pos
     end
 
-    test "the verification queue survives garbage page params", %{conn: conn} do
+    test "the member browser survives garbage page params", %{conn: conn} do
       insert(:user, first_name: "Pending", identity_verified?: false)
 
-      assert conn |> get(~p"/admin?page=banana") |> html_response(200) =~ "Pending"
-      assert conn |> get(~p"/admin?page=999") |> html_response(200) =~ "Pending"
+      assert conn |> get(~p"/admin/users?reg=all&page=banana") |> html_response(200) =~ "Pending"
+      assert conn |> get(~p"/admin/users?reg=all&page=999") |> html_response(200) =~ "Pending"
     end
   end
 

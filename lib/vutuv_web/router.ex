@@ -339,6 +339,11 @@ defmodule VutuvWeb.Router do
     post("/ads/:id/approve", AdController, :approve)
 
     post("/usernames", UsernameController, :update)
+
+    # The member browser is a LiveView (`UserLive`, in the live_session below) so
+    # search/filter/sort update with no reload. :update is the identity-
+    # verification write action the browser's inline Verify button and this
+    # legacy POST both use.
     post("/users", UserController, :update)
     resources("/locales", LocaleController, only: [:index, :show])
     resources("/exonyms", ExonymController)
@@ -375,6 +380,10 @@ defmodule VutuvWeb.Router do
     root_layout: {VutuvWeb.LayoutHTML, :root} do
     scope "/admin", VutuvWeb.Admin, as: :admin do
       pipe_through([:browser, :admin])
+
+      # The member browser: a live, filterable, searchable, sortable list of
+      # every account (default: PIN-registered, newest first).
+      live("/users", UserLive, :index)
 
       live("/newsletters/:id/send", NewsletterBroadcastLive)
 
