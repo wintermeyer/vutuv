@@ -21,6 +21,12 @@ defmodule VutuvWeb.Admin.AdminHTML do
   attr(:cta, :string, required: true)
   attr(:id, :string, default: nil)
   attr(:count, :integer, default: nil)
+
+  attr(:count_exact, :boolean,
+    default: false,
+    doc: "show the count grouped in full (60.023) instead of compact (60K)"
+  )
+
   attr(:attention, :boolean, default: false)
   slot(:inner_block, required: true)
 
@@ -54,7 +60,7 @@ defmodule VutuvWeb.Admin.AdminHTML do
             !@attention && "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
           ]}
         >
-          {compact_count(@count)}
+          {if @count_exact, do: delimited_count(@count), else: compact_count(@count)}
         </span>
       </div>
 

@@ -7672,3 +7672,8 @@ msgstr "Diese Anwendung existiert nicht mehr."
 #, elixir-autogen, elixir-format
 msgid "Everything that keeps vutuv running, in one place. Cards with open work glow in coral."
 msgstr "Alles, was vutuv am Laufen hält, an einem Ort. Karten mit offener Arbeit leuchten in Koralle."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Search, filter and sort every account, and verify a member's identity."
+msgstr "Jedes Konto durchsuchen, filtern und sortieren sowie die Identität eines Mitglieds verifizieren."

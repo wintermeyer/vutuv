@@ -9,8 +9,6 @@ defmodule VutuvWeb.Admin.AdminController do
     # it and surfaces the one actionable slice — the identity-verification queue.
     render(conn, "index.html",
       members_count: Repo.aggregate(User, :count),
-      unverified_count:
-        Repo.aggregate(from(u in User, where: u.identity_verified? != true), :count),
       moderation_count: Vutuv.Moderation.open_queue_count(),
       ads_enabled: Vutuv.Ads.enabled?(),
       pending_ads_count: if(Vutuv.Ads.enabled?(), do: Vutuv.Ads.pending_ads_count(), else: 0),
