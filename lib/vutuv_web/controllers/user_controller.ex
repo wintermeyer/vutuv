@@ -90,16 +90,35 @@ defmodule VutuvWeb.UserController do
     # helper rebuilt straight from params, so a partial submission missing a name
     # key wiped every search term (issue #780).
     case Accounts.update_user(user, user_params) do
-      {:ok, user} ->
+      {:ok, updated} ->
         conn
-        |> put_flash(:info, gettext("User updated successfully."))
-        |> redirect(to: ~p"/#{user}")
+        |> save_flash(user, updated)
+        |> redirect(to: ~p"/#{updated}")
 
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
         |> render("edit.html", user: user, changeset: changeset)
     end
+  end
+
+  # Editing a name or birthday auto-revokes a prior identity verification
+  # (User.changeset/2). When that happened, explain it instead of the generic
+  # success toast: friendly, and spelling out the why (so verified profiles stay
+  # trustworthy and nobody can rename a verified account to a fake identity). A
+  # persistent error toast is used on purpose so the member can read it.
+  defp save_flash(conn, %User{identity_verified?: true}, %User{identity_verified?: false}) do
+    put_flash(
+      conn,
+      :error,
+      gettext(
+        "Your verified badge was removed because you changed your name or date of birth. We re-check identity against those details so members can trust verified profiles and nobody can set up a fake verified account. An admin can verify you again anytime."
+      )
+    )
+  end
+
+  defp save_flash(conn, _before, _after) do
+    put_flash(conn, :info, gettext("User updated successfully."))
   end
 
   # Step 1: mail a PIN and render the PIN-entry form. Nothing is deleted yet.

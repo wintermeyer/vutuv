@@ -60,4 +60,69 @@ defmodule Vutuv.Accounts.UserTest do
       assert Ecto.Changeset.get_field(changeset, :birthdate) == nil
     end
   end
+
+  describe "identity verification revocation" do
+    # A member an admin has already verified (their physical ID was checked
+    # against this name and birthday).
+    defp verified_user do
+      %User{
+        identity_verified?: true,
+        first_name: "Erika",
+        last_name: "Mustermann",
+        birthdate: ~D[1980-01-01]
+      }
+    end
+
+    test "changing the first name revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"first_name" => "Imposter"})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "changing the last name revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"last_name" => "Other"})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "changing the middle name revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"middle_name" => "Zweitname"})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "changing the birthday revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"birthdate" => ~D[1990-12-31]})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "changing the nickname revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"nickname" => "Eri"})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "adding an honorific title revokes the verification" do
+      changeset = User.changeset(verified_user(), %{"honorific_prefix" => "Dr."})
+      assert Ecto.Changeset.get_change(changeset, :identity_verified?) == false
+    end
+
+    test "editing a non-identity field (headline) keeps the verification" do
+      changeset = User.changeset(verified_user(), %{"headline" => "Now hiring"})
+      refute Ecto.Changeset.get_change(changeset, :identity_verified?)
+    end
+
+    test "resubmitting the same name and birthday keeps the verification" do
+      changeset =
+        User.changeset(verified_user(), %{
+          "first_name" => "Erika",
+          "last_name" => "Mustermann",
+          "birthdate" => ~D[1980-01-01]
+        })
+
+      refute Ecto.Changeset.get_change(changeset, :identity_verified?)
+    end
+
+    test "an unverified member never gets a spurious verification change" do
+      unverified = %User{identity_verified?: false, first_name: "Erika"}
+      changeset = User.changeset(unverified, %{"first_name" => "Imposter"})
+      refute Ecto.Changeset.get_change(changeset, :identity_verified?)
+    end
+  end
 end

@@ -50,6 +50,43 @@ defmodule VutuvWeb.UserControllerTest do
     assert conn |> get("/users") |> html_response(404)
   end
 
+  describe "editing identity data of a verified member" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      user = Repo.update!(Ecto.Changeset.change(user, identity_verified?: true))
+      %{conn: conn, user: user}
+    end
+
+    test "changing the name revokes verification and explains why", %{conn: conn, user: user} do
+      conn = put(conn, ~p"/#{user}", user: %{"first_name" => "Totally Different"})
+
+      assert redirected_to(conn)
+      refute Repo.get!(User, user.id).identity_verified?
+
+      flash = Phoenix.Flash.get(conn.assigns.flash, :error)
+      assert flash =~ "verified badge"
+      assert flash =~ "fake"
+    end
+
+    test "changing the birthday revokes verification", %{conn: conn, user: user} do
+      conn = put(conn, ~p"/#{user}", user: %{"birthdate" => "1991-07-01"})
+
+      refute Repo.get!(User, user.id).identity_verified?
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "verified badge"
+    end
+
+    test "editing a non-identity field keeps verification and the normal flash", %{
+      conn: conn,
+      user: user
+    } do
+      conn = put(conn, ~p"/#{user}", user: %{"headline" => "Open to work"})
+
+      assert Repo.get!(User, user.id).identity_verified?
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "updated"
+      refute Phoenix.Flash.get(conn.assigns.flash, :error)
+    end
+  end
+
   test "shows chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = get(conn, ~p"/#{user}")

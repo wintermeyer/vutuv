@@ -191,6 +191,33 @@ defmodule Vutuv.Accounts.User do
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
     |> nullify_default_birthdate()
     |> validate_birthdate()
+    |> revoke_verification_on_identity_change()
+  end
+
+  # Every field that shapes the name the verified badge vouches for, plus the
+  # birthday: the legal name parts, the nickname and the honorific titles. An
+  # admin checked the ID against these, so changing any of them invalidates that
+  # check. Deliberately broad ("sicher ist sicher") — even a nickname or title
+  # edit shifts the displayed identity, so it re-opens the verification.
+  @identity_fields ~w(first_name middle_name last_name nickname
+    honorific_prefix honorific_suffix birthdate)a
+
+  # Auto-revoke a prior identity verification when the member edits their name or
+  # birthday. The admin's ID check was made against exactly those details, so it
+  # no longer holds once they change; without this someone could get a real
+  # identity verified and then rename the account to impersonate, keeping the
+  # badge. identity_verified? is admin-only (never cast), so this programmatic
+  # put_change is the only way the edit form can clear it — re-verification is a
+  # fresh admin action. Runs after nullify_default_birthdate/1 so resubmitting
+  # the unset 1900-01-01 birthday sentinel is not mistaken for a change.
+  defp revoke_verification_on_identity_change(changeset) do
+    identity_changed? = Enum.any?(@identity_fields, &Map.has_key?(changeset.changes, &1))
+
+    if identity_changed? and get_field(changeset, :identity_verified?) do
+      put_change(changeset, :identity_verified?, false)
+    else
+      changeset
+    end
   end
 
   @doc """
