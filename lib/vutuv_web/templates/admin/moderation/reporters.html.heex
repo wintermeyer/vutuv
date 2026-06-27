@@ -1,4 +1,11 @@
-<.page_header title={gettext("Reporter track records")} crumbs={[gettext("Moderation")]} />
+<.page_header
+  title={gettext("Reporter track records")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Moderation"), ~p"/admin/moderation"},
+    gettext("Reporter track records")
+  ]}
+/>
 
 <div class="card-list">
   <section class="card">

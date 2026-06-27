@@ -1,47 +1,19 @@
 defmodule VutuvWeb.Admin.ModerationController do
   @moduledoc """
-  The admin moderation queue. Admins only see what the self-service flow
-  could not settle: disputes, ignored 72h deadlines, re-reports and profile
-  cases. Two one-click rulings per case: uphold (strike the owner, content
-  stays frozen) or reject (unfreeze; optionally mark reports as abusive,
-  which strikes the reporter).
+  The classic routes behind the moderation flow. The queue and the case page are
+  LiveViews (`ModerationLive`, `ModerationCaseLive`), where the one-click rulings
+  act reload-free; this controller keeps what cannot be a LiveView or is the
+  no-JS fallback: the read-only reporter dashboard, the private evidence-
+  screenshot stream, and the uphold/reject POSTs. Uphold strikes the owner and
+  keeps the content frozen; reject unfreezes it and optionally marks reports
+  abusive (striking the reporter).
   """
 
   use VutuvWeb, :controller
 
-  alias Vutuv.{Chat, Moderation}
-  alias Vutuv.Moderation.Case
+  alias Vutuv.Moderation
   alias Vutuv.Moderation.EvidenceScreenshot
   alias VutuvWeb.ControllerHelpers
-
-  def index(conn, _params) do
-    render(conn, "index.html",
-      page_title: gettext("Moderation queue"),
-      cases: Moderation.list_queue()
-    )
-  end
-
-  def show(conn, %{"id" => id}) do
-    with_case(conn, id, fn case_record ->
-      stats_by_reporter =
-        Moderation.reporter_stats_map(Enum.map(case_record.reports, & &1.reporter_id))
-
-      render(conn, "show.html",
-        page_title: gettext("Moderation case"),
-        case: case_record,
-        content: Moderation.case_content(case_record),
-        conversation_context: conversation_context(case_record),
-        owner_active_strikes: Moderation.active_strike_count(case_record.owner),
-        events: Moderation.case_events(case_record),
-        severance_by_reporter:
-          Map.new(Moderation.case_severances(case_record), &{&1.reporter_id, &1}),
-        reporter_stats:
-          Map.new(case_record.reports, fn report ->
-            {report.id, Map.fetch!(stats_by_reporter, report.reporter_id)}
-          end)
-      )
-    end)
-  end
 
   # Streams the private evidence screenshot (captured at report time). The
   # moderation_evidence/ tree has no static mount; this authorizing route
@@ -97,7 +69,7 @@ defmodule VutuvWeb.Admin.ModerationController do
   end
 
   # Load the case-with-details or render the shared 404 — the load-or-404 guard
-  # the show/uphold/reject actions share.
+  # the uphold/reject actions share.
   defp with_case(conn, id, fun) do
     case Moderation.get_case_with_details(id) do
       nil -> ControllerHelpers.render_error(conn, 404)
@@ -111,15 +83,4 @@ defmodule VutuvWeb.Admin.ModerationController do
     |> put_flash(:error, gettext("This case has already been resolved."))
     |> redirect(to: ~p"/admin/moderation")
   end
-
-  # For message cases: the reported message in its conversation (the last few
-  # messages before it), so the admin can judge bullying in context.
-  defp conversation_context(%Case{content_type: "message"} = case_record) do
-    case Moderation.case_content(case_record) do
-      nil -> []
-      message -> Chat.moderation_context(message)
-    end
-  end
-
-  defp conversation_context(_case_record), do: []
 end

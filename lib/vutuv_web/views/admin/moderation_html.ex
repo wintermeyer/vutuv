@@ -1,7 +1,6 @@
 defmodule VutuvWeb.Admin.ModerationHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.UserHelpers
 
   alias Vutuv.Moderation.Case
 

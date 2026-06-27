@@ -1,4 +1,10 @@
 defmodule VutuvWeb.Admin.ModerationControllerTest do
+  @moduledoc """
+  The classic moderation routes: the private evidence stream, the read-only
+  reporter dashboard, and the uphold/reject POSTs that are the no-JS fallback for
+  the case page's reload-free rulings. The queue + case rendering and the
+  reload-free path live in `ModerationLiveTest`.
+  """
   use VutuvWeb.ConnCase
 
   alias Vutuv.Moderation
@@ -18,58 +24,10 @@ defmodule VutuvWeb.Admin.ModerationControllerTest do
   end
 
   describe "authorization" do
-    test "non-admins are locked out", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      conn = get(conn, ~p"/admin/moderation")
-      assert html_response(conn, 403)
-    end
-  end
-
-  describe "index" do
-    test "lists the queue with escalated cases first", %{conn: conn} do
+    test "non-admins are locked out of a classic route", %{conn: conn} do
       {case_record, _post, _owner, _reporter} = escalated_case()
-      {conn, _admin} = create_and_login_admin(conn)
-
-      conn = get(conn, ~p"/admin/moderation")
-      response = html_response(conn, 200)
-      assert response =~ case_record.id
-      assert response =~ "Escalated"
-    end
-  end
-
-  describe "show" do
-    test "shows the case with reporter track record and ruling buttons", %{conn: conn} do
-      {case_record, post, _owner, _reporter} = escalated_case()
-      {conn, _admin} = create_and_login_admin(conn)
-
-      conn = get(conn, ~p"/admin/moderation/#{case_record.id}")
-      response = html_response(conn, 200)
-      assert response =~ post.body
-      assert response =~ ~p"/admin/moderation/#{case_record.id}/uphold"
-      assert response =~ ~p"/admin/moderation/#{case_record.id}/reject"
-      # reporter anonymity does not apply to admins: the track record shows
-      assert response =~ "report"
-      # singular, not "1 reports"
-      assert response =~ "1 report so far"
-    end
-
-    test "shows the audit log and the severance state", %{conn: conn} do
-      owner = insert_activated_user()
-      insert(:email, user: owner)
-      reporter = insert(:activated_user)
-      connect!(reporter, owner)
-      post = insert(:post, user: owner)
-      {:ok, case_record} = Moderation.report_content(reporter, post, %{"category" => "spam"})
-      flush_emails()
-
-      {conn, _admin} = create_and_login_admin(conn)
-      response = conn |> get(~p"/admin/moderation/#{case_record.id}") |> html_response(200)
-
-      assert response =~ "case-timeline"
-      assert response =~ "Report filed"
-      assert response =~ "Content frozen"
-      assert response =~ "Reporter and owner separated"
-      assert response =~ "separated since this report"
+      {conn, _user} = create_and_login_user(conn)
+      assert html_response(get(conn, ~p"/admin/moderation/#{case_record.id}/evidence"), 403)
     end
   end
 

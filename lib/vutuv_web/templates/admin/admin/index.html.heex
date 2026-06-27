@@ -1,21 +1,14 @@
 <.page_header title={gettext("Admin control panel")} crumbs={[gettext("Admin")]} />
 
-<div class="card-list">
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1 class="flex items-center gap-2">
-        {gettext("Moderation")}
-        <.count_badge count={@moderation_count} />
-      </h1>
-      <a
-        href={~p"/admin/moderation"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-moderation-link"
-      >
-        {gettext("Open the queue")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
+<div class="space-y-10">
+  <.admin_group title={gettext("Moderation & queues")}>
+    <.admin_card
+      title={gettext("Moderation")}
+      count={@moderation_count}
+      href={~p"/admin/moderation"}
+      id="admin-moderation-link"
+      cta={gettext("Open the queue")}
+    >
       <%= if @moderation_count == 0 do %>
         {gettext("No reported content waiting - the self-service flow is doing its job.")}
       <% else %>
@@ -25,132 +18,15 @@
           @moderation_count
         )}
       <% end %>
-    </p>
-  </section>
+    </.admin_card>
 
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1>{gettext("Daily report")}</h1>
-      <a
-        href={~p"/admin/reports"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-reports-link"
-      >
-        {gettext("Open the daily report")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
-      {gettext(
-        "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
-      )}
-    </p>
-  </section>
-
-  <section :if={@ads_enabled} class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1 class="flex items-center gap-2">
-        {gettext("Ads")}
-        <.count_badge count={@pending_ads_count} />
-      </h1>
-      <a
-        href={~p"/admin/ads"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-ads-link"
-      >
-        {gettext("Open the ad review")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
-      <%= if @pending_ads_count == 0 do %>
-        {gettext("No ads waiting for approval.")}
-      <% else %>
-        {ngettext(
-          "%{count} ad is waiting for approval.",
-          "%{count} ads are waiting for approval.",
-          @pending_ads_count
-        )}
-      <% end %>
-    </p>
-  </section>
-
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1>{gettext("API applications")}</h1>
-      <a
-        href={~p"/admin/api_apps"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-api-apps-link"
-      >
-        {gettext("Manage applications")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
-      {ngettext(
-        "%{count} registered third-party application. Suspending one cuts off all of its tokens.",
-        "%{count} registered third-party applications. Suspending one cuts off all of its tokens.",
-        @api_apps_count
-      )}
-    </p>
-  </section>
-
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1 class="flex items-center gap-2">
-        {gettext("Deliverability")}
-        <.count_badge count={@frozen_accounts_count} />
-      </h1>
-      <a
-        href={~p"/admin/deliverability"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-deliverability-link"
-      >
-        {gettext("Open deliverability")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
-      <%= if @frozen_accounts_count == 0 do %>
-        {gettext("No accounts frozen for unreachability. Bounced addresses and the audit trail are here too.")}
-      <% else %>
-        {ngettext(
-          "%{count} account is frozen because every email address bounced.",
-          "%{count} accounts are frozen because every email address bounced.",
-          @frozen_accounts_count
-        )}
-      <% end %>
-    </p>
-  </section>
-
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1>{gettext("Newsletter")}</h1>
-      <a
-        href={~p"/admin/newsletters"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-newsletters-link"
-      >
-        {gettext("Open newsletters")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
-      {gettext("Compose a newsletter, save it as a draft, test it, then send it to all members.")}
-    </p>
-  </section>
-
-  <section class="card">
-    <div class="flex items-center justify-between gap-4">
-      <h1 class="flex items-center gap-2">
-        {gettext("Members")}
-        <.count_badge count={@unverified_count} />
-      </h1>
-      <a
-        href={~p"/admin/users"}
-        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-        id="admin-users-link"
-      >
-        {gettext("Open the member browser")} ›
-      </a>
-    </div>
-    <p class="mt-1 text-sm text-slate-500">
+    <.admin_card
+      title={gettext("Members")}
+      count={@unverified_count}
+      href={~p"/admin/users"}
+      id="admin-users-link"
+      cta={gettext("Open the member browser")}
+    >
       <%= if @unverified_count == 0 do %>
         {ngettext(
           "%{count} member. Search, filter and sort every account.",
@@ -170,8 +46,115 @@
           {gettext("Open the queue")} ›
         </a>
       <% end %>
-    </p>
-  </section>
+    </.admin_card>
 
-  {VutuvWeb.Admin.UsernameHTML.index(%{conn: @conn})}
+    <.admin_card
+      title={gettext("Deliverability")}
+      count={@frozen_accounts_count}
+      href={~p"/admin/deliverability"}
+      id="admin-deliverability-link"
+      cta={gettext("Open deliverability")}
+    >
+      <%= if @frozen_accounts_count == 0 do %>
+        {gettext(
+          "No accounts frozen for unreachability. Bounced addresses and the audit trail are here too."
+        )}
+      <% else %>
+        {ngettext(
+          "%{count} account is frozen because every email address bounced.",
+          "%{count} accounts are frozen because every email address bounced.",
+          @frozen_accounts_count
+        )}
+      <% end %>
+    </.admin_card>
+  </.admin_group>
+
+  <.admin_group title={gettext("Communication")}>
+    <.admin_card
+      title={gettext("Newsletter")}
+      href={~p"/admin/newsletters"}
+      id="admin-newsletters-link"
+      cta={gettext("Open newsletters")}
+    >
+      {gettext("Compose a newsletter, save it as a draft, test it, then send it to all members.")}
+    </.admin_card>
+
+    <.admin_card
+      title={gettext("Newsletter audiences")}
+      href={~p"/admin/newsletter_groups"}
+      id="admin-newsletter-groups-link"
+      cta={gettext("Manage audiences")}
+    >
+      {gettext(
+        "Build fixed recipient groups from filters (language, country, age, tag) to target a newsletter."
+      )}
+    </.admin_card>
+  </.admin_group>
+
+  <.admin_group title={gettext("Content & taxonomy")}>
+    <.admin_card
+      title={gettext("Tags")}
+      count={@tags_count}
+      href={~p"/admin/tags"}
+      id="admin-tags-link"
+      cta={gettext("Manage tags")}
+    >
+      {gettext("Create, rename and remove the tags members can add to their profile.")}
+    </.admin_card>
+
+    <.admin_card
+      title={gettext("Usernames")}
+      href={~p"/admin/usernames"}
+      id="admin-usernames-link"
+      cta={gettext("Disable a username")}
+    >
+      {gettext("Take an unwanted username away from a member by force-renaming the account.")}
+    </.admin_card>
+  </.admin_group>
+
+  <.admin_group title={gettext("System & insights")}>
+    <.admin_card
+      title={gettext("Daily report")}
+      href={~p"/admin/reports"}
+      id="admin-reports-link"
+      cta={gettext("Open the daily report")}
+    >
+      {gettext(
+        "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
+      )}
+    </.admin_card>
+
+    <.admin_card
+      title={gettext("API applications")}
+      count={@api_apps_count}
+      href={~p"/admin/api_apps"}
+      id="admin-api-apps-link"
+      cta={gettext("Manage applications")}
+    >
+      {ngettext(
+        "%{count} registered third-party application. Suspending one cuts off all of its tokens.",
+        "%{count} registered third-party applications. Suspending one cuts off all of its tokens.",
+        @api_apps_count
+      )}
+    </.admin_card>
+
+    <.admin_card
+      :if={@ads_enabled}
+      title={gettext("Ads")}
+      count={@pending_ads_count}
+      href={~p"/admin/ads"}
+      id="admin-ads-link"
+      cta={gettext("Open the ad review")}
+    >
+      <%= if @pending_ads_count == 0 do %>
+        {gettext("No ads waiting for approval.")}
+      <% else %>
+        {ngettext(
+          "%{count} ad is waiting for approval.",
+          "%{count} ads are waiting for approval.",
+          @pending_ads_count
+        )}
+      <% end %>
+    </.admin_card>
+  </.admin_group>
 </div>

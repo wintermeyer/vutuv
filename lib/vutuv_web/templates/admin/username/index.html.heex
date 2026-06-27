@@ -1,5 +1,14 @@
-<section class="card">
-  <h1><%= gettext("Disable slugs") %></h1>
+<.page_header
+  title={gettext("Disable a username")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Usernames")]}
+/>
 
-  <%= render "form_content.html", conn: @conn %>
-</section>
+<.card_section>
+  <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+    {gettext(
+      "Take an unwanted username away from a member: the account is force-renamed to a generated handle. The old name is not blocked afterwards - a name bad enough to ban globally belongs in the moderation tooling."
+    )}
+  </p>
+
+  {render("form_content.html", conn: @conn)}
+</.card_section>

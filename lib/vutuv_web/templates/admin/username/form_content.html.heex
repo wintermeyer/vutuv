@@ -1,10 +1,16 @@
-<.form :let={f} for={%{}} action={~p"/admin/usernames"} as={:username_disable} multipart class="editform">
-
+<.form
+  :let={f}
+  for={%{}}
+  action={~p"/admin/usernames"}
+  as={:username_disable}
+  multipart
+  class="editform"
+>
   <.editform_field form={f} field={:value}>
-    <%= label f, :value, gettext("Slug name") %>
-    <%= text_input f, :value %>
-    <%= error_tag f, :value %>
+    {label(f, :value, gettext("Username"))}
+    {text_input(f, :value)}
+    {error_tag(f, :value)}
   </.editform_field>
 
-  <%= submit gettext("Disable"), class: "button" %>
+  {submit(gettext("Disable"), class: "button")}
 </.form>

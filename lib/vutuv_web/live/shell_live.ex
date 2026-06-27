@@ -57,6 +57,7 @@ defmodule VutuvWeb.ShellLive do
       |> assign(:user_name, session["user_name"])
       |> assign(:user_param, user_param)
       |> assign(:user_avatar, session["user_avatar"])
+      |> assign(:user_admin?, session["user_admin?"] == true)
       |> assign(:self_online?, false)
       |> assign(:presence_hidden_ids, MapSet.new())
       # The badge counts are the most expensive query on every page (an 8-way
@@ -329,6 +330,16 @@ defmodule VutuvWeb.ShellLive do
 
                   <.link href={~p"/#{@user_param}/edit"} class={[menu_item_class(), "block"]}>
                     {gettext("Settings")}
+                  </.link>
+
+                  <%!-- Only admins see this; the link is the single entry point
+                  into the /admin control panel (there is no other nav to it). --%>
+                  <.link
+                    :if={@user_admin?}
+                    href={~p"/admin"}
+                    class={[menu_item_class(), "block font-semibold text-brand-700 dark:text-brand-400"]}
+                  >
+                    {gettext("Admin")}
                   </.link>
 
                   <%!-- Power-user affordance: opens the shortcuts overlay (wired in

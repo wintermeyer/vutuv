@@ -1,19 +1,17 @@
 defmodule VutuvWeb.Admin.ApiAppController do
   @moduledoc """
-  The operator's view of every registered OAuth application, with the
-  bad-player kill switch: suspending an app makes all of its tokens fail
-  on their very next request (`Vutuv.ApiAuth.verify_token/1` checks
-  `suspended_at` live); unsuspending restores them.
+  The suspend / unsuspend kill switch behind the OAuth-application list. The list
+  itself is a LiveView (`VutuvWeb.Admin.ApiAppLive`), where the toggles act
+  reload-free; these CSRF POSTs are the no-JS / scriptable fallback. Suspending an
+  app makes all of its tokens fail on their very next request
+  (`Vutuv.ApiAuth.verify_token/1` checks `suspended_at` live); unsuspending
+  restores them.
   """
 
   use VutuvWeb, :controller
 
   alias Vutuv.ApiAuth
   alias VutuvWeb.ControllerHelpers
-
-  def index(conn, _params) do
-    render(conn, "index.html", apps: ApiAuth.list_all_apps())
-  end
 
   def suspend(conn, %{"id" => id}) do
     case ApiAuth.get_any_app(id) do

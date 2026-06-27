@@ -7422,3 +7422,80 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Last deployed (Berlin time)"
 msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Moderation & queues"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Communication"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Content & taxonomy"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "System & insights"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Manage tags"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Create, rename and remove the tags members can add to their profile."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#: lib/vutuv_web/templates/admin/username/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Usernames"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#: lib/vutuv_web/templates/admin/username/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Disable a username"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Take an unwanted username away from a member by force-renaming the account."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Build fixed recipient groups from filters (language, country, age, tag) to target a newsletter."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/username/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Take an unwanted username away from a member: the account is force-renamed to a generated handle. The old name is not blocked afterwards - a name bad enough to ban globally belongs in the moderation tooling."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/deliverability_live.ex
+#, elixir-autogen, elixir-format
+msgid "That account no longer exists."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/deliverability_live.ex
+#, elixir-autogen, elixir-format
+msgid "That address no longer exists."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/moderation_case_live.ex
+#, elixir-autogen, elixir-format
+msgid "This case no longer exists."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/api_app_live.ex
+#, elixir-autogen, elixir-format
+msgid "That application no longer exists."
+msgstr ""

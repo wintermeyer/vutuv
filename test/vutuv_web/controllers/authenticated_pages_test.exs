@@ -120,7 +120,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     setup %{conn: conn} do
       {conn, admin} = create_and_login_admin(conn)
       # An unverified user with no last name (the case that crashed the
-      # dashboard) plus a tag and exonym source row for the listings.
+      # dashboard) plus a tag for the listing.
       insert(:user, last_name: nil)
       insert(:tag)
       %{conn: conn, admin: admin}
@@ -129,9 +129,8 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     test "admin pages render", %{conn: conn} do
       renders(conn, ~p"/admin")
       renders(conn, ~p"/admin/users")
-      renders(conn, ~p"/admin/locales")
-      renders(conn, ~p"/admin/exonyms")
       renders(conn, ~p"/admin/tags")
+      renders(conn, ~p"/admin/usernames")
     end
 
     test "the member browser lists newest registrations first", %{conn: conn} do
@@ -203,47 +202,22 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       {conn, admin} = create_and_login_admin(conn)
       target = insert(:user)
       insert(:email, user: target)
-      [locale_a, locale_b | _] = Repo.all(from(l in Vutuv.Accounts.Locale, limit: 2))
-
-      exonym =
-        Repo.insert!(%Vutuv.Accounts.Exonym{
-          value: "Beispiel",
-          locale_id: locale_a.id,
-          exonym_locale_id: locale_b.id
-        })
 
       %{
         conn: conn,
         admin: admin,
         target: target,
-        tag: insert(:tag),
-        exonym: exonym,
-        locale_a: locale_a,
-        locale_b: locale_b
+        tag: insert(:tag)
       }
     end
 
-    test "admin new/edit forms render", %{
-      conn: conn,
-      tag: tag,
-      exonym: exonym
-    } do
+    test "admin new/edit forms render", %{conn: conn, tag: tag} do
       renders(conn, ~p"/admin/tags/new")
       renders(conn, ~p"/admin/tags/#{tag}/edit")
-      renders(conn, ~p"/admin/exonyms/new")
-      renders(conn, ~p"/admin/exonyms/#{exonym}/edit")
     end
 
-    test "admin create tag / exonym", %{
-      conn: conn,
-      locale_a: locale_a,
-      locale_b: locale_b
-    } do
+    test "admin create tag", %{conn: conn} do
       assert post(conn, ~p"/admin/tags", tag: %{name: "Admin Tag"}).status < 500
-
-      assert post(conn, ~p"/admin/exonyms",
-               exonym: %{value: "Exonym", locale_id: locale_a.id, exonym_locale_id: locale_b.id}
-             ).status < 500
     end
 
     test "admin update / delete tag", %{conn: conn, tag: tag} do

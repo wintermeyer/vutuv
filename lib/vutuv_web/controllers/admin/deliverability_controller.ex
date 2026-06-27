@@ -1,34 +1,19 @@
 defmodule VutuvWeb.Admin.DeliverabilityController do
   @moduledoc """
-  The admin email-deliverability dashboard. Surfaces the bounce machinery so an
-  admin can see and undo it: accounts frozen because every address bounced
-  (`Vutuv.Deliverability`), addresses currently marked undeliverable, the raw
-  bounce ledger, and the audit trail of every transition. Two undo actions:
-  thaw a frozen account, or clear a single address's undeliverable mark (which
-  re-assesses the owner, lifting a freeze if a working address remains).
+  The two undo actions behind the deliverability dashboard. The dashboard itself
+  is a LiveView (`VutuvWeb.Admin.DeliverabilityLive`), where thaw/clear act
+  reload-free; these CSRF POSTs are the no-JS / scriptable fallback. thaw lifts a
+  freeze; clear lifts a single address's undeliverable mark (re-assessing the
+  owner, which lifts a freeze if a working address remains). See
+  `Vutuv.Deliverability`.
   """
 
   use VutuvWeb, :controller
-
-  import Ecto.Query
 
   alias Vutuv.Accounts.{Email, User}
   alias Vutuv.Deliverability
   alias Vutuv.Repo
   alias VutuvWeb.ControllerHelpers
-
-  def index(conn, _params) do
-    events = Deliverability.recent_events()
-
-    render(conn, "index.html",
-      page_title: gettext("Deliverability"),
-      frozen: Deliverability.frozen_accounts(),
-      deactivated: Deliverability.deactivated_addresses(),
-      bounces: Deliverability.recent_bounces(),
-      events: events,
-      users: users_for_events(events)
-    )
-  end
 
   def thaw(conn, %{"id" => id}) do
     case Repo.get(User, id) do
@@ -61,17 +46,5 @@ defmodule VutuvWeb.Admin.DeliverabilityController do
     conn
     |> put_flash(kind, message)
     |> redirect(to: ~p"/admin/deliverability")
-  end
-
-  # The audit rows reference members by bare id (the ledger is FK-free); resolve
-  # them in one query so the template can link names.
-  defp users_for_events(events) do
-    ids =
-      events
-      |> Enum.flat_map(&[&1.user_id, &1.actor_id])
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
-
-    Repo.all(from(u in User, where: u.id in ^ids)) |> Map.new(&{&1.id, &1})
   end
 end

@@ -323,11 +323,13 @@ defmodule VutuvWeb.Router do
     # Vutuv.Reports.DailyReporter mails the previous day's copy each night.
     get("/reports", ReportController, :index)
 
-    # The moderation queue + rulings. /reporters (the misuse dashboard) must
-    # precede /:id so the literal segment wins.
-    get("/moderation", ModerationController, :index)
+    # The moderation queue + case page are LiveViews (in the live_session below)
+    # so rulings act reload-free. These classic routes stay: /reporters (the
+    # read-only misuse dashboard), the private evidence-screenshot stream, and the
+    # uphold/reject POSTs that are the no-JS / scriptable fallback for the rulings.
+    # /reporters and /:id/evidence are defined before the live `/moderation/:id`
+    # (earlier scope wins) so the literal/suffixed segments still match first.
     get("/moderation/reporters", ModerationController, :reporters)
-    get("/moderation/:id", ModerationController, :show)
     get("/moderation/:id/evidence", ModerationController, :evidence)
     post("/moderation/:id/uphold", ModerationController, :uphold)
     post("/moderation/:id/reject", ModerationController, :reject)
@@ -338,6 +340,9 @@ defmodule VutuvWeb.Router do
     get("/ads/:id", AdController, :show)
     post("/ads/:id/approve", AdController, :approve)
 
+    # Force-rename a member out of an unwanted username (the old name is not
+    # blocked afterwards). GET renders the form; POST does the rename.
+    get("/usernames", UsernameController, :index)
     post("/usernames", UsernameController, :update)
 
     # The member browser is a LiveView (`UserLive`, in the live_session below) so
@@ -345,20 +350,20 @@ defmodule VutuvWeb.Router do
     # verification write action the browser's inline Verify button and this
     # legacy POST both use.
     post("/users", UserController, :update)
-    resources("/locales", LocaleController, only: [:index, :show])
-    resources("/exonyms", ExonymController)
 
     resources("/tags", TagController, param: "slug")
 
-    # The registered OAuth apps + the bad-player kill switch.
-    get("/api_apps", ApiAppController, :index)
+    # The registered OAuth apps + the bad-player kill switch. The list is a
+    # LiveView (below) so suspend/unsuspend act reload-free; these POSTs are the
+    # no-JS / scriptable fallback.
     post("/api_apps/:id/suspend", ApiAppController, :suspend)
     post("/api_apps/:id/unsuspend", ApiAppController, :unsuspend)
 
     # Email deliverability: bounced/deactivated addresses, accounts frozen
-    # because every address is dead, the bounce ledger and the audit trail.
-    # thaw lifts a freeze; clear lifts an address's undeliverable mark.
-    get("/deliverability", DeliverabilityController, :index)
+    # because every address is dead, the bounce ledger and the audit trail. The
+    # dashboard itself is a LiveView (`DeliverabilityLive`, in the live_session
+    # below) so thaw/clear act reload-free; these two POSTs are the no-JS /
+    # scriptable fallback. thaw lifts a freeze; clear lifts an address's mark.
     post("/deliverability/users/:id/thaw", DeliverabilityController, :thaw)
     post("/deliverability/emails/:id/clear", DeliverabilityController, :clear_address)
 
@@ -384,6 +389,18 @@ defmodule VutuvWeb.Router do
       # The member browser: a live, filterable, searchable, sortable list of
       # every account (default: PIN-registered, newest first).
       live("/users", UserLive, :index)
+
+      # The deliverability dashboard: thaw/clear act reload-free over the socket.
+      live("/deliverability", DeliverabilityLive, :index)
+
+      # The moderation queue + case page: rulings (uphold/reject) act reload-free
+      # and drop back to the queue. /moderation/reporters + /:id/evidence stay
+      # classic (defined earlier above, so they match before this :id route).
+      live("/moderation", ModerationLive, :index)
+      live("/moderation/:id", ModerationCaseLive, :show)
+
+      # The OAuth-application list: suspend/unsuspend act reload-free.
+      live("/api_apps", ApiAppLive, :index)
 
       live("/newsletters/:id/send", NewsletterBroadcastLive)
 
