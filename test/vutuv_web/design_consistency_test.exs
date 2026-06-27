@@ -64,13 +64,19 @@ defmodule VutuvWeb.DesignConsistencyTest do
       %{conn: conn, admin: admin}
     end
 
-    test "uses the standard chrome and a non-destructive verify button", %{conn: conn} do
+    test "renders the standard chrome and grouped section tiles, nothing destructive", %{
+      conn: conn
+    } do
       conn = get(conn, ~p"/admin")
       html = html_response(conn, 200)
 
+      # Standard page chrome (the profile-header + breadcrumb block).
       assert html =~ "profile-header"
-      assert html =~ ~s(class="card)
-      # Verifying a user is a positive action, not a destructive one.
+      # The dashboard renders its section tiles on the Track-2 card surface
+      # (rounded-2xl + ring), not the legacy `.card` class.
+      assert html =~ "admin-moderation-link"
+      assert html =~ "rounded-2xl"
+      # Nothing on the dashboard is a destructive action.
       refute html =~ "button--danger"
     end
   end

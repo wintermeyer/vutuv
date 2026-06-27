@@ -7667,3 +7667,8 @@ msgstr "Dieser Fall existiert nicht mehr."
 #, elixir-autogen, elixir-format
 msgid "That application no longer exists."
 msgstr "Diese Anwendung existiert nicht mehr."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Everything that keeps vutuv running, in one place. Cards with open work glow in coral."
+msgstr "Alles, was vutuv am Laufen hält, an einem Ort. Karten mit offener Arbeit leuchten in Koralle."

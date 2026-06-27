@@ -7499,3 +7499,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That application no longer exists."
 msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Everything that keeps vutuv running, in one place. Cards with open work glow in coral."
+msgstr ""
