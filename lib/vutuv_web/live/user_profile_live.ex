@@ -533,7 +533,9 @@ defmodule VutuvWeb.UserProfileLive do
         done: user.work_experiences != [],
         href: ~p"/#{user}/work_experiences/new"
       },
-      %{label: gettext("Write your first post"), done: posts_total > 0, href: ~p"/feed"}
+      # Same #compose hash as the Posts-card tile: land on the feed with the
+      # composer already open instead of a closed one.
+      %{label: gettext("Write your first post"), done: posts_total > 0, href: ~p"/feed#compose"}
     ]
   end
 

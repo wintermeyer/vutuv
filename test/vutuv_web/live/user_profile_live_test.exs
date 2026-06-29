@@ -268,6 +268,21 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "the owner's 'Write a post' compose tile" do
+    test "links to the feed with the composer pre-opened", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The tile must land on /feed#compose, not bare /feed — the #compose hash
+      # is what reveals and focuses the composer on arrival (the same path the
+      # "n" keyboard shortcut uses), so clicking it opens the new-post form
+      # straight away instead of dropping the owner on a closed composer.
+      tile = element(view, "#profile-posts [data-empty-add]")
+      assert render(tile) =~ ~s(href="/feed#compose")
+    end
+  end
+
   describe "live post deletion" do
     test "a post deleted elsewhere drops from the open profile", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)

@@ -264,9 +264,11 @@ the resulting ~200px rail width. --%>
       shares the "Post" msgid and must not be repurposed. --%>
       <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)} />
 
-      <%!-- Compose affordance on top, the convention everywhere (the feed opens
-      in the /feed composer). --%>
-      <.empty_add :if={@as_owner?} href={~p"/feed"} class={@posts != [] && "mb-4"}>
+      <%!-- Compose affordance on top, the convention everywhere. Links to the
+      feed with the `#compose` hash so the composer reveals and focuses on
+      arrival (the same path the "n" keyboard shortcut uses) — clicking here
+      opens the new-post form straight away instead of a closed composer. --%>
+      <.empty_add :if={@as_owner?} href={~p"/feed#compose"} class={@posts != [] && "mb-4"}>
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
       </.empty_add>
 
