@@ -185,25 +185,26 @@ The private originals tree (`/srv/vutuv3/originals/`) must **not** get any
 
 ### nginx for post images (one-time setup)
 
-> **Note (forward-looking).** This snippet still names `/srv/legacy-vutuv`, but
-> the current production host serves uploads from `/srv/vutuv3`
-> (`UPLOADS_DIR_PREFIX`) and there are no post images in prod yet (its vhost has
-> no `internal_post_images` location). When post images do ship, use
-> `/srv/vutuv3` paths and an `\.avif$` pattern.
+> **Required for prod.** Without this location every post image (composer
+> preview thumbnail, feed image, inline `![](…)`) renders as a broken image:
+> the app answers the image request with `X-Accel-Redirect`, and nginx has
+> nowhere to send it. The post-image feature is live in production, so this
+> block must be in the vhost.
 
-Post images are auth-proxied: the app checks the post's audience and answers with `X-Accel-Redirect`; nginx streams the file from an `internal` location (config `:post_image_serving` is `:accel_redirect` in prod). Unlike `/avatars/` and `/covers/` there must be **no public alias** for post images. Add to the vhost:
+Post images are auth-proxied: the app checks the post's audience and answers with `X-Accel-Redirect`; nginx streams the file from an `internal` location (config `:post_image_serving` is `:accel_redirect` in prod). Unlike `/avatars/` and `/covers/` there must be **no public alias** for post images. Add to the vhost (the current host serves uploads from `/srv/vutuv3`, `UPLOADS_DIR_PREFIX`):
 
 ```nginx
 # Post images: only reachable via X-Accel-Redirect from the app. The version
 # pattern means originals (which keep their EXIF/GPS metadata) can never be
-# served even if a path leaked. The "webp" alternative is transitional, for
-# files `Vutuv.Release.regenerate_images()` has not converted yet — narrow
-# the pattern to \.avif$ once a run reports nothing left to convert.
-location ~ ^/internal_post_images/(?<token>[A-Za-z0-9_-]+)/(?<version>thumb|feed|large)\.(?<fmt>avif|webp)$ {
+# served even if a path leaked. Post images were AVIF from day one, so the
+# pattern is `\.avif$` (no transitional `.webp` to resolve).
+location ~ ^/internal_post_images/(?<token>[A-Za-z0-9_-]+)/(?<version>thumb|feed|large)\.avif$ {
     internal;
-    alias /srv/legacy-vutuv/post_images/$token/$version.$fmt;
+    alias /srv/vutuv3/post_images/$token/$version.avif;
 }
 ```
+
+After adding it, `nginx -t && systemctl reload nginx` — no app redeploy is needed (the app already emits the redirect; only nginx was missing the target).
 
 Uploads run over the LiveView websocket (no `client_max_body_size` change needed for the 6 MB images unless the websocket location caps buffers unusually small).
 
