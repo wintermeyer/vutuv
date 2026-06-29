@@ -214,6 +214,57 @@ defmodule Vutuv.NewsletterGroupsTest do
     end
   end
 
+  describe "specific-account allowlist groups (no filters)" do
+    test "included_user_ids with no filters resolve to exactly those accounts, not everyone" do
+      a = member("a@x.com")
+      b = member("b@x.com")
+      _c = member("c@x.com")
+
+      ids = Newsletters.audience_user_ids(%{included_user_ids: [a.id, b.id]})
+      assert MapSet.new(ids) == MapSet.new([a.id, b.id])
+      assert Newsletters.audience_count(%{included_user_ids: [a.id, b.id]}) == 2
+    end
+
+    test "included_group_ids with no filters resolve to exactly those groups' members" do
+      de = member("de@x.com", locale: "de")
+      _en = member("en@x.com", locale: "en")
+      {:ok, de_group} = Newsletters.create_group(%{"name" => "DE", "locales" => ["de"]})
+
+      ids = Newsletters.audience_user_ids(%{included_group_ids: [de_group.id]})
+      assert MapSet.new(ids) == MapSet.new([de.id])
+    end
+
+    test "create_group/1 freezes a hand-picked allowlist with no filters" do
+      a = member("a@x.com")
+      b = member("b@x.com")
+      _c = member("c@x.com")
+
+      assert {:ok, group} =
+               Newsletters.create_group(%{
+                 "name" => "Beta testers",
+                 "included_user_ids" => [a.id, b.id]
+               })
+
+      assert group.member_count == 2
+      assert MapSet.new(member_ids(group)) == MapSet.new([a.id, b.id])
+    end
+
+    test "an allowlist still only includes eligible (emailable, subscribed) accounts" do
+      a = member("a@x.com")
+      optout = member("out@x.com", newsletter_emails?: false)
+
+      ids = Newsletters.audience_user_ids(%{included_user_ids: [a.id, optout.id]})
+      assert ids == [a.id]
+    end
+
+    test "no selectors at all still means everyone (the 'all members' / 'the rest' default)" do
+      a = member("a@x.com")
+      b = member("b@x.com")
+
+      assert MapSet.new(Newsletters.audience_user_ids(%{})) == MapSet.new([a.id, b.id])
+    end
+  end
+
   describe "preview & member listing" do
     test "audience_preview/2 returns a profile-linkable sample of matches" do
       ann = member("a@x.com", first_name: "Ann")

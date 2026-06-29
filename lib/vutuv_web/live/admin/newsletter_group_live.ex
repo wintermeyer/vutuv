@@ -70,13 +70,31 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   end
 
   # The per-account curation state (which survives filter changes and paging):
-  # the manual include/exclude lists, the member search, and the list page.
+  # the build mode, the manual include/exclude lists, the member search, and the
+  # list page.
   defp init_curation(socket, base) do
     socket
+    |> assign(:mode, initial_mode(base))
     |> assign(:included_user_ids, base.included_user_ids || [])
     |> assign(:excluded_user_ids, base.excluded_user_ids || [])
     |> assign(:member_search, "")
     |> assign(:list_page, 1)
+  end
+
+  # An existing group reopens in the mode it was built in: a pure hand-picked
+  # allowlist (specific accounts, no filters) in `:accounts`, everything else in
+  # `:filters`. A brand-new group starts in `:filters` (the default builder).
+  defp initial_mode(%NewsletterGroup{} = base) do
+    if (base.included_user_ids || []) != [] and no_filters?(base),
+      do: :accounts,
+      else: :filters
+  end
+
+  defp no_filters?(%NewsletterGroup{} = base) do
+    Enum.all?(
+      [base.country, base.min_age, base.max_age, base.tag_id, base.username],
+      &is_nil/1
+    ) and base.locales == [] and base.included_group_ids == [] and base.excluded_group_ids == []
   end
 
   # A ready-to-use, editable default name carrying the moment it was opened
@@ -138,11 +156,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   end
 
   def handle_event("save", %{"newsletter_group" => params}, socket) do
-    params =
-      Map.merge(params, %{
-        "included_user_ids" => socket.assigns.included_user_ids,
-        "excluded_user_ids" => socket.assigns.excluded_user_ids
-      })
+    params = finalize_params(params, socket.assigns)
 
     result =
       case socket.assigns.live_action do
@@ -211,6 +225,34 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
      |> recompute()}
   end
 
+  # Switch between the filter builder and the hand-picked-accounts allowlist.
+  def handle_event("set_mode", %{"mode" => mode}, socket) do
+    {:noreply,
+     socket
+     |> assign(:mode, if(mode == "accounts", do: :accounts, else: :filters))
+     |> assign(:member_search, "")
+     |> assign(:list_page, 1)
+     |> recompute()}
+  end
+
+  # Accounts mode: add a searched member to the allowlist (and lift any stale
+  # exclusion of them).
+  def handle_event("add_member", %{"id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:included_user_ids, uniq_prepend(socket.assigns.included_user_ids, id))
+     |> assign(:excluded_user_ids, List.delete(socket.assigns.excluded_user_ids, id))
+     |> recompute()}
+  end
+
+  # Accounts mode: drop a member from the allowlist.
+  def handle_event("remove_member", %{"id" => id}, socket) do
+    {:noreply,
+     socket
+     |> assign(:included_user_ids, List.delete(socket.assigns.included_user_ids, id))
+     |> recompute()}
+  end
+
   def handle_event("select_all", _params, socket), do: {:noreply, bulk_select(socket, true)}
   def handle_event("unselect_all", _params, socket), do: {:noreply, bulk_select(socket, false)}
 
@@ -276,29 +318,66 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   end
 
   # Merge the filter criteria with the manual include/exclude lists, recompute
-  # the count, then the displayed member list.
+  # the count, then the displayed member list. In accounts mode the filters and
+  # the size cap are ignored: the audience is exactly the chosen accounts.
   defp recompute(socket) do
     assigns = socket.assigns
+    filters = if assigns.mode == :accounts, do: %{}, else: assigns.filter_criteria
 
     criteria =
-      Map.merge(assigns.filter_criteria, %{
+      Map.merge(filters, %{
         included_user_ids: assigns.included_user_ids,
         excluded_user_ids: assigns.excluded_user_ids
       })
 
-    match = Newsletters.audience_count(criteria)
+    # An empty allowlist is *nobody* (0), not everyone: a criteria map with no
+    # positive selector matches everyone by design, which is right for the
+    # filter builder but wrong for a hand-picked list that just hasn't been
+    # filled yet.
+    match =
+      if assigns.mode == :accounts and assigns.included_user_ids == [],
+        do: 0,
+        else: Newsletters.audience_count(criteria)
 
-    effective =
-      if is_integer(assigns.max_size) and assigns.max_size < match,
-        do: assigns.max_size,
-        else: match
+    cap = if assigns.mode == :accounts, do: nil, else: assigns.max_size
+
+    effective = if is_integer(cap) and cap < match, do: cap, else: match
 
     socket
     |> assign(:criteria, criteria)
     |> assign(:match_count, match)
     |> assign(:effective_count, effective)
+    |> assign(:included_users, Newsletters.users_by_ids(assigns.included_user_ids))
     |> assign_excluded_chips(assigns.excluded_user_ids)
     |> assign_list()
+  end
+
+  # On save, fold the curation lists into the params. In accounts mode the group
+  # is persisted as a pure allowlist: every filter field is reset (the inputs are
+  # hidden in this mode, so a converted group must not keep matching by filter)
+  # and only the chosen accounts remain.
+  defp finalize_params(params, %{mode: :accounts} = assigns) do
+    Map.merge(params, %{
+      "locales" => [],
+      "country" => "",
+      "min_age" => nil,
+      "max_age" => nil,
+      "max_size" => nil,
+      "random_sample" => "false",
+      "username" => "",
+      "tag_name" => "",
+      "included_group_ids" => [],
+      "excluded_group_ids" => [],
+      "included_user_ids" => assigns.included_user_ids,
+      "excluded_user_ids" => []
+    })
+  end
+
+  defp finalize_params(params, assigns) do
+    Map.merge(params, %{
+      "included_user_ids" => assigns.included_user_ids,
+      "excluded_user_ids" => assigns.excluded_user_ids
+    })
   end
 
   # The "Removed" chips, capped so a bulk unselect-all can't render thousands.
@@ -309,28 +388,41 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     |> assign(:excluded_extra, max(length(ids) - @chip_cap, 0))
   end
 
-  # The curation list: the audience itself when not searching, or the eligible
-  # members matching the search (so any account can be found to add). Each row's
-  # tick state comes from `members_checked` (the ids actually in the audience).
+  # The curation list. When searching, the eligible members matching the search
+  # (so any account can be found to add) in either mode. When not searching:
+  # the filter audience in filters mode; in accounts mode the chosen allowlist
+  # is rendered from `@included_users` instead, so no preview query runs. Each
+  # row's tick/added state comes from `members_checked` — in filters mode the
+  # ids actually in the audience, in accounts mode the allowlist itself.
   defp assign_list(socket) do
     assigns = socket.assigns
     per_page = Newsletters.preview_limit()
+    searching? = assigns.member_search not in [nil, ""]
 
     {rows, total} =
-      if assigns.member_search in [nil, ""] do
-        {Newsletters.audience_preview(assigns.criteria,
-           page: assigns.list_page,
-           per_page: per_page
-         ), assigns.match_count}
-      else
-        {Newsletters.search_members(assigns.member_search,
-           page: assigns.list_page,
-           per_page: per_page
-         ), Newsletters.search_members_count(assigns.member_search)}
+      cond do
+        searching? ->
+          {Newsletters.search_members(assigns.member_search,
+             page: assigns.list_page,
+             per_page: per_page
+           ), Newsletters.search_members_count(assigns.member_search)}
+
+        assigns.mode == :accounts ->
+          {[], 0}
+
+        true ->
+          {Newsletters.audience_preview(assigns.criteria,
+             page: assigns.list_page,
+             per_page: per_page
+           ), assigns.match_count}
       end
 
     checked =
-      MapSet.new(Newsletters.audience_member_ids(assigns.criteria, Enum.map(rows, & &1.id)))
+      if assigns.mode == :accounts do
+        MapSet.new(assigns.included_user_ids)
+      else
+        MapSet.new(Newsletters.audience_member_ids(assigns.criteria, Enum.map(rows, & &1.id)))
+      end
 
     socket
     |> assign(:members, rows)
@@ -589,11 +681,44 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             />
           </div>
 
-          <div class="grid gap-5 sm:grid-cols-2">
-            <div>
-              <span class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
-                {gettext("Language")}
-              </span>
+          <div>
+            <span class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+              {gettext("How to build this audience")}
+            </span>
+            <div
+              class="mt-2 inline-flex rounded-lg border border-slate-300 p-1 dark:border-slate-700"
+              role="group"
+            >
+              <button
+                type="button"
+                id="mode-filters"
+                phx-click="set_mode"
+                phx-value-mode="filters"
+                class={mode_tab_class(@mode == :filters)}
+              >
+                {gettext("From filters")}
+              </button>
+              <button
+                type="button"
+                id="mode-accounts"
+                phx-click="set_mode"
+                phx-value-mode="accounts"
+                class={mode_tab_class(@mode == :accounts)}
+              >
+                {gettext("Specific accounts")}
+              </button>
+            </div>
+            <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+              {gettext("Pick members from filters, or hand-pick specific accounts (e.g. a small group of testers).")}
+            </p>
+          </div>
+
+          <div :if={@mode == :filters} class="space-y-5">
+            <div class="grid gap-5 sm:grid-cols-2">
+              <div>
+                <span class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {gettext("Language")}
+                </span>
               <input type="hidden" name="newsletter_group[locales][]" value="" />
               <div class="mt-2 flex flex-wrap gap-4">
                 <label :for={loc <- NewsletterGroup.locales()} class="inline-flex items-center gap-2 text-sm">
@@ -910,6 +1035,144 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
               </li>
             </ul>
           </div>
+          </div>
+
+          <div :if={@mode == :accounts} class="space-y-4">
+            <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/30">
+              <p class="text-sm text-slate-700 dark:text-slate-200">
+                {gettext("Accounts in this audience")}:
+                <strong class="text-lg" id="account-count">{@match_count}</strong>
+              </p>
+              <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Only these accounts get the newsletter. Search for members below and add them one by one.")}
+              </p>
+            </div>
+
+            <div>
+              <label
+                for="account_search"
+                class="block text-sm font-semibold text-slate-700 dark:text-slate-200"
+              >
+                {gettext("Find accounts to add")}
+              </label>
+              <input
+                type="text"
+                name="member_search"
+                id="account_search"
+                value={@member_search}
+                placeholder={gettext("search by @handle…")}
+                class={[input_class(), "mt-1"]}
+                phx-debounce="300"
+              />
+            </div>
+
+            <div :if={@member_search in [nil, ""]} id="chosen-accounts">
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {gettext("Chosen accounts")}
+              </p>
+              <p :if={@included_users == []} class="card__empty">
+                {gettext("No accounts yet. Search above to add some.")}
+              </p>
+              <ul :if={@included_users != []} class="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                <li
+                  :for={user <- @included_users}
+                  class="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <button
+                    type="button"
+                    phx-click="remove_member"
+                    phx-value-id={user.id}
+                    title={gettext("Remove from audience")}
+                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs leading-none text-rose-700 hover:bg-rose-200 dark:bg-rose-900/40 dark:text-rose-200"
+                  >
+                    ✕
+                  </button>
+                  <.link navigate={~p"/#{user}"} class="flex min-w-0 items-center gap-2">
+                    <.avatar user={user} size="xs" />
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                        {UserHelpers.full_name(user)}
+                      </span>
+                      <span class="block truncate text-xs text-slate-500">@{user.username}</span>
+                    </span>
+                  </.link>
+                </li>
+              </ul>
+            </div>
+
+            <div :if={@member_search not in [nil, ""]} id="account-search-results" class="space-y-3">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                  {gettext("Search results")}
+                  <span class="font-normal text-slate-500">
+                    ({gettext("page %{page} of %{pages}, %{total} total",
+                      page: @list_page,
+                      pages: list_pages(@list_total),
+                      total: @list_total
+                    )})
+                  </span>
+                </p>
+                <div :if={list_pages(@list_total) > 1} class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    phx-click="list_page"
+                    phx-value-page={@list_page - 1}
+                    disabled={@list_page <= 1}
+                    class={preview_nav_class()}
+                  >
+                    {gettext("Previous")}
+                  </button>
+                  <button
+                    type="button"
+                    phx-click="list_page"
+                    phx-value-page={@list_page + 1}
+                    disabled={@list_page >= list_pages(@list_total)}
+                    class={preview_nav_class()}
+                  >
+                    {gettext("Next")}
+                  </button>
+                </div>
+              </div>
+
+              <p :if={@members == []} class="card__empty">{gettext("No members.")}</p>
+
+              <ul :if={@members != []} class="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
+                <li
+                  :for={user <- @members}
+                  class="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                >
+                  <%= if user.id in @members_checked do %>
+                    <button
+                      type="button"
+                      phx-click="remove_member"
+                      phx-value-id={user.id}
+                      class="shrink-0 rounded-full bg-brand-600 px-2 py-0.5 text-xs font-semibold text-white"
+                    >
+                      {gettext("Added")} ✓
+                    </button>
+                  <% else %>
+                    <button
+                      type="button"
+                      phx-click="add_member"
+                      phx-value-id={user.id}
+                      class="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      {gettext("Add to audience")}
+                    </button>
+                  <% end %>
+                  <.link navigate={~p"/#{user}"} class="flex min-w-0 items-center gap-2">
+                    <.avatar user={user} size="xs" />
+                    <span class="min-w-0">
+                      <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+                        {UserHelpers.full_name(user)}
+                      </span>
+                      <span class="block truncate text-xs text-slate-500">@{user.username}</span>
+                    </span>
+                  </.link>
+                </li>
+              </ul>
+            </div>
+          </div>
 
           <div class="flex items-center gap-4">
             <.button type="submit">{gettext("Save audience")}</.button>
@@ -934,4 +1197,12 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     "rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 " <>
       "disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
   end
+
+  # The segmented build-mode tab: brand-filled when active, quiet otherwise.
+  defp mode_tab_class(true),
+    do: "rounded-md px-3 py-1.5 text-sm font-semibold bg-brand-600 text-white"
+
+  defp mode_tab_class(false),
+    do:
+      "rounded-md px-3 py-1.5 text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-slate-100"
 end

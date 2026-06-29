@@ -6679,3 +6679,58 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "updates automatically"
 msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "How to build this audience"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "From filters"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Specific accounts"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Pick members from filters, or hand-pick specific accounts (e.g. a small group of testers)."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Accounts in this audience"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Only these accounts get the newsletter. Search for members below and add them one by one."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Find accounts to add"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Chosen accounts"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "No accounts yet. Search above to add some."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Remove from audience"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Add to audience"
+msgstr ""

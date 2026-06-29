@@ -189,4 +189,62 @@ defmodule VutuvWeb.Admin.NewsletterGroupLiveTest do
       assert group.name =~ ~r/^Audience \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/
     end
   end
+
+  describe "specific-accounts mode (hand-picked allowlist)" do
+    test "switching to Specific accounts hides the filters and shows the picker", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/newsletter_groups/new")
+      # The default builder shows the filter inputs.
+      assert has_element?(lv, "#group_username")
+
+      lv |> element("#mode-accounts") |> render_click()
+
+      assert has_element?(lv, "#account_search")
+      assert has_element?(lv, "#chosen-accounts")
+      refute has_element?(lv, "#group_username")
+    end
+
+    test "search, add an account, and save a group of exactly that account", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      grace = member("g@x.com", username: "grace-hopper")
+      _ada = member("a@x.com", username: "ada-lovelace")
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/newsletter_groups/new")
+      lv |> element("#mode-accounts") |> render_click()
+
+      # Find grace and add her to the allowlist.
+      lv |> form("#group-form", %{member_search: "grace*"}) |> render_change()
+      assert has_element?(lv, ~s|button[phx-click="add_member"][phx-value-id="#{grace.id}"]|)
+
+      lv
+      |> element(~s|button[phx-click="add_member"][phx-value-id="#{grace.id}"]|)
+      |> render_click()
+
+      assert has_element?(lv, "#account-count", "1")
+
+      lv |> form("#group-form", newsletter_group: %{name: "Beta testers"}) |> render_submit()
+      assert_redirect(lv, ~p"/admin/newsletter_groups")
+
+      assert [group] = Newsletters.list_groups()
+      assert group.name == "Beta testers"
+      assert group.included_user_ids == [grace.id]
+      assert group.locales == []
+      assert group.member_count == 1
+    end
+
+    test "an allowlist group reopens in Specific accounts mode on edit", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      picked = member("p@x.com", username: "picked-one")
+
+      {:ok, group} =
+        Newsletters.create_group(%{"name" => "Testers", "included_user_ids" => [picked.id]})
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/newsletter_groups/#{group.id}/edit")
+
+      assert has_element?(lv, "#account_search")
+      assert has_element?(lv, ~s|#chosen-accounts a[href="/picked-one"]|)
+      refute has_element?(lv, "#group_username")
+    end
+  end
 end

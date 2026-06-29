@@ -7792,3 +7792,58 @@ msgstr "Gestern"
 #, elixir-autogen, elixir-format
 msgid "updates automatically"
 msgstr "aktualisiert sich automatisch"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "How to build this audience"
+msgstr "Wie diese Zielgruppe entsteht"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "From filters"
+msgstr "Aus Filtern"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Specific accounts"
+msgstr "Bestimmte Konten"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Pick members from filters, or hand-pick specific accounts (e.g. a small group of testers)."
+msgstr "Wählen Sie Mitglieder über Filter oder fügen Sie gezielt bestimmte Konten hinzu (z. B. eine kleine Gruppe von Testern)."
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Accounts in this audience"
+msgstr "Konten in dieser Zielgruppe"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Only these accounts get the newsletter. Search for members below and add them one by one."
+msgstr "Nur diese Konten erhalten den Newsletter. Suchen Sie unten nach Mitgliedern und fügen Sie sie einzeln hinzu."
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Find accounts to add"
+msgstr "Konten zum Hinzufügen suchen"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Chosen accounts"
+msgstr "Ausgewählte Konten"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "No accounts yet. Search above to add some."
+msgstr "Noch keine Konten. Suchen Sie oben, um welche hinzuzufügen."
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Remove from audience"
+msgstr "Aus der Zielgruppe entfernen"
+
+#: lib/vutuv_web/live/admin/newsletter_group_live.ex
+#, elixir-autogen, elixir-format
+msgid "Add to audience"
+msgstr "Hinzufügen"

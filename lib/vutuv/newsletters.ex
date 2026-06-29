@@ -494,13 +494,7 @@ defmodule Vutuv.Newsletters do
       )
 
     base
-    |> where(
-      ^membership(
-        filter_predicate(criteria, today),
-        present_ids(criteria, :included_group_ids),
-        present_ids(criteria, :included_user_ids)
-      )
-    )
+    |> where(^membership(criteria, today))
     |> exclude_groups(present_ids(criteria, :excluded_group_ids))
     |> exclude_users(present_ids(criteria, :excluded_user_ids))
   end
@@ -509,24 +503,39 @@ defmodule Vutuv.Newsletters do
     criteria |> Map.get(key) |> List.wrap() |> Enum.reject(&(&1 in [nil, ""]))
   end
 
-  # Matches the filter, OR belongs to an added group, OR is an added account.
-  defp membership(filter, [], []), do: filter
-
-  defp membership(filter, group_ids, user_ids) do
-    dynamic([u], ^filter or ^added(group_ids, user_ids))
+  # The "is in this audience" predicate. A member belongs when they match the
+  # filters, are in an *added* group, or are an *added* account - the three
+  # positive selectors, OR-ed together. With *no* positive selector at all the
+  # audience is everyone (the "all members" group and the "send to the rest"
+  # group both rely on this); but the moment any positive selector is present
+  # the audience is exactly the union of those, so a hand-picked account list
+  # resolves to just those accounts rather than everyone-plus-them. (An empty
+  # filter must therefore contribute *nothing* here, not vacuously match all.)
+  defp membership(criteria, today) do
+    [
+      filter_predicate(criteria, today),
+      included_groups_clause(present_ids(criteria, :included_group_ids)),
+      included_users_clause(present_ids(criteria, :included_user_ids))
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> dynamic(true)
+      clauses -> Enum.reduce(clauses, fn clause, acc -> dynamic(^acc or ^clause) end)
+    end
   end
 
-  defp added(group_ids, []), do: dynamic([u], u.id in subquery(group_member_ids(group_ids)))
-  defp added([], user_ids), do: dynamic([u], u.id in ^user_ids)
+  defp included_groups_clause([]), do: nil
+  defp included_groups_clause(ids), do: dynamic([u], u.id in subquery(group_member_ids(ids)))
 
-  defp added(group_ids, user_ids) do
-    dynamic([u], u.id in subquery(group_member_ids(group_ids)) or u.id in ^user_ids)
-  end
+  defp included_users_clause([]), do: nil
+  defp included_users_clause(ids), do: dynamic([u], u.id in ^ids)
 
   defp group_member_ids(ids) do
     from(m in NewsletterGroupMember, where: m.group_id in ^ids, select: m.user_id)
   end
 
+  # The AND-combined filter clauses, or nil when no filter criterion is set (so
+  # an empty filter contributes nobody to `membership/2` rather than everybody).
   defp filter_predicate(criteria, today) do
     [
       locale_predicate(Map.get(criteria, :locales)),
@@ -537,7 +546,10 @@ defmodule Vutuv.Newsletters do
       username_predicate(Map.get(criteria, :username))
     ]
     |> Enum.reject(&is_nil/1)
-    |> Enum.reduce(dynamic(true), fn predicate, acc -> dynamic(^acc and ^predicate) end)
+    |> case do
+      [] -> nil
+      predicates -> Enum.reduce(predicates, fn predicate, acc -> dynamic(^acc and ^predicate) end)
+    end
   end
 
   defp locale_predicate(locales) when is_list(locales) and locales != [],
