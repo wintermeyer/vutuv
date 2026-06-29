@@ -54,10 +54,20 @@ if config_env() == :prod do
   # if the binary is not on $PATH under one of the usual names.
   config :vutuv, :chromium_path, System.get_env("CHROMIUM_PATH")
 
-  # Post images are auth-proxied: the app checks the post's audience, nginx
-  # streams the bytes via X-Accel-Redirect from an `internal` location
-  # (see README deploy notes). Dev/test use the send_file fallback instead.
-  config :vutuv, :post_image_serving, :accel_redirect
+  # Post images are auth-proxied: the app checks the post's audience, then
+  # serves the bytes itself with send_file (the sendfile syscall, no in-memory
+  # buffering), and nginx proxies them like any other app response.
+  #
+  # We deliberately do NOT use the X-Accel-Redirect handoff here. It was tried
+  # in production (2026-06-29) and, although the nginx `internal_post_images`
+  # location is present and correct and the files are readable by the nginx
+  # user, nginx rejected every X-Accel internal redirect with its bare
+  # `internal` 404 instead of streaming the file, so every post image came back
+  # broken. `send_file` is the path dev/test already use, so it is well tested
+  # and audience-guarded identically. The `:accel_redirect` mode still exists
+  # (the controller branches on this value) for if the nginx X-Accel handoff is
+  # ever root-caused and re-enabled.
+  config :vutuv, :post_image_serving, :send_file
 
   # Bearer token for POST /webhooks/bounces (the Postfix bounce pipe, see
   # README "Email bounce handling"). Unset => the endpoint 404s, bounce
