@@ -10,6 +10,10 @@ defmodule VutuvWeb.Router do
     plug(:accepts, ["html"])
     plug(:fetch_session)
     plug(:fetch_flash)
+    # Records a click on a newsletter's tracked vutuv.de link and redirects to
+    # the clean URL. Early, so a tracked click never does the rest of the
+    # pipeline's per-request work just to throw the page away on the redirect.
+    plug(Plugs.NewsletterClick)
     plug(:protect_from_forgery)
     plug(:put_secure_browser_headers)
     plug(Plugs.ContentSecurityPolicy)
@@ -370,8 +374,10 @@ defmodule VutuvWeb.Router do
     # The email newsletter ("Rundbrief"): compose/store a draft, send a test to
     # one address, broadcast to all members, and read the per-recipient delivery
     # log. See Vutuv.Newsletters; test/broadcast are the two extra POST actions.
+    # /clicks is the link-click detail log behind the success overview.
     resources("/newsletters", NewsletterController)
     post("/newsletters/:id/test", NewsletterController, :test)
+    get("/newsletters/:id/clicks", NewsletterController, :clicks)
   end
 
   # The newsletter audience builder is a LiveView (live "how many match" count as

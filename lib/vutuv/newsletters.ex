@@ -22,6 +22,7 @@ defmodule Vutuv.Newsletters do
   alias Vutuv.Newsletters.{
     Markdown,
     Newsletter,
+    NewsletterClick,
     NewsletterDelivery,
     NewsletterGroup,
     NewsletterGroupMember
@@ -33,6 +34,7 @@ defmodule Vutuv.Newsletters do
   alias Vutuv.Repo
   alias Vutuv.Tags.{Tag, UserTag}
   alias Vutuv.UUIDv7
+  alias VutuvWeb.NewsletterToken
   alias VutuvWeb.UnsubscribeToken
   alias VutuvWeb.UserHelpers
 
@@ -116,7 +118,7 @@ defmodule Vutuv.Newsletters do
     email = String.trim(email)
 
     if Regex.match?(@email_re, email) do
-      content_html = Markdown.to_email_html(newsletter.body)
+      content_html = Markdown.to_email_html(newsletter.body, track: true)
       unsubscribe_url = UnsubscribeToken.url(admin, :newsletter_emails?)
 
       delivery =
@@ -707,6 +709,104 @@ defmodule Vutuv.Newsletters do
 
   defp validated(_value, _allowed), do: nil
 
+  ## Click tracking (the success overview)
+
+  @clicks_per_page 50
+  @max_url 255
+
+  @doc "The click-log page size, shared by the query and the pager."
+  def clicks_per_page, do: @clicks_per_page
+
+  @doc """
+  Records that the recipient identified by `user_id` followed the tracked link
+  `url` in newsletter `newsletter_id` (the "when" is the row's `inserted_at`).
+  Best-effort: a stale link whose newsletter or member is gone is ignored rather
+  than 500ing the visitor's navigation. Returns `:ok` or `:error`.
+  """
+  def record_click(newsletter_id, user_id, url)
+      when is_binary(newsletter_id) and is_binary(user_id) and is_binary(url) do
+    Repo.insert!(%NewsletterClick{
+      newsletter_id: newsletter_id,
+      user_id: user_id,
+      url: String.slice(url, 0, @max_url)
+    })
+
+    :ok
+  rescue
+    Ecto.ConstraintError -> :error
+  end
+
+  @doc """
+  The headline success numbers for `newsletter`, over the clicks by members it
+  was actually broadcast to (test clicks are excluded): how many recipients, how
+  many distinct members clicked, the total clicks, and the click rate in percent.
+  """
+  def newsletter_stats(%Newsletter{} = newsletter) do
+    %{clicks: clicks, clickers: clickers} =
+      Repo.one(
+        from(c in broadcast_clicks_query(newsletter.id),
+          select: %{clicks: count(c.id), clickers: count(c.user_id, :distinct)}
+        )
+      )
+
+    %{
+      recipients: newsletter.recipient_count,
+      total_clicks: clicks,
+      unique_clickers: clickers,
+      click_rate: click_rate(clickers, newsletter.recipient_count)
+    }
+  end
+
+  @doc """
+  Per-link tally for `newsletter` (broadcast clicks only), most-clicked first:
+  the link `url`, the total `clicks`, and the distinct `clickers`.
+  """
+  def link_stats(%Newsletter{} = newsletter) do
+    newsletter.id
+    |> broadcast_clicks_query()
+    |> group_by([c], c.url)
+    |> select([c], %{url: c.url, clicks: count(c.id), clickers: count(c.user_id, :distinct)})
+    |> order_by([c], desc: count(c.id), asc: c.url)
+    |> Repo.all()
+  end
+
+  @doc "How many broadcast clicks `newsletter` has (for the click-log pager)."
+  def count_clicks(%Newsletter{} = newsletter),
+    do: Repo.aggregate(broadcast_clicks_query(newsletter.id), :count)
+
+  @doc """
+  One page of `newsletter`'s broadcast click log, newest first, with the member
+  preloaded. `opts` may carry `:total` (skip the recount) and `:per_page`.
+  """
+  def list_clicks(%Newsletter{} = newsletter, params \\ %{}, opts \\ []) do
+    per_page = Keyword.get(opts, :per_page, @clicks_per_page)
+    total = Keyword.get(opts, :total) || count_clicks(newsletter)
+
+    newsletter.id
+    |> broadcast_clicks_query()
+    |> order_by([c], desc: c.inserted_at, desc: c.id)
+    |> preload([:user])
+    |> Pages.paginate(params, total, per_page)
+    |> Repo.all()
+  end
+
+  # A newsletter's clicks restricted to members it was broadcast to: the inner
+  # join to a "broadcast" delivery for the same (newsletter, member) drops test
+  # clicks and clicks whose member was since deleted (nilified user_id). One
+  # broadcast delivery exists per recipient, so the join never fans a click out.
+  defp broadcast_clicks_query(newsletter_id) do
+    from(c in NewsletterClick,
+      join: d in NewsletterDelivery,
+      on:
+        d.newsletter_id == c.newsletter_id and d.user_id == c.user_id and
+          d.kind == "broadcast",
+      where: c.newsletter_id == ^newsletter_id
+    )
+  end
+
+  defp click_rate(_clickers, recipients) when recipients in [nil, 0], do: 0.0
+  defp click_rate(clickers, recipients), do: clickers / recipients * 100
+
   # Flips the draft to "sending" only if it is still a draft (recording the
   # chosen audience), so exactly one caller wins the broadcast (update_all
   # reports how many rows it changed).
@@ -723,7 +823,7 @@ defmodule Vutuv.Newsletters do
   end
 
   defp run_broadcast(%Newsletter{} = newsletter) do
-    content_html = Markdown.to_email_html(newsletter.body)
+    content_html = Markdown.to_email_html(newsletter.body, track: true)
     now = NaiveDateTime.utc_now(:second)
 
     count =
@@ -765,6 +865,7 @@ defmodule Vutuv.Newsletters do
          unsubscribe_url
        ) do
     subs = substitutions(subs_user, to_email)
+    click_token = NewsletterToken.sign(newsletter, subs_user)
 
     status =
       %{
@@ -772,7 +873,10 @@ defmodule Vutuv.Newsletters do
         to_email: to_email,
         subject: Markdown.apply_vars(newsletter.subject, subs),
         locale: email_locale(subs_user),
-        content_html: Markdown.apply_vars(content_html, subs, escape: true),
+        content_html:
+          content_html
+          |> Markdown.apply_vars(subs, escape: true)
+          |> Markdown.put_click_token(click_token),
         content_text: Markdown.apply_vars(newsletter.body, subs),
         unsubscribe_url: unsubscribe_url
       }

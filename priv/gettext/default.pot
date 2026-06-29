@@ -7509,3 +7509,73 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Search, filter and sort every account, and verify a member's identity."
 msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Resonance"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Members who clicked"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Total clicks"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Clicks per link"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "No link clicks yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Clicks"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Full click log"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Note: automated email-security scanners can follow links and inflate these numbers."
+msgstr ""
+
+#: lib/vutuv_web/controllers/admin/newsletter_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Newsletter clicks"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Link clicks"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "No clicks recorded yet."
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "(deleted member)"
+msgstr ""

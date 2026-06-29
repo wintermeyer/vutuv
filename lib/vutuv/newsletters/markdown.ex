@@ -14,7 +14,25 @@ defmodule Vutuv.Newsletters.Markdown do
   body is rendered to HTML **once** and the per-recipient values are substituted
   into the finished HTML afterwards (`apply_vars/3`), HTML-escaped for the HTML
   body and raw for the plain-text body and the subject line.
+
+  ## Click tracking
+
+  With `to_email_html(body, track: true)` every link to vutuv.de gets a
+  `?nlt=<placeholder>` tracking parameter on its `href` (the visible link text is
+  untouched, so the URL still reads normally). The placeholder is swapped for the
+  per-recipient signed token by `put_click_token/2`, once per recipient, after
+  the merge variables are substituted. The plain-text body never goes through
+  here, so the ASCII version keeps the bare link. External links are left alone.
   """
+
+  alias VutuvWeb.NewsletterToken
+
+  # The literal stand-in for the per-recipient click token. It is inserted into
+  # the rendered HTML once (so the render still happens a single time) and
+  # `put_click_token/2` replaces it per recipient. Deliberately made of plain
+  # letters/underscores so Earmark's HTML transform leaves it byte-for-byte
+  # intact and a simple String.replace finds it.
+  @click_sentinel "__vutuv_nlt__"
 
   # Mirrors the brand/slate palette + fonts in VutuvWeb.EmailComponents, kept
   # inline here (an HTML-email AST needs literal style strings, not a component).
@@ -69,16 +87,32 @@ defmodule Vutuv.Newsletters.Markdown do
   `breaks: true` makes a single newline a `<br>` (like the chat composer and the
   plain-text email body), so an admin's multi-line signature stays multi-line
   instead of collapsing into one paragraph line.
+
+  With `track: true` every internal (vutuv.de) link gets the click-tracking
+  placeholder on its `href` (see `put_click_token/2`); the default leaves links
+  untouched (the admin preview).
   """
-  def to_email_html(markdown) when is_binary(markdown) do
+  def to_email_html(markdown, opts \\ [])
+
+  def to_email_html(markdown, opts) when is_binary(markdown) do
     {_status, ast, _messages} = Earmark.as_ast(markdown, breaks: true)
+    hosts = if Keyword.get(opts, :track, false), do: internal_hosts(), else: []
 
     ast
-    |> style_nodes()
+    |> style_nodes(hosts)
     |> Earmark.Transform.transform()
   end
 
-  def to_email_html(_), do: ""
+  def to_email_html(_markdown, _opts), do: ""
+
+  @doc """
+  Swaps the per-recipient click-token placeholder left by
+  `to_email_html(body, track: true)` for `token` in the rendered HTML. Called
+  once per recipient, after the merge variables are substituted. A no-op when the
+  body carries no tracked links.
+  """
+  def put_click_token(html, token) when is_binary(html) and is_binary(token),
+    do: String.replace(html, @click_sentinel, token)
 
   @doc """
   Substitutes every `{{var}}` in `string` from `subs`. With `escape: true` the
@@ -104,16 +138,16 @@ defmodule Vutuv.Newsletters.Markdown do
     |> Phoenix.HTML.safe_to_string()
   end
 
-  defp style_nodes(nodes) when is_list(nodes) do
-    nodes |> Enum.map(&style_node/1) |> preserve_indent()
+  defp style_nodes(nodes, hosts) when is_list(nodes) do
+    nodes |> Enum.map(&style_node(&1, hosts)) |> preserve_indent()
   end
 
-  defp style_node({tag, attrs, content, meta}) do
-    {tag, with_style(tag, attrs), style_nodes(content), meta}
+  defp style_node({tag, attrs, content, meta}, hosts) do
+    {tag, attrs |> with_style(tag) |> track_link(tag, hosts), style_nodes(content, hosts), meta}
   end
 
   # Text nodes (binaries) and anything else pass through unchanged.
-  defp style_node(other), do: other
+  defp style_node(other, _hosts), do: other
 
   # Make leading spaces on a line that follows a line break visible: HTML would
   # otherwise collapse them, so an indented signature line (e.g. two spaces
@@ -140,10 +174,50 @@ defmodule Vutuv.Newsletters.Markdown do
     end)
   end
 
-  defp with_style(tag, attrs) do
+  defp with_style(attrs, tag) do
     case Map.fetch(@styles, tag) do
       {:ok, style} -> [{"style", style} | attrs]
       :error -> attrs
     end
   end
+
+  # Appends the click-tracking placeholder to an internal link's href. Only
+  # touches <a> tags, and only when tracking is on (hosts != []). The visible
+  # link content is left alone — only the href carries the parameter.
+  defp track_link(attrs, "a", [_ | _] = hosts) do
+    Enum.map(attrs, fn
+      {"href", url} -> {"href", tracked_href(url, hosts)}
+      other -> other
+    end)
+  end
+
+  defp track_link(attrs, _tag, _hosts), do: attrs
+
+  defp tracked_href(url, hosts) when is_binary(url) do
+    uri = URI.parse(url)
+
+    if uri.host in hosts do
+      URI.to_string(%{uri | query: append_click_param(uri.query)})
+    else
+      url
+    end
+  end
+
+  defp tracked_href(url, _hosts), do: url
+
+  defp append_click_param(nil), do: "#{NewsletterToken.param()}=#{@click_sentinel}"
+  defp append_click_param(query), do: "#{query}&#{NewsletterToken.param()}=#{@click_sentinel}"
+
+  # The hosts that count as "vutuv.de" for link tracking: the configured public
+  # host plus its www/non-www twin, so a link to either form is tracked.
+  defp internal_hosts do
+    case Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] do
+      url when is_binary(url) -> url |> URI.parse() |> Map.get(:host) |> host_variants()
+      _ -> []
+    end
+  end
+
+  defp host_variants(nil), do: []
+  defp host_variants("www." <> rest = host), do: [host, rest]
+  defp host_variants(host), do: [host, "www." <> host]
 end

@@ -30,6 +30,22 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
   @doc "The delivery-log page size, shared by the query and the pager."
   def deliveries_per_page, do: Newsletters.deliveries_per_page()
 
+  @doc "The click-log page size, shared by the query and the pager."
+  def clicks_per_page, do: Newsletters.clicks_per_page()
+
+  @doc "A click rate as a one-decimal percentage string, German with a decimal comma."
+  def percent(rate) when is_number(rate) do
+    decimal = if Gettext.get_locale(VutuvWeb.Gettext) == "de", do: ",", else: "."
+
+    string =
+      rate
+      |> Float.round(1)
+      |> :erlang.float_to_binary(decimals: 1)
+      |> String.replace(".", decimal)
+
+    "#{string} %"
+  end
+
   @doc "The active filters as a string-keyed query map (for the pager and links)."
   def delivery_query(filters) do
     %{

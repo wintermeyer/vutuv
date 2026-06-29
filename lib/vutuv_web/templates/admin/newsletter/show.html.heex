@@ -41,6 +41,82 @@
     </p>
   </section>
 
+  <%!-- Success: link-click engagement for a sent newsletter --%>
+  <section :if={@newsletter.status == "sent"} class="card">
+    <h1>{gettext("Resonance")}</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked.")}
+    </p>
+
+    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+      <div class="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+        <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Recipients")}
+        </p>
+        <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+          {delimited_count(@stats.recipients)}
+        </p>
+      </div>
+      <div class="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+        <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Members who clicked")}
+        </p>
+        <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+          {delimited_count(@stats.unique_clickers)}
+          <span class="text-base font-normal text-slate-600 dark:text-slate-400">
+            ({percent(@stats.click_rate)})
+          </span>
+        </p>
+      </div>
+      <div class="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+        <p class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Total clicks")}
+        </p>
+        <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">
+          {delimited_count(@stats.total_clicks)}
+        </p>
+      </div>
+    </div>
+
+    <h2 class="card__label mt-6">{gettext("Clicks per link")}</h2>
+    <p :if={@link_stats == []} class="card__empty">{gettext("No link clicks yet.")}</p>
+
+    <div :if={@link_stats != []} class="mt-2 card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Link")}</th>
+            <th>{gettext("Clicks")}</th>
+            <th>{gettext("Members")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={link <- @link_stats}>
+            <td class="breakwrap">
+              <a href={link.url} target="_blank" rel="noopener">{link.url}</a>
+            </td>
+            <td>{delimited_count(link.clicks)}</td>
+            <td>{delimited_count(link.clickers)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="mt-4">
+      <.link
+        navigate={~p"/admin/newsletters/#{@newsletter}/clicks"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+        id="view-clicks"
+      >
+        {gettext("Full click log")} ›
+      </.link>
+    </p>
+
+    <p class="mt-3 text-xs text-slate-600 dark:text-slate-400">
+      {gettext("Note: automated email-security scanners can follow links and inflate these numbers.")}
+    </p>
+  </section>
+
   <%!-- Preview, rendered with your own account data for the variables --%>
   <section class="card">
     <h1>{gettext("Preview")}</h1>

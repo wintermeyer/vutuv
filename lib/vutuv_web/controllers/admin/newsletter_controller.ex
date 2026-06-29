@@ -52,7 +52,22 @@ defmodule VutuvWeb.Admin.NewsletterController do
         preview: Newsletters.preview(newsletter, conn.assigns.current_user),
         filters: filters,
         delivery_total: total,
-        deliveries: Newsletters.list_deliveries(newsletter, filters, params, total: total)
+        deliveries: Newsletters.list_deliveries(newsletter, filters, params, total: total),
+        stats: Newsletters.newsletter_stats(newsletter),
+        link_stats: Newsletters.link_stats(newsletter)
+      )
+    end)
+  end
+
+  def clicks(conn, %{"id" => id} = params) do
+    with_newsletter(conn, id, fn newsletter ->
+      total = Newsletters.count_clicks(newsletter)
+
+      render(conn, "clicks.html",
+        page_title: gettext("Newsletter clicks"),
+        newsletter: newsletter,
+        click_total: total,
+        clicks: Newsletters.list_clicks(newsletter, params, total: total)
       )
     end)
   end

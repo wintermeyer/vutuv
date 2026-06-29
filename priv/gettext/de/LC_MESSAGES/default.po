@@ -7677,3 +7677,73 @@ msgstr "Alles, was vutuv am Laufen hält, an einem Ort. Karten mit offener Arbei
 #, elixir-autogen, elixir-format
 msgid "Search, filter and sort every account, and verify a member's identity."
 msgstr "Jedes Konto durchsuchen, filtern und sortieren sowie die Identität eines Mitglieds verifizieren."
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Resonance"
+msgstr "Resonanz"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "How members engaged with the vutuv.de links in this newsletter. Counts the HTML email's links; the plain-text version is not tracked."
+msgstr "Wie Mitglieder mit den vutuv.de-Links in diesem Newsletter umgegangen sind. Gezählt werden die Links der HTML-E-Mail; die reine Text-Fassung wird nicht ausgewertet."
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Members who clicked"
+msgstr "Mitglieder mit Klick"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Total clicks"
+msgstr "Klicks gesamt"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Clicks per link"
+msgstr "Klicks pro Link"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "No link clicks yet."
+msgstr "Noch keine Klicks auf Links."
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Clicks"
+msgstr "Klicks"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Full click log"
+msgstr "Vollständiges Klickprotokoll"
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex
+#, elixir-autogen, elixir-format
+msgid "Note: automated email-security scanners can follow links and inflate these numbers."
+msgstr "Hinweis: Automatische E-Mail-Sicherheitsscanner können Links aufrufen und diese Zahlen erhöhen."
+
+#: lib/vutuv_web/controllers/admin/newsletter_controller.ex
+#, elixir-autogen, elixir-format
+msgid "Newsletter clicks"
+msgstr "Newsletter-Klicks"
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Link clicks"
+msgstr "Link-Klicks"
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when."
+msgstr "Jeder erfasste Klick auf einen vutuv.de-Link in diesem Newsletter, neueste zuerst: wer wann welchen Link angeklickt hat."
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "No clicks recorded yet."
+msgstr "Noch keine Klicks erfasst."
+
+#: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex
+#, elixir-autogen, elixir-format
+msgid "(deleted member)"
+msgstr "(gelöschtes Mitglied)"

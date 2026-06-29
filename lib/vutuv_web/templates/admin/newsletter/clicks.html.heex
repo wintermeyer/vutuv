@@ -1,0 +1,49 @@
+<.page_header
+  title={gettext("Clicks")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Newsletters"), ~p"/admin/newsletters"},
+    {@newsletter.subject, ~p"/admin/newsletters/#{@newsletter}"},
+    gettext("Clicks")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <h1 class="flex items-center gap-2">
+      {gettext("Link clicks")}
+      <.count_badge count={@click_total} />
+    </h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("Every recorded click on a vutuv.de link in this newsletter, newest first: who clicked which link, and when.")}
+    </p>
+
+    <p :if={@click_total == 0} class="card__empty">{gettext("No clicks recorded yet.")}</p>
+
+    <div :if={@clicks != []} class="mt-4 card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("When")}</th>
+            <th>{gettext("Member")}</th>
+            <th>{gettext("Link")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={click <- @clicks} id={"click-#{click.id}"}>
+            <td>{fmt(click.inserted_at)}</td>
+            <td class="breakwrap">
+              <a :if={click.user} href={~p"/#{click.user}"}>@{click.user.username}</a>
+              <span :if={is_nil(click.user)} class="text-slate-500">{gettext("(deleted member)")}</span>
+            </td>
+            <td class="breakwrap">
+              <a href={click.url} target="_blank" rel="noopener">{click.url}</a>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <.pager params={@conn.params} total={@click_total} per_page={clicks_per_page()} />
+  </section>
+</div>

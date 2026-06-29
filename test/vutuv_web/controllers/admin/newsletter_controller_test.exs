@@ -84,6 +84,39 @@ defmodule VutuvWeb.Admin.NewsletterControllerTest do
     end
   end
 
+  describe "success overview + clicks" do
+    test "a sent newsletter shows the resonance card with the click rate", %{conn: conn} do
+      {conn, admin} = create_and_login_admin(conn)
+      newsletter = create_draft(admin)
+      member = insert(:activated_user)
+      insert(:email, user: member, value: "m@example.com")
+      {:ok, :started} = Newsletters.start_broadcast(newsletter)
+      newsletter = Newsletters.get_newsletter!(newsletter.id)
+      Newsletters.record_click(newsletter.id, member.id, "/welcome")
+
+      response = html_response(get(conn, ~p"/admin/newsletters/#{newsletter}"), 200)
+      assert response =~ "Resonance"
+      assert response =~ "Members who clicked"
+      assert response =~ "/welcome"
+      assert response =~ "Full click log"
+    end
+
+    test "the clicks page lists the click log", %{conn: conn} do
+      {conn, admin} = create_and_login_admin(conn)
+      newsletter = create_draft(admin)
+      member = insert(:activated_user, username: "clicker")
+      insert(:email, user: member, value: "m@example.com")
+      {:ok, :started} = Newsletters.start_broadcast(newsletter)
+      newsletter = Newsletters.get_newsletter!(newsletter.id)
+      Newsletters.record_click(newsletter.id, member.id, "/welcome")
+
+      response = html_response(get(conn, ~p"/admin/newsletters/#{newsletter}/clicks"), 200)
+      assert response =~ "Link clicks"
+      assert response =~ "clicker"
+      assert response =~ "/welcome"
+    end
+  end
+
   describe "test send" do
     test "sends a test and logs it", %{conn: conn} do
       {conn, admin} = create_and_login_admin(conn)

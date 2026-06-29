@@ -10,6 +10,7 @@ defmodule Vutuv.NewslettersTest do
 
   alias Vutuv.Newsletters
   alias Vutuv.Newsletters.Markdown
+  alias VutuvWeb.NewsletterToken
 
   defp admin, do: insert(:activated_user, first_name: "Erika", admin?: true)
 
@@ -106,6 +107,120 @@ defmodule Vutuv.NewslettersTest do
     test "to_email_html/1 keeps leading-space indentation after a break (as nbsp)" do
       html = Markdown.to_email_html("Viele Grüße\n  Stefan Wintermeyer")
       assert html =~ "  Stefan Wintermeyer"
+    end
+  end
+
+  describe "click tracking (link rewriting)" do
+    # In the test env the configured public host is "localhost", so a link to it
+    # is "internal" and gets the tracking placeholder; example.com does not.
+    test "to_email_html/2 with track: true adds the placeholder to internal links only" do
+      html =
+        Markdown.to_email_html(
+          "[here](http://localhost:4000/welcome) and [there](https://example.com/x)",
+          track: true
+        )
+
+      assert html =~ "http://localhost:4000/welcome?nlt=__vutuv_nlt__"
+      assert html =~ "https://example.com/x"
+      refute html =~ "example.com/x?nlt"
+    end
+
+    test "to_email_html/2 leaves links untouched without tracking (the admin preview)" do
+      html = Markdown.to_email_html("[here](http://localhost:4000/welcome)")
+      assert html =~ "http://localhost:4000/welcome"
+      refute html =~ "nlt="
+    end
+
+    test "to_email_html/2 appends to a link that already has a query string" do
+      html = Markdown.to_email_html("[s](http://localhost:4000/search?q=a)", track: true)
+      assert html =~ "q=a"
+      assert html =~ "nlt=__vutuv_nlt__"
+    end
+
+    test "put_click_token/2 swaps the placeholder for the per-recipient token" do
+      html = Markdown.to_email_html("[here](http://localhost:4000/welcome)", track: true)
+      out = Markdown.put_click_token(html, "TOKEN-123")
+
+      assert out =~ "nlt=TOKEN-123"
+      refute out =~ "__vutuv_nlt__"
+    end
+
+    test "the plain-text body keeps the bare link, the HTML href carries a verifiable token" do
+      admin = admin()
+      ann = member_with_email("ann@example.com", first_name: "Ann")
+
+      newsletter =
+        draft(admin, %{
+          "subject" => "S",
+          "body" => "Visit [profile](http://localhost:4000/welcome)."
+        })
+
+      newsletter_id = newsletter.id
+      ann_id = ann.id
+
+      assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
+      [email] = flush_emails()
+
+      assert [_, token] = Regex.run(~r/nlt=([\w.\-]+)/, email.html_body)
+      assert {:ok, ^newsletter_id, ^ann_id} = NewsletterToken.verify(token)
+
+      # The ASCII version uses only the normal link, no tracking parameter.
+      refute email.text_body =~ "nlt="
+      assert email.text_body =~ "http://localhost:4000/welcome"
+    end
+  end
+
+  describe "click stats" do
+    setup do
+      admin = admin()
+      ann = member_with_email("ann@example.com", first_name: "Ann")
+      bob = member_with_email("bob@example.com", first_name: "Bob")
+      newsletter = draft(admin)
+      {:ok, :started} = Newsletters.start_broadcast(newsletter)
+      flush_emails()
+      %{admin: admin, ann: ann, bob: bob, newsletter: Newsletters.get_newsletter!(newsletter.id)}
+    end
+
+    test "record_click + newsletter_stats + link_stats", ctx do
+      %{newsletter: nl, ann: ann, bob: bob} = ctx
+
+      assert :ok = Newsletters.record_click(nl.id, ann.id, "/welcome")
+      assert :ok = Newsletters.record_click(nl.id, ann.id, "/welcome")
+      assert :ok = Newsletters.record_click(nl.id, bob.id, "/jobs")
+
+      stats = Newsletters.newsletter_stats(nl)
+      assert stats.recipients == 2
+      assert stats.total_clicks == 3
+      assert stats.unique_clickers == 2
+      assert_in_delta stats.click_rate, 100.0, 0.001
+
+      assert [
+               %{url: "/welcome", clicks: 2, clickers: 1},
+               %{url: "/jobs", clicks: 1, clickers: 1}
+             ] = Newsletters.link_stats(nl)
+    end
+
+    test "clicks by non-recipients (e.g. an admin testing) are excluded from the numbers", ctx do
+      %{newsletter: nl, ann: ann, admin: admin} = ctx
+
+      Newsletters.record_click(nl.id, ann.id, "/welcome")
+      # The admin has no deliverable email, so was not a broadcast recipient.
+      Newsletters.record_click(nl.id, admin.id, "/welcome")
+
+      stats = Newsletters.newsletter_stats(nl)
+      assert stats.total_clicks == 1
+      assert stats.unique_clickers == 1
+    end
+
+    test "list_clicks paginates newest first, with the member preloaded", ctx do
+      %{newsletter: nl, ann: ann, bob: bob} = ctx
+      Newsletters.record_click(nl.id, ann.id, "/welcome")
+      Newsletters.record_click(nl.id, bob.id, "/jobs")
+
+      assert Newsletters.count_clicks(nl) == 2
+      clicks = Newsletters.list_clicks(nl)
+      assert length(clicks) == 2
+      assert Enum.all?(clicks, &(&1.user != nil))
     end
   end
 
