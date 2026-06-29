@@ -232,6 +232,26 @@ defmodule VutuvWeb.UserProfileLive do
   def handle_info({:endorsement_changed, _user_tag_id}, socket),
     do: {:noreply, refresh_tags(socket)}
 
+  # A shown post was deleted elsewhere. The owner's posts broadcast their
+  # deletion on the owner's topic (which this page already subscribes to), so
+  # drop the entry rather than leave a stale card whose action-bar component no
+  # longer subscribes per post. A post outside the shown preview (or a followed
+  # author's, also on this topic) simply isn't found and nothing changes.
+  def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
+    kept = Enum.reject(socket.assigns.posts, &(&1.post.id == post_id))
+
+    socket =
+      if length(kept) == length(socket.assigns.posts) do
+        socket
+      else
+        socket
+        |> assign(:posts, kept)
+        |> assign(:posts_total, max(socket.assigns.posts_total - 1, 0))
+      end
+
+    {:noreply, socket}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Only a logged-in non-owner may endorse, and only a tag actually shown on

@@ -12,6 +12,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Posts
   alias Vutuv.Social
   alias Vutuv.Tags
 
@@ -264,6 +265,25 @@ defmodule VutuvWeb.UserProfileLiveTest do
       view |> element(~s(button[phx-click="view_as"][phx-value-mode="you"])) |> render_click()
       refute has_element?(view, "#view-as-banner")
       assert render(view) =~ "secret@example.com"
+    end
+  end
+
+  describe "live post deletion" do
+    test "a post deleted elsewhere drops from the open profile", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, post} = Posts.create_post(owner, %{body: "soon deleted"})
+
+      {:ok, view, html} = live(conn, ~p"/#{owner}")
+      assert html =~ "soon deleted"
+
+      # The deletion broadcasts {:post_deleted} on the owner's topic, which the
+      # profile subscribes to — so the card drops without a reload (the action
+      # bar is now an in-process component that no longer subscribes per post).
+      {:ok, _} = Posts.delete_post(post)
+      _ = :sys.get_state(view.pid)
+
+      refute render(view) =~ "soon deleted"
     end
   end
 end

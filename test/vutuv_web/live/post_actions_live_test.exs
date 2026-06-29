@@ -1,9 +1,14 @@
 defmodule VutuvWeb.PostActionsLiveTest do
   @moduledoc """
-  The per-card action bar (`VutuvWeb.PostLive.Actions`, embedded via
-  `live_render` from the post card): like/bookmark/repost toggles, the live
-  counter updates over the post topic, the repost lock on restricted posts —
-  plus the /likes and /bookmarks pages fed by it.
+  The per-card action bar: like/bookmark/repost toggles and the repost lock on
+  restricted posts, plus the /likes and /bookmarks pages fed by it.
+
+  On a LiveView host (the feed) the bar is the in-process
+  `VutuvWeb.PostLive.ActionsComponent`, driven straight through the host view —
+  no nested child LiveView (the change that killed the per-card flashing and the
+  per-card PubSub subscriptions). The standalone `VutuvWeb.PostLive.Actions`
+  LiveView still backs the dead controller pages and keeps its live counters; it
+  is exercised in isolation below.
   """
   use VutuvWeb.ConnCase
 
@@ -14,9 +19,31 @@ defmodule VutuvWeb.PostActionsLiveTest do
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
-  defp feed_actions(conn, post) do
+  # The bar is part of the feed's own DOM now, so the feed view itself drives it
+  # (the button's `phx-target` routes the click to its component).
+  defp feed_actions(conn, _post) do
     {:ok, feed, _html} = live(conn, ~p"/feed")
-    %{view: find_live_child(feed, "post-actions-post-#{post.id}"), feed: feed}
+    %{view: feed, feed: feed}
+  end
+
+  describe "no nested action LiveView (flash + PubSub fix)" do
+    test "the feed renders the action bar inline, not as a child LiveView", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = create_post!(user, %{body: "inline bar"})
+
+      {:ok, feed, _html} = live(conn, ~p"/feed")
+
+      # The bar lives in the feed's own DOM (a LiveComponent), so there is no
+      # per-card child LiveView to re-mount (flash) when the feed re-renders a
+      # stream, and no per-card "post:<id>" subscription.
+      refute find_live_child(feed, "post-actions-post-#{post.id}")
+      assert has_element?(feed, "#post-actions-post-#{post.id}-like")
+
+      # A like still updates the card in place, handled by the feed process.
+      feed |> element("#post-actions-post-#{post.id}-like") |> render_click()
+      assert render(feed) =~ ~r/data-count="like">\s*1\s*</
+      assert %{likes: 1} = Posts.engagement_counts(post.id)
+    end
   end
 
   describe "the action bar on the feed" do
@@ -77,24 +104,14 @@ defmodule VutuvWeb.PostActionsLiveTest do
                Posts.update_post(post, %{body: "spread", denials: [%{"wildcard" => "everyone"}]})
     end
 
-    test "the reply button links to the reply page and counts live", %{conn: conn} do
+    test "the reply button links to the reply page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       post = create_post!(user, %{body: "discussable"})
       %{view: actions} = feed_actions(conn, post)
 
-      reply_button = "#post-actions-post-#{post.id}-reply"
-
-      html = actions |> element(reply_button) |> render()
+      html = actions |> element("#post-actions-post-#{post.id}-reply") |> render()
       assert html =~ ~s(href="/posts/#{post.id}/reply")
       refute html =~ ~s(data-count="reply")
-
-      # Render once so the child is fully joined before the broadcast.
-      assert render(actions) =~ "post-actions-post-#{post.id}-reply"
-
-      {:ok, _} = Posts.create_reply(other_user(), post, %{body: "an answer"})
-
-      html = actions |> element(reply_button) |> render()
-      assert html =~ ~r/data-count="reply">\s*1\s*</
     end
 
     test "the reply button is disabled on restricted posts", %{conn: conn} do
@@ -167,36 +184,11 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert render(actions) =~ "justify-between"
     end
 
-    test "your own like in another session fills the heart here too", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "two tabs"})
-
-      {:ok, feed_a, _html} = live(conn, ~p"/feed")
-      {:ok, feed_b, _html} = live(conn, ~p"/feed")
-      actions_a = find_live_child(feed_a, "post-actions-post-#{post.id}")
-      actions_b = find_live_child(feed_b, "post-actions-post-#{post.id}")
-      assert render(actions_b) =~ ~s(aria-pressed="false")
-
-      actions_a |> element("#post-actions-post-#{post.id}-like") |> render_click()
-
-      html = render(actions_b)
-      assert html =~ ~s(aria-pressed="true")
-      assert html =~ ~r/data-count="like">\s*1\s*</
-    end
-
-    test "another user's like ticks the counter live", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      post = create_post!(user, %{body: "watched"})
-      %{view: actions} = feed_actions(conn, post)
-
-      # Render once so the child is fully joined before the broadcast.
-      assert render(actions) =~ "post-actions-post-#{post.id}-like"
-
-      :ok = Posts.like_post(other_user(), post)
-
-      html = render(actions)
-      assert html =~ ~r/data-count="like">\s*1\s*</
-    end
+    # On a LiveView host the bar no longer subscribes to the post topic (the
+    # "minimum PubSub" trade-off), so a like by another session / another user
+    # is not reflected live — it refreshes on reload. The standalone bar on the
+    # dead pages still ticks live; the underlying broadcast is covered by the
+    # "engagement broadcasts" cases below.
   end
 
   describe "the feed timeline with reposts" do
@@ -225,8 +217,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
 
-      %{view: actions} = %{view: find_live_child(feed, "post-actions-post-#{post.id}")}
-      actions |> element("#post-actions-post-#{post.id}-repost") |> render_click()
+      feed |> element("#post-actions-post-#{post.id}-repost") |> render_click()
 
       html = render(feed)
       assert html =~ ~s(id="feed-repost-)
@@ -264,10 +255,7 @@ defmodule VutuvWeb.PostActionsLiveTest do
       {:ok, view, html} = live(conn, ~p"/likes")
       assert html =~ "soon gone"
 
-      view
-      |> find_live_child("post-actions-#{post.id}")
-      |> element("#post-actions-#{post.id}-like")
-      |> render_click()
+      view |> element("#post-actions-#{post.id}-like") |> render_click()
 
       refute render(view) =~ "soon gone"
     end

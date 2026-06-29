@@ -252,24 +252,19 @@ defmodule VutuvWeb.PostLive.Feed do
 
   # Own activity (this or another session) appears immediately; other
   # people's waits behind the pill — and only when the post is visible.
+  defp insert_entry(socket, nil, _actor_id), do: {:noreply, socket}
+
   defp insert_entry(socket, entry, actor_id) do
     user = socket.assigns.current_user
-    # Attach the viewer's follow edge so the card's mute toggle works on a
-    # live-arrived post too (nil for an own post — no self-follow).
-    entry =
-      entry && Map.put(entry, :viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
 
     cond do
-      is_nil(entry) ->
-        {:noreply, socket}
-
       actor_id == user.id ->
         {:noreply,
          socket
          |> assign(:empty?, false)
          # The viewer just posted (this or another session): collapse the composer.
          |> assign(:composer_open?, false)
-         |> stream_insert(:posts, entry, at: 0)}
+         |> stream_insert(:posts, decorate(entry, user), at: 0)}
 
       # Mirror the pull path's blocked-author filter: a third party's repost
       # must not carry a blocked author's post into the feed (blocking already
@@ -278,11 +273,24 @@ defmodule VutuvWeb.PostLive.Feed do
         {:noreply, socket}
 
       Posts.visible_to?(entry.post, user) ->
-        {:noreply, update(socket, :pending_posts, &[entry | &1])}
+        {:noreply, update(socket, :pending_posts, &[decorate(entry, user) | &1])}
 
       true ->
         {:noreply, socket}
     end
+  end
+
+  # Attach the viewer's follow edge (so the card's mute toggle works on a
+  # live-arrived post too — nil for an own post, no self-follow) and the
+  # action-bar engagement, both queried in this process. The bar component
+  # renders straight from the entry's engagement, so a live-arrived card never
+  # queries during render (which would race the sandbox in tests). Only the
+  # two branches that keep the entry pay for it — a blocked or denied post is
+  # dropped before either query runs.
+  defp decorate(entry, user) do
+    entry
+    |> Map.put(:viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
+    |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user.id))
   end
 
   @impl true

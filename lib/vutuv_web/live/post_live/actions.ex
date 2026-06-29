@@ -1,36 +1,28 @@
 defmodule VutuvWeb.PostLive.Actions do
   @moduledoc """
-  The per-card action bar: like / reply / repost / bookmark with live
-  counters (the reply control navigates to the reply page instead of
-  toggling).
+  The per-card action bar (like / reply / repost / bookmark with live counters)
+  as a **standalone LiveView**, embedded via `live_render` from
+  `VutuvWeb.PostComponents.post_card/1` on the **dead controller pages** that
+  have no LiveView host — the post permalink, the author archive, the profile
+  served as a controller page. There the bar is the only live part, so it keeps
+  its own post-topic subscription and its counters tick in real time.
 
-  One small LiveView per rendered post card, embedded via `live_render`
-  from `VutuvWeb.PostComponents.post_card/1` — on the LiveView feed *and*
-  on the dead pages (permalink, profile, archive), so the counters update
-  in real time everywhere a post is on screen. It subscribes to the post's
-  topic and re-renders on `{:post_counters, …}` (absolute counts, so
-  updates are idempotent).
+  On LiveView host pages the bar is instead the in-process
+  `VutuvWeb.PostLive.ActionsComponent`; both render the same markup
+  (`VutuvWeb.PostComponents.post_actions/1`) and share the same toggle rule
+  (`VutuvWeb.PostLive.ActionBar`).
 
-  Logged-out viewers get the same live counters; pressing a button sends
-  them to the login page. Restricted posts render a disabled repost button
-  (only public posts can be reposted — `Vutuv.Posts.repost_post/2`).
-
-  Mounted outside the `live_session` (embedded), so it applies the session
-  locale itself, like `VutuvWeb.ShellLive`.
+  It re-renders on `{:post_counters, …}` (absolute counts, idempotent).
+  Logged-out viewers get the same live counters; pressing a button sends them
+  to the login page. Mounted outside the `live_session` (embedded), so it
+  applies the session locale itself, like `VutuvWeb.ShellLive`.
   """
   use Phoenix.LiveView
 
-  use Phoenix.VerifiedRoutes,
-    endpoint: VutuvWeb.Endpoint,
-    router: VutuvWeb.Router,
-    statics: ~w(assets fonts images favicon.ico)
-
-  use Gettext, backend: VutuvWeb.Gettext
-
-  import VutuvWeb.UI,
-    only: [compact_count: 1, icon_repost: 1, icon_reply: 1, icon_bookmark: 1, icon_heart: 1]
+  import VutuvWeb.PostComponents, only: [post_actions: 1]
 
   alias Vutuv.Posts
+  alias VutuvWeb.PostLive.ActionBar
 
   @impl true
   def mount(_params, session, socket) do
@@ -40,16 +32,13 @@ defmodule VutuvWeb.PostLive.Actions do
 
     # The post topic carries everything this bar needs: absolute counts for
     # every viewer, plus — when the actor is the viewer (`:by_user_id`) — the
-    # cue to re-sync the viewer's own filled-in flags across their tabs. So the
-    # bar does NOT subscribe to the viewer's activity firehose; on a feed of N
-    # posts that used to put N subscribers on `"user:<id>"`, each handed every
-    # notification / message / new-post event only to discard it.
+    # cue to re-sync the viewer's own filled-in flags across their tabs.
     if connected?(socket), do: Posts.subscribe_post(post_id)
 
-    # A list page (e.g. the feed) that already loaded the post can hand the
-    # engagement in via the session, sparing this bar its own query on mount;
-    # otherwise (a lone card on a dead page) the bar loads it itself.
-    engagement = session["engagement"] || Posts.post_engagement(post_id, viewer_id)
+    # A list page that already loaded the post can hand the engagement in via
+    # the session, sparing this bar its own query on mount; otherwise (a lone
+    # card on a dead page) the bar loads it itself.
+    engagement = ActionBar.engagement_or_load(session["engagement"], post_id, viewer_id)
 
     {:ok,
      socket
@@ -59,51 +48,9 @@ defmodule VutuvWeb.PostLive.Actions do
      |> assign(:engagement, engagement)}
   end
 
-  # The post can vanish between page render and socket mount (or while the
-  # page is open) — engagement turns nil and the bar simply empties.
-  defp load_engagement(socket) do
-    assign(
-      socket,
-      :engagement,
-      Posts.post_engagement(socket.assigns.post_id, socket.assigns.viewer_id)
-    )
-  end
-
   @impl true
   def handle_event("toggle", %{"kind" => kind}, socket) when kind in ~w(like bookmark repost) do
-    case {socket.assigns.viewer_id, socket.assigns.engagement} do
-      {nil, _} ->
-        {:noreply, redirect(socket, to: ~p"/login")}
-
-      {_, nil} ->
-        {:noreply, socket}
-
-      {viewer_id, engagement} ->
-        toggle(kind, viewer_id, engagement, socket)
-    end
-  end
-
-  defp toggle(kind, viewer_id, engagement, socket) do
-    user = Vutuv.Repo.get(Vutuv.Accounts.User, viewer_id)
-    post = Vutuv.Repo.get(Vutuv.Posts.Post, socket.assigns.post_id)
-
-    if user && post do
-      # Errors (:not_visible, :restricted) mean the button should not have
-      # been live — the reload below shows the truth either way.
-      _ =
-        case {kind, engagement} do
-          {"like", %{liked?: true}} -> Posts.unlike_post(user, post)
-          {"like", _} -> Posts.like_post(user, post)
-          {"bookmark", %{bookmarked?: true}} -> Posts.unbookmark_post(user, post)
-          {"bookmark", _} -> Posts.bookmark_post(user, post)
-          {"repost", %{reposted?: true}} -> Posts.unrepost_post(user, post)
-          {"repost", _} -> Posts.repost_post(user, post)
-        end
-    end
-
-    # The broadcast updates the counters everywhere; the viewer's own flags
-    # are not in it, so reload both here.
-    {:noreply, load_engagement(socket)}
+    {:noreply, ActionBar.toggle(kind, socket)}
   end
 
   @impl true
@@ -122,7 +69,7 @@ defmodule VutuvWeb.PostLive.Actions do
         # counts. Anything else — another viewer's toggle, a reply-count tick —
         # is counts-only and never touches this viewer's flags.
         if payload[:by_user_id] && payload[:by_user_id] == socket.assigns.viewer_id do
-          {:noreply, load_engagement(socket)}
+          {:noreply, ActionBar.load_engagement(socket)}
         else
           {:noreply,
            assign(socket, :engagement, %{
@@ -136,12 +83,12 @@ defmodule VutuvWeb.PostLive.Actions do
     end
   end
 
-  # The post was deleted while the bar was open: re-checking engagement turns
-  # it nil and the bar empties (on the feed the whole card is dropped; on the
-  # dead permalink/profile pages the bar is the only part that can react).
+  # The post was deleted while the bar was open: re-checking engagement turns it
+  # nil and the bar empties (the dead permalink/profile pages can only react
+  # through this bar).
   def handle_info({:post_deleted, %{post_id: post_id}}, socket) do
     if post_id == socket.assigns.post_id do
-      {:noreply, load_engagement(socket)}
+      {:noreply, ActionBar.load_engagement(socket)}
     else
       {:noreply, socket}
     end
@@ -152,151 +99,7 @@ defmodule VutuvWeb.PostLive.Actions do
   @impl true
   def render(assigns) do
     ~H"""
-    <%!-- justify-between spreads the four controls across the column's full
-          width (X-style); -mx-2 cancels the outer buttons' px-2 so the first
-          and last glyphs line up with the column edges. --%>
-    <div
-      :if={@engagement}
-      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400"
-    >
-      <.action_button
-        id={"#{@id}-like"}
-        kind="like"
-        active?={@engagement.liked?}
-        count={@engagement.likes}
-        label={if @engagement.liked?, do: gettext("Unlike"), else: gettext("Like")}
-        active_class="text-accent"
-      >
-        <:icon><.icon_heart filled?={@engagement.liked?} /></:icon>
-      </.action_button>
-
-      <.reply_link
-        id={"#{@id}-reply"}
-        post_id={@post_id}
-        count={@engagement.replies}
-        disabled={@engagement.restricted?}
-      />
-
-      <.action_button
-        id={"#{@id}-repost"}
-        kind="repost"
-        active?={@engagement.reposted?}
-        count={@engagement.reposts}
-        label={if @engagement.reposted?, do: gettext("Undo repost"), else: gettext("Repost")}
-        active_class="text-brand-600 dark:text-brand-300"
-        disabled={@engagement.restricted?}
-        disabled_title={gettext("Only public posts can be reposted.")}
-      >
-        <:icon><.icon_repost /></:icon>
-      </.action_button>
-
-      <.action_button
-        id={"#{@id}-bookmark"}
-        kind="bookmark"
-        active?={@engagement.bookmarked?}
-        count={@engagement.bookmarks}
-        label={if @engagement.bookmarked?, do: gettext("Remove bookmark"), else: gettext("Bookmark")}
-        active_class="text-brand-600 dark:text-brand-300"
-      >
-        <:icon><.icon_bookmark filled?={@engagement.bookmarked?} /></:icon>
-      </.action_button>
-    </div>
-    """
-  end
-
-  # The reply control is a navigation, not a toggle: it leads to the reply
-  # page (which requires login itself). Restricted posts cannot be answered,
-  # mirroring the disabled repost button.
-  attr(:id, :string, required: true)
-  attr(:post_id, :integer, required: true)
-  attr(:count, :integer, required: true)
-  attr(:disabled, :boolean, required: true)
-
-  defp reply_link(assigns) do
-    ~H"""
-    <.link
-      :if={!@disabled}
-      id={@id}
-      href={~p"/posts/#{@post_id}/reply"}
-      aria-label={gettext("Reply")}
-      title={gettext("Reply")}
-      class={[
-        "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm",
-        "hover:bg-slate-100 dark:hover:bg-slate-800",
-        # components.css colors bare `a, button` brand-600, which beats the
-        # wrapper's inherited slate — so the muted color sits on the link.
-        "text-slate-500 dark:text-slate-400"
-      ]}
-    >
-      <.icon_reply />
-      <.count_pill count={@count} kind="reply" />
-    </.link>
-    <span
-      :if={@disabled}
-      id={@id}
-      aria-disabled="true"
-      title={gettext("Only public posts can be answered.")}
-      class="inline-flex cursor-not-allowed items-center gap-1.5 rounded-lg px-2 py-1 text-sm text-slate-500 opacity-40 dark:text-slate-400"
-    >
-      <.icon_reply />
-      <.count_pill count={@count} />
-    </span>
-    """
-  end
-
-  attr(:id, :string, required: true)
-  attr(:kind, :string, required: true)
-  attr(:active?, :boolean, required: true)
-  attr(:count, :integer, required: true)
-  attr(:label, :string, required: true)
-  attr(:active_class, :string, required: true)
-  attr(:disabled, :boolean, default: false)
-  attr(:disabled_title, :string, default: nil)
-  slot(:icon, required: true)
-
-  defp action_button(assigns) do
-    ~H"""
-    <button
-      type="button"
-      id={@id}
-      phx-click="toggle"
-      phx-value-kind={@kind}
-      disabled={@disabled}
-      aria-pressed={to_string(@active?)}
-      aria-label={@label}
-      title={if(@disabled, do: @disabled_title, else: @label)}
-      class={[
-        "inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm",
-        @disabled && "cursor-not-allowed opacity-40",
-        !@disabled && "hover:bg-slate-100 dark:hover:bg-slate-800",
-        # components.css colors bare `a, button` brand-600, which beats the
-        # wrapper's inherited slate — so the state color sits on the button.
-        if(@active?, do: @active_class, else: "text-slate-500 dark:text-slate-400")
-      ]}
-    >
-      {render_slot(@icon)}
-      <%!-- Always mounted (invisible at zero) so an arriving first count
-            doesn't shift the neighbouring buttons under the pointer. --%>
-      <.count_pill count={@count} kind={@kind} />
-    </button>
-    """
-  end
-
-  # The shared count pill: invisible (but mounted) at zero so an arriving
-  # first count doesn't shift neighbours, formatted through compact_count.
-  # `kind` is the data-count token (nil omits the attribute, as the disabled
-  # reply branch does).
-  attr(:count, :integer, required: true)
-  attr(:kind, :string, default: nil)
-
-  defp count_pill(assigns) do
-    ~H"""
-    <span
-      class={["font-medium tabular-nums", @count == 0 && "invisible"]}
-      data-count={@kind && @count > 0 && @kind}
-    >
-      {compact_count(@count)}
-    </span>
+    <.post_actions id={@id} post_id={@post_id} engagement={@engagement} />
     """
   end
 end

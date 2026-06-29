@@ -193,7 +193,16 @@ defmodule VutuvWeb.PostLive.Saved do
 
       post ->
         Posts.subscribe_post(post.id)
-        stream_insert(socket, :posts, post, at: 0)
+
+        # Hand the inserted card its engagement, like the initial page does, so
+        # the action-bar component renders straight from it instead of querying
+        # during this broadcast-triggered render.
+        socket
+        |> update(
+          :post_engagement,
+          &Map.put(&1, post.id, Posts.post_engagement(post.id, socket.assigns.current_user.id))
+        )
+        |> stream_insert(:posts, post, at: 0)
     end
   end
 

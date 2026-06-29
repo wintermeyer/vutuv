@@ -17,6 +17,19 @@ defmodule VutuvWeb.UserProfilePostsTest do
     assert conn.resp_body =~ "profile post"
   end
 
+  test "a logged-out visitor sees the post action bar without crashing", %{conn: conn} do
+    user = insert_activated_user()
+    {:ok, post} = Posts.create_post(user, %{body: "public post"})
+
+    conn = get(conn, "/#{user.username}")
+
+    assert html_response(conn, 200) =~ "public post"
+    # The action bar renders for an anonymous viewer: viewer_id resolves to nil
+    # (not the `false` an `&&` would yield, which Posts.post_engagement/2 has no
+    # clause for and would crash on).
+    assert conn.resp_body =~ ~s(id="post-actions-post-#{post.id}-like")
+  end
+
   test "post timestamps are marked for client-side timezone localization", %{conn: conn} do
     user = insert_activated_user()
     {:ok, post} = Posts.create_post(user, %{body: "timed post"})

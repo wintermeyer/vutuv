@@ -16,10 +16,12 @@ paths:
 LiveView is adopted **incrementally** here; it is not a fresh `phx.gen.auth` app.
 The live modules in `lib/vutuv_web/live/`: `ShellLive` (the chrome), `MemberCountLive`
 (landing pill), `SearchLive`, `PostLive.Feed`, `PostLive.Edit`, `PostLive.Reply`,
-`PostLive.Saved`, `PostLive.Composer` (a LiveComponent), `PostLive.Actions` (per-post
-action bar, one embedded `live_render` per card), `MessageLive.Index`,
-`NotificationLive.Index`, `UserProfileLive` (the member profile `/:slug`), plus the
-`on_mount` hooks `Live.InitAssigns` and `LiveLocale`.
+`PostLive.Saved`, `PostLive.Composer` (a LiveComponent), the post action bar
+(`PostLive.ActionsComponent`, an in-process LiveComponent on LiveView host pages;
+`PostLive.Actions`, the standalone `live_render` bar kept only for the dead controller
+pages — both render `PostComponents.post_actions/1` and share `PostLive.ActionBar`),
+`MessageLive.Index`, `NotificationLive.Index`, `UserProfileLive` (the member profile
+`/:slug`), plus the `on_mount` hooks `Live.InitAssigns` and `LiveLocale`.
 
 - **The profile (`UserProfileLive`) is embedded by a controller, not a `live/3` route.**
   `VutuvWeb.UserController.show` keeps owning agent-format negotiation (the `.md`/`.txt`/
@@ -37,11 +39,13 @@ action bar, one embedded `live_render` per card), `MessageLive.Index`,
   Unblock control, the follower/following/who-to-follow `user_row` follow buttons, and the
   owner "View as" switcher — all pass `live?` to their `VutuvWeb.UI` components
   (`follow_button`/`follow_relationship`/`tag_vote`/`card_menu`/`user_row`/`view_as_switcher`).
-  Counts and tags also update live over PubSub (see the social-graph note below). What stays
-  a plain `<a>` is **navigation** (Message, Report, vCard, agent-format/map/manage/edit
-  links) and the embedded **post action bars** (their own `PostLive.Actions` live_render) +
-  the shared **post card ⋯ menu** (classic everywhere incl. the feed — don't special-case it
-  on the profile). The classic CSRF routes (Follow/UserSave/Block/UserTagEndorsement
+  Counts and tags also update live over PubSub (see the social-graph note below). The
+  **post action bars** are in-process `PostLive.ActionsComponent`s here (not their own
+  `live_render` — that flashed on every stream re-render), and the profile drops a deleted
+  post live via `{:post_deleted}` on the owner's topic. What stays a plain `<a>` is
+  **navigation** (Message, Report, vCard, agent-format/map/manage/edit links) and the shared
+  **post card ⋯ menu** (classic everywhere incl. the feed — don't special-case it on the
+  profile). The classic CSRF routes (Follow/UserSave/Block/UserTagEndorsement
   controllers) stay as the no-JS / API path.
 
 - **There is no `core_components.ex`.** Do **not** use `<.input>`, `<.icon name="hero-…">`,
