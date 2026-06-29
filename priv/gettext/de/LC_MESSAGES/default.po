@@ -7747,3 +7747,48 @@ msgstr "Noch keine Klicks erfasst."
 #, elixir-autogen, elixir-format
 msgid "(deleted member)"
 msgstr "(gelöschtes Mitglied)"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Currently online"
+msgstr "Gerade online"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Direct messages"
+msgstr "Direktnachrichten"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Latest"
+msgstr "Zuletzt"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Live activity"
+msgstr "Live-Aktivität"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Members online right now"
+msgstr "Mitglieder, die gerade online sind"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "New members"
+msgstr "Neue Mitglieder"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Today"
+msgstr "Heute"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Yesterday"
+msgstr "Gestern"
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "updates automatically"
+msgstr "aktualisiert sich automatisch"

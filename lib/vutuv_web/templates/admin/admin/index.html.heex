@@ -4,6 +4,13 @@
   {gettext("Everything that keeps vutuv running, in one place. Cards with open work glow in coral.")}
 </p>
 
+<%!-- The live activity pulse, embedded like ShellLive so its counts and the
+"online now" figure update on their own without reloading the admin home. --%>
+{live_render(@conn, VutuvWeb.Admin.DashboardLive,
+  id: "admin-dashboard-lv",
+  session: %{"locale" => @conn.assigns[:locale]}
+)}
+
 <div class="space-y-10">
   <.admin_group title={gettext("Moderation & queues")}>
     <.admin_card

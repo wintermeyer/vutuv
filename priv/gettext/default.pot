@@ -7579,3 +7579,48 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "(deleted member)"
 msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Currently online"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Direct messages"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Latest"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Live activity"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Members online right now"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "New members"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Today"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "Yesterday"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex
+#, elixir-autogen, elixir-format
+msgid "updates automatically"
+msgstr ""
