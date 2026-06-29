@@ -226,10 +226,17 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   end
 
   # Switch between the filter builder and the hand-picked-accounts allowlist.
+  # Entering accounts mode drops any exclusions: an allowlist has no exclusion
+  # UI, so they would be invisible dead state (this matches what `finalize_params`
+  # already persists on an accounts-mode save).
   def handle_event("set_mode", %{"mode" => mode}, socket) do
+    mode = if mode == "accounts", do: :accounts, else: :filters
+    excluded = if mode == :accounts, do: [], else: socket.assigns.excluded_user_ids
+
     {:noreply,
      socket
-     |> assign(:mode, if(mode == "accounts", do: :accounts, else: :filters))
+     |> assign(:mode, mode)
+     |> assign(:excluded_user_ids, excluded)
      |> assign(:member_search, "")
      |> assign(:list_page, 1)
      |> recompute()}
@@ -347,9 +354,24 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     |> assign(:criteria, criteria)
     |> assign(:match_count, match)
     |> assign(:effective_count, effective)
-    |> assign(:included_users, Newsletters.users_by_ids(assigns.included_user_ids))
-    |> assign_excluded_chips(assigns.excluded_user_ids)
+    |> assign_mode_lists(assigns)
     |> assign_list()
+  end
+
+  # The per-mode member lists: only the one the active mode renders is fetched,
+  # so a filter tweak never resolves the (unused) chosen-accounts list and an
+  # account toggle never resolves the (unused) "Removed" chips.
+  defp assign_mode_lists(socket, %{mode: :accounts} = assigns) do
+    socket
+    |> assign(:included_users, Newsletters.users_by_ids(assigns.included_user_ids))
+    |> assign(:excluded_users, [])
+    |> assign(:excluded_extra, 0)
+  end
+
+  defp assign_mode_lists(socket, assigns) do
+    socket
+    |> assign(:included_users, [])
+    |> assign_excluded_chips(assigns.excluded_user_ids)
   end
 
   # On save, fold the curation lists into the params. In accounts mode the group
@@ -501,6 +523,27 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   def render(%{live_action: :show} = assigns), do: render_show(assigns)
   def render(assigns), do: render_form(assigns)
 
+  # A profile link showing a member's avatar, name and @handle — the one row of
+  # member markup, reused by the show-page grid, the filter preview and the two
+  # account pickers. `class` styles the link itself (full-width clickable row in
+  # the grid; a compact cell beside an action button in the pickers).
+  attr(:user, :any, required: true)
+  attr(:class, :string, default: "flex min-w-0 items-center gap-2")
+
+  defp member_link(assigns) do
+    ~H"""
+    <.link navigate={~p"/#{@user}"} class={@class}>
+      <.avatar user={@user} size="xs" />
+      <span class="min-w-0">
+        <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
+          {UserHelpers.full_name(@user)}
+        </span>
+        <span class="block truncate text-xs text-slate-500">@{@user.username}</span>
+      </span>
+    </.link>
+    """
+  end
+
   # A grid of members, each linking to their profile. Shared by the builder
   # preview and the show page.
   attr(:users, :list, required: true)
@@ -509,18 +552,10 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     ~H"""
     <ul class="grid gap-1 sm:grid-cols-2 lg:grid-cols-3">
       <li :for={user <- @users}>
-        <.link
-          navigate={~p"/#{user}"}
+        <.member_link
+          user={user}
           class="flex items-center gap-2 rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800"
-        >
-          <.avatar user={user} size="xs" />
-          <span class="min-w-0">
-            <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-              {UserHelpers.full_name(user)}
-            </span>
-            <span class="block truncate text-xs text-slate-500">@{user.username}</span>
-          </span>
-        </.link>
+        />
       </li>
     </ul>
     """
@@ -1023,15 +1058,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                 >
                   <span :if={user.id in @members_checked}>✓</span>
                 </button>
-                <.link navigate={~p"/#{user}"} class="flex min-w-0 items-center gap-2">
-                  <.avatar user={user} size="xs" />
-                  <span class="min-w-0">
-                    <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                      {UserHelpers.full_name(user)}
-                    </span>
-                    <span class="block truncate text-xs text-slate-500">@{user.username}</span>
-                  </span>
-                </.link>
+                <.member_link user={user} />
               </li>
             </ul>
           </div>
@@ -1087,15 +1114,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                   >
                     ✕
                   </button>
-                  <.link navigate={~p"/#{user}"} class="flex min-w-0 items-center gap-2">
-                    <.avatar user={user} size="xs" />
-                    <span class="min-w-0">
-                      <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                        {UserHelpers.full_name(user)}
-                      </span>
-                      <span class="block truncate text-xs text-slate-500">@{user.username}</span>
-                    </span>
-                  </.link>
+                  <.member_link user={user} />
                 </li>
               </ul>
             </div>
@@ -1160,15 +1179,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                       {gettext("Add to audience")}
                     </button>
                   <% end %>
-                  <.link navigate={~p"/#{user}"} class="flex min-w-0 items-center gap-2">
-                    <.avatar user={user} size="xs" />
-                    <span class="min-w-0">
-                      <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
-                        {UserHelpers.full_name(user)}
-                      </span>
-                      <span class="block truncate text-xs text-slate-500">@{user.username}</span>
-                    </span>
-                  </.link>
+                  <.member_link user={user} />
                 </li>
               </ul>
             </div>

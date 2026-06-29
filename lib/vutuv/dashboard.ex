@@ -18,11 +18,11 @@ defmodule Vutuv.Dashboard do
 
   import Ecto.Query
 
-  alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Chat.Message
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
+  alias Vutuv.Reports
 
   @doc """
   The dashboard's database figures as a map, computed against the current
@@ -35,31 +35,19 @@ defmodule Vutuv.Dashboard do
     {today_start, today_end} = BerlinTime.day_bounds_utc(today)
     {yesterday_start, yesterday_end} = BerlinTime.day_bounds_utc(Date.add(today, -1))
 
+    # The per-day counts reuse `Vutuv.Reports`' primitives so the two activity
+    # views (this live dashboard and the nightly report) count identically.
     %{
-      posts_today: count_between(Post, today_start, today_end),
-      posts_yesterday: count_between(Post, yesterday_start, yesterday_end),
+      posts_today: Reports.count_between(Post, today_start, today_end),
+      posts_yesterday: Reports.count_between(Post, yesterday_start, yesterday_end),
       last_post_at: latest_inserted_at(Post),
-      messages_today: count_between(Message, today_start, today_end),
-      messages_yesterday: count_between(Message, yesterday_start, yesterday_end),
+      messages_today: Reports.count_between(Message, today_start, today_end),
+      messages_yesterday: Reports.count_between(Message, yesterday_start, yesterday_end),
       last_message_at: latest_inserted_at(Message),
-      registrations_today: count_confirmed_registrations(today_start, today_end),
-      registrations_yesterday: count_confirmed_registrations(yesterday_start, yesterday_end)
+      registrations_today: Reports.count_confirmed_registrations(today_start, today_end),
+      registrations_yesterday:
+        Reports.count_confirmed_registrations(yesterday_start, yesterday_end)
     }
-  end
-
-  defp count_between(schema, day_start, day_end) do
-    from(r in schema, where: r.inserted_at >= ^day_start and r.inserted_at < ^day_end)
-    |> Repo.aggregate(:count)
-  end
-
-  # Confirmed-by-PIN sign-ups only (mirrors `Vutuv.Reports`): real new members,
-  # not the unconfirmed or spam half-registrations the anti-spam gate hides.
-  defp count_confirmed_registrations(day_start, day_end) do
-    from(u in User,
-      where: u.email_confirmed? == true,
-      where: u.inserted_at >= ^day_start and u.inserted_at < ^day_end
-    )
-    |> Repo.aggregate(:count)
   end
 
   # The newest row's `inserted_at`, or nil for an empty table. Ordered by the

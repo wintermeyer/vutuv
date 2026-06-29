@@ -64,7 +64,12 @@ defmodule Vutuv.Reports do
     end
   end
 
-  defp count_confirmed_registrations(day_start, day_end) do
+  @doc """
+  How many confirmed-by-PIN members registered in the half-open UTC window
+  `[day_start, day_end)`. The shared daily-registration primitive, used by
+  `daily/1` and by `Vutuv.Dashboard`.
+  """
+  def count_confirmed_registrations(day_start, day_end) do
     from(u in User,
       where: u.email_confirmed? == true,
       where: u.inserted_at >= ^day_start and u.inserted_at < ^day_end
@@ -72,7 +77,12 @@ defmodule Vutuv.Reports do
     |> Repo.aggregate(:count)
   end
 
-  defp count_between(schema, day_start, day_end) do
+  @doc """
+  How many rows of `schema` were inserted in the half-open UTC window
+  `[day_start, day_end)`. The shared per-day row-count primitive, used by
+  `daily/1` and by `Vutuv.Dashboard`.
+  """
+  def count_between(schema, day_start, day_end) do
     from(r in schema, where: r.inserted_at >= ^day_start and r.inserted_at < ^day_end)
     |> Repo.aggregate(:count)
   end
