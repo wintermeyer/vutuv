@@ -64,6 +64,101 @@ defmodule VutuvWeb.UserHTML do
   end
 
   @doc """
+  The interactive like / reply / repost / bookmark bar under each post in the
+  profile's threaded-posts layout. Every row renders the same bar through this
+  one component, so the root post and each reply share identical affordances:
+  Like, Reply and Repost are clickable and reveal a hover roster popover (who
+  liked / replied / reposted), and Bookmark is a private toggle with no count.
+  Previously only the root carried the live bar while the replies showed a dead
+  static stat row, and the root duplicated the popover markup three times.
+
+  Each of `like`, `reply` and `repost` is a stat map:
+
+    * `:count`  - the number on the button; the number is hidden when 0 so a
+      cold action reads as a bare clickable glyph (matching the old static rows).
+    * `:roster` - the members shown in the hover popover (linked avatar + name
+      rows); an empty list renders no popover.
+    * `:more`   - optional "und N weitere" overflow tally (omitted/0 hides it).
+  """
+  attr(:like, :map, required: true)
+  attr(:reply, :map, required: true)
+  attr(:repost, :map, required: true)
+
+  def thread_action_bar(assigns) do
+    ~H"""
+    <%!-- The bar spreads full width (-mx-2 cancels the buttons' px-2 so the outer
+    glyphs sit at the column edges). Each control keeps its own CLICK action;
+    HOVER reveals the roster of members who did it, in a popover that opens ABOVE
+    the button so it never covers the click target. --%>
+    <div class="-mx-2 mt-2 flex items-center justify-between gap-2 text-slate-400 dark:text-slate-500">
+      <.thread_action_control kind={:like} stat={@like} />
+      <.thread_action_control kind={:reply} stat={@reply} />
+      <.thread_action_control kind={:repost} stat={@repost} />
+      <%!-- BOOKMARK: clickable, no roster (bookmarks are private) --%>
+      <button type="button" class="inline-flex items-center rounded-lg px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <.icon_bookmark class="h-4 w-4" />
+      </button>
+    </div>
+    """
+  end
+
+  # One control of the thread action bar: a clickable button (icon + count) with
+  # an optional hover roster popover. `kind` picks the glyph, the named hover
+  # group and the popover alignment; `stat` carries the count/roster/more.
+  attr(:kind, :atom, required: true)
+  attr(:stat, :map, required: true)
+
+  defp thread_action_control(assigns) do
+    ~H"""
+    <span class={["relative", control_group_class(@kind)]}>
+      <button type="button" class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 hover:bg-slate-100 dark:hover:bg-slate-800">
+        <.icon_heart :if={@kind == :like} class="h-4 w-4" />
+        <.icon_reply :if={@kind == :reply} class="h-4 w-4" />
+        <.icon_repost :if={@kind == :repost} class="h-4 w-4" />
+        <span :if={@stat.count > 0} class="text-xs tabular-nums">{@stat.count}</span>
+      </button>
+      <div
+        :if={@stat.roster != []}
+        class={[
+          "absolute bottom-full z-30 mb-2 hidden w-max max-w-[14rem] rounded-xl bg-white p-2 text-left font-normal shadow-lg ring-1 ring-slate-200 after:absolute after:inset-x-0 after:top-full after:h-2 after:content-[''] dark:bg-slate-800 dark:ring-slate-700",
+          control_align_class(@kind),
+          control_reveal_class(@kind)
+        ]}
+      >
+        <ul class="space-y-0.5">
+          <li :for={member <- @stat.roster}>
+            <.link navigate={~p"/#{member}"} class="flex items-center gap-2 rounded-lg px-1 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700/60">
+              <.avatar user={member} size="xs" />
+              <span class="min-w-0 truncate text-xs font-medium text-slate-700 dark:text-slate-200">{full_name(member)}</span>
+            </.link>
+          </li>
+        </ul>
+        <span :if={Map.get(@stat, :more, 0) > 0} class="mt-1 block px-1 text-[11px] text-slate-500 dark:text-slate-400">
+          und {@stat.more} weitere
+        </span>
+      </div>
+    </span>
+    """
+  end
+
+  # Named hover group, popover alignment and reveal trigger per control kind.
+  # Kept as literal strings (not interpolated) so Tailwind's source scanner
+  # generates the named-group variants.
+  defp control_group_class(:like), do: "group/like"
+  defp control_group_class(:reply), do: "group/reply"
+  defp control_group_class(:repost), do: "group/repost"
+
+  defp control_align_class(:like), do: "left-0"
+  defp control_align_class(:reply), do: "left-1/2 -translate-x-1/2"
+  defp control_align_class(:repost), do: "right-0"
+
+  defp control_reveal_class(:like), do: "group-hover/like:block group-focus-within/like:block"
+  defp control_reveal_class(:reply), do: "group-hover/reply:block group-focus-within/reply:block"
+
+  defp control_reveal_class(:repost),
+    do: "group-hover/repost:block group-focus-within/repost:block"
+
+  @doc """
   How long the account has been on vutuv, derived from `inserted_at`.
 
   "Member since 2008" for an older account; "Member since February 2026" when

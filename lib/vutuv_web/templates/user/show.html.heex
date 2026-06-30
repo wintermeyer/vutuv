@@ -272,18 +272,131 @@ the resulting ~200px rail width. --%>
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
       </.empty_add>
 
-      <div :if={@posts != []} class="divide-y divide-slate-100 dark:divide-slate-800">
-        <.post_card
-          :for={entry <- @posts}
-          post={entry.post}
-          reposted_by={entry.reposted_by}
-          entry_id={entry.id}
-          conn_or_socket={@socket}
-          viewer={@view_viewer}
-          mode={:preview}
-          surface={:flat}
-          class="py-4 first:pt-0 last:pb-0"
-        />
+<%!-- THREAD LAYOUT EXPLORATION (Tidewave variants), round 5. Converged on
+      Threaded list: the graphical rail + tick tree from "Tree rail" carrying
+      mutt's compact rows, each post now with the like / reply / repost /
+      bookmark bar underneath. Real avatars (Stefan + Dirk, from the preloaded
+      posts); deeper rows are invented only to show the branching. "Current
+      (today)" stays as the live baseline (the only real <.post_card> on the
+      page, which also keeps the module imported). Next step is to wire this
+      into <.post_card> for real over the preloaded reply_ref. The mock stands
+      alone: no shared DOM ids, no live components. --%>
+      <div :if={@posts != []} data-tw-container="Thread layout">
+        <%!-- Real participants for the mockups, taken from the already-preloaded
+        posts: the owner (Dirk) and, from his reply's preloaded parent, that
+        post's author (Stefan). Falls back to the owner if no reply is on the
+        page, so the block always renders. --%>
+        <% owner = @user %>
+        <% parent_author =
+          Enum.find_value(@posts, @user, fn entry ->
+            case Vutuv.Posts.reply_ref_state(entry.post) do
+              {:parent, parent} -> parent.user
+              _ -> nil
+            end
+          end) %>
+
+        <%!-- THREADED LIST (the chosen direction). The graphical rail + tick
+        tree from "Tree rail" carrying mutt's compact rows: the body gets its
+        own line under the name, and the like / reply / repost / bookmark bar
+        sits under each post. Real avatars; deeper rows invented to show the
+        branching. (The bar is static here — the real one is the live
+        PostLive.ActionsComponent we wire in when this goes into <.post_card>.) --%>
+        <div data-tw-variant="Threaded list">
+          <%!-- root --%>
+          <div class="flex items-center gap-3 py-1">
+            <.avatar user={parent_author} size="sm" />
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-baseline gap-x-2">
+                <span class="font-semibold text-slate-900 dark:text-white">{full_name(parent_author)}</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400">{"@" <> parent_author.username} · 18. Juni</span>
+              </div>
+              <p class="truncate text-sm text-slate-700 dark:text-slate-300">just setting up my vutuv</p>
+              <.thread_action_bar
+                like={%{count: 5, roster: [parent_author, owner], more: 3}}
+                reply={%{count: 2, roster: [owner, parent_author]}}
+                repost={%{count: 1, roster: [parent_author]}}
+              />
+            </div>
+          </div>
+          <div class="ml-[1.125rem] space-y-1 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
+            <div class="relative flex items-center gap-3 py-1">
+              <span class="absolute -left-5 top-1/2 h-px w-5 -translate-y-1/2 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
+              <.avatar user={owner} size="sm" />
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-x-2">
+                  <span class="font-semibold text-slate-900 dark:text-white">{full_name(owner)}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{"@" <> owner.username} · 30. Juni</span>
+                </div>
+                <p class="truncate text-sm text-slate-700 dark:text-slate-300">
+                  Es wäre toll, wenn man die Jobbezeichnung auswählen dürfte, die im Profil erscheint.
+                </p>
+                <.thread_action_bar
+                  like={%{count: 2, roster: [owner, parent_author]}}
+                  reply={%{count: 1, roster: [parent_author]}}
+                  repost={%{count: 0, roster: []}}
+                />
+              </div>
+            </div>
+            <%!-- nested answer — invented --%>
+            <div class="ml-[1.125rem] space-y-1 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
+              <div class="relative flex items-center gap-3 py-1">
+                <span class="absolute -left-5 top-1/2 h-px w-5 -translate-y-1/2 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
+                <.avatar user={parent_author} size="sm" />
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-baseline gap-x-2">
+                    <span class="font-semibold text-slate-900 dark:text-white">{full_name(parent_author)}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400">{"@" <> parent_author.username} · 30. Juni</span>
+                  </div>
+                  <p class="truncate text-sm text-slate-700 dark:text-slate-300">Gute Idee, das setzen wir bald um.</p>
+                  <.thread_action_bar
+                    like={%{count: 1, roster: [parent_author]}}
+                    reply={%{count: 0, roster: []}}
+                    repost={%{count: 0, roster: []}}
+                  />
+                </div>
+              </div>
+            </div>
+            <%!-- second reply to the root — invented --%>
+            <div class="relative flex items-center gap-3 py-1">
+              <span class="absolute -left-5 top-1/2 h-px w-5 -translate-y-1/2 bg-slate-200 dark:bg-slate-700" aria-hidden="true"></span>
+              <.avatar user={owner} size="sm" />
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-baseline gap-x-2">
+                  <span class="font-semibold text-slate-900 dark:text-white">{full_name(owner)}</span>
+                  <span class="text-xs text-slate-500 dark:text-slate-400">{"@" <> owner.username} · 30. Juni</span>
+                </div>
+                <p class="truncate text-sm text-slate-700 dark:text-slate-300">Und ein Dark Mode wäre super.</p>
+                <.thread_action_bar
+                  like={%{count: 3, roster: [owner, parent_author], more: 1}}
+                  reply={%{count: 0, roster: []}}
+                  repost={%{count: 0, roster: []}}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <%!-- CURRENT (today). The live list as it ships now: each post is a
+        <.post_card>; a reply shows only a small "Replying to @handle" line and
+        the post it answers is never shown. This is the base the four takes
+        above build on, kept here so the real posts stay on the page. --%>
+        <div
+          data-tw-variant="Current (today)"
+          class="divide-y divide-slate-100 dark:divide-slate-800"
+          hidden
+        >
+          <.post_card
+            :for={entry <- @posts}
+            post={entry.post}
+            reposted_by={entry.reposted_by}
+            entry_id={entry.id}
+            conn_or_socket={@socket}
+            viewer={@view_viewer}
+            mode={:preview}
+            surface={:flat}
+            class="py-4 first:pt-0 last:pb-0"
+          />
+        </div>
       </div>
 
       <%!-- Content navigation: only when there is more than the profile shows. --%>
