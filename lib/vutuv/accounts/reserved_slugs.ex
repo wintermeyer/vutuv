@@ -12,11 +12,14 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   words *with* underscores must be listed too — only those longer than 15
   characters (new_registration, account_deletion) are ruled out by the
   length limit alone.
+
+  A second group reserves a handful of **personal / brand handles** that are
+  not routes but should never be claimed by an arbitrary member.
   """
 
   # Router prefixes (current and legacy), endpoint/static paths, and a few
   # conventional names kept free for future use.
-  @reserved ~w(
+  @route_slugs ~w(
     about access_tokens admin ads api assets avatars blocks blog bookmarks community
     connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
@@ -27,6 +30,14 @@ defmodule Vutuv.Accounts.ReservedSlugs do
     sitemap.xml sitemaps socket status support tags team terms tidewave unsubscribe
     user_bookmarks user_likes users webhooks www
   )
+
+  # Personal / brand handles held back from public registration. These are not
+  # routes. `sw`, `aw` and `jw` sit below the 3-character handle minimum, so for
+  # usernames they are belt-and-suspenders; reserving them still steers
+  # auto-generated handles and slug resolution away from these names.
+  @handle_slugs ~w(stefan aurelius juna sw aw jw)
+
+  @reserved @route_slugs ++ @handle_slugs
 
   def list, do: @reserved
 end
