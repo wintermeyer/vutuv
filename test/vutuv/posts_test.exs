@@ -383,6 +383,78 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "profile_posts/3 conversation context" do
+    test "attaches the parent a reply answers, visible to anonymous readers" do
+      parent_author = user()
+      replier = user()
+      parent = create_post!(parent_author, %{body: "What job title shows on the profile?"})
+
+      {:ok, reply} =
+        Posts.create_reply(replier, parent, %{"body" => "It would be great to choose it."})
+
+      assert [entry] = Posts.profile_posts(replier, nil)
+      assert entry.post.id == reply.id
+      assert entry.context.parent.id == parent.id
+      assert entry.context.parent.user.id == parent_author.id
+    end
+
+    test "lists up to two replies oldest-first with an exact total" do
+      author = user()
+      post = create_post!(author, %{body: "Topic"})
+
+      [r1, r2, _r3] =
+        for n <- 1..3 do
+          {:ok, reply} = Posts.create_reply(user(), post, %{"body" => "reply #{n}"})
+          reply
+        end
+
+      assert [entry] = Posts.profile_posts(author, nil)
+      assert entry.post.id == post.id
+      assert Enum.map(entry.context.replies, & &1.id) == [r1.id, r2.id]
+      assert entry.context.replies_total == 3
+    end
+
+    test "does not leak a frozen parent's body (the context omits it)" do
+      parent_author = user()
+      replier = user()
+      parent = create_post!(parent_author, %{body: "secret parent"})
+      {:ok, reply} = Posts.create_reply(replier, parent, %{"body" => "reply body"})
+
+      parent
+      |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+      |> Repo.update!()
+
+      assert [entry] = Posts.profile_posts(replier, nil)
+      assert entry.post.id == reply.id
+      # The reply_ref still points at the parent, but the visibility-scoped
+      # context omits it so a frozen parent's body never reaches an anon reader.
+      assert entry.context.parent == nil
+    end
+
+    test "omits a frozen reply from the inline list and the count" do
+      author = user()
+      post = create_post!(author, %{body: "Topic"})
+      {:ok, visible} = Posts.create_reply(user(), post, %{"body" => "shown"})
+      {:ok, hidden} = Posts.create_reply(user(), post, %{"body" => "frozen"})
+
+      hidden
+      |> Ecto.Changeset.change(frozen_at: NaiveDateTime.utc_now(:second))
+      |> Repo.update!()
+
+      assert [entry] = Posts.profile_posts(author, nil)
+      assert Enum.map(entry.context.replies, & &1.id) == [visible.id]
+      assert entry.context.replies_total == 1
+    end
+
+    test "a standalone post (no parent, no replies) carries an empty context" do
+      author = user()
+      create_post!(author, %{body: "standalone"})
+
+      assert [entry] = Posts.profile_posts(author, nil)
+      assert entry.context == %{parent: nil, replies: [], replies_total: 0}
+    end
+  end
+
   describe "feed_page/2" do
     test "shows own and followees' posts, not strangers'" do
       viewer = user()

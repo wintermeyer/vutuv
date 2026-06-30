@@ -301,4 +301,40 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute render(view) =~ "soon deleted"
     end
   end
+
+  describe "conversation context (issue #831)" do
+    test "shows the parent inline and drops the duplicate reply banner", %{conn: conn} do
+      owner = insert_activated_user()
+      other = insert_activated_user(first_name: "Petra", last_name: "Parent")
+      {:ok, parent} = Posts.create_post(other, %{body: "Which bridge type is best?"})
+      {:ok, _reply} = Posts.create_reply(owner, parent, %{"body" => "Suspension, obviously."})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The parent the owner's post replies to is quoted inline above it...
+      assert render(view) =~ "Which bridge type is best?"
+      # ...so the redundant "Replying to @petra" banner is suppressed.
+      refute has_element?(view, ~s([data-reply-banner="parent"]))
+    end
+
+    test "lists the first two replies and links to the full thread", %{conn: conn} do
+      owner = insert_activated_user()
+      {:ok, post} = Posts.create_post(owner, %{body: "Cable-stayed or suspension?"})
+
+      for body <- ["first reply", "second reply", "third reply"] do
+        {:ok, _} = Posts.create_reply(insert_activated_user(), post, %{"body" => body})
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+      rendered = render(view)
+
+      # The first two replies render inline, oldest first; the third is capped.
+      assert rendered =~ "first reply"
+      assert rendered =~ "second reply"
+      refute rendered =~ "third reply"
+
+      # A "View all" link points at the post permalink, where the rest live.
+      assert has_element?(view, ~s(a[href="/#{owner.username}/posts/#{post.id}"]), "replies")
+    end
+  end
 end

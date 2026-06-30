@@ -47,7 +47,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       section(gettext("Addresses"), Enum.map(doc.addresses, &entry_line("addresses", &1))),
       section(
         gettext("Posts (%{count} total)", count: doc.counts.posts),
-        Enum.map(doc.posts, &post_line/1)
+        Enum.map(doc.posts, &profile_post_block/1)
       )
     ]
     |> join_blocks()
@@ -294,6 +294,30 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
     "- #{post.published_on}#{reposted}: [#{md_text(post.excerpt)}](#{post.url})"
   end
+
+  # A profile post with its conversation context (issue #831): the parent it
+  # replies to (quoted), the post line, then the first replies — reusing the
+  # permalink helpers so the two pages render a thread the same way.
+  defp profile_post_block(post) do
+    parent = Map.get(post, :in_reply_to)
+
+    [
+      parent && in_reply_to_line(parent),
+      parent && parent_excerpt_line(parent),
+      post_line(post),
+      profile_replies(Map.get(post, :replies, []))
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join("\n")
+  end
+
+  defp parent_excerpt_line(%{excerpt: excerpt}) when is_binary(excerpt),
+    do: "> #{md_text(excerpt)}"
+
+  defp parent_excerpt_line(_parent), do: nil
+
+  defp profile_replies([]), do: nil
+  defp profile_replies(replies), do: Enum.map_join(replies, "\n", &reply_block/1)
 
   defp person_line(person), do: "- #{person_text(person)}"
 

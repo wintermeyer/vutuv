@@ -62,6 +62,9 @@ defmodule Vutuv.Posts do
   @default_feed_limit 20
   @default_profile_limit 3
   @default_thread_limit 100
+  # How many replies a profile post shows inline before linking to the full
+  # thread — the Twitter-style conversation context on `/:slug` (issue #831).
+  @profile_context_replies 2
   @pending_max_age_hours 24
   @max_tags 5
 
@@ -1017,7 +1020,9 @@ defmodule Vutuv.Posts do
   @doc """
   The newest timeline entries of `author` that `viewer` may see (profile
   page section): own posts plus reposts, same entry shape as `feed_page/2`
-  (`reposted_by` is the author for repost entries).
+  (`reposted_by` is the author for repost entries), each carrying a
+  `:context` map (see `attach_thread_context/2`) so the profile can render
+  the surrounding conversation Twitter-style (issue #831).
   """
   def profile_posts(%User{} = author, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_profile_limit)
@@ -1028,6 +1033,7 @@ defmodule Vutuv.Posts do
     |> limit(^limit)
     |> Repo.all()
     |> author_entries(author)
+    |> attach_thread_context(viewer)
   end
 
   @doc "How many timeline entries of `author` `viewer` may see (the \"View all\" label)."
@@ -1171,6 +1177,109 @@ defmodule Vutuv.Posts do
     |> scope_visible(viewer)
     |> Repo.all()
     |> Repo.preload(post_preloads())
+  end
+
+  @doc """
+  Attaches a `:context` map to each profile timeline entry so the profile
+  page can render the surrounding conversation Twitter-style (issue #831):
+
+      %{
+        parent: %Post{} | nil,   # the post this one replies to, when visible
+        replies: [%Post{}],      # up to #{@profile_context_replies} replies, oldest first
+        replies_total: integer   # all replies the viewer may see
+      }
+
+  Everything is scoped through `scope_visible/2`, the same lens the rest of
+  the app uses: the `parent` is dropped (degrading to the plain reply banner)
+  when it is restricted, frozen or deleted, so its body never leaks; hidden
+  replies are neither listed nor counted. Lightly preloaded (`:user` only) —
+  the parent and reply previews render as compact snippets, not full cards.
+  """
+  def attach_thread_context([], _viewer), do: []
+
+  def attach_thread_context(entries, viewer) do
+    posts = Enum.map(entries, & &1.post)
+    post_ids = Enum.map(posts, & &1.id)
+
+    parent_ids =
+      posts
+      |> Enum.flat_map(fn post ->
+        case reply_ref_state(post) do
+          {:parent, parent} -> [parent.id]
+          _ -> []
+        end
+      end)
+      |> Enum.uniq()
+
+    parents = visible_posts_by_id(parent_ids, viewer)
+    previews = preview_replies_by_parent(post_ids, viewer)
+    totals = reply_counts_by_parent(post_ids, viewer)
+
+    Enum.map(entries, fn entry ->
+      parent =
+        case reply_ref_state(entry.post) do
+          {:parent, ref_parent} -> Map.get(parents, ref_parent.id)
+          _ -> nil
+        end
+
+      Map.put(entry, :context, %{
+        parent: parent,
+        replies: Map.get(previews, entry.post.id, []),
+        replies_total: Map.get(totals, entry.post.id, 0)
+      })
+    end)
+  end
+
+  # The visibility-scoped posts among `ids`, keyed by id. Used for the inline
+  # parent snippet, whose *body* is shown — so it must pass the same lens the
+  # permalink does, not the unscoped `reply_ref` preload.
+  defp visible_posts_by_id([], _viewer), do: %{}
+
+  defp visible_posts_by_id(ids, viewer) do
+    from(p in Post, where: p.id in ^ids)
+    |> scope_visible(viewer)
+    |> Repo.all()
+    |> Repo.preload([:user])
+    |> Map.new(&{&1.id, &1})
+  end
+
+  # The first few visible replies under each of `parent_ids`, keyed by parent
+  # id, oldest first (the permalink ordering). Bounded per parent; the profile
+  # only ever asks about a handful of posts.
+  defp preview_replies_by_parent([], _viewer), do: %{}
+
+  defp preview_replies_by_parent(parent_ids, viewer) do
+    Map.new(parent_ids, fn parent_id ->
+      replies =
+        from(p in Post,
+          join: r in PostReply,
+          on: r.post_id == p.id,
+          where: r.parent_post_id == ^parent_id,
+          order_by: [asc: p.inserted_at, asc: p.id],
+          limit: ^@profile_context_replies
+        )
+        |> scope_visible(viewer)
+        |> Repo.all()
+        |> Repo.preload([:user])
+
+      {parent_id, replies}
+    end)
+  end
+
+  # The exact count of visible replies per parent, in one grouped query.
+  defp reply_counts_by_parent([], _viewer), do: %{}
+
+  defp reply_counts_by_parent(parent_ids, viewer) do
+    from(p in Post,
+      join: r in PostReply,
+      on: r.post_id == p.id,
+      where: r.parent_post_id in ^parent_ids,
+      group_by: r.parent_post_id,
+      select: {r.parent_post_id, count(p.id)}
+    )
+    |> scope_visible(viewer)
+    |> Repo.all()
+    |> Map.new()
   end
 
   @doc """

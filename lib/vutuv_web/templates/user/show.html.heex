@@ -276,6 +276,7 @@ the resulting ~200px rail width. --%>
         <.post_card
           :for={entry <- @posts}
           post={entry.post}
+          context={entry.context}
           reposted_by={entry.reposted_by}
           entry_id={entry.id}
           conn_or_socket={@socket}

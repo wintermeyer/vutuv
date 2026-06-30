@@ -133,12 +133,55 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     end
   end
 
+  # Mirrors what the profile's post card now shows (issue #831): the post
+  # itself, the parent it replies to and the first replies it received. The
+  # parent reference (url + author) follows the permalink doc's `in_reply_to`;
+  # the parent *excerpt* is added only when the visibility-scoped context
+  # carries the parent, so a restricted/frozen parent's body never leaks.
   defp post_entry(entry) do
     %{
       url: AgentDocs.abs_url(Vutuv.Posts.path(entry.post)),
       published_on: entry.post.published_on,
       excerpt: AgentDocs.excerpt(entry.post.body),
-      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by)
+      reposted_by: entry.reposted_by && UserHelpers.full_name(entry.reposted_by),
+      in_reply_to: in_reply_to(entry),
+      reply_count: entry.context.replies_total,
+      replies: Enum.map(entry.context.replies, &reply_entry/1)
+    }
+  end
+
+  defp in_reply_to(entry) do
+    case Vutuv.Posts.reply_ref_state(entry.post) do
+      {:parent, parent} ->
+        %{
+          url: AgentDocs.abs_url(Vutuv.Posts.path(parent)),
+          author: UserHelpers.full_name(parent.user)
+        }
+        |> maybe_parent_excerpt(entry.context.parent)
+
+      {:author_only, author} ->
+        %{url: nil, author: UserHelpers.full_name(author)}
+
+      :gone ->
+        %{url: nil, author: nil}
+
+      nil ->
+        nil
+    end
+  end
+
+  defp maybe_parent_excerpt(ref, %Vutuv.Posts.Post{} = parent),
+    do: Map.put(ref, :excerpt, AgentDocs.excerpt(parent.body))
+
+  defp maybe_parent_excerpt(ref, _not_visible), do: ref
+
+  defp reply_entry(%Vutuv.Posts.Post{} = reply) do
+    %{
+      url: AgentDocs.abs_url(Vutuv.Posts.path(reply)),
+      author: UserHelpers.full_name(reply.user),
+      author_username: reply.user.username,
+      published_on: reply.published_on,
+      body_markdown: reply.body
     }
   end
 

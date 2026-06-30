@@ -25,6 +25,7 @@ defmodule VutuvWeb.PostComponents do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
 
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
@@ -70,6 +71,15 @@ defmodule VutuvWeb.PostComponents do
         "action bar so it skips its own mount query; nil = the bar loads it itself"
   )
 
+  attr(:context, :any,
+    default: nil,
+    doc:
+      "profile-only conversation context (Posts.attach_thread_context/2): " <>
+        "%{parent: %Post{} | nil, replies: [%Post{}], replies_total: integer}. When set, the " <>
+        "card renders the parent above and the first replies below, Twitter-style (issue #831); " <>
+        "nil everywhere else (feed, permalink) leaves the card unchanged."
+  )
+
   def post_card(assigns) do
     {body_html, truncated?} =
       case assigns.mode do
@@ -105,7 +115,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:author?, Posts.author?(assigns.post, viewer))
       |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
       |> assign(:frozen?, assigns.post.frozen_at != nil)
-      |> assign(:reply_banner, reply_banner(assigns.post))
+      |> assign(:reply_banner, banner_for(assigns.context, assigns.post))
       |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
@@ -136,12 +146,16 @@ defmodule VutuvWeb.PostComponents do
       time_id={@time_id}
       engagement={@engagement}
       viewer_id={@viewer_id}
+      context={@context}
+      dom_base={@entry_id || @post.id}
     />
     """
   end
 
   attr(:surface, :atom, required: true)
   attr(:class, :string, default: nil)
+  attr(:context, :any, default: nil)
+  attr(:dom_base, :string, required: true)
   attr(:post, :any, required: true)
   attr(:mode, :atom, required: true)
   attr(:body_html, :any, required: true)
@@ -177,6 +191,17 @@ defmodule VutuvWeb.PostComponents do
 
   defp render_post_card_inner(assigns) do
     ~H"""
+    <%!-- Conversation context (profile only, issue #831): the post this one
+    replies to sits above it, quoted with a left rule. Shown only when the
+    parent is visible to this viewer; a gone/hidden parent keeps the plain
+    reply banner inside the card below instead. --%>
+    <div
+      :if={parent_shown?(@context)}
+      class="mb-4 border-l-2 border-slate-200 pl-3 dark:border-slate-700"
+    >
+      <.context_post post={@context.parent} dom_id={"#{@dom_base}-parent"} />
+    </div>
+
     <div>
       <%!-- The owner's freezer notice: only the author (and admins) still see
       a reported post; everyone else gets nothing, not even a tombstone. --%>
@@ -394,7 +419,84 @@ defmodule VutuvWeb.PostComponents do
         </div>
       </div>
     </div>
+
+    <%!-- The first replies this post received (profile only, issue #831),
+    quoted under it; "View all" links to the full thread on the permalink
+    once there are more than the inline cap. --%>
+    <div
+      :if={@context && @context.replies != []}
+      class="mt-4 space-y-4 border-l-2 border-slate-200 pl-3 dark:border-slate-700"
+    >
+      <.context_post
+        :for={reply <- @context.replies}
+        post={reply}
+        dom_id={"#{@dom_base}-reply-#{reply.id}"}
+      />
+      <.link
+        :if={@context.replies_total > length(@context.replies)}
+        href={@permalink}
+        class="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("View all %{count} replies", count: compact_count(@context.replies_total))}
+        <span aria-hidden="true">→</span>
+      </.link>
+    </div>
     """
+  end
+
+  attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{} (needs :user)")
+  attr(:dom_id, :string, required: true, doc: "unique id base for the snippet's <time> hook")
+
+  # A compact, non-interactive snippet of a post — the parent above and the
+  # replies below a profile post (issue #831). No action bar, menu, images or
+  # tags: just who, when (linked to the permalink) and a two-line excerpt, so
+  # the conversation reads at a glance without the weight of a full card.
+  defp context_post(assigns) do
+    {body_html, _truncated?} = VutuvWeb.Markdown.render_preview(assigns.post.body, [])
+
+    assigns =
+      assigns
+      |> assign(:body_html, body_html)
+      |> assign(:permalink, Posts.path(assigns.post))
+
+    ~H"""
+    <div class="flex items-start gap-2.5">
+      <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
+        <.avatar user={@post.user} size="xs" />
+      </.link>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-baseline gap-x-1.5">
+          <.link
+            href={~p"/#{@post.user}"}
+            class="text-sm font-semibold text-slate-700 hover:text-brand-700 dark:text-slate-200"
+          >
+            {full_name(@post.user)}
+          </.link>
+          <.link href={@permalink} class="text-xs text-slate-500 hover:text-brand-700">
+            <.local_time id={"#{@dom_id}-time"} at={@post.inserted_at} />
+          </.link>
+        </div>
+        <div
+          :if={@post.body != ""}
+          class="markdown mt-0.5 line-clamp-2 text-sm text-slate-600 dark:text-slate-400"
+        >
+          {@body_html}
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # Whether the inline parent snippet should render: the conversation context
+  # carries a parent the current viewer may see (a gone/hidden parent is nil).
+  defp parent_shown?(%{parent: %Post{}}), do: true
+  defp parent_shown?(_context), do: false
+
+  # When the conversation context renders the parent inline (profile), the
+  # "Replying to @x" banner would just repeat it, so it is dropped; a context
+  # whose parent is gone/hidden keeps the banner as the only reply cue.
+  defp banner_for(context, post) do
+    if parent_shown?(context), do: nil, else: reply_banner(post)
   end
 
   # The three banner states a reply card can be in, resolved from the

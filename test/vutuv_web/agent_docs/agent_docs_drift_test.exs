@@ -117,6 +117,32 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.html =~ "drift_tester"
   end
 
+  test "profile: a post's conversation context (parent + replies) appears in every format",
+       %{user: user, post: post} do
+    # A reply the user's post received — shown under it on the profile.
+    replier = insert_activated_user(first_name: "Rudy", last_name: "Responder")
+
+    {:ok, _} =
+      Vutuv.Posts.create_reply(replier, post, %{"body" => "Cable-stayed beats them all."})
+
+    # A post by the user that is itself a reply — its parent shows above it.
+    parent_author = insert_activated_user(first_name: "Petra", last_name: "Parent")
+    parent = create_post!(parent_author, %{"body" => "Which bridge type is best?"})
+    {:ok, _} = Vutuv.Posts.create_reply(user, parent, %{"body" => "Suspension, obviously."})
+
+    rendered = formats_for("/drift_tester")
+
+    for fact <- [
+          # the reply the post received (replies-below direction)
+          "Rudy Responder",
+          "Cable-stayed beats them all.",
+          # the parent the user's own reply answers (parent-above direction)
+          "Petra Parent",
+          "Which bridge type is best?"
+        ],
+        do: assert_fact_everywhere(rendered, fact)
+  end
+
   test "profile vCard carries the same contact facts", %{user: _user} do
     body = get(build_conn(), "/drift_tester.vcf").resp_body
 

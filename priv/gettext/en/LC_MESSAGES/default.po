@@ -2336,6 +2336,11 @@ msgstr ""
 msgid "View all %{count} posts"
 msgstr ""
 
+#: lib/vutuv_web/components/post_components.ex:444
+#, elixir-autogen, elixir-format
+msgid "View all %{count} replies"
+msgstr ""
+
 #: lib/vutuv_web/controllers/post_controller.ex:129
 #, elixir-autogen, elixir-format
 msgid "All posts"
