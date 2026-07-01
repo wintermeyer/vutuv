@@ -18,6 +18,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
   alias Vutuv.Activity
+  alias Vutuv.Posts
 
   @page_size 50
 
@@ -43,7 +44,9 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> assign(:remaining, max(total - length(page.entries), 0))
-     |> stream(:notifications, page.entries, dom_id: &"notification-#{&1.id}")}
+     |> stream(:notifications, with_post_previews(page.entries, user),
+       dom_id: &"notification-#{&1.id}"
+     )}
   end
 
   @impl true
@@ -59,18 +62,24 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> assign(:remaining, max(socket.assigns.remaining - length(page.entries), 0))
-     |> stream(:notifications, page.entries, at: -1)}
+     |> stream(:notifications, with_post_previews(page.entries, socket.assigns.current_user),
+       at: -1
+     )}
   end
 
   @impl true
   def handle_info({:new_notification, notification}, socket) do
-    item =
+    [item] =
       notification
       |> Map.put_new(:kind, "activity")
       # Pushed events carry no row id, so mint one. The "live-" prefix keeps
       # them out of the derived "<kind>-<row id>" namespace - a pushed event
       # must prepend, never update a derived row in place.
       |> Map.put(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
+      # A pushed reply/like carries the post ids but no bodies; quote them like
+      # the derived rows do.
+      |> List.wrap()
+      |> with_post_previews(socket.assigns.current_user)
 
     # The user is watching the event arrive, so it is already read: advance the
     # read marker, which broadcasts :notifications_read and keeps the shell's
@@ -118,7 +127,8 @@ defmodule VutuvWeb.NotificationLive.Index do
               </span>
             </.presence_wrap>
           <% end %>
-          <div>
+          <div class="min-w-0 flex-1">
+            <% target = notification_target(n, @current_user) %>
             <p class="text-slate-800 dark:text-slate-100">
               <%= if n[:actor_param] do %>
                 <.link href={~p"/#{n.actor_param}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
@@ -130,7 +140,7 @@ defmodule VutuvWeb.NotificationLive.Index do
               <%!-- The event text leads to the thing it reports: the liked or
               replied-to post, the connections page for a request, the actor's
               profile otherwise. --%>
-              <%= if target = notification_target(n, @current_user) do %>
+              <%= if target do %>
                 <.link href={target} class="hover:text-brand-700 hover:underline">
                   {notification_text(n)}
                 </.link>
@@ -138,6 +148,24 @@ defmodule VutuvWeb.NotificationLive.Index do
                 {notification_text(n)}
               <% end %>
             </p>
+            <%!-- For a like, quote the liked post; for a reply, quote both the
+            recipient's own post that was replied to and the reply itself, each
+            truncated to its first lines and linked to its own permalink. When
+            both show, a caption tells them apart. --%>
+            <% both_quotes? = n[:post_preview] && n[:reply_preview] %>
+            <.post_quote
+              :if={n[:post_preview] && target}
+              href={target}
+              label={both_quotes? && gettext("Your post")}
+              preview={n.post_preview}
+            />
+            <.post_quote
+              :if={n[:reply_preview]}
+              href={~p"/#{n.actor_param}/posts/#{n.reply_post_id}"}
+              label={both_quotes? && gettext("Reply")}
+              preview={n.reply_preview}
+              data-reply-preview="true"
+            />
             <span class="text-xs uppercase tracking-wide text-slate-500">
               {kind_label(n.kind)}<span :if={n[:at]}> &middot; <time>{format_at(n.at)}</time></span>
             </span>
@@ -149,6 +177,35 @@ defmodule VutuvWeb.NotificationLive.Index do
 
       <.load_more :if={@more?} class="mt-6">{load_more_label(@remaining)}</.load_more>
     </div>
+    """
+  end
+
+  # One quoted post excerpt under a notification: a calm left-bordered card that
+  # links to the post like the event text does. `label` (optional) is the small
+  # uppercase caption that tells the two quotes of a reply apart ("Your post" vs
+  # "Reply"); a lone quote (a like) is unambiguous and passes none. Extra
+  # attributes (a `data-reply-preview` test hook) flow through the global rest.
+  attr(:href, :string, required: true)
+  attr(:label, :any, default: nil)
+  attr(:preview, :map, required: true)
+  attr(:rest, :global)
+
+  def post_quote(assigns) do
+    ~H"""
+    <.link
+      href={@href}
+      data-post-preview="true"
+      class="mt-2 block rounded-lg border-l-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:text-slate-200"
+      {@rest}
+    >
+      <span
+        :if={@label}
+        class="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+      >
+        {@label}
+      </span>
+      <span class="line-clamp-3 whitespace-pre-line">{@preview.text}<span :if={@preview.truncated?}>…</span></span>
+    </.link>
     """
   end
 
@@ -287,4 +344,63 @@ defmodule VutuvWeb.NotificationLive.Index do
     do: Calendar.strftime(at, "%Y-%m-%d")
 
   defp format_at(_), do: nil
+
+  # Reply and like notifications carry post ids the row can quote: a like the
+  # liked post (`:post_id`), a reply both the recipient's own post that was
+  # replied to (`:post_id`) and the reply itself (`:reply_post_id`). Look every
+  # referenced body up in one batched, visibility-scoped query and attach a
+  # first-lines plain-text excerpt as `:post_preview` / `:reply_preview`. Other
+  # kinds carry no ids, a photo-only post (empty body) yields no preview, and a
+  # reply hidden from the viewer is absent from `bodies`, so all pass through
+  # unchanged.
+  defp with_post_previews(entries, viewer) do
+    bodies =
+      entries
+      |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id]])
+      |> then(&Posts.post_bodies(viewer, &1))
+
+    Enum.map(entries, fn entry ->
+      entry
+      |> put_preview(:post_preview, entry[:post_id], bodies)
+      |> put_preview(:reply_preview, entry[:reply_post_id], bodies)
+    end)
+  end
+
+  defp put_preview(entry, key, post_id, bodies) do
+    with true <- is_binary(post_id),
+         body when is_binary(body) <- Map.get(bodies, post_id),
+         preview when preview != nil <- post_preview(body) do
+      Map.put(entry, key, preview)
+    else
+      _ -> entry
+    end
+  end
+
+  # How many source lines and characters the notification quote keeps.
+  @preview_line_count 3
+  @preview_char_limit 280
+
+  # The plain-text excerpt shown under a reply/like notification: the post's
+  # first three non-empty lines, capped so one very long line can't blow the
+  # row up. Plain text (not rendered Markdown) to match the compact reply
+  # context row on the profile. `truncated?` tells the row to append an ellipsis
+  # when more was cut. Returns nil for a bodyless (photo-only) post.
+  defp post_preview(body) do
+    lines =
+      body
+      |> String.split("\n")
+      |> Enum.map(&String.trim/1)
+      |> Enum.reject(&(&1 == ""))
+
+    {shown, rest} = Enum.split(lines, @preview_line_count)
+    text = Enum.join(shown, "\n")
+
+    cond do
+      text == "" -> nil
+      String.length(text) > @preview_char_limit -> %{text: clamp(text), truncated?: true}
+      true -> %{text: text, truncated?: rest != []}
+    end
+  end
+
+  defp clamp(text), do: text |> String.slice(0, @preview_char_limit) |> String.trim_trailing()
 end

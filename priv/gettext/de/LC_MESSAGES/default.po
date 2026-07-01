@@ -5512,6 +5512,11 @@ msgstr "Ansehen"
 msgid "Your name"
 msgstr "Ihr Name"
 
+#: lib/vutuv_web/live/notification_live/index.ex:159
+#, elixir-autogen, elixir-format
+msgid "Your post"
+msgstr "Ihr Beitrag"
+
 #: lib/vutuv_web/templates/settings/privacy.html.heex:113
 #, elixir-autogen, elixir-format
 msgid "Your posts or profile a moderator is looking at."

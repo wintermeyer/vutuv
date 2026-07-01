@@ -197,10 +197,10 @@ defmodule Vutuv.Activity do
   author. `post_id` is the parent post, so the notification can link to the
   thread the reply landed in.
   """
-  def notify_reply(parent_author_id, replier, post_id \\ nil) do
+  def notify_reply(parent_author_id, replier, parent_post_id \\ nil, reply_post_id \\ nil) do
     Vutuv.Webhooks.emit(parent_author_id, "post.replied", %{
       "by" => actor_param(replier),
-      "post_id" => post_id
+      "post_id" => parent_post_id
     })
 
     notify(
@@ -208,7 +208,10 @@ defmodule Vutuv.Activity do
       Map.merge(actor_fields(replier), %{
         kind: "reply",
         text: "replied to your post.",
-        post_id: post_id,
+        # The recipient's own post that was replied to (what the row links to)…
+        post_id: parent_post_id,
+        # …and the reply itself, so the row can quote both.
+        reply_post_id: reply_post_id,
         at: DateTime.utc_now()
       })
     )
@@ -474,14 +477,17 @@ defmodule Vutuv.Activity do
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^limit,
-      select: {r.id, r.inserted_at, replier, r.parent_post_id}
+      select: {r.id, r.inserted_at, replier, r.parent_post_id, r.post_id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
-    |> Enum.map(fn {id, at, replier, parent_post_id} ->
+    |> Enum.map(fn {id, at, replier, parent_post_id, reply_post_id} ->
       "reply-#{id}"
       |> actor_item("reply", at, replier)
+      # The parent (the recipient's own post the row links to) and the reply
+      # itself, so the row can quote both.
       |> Map.put(:post_id, parent_post_id)
+      |> Map.put(:reply_post_id, reply_post_id)
     end)
   end
 

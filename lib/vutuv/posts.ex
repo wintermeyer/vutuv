@@ -1255,6 +1255,28 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  The bodies of the given post ids **visible to `viewer`** as a `%{id => body}`
+  map, for building the notification-page post previews in one round trip.
+  Missing, deleted or denied ids are simply absent; a `nil`/empty id list makes
+  no query. `viewer`'s own posts always pass (so the recipient's own post that a
+  reply/like is about is always quotable), while another member's post (a reply
+  quoted alongside it) passes only when the deny-based visibility rules would
+  show it, so a restricted reply never leaks through the notification.
+  """
+  def post_bodies(viewer, ids) do
+    ids = ids |> Enum.filter(&is_binary/1) |> Enum.uniq()
+
+    if ids == [] do
+      %{}
+    else
+      from(p in Post, where: p.id in ^ids, select: {p.id, p.body})
+      |> scope_visible(viewer)
+      |> Repo.all()
+      |> Map.new()
+    end
+  end
+
+  @doc """
   Classifies a post's reply parent (from its preloaded `reply_ref`) into one of
   `{:parent, parent_post}` (the parent still exists), `{:author_only, author}`
   (the parent post is gone but its author remains), `:gone` (author gone too),
@@ -1494,7 +1516,7 @@ defmodule Vutuv.Posts do
     broadcast_reply_count(parent.id)
 
     if parent.user_id != reply.user_id do
-      Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id)
+      Vutuv.Activity.notify_reply(parent.user_id, reply.user, parent.id, reply.id)
     end
   end
 

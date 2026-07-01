@@ -112,6 +112,117 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert html =~ ~s(href="/#{user.username}/posts/#{post.id}")
     end
 
+    test "a like notification previews the liked post's body", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "Ship the redesign on Friday")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The quote is shown and, like the event text, links to the post.
+      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
+
+      assert has_element?(
+               live,
+               ~s([data-post-preview][href="/#{user.username}/posts/#{post.id}"])
+             )
+    end
+
+    test "a reply notification previews both the parent post and the reply", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      replier = insert(:user)
+      parent = insert(:post, user: user, body: "Which editor do you swear by?")
+      reply = insert(:post, user: replier, body: "Neovim, without a doubt.")
+
+      insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # The recipient's own post is quoted and links to its thread ...
+      assert has_element?(
+               live,
+               ~s([data-post-preview][href="/#{user.username}/posts/#{parent.id}"]),
+               "Which editor do you swear by?"
+             )
+
+      # ... and the reply is quoted and links to the reply's own permalink.
+      assert has_element?(
+               live,
+               ~s([data-reply-preview][href="/#{replier.username}/posts/#{reply.id}"]),
+               "Neovim, without a doubt."
+             )
+    end
+
+    test "a reply hidden from the recipient is not quoted", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      replier = insert(:user)
+      parent = insert(:post, user: user, body: "Public question")
+      reply = insert(:post, user: replier, body: "Secret answer")
+      # The replier denies the recipient, so its body must not leak into the row.
+      Vutuv.Repo.insert!(%Vutuv.Posts.PostDenial{post_id: reply.id, denied_user_id: user.id})
+
+      insert(:post_reply, post: reply, parent_post: parent, parent_author: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "Public question"
+      refute render(live) =~ "Secret answer"
+      refute has_element?(live, ~s([data-reply-preview]))
+    end
+
+    test "the post preview keeps only the first three lines", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      body = "Line one\nLine two\nLine three\nLine four is hidden"
+      post = insert(:post, user: user, body: body)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "Line one"
+      assert html =~ "Line three"
+      refute html =~ "Line four is hidden"
+    end
+
+    test "a like on a bodyless (photo-only) post shows no preview", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post = insert(:post, user: user, body: "")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "liked your post"
+      refute has_element?(live, ~s([data-post-preview]))
+    end
+
+    test "non-post notifications carry no preview", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "started following you"
+      refute has_element?(live, ~s([data-post-preview]))
+    end
+
+    test "a like arriving live carries its post preview", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "Live-quoted post body")
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      fan = insert(:user, first_name: "Fanny", last_name: "First")
+      Vutuv.Activity.notify_like(user.id, fan, post.id)
+      _ = :sys.get_state(live.pid)
+
+      assert has_element?(live, ~s([data-post-preview]), "Live-quoted post body")
+    end
+
     test "kind labels render as human text, not raw kind strings", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
