@@ -173,5 +173,40 @@ defmodule VutuvWeb.WorkExperienceHTML do
   defp circle_rem(_months, max_months) when max_months <= 0, do: 1.6
   defp circle_rem(months, max_months), do: 1.6 + :math.sqrt(months / max_months) * (4.0 - 1.6)
 
+  @doc """
+  The member's pinned profile job title (issue #833), found in the already-
+  loaded list, or nil when they use the automatic heuristic. `id` is a
+  member's `users.profile_work_experience_id`.
+  """
+  def pinned_job(_work_experiences, nil), do: nil
+  def pinned_job(work_experiences, id), do: Enum.find(work_experiences, &(&1.id == id))
+
+  @doc """
+  The star that marks (and toggles) which work experience supplies the profile
+  job title on the management list (issue #833): solid when this role is the
+  pinned one, outline as the "pin this one instead" affordance otherwise. One
+  path renders both, colour and fill come from the caller's classes.
+  """
+  attr(:filled, :boolean, default: false)
+  attr(:class, :string, default: "h-4 w-4")
+
+  def pin_star(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      viewBox="0 0 20 20"
+      fill={if(@filled, do: "currentColor", else: "none")}
+      stroke="currentColor"
+      stroke-width={if(@filled, do: "0", else: "1.5")}
+      aria-hidden="true"
+    >
+      <path
+        stroke-linejoin="round"
+        d="M10 1.75l2.6 5.27 5.82.846-4.21 4.104.994 5.796L10 15.1l-5.204 2.736.994-5.796L1.58 7.866l5.82-.846L10 1.75z"
+      />
+    </svg>
+    """
+  end
+
   embed_templates("../templates/work_experience/*")
 end

@@ -615,6 +615,11 @@ defmodule VutuvWeb.Router do
       resources("/phone_numbers", PhoneNumberController)
       resources("/links", UrlController)
       resources("/social_media_accounts", SocialMediaAccountController)
+      # Pin one work experience as the profile job title, or clear back to the
+      # automatic heuristic (issue #833). Owner-only, on the management page;
+      # the extra `/pin` segment keeps these distinct from the resources below.
+      put("/work_experiences/:id/pin", WorkExperienceController, :pin)
+      delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
       resources("/work_experiences", WorkExperienceController)
       resources("/addresses", AddressController)
 

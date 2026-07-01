@@ -84,6 +84,99 @@ defmodule VutuvWeb.UserHelpersTest do
     end
   end
 
+  describe "a pinned profile job title wins over the heuristic (issue #833)" do
+    test "current_job/1 returns the pinned role, not the heuristic pick" do
+      user = insert(:user)
+      # The heuristic would lead with the open-ended `current` role.
+      current = we(user, start_month: 3, start_year: 2021, end_month: nil, end_year: nil)
+      past = we(user, start_month: 1, start_year: 2015, end_month: 12, end_year: 2018)
+
+      {:ok, user} = Vutuv.Accounts.pin_profile_work_experience(user, past)
+
+      job = UserHelpers.current_job(user)
+      assert job.id == past.id
+      refute job.id == current.id
+    end
+
+    test "current_job_in_memory/2 returns the pinned role, else the heuristic" do
+      user = insert(:user)
+      current = we(user, start_month: 3, start_year: 2021, end_month: nil, end_year: nil)
+      past = we(user, start_month: 1, start_year: 2015, end_month: 12, end_year: 2018)
+      experiences = ordered_experiences(user)
+
+      assert UserHelpers.current_job_in_memory(experiences, past.id).id == past.id
+      assert UserHelpers.current_job_in_memory(experiences, nil).id == current.id
+    end
+
+    test "a pinned id that is not in the list falls back to the heuristic" do
+      user = insert(:user)
+      current = we(user, start_month: 3, start_year: 2021, end_month: nil, end_year: nil)
+      experiences = ordered_experiences(user)
+
+      assert UserHelpers.current_job_in_memory(experiences, Vutuv.UUIDv7.generate()).id ==
+               current.id
+    end
+
+    test "deleting the pinned role nils the pointer, so it falls back (ON DELETE SET NULL)" do
+      user = insert(:user)
+      current = we(user, start_month: 3, start_year: 2021, end_month: nil, end_year: nil)
+      past = we(user, start_month: 1, start_year: 2015, end_month: 12, end_year: 2018)
+      {:ok, _} = Vutuv.Accounts.pin_profile_work_experience(user, past)
+
+      Repo.delete!(past)
+      user = Repo.get!(User, user.id)
+
+      assert is_nil(user.profile_work_experience_id)
+      assert UserHelpers.current_job(user).id == current.id
+    end
+
+    test "pinning rejects a work experience that belongs to someone else" do
+      owner = insert(:user)
+      _own = we(owner, title: "Owner Role", organization: "OwnCo")
+      other = insert(:user)
+      foreign = we(other, title: "Foreign Role", organization: "TheirCo")
+
+      assert {:error, :not_owner} = Vutuv.Accounts.pin_profile_work_experience(owner, foreign)
+      assert is_nil(Repo.get!(User, owner.id).profile_work_experience_id)
+    end
+
+    test "work_information_map/2 reflects the pinned title on a listing-fields struct" do
+      user = insert(:user)
+
+      _current =
+        we(user,
+          title: "New Role",
+          organization: "NewCo",
+          start_month: 3,
+          start_year: 2021,
+          end_month: nil,
+          end_year: nil
+        )
+
+      past =
+        we(user,
+          title: "Old Role",
+          organization: "OldCo",
+          start_month: 1,
+          start_year: 2015,
+          end_month: 12,
+          end_year: 2018
+        )
+
+      {:ok, _} = Vutuv.Accounts.pin_profile_work_experience(user, past)
+
+      # Reload the way a listing query does, to prove the pin flows through the
+      # partial listing_fields/0 struct, not just a full user row.
+      listing_user =
+        Repo.one!(
+          from(u in User, where: u.id == ^user.id, select: struct(u, ^User.listing_fields()))
+        )
+
+      map = UserHelpers.work_information_map([listing_user], 60)
+      assert Map.fetch!(map, user.id) == "Old Role @ OldCo"
+    end
+  end
+
   describe "work_information_string_for_job/2 matches work_information_string/2" do
     test "current job with title and organization" do
       user = insert(:user)

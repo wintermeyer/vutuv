@@ -1,6 +1,7 @@
 defmodule VutuvWeb.WorkExperienceController do
   use VutuvWeb, :controller
 
+  alias Vutuv.Accounts
   alias Vutuv.Profiles.WorkExperience
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -34,10 +35,45 @@ defmodule VutuvWeb.WorkExperienceController do
       html: fn conn ->
         conn
         |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", user: user, work_experience: user.work_experiences)
+        |> render("index.html",
+          user: user,
+          work_experience: user.work_experiences,
+          # The pinned profile job title (issue #833), so the management list can
+          # mark it and offer the chooser. Nil = automatic heuristic.
+          profile_work_experience_id: user.profile_work_experience_id
+        )
       end,
       doc: fn -> SectionDocs.build_index(user, :work_experiences, user.work_experiences) end
     )
+  end
+
+  # Pin one work experience as the member's profile job title, or clear the
+  # pin back to the automatic heuristic (issue #833). Owner-only (AuthUser) and
+  # owner-scoped (ResolveOwnedSlug assigns :job from the member's own rows), so
+  # a member can only ever pin their own role.
+  def pin(conn, _params) do
+    user = conn.assigns[:user]
+
+    case Accounts.pin_profile_work_experience(user, conn.assigns[:job]) do
+      {:ok, _user} ->
+        conn
+        |> put_flash(:info, gettext("This job title now appears on your profile."))
+        |> redirect(to: ~p"/#{user}/work_experiences")
+
+      {:error, _} ->
+        conn
+        |> put_flash(:error, gettext("That work experience could not be pinned."))
+        |> redirect(to: ~p"/#{user}/work_experiences")
+    end
+  end
+
+  def unpin(conn, _params) do
+    user = conn.assigns[:user]
+    {:ok, _user} = Accounts.unpin_profile_work_experience(user)
+
+    conn
+    |> put_flash(:info, gettext("Your profile job title is chosen automatically again."))
+    |> redirect(to: ~p"/#{user}/work_experiences")
   end
 
   def new(conn, _params) do

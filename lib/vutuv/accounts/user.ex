@@ -127,6 +127,14 @@ defmodule Vutuv.Accounts.User do
     has_many(:addresses, Vutuv.Profiles.Address)
     has_many(:work_experiences, Vutuv.Profiles.WorkExperience)
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
+
+    # The work experience the member pinned as their profile job title (issue
+    # #833). nil = pick it automatically (UserHelpers.current_job/1). Set only
+    # through Accounts.pin_profile_work_experience/2 / unpin_profile_work_experience/1
+    # (never cast from the profile form), and nulled by the DB when the pinned
+    # experience is deleted (ON DELETE SET NULL), so it can never point at a
+    # gone role.
+    belongs_to(:profile_work_experience, Vutuv.Profiles.WorkExperience)
     has_many(:search_terms, Vutuv.Accounts.SearchTerm, on_replace: :delete)
     has_many(:endorsements, Vutuv.Tags.UserTagEndorsement)
 
@@ -154,7 +162,10 @@ defmodule Vutuv.Accounts.User do
     # :updated_at is still loaded for rows not yet migrated to that scheme: their
     # avatar falls back to the legacy `?v=#{phash2(updated_at)}` cache-buster, so
     # a re-uploaded thumbnail doesn't keep serving the cached old image.
-    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at)a
+    # :profile_work_experience_id is loaded so a listing row's work line reflects
+    # a member's pinned profile job title (issue #833) via work_information_map/2,
+    # not just the automatic heuristic.
+    ~w(id first_name last_name honorific_prefix honorific_suffix username avatar avatar_fingerprint updated_at profile_work_experience_id)a
   end
 
   # :username is deliberately NOT here: the username is unique, rate-limited

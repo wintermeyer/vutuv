@@ -39,8 +39,14 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     path = "/" <> user.username
     # The header job, resolved against the already-preloaded experiences
     # (current_job_in_memory mirrors the page's DB-backed current_job/1 on
-    # an id-ordered list — UUID v7 ids sort by creation time).
-    job = UserHelpers.current_job_in_memory(Enum.sort_by(user.work_experiences, & &1.id))
+    # an id-ordered list — UUID v7 ids sort by creation time). A pinned role
+    # (issue #833) wins over the heuristic, matching the HTML header.
+    job =
+      UserHelpers.current_job_in_memory(
+        Enum.sort_by(user.work_experiences, & &1.id),
+        user.profile_work_experience_id
+      )
+
     work_info = UserHelpers.work_information_string_for_job(job, 256)
     posts = Vutuv.Posts.profile_posts(user, viewer)
 

@@ -6778,3 +6778,35 @@ msgstr ""
 #: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
 msgid "We wait a little before emailing, so you can read the message yourself first. These two settings apply only while unread-message emails are on."
 msgstr ""
+
+#: lib/vutuv_web/controllers/work_experience_controller.ex
+msgid "This job title now appears on your profile."
+msgstr ""
+
+#: lib/vutuv_web/controllers/work_experience_controller.ex
+msgid "That work experience could not be pinned."
+msgstr ""
+
+#: lib/vutuv_web/controllers/work_experience_controller.ex
+msgid "Your profile job title is chosen automatically again."
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex
+msgid "%{title} @ %{organization} is shown as your profile job title."
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex
+msgid "Your profile job title is chosen automatically. Pick a role below to control which title leads your profile."
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex
+msgid "Shown on your profile"
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex
+msgid "Use automatic"
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex
+msgid "Show on profile"
+msgstr ""

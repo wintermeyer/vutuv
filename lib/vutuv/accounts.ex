@@ -22,6 +22,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Pages
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Uploads.Crop
 
@@ -896,6 +897,41 @@ defmodule Vutuv.Accounts do
     with {:ok, user} <- Repo.update(changeset) do
       {:ok, store_pending_images(user, attrs)}
     end
+  end
+
+  @doc """
+  Pins `work_experience` as the member's profile job title (issue #833): the
+  title/organization the profile header, listing rows, meta description,
+  JSON-LD and every agent format lead with, instead of the automatic
+  `VutuvWeb.UserHelpers.current_job/1` heuristic.
+
+  `work_experience` must belong to `user` (the caller resolves it owner-scoped);
+  a foreign one is rejected rather than pinned. `profile_work_experience_id` is
+  set programmatically here, never cast from the profile form.
+  """
+  def pin_profile_work_experience(%User{id: user_id} = user, %WorkExperience{
+        id: we_id,
+        user_id: user_id
+      }) do
+    user
+    |> Ecto.Changeset.change(profile_work_experience_id: we_id)
+    # Guards against a race where the experience is deleted between the owner
+    # resolution and this write: the FK constraint fails cleanly instead of
+    # persisting a dangling pointer.
+    |> Ecto.Changeset.foreign_key_constraint(:profile_work_experience_id)
+    |> Repo.update()
+  end
+
+  def pin_profile_work_experience(%User{}, %WorkExperience{}), do: {:error, :not_owner}
+
+  @doc """
+  Clears the member's pinned profile job title, so it falls back to the
+  automatic `VutuvWeb.UserHelpers.current_job/1` heuristic again (issue #833).
+  """
+  def unpin_profile_work_experience(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(profile_work_experience_id: nil)
+    |> Repo.update()
   end
 
   # Avatar/cover files are written to disk only AFTER the row commits, so a

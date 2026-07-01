@@ -368,7 +368,7 @@ defmodule VutuvWeb.UserProfileLive do
     # resolve the header's current job from that list in memory (the same
     # current_job_in_memory/1 the listing pages use) instead of re-running the
     # 2-4 query current_job/1 chain against work_experiences.
-    header_job = current_job_in_memory(user.work_experiences)
+    header_job = current_job_in_memory(user.work_experiences, user.profile_work_experience_id)
     recommended_users = recommended_users(user, view_viewer)
 
     posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)

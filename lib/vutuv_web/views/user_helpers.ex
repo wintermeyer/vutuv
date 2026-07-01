@@ -79,7 +79,29 @@ defmodule VutuvWeb.UserHelpers do
   """
   def user_has_permissions?(user, visitor), do: same_user?(user, visitor)
 
+  @doc """
+  The work experience whose title/organization leads the member's profile.
+
+  A member can pin one (issue #833) via `users.profile_work_experience_id`;
+  when they have, that role wins. Otherwise it falls back to the automatic
+  heuristic: the first open-ended dated role, else the first open-ended role,
+  else the most recent by start date. `pinned_job/1` reads
+  `user.profile_work_experience_id`, which is nil for the pre-pin default, so
+  members who never touch the setting see exactly the old behaviour.
+  """
   def current_job(user) do
+    pinned_job(user) || heuristic_current_job(user)
+  end
+
+  # The pinned role, re-scoped to the user so a stale pointer to a foreign or
+  # deleted row (the FK nils it on delete, but be defensive) never surfaces.
+  defp pinned_job(%{profile_work_experience_id: id, id: user_id}) when is_binary(id) do
+    Repo.one(from(w in WorkExperience, where: w.id == ^id and w.user_id == ^user_id))
+  end
+
+  defp pinned_job(_user), do: nil
+
+  defp heuristic_current_job(user) do
     if Repo.exists?(from(w in WorkExperience, where: w.user_id == ^user.id)) do
       user
       |> has_start_no_end
@@ -228,10 +250,25 @@ defmodule VutuvWeb.UserHelpers do
   Steps 1 and 2 use `limit: 1` with no `order_by` in the DB version, which on
   Postgres yields rows in physical (insertion / id) order; we mirror that by
   preserving the list order produced by an `id`-ordered query.
-  """
-  def current_job_in_memory([]), do: nil
 
-  def current_job_in_memory(work_experiences) when is_list(work_experiences) do
+  `pinned_id` (a member's `users.profile_work_experience_id`, issue #833) short-
+  circuits the heuristic when it points at one of `work_experiences`: that role
+  wins. nil (the default) leaves the precedence above untouched.
+  """
+  def current_job_in_memory(work_experiences, pinned_id \\ nil)
+
+  def current_job_in_memory([], _pinned_id), do: nil
+
+  def current_job_in_memory(work_experiences, pinned_id) when is_list(work_experiences) do
+    pinned_in_list(work_experiences, pinned_id) || heuristic_in_memory(work_experiences)
+  end
+
+  defp pinned_in_list(_work_experiences, nil), do: nil
+
+  defp pinned_in_list(work_experiences, pinned_id),
+    do: Enum.find(work_experiences, &(&1.id == pinned_id))
+
+  defp heuristic_in_memory(work_experiences) do
     has_start_no_end =
       Enum.find(work_experiences, fn w ->
         not is_nil(w.start_month) and not is_nil(w.start_year) and
@@ -285,7 +322,11 @@ defmodule VutuvWeb.UserHelpers do
       |> Enum.group_by(& &1.user_id)
 
     Map.new(users, fn user ->
-      job = current_job_in_memory(Map.get(experiences_by_user, user.id, []))
+      job =
+        current_job_in_memory(
+          Map.get(experiences_by_user, user.id, []),
+          user.profile_work_experience_id
+        )
 
       info =
         case work_information_string_for_job(job, len) do
