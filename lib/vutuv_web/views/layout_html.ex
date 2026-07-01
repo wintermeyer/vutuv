@@ -157,6 +157,10 @@ defmodule VutuvWeb.LayoutHTML do
         %{
           "user_id" => user.id,
           "user_name" => full_name(user),
+          # The monogram is built from first+last only (the shared name_initials/1
+          # user clause), matching <.avatar>, so an honorific ("Dr.") in the
+          # display name can't leak into the initials.
+          "user_initials" => name_initials(user),
           "user_param" => Phoenix.Param.to_param(user),
           "user_avatar" => Vutuv.Avatar.user_url(user, :thumb),
           "user_admin?" => user.admin?,

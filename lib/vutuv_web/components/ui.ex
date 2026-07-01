@@ -1309,12 +1309,7 @@ defmodule VutuvWeb.UI do
   # top-bar avatar) instead of the anonymous placeholder image — initials
   # tell people apart in lists, a shared grey silhouette does not.
   defp avatar_inner(%{src: nil, user: %{avatar: nil} = user} = assigns) do
-    full_name =
-      [Map.get(user, :first_name), Map.get(user, :last_name)]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.join(" ")
-
-    assigns = assign(assigns, :initials, name_initials(full_name))
+    assigns = assign(assigns, :initials, name_initials(user))
 
     ~H"""
     <span
@@ -1359,11 +1354,21 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Up to two uppercased initials from a display name (`"Greta Tester"` → `"GT"`),
-  `"?"` when there is nothing to abbreviate. Shared by `<.avatar>` and the
-  shell's top-bar tile so the two always agree.
+  Up to two uppercased initials for a member, `"?"` when there is nothing to
+  abbreviate. Accepts either a **user map** (built from `first_name` + `last_name`
+  only, so an honorific like `"Dr."` never leaks into the monogram) or an already
+  composed **display-name string** (`"Greta Tester"` → `"GT"`). This is the one
+  definition of a member's monogram, shared by `<.avatar>` and the shell's
+  top-bar tile so the two always agree.
   """
   def name_initials(nil), do: "?"
+
+  def name_initials(%{first_name: _, last_name: _} = user) do
+    [Map.get(user, :first_name), Map.get(user, :last_name)]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" ")
+    |> name_initials()
+  end
 
   def name_initials(name) do
     name

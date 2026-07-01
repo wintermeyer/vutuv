@@ -2,13 +2,15 @@
   <.form_error changeset={@changeset} />
 
   <.editform_field form={f} field={:provider}>
-    <%= label f, :provider %>
-    <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(), prompt: "Select a Social Media Provider", autofocus: true %>
+    <%= label f, :provider, gettext("Provider") %>
+    <%= select f, :provider, Vutuv.Profiles.SocialMediaAccount.accepted_providers(),
+      prompt: gettext("Select a social media provider"),
+      autofocus: true %>
     <%= error_tag f, :provider %>
   </.editform_field>
 
   <.editform_field form={f} field={:value}>
-    <%= label f, :account %>
+    <%= label f, :value, gettext("Account") %>
     <%= text_input f, :value %>
     <%= error_tag f, :value %>
     <%= error_tag f, :value_provider %>

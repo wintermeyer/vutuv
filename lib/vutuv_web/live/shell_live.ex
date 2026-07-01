@@ -55,6 +55,9 @@ defmodule VutuvWeb.ShellLive do
       socket
       |> assign(:user_id, user_id)
       |> assign(:user_name, session["user_name"])
+      # Initials are built from first+last (matching <.avatar>); fall back to the
+      # display name only for sessions built before that key existed.
+      |> assign(:user_initials, session["user_initials"] || name_initials(session["user_name"]))
       |> assign(:user_param, user_param)
       |> assign(:user_avatar, session["user_avatar"])
       |> assign(:user_admin?, session["user_admin?"] == true)
@@ -297,7 +300,7 @@ defmodule VutuvWeb.ShellLive do
                       <img src={@user_avatar} alt={@user_name} class="h-9 w-9 rounded-full object-cover" />
                     <% else %>
                       <span class="flex h-9 w-9 items-center justify-center rounded-full bg-brand-700 text-sm font-bold text-white">
-                        {name_initials(@user_name)}
+                        {@user_initials}
                       </span>
                     <% end %>
                     <.presence_dot online={@self_online?} size="sm" />

@@ -126,6 +126,16 @@ defmodule VutuvWeb.ShellLiveTest do
     refute has_element?(view, ~s(summary[title="Stefan Wintermeyer"] img))
   end
 
+  test "the top-bar monogram uses the first+last initials, not the honorific title", %{conn: conn} do
+    # Regression: "Dr. Anna Schmidt" showed "DA" in the shell instead of "AS".
+    user = insert(:user)
+    session = session_for(user, %{"user_name" => "Dr. Anna Schmidt", "user_initials" => "AS"})
+    {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+
+    assert has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "AS")
+    refute has_element?(view, ~s(summary[title="Dr. Anna Schmidt"]), "DA")
+  end
+
   test "the avatar opens an account menu linking to every account area", %{conn: conn} do
     user = insert(:user)
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))

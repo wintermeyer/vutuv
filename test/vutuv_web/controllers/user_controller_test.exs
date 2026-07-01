@@ -526,6 +526,22 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ ">my site</a>"
   end
 
+  test "renders a Markdown list in the headline with visible bullets", %{conn: conn} do
+    # The edit form promises "Fett, Kursiv, Links und Listen", and the Markdown
+    # pipeline emits <ul>/<li>, but Tailwind Preflight strips list markers unless
+    # the container restores them. Without list styling the items ran together as
+    # plain lines with no bullets.
+    user = insert_activated_user(headline: "Skills:\n\n- Elixir\n- Photography")
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+
+    assert html =~ "<ul>"
+    assert html =~ "<li>"
+    # The headline container carries list styling so bullets/numbers show.
+    assert html =~ "[&_ul]:list-disc"
+    assert html =~ "[&_ol]:list-decimal"
+  end
+
   test "renders a tag's endorsement count as an inline pill with a clickable endorser roster",
        %{conn: conn} do
     owner = insert_activated_user(username: "tag.pill.owner")

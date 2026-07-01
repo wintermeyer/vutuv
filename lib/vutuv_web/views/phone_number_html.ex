@@ -10,7 +10,9 @@ defmodule VutuvWeb.PhoneNumberHTML do
   """
   def phone_type_label("Work"), do: gettext("Work")
   def phone_type_label("Cell"), do: gettext("Cell")
-  def phone_type_label("Home"), do: gettext("Home")
+  # "Home" is disambiguated from the navigation "Home" (Startseite): as a phone
+  # type it is the private/home number, "Privat" in German.
+  def phone_type_label("Home"), do: pgettext("phone number type", "Home")
   def phone_type_label("Fax"), do: gettext("Fax")
   def phone_type_label(other), do: other
 

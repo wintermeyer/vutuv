@@ -31,6 +31,42 @@ defmodule VutuvWeb.SectionOrderingTest do
       end
     end
 
+    test "the phone number's type shows its translated label, not the raw value", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      insert(:phone_number, user: owner, number_type: "Cell", value: "+49 30 5550101")
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de")
+        |> get("/#{owner.username}/phone_numbers")
+        |> html_response(200)
+
+      # The reorder row must render "Mobil-Telefon", never the raw stored "Cell".
+      assert html =~ "Mobil-Telefon"
+      refute html =~ ~r/reorder__sub[^>]*>\s*Cell/
+    end
+
+    test "a visitor sees the translated phone type on the read-only list, not the raw value",
+         %{conn: conn} do
+      {conn, _visitor} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      insert(:phone_number, user: owner, number_type: "Cell", value: "+49 30 5550202")
+
+      html =
+        conn
+        |> recycle()
+        |> put_req_header("accept-language", "de")
+        |> get("/#{owner.username}/phone_numbers")
+        |> html_response(200)
+
+      # A visitor gets the read-only card_list (no reorder tool); it must still
+      # localize the type, like the owner's reorder rows do.
+      refute html =~ ~s(phx-hook="Reorder")
+      assert html =~ "Mobil-Telefon"
+      refute html =~ ">Cell</a>"
+    end
+
     test "a visitor never gets it", %{conn: conn} do
       {conn, _visitor} = create_and_login_user(conn)
       owner = insert_activated_user()

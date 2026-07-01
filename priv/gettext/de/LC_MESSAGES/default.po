@@ -321,11 +321,16 @@ msgstr "Ihr gratis Account ist in nicht mal 30 Sekunden fertig."
 
 #: lib/vutuv_web/templates/layout/app.html.heex:131
 #: lib/vutuv_web/templates/page/most_followed_users.html.heex:2
+#, elixir-autogen
+msgid "Home"
+msgstr "Startseite"
+
 #: lib/vutuv_web/templates/phone_number/form_content.html.heex:11
 #: lib/vutuv_web/views/phone_number_html.ex:13
 #, elixir-autogen
+msgctxt "phone number type"
 msgid "Home"
-msgstr "Home"
+msgstr "Privat"
 
 #: web/templates/followee/index.html.eex:21
 msgid "It doesn't look like you're following anyone yet. Find someone a profile of someone you know, or someone you're interested in, and click the follow button!"
@@ -1120,7 +1125,12 @@ msgstr "divers"
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:56
 #, elixir-autogen
 msgid "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
-msgstr "Ein Social Media Account wurde erstellt. Wussten Sie, das der vutuv Source-Code auf GitHub gehostet wird? https://github.com/wintermeyer/vutuv"
+msgstr "Ein Social Media Account wurde erstellt. Wussten Sie, dass der vutuv Source-Code auf GitHub gehostet wird? https://github.com/wintermeyer/vutuv"
+
+#: lib/vutuv_web/templates/social_media_account/form_content.html.heex:7
+#, elixir-autogen
+msgid "Select a social media provider"
+msgstr "Wählen Sie einen Social-Media-Anbieter aus"
 
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:61
 #, elixir-autogen

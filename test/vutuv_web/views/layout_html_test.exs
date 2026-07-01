@@ -1,6 +1,21 @@
 defmodule VutuvWeb.LayoutHTMLTest do
   use VutuvWeb.ConnCase, async: true
 
+  alias VutuvWeb.LayoutHTML
+
+  test "shell_session avatar initials come from first+last, not the honorific title", %{conn: _} do
+    # Regression: a member with a Titel ("Dr.") saw the shell top-bar monogram
+    # read "DA" (first letters of "Dr." + "Anna") while every other avatar in the
+    # app showed "AS". The shell must build its initials from the same first+last
+    # basis as <.avatar>, so the two always agree.
+    user = insert(:user, first_name: "Anna", last_name: "Schmidt", honorific_prefix: "Dr.")
+
+    session = LayoutHTML.shell_session(%{current_user: user})
+
+    assert session["user_name"] == "Dr. Anna Schmidt"
+    assert session["user_initials"] == "AS"
+  end
+
   test "the app layout wraps page content with the shared shell nav and footer", %{conn: conn} do
     conn = get(conn, ~p"/impressum")
     body = html_response(conn, 200)

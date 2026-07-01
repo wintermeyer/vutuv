@@ -33,6 +33,7 @@ defmodule VutuvWeb.SectionReorderLive do
   import VutuvWeb.UI, only: [row_actions: 1]
   import VutuvWeb.UrlHTML, only: [linkable_url: 1, display_url: 1]
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
+  import VutuvWeb.PhoneNumberHTML, only: [phone_type_label: 1]
   import VutuvWeb.UserHelpers, only: [format_address: 2]
 
   alias Vutuv.Profiles.SocialMediaAccount
@@ -163,7 +164,7 @@ defmodule VutuvWeb.SectionReorderLive do
     ~H"""
     <div class="reorder__text">
       <div class="reorder__title">{@entry.value}</div>
-      <div class="reorder__sub">{@entry.number_type}</div>
+      <div class="reorder__sub">{phone_type_label(@entry.number_type)}</div>
     </div>
     """
   end

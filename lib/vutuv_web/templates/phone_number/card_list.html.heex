@@ -11,7 +11,7 @@
     <%= for number <- @phone_numbers do %>
     <tr>
       <td>
-      <%= link number.number_type, to: ~p"/#{@user}/phone_numbers/#{number}" %>
+      <%= link phone_type_label(number.number_type), to: ~p"/#{@user}/phone_numbers/#{number}" %>
       </td>
       <td><%= number.value %></td>
       <td class="text-right">

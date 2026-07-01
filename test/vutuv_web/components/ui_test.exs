@@ -92,6 +92,28 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "name_initials/1" do
+    test "builds a display-name string's initials" do
+      assert UI.name_initials("Greta Tester") == "GT"
+    end
+
+    test "builds a user's initials from first+last only, ignoring the honorific" do
+      # Regression: a "Dr." title used to leak into the shell monogram ("DA").
+      user = %Vutuv.Accounts.User{
+        first_name: "Anna",
+        last_name: "Schmidt",
+        honorific_prefix: "Dr."
+      }
+
+      assert UI.name_initials(user) == "AS"
+    end
+
+    test "returns ? when there is nothing to abbreviate" do
+      assert UI.name_initials(nil) == "?"
+      assert UI.name_initials(%Vutuv.Accounts.User{first_name: nil, last_name: nil}) == "?"
+    end
+  end
+
   describe "avatar/1" do
     test "marks the <img> with data-avatar so the JS fallback can bind to it" do
       html = render_component(&UI.avatar/1, src: "/avatars/x/Jane%20Doe_thumb.avif")

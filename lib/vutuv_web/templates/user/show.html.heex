@@ -159,11 +159,12 @@ the resulting ~200px rail width. --%>
           </div>
         </div>
         <%!-- Headline is user-written Markdown through the safe VutuvWeb.Markdown
-        pipeline; the arbitrary-variant classes flatten Earmark's <p> and tint
+        pipeline; the arbitrary-variant classes flatten Earmark's <p>, restore the
+        list markers Preflight strips (the edit form promises "Listen"), and tint
         inline links/code to match the muted sub-line. --%>
         <div
           :if={@user.headline}
-          class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
+          class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
         >
           {VutuvWeb.Markdown.render(@user.headline)}
         </div>
