@@ -30,6 +30,23 @@ defmodule VutuvWeb.UnsubscribeControllerTest do
     assert reload(user).notification_emails?
   end
 
+  # The :unsubscribe pipeline drops CSRF so the RFC 8058 one-click POST works,
+  # which leaves the embedded ShellLive socket with no valid CSRF token: in a
+  # real browser it can't join and the client falls back to full page reloads
+  # in a loop ("LiveView reload hell", reported for the newsletter Abmelden
+  # link). ConnTest renders the shell statically, so only its absence from the
+  # HTML can guard the fix: these pages must render with no app shell.
+  test "the confirmation page renders without the live app shell", %{conn: conn, token: token} do
+    refute html_response(get(conn, ~p"/unsubscribe/#{token}"), 200) =~ "app-shell-lv"
+  end
+
+  test "a bad token 404s without the live app shell", %{conn: conn} do
+    conn = get(conn, ~p"/unsubscribe/not-a-real-token")
+
+    assert conn.status == 404
+    refute html_response(conn, 404) =~ "app-shell-lv"
+  end
+
   test "POST switches notification emails off", %{conn: conn, user: user, token: token} do
     conn = post(conn, ~p"/unsubscribe/#{token}")
 

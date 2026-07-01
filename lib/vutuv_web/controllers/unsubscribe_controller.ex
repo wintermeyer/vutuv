@@ -16,6 +16,16 @@ defmodule VutuvWeb.UnsubscribeController do
   alias Vutuv.Accounts.User
   alias VutuvWeb.UnsubscribeToken
 
+  # Render as standalone pages, without the app shell. The :unsubscribe pipeline
+  # drops CSRF protection so the RFC 8058 one-click POST (no token) works, which
+  # leaves the shell's embedded ShellLive LiveView with no valid CSRF token for
+  # its socket: it can't join, and the client falls back to full page reloads in
+  # a loop ("LiveView reload hell" reported for the newsletter Abmelden link).
+  # These pages are opened from an email by a usually logged-out recipient and
+  # need no chrome anyway. layout: false also flows into the render_error/404
+  # path below, so a bad token stays a clean, loop-free 404.
+  plug(:put_layout, html: false)
+
   def show(conn, %{"token" => token}) do
     case user_for_token(token) do
       {%User{} = user, field} -> render(conn, "show.html", user: user, token: token, field: field)
