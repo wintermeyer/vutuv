@@ -945,6 +945,43 @@ msgstr ""
 msgid "Page not found"
 msgstr ""
 
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "This page does not exist"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "The word"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid ""
+"in this address is only a placeholder. Replace it with the actual username of "
+"the person whose profile you want to visit."
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "For example, this profile really exists:"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "Do not know the username? Try the"
+msgstr ""
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "search page"
+msgstr ""
+
 #: web/views/error_view.ex:15, web/views/error_view.ex:26
 msgid "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report."
 msgstr ""

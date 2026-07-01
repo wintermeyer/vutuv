@@ -151,6 +151,9 @@ is **no theme toggle**, and every surface/text needs `dark:` variants.
   `<.edit_delete_actions>` icon group.
 - Error pages (`VutuvWeb.ErrorHTML`) render the `.error-page` card (code, message,
   "Back to the start page") and must work with and without the app layout.
+  `.error-page__note` is the prominent brand-tinted callout inside that card
+  (the `/username` placeholder helper uses it to own up to a broken newsletter
+  link); it is the one non-muted line, distinct from the grey `.error-page__hint`.
 
 ### CSS architecture (don't break it)
 

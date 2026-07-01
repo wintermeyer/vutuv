@@ -946,6 +946,47 @@ msgstr "Mann"
 msgid "Page not found"
 msgstr "Seite nicht verfügbar"
 
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "This page does not exist"
+msgstr "Diese Seite gibt es nicht"
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
+msgstr ""
+"Mea Culpa: Genau diesen fehlerhaften Link hatten wir tatsächlich einmal in "
+"einem Newsletter. Wir bitten um Entschuldigung!"
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "The word"
+msgstr "Das Wort"
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid ""
+"in this address is only a placeholder. Replace it with the actual username of "
+"the person whose profile you want to visit."
+msgstr ""
+"in dieser Adresse ist nur ein Platzhalter. Ersetzen Sie es durch den "
+"tatsächlichen Benutzernamen der Person, deren Profil Sie besuchen möchten."
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "For example, this profile really exists:"
+msgstr "Dieses Profil gibt es zum Beispiel wirklich:"
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "Do not know the username? Try the"
+msgstr "Sie kennen den Benutzernamen nicht? Probieren Sie die"
+
+#: lib/vutuv_web/views/error_html.ex
+#, elixir-autogen
+msgid "search page"
+msgstr "Suchseite"
+
 #: web/views/error_view.ex:15, web/views/error_view.ex:26
 msgid "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report."
 msgstr "Fehler! Irgendwas stimmt hier nicht. Wir würden uns über einen Bugreport unter %{link_open}freuen."

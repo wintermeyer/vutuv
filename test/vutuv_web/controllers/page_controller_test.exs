@@ -162,6 +162,42 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET /username" do
+    # People copy the literal word "username" out of instructions ("your profile
+    # lives at vutuv.de/username") and paste it into the address bar. Rather than
+    # a bare 404, /username explains that it is a placeholder for the person's
+    # real handle and points at a concrete example. "username" is a ReservedSlug
+    # so no member can ever claim it and shadow this page.
+    test "explains the placeholder instead of showing a bare 404", %{conn: conn} do
+      # 404 status: there is no page or member literally called "username".
+      body = conn |> get(~p"/username") |> html_response(404)
+
+      # It names the placeholder and links a real example profile.
+      assert body =~ "username"
+      assert body =~ "wintermeyer"
+      assert body =~ ~s(href="/wintermeyer")
+    end
+
+    # The German username help text points at vutuv.de/benutzername, so the
+    # German placeholder gets the same helper page.
+    test "the German placeholder /benutzername shows the same helper", %{conn: conn} do
+      body = conn |> get(~p"/benutzername") |> html_response(404)
+
+      assert body =~ ~s(href="/wintermeyer")
+    end
+
+    test "renders the placeholder page even when a member exists at the example slug",
+         %{conn: conn} do
+      # The example handle being registered must not change what /username shows:
+      # the route wins over the /:slug catch-all by definition order.
+      insert(:activated_user, username: "wintermeyer")
+
+      body = conn |> get(~p"/username") |> html_response(404)
+
+      assert body =~ ~s(href="/wintermeyer")
+    end
+  end
+
   describe "GET / JSON-LD" do
     # The dead Twitter handle was retired; it must not linger in the static
     # JSON-LD sameAs block on the start page.

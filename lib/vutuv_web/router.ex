@@ -121,6 +121,14 @@ defmodule VutuvWeb.Router do
     get("/impressum", PageController, :impressum)
     get("/datenschutzerklaerung", PageController, :datenschutzerklaerung)
     get("/nutzungsbedingungen", PageController, :nutzungsbedingungen)
+    # People paste the literal placeholder "username" from instructions ("your
+    # profile lives at vutuv.de/username") into the address bar. A dedicated
+    # route before the /:slug catch-all answers it with a helper page that
+    # explains the placeholder and points at a real example, instead of a bare
+    # 404. "benutzername" is the German placeholder the username help text shows
+    # (vutuv.de/benutzername). Both are ReservedSlugs so no member can shadow them.
+    get("/username", PageController, :username_placeholder)
+    get("/benutzername", PageController, :username_placeholder)
     get("/listings/most_followed_users", PageController, :most_followed_users)
 
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it

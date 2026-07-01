@@ -57,6 +57,45 @@ defmodule VutuvWeb.ErrorHTML do
     """
   end
 
+  # The helper page for /username (and the German /benutzername): people copy
+  # the literal placeholder out of instructions ("your profile lives at
+  # vutuv.de/username") and land here. Instead of a bare 404 it explains that
+  # the word is a placeholder for the person's real handle and links a concrete
+  # example. The prominent note owns up to a newsletter that once shipped this
+  # exact broken link. Rendered with a 404 status by VutuvWeb.PageController.
+  def render("username_placeholder.html", assigns) do
+    assigns = Map.new(assigns)
+
+    ~H"""
+    <div class="error-page">
+      <p class="error-page__code">404</p>
+      <h1 class="error-page__title">{gettext("This page does not exist")}</h1>
+      <p class="error-page__note">
+        {gettext(
+          "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
+        )}
+      </p>
+      <p class="error-page__hint">
+        {gettext("The word")} <code>username</code>
+        {gettext(
+          "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
+        )}
+      </p>
+      <p class="error-page__hint">
+        {gettext("For example, this profile really exists:")}
+        <a href="/wintermeyer">vutuv.de/wintermeyer</a>
+      </p>
+      <p class="error-page__hint">
+        {gettext("Do not know the username? Try the")}
+        <a href="/search">{gettext("search page")}</a>.
+      </p>
+      <p class="error-page__actions">
+        <a href="/" class="button">{gettext("Back to the start page")}</a>
+      </p>
+    </div>
+    """
+  end
+
   def render(template, _assigns) do
     Phoenix.Controller.status_message_from_template(template)
   end

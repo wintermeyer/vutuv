@@ -67,6 +67,8 @@ defmodule Vutuv.Accounts.SlugTest do
             "messages",
             "assets",
             "users",
+            "username",
+            "benutzername",
             "unsubscribe",
             "post_images",
             "follow_back",

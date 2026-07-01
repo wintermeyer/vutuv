@@ -349,6 +349,17 @@ body.stretch main {
   font-size: 0.875rem;
   color: #64748b;
 }
+/* A prominent, brand-tinted callout inside an error card (the /username helper
+   page owns up to a newsletter that once shipped this broken link). */
+.error-page__note {
+  margin: 1.25rem 0;
+  padding: 0.875rem 1rem;
+  border-radius: 0.75rem;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 1rem;
+  font-weight: 600;
+}
 .error-page__actions {
   margin-top: 1.5rem;
 }
@@ -1158,6 +1169,7 @@ ul.thumbs li .text .url a {
   .error-page__code { color: #334155; }
   .error-page__title { color: #f1f5f9; }
   .error-page__hint { color: #94a3b8; }
+  .error-page__note { background: rgb(30 58 138 / 0.35); color: #dbeafe; }
 }
 
 /* Changing this file (or app.css @theme / lib/vutuv_web/components/ui.ex) is a

@@ -65,6 +65,23 @@ defmodule VutuvWeb.PageController do
     render(conn, "nutzungsbedingungen.html", page_title: gettext("Nutzungsbedingungen"))
   end
 
+  @doc """
+  The helper page for `/username`.
+
+  "username" is a placeholder people copy verbatim out of instructions ("your
+  profile lives at vutuv.de/username"), so rather than a bare 404 we explain
+  that it stands for the person's real handle and link a concrete example.
+  Served with a 404 status (there is no page or member literally called
+  "username") through the shared `VutuvWeb.ErrorHTML` error card, the same way
+  `Plug.AuthAdmin` renders its explanatory 403.
+  """
+  def username_placeholder(conn, _params) do
+    conn
+    |> put_status(:not_found)
+    |> put_view(html: VutuvWeb.ErrorHTML)
+    |> render("username_placeholder.html")
+  end
+
   def new_registration(conn, %{"user" => user_params}) do
     email = user_params["emails"]["0"]["value"]
 
