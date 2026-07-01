@@ -404,6 +404,10 @@ defmodule VutuvWeb.Router do
       # every account (default: PIN-registered, newest first).
       live("/users", UserLive, :index)
 
+      # Search for an account and delete it behind an "Are you sure?" modal.
+      # Deletion removes everything the account owns and emails the operator.
+      live("/users/delete", UserDeleteLive, :index)
+
       # The deliverability dashboard: thaw/clear act reload-free over the socket.
       live("/deliverability", DeliverabilityLive, :index)
 

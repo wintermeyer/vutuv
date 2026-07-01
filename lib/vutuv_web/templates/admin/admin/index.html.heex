@@ -46,6 +46,18 @@
     </.admin_card>
 
     <.admin_card
+      icon="trash"
+      title={gettext("Delete account")}
+      href={~p"/admin/users/delete"}
+      id="admin-delete-account-link"
+      cta={gettext("Search and delete")}
+    >
+      {gettext(
+        "Find an account by name, @handle or email and delete it, with everything it owns, behind a confirmation."
+      )}
+    </.admin_card>
+
+    <.admin_card
       icon="envelope"
       title={gettext("Deliverability")}
       count={@frozen_accounts_count}

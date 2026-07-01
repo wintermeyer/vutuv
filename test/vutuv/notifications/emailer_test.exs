@@ -116,6 +116,66 @@ defmodule Vutuv.Notifications.EmailerTest do
     end
   end
 
+  describe "account_deleted_notice/1 (operator record of an admin deletion)" do
+    @snapshot %{
+      id: "0190a0b1-c2d3-7000-8000-000000000001",
+      name: "Zaphod Beeblebrox",
+      username: "zaphod",
+      emails: ["z@example.com", "z2@example.com"],
+      phone_numbers: ["+49 30 123456"],
+      post_count: 7,
+      joined_at: ~N[2024-01-02 10:00:00],
+      deleted_at: ~U[2026-07-01 12:34:56Z]
+    }
+
+    test "goes to the operator, never to the deleted member" do
+      email = Emailer.account_deleted_notice(@snapshot)
+
+      assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
+      # None of the account's own addresses may be a recipient.
+      to_addresses = Enum.map(email.to, fn {_name, address} -> address end)
+      refute "z@example.com" in to_addresses
+      assert_robot_headers(email)
+    end
+
+    test "names the account by @handle in the subject" do
+      assert Emailer.account_deleted_notice(@snapshot).subject =~ "@zaphod"
+    end
+
+    test "records the account's data and both timestamps in the text body" do
+      body = Emailer.account_deleted_notice(@snapshot).text_body
+
+      assert body =~ "0190a0b1-c2d3-7000-8000-000000000001"
+      assert body =~ "zaphod"
+      assert body =~ "z@example.com"
+      assert body =~ "z2@example.com"
+      assert body =~ "+49 30 123456"
+      assert body =~ "7"
+      # Registered on and deleted on (UTC + Europe/Berlin, +2h in July).
+      assert body =~ "02.01.2024"
+      assert body =~ "01.07.2026 12:34:56 UTC"
+      assert body =~ "01.07.2026 14:34:56"
+    end
+
+    test "carries the same data in the HTML alternative" do
+      html = Emailer.account_deleted_notice(@snapshot).html_body
+
+      assert html =~ "@zaphod" or html =~ "zaphod"
+      assert html =~ "z@example.com"
+      assert html =~ "+49 30 123456"
+      assert html =~ "01.07.2026 12:34:56 UTC"
+    end
+
+    test "renders cleanly when the account had no emails or phone numbers" do
+      snapshot = %{@snapshot | emails: [], phone_numbers: [], post_count: 0}
+      email = Emailer.account_deleted_notice(snapshot)
+
+      assert email.text_body =~ "(keine)"
+      assert email.html_body =~ "(keine)"
+      assert_robot_headers(email)
+    end
+  end
+
   describe "transactional builders carry the robot headers" do
     test "registration email (unactivated user)" do
       user = insert(:user, email_confirmed?: false, locale: "en")

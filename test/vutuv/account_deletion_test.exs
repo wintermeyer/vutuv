@@ -14,6 +14,7 @@ defmodule Vutuv.AccountDeletionTest do
   use Vutuv.DataCase, async: false
 
   import Ecto.Query
+  import Swoosh.TestAssertions
   import Vutuv.PostsHelpers, only: [create_post!: 2]
 
   alias Vutuv.Accounts
@@ -188,5 +189,40 @@ defmodule Vutuv.AccountDeletionTest do
 
     # --- The moderation evidence screenshot is purged with the account. ---
     refute File.exists?(evidence_file)
+  end
+
+  describe "admin_delete_user/1" do
+    test "deletes everything the account owns, emails the operator, never the member" do
+      user =
+        insert(:activated_user,
+          first_name: "Zaphod",
+          last_name: "Beeblebrox",
+          username: "zaphod"
+        )
+
+      insert(:email, user: user, value: "victim@example.com")
+      insert(:phone_number, user: user, value: "+49 30 5551234")
+      create_post!(user, %{body: "hello world"})
+
+      assert {:ok, _} = Accounts.admin_delete_user(user)
+
+      # The account and everything it owns is gone.
+      refute Repo.get(User, user.id)
+      assert count(from(e in Email, where: e.user_id == ^user.id)) == 0
+      assert count(from(p in Post, where: p.user_id == ^user.id)) == 0
+
+      # The operator gets a record of the deletion, with the account's details
+      # (captured before the cascade) and the deletion timestamp.
+      assert_email_sent(fn email ->
+        assert email.to == [{"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}]
+        assert email.subject =~ "@zaphod"
+        assert email.text_body =~ "victim@example.com"
+        assert email.text_body =~ "+49 30 5551234"
+        true
+      end)
+
+      # The deleted member is never a recipient of any mail.
+      refute_email_sent(%{to: [{_, "victim@example.com"}]})
+    end
   end
 end

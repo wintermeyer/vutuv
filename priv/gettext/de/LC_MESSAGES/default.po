@@ -7974,3 +7974,66 @@ msgstr "Automatisch verwenden"
 #: lib/vutuv_web/templates/work_experience/card_list.html.heex
 msgid "Show on profile"
 msgstr "Auf Profil anzeigen"
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid "Delete this account?"
+msgstr "Dieses Konto löschen?"
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid "No accounts match your search."
+msgstr "Keine Konten entsprechen Ihrer Suche."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid "Search and delete"
+msgstr "Suchen und löschen"
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid "Type a name, @handle or email to find the account to delete."
+msgstr ""
+"Geben Sie einen Namen, @Handle oder eine E-Mail ein, um das zu löschende "
+"Konto zu finden."
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid "Account @%{username} was deleted. A record was emailed to the operator."
+msgstr ""
+"Konto @%{username} wurde gelöscht. Eine Aufzeichnung wurde an den Betreiber "
+"gesendet."
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid ""
+"This permanently deletes the account and everything it owns (posts, phone "
+"numbers, email addresses, tags and more). This cannot be undone. The member "
+"is not notified; a record is emailed to the operator."
+msgstr ""
+"Dies löscht das Konto und alles, was dazu gehört (Beiträge, Telefonnummern, "
+"E-Mail-Adressen, Tags und mehr), endgültig. Das lässt sich nicht rückgängig "
+"machen. Das Mitglied wird nicht benachrichtigt; eine Aufzeichnung wird an den "
+"Betreiber gesendet."
+
+#: lib/vutuv_web/live/admin/user_delete_live.ex
+#, elixir-autogen, elixir-format
+msgid ""
+"Find a member by name, @handle or email, then delete the account. Deletion "
+"is permanent: it removes the account and everything it owns (posts, phone "
+"numbers, email addresses, tags and more). The member is not emailed; a "
+"record is sent to the operator."
+msgstr ""
+"Finden Sie ein Mitglied nach Name, @Handle oder E-Mail und löschen Sie dann "
+"das Konto. Die Löschung ist endgültig: Sie entfernt das Konto und alles, was "
+"dazu gehört (Beiträge, Telefonnummern, E-Mail-Adressen, Tags und mehr). Das "
+"Mitglied erhält keine E-Mail; eine Aufzeichnung geht an den Betreiber."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex
+#, elixir-autogen, elixir-format
+msgid ""
+"Find an account by name, @handle or email and delete it, with everything it "
+"owns, behind a confirmation."
+msgstr ""
+"Finden Sie ein Konto nach Name, @Handle oder E-Mail und löschen Sie es, mit "
+"allem, was dazu gehört, hinter einer Bestätigung."

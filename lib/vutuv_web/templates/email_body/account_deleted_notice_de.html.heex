@@ -1,0 +1,30 @@
+<.email_layout preheader="vutuv: Konto gelöscht" locale={@locale}>
+  <.email_heading>Konto gelöscht</.email_heading>
+  <.email_p>
+    Ein Administrator hat ein vutuv Konto gelöscht. Das Konto und alle
+    zugehörigen Daten (Beiträge, Telefonnummern, E-Mail-Adressen, Tags,
+    Empfehlungen, Bilder und mehr) wurden entfernt. Der betroffenen Person
+    wurde keine E-Mail gesendet.
+  </.email_p>
+  <.email_panel>
+    <.email_row label="Name">{@account.name}</.email_row>
+    <.email_row label="Benutzername">{"@" <> @account.username}</.email_row>
+    <.email_row label="Konto-ID">{@account.id}</.email_row>
+    <.email_row label="Registriert am">{@account.joined_at_display}</.email_row>
+    <.email_row label="Beiträge">{@account.post_count}</.email_row>
+    <.email_row label="Gelöscht am (UTC)">{@account.deleted_at_utc}</.email_row>
+    <.email_row label="Gelöscht am (Europe/Berlin)">{@account.deleted_at_berlin}</.email_row>
+  </.email_panel>
+  <.email_p><strong>E-Mail-Adressen</strong></.email_p>
+  <%= if @account.emails == [] do %>
+    <.email_p>(keine)</.email_p>
+  <% else %>
+    <.email_list items={@account.emails} />
+  <% end %>
+  <.email_p><strong>Telefonnummern</strong></.email_p>
+  <%= if @account.phone_numbers == [] do %>
+    <.email_p>(keine)</.email_p>
+  <% else %>
+    <.email_list items={@account.phone_numbers} />
+  <% end %>
+</.email_layout>

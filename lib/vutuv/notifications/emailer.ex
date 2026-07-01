@@ -449,9 +449,9 @@ defmodule Vutuv.Notifications.Emailer do
     "#{euros},#{decimals}"
   end
 
-  ## Daily operator report (see Vutuv.Reports.DailyReporter, the only caller)
+  ## Operator notices (fixed German recipient, no member ever receives them)
 
-  @daily_report_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
+  @operator_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
 
   @doc """
   The operator's daily report: confirmed-by-PIN new registrations, the day's
@@ -462,9 +462,42 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def daily_report_email(%DailyReport{} = report) do
     base_email()
-    |> to(@daily_report_recipient)
+    |> to(@operator_recipient)
     |> subject(DailyReport.email_subject(report))
     |> render_bodies("daily_report", "de", %{report: report, url: public_url()})
+  end
+
+  @doc """
+  Operator notice that an admin deleted a member account. Goes to the operator
+  (`@operator_recipient`) and **never** to the deleted member: it records what
+  was removed - the account's name, @handle, id, every email address and phone
+  number, the post count and the join date, all captured before the cascade -
+  plus the exact deletion timestamp (UTC and Europe/Berlin wall-clock). Fixed
+  German recipient and template, like the daily report. The only caller is
+  `Vutuv.Accounts.admin_delete_user/1`, which snapshots the account before it
+  is gone and hands the map here.
+  """
+  def account_deleted_notice(snapshot) do
+    base_email()
+    |> to(@operator_recipient)
+    |> subject("vutuv: Konto @#{snapshot.username} gelöscht")
+    |> render_bodies("account_deleted_notice", "de", %{account: deletion_display(snapshot)})
+  end
+
+  # The account snapshot enriched with the pre-formatted timestamp strings the
+  # template renders, so the body template stays logic-free. The stored
+  # instants are UTC; the operator sits in Germany, so the deletion time is
+  # shown in both UTC and Europe/Berlin wall-clock (via Vutuv.BerlinTime, which
+  # carries no tzdata dependency).
+  defp deletion_display(snapshot) do
+    Map.merge(snapshot, %{
+      deleted_at_utc: Calendar.strftime(snapshot.deleted_at, "%d.%m.%Y %H:%M:%S UTC"),
+      deleted_at_berlin:
+        snapshot.deleted_at
+        |> Vutuv.BerlinTime.naive()
+        |> Calendar.strftime("%d.%m.%Y %H:%M:%S Uhr"),
+      joined_at_display: Calendar.strftime(snapshot.joined_at, "%d.%m.%Y")
+    })
   end
 
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)

@@ -563,6 +563,47 @@ defmodule Vutuv.Accounts do
     {:ok, user}
   end
 
+  @doc """
+  Admin-initiated deletion of `user`. Snapshots the account's identifying
+  details (name, @handle, id, every email address and phone number, post count,
+  join date) **before** the cascade removes them, deletes the account and
+  everything it owns through `delete_user/1` (which sends the member no email),
+  then mails the operator a record of what was deleted and the exact deletion
+  timestamp (`Vutuv.Notifications.Emailer.account_deleted_notice/1`).
+
+  This is the entry point the admin "delete account" page uses. The member is
+  never notified; only the operator is. Returns `{:ok, user}`.
+  """
+  def admin_delete_user(%User{} = user) do
+    snapshot = deletion_snapshot(user)
+    {:ok, user} = delete_user(user)
+
+    snapshot
+    |> Map.put(:deleted_at, DateTime.utc_now())
+    |> Emailer.account_deleted_notice()
+    |> Emailer.deliver()
+
+    {:ok, user}
+  end
+
+  # The account details the operator email records, read while the account still
+  # exists (the cascade in delete_user/1 removes these rows moments later).
+  defp deletion_snapshot(%User{} = user) do
+    %{
+      id: user.id,
+      name: VutuvWeb.UserHelpers.full_name(user),
+      username: user.username,
+      emails: Repo.all(from(e in Email, where: e.user_id == ^user.id, select: e.value)),
+      phone_numbers:
+        Repo.all(
+          from(p in Vutuv.Profiles.PhoneNumber, where: p.user_id == ^user.id, select: p.value)
+        ),
+      post_count:
+        Repo.aggregate(from(p in Vutuv.Posts.Post, where: p.user_id == ^user.id), :count),
+      joined_at: user.inserted_at
+    }
+  end
+
   # How long after sign-up an unconfirmed registration is swept.
   @unconfirmed_registration_max_age_minutes 60
 

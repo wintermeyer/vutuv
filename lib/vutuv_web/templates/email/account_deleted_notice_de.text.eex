@@ -1,0 +1,26 @@
+Ein Administrator hat ein vutuv Konto gelöscht.
+
+Das Konto und alle zugehörigen Daten (Beiträge, Telefonnummern,
+E-Mail-Adressen, Tags, Empfehlungen, Bilder und mehr) wurden entfernt.
+Der betroffenen Person wurde keine E-Mail gesendet.
+
+Gelöschtes Konto
+================
+Name:           <%= @account.name %>
+Benutzername:   @<%= @account.username %>
+Konto-ID:       <%= @account.id %>
+Registriert am: <%= @account.joined_at_display %>
+Beiträge:       <%= @account.post_count %>
+
+E-Mail-Adressen:
+<%= if @account.emails == [] do %>  (keine)
+<% else %><%= for email <- @account.emails do %>  - <%= email %>
+<% end %><% end %>
+Telefonnummern:
+<%= if @account.phone_numbers == [] do %>  (keine)
+<% else %><%= for phone <- @account.phone_numbers do %>  - <%= phone %>
+<% end %><% end %>
+Gelöscht am
+===========
+<%= @account.deleted_at_utc %>
+<%= @account.deleted_at_berlin %> (Europe/Berlin)
