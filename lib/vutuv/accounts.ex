@@ -36,11 +36,12 @@ defmodule Vutuv.Accounts do
     |> case do
       {:ok, user} ->
         # The sign-up form's "Your tags" field (the virtual `tag_list`): turn
-        # it into real user tags now that the user row exists. A run-on list
-        # ("JavaScript Go Hunde") was already rejected by the changeset
-        # (User.validate_tag_list/1), and case-insensitive de-duplication drops
-        # a repeated tag ("Go, go") before it can trip the unique constraint, so
-        # no per-tag insert error is silently swallowed here.
+        # it into real user tags now that the user row exists. The field is
+        # split on both commas and spaces (`parse_tag_names/1`), so a member who
+        # types "JavaScript Go Hunde" gets three separate tags rather than one
+        # merged one; case-insensitive de-duplication then drops a repeated tag
+        # ("Go, go") before it can trip the unique constraint, so no per-tag
+        # insert error is silently swallowed here.
         user_params["tag_list"]
         |> Vutuv.Tags.parse_tag_names()
         |> Enum.uniq_by(&String.downcase/1)

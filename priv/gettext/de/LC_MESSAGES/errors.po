@@ -106,6 +106,6 @@ msgstr "muss mindestens drei Tage im Voraus gebucht werden"
 msgid "has already been booked"
 msgstr "ist bereits gebucht"
 
-## Custom message from the sign-up tag-list rule (Vutuv.Accounts.User.changeset/2).
-msgid "This looks like several tags. Separate each one with a comma, e.g. JavaScript, Go, Dogs."
-msgstr "Das sieht nach mehreren Tags aus. Trennen Sie jedes Tag mit einem Komma, z. B. JavaScript, Go, Hunde."
+## Custom message from the tag no-space rule (Vutuv.Tags.Tag.changeset/2).
+msgid "must not contain spaces"
+msgstr "darf keine Leerzeichen enthalten"

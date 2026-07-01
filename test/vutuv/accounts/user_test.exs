@@ -136,25 +136,20 @@ defmodule Vutuv.Accounts.UserTest do
       User.changeset(%User{}, %{"first_name" => "first_name", "tag_list" => tag_list})
     end
 
+    # The virtual `tag_list` is not validated on the changeset: it is split into
+    # real tags after the row commits (Accounts.register_user/3), on both commas
+    # and spaces, so any string is accepted here. A run of words is no longer an
+    # error, it just becomes several tags. See tags_test.exs / page_controller_test.exs.
     test "accepts a comma-separated list" do
       assert tag_list_changeset("Elixir, Cooking, Go").valid?
     end
 
-    test "accepts a legitimate multi-word tag" do
-      assert tag_list_changeset("Ruby on Rails").valid?
+    test "accepts a run of space-separated words" do
+      assert tag_list_changeset("JavaScript Go Hunde").valid?
     end
 
     test "accepts no tags at all" do
       assert User.changeset(%User{}, %{"first_name" => "first_name"}).valid?
-    end
-
-    test "rejects a run of words that were meant to be separate tags" do
-      # A member who forgets the commas (the "marco_a609e05b" profile) is
-      # stopped instead of getting one giant merged tag.
-      changeset = tag_list_changeset("JavaScript webdevelopment Go Hunde")
-
-      refute changeset.valid?
-      assert %{tag_list: [_]} = errors_on(changeset)
     end
   end
 end

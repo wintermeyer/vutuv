@@ -530,7 +530,9 @@ defmodule VutuvWeb.PostLive.Composer do
               name="post[tags]"
               value={@tags_value}
               placeholder={
-                gettext("Tags, comma-separated (max. %{max})", max: Posts.max_tags_per_post())
+                gettext("Tags, comma- or space-separated (max. %{max})",
+                  max: Posts.max_tags_per_post()
+                )
               }
               class={[input_class(), "min-w-56 flex-1"]}
             />

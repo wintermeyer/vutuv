@@ -3,8 +3,8 @@
 
 <.editform_field form={f} field={:value}>
   <%= label f, :value, gettext("Tags") %>
-  <%= text_input f, :value, placeholder: gettext("PHP, JavaScript, Tap Dancing, Origami, Recruiting") %>
-  <p class="editform__hint"><%= gettext("Separate multiple tags with commas.") %></p>
+  <%= text_input f, :value, placeholder: gettext("PHP, JavaScript, Origami, Recruiting") %>
+  <p class="editform__hint"><%= gettext("Separate tags with a comma or a space.") %></p>
   <%= error_tag f, :value %>
   <%= error_tag @changeset, :user_id_tag_id %>
 

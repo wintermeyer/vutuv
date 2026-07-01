@@ -398,20 +398,23 @@ defmodule VutuvWeb.PageControllerTest do
       assert user.user_tags == []
     end
 
-    # A member who forgets the commas and types several tags as one run of
-    # words (the "marco_a609e05b" profile) is stopped with a hint instead of
-    # getting one giant merged tag. See Vutuv.Tags.likely_missing_commas?/1.
-    test "rejects a tag list that looks like several tags without commas", %{conn: conn} do
+    # Tags never contain spaces, so a run of words is not an error: each word
+    # (and each comma-separated segment) becomes its own tag. See
+    # Vutuv.Tags.parse_tag_names/1.
+    test "splits a space-separated tag list into one tag per word", %{conn: conn} do
       attrs =
         Map.merge(@valid_attrs, %{
-          "emails" => %{"0" => %{"value" => "runon@example.com"}},
-          "tag_list" => "JavaScript webdevelopment Go Hunde"
+          "emails" => %{"0" => %{"value" => "spaced@example.com"}},
+          "tag_list" => "JavaScript Go Hunde"
         })
 
-      conn = post(conn, ~p"/new_registration", user: attrs)
+      post(conn, ~p"/new_registration", user: attrs)
 
-      assert conn.status == 422
-      refute user_by_email("runon@example.com")
+      user = user_by_email("spaced@example.com") |> Vutuv.Repo.preload(user_tags: :tag)
+
+      assert user.user_tags
+             |> Enum.map(& &1.tag.name)
+             |> Enum.sort() == ["Go", "Hunde", "JavaScript"]
     end
 
     # The PIN-entry confirmation page shown right after sign-up used to point at

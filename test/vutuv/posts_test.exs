@@ -100,13 +100,15 @@ defmodule Vutuv.PostsTest do
                Posts.create_post(author, %{body: "x", image_ids: Enum.map(images, & &1.id)})
     end
 
-    test "creates tags from a comma list and reuses existing tags case-insensitively" do
+    test "creates tags from a comma- or space-separated list, reusing tags case-insensitively" do
       existing = insert(:tag, name: "Elixir", slug: "elixir")
 
-      post = create_post!(user(), %{body: "tagged", tags: "elixir, Phoenix Framework"})
+      # The comma and the space both split, so "Phoenix Ecto" is two tags, not
+      # one spaced tag (tags never contain spaces).
+      post = create_post!(user(), %{body: "tagged", tags: "elixir, Phoenix Ecto"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
-      assert tag_names == ["Elixir", "Phoenix Framework"]
+      assert tag_names == ["Ecto", "Elixir", "Phoenix"]
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 

@@ -217,7 +217,9 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
 
     test "admin create tag", %{conn: conn} do
-      assert post(conn, ~p"/admin/tags", tag: %{name: "Admin Tag"}).status < 500
+      # A tag name is a single token (no spaces), so keep the smoke-test name
+      # space-free or the create fails validation instead of exercising it.
+      assert post(conn, ~p"/admin/tags", tag: %{name: "AdminTag"}).status < 500
     end
 
     test "admin update / delete tag", %{conn: conn, tag: tag} do

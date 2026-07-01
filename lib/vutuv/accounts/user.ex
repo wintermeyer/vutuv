@@ -3,7 +3,6 @@ defmodule Vutuv.Accounts.User do
 
   use VutuvWeb, :model
   alias Vutuv.Accounts.ReservedSlugs
-  alias Vutuv.Tags
   @derive {Phoenix.Param, key: :username}
 
   schema "users" do
@@ -215,7 +214,6 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:honorific_suffix, max: 50)
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
-    |> validate_tag_list()
     # The literal mirrors the canonical service list in `Vutuv.Maps`; it is kept
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.
@@ -224,25 +222,6 @@ defmodule Vutuv.Accounts.User do
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> revoke_verification_on_identity_change()
-  end
-
-  # The sign-up "Your tags" field (the virtual :tag_list) is comma-separated. If
-  # the member forgot the commas and typed several tags as one run of words,
-  # block registration with a hint instead of silently storing one giant tag
-  # (the "marco_a609e05b" profile). The tags themselves are created after the
-  # row commits, in Accounts.register_user/3. The message is translated via the
-  # "errors" gettext domain (see errors.po), like the other custom messages.
-  defp validate_tag_list(changeset) do
-    validate_change(changeset, :tag_list, fn :tag_list, value ->
-      if Tags.likely_missing_commas?(value) do
-        [
-          tag_list:
-            "This looks like several tags. Separate each one with a comma, e.g. JavaScript, Go, Dogs."
-        ]
-      else
-        []
-      end
-    end)
   end
 
   # Every identity detail the verified badge vouches for: the legal name parts,

@@ -2302,8 +2302,8 @@ msgstr "unbekannt"
 
 #: lib/vutuv_web/live/post_live/composer.ex:533
 #, elixir-autogen, elixir-format
-msgid "Tags, comma-separated (max. %{max})"
-msgstr "Tags, durch Komma getrennt (max. %{max})"
+msgid "Tags, comma- or space-separated (max. %{max})"
+msgstr "Tags, durch Komma oder Leerzeichen getrennt (max. %{max})"
 
 #: lib/vutuv_web/live/post_live/composer.ex:708
 #, elixir-autogen, elixir-format
@@ -2739,13 +2739,13 @@ msgstr "%{successes} von %{total} Tags hinzugefügt (der Rest war doppelt oder u
 
 #: lib/vutuv_web/templates/user_tag/form_content.html.heex:6
 #, elixir-autogen, elixir-format
-msgid "PHP, JavaScript, Tap Dancing, Origami, Recruiting"
-msgstr "PHP, JavaScript, Stepptanz, Origami, Recruiting"
+msgid "PHP, JavaScript, Origami, Recruiting"
+msgstr "PHP, JavaScript, Origami, Recruiting"
 
 #: lib/vutuv_web/templates/user_tag/form_content.html.heex:7
 #, elixir-autogen, elixir-format
-msgid "Separate multiple tags with commas."
-msgstr "Mehrere Tags durch Komma trennen."
+msgid "Separate tags with a comma or a space."
+msgstr "Tags mit Komma oder Leerzeichen trennen."
 
 #: lib/vutuv_web/templates/connection/index.html.heex:13
 #, elixir-autogen, elixir-format

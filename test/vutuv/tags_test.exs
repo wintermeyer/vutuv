@@ -40,36 +40,51 @@ defmodule Vutuv.TagsTest do
       assert tag.name == "WebAssembly"
       assert tag.slug == "webassembly"
     end
+
+    test "a value with whitespace is never linked to a legacy multi-word tag" do
+      # A legacy tag from before the no-space rule still exists; a spaced value
+      # must not attach it. It builds a fresh (invalid) tag instead, so the
+      # changeset fails validation rather than quietly linking the old tag.
+      insert(:tag, name: "Ruby on Rails", slug: "ruby-on-rails")
+
+      changeset = link("Ruby on Rails")
+      refute get_change(changeset, :tag_id)
+      assert get_change(changeset, :tag)
+    end
   end
 
-  describe "likely_missing_commas?/1" do
-    test "flags a run of words the member forgot to comma-separate" do
-      # The "marco_a609e05b" profile: four topics typed as a single tag.
-      assert Tags.likely_missing_commas?("JavaScript webdevelopment Go Hunde")
+  describe "parse_tag_names/1" do
+    test "splits on both commas and spaces" do
+      assert Tags.parse_tag_names("Elixir, Phoenix Go") == ["Elixir", "Phoenix", "Go"]
     end
 
-    test "accepts a normal comma-separated list" do
-      refute Tags.likely_missing_commas?(" Elixir,  Cooking , ")
+    test "splits what used to be one multi-word tag into one tag per word" do
+      assert Tags.parse_tag_names("Ruby on Rails") == ["Ruby", "on", "Rails"]
     end
 
-    test "accepts legitimate multi-word tags of up to three words" do
-      refute Tags.likely_missing_commas?("Ruby on Rails")
-      refute Tags.likely_missing_commas?("Amazon Web Services")
-      refute Tags.likely_missing_commas?("Tap Dancing")
+    test "trims padding and drops empty segments" do
+      assert Tags.parse_tag_names(" PHP , , Go ") == ["PHP", "Go"]
     end
 
-    test "accepts a single long compound word" do
-      refute Tags.likely_missing_commas?("Kraftfahrzeugmechatroniker")
+    test "returns [] for blank and nil input" do
+      assert Tags.parse_tag_names("   ") == []
+      assert Tags.parse_tag_names(nil) == []
+    end
+  end
+
+  describe "add_user_tag/2 rejects spaces" do
+    test "a spaced name that is not an existing tag fails validation" do
+      user = insert(:user)
+
+      assert {:error, changeset} = Tags.add_user_tag(user, "Ruby on Rails")
+      assert %{tag: %{name: ["must not contain spaces"]}} = errors_on(changeset)
     end
 
-    test "accepts blank and nil input" do
-      refute Tags.likely_missing_commas?("   ")
-      refute Tags.likely_missing_commas?(nil)
-    end
+    test "a single-word name is stored" do
+      user = insert(:user)
 
-    test "still flags a run-on chunk when other tags are comma-separated" do
-      refute Tags.likely_missing_commas?("Elixir, Ruby on Rails")
-      assert Tags.likely_missing_commas?("Elixir, Go Hunde Katze Vogel")
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "Elixir")
+      assert Repo.preload(user_tag, :tag).tag.name == "Elixir"
     end
   end
 

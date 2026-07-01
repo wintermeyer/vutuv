@@ -19,11 +19,11 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert tag_count(user) == 1
     end
 
-    test "adds several comma-separated tags at once", %{conn: conn, user: user} do
-      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, Phoenix , Ruby on Rails"})
+    test "adds several comma- or space-separated tags at once", %{conn: conn, user: user} do
+      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, Phoenix  Ruby"})
 
       assert redirected_to(conn) == ~p"/#{user}/tags"
-      # The blank-padded middle entry is trimmed, not dropped.
+      # Both the comma and the (doubled) space split, so this is three tags.
       assert tag_count(user) == 3
     end
 

@@ -1449,8 +1449,10 @@ defmodule Vutuv.Posts do
 
   defp parse_tag_values(nil), do: []
 
+  # Tags never contain spaces, so the composer field splits on both the comma
+  # and any whitespace: "elixir Phoenix, Ecto" becomes three tags.
   defp parse_tag_values(values) when is_binary(values),
-    do: parse_tag_values(String.split(values, ","))
+    do: parse_tag_values(String.split(values, ~r/[\s,]+/, trim: true))
 
   defp parse_tag_values(values) when is_list(values) do
     values

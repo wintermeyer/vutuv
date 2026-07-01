@@ -42,6 +42,12 @@ defmodule Vutuv.Tags.Tag do
   defp shared_validations(changeset) do
     changeset
     |> validate_required([:slug, :name])
+    # A tag is a single token: no spaces (or any other whitespace). Both the
+    # sign-up field and the tags page split their input on spaces before this
+    # runs, so this is the backstop for the paths that hand a raw name straight
+    # through (the JSON API, a post's tag list) — a spaced name is rejected, not
+    # silently merged into one giant tag.
+    |> validate_format(:name, ~r/^\S+$/, message: "must not contain spaces")
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> unique_constraint(:slug)
@@ -68,8 +74,23 @@ defmodule Vutuv.Tags.Tag do
   @doc """
   Links the changeset to an existing tag whose name (case-insensitive) or slug
   matches the typed value, or builds a new tag when none exists.
+
+  A value that contains whitespace is never linked, not even to a legacy
+  multi-word tag that predates the no-space rule: it is built as a fresh tag so
+  the changeset carries the validation error instead of quietly attaching a
+  spaced tag. Callers that split their input first (sign-up, the tags page)
+  never reach this branch; the JSON API does.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
+    if String.match?(value, ~r/\s/) do
+      tag = __MODULE__.changeset(%__MODULE__{}, params)
+      put_assoc(changeset, :tag, tag)
+    else
+      link_or_build_tag(changeset, value, params)
+    end
+  end
+
+  defp link_or_build_tag(changeset, value, params) do
     downcase_value = String.downcase(value)
 
     Vutuv.Repo.one(
