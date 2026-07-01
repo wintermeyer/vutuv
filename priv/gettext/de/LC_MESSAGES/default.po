@@ -8037,3 +8037,18 @@ msgid ""
 msgstr ""
 "Finden Sie ein Konto nach Name, @Handle oder E-Mail und löschen Sie es, mit "
 "allem, was dazu gehört, hinter einer Bestätigung."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:19
+#, elixir-autogen, elixir-format
+msgid "Reverse proxy is not forwarding your real IP address"
+msgstr "Der Reverse-Proxy reicht deine echte IP-Adresse nicht weiter"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Your IP address, as vutuv sees it:"
+msgstr "Deine IP-Adresse, so wie vutuv sie sieht:"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:23
+#, elixir-autogen, elixir-format
+msgid "vutuv sees your address as %{ip}, a loopback or private-range address. That means nginx is not passing the X-Forwarded-For header, so per-IP rate limiting and the security email's IP line do not work (issue #799). Add \"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\" to the nginx site config."
+msgstr "vutuv sieht deine Adresse als %{ip}, eine Loopback- oder private Adresse. Das bedeutet, dass nginx den X-Forwarded-For-Header nicht weiterreicht, sodass das IP-basierte Rate-Limit und die IP-Zeile in der Sicherheits-E-Mail nicht funktionieren (Issue #799). Ergänze \"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\" in der nginx-Site-Konfiguration."

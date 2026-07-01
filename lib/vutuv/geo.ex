@@ -41,9 +41,21 @@ defmodule Vutuv.Geo do
     end
   end
 
-  # A private/loopback address has no public location. Matches the common
-  # ranges without parsing every CIDR — good enough to skip pointless lookups.
-  defp private_or_loopback?(ip) do
+  @doc """
+  Whether `ip` is a loopback or private-range address (localhost, LAN, the
+  reverse-proxy hop) rather than a public client address. Accepts an `:inet`
+  tuple or a string. Used both to skip pointless geo lookups and to warn the
+  admin when the reverse proxy is not forwarding the real client IP, so the app
+  only ever sees the loopback hop (issues #799, #837).
+
+  Matches the common ranges without parsing every CIDR — good enough for both.
+  """
+  def private_or_loopback?(nil), do: false
+
+  def private_or_loopback?(ip) when is_tuple(ip),
+    do: ip |> :inet.ntoa() |> to_string() |> private_or_loopback?()
+
+  def private_or_loopback?(ip) when is_binary(ip) do
     ip in ["127.0.0.1", "::1", "0.0.0.0"] or
       String.starts_with?(ip, ["10.", "192.168.", "169.254.", "fc", "fd", "fe80:"]) or
       String.match?(ip, ~r/^172\.(1[6-9]|2\d|3[01])\./)

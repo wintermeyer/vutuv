@@ -7802,3 +7802,18 @@ msgstr ""
 #: lib/vutuv_web/templates/work_experience/card_list.html.heex
 msgid "Show on profile"
 msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:19
+#, elixir-autogen, elixir-format
+msgid "Reverse proxy is not forwarding your real IP address"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Your IP address, as vutuv sees it:"
+msgstr ""
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:23
+#, elixir-autogen, elixir-format
+msgid "vutuv sees your address as %{ip}, a loopback or private-range address. That means nginx is not passing the X-Forwarded-For header, so per-IP rate limiting and the security email's IP line do not work (issue #799). Add \"proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\" to the nginx site config."
+msgstr ""
