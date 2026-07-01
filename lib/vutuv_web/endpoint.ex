@@ -54,6 +54,16 @@ defmodule VutuvWeb.Endpoint do
     plug(Phoenix.CodeReloader)
   end
 
+  # In production nginx terminates TLS and proxies to us over loopback, so the
+  # TCP peer is always 127.0.0.1. RemoteIp rewrites `conn.remote_ip` from the
+  # `X-Forwarded-For` header nginx sets; it trusts the reserved/loopback proxy
+  # hop by default and takes the closest non-proxy address, so a client cannot
+  # spoof it. Every downstream reader (the session fingerprint behind the
+  # security email, the per-IP rate limiter) then sees the real visitor address
+  # instead of a single shared loopback bucket (issues #799, #837). A no-op in
+  # dev/test, where there is no proxy and no forwarded header.
+  plug(RemoteIp)
+
   plug(Plug.RequestId)
   plug(Plug.Logger)
 

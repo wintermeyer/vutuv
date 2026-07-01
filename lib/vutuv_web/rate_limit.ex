@@ -4,12 +4,22 @@ defmodule VutuvWeb.RateLimit do
   on top of the per-PIN attempt lockout. It is disabled in the test environment
   by default so the suite's many logins do not exhaust a shared counter; the
   dedicated rate-limit test flips it on.
+
+  The per-IP key reads `conn.remote_ip`, which the endpoint's `RemoteIp` plug
+  resolves to the real client address from `X-Forwarded-For` behind the nginx
+  proxy. Before that fix every visitor collapsed onto the single loopback IP, so
+  the per-IP budget was one global bucket and real members were locked out of
+  login (issues #799, #837).
   """
 
   alias Vutuv.RateLimiter
 
-  @default_limit 5
-  @default_window_ms :timer.minutes(10)
+  # 50 requests per 3 hours, per real client IP and per email. Generous on
+  # purpose: this guards against abuse/enumeration, not honest use, and mobile
+  # carriers put many subscribers behind one shared (CGNAT) public IP, so a tight
+  # per-IP budget would lock innocent members out.
+  @default_limit 50
+  @default_window_ms :timer.hours(3)
 
   # Resending a PIN re-mints it and resets the per-PIN attempt counter, so an
   # unbounded resend turns the 3-strikes lockout into an open brute-force door.
@@ -56,6 +66,8 @@ defmodule VutuvWeb.RateLimit do
   defp normalize(value) when is_binary(value), do: String.downcase(value)
   defp normalize(value), do: value
 
+  # The real client address (resolved by the endpoint's RemoteIp plug from
+  # X-Forwarded-For), not the loopback proxy hop.
   defp ip(conn) do
     conn.remote_ip |> :inet.ntoa() |> to_string()
   end

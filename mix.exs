@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.22.0",
+      version: "7.22.1",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -51,6 +51,11 @@ defmodule Vutuv.MixProject do
       {:earmark, "~> 1.4"},
       {:html_sanitize_ex, "~> 1.4"},
       {:bandit, "~> 1.0"},
+      # Resolves the real client IP from X-Forwarded-For behind the nginx
+      # reverse proxy, so `conn.remote_ip` is the visitor's address instead of
+      # the loopback proxy hop. The session fingerprint (security email) and the
+      # rate limiter both key on it (issues #799, #837).
+      {:remote_ip, "~> 1.2"},
 
       # Database
       {:ecto_sql, "~> 3.10"},

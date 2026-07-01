@@ -87,12 +87,14 @@ defmodule VutuvWeb.HttpStatusContractTest do
   describe "rate limits" do
     test "the login email step answers 429 over the limit", %{conn: conn} do
       previous = Application.get_env(:vutuv, :rate_limit)
-      Application.put_env(:vutuv, :rate_limit, enabled: true)
+      # An explicit small budget keeps the contract test decoupled from the
+      # (deliberately generous) production default of 50 per 3h.
+      Application.put_env(:vutuv, :rate_limit, enabled: true, limit: 3, window_ms: 60_000)
       Vutuv.RateLimiter.reset()
       on_exit(fn -> Application.put_env(:vutuv, :rate_limit, previous) end)
 
       last =
-        Enum.reduce(1..10, conn, fn _n, _acc ->
+        Enum.reduce(1..4, conn, fn _n, _acc ->
           post(build_conn(), ~p"/login", session: %{"email" => "rate@example.com"})
         end)
 

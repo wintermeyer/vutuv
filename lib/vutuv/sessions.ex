@@ -72,7 +72,8 @@ defmodule Vutuv.Sessions do
   end
 
   # The User-Agent and source IP of the request behind a login. remote_ip is the
-  # same source the rate limiter keys on (best-effort behind a proxy).
+  # real client address the endpoint's RemoteIp plug resolves from
+  # X-Forwarded-For (issue #799), the same source the rate limiter keys on.
   defp fingerprint_from_conn(conn) do
     ua = conn |> Plug.Conn.get_req_header("user-agent") |> List.first()
     ip = conn.remote_ip && conn.remote_ip |> :inet.ntoa() |> to_string()

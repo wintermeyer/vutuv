@@ -38,6 +38,16 @@ defmodule VutuvWeb.RateLimitTest do
     assert RateLimit.check(conn({10, 0, 0, 4}), :evt, "a@b.com") == :rate_limited
   end
 
+  test "defaults to 50 requests per 3 hours when no limit/window is configured" do
+    # No :limit/:window_ms override, so the module's @default_limit /
+    # @default_window_ms apply (issue #837: 50 per 3h, per real client IP).
+    Application.put_env(:vutuv, :rate_limit, enabled: true)
+    c = conn({10, 0, 0, 50})
+
+    for _ <- 1..50, do: assert(RateLimit.check(c, :login_email) == :ok)
+    assert RateLimit.check(c, :login_email) == :rate_limited
+  end
+
   test "an explicit per-call limit overrides the configured one" do
     Application.put_env(:vutuv, :rate_limit, enabled: true, limit: 100, window_ms: 60_000)
     c = conn({10, 0, 0, 5})
