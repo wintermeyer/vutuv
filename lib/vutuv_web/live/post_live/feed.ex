@@ -301,7 +301,11 @@ defmodule VutuvWeb.PostLive.Feed do
       uses the otherwise-empty side space. The rail is desktop-only (the grid
       collapses to one column under md, and the rail is hidden anyway). --%>
       <div class="grid gap-6 md:grid-cols-3">
-        <div class="space-y-4 md:col-span-2">
+        <%!-- min-w-0: below md the grid is a single implicit `auto` track that
+        respects this column's min-content, so a long `truncate` descendant (a
+        threaded reply's parent-excerpt) would otherwise force the column — and
+        the whole page — wider than a phone viewport. --%>
+        <div class="min-w-0 space-y-4 md:col-span-2">
           <div class="flex flex-wrap items-baseline justify-between gap-2">
             <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
             <p class="text-sm font-semibold">

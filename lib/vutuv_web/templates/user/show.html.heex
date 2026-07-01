@@ -11,7 +11,11 @@ on drift. --%>
 content+rail columns too; user_row and the rail cards truncate cleanly at
 the resulting ~200px rail width. --%>
 <div class="grid gap-6 py-6 md:grid-cols-3">
-  <div class="space-y-6 md:col-span-2">
+  <%!-- min-w-0 so the column can shrink below its content's min-content on a
+  phone (below md the grid is a single implicit `auto` track): the Posts section
+  renders `truncate` parent-excerpts and Markdown bodies that would otherwise
+  force the column past the viewport and scroll the page sideways. --%>
+  <div class="min-w-0 space-y-6 md:col-span-2">
     <%!-- The owner's moderation notice: a frozen / suspended profile is
     invisible to everyone else, so tell the owner what is going on and where
     to act. Visitors never reach this page (EnsureActivated 404s first). --%>
