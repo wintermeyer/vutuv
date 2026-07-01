@@ -820,6 +820,11 @@ msgstr ""
 msgid "Work experience updated successfully."
 msgstr ""
 
+#: lib/vutuv_web/controllers/session_controller.ex:48
+#, elixir-autogen, elixir-format
+msgid "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
+msgstr ""
+
 #: lib/vutuv_web/templates/follower/index.html.heex:15
 #, elixir-autogen
 msgid "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites."

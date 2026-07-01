@@ -822,6 +822,11 @@ msgstr "Ein Lebenlaufseintrag wurde gelöscht"
 msgid "Work experience updated successfully."
 msgstr "Ein Lebenslaufeintrag wurde geändert."
 
+#: lib/vutuv_web/controllers/session_controller.ex:48
+#, elixir-autogen, elixir-format
+msgid "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
+msgstr "Sie haben noch keinen Passkey. Wir haben Ihnen stattdessen eine Einmal-PIN per E-Mail geschickt, mit der Sie sich anmelden können."
+
 #: lib/vutuv_web/templates/follower/index.html.heex:15
 #, elixir-autogen
 msgid "You don't have any followers yet! If you want more followers, you could follow others, invite your friends, or link your Vutuv profile on other social media websites."

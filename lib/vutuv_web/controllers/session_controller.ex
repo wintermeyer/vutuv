@@ -15,7 +15,42 @@ defmodule VutuvWeb.SessionController do
   plug(VutuvWeb.Plug.RequireUserLoggedOut when action in [:new, :create, :resend, :cancel])
 
   def new(conn, _) do
-    render(conn, "new.html")
+    # If a login PIN is already in flight (the visitor started a login, or the
+    # passkey fallback below routed them here), show the PIN-entry form instead
+    # of the email form so they can finish — mirroring how "/" is pinned to the
+    # PIN form while a PIN is pending (PageController.display_pin_entry/2). Not
+    # gated on a PIN row existing in the DB: that would betray whether the
+    # address has an account (issue #759's enumeration oracle).
+    case Accounts.read_pin_cookie(conn) do
+      email when is_binary(email) ->
+        conn
+        |> flash_passkey_fallback()
+        |> render("pin_user_login.html")
+
+      nil ->
+        render(conn, "new.html")
+    end
+  end
+
+  # The passkey fallback (see passkey_challenge/2) marks the session before it
+  # bounces the visitor here, so we greet them with the friendly note explaining
+  # why they landed on the PIN form. It is set here, in the same request that
+  # renders the form, because Phoenix only carries a flash across requests on a
+  # redirect response — and the JSON challenge answer that mailed the PIN is a
+  # 200, not a 3xx. The marker is one-shot: read it, drop it.
+  defp flash_passkey_fallback(conn) do
+    if get_session(conn, :passkey_pin_fallback) do
+      conn
+      |> delete_session(:passkey_pin_fallback)
+      |> put_flash(
+        :info,
+        gettext(
+          "You don't have a passkey yet, so we've emailed you a one-time PIN to sign in instead."
+        )
+      )
+    else
+      conn
+    end
   end
 
   # Step 1: the visitor types their email. We mail a PIN, stash the identity in
@@ -101,15 +136,70 @@ defmodule VutuvWeb.SessionController do
   # exactly like the username-availability endpoint.
 
   # Step 1: hand the browser a fresh authentication challenge (no allow-list, so
-  # any discoverable passkey for this site can be used — no email typed first).
-  def passkey_challenge(conn, _params) do
+  # any discoverable passkey for this site can be used).
+  #
+  # Two shapes, decided by whether the visitor typed an email first:
+  #
+  #   * no email — the passkey-first path: mint a discoverable challenge and let
+  #     the browser surface any passkey stored for this site.
+  #   * an email whose account HAS a passkey — same discoverable challenge (the
+  #     email only decides the branch; we never leak that account's credential
+  #     ids into the allow-list).
+  #   * an email with NO passkey (or no account at all) — the visitor would only
+  #     meet an empty native prompt, so fall back to the email-PIN flow: mail a
+  #     PIN and route them to the PIN screen, exactly as if they had clicked
+  #     "Log in", with a friendly flash (issue #834).
+  #
+  # The no-passkey and unknown-address branches are byte-identical, so the
+  # fallback stays enumeration-safe; the one thing an email reveals is that its
+  # account has a passkey (a challenge, not a redirect), the deliberate cost of
+  # letting a passkey member sign in by typing their address.
+  def passkey_challenge(conn, params) do
     case RateLimit.check(conn, :login_passkey) do
       :ok ->
-        {challenge, options} = Credentials.authentication_options()
+        email = params["email"]
+
+        cond do
+          not is_binary(email) or String.trim(email) == "" ->
+            issue_auth_challenge(conn)
+
+          Credentials.passkey_for_email?(email) ->
+            issue_auth_challenge(conn)
+
+          true ->
+            pin_fallback(conn, String.trim(email))
+        end
+
+      :rate_limited ->
+        conn
+        |> put_status(:too_many_requests)
+        |> json(%{error: gettext("Too many attempts. Please try again later.")})
+    end
+  end
+
+  defp issue_auth_challenge(conn) do
+    {challenge, options} = Credentials.authentication_options()
+
+    conn
+    |> put_session(:webauthn_auth_challenge, challenge)
+    |> json(options)
+  end
+
+  # No passkey for the typed address: behave like the email-PIN step 1. Throttle
+  # on the same per-email budget as the "Log in" button so this cannot be used
+  # to out-mail that limit, mail the PIN (only when the account exists — the JSON
+  # is identical regardless), mark the session so /login greets the visitor with
+  # the friendly note, and tell the JS to navigate there. The note is flashed by
+  # `new/2` rather than here because Phoenix carries a flash across requests only
+  # on a redirect, and this is a 200 JSON answer.
+  defp pin_fallback(conn, email) do
+    case RateLimit.check(conn, :login_email, email) do
+      :ok ->
+        {:ok, conn} = Accounts.login_by_email(conn, email)
 
         conn
-        |> put_session(:webauthn_auth_challenge, challenge)
-        |> json(options)
+        |> put_session(:passkey_pin_fallback, true)
+        |> json(%{redirect: ~p"/login"})
 
       :rate_limited ->
         conn

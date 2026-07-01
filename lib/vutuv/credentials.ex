@@ -31,6 +31,7 @@ defmodule Vutuv.Credentials do
 
   require Logger
 
+  alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.User
   alias Vutuv.Credentials.UserCredential
   alias Vutuv.Repo
@@ -283,6 +284,32 @@ defmodule Vutuv.Credentials do
   def count_for_user(%User{} = user) do
     Repo.one(from(c in UserCredential, where: c.user_id == ^user.id, select: count(c.id)))
   end
+
+  @doc """
+  Whether the account owning `email` has at least one enrolled passkey.
+
+  Used by the login page (issue #834): a visitor who typed their address and
+  clicked "Sign in with a passkey" but has no passkey should fall back to the
+  email-PIN flow rather than be stranded at an empty native prompt. `email` is
+  matched case-insensitively, the same way `Vutuv.Accounts` looks addresses up.
+
+  A `false` result covers both "the account has no passkey" and "no such
+  account", so the caller can treat the two identically and not leak which
+  addresses are registered.
+  """
+  def passkey_for_email?(email) when is_binary(email) do
+    email = String.downcase(email)
+
+    Repo.exists?(
+      from(c in UserCredential,
+        join: e in Email,
+        on: e.user_id == c.user_id,
+        where: e.value == ^email
+      )
+    )
+  end
+
+  def passkey_for_email?(_email), do: false
 
   # ── Helpers ──
 

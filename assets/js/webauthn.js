@@ -82,16 +82,29 @@ async function registerPasskey(button) {
   }
 }
 
-// Login (use a credential), from the /login page. No allow-list is sent, so the
-// browser surfaces any discoverable passkey for this site — no email typed.
+// Login (use a credential), from the /login page. We pass along whatever the
+// visitor typed in the email field: with no email (or an account that has a
+// passkey) the server mints a discoverable challenge and the browser surfaces
+// any passkey for this site; for an email with no passkey the server instead
+// mails a PIN and answers with a `redirect`, so we send the member to the PIN
+// screen rather than strand them at an empty native prompt (issue #834).
 async function loginWithPasskey(button) {
   const scope = button.closest("#passkey-signin") || document
+  const emailField = document.querySelector('#login-form [name="session[email]"]')
+  const email = emailField ? emailField.value.trim() : ""
   button.disabled = true
   hideError(scope)
 
   try {
-    const options = await postJSON(button.dataset.challengeUrl, {})
+    const options = await postJSON(button.dataset.challengeUrl, { email })
     if (options.error) return showError(scope, options.error)
+
+    // No passkey for this address: the server already mailed a PIN, so follow
+    // it to the PIN-entry screen (with the friendly flash it stashed).
+    if (options.redirect) {
+      window.location = options.redirect
+      return
+    }
 
     options.challenge = b64urlToBuf(options.challenge)
 

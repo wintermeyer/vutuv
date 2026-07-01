@@ -25,6 +25,17 @@ defmodule VutuvWeb.SessionControllerTest do
       # A fresh member follows nobody yet, so home is their profile.
       assert redirected_to(conn) == ~p"/#{user}"
     end
+
+    test "shows the PIN form when a login PIN is already in flight", %{conn: conn} do
+      # A visitor who has a pending PIN (started a login elsewhere, or was routed
+      # here by the passkey fallback) should be able to finish on /login itself,
+      # the same way "/" is pinned to the PIN form while a PIN is pending.
+      {:ok, conn} = Accounts.login_by_email(conn, "someone@example.com")
+
+      conn = get(recycle(conn), ~p"/login")
+
+      assert html_response(conn, 200) =~ ~s(name="session[pin]")
+    end
   end
 
   describe "dev email inbox link" do
@@ -115,6 +126,65 @@ defmodule VutuvWeb.SessionControllerTest do
       body = html_response(freed, 200)
       refute body =~ ~s(name="session[pin]")
       assert body =~ "new_registration"
+    end
+  end
+
+  # Issue #834: when the visitor typed an email and clicked "Sign in with a
+  # passkey" but the account has no passkey, the challenge endpoint must not
+  # strand them at the native prompt. It falls back to the email-PIN flow —
+  # mails a one-time PIN and tells the JS to move to the PIN screen — exactly
+  # as if they had clicked "Log in", but with a friendly flash. The no-passkey
+  # and unknown-address responses are byte-identical, so the fallback never
+  # betrays who is registered; the only thing typing an email reveals is that
+  # the account has a passkey (it gets a challenge instead), a deliberate
+  # trade-off for a login the member can actually complete.
+  describe "POST /login/passkey/challenge (email-aware, issue #834)" do
+    test "an email without a passkey mails a PIN and routes to the PIN screen", %{conn: conn} do
+      {:ok, _user} = Accounts.register_user(conn, @pending_attrs)
+
+      conn = post(conn, ~p"/login/passkey/challenge", %{"email" => "pending@example.com"})
+
+      assert %{"redirect" => "/login"} = json_response(conn, 200)
+      # No WebAuthn challenge was minted — this is the PIN path, not a ceremony.
+      refute get_session(conn, :webauthn_auth_challenge)
+      # A real login PIN went out, and no one was logged in by the challenge.
+      assert sent_pin()
+      refute get_session(conn, :user_id)
+
+      # Following the redirect lands on the PIN-entry form with the friendly note.
+      followed = get(recycle(conn), ~p"/login")
+      assert html_response(followed, 200) =~ ~s(name="session[pin]")
+      assert Phoenix.Flash.get(followed.assigns.flash, :info) =~ "PIN"
+    end
+
+    test "an email with a passkey gets a challenge and no PIN", %{conn: conn} do
+      {:ok, user} = Accounts.register_user(conn, @pending_attrs)
+      insert(:user_credential, user: user)
+
+      conn = post(conn, ~p"/login/passkey/challenge", %{"email" => "pending@example.com"})
+
+      body = json_response(conn, 200)
+      assert {:ok, _} = Base.url_decode64(body["challenge"], padding: false)
+      assert %Wax.Challenge{} = get_session(conn, :webauthn_auth_challenge)
+      refute body["redirect"]
+      # A member with a passkey is never mailed a PIN behind their back.
+      assert_no_email_sent()
+    end
+
+    test "an unknown address routes to the PIN screen without sending mail", %{conn: conn} do
+      conn = post(conn, ~p"/login/passkey/challenge", %{"email" => "nobody@example.com"})
+
+      # Same response as a real account with no passkey, and no mail leaks out —
+      # so the endpoint stays enumeration-safe.
+      assert %{"redirect" => "/login"} = json_response(conn, 200)
+      assert_no_email_sent()
+    end
+
+    test "a blank email still yields a discoverable challenge", %{conn: conn} do
+      conn = post(conn, ~p"/login/passkey/challenge", %{"email" => "   "})
+
+      assert json_response(conn, 200)["challenge"]
+      assert %Wax.Challenge{} = get_session(conn, :webauthn_auth_challenge)
     end
   end
 end
