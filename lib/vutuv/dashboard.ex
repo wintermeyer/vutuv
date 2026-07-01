@@ -18,11 +18,16 @@ defmodule Vutuv.Dashboard do
 
   import Ecto.Query
 
+  alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Chat.Message
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
   alias Vutuv.Reports
+
+  # How many members each dashboard people list shows at most: the "currently
+  # online" and "newest members" cards both link straight to this many profiles.
+  @people_list_limit 10
 
   @doc """
   The dashboard's database figures as a map, computed against the current
@@ -56,5 +61,46 @@ defmodule Vutuv.Dashboard do
   defp latest_inserted_at(schema) do
     from(r in schema, order_by: [desc: r.id], limit: 1, select: r.inserted_at)
     |> Repo.one()
+  end
+
+  @doc """
+  The most recently registered confirmed members, newest first (at most
+  `@people_list_limit`). Ordered by the UUID v7 primary key, whose embedded
+  timestamp makes "highest id" mean "most recently signed up", so it is an index
+  scan with no `inserted_at` sort. Only `email_confirmed?` members count, matching
+  the "New members" figure (`Reports.count_confirmed_registrations/2`). Rows carry
+  only the columns a listing row renders (`User.listing_fields/0`), so the
+  dashboard can link to each profile with its avatar and name.
+  """
+  def newest_members(limit \\ @people_list_limit) do
+    from(u in User,
+      where: u.email_confirmed? == true,
+      order_by: [desc: u.id],
+      limit: ^limit,
+      select: struct(u, ^User.listing_fields())
+    )
+    |> Repo.all()
+  end
+
+  @doc """
+  Up to `@people_list_limit` of the members named by `online_ids` — the in-memory
+  presence set from `VutuvWeb.Presence.online_ids/0` — newest first. Returns `[]`
+  for an empty set without touching the database. Rows carry only
+  `User.listing_fields/0`, like `newest_members/1`.
+  """
+  def online_members(online_ids, limit \\ @people_list_limit) do
+    case MapSet.to_list(online_ids) do
+      [] ->
+        []
+
+      ids ->
+        from(u in User,
+          where: u.id in ^ids,
+          order_by: [desc: u.id],
+          limit: ^limit,
+          select: struct(u, ^User.listing_fields())
+        )
+        |> Repo.all()
+    end
   end
 end

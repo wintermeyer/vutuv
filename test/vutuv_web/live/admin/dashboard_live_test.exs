@@ -66,6 +66,32 @@ defmodule VutuvWeb.Admin.DashboardLiveTest do
       assert has_element?(view, "#stat-online", "1")
     end
 
+    test "the currently-online card links to each online member's profile", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.Admin.DashboardLive)
+      assert has_element?(view, "#online-members", "Nobody is online right now")
+
+      Presence.subscribe_online()
+
+      online = insert(:user)
+      agent = start_supervised!({Agent, fn -> :ok end})
+      {:ok, _ref} = Presence.track_user(agent, online.id)
+
+      assert_receive %Broadcast{event: "presence_diff"}
+      _ = :sys.get_state(view.pid)
+
+      assert has_element?(view, "#online-members a[href='/#{online.username}']")
+    end
+
+    test "the new-members card links to the newest confirmed members", %{conn: conn} do
+      member = insert(:user, email_confirmed?: true)
+      unconfirmed = insert(:user, email_confirmed?: false)
+
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.Admin.DashboardLive)
+
+      assert has_element?(view, "#newest-members a[href='/#{member.username}']")
+      refute has_element?(view, "#newest-members a[href='/#{unconfirmed.username}']")
+    end
+
     test "a refresh picks up posts created after mount", %{conn: conn} do
       {:ok, view, _html} = live_isolated(conn, VutuvWeb.Admin.DashboardLive)
       assert has_element?(view, "#stat-posts-today", "0")

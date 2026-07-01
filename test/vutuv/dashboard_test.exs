@@ -88,4 +88,39 @@ defmodule Vutuv.DashboardTest do
     assert NaiveDateTime.compare(snapshot.last_post_at, ctx.today_start) == :eq
     assert NaiveDateTime.compare(snapshot.last_message_at, ctx.today_start) == :eq
   end
+
+  describe "newest_members/1" do
+    test "lists confirmed members newest first, skipping unconfirmed ones" do
+      _oldest = insert(:activated_user)
+      newest = insert(:activated_user)
+      insert(:user, email_confirmed?: false)
+
+      # Ids are UUID v7, so the last-inserted member sorts first.
+      assert [first | _] = Dashboard.newest_members()
+      assert first.id == newest.id
+      assert length(Dashboard.newest_members()) == 2
+    end
+
+    test "caps the list at ten" do
+      for _ <- 1..11, do: insert(:activated_user)
+
+      assert length(Dashboard.newest_members()) == 10
+    end
+  end
+
+  describe "online_members/1" do
+    test "returns [] for an empty presence set without querying" do
+      assert Dashboard.online_members(MapSet.new()) == []
+    end
+
+    test "resolves the presence ids to member rows, newest first" do
+      older = insert(:user)
+      newer = insert(:user)
+      _absent = insert(:user)
+
+      members = Dashboard.online_members(MapSet.new([older.id, newer.id]))
+
+      assert Enum.map(members, & &1.id) == [newer.id, older.id]
+    end
+  end
 end

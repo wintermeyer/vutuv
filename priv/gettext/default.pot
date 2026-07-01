@@ -2147,7 +2147,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/post_controller.ex:51
 #: lib/vutuv_web/controllers/post_controller.ex:59
 #: lib/vutuv_web/controllers/user_controller.ex:48
-#: lib/vutuv_web/live/admin/dashboard_live.ex:106
+#: lib/vutuv_web/live/admin/dashboard_live.ex:149
 #: lib/vutuv_web/live/post_live/saved.ex:279
 #: lib/vutuv_web/live/search_live.ex:147
 #: lib/vutuv_web/live/search_live.ex:306
@@ -7563,47 +7563,47 @@ msgstr ""
 msgid "(deleted member)"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:85
+#: lib/vutuv_web/live/admin/dashboard_live.ex:105
 #, elixir-autogen, elixir-format
 msgid "Currently online"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:113
+#: lib/vutuv_web/live/admin/dashboard_live.ex:156
 #, elixir-autogen, elixir-format
 msgid "Direct messages"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:163
+#: lib/vutuv_web/live/admin/dashboard_live.ex:243
 #, elixir-autogen, elixir-format
 msgid "Latest"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:74
+#: lib/vutuv_web/live/admin/dashboard_live.ex:94
 #, elixir-autogen, elixir-format
 msgid "Live activity"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:100
+#: lib/vutuv_web/live/admin/dashboard_live.ex:120
 #, elixir-autogen, elixir-format
 msgid "Members online right now"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:120
+#: lib/vutuv_web/live/admin/dashboard_live.ex:131
 #, elixir-autogen, elixir-format
 msgid "New members"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:150
+#: lib/vutuv_web/live/admin/dashboard_live.ex:230
 #, elixir-autogen, elixir-format
 msgid "Today"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:154
+#: lib/vutuv_web/live/admin/dashboard_live.ex:234
 #, elixir-autogen, elixir-format
 msgid "Yesterday"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/dashboard_live.ex:77
+#: lib/vutuv_web/live/admin/dashboard_live.ex:97
 #, elixir-autogen, elixir-format
 msgid "updates automatically"
 msgstr ""
@@ -7946,4 +7946,14 @@ msgstr ""
 #: lib/vutuv_web/live/admin/user_live.ex:253
 #, elixir-autogen, elixir-format
 msgid "name, @handle or email"
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex:140
+#, elixir-autogen, elixir-format
+msgid "No members yet."
+msgstr ""
+
+#: lib/vutuv_web/live/admin/dashboard_live.ex:125
+#, elixir-autogen, elixir-format
+msgid "Nobody is online right now."
 msgstr ""
