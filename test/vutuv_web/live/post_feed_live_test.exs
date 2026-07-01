@@ -54,6 +54,41 @@ defmodule VutuvWeb.PostFeedLiveTest do
     end
   end
 
+  describe "threaded replies" do
+    test "a reply shows the post it answers inline, not a bare handle banner", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, parent} = Posts.create_post(friend, %{body: "the original question"})
+      {:ok, _reply} = Posts.create_reply(user, parent, %{body: "my answer to it"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      # The reply carries the post it answers as an inline context preview
+      # (the same treatment as the profile), linking to the parent post — not
+      # the flat "Replying to @handle" text banner.
+      assert html =~ "the original question"
+      assert has_element?(live, ~s(#feed-posts a[href="#{Posts.path(parent)}"]))
+      refute has_element?(live, "[data-reply-banner]")
+    end
+
+    test "the timeline renders as one card, not one card per post", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      for n <- 1..3, do: {:ok, _} = Posts.create_post(friend, %{body: "post #{n}"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # The posts stream is the card surface itself (divide-y flat rows), the
+      # same container the profile Posts section uses — so the feed and the
+      # profile read as one UX, not "separate cards" vs "one card".
+      assert has_element?(live, ~s(#feed-posts[data-post-list]))
+    end
+  end
+
   describe "composer" do
     test "creates a public post that appears in the feed", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)

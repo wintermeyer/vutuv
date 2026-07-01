@@ -350,20 +350,28 @@ defmodule VutuvWeb.PostLive.Feed do
             </.button>
           </div>
 
-          <div id="feed-posts" phx-update="stream" class="space-y-4">
-            <div :for={{dom_id, entry} <- @streams.posts} id={dom_id}>
-              <.post_card
+          <%!-- The timeline is one card of flat divide-y rows — the same
+          container and shared <.post_thread_entry> the profile Posts section
+          uses, so the feed and a profile read as one UX (a reply nests the post
+          it answers inline instead of the old flat "Replying to @handle"
+          banner). Gated on @empty? so an empty feed shows the message below
+          rather than a blank card; every live insert flips @empty? in the same
+          diff, so the container is present whenever there is (or just became)
+          content. --%>
+          <.post_list :if={!@empty?} id="feed-posts" phx-update="stream" data-post-list>
+            <div :for={{dom_id, entry} <- @streams.posts} id={dom_id} class={post_row_class()}>
+              <.post_thread_entry
                 post={entry.post}
                 viewer={@current_user}
                 viewer_follow={entry[:viewer_follow]}
-                mode={:preview}
                 reposted_by={entry.reposted_by}
                 entry_id={entry.id}
                 conn_or_socket={@socket}
                 engagement={entry.engagement}
+                surface={:flat}
               />
             </div>
-          </div>
+          </.post_list>
 
           <p :if={@empty? && @pending_posts == []} class="text-slate-600 dark:text-slate-400">
             {gettext("Nothing here yet. Follow people to fill your feed, or write your first post.")}

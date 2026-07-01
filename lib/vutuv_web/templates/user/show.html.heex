@@ -272,53 +272,23 @@ the resulting ~200px rail width. --%>
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
       </.empty_add>
 
-<%!-- Threaded Posts list. Each viewer-visible entry is a real <.post_card>
-      (flat, carrying its live action bar). When the entry is a reply, the post
-      it answers is shown as a compact context row above it, joined by the
-      thread rail + tick, and the card's own "Replying to @handle" banner is
-      suppressed so the relationship is shown once, by the actual parent. A
-      top-level post (or a reply whose parent is gone) renders standalone, where
-      the card's banner covers the degraded cases. --%>
-      <div :if={@posts != []} class="divide-y divide-slate-100 dark:divide-slate-800">
-        <div :for={entry <- @posts} class="py-4 first:pt-0 last:pb-0">
-          <%= case Posts.reply_ref_state(entry.post) do %>
-            <% {:parent, parent} -> %>
-              <.reply_parent_preview parent={parent} time_id={"thread-parent-time-#{entry.id}"} />
-              <%!-- The reply nested under its parent: the rail drops from the
-              parent avatar's centre (ml-[1.125rem]) and the tick (top-[1.125rem])
-              meets the reply card's own avatar centre. --%>
-              <div class="ml-[1.125rem] mt-1 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
-                <div class="relative">
-                  <span
-                    class="absolute -left-5 top-[1.125rem] h-px w-5 bg-slate-200 dark:bg-slate-700"
-                    aria-hidden="true"
-                  >
-                  </span>
-                  <.post_card
-                    post={entry.post}
-                    reposted_by={entry.reposted_by}
-                    entry_id={entry.id}
-                    conn_or_socket={@socket}
-                    viewer={@view_viewer}
-                    mode={:preview}
-                    surface={:flat}
-                    show_reply_banner={false}
-                  />
-                </div>
-              </div>
-            <% _ -> %>
-              <.post_card
-                post={entry.post}
-                reposted_by={entry.reposted_by}
-                entry_id={entry.id}
-                conn_or_socket={@socket}
-                viewer={@view_viewer}
-                mode={:preview}
-                surface={:flat}
-              />
-          <% end %>
+<%!-- Threaded Posts list — the shared <.post_thread_entry>: a reply nests the
+      post it answers as an inline context preview joined by the thread rail, a
+      top-level post (or a degraded reply) renders standalone. The same component
+      renders the feed, the saved lists, the archive and the permalink thread, so
+      a post reads identically everywhere. --%>
+      <.post_list :if={@posts != []} card={false} data-post-list>
+        <div :for={entry <- @posts} class={post_row_class()}>
+          <.post_thread_entry
+            post={entry.post}
+            reposted_by={entry.reposted_by}
+            entry_id={entry.id}
+            conn_or_socket={@socket}
+            viewer={@view_viewer}
+            surface={:flat}
+          />
         </div>
-      </div>
+      </.post_list>
 
       <%!-- Content navigation: only when there is more than the profile shows. --%>
       <.card_footer_link :if={@posts_total > length(@posts)} href={~p"/#{@user}/posts"}>

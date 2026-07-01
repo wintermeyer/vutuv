@@ -1,10 +1,9 @@
 defmodule VutuvWeb.UserHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.PostComponents, only: [post_card: 1]
+  import VutuvWeb.PostComponents, only: [post_list: 1, post_row_class: 0, post_thread_entry: 1]
   import VutuvWeb.UserHelpers
 
-  alias Vutuv.Posts
   alias Vutuv.Profiles.SocialMediaAccount
 
   embed_templates("../templates/user/*")
@@ -62,47 +61,6 @@ defmodule VutuvWeb.UserHTML do
       info when info in [nil, ""] -> "\u00A0"
       info -> info
     end
-  end
-
-  @doc """
-  A reply's parent post shown as a compact context row above the reply in the
-  profile's threaded Posts section: the parent author's avatar and name (both
-  linking to their profile) and a one-line excerpt that links to the parent
-  post. This is the real-data stand-in for the post card's "Replying to
-  @handle" banner — the reply card itself renders below with its banner
-  suppressed (`show_reply_banner={false}`), so the relationship is shown once,
-  by the actual parent rather than a bare handle.
-  """
-  attr(:parent, Vutuv.Posts.Post, required: true)
-  attr(:time_id, :string, required: true)
-
-  def reply_parent_preview(assigns) do
-    ~H"""
-    <div class="flex items-start gap-3">
-      <.link href={~p"/#{@parent.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
-        <.avatar user={@parent.user} size="sm" />
-      </.link>
-      <div class="min-w-0 flex-1">
-        <div class="flex flex-wrap items-baseline gap-x-2">
-          <.link
-            href={~p"/#{@parent.user}"}
-            class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
-          >
-            {full_name(@parent.user)}
-          </.link>
-          <span class="text-xs text-slate-500 dark:text-slate-400">
-            {"@" <> @parent.user.username} ·
-            <.local_time id={@time_id} at={@parent.inserted_at} />
-          </span>
-        </div>
-        <.link href={Posts.path(@parent)} class="mt-0.5 block">
-          <p class="truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300">
-            {@parent.body}
-          </p>
-        </.link>
-      </div>
-    </div>
-    """
   end
 
   @doc """

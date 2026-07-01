@@ -13,12 +13,17 @@ defmodule VutuvWeb.NotificationLive.Index do
   """
   use VutuvWeb, :live_view
 
+  # The quoted post under a reply/like event is the shared read-only preview the
+  # feed and profile use, so a referenced post reads the same everywhere.
+  import VutuvWeb.PostComponents, only: [post_preview: 1]
+
   # Like the feed and messages: not a page for anonymous visitors —
   # redirect to /login instead of rendering an empty 200.
   on_mount({VutuvWeb.Live.InitAssigns, :require_login})
 
   alias Vutuv.Activity
   alias Vutuv.Posts
+  alias Vutuv.Posts.Post
 
   @page_size 50
 
@@ -150,20 +155,29 @@ defmodule VutuvWeb.NotificationLive.Index do
             </p>
             <%!-- For a like, quote the liked post; for a reply, quote both the
             recipient's own post that was replied to and the reply itself, each
-            truncated to its first lines and linked to its own permalink. When
-            both show, a caption tells them apart. --%>
+            truncated to its first lines and linked to its own permalink, via the
+            shared <.post_preview>. When both show, a caption tells them apart. --%>
             <% both_quotes? = n[:post_preview] && n[:reply_preview] %>
-            <.post_quote
-              :if={n[:post_preview] && target}
-              href={target}
+            <.post_preview
+              :if={n[:post_preview]}
+              post={n.post_preview.post}
+              text={n.post_preview.text}
+              truncated?={n.post_preview.truncated?}
+              clamp="line-clamp-3 whitespace-pre-line"
               label={both_quotes? && gettext("Your post")}
-              preview={n.post_preview}
+              time_id={"notif-post-#{n.id}"}
+              class="mt-2"
+              data-post-preview="true"
             />
-            <.post_quote
+            <.post_preview
               :if={n[:reply_preview]}
-              href={~p"/#{n.actor_param}/posts/#{n.reply_post_id}"}
+              post={n.reply_preview.post}
+              text={n.reply_preview.text}
+              truncated?={n.reply_preview.truncated?}
+              clamp="line-clamp-3 whitespace-pre-line"
               label={both_quotes? && gettext("Reply")}
-              preview={n.reply_preview}
+              time_id={"notif-reply-#{n.id}"}
+              class="mt-2"
               data-reply-preview="true"
             />
             <span class="text-xs uppercase tracking-wide text-slate-500">
@@ -177,35 +191,6 @@ defmodule VutuvWeb.NotificationLive.Index do
 
       <.load_more :if={@more?} class="mt-6">{load_more_label(@remaining)}</.load_more>
     </div>
-    """
-  end
-
-  # One quoted post excerpt under a notification: a calm left-bordered card that
-  # links to the post like the event text does. `label` (optional) is the small
-  # uppercase caption that tells the two quotes of a reply apart ("Your post" vs
-  # "Reply"); a lone quote (a like) is unambiguous and passes none. Extra
-  # attributes (a `data-reply-preview` test hook) flow through the global rest.
-  attr(:href, :string, required: true)
-  attr(:label, :any, default: nil)
-  attr(:preview, :map, required: true)
-  attr(:rest, :global)
-
-  def post_quote(assigns) do
-    ~H"""
-    <.link
-      href={@href}
-      data-post-preview="true"
-      class="mt-2 block rounded-lg border-l-2 border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600 hover:border-brand-400 hover:text-slate-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400 dark:hover:text-slate-200"
-      {@rest}
-    >
-      <span
-        :if={@label}
-        class="mb-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
-      >
-        {@label}
-      </span>
-      <span class="line-clamp-3 whitespace-pre-line">{@preview.text}<span :if={@preview.truncated?}>…</span></span>
-    </.link>
     """
   end
 
@@ -348,29 +333,30 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Reply and like notifications carry post ids the row can quote: a like the
   # liked post (`:post_id`), a reply both the recipient's own post that was
   # replied to (`:post_id`) and the reply itself (`:reply_post_id`). Look every
-  # referenced body up in one batched, visibility-scoped query and attach a
-  # first-lines plain-text excerpt as `:post_preview` / `:reply_preview`. Other
-  # kinds carry no ids, a photo-only post (empty body) yields no preview, and a
-  # reply hidden from the viewer is absent from `bodies`, so all pass through
-  # unchanged.
+  # referenced post up in one batched, visibility-scoped query and attach a
+  # preview map `%{post:, text:, truncated?:}` as `:post_preview` /
+  # `:reply_preview` — the shared `<.post_preview>` renders the author + permalink
+  # from `post`, the first-lines plain-text excerpt from `text`. Other kinds carry
+  # no ids, a photo-only post (empty body) yields no preview, and a reply hidden
+  # from the viewer is absent from `posts`, so all pass through unchanged.
   defp with_post_previews(entries, viewer) do
-    bodies =
+    posts =
       entries
       |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id]])
-      |> then(&Posts.post_bodies(viewer, &1))
+      |> then(&Posts.visible_posts_by_ids(viewer, &1))
 
     Enum.map(entries, fn entry ->
       entry
-      |> put_preview(:post_preview, entry[:post_id], bodies)
-      |> put_preview(:reply_preview, entry[:reply_post_id], bodies)
+      |> put_preview(:post_preview, entry[:post_id], posts)
+      |> put_preview(:reply_preview, entry[:reply_post_id], posts)
     end)
   end
 
-  defp put_preview(entry, key, post_id, bodies) do
+  defp put_preview(entry, key, post_id, posts) do
     with true <- is_binary(post_id),
-         body when is_binary(body) <- Map.get(bodies, post_id),
-         preview when preview != nil <- post_preview(body) do
-      Map.put(entry, key, preview)
+         %Post{} = post <- Map.get(posts, post_id),
+         %{} = excerpt <- preview_excerpt(post.body) do
+      Map.put(entry, key, Map.put(excerpt, :post, post))
     else
       _ -> entry
     end
@@ -384,8 +370,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   # first three non-empty lines, capped so one very long line can't blow the
   # row up. Plain text (not rendered Markdown) to match the compact reply
   # context row on the profile. `truncated?` tells the row to append an ellipsis
-  # when more was cut. Returns nil for a bodyless (photo-only) post.
-  defp post_preview(body) do
+  # when more was cut. Returns nil for a bodyless (photo-only) post. Kept
+  # server-side (not a CSS clamp) so a hidden reply's body never reaches the DOM.
+  defp preview_excerpt(body) do
     lines =
       body
       |> String.split("\n")

@@ -301,20 +301,25 @@ defmodule VutuvWeb.PostLive.Saved do
         </.form>
 
         <%= if @type == :posts do %>
-          <div id="saved-posts" phx-update="stream" class="space-y-4">
-            <p class="hidden text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
+          <%!-- One card of flat divide-y rows via the shared
+          <.post_thread_entry> — the same treatment as the feed and the profile,
+          so a reply nests the post it answers. The empty <p> uses the only:block
+          trick (like the People tab below) so un-saving the last post reveals it
+          with no emptiness bookkeeping. --%>
+          <.post_list id="saved-posts" phx-update="stream" data-post-list>
+            <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
               {posts_empty_text(@live_action, @q)}
             </p>
-            <div :for={{dom_id, post} <- @streams.posts} id={dom_id}>
-              <.post_card
+            <div :for={{dom_id, post} <- @streams.posts} id={dom_id} class={post_row_class()}>
+              <.post_thread_entry
                 post={post}
                 viewer={@current_user}
-                mode={:preview}
                 conn_or_socket={@socket}
                 engagement={Map.get(@post_engagement, post.id)}
+                surface={:flat}
               />
             </div>
-          </div>
+          </.post_list>
         <% else %>
           <ul id="saved-people" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
             <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-people-empty">

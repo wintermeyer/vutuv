@@ -24,15 +24,21 @@
       </span>
     </p>
 
-    <.post_card
-      :for={entry <- @posts}
-      post={entry.post}
-      reposted_by={entry.reposted_by}
-      entry_id={entry.id}
-      conn_or_socket={@conn}
-      viewer={@current_user}
-      mode={:preview}
-    />
+    <%!-- One card of flat divide-y rows via the shared <.post_thread_entry>,
+    the same treatment as the feed and the profile — a reply nests the post it
+    answers inline instead of the flat "Replying to @handle" banner. --%>
+    <.post_list :if={@posts != []} data-post-list>
+      <div :for={entry <- @posts} class={post_row_class()}>
+        <.post_thread_entry
+          post={entry.post}
+          reposted_by={entry.reposted_by}
+          entry_id={entry.id}
+          conn_or_socket={@conn}
+          viewer={@current_user}
+          surface={:flat}
+        />
+      </div>
+    </.post_list>
 
     <p :if={@posts == []} class="text-slate-600 dark:text-slate-400">{gettext("Nothing here yet.")}</p>
 

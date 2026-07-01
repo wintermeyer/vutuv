@@ -17,21 +17,26 @@
       </span>
     </div>
 
-    <%!-- The thread: the replies this viewer may see, oldest first. Each
-    reply is a normal post card (own banner, action bar, ⋯ menu). --%>
+    <%!-- The thread: the replies this viewer may see, oldest first — flat
+    divide-y rows via the shared <.post_thread_entry>, the same treatment as the
+    feed and the profile. Nesting is off here (nest_parent={false}): every reply
+    answers the post shown above, so nesting its parent would just duplicate the
+    page. The card's own reply banner is dropped for the same reason. --%>
     <section :if={@replies != []} id="post-replies" class="mt-8">
       <h2 class="px-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
         {gettext("Replies")} ({compact_count(length(@replies))})
       </h2>
-      <div class="mt-3 space-y-4">
-        <.post_card
-          :for={reply <- @replies}
-          post={reply}
-          viewer={@current_user}
-          mode={:preview}
-          conn_or_socket={@conn}
-        />
-      </div>
+      <.post_list class="mt-3" data-post-list>
+        <div :for={reply <- @replies} class={post_row_class()}>
+          <.post_thread_entry
+            post={reply}
+            viewer={@current_user}
+            conn_or_socket={@conn}
+            surface={:flat}
+            nest_parent={false}
+          />
+        </div>
+      </.post_list>
     </section>
 
     <%!-- This post in agent-/machine-readable formats (VutuvWeb.AgentDocs):

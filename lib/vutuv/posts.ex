@@ -1255,24 +1255,26 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
-  The bodies of the given post ids **visible to `viewer`** as a `%{id => body}`
-  map, for building the notification-page post previews in one round trip.
-  Missing, deleted or denied ids are simply absent; a `nil`/empty id list makes
-  no query. `viewer`'s own posts always pass (so the recipient's own post that a
-  reply/like is about is always quotable), while another member's post (a reply
-  quoted alongside it) passes only when the deny-based visibility rules would
-  show it, so a restricted reply never leaks through the notification.
+  The given post ids **visible to `viewer`** as a `%{id => %Post{}}` map with
+  `:user` preloaded, for building the notification-page post previews (the shared
+  `<.post_preview>` needs the author + permalink, not just the body) in one round
+  trip. Missing, deleted or denied ids are simply absent; a `nil`/empty id list
+  makes no query. `viewer`'s own posts always pass (so the recipient's own post
+  that a reply/like is about is always quotable), while another member's post (a
+  reply quoted alongside it) passes only when the deny-based visibility rules
+  would show it, so a restricted reply never leaks through the notification.
   """
-  def post_bodies(viewer, ids) do
+  def visible_posts_by_ids(viewer, ids) do
     ids = ids |> Enum.filter(&is_binary/1) |> Enum.uniq()
 
     if ids == [] do
       %{}
     else
-      from(p in Post, where: p.id in ^ids, select: {p.id, p.body})
+      from(p in Post, where: p.id in ^ids)
       |> scope_visible(viewer)
       |> Repo.all()
-      |> Map.new()
+      |> Repo.preload(:user)
+      |> Map.new(&{&1.id, &1})
     end
   end
 

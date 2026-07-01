@@ -148,6 +148,209 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
+  @doc """
+  The shared shell for a threaded post list: a `divide-y` column of
+  `<.post_thread_entry>` rows, optionally wrapped in a `<.card>`. Every post
+  surface (feed, saved, profile Posts section, archive, permalink thread) renders
+  through this, so the container — card wrap, divider colour, row rhythm — lives
+  in one place.
+
+  The rows themselves stay at the call site (a `:for` over a static list, or a
+  LiveView `phx-update="stream"` comprehension whose children must be bound where
+  the stream assign lives), each a `<div class={post_row_class()}>` around one
+  `<.post_thread_entry>`. Stream attrs (`id`, `phx-update`, `data-post-list`) flow
+  through the global `rest` onto the divider column.
+  """
+  attr(:card, :boolean,
+    default: true,
+    doc: "wrap in a <.card>; false when the list is already inside one (the profile section)"
+  )
+
+  attr(:class, :string, default: nil, doc: "outer-wrapper utilities, e.g. mt-3 spacing")
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def post_list(assigns) do
+    ~H"""
+    <.card :if={@card} class={@class}>
+      <div class="divide-y divide-slate-100 dark:divide-slate-800" {@rest}>
+        {render_slot(@inner_block)}
+      </div>
+    </.card>
+    <div
+      :if={!@card}
+      class={["divide-y divide-slate-100 dark:divide-slate-800", @class]}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
+
+  @doc """
+  The row-wrapper class every `<.post_list>` child uses: vertical rhythm plus
+  flush first/last so the top and bottom rows sit against the card padding.
+  """
+  def post_row_class, do: "py-4 first:pt-0 last:pb-0"
+
+  @doc """
+  One row of a threaded post timeline — the single rendering of a
+  post-with-context shared by the feed, the profile Posts section, the saved
+  lists, the post archive and the permalink reply thread, so a reply reads the
+  same everywhere instead of the feed's old flat "Replying to @handle" banner.
+
+  When the entry is a reply whose parent still exists (and `nest_parent`), the
+  post it answers renders above as a compact `<.post_preview>` joined by the
+  thread rail + tick, and the leaf `<.post_card>` drops its own reply banner (the
+  inline parent shows the relationship once). A top-level post, a reply whose
+  parent is gone (the card's degraded banner covers it), or `nest_parent={false}`
+  on the permalink (where the parent *is* the page) renders as a standalone card.
+
+  Forwards the same post/viewer/engagement/reposted_by/entry_id/conn_or_socket
+  the `<.post_card>` takes to the leaf card; `surface` picks the leaf shell
+  (`:flat` inside a divide-y list, `:card` standalone). A list entry is always a
+  `:preview` card — the one `:full` rendering (the permalink's own post) uses
+  `<.post_card>` directly, not this.
+  """
+  attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
+  attr(:viewer, :any, default: nil)
+  attr(:viewer_follow, :any, default: nil)
+  attr(:engagement, :any, default: nil)
+  attr(:reposted_by, :any, default: nil)
+  attr(:entry_id, :string, default: nil)
+  attr(:surface, :atom, default: :flat, values: [:card, :flat])
+  attr(:conn_or_socket, :any, required: true)
+
+  attr(:nest_parent, :boolean,
+    default: true,
+    doc:
+      "nest a reply's parent post inline. false where the parent is already on " <>
+        "the page (the permalink thread), so the row is just the flat card"
+  )
+
+  def post_thread_entry(assigns) do
+    assigns = assign(assigns, :parent, thread_parent(assigns.post, assigns.nest_parent))
+
+    ~H"""
+    <%= if @parent do %>
+      <.post_preview
+        post={@parent}
+        time_id={"thread-parent-time-#{@entry_id || @post.id}"}
+        text={@parent.body}
+      />
+      <%!-- The reply nested under its parent: the rail drops from the parent
+      avatar's centre (ml-[1.125rem]) and the tick (top-[1.125rem]) meets the
+      reply card's own avatar centre. --%>
+      <div class="ml-[1.125rem] mt-1 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
+        <div class="relative">
+          <span
+            class="absolute -left-5 top-[1.125rem] h-px w-5 bg-slate-200 dark:bg-slate-700"
+            aria-hidden="true"
+          >
+          </span>
+          <.post_card
+            post={@post}
+            viewer={@viewer}
+            viewer_follow={@viewer_follow}
+            engagement={@engagement}
+            reposted_by={@reposted_by}
+            entry_id={@entry_id}
+            surface={@surface}
+            conn_or_socket={@conn_or_socket}
+            show_reply_banner={false}
+          />
+        </div>
+      </div>
+    <% else %>
+      <.post_card
+        post={@post}
+        viewer={@viewer}
+        viewer_follow={@viewer_follow}
+        engagement={@engagement}
+        reposted_by={@reposted_by}
+        entry_id={@entry_id}
+        surface={@surface}
+        conn_or_socket={@conn_or_socket}
+        show_reply_banner={@nest_parent}
+      />
+    <% end %>
+    """
+  end
+
+  # The parent post to nest above a reply, or nil to render the post standalone
+  # (a top-level post, a reply whose parent is gone, or nesting turned off where
+  # the parent is already on the page — the permalink thread).
+  defp thread_parent(_post, false), do: nil
+
+  defp thread_parent(post, true) do
+    case Posts.reply_ref_state(post) do
+      {:parent, parent} -> parent
+      _ -> nil
+    end
+  end
+
+  @doc """
+  A compact, read-only, linked preview of one post — the shared "referenced post"
+  rendering. Two homes: the thread parent-context row above a reply
+  (`<.post_thread_entry>`) and the notification page's quoted post. Read-only on
+  purpose (no action bar, no live component), so a 50-row notification page stays
+  cheap.
+
+  Renders the author (linked avatar + name → profile, `@handle` · time) and a
+  clamped excerpt that links to the post permalink. `text` is the already-prepared
+  excerpt: the thread parent passes the parent body and lets the default
+  `truncate` clamp it to one line; the notification page pre-clamps to three lines
+  server-side (its own visibility rules must strip a denied body) and passes
+  `clamp="line-clamp-3 whitespace-pre-line"` + `truncated?`. `label` is the
+  optional uppercase caption that tells a reply notification's two quotes apart
+  ("Your post" / "Reply"); the global `rest` carries the
+  `data-post-preview` / `data-reply-preview` hooks onto the excerpt link (the
+  element that owns the permalink).
+  """
+  attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{} with :user")
+  attr(:time_id, :string, required: true)
+  attr(:text, :string, required: true)
+  attr(:truncated?, :boolean, default: false)
+  attr(:clamp, :string, default: "truncate")
+  attr(:label, :any, default: nil)
+  attr(:class, :string, default: nil, doc: "outer wrapper utilities (e.g. mt-2 in notifications)")
+  attr(:rest, :global, doc: "data-* hooks land on the excerpt link, which owns the permalink")
+
+  def post_preview(assigns) do
+    ~H"""
+    <div class={["flex items-start gap-3", @class]}>
+      <.link href={~p"/#{@post.user}"} class="shrink-0" aria-hidden="true" tabindex="-1">
+        <.avatar user={@post.user} size="sm" />
+      </.link>
+      <div class="min-w-0 flex-1">
+        <div class="flex flex-wrap items-baseline gap-x-2">
+          <.link
+            href={~p"/#{@post.user}"}
+            class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+          >
+            {full_name(@post.user)}
+          </.link>
+          <span class="text-xs text-slate-500 dark:text-slate-400">
+            {"@" <> @post.user.username} ·
+            <.local_time id={@time_id} at={@post.inserted_at} />
+          </span>
+        </div>
+        <span
+          :if={@label}
+          class="mt-0.5 block text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+        >
+          {@label}
+        </span>
+        <.link href={Posts.path(@post)} class="mt-0.5 block" {@rest}>
+          <p class={["text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300", @clamp]}>
+            {@text}<span :if={@truncated?}>…</span>
+          </p>
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
   attr(:surface, :atom, required: true)
   attr(:class, :string, default: nil)
   attr(:post, :any, required: true)
