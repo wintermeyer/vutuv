@@ -108,3 +108,7 @@ msgstr ""
 
 msgid "has already been booked"
 msgstr ""
+
+## Custom message from the sign-up tag-list rule (Vutuv.Accounts.User.changeset/2).
+msgid "This looks like several tags. Separate each one with a comma, e.g. JavaScript, Go, Dogs."
+msgstr ""

@@ -398,6 +398,22 @@ defmodule VutuvWeb.PageControllerTest do
       assert user.user_tags == []
     end
 
+    # A member who forgets the commas and types several tags as one run of
+    # words (the "marco_a609e05b" profile) is stopped with a hint instead of
+    # getting one giant merged tag. See Vutuv.Tags.likely_missing_commas?/1.
+    test "rejects a tag list that looks like several tags without commas", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "runon@example.com"}},
+          "tag_list" => "JavaScript webdevelopment Go Hunde"
+        })
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert conn.status == 422
+      refute user_by_email("runon@example.com")
+    end
+
     # The PIN-entry confirmation page shown right after sign-up used to point at
     # the dead @vutuv Twitter account. The whole "Updates about vutuv" line is
     # gone; the PIN form and its instructions must stay untouched.

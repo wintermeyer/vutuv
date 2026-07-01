@@ -18,6 +18,13 @@ defmodule Vutuv.Tags do
   @endorser_sorts ~w(name username date)
   @endorsers_per_page 25
 
+  # A single tag is at most this many whitespace-separated words. More than that
+  # and the member almost certainly forgot the commas (e.g. "JavaScript
+  # webdevelopment Go Hunde", the marco_a609e05b profile) rather than naming one
+  # real tag. Genuine multi-word tags ("Amazon Web Services", "Ruby on Rails")
+  # stay at or under it.
+  @max_tag_words 3
+
   @doc """
   Splits a comma-separated tag string into clean names: `" PHP, , Go "` →
   `["PHP", "Go"]`. Safe to call with `nil` (returns `[]`).
@@ -30,6 +37,19 @@ defmodule Vutuv.Tags do
   end
 
   def parse_tag_names(_), do: []
+
+  @doc """
+  Whether a raw tag-list string looks like the member forgot to separate their
+  tags with commas: after the comma split, some resulting tag still holds more
+  than #{@max_tag_words} words (`"JavaScript webdevelopment Go Hunde"`), so
+  storing it would create one giant merged tag. Registration uses this to block
+  such input with a hint. `nil`, blank input and normal lists return `false`.
+  """
+  def likely_missing_commas?(value) do
+    value
+    |> parse_tag_names()
+    |> Enum.any?(&(&1 |> String.split(~r/\s+/, trim: true) |> length() > @max_tag_words))
+  end
 
   @doc """
   Tags `user` with `name`, creating the global tag or linking the existing

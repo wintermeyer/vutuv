@@ -130,4 +130,31 @@ defmodule Vutuv.Accounts.UserTest do
       refute Ecto.Changeset.get_change(changeset, :identity_verified?)
     end
   end
+
+  describe "tag list" do
+    defp tag_list_changeset(tag_list) do
+      User.changeset(%User{}, %{"first_name" => "first_name", "tag_list" => tag_list})
+    end
+
+    test "accepts a comma-separated list" do
+      assert tag_list_changeset("Elixir, Cooking, Go").valid?
+    end
+
+    test "accepts a legitimate multi-word tag" do
+      assert tag_list_changeset("Ruby on Rails").valid?
+    end
+
+    test "accepts no tags at all" do
+      assert User.changeset(%User{}, %{"first_name" => "first_name"}).valid?
+    end
+
+    test "rejects a run of words that were meant to be separate tags" do
+      # A member who forgets the commas (the "marco_a609e05b" profile) is
+      # stopped instead of getting one giant merged tag.
+      changeset = tag_list_changeset("JavaScript webdevelopment Go Hunde")
+
+      refute changeset.valid?
+      assert %{tag_list: [_]} = errors_on(changeset)
+    end
+  end
 end

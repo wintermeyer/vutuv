@@ -42,6 +42,37 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "likely_missing_commas?/1" do
+    test "flags a run of words the member forgot to comma-separate" do
+      # The "marco_a609e05b" profile: four topics typed as a single tag.
+      assert Tags.likely_missing_commas?("JavaScript webdevelopment Go Hunde")
+    end
+
+    test "accepts a normal comma-separated list" do
+      refute Tags.likely_missing_commas?(" Elixir,  Cooking , ")
+    end
+
+    test "accepts legitimate multi-word tags of up to three words" do
+      refute Tags.likely_missing_commas?("Ruby on Rails")
+      refute Tags.likely_missing_commas?("Amazon Web Services")
+      refute Tags.likely_missing_commas?("Tap Dancing")
+    end
+
+    test "accepts a single long compound word" do
+      refute Tags.likely_missing_commas?("Kraftfahrzeugmechatroniker")
+    end
+
+    test "accepts blank and nil input" do
+      refute Tags.likely_missing_commas?("   ")
+      refute Tags.likely_missing_commas?(nil)
+    end
+
+    test "still flags a run-on chunk when other tags are comma-separated" do
+      refute Tags.likely_missing_commas?("Elixir, Ruby on Rails")
+      assert Tags.likely_missing_commas?("Elixir, Go Hunde Katze Vogel")
+    end
+  end
+
   describe "user_tags" do
     test "UserTag.name/1 returns the tag's name" do
       user = insert(:user)
