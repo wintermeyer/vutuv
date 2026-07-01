@@ -38,6 +38,14 @@ defmodule VutuvWeb.PostComponents do
 
   attr(:mode, :atom, default: :preview, values: [:preview, :full])
 
+  attr(:show_reply_banner, :boolean,
+    default: true,
+    doc:
+      "render the \"Replying to @handle\" banner for a reply. Set false where the " <>
+        "caller already shows the parent post inline (the profile thread), so the " <>
+        "banner would just duplicate it"
+  )
+
   attr(:surface, :atom,
     default: :card,
     values: [:card, :flat],
@@ -105,7 +113,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:author?, Posts.author?(assigns.post, viewer))
       |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
       |> assign(:frozen?, assigns.post.frozen_at != nil)
-      |> assign(:reply_banner, reply_banner(assigns.post))
+      |> assign(:reply_banner, reply_banner(assigns.post, assigns.show_reply_banner))
       |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
@@ -400,7 +408,11 @@ defmodule VutuvWeb.PostComponents do
   # The three banner states a reply card can be in, resolved from the
   # preloaded reply_ref (one level deep — `Vutuv.Posts.post_preloads/0`).
   # Pattern-match the structs: an un-preloaded has_one is a truthy
-  # %Ecto.Association.NotLoaded{}.
+  # %Ecto.Association.NotLoaded{}. `show?` is false where the caller already
+  # shows the parent post inline (the profile thread), so the banner is dropped.
+  defp reply_banner(_post, false), do: nil
+  defp reply_banner(post, true), do: reply_banner(post)
+
   defp reply_banner(post) do
     case Posts.reply_ref_state(post) do
       {:parent, parent} -> {:parent, parent.user, Posts.path(parent)}

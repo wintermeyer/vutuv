@@ -283,6 +283,52 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "posts section author links" do
+    test "a post author's avatar and name link to their profile", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, _post} = Posts.create_post(owner, %{body: "just setting up my vutuv"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The threaded posts list names the author and shows their avatar; both
+      # are links to that member's profile so a reader can jump straight there.
+      # (Two links to the same profile: the avatar — aria-hidden so the named
+      # link is the one in the tab order — and the name itself.)
+      assert view
+             |> element(~s(#profile-posts a[href="/#{owner.username}"][aria-hidden="true"]))
+             |> has_element?()
+
+      assert view
+             |> element(
+               ~s(#profile-posts a[href="/#{owner.username}"]),
+               VutuvWeb.UserHelpers.full_name(owner)
+             )
+             |> has_element?()
+    end
+
+    test "a reply shows the real parent post as context, linking to it", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      other = insert_activated_user()
+      {:ok, parent} = Posts.create_post(other, %{body: "the original question"})
+      {:ok, _reply} = Posts.create_reply(owner, parent, %{body: "my answer to it"})
+
+      {:ok, view, html} = live(conn, ~p"/#{owner}")
+
+      # The reply renders with the post it answers shown above it as context:
+      # the parent's body, a link to the parent post, and the parent author's
+      # profile link (avatar + name in the context row).
+      assert html =~ "the original question"
+      assert has_element?(view, ~s(#profile-posts a[href="#{Posts.path(parent)}"]))
+      assert has_element?(view, ~s(#profile-posts a[href="/#{other.username}"]))
+
+      # The card's own "Replying to" banner is suppressed — the inline parent
+      # replaces it, so the relationship is shown once, not twice.
+      refute has_element?(view, "[data-reply-banner]")
+    end
+  end
+
   describe "live post deletion" do
     test "a post deleted elsewhere drops from the open profile", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
