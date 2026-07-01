@@ -163,13 +163,61 @@ defmodule Vutuv.Notifications.EmailerTest do
       other = insert(:user, username: "the-sender")
 
       email =
-        Emailer.unread_messages_email("unread@example.com", user, other, Vutuv.UUIDv7.generate())
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          "Coffee this week?"
+        )
 
       assert_robot_headers(email)
       # System text names accounts by their @handle, never the clear name.
       assert email.subject =~ "@the-sender"
       assert email.text_body =~ "@the-sender"
       refute email.text_body =~ other.first_name
+      # The triggering DM is quoted, and the copy explains only the first
+      # message of a burst is mailed (issue: reduce notification noise).
+      assert email.text_body =~ "Coffee this week?"
+      assert email.text_body =~ "only email"
+      # And it deep-links to where the member can customize this behavior.
+      assert email.text_body =~ "#{user.username}/settings/notifications"
+      assert email.html_body =~ "#{user.username}/settings/notifications"
+    end
+
+    test "an each-message member is told every message is emailed, not just the first" do
+      user = insert(:user, locale: "en", dm_email_each_message?: true)
+      other = insert(:user, username: "the-sender")
+
+      email =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          "hi"
+        )
+
+      assert email.text_body =~ "every new unread message"
+      refute email.text_body =~ "only email"
+    end
+
+    test "the unread email quotes only an opening excerpt of a long message" do
+      user = insert(:user, locale: "en")
+      other = insert(:user, username: "the-sender")
+      long_body = String.duplicate("a", 5_000) <> "TAIL"
+
+      email =
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          long_body
+        )
+
+      assert email.text_body =~ "…"
+      refute email.text_body =~ "TAIL"
     end
 
     test "security alert email (issue #786)" do
@@ -197,7 +245,13 @@ defmodule Vutuv.Notifications.EmailerTest do
       other = insert(:user)
 
       email =
-        Emailer.unread_messages_email("unread@example.com", user, other, Vutuv.UUIDv7.generate())
+        Emailer.unread_messages_email(
+          "unread@example.com",
+          user,
+          other,
+          Vutuv.UUIDv7.generate(),
+          "hi"
+        )
 
       assert email.headers["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"
       assert email.headers["List-Unsubscribe"] =~ "/unsubscribe/"
@@ -397,11 +451,14 @@ defmodule Vutuv.Notifications.EmailerTest do
           "unread@example.com",
           user,
           other,
-          Vutuv.UUIDv7.generate()
+          Vutuv.UUIDv7.generate(),
+          "See you at the meetup?"
         ).html_body
 
       assert html =~ "@the-sender"
       refute html =~ other.first_name
+      # The DM body is quoted in the HTML alternative as well.
+      assert html =~ "See you at the meetup?"
       # Notification mail keeps its one-click unsubscribe link in the HTML too.
       assert html =~ "/unsubscribe/"
     end

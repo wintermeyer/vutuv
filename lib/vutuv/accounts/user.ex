@@ -60,6 +60,15 @@ defmodule Vutuv.Accounts.User do
     # such email (RFC 8058 one-click); transactional mail (PINs, moderation)
     # ignores it. This is the "unread messages" switch in the granular set below.
     field(:notification_emails?, :boolean, default: true)
+    # How the unread-message nudge behaves when it is on. Defaults reproduce the
+    # historical behaviour: one email per unread burst (each_message? false),
+    # sent once the message has sat unread for 15 minutes (the debounce delay).
+    # `dm_email_each_message?` true switches to an email per unread message;
+    # `dm_email_delay_minutes` is how long Vutuv.Chat waits before mailing (a
+    # grace period so an online member can read it first). See the notifications
+    # settings page.
+    field(:dm_email_each_message?, :boolean, default: false)
+    field(:dm_email_delay_minutes, :integer, default: 15)
     # The opt-in granular notification mails (set on the notifications settings
     # page, each with its own one-click unsubscribe). Default false so enabling
     # the feature never mass-mails existing members. The events themselves are
@@ -154,7 +163,16 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+
+  # The delay presets the notifications settings page offers (minutes a message
+  # may sit unread before the nudge email goes out). The single source of truth
+  # for both the select's options and the changeset's validation, so the form
+  # can never save a value the query does not expect. 0 means "as soon as the
+  # next sweep runs".
+  @dm_email_delay_values [0, 5, 15, 30, 60, 120]
+
+  def dm_email_delay_values, do: @dm_email_delay_values
 
   @doc """
   The notification-email preference fields, by the param/column name a
@@ -189,6 +207,7 @@ defmodule Vutuv.Accounts.User do
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
+    |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> revoke_verification_on_identity_change()

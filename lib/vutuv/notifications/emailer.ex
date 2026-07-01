@@ -181,13 +181,22 @@ defmodule Vutuv.Notifications.Emailer do
     |> render_bodies("verification_confirmation", locale, %{user: user, url: public_url()})
   end
 
+  # Longest message excerpt quoted in the unread-notification email. A DM may
+  # run to Message.max_body_length (10k chars); the email is only a nudge, so
+  # quote an opening excerpt and let the member read the rest on vutuv.
+  @message_excerpt_length 600
+
   @doc """
   The debounced "you have an unread message" notice (see
   `Vutuv.Chat.send_unread_notifications/0`). Names the sender by @handle only
-  — system text never uses clear names. The caller passes the recipient's
-  address (it already looked it up to decide whether to send at all).
+  (system text never uses clear names) and quotes `message_body`, the first
+  unread message of the burst (the DM that triggered the email), so the member
+  can read it without opening the app. The copy also explains that only that
+  first message is mailed, to keep the notifications quiet. The caller passes
+  the recipient's address (it already looked it up to decide whether to send at
+  all) and the message body.
   """
-  def unread_messages_email(email, user, other, conversation_id) do
+  def unread_messages_email(email, user, other, conversation_id, message_body) do
     locale = get_locale(user.locale)
     unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user)
 
@@ -205,9 +214,29 @@ defmodule Vutuv.Notifications.Emailer do
       user: user,
       other_slug: other.username,
       conversation_id: conversation_id,
+      message_body: message_excerpt(message_body),
+      # The recipient's own settings drive the copy: whether they are told this
+      # is the only email for the burst or that every message is mailed, and the
+      # deep link where they can change that (and the delay).
+      each_message?: user.dm_email_each_message?,
+      settings_url: "#{public_url()}#{user.username}/settings/notifications",
       url: public_url(),
       unsubscribe_url: unsubscribe_url
     })
+  end
+
+  # Opening excerpt of a quoted message: the whole thing when short, otherwise
+  # the first @message_excerpt_length graphemes with a trailing ellipsis. A nil
+  # body (a moderator deleted the message between selection and send) drops the
+  # quote rather than rendering an empty box.
+  defp message_excerpt(nil), do: nil
+
+  defp message_excerpt(body) do
+    if String.length(body) > @message_excerpt_length do
+      String.trim_trailing(String.slice(body, 0, @message_excerpt_length)) <> "…"
+    else
+      body
+    end
   end
 
   @doc """

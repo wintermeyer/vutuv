@@ -1,10 +1,16 @@
 <%= email_greeting(@user) %>,
 
-you have a new message from @<%= @other_slug %> on vutuv.
-
+you have a new message from @<%= @other_slug %> on vutuv:
+<%= if @message_body do %>
+<%= @message_body %>
+<% end %>
 Read and reply here:
 
 <%= @url %>messages/<%= @conversation_id %>
+
+<%= if @each_message? do %>You will get an email like this for every new unread message.<% else %>To keep your inbox quiet, this is the only email you will get about this conversation until you open it.<% end %> You decide whether we email you for every message or only the first, and how long we wait before sending, in your notification settings:
+
+<%= @settings_url %>
 
 You can switch these notification emails off here:
 

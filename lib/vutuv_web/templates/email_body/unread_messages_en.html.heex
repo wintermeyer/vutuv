@@ -1,7 +1,13 @@
 <.email_layout preheader="You have a new message on vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>you have a new message from @{@other_slug} on vutuv.</.email_p>
+  <.email_p>you have a new message from @{@other_slug} on vutuv:</.email_p>
+  <.email_quote :if={@message_body} body={@message_body} />
   <.email_button href={"#{@url}messages/#{@conversation_id}"}>Read and reply</.email_button>
+  <.email_p>
+    {(@each_message? &&
+      "You will get an email like this for every new unread message.") ||
+      "To keep your inbox quiet, this is the only email you will get about this conversation until you open it."} You decide whether we email you for every message or only the first, and how long we wait before sending, in your <.email_link href={@settings_url}>notification settings</.email_link>.
+  </.email_p>
   <.email_signature locale={@locale} />
   <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
 </.email_layout>

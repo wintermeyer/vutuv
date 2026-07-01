@@ -1,7 +1,13 @@
 <.email_layout preheader="Sie haben eine neue Nachricht auf vutuv" locale={@locale}>
   <.email_p>{email_greeting(@user)},</.email_p>
-  <.email_p>Sie haben eine neue Nachricht von @{@other_slug} auf vutuv.</.email_p>
+  <.email_p>Sie haben eine neue Nachricht von @{@other_slug} auf vutuv:</.email_p>
+  <.email_quote :if={@message_body} body={@message_body} />
   <.email_button href={"#{@url}messages/#{@conversation_id}"}>Lesen und antworten</.email_button>
+  <.email_p>
+    {(@each_message? &&
+      "Sie erhalten für jede neue ungelesene Nachricht eine solche E-Mail.") ||
+      "Damit Ihr Postfach ruhig bleibt, ist dies die einzige E-Mail, die Sie zu dieser Unterhaltung erhalten, bis Sie sie öffnen."} Ob wir Sie über jede Nachricht oder nur die erste benachrichtigen und wie lange wir vorher warten, legen Sie in Ihren <.email_link href={@settings_url}>Benachrichtigungseinstellungen</.email_link> fest.
+  </.email_p>
   <.email_signature locale={@locale} />
   <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
 </.email_layout>

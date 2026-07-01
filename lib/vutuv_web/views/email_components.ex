@@ -2,9 +2,10 @@ defmodule VutuvWeb.EmailComponents do
   @moduledoc """
   The shared HTML-email framework: one `email_layout/1` chrome plus a small set
   of inline-styled building blocks (`email_p`, `email_pin`, `email_button`,
-  `email_panel`/`email_row`, `email_list`, `email_divider`, `email_muted`,
-  `email_signature`). Every HTML email body (`lib/vutuv_web/templates/email_body/`)
-  composes these, so the look and feel is defined in exactly one place.
+  `email_panel`/`email_row`, `email_quote`, `email_list`, `email_divider`,
+  `email_muted`, `email_signature`). Every HTML email body
+  (`lib/vutuv_web/templates/email_body/`) composes these, so the look and feel
+  is defined in exactly one place.
 
   HTML email cannot use the web design system (Tailwind / `components.css`):
   clients want table-based layout and **inline** styles, with a `<style>` head
@@ -205,6 +206,24 @@ defmodule VutuvWeb.EmailComponents do
     """
   end
 
+  @doc """
+  A quoted message body — the DM that triggered an unread-notification email.
+  A brand left-rule panel that preserves the message's own line breaks
+  (`white-space:pre-wrap`) so it reads like the original, without rendering any
+  markup the sender wrote.
+  """
+  attr(:body, :string, required: true)
+
+  def email_quote(assigns) do
+    ~H"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1d4ed8;border-radius:8px;">
+      <tr>
+        <td class="email-text" style={quote_style()}>{@body}</td>
+      </tr>
+    </table>
+    """
+  end
+
   @doc "A label/value row inside an `email_panel/1`."
   attr(:label, :string, required: true)
   slot(:inner_block, required: true)
@@ -320,6 +339,10 @@ defmodule VutuvWeb.EmailComponents do
 
   defp row_value_style,
     do: "padding:6px 0;font-family:#{@font};font-size:14px;color:#334155;word-break:break-word;"
+
+  defp quote_style,
+    do:
+      "padding:14px 18px;font-family:#{@font};font-size:15px;line-height:1.6;color:#334155;white-space:pre-wrap;word-break:break-word;"
 
   defp list_style,
     do:

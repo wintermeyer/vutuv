@@ -211,7 +211,38 @@ defmodule VutuvWeb.SettingsControllerTest do
       refute html =~ "email_on_connection_request?"
       assert html =~ "email_on_endorsement?"
       assert html =~ "email_on_follower?"
+      # The unread-message frequency and delay controls.
+      assert html =~ "dm_email_each_message?"
+      assert html =~ "dm_email_delay_minutes"
       assert html =~ ~s(href="#{~p"/notifications"}")
+    end
+
+    test "saving the message-email frequency and delay persists them", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/#{user}/settings/notifications",
+          user: %{
+            "notification_emails?" => "true",
+            "dm_email_each_message?" => "true",
+            "dm_email_delay_minutes" => "30"
+          }
+        )
+
+      assert redirected_to(conn) == ~p"/#{user}/settings/notifications"
+
+      assert %User{dm_email_each_message?: true, dm_email_delay_minutes: 30} =
+               Repo.get(User, user.id)
+    end
+
+    test "an unsupported delay value is rejected and nothing is saved", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/#{user}/settings/notifications", user: %{"dm_email_delay_minutes" => "7"})
+
+      assert html_response(conn, 422)
+      assert Repo.get(User, user.id).dm_email_delay_minutes == 15
     end
   end
 

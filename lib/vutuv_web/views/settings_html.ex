@@ -2,7 +2,38 @@ defmodule VutuvWeb.SettingsHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  alias Vutuv.Accounts.User
+
   embed_templates("../templates/settings/*")
+
+  @doc """
+  The two choices for how often the unread-message email is sent, as
+  `{label, value}` pairs for a `select` on `dm_email_each_message?` (a boolean).
+  """
+  def dm_frequency_options do
+    [
+      {gettext("Only the first message"), false},
+      {gettext("Every message"), true}
+    ]
+  end
+
+  @doc """
+  The unread-message delay presets as `{label, minutes}` pairs, driven by the
+  single source of truth in `Vutuv.Accounts.User.dm_email_delay_values/0` so the
+  select can never offer a value the changeset rejects.
+  """
+  def dm_delay_options do
+    Enum.map(User.dm_email_delay_values(), &{dm_delay_label(&1), &1})
+  end
+
+  # Explicit per-value labels (rather than interpolating the integer) so no bare
+  # count reaches the UI and adding a preset without a label fails loudly here.
+  defp dm_delay_label(0), do: gettext("As soon as possible")
+  defp dm_delay_label(5), do: gettext("After 5 minutes")
+  defp dm_delay_label(15), do: gettext("After 15 minutes")
+  defp dm_delay_label(30), do: gettext("After 30 minutes")
+  defp dm_delay_label(60), do: gettext("After 1 hour")
+  defp dm_delay_label(120), do: gettext("After 2 hours")
 
   @doc """
   One row on the account hub: a title, an optional sub-line, and a right-aligned

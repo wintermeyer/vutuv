@@ -55,6 +55,108 @@ defmodule Vutuv.Chat.UnreadNotifierTest do
     refute_email_sent()
   end
 
+  test "quotes the first unread message and says it is the only email for the burst" do
+    [a, b] = [user(), user(locale: "en")]
+    conversation = insert_conversation_between(a, b)
+    age_message!(send!(a, conversation, "Are you around for lunch tomorrow?"))
+    # A later reply in the same burst must not change what is quoted: we mail
+    # only the first message and the copy has to say so.
+    send!(a, conversation, "still there?")
+
+    assert Chat.send_unread_notifications() == 1
+
+    assert_email_sent(fn email ->
+      # The DM that triggered the email is included, in both bodies.
+      assert email.text_body =~ "Are you around for lunch tomorrow?"
+      assert email.html_body =~ "Are you around for lunch tomorrow?"
+      # Only the first message is quoted, not the later one in the same burst.
+      refute email.text_body =~ "still there?"
+      # And the recipient is told this is the only email for the conversation.
+      assert email.text_body =~ "only email"
+    end)
+  end
+
+  test "the email links to the recipient's notification settings" do
+    [a, b] = [user(), user(locale: "en")]
+    conversation = insert_conversation_between(a, b)
+    age_message!(send!(a, conversation))
+
+    assert Chat.send_unread_notifications() == 1
+
+    assert_email_sent(fn email ->
+      assert email.text_body =~ "#{b.username}/settings/notifications"
+      assert email.html_body =~ "#{b.username}/settings/notifications"
+    end)
+  end
+
+  test "each-message mode sends one email per unread message" do
+    [a, b] = [user(), user(dm_email_each_message?: true, locale: "en")]
+    conversation = insert_conversation_between(a, b)
+    age_message!(send!(a, conversation, "first message"))
+    age_message!(send!(a, conversation, "second message"))
+
+    assert Chat.send_unread_notifications() == 2
+
+    assert_received {:email, one}
+    assert_received {:email, two}
+    bodies = [one.text_body, two.text_body]
+    assert Enum.any?(bodies, &(&1 =~ "first message"))
+    assert Enum.any?(bodies, &(&1 =~ "second message"))
+    # The copy reflects the mode, not the "only email" line.
+    assert Enum.all?(bodies, &(&1 =~ "every new unread message"))
+
+    # The high-water mark means nothing is re-sent on the next sweep.
+    assert Chat.send_unread_notifications() == 0
+    refute_email_sent()
+  end
+
+  test "each-message mode mails only messages newer than the last sweep's mark" do
+    [a, b] = [user(), user(dm_email_each_message?: true, locale: "en")]
+    conversation = insert_conversation_between(a, b)
+    old = send!(a, conversation, "already covered")
+    fresh = send!(a, conversation, "new since last time")
+    age_message!(old, 40)
+    age_message!(fresh, 20)
+
+    # Simulate a prior sweep whose high-water mark sits between the two messages:
+    # the older one was mailed then, the newer one arrived after and is due now.
+    mark = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -30 * 60)
+
+    Repo.update_all(
+      from(p in Participant,
+        where: p.conversation_id == ^conversation.id and p.user_id == ^b.id
+      ),
+      set: [notified_at: mark]
+    )
+
+    assert Chat.send_unread_notifications() == 1
+    assert_email_sent(fn email -> assert email.text_body =~ "new since last time" end)
+  end
+
+  test "respects a member's longer custom delay" do
+    [a, b] = [user(), user(dm_email_delay_minutes: 30)]
+    conversation = insert_conversation_between(a, b)
+    message = send!(a, conversation)
+
+    # Unread for 20 minutes: past the default 15, but not this member's 30.
+    age_message!(message, 20)
+    assert Chat.send_unread_notifications() == 0
+    refute_email_sent()
+
+    # Once it crosses 30 minutes, it goes out.
+    age_message!(message, 35)
+    assert Chat.send_unread_notifications() == 1
+  end
+
+  test "respects a member's shorter custom delay" do
+    [a, b] = [user(), user(dm_email_delay_minutes: 5)]
+    conversation = insert_conversation_between(a, b)
+    # Unread for 10 minutes: still under the default 15, but past this member's 5.
+    age_message!(send!(a, conversation), 10)
+
+    assert Chat.send_unread_notifications() == 1
+  end
+
   test "a German recipient gets the German email" do
     [a, b] = [user(), user(locale: "de")]
     conversation = insert_conversation_between(a, b)

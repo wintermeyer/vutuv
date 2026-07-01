@@ -581,29 +581,39 @@ defmodule Vutuv.Chat do
 
   ## Unread email notifications
 
-  # How long a message may sit unread before the email goes out. Long enough
-  # that an active back-and-forth never emails mid-exchange.
-  @unread_email_delay_minutes 15
-
   @doc """
-  Emails every participant whose conversation holds messages left unread past
-  the debounce delay — at most one email per conversation per unread burst
-  (`notified_at` is set here and nulled by `mark_read/2`). Only accepted
-  conversations qualify: a stranger's pending request must never be able to
-  push email to anyone. Called by `Vutuv.Chat.UnreadNotifier`; returns the
-  number of emails sent.
+  Emails every participant who has messages left unread past *their own*
+  debounce delay (`users.dm_email_delay_minutes`, default 15). What they get is
+  their choice too (notifications settings page):
+
+    * `dm_email_each_message?` false (the default) — one email per unread burst,
+      quoting the first unread message. `notified_at` is stamped here and nulled
+      by `mark_read/2`, so nothing more is sent until the burst is read.
+    * `dm_email_each_message?` true — one email per unread message. `notified_at`
+      is a high-water mark (the sweep's cutoff) so each new message is mailed
+      exactly once as it ages past the delay.
+
+  Only accepted conversations qualify: a stranger's pending request must never
+  be able to push email to anyone, and an opted-out recipient
+  (`notification_emails?` false) is filtered out entirely (never stamped), so
+  switching the emails back on re-arms a still-unread burst. Called by
+  `Vutuv.Chat.UnreadNotifier`; returns the number of emails sent.
   """
   def send_unread_notifications do
-    cutoff =
-      NaiveDateTime.add(NaiveDateTime.utc_now(:second), -@unread_email_delay_minutes * 60)
+    now = NaiveDateTime.utc_now(:second)
 
     query =
       from(p in Participant,
         join: c in Conversation,
         on: c.id == p.conversation_id,
+        join: u in User,
+        on: u.id == p.user_id,
         where: c.status == "accepted",
         where: is_nil(c.frozen_at),
-        where: is_nil(p.notified_at),
+        where: u.notification_emails? == true,
+        # First-message-only members are done for the burst once stamped; each-
+        # message members stay eligible for the messages that arrived since.
+        where: u.dm_email_each_message? == true or is_nil(p.notified_at),
         where:
           fragment(
             """
@@ -612,59 +622,101 @@ defmodule Vutuv.Chat do
                       AND m.sender_id <> ?
                       AND m.frozen_at IS NULL
                       AND (? IS NULL OR m.inserted_at > ?)
-                      AND m.inserted_at < ?)
+                      AND (? IS NULL OR m.inserted_at > ?)
+                      AND m.inserted_at < (? - make_interval(mins => ?)))
             """,
             p.conversation_id,
             p.user_id,
             p.last_read_at,
             p.last_read_at,
-            type(^cutoff, :naive_datetime)
+            p.notified_at,
+            p.notified_at,
+            type(^now, :naive_datetime),
+            u.dm_email_delay_minutes
           ),
-        select: {p, c}
+        select: {p, c, u}
       )
 
-    rows = Repo.all(query)
-
-    # Batch-load every user this path touches (recipients and their
-    # counterparts) in one query instead of two Repo.get! per row, the way
-    # hydrate/2 does. The recipient's first email stays a per-row lookup
-    # because first_email_value/1 has no deterministic batch equivalent.
-    user_ids =
-      Enum.flat_map(rows, fn {participant, conversation} ->
-        [participant.user_id, other_user_id(conversation, participant.user_id)]
+    # The recipient rides along on the join (its settings drive everything); the
+    # counterpart (named by @handle in the email) is the one per-row lookup left,
+    # resolved once per row here and batch-loaded, the way hydrate/2 does.
+    rows =
+      Repo.all(query)
+      |> Enum.map(fn {participant, conversation, recipient} ->
+        {participant, conversation, recipient, other_user_id(conversation, participant.user_id)}
       end)
 
-    users =
-      from(u in User, where: u.id in ^user_ids)
+    others =
+      from(u in User, where: u.id in ^Enum.map(rows, &elem(&1, 3)))
       |> Repo.all()
       |> Map.new(&{&1.id, &1})
 
-    Enum.count(rows, fn {participant, conversation} ->
-      recipient = Map.fetch!(users, participant.user_id)
-      other = Map.fetch!(users, other_user_id(conversation, participant.user_id))
-      notify_participant(participant, conversation, recipient, other)
+    Enum.reduce(rows, 0, fn {participant, conversation, recipient, other_id}, sent ->
+      other = Map.fetch!(others, other_id)
+      sent + notify_participant(participant, conversation, recipient, other, now)
     end)
   end
 
-  defp notify_participant(participant, conversation, recipient, other) do
-    # An opted-out recipient (notification_emails? false) is skipped without
-    # setting notified_at, so switching the emails back on makes a still-
-    # unread burst eligible again on the next tick.
-    email = recipient.notification_emails? && Vutuv.Accounts.first_email_value(recipient)
-
-    if email do
-      email
-      |> Emailer.unread_messages_email(recipient, other, conversation.id)
-      |> Emailer.deliver()
-
-      from(p in Participant, where: p.id == ^participant.id)
-      |> Repo.update_all(set: [notified_at: NaiveDateTime.utc_now(:second)])
-
-      true
-    else
-      false
+  defp notify_participant(participant, conversation, recipient, other, now) do
+    case Vutuv.Accounts.first_email_value(recipient) do
+      nil -> 0
+      email -> deliver_unread_burst(participant, conversation, recipient, other, email, now)
     end
   end
+
+  defp deliver_unread_burst(participant, conversation, recipient, other, email, now) do
+    cutoff = NaiveDateTime.add(now, -recipient.dm_email_delay_minutes * 60)
+
+    case unread_bodies_to_notify(participant, recipient, cutoff) do
+      [] ->
+        0
+
+      bodies ->
+        Enum.each(bodies, fn body ->
+          email
+          |> Emailer.unread_messages_email(recipient, other, conversation.id, body)
+          |> Emailer.deliver()
+        end)
+
+        # Stamp the sweep cutoff as the high-water mark: everything older was just
+        # mailed, so a later sweep only picks up messages that arrive after it.
+        # For a first-message-only member the value is immaterial — any non-null
+        # suppresses the burst until mark_read/2 clears it.
+        from(p in Participant, where: p.id == ^participant.id)
+        |> Repo.update_all(set: [notified_at: cutoff])
+
+        length(bodies)
+    end
+  end
+
+  # The unread message bodies to mail this sweep, oldest first: everything from
+  # the other participant that arrived after the last read *and* after the last
+  # notification, and has aged past the recipient's delay (< cutoff). A first-
+  # message-only member gets just the oldest (limit 1); an each-message member
+  # gets them all. Matches the EXISTS in send_unread_notifications/0.
+  defp unread_bodies_to_notify(participant, recipient, cutoff) do
+    threshold = later(participant.last_read_at, participant.notified_at)
+
+    query =
+      from(m in Message,
+        where: m.conversation_id == ^participant.conversation_id,
+        where: m.sender_id != ^participant.user_id,
+        where: is_nil(m.frozen_at),
+        where: m.inserted_at < ^cutoff,
+        order_by: [asc: m.inserted_at],
+        select: m.body
+      )
+
+    query = if threshold, do: from(m in query, where: m.inserted_at > ^threshold), else: query
+    query = if recipient.dm_email_each_message?, do: query, else: from(m in query, limit: 1)
+
+    Repo.all(query)
+  end
+
+  # The later of two possibly-nil timestamps (nil = "no floor").
+  defp later(nil, b), do: b
+  defp later(a, nil), do: a
+  defp later(a, b), do: if(NaiveDateTime.compare(a, b) == :lt, do: b, else: a)
 
   ## Conversation lifecycle predicates (the display twins of send_message/3)
 

@@ -6734,3 +6734,47 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Add to audience"
 msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "How often"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "Send the email"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "As soon as possible"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "After 5 minutes"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "After 15 minutes"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "After 30 minutes"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "After 1 hour"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "After 2 hours"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "Only the first message"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "Every message"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex lib/vutuv_web/templates/settings/notifications.html.heex
+msgid "We wait a little before emailing, so you can read the message yourself first. These two settings apply only while unread-message emails are on."
+msgstr ""

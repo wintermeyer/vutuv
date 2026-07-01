@@ -23,10 +23,31 @@ heading. --%>
       >
         <.form_error changeset={@changeset} />
 
-        <.setting_toggle label={gettext("Unread messages")}>
-          <:checkbox><%= checkbox f, :notification_emails?, class: checkbox_class() %></:checkbox>
-          {gettext("When someone messages you and you have not read it yet.")}
-        </.setting_toggle>
+        <div class="space-y-4">
+          <.setting_toggle label={gettext("Unread messages")}>
+            <:checkbox><%= checkbox f, :notification_emails?, class: checkbox_class() %></:checkbox>
+            {gettext("When someone messages you and you have not read it yet.")}
+          </.setting_toggle>
+
+          <%!-- How the unread-message email behaves. Indented under the toggle
+                because it only matters while that is on (said plainly in the
+                hint), and kept simple: two selects a member reads at a glance. --%>
+          <div class="ml-7 grid gap-4 sm:grid-cols-2">
+            <div>
+              <%= label f, :dm_email_each_message?, gettext("How often"), class: "mb-1 block text-sm font-medium text-slate-900 dark:text-white" %>
+              <%= select f, :dm_email_each_message?, dm_frequency_options(), class: input_class() %>
+            </div>
+            <div>
+              <%= label f, :dm_email_delay_minutes, gettext("Send the email"), class: "mb-1 block text-sm font-medium text-slate-900 dark:text-white" %>
+              <%= select f, :dm_email_delay_minutes, dm_delay_options(), class: input_class() %>
+            </div>
+          </div>
+          <p class="ml-7 text-sm font-normal text-slate-600 dark:text-slate-400">
+            {gettext(
+              "We wait a little before emailing, so you can read the message yourself first. These two settings apply only while unread-message emails are on."
+            )}
+          </p>
+        </div>
 
         <.setting_toggle label={gettext("Endorsements")}>
           <:checkbox><%= checkbox f, :email_on_endorsement?, class: checkbox_class() %></:checkbox>

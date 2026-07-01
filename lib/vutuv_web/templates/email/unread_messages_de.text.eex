@@ -1,10 +1,16 @@
 <%= email_greeting(@user) %>,
 
-Sie haben eine neue Nachricht von @<%= @other_slug %> auf vutuv.
-
+Sie haben eine neue Nachricht von @<%= @other_slug %> auf vutuv:
+<%= if @message_body do %>
+<%= @message_body %>
+<% end %>
 Hier können Sie sie lesen und beantworten:
 
 <%= @url %>messages/<%= @conversation_id %>
+
+<%= if @each_message? do %>Sie erhalten für jede neue ungelesene Nachricht eine solche E-Mail.<% else %>Damit Ihr Postfach ruhig bleibt, ist dies die einzige E-Mail, die Sie zu dieser Unterhaltung erhalten, bis Sie sie öffnen.<% end %> Ob wir Sie über jede Nachricht oder nur die erste benachrichtigen und wie lange wir vorher warten, legen Sie in Ihren Benachrichtigungseinstellungen fest:
+
+<%= @settings_url %>
 
 Diese Benachrichtigungs-E-Mails können Sie hier abschalten:
 

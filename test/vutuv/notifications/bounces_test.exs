@@ -111,7 +111,7 @@ defmodule Vutuv.Notifications.BouncesTest do
 
       result =
         "dead@example.com"
-        |> Emailer.unread_messages_email(user, other, Vutuv.UUIDv7.generate())
+        |> Emailer.unread_messages_email(user, other, Vutuv.UUIDv7.generate(), "hi")
         |> Emailer.deliver()
 
       assert result == :suppressed
@@ -137,7 +137,7 @@ defmodule Vutuv.Notifications.BouncesTest do
       other = insert(:user)
 
       "fine@example.com"
-      |> Emailer.unread_messages_email(user, other, Vutuv.UUIDv7.generate())
+      |> Emailer.unread_messages_email(user, other, Vutuv.UUIDv7.generate(), "hi")
       |> Emailer.deliver()
 
       assert_email_sent()
