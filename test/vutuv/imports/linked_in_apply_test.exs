@@ -61,6 +61,41 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert Repo.aggregate(from(e in Education, where: e.user_id == ^user.id), :count) == 1
   end
 
+  # The (value, provider) unique index on social_media_accounts is GLOBAL: a
+  # handle someone else already claimed can never be imported. It must be
+  # counted as skipped WITHOUT the insert firing the constraint — inside the
+  # one import transaction that error aborts the transaction at the Postgres
+  # level and every later insert dies with 25P02 (this 500ed real imports: the
+  # member's Twitter handle belonged to another account, and the phone insert
+  # right after it crashed).
+  test "a social account claimed by another member is skipped, the rest still lands" do
+    other = insert(:user)
+    insert(:social_media_account, user: other, provider: "Twitter", value: "wintermeyer")
+
+    user = insert(:user)
+
+    profile_csv =
+      "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\n" <>
+        "Stefan,Wintermeyer,,,,,,,,,[wintermeyer],,\n"
+
+    phones_csv = "Extension,Number,Type\n,+49 30 901820,Work\n"
+
+    {:ok, parsed} =
+      LinkedIn.parse(zip([{"Profile.csv", profile_csv}, {"PhoneNumbers.csv", phones_csv}]))
+
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    # The claimed handle is skipped; the phone AFTER it still imports.
+    assert summary.created.social == 0
+    assert summary.skipped.social == 1
+    assert summary.created.phones == 1
+
+    assert Repo.aggregate(
+             from(p in Vutuv.Profiles.PhoneNumber, where: p.user_id == ^user.id),
+             :count
+           ) == 1
+  end
+
   test "fills a blank headline but never overwrites an existing one" do
     blank = insert(:user, headline: nil)
 

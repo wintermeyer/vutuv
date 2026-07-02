@@ -7990,49 +7990,49 @@ msgstr ""
 msgid "Nobody is online right now."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:152
+#: lib/vutuv_web/controllers/import_controller.ex:155
 #, elixir-autogen, elixir-format
 msgid "%{count} education entry"
 msgid_plural "%{count} education entries"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:154
+#: lib/vutuv_web/controllers/import_controller.ex:157
 #, elixir-autogen, elixir-format
 msgid "%{count} link"
 msgid_plural "%{count} links"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:158
+#: lib/vutuv_web/controllers/import_controller.ex:161
 #, elixir-autogen, elixir-format
 msgid "%{count} phone number"
 msgid_plural "%{count} phone numbers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:160
+#: lib/vutuv_web/controllers/import_controller.ex:163
 #, elixir-autogen, elixir-format
 msgid "%{count} profile field"
 msgid_plural "%{count} profile fields"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:156
+#: lib/vutuv_web/controllers/import_controller.ex:159
 #, elixir-autogen, elixir-format
 msgid "%{count} social account"
 msgid_plural "%{count} social accounts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:153
+#: lib/vutuv_web/controllers/import_controller.ex:156
 #, elixir-autogen, elixir-format
 msgid "%{count} tag"
 msgid_plural "%{count} tags"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:150
+#: lib/vutuv_web/controllers/import_controller.ex:153
 #, elixir-autogen, elixir-format
 msgid "%{count} work experience"
 msgid_plural "%{count} work experiences"
@@ -8130,12 +8130,12 @@ msgstr ""
 msgid "Import selected"
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:166
+#: lib/vutuv_web/controllers/import_controller.ex:169
 #, elixir-autogen, elixir-format
 msgid "Imported %{items}."
 msgstr ""
 
-#: lib/vutuv_web/controllers/import_controller.ex:165
+#: lib/vutuv_web/controllers/import_controller.ex:168
 #, elixir-autogen, elixir-format
 msgid "Nothing new to import."
 msgstr ""
@@ -8169,13 +8169,6 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Set %{field}:"
 msgstr ""
-
-#: lib/vutuv_web/controllers/import_controller.ex:178
-#, elixir-autogen, elixir-format
-msgid "Skipped %{count} entry already on your profile."
-msgid_plural "Skipped %{count} entries already on your profile."
-msgstr[0] ""
-msgstr[1] ""
 
 #: lib/vutuv_web/templates/import/preview.html.heex:44
 #, elixir-autogen, elixir-format
@@ -8271,3 +8264,10 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Please check the fields marked in red."
 msgstr ""
+
+#: lib/vutuv_web/controllers/import_controller.ex:181
+#, elixir-autogen, elixir-format
+msgid "Skipped %{count} entry that is already on your profile or taken by another member."
+msgid_plural "Skipped %{count} entries that are already on your profile or taken by another member."
+msgstr[0] ""
+msgstr[1] ""

@@ -124,6 +124,47 @@ defmodule Vutuv.Imports.LinkedInTest do
 
       assert [%{params: %{"value" => "+49 30 1234567", "number_type" => "Cell"}}] = result.phones
     end
+
+    # Real archives list the same number more than once (and in more than one
+    # format); the digit-based candidate id collapses them so the preview shows
+    # one row, not a run of duplicate checkboxes.
+    test "the same number in different formats yields one candidate" do
+      csv = "Extension,Number,Type\n,+49 1515 0230373,Mobile\n,4915150230373,Mobile\n"
+      {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
+
+      assert [%{params: %{"value" => "+49 1515 0230373"}}] = result.phones
+    end
+
+    test "rows without a number yield no candidates" do
+      csv = "Extension,Number,Type\n,,Mobile\n,,Mobile\n"
+      {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
+
+      assert result.phones == []
+    end
+  end
+
+  describe "blank-row hygiene" do
+    # A candidate missing its essentials can only fail (or insert an empty row)
+    # at apply time and renders an empty preview checkbox until then — drop it
+    # at parse.
+    test "an education row without a school is dropped" do
+      csv = "School Name,Start Date,End Date,Notes,Degree Name,Activities\n,1990,1993,,Abitur,\n"
+      {:ok, result} = LinkedIn.parse(zip([{"Education.csv", csv}]))
+
+      assert result.educations == []
+    end
+
+    test "a position row without organization or title is dropped" do
+      csv = """
+      Company Name,Title,Description,Location,Started On,Finished On
+      ,Engineer,,Berlin,2020,
+      Acme,,,Berlin,2020,
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Positions.csv", csv}]))
+
+      assert result.positions == []
+    end
   end
 
   describe "classification and scope" do

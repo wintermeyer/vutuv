@@ -136,7 +136,10 @@ defmodule VutuvWeb.ImportController do
     |> redirect(to: ~p"/#{user}/settings/import/linkedin")
   end
 
-  # "Imported 1 work experience, 2 tags. Skipped 3 already on your profile."
+  # "Imported 1 work experience, 2 tags. Skipped 3 entries …". The skip reason
+  # names both cases: an entry the member already has AND one another member
+  # has claimed (the globally-unique social handles — see
+  # LinkedIn.social_key_unless_claimed/1).
   defp summary_flash(summary) do
     summary.created
     |> imported_parts()
@@ -176,8 +179,8 @@ defmodule VutuvWeb.ImportController do
     message <>
       " " <>
       ngettext(
-        "Skipped %{count} entry already on your profile.",
-        "Skipped %{count} entries already on your profile.",
+        "Skipped %{count} entry that is already on your profile or taken by another member.",
+        "Skipped %{count} entries that are already on your profile or taken by another member.",
         count
       )
   end

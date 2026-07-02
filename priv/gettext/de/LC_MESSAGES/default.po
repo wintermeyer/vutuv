@@ -8028,49 +8028,49 @@ msgstr "Noch keine Mitglieder."
 msgid "Nobody is online right now."
 msgstr "Zurzeit ist niemand online."
 
-#: lib/vutuv_web/controllers/import_controller.ex:152
+#: lib/vutuv_web/controllers/import_controller.ex:155
 #, elixir-autogen, elixir-format
 msgid "%{count} education entry"
 msgid_plural "%{count} education entries"
 msgstr[0] "%{count} Ausbildungseintrag"
 msgstr[1] "%{count} Ausbildungseinträge"
 
-#: lib/vutuv_web/controllers/import_controller.ex:154
+#: lib/vutuv_web/controllers/import_controller.ex:157
 #, elixir-autogen, elixir-format
 msgid "%{count} link"
 msgid_plural "%{count} links"
 msgstr[0] "%{count} Link"
 msgstr[1] "%{count} Links"
 
-#: lib/vutuv_web/controllers/import_controller.ex:158
+#: lib/vutuv_web/controllers/import_controller.ex:161
 #, elixir-autogen, elixir-format
 msgid "%{count} phone number"
 msgid_plural "%{count} phone numbers"
 msgstr[0] "%{count} Telefonnummer"
 msgstr[1] "%{count} Telefonnummern"
 
-#: lib/vutuv_web/controllers/import_controller.ex:160
+#: lib/vutuv_web/controllers/import_controller.ex:163
 #, elixir-autogen, elixir-format
 msgid "%{count} profile field"
 msgid_plural "%{count} profile fields"
 msgstr[0] "%{count} Profilfeld"
 msgstr[1] "%{count} Profilfelder"
 
-#: lib/vutuv_web/controllers/import_controller.ex:156
+#: lib/vutuv_web/controllers/import_controller.ex:159
 #, elixir-autogen, elixir-format
 msgid "%{count} social account"
 msgid_plural "%{count} social accounts"
 msgstr[0] "%{count} Social-Media-Konto"
 msgstr[1] "%{count} Social-Media-Konten"
 
-#: lib/vutuv_web/controllers/import_controller.ex:153
+#: lib/vutuv_web/controllers/import_controller.ex:156
 #, elixir-autogen, elixir-format
 msgid "%{count} tag"
 msgid_plural "%{count} tags"
 msgstr[0] "%{count} Tag"
 msgstr[1] "%{count} Tags"
 
-#: lib/vutuv_web/controllers/import_controller.ex:150
+#: lib/vutuv_web/controllers/import_controller.ex:153
 #, elixir-autogen, elixir-format
 msgid "%{count} work experience"
 msgid_plural "%{count} work experiences"
@@ -8168,12 +8168,12 @@ msgstr "Von LinkedIn importieren"
 msgid "Import selected"
 msgstr "Auswahl importieren"
 
-#: lib/vutuv_web/controllers/import_controller.ex:166
+#: lib/vutuv_web/controllers/import_controller.ex:169
 #, elixir-autogen, elixir-format
 msgid "Imported %{items}."
 msgstr "%{items} importiert."
 
-#: lib/vutuv_web/controllers/import_controller.ex:165
+#: lib/vutuv_web/controllers/import_controller.ex:168
 #, elixir-autogen, elixir-format
 msgid "Nothing new to import."
 msgstr "Nichts Neues zu importieren."
@@ -8207,13 +8207,6 @@ msgstr "Schule"
 #, elixir-autogen, elixir-format
 msgid "Set %{field}:"
 msgstr "%{field} setzen:"
-
-#: lib/vutuv_web/controllers/import_controller.ex:178
-#, elixir-autogen, elixir-format
-msgid "Skipped %{count} entry already on your profile."
-msgid_plural "Skipped %{count} entries already on your profile."
-msgstr[0] "%{count} Eintrag übersprungen, der bereits in Ihrem Profil steht."
-msgstr[1] "%{count} Einträge übersprungen, die bereits in Ihrem Profil stehen."
 
 #: lib/vutuv_web/templates/import/preview.html.heex:44
 #, elixir-autogen, elixir-format
@@ -8311,3 +8304,10 @@ msgstr "Zum Beispiel ein Gedanke zu %{tag}."
 #, elixir-autogen, elixir-format
 msgid "Please check the fields marked in red."
 msgstr "Bitte prüfen Sie die rot markierten Felder."
+
+#: lib/vutuv_web/controllers/import_controller.ex:181
+#, elixir-autogen, elixir-format
+msgid "Skipped %{count} entry that is already on your profile or taken by another member."
+msgid_plural "Skipped %{count} entries that are already on your profile or taken by another member."
+msgstr[0] "%{count} Eintrag übersprungen, der schon in Ihrem Profil steht oder von einem anderen Mitglied belegt ist."
+msgstr[1] "%{count} Einträge übersprungen, die schon in Ihrem Profil stehen oder von einem anderen Mitglied belegt sind."

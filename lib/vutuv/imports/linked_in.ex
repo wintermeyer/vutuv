@@ -158,14 +158,26 @@ defmodule Vutuv.Imports.LinkedIn do
 
     %{
       profile: profile,
-      positions: rows_by_type |> Map.get(:positions, []) |> Enum.map(&position_candidate/1),
-      educations: rows_by_type |> Map.get(:educations, []) |> Enum.map(&education_candidate/1),
+      positions:
+        rows_by_type |> Map.get(:positions, []) |> Enum.map(&position_candidate/1) |> tidy(),
+      educations:
+        rows_by_type |> Map.get(:educations, []) |> Enum.map(&education_candidate/1) |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
-      phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1),
-      urls: profile_urls,
-      social: profile_social
+      phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
+      urls: tidy(profile_urls),
+      social: tidy(profile_social)
     }
+  end
+
+  # Candidate hygiene: drop rows missing their essentials (a blank row can only
+  # fail — or insert an empty shell — at apply time, and renders an empty
+  # preview checkbox until then), then collapse duplicates. Real archives
+  # repeat entries across files, sometimes formatted differently ("+49 1515 …"
+  # vs "49151…"); the content-hash candidate id (cid/2) is built from the
+  # normalized essence, so those collide here on purpose and one survives.
+  defp tidy(candidates) do
+    candidates |> Enum.reject(&is_nil/1) |> Enum.uniq_by(& &1.id)
   end
 
   # Group every readable CSV's rows (as header=>value maps) under a type derived
@@ -320,19 +332,25 @@ defmodule Vutuv.Imports.LinkedIn do
     org = blank_nil(row["Company Name"])
     title = blank_nil(row["Title"])
 
-    %{
-      id: cid("position", "#{downcase(org)}|#{downcase(title)}"),
-      label: [title, org] |> compact() |> Enum.join(" @ "),
-      params: %{
-        "organization" => org,
-        "title" => title,
-        "description" => blank_nil(row["Description"]),
-        "start_month" => sm,
-        "start_year" => sy,
-        "end_month" => em,
-        "end_year" => ey
+    # Both are required by WorkExperience.changeset — a row missing either
+    # could never import.
+    if is_nil(org) or is_nil(title) do
+      nil
+    else
+      %{
+        id: cid("position", "#{downcase(org)}|#{downcase(title)}"),
+        label: [title, org] |> compact() |> Enum.join(" @ "),
+        params: %{
+          "organization" => org,
+          "title" => title,
+          "description" => blank_nil(row["Description"]),
+          "start_month" => sm,
+          "start_year" => sy,
+          "end_month" => em,
+          "end_year" => ey
+        }
       }
-    }
+    end
   end
 
   # ── Education.csv → Education params ──
@@ -343,19 +361,25 @@ defmodule Vutuv.Imports.LinkedIn do
     school = blank_nil(row["School Name"])
     degree = blank_nil(row["Degree Name"])
 
-    %{
-      id: cid("education", "#{downcase(school)}|#{downcase(degree)}"),
-      label: [degree, school] |> compact() |> Enum.join(", "),
-      params: %{
-        "school" => school,
-        "degree" => degree,
-        "description" => education_notes(row),
-        "start_month" => sm,
-        "start_year" => sy,
-        "end_month" => em,
-        "end_year" => ey
+    # The school is required by Education.changeset — a school-less row could
+    # never import.
+    if is_nil(school) do
+      nil
+    else
+      %{
+        id: cid("education", "#{downcase(school)}|#{downcase(degree)}"),
+        label: [degree, school] |> compact() |> Enum.join(", "),
+        params: %{
+          "school" => school,
+          "degree" => degree,
+          "description" => education_notes(row),
+          "start_month" => sm,
+          "start_year" => sy,
+          "end_month" => em,
+          "end_year" => ey
+        }
       }
-    }
+    end
   end
 
   defp education_notes(row) do
@@ -380,14 +404,20 @@ defmodule Vutuv.Imports.LinkedIn do
 
   # ── PhoneNumbers.csv → PhoneNumber params ──
 
+  # nil for a number-less row; the id hashes the digits alone, so the same
+  # number in two formats is one candidate.
   defp phone_candidate(row) do
-    number = blank_nil(row["Number"])
+    case blank_nil(row["Number"]) do
+      nil ->
+        nil
 
-    %{
-      id: cid("phone", digits(number)),
-      label: number,
-      params: %{"value" => number, "number_type" => phone_type(row["Type"])}
-    }
+      number ->
+        %{
+          id: cid("phone", digits(number)),
+          label: number,
+          params: %{"value" => number, "number_type" => phone_type(row["Type"])}
+        }
+    end
   end
 
   defp phone_type(type) do
@@ -563,7 +593,7 @@ defmodule Vutuv.Imports.LinkedIn do
 
       {existing, social} =
         insert_scoped(existing, :social, Map.get(selection, :social, []), fn c ->
-          {social_key(c.params), &SocialMediaAccount.changeset(&1, c.params),
+          {social_key_unless_claimed(c.params), &SocialMediaAccount.changeset(&1, c.params),
            :social_media_accounts}
         end)
 
@@ -622,8 +652,17 @@ defmodule Vutuv.Imports.LinkedIn do
     if MapSet.member?(seen, key) do
       {seen, created, skipped + 1}
     else
+      # on_conflict: :nothing — every insert here runs inside apply_selection's
+      # single transaction, and a unique-index violation (even one a changeset
+      # declares, which Ecto softens to {:error, changeset}) would abort that
+      # transaction at the Postgres level: every insert after it then dies with
+      # 25P02 and the whole import 500s. The deterministic cases are
+      # pre-filtered (per-user keys, the globally-claimed social check), so
+      # what's left is races and the global slug indexes — DO NOTHING degrades
+      # those to a no-op row. Such a raced no-op counts as created even though
+      # nothing landed; a cosmetic miscount in the summary, never a crash.
       changeset_fun.(Ecto.build_assoc(%User{id: uid}, assoc))
-      |> Repo.insert()
+      |> Repo.insert(on_conflict: :nothing)
       |> tally(key, acc)
     end
   end
@@ -739,6 +778,21 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp social_key(%{"provider" => provider, "value" => value}),
     do: "#{downcase(provider)}|#{downcase(value)}"
+
+  # The (value, provider) unique index on social_media_accounts is GLOBAL — a
+  # handle another member already claimed can never be imported. A nil key
+  # routes the candidate into do_insert's skipped path, so the insert never
+  # fires the constraint (which would abort the surrounding import transaction
+  # and 25P02-crash every insert after it; "Someone has already claimed this
+  # account" is the constraint's own user-facing message elsewhere).
+  defp social_key_unless_claimed(%{"provider" => provider, "value" => value} = params) do
+    claimed? =
+      Repo.exists?(
+        from(s in SocialMediaAccount, where: s.value == ^value and s.provider == ^provider)
+      )
+
+    if claimed?, do: nil, else: social_key(params)
+  end
 
   # ── Small helpers ──
 
