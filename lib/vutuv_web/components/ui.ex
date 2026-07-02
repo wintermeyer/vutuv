@@ -22,6 +22,7 @@ defmodule VutuvWeb.UI do
 
   import PhoenixHTMLHelpers.Link, only: [button: 2]
 
+  alias Vutuv.BerlinTime
   alias Vutuv.Tags.UserTag
 
   @doc """
@@ -1525,6 +1526,52 @@ defmodule VutuvWeb.UI do
 
   defp iso_utc(%DateTime{} = dt), do: dt |> DateTime.truncate(:second) |> DateTime.to_iso8601()
   defp iso_utc(%NaiveDateTime{} = ndt), do: NaiveDateTime.to_iso8601(ndt) <> "Z"
+
+  @doc """
+  A **post** timestamp, rendered entirely on the server in Europe/Berlin time —
+  vutuv's canonical clock (`Vutuv.BerlinTime`, the same German calendar day the
+  age display and the daily ad rotation use). Unlike `<.local_time>` there is no
+  client-side rewrite: a post from **today** shows just the time ("08:42 Uhr" in
+  German, a bare "8:42 AM" elsewhere), older posts the full short date and time
+  ("02.07.26, 08:42"). The `<time>` keeps the UTC `datetime` for machines/agents
+  and a full-date `title` for hover, but the visible text is final from the
+  server, so it deliberately carries **no** `data-localtime` marker (the JS
+  localizer skips it). Used by the post card and the thread/notification post
+  preview; every other timestamp still uses `<.local_time>` (viewer timezone).
+  """
+  attr(:at, :any, required: true, doc: "a NaiveDateTime (treated as UTC) or a UTC DateTime")
+  attr(:id, :string, default: nil)
+  attr(:class, :any, default: nil)
+
+  def post_time(assigns) do
+    utc = as_utc_datetime(assigns.at)
+    local = BerlinTime.naive(utc)
+    today? = BerlinTime.date(utc) == BerlinTime.today()
+    locale = Gettext.get_locale(VutuvWeb.Gettext)
+
+    assigns =
+      assign(assigns,
+        iso: iso_utc(assigns.at),
+        text: post_stamp(local, today?, locale),
+        full: post_stamp(local, false, locale)
+      )
+
+    ~H"""
+    <time id={@id} datetime={@iso} title={@full} class={@class}>{@text}</time>
+    """
+  end
+
+  defp as_utc_datetime(%DateTime{} = dt), do: dt
+  defp as_utc_datetime(%NaiveDateTime{} = ndt), do: DateTime.from_naive!(ndt, "Etc/UTC")
+
+  # German is the site's primary locale: 24-hour clock, an "Uhr" suffix for a
+  # post made today, and the dotted numeric short date otherwise. Any other
+  # locale (currently English) gets the bare locale-appropriate time / short
+  # date, matching what the old client-side Intl short format produced.
+  defp post_stamp(local, true, "de"), do: Calendar.strftime(local, "%H:%M") <> " Uhr"
+  defp post_stamp(local, false, "de"), do: Calendar.strftime(local, "%d.%m.%y, %H:%M")
+  defp post_stamp(local, true, _locale), do: Calendar.strftime(local, "%-I:%M %p")
+  defp post_stamp(local, false, _locale), do: Calendar.strftime(local, "%-m/%-d/%y, %-I:%M %p")
 
   @doc "Coral unread-count badge. Renders nothing when `count` is 0. Pass `class` to position it."
   attr(:count, :integer, default: 0)

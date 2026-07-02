@@ -49,6 +49,46 @@ defmodule VutuvWeb.UITest do
     end
   end
 
+  describe "post_time/1" do
+    # A post made today shows only the time; older posts keep the full date.
+    # Rendered server-side in Europe/Berlin time (Vutuv.BerlinTime), so it must
+    # not carry the client-side data-localtime marker the JS localizer rewrites.
+    test "a post from today shows only the time, with 'Uhr' in German" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      html = render_component(&UI.post_time/1, at: NaiveDateTime.utc_now())
+
+      # Visible text is just the time; the full date lives only in the hover title.
+      assert html =~ ~r/>\d{2}:\d{2} Uhr</
+      refute html =~ ~r/>\d{2}\.\d{2}\.\d{2}/
+      refute html =~ "data-localtime"
+      assert html =~ "datetime="
+    end
+
+    test "an older post shows the full short date and time in German" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      # 2020-01-15 10:00 UTC is winter (CET, UTC+1) -> 11:00 Berlin.
+      html = render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00])
+
+      assert html =~ "15.01.20, 11:00"
+      refute html =~ "Uhr"
+    end
+
+    test "today shows a bare time (no 'Uhr') under a non-German locale" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      html = render_component(&UI.post_time/1, at: NaiveDateTime.utc_now())
+
+      assert html =~ ~r/\d{1,2}:\d{2}\s?(AM|PM)/
+      refute html =~ "Uhr"
+    end
+
+    test "an older post shows the locale-appropriate full date in English" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      html = render_component(&UI.post_time/1, at: ~N[2020-01-15 10:00:00])
+
+      assert html =~ "1/15/20, 11:00 AM"
+    end
+  end
+
   describe "count_badge/1" do
     test "renders nothing for a zero count" do
       assert render_component(&UI.count_badge/1, count: 0) |> String.trim() == ""

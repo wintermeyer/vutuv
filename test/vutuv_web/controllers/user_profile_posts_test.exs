@@ -30,18 +30,19 @@ defmodule VutuvWeb.UserProfilePostsTest do
     assert conn.resp_body =~ ~s(id="post-actions-post-#{post.id}-like")
   end
 
-  test "post timestamps are marked for client-side timezone localization", %{conn: conn} do
+  test "post timestamps render server-side in Berlin time, not client-localized", %{conn: conn} do
     user = insert_activated_user()
     {:ok, post} = Posts.create_post(user, %{body: "timed post"})
 
     conn = get(conn, "/#{user.username}")
     body = html_response(conn, 200)
 
-    # The <time> tag must carry a UTC-marked datetime ("Z") and the
-    # data-localtime marker so app.js can rewrite it into the viewer's
-    # timezone — server-side strftime alone would show UTC to everyone.
-    assert body =~ ~s(data-localtime)
+    # Post times are rendered on the server in Europe/Berlin time
+    # (Vutuv.BerlinTime, via VutuvWeb.UI.post_time/1), so a post from today
+    # shows just the time. The <time> keeps a UTC-marked datetime ("Z") for
+    # machines but carries NO data-localtime marker: app.js must leave it alone.
     assert body =~ ~s(datetime="#{NaiveDateTime.to_iso8601(post.inserted_at)}Z")
+    refute body =~ ~s(data-localtime)
   end
 
   test "the owner sees the card with an Add link even when empty", %{conn: conn} do

@@ -332,7 +332,7 @@ defmodule VutuvWeb.PostComponents do
           </.link>
           <span class="text-xs text-slate-500 dark:text-slate-400">
             {"@" <> @post.user.username} ·
-            <.local_time id={@time_id} at={@post.inserted_at} />
+            <.post_time id={@time_id} at={@post.inserted_at} />
           </span>
         </div>
         <span
@@ -458,7 +458,7 @@ defmodule VutuvWeb.PostComponents do
               {full_name(@post.user)}
             </.link>
             <.link href={@permalink} class="text-sm text-slate-500 hover:text-brand-700">
-              <.local_time id={@time_id} at={@post.inserted_at} />
+              <.post_time id={@time_id} at={@post.inserted_at} />
             </.link>
             <span :if={@edited?} class="text-xs text-slate-500">{gettext("edited")}</span>
             <span
