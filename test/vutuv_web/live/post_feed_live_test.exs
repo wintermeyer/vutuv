@@ -61,7 +61,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       insert(:follow, follower: user, followee: friend)
 
       {:ok, parent} = Posts.create_post(friend, %{body: "the original question"})
-      {:ok, _reply} = Posts.create_reply(user, parent, %{body: "my answer to it"})
+      {:ok, reply} = Posts.create_reply(user, parent, %{body: "my answer to it"})
 
       {:ok, live, html} = live(conn, ~p"/feed")
 
@@ -71,6 +71,31 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "the original question"
       assert has_element?(live, ~s(#feed-posts a[href="#{Posts.path(parent)}"]))
       refute has_element?(live, "[data-reply-banner]")
+
+      # And the parent is shown *only* nested under the reply, never also as its
+      # own standalone row — the followed author's post used to appear twice.
+      assert has_element?(live, "#feed-post-#{reply.id}")
+      refute has_element?(live, "#feed-post-#{parent.id}")
+    end
+
+    test "replying live removes the parent's standalone row, keeping the thread", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      {:ok, parent} = Posts.create_post(friend, %{body: "the original question"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      # The parent is on the open feed as its own row.
+      assert has_element?(live, "#feed-post-#{parent.id}")
+
+      # The viewer replies (broadcasts to their own session): the reply lands
+      # at the top nesting the parent, and the standalone parent row is pruned.
+      {:ok, reply} = Posts.create_reply(user, parent, %{body: "my live answer"})
+      _ = :sys.get_state(live.pid)
+
+      assert has_element?(live, "#feed-post-#{reply.id}")
+      refute has_element?(live, "#feed-post-#{parent.id}")
     end
 
     test "the timeline renders as one card, not one card per post", %{conn: conn} do

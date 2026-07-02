@@ -920,7 +920,7 @@ defmodule Vutuv.Posts do
         cursor
       )
 
-    %{page | entries: hydrate_posts(page.entries)}
+    %{page | entries: page.entries |> hydrate_posts() |> drop_threaded_parents()}
   end
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
@@ -1014,6 +1014,31 @@ defmodule Vutuv.Posts do
     Enum.zip_with(entries, posts, &%{&1 | post: &2})
   end
 
+  # A reply already renders the post it answers inline (the threaded card, via
+  # `<.post_thread_entry>`), so when both a reply and its parent land on the
+  # same page the parent's own standalone entry is a visible duplicate — the
+  # feed showed a followed author's post both on its own and nested under your
+  # reply. Drop the standalone parent, keeping the threaded reply. Only
+  # non-reply entries are dropped, so a reply that is itself another reply's
+  # parent still renders its own thread. Entries must have `reply_ref`
+  # preloaded (they do — `post_preloads/0`).
+  defp drop_threaded_parents(entries) do
+    nested_parent_ids =
+      for %{post: post} <- entries,
+          {:parent, parent} <- [reply_ref_state(post)],
+          into: MapSet.new(),
+          do: parent.id
+
+    if MapSet.size(nested_parent_ids) == 0 do
+      entries
+    else
+      Enum.reject(entries, fn %{post: post} ->
+        not match?({:parent, _}, reply_ref_state(post)) and
+          MapSet.member?(nested_parent_ids, post.id)
+      end)
+    end
+  end
+
   @doc """
   The newest timeline entries of `author` that `viewer` may see (profile
   page section): own posts plus reposts, same entry shape as `feed_page/2`
@@ -1028,6 +1053,7 @@ defmodule Vutuv.Posts do
     |> limit(^limit)
     |> Repo.all()
     |> author_entries(author)
+    |> drop_threaded_parents()
   end
 
   @doc "How many timeline entries of `author` `viewer` may see (the \"View all\" label)."

@@ -395,6 +395,15 @@ defmodule Vutuv.PostsTest do
 
       assert Posts.count_author_posts(author, nil) == 2
     end
+
+    test "a self-reply nests the parent inline and doesn't show it standalone" do
+      author = user()
+      parent = create_post!(author, %{body: "original"})
+      {:ok, reply} = Posts.create_reply(author, parent, %{body: "following up"})
+
+      ids = Posts.profile_posts(author, nil, limit: 10) |> Enum.map(& &1.id)
+      assert ids == ["post-#{reply.id}"]
+    end
   end
 
   describe "feed_page/2" do
@@ -538,6 +547,46 @@ defmodule Vutuv.PostsTest do
       walked = Enum.map(page1.entries ++ page2.entries, & &1.id)
       assert length(walked) == 6
       assert Enum.uniq(walked) == walked
+    end
+
+    test "when you reply to a followee's post, the parent isn't shown twice" do
+      # The reply already renders the parent inline (the threaded card), so a
+      # separate standalone entry for that parent is a visible duplicate: the
+      # feed showed the followed author's post both on its own and nested under
+      # the reply. Only the threaded reply should remain.
+      viewer = user()
+      author = user()
+      follow!(viewer, author)
+
+      parent = create_post!(author, %{body: "original"})
+      {:ok, reply} = Posts.create_reply(viewer, parent, %{body: "an answer"})
+
+      ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.id)
+      assert ids == ["post-#{reply.id}"]
+      refute "post-#{parent.id}" in ids
+    end
+
+    test "a followee's reply to another followee's post hides the standalone parent" do
+      viewer = user()
+      author = user()
+      replier = user()
+      follow!(viewer, author)
+      follow!(viewer, replier)
+
+      parent = create_post!(author, %{body: "original"})
+      {:ok, reply} = Posts.create_reply(replier, parent, %{body: "an answer"})
+
+      ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.id)
+      assert ids == ["post-#{reply.id}"]
+    end
+
+    test "a lone reply whose parent isn't in the feed still shows (parent nested inline)" do
+      viewer = user()
+      parent = create_post!(user(), %{body: "original"})
+      {:ok, reply} = Posts.create_reply(viewer, parent, %{body: "answer"})
+
+      entries = Posts.feed_page(viewer).entries
+      assert Enum.map(entries, & &1.id) == ["post-#{reply.id}"]
     end
   end
 

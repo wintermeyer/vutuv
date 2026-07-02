@@ -184,7 +184,9 @@ defmodule VutuvWeb.PostLive.Feed do
       # Oldest pending first, so the newest ends up on top.
       |> Enum.reverse()
       |> Enum.reduce(socket, fn entry, socket ->
-        stream_insert(socket, :posts, entry, at: 0)
+        socket
+        |> stream_insert(:posts, entry, at: 0)
+        |> prune_threaded_parent(entry)
       end)
       |> assign(:pending_posts, [])
       |> assign(:empty?, false)
@@ -264,7 +266,8 @@ defmodule VutuvWeb.PostLive.Feed do
          |> assign(:empty?, false)
          # The viewer just posted (this or another session): collapse the composer.
          |> assign(:composer_open?, false)
-         |> stream_insert(:posts, decorate(entry, user), at: 0)}
+         |> stream_insert(:posts, decorate(entry, user), at: 0)
+         |> prune_threaded_parent(entry)}
 
       # Mirror the pull path's blocked-author filter: a third party's repost
       # must not carry a blocked author's post into the feed (blocking already
@@ -277,6 +280,26 @@ defmodule VutuvWeb.PostLive.Feed do
 
       true ->
         {:noreply, socket}
+    end
+  end
+
+  # A newly streamed reply renders the post it answers inline (the threaded
+  # card), so drop the parent's standalone row — from the stream and from any
+  # pending batch behind the pill — to avoid showing it twice. The pull path
+  # (`Posts.feed_page/2`) dedups the same way on reload. A no-op for a
+  # non-reply, and harmless when the parent isn't on the page
+  # (`stream_delete_by_dom_id` ignores an absent id). Targets the parent's
+  # own-post row (`feed-post-<id>`); a repost of the parent self-corrects on
+  # the next reload.
+  defp prune_threaded_parent(socket, entry) do
+    case Posts.reply_ref_state(entry.post) do
+      {:parent, parent} ->
+        socket
+        |> stream_delete_by_dom_id(:posts, "feed-post-#{parent.id}")
+        |> update(:pending_posts, &Enum.reject(&1, fn e -> e.post.id == parent.id end))
+
+      _ ->
+        socket
     end
   end
 
