@@ -34,4 +34,13 @@ defmodule Vutuv.ExportTest do
     assert Map.has_key?(profile, :email_on_follower)
     refute Map.has_key?(profile, :email_on_connection_request)
   end
+
+  test "education entries are included in the export" do
+    user = insert(:activated_user)
+    insert(:education, user: user, school: "Acme University", degree: "BSc")
+
+    data = Export.build(user)
+
+    assert [%{school: "Acme University", degree: "BSc"}] = data.educations
+  end
 end

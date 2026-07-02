@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.27.2",
+      version: "7.28.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -64,6 +64,10 @@ defmodule Vutuv.MixProject do
 
       # JSON
       {:jason, "~> 1.4"},
+
+      # CSV parsing (LinkedIn data-export import); promotes the transitive
+      # optional dep of :req to a direct one.
+      {:nimble_csv, "~> 1.2"},
 
       # Email
       {:swoosh, "~> 1.17"},

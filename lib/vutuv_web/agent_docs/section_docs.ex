@@ -29,6 +29,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   # itself and hold no copy of this inventory.
   @sections %{
     work_experiences: "work_experience",
+    educations: "education",
     links: "link",
     social_media_accounts: "social_media_account",
     addresses: "address",
@@ -74,6 +75,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   defp index_title(:work_experiences, name), do: gettext("Work experience of %{name}", name: name)
+  defp index_title(:educations, name), do: gettext("Education of %{name}", name: name)
   defp index_title(:links, name), do: gettext("Links of %{name}", name: name)
 
   defp index_title(:social_media_accounts, name),
@@ -87,6 +89,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:work_experiences, entry),
     do: Enum.join(Enum.filter([entry.title, entry.organization], & &1), " @ ")
 
+  defp entry_title(:educations, entry),
+    do: Enum.join(Enum.filter([entry.degree, entry.school], & &1), " · ")
+
   defp entry_title(:links, entry), do: entry.description || entry.url
   defp entry_title(:social_media_accounts, entry), do: entry.provider
   defp entry_title(:addresses, entry), do: entry.description || entry.city || gettext("Address")
@@ -95,6 +100,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:tags, entry), do: entry.name
 
   defp entry(:work_experiences, record), do: work_entry(record)
+  defp entry(:educations, record), do: education_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
   defp entry(:addresses, record), do: address_entry(record)
@@ -117,6 +123,19 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       description: work.description,
       start: year_month(work.start_year, work.start_month),
       end: year_month(work.end_year, work.end_month)
+    }
+  end
+
+  @doc false
+  def education_entry(edu) do
+    %{
+      id: edu.id,
+      school: edu.school,
+      degree: edu.degree,
+      field_of_study: edu.field_of_study,
+      description: edu.description,
+      start: year_month(edu.start_year, edu.start_month),
+      end: year_month(edu.end_year, edu.end_month)
     }
   end
 

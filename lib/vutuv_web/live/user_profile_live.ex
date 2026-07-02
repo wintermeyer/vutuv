@@ -28,6 +28,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -393,6 +394,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
     |> assign(:work_experience, user.work_experiences)
+    |> assign(:education, user.educations)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
     |> assign(:completion_steps, steps)
@@ -471,6 +473,9 @@ defmodule VutuvWeb.UserProfileLive do
       work_experiences:
         from(u in WorkExperience, limit: 3)
         |> WorkExperience.order_by_date(),
+      educations:
+        from(e in Education, limit: 3)
+        |> Education.order_by_date(),
       phone_numbers: PhoneNumber.ordered() |> limit(3),
       urls: Url.ordered() |> limit(3),
       addresses: Address.ordered() |> limit(3),
@@ -497,6 +502,7 @@ defmodule VutuvWeb.UserProfileLive do
     counts =
       section_count(UserTag, uid, "user_tags")
       |> union_all(^section_count(WorkExperience, uid, "jobs"))
+      |> union_all(^section_count(Education, uid, "educations"))
       |> union_all(^section_count(PhoneNumber, uid, "numbers"))
       |> union_all(^section_count(Url, uid, "links"))
       |> union_all(^section_count(Address, uid, "addresses"))
@@ -506,6 +512,7 @@ defmodule VutuvWeb.UserProfileLive do
     %{
       user_tags: Map.get(counts, "user_tags", 0),
       jobs: Map.get(counts, "jobs", 0),
+      educations: Map.get(counts, "educations", 0),
       numbers: Map.get(counts, "numbers", 0),
       links: Map.get(counts, "links", 0),
       addresses: Map.get(counts, "addresses", 0)

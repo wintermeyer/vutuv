@@ -30,6 +30,7 @@ defmodule Vutuv.Export do
         :phone_numbers,
         :addresses,
         :work_experiences,
+        :educations,
         :social_media_accounts,
         :urls,
         :search_terms,
@@ -68,6 +69,20 @@ defmodule Vutuv.Export do
           &Map.take(&1, [
             :organization,
             :title,
+            :description,
+            :start_month,
+            :start_year,
+            :end_month,
+            :end_year
+          ])
+        ),
+      educations:
+        Enum.map(
+          user.educations,
+          &Map.take(&1, [
+            :school,
+            :degree,
+            :field_of_study,
             :description,
             :start_month,
             :start_year,

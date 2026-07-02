@@ -1,0 +1,31 @@
+<.page_header
+  title={Enum.join(Enum.filter([@education.degree, @education.school], & &1), " · ")}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Education"), ~p"/#{@user}/educations"},
+    @education.school
+  ]}
+/>
+
+<.card_section>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/#{@user}/educations/#{@education}/edit"}
+    delete_to={~p"/#{@user}/educations/#{@education}"}
+  />
+
+  <h2 class="card__label"><%= gettext("Time Period") %></h2>
+  <p>
+    <%= format_duration(@education.start_month, @education.start_year, @education.end_month, @education.end_year) %>
+  </p>
+  <%= if @education.field_of_study do %>
+    <h2 class="card__label"><%= gettext("Field of study") %></h2>
+    <p><%= @education.field_of_study %></p>
+  <% end %>
+  <%= if @education.description do %>
+    <h2 class="card__label"><%= gettext("Description") %></h2>
+    <p><%= @education.description %></p>
+  <% end %>
+</.card_section>

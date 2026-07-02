@@ -1,0 +1,44 @@
+<.page_header
+  title={gettext("Import from LinkedIn")}
+  crumbs={[
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Account settings"), ~p"/#{@user}/settings"},
+    gettext("Import from LinkedIn")
+  ]}
+/>
+
+<div class="mx-auto max-w-3xl">
+  <.card>
+    <.section_title>{gettext("Step 1: Download your LinkedIn data")}</.section_title>
+    <ol class="mt-2 list-decimal space-y-1 pl-5 text-sm text-slate-700 dark:text-slate-300">
+      <li>{gettext("On LinkedIn, open Settings & Privacy, then Data Privacy.")}</li>
+      <li>{gettext("Choose \"Get a copy of your data\".")}</li>
+      <li>
+        {gettext(
+          "Pick the larger archive (profile, positions, education, skills) and request it. LinkedIn emails you a ZIP file, usually within a day."
+        )}
+      </li>
+      <li>{gettext("Download the ZIP file to your device.")}</li>
+    </ol>
+
+    <.section_title class="mt-6">{gettext("Step 2: Upload the ZIP here")}</.section_title>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "We show you everything we find and let you choose what to add. Nothing is imported until you confirm. Your existing entries are never overwritten."
+      )}
+    </p>
+
+    <.form
+      :let={_f}
+      for={to_form(%{}, as: :import)}
+      action={~p"/#{@user}/settings/import/linkedin"}
+      method="post"
+      multipart
+      id="linkedin-import-form"
+      class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"
+    >
+      <input type="file" name="import[archive]" accept=".zip,application/zip" class={input_class()} />
+      <.button type="submit">{gettext("Upload and preview")}</.button>
+    </.form>
+  </.card>
+</div>

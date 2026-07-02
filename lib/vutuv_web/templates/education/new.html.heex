@@ -1,0 +1,11 @@
+<.page_header crumbs={[
+  gettext("Users"),
+  {full_name(@user), ~p"/#{@user}"},
+  {gettext("Education"), ~p"/#{@user}/educations"},
+  gettext("New")
+]} />
+
+
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/#{@user}/educations", changeset: @changeset, action: ~p"/#{@user}/educations", current_year: @current_year %>
+</.card_section>

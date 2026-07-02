@@ -596,6 +596,10 @@ defmodule VutuvWeb.Router do
       # Read-only developer hub: connected apps + personal API tokens, split off
       # the account hub so neither page is overloaded.
       get("/settings/apps", SettingsController, :apps)
+      # Import a LinkedIn data-export ZIP: upload -> preview -> apply the picks.
+      get("/settings/import/linkedin", ImportController, :new)
+      post("/settings/import/linkedin", ImportController, :create)
+      post("/settings/import/linkedin/apply", ImportController, :confirm)
       # The interface-language form lives on the account hub (GET /settings); it
       # only needs a write target, not its own page.
       put("/settings/language", SettingsController, :update_language)
@@ -633,6 +637,7 @@ defmodule VutuvWeb.Router do
       put("/work_experiences/:id/pin", WorkExperienceController, :pin)
       delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
       resources("/work_experiences", WorkExperienceController)
+      resources("/educations", EducationController)
       resources("/addresses", AddressController)
 
       resources("/tags", UserTagController,

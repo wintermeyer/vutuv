@@ -162,6 +162,18 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def education_factory do
+    %Vutuv.Profiles.Education{
+      school: "Acme University",
+      degree: "BSc Computer Science",
+      field_of_study: "Computer Science",
+      description: "Studied things",
+      start_year: 2010,
+      end_year: 2014,
+      slug: sequence(:education_slug, &"bsc-acme-#{&1}")
+    }
+  end
+
   def follow_factory do
     %Vutuv.Social.Follow{}
   end

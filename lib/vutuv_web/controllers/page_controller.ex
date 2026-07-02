@@ -164,8 +164,8 @@ defmodule VutuvWeb.PageController do
   - `/<username>/posts/<id>` — a single post with replies
   - `/<username>/followers`, `/<username>/following`, `/<username>/connections` — people lists
   - `/<username>/<section>` — the profile sections in full: `work_experiences`,
-    `links`, `social_media_accounts`, `addresses`, `phone_numbers`, `emails`
-    (public addresses only), `tags`; a single entry lives at
+    `educations`, `links`, `social_media_accounts`, `addresses`, `phone_numbers`,
+    `emails` (public addresses only), `tags`; a single entry lives at
     `/<username>/<section>/<id-or-slug>`
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members

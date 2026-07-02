@@ -221,6 +221,12 @@ too. So this page stays short and unambiguous. --%>
           href={~p"/#{@user}/export"}
           label={gettext("Download")}
         />
+        <.account_row
+          title={gettext("Import from LinkedIn")}
+          subtitle={gettext("Upload your LinkedIn data export to fill in your profile.")}
+          href={~p"/#{@user}/settings/import/linkedin"}
+          label={gettext("Import")}
+        />
       </ul>
     </.card>
 

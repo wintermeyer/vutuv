@@ -1,0 +1,38 @@
+<%!-- The education list, shared with the profile's Education card: a year-led
+date range on the left, a dotted rail with the degree, school, field of study
+and description, and the owner's calm Edit/Delete under each entry (dropped in
+the visitor preview modes, gated on @as_owner?). Entries arrive newest-first
+(Education.order_by_date). --%>
+<div>
+  <div
+    :for={edu <- @education}
+    class="grid grid-cols-[6.5rem_1fr] items-start gap-3"
+  >
+    <div class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-500 dark:text-slate-400">
+      {format_duration(edu.start_month, edu.start_year, edu.end_month, edu.end_year, :year_first)}
+    </div>
+    <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
+      <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
+      <.link
+        href={~p"/#{@user}/educations/#{edu}"}
+        class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+      >
+        {edu.degree || edu.school}
+      </.link>
+      <p :if={edu.degree} class="text-sm text-slate-500">{edu.school}</p>
+      <p :if={edu.field_of_study} class="text-sm text-slate-600 dark:text-slate-400">
+        {edu.field_of_study}
+      </p>
+      <p :if={edu.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {edu.description}
+      </p>
+      <.row_actions
+        :if={@as_owner?}
+        align={:start}
+        class="mt-2"
+        edit_to={~p"/#{@user}/educations/#{edu}/edit"}
+        delete_to={~p"/#{@user}/educations/#{edu}"}
+      />
+    </div>
+  </div>
+</div>

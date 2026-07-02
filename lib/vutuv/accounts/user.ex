@@ -126,6 +126,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:phone_numbers, Vutuv.Profiles.PhoneNumber)
     has_many(:addresses, Vutuv.Profiles.Address)
     has_many(:work_experiences, Vutuv.Profiles.WorkExperience)
+    has_many(:educations, Vutuv.Profiles.Education)
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
 
     # The work experience the member pinned as their profile job title (issue

@@ -28,6 +28,12 @@ defmodule VutuvWeb.RateLimit do
   @resend_limit 5
   @resend_window_ms :timer.minutes(60)
 
+  # The LinkedIn import decompresses an upload and writes a batch of rows, so it
+  # gets its own modest budget (10 per hour, per IP and per member) on top of the
+  # zip-bomb caps in Vutuv.Imports.LinkedIn. Overridable via config for the test.
+  @import_limit 10
+  @import_window_ms :timer.hours(1)
+
   @doc """
   Returns `:ok` when the request is within the limit for `event`, or
   `:rate_limited` once the per-IP or per-identity counter is exceeded. `extra` is
@@ -58,6 +64,18 @@ defmodule VutuvWeb.RateLimit do
   """
   def check_login_resend(conn, email) do
     check(conn, :login_resend, email, limit: @resend_limit, window_ms: @resend_window_ms)
+  end
+
+  @doc """
+  Throttles a member's LinkedIn imports (10 per hour, per IP and per member id),
+  so a single account cannot hammer the upload/parse/apply path. The budget is
+  overridable via `config :vutuv, :linkedin_import_rate_limit, {limit, window_ms}`.
+  """
+  def check_linkedin_import(conn, user) do
+    {limit, window_ms} =
+      Application.get_env(:vutuv, :linkedin_import_rate_limit, {@import_limit, @import_window_ms})
+
+    check(conn, :linkedin_import, user.id, limit: limit, window_ms: window_ms)
   end
 
   defp identity_keys(_event, nil), do: []

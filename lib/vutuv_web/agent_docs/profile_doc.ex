@@ -11,6 +11,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   """
 
   alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
@@ -88,6 +89,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       },
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
+      educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),
@@ -105,6 +107,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       social_media_accounts: SocialMediaAccount.ordered(),
       user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
+      educations: Education.order_by_date(Education),
       # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
       # documents list these contact sections the same way the HTML pages do.
       phone_numbers: PhoneNumber.ordered(),

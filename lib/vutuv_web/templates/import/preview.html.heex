@@ -1,0 +1,91 @@
+<.page_header
+  title={gettext("Import from LinkedIn")}
+  crumbs={[
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Account settings"), ~p"/#{@user}/settings"},
+    {gettext("Import from LinkedIn"), ~p"/#{@user}/settings/import/linkedin"},
+    gettext("Preview")
+  ]}
+/>
+
+<div class="mx-auto max-w-3xl">
+  <.card>
+    <p class="text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Here is what we found in your export. Uncheck anything you do not want. Entries already on your profile are unchecked for you."
+      )}
+    </p>
+
+    <.form
+      for={to_form(%{}, as: :import)}
+      action={~p"/#{@user}/settings/import/linkedin/apply"}
+      method="post"
+      id="linkedin-import-preview"
+      class="mt-4"
+    >
+      <input type="hidden" name="payload" value={@payload} />
+
+      <.candidate_section title={gettext("Work experience")} items={@candidates.positions}>
+        <.candidate_row :for={c <- @candidates.positions} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <.candidate_section title={gettext("Education")} items={@candidates.educations}>
+        <.candidate_row :for={c <- @candidates.educations} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <.candidate_section title={gettext("Tags")} items={@candidates.skills}>
+        <.candidate_row :for={c <- @candidates.skills} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <.candidate_section title={gettext("Links")} items={@candidates.urls}>
+        <.candidate_row :for={c <- @candidates.urls} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <.candidate_section title={gettext("Social media")} items={@candidates.social}>
+        <.candidate_row :for={c <- @candidates.social} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <.candidate_section title={gettext("Phone numbers")} items={@candidates.phones}>
+        <.candidate_row :for={c <- @candidates.phones} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
+      <%!-- Profile scalars: offered only when the field is currently blank, so an
+      import never overwrites your name or headline. --%>
+      <div :if={Enum.any?(@candidates.profile, & &1.fillable?)} class="mt-6">
+        <.section_title>{gettext("Profile")}</.section_title>
+        <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+          <li :for={c <- @candidates.profile} :if={c.fillable?} class="flex items-start gap-3 py-2">
+            <input type="checkbox" name="selected[]" value={c.id} class={checkbox_class()} id={"cand-#{c.id}"} />
+            <label for={"cand-#{c.id}"} class="text-sm text-slate-800 dark:text-slate-200">
+              {gettext("Set %{field}:", field: c.label)} <span class="font-medium">{c.value}</span>
+            </label>
+          </li>
+        </ul>
+      </div>
+
+      <%!-- Emails are PIN-verified identities, so they are never imported; we
+      point at the normal add-email flow instead. --%>
+      <div :if={@candidates.emails != []} class="mt-6">
+        <.section_title>{gettext("Email addresses")}</.section_title>
+        <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Email addresses are not imported automatically because each one is confirmed by PIN. Add them yourself if you like:"
+          )}
+          <.link navigate={~p"/#{@user}/emails/new"} class="font-semibold text-brand-600 hover:text-brand-700">
+            {gettext("add an email address")}
+          </.link>.
+        </p>
+        <ul class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+          <li :for={email <- @candidates.emails}>{email.value}</li>
+        </ul>
+      </div>
+
+      <div class="mt-6 flex items-center gap-3">
+        <.button type="submit">{gettext("Import selected")}</.button>
+        <.link navigate={~p"/#{@user}/settings/import/linkedin"} class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400">
+          {gettext("Cancel")}
+        </.link>
+      </div>
+    </.form>
+  </.card>
+</div>

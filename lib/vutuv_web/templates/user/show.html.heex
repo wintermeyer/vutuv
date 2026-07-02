@@ -398,6 +398,51 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- Education --%>
+    <.card :if={@education != [] or @as_owner?} id="profile-education">
+      <.section_header title={gettext("Education")} />
+
+      <.empty_add :if={@as_owner? and @education == []} href={~p"/#{@user}/educations/new"}>
+        {gettext("Add education")}
+      </.empty_add>
+
+      <%!-- A year-led date range on the left, the degree/school on a rail.
+      Entries arrive newest-first (Education.order_by_date). --%>
+      <div :if={@education != []}>
+        <div
+          :for={edu <- @education}
+          class="grid grid-cols-[6.5rem_1fr] items-start gap-3"
+        >
+          <div class="pt-0.5 text-right text-xs font-semibold leading-tight text-slate-500 dark:text-slate-400 tabular-nums">
+            {VutuvWeb.WorkExperienceHTML.format_duration(
+              edu.start_month,
+              edu.start_year,
+              edu.end_month,
+              edu.end_year,
+              :year_first
+            )}
+          </div>
+          <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
+            <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
+            <.link href={~p"/#{@user}/educations/#{edu}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
+              {edu.degree || edu.school}
+            </.link>
+            <p :if={edu.degree} class="text-sm text-slate-500">{edu.school}</p>
+            <p :if={edu.field_of_study} class="text-sm text-slate-600 dark:text-slate-400">
+              {edu.field_of_study}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <.manage_footer
+        href={~p"/#{@user}/educations"}
+        total={@totals.educations}
+        preview={3}
+        owner={@as_owner?}
+      />
+    </.card>
+
     <%!-- Links: preview cards built from the page screenshots that
     Vutuv.PageScreenshot captures on link create/update. Lives in the wide
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back
