@@ -2217,10 +2217,10 @@ msgstr "Wird gespeichert…"
 
 #: lib/vutuv_web/live/post_live/feed.ex:386
 #, elixir-autogen, elixir-format
-msgid "Show %{count} new post"
-msgid_plural "Show %{count} new posts"
-msgstr[0] "Zeige %{count} neuen Beitrag"
-msgstr[1] "Zeige %{count} neue Beiträge"
+msgid "Show %{formatted} new post"
+msgid_plural "Show %{formatted} new posts"
+msgstr[0] "Zeige %{formatted} neuen Beitrag"
+msgstr[1] "Zeige %{formatted} neue Beiträge"
 
 #: lib/vutuv_web/live/post_live/edit.ex:27
 #: lib/vutuv_web/live/post_live/reply.ex:30
@@ -2768,16 +2768,16 @@ msgstr "Tags mit Komma oder Leerzeichen trennen."
 #: lib/vutuv_web/templates/connection/index.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "1 connection"
-msgid_plural "%{count} connections"
+msgid_plural "%{formatted} connections"
 msgstr[0] "1 Vernetzung"
-msgstr[1] "%{count} Vernetzungen"
+msgstr[1] "%{formatted} Vernetzungen"
 
 #: lib/vutuv_web/templates/user/card_list.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "+1 more tag"
-msgid_plural "+%{count} more tags"
+msgid_plural "+%{formatted} more tags"
 msgstr[0] "+1 weiteres Tag"
-msgstr[1] "+%{count} weitere Tags"
+msgstr[1] "+%{formatted} weitere Tags"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:213
 #: lib/vutuv_web/agent_docs/text.ex:241

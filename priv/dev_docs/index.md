@@ -52,7 +52,7 @@ only you can see):
   "schema_version": 1,
   "name": "Stefan Wintermeyer",
   "username": "wintermeyer",
-  "emails": ["stefan@example.com"],
+  "emails": [{"id": "0190…", "type": "Work", "value": "stefan@example.com"}],
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
   "tags": [{"name": "Phoenix", "endorsements": 31}],
   "...": "..."

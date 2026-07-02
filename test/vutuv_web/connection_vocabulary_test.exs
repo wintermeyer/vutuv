@@ -33,7 +33,11 @@ defmodule VutuvWeb.ConnectionVocabularyTest do
     assert de("No connections yet.") == "Noch keine Vernetzungen."
     assert Gettext.ngettext(@backend, "connection", "connections", 2) == "Vernetzungen"
 
-    assert Gettext.ngettext(@backend, "1 connection", "%{count} connections", 5, count: 5) ==
+    # The plural form binds the compact-formatted number as %{formatted}
+    # (ngettext force-binds %{count} to the bare integer, see CLAUDE.md).
+    assert Gettext.ngettext(@backend, "1 connection", "%{formatted} connections", 5,
+             formatted: "5"
+           ) ==
              "5 Vernetzungen"
 
     assert de("Connected") == "Vernetzt"

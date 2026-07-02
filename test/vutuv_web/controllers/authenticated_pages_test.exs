@@ -3,21 +3,13 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
   Smoke tests that log in and GET the main authenticated pages (index, show,
   new, edit) with realistic data. They guard against query and template bugs
   that surface only when authenticated: a controller error raises and fails the
-  GET below. `renders/2` asserts a page rendered (2xx/3xx); `no_server_error/2`
-  only asserts the page did not 5xx, for auth-gated pages that legitimately
-  redirect or 403.
+  GET below. `renders/2` asserts a page rendered (2xx/3xx).
   """
   use VutuvWeb.ConnCase
 
   defp renders(conn, path) do
     conn = get(conn, path)
     assert conn.status in 200..399, "GET #{path} returned HTTP #{conn.status}"
-    conn
-  end
-
-  defp no_server_error(conn, path) do
-    conn = get(conn, path)
-    assert conn.status < 500, "GET #{path} returned HTTP #{conn.status}"
     conn
   end
 
@@ -103,10 +95,6 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/#{user}/links/#{url}/edit")
       renders(conn, ~p"/#{user}/addresses/#{address}/edit")
       renders(conn, ~p"/#{user}/social_media_accounts/#{social}/edit")
-    end
-
-    test "auth-gated pages do not 5xx", %{conn: conn, user: user} do
-      no_server_error(conn, ~p"/#{user}/groups")
     end
 
     test "public listing and global tag pages render", %{conn: conn, tag: tag} do

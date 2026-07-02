@@ -18,6 +18,7 @@ defmodule Vutuv.Social do
   alias Vutuv.Repo
   alias Vutuv.Social.Block
   alias Vutuv.Social.Follow
+  alias Vutuv.Social.PopularUsers
   alias Vutuv.Social.UserBookmark
   alias Vutuv.Social.UserLike
   alias Vutuv.UUIDv7
@@ -239,8 +240,25 @@ defmodule Vutuv.Social do
   real data that is the same top-N as ranking everyone (the most-followed
   members all have followers), but it replaces a full-table group-by with a
   scan of the far smaller follows table.
+
+  Served from the `Vutuv.Social.PopularUsers` snapshot (refreshed every few
+  minutes) when available, so the hot paths never pay for the ranking scan;
+  a cache miss falls back to the direct query.
   """
   def most_followed_users(limit) do
+    case PopularUsers.top(limit) do
+      {:ok, users} -> users
+      :miss -> compute_most_followed(limit)
+    end
+  end
+
+  @doc """
+  The uncached ranking behind `most_followed_users/1` — one GROUP BY over
+  `follows`. Called by `Vutuv.Social.PopularUsers` on its refresh timer and
+  as the direct fallback while no snapshot exists; don't call it from
+  request paths.
+  """
+  def compute_most_followed(limit) do
     # Count each followee's *visible* followers, so the ranking matches the
     # follower_count/1 shown on each profile and can't be inflated by
     # mass-registering never-activated follower accounts.

@@ -55,7 +55,7 @@ defmodule VutuvWeb.DevWebhookControllerTest do
     assert html_response(conn, 422) =~ "editform"
   end
 
-  test "webhooks are owner-scoped", %{conn: conn, app: app} do
+  test "webhooks are owner-scoped", %{app: app} do
     {:ok, subscription, _secret} =
       Webhooks.create_subscription(app, %{
         "url" => "https://hooks.example.org/x",

@@ -380,11 +380,17 @@ defmodule VutuvWeb.UserProfileLive do
     view_viewer = preview_viewer(preview_as, current_user)
     private_emails? = private_emails?(preview_as, current_user, user)
 
-    # preload_user_for_show already loaded the date-ordered work experiences;
-    # resolve the header's current job from that list in memory (the same
-    # current_job_in_memory/1 the listing pages use) instead of re-running the
-    # 2-4 query current_job/1 chain against work_experiences.
-    header_job = current_job_in_memory(user.work_experiences, user.profile_work_experience_id)
+    # preload_user_for_show loaded ALL work experiences (date-ordered for the
+    # Experience card); resolve the header's current job from the id-sorted
+    # full list, exactly like ProfileDoc and the vCard do. A truncated or
+    # date-ordered list can pick a different role (a pin outside the newest
+    # three, or several ongoing roles) and make header and agent docs disagree.
+    header_job =
+      current_job_in_memory(
+        Enum.sort_by(user.work_experiences, & &1.id),
+        user.profile_work_experience_id
+      )
+
     recommended_users = recommended_users(user, view_viewer)
 
     posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
@@ -408,7 +414,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:posts, Vutuv.Posts.profile_posts(user, posts_viewer))
     |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
-    |> assign(:work_experience, user.work_experiences)
+    |> assign(:work_experience, Enum.take(user.work_experiences, 3))
     |> assign(:education, user.educations)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
@@ -485,9 +491,10 @@ defmodule VutuvWeb.UserProfileLive do
     |> Repo.preload(
       social_media_accounts: SocialMediaAccount.ordered(),
       user_tags: user_tags_query(),
-      work_experiences:
-        from(u in WorkExperience, limit: 3)
-        |> WorkExperience.order_by_date(),
+      # Deliberately unlimited: the header-job pick must see every role (a
+      # pinned one can sit outside the newest three; see load_profile). The
+      # Experience card takes its top 3 in memory; rows per member are few.
+      work_experiences: WorkExperience.order_by_date(WorkExperience),
       educations:
         from(e in Education, limit: 3)
         |> Education.order_by_date(),

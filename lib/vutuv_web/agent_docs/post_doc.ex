@@ -35,6 +35,7 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   def build(author, %Post{} = post, opts \\ []) do
     replies = Posts.list_replies(post, Keyword.get(opts, :viewer))
     {noindex?, noai?} = robots_axes(author, Posts.restricted?(post))
+    engagement = Posts.engagement_counts(post.id)
 
     AgentDocs.doc_meta("post", Posts.path(post), noindex: noindex?, noai: noai?)
     |> Map.merge(%{
@@ -52,7 +53,11 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       # frozen / denied replies (issue #774), but counting `replies` here avoids
       # a second query and can never drift from the list.)
       reply_count: length(replies),
-      replies: Enum.map(replies, &reply_entry/1)
+      replies: Enum.map(replies, &reply_entry/1),
+      # The public engagement counters the HTML action bar shows to everyone.
+      like_count: engagement.likes,
+      repost_count: engagement.reposts,
+      bookmark_count: engagement.bookmarks
     })
   end
 

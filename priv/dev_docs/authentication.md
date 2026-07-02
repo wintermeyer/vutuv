@@ -124,8 +124,8 @@ print(profile["name"], profile["counts"])
 ## Accountability
 
 The API is tied to accounts on both sides: tokens belong to vutuv members,
-and (once OAuth app registration ships) third-party applications must be
-registered by a vutuv account too. Abuse — spam, scraping beyond the rate
+and third-party applications must be registered by a vutuv account too
+(see [OAuth 2 for third-party apps](#oauth-2-for-third-party-apps) below). Abuse — spam, scraping beyond the rate
 limits, acting against members' interests — leads to token revocation,
 app suspension, or account moderation. A suspended app's tokens all stop
 working at once.

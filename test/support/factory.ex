@@ -217,7 +217,7 @@ defmodule Vutuv.Factory do
   def post_factory do
     %Vutuv.Posts.Post{
       body: sequence(:post_body, &"Post body #{&1}"),
-      published_on: Date.utc_today(),
+      published_on: Vutuv.BerlinTime.today(),
       user: build(:user)
     }
   end

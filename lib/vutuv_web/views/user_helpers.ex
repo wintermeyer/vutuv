@@ -521,8 +521,10 @@ defmodule VutuvWeb.UserHelpers do
     |> safe_to_string()
   end
 
+  # Bare (unlinked) crumbs are often user-authored text (a link description, a
+  # job title); the joined string ends up inside `raw/1`, so escape here.
   defp gen_breadcrumb(value) do
-    value
+    value |> Phoenix.HTML.html_escape() |> safe_to_string()
   end
 
   def email_greeting(%User{locale: "de", last_name: nil}), do: "#{greeting("de")}"

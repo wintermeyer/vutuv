@@ -415,8 +415,11 @@ defmodule VutuvWeb.PostLive.Feed do
 
           <div :if={@pending_posts != []} class="text-center">
             <.button id="show-new-posts" variant="secondary" phx-click="show-new">
-              {ngettext("Show %{count} new post", "Show %{count} new posts", length(@pending_posts),
-                count: length(@pending_posts)
+              {ngettext(
+                "Show %{formatted} new post",
+                "Show %{formatted} new posts",
+                length(@pending_posts),
+                formatted: compact_count(length(@pending_posts))
               )}
             </.button>
           </div>

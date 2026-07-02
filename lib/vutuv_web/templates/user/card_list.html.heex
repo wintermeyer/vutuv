@@ -39,7 +39,7 @@ no tag line and the rows keep their compact height. --%>
         </.link>
         <% more = tag_summary.total - length(tag_summary.top) %>
         <span :if={more > 0} class="profile-tags__more">
-          {ngettext("+1 more tag", "+%{count} more tags", more)}
+          {ngettext("+1 more tag", "+%{formatted} more tags", more, formatted: compact_count(more))}
         </span>
       </span>
       </p>

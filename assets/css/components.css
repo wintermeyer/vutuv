@@ -981,7 +981,7 @@ ul.thumbs li .text .url a {
 
 /* ---------- Dark mode (follows system) ---------- */
 /* ---------- Markdown bodies ---------- */
-/* Track 2 pages wrap rendered user Markdown (posts) in `.markdown`. Only
+/* Kit pages wrap rendered user Markdown (posts) in `.markdown`. Only
    structure lives here; text color comes from the wrapper's utilities. */
 /* Break long unbreakable tokens (a pasted URL, a very long word) so a post body
    wraps instead of overflowing its column and scrolling the page sideways on a

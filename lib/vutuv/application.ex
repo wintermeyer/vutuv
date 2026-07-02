@@ -12,6 +12,10 @@ defmodule Vutuv.Application do
         # Owns the live member counter behind the landing page. Starts after the
         # Repo (it seeds from it) and PubSub (it broadcasts over it).
         Vutuv.Accounts.MemberCounter,
+        # Snapshots the "most followed members" pool for the who-to-follow
+        # rails and the public listing. Starts after the Repo (it seeds the
+        # snapshot from it).
+        Vutuv.Social.PopularUsers,
         # Fans a :day_changed broadcast out at Berlin midnight so open pages
         # re-render "today"/"Gestern" post timestamps. Needs PubSub only.
         Vutuv.DayClock,

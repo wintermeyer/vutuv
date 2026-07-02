@@ -2212,8 +2212,8 @@ msgstr ""
 
 #: lib/vutuv_web/live/post_live/feed.ex:386
 #, elixir-autogen, elixir-format
-msgid "Show %{count} new post"
-msgid_plural "Show %{count} new posts"
+msgid "Show %{formatted} new post"
+msgid_plural "Show %{formatted} new posts"
 msgstr[0] ""
 msgstr[1] ""
 
@@ -2763,14 +2763,14 @@ msgstr ""
 #: lib/vutuv_web/templates/connection/index.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "1 connection"
-msgid_plural "%{count} connections"
+msgid_plural "%{formatted} connections"
 msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/templates/user/card_list.html.heex:42
 #, elixir-autogen, elixir-format
 msgid "+1 more tag"
-msgid_plural "+%{count} more tags"
+msgid_plural "+%{formatted} more tags"
 msgstr[0] ""
 msgstr[1] ""
 

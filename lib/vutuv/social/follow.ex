@@ -64,7 +64,9 @@ defmodule Vutuv.Social.Follow do
         where:
           account_confirmed_row(fe) and
             account_confirmed_row(fr),
-        order_by: [desc: :inserted_at],
+        # The id tiebreaker keeps offset pagination stable when two follows
+        # share the same second (timestamps have second precision).
+        order_by: [desc: :inserted_at, desc: :id],
         limit: ^n
       )
 

@@ -63,6 +63,31 @@ defmodule VutuvWeb.WorkExperiencePinTest do
     refute meta_description(html) =~ "Current Role"
   end
 
+  test "a pinned role outside the 3 most recent by date still leads the header", ctx do
+    %{conn: conn, user: user, past: past} = ctx
+
+    # Four fresher roles push `past` (ended 2018) out of any date-ordered
+    # top-3 window; the pin must still win on the profile header, exactly as
+    # it does in the agent docs and the vCard (they resolve from the full
+    # id-ordered list — the header must not resolve from a truncated one).
+    for year <- 2019..2022 do
+      insert(:work_experience,
+        user: user,
+        title: "Filler #{year}",
+        organization: "FillCo",
+        start_month: 1,
+        start_year: year,
+        end_month: 12,
+        end_year: year
+      )
+    end
+
+    conn = put(conn, ~p"/#{user}/work_experiences/#{past}/pin")
+
+    html = conn |> get(~p"/#{user}") |> html_response(200)
+    assert meta_description(html) =~ "Past Role @ ThenCo"
+  end
+
   test "clearing the pin falls back to the automatic heuristic", ctx do
     %{conn: conn, user: user, past: past} = ctx
 

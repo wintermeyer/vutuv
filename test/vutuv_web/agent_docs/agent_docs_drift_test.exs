@@ -37,7 +37,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       user: user,
       school: "Bridge University",
       degree: "MSc Structures",
-      field_of_study: "Structural Engineering"
+      field_of_study: "Structural Engineering",
+      description: "Thesis on load distribution"
     )
 
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
@@ -140,9 +141,16 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "URL:"
   end
 
-  test "post permalink: body, author and replies in every format", %{post: post} do
+  test "post permalink: body, author, replies and engagement in every format", %{post: post} do
     replier = insert_activated_user(first_name: "Resa", last_name: "Reply")
     {:ok, _reply} = Vutuv.Posts.create_reply(replier, post, %{"body" => "Agreed, very sturdy."})
+
+    # The HTML action bar shows like/repost/bookmark counts to every visitor,
+    # so the agent formats must carry them too.
+    fan = insert_activated_user(first_name: "Fan", last_name: "Fervent")
+    :ok = Vutuv.Posts.like_post(fan, post)
+    :ok = Vutuv.Posts.repost_post(fan, post)
+    :ok = Vutuv.Posts.bookmark_post(fan, post)
 
     rendered = formats_for("/drift_tester/posts/#{post.id}")
 
@@ -157,6 +165,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     doc = Jason.decode!(rendered.json)
     assert doc["type"] == "post"
     assert doc["reply_count"] == 1
+    assert doc["like_count"] == 1
+    assert doc["repost_count"] == 1
+    assert doc["bookmark_count"] == 1
+
+    assert rendered.md =~ "Likes: 1"
+    assert rendered.txt =~ "Likes: 1"
   end
 
   test "post archive: entries and total in every format", %{post: post} do
@@ -261,7 +275,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   test "every profile section page serves its facts in all formats" do
     facts = %{
       work_experiences: ["Bridge Engineer", "Span AG", "Building things"],
-      educations: ["Bridge University", "MSc Structures", "Structural Engineering"],
+      educations: [
+        "Bridge University",
+        "MSc Structures",
+        "Structural Engineering",
+        "Thesis on load distribution"
+      ],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
       addresses: ["Berlin", "10115"],
@@ -301,6 +320,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         do: assert_fact_everywhere(rendered, fact)
 
     assert Jason.decode!(rendered.json)["type"] == "work_experience"
+
+    [edu] = Repo.all(Ecto.assoc(user, :educations))
+    rendered = formats_for("/drift_tester/educations/#{edu.id}")
+
+    for fact <- ["Bridge University", "Structural Engineering", "Thesis on load distribution"],
+        do: assert_fact_everywhere(rendered, fact)
 
     [url] = Repo.all(Ecto.assoc(user, :urls))
     rendered = formats_for("/drift_tester/links/#{url.id}")

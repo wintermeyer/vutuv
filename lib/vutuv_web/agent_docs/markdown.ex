@@ -87,6 +87,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
       tags_line(doc.tags),
+      engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
       section("#{gettext("Replies")} (#{doc.reply_count})", Enum.map(doc.replies, &reply_block/1))
     ]
@@ -248,15 +249,20 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   # Shares work_period/1 (the education entry carries the same :start / :end
-  # keys). Degree + school lead, then the period, then field of study or notes.
+  # keys). Degree + school lead, then the period, then field of study and
+  # notes — both, like the HTML page shows them.
   defp education_line(edu) do
     period = work_period(edu)
     title = Enum.join(Enum.filter([edu.degree, edu.school], & &1), ", ")
-    detail = edu.field_of_study || edu.description
+
+    detail =
+      [edu.field_of_study, edu.description]
+      |> Enum.filter(& &1)
+      |> Enum.map_join(" — ", &md_text/1)
 
     ["- ", title]
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
-    |> Kernel.++(if detail, do: [": #{md_text(detail)}"], else: [])
+    |> Kernel.++(if detail != "", do: [": #{detail}"], else: [])
     |> Enum.join()
   end
 
@@ -355,6 +361,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")
+
+  # The public engagement counters, mirroring the HTML action bar.
+  defp engagement_line(doc) do
+    "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
+      "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
+  end
 
   defp page_hint(total, listed) when total > length(listed) do
     " (" <> gettext("%{count} on this page, use ?page=N", count: length(listed)) <> ")"

@@ -58,6 +58,11 @@ config :vutuv, :ai_crawler_policy, :permissive
 # off so its process never uses the SQL Sandbox connection it does not own.
 config :vutuv, :reconcile_member_count, true
 
+# The "most followed members" pool (Vutuv.Social.PopularUsers) re-ranks on a
+# slow timer. Tests turn this off (sandbox ownership); every call then falls
+# back to the direct ranking query, so tests always see fresh data.
+config :vutuv, :refresh_popular_users, true
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

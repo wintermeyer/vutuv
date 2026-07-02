@@ -72,7 +72,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
       # Standard page chrome (the profile-header + breadcrumb block).
       assert html =~ "profile-header"
-      # The dashboard renders its section tiles on the Track-2 card surface
+      # The dashboard renders its section tiles on the kit-page card surface
       # (rounded-2xl + ring), not the legacy `.card` class.
       assert html =~ "admin-moderation-link"
       assert html =~ "rounded-2xl"

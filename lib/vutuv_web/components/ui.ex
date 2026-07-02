@@ -26,7 +26,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Tags.UserTag
 
   @doc """
-  Shared input class for hand-written (Track 2) form fields — the Direction A
+  Shared input class for hand-written (kit-page) form fields — the Direction A
   input recipe (full width, rounded, slate border, brand focus ring, dark-aware).
   The single source for the post composer, the auth pages and any green-field
   form, so the field look stays consistent. Compose with utilities via a list,
@@ -37,7 +37,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Shared checkbox class for hand-written (Track 2) consent/opt-in boxes —
+  Shared checkbox class for hand-written (kit-page) consent/opt-in boxes —
   the companion to `input_class/0` (brand check on a rounded slate box,
   top-aligned beside its label text, dark-aware). The single source for
   the sign-up form's consent checkboxes.
@@ -284,7 +284,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Per-card ⋯ menu for hand-written (Track 2) profile sections — the quiet
+  Per-card ⋯ menu for hand-written (kit-page) profile sections — the quiet
   home for the owner's rare actions (add entry, manage entries) so they are
   not always in the viewer's face. A native `<details data-menu>` dropdown:
   no JS framework, keyboard-accessible out of the box; `app.js` closes any
@@ -1700,7 +1700,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Legacy (Track 1) page top shared by the controller pages: the `.profile-header`
+  Classic-page (components.css-styled) page top shared by the controller pages: the `.profile-header`
   h1 block and/or the `.breadcrumbs` row. This is the boilerplate that opened ~47
   page templates (and the breadcrumbs row ~65). Styled by `components.css`, not
   Tailwind — do not swap in utilities.
@@ -1745,7 +1745,7 @@ defmodule VutuvWeb.UI do
   defp crumb_text(other), do: to_string(other)
 
   @doc """
-  Legacy (Track 1) changeset-error banner shared by the `editform` `form_content`
+  Classic-page (components.css-styled) changeset-error banner shared by the `editform` `form_content`
   templates. Renders the `.alert.alert-danger` row only when `@changeset.action`
   is set (a failed submit), nothing on a fresh form. Styled by `components.css`,
   not Tailwind — do not swap in utilities. Use it as `<.form_error changeset={@changeset} />`.
@@ -1761,7 +1761,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Legacy (Track 1) `editform__field` wrapper shared by the `editform`
+  Classic-page (components.css-styled) `editform__field` wrapper shared by the `editform`
   `form_content` templates: the `<div class="editform__field">` that turns
   `editform__field--error` on when `field` has an error, with the label / input /
   hints / error tags supplied verbatim in the inner block. Replaces the
@@ -1848,7 +1848,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Legacy (Track 1) Cancel/Submit actions row shared by the `editform`
+  Classic-page (components.css-styled) Cancel/Submit actions row shared by the `editform`
   `form_content` templates. Emits the same `.editform__actions` markup the
   `link/2` + `submit/2` helpers produced (a `.button.button--cancel` link to
   `@backlink` and a `.button` submit button), styled by `components.css`. Use it
@@ -1886,7 +1886,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Legacy (Track 1) edit/delete (and optional view) icon-button group. Renders the
+  Classic-page (components.css-styled) edit/delete (and optional view) icon-button group. Renders the
   canonical legacy anatomy from `design.md`: a `.btns-right` wrapper holding
   `.button.button--icon.button--small` controls with CSS-glyph icons
   (`i.icon.icon--edit|--delete|--search`), in **view → edit → delete** source
@@ -2162,7 +2162,7 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Legacy (Track 1) card shell shared by the owned-resource index pages and the
+  Classic-page (components.css-styled) card shell shared by the owned-resource index pages and the
   new/edit form wrappers: the `<div class="card-list"><section class="card">…</section></div>`
   boilerplate that used to be copy-pasted into ~30 templates, styled by
   `components.css` (not Tailwind — do not swap in utilities). The `inner_block`

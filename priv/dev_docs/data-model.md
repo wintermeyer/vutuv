@@ -57,11 +57,11 @@ your own profile via `POST/PATCH/DELETE /me/<section>`:
 
 | Section | Entry fields | Notes |
 |---------|-------------|-------|
-| `emails` | `value` | Read-only over the API: an address is a PIN-verified login identity. Members mark addresses public or private; private ones are visible only to the owner (and to members the owner follows, on the website's email page). |
+| `emails` | `id`, `type` (`Work`/`Personal`/`Other`), `value` | Read-only over the API: an address is a PIN-verified login identity. Members mark addresses public or private; private ones are visible only to the owner. |
 | `links` | `value` (URL), `description` | vutuv renders a screenshot preview on the website. |
 | `social_media_accounts` | `provider`, `value` (handle) | Providers: Facebook, Twitter, Instagram, YouTube, Snapchat, LinkedIn, XING, GitHub. |
 | `addresses` | `description`, `line_1`…`line_4`, `zip_code`, `city`, `state`, `country` | |
-| `phone_numbers` | `value`, `number_type` | |
+| `phone_numbers` | `value`, `number_type` | Read responses return the type as `type`; writes take `number_type`. |
 | `work_experiences` | `title`, `organization`, `description`, `start_year`, `start_month`, `end_year`, `end_month` | An open `end` means "current position"; the most recent current one feeds the profile's `current_position`. |
 
 Entry `id`s are stable — store them to update or delete later.
@@ -108,7 +108,7 @@ website.
 A post is Markdown `body_markdown` (up to 20,000 characters), optional
 **tags** (the same global tags as on profiles), optional **images**, and an
 optional **audience**. Posts have a permalink
-(`/<username>/posts/<date>/<id>`), appear in the author's archive and in their
+(`/<username>/posts/<id>`), appear in the author's archive and in their
 followers' feeds.
 
 ### Audiences: the denial model

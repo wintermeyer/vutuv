@@ -85,6 +85,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
       tags_line(doc.tags),
+      engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       section(
         "#{gettext("Replies")} (#{doc.reply_count})",
@@ -272,12 +273,12 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp education_line(edu) do
     period = Markdown.work_period(edu)
     title = Enum.join(Enum.filter([edu.degree, edu.school], & &1), ", ")
-    detail = edu.field_of_study || edu.description
+    detail = [edu.field_of_study, edu.description] |> Enum.filter(& &1) |> Enum.join(" — ")
 
     "* " <>
       title <>
       if(period, do: " (#{period})", else: "") <>
-      if(detail, do: ": #{detail}", else: "")
+      if(detail != "", do: ": #{detail}", else: "")
   end
 
   defp link_line(%{description: nil, url: url}), do: "* #{url}"
@@ -322,6 +323,12 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.join(tags, ", ")
+
+  # The public engagement counters, mirroring the HTML action bar.
+  defp engagement_line(doc) do
+    "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
+      "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
+  end
 
   defp page_hint(total, listed) when total > length(listed) do
     " — " <> gettext("%{count} on this page, use ?page=N", count: length(listed))

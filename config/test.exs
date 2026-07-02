@@ -38,6 +38,7 @@ config :vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{93, 184, 216, 34}]} 
 # Swoosh test adapter's {:email, ...} message (it goes to the calling process).
 config :vutuv, :async_email, false
 config :vutuv, :reconcile_member_count, false
+config :vutuv, :refresh_popular_users, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

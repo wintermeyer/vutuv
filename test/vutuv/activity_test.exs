@@ -9,14 +9,16 @@ defmodule Vutuv.ActivityTest do
   alias Vutuv.Tags.UserTagEndorsement
 
   test "notify broadcasts a :new_notification to the user topic" do
-    Activity.subscribe(42)
-    Activity.notify(42, %{kind: "follower", text: "Hi"})
+    user_id = Vutuv.UUIDv7.generate()
+    Activity.subscribe(user_id)
+    Activity.notify(user_id, %{kind: "follower", text: "Hi"})
     assert_receive {:new_notification, %{text: "Hi"}}
   end
 
   test "notify_new_follower carries the actor's name and action" do
-    Activity.subscribe(7)
-    Activity.notify_new_follower(7, %{first_name: "José", last_name: "Daniel"})
+    user_id = Vutuv.UUIDv7.generate()
+    Activity.subscribe(user_id)
+    Activity.notify_new_follower(user_id, %{first_name: "José", last_name: "Daniel"})
 
     assert_receive {:new_notification,
                     %{kind: "follower", actor_name: "José Daniel", text: "started following you."} =
@@ -28,8 +30,9 @@ defmodule Vutuv.ActivityTest do
   end
 
   test "notify_endorsement carries the tag plus the actor triple" do
-    Activity.subscribe(8)
-    Activity.notify_endorsement(8, %{first_name: "Ada", last_name: "Lovelace"}, "Elixir")
+    user_id = Vutuv.UUIDv7.generate()
+    Activity.subscribe(user_id)
+    Activity.notify_endorsement(user_id, %{first_name: "Ada", last_name: "Lovelace"}, "Elixir")
 
     assert_receive {:new_notification, n}
     assert n.kind == "endorsement"
@@ -42,8 +45,9 @@ defmodule Vutuv.ActivityTest do
   end
 
   test "notify_connection carries the actor triple and no tag" do
-    Activity.subscribe(11)
-    Activity.notify_connection(11, %{first_name: "Wojtek", last_name: "Mach"})
+    user_id = Vutuv.UUIDv7.generate()
+    Activity.subscribe(user_id)
+    Activity.notify_connection(user_id, %{first_name: "Wojtek", last_name: "Mach"})
 
     assert_receive {:new_notification, n}
     assert n.kind == "connection"
@@ -55,7 +59,7 @@ defmodule Vutuv.ActivityTest do
   end
 
   test "a nil recipient is a no-op (no crash, nothing delivered)" do
-    Activity.subscribe(13)
+    Activity.subscribe(Vutuv.UUIDv7.generate())
     assert :ok = Activity.notify(nil, %{text: "ignored"})
     refute_receive {:new_notification, _}
   end

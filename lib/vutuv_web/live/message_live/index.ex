@@ -50,9 +50,21 @@ defmodule VutuvWeb.MessageLive.Index do
      |> assign(:other, nil)
      |> assign(:more?, false)
      |> assign(:cursor, nil)
-     |> assign_lists()
+     |> assign_sidebar()
      |> stream(:messages, [], dom_id: &"message-#{&1.id}")
      |> assign_form()}
+  end
+
+  # The sidebar lists load only on the connected mount (the page is
+  # login-required, so the static render is replaced a moment later — no
+  # reason to run the 8 sidebar queries twice per visit). `loaded?` keeps the
+  # "No conversations yet." empty state from flashing before they arrive.
+  defp assign_sidebar(socket) do
+    if connected?(socket) do
+      socket |> assign(:loaded?, true) |> assign_lists()
+    else
+      socket |> assign(:loaded?, false) |> assign(:conversations, []) |> assign(:requests, [])
+    end
   end
 
   @impl true
@@ -473,7 +485,10 @@ defmodule VutuvWeb.MessageLive.Index do
           </li>
         </ul>
 
-        <div :if={@conversations == [] && @requests == []} class="px-4 py-6 text-sm text-slate-600 dark:text-slate-400">
+        <div
+          :if={@loaded? && @conversations == [] && @requests == []}
+          class="px-4 py-6 text-sm text-slate-600 dark:text-slate-400"
+        >
           <p>{gettext("No conversations yet.")}</p>
           <p class="mt-1">{gettext("Open someone's profile to message them.")}</p>
           <p class="mt-2">

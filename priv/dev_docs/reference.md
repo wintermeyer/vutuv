@@ -55,7 +55,7 @@ auth $API/users/wintermeyer
   "username": "wintermeyer",
   "headline_markdown": "Phoenix, Elixir & web performance.",
   "counts": {"followers": 1208, "following": 341, "connections": 86, "posts": 412},
-  "emails": ["stefan@example.com"],
+  "emails": [{"id": "0190…", "type": "Work", "value": "stefan@example.com"}],
   "tags": [{"id": "0190…", "name": "Phoenix", "slug": "phoenix", "endorsements": 31}],
   "work_experiences": [{"id": "0190…", "title": "Consultant", "organization": "Wintermeyer Consulting", "start": "2010-01", "end": null}],
   "links": [{"id": "0190…", "url": "https://www.wintermeyer-consulting.de", "description": "Company"}],

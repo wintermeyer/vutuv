@@ -23,12 +23,15 @@ defmodule Vutuv.PostsTest do
   end
 
   describe "create_post/2" do
-    test "creates a public post stamped with today's UTC date" do
+    test "creates a public post stamped with today's Berlin date" do
       author = user()
 
       assert {:ok, %Post{} = post} = Posts.create_post(author, %{body: "Hello **world**"})
       assert post.body == "Hello **world**"
-      assert post.published_on == Date.utc_today()
+      # The archive coordinate is the German calendar day, like every other
+      # user-facing day in the app — not the UTC day, which lags Berlin by
+      # 1-2 hours around midnight.
+      assert post.published_on == Vutuv.BerlinTime.today()
       assert post.denials == []
       assert post.user.id == author.id
     end
@@ -1042,7 +1045,7 @@ defmodule Vutuv.PostsTest do
 
       assert {:ok, %Post{} = reply} = Posts.create_reply(replier, parent, %{body: "an answer"})
       assert reply.body == "an answer"
-      assert reply.published_on == Date.utc_today()
+      assert reply.published_on == Vutuv.BerlinTime.today()
       assert reply.reply_ref.parent_post_id == parent.id
       assert reply.reply_ref.parent_author_id == author.id
       assert reply.reply_ref.parent_post.id == parent.id

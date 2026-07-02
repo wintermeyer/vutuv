@@ -38,17 +38,28 @@ defmodule VutuvWeb.NotificationLive.Index do
       Vutuv.DayClock.subscribe()
     end
 
-    page = Activity.notifications_page(user.id, limit: @page_size)
-    items = with_post_previews(page.entries, user)
+    # The feed load runs only on the connected mount: the page is
+    # login-required (no SEO / no-JS value), so the static render the socket
+    # replaces a moment later would just double the 8-source merge and count.
+    {page, items, total} =
+      if connected?(socket) do
+        page = Activity.notifications_page(user.id, limit: @page_size)
+        items = with_post_previews(page.entries, user)
 
-    # What the "Load more" label counts down: feed events not on screen yet.
-    # Live-pushed events show up immediately, so they never touch this number.
-    total = Activity.notifications_count(user.id)
+        # What the "Load more" label counts down: feed events not on screen
+        # yet. Live-pushed events show up immediately, so they never touch
+        # this number.
+        {page, items, Activity.notifications_count(user.id)}
+      else
+        {%{entries: [], more?: false, next_cursor: nil}, [], 0}
+      end
 
     {:ok,
      socket
      |> assign(:page_title, gettext("Notifications"))
-     |> assign(:empty?, Enum.empty?(page.entries))
+     # Never true on the static render, so "Nothing new yet." cannot flash
+     # before the connected mount fills the list in.
+     |> assign(:empty?, connected?(socket) and Enum.empty?(page.entries))
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> assign(:remaining, max(total - length(page.entries), 0))

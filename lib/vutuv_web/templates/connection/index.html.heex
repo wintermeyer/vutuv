@@ -10,7 +10,9 @@
   unfollowing (which drops the mutual follow). --%>
   <.card>
     <.section_title>
-      {ngettext("1 connection", "%{count} connections", @total)}
+      {ngettext("1 connection", "%{formatted} connections", @total,
+        formatted: compact_count(@total)
+      )}
     </.section_title>
 
     <ul :if={@connections != []} class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">

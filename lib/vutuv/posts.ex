@@ -17,9 +17,9 @@ defmodule Vutuv.Posts do
   `visible_to?/2` or the composable `scope_visible/2` — never filter by hand.
 
   **Permalinks** are `/:slug/posts/:id` — the post's UUID v7 is the whole
-  coordinate. `published_on` (the UTC date at insert time, never changed by
-  edits) scopes the day/month/year archive index pages under the same
-  `/:slug/posts` prefix.
+  coordinate. `published_on` (the Berlin calendar day at insert time, never
+  changed by edits) scopes the day/month/year archive index pages under the
+  same `/:slug/posts` prefix.
 
   **Images** upload eagerly while composing (`create_pending_image/3`), so
   inline markdown can reference them before the post exists; submit attaches
@@ -263,13 +263,14 @@ defmodule Vutuv.Posts do
     end
   end
 
-  # Stamps the UTC publication date (the archive coordinate) and commits the
-  # post, its image claims and — for a reply — the PostReply row in one
-  # transaction, so post and reference land (or roll back) together.
+  # Stamps the Berlin-day publication date (the archive coordinate; the same
+  # calendar day the rendered timestamps use) and commits the post, its image
+  # claims and — for a reply — the PostReply row in one transaction, so post
+  # and reference land (or roll back) together.
   defp insert_post(changeset, image_ids, parent \\ nil) do
     Repo.transaction(fn ->
       changeset
-      |> Ecto.Changeset.change(published_on: Date.utc_today())
+      |> Ecto.Changeset.change(published_on: Vutuv.BerlinTime.today())
       |> Repo.insert()
       |> case do
         {:ok, post} ->
@@ -1179,7 +1180,8 @@ defmodule Vutuv.Posts do
           ref_id: r.id,
           post_id: p.id,
           at: r.inserted_at,
-          on_date: fragment("(?)::date", r.inserted_at)
+          on_date:
+            fragment("((? AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')::date", r.inserted_at)
         }
       )
       |> scope_timeline(viewer)

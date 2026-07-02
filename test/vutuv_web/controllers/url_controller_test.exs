@@ -45,6 +45,22 @@ defmodule VutuvWeb.UrlControllerTest do
     assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
   end
 
+  test "breadcrumbs escape user-authored text instead of injecting raw HTML", %{conn: conn} do
+    {_conn, user} = create_and_login_user(conn)
+    # The link description lands as the final (bare-string) breadcrumb on the
+    # public show page; it must be escaped there like everywhere else.
+    url =
+      insert(:url,
+        user: user,
+        value: "http://example.org",
+        description: "<img src=x onerror=x>R&D"
+      )
+
+    html = build_conn() |> get(~p"/#{user}/links/#{url}") |> html_response(200)
+    refute html =~ "<img src=x"
+    assert html =~ "&lt;img src=x onerror=x&gt;R&amp;D"
+  end
+
   test "the public show page neutralizes a legacy javascript: link instead of 500ing", %{
     conn: conn
   } do

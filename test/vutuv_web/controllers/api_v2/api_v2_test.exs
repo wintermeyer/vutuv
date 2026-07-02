@@ -13,10 +13,6 @@ defmodule VutuvWeb.ApiV2Test do
     {:ok, conn: conn, user: user, plaintext: plaintext, token: token}
   end
 
-  defp authed(conn, plaintext) do
-    put_req_header(conn, "authorization", "Bearer " <> plaintext)
-  end
-
   describe "authentication" do
     test "no token is a 401 problem with WWW-Authenticate", %{conn: conn} do
       conn = get(conn, "/api/2.0/me")
