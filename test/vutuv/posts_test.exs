@@ -112,6 +112,18 @@ defmodule Vutuv.PostsTest do
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
+    test "strips a leading # from post tags and reuses the bare tag" do
+      existing = insert(:tag, name: "Elixir", slug: "elixir")
+
+      # A member types the hashtag form in the composer; it stores the bare tags
+      # and links #Elixir to the existing Elixir tag rather than a # duplicate.
+      post = create_post!(user(), %{body: "tagged", tags: "#Elixir #phoenix"})
+
+      tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
+      assert tag_names == ["Elixir", "phoenix"]
+      assert Enum.any?(post.tags, &(&1.id == existing.id))
+    end
+
     test "keeps at most #{Vutuv.Posts.max_tags_per_post()} tags, in input order" do
       tags = Enum.map_join(1..7, ", ", &"tag-number-#{&1}")
 

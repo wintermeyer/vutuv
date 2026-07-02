@@ -27,11 +27,16 @@ defmodule Vutuv.Tags do
   Splits a tag string into clean names, treating both the comma and any run of
   whitespace as separators: `" PHP, , Ruby on Rails "` →
   `["PHP", "Ruby", "on", "Rails"]`. Tags never contain spaces, so what used to
-  be one merged multi-word tag now becomes one tag per word. Safe to call with
-  `nil` (returns `[]`).
+  be one merged multi-word tag now becomes one tag per word. A leading `#` (the
+  hashtag form) is stripped from each token, so `"#Elixir #Phoenix"` becomes
+  `["Elixir", "Phoenix"]` and a bare `"#"` drops out. Safe to call with `nil`
+  (returns `[]`).
   """
   def parse_tag_names(value) when is_binary(value) do
-    String.split(value, ~r/[\s,]+/, trim: true)
+    value
+    |> String.split(~r/[\s,]+/, trim: true)
+    |> Enum.map(&Tag.normalize_value/1)
+    |> Enum.reject(&(&1 == ""))
   end
 
   def parse_tag_names(_), do: []

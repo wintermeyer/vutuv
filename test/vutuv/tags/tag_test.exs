@@ -3,6 +3,21 @@ defmodule Vutuv.Tags.TagTest do
 
   alias Vutuv.Tags.Tag
 
+  describe "changeset/2 normalizes the value" do
+    import Ecto.Changeset
+
+    test "strips a leading # so the hashtag form stores the bare name" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "#Elixir"})
+      assert get_change(changeset, :name) == "Elixir"
+      assert get_change(changeset, :slug) == "elixir"
+    end
+
+    test "keeps a trailing # (C# stays C#)" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "C#"})
+      assert get_change(changeset, :name) == "C#"
+    end
+  end
+
   describe "related_users/2" do
     test "returns the current user's connections that are endorsed for the tag" do
       # Activated: the tag-page user queries hide unactivated accounts.

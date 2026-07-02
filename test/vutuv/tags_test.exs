@@ -72,6 +72,47 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "a leading # (the hashtag form) is stripped" do
+    # Members naturally type tags with a leading `#` (posts render `#hashtag`
+    # links), so `#elixir` is stored as the tag `elixir` — and links to the same
+    # global tag as `elixir`, never a `#`-prefixed duplicate. Only a *leading*
+    # run of `#` is removed, so `C#` keeps its trailing `#`.
+    import Ecto.Changeset
+
+    test "parse_tag_names strips a leading # and splits the hashtag forms" do
+      assert Tags.parse_tag_names("#Elixir, #Phoenix #Go") == ["Elixir", "Phoenix", "Go"]
+    end
+
+    test "parse_tag_names drops a bare # that normalizes to nothing" do
+      assert Tags.parse_tag_names("#elixir # #") == ["elixir"]
+    end
+
+    test "create_or_link_tag links #Elixir to the existing Elixir tag" do
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+
+      changeset =
+        %UserTag{} |> change(%{}) |> Tag.create_or_link_tag(%{"value" => "#Elixir"})
+
+      assert get_change(changeset, :tag_id) == tag.id
+    end
+
+    test "add_user_tag stores #elixir as the tag elixir" do
+      user = insert(:user)
+
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "#elixir")
+      tag = Repo.preload(user_tag, :tag).tag
+      assert tag.name == "elixir"
+      assert tag.slug == "elixir"
+    end
+
+    test "add_user_tag keeps a trailing # (C# stays C#)" do
+      user = insert(:user)
+
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "C#")
+      assert Repo.preload(user_tag, :tag).tag.name == "C#"
+    end
+  end
+
   describe "add_user_tag/2 rejects spaces" do
     test "a spaced name that is not an existing tag fails validation" do
       user = insert(:user)

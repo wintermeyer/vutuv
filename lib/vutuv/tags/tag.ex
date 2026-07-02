@@ -25,6 +25,8 @@ defmodule Vutuv.Tags.Tag do
   def changeset(struct, params \\ %{})
 
   def changeset(struct, %{"value" => value} = params) do
+    value = normalize_value(value)
+
     struct
     |> cast(params, [:name, :description])
     |> put_change(:name, value)
@@ -82,6 +84,12 @@ defmodule Vutuv.Tags.Tag do
   never reach this branch; the JSON API does.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
+    # Strip the hashtag form before both the existing-tag lookup and the build,
+    # so `#Elixir` links to `Elixir` (not a `#`-prefixed duplicate) and stores
+    # the bare name. The rewritten params carry the normalized value downstream.
+    value = normalize_value(value)
+    params = Map.put(params, "value", value)
+
     if String.match?(value, ~r/\s/) do
       tag = __MODULE__.changeset(%__MODULE__{}, params)
       put_assoc(changeset, :tag, tag)
@@ -89,6 +97,24 @@ defmodule Vutuv.Tags.Tag do
       link_or_build_tag(changeset, value, params)
     end
   end
+
+  @leading_hash ~r/^#+\s*/
+
+  @doc """
+  Normalizes a typed tag value: trims it and strips a leading `#` — the hashtag
+  form members naturally type, since posts render `#hashtag` links — so
+  `"#elixir"` is stored as the tag `elixir` and links to the same global tag as
+  `"elixir"` rather than a `#`-prefixed duplicate. Only a *leading* run of `#`
+  (and any space right after it) is removed, so `"C#"` / `"F#"` keep their
+  trailing `#`. A bare `"#"` normalizes to `""` (dropped as blank by the split
+  paths, rejected by the changeset). Applied at every tag-value boundary:
+  `Vutuv.Tags.parse_tag_names/1`, `Vutuv.Posts` post tags, `create_or_link_tag/2`
+  and `changeset/2`, so no entry point can store a leading `#`.
+  """
+  def normalize_value(value) when is_binary(value),
+    do: value |> String.trim() |> String.replace(@leading_hash, "")
+
+  def normalize_value(value), do: value
 
   defp link_or_build_tag(changeset, value, params) do
     downcase_value = String.downcase(value)

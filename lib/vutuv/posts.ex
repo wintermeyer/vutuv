@@ -1454,9 +1454,11 @@ defmodule Vutuv.Posts do
   defp parse_tag_values(values) when is_binary(values),
     do: parse_tag_values(String.split(values, ~r/[\s,]+/, trim: true))
 
+  # Tag.normalize_value strips a leading `#` (the hashtag form), so "#Elixir"
+  # becomes "Elixir" and dedupes/links against the bare tag; a bare "#" drops.
   defp parse_tag_values(values) when is_list(values) do
     values
-    |> Enum.map(&String.trim/1)
+    |> Enum.map(&Tag.normalize_value/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.uniq_by(&String.downcase/1)
     |> Enum.take(@max_tags)
