@@ -84,6 +84,15 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # never collide.
       assert has_element?(live, "#post-actions-post-#{reply.id}-like")
       assert has_element?(live, "#post-actions-post-#{reply.id}-parent-#{parent.id}-like")
+
+      # The vertical connector "drop" that threads the parent's avatar down into
+      # the reply must size itself with an explicit height (calc(100% - top)),
+      # never a `top`/`bottom` auto-height: an empty absolutely-positioned box
+      # sized only by top+bottom collapses to zero on iOS/mobile Safari, which
+      # made the whole thread line disappear on phones (issue: "line doesn't
+      # show up in the mobile version"). Lock the hardened form in.
+      feed_html = live |> element("#feed-posts") |> render()
+      assert feed_html =~ "h-[calc(100%-2.25rem)]"
     end
 
     test "replying live removes the parent's standalone row, keeping the thread", %{conn: conn} do

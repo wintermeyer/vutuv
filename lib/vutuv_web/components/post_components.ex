@@ -355,10 +355,14 @@ defmodule VutuvWeb.PostComponents do
         <div class="relative">
           <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
           elbow below continues it into the reply's avatar. Only when a reply
-          follows this card. --%>
+          follows this card. Height is an explicit `calc(100% - top)`, not
+          `top-9` + `bottom-0`: an empty absolutely-positioned box sized only by
+          `top`/`bottom` (auto height) collapses to zero on iOS/mobile Safari, so
+          the whole thread line vanished on phones while the explicit-height
+          elbows survived. An explicit height renders identically everywhere. --%>
           <span
             :if={rest != []}
-            class="absolute bottom-0 left-[1.125rem] top-9 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
+            class="absolute left-[1.125rem] top-9 h-[calc(100%-2.25rem)] w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
             aria-hidden="true"
           >
           </span>
