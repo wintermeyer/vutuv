@@ -76,6 +76,14 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # own standalone row — the followed author's post used to appear twice.
       assert has_element?(live, "#feed-post-#{reply.id}")
       refute has_element?(live, "#feed-post-#{parent.id}")
+
+      # Both the reply *and* the post it answers are full cards that keep their
+      # own action bar (like / repost / bookmark), so every element of the
+      # thread can be acted on — the parent is no longer a faint read-only
+      # excerpt. The parent's bar is keyed under the leaf entry so the two bars
+      # never collide.
+      assert has_element?(live, "#post-actions-post-#{reply.id}-like")
+      assert has_element?(live, "#post-actions-post-#{reply.id}-parent-#{parent.id}-like")
     end
 
     test "replying live removes the parent's standalone row, keeping the thread", %{conn: conn} do
@@ -96,6 +104,73 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       assert has_element?(live, "#feed-post-#{reply.id}")
       refute has_element?(live, "#feed-post-#{parent.id}")
+
+      # The nested parent card carries its own action bar for the live-arrived
+      # reply too (one-level nesting; its bar self-loads engagement).
+      assert has_element?(live, "#post-actions-post-#{reply.id}-parent-#{parent.id}-like")
+    end
+
+    test "a multi-post thread across users renders once, not fragmented pairs", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      # A three-post conversation spanning two users: user roots it, friend
+      # answers, user answers again. All three are on the viewer's feed (own +
+      # followed), so the whole chain is present.
+      {:ok, root} = Posts.create_post(user, %{body: "the root question"})
+      {:ok, mid} = Posts.create_reply(friend, root, %{body: "the middle answer"})
+      {:ok, leaf} = Posts.create_reply(user, mid, %{body: "the final word"})
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      # The whole thread renders once as a single conversation — each post shown
+      # exactly once. The middle post used to appear twice (its own row *and*
+      # nested under the leaf); it must not any more.
+      assert html =~ "the root question"
+      assert html =~ "the middle answer"
+      assert html =~ "the final word"
+      assert length(String.split(html, "the middle answer")) - 1 == 1
+
+      # Only the leaf keeps its standalone stream row; the root and middle are
+      # nested inside that one thread, so their own rows are dropped.
+      assert has_element?(live, "#feed-post-#{leaf.id}")
+      refute has_element?(live, "#feed-post-#{mid.id}")
+      refute has_element?(live, "#feed-post-#{root.id}")
+
+      # Every post in the thread keeps its own action bar.
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-like")
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{mid.id}-like")
+      assert has_element?(live, "#post-actions-post-#{leaf.id}-parent-#{root.id}-like")
+    end
+
+    test "a deep thread caps its indentation so it can't scroll a phone sideways", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      friend = other_user()
+      insert(:follow, follower: user, followee: friend)
+
+      # A seven-post back-and-forth (root + six replies, alternating authors), all
+      # on the viewer's feed so the whole chain collapses into one thread.
+      {:ok, root} = Posts.create_post(user, %{body: "chain post 0"})
+
+      _leaf =
+        Enum.reduce(1..6, root, fn n, parent ->
+          author = if rem(n, 2) == 0, do: user, else: friend
+          {:ok, reply} = Posts.create_reply(author, parent, %{body: "chain post #{n}"})
+          reply
+        end)
+
+      {:ok, live, html} = live(conn, ~p"/feed")
+
+      # Every post in the thread still renders (nothing is dropped to save width).
+      for n <- 0..6, do: assert(html =~ "chain post #{n}")
+
+      # But the indentation is capped: a 7-deep thread shows at most 3 nested
+      # rails, not 6, so it can't march off the right edge of a phone. `border-l-2`
+      # is the thread rail (the only feed use of it).
+      feed_html = live |> element("#feed-posts") |> render()
+      rails = length(String.split(feed_html, "border-l-2")) - 1
+      assert rails <= 3, "expected the indent to cap at 3 rails, got #{rails}"
     end
 
     test "the timeline renders as one card, not one card per post", %{conn: conn} do

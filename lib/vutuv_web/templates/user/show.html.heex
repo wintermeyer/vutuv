@@ -286,6 +286,7 @@ the resulting ~200px rail width. --%>
         <div :for={entry <- @posts} class={post_row_class()}>
           <.post_thread_entry
             post={entry.post}
+            ancestors={entry[:ancestors]}
             reposted_by={entry.reposted_by}
             entry_id={entry.id}
             conn_or_socket={@socket}

@@ -126,10 +126,19 @@ defmodule VutuvWeb.PostLive.Feed do
   # author for the whole page in one query each, and hang them on each entry, so
   # the per-card Actions LiveViews don't each run their own query (was one query
   # per post) and the card's mute toggle knows its follow id + state without a
-  # per-row lookup. Live-arriving single posts carry `engagement: nil` (falls
-  # back to the bar's own query) and get their follow edge in `insert_entry/3`.
+  # per-row lookup. A threaded reply nests the whole conversation it answers as
+  # full cards, so every ancestor post id joins the same engagement batch and
+  # each entry carries a `%{post_id => engagement}` submap for those cards' bars.
+  # Live-arriving single posts carry `engagement: nil` (falls back to the bar's
+  # own query) and get their follow edge in `insert_entry/3`.
   defp with_engagement(entries, user) do
-    engagement = Posts.post_engagement_map(Enum.map(entries, & &1.post.id), user)
+    ancestor_ids = fn entry -> Enum.map(entry[:ancestors] || [], & &1.id) end
+
+    engagement =
+      entries
+      |> Enum.flat_map(fn entry -> [entry.post.id | ancestor_ids.(entry)] end)
+      |> Enum.uniq()
+      |> Posts.post_engagement_map(user)
 
     follows =
       entries
@@ -140,6 +149,7 @@ defmodule VutuvWeb.PostLive.Feed do
     Enum.map(entries, fn entry ->
       entry
       |> Map.put(:engagement, engagement[entry.post.id])
+      |> Map.put(:ancestor_engagement, Map.take(engagement, ancestor_ids.(entry)))
       |> Map.put(:viewer_follow, follows[entry.post.user_id])
     end)
   end
@@ -309,7 +319,9 @@ defmodule VutuvWeb.PostLive.Feed do
   # renders straight from the entry's engagement, so a live-arrived card never
   # queries during render (which would race the sandbox in tests). Only the
   # two branches that keep the entry pay for it — a blocked or denied post is
-  # dropped before either query runs.
+  # dropped before either query runs. A live-arrived reply nests only its direct
+  # parent (one level, whose bar self-loads); the full visible chain reassembles
+  # on the next reload / "Load more" (which run through `collapse_threads/1`).
   defp decorate(entry, user) do
     entry
     |> Map.put(:viewer_follow, Social.follow_edge(user.id, entry.post.user_id))
@@ -391,6 +403,8 @@ defmodule VutuvWeb.PostLive.Feed do
                 post={entry.post}
                 viewer={@current_user}
                 viewer_follow={entry[:viewer_follow]}
+                ancestors={entry[:ancestors]}
+                ancestor_engagement={entry[:ancestor_engagement] || %{}}
                 reposted_by={entry.reposted_by}
                 entry_id={entry.id}
                 conn_or_socket={@socket}

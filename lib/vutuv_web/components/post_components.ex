@@ -199,23 +199,48 @@ defmodule VutuvWeb.PostComponents do
   lists, the post archive and the permalink reply thread, so a reply reads the
   same everywhere instead of the feed's old flat "Replying to @handle" banner.
 
-  When the entry is a reply whose parent still exists (and `nest_parent`), the
-  post it answers renders above as a compact `<.post_preview>` joined by the
-  thread rail + tick, and the leaf `<.post_card>` drops its own reply banner (the
-  inline parent shows the relationship once). A top-level post, a reply whose
-  parent is gone (the card's degraded banner covers it), or `nest_parent={false}`
-  on the permalink (where the parent *is* the page) renders as a standalone card.
+  When the entry is a reply, the posts it answers render **above** it as a
+  **nested conversation** (`thread_chain/1`): each is a full `<.post_card>`
+  (keeping its own like / repost / bookmark bar), oldest-first, and every reply is
+  **indented one step further right** under the post it answers — a left-rail,
+  left-padded block per level — so the reply depth reads at a glance the way a
+  threaded comment tree does, however many posts or authors the thread spans. The
+  leaf reply drops its own "Replying to @handle" banner (the posts above show the
+  relationship). A top-level post, a reply whose parent is gone (the card's
+  degraded banner covers it), or `nest_parent={false}` on the permalink (where the
+  parent *is* the page) renders as a standalone card.
+
+  `ancestors` is the ordered, oldest-first list of the posts this one answers
+  (from `Posts.collapse_threads/1`); the feed and profile pass the whole visible
+  chain, so a multi-post thread renders once. When it is not given, the component
+  falls back to the single preloaded `reply_ref` parent (one level), which is all
+  the archive / permalink / saved lists need. `ancestor_engagement` is a
+  `%{post_id => engagement}` map for those ancestor cards' action bars (the feed
+  batches it; nil entries make a bar self-load, the profile path).
 
   Forwards the same post/viewer/engagement/reposted_by/entry_id/conn_or_socket
   the `<.post_card>` takes to the leaf card; `surface` picks the leaf shell
   (`:flat` inside a divide-y list, `:card` standalone). A list entry is always a
   `:preview` card — the one `:full` rendering (the permalink's own post) uses
-  `<.post_card>` directly, not this.
+  `<.post_card>` directly.
   """
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
   attr(:viewer_follow, :any, default: nil)
   attr(:engagement, :any, default: nil)
+
+  attr(:ancestors, :any,
+    default: nil,
+    doc:
+      "oldest-first list of the posts this one answers; nil falls back to the " <>
+        "single preloaded reply_ref parent (one level)"
+  )
+
+  attr(:ancestor_engagement, :map,
+    default: %{},
+    doc: "%{post_id => engagement} for the ancestor cards' action bars; missing = self-load"
+  )
+
   attr(:reposted_by, :any, default: nil)
   attr(:entry_id, :string, default: nil)
   attr(:surface, :atom, default: :flat, values: [:card, :flat])
@@ -229,39 +254,14 @@ defmodule VutuvWeb.PostComponents do
   )
 
   def post_thread_entry(assigns) do
-    assigns = assign(assigns, :parent, thread_parent(assigns.post, assigns.nest_parent))
+    # An explicit [] means "collapsed, no ancestors" (a root/standalone) and must
+    # not fall back; only a missing (nil) list falls back to the one-level parent.
+    ancestors = assigns.ancestors || one_level_ancestors(assigns.post, assigns.nest_parent)
+    assigns = assign(assigns, :ancestors, ancestors)
+    assigns = assign(assigns, :chain, thread_chain_items(assigns))
 
     ~H"""
-    <%= if @parent do %>
-      <.post_preview
-        post={@parent}
-        time_id={"thread-parent-time-#{@entry_id || @post.id}"}
-        text={@parent.body}
-      />
-      <%!-- The reply nested under its parent: the rail drops from the parent
-      avatar's centre (ml-[1.125rem]) and the tick (top-[1.125rem]) meets the
-      reply card's own avatar centre. --%>
-      <div class="ml-[1.125rem] mt-1 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
-        <div class="relative">
-          <span
-            class="absolute -left-5 top-[1.125rem] h-px w-5 bg-slate-200 dark:bg-slate-700"
-            aria-hidden="true"
-          >
-          </span>
-          <.post_card
-            post={@post}
-            viewer={@viewer}
-            viewer_follow={@viewer_follow}
-            engagement={@engagement}
-            reposted_by={@reposted_by}
-            entry_id={@entry_id}
-            surface={@surface}
-            conn_or_socket={@conn_or_socket}
-            show_reply_banner={false}
-          />
-        </div>
-      </div>
-    <% else %>
+    <%= if @ancestors == [] do %>
       <.post_card
         post={@post}
         viewer={@viewer}
@@ -273,34 +273,136 @@ defmodule VutuvWeb.PostComponents do
         conn_or_socket={@conn_or_socket}
         show_reply_banner={@nest_parent}
       />
+    <% else %>
+      <%!-- The reply and the posts it answers, as one conversation: each is a
+      full post card (its own like / repost / bookmark bar), oldest-first, and
+      every reply is nested one step further right under the post it answers —
+      a left-rail, left-padded block per level — so the reply depth reads at a
+      glance the way a threaded comment tree does. --%>
+      <.thread_chain
+        chain={@chain}
+        viewer={@viewer}
+        surface={@surface}
+        conn_or_socket={@conn_or_socket}
+      />
     <% end %>
     """
   end
 
-  # The parent post to nest above a reply, or nil to render the post standalone
-  # (a top-level post, a reply whose parent is gone, or nesting turned off where
-  # the parent is already on the page — the permalink thread).
-  defp thread_parent(_post, false), do: nil
+  # The ordered card specs for a threaded conversation: the ancestors (oldest
+  # first, banners off, engagement from the batched map) followed by the leaf
+  # (which keeps its own follow edge, repost line and engagement). Each ancestor's
+  # `entry_id` is derived from the leaf entry so DOM ids stay unique even when the
+  # same post is nested under more than one reply on the page.
+  defp thread_chain_items(assigns) do
+    leaf_key = assigns.entry_id || assigns.post.id
 
-  defp thread_parent(post, true) do
+    ancestors =
+      Enum.map(assigns.ancestors, fn post ->
+        %{
+          post: post,
+          engagement: assigns.ancestor_engagement[post.id],
+          viewer_follow: nil,
+          reposted_by: nil,
+          entry_id: "#{leaf_key}-parent-#{post.id}"
+        }
+      end)
+
+    ancestors ++
+      [
+        %{
+          post: assigns.post,
+          engagement: assigns.engagement,
+          viewer_follow: assigns.viewer_follow,
+          reposted_by: assigns.reposted_by,
+          entry_id: assigns.entry_id
+        }
+      ]
+  end
+
+  # How many levels of a thread visibly indent before the indentation is capped.
+  # Beyond this, deeper replies keep stacking at the same indent instead of
+  # marching further right. A card's min-content is ~267px, and a 360px phone
+  # (the narrow floor we support) leaves ~60px of slack past that, so 3 levels of
+  # `pl-3` (~14px each incl. the border) stays comfortably on-screen; letting the
+  # indent grow unbounded scrolled a deep thread sideways on a phone.
+  @thread_indent_cap 3
+
+  # Renders a reply chain as a nested comment tree: the head card at the current
+  # indent, then — while the chain continues — the rest inside a left-rail,
+  # left-padded block one step deeper, recursively. So the root sits flush left
+  # and each reply is indented under the post it answers, its depth showing in
+  # the accumulated rails to its left, until the indent is capped (see above) and
+  # deeper replies stack at the same level.
+  attr(:chain, :list, required: true)
+  attr(:depth, :integer, default: 0)
+  attr(:viewer, :any, default: nil)
+  attr(:surface, :atom, required: true)
+  attr(:conn_or_socket, :any, required: true)
+
+  defp thread_chain(assigns) do
+    # `@thread_indent_cap` is a module attribute, not an assign, so resolve the
+    # "still indenting?" flag here — inside ~H, `@name` would mean assigns.name.
+    assigns = assign(assigns, :indent?, assigns.depth < @thread_indent_cap)
+
+    ~H"""
+    <%= case @chain do %>
+      <% [item | rest] -> %>
+        <.post_card
+          post={item.post}
+          viewer={@viewer}
+          viewer_follow={item.viewer_follow}
+          engagement={item.engagement}
+          reposted_by={item.reposted_by}
+          entry_id={item.entry_id}
+          surface={@surface}
+          conn_or_socket={@conn_or_socket}
+          show_reply_banner={false}
+        />
+        <div
+          :if={rest != []}
+          class={[
+            "mt-3",
+            @indent? && "border-l-2 border-slate-200 pl-3 dark:border-slate-700 sm:pl-5"
+          ]}
+        >
+          <.thread_chain
+            chain={rest}
+            depth={@depth + 1}
+            viewer={@viewer}
+            surface={@surface}
+            conn_or_socket={@conn_or_socket}
+          />
+        </div>
+      <% [] -> %>
+    <% end %>
+    """
+  end
+
+  # Fallback when a caller does not compute the full visible chain: the single
+  # preloaded `reply_ref` parent (one level), or none when nesting is off (the
+  # permalink, where the parent is the page) or the post is not a reply.
+  defp one_level_ancestors(_post, false), do: []
+
+  defp one_level_ancestors(post, true) do
     case Posts.reply_ref_state(post) do
-      {:parent, parent} -> parent
-      _ -> nil
+      {:parent, parent} -> [parent]
+      _ -> []
     end
   end
 
   @doc """
   A compact, read-only, linked preview of one post — the shared "referenced post"
-  rendering. Two homes: the thread parent-context row above a reply
-  (`<.post_thread_entry>`) and the notification page's quoted post. Read-only on
+  rendering. Its home is the notification page's quoted post. Read-only on
   purpose (no action bar, no live component), so a 50-row notification page stays
-  cheap.
+  cheap. (The feed/profile thread used to nest the parent through this too, but
+  now renders it as a full `<.post_card>` so every element of a thread keeps its
+  own action bar.)
 
   Renders the author (linked avatar + name → profile, `@handle` · time) and a
   clamped excerpt that links to the post permalink. `text` is the already-prepared
-  excerpt: the thread parent passes the parent body and lets the default
-  `truncate` clamp it to one line; the notification page pre-clamps to three lines
-  server-side (its own visibility rules must strip a denied body) and passes
+  excerpt: the notification page pre-clamps to three lines server-side (its own
+  visibility rules must strip a denied body) and passes
   `clamp="line-clamp-3 whitespace-pre-line"` + `truncated?`. `label` is the
   optional uppercase caption that tells a reply notification's two quotes apart
   ("Your post" / "Reply"); the global `rest` carries the

@@ -920,7 +920,7 @@ defmodule Vutuv.Posts do
         cursor
       )
 
-    %{page | entries: page.entries |> hydrate_posts() |> drop_threaded_parents()}
+    %{page | entries: page.entries |> hydrate_posts() |> collapse_threads()}
   end
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
@@ -1014,28 +1014,53 @@ defmodule Vutuv.Posts do
     Enum.zip_with(entries, posts, &%{&1 | post: &2})
   end
 
-  # A reply already renders the post it answers inline (the threaded card, via
-  # `<.post_thread_entry>`), so when both a reply and its parent land on the
-  # same page the parent's own standalone entry is a visible duplicate — the
-  # feed showed a followed author's post both on its own and nested under your
-  # reply. Drop the standalone parent, keeping the threaded reply. Only
-  # non-reply entries are dropped, so a reply that is itself another reply's
-  # parent still renders its own thread. Entries must have `reply_ref`
-  # preloaded (they do — `post_preloads/0`).
-  defp drop_threaded_parents(entries) do
-    nested_parent_ids =
-      for %{post: post} <- entries,
-          {:parent, parent} <- [reply_ref_state(post)],
-          into: MapSet.new(),
-          do: parent.id
+  # A reply renders as a conversation: the posts it answers are stacked above it
+  # as full cards (`<.post_thread_entry>`). So when a reply *and its ancestors*
+  # all land on the same page, the ancestors' own standalone rows are visible
+  # duplicates — and a middle post (a reply that is itself another reply's
+  # parent) used to show up twice: once nested under its reply, once as its own
+  # row nesting *its* parent. Collapse each thread: drop every entry whose post
+  # is an ancestor of another entry (it renders inside that thread instead), and
+  # annotate each surviving leaf with `:ancestors` — the ordered, oldest-first
+  # list of the posts it answers — so the whole thread renders once, no matter
+  # how many posts or authors it spans.
+  #
+  # The chain is walked one link at a time through the entries themselves (each
+  # carries its direct parent in the preloaded `reply_ref`), so it reaches as
+  # far up as its posts are present on the page; the first parent that is not an
+  # entry is kept as a single nested context (its own parent is not preloaded).
+  # Reposts always render standalone, so they are never dropped.
+  defp collapse_threads(entries) do
+    by_id =
+      for %{reposted_by: nil, post: %{id: id} = post} <- entries, into: %{}, do: {id, post}
 
-    if MapSet.size(nested_parent_ids) == 0 do
-      entries
-    else
-      Enum.reject(entries, fn %{post: post} ->
-        not match?({:parent, _}, reply_ref_state(post)) and
-          MapSet.member?(nested_parent_ids, post.id)
-      end)
+    absorbed =
+      for %{post: post} <- entries,
+          ancestor <- ancestor_chain(post, by_id),
+          Map.has_key?(by_id, ancestor.id),
+          into: MapSet.new(),
+          do: ancestor.id
+
+    entries
+    |> Enum.reject(fn e -> is_nil(e.reposted_by) and MapSet.member?(absorbed, e.post.id) end)
+    |> Enum.map(fn e -> Map.put(e, :ancestors, ancestor_chain(e.post, by_id)) end)
+  end
+
+  # The posts `post` answers, oldest first. Walk up the reply chain, preferring
+  # the fully-preloaded entry copy of each parent (which carries its own
+  # `reply_ref`) so the walk can continue past it; stop at a root or at the first
+  # parent that is not itself an entry (its parent is not preloaded — one level
+  # only there). Reply parents are always older posts, so the walk can't cycle.
+  defp ancestor_chain(post, by_id, acc \\ []) do
+    case reply_ref_state(post) do
+      {:parent, parent} ->
+        case Map.get(by_id, parent.id) do
+          nil -> [parent | acc]
+          entry_parent -> ancestor_chain(entry_parent, by_id, [entry_parent | acc])
+        end
+
+      _ ->
+        acc
     end
   end
 
@@ -1053,7 +1078,7 @@ defmodule Vutuv.Posts do
     |> limit(^limit)
     |> Repo.all()
     |> author_entries(author)
-    |> drop_threaded_parents()
+    |> collapse_threads()
   end
 
   @doc "How many timeline entries of `author` `viewer` may see (the \"View all\" label)."
@@ -1330,13 +1355,18 @@ defmodule Vutuv.Posts do
     # denials with group/denied_user: the author-facing audience display
     # names them (never shown to other viewers). reply_ref goes exactly one
     # level deep (the banner names the direct parent only) — preloading the
-    # parent's own reply_ref would recurse.
+    # parent's own reply_ref would recurse. The parent carries :images + :tags
+    # too: the feed/profile thread nests it as a full post card (its own action
+    # bar, images, tags), not just a one-line excerpt.
     [
       :user,
       :images,
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
-      reply_ref: [:parent_author, parent_post: :user]
+      reply_ref: [
+        :parent_author,
+        parent_post: [:user, :images, tags: from(t in Tag, order_by: t.name)]
+      ]
     ]
   end
 
