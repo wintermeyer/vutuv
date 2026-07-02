@@ -165,12 +165,13 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # Every post in the thread still renders (nothing is dropped to save width).
       for n <- 0..6, do: assert(html =~ "chain post #{n}")
 
-      # But the indentation is capped: a 7-deep thread shows at most 3 nested
-      # rails, not 6, so it can't march off the right edge of a phone. `border-l-2`
-      # is the thread rail (the only feed use of it).
+      # But the indentation is capped: a 7-deep thread indents at most twice
+      # (@thread_indent_cap), not six times, so it can't march off the right edge
+      # of a phone. `border-l-2` is the indented connector elbow (the only feed
+      # use of it); capped-depth connectors are a plain vertical drop instead.
       feed_html = live |> element("#feed-posts") |> render()
-      rails = length(String.split(feed_html, "border-l-2")) - 1
-      assert rails <= 3, "expected the indent to cap at 3 rails, got #{rails}"
+      indents = length(String.split(feed_html, "border-l-2")) - 1
+      assert indents <= 2, "expected the indent to cap at 2 levels, got #{indents}"
     end
 
     test "the timeline renders as one card, not one card per post", %{conn: conn} do

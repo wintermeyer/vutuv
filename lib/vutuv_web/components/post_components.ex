@@ -321,19 +321,23 @@ defmodule VutuvWeb.PostComponents do
   end
 
   # How many levels of a thread visibly indent before the indentation is capped.
-  # Beyond this, deeper replies keep stacking at the same indent instead of
-  # marching further right. A card's min-content is ~267px, and a 360px phone
-  # (the narrow floor we support) leaves ~60px of slack past that, so 3 levels of
-  # `pl-3` (~14px each incl. the border) stays comfortably on-screen; letting the
-  # indent grow unbounded scrolled a deep thread sideways on a phone.
-  @thread_indent_cap 3
+  # Beyond this, deeper replies keep stacking in the same column (the connector
+  # becomes a straight vertical drop) instead of marching further right. A card's
+  # min-content is ~267px and a 360px phone (the narrow floor we support) leaves
+  # ~60px of slack past that, so 2 levels of `pl-7` (28px) stay comfortably
+  # on-screen; letting the indent grow unbounded scrolled a deep thread sideways.
+  @thread_indent_cap 2
 
-  # Renders a reply chain as a nested comment tree: the head card at the current
-  # indent, then — while the chain continues — the rest inside a left-rail,
-  # left-padded block one step deeper, recursively. So the root sits flush left
-  # and each reply is indented under the post it answers, its depth showing in
-  # the accumulated rails to its left, until the indent is capped (see above) and
-  # deeper replies stack at the same level.
+  # Renders a reply chain as a threaded conversation with a **connector line that
+  # runs from each avatar into the reply's avatar** (like a mail/forum thread):
+  # a vertical drop from the head avatar down its card, then — in the indented
+  # block holding the reply — an elbow that curves from that column into the
+  # reply's avatar. Each reply is indented one `pl-7` step under the post it
+  # answers until the indent is capped (see above), past which replies stay in
+  # the same column and the connector is a straight vertical drop. Recursion draws
+  # the same connector at every level, so the line threads avatar-to-avatar all
+  # the way down. The avatar centre is `1.125rem` in from the card's left (the
+  # `sm` avatar), which is why the connectors sit at `left-[1.125rem]`.
   attr(:chain, :list, required: true)
   attr(:depth, :integer, default: 0)
   attr(:viewer, :any, default: nil)
@@ -348,24 +352,46 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <%= case @chain do %>
       <% [item | rest] -> %>
-        <.post_card
-          post={item.post}
-          viewer={@viewer}
-          viewer_follow={item.viewer_follow}
-          engagement={item.engagement}
-          reposted_by={item.reposted_by}
-          entry_id={item.entry_id}
-          surface={@surface}
-          conn_or_socket={@conn_or_socket}
-          show_reply_banner={false}
-        />
-        <div
-          :if={rest != []}
-          class={[
-            "mt-3",
-            @indent? && "border-l-2 border-slate-200 pl-3 dark:border-slate-700 sm:pl-5"
-          ]}
-        >
+        <div class="relative">
+          <%!-- Drops from this avatar's bottom (top-9) to the card's bottom; the
+          elbow below continues it into the reply's avatar. Only when a reply
+          follows this card. --%>
+          <span
+            :if={rest != []}
+            class="absolute bottom-0 left-[1.125rem] top-9 w-0.5 -translate-x-1/2 rounded-full bg-slate-200 dark:bg-slate-700"
+            aria-hidden="true"
+          >
+          </span>
+          <.post_card
+            post={item.post}
+            viewer={@viewer}
+            viewer_follow={item.viewer_follow}
+            engagement={item.engagement}
+            reposted_by={item.reposted_by}
+            entry_id={item.entry_id}
+            surface={@surface}
+            conn_or_socket={@conn_or_socket}
+            show_reply_banner={false}
+          />
+        </div>
+        <div :if={rest != []} class={["relative pt-3", @indent? && "pl-7"]}>
+          <%!-- The connector into the reply's avatar. Indented: an elbow curving
+          from the parent column (left-[1.125rem]) right into the reply avatar's
+          left edge, at the reply avatar's vertical centre (pt-3 + 1.125rem =
+          1.875rem down). Capped: the reply is in the same column, so a straight
+          vertical drop to its avatar. --%>
+          <span
+            :if={@indent?}
+            class="absolute left-[1.125rem] top-0 h-[1.875rem] w-2.5 rounded-bl-xl border-b-2 border-l-2 border-slate-200 dark:border-slate-700"
+            aria-hidden="true"
+          >
+          </span>
+          <span
+            :if={!@indent?}
+            class="absolute left-[1.125rem] top-0 h-3 w-0.5 -translate-x-1/2 rounded-full bg-slate-200 dark:bg-slate-700"
+            aria-hidden="true"
+          >
+          </span>
           <.thread_chain
             chain={rest}
             depth={@depth + 1}
