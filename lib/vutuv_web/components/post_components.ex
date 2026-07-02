@@ -358,7 +358,7 @@ defmodule VutuvWeb.PostComponents do
           follows this card. --%>
           <span
             :if={rest != []}
-            class="absolute bottom-0 left-[1.125rem] top-9 w-0.5 -translate-x-1/2 rounded-full bg-slate-200 dark:bg-slate-700"
+            class="absolute bottom-0 left-[1.125rem] top-9 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
             aria-hidden="true"
           >
           </span>
@@ -388,7 +388,7 @@ defmodule VutuvWeb.PostComponents do
           </span>
           <span
             :if={!@indent?}
-            class="absolute left-[1.125rem] top-0 h-3 w-0.5 -translate-x-1/2 rounded-full bg-slate-200 dark:bg-slate-700"
+            class="absolute left-[1.125rem] top-0 h-3 w-0.5 rounded-full bg-slate-200 dark:bg-slate-700"
             aria-hidden="true"
           >
           </span>
