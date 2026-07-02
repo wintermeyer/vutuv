@@ -52,7 +52,8 @@ defmodule VutuvWeb.OauthControllerTest do
       {:ok, _user} =
         Vutuv.Accounts.register_user(conn, %{
           "emails" => %{"0" => %{"value" => "consent@example.com"}},
-          "first_name" => "Consent"
+          "first_name" => "Consent",
+          "tag_list" => @registration_tags
         })
 
       # Drive the real two-step PIN login over HTTP; ConnTest recycles the

@@ -5,7 +5,8 @@ defmodule VutuvWeb.UserControllerTest do
 
   @valid_attrs %{
     "emails" => %{"0" => %{"value" => "email@example.com"}},
-    "first_name" => "first_name"
+    "first_name" => "first_name",
+    "tag_list" => @registration_tags
   }
   @update_attrs [first_name: "new_first_name"]
   @invalid_update_attrs [first_name: nil, last_name: nil]
@@ -649,11 +650,15 @@ defmodule VutuvWeb.UserControllerTest do
           ~p"/#{user}/links/new",
           ~p"/#{user}/social_media_accounts/new",
           ~p"/#{user}/addresses/new",
-          ~p"/#{user}/work_experiences/new",
-          ~p"/#{user}/tags/new"
+          ~p"/#{user}/work_experiences/new"
         ] do
       assert html =~ path
     end
+
+    # Tags are never empty on a fresh account (sign-up requires three), so the
+    # Tags card is already a showcase: a Manage footer instead of the add tile.
+    refute html =~ ~s(href="#{~p"/#{user}/tags/new"}")
+    assert html =~ ~s(href="#{~p"/#{user}/tags"}")
   end
 
   test "empty sections invite the owner to add information instead of dead-ending", %{conn: conn} do
@@ -739,7 +744,8 @@ defmodule VutuvWeb.UserControllerTest do
     attrs = %{
       "emails" => %{"0" => %{"value" => "renamed@example.com"}},
       "first_name" => "Jane",
-      "last_name" => "Doe"
+      "last_name" => "Doe",
+      "tag_list" => @registration_tags
     }
 
     {:ok, user} = Vutuv.Accounts.register_user(conn, attrs)

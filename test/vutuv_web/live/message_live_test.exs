@@ -11,7 +11,8 @@ defmodule VutuvWeb.MessageLiveTest do
 
     create_and_login_user(conn, %{
       "emails" => %{"0" => %{"value" => "#{String.downcase(name)}@example.com"}},
-      "first_name" => name
+      "first_name" => name,
+      "tag_list" => @registration_tags
     })
   end
 

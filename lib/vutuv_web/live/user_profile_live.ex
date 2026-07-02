@@ -550,23 +550,40 @@ defmodule VutuvWeb.UserProfileLive do
 
   defp completion_steps(user, posts_total) do
     [
+      # Sign-up requires three tags, so this step arrives already checked: the
+      # checklist opens with visible progress instead of a wall of zeros
+      # (people finish lists they have visibly started). It stays actionable
+      # for tag-less accounts from before the minimum, in their
+      # dormant-return window.
+      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/#{user}/tags/new"},
       %{
         label: gettext("Add a profile photo"),
         done: present?(user.avatar),
         href: ~p"/#{user}/edit"
       },
       %{label: gettext("Add a tagline"), done: present?(user.headline), href: ~p"/#{user}/edit"},
-      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/#{user}/tags/new"},
-      %{
-        label: gettext("Add work experience"),
-        done: user.work_experiences != [],
-        href: ~p"/#{user}/work_experiences/new"
-      },
       # Same #compose hash as the Posts-card tile: land on the feed with the
-      # composer already open instead of a closed one.
-      %{label: gettext("Write your first post"), done: posts_total > 0, href: ~p"/feed#compose"}
+      # composer already open instead of a closed one. "Add work experience"
+      # is deliberately not a step any more: the checklist leads toward the
+      # first post, not CV upkeep (the Experience card keeps its own tile).
+      %{
+        label: gettext("Write your first post"),
+        done: posts_total > 0,
+        href: ~p"/feed#compose",
+        hint: first_post_hint(user)
+      }
     ]
   end
+
+  # A concrete first-post prompt borrowed from the member's own sign-up tags
+  # ("a thought on #elixir") — which doubles as a quiet demo that #hashtags
+  # work in posts. user_tags arrive most-endorsed first, slug as tiebreaker,
+  # so a fresh account gets its alphabetically first tag.
+  defp first_post_hint(%User{user_tags: [user_tag | _]}) do
+    gettext("For example, a thought on %{tag}.", tag: "#" <> user_tag.tag.slug)
+  end
+
+  defp first_post_hint(_user), do: nil
 
   defp present?(nil), do: false
   defp present?(value) when is_binary(value), do: String.trim(value) != ""

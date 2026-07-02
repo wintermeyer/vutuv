@@ -23,14 +23,21 @@ defmodule VutuvWeb.ConnCase do
 
       @endpoint VutuvWeb.Endpoint
 
+      # Registration requires at least three distinct tags (the sign-up tag
+      # minimum), so every helper-registered account carries this neutral,
+      # test-greppable trio.
+      @registration_tags "alpha-tag beta-tag gamma-tag"
+
       @admin_attrs %{
         "emails" => %{"0" => %{"value" => "admin@example.com"}},
-        "first_name" => "admin"
+        "first_name" => "admin",
+        "tag_list" => @registration_tags
       }
 
       @default_login_attrs %{
         "emails" => %{"0" => %{"value" => "email@example.com"}},
-        "first_name" => "first_name"
+        "first_name" => "first_name",
+        "tag_list" => @registration_tags
       }
 
       defp create_and_login_admin(conn) do

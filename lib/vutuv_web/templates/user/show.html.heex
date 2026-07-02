@@ -223,9 +223,12 @@ the resulting ~200px rail width. --%>
     the onboarding window (a new account's first 24h, or the 24h after a dormant
     member signs back in) while anything is still undone, and gone once every step
     is done; @show_completion? carries that gate (see UserController). Each todo
-    links straight to where it is done. Replaces the old 10-minute welcome note. --%>
+    links straight to where it is done. Replaces the old 10-minute welcome note.
+    The tag step is already checked for anyone registered since the three-tag
+    sign-up minimum, so the list opens with visible progress. --%>
     <section
       :if={@show_completion?}
+      id="profile-completion"
       class="rounded-2xl bg-brand-50 p-6 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50"
     >
       <% done_count = Enum.count(@completion_steps, & &1.done) %>
@@ -243,7 +246,10 @@ the resulting ~200px rail width. --%>
         <div class="h-full rounded-full bg-brand-600 transition-all" style={"width: #{round(done_count / total * 100)}%"}></div>
       </div>
       <ul class="mt-4 space-y-2">
-        <li :for={step <- @completion_steps} class="flex items-center gap-3">
+        <%!-- items-start (not center): a step may carry a one-line hint under
+        its label, and the glyph should stay on the label line. text-sm lines
+        and the h-5 glyphs are both 20px, so the first lines still align. --%>
+        <li :for={step <- @completion_steps} class="flex items-start gap-3">
           <%= if step.done do %>
             <span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white" aria-hidden="true">
               <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24">
@@ -253,9 +259,16 @@ the resulting ~200px rail width. --%>
             <span class="text-sm text-brand-700/50 line-through dark:text-brand-200/40">{step.label}</span>
           <% else %>
             <span class="h-5 w-5 shrink-0 rounded-full border-2 border-brand-300 dark:border-brand-700" aria-hidden="true"></span>
-            <.link href={step.href} class="text-sm font-medium text-brand-800 hover:underline dark:text-brand-100">
-              {step.label}
-            </.link>
+            <span class="min-w-0">
+              <.link href={step.href} class="text-sm font-medium text-brand-800 hover:underline dark:text-brand-100">
+                {step.label}
+              </.link>
+              <%!-- The optional per-step nudge (the first-post topic borrowed
+              from the member's own tags) — quiet, muted, not a second link. --%>
+              <span :if={step[:hint]} class="block text-xs text-brand-700/70 dark:text-brand-200/60">
+                {step.hint}
+              </span>
+            </span>
           <% end %>
         </li>
       </ul>

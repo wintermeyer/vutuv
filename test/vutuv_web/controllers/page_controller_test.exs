@@ -279,7 +279,8 @@ defmodule VutuvWeb.PageControllerTest do
   describe "POST /new_registration" do
     @valid_attrs %{
       "emails" => %{"0" => %{"value" => "newcomer@example.com"}},
-      "first_name" => "Newcomer"
+      "first_name" => "Newcomer",
+      "tag_list" => "Elixir Cooking Origami"
     }
 
     # Checking the (inverted) indexing box submits "false", which must land as a
@@ -373,7 +374,7 @@ defmodule VutuvWeb.PageControllerTest do
       attrs =
         Map.merge(@valid_attrs, %{
           "emails" => %{"0" => %{"value" => "tagged@example.com"}},
-          "tag_list" => " Elixir,  Cooking , "
+          "tag_list" => " Elixir,  Cooking , Origami, "
         })
 
       post(conn, ~p"/new_registration", user: attrs)
@@ -382,20 +383,36 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert user.user_tags
              |> Enum.map(&String.downcase(&1.tag.name))
-             |> Enum.sort() == ["cooking", "elixir"]
+             |> Enum.sort() == ["cooking", "elixir", "origami"]
     end
 
-    test "a blank tag list creates no tags", %{conn: conn} do
+    # Tags are a cornerstone of the system, so a sign-up needs at least three
+    # distinct ones. A short (or blank) tag list re-renders the form with the
+    # error instead of creating the account.
+    test "a blank tag list is rejected", %{conn: conn} do
       attrs =
         Map.merge(@valid_attrs, %{
           "emails" => %{"0" => %{"value" => "untagged@example.com"}},
           "tag_list" => "   "
         })
 
-      post(conn, ~p"/new_registration", user: attrs)
+      conn = post(conn, ~p"/new_registration", user: attrs)
 
-      user = user_by_email("untagged@example.com") |> Vutuv.Repo.preload(:user_tags)
-      assert user.user_tags == []
+      assert html_response(conn, 422) =~ "Please enter at least 3 different tags."
+      refute user_by_email("untagged@example.com")
+    end
+
+    test "fewer than three distinct tags is rejected, counting duplicates once", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "duplicated@example.com"}},
+          "tag_list" => "Elixir, elixir, ELIXIR, Cooking"
+        })
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert html_response(conn, 422) =~ "Please enter at least 3 different tags."
+      refute user_by_email("duplicated@example.com")
     end
 
     # Tags never contain spaces, so a run of words is not an error: each word
@@ -447,8 +464,10 @@ defmodule VutuvWeb.PageControllerTest do
           "session" => %{"pin" => pin, "context" => "registration"}
         })
 
-      # Greeted by first name, not the anonymous "Welcome to vutuv!".
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "Welcome to vutuv, Newcomer!"
+      # Greeted by first name, not the anonymous "Welcome to vutuv!", and
+      # gently pointed at the two profile steps the checklist will show.
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "Welcome to vutuv, Newcomer! A photo and a short tagline make your profile complete."
     end
   end
 
@@ -460,14 +479,16 @@ defmodule VutuvWeb.PageControllerTest do
   describe "POST /new_registration with an address that already exists" do
     @taken_attrs %{
       "emails" => %{"0" => %{"value" => "taken@example.com"}},
-      "first_name" => "Mallory"
+      "first_name" => "Mallory",
+      "tag_list" => "Phishing Probing Poking"
     }
 
     setup %{conn: conn} do
       {:ok, owner} =
         Vutuv.Accounts.register_user(conn, %{
           "emails" => %{"0" => %{"value" => "taken@example.com"}},
-          "first_name" => "Owner"
+          "first_name" => "Owner",
+          "tag_list" => "Elixir Cooking Origami"
         })
 
       %{owner: owner}

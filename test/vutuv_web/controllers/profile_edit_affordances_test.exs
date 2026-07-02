@@ -63,7 +63,8 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       # A full section is a clean showcase: a "Manage" link to its page, and the
       # inline add tile is gone (adding more happens on the management page).
-      for path <- [~p"/#{user}/work_experiences", ~p"/#{user}/links"] do
+      # Tags are always full on a fresh account (sign-up requires three).
+      for path <- [~p"/#{user}/work_experiences", ~p"/#{user}/links", ~p"/#{user}/tags"] do
         assert html =~ ~s(href="#{path}"), "expected manage link for #{path}"
         refute html =~ ~s(href="#{path}/new"), "the add tile is gone once #{path} has entries"
       end
@@ -72,8 +73,7 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       for path <- [
             ~p"/#{user}/phone_numbers",
             ~p"/#{user}/addresses",
-            ~p"/#{user}/social_media_accounts",
-            ~p"/#{user}/tags"
+            ~p"/#{user}/social_media_accounts"
           ] do
         assert html =~ ~s(href="#{path}/new"), "expected add tile for empty #{path}"
       end
@@ -114,18 +114,46 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
   describe "profile completion checklist" do
     # The owner's onboarding nudge: a few high-impact steps, shown only while
     # something is still undone, and gone once the profile is complete. It is
-    # owner-only (a visitor never sees it).
+    # owner-only (a visitor never sees it). Since sign-up requires three tags,
+    # the tag step arrives already checked: the list opens at 1/4, visible
+    # progress instead of a wall of zeros.
 
-    test "a new owner sees the checklist with every step still to do", %{conn: conn} do
+    test "a new owner sees the checklist with the tag step already done", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+      checklist = completion_text(html)
+
+      assert checklist =~ "Complete your profile"
+      assert checklist =~ "Add a tag"
+      assert checklist =~ "Add a profile photo"
+      assert checklist =~ "Add a tagline"
+      assert checklist =~ "Write your first post"
+      # The registration tags already check the first step off.
+      assert checklist =~ "1/4"
+    end
+
+    # The checklist leads to photo / tagline / first post; work experience is
+    # deliberately not pushed there (its section card keeps its own add tile).
+    test "the checklist does not push work experience", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      assert html =~ "Complete your profile"
-      assert html =~ "Add a profile photo"
-      assert html =~ "Add a tagline"
-      # A blank factory profile has none of the five done.
-      assert html =~ "0/5"
+      refute completion_text(html) =~ "Add work experience"
+      # The section tile itself stays available on the page.
+      assert html =~ ~s(href="#{~p"/#{user}/work_experiences/new"}")
+    end
+
+    # The first-post step borrows one of the member's own sign-up tags as a
+    # concrete prompt (and quietly demonstrates that #hashtags work in posts).
+    test "the first-post step suggests a topic from the member's own tags", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      # @default_login_attrs registers alpha-tag/beta-tag/gamma-tag.
+      assert completion_text(html) =~ "For example, a thought on #alpha-tag."
     end
 
     test "the checklist disappears once every step is done", %{conn: conn} do
@@ -134,8 +162,6 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       {:ok, user} =
         Repo.update(Ecto.Changeset.change(user, avatar: "me.jpg", headline: "Builder of things"))
 
-      insert(:user_tag, user: user, tag: insert(:tag))
-      insert(:work_experience, user: user)
       insert(:post, user: user)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
@@ -175,6 +201,16 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       refute html =~ "Complete your profile"
     end
+  end
+
+  # The checklist card's own text, so assertions about its steps can't be
+  # satisfied (or broken) by the identically-worded section tiles elsewhere on
+  # the profile.
+  defp completion_text(html) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query("#profile-completion")
+    |> LazyHTML.text()
   end
 
   # Push the account's creation out of the 24h "new account" window.

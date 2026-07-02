@@ -273,11 +273,41 @@ defmodule Vutuv.Accounts.User do
   end
 
   # Registration is the one place where an email address may ride along with
-  # the user: the address is verified right afterwards by the login PIN.
+  # the user: the address is verified right afterwards by the login PIN. It is
+  # also the one place that enforces the tag minimum — tags are how members
+  # are found, so an account may not start without at least three distinct
+  # ones (an existing member is never forced to keep three).
   def registration_changeset(model, params \\ %{}) do
     model
     |> changeset(params)
+    |> validate_minimum_tags()
     |> cast_assoc(:emails)
+  end
+
+  # How many distinct tags a sign-up must bring.
+  @min_registration_tags 3
+
+  # Counts exactly what Accounts.register_user/3 later materializes as tags:
+  # the tag_list split on commas/spaces (Vutuv.Tags.parse_tag_names/1), then
+  # case-insensitively de-duplicated — so a padded "Go, go, GO" is one tag,
+  # not three.
+  defp validate_minimum_tags(changeset) do
+    distinct_tags =
+      changeset
+      |> get_field(:tag_list)
+      |> Vutuv.Tags.parse_tag_names()
+      |> Enum.uniq_by(&String.downcase/1)
+
+    if length(distinct_tags) >= @min_registration_tags do
+      changeset
+    else
+      add_error(
+        changeset,
+        :tag_list,
+        "Please enter at least %{min} different tags.",
+        min: @min_registration_tags
+      )
+    end
   end
 
   # Avatar/cover uploads are validated here (size, extension, decodability) but

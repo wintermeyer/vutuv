@@ -5,7 +5,8 @@ defmodule VutuvWeb.RegistrationDevMailboxTest do
 
   @valid_attrs %{
     "emails" => %{"0" => %{"value" => "pin-newcomer@example.com"}},
-    "first_name" => "Newcomer"
+    "first_name" => "Newcomer",
+    "tag_list" => "Elixir Cooking Origami"
   }
 
   # After sign-up the member lands on the PIN confirmation page (rendered by

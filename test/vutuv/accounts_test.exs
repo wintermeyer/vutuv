@@ -10,7 +10,8 @@ defmodule Vutuv.AccountsTest do
   @valid_registration %{
     "emails" => %{"0" => %{"value" => "test@example.com"}},
     "first_name" => "Test",
-    "last_name" => "User"
+    "last_name" => "User",
+    "tag_list" => "Elixir Cooking Origami"
   }
 
   defp build_conn do
@@ -77,6 +78,43 @@ defmodule Vutuv.AccountsTest do
 
       assert {:ok, %User{} = user} = Accounts.register_user(conn, attrs)
       refute user.email_confirmed?
+    end
+
+    # Tags are how members are found, so a sign-up must arrive with at least
+    # three distinct ones. The minimum counts what actually lands as tags:
+    # parsed like register_user parses them, duplicates (case-insensitively)
+    # collapsed first.
+    test "creates the tags alongside the user" do
+      conn = build_conn()
+      assert {:ok, %User{} = user} = Accounts.register_user(conn, @valid_registration)
+
+      assert user.user_tags |> Enum.map(& &1.tag.name) |> Enum.sort() ==
+               ["Cooking", "Elixir", "Origami"]
+    end
+
+    test "rejects a registration with fewer than three tags" do
+      conn = build_conn()
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir Cooking")
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+      assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
+      refute Repo.get_by(User, first_name: "Test")
+    end
+
+    test "rejects a registration without any tags" do
+      conn = build_conn()
+      attrs = Map.delete(@valid_registration, "tag_list")
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+      assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
+    end
+
+    test "a differently-cased duplicate counts as one tag" do
+      conn = build_conn()
+      attrs = Map.put(@valid_registration, "tag_list", "Elixir elixir ELIXIR Cooking")
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+      assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
     end
   end
 

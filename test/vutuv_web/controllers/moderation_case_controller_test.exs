@@ -50,7 +50,8 @@ defmodule VutuvWeb.ModerationCaseControllerTest do
       {other_conn, _other} =
         create_and_login_user(build_conn() |> Plug.Test.init_test_session(%{}), %{
           "emails" => %{"0" => %{"value" => "other@example.com"}},
-          "first_name" => "other"
+          "first_name" => "other",
+          "tag_list" => @registration_tags
         })
 
       conn = get(other_conn, ~p"/moderation/cases/#{case_record.id}")

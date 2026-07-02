@@ -84,7 +84,9 @@
       </div>
       <div>
         <%= text_input f, :tag_list, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)") %>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("Separate tags with a comma or a space.")}</p>
+        <%!-- Tags are how members are found, so sign-up asks for at least
+              three (enforced by the registration changeset). --%>
+        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space.")}</p>
         <%= error_tag f, :tag_list %>
       </div>
     </div>

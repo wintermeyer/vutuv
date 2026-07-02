@@ -109,6 +109,11 @@ msgstr ""
 msgid "has already been booked"
 msgstr ""
 
-## Custom message from the sign-up tag-list rule (Vutuv.Accounts.User.changeset/2).
-msgid "This looks like several tags. Separate each one with a comma, e.g. JavaScript, Go, Dogs."
+## Custom message from the tag no-space rule (Vutuv.Tags.Tag.changeset/2).
+msgid "must not contain spaces"
+msgstr ""
+
+## Custom message from the sign-up tag minimum
+## (Vutuv.Accounts.User.registration_changeset/2).
+msgid "Please enter at least %{min} different tags."
 msgstr ""

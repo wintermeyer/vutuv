@@ -385,15 +385,24 @@ defmodule VutuvWeb.SessionController do
   # shows, so the two never disagree).
   defp welcome_flash("registration", %User{first_name: name})
        when is_binary(name) and name != "" do
-    gettext("Welcome to vutuv, %{name}!", name: name)
+    gettext("Welcome to vutuv, %{name}!", name: name) <> " " <> registration_note()
   end
 
-  defp welcome_flash("registration", _user), do: gettext("Welcome to vutuv!")
+  defp welcome_flash("registration", _user),
+    do: gettext("Welcome to vutuv!") <> " " <> registration_note()
 
   defp welcome_flash(_context, %User{} = user) do
     [greeting(user), unread_note(user)]
     |> Enum.reject(&is_nil/1)
     |> Enum.join(" ")
+  end
+
+  # The one gentle pointer after the confirmation PIN: the two steps that make
+  # the fresh profile recognizable. The member lands on their own profile,
+  # where the onboarding checklist repeats both clickably — so the toast only
+  # plants the idea, it doesn't have to carry links.
+  defp registration_note do
+    gettext("A photo and a short tagline make your profile complete.")
   end
 
   defp greeting(%User{first_name: name}) when is_binary(name) and name != "" do

@@ -41,7 +41,10 @@ defmodule Vutuv.Accounts do
         # types "JavaScript Go Hunde" gets three separate tags rather than one
         # merged one; case-insensitive de-duplication then drops a repeated tag
         # ("Go, go") before it can trip the unique constraint, so no per-tag
-        # insert error is silently swallowed here.
+        # insert error is silently swallowed here. The insert above only
+        # succeeds when this same parse+dedup yields at least three tags
+        # (User.registration_changeset/2's minimum), so a fresh account always
+        # lands with tags attached.
         user_params["tag_list"]
         |> Vutuv.Tags.parse_tag_names()
         |> Enum.uniq_by(&String.downcase/1)

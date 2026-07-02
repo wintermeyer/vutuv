@@ -9,7 +9,8 @@ defmodule Vutuv.Accounts.MemberCounterTest do
   @valid_registration %{
     "emails" => %{"0" => %{"value" => "counted@example.com"}},
     "first_name" => "Counted",
-    "last_name" => "Member"
+    "last_name" => "Member",
+    "tag_list" => "Elixir Cooking Origami"
   }
 
   defp build_conn do

@@ -89,6 +89,14 @@ defmodule VutuvWeb.ImportControllerTest do
 
     assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get_by(WorkExperience, user_id: user.id, organization: "Acme")
-    refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
+
+    # The unchecked Elixir skill was not imported; only the three registration
+    # tags the account signed up with exist.
+    refute Repo.exists?(
+             from(ut in UserTag,
+               join: t in assoc(ut, :tag),
+               where: ut.user_id == ^user.id and t.name == "Elixir"
+             )
+           )
   end
 end

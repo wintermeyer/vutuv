@@ -252,6 +252,8 @@ Where the server handled it via:
       matches = LazyHTML.filter(document, "your-complex-selector")
       IO.inspect(matches, label: "Matches")
 
+- **To select a descendant element from a full page, use `LazyHTML.query/2`, never `LazyHTML.filter/2`.** `filter/2` only matches the *root* nodes of the current node set — on a `from_document/1` page that is `<html>`, so `LazyHTML.filter(doc, "#some-id")` silently returns an empty set (and an empty set makes `refute LazyHTML.text(...) =~ "..."` pass vacuously). `query/2` searches the whole subtree. Reach for `filter/2` only to narrow a node set you already queried.
+
 ### Form handling
 
 #### Creating a form from params

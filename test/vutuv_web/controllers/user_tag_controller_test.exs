@@ -7,41 +7,52 @@ defmodule VutuvWeb.UserTagControllerTest do
     do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
 
   describe "create (the one place tags are added — single or comma-separated)" do
+    # The signed-up account already carries its three registration tags, so
+    # every count below is relative to that baseline.
     setup %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      {:ok, conn: conn, user: user}
+      {:ok, conn: conn, user: user, base: tag_count(user)}
     end
 
-    test "adds a single tag and redirects to the tags page", %{conn: conn, user: user} do
+    test "adds a single tag and redirects to the tags page", %{
+      conn: conn,
+      user: user,
+      base: base
+    } do
       conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir"})
 
       assert redirected_to(conn) == ~p"/#{user}/tags"
-      assert tag_count(user) == 1
+      assert tag_count(user) == base + 1
     end
 
-    test "adds several comma- or space-separated tags at once", %{conn: conn, user: user} do
+    test "adds several comma- or space-separated tags at once", %{
+      conn: conn,
+      user: user,
+      base: base
+    } do
       conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, Phoenix  Ruby"})
 
       assert redirected_to(conn) == ~p"/#{user}/tags"
       # Both the comma and the (doubled) space split, so this is three tags.
-      assert tag_count(user) == 3
+      assert tag_count(user) == base + 3
     end
 
-    test "ignores empty segments between commas", %{conn: conn, user: user} do
+    test "ignores empty segments between commas", %{conn: conn, user: user, base: base} do
       conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, , Ruby,"})
 
       assert redirected_to(conn) == ~p"/#{user}/tags"
-      assert tag_count(user) == 2
+      assert tag_count(user) == base + 2
     end
 
     test "re-renders the form with an error when nothing usable is typed", %{
       conn: conn,
-      user: user
+      user: user,
+      base: base
     } do
       conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: ""})
 
       assert html_response(conn, 200) =~ "editform"
-      assert tag_count(user) == 0
+      assert tag_count(user) == base
     end
   end
 

@@ -77,7 +77,8 @@ defmodule VutuvWeb.SessionControllerTest do
   # stays pinned to the PIN-entry form — see "POST /login/cancel").
   @pending_attrs %{
     "emails" => %{"0" => %{"value" => "pending@example.com"}},
-    "first_name" => "Pending"
+    "first_name" => "Pending",
+    "tag_list" => "Elixir Cooking Origami"
   }
 
   describe "POST /login/resend" do
