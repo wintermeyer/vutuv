@@ -174,7 +174,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       html = html_response(conn, 200)
 
       refute html =~ "alert-danger"
-      refute html =~ "Oops, something went wrong"
+      refute html =~ "Please check the fields marked in red"
 
       # The Cancel link points back to the @backlink the controller passes.
       assert html =~ ~s(class="button button--cancel" href="#{~p"/#{user}/phone_numbers"}")
@@ -185,9 +185,13 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn = post(conn, ~p"/#{user}/phone_numbers", phone_number: %{"value" => ""})
       html = html_response(conn, 422)
 
-      assert html =~ ~s(class="alert alert-danger")
-      assert html =~ ~s(<p class="editform__error">)
-      assert html =~ "Oops, something went wrong"
+      # The banner is a compact status strip: warning icon + one actionable
+      # sentence, announced to assistive tech via role="alert". The classic
+      # editform pages already mark errored fields red (.editform__field--error),
+      # so the sentence holds everywhere the banner shows.
+      assert html =~ ~s(class="alert alert-danger" role="alert")
+      assert html =~ ~s(class="alert__icon")
+      assert html =~ "Please check the fields marked in red."
 
       # The actions row still renders on the failed re-render.
       assert html =~ ~s(class="button button--cancel")

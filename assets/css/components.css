@@ -408,7 +408,12 @@ body.stretch main {
   border-color: var(--color-brand-500);
   box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
 }
-.editform__field--error input,
+/* `input[type]` + `input:not([type])` (0,2,1 each) instead of a bare `input`
+   (0,1,1): the base recipe above selects `.editform input[type="text"]` etc.
+   at 0,2,1, which would out-rank a lower-specificity error rule and keep the
+   errored field's border grey. */
+.editform__field--error input[type],
+.editform__field--error input:not([type]),
 .editform__field--error select,
 .editform__field--error textarea {
   border-color: #ef4444;
@@ -417,6 +422,7 @@ body.stretch main {
 .editform__field--error span {
   color: #dc2626;
   font-size: 0.8rem;
+  font-weight: 500;
   margin-top: 0.25rem;
   display: block;
 }
@@ -432,8 +438,13 @@ body.stretch main {
    (one class + element) would out-rank a single class. */
 .editform__hint.editform__hint--ok { color: var(--color-brand-500); }
 .editform__hint.editform__hint--error { color: #dc2626; }
+/* The changeset-error banner (<.form_error>): a compact status strip — warning
+   icon beside one sentence — rather than a padded paragraph box. */
 .alert,
 .alert-danger {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #b91c1c;
@@ -441,6 +452,20 @@ body.stretch main {
   padding: 0.75rem 1rem;
   margin-bottom: 1rem;
   font-size: 0.875rem;
+  font-weight: 500;
+}
+/* Beat the `p` element default (15px + bottom margin) and `.card p`'s colour. */
+.alert p {
+  margin: 0;
+  font-size: inherit;
+  line-height: 1.4;
+  color: inherit;
+}
+.alert__icon {
+  height: 1.25rem;
+  width: 1.25rem;
+  flex: none;
+  margin-top: 1px;
 }
 .editform__actions {
   display: flex;
@@ -1153,6 +1178,19 @@ ul.thumbs li .text .url a {
   .icon--follow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M19 8v6M22 11h-6'/%3E%3C/svg%3E"); }
   .icon--unfollow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='m16 11 2 2 4-4'/%3E%3C/svg%3E"); }
   .alert, .alert-danger { background: rgb(127 29 29 / 0.25); border-color: rgb(153 27 27 / 0.5); color: #fca5a5; }
+  /* The light `.alert p { color: inherit }` loses to this block's `.card p`
+     (same 0,1,1, but later in the file), so re-assert it here. */
+  .alert p { color: inherit; }
+  /* Field-error marking (light values above). The border list mirrors the
+     dark base recipe's `input[type=…]` specificity, which would otherwise
+     out-rank it and keep an errored field's border slate. */
+  .editform__field--error input[type],
+  .editform__field--error input:not([type]),
+  .editform__field--error select,
+  .editform__field--error textarea { border-color: #ef4444; }
+  .editform__error, .editform__field--error span { color: #f87171; }
+  .editform__hint { color: #94a3b8; }
+  .editform__hint.editform__hint--error { color: #f87171; }
   .button--cancel, .button--secondary, .button--icon:hover,
   button[type="submit"].button--cancel, button[type="submit"].button--secondary,
   input[type="submit"].button--cancel, input[type="submit"].button--secondary { background: #1e293b; color: #e2e8f0; }

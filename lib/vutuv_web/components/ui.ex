@@ -37,6 +37,26 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  Like `input_class/0`, but aware of a specific field's validation state: once
+  `field` carries an error the calm slate border swaps for the error red (with
+  a matching red focus border), so the failed field is marked on the input
+  itself — the promise the `<.form_error>` banner makes ("the fields marked in
+  red"). A clean field renders exactly `input_class/0`. Pair it with
+  `aria-invalid` on the input and `error_tag/2` below it; compose extra
+  utilities the same way: `class={[input_class(f, :value), "resize-y"]}`.
+
+  The two strings are the same recipe except for the border colours — keep
+  them in step when the input recipe changes (see .claude/rules/design.md).
+  """
+  def input_class(form, field) do
+    if form.errors[field] do
+      "w-full rounded-lg border border-red-400 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none dark:border-red-500/70 dark:bg-slate-800 dark:text-slate-100"
+    else
+      input_class()
+    end
+  end
+
+  @doc """
   Shared checkbox class for hand-written (kit-page) consent/opt-in boxes —
   the companion to `input_class/0` (brand check on a rounded slate box,
   top-aligned beside its label text, dark-aware). The single source for
@@ -1745,17 +1765,29 @@ defmodule VutuvWeb.UI do
   defp crumb_text(other), do: to_string(other)
 
   @doc """
-  Classic-page (components.css-styled) changeset-error banner shared by the `editform` `form_content`
-  templates. Renders the `.alert.alert-danger` row only when `@changeset.action`
-  is set (a failed submit), nothing on a fresh form. Styled by `components.css`,
-  not Tailwind — do not swap in utilities. Use it as `<.form_error changeset={@changeset} />`.
+  Changeset-error banner shared by the `editform` `form_content` templates and
+  the sign-up form. Renders the `.alert.alert-danger` strip only when
+  `@changeset.action` is set (a failed submit), nothing on a fresh form: a
+  warning glyph plus one actionable sentence ("Please check the fields marked
+  in red."), announced to assistive tech via `role="alert"`. The sentence must
+  stay true wherever the banner shows — classic editform pages mark errored
+  fields via `.editform__field--error`, kit forms via `input_class/2`. Styled
+  by `components.css`, not Tailwind — do not swap in utilities. Use it as
+  `<.form_error changeset={@changeset} />`.
   """
   attr(:changeset, :any, required: true)
 
   def form_error(assigns) do
     ~H"""
-    <div :if={@changeset.action} class="alert alert-danger">
-      <p class="editform__error">{gettext("Oops, something went wrong! Please check the errors below.")}</p>
+    <div :if={@changeset.action} class="alert alert-danger" role="alert">
+      <svg class="alert__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"
+        />
+      </svg>
+      <p>{gettext("Please check the fields marked in red.")}</p>
     </div>
     """
   end

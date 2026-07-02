@@ -402,6 +402,37 @@ defmodule VutuvWeb.PageControllerTest do
       refute user_by_email("untagged@example.com")
     end
 
+    # The failed re-render marks the field itself, not just the page: the
+    # errored input turns red (aria-invalid for assistive tech), the specific
+    # error replaces the generic hint (never both, they'd say the same thing
+    # twice), and the banner points at the red marking instead of apologizing
+    # about a "validation error".
+    test "a rejected sign-up marks the tag field itself", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "marked@example.com"}},
+          "tag_list" => "Elixir"
+        })
+
+      body = conn |> post(~p"/new_registration", user: attrs) |> html_response(422)
+
+      assert body =~ "Please check the fields marked in red."
+      assert body =~ ~s(aria-invalid="true")
+      assert body =~ "border-red-400"
+      # The hint yields to the specific error instead of stacking under it.
+      assert body =~ "Please enter at least 3 different tags."
+      refute body =~ "At least three tags, separated by a comma or a space."
+    end
+
+    test "a fresh form shows the hint and no error chrome", %{conn: conn} do
+      body = conn |> get(~p"/") |> html_response(200)
+
+      assert body =~ "At least three tags, separated by a comma or a space."
+      refute body =~ "Please check the fields marked in red."
+      refute body =~ ~s(aria-invalid="true")
+      refute body =~ "border-red-400"
+    end
+
     test "fewer than three distinct tags is rejected, counting duplicates once", %{conn: conn} do
       attrs =
         Map.merge(@valid_attrs, %{

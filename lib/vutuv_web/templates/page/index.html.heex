@@ -74,20 +74,23 @@
       </fieldset>
       <div class="grid gap-4 sm:grid-cols-2">
         <div>
-          <%= text_input f, :first_name, class: input_class(), placeholder: gettext("Enter your first name") %>
+          <%= text_input f, :first_name, class: input_class(f, :first_name), placeholder: gettext("Enter your first name"), "aria-invalid": f.errors[:first_name] && "true" %>
           <%= error_tag f, :first_name %>
         </div>
         <div>
-          <%= text_input f, :last_name, class: input_class(), placeholder: gettext("Enter your last name") %>
+          <%= text_input f, :last_name, class: input_class(f, :last_name), placeholder: gettext("Enter your last name"), "aria-invalid": f.errors[:last_name] && "true" %>
           <%= error_tag f, :last_name %>
         </div>
       </div>
       <div>
-        <%= text_input f, :tag_list, class: input_class(), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)") %>
+        <%= text_input f, :tag_list, class: input_class(f, :tag_list), placeholder: gettext("Your tags (e.g. JavaScript, Cooking, Origami, Cat)"), "aria-invalid": f.errors[:tag_list] && "true" %>
         <%!-- Tags are how members are found, so sign-up asks for at least
-              three (enforced by the registration changeset). --%>
-        <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space.")}</p>
+              three (enforced by the registration changeset). On a failed
+              submit the specific error replaces the hint — the two would say
+              nearly the same thing, and one clear line beats a red-on-grey
+              stack. The input itself turns red via input_class/2. --%>
         <%= error_tag f, :tag_list %>
+        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space.")}</p>
       </div>
     </div>
 
@@ -110,7 +113,7 @@
           <%= error_tag ef, :email_type %>
         </fieldset>
         <div>
-          <%= email_input ef, :value, class: input_class(), placeholder: gettext("Enter your email address") %>
+          <%= email_input ef, :value, class: input_class(ef, :value), placeholder: gettext("Enter your email address"), "aria-invalid": ef.errors[:value] && "true" %>
           <%= error_tag ef, :value %>
         </div>
         <%!-- Checked by default (the controller primes public?: true on the
