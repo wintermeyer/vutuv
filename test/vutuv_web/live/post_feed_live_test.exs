@@ -705,4 +705,39 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#load-more")
     end
   end
+
+  describe "midnight day-change refresh" do
+    # Backdate a post one German calendar day so its stamp is the "yesterday"
+    # form regardless of when the suite runs. Noon keeps the Berlin day clear of
+    # either midnight.
+    defp backdate_to_yesterday!(post) do
+      yesterday = NaiveDateTime.new!(Date.add(Vutuv.BerlinTime.today(), -1), ~T[12:00:00])
+      post |> Ecto.Changeset.change(inserted_at: yesterday) |> Vutuv.Repo.update!()
+    end
+
+    test "a post from yesterday renders the 'Gestern'/'Yesterday' stamp", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "words from the prior day"})
+      backdate_to_yesterday!(post)
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "words from the prior day"
+      assert html =~ ~r/Gestern|Yesterday/
+    end
+
+    test "a :day_changed tick re-renders the feed without dropping shown posts", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Posts.create_post(user, %{body: "still here"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      assert render(live) =~ "still here"
+
+      # The DayClock fires this at Berlin midnight; the feed re-streams its
+      # retained entries in place, so every post survives the refresh.
+      send(live.pid, :day_changed)
+      _ = :sys.get_state(live.pid)
+      assert render(live) =~ "still here"
+    end
+  end
 end

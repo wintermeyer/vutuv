@@ -4,7 +4,18 @@ defmodule VutuvWeb.UITest do
   import Phoenix.Component, only: [sigil_H: 2]
   import Phoenix.LiveViewTest
 
+  alias Vutuv.BerlinTime
   alias VutuvWeb.UI
+
+  # Noon UTC on yesterday's Berlin calendar day, as a NaiveDateTime (post_time
+  # reads a naive value as UTC). Noon keeps the Berlin day unambiguous - far
+  # from either midnight - so the "yesterday" bucket is stable whenever tests run.
+  defp yesterday_berlin_noon do
+    BerlinTime.today()
+    |> Date.add(-1)
+    |> DateTime.new!(~T[12:00:00], "Etc/UTC")
+    |> DateTime.to_naive()
+  end
 
   describe "compact_count/1" do
     test "shows numbers up to 999 exactly" do
@@ -71,6 +82,26 @@ defmodule VutuvWeb.UITest do
 
       assert html =~ "15.01.20, 11:00"
       refute html =~ "Uhr"
+    end
+
+    test "a post from yesterday says 'Gestern' with the time and no numeric date in German" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      # Yesterday in Berlin, at a time far from midnight so the Berlin day is
+      # unambiguous. post_time treats a NaiveDateTime as UTC.
+      at = %{yesterday_berlin_noon() | second: 0}
+      html = render_component(&UI.post_time/1, at: at)
+
+      assert html =~ ~r/>Gestern, \d{2}:\d{2} Uhr</
+      # No dotted numeric date in the visible label (it stays in the hover title).
+      refute html =~ ~r/>Gestern, \d{2}\.\d{2}\.\d{2}/
+    end
+
+    test "a post from yesterday says 'Yesterday' under a non-German locale" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+      at = %{yesterday_berlin_noon() | second: 0}
+      html = render_component(&UI.post_time/1, at: at)
+
+      assert html =~ ~r/>Yesterday, \d{1,2}:\d{2}\s?(AM|PM)</
     end
 
     test "today shows a bare time (no 'Uhr') under a non-German locale" do

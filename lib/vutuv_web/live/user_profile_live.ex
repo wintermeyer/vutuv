@@ -57,7 +57,12 @@ defmodule VutuvWeb.UserProfileLive do
     # The owner topic carries the live count / endorsement / follow-state
     # changes; subscribing only when connected keeps the disconnected (SEO /
     # test) render a single pass.
-    if connected?(socket), do: Activity.subscribe(profile_user_id)
+    if connected?(socket) do
+      Activity.subscribe(profile_user_id)
+      # Roll the shown posts' Berlin-day stamps over at midnight ("09:50 Uhr" ->
+      # "Gestern, 09:50 Uhr") without a reload.
+      Vutuv.DayClock.subscribe()
+    end
 
     socket =
       socket
@@ -251,6 +256,16 @@ defmodule VutuvWeb.UserProfileLive do
       end
 
     {:noreply, socket}
+  end
+
+  # The Berlin day rolled over at midnight (Vutuv.DayClock): re-fetch the shown
+  # posts so their stamps re-render with the new day ("today" -> "Gestern").
+  # A fresh list (new identity) is what makes change tracking re-render the
+  # `:for` over @posts; content barely differs, only the relative wording.
+  def handle_info(:day_changed, socket) do
+    posts_viewer = posts_scope(socket.assigns.preview_as, socket.assigns.current_user)
+    posts = Vutuv.Posts.profile_posts(socket.assigns.user, posts_viewer)
+    {:noreply, assign(socket, :posts, posts)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

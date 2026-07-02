@@ -54,15 +54,36 @@ defmodule Vutuv.BerlinTime do
     {local_midnight_utc(date), local_midnight_utc(Date.add(date, 1))}
   end
 
+  @doc """
+  The next Europe/Berlin local midnight (00:00) strictly after `utc`, as a UTC
+  `DateTime`. Used to schedule work at the German day boundary - the
+  `Vutuv.DayClock` refreshes every open page's Berlin-dated post timestamps at
+  00:00, so a post shown as bare "09:50 Uhr" rolls over to "Gestern, 09:50 Uhr".
+
+  Since `utc` always falls inside its own Berlin day, tomorrow's Berlin midnight
+  is always in the future, so no extra guard is needed. The offset is taken at
+  the target midnight's midday (the same DST caveat `day_bounds_utc/1` carries):
+  on the two switch nights a year the boundary can land an hour off, which a
+  midnight fan-out timer does not care about.
+  """
+  def next_midnight_utc(%DateTime{} = utc \\ DateTime.utc_now()) do
+    utc
+    |> date()
+    |> Date.add(1)
+    |> local_midnight_as_utc()
+  end
+
   # Berlin-local 00:00 of `date`, expressed as a UTC NaiveDateTime.
-  defp local_midnight_utc(date) do
+  defp local_midnight_utc(date), do: date |> local_midnight_as_utc() |> DateTime.to_naive()
+
+  # Berlin-local 00:00 of `date`, expressed as a UTC DateTime.
+  defp local_midnight_as_utc(date) do
     midday_utc = DateTime.new!(date, ~T[12:00:00], "Etc/UTC")
     offset_hours = if summer_time?(midday_utc), do: 2, else: 1
 
     date
     |> DateTime.new!(~T[00:00:00], "Etc/UTC")
     |> DateTime.add(-offset_hours * 3600, :second)
-    |> DateTime.to_naive()
   end
 
   defp summer_time?(utc) do

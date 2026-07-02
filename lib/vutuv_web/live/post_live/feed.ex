@@ -61,6 +61,9 @@ defmodule VutuvWeb.PostLive.Feed do
   defp mount_feed(socket, user, session) do
     if connected?(socket) do
       Vutuv.Activity.subscribe(user.id)
+      # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
+      # 09:50 Uhr") the moment the German day rolls over at midnight.
+      Vutuv.DayClock.subscribe()
       # Reshuffle the "Who to follow" rail every few minutes while the page stays
       # open, so a long-lived session keeps seeing fresh suggestions even without
       # a reload (a new visit reshuffles too, via this same mount).
@@ -68,6 +71,7 @@ defmodule VutuvWeb.PostLive.Feed do
     end
 
     page = Posts.feed_page(user, limit: @page_size)
+    entries = with_engagement(page.entries, user)
 
     socket
     |> assign(:current_user, user)
@@ -85,9 +89,14 @@ defmodule VutuvWeb.PostLive.Feed do
     # The composer starts collapsed to a single "What's new?" button; posting
     # (own activity arriving below) collapses it again.
     |> assign(:composer_open?, false)
+    # The set of entries currently on screen, kept so the midnight :day_changed
+    # tick can re-render each stamp in place (streams don't retain their data).
+    # Order/dupes don't matter: the refresh uses stream_insert update_only, which
+    # updates existing rows where they sit and ignores ones already gone.
+    |> assign(:entries, entries)
     |> assign_who_to_follow()
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
-    |> stream(:posts, with_engagement(page.entries, user))
+    |> stream(:posts, entries)
   end
 
   # The desktop "Who to follow" rail: a randomized handful of the most-followed
@@ -162,11 +171,14 @@ defmodule VutuvWeb.PostLive.Feed do
         cursor: socket.assigns.cursor
       )
 
+    entries = with_engagement(page.entries, socket.assigns.current_user)
+
     {:noreply,
      socket
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
-     |> stream(:posts, with_engagement(page.entries, socket.assigns.current_user), at: -1)}
+     |> update(:entries, &(&1 ++ entries))
+     |> stream(:posts, entries, at: -1)}
   end
 
   def handle_event("open-composer", _params, socket) do
@@ -189,8 +201,10 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   def handle_event("show-new", _params, socket) do
+    pending = socket.assigns.pending_posts
+
     socket =
-      socket.assigns.pending_posts
+      pending
       # Oldest pending first, so the newest ends up on top.
       |> Enum.reverse()
       |> Enum.reduce(socket, fn entry, socket ->
@@ -198,6 +212,7 @@ defmodule VutuvWeb.PostLive.Feed do
         |> stream_insert(:posts, entry, at: 0)
         |> prune_threaded_parent(entry)
       end)
+      |> update(:entries, &(pending ++ &1))
       |> assign(:pending_posts, [])
       |> assign(:empty?, false)
 
@@ -260,6 +275,20 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign_who_to_follow(socket)}
   end
 
+  # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
+  # shown post's stamp so "today" wording becomes "Gestern" and yesterday's
+  # falls back to a full date. `update_only` refreshes each row in place and
+  # skips any no longer on the client, so entries left in @entries for
+  # deleted/pruned posts are harmless (no re-insert, no reorder).
+  def handle_info(:day_changed, socket) do
+    socket =
+      Enum.reduce(socket.assigns.entries, socket, fn entry, socket ->
+        stream_insert(socket, :posts, entry, update_only: true)
+      end)
+
+    {:noreply, socket}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Own activity (this or another session) appears immediately; other
@@ -271,12 +300,15 @@ defmodule VutuvWeb.PostLive.Feed do
 
     cond do
       actor_id == user.id ->
+        decorated = decorate(entry, user)
+
         {:noreply,
          socket
          |> assign(:empty?, false)
          # The viewer just posted (this or another session): collapse the composer.
          |> assign(:composer_open?, false)
-         |> stream_insert(:posts, decorate(entry, user), at: 0)
+         |> update(:entries, &[decorated | &1])
+         |> stream_insert(:posts, decorated, at: 0)
          |> prune_threaded_parent(entry)}
 
       # Mirror the pull path's blocked-author filter: a third party's repost

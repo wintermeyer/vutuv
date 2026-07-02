@@ -12,6 +12,9 @@ defmodule Vutuv.Application do
         # Owns the live member counter behind the landing page. Starts after the
         # Repo (it seeds from it) and PubSub (it broadcasts over it).
         Vutuv.Accounts.MemberCounter,
+        # Fans a :day_changed broadcast out at Berlin midnight so open pages
+        # re-render "today"/"Gestern" post timestamps. Needs PubSub only.
+        Vutuv.DayClock,
         # Must start after PubSub (it depends on it) and before the Endpoint.
         VutuvWeb.Presence,
         {Task.Supervisor, name: Vutuv.TaskSupervisor},

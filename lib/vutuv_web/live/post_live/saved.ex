@@ -33,11 +33,18 @@ defmodule VutuvWeb.PostLive.Saved do
 
   @impl true
   def mount(_params, _session, socket) do
-    if connected?(socket), do: Vutuv.Activity.subscribe(socket.assigns.current_user.id)
+    if connected?(socket) do
+      Vutuv.Activity.subscribe(socket.assigns.current_user.id)
+      # Roll the shown posts' Berlin-day stamps over at midnight without a reload.
+      Vutuv.DayClock.subscribe()
+    end
 
     {:ok,
      socket
      |> assign(:post_engagement, %{})
+     # The posts currently on screen (empty on the People tab), kept so the
+     # midnight :day_changed tick can re-render each stamp in place.
+     |> assign(:saved_posts, [])
      |> stream(:posts, [])
      |> stream(:people, [])}
   end
@@ -58,6 +65,7 @@ defmodule VutuvWeb.PostLive.Saved do
      |> assign(:page_title, title(socket.assigns.live_action))
      |> assign(:more?, page.more?)
      |> assign(:offset, page.next_offset)
+     |> assign(:saved_posts, if(stream_name == :posts, do: page.entries, else: []))
      |> assign(
        :post_engagement,
        page_engagement(stream_name, page.entries, socket.assigns.current_user)
@@ -113,6 +121,11 @@ defmodule VutuvWeb.PostLive.Saved do
     {stream_name, page} = load_page(socket, socket.assigns.offset)
     if stream_name == :posts, do: subscribe_posts(page.entries)
     user = socket.assigns.current_user
+
+    socket =
+      if stream_name == :posts,
+        do: update(socket, :saved_posts, &(&1 ++ page.entries)),
+        else: socket
 
     {:noreply,
      socket
@@ -180,6 +193,18 @@ defmodule VutuvWeb.PostLive.Saved do
     {:noreply, stream_delete_by_dom_id(socket, :posts, "posts-#{post_id}")}
   end
 
+  # The Berlin day rolled over at midnight (Vutuv.DayClock): re-render each shown
+  # post's stamp ("today" -> "Gestern"). No-op on the People tab (@saved_posts is
+  # empty there). update_only refreshes rows in place and skips any already gone.
+  def handle_info(:day_changed, socket) do
+    socket =
+      Enum.reduce(socket.assigns.saved_posts, socket, fn post, socket ->
+        stream_insert(socket, :posts, post, update_only: true)
+      end)
+
+    {:noreply, socket}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp apply_post_change(socket, post_id, false) do
@@ -202,6 +227,7 @@ defmodule VutuvWeb.PostLive.Saved do
           :post_engagement,
           &Map.put(&1, post.id, Posts.post_engagement(post.id, socket.assigns.current_user.id))
         )
+        |> update(:saved_posts, &[post | &1])
         |> stream_insert(:posts, post, at: 0)
     end
   end

@@ -28,6 +28,22 @@ defmodule VutuvWeb.SavedLiveTest do
     refute render(view) =~ "liked then gone"
   end
 
+  test "a :day_changed tick re-renders the shown posts without dropping them", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    author = other_user()
+    post = create_post!(author, %{body: "still liked"})
+    :ok = Posts.like_post(user, post)
+
+    {:ok, view, _html} = live(conn, ~p"/likes")
+    assert render(view) =~ "still liked"
+
+    # The DayClock fires this at Berlin midnight; the /likes page re-streams its
+    # retained posts in place so every stamp refreshes and no card is dropped.
+    send(view.pid, :day_changed)
+    _ = :sys.get_state(view.pid)
+    assert render(view) =~ "still liked"
+  end
+
   test "a bookmarked post is removed live when its author's account is deleted", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     author = other_user()

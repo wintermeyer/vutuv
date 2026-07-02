@@ -424,6 +424,23 @@ defmodule VutuvWeb.NotificationLiveTest do
     end
   end
 
+  describe "midnight day-change refresh" do
+    test "a :day_changed tick re-renders the quoted posts without dropping them", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user, body: "Ship the redesign on Friday")
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
+
+      # The DayClock fires this at Berlin midnight; the page re-streams its
+      # retained items in place so each quoted-post stamp refreshes.
+      send(live.pid, :day_changed)
+      _ = :sys.get_state(live.pid)
+      assert has_element?(live, ~s([data-post-preview]), "Ship the redesign on Friday")
+    end
+  end
+
   # Derived rows carry an `id="notification-<kind>-<row id>"`.
   defp row_count(html, kind \\ "follower"),
     do: length(String.split(html, ~s(id="notification-#{kind}-))) - 1

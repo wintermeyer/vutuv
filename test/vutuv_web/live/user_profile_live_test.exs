@@ -329,6 +329,36 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "midnight day-change refresh" do
+    test "a post from yesterday renders the 'Gestern'/'Yesterday' stamp", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, post} = Posts.create_post(owner, %{body: "words from the prior day"})
+      yesterday = NaiveDateTime.new!(Date.add(Vutuv.BerlinTime.today(), -1), ~T[12:00:00])
+      post |> Ecto.Changeset.change(inserted_at: yesterday) |> Vutuv.Repo.update!()
+
+      {:ok, _view, html} = live(conn, ~p"/#{owner}")
+
+      assert html =~ "words from the prior day"
+      assert html =~ ~r/Gestern|Yesterday/
+    end
+
+    test "a :day_changed tick re-fetches the shown posts without a crash", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      {:ok, _post} = Posts.create_post(owner, %{body: "still here"})
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+      assert render(view) =~ "still here"
+
+      # The DayClock fires this at Berlin midnight; the profile re-fetches its
+      # posts so the stamps re-render, and the post is still shown afterwards.
+      send(view.pid, :day_changed)
+      _ = :sys.get_state(view.pid)
+      assert render(view) =~ "still here"
+    end
+  end
+
   describe "live post deletion" do
     test "a post deleted elsewhere drops from the open profile", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)

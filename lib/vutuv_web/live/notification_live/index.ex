@@ -34,9 +34,12 @@ defmodule VutuvWeb.NotificationLive.Index do
     if connected?(socket) do
       Activity.subscribe(user.id)
       Activity.mark_notifications_read(user.id)
+      # Roll the quoted posts' Berlin-day stamps over at midnight without a reload.
+      Vutuv.DayClock.subscribe()
     end
 
     page = Activity.notifications_page(user.id, limit: @page_size)
+    items = with_post_previews(page.entries, user)
 
     # What the "Load more" label counts down: feed events not on screen yet.
     # Live-pushed events show up immediately, so they never touch this number.
@@ -49,9 +52,10 @@ defmodule VutuvWeb.NotificationLive.Index do
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> assign(:remaining, max(total - length(page.entries), 0))
-     |> stream(:notifications, with_post_previews(page.entries, user),
-       dom_id: &"notification-#{&1.id}"
-     )}
+     # The shown items, kept so the midnight :day_changed tick can re-render each
+     # quoted-post stamp in place (streams don't retain their data).
+     |> assign(:items, items)
+     |> stream(:notifications, items, dom_id: &"notification-#{&1.id}")}
   end
 
   @impl true
@@ -62,14 +66,15 @@ defmodule VutuvWeb.NotificationLive.Index do
         cursor: socket.assigns.cursor
       )
 
+    items = with_post_previews(page.entries, socket.assigns.current_user)
+
     {:noreply,
      socket
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
      |> assign(:remaining, max(socket.assigns.remaining - length(page.entries), 0))
-     |> stream(:notifications, with_post_previews(page.entries, socket.assigns.current_user),
-       at: -1
-     )}
+     |> update(:items, &(&1 ++ items))
+     |> stream(:notifications, items, at: -1)}
   end
 
   @impl true
@@ -94,7 +99,20 @@ defmodule VutuvWeb.NotificationLive.Index do
     {:noreply,
      socket
      |> assign(:empty?, false)
+     |> update(:items, &[item | &1])
      |> stream_insert(:notifications, item, at: 0)}
+  end
+
+  # The Berlin day rolled over at midnight (Vutuv.DayClock): re-render each shown
+  # item so its quoted-post stamp moves "today" -> "Gestern". update_only
+  # refreshes rows in place and skips any already gone (see PostLive.Feed).
+  def handle_info(:day_changed, socket) do
+    socket =
+      Enum.reduce(socket.assigns.items, socket, fn item, socket ->
+        stream_insert(socket, :notifications, item, update_only: true)
+      end)
+
+    {:noreply, socket}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

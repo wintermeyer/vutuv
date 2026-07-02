@@ -58,6 +58,27 @@ defmodule Vutuv.BerlinTimeTest do
     end
   end
 
+  describe "next_midnight_utc/1" do
+    test "returns the coming Berlin 00:00 as a UTC instant, DST-aware" do
+      # Winter (CET, +1h): Berlin 2026-01-16 00:00 is 2026-01-15 23:00 UTC.
+      assert BerlinTime.next_midnight_utc(~U[2026-01-15 12:00:00Z]) == ~U[2026-01-15 23:00:00Z]
+      # Summer (CEST, +2h): Berlin 2026-07-03 00:00 is 2026-07-02 22:00 UTC.
+      assert BerlinTime.next_midnight_utc(~U[2026-07-02 12:00:00Z]) == ~U[2026-07-02 22:00:00Z]
+    end
+
+    test "a moment before Berlin midnight still points at the very next one" do
+      # 2026-01-15 22:59 UTC is Berlin 23:59 the same day; the next boundary is
+      # still 2026-01-16 00:00 Berlin = 2026-01-15 23:00 UTC (one minute away).
+      assert BerlinTime.next_midnight_utc(~U[2026-01-15 22:59:00Z]) == ~U[2026-01-15 23:00:00Z]
+    end
+
+    test "the result is always strictly in the future of the given instant" do
+      for utc <- [~U[2026-01-15 12:00:00Z], ~U[2026-07-02 23:30:00Z], ~U[2026-03-29 00:30:00Z]] do
+        assert DateTime.compare(BerlinTime.next_midnight_utc(utc), utc) == :gt
+      end
+    end
+  end
+
   describe "today/0" do
     test "is a Date on or after the current UTC day (Berlin is never behind UTC)" do
       today = BerlinTime.today()
