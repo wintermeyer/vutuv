@@ -5,7 +5,7 @@ defmodule VutuvWeb.SettingsController do
   sections, the account areas, privacy, notifications, apps, and the delete
   exit). The account areas are focused subpages carved out of the old
   everything-on-one-scroll account hub: sign-in & security (username, emails,
-  devices, passkeys), language & maps, your data (export / LinkedIn import),
+  devices, passkeys), language & maps, import (LinkedIn), export (GDPR),
   and the delete-account danger page. The profile basics (photos, name, about)
   stay on `UserController.edit`.
 
@@ -91,10 +91,16 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  def data(conn, _params) do
+  # The export page: explains the GDPR download and offers it as a button
+  # (the file itself is GET /settings/export/download, ExportController).
+  def export(conn, _params) do
     user = conn.assigns[:user]
-    render(conn, "data.html", user: user, page_title: gettext("Your data"))
+    render(conn, "export.html", user: user, page_title: gettext("Export"))
   end
+
+  # "Ihre Daten" was split into Import and Export; the drawer URL lived only
+  # briefly, so its bookmarks land on the hub.
+  def data_redirect(conn, _params), do: redirect(conn, to: ~p"/settings")
 
   # The danger page: the warning and the PIN-mailing delete control live on
   # their own page (never straight on the hub), so the destructive action is

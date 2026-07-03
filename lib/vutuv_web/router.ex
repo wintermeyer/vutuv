@@ -591,7 +591,6 @@ defmodule VutuvWeb.Router do
     # method <.form for={changeset} emits for a persisted record.
     get("/security", SettingsController, :security)
     get("/preferences", SettingsController, :preferences)
-    get("/data", SettingsController, :data)
     get("/delete", SettingsController, :delete_account)
     get("/privacy", SettingsController, :privacy)
     put("/privacy", SettingsController, :update_privacy)
@@ -613,8 +612,13 @@ defmodule VutuvWeb.Router do
     post("/passkeys/challenge", PasskeyController, :challenge)
     post("/passkeys", PasskeyController, :create)
     delete("/passkeys/:id", PasskeyController, :delete)
-    # The owner's personal data download (GDPR): one JSON file.
-    get("/export", ExportController, :show)
+    # Export: the page explains the GDPR download; /export/download is the
+    # actual one-JSON-file response.
+    get("/export", SettingsController, :export)
+    get("/export/download", ExportController, :show)
+    # "Ihre Daten" was split into Import and Export (its two rows); redirect
+    # the short-lived drawer URL to the hub.
+    get("/data", SettingsController, :data_redirect)
     # Import a LinkedIn data-export ZIP: upload -> preview -> apply the picks.
     get("/import/linkedin", ImportController, :new)
     post("/import/linkedin", ImportController, :create)

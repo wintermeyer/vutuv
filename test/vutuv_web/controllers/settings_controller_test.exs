@@ -15,7 +15,7 @@ defmodule VutuvWeb.SettingsControllerTest do
             ~p"/settings/apps",
             ~p"/settings/security",
             ~p"/settings/preferences",
-            ~p"/settings/data",
+            ~p"/settings/export",
             ~p"/settings/delete"
           ] do
         # Every settings page carries a way to every other settings area (the
@@ -67,7 +67,8 @@ defmodule VutuvWeb.SettingsControllerTest do
       # Account subpages (split off the old mega-page).
       assert html =~ ~s(href="#{~p"/settings/security"}")
       assert html =~ ~s(href="#{~p"/settings/preferences"}")
-      assert html =~ ~s(href="#{~p"/settings/data"}")
+      assert html =~ ~s(href="#{~p"/settings/import/linkedin"}")
+      assert html =~ ~s(href="#{~p"/settings/export"}")
       # The rest.
       assert html =~ ~s(href="#{~p"/settings/privacy"}")
       assert html =~ ~s(href="#{~p"/settings/notifications"}")
@@ -139,7 +140,7 @@ defmodule VutuvWeb.SettingsControllerTest do
             {~p"/settings", "Settings"},
             {~p"/settings/security", "Sign-in &amp; security"},
             {~p"/settings/preferences", "Language &amp; maps"},
-            {~p"/settings/data", "Your data"},
+            {~p"/settings/export", "Export"},
             {~p"/settings/delete", "Delete account"}
           ] do
         html = conn |> recycle() |> get(path) |> html_response(200)
@@ -375,13 +376,28 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
-  describe "your data page" do
-    test "surfaces the export download and the LinkedIn import", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/settings/data") |> html_response(200)
+  describe "export page" do
+    test "explains the download and offers it as a button", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/export") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/settings/export"}")
-      assert html =~ ~s(href="#{~p"/settings/import/linkedin"}")
+      assert html =~ "data-settings-shell"
+      assert html =~ ~s(href="#{~p"/settings/export/download"}")
+    end
+
+    test "the old /settings/data URL redirects to the hub", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      assert conn |> get("/settings/data") |> redirected_to() == "/settings"
+    end
+  end
+
+  describe "import page" do
+    test "renders inside the settings shell", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
+
+      assert html =~ "data-settings-shell"
+      assert html =~ "linkedin-import-form"
     end
   end
 

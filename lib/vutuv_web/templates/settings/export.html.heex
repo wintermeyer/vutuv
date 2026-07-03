@@ -1,0 +1,19 @@
+<%!-- Export: everything vutuv stores about this member, out as one JSON file
+(GDPR). The page explains what the download contains before the button, so a
+sidebar click never triggers a surprise file download. --%>
+<.settings_shell user={@user} active={:export} title={gettext("Export")}>
+  <.card>
+    <.section_title>{gettext("Download your data")}</.section_title>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("Download everything vutuv stores about you, as one file.")}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "The file is in JSON format and includes your profile, posts, messages and settings. It contains private data, so store it carefully."
+      )}
+    </p>
+    <.button href={~p"/settings/export/download"} class="mt-4">
+      {gettext("Download")}
+    </.button>
+  </.card>
+</.settings_shell>

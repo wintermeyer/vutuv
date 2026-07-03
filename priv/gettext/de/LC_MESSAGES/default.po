@@ -99,7 +99,7 @@ msgstr "Geburtstag"
 #: lib/vutuv_web/live/post_live/feed.ex:411
 #: lib/vutuv_web/templates/ad/new.html.heex:133
 #: lib/vutuv_web/templates/admin/newsletter/form_content.html.heex:57
-#: lib/vutuv_web/templates/import/preview.html.heex:86
+#: lib/vutuv_web/templates/import/preview.html.heex:77
 #: lib/vutuv_web/templates/report/new.html.heex:103
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
 #: lib/vutuv_web/templates/user/edit.html.heex:41
@@ -167,7 +167,7 @@ msgstr "Beschreibung"
 msgid "Disable"
 msgstr "Inaktivieren"
 
-#: lib/vutuv_web/templates/settings/data.html.heex:11
+#: lib/vutuv_web/templates/settings/export.html.heex:16
 #: lib/vutuv_web/templates/user/show.html.heex:213
 #, elixir-autogen
 msgid "Download"
@@ -377,8 +377,8 @@ msgstr "Link wurde geändert."
 #: lib/vutuv_web/agent_docs/text.ex:41
 #: lib/vutuv_web/components/ui.ex:2373
 #: lib/vutuv_web/controllers/url_controller.ex:28
-#: lib/vutuv_web/templates/import/new.html.heex:20
-#: lib/vutuv_web/templates/import/preview.html.heex:40
+#: lib/vutuv_web/templates/import/new.html.heex:12
+#: lib/vutuv_web/templates/import/preview.html.heex:31
 #: lib/vutuv_web/templates/url/edit.html.heex:3
 #: lib/vutuv_web/templates/url/index.html.heex:10
 #: lib/vutuv_web/templates/url/manage.html.heex:4
@@ -418,7 +418,7 @@ msgstr "Einloggen"
 msgid "Middle Name"
 msgstr "Zweiter Vorname"
 
-#: lib/vutuv_web/components/ui.ex:2386
+#: lib/vutuv_web/components/ui.ex:2387
 #, elixir-autogen
 msgid "More"
 msgstr "Mehr"
@@ -1381,8 +1381,8 @@ msgstr "Tag-URLs"
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:5
-#: lib/vutuv_web/templates/import/new.html.heex:19
-#: lib/vutuv_web/templates/import/preview.html.heex:36
+#: lib/vutuv_web/templates/import/new.html.heex:11
+#: lib/vutuv_web/templates/import/preview.html.heex:27
 #: lib/vutuv_web/templates/tag/index.html.heex:1
 #: lib/vutuv_web/templates/tag/show.html.heex:4
 #: lib/vutuv_web/templates/user/show.html.heex:328
@@ -1722,7 +1722,7 @@ msgstr "Hier gibt es noch nichts."
 msgid "Nothing new yet."
 msgstr "Noch nichts Neues."
 
-#: lib/vutuv_web/components/ui.ex:2389
+#: lib/vutuv_web/components/ui.ex:2390
 #: lib/vutuv_web/live/notification_live/index.ex:59
 #: lib/vutuv_web/live/notification_live/index.ex:135
 #: lib/vutuv_web/live/shell_live.ex:278
@@ -1908,7 +1908,7 @@ msgstr[0] "%{count} Jahr"
 msgstr[1] "%{count} Jahre"
 
 #: lib/vutuv_web/templates/user/show.html.heex:404
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:99
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:107
 #, elixir-autogen, elixir-format
 msgid "Time in this role"
 msgstr "Dauer in dieser Position"
@@ -2251,7 +2251,7 @@ msgstr "Zu viele Dateien."
 msgid "Upload failed."
 msgstr "Upload fehlgeschlagen."
 
-#: lib/vutuv_web/components/ui.ex:2530
+#: lib/vutuv_web/components/ui.ex:2533
 #: lib/vutuv_web/live/shell_live.ex:321
 #: lib/vutuv_web/templates/post/index.html.heex:12
 #: lib/vutuv_web/templates/post/teaser.html.heex:54
@@ -3137,8 +3137,8 @@ msgid "Private message"
 msgstr "Private Nachricht"
 
 #: lib/vutuv_web/components/ui.ex:2368
-#: lib/vutuv_web/templates/import/new.html.heex:23
-#: lib/vutuv_web/templates/import/preview.html.heex:55
+#: lib/vutuv_web/templates/import/new.html.heex:15
+#: lib/vutuv_web/templates/import/preview.html.heex:46
 #: lib/vutuv_web/views/admin/moderation_html.ex:20
 #, elixir-autogen, elixir-format
 msgid "Profile"
@@ -4408,7 +4408,6 @@ msgstr "Anzeige bearbeiten"
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1002
 #: lib/vutuv_web/templates/ad/preview.html.heex:3
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:122
-#: lib/vutuv_web/templates/import/preview.html.heex:7
 #, elixir-autogen, elixir-format
 msgid "Preview"
 msgstr "Vorschau"
@@ -5213,8 +5212,8 @@ msgstr "API-Token (%{date})"
 msgid "API documentation"
 msgstr "API-Dokumentation"
 
-#: lib/vutuv_web/components/ui.ex:2391
-#: lib/vutuv_web/controllers/settings_controller.ex:105
+#: lib/vutuv_web/components/ui.ex:2392
+#: lib/vutuv_web/controllers/settings_controller.ex:111
 #: lib/vutuv_web/live/admin/user_delete_live.ex:33
 #: lib/vutuv_web/live/admin/user_delete_live.ex:110
 #: lib/vutuv_web/live/admin/user_delete_live.ex:111
@@ -5258,16 +5257,6 @@ msgstr ""
 msgid "You can no longer reply to this post."
 msgstr "Sie können auf diesen Beitrag nicht mehr antworten."
 
-#: lib/vutuv_web/components/ui.ex:2384
-#: lib/vutuv_web/controllers/settings_controller.ex:96
-#: lib/vutuv_web/templates/import/new.html.heex:5
-#: lib/vutuv_web/templates/import/preview.html.heex:5
-#: lib/vutuv_web/templates/settings/data.html.heex:3
-#: lib/vutuv_web/templates/settings/data.html.heex:5
-#, elixir-autogen, elixir-format
-msgid "Your data"
-msgstr "Ihre Daten"
-
 #: lib/vutuv_web/templates/settings/privacy.html.heex:142
 #, elixir-autogen, elixir-format
 msgid "Content under review"
@@ -5304,9 +5293,9 @@ msgstr "Tastaturkürzel"
 msgid "Navigation"
 msgstr "Navigation"
 
-#: lib/vutuv_web/components/ui.ex:2451
-#: lib/vutuv_web/components/ui.ex:2456
-#: lib/vutuv_web/components/ui.ex:2522
+#: lib/vutuv_web/components/ui.ex:2452
+#: lib/vutuv_web/components/ui.ex:2457
+#: lib/vutuv_web/components/ui.ex:2525
 #: lib/vutuv_web/controllers/settings_controller.ex:46
 #: lib/vutuv_web/live/shell_live.ex:338
 #: lib/vutuv_web/templates/address/edit.html.heex:2
@@ -5316,8 +5305,6 @@ msgstr "Navigation"
 #: lib/vutuv_web/templates/email/confirm.html.heex:2
 #: lib/vutuv_web/templates/email/edit.html.heex:3
 #: lib/vutuv_web/templates/email/new.html.heex:3
-#: lib/vutuv_web/templates/import/new.html.heex:4
-#: lib/vutuv_web/templates/import/preview.html.heex:4
 #: lib/vutuv_web/templates/phone_number/edit.html.heex:2
 #: lib/vutuv_web/templates/phone_number/new.html.heex:2
 #: lib/vutuv_web/templates/settings/index.html.heex:10
@@ -5457,7 +5444,7 @@ msgstr "Adressen hinzufügen, entfernen oder Ihre Hauptadresse wählen."
 msgid "Change"
 msgstr "Ändern"
 
-#: lib/vutuv_web/templates/settings/data.html.heex:9
+#: lib/vutuv_web/templates/settings/export.html.heex:8
 #, elixir-autogen, elixir-format
 msgid "Download everything vutuv stores about you, as one file."
 msgstr "Laden Sie alles herunter, was vutuv über Sie speichert, als eine Datei."
@@ -5465,13 +5452,13 @@ msgstr "Laden Sie alles herunter, was vutuv über Sie speichert, als eine Datei.
 #: lib/vutuv_web/components/ui.ex:2375
 #: lib/vutuv_web/controllers/email_controller.ex:46
 #: lib/vutuv_web/templates/email/manage.html.heex:4
-#: lib/vutuv_web/templates/import/preview.html.heex:69
+#: lib/vutuv_web/templates/import/preview.html.heex:60
 #: lib/vutuv_web/templates/settings/security.html.heex:17
 #, elixir-autogen, elixir-format
 msgid "Email addresses"
 msgstr "E-Mail-Adressen"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:154
+#: lib/vutuv_web/controllers/settings_controller.ex:160
 #, elixir-autogen, elixir-format
 msgid "Notification settings saved."
 msgstr "Benachrichtigungseinstellungen gespeichert."
@@ -5491,13 +5478,13 @@ msgstr "Persönliche Tokens für die vutuv-API."
 msgid "Photos"
 msgstr "Fotos"
 
-#: lib/vutuv_web/components/ui.ex:2388
+#: lib/vutuv_web/components/ui.ex:2389
 #: lib/vutuv_web/templates/settings/privacy.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Privacy"
 msgstr "Privatsphäre"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:129
+#: lib/vutuv_web/controllers/settings_controller.ex:135
 #, elixir-autogen, elixir-format
 msgid "Privacy settings saved."
 msgstr "Datenschutzeinstellungen gespeichert."
@@ -5532,7 +5519,7 @@ msgstr "Ihre Beiträge oder Ihr Profil, die ein Moderator gerade prüft."
 msgid "Apps & API access"
 msgstr "Apps & API-Zugang"
 
-#: lib/vutuv_web/templates/settings/data.html.heex:8
+#: lib/vutuv_web/templates/settings/export.html.heex:6
 #, elixir-autogen, elixir-format
 msgid "Download your data"
 msgstr "Ihre Daten herunterladen"
@@ -5552,7 +5539,7 @@ msgstr "Sprache der Oberfläche"
 msgid "Language & region"
 msgstr "Sprache & Region"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:168
+#: lib/vutuv_web/controllers/settings_controller.ex:174
 #, elixir-autogen, elixir-format
 msgid "Language updated."
 msgstr "Sprache aktualisiert."
@@ -5606,13 +5593,13 @@ msgstr "@%{slug} hat Sie auf vutuv empfohlen"
 msgid "@%{slug} started following you on vutuv"
 msgstr "@%{slug} folgt Ihnen jetzt auf vutuv"
 
-#: lib/vutuv_web/components/ui.ex:2390
+#: lib/vutuv_web/components/ui.ex:2391
 #: lib/vutuv_web/templates/settings/apps.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Apps"
 msgstr "Apps"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:120
+#: lib/vutuv_web/controllers/settings_controller.ex:126
 #, elixir-autogen, elixir-format
 msgid "Apps & API"
 msgstr "Apps & API-Zugang"
@@ -5638,7 +5625,7 @@ msgstr "Benachrichtigungen in der App"
 msgid "New followers"
 msgstr "Neue Follower"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:144
+#: lib/vutuv_web/controllers/settings_controller.ex:150
 #, elixir-autogen, elixir-format
 msgid "Notification settings"
 msgstr "Benachrichtigungseinstellungen"
@@ -5648,7 +5635,7 @@ msgstr "Benachrichtigungseinstellungen"
 msgid "Open your notifications"
 msgstr "Benachrichtigungen öffnen"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:114
+#: lib/vutuv_web/controllers/settings_controller.ex:120
 #, elixir-autogen, elixir-format
 msgid "Privacy settings"
 msgstr "Privatsphäre-Einstellungen"
@@ -5839,7 +5826,7 @@ msgid_plural "%{count} minutes ago"
 msgstr[0] "vor %{count} Minute"
 msgstr[1] "vor %{count} Minuten"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:212
+#: lib/vutuv_web/controllers/settings_controller.ex:218
 #, elixir-autogen, elixir-format
 msgid "All other devices have been logged out."
 msgstr "Alle anderen Geräte wurden abgemeldet."
@@ -5879,7 +5866,7 @@ msgstr "Neue Anmeldung bei Ihrem vutuv-Konto"
 msgid "Signed-in devices"
 msgstr "Angemeldete Geräte"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:201
+#: lib/vutuv_web/controllers/settings_controller.ex:207
 #, elixir-autogen, elixir-format
 msgid "That device has been logged out."
 msgstr "Dieses Gerät wurde abgemeldet."
@@ -6249,7 +6236,7 @@ msgstr "Empfehlung zurücknehmen"
 msgid "Default map"
 msgstr "Standardkarte"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:183
+#: lib/vutuv_web/controllers/settings_controller.ex:189
 #, elixir-autogen, elixir-format
 msgid "Map preferences saved."
 msgstr "Karteneinstellungen gespeichert."
@@ -7835,17 +7822,17 @@ msgstr "%{title} @ %{organization} wird als Jobtitel auf Ihrem Profil angezeigt.
 msgid "Your profile job title is chosen automatically. Pick a role below to control which title leads your profile."
 msgstr "Ihr Jobtitel wird automatisch gewählt. Wählen Sie unten eine Position, um festzulegen, welcher Titel auf Ihrem Profil erscheint."
 
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:69
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:76
 #, elixir-autogen
 msgid "Shown on your profile"
 msgstr "Auf Ihrem Profil sichtbar"
 
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:75
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:82
 #, elixir-autogen
 msgid "Use automatic"
 msgstr "Automatisch verwenden"
 
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:85
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:92
 #, elixir-autogen
 msgid "Show on profile"
 msgstr "Auf Profil anzeigen"
@@ -8134,8 +8121,8 @@ msgstr "Abschluss"
 #: lib/vutuv_web/templates/education/manage.html.heex:4
 #: lib/vutuv_web/templates/education/new.html.heex:3
 #: lib/vutuv_web/templates/education/show.html.heex:6
-#: lib/vutuv_web/templates/import/new.html.heex:18
-#: lib/vutuv_web/templates/import/preview.html.heex:32
+#: lib/vutuv_web/templates/import/new.html.heex:10
+#: lib/vutuv_web/templates/import/preview.html.heex:23
 #: lib/vutuv_web/templates/user/show.html.heex:422
 #, elixir-autogen, elixir-format
 msgid "Education"
@@ -8161,7 +8148,7 @@ msgstr "Ausbildung von %{name}"
 msgid "Education updated successfully."
 msgstr "Ausbildung erfolgreich aktualisiert."
 
-#: lib/vutuv_web/templates/import/preview.html.heex:71
+#: lib/vutuv_web/templates/import/preview.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "Email addresses are not imported automatically because each one is confirmed by PIN. Add them yourself if you like:"
 msgstr "E-Mail-Adressen werden nicht automatisch importiert, da jede per PIN bestätigt wird. Fügen Sie sie bei Bedarf selbst hinzu:"
@@ -8172,28 +8159,25 @@ msgstr "E-Mail-Adressen werden nicht automatisch importiert, da jede per PIN bes
 msgid "Field of study"
 msgstr "Studienfach"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:14
+#: lib/vutuv_web/templates/import/preview.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Here is what we found in your export. Uncheck anything you do not want. Entries already on your profile are unchecked for you."
 msgstr "Das haben wir in Ihrem Export gefunden. Entfernen Sie das Häkchen bei allem, was Sie nicht übernehmen möchten. Einträge, die bereits in Ihrem Profil stehen, sind für Sie abgewählt."
 
-#: lib/vutuv_web/templates/settings/data.html.heex:17
+#: lib/vutuv_web/components/ui.ex:2384
 #, elixir-autogen, elixir-format
 msgid "Import"
-msgstr "Importieren"
+msgstr "Import"
 
 #: lib/vutuv_web/controllers/import_controller.ex:31
 #: lib/vutuv_web/controllers/import_controller.ex:53
-#: lib/vutuv_web/templates/import/new.html.heex:2
-#: lib/vutuv_web/templates/import/new.html.heex:6
-#: lib/vutuv_web/templates/import/preview.html.heex:2
-#: lib/vutuv_web/templates/import/preview.html.heex:6
-#: lib/vutuv_web/templates/settings/data.html.heex:14
+#: lib/vutuv_web/templates/import/new.html.heex:1
+#: lib/vutuv_web/templates/import/preview.html.heex:1
 #, elixir-autogen, elixir-format
 msgid "Import from LinkedIn"
 msgstr "Von LinkedIn importieren"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:84
+#: lib/vutuv_web/templates/import/preview.html.heex:75
 #, elixir-autogen, elixir-format
 msgid "Import selected"
 msgstr "Auswahl importieren"
@@ -8210,8 +8194,8 @@ msgstr "Nichts Neues zu importieren."
 
 #: lib/vutuv_web/components/ui.ex:2376
 #: lib/vutuv_web/controllers/phone_number_controller.ex:31
-#: lib/vutuv_web/templates/import/new.html.heex:22
-#: lib/vutuv_web/templates/import/preview.html.heex:48
+#: lib/vutuv_web/templates/import/new.html.heex:14
+#: lib/vutuv_web/templates/import/preview.html.heex:39
 #: lib/vutuv_web/templates/phone_number/manage.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "Phone numbers"
@@ -8227,23 +8211,23 @@ msgstr "Bitte wählen Sie zuerst Ihre LinkedIn-Export-ZIP-Datei."
 msgid "School"
 msgstr "Schule"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:60
+#: lib/vutuv_web/templates/import/preview.html.heex:51
 #, elixir-autogen, elixir-format
 msgid "Set %{field}:"
 msgstr "%{field} setzen:"
 
-#: lib/vutuv_web/templates/import/new.html.heex:21
-#: lib/vutuv_web/templates/import/preview.html.heex:44
+#: lib/vutuv_web/templates/import/new.html.heex:13
+#: lib/vutuv_web/templates/import/preview.html.heex:35
 #, elixir-autogen, elixir-format
 msgid "Social media"
 msgstr "Soziale Medien"
 
-#: lib/vutuv_web/templates/import/new.html.heex:33
+#: lib/vutuv_web/templates/import/new.html.heex:25
 #, elixir-autogen, elixir-format
 msgid "Step 1: Download your LinkedIn data"
 msgstr "Schritt 1: Laden Sie Ihre LinkedIn-Daten herunter"
 
-#: lib/vutuv_web/templates/import/new.html.heex:84
+#: lib/vutuv_web/templates/import/new.html.heex:76
 #, elixir-autogen, elixir-format
 msgid "Step 2: Upload the ZIP here"
 msgstr "Schritt 2: Laden Sie die ZIP-Datei hier hoch"
@@ -8263,23 +8247,18 @@ msgstr "Die Datei konnte nicht gelesen werden. Bitte versuchen Sie es erneut."
 msgid "The import could not be completed. Please try again."
 msgstr "Der Import konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/templates/import/new.html.heex:128
+#: lib/vutuv_web/templates/import/new.html.heex:120
 #, elixir-autogen, elixir-format
 msgid "Upload and preview"
 msgstr "Hochladen und Vorschau"
 
-#: lib/vutuv_web/templates/settings/data.html.heex:15
-#, elixir-autogen, elixir-format
-msgid "Upload your LinkedIn data export to fill in your profile."
-msgstr "Laden Sie Ihren LinkedIn-Datenexport hoch, um Ihr Profil zu füllen."
-
-#: lib/vutuv_web/templates/import/new.html.heex:17
-#: lib/vutuv_web/templates/import/preview.html.heex:28
+#: lib/vutuv_web/templates/import/new.html.heex:9
+#: lib/vutuv_web/templates/import/preview.html.heex:19
 #, elixir-autogen, elixir-format
 msgid "Work experience"
 msgstr "Berufserfahrung"
 
-#: lib/vutuv_web/templates/import/preview.html.heex:75
+#: lib/vutuv_web/templates/import/preview.html.heex:66
 #, elixir-autogen, elixir-format
 msgid "add an email address"
 msgstr "eine E-Mail-Adresse hinzufügen"
@@ -8367,62 +8346,62 @@ msgstr "Beiträge werden geladen"
 msgid "Social media posts"
 msgstr "Social-Media-Beiträge"
 
-#: lib/vutuv_web/templates/import/new.html.heex:58
+#: lib/vutuv_web/templates/import/new.html.heex:50
 #, elixir-autogen, elixir-format
 msgid "Click \"Request archive\"."
 msgstr "Klicken Sie auf „Archiv anfordern“."
 
-#: lib/vutuv_web/templates/import/new.html.heex:70
+#: lib/vutuv_web/templates/import/new.html.heex:62
 #, elixir-autogen, elixir-format
 msgid "LinkedIn's \"Download my data\" page with \"Download larger data archive\" selected and the \"Request archive\" button below it."
 msgstr "Die LinkedIn-Seite „Meine Daten herunterladen“ mit ausgewähltem „Größeres Datenarchiv herunterladen“ und der Schaltfläche „Archiv anfordern“ darunter."
 
-#: lib/vutuv_web/templates/import/new.html.heex:54
+#: lib/vutuv_web/templates/import/new.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "On that page, select \"Download larger data archive\" (profile, positions, education, skills)."
 msgstr "Wählen Sie auf dieser Seite „Größeres Datenarchiv herunterladen“ (Profil, Positionen, Ausbildung, Kenntnisse)."
 
-#: lib/vutuv_web/templates/import/new.html.heex:46
+#: lib/vutuv_web/templates/import/new.html.heex:38
 #, elixir-autogen, elixir-format
 msgid "Open LinkedIn's data export page"
 msgstr "LinkedIn-Datenexport-Seite öffnen"
 
-#: lib/vutuv_web/templates/import/new.html.heex:80
+#: lib/vutuv_web/templates/import/new.html.heex:72
 #, elixir-autogen, elixir-format
 msgid "Select the larger archive, then click \"Request archive\"."
 msgstr "Wählen Sie das größere Archiv und klicken Sie dann auf „Archiv anfordern“."
 
-#: lib/vutuv_web/templates/import/new.html.heex:35
+#: lib/vutuv_web/templates/import/new.html.heex:27
 #, elixir-autogen, elixir-format
 msgid "LinkedIn lets you export your own data as a ZIP archive. Open the export page, request the larger archive, and download the ZIP once LinkedIn has finished preparing it (this usually takes a few minutes)."
 msgstr "LinkedIn ermöglicht Ihnen, Ihre eigenen Daten als ZIP-Archiv zu exportieren. Öffnen Sie die Exportseite, fordern Sie das größere Archiv an und laden Sie die ZIP-Datei herunter, sobald LinkedIn sie fertig vorbereitet hat (das dauert meist nur wenige Minuten)."
 
-#: lib/vutuv_web/templates/import/new.html.heex:60
+#: lib/vutuv_web/templates/import/new.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "LinkedIn prepares your archive. When it is ready (usually after a few minutes), download the ZIP to your device."
 msgstr "LinkedIn bereitet Ihr Archiv vor. Sobald es fertig ist (meist nach wenigen Minuten), laden Sie die ZIP-Datei auf Ihr Gerät herunter."
 
-#: lib/vutuv_web/templates/import/new.html.heex:86
+#: lib/vutuv_web/templates/import/new.html.heex:78
 #, elixir-autogen, elixir-format
 msgid "Then upload the ZIP file below to see the preview and pick what to add."
 msgstr "Laden Sie die ZIP-Datei anschließend unten hoch, um die Vorschau zu sehen und auszuwählen, was übernommen wird."
 
-#: lib/vutuv_web/templates/import/new.html.heex:12
+#: lib/vutuv_web/templates/import/new.html.heex:4
 #, elixir-autogen, elixir-format
 msgid "What gets imported"
 msgstr "Was importiert wird"
 
-#: lib/vutuv_web/templates/import/new.html.heex:26
+#: lib/vutuv_web/templates/import/new.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "You decide exactly what to add. In the next step we show you everything we found and you pick it entry by entry, so you never import anything sight unseen. Nothing is added until you confirm, and your existing entries are never overwritten."
 msgstr "Sie entscheiden genau, was übernommen wird. Im nächsten Schritt zeigen wir Ihnen alles, was wir gefunden haben, und Sie wählen Eintrag für Eintrag aus, sodass Sie nie etwas ungesehen importieren. Es wird nichts übernommen, bevor Sie bestätigen, und Ihre vorhandenen Einträge werden nie überschrieben."
 
-#: lib/vutuv_web/templates/import/new.html.heex:14
+#: lib/vutuv_web/templates/import/new.html.heex:6
 #, elixir-autogen, elixir-format
 msgid "Import your LinkedIn profile data into your vutuv profile. From your export we can fill in:"
 msgstr "Importieren Sie die Daten Ihres LinkedIn-Profils in Ihr vutuv Profil. Aus Ihrem Export können wir übernehmen:"
 
-#: lib/vutuv_web/templates/import/new.html.heex:116
+#: lib/vutuv_web/templates/import/new.html.heex:108
 #, elixir-autogen, elixir-format
 msgid "Drag your ZIP file here, or click to choose one."
 msgstr "Ziehen Sie Ihre ZIP-Datei hierher oder klicken Sie, um eine auszuwählen."
@@ -8451,3 +8430,15 @@ msgstr "Weitere Profil-Bereiche"
 #, elixir-autogen, elixir-format
 msgid "Sign-in & security"
 msgstr "Anmeldung & Sicherheit"
+
+#: lib/vutuv_web/components/ui.ex:2385
+#: lib/vutuv_web/controllers/settings_controller.ex:98
+#: lib/vutuv_web/templates/settings/export.html.heex:4
+#, elixir-autogen, elixir-format
+msgid "Export"
+msgstr "Export"
+
+#: lib/vutuv_web/templates/settings/export.html.heex:11
+#, elixir-autogen, elixir-format
+msgid "The file is in JSON format and includes your profile, posts, messages and settings. It contains private data, so store it carefully."
+msgstr "Die Datei ist im JSON-Format und enthält Ihr Profil, Ihre Beiträge, Nachrichten und Einstellungen. Sie enthält private Daten, bewahren Sie sie also sorgfältig auf."

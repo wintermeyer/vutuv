@@ -18,7 +18,7 @@ defmodule VutuvWeb.ExportControllerTest do
   }
 
   defp download(conn, user) do
-    get(conn, ~p"/settings/export")
+    get(conn, ~p"/settings/export/download")
   end
 
   test "the owner downloads one JSON file with their data", %{conn: conn} do
@@ -56,7 +56,7 @@ defmodule VutuvWeb.ExportControllerTest do
   test "a guest is sent to the login flow, not the export", %{conn: conn} do
     # /settings is user-agnostic and login-required: there is no URL for
     # someone ELSE's export any more, and a guest is turned away.
-    assert conn |> get(~p"/settings/export") |> redirected_to() == "/"
+    assert conn |> get(~p"/settings/export/download") |> redirected_to() == "/"
   end
 
   test "logged out is refused", %{conn: conn} do

@@ -1,13 +1,5 @@
-<.page_header
-  title={gettext("Import from LinkedIn")}
-  crumbs={[
-    {gettext("Settings"), ~p"/settings"},
-    {gettext("Your data"), ~p"/settings/data"},
-    gettext("Import from LinkedIn")
-  ]}
-/>
-
-<div class="mx-auto max-w-3xl space-y-6">
+<.settings_shell user={@user} active={:import} title={gettext("Import from LinkedIn")}>
+<div class="max-w-3xl space-y-6">
   <.card>
     <.section_title>{gettext("What gets imported")}</.section_title>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
@@ -130,3 +122,4 @@
     </.form>
   </.card>
 </div>
+</.settings_shell>
