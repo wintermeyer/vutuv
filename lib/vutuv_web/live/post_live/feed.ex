@@ -373,18 +373,12 @@ defmodule VutuvWeb.PostLive.Feed do
         threaded reply's parent-excerpt) would otherwise force the column — and
         the whole page — wider than a phone viewport. --%>
         <div class="min-w-0 space-y-4 md:col-span-2">
-          <div class="flex flex-wrap items-baseline justify-between gap-2">
-            <h1 class="text-2xl font-bold text-slate-800 dark:text-slate-100">{gettext("Feed")}</h1>
-            <p class="text-sm font-semibold">
-              <.link navigate={~p"/likes"} class="text-brand-600 hover:text-brand-700">
-                {gettext("Likes")}
-              </.link>
-              <span class="text-slate-300 dark:text-slate-600">·</span>
-              <.link navigate={~p"/bookmarks"} class="text-brand-600 hover:text-brand-700">
-                {gettext("Bookmarks")}
-              </.link>
-            </p>
-          </div>
+          <%!-- No visible headline: the top nav already marks Feed as active,
+          so the page opens with the compose tile (like the profile's Beiträge
+          card) and the h1 stays for screen readers only. The Likes/Bookmarks
+          links that used to balance the headline were redundant — both live
+          in the avatar menu and as tabs on the saved hub. --%>
+          <h1 class="sr-only">{gettext("Feed")}</h1>
 
           <%!-- Collapsed by default: the same dashed compose tile as the
           profile's Beiträge section (<.empty_add>), reused as a reveal trigger

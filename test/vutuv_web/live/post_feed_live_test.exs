@@ -52,6 +52,20 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "friend words"
       refute html =~ "stranger words"
     end
+
+    test "opens with the compose tile, no visible headline or saved-hub links", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/feed")
+
+      # The page opens with the compose tile (like the profile's Beiträge
+      # card); the h1 stays for screen readers only. The old Likes/Bookmarks
+      # header links were redundant — both live in the avatar menu and as tabs
+      # on the saved hub.
+      assert has_element?(view, "#feed h1.sr-only", "Feed")
+      refute has_element?(view, ~s(#feed a[href="/likes"]))
+      refute has_element?(view, ~s(#feed a[href="/bookmarks"]))
+    end
   end
 
   describe "threaded replies" do
