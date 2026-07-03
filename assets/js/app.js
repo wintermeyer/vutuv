@@ -459,6 +459,104 @@ function setupMapLinks() {
 }
 onReady(setupMapLinks)
 
+// Drag-and-drop for the LinkedIn import ZIP (Step 2 of the import page). The
+// <label data-dropzone> wraps a real, sr-only file input, so the form still
+// posts multipart exactly as before and the picker/submit work with JS off —
+// this only lets the member drop a file onto the zone, highlights it while a
+// file is dragged over, and shows the chosen filename. Classic controller page,
+// so plain JS suffices.
+function wireDropzone(zone) {
+  if (!once(zone, "dropzone")) return
+  const input = zone.querySelector("[data-dropzone-input]")
+  if (!input) return
+  const prompt = zone.querySelector("[data-dropzone-prompt]")
+  const name = zone.querySelector("[data-dropzone-name]")
+
+  const showChosen = () => {
+    const file = input.files && input.files[0]
+    if (!file || !name) return
+    name.textContent = file.name
+    name.classList.remove("hidden")
+    if (prompt) prompt.classList.add("hidden")
+  }
+
+  input.addEventListener("change", showChosen)
+
+  ;["dragenter", "dragover"].forEach((ev) =>
+    zone.addEventListener(ev, (e) => {
+      e.preventDefault()
+      zone.dataset.dragover = "true"
+    })
+  )
+  ;["dragleave", "dragend"].forEach((ev) =>
+    zone.addEventListener(ev, (e) => {
+      // Ignore dragleave bubbling up from a child element still inside the zone.
+      if (ev === "dragleave" && zone.contains(e.relatedTarget)) return
+      delete zone.dataset.dragover
+    })
+  )
+
+  zone.addEventListener("drop", (e) => {
+    e.preventDefault()
+    delete zone.dataset.dragover
+    const dropped = e.dataTransfer && e.dataTransfer.files
+    if (!dropped || !dropped.length) return
+    // Non-multiple input: keep just the first file, via a fresh DataTransfer.
+    const dt = new DataTransfer()
+    dt.items.add(dropped[0])
+    input.files = dt.files
+    showChosen()
+  })
+}
+
+function setupDropzones() {
+  document.querySelectorAll("[data-dropzone]").forEach(wireDropzone)
+}
+onReady(setupDropzones)
+
+// "Select all / deselect all" toggle for each candidate group on the LinkedIn
+// import preview page. Progressive: the button starts hidden and does nothing
+// with JS off (the checkboxes are still individually selectable), so this only
+// adds a one-click flip over every checkbox inside the enclosing
+// [data-select-group]. The button carries both localized labels as data-* so
+// no translated text is hardcoded here.
+function wireSelectAll(btn) {
+  if (!once(btn, "selectAll")) return
+  const group = btn.closest("[data-select-group]")
+  if (!group) return
+  const boxes = () => [...group.querySelectorAll('input[type="checkbox"]')]
+
+  const sync = () => {
+    const all = boxes()
+    const allChecked = all.length > 0 && all.every((b) => b.checked)
+    btn.dataset.state = allChecked ? "all" : "some"
+    btn.textContent = allChecked
+      ? btn.dataset.labelDeselect
+      : btn.dataset.labelSelect
+  }
+
+  btn.addEventListener("click", () => {
+    const check = btn.dataset.state !== "all"
+    boxes().forEach((b) => {
+      b.checked = check
+    })
+    sync()
+  })
+
+  // Keep the label honest when the member toggles individual boxes by hand.
+  group.addEventListener("change", (e) => {
+    if (e.target.matches('input[type="checkbox"]')) sync()
+  })
+
+  btn.classList.remove("hidden")
+  sync()
+}
+
+function setupSelectAll() {
+  document.querySelectorAll("[data-select-all]").forEach(wireSelectAll)
+}
+onReady(setupSelectAll)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

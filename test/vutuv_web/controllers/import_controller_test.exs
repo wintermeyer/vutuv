@@ -28,8 +28,19 @@ defmodule VutuvWeb.ImportControllerTest do
 
   test "the upload form renders for the owner", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = get(conn, ~p"/#{user}/settings/import/linkedin")
-    assert html_response(conn, 200) =~ "linkedin-import-form"
+    html = conn |> get(~p"/#{user}/settings/import/linkedin") |> html_response(200)
+    assert html =~ "linkedin-import-form"
+    # The drag-and-drop enhancement wraps the file input in a dropzone, but the
+    # input must keep its name so the plain multipart POST still works with JS off.
+    assert html =~ "data-dropzone"
+    assert html =~ ~s(name="import[archive]")
+  end
+
+  test "the page links to LinkedIn's data export page and shows the screenshot", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}/settings/import/linkedin") |> html_response(200)
+    assert html =~ "https://www.linkedin.com/mypreferences/d/download-my-data"
+    assert html =~ "/images/linkedin-download-my-data.webp"
   end
 
   test "a member cannot open another member's import page", %{conn: conn} do
@@ -51,6 +62,10 @@ defmodule VutuvWeb.ImportControllerTest do
     assert body =~ "linkedin-import-preview"
     assert body =~ "Acme"
     assert body =~ "Elixir"
+    # Each candidate group carries a select-all/deselect-all toggle (JS reveals
+    # the button; it starts hidden and the checkboxes work without it).
+    assert body =~ "data-select-group"
+    assert body =~ "data-select-all"
   end
 
   test "the uploaded temp file is deleted after parsing", %{conn: conn} do

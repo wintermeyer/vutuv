@@ -51,8 +51,8 @@
 
       <%!-- Profile scalars: offered only when the field is currently blank, so an
       import never overwrites your name or headline. --%>
-      <div :if={Enum.any?(@candidates.profile, & &1.fillable?)} class="mt-6">
-        <.section_title>{gettext("Profile")}</.section_title>
+      <div :if={Enum.any?(@candidates.profile, & &1.fillable?)} class="mt-6" data-select-group>
+        <.select_group_header title={gettext("Profile")} />
         <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
           <li :for={c <- @candidates.profile} :if={c.fillable?} class="flex items-start gap-3 py-2">
             <input type="checkbox" name="selected[]" value={c.id} class={checkbox_class()} id={"cand-#{c.id}"} />
