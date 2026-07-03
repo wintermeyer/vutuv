@@ -71,6 +71,7 @@ defmodule VutuvWeb.ShellLive do
       # connect. A real unread count appears within a fraction of a second.
       |> assign(:messages_count, 0)
       |> assign(:notifications_count, 0)
+      |> assign(:brand_path, brand_path(user_param, path))
       |> maybe_start_counts(user_id, path)
       |> maybe_start_presence(user_id, session["show_online"] == true)
 
@@ -136,6 +137,12 @@ defmodule VutuvWeb.ShellLive do
   defp initial_count(path, prefix, user_id, counter) do
     if String.starts_with?(path, prefix), do: 0, else: counter.(user_id)
   end
+
+  # Where the logo goes. Normally "home" ("/", which routes a logged-in member
+  # to their feed), but ON the feed itself that would be a no-op round trip, so
+  # there it deep-links to the member's own profile instead.
+  defp brand_path(user_param, "/feed") when is_binary(user_param), do: ~p"/#{user_param}"
+  defp brand_path(_user_param, _path), do: ~p"/"
 
   # Both badges recompute from the source of truth rather than adjusting a
   # running tally, so they can't drift. A bare +1 on :new_notification went
@@ -224,8 +231,14 @@ defmodule VutuvWeb.ShellLive do
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
           <%!-- The logo is "home": for a logged-in member "/" redirects to their
-               home (feed or profile) via RequireUserLoggedOut; logged out it is the landing page. --%>
-          <.link href={~p"/"} class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white">
+               home (feed or profile) via RequireUserLoggedOut; logged out it is the
+               landing page. On /feed itself it links to the member's own profile
+               instead (see brand_path/2). --%>
+          <.link
+            href={@brand_path}
+            data-brand
+            class="shrink-0 text-2xl font-extrabold tracking-tight text-brand-800 dark:text-white"
+          >
             vutuv
           </.link>
 

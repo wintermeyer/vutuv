@@ -109,6 +109,49 @@ defmodule VutuvWeb.ShellLiveTest do
     refute has_element?(view, @bell_badge)
   end
 
+  describe "brand link" do
+    test "points to the member's own profile on the feed", %{conn: conn} do
+      # On /feed the logo would only round-trip through "/" back to the feed,
+      # so there it deep-links to the member's own profile instead.
+      user = insert(:user)
+      session = session_for(user, %{"path" => "/feed"})
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+
+      assert has_element?(view, ~s(header a[data-brand][href="/stefan"]), "vutuv")
+    end
+
+    test "stays the home link on every other page", %{conn: conn} do
+      user = insert(:user)
+      session = session_for(user, %{"path" => "/search"})
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session)
+
+      assert has_element?(view, ~s(header a[data-brand][href="/"]), "vutuv")
+    end
+
+    test "stays the home link when logged out", %{conn: conn} do
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: %{"path" => "/feed"})
+
+      assert has_element?(view, ~s(header a[data-brand][href="/"]), "vutuv")
+    end
+
+    test "the real feed page wires the brand link to the member's profile", %{conn: conn} do
+      # End to end through the layout: the feed page must hand its path to the
+      # shell (session "path"), while a sibling page keeps the home link.
+      {conn, user} = create_and_login_user(conn)
+
+      feed_doc = conn |> get(~p"/feed") |> html_response(200) |> LazyHTML.from_document()
+
+      assert feed_doc |> LazyHTML.query("a[data-brand]") |> LazyHTML.attribute("href") ==
+               ["/#{user.username}"]
+
+      search_doc = conn |> get(~p"/search") |> html_response(200) |> LazyHTML.from_document()
+
+      assert search_doc |> LazyHTML.query("a[data-brand]") |> LazyHTML.attribute("href") ==
+               ["/"]
+    end
+  end
+
   test "shows the user's avatar in the top bar when they have one", %{conn: conn} do
     user = insert(:user)
     session = session_for(user, %{"user_avatar" => "/avatars/#{user.id}/Stefan%20W_thumb.jpg"})
