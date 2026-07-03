@@ -12,9 +12,7 @@ defmodule Vutuv.Sitemap do
   """
 
   import Ecto.Query
-  import Vutuv.Moderation.Query
 
-  alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -34,6 +32,7 @@ defmodule Vutuv.Sitemap do
                   "/datenschutzerklaerung",
                   "/nutzungsbedingungen",
                   "/listings/most_followed_users",
+                  "/members",
                   "/ads",
                   "/tags",
                   "/developers"
@@ -104,9 +103,9 @@ defmodule Vutuv.Sitemap do
     query |> limit(^@chunk_size) |> offset(^((chunk - 1) * @chunk_size))
   end
 
-  defp indexable_users do
-    from(u in User, where: u.email_confirmed? and not u.noindex? and not account_hidden(u.id))
-  end
+  # The crawlable member set lives in Vutuv.Directory (the /members pages),
+  # so directory and sitemap can never drift apart.
+  defp indexable_users, do: Vutuv.Directory.indexable_users()
 
   # scope_visible(nil) already drops restricted posts, frozen posts and
   # moderation-hidden authors; the join adds the member-level conditions.

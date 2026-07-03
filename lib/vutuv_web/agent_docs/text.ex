@@ -165,6 +165,18 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # The member directory overview (/members): the letter buckets with their
+  # member counts and letter-page URLs.
+  def render(%{type: "directory"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map(doc.letters, fn entry -> "- #{entry.letter} (#{entry.count}): #{entry.url}" end),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
   def render(%{type: "advertising"} = doc) do
     [

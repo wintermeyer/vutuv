@@ -55,6 +55,10 @@ defmodule VutuvWeb.UserController do
     # without this the page chrome — ShellLive included — renders twice. The
     # root layout (the document <head>) still applies.
     conn
+    # The member's search/AI opt-outs as a response header, belt and braces
+    # to the layout's robots meta tag (the post pages and the agent-format
+    # documents already answer with it).
+    |> VutuvWeb.ContentPolicy.put_robots_header(user.noindex?, user.noai?)
     |> put_layout(html: false)
     |> live_render(VutuvWeb.UserProfileLive,
       session: %{

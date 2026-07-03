@@ -855,6 +855,19 @@ defmodule VutuvWeb.UserControllerTest do
              ~s(<meta name="robots" content="noindex, noai, noimageai")
   end
 
+  # Belt and braces to the meta tag above: the HTML profile response also
+  # carries the member's opt-outs as an X-Robots-Tag header, like the post
+  # pages and the agent-format documents already do.
+  test "the profile page stamps the X-Robots-Tag header the member chose", %{conn: conn} do
+    open = insert_activated_user(noindex?: false, noai?: false)
+    assert conn |> get(~p"/#{open}") |> get_resp_header("x-robots-tag") == []
+
+    private = insert_activated_user(noindex?: true, noai?: true)
+
+    assert build_conn() |> get(~p"/#{private}") |> get_resp_header("x-robots-tag") ==
+             ["noindex, noai, noimageai"]
+  end
+
   test "profile update ignores email params (emails change only via the PIN flow)", %{conn: conn} do
     # Adding an address goes through EmailController.create, which mails a PIN
     # to the new address and only inserts it after confirmation (issue #759).

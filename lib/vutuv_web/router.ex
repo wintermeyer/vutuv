@@ -152,6 +152,13 @@ defmodule VutuvWeb.Router do
     get("/{{username}}", PageController, :newsletter_username_placeholder)
     get("/listings/most_followed_users", PageController, :most_followed_users)
 
+    # The public member directory: the A-Z overview plus one page per letter.
+    # The crawl surface for search engines that follow links instead of
+    # reading /sitemap.xml, and a browsable index for humans ("members" is a
+    # ReservedSlug; the letter pages carry agent-format siblings).
+    get("/members", DirectoryController, :index)
+    get("/members/:letter", DirectoryController, :show)
+
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it
     # can negotiate the agent-format siblings (/feed.md/.txt/.json/.xml,
     # VutuvWeb.AgentDocs) and live_render the LiveView for HTML. A literal route
@@ -709,8 +716,8 @@ defmodule VutuvWeb.Router do
   scope "/", VutuvWeb do
     pipe_through(:browser)
 
-    # No :index — there is no public user directory; the admin panel lists
-    # unverified users and search covers discovery. No :new/:create either —
+    # No :index — the public member directory lives at /members
+    # (DirectoryController), so UserController never lists. No :new/:create either —
     # registration is the landing-page form (POST /new_registration); the
     # UserController versions were unreachable (EnsureActivated 404'd them).
     # No :edit/:update — the basics form lives at /settings/profile now.

@@ -2,8 +2,9 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   @moduledoc """
   The people-list pages as data maps for the agent formats: the follower /
   following lists (`/:slug/followers`, `/:slug/following`), the connections
-  list (`/:slug/connections`), the tag page (`/tags/:slug`) and the
-  most-followed listing (`/listings/most_followed_users`).
+  list (`/:slug/connections`), the tag page (`/tags/:slug`), the
+  most-followed listing (`/listings/most_followed_users`) and the member
+  directory (`/members` + `/members/:letter`).
 
   The follow and connection lists are noindexed in HTML (the `NoIndex`
   plug + robots.txt), so their docs carry `noindex: true` plus
@@ -123,6 +124,46 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
           "We haven't yet figured out the best way to help everyone discover other interesting vutuv users. So for now, this page simply lists the 1,000 users with the most followers."
         ),
       people: Enum.map(users, &person_entry(&1, work_info_by_id, tags_by_id))
+    })
+  end
+
+  @doc """
+  The member-directory overview (`/members`): one entry per letter bucket
+  with its member count and letter-page URL. Zero-count letters ride along
+  so the doc mirrors the HTML page's full A-Z strip.
+  """
+  def build_directory_index(entries, total) do
+    AgentDocs.doc_meta("directory", "/members")
+    |> Map.merge(%{
+      title: gettext("Member directory"),
+      description:
+        gettext(
+          "All members who allow search engines to index their profile, grouped by the first letter of their last name."
+        ),
+      total: total,
+      letters:
+        Enum.map(entries, fn %{letter: letter, count: count} ->
+          %{letter: letter, count: count, url: AgentDocs.abs_url("/members/#{letter}")}
+        end)
+    })
+  end
+
+  @doc """
+  One page of a member-directory letter (`/members/:letter`). Same doc type
+  as the most-followed listing — it is a plain people list; the directory
+  context lives in the title and the canonical URL.
+  """
+  def build_directory_letter(letter, label, people, total, work_info_by_id, tags_by_id) do
+    title = gettext("Members: %{letter}", letter: label)
+
+    AgentDocs.doc_meta("listing", "/members/#{letter}")
+    |> Map.merge(%{
+      title: title,
+      description:
+        gettext("The member directory's %{letter} page, sorted by last name.", letter: label),
+      letter: letter,
+      total: total,
+      people: Enum.map(people, &person_entry(&1, work_info_by_id, tags_by_id))
     })
   end
 

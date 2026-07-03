@@ -1,0 +1,52 @@
+<.page_header
+  title={gettext("Member directory")}
+  crumbs={[{gettext("Home"), ~p"/"}, gettext("Member directory")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext(
+        "All %{count} members whose profiles are open to search engines, filed alphabetically by last name.",
+        count: delimited_count(@total)
+      )}
+    </p>
+
+    <%!-- The A-Z strip: letters with members link to their page, empty ones
+    render as muted tiles so the strip always shows the whole alphabet. Plain
+    <a>/<span> tags keep the attribute order stable for the tests. --%>
+    <nav
+      aria-label={gettext("Members by initial")}
+      class="mt-6 grid grid-cols-5 gap-2 sm:grid-cols-9"
+    >
+      <%= for entry <- @entries do %>
+        <%= if entry.count > 0 do %>
+          <a
+            href={~p"/members/#{entry.letter}"}
+            data-letter={entry.letter}
+            data-count={entry.count}
+            class="flex flex-col items-center rounded-lg px-2 py-3 ring-1 ring-slate-200 hover:bg-brand-50 dark:ring-slate-800 dark:hover:bg-brand-900/40"
+          >
+            <span class="text-lg font-semibold text-brand-700 dark:text-brand-100">
+              {display_letter(entry.letter)}
+            </span>
+            <span class="text-xs text-slate-600 dark:text-slate-400">
+              {compact_count(entry.count)}
+            </span>
+          </a>
+        <% else %>
+          <span
+            data-letter={entry.letter}
+            data-count="0"
+            class="flex flex-col items-center rounded-lg px-2 py-3 opacity-40 ring-1 ring-slate-200 dark:ring-slate-800"
+          >
+            <span class="text-lg font-semibold text-slate-600 dark:text-slate-400">
+              {display_letter(entry.letter)}
+            </span>
+            <span class="text-xs text-slate-600 dark:text-slate-400">0</span>
+          </span>
+        <% end %>
+      <% end %>
+    </nav>
+  </section>
+</div>

@@ -272,6 +272,25 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 
+  test "member directory index in every format" do
+    rendered = formats_for("/members")
+
+    # Greta Gradient sits under G, Fanny Follower under F — every format
+    # must link both letter pages.
+    assert_fact_everywhere(rendered, "/members/g")
+    assert_fact_everywhere(rendered, "/members/f")
+    assert Jason.decode!(rendered.json)["type"] == "directory"
+  end
+
+  test "member directory letter page in every format" do
+    rendered = formats_for("/members/g")
+
+    assert_fact_everywhere(rendered, "Greta Gradient")
+    # Each listed member's tags ride along in every format, like their name.
+    assert_fact_everywhere(rendered, "Bridgebuilding")
+    assert Jason.decode!(rendered.json)["type"] == "listing"
+  end
+
   test "every profile section page serves its facts in all formats" do
     facts = %{
       work_experiences: ["Bridge Engineer", "Span AG", "Building things"],

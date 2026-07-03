@@ -187,6 +187,8 @@ defmodule VutuvWeb.PageController do
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members
+  - `/members` — the member directory: everyone open to search engines,
+    filed by last-name initial at `/members/<a-z|other>`
   - `/ads` — the daily text ad: price, conditions, next available day
     (booking happens online and requires a login)
 

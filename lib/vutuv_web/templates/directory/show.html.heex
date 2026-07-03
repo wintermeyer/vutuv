@@ -1,0 +1,58 @@
+<.page_header
+  title={gettext("Members: %{letter}", letter: @label)}
+  crumbs={[
+    {gettext("Home"), ~p"/"},
+    {gettext("Member directory"), ~p"/members"},
+    @label
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <%!-- Quick jump to the sibling letters; also the interlinking that lets
+    link-following crawlers reach every letter page from every other one. --%>
+    <nav aria-label={gettext("Members by initial")} class="flex flex-wrap gap-x-1 gap-y-2 text-sm">
+      <%= for entry <- @entries do %>
+        <%= if entry.count > 0 do %>
+          <a
+            href={~p"/members/#{entry.letter}"}
+            aria-current={entry.letter == @letter && "page"}
+            class={[
+              "rounded px-2 py-1 font-semibold",
+              entry.letter == @letter && "bg-brand-600 text-white",
+              entry.letter != @letter &&
+                "text-brand-700 hover:bg-brand-50 dark:text-brand-100 dark:hover:bg-brand-900/40"
+            ]}
+          >
+            {display_letter(entry.letter)}
+          </a>
+        <% else %>
+          <span class="rounded px-2 py-1 font-semibold text-slate-600 opacity-40 dark:text-slate-400">
+            {display_letter(entry.letter)}
+          </span>
+        <% end %>
+      <% end %>
+    </nav>
+
+    <p :if={@total > 0} class="mt-4">
+      {ngettext("One member", "%{formatted} members", @total, formatted: delimited_count(@total))}
+    </p>
+
+    <%= if @users == [] do %>
+      <p class="card__empty">{gettext("No members with this initial yet.")}</p>
+    <% else %>
+      {VutuvWeb.UserHTML.card_list(%{
+        conn: @conn,
+        users: @users,
+        current_user: @current_user,
+        current_user_id: @current_user_id,
+        work_string_length: 60,
+        work_info_by_id: @work_info_by_id,
+        tags_by_id: @tags_by_id,
+        following_by_id: @following_by_id
+      })}
+    <% end %>
+
+    <.pager params={@conn.params} total={@total} />
+  </section>
+</div>
