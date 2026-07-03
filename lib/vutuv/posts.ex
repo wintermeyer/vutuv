@@ -1121,6 +1121,76 @@ defmodule Vutuv.Posts do
     |> Repo.preload(post_preloads())
   end
 
+  @discover_limit 5
+  @discover_pool 100
+
+  @doc """
+  A random handful of recent public posts for the feed's discovery rail:
+  posts by members who share `viewer`'s language but whom the viewer does
+  not follow — the post-shaped sibling of the "Who to follow" suggestions.
+
+  One post per author (their newest eligible one), drawn at random from the
+  `@discover_pool` newest such posts, so the rail surfaces different voices
+  on every draw while staying "new". Language matches on `users.locale` with
+  the empty value counting as English, mirroring `VutuvWeb.LiveLocale`'s
+  fallback. Replies (confusing without their thread) and image-only posts
+  (nothing to excerpt in a compact row) are skipped; a *muted* follow is
+  still a follow, so those authors stay excluded too. Preloaded like every
+  rendered post.
+  """
+  def discover_posts(%User{} = viewer, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @discover_limit)
+    locale = locale_or_english(viewer.locale)
+
+    newest_per_author =
+      from(p in Post,
+        join: u in assoc(p, :user),
+        left_join: r in assoc(p, :reply_ref),
+        where: is_nil(r.id),
+        where: fragment("COALESCE(NULLIF(?, ''), 'en')", u.locale) == ^locale,
+        where: p.user_id != ^viewer.id,
+        where: p.user_id not in subquery(all_followees_of(viewer.id)),
+        where: p.user_id not in subquery(blocked_either_way(viewer.id)),
+        where: account_confirmed_row(u),
+        where: p.body != "",
+        distinct: p.user_id,
+        order_by: [asc: p.user_id, desc: p.id],
+        select: %{id: p.id}
+      )
+      |> scope_visible(nil)
+
+    pool =
+      from(s in subquery(newest_per_author),
+        order_by: [desc: s.id],
+        limit: @discover_pool,
+        select: %{id: s.id}
+      )
+
+    ids =
+      from(s in subquery(pool),
+        order_by: fragment("random()"),
+        limit: ^limit,
+        select: s.id
+      )
+      |> Repo.all()
+
+    from(p in Post, where: p.id in ^ids)
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+    # An `id IN` fetch loses the random draw order.
+    |> Enum.shuffle()
+  end
+
+  defp locale_or_english(locale) when is_binary(locale) and locale != "", do: locale
+  defp locale_or_english(_locale), do: "en"
+
+  # Unlike the feed's `followees_of/1`, muted follows count here: muting only
+  # silences a followee's posts, it does not turn them back into a stranger
+  # worth suggesting.
+  defp all_followees_of(viewer_id) do
+    from(c in Follow, where: c.follower_id == ^viewer_id, select: c.followee_id)
+  end
+
   @doc """
   One offset page of `author`'s timeline visible to `viewer` — the author
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).

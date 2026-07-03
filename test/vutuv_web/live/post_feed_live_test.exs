@@ -46,11 +46,13 @@ defmodule VutuvWeb.PostFeedLiveTest do
       {:ok, _} = Posts.create_post(friend, %{body: "friend words"})
       {:ok, _} = Posts.create_post(other_user(), %{body: "stranger words"})
 
-      {:ok, _live, html} = live(conn, ~p"/feed")
+      {:ok, live, html} = live(conn, ~p"/feed")
 
       assert html =~ "my words"
       assert html =~ "friend words"
-      refute html =~ "stranger words"
+      # The stranger's post stays out of the timeline (it may still surface in
+      # the rail's "Suggested posts" discovery card — that is the card's job).
+      refute has_element?(live, "#feed-posts", "stranger words")
     end
 
     test "opens with the composer card, no visible headline or saved-hub links", %{conn: conn} do
@@ -551,6 +553,113 @@ defmodule VutuvWeb.PostFeedLiveTest do
       _ = render(live)
 
       assert has_element?(live, ~s(#who-to-follow a[href="/#{popular.username}"]))
+    end
+  end
+
+  describe "suggested posts rail" do
+    test "shows a same-language stranger's post with author link, permalink and reload", %{
+      conn: conn
+    } do
+      {conn, _user} = create_and_login_user(conn)
+      author = other_user(first_name: "New", last_name: "Voice")
+      {:ok, post} = Posts.create_post(author, %{body: "something worth discovering"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, ~s(#discover-posts a[href="/#{author.username}"]))
+
+      assert has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+             )
+
+      assert has_element?(live, ~s(#discover-reshuffle[phx-click="reshuffle-discover"]))
+    end
+
+    test "skips followed authors and other-language members", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      followed = other_user(first_name: "Al", last_name: "Ready")
+      german = other_user(first_name: "Deutsch", last_name: "Sprecher", locale: "de")
+      fresh = other_user(first_name: "Fresh", last_name: "Face")
+      insert(:follow, follower: user, followee: followed)
+
+      {:ok, followed_post} = Posts.create_post(followed, %{body: "followed words"})
+      {:ok, german_post} = Posts.create_post(german, %{body: "deutsche Worte"})
+      {:ok, fresh_post} = Posts.create_post(fresh, %{body: "fresh words"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{fresh.username}/posts/#{fresh_post.id}"])
+             )
+
+      refute has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{followed.username}/posts/#{followed_post.id}"])
+             )
+
+      refute has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{german.username}/posts/#{german_post.id}"])
+             )
+    end
+
+    test "hides the card when nothing is eligible", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      refute has_element?(live, "#discover-posts")
+    end
+
+    test "the reload control draws a fresh random handful without a reload", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      # More eligible authors than the 5 shown, so each draw picks a subset.
+      pool =
+        for n <- 1..10 do
+          author = other_user(first_name: "Voice", last_name: "No#{n}")
+          {:ok, post} = Posts.create_post(author, %{body: "discover me #{n}"})
+          {author, post}
+        end
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Over several reshuffles the union of shown permalinks must exceed the 5
+      # shown at once — a fixed pick never would.
+      shown =
+        Enum.reduce(1..12, MapSet.new(), fn _i, acc ->
+          live |> element("#discover-reshuffle") |> render_click()
+
+          pool
+          |> Enum.filter(fn {author, post} ->
+            has_element?(live, ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"]))
+          end)
+          |> Enum.reduce(acc, fn {_author, post}, acc -> MapSet.put(acc, post.id) end)
+        end)
+
+      assert MapSet.size(shown) > 5
+    end
+
+    test "the periodic suggestions refresh redraws the posts rail too", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      author = other_user(first_name: "New", last_name: "Voice")
+      {:ok, post} = Posts.create_post(author, %{body: "still discoverable"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+             )
+
+      send(live.pid, :refresh_suggestions)
+      _ = render(live)
+
+      assert has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+             )
     end
   end
 

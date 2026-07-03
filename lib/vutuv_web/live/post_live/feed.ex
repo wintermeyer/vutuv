@@ -25,6 +25,7 @@ defmodule VutuvWeb.PostLive.Feed do
 
   alias Vutuv.Posts
   alias Vutuv.Social
+  alias VutuvWeb.AgentDocs
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
 
@@ -36,6 +37,8 @@ defmodule VutuvWeb.PostLive.Feed do
   @who_to_follow 6
   @suggestion_pool 60
   @suggestions_refresh :timer.minutes(5)
+  # "Suggested posts" rail: how many discovery posts to show at once.
+  @discover_posts 5
 
   @impl true
   # Rendered by VutuvWeb.NewsfeedController via `live_render` (off-router, so it
@@ -95,6 +98,7 @@ defmodule VutuvWeb.PostLive.Feed do
     # updates existing rows where they sit and ignores ones already gone.
     |> assign(:entries, entries)
     |> assign_who_to_follow()
+    |> assign_discover_posts()
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, entries)
   end
@@ -129,6 +133,17 @@ defmodule VutuvWeb.PostLive.Feed do
     # Every suggestion is by construction someone the viewer does not follow, so
     # the follow buttons all render the "Follow" state from an empty map.
     |> assign(:following_by_id, %{})
+  end
+
+  # The rail's "Suggested posts" card: a random handful of recent public posts
+  # by same-language members the viewer does not follow — the post-shaped twin
+  # of the "Who to follow" suggestions (the draw itself lives in
+  # `Posts.discover_posts/2`). Re-run by the reload button, the periodic
+  # refresh tick and every follow (a just-followed author's post is no longer
+  # a discovery).
+  defp assign_discover_posts(socket) do
+    posts = Posts.discover_posts(socket.assigns.current_user, limit: @discover_posts)
+    assign(socket, :discover_posts, posts)
   end
 
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
@@ -192,12 +207,19 @@ defmodule VutuvWeb.PostLive.Feed do
   # The rail's "Follow" button (user_row live?): follow with no reload, then
   # recompute the rail so the new followee drops out (we only suggest members
   # the viewer doesn't already follow) and the next candidate fills the slot.
+  # The posts rail redraws too — the new followee's post may be in it, and a
+  # followed author is no longer a discovery.
   def handle_event("follow", %{"followee" => followee_id}, socket) do
     me = socket.assigns.current_user
 
     if me && me.id != followee_id, do: Social.follow(me, followee_id)
 
-    {:noreply, assign_who_to_follow(socket)}
+    {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+  end
+
+  # The "Suggested posts" card's reload button: draw 5 fresh random ones.
+  def handle_event("reshuffle-discover", _params, socket) do
+    {:noreply, assign_discover_posts(socket)}
   end
 
   def handle_event("show-new", _params, socket) do
@@ -266,13 +288,13 @@ defmodule VutuvWeb.PostLive.Feed do
      |> update(:pending_posts, &Enum.reject(&1, fn entry -> entry.post.id == post_id end))}
   end
 
-  # Periodic reshuffle of the "Who to follow" rail: draw a fresh random slate of
-  # not-yet-followed members and reschedule the next tick. Cheap (one ranking
-  # query + one follow-edge query, both already small), so a 5-minute cadence on
-  # an open feed is fine.
+  # Periodic reshuffle of the "Who to follow" and "Suggested posts" rails: draw
+  # a fresh random slate of not-yet-followed members and posts and reschedule
+  # the next tick. Cheap (a ranking query, a follow-edge query and the pooled
+  # posts draw, all small), so a 5-minute cadence on an open feed is fine.
   def handle_info(:refresh_suggestions, socket) do
     Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
-    {:noreply, assign_who_to_follow(socket)}
+    {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
   end
 
   # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
@@ -490,6 +512,70 @@ defmodule VutuvWeb.PostLive.Feed do
               />
             </ul>
           </.card>
+
+          <%!-- "Suggested posts": a random handful of recent public posts by
+          same-language members the viewer doesn't follow — discovery beyond
+          the follow graph, like "Who to follow" but for content. Compact rows
+          (avatar + name + one-line excerpt), not full post cards — an action
+          bar and gallery don't fit a rail. The reload button draws 5 fresh
+          ones with no page reload. --%>
+          <.card :if={@discover_posts != []} id="discover-posts">
+            <div class="mb-4 flex items-center justify-between gap-3">
+              <.section_title>{gettext("Suggested posts")}</.section_title>
+              <button
+                id="discover-reshuffle"
+                type="button"
+                phx-click="reshuffle-discover"
+                title={gettext("Show other posts")}
+                aria-label={gettext("Show other posts")}
+                class="text-slate-500 transition hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-200"
+              >
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke-width="1.5"
+                  stroke="currentColor"
+                  class="h-4 w-4"
+                  aria-hidden="true"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99"
+                  />
+                </svg>
+              </button>
+            </div>
+            <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+              <li
+                :for={post <- @discover_posts}
+                class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+              >
+                <.avatar user={post.user} size="sm" shape="circle" presence />
+                <div class="min-w-0">
+                  <p class="mb-0 text-sm">
+                    <.link
+                      href={~p"/#{post.user}"}
+                      class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                    >
+                      {UserHelpers.full_name(post.user)}
+                    </.link>
+                    <span class="text-slate-500 dark:text-slate-400">
+                      · <.post_time at={post.inserted_at} />
+                    </span>
+                  </p>
+                  <.link
+                    href={~p"/#{post.user}/posts/#{post.id}"}
+                    class="mt-1 block truncate text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300"
+                  >
+                    {AgentDocs.excerpt(post.body)}
+                  </.link>
+                </div>
+              </li>
+            </ul>
+          </.card>
+
           <.other_formats_card base_path="/feed" locale={@locale} id="feed-other-formats" />
         </aside>
       </div>

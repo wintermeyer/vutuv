@@ -199,14 +199,16 @@ defmodule VutuvWeb.PostActionsLiveTest do
       post = create_post!(other_user(), %{body: "carried far"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
-      refute render(feed) =~ "carried far"
+      # The stranger's post stays out of the timeline (it may still surface in
+      # the rail's "Suggested posts" discovery card — that is the card's job).
+      refute has_element?(feed, "#feed-posts", "carried far")
 
       :ok = Posts.repost_post(friend, post)
 
       assert feed |> element("#show-new-posts") |> render() =~ "Show 1 new post"
-      html = feed |> element("#show-new-posts") |> render_click()
-      assert html =~ "carried far"
-      assert html =~ "Reposted by Carla Carrier"
+      feed |> element("#show-new-posts") |> render_click()
+      assert has_element?(feed, "#feed-posts", "carried far")
+      assert has_element?(feed, "#feed-posts", "Reposted by Carla Carrier")
     end
 
     test "your own repost prepends immediately", %{conn: conn} do

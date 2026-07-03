@@ -593,6 +593,119 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "discover_posts/2" do
+    test "returns a same-language stranger's public post with the author preloaded" do
+      viewer = user(locale: "de")
+      author = user(locale: "de")
+      post = create_post!(author, %{body: "entdecke mich"})
+
+      assert [found] = Posts.discover_posts(viewer)
+      assert found.id == post.id
+      assert found.user.id == author.id
+    end
+
+    test "excludes authors the viewer follows, including muted follows" do
+      viewer = user()
+      followed = user()
+      muted = user()
+      follow!(viewer, followed)
+      follow!(viewer, muted)
+      fid = Vutuv.Social.follow_id(viewer.id, muted.id)
+      Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
+
+      create_post!(followed, %{body: "already following"})
+      create_post!(muted, %{body: "muted but still followed"})
+      fresh = create_post!(user(), %{body: "new voice"})
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [fresh.id]
+    end
+
+    test "excludes the viewer's own posts" do
+      viewer = user()
+      create_post!(viewer, %{body: "mine"})
+
+      assert Posts.discover_posts(viewer) == []
+    end
+
+    test "matches on locale, treating a missing locale as English" do
+      german_viewer = user(locale: "de")
+      unset_viewer = user(locale: nil)
+
+      german_post = create_post!(user(locale: "de"), %{body: "auf Deutsch"})
+      english_post = create_post!(user(locale: "en"), %{body: "in English"})
+      unset_post = create_post!(user(locale: nil), %{body: "no locale set"})
+
+      german_ids = Posts.discover_posts(german_viewer) |> Enum.map(& &1.id)
+      assert german_ids == [german_post.id]
+
+      unset_ids = Posts.discover_posts(unset_viewer) |> Enum.map(& &1.id) |> Enum.sort()
+      assert unset_ids == Enum.sort([english_post.id, unset_post.id])
+    end
+
+    test "excludes restricted posts, replies and image-only posts" do
+      viewer = user()
+      author = user()
+
+      create_post!(author, %{body: "circle only", denials: [%{"wildcard" => "non_followers"}]})
+      parent = create_post!(author, %{body: "parent"})
+      {:ok, _reply} = Posts.create_reply(user(), parent, %{body: "an answer"})
+      image = insert(:post_image, user: author, post: nil)
+      create_post!(author, %{body: "", image_ids: [image.id]})
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [parent.id]
+    end
+
+    test "excludes members with a block in either direction" do
+      viewer = user()
+      blocked = user()
+      blocker = user()
+      {:ok, _} = Vutuv.Social.block_user(viewer, blocked)
+      {:ok, _} = Vutuv.Social.block_user(blocker, viewer)
+
+      create_post!(blocked, %{body: "blocked by viewer"})
+      create_post!(blocker, %{body: "blocked the viewer"})
+
+      assert Posts.discover_posts(viewer) == []
+    end
+
+    test "excludes unconfirmed authors" do
+      viewer = user()
+      create_post!(user(email_confirmed?: false), %{body: "ghost"})
+
+      assert Posts.discover_posts(viewer) == []
+    end
+
+    test "picks one post per author: their newest eligible one" do
+      viewer = user()
+      prolific = user()
+
+      older = create_post!(prolific, %{body: "older"})
+      backdate_post!(older, 60)
+      newest = create_post!(prolific, %{body: "newest"})
+
+      assert Enum.map(Posts.discover_posts(viewer), & &1.id) == [newest.id]
+    end
+
+    test "returns at most limit posts and randomizes which authors it draws" do
+      viewer = user()
+      for n <- 1..8, do: create_post!(user(), %{body: "voice #{n}"})
+
+      found = Posts.discover_posts(viewer, limit: 5)
+      assert length(found) == 5
+
+      # Across enough draws the random pick surfaces more than one slate.
+      seen =
+        Enum.reduce(1..20, MapSet.new(), fn _, seen ->
+          Posts.discover_posts(viewer, limit: 5)
+          |> Enum.map(& &1.user_id)
+          |> MapSet.new()
+          |> MapSet.union(seen)
+        end)
+
+      assert MapSet.size(seen) > 5
+    end
+  end
+
   describe "author_posts_page/4 with reposts" do
     test "pages posts and reposts together and scopes the period by event date" do
       author = user()
