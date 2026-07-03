@@ -1,9 +1,13 @@
 defmodule VutuvWeb.SettingsController do
   @moduledoc """
-  The owner's account settings, split off the old everything-on-one-page edit
-  form into focused pages: privacy & visibility, notifications, and an account
-  hub (username, emails, data export, security links, delete). The profile
-  content itself (photos, name, about) stays on `UserController.edit`.
+  The owner's settings. `index/2` is the **hub**: the one grouped map of
+  everything a member can change about themselves (the profile-content
+  sections, the account areas, privacy, notifications, apps, and the delete
+  exit). The account areas are focused subpages carved out of the old
+  everything-on-one-scroll account hub: sign-in & security (username, emails,
+  devices, passkeys), language & maps, your data (export / LinkedIn import),
+  and the delete-account danger page. The profile basics (photos, name, about)
+  stay on `UserController.edit`.
 
   Owner-only, enforced exactly like the edit page: `UserResolveSlug` resolves
   the `:slug`, `AuthUser` 403s anyone who is not that member, `EnsureActivated`
@@ -25,29 +29,76 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Credentials
   alias Vutuv.Sessions
 
-  # The account hub also carries the interface-language form, so it needs a
-  # changeset like the other settings pages. Each page sets its own :page_title
-  # so the browser tab / history reads "Account settings - vutuv" etc. rather
-  # than falling back to the bare member name (LayoutHTML.page_title/1).
+  # The hub: no forms of its own, just the grouped rows with per-section entry
+  # counts. Each page sets its own :page_title so the browser tab / history
+  # reads "Settings - vutuv" etc. rather than falling back to the bare member
+  # name (LayoutHTML.page_title/1).
   def index(conn, _params) do
     user = conn.assigns[:user]
-    render(conn, "index.html", [changeset: User.changeset(user)] ++ hub_assigns(conn))
+
+    render(conn, "index.html",
+      user: user,
+      section_counts: hub_counts(user),
+      page_title: gettext("Settings")
+    )
   end
 
-  # The account hub renders more than user + changeset (devices, passkeys, its
-  # own title). Both the GET and the language/maps forms' error re-render need
-  # these, so they live in one place — without them an invalid hub-form submit
-  # would crash on a missing assign.
-  defp hub_assigns(conn) do
+  # The Accounts counts are keyed by domain name (urls, phone_numbers, ...);
+  # the hub rows are keyed by menu key (links, phones, ...). Translate once
+  # here so the template stays a dumb list.
+  defp hub_counts(user) do
+    counts = Accounts.profile_section_counts(user)
+
+    %{
+      work: counts.work_experiences,
+      education: counts.educations,
+      links: counts.urls,
+      social: counts.social_media_accounts,
+      emails: counts.emails,
+      phones: counts.phone_numbers,
+      addresses: counts.addresses,
+      tags: counts.tags
+    }
+  end
+
+  # Sign-in & security: username, email addresses, signed-in devices and
+  # passkeys — the credential cluster, on one focused page.
+  def security(conn, _params) do
     user = conn.assigns[:user]
 
-    [
+    render(conn, "security.html",
       user: user,
       sessions: Sessions.list_active(user),
       current_session_id: conn.assigns[:current_session_id],
       passkeys: Credentials.list_for_user(user),
-      page_title: gettext("Account settings")
-    ]
+      page_title: gettext("Sign-in & security")
+    )
+  end
+
+  # Language & maps: the interface-language and map-preference forms, so they
+  # need a changeset like the privacy/notifications pages.
+  def preferences(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "preferences.html",
+      user: user,
+      changeset: User.changeset(user),
+      page_title: gettext("Language & maps")
+    )
+  end
+
+  def data(conn, _params) do
+    user = conn.assigns[:user]
+    render(conn, "data.html", user: user, page_title: gettext("Your data"))
+  end
+
+  # The danger page: the warning and the PIN-mailing delete control live on
+  # their own page (never straight on the hub), so the destructive action is
+  # easy to find but hard to trigger in passing. The actual DELETE stays
+  # UserController.delete.
+  def delete_account(conn, _params) do
+    user = conn.assigns[:user]
+    render(conn, "delete_account.html", user: user, page_title: gettext("Delete account"))
   end
 
   def privacy(conn, _params) do
@@ -105,33 +156,34 @@ defmodule VutuvWeb.SettingsController do
   end
 
   # The interface language (`locale`) is the user's own UI-language preference,
-  # not public profile content, so it lives on the account hub rather than the
-  # profile editor. It posts back to the hub and rerenders it on error.
+  # not public profile content, so it lives on the language & maps page rather
+  # than the profile editor. It posts back to that page and rerenders it on
+  # error.
   def update_language(conn, %{"user" => params}) do
     user = conn.assigns[:user]
 
     save(
       conn,
       params,
-      "index.html",
-      ~p"/#{user}/settings",
+      "preferences.html",
+      ~p"/#{user}/settings/preferences",
       gettext("Language updated.")
     )
   end
 
   # Map preferences (which map services to show on addresses and which is the
   # default) are a viewing preference, not public profile content, so they sit
-  # on the account hub next to language. The form posts the three enable
-  # checkboxes plus the default select; `Vutuv.Maps` reconciles a default that
-  # points at a disabled service at render time, so no extra validation here.
+  # on the language & maps page. The form posts the three enable checkboxes
+  # plus the default select; `Vutuv.Maps` reconciles a default that points at
+  # a disabled service at render time, so no extra validation here.
   def update_maps(conn, %{"user" => params}) do
     user = conn.assigns[:user]
 
     save(
       conn,
       params,
-      "index.html",
-      ~p"/#{user}/settings",
+      "preferences.html",
+      ~p"/#{user}/settings/preferences",
       gettext("Map preferences saved.")
     )
   end
@@ -151,7 +203,7 @@ defmodule VutuvWeb.SettingsController do
 
     conn
     |> put_flash(:info, gettext("That device has been logged out."))
-    |> redirect(to: ~p"/#{user}/settings")
+    |> redirect(to: ~p"/#{user}/settings/security")
   end
 
   # Log out every other device, keeping the current one (so the member is not
@@ -162,7 +214,7 @@ defmodule VutuvWeb.SettingsController do
 
     conn
     |> put_flash(:info, gettext("All other devices have been logged out."))
-    |> redirect(to: ~p"/#{user}/settings")
+    |> redirect(to: ~p"/#{user}/settings/security")
   end
 
   # The settings sub-forms each submit only their own fields; Accounts.update_user/2
@@ -187,12 +239,8 @@ defmodule VutuvWeb.SettingsController do
     end
   end
 
-  # Privacy/notifications re-render their own templates (user + changeset is
-  # enough); the language and maps forms re-render the account hub, which needs
-  # its full assign set.
-  defp error_assigns(conn, "index.html", changeset),
-    do: [changeset: changeset] ++ hub_assigns(conn)
-
+  # Every settings form page re-renders with user + changeset; the pages that
+  # need more (the security page's devices and passkeys) carry no forms.
   defp error_assigns(conn, _template, changeset),
     do: [user: conn.assigns[:user], changeset: changeset]
 end

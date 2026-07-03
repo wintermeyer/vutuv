@@ -25,7 +25,10 @@ defmodule VutuvWeb.DesignConsistencyTest do
     # (the page h1) and `crumbs` (a list ending at "Emails", with a linked name
     # crumb in the middle).
     test "the email index renders the page_header h1 and breadcrumbs", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/#{user}/emails")
+      # The owner's own view renders inside the settings shell now, so exercise
+      # the classic anatomy through the public preview, which is exactly what a
+      # visitor gets.
+      conn = get(conn, ~p"/#{user}/emails?view_as=public")
       html = html_response(conn, 200)
 
       # The profile-header h1 block carries the page title.

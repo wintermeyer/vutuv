@@ -131,11 +131,13 @@ defmodule VutuvWeb.UsernameControllerTest do
   end
 
   describe "discoverability" do
-    test "the account hub shows the current username and links to the change flow", %{conn: conn} do
+    test "the sign-in & security page shows the current username and links to the change flow", %{
+      conn: conn
+    } do
       {conn, user} = create_and_login_user(conn)
 
-      # The username moved off the edit form to the Account tab of Settings.
-      html = conn |> get("/#{user.username}/settings") |> html_response(200)
+      # The username lives on the sign-in & security page of Settings.
+      html = conn |> get("/#{user.username}/settings/security") |> html_response(200)
 
       assert html =~ "@#{user.username}"
       assert html =~ "/#{user.username}/usernames/new"

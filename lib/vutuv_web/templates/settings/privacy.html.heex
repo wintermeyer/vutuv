@@ -6,9 +6,7 @@ members + the moderation status), both moved here from the account hub where
 members did not look for them. The helper line under each checkbox is forced
 font-normal because the surrounding <label> defaults to bold (components.css),
 which would otherwise render the hint heavier than its own heading. --%>
-<div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Privacy")}</h1>
-  <.settings_nav user={@user} active={:privacy} class="mb-6" />
+<.settings_shell user={@user} active={:privacy} title={gettext("Privacy")}>
 
   <div class="space-y-6">
     <.card>
@@ -149,4 +147,4 @@ which would otherwise render the hint heavier than its own heading. --%>
       </ul>
     </.card>
   </div>
-</div>
+</.settings_shell>

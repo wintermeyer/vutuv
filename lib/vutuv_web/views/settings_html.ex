@@ -36,9 +36,9 @@ defmodule VutuvWeb.SettingsHTML do
   defp dm_delay_label(120), do: gettext("After 2 hours")
 
   @doc """
-  One row on the account hub: a title, an optional sub-line, and a right-aligned
-  text link to where the thing is actually managed. Keeps the hub's lists tidy
-  and DRY.
+  One row on the settings subpages' cards: a title, an optional sub-line, and a
+  right-aligned text link to where the thing is actually managed. Keeps the
+  lists tidy and DRY.
   """
   attr(:title, :string, required: true)
   attr(:subtitle, :string, default: nil)

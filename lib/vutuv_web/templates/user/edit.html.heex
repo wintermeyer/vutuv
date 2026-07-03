@@ -1,13 +1,11 @@
-<%!-- Edit profile = the "Profile" tab of Settings: the public profile content
-only (photos, name, about you), grouped into cards. Privacy/visibility moved to
-the Privacy tab, email notifications to the Notifications tab, and the account
-hub (username, emails, interface language, data, apps/API, delete) to the
-Account tab. One form, one Save, posting the whole profile to PATCH /:slug as
-before. --%>
-<div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Profile")}</h1>
-  <.settings_nav user={@user} active={:profile} class="mb-6" />
-
+<%!-- Basics & photos: the profile's general info (photos, name, about you) in
+one form, one Save, posting the whole profile to PATCH /:slug. It renders
+inside the shared settings shell like every other settings page; the sibling
+profile sections (work experience, links, tags, ...) are their own pages — on
+md+ the sidebar lists them, on phones the "More profile sections" card below
+the form does, so this page is never a dead end (the "Edit profile" button
+lands here). --%>
+<.settings_shell user={@user} active={:basics} title={gettext("Basics & photos")}>
   <.form :let={f} for={@changeset} action={~p"/#{@user}"} multipart class="space-y-6">
     <.form_error changeset={@changeset} />
 
@@ -57,8 +55,10 @@ before. --%>
         </div>
         <%!-- Cover photo: preview the current cover (the same object-cover crop
         as the profile banner) only when one is uploaded; the gradient default
-        is not a photo worth previewing. --%>
-        <div>
+        is not a photo worth previewing. The id is the profile cover overlay's
+        deep-link target (/edit#cover); scroll-mt keeps the sticky top bar from
+        covering it after the jump. --%>
+        <div id="cover" class="scroll-mt-24">
           <%= label f, :cover_photo, gettext("Cover photo"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
           <% cover_url = Vutuv.Cover.display_url(@user, :wide) %>
           <figure :if={cover_url} class="mt-2">
@@ -170,4 +170,24 @@ before. --%>
       </.link>
     </div>
   </.form>
-</div>
+
+  <%!-- On phones the sidebar is hidden, so list the sibling profile sections
+  here — a member who tapped "Edit profile" to add a job must not hit a dead
+  end. Same rows as the hub, minus this very page. --%>
+  <% [{_profile_group, profile_entries} | _rest] = settings_menu(@user) %>
+  <section class="mt-8 md:hidden">
+    <h2 class="mb-2 px-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      {gettext("More profile sections")}
+    </h2>
+    <div class="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        <.hub_row
+          :for={{label, path, key} <- profile_entries}
+          :if={key != :basics}
+          navigate={path}
+          label={label}
+        />
+      </ul>
+    </div>
+  </section>
+</.settings_shell>

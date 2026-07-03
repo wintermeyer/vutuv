@@ -88,7 +88,10 @@ defmodule VutuvWeb.PasskeyControllerTest do
 
     test "the challenge endpoint survives CSRF enforcement", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      conn = get(conn, ~p"/#{user}/settings")
+      # submit_with_csrf scrapes the token from a rendered <form>; the security
+      # page carries none with a single session, so grab it from the
+      # preferences page (same session, same token).
+      conn = get(conn, ~p"/#{user}/settings/preferences")
 
       conn = submit_with_csrf(conn, ~p"/#{user}/settings/passkeys/challenge", %{})
       assert json_response(conn, 200)
@@ -122,15 +125,15 @@ defmodule VutuvWeb.PasskeyControllerTest do
 
       conn = delete(recycle(conn), ~p"/#{user}/settings/passkeys/#{credential.id}")
 
-      assert redirected_to(conn) == ~p"/#{user}/settings"
+      assert redirected_to(conn) == ~p"/#{user}/settings/security"
       assert Credentials.count_for_user(user) == 0
     end
 
-    test "the account hub lists the owner's passkeys", %{conn: conn} do
+    test "the sign-in & security page lists the owner's passkeys", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       credential = insert(:user_credential, user: user, nickname: "My Laptop")
 
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/#{user}/settings/security") |> html_response(200)
 
       assert html =~ "Passkeys"
       assert html =~ "My Laptop"

@@ -50,7 +50,7 @@ defmodule VutuvWeb.PasskeyController do
       {:ok, _credential} ->
         conn
         |> put_flash(:info, gettext("Passkey added."))
-        |> json(%{ok: true, redirect: ~p"/#{user}/settings"})
+        |> json(%{ok: true, redirect: ~p"/#{user}/settings/security"})
 
       _ ->
         conn
@@ -72,7 +72,7 @@ defmodule VutuvWeb.PasskeyController do
 
     conn
     |> put_flash(:info, gettext("Passkey removed."))
-    |> redirect(to: ~p"/#{user}/settings")
+    |> redirect(to: ~p"/#{user}/settings/security")
   end
 
   defp passkey_nickname(conn, params) do

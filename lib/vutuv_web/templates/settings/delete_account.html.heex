@@ -1,0 +1,25 @@
+<%!-- The destructive action on its own page: the hub only carries a red door
+here, so deleting is easy to find but impossible to trigger in passing. A
+clearly-labelled card with a red ring, the canonical red control, a
+plain-language warning and a confirm dialog; the DELETE itself stays
+UserController.delete (it mails the confirmation PIN). Written as a raw card
+so the red ring doesn't fight the slate ring baked into <.card>. --%>
+<.settings_shell user={@user} active={:delete} title={gettext("Delete account")}>
+  <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-red-200 dark:bg-slate-900 dark:ring-red-900/50">
+    <.section_title>{gettext("Delete account")}</.section_title>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
+      )}
+    </p>
+    <.link
+      id="delete-account"
+      href={~p"/#{@user}"}
+      method="delete"
+      data-confirm={gettext("Start deleting your account? We will email you a PIN to confirm.")}
+      class="mt-4 inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+    >
+      {gettext("Delete my account")}
+    </.link>
+  </section>
+</.settings_shell>

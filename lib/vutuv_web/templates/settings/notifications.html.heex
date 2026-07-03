@@ -4,9 +4,7 @@ honest read-only explainer of the always-on in-app notifications. Each helper
 line is forced font-normal because the surrounding <label> defaults to bold
 (components.css), which would otherwise render the hint heavier than its
 heading. --%>
-<div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Notifications")}</h1>
-  <.settings_nav user={@user} active={:notifications} class="mb-6" />
+<.settings_shell user={@user} active={:notifications} title={gettext("Notifications")}>
 
   <div class="space-y-6">
     <.card>
@@ -92,4 +90,4 @@ heading. --%>
       </p>
     </.card>
   </div>
-</div>
+</.settings_shell>

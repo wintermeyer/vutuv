@@ -792,9 +792,9 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Allow AI agents and LLMs to use your profile"
   end
 
-  test "the account hub carries a clear, confirmed Delete account control", %{conn: conn} do
+  test "the delete-account page carries a clear, confirmed Delete account control", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+    html = conn |> get(~p"/#{user}/settings/delete") |> html_response(200)
 
     assert html =~ "Delete account"
     # The consequence is spelled out before the user acts...
@@ -803,9 +803,6 @@ defmodule VutuvWeb.UserControllerTest do
     # dialog (id pinned so the shell's logout delete-link doesn't match).
     assert html =~ ~s(id="delete-account")
     assert html =~ "data-confirm"
-
-    # The GDPR export stays reachable from the hub.
-    assert html =~ ~s(href="#{~p"/#{user}/export"}")
   end
 
   test "the otherwise-unfindable account & privacy pages are reachable from settings", %{

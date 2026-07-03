@@ -2,9 +2,7 @@
 is overloaded. Third-party apps the member authorized, their personal API
 tokens, and a cross-link to the public API docs. Read-only here (each row links
 to where the thing is actually managed), so no changeset. --%>
-<div class="py-6">
-  <h1 class="mb-4 text-2xl font-bold text-slate-900 dark:text-white">{gettext("Apps")}</h1>
-  <.settings_nav user={@user} active={:apps} class="mb-6" />
+<.settings_shell user={@user} active={:apps} title={gettext("Apps")}>
 
   <.card>
     <.section_title>{gettext("Apps & API access")}</.section_title>
@@ -31,4 +29,4 @@ to where the thing is actually managed), so no changeset. --%>
       </.link>
     </p>
   </.card>
-</div>
+</.settings_shell>

@@ -331,7 +331,10 @@ defmodule VutuvWeb.ShellLive do
 
                   <div class="my-1 border-t border-slate-100 dark:border-slate-800"></div>
 
-                  <.link href={~p"/#{@user_param}/edit"} class={[menu_item_class(), "block"]}>
+                  <%!-- "Settings" opens the settings hub — the one grouped map of
+                  everything editable — so the label finally matches the
+                  destination (it used to alias the profile-basics form). --%>
+                  <.link href={~p"/#{@user_param}/settings"} class={[menu_item_class(), "block"]}>
                     {gettext("Settings")}
                   </.link>
 

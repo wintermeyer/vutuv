@@ -1,11 +1,19 @@
-<.page_header
-  title={gettext("Work Experiences")}
+<%!-- The owner manages this section inside the shared settings shell
+(back to Settings, sidebar on md+); a visitor — or the owner previewing
+as public — gets the classic breadcrumbs page, unchanged, so the public
+rendering and its agent-format docs stay untouched. --%>
+<.settings_shell
+  user={@user}
+  active={:work}
+  title={gettext("Experience")}
+  public_title={gettext("Work Experiences")}
+  enabled={@as_owner?}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Experience")
   ]}
-/>
+>
 
 <.card_section
   empty={Enum.empty?(@work_experience)}
@@ -14,3 +22,4 @@
 >
   <%= render "card_list.html", assigns %>
 </.card_section>
+</.settings_shell>

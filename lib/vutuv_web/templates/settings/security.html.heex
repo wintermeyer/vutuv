@@ -1,0 +1,119 @@
+<%!-- Sign-in & security: the credential cluster on one focused page — who you
+sign in as (username, email addresses), where you are signed in (devices,
+each remotely revocable, issue #794), and the phishing-resistant passkeys
+(issue #795). Carved out of the old everything-on-one-scroll account hub. --%>
+<.settings_shell user={@user} active={:security} title={gettext("Sign-in & security")}>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Sign-in & identity")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <.account_row
+          title={gettext("Username")}
+          subtitle={"@" <> @user.username}
+          href={~p"/#{@user}/usernames/new"}
+          label={gettext("Change")}
+        />
+        <.account_row
+          title={gettext("Email addresses")}
+          subtitle={gettext("Add, remove or pick your primary address.")}
+          href={~p"/#{@user}/emails"}
+          label={gettext("Manage")}
+        />
+      </ul>
+    </.card>
+
+    <%!-- Signed-in devices: where this account is logged in, each revocable
+          remotely (issue #794). The current device is marked and has no logout
+          (you sign it out via the normal logout); every other device has one,
+          plus a "log out all other devices" sweep. --%>
+    <.card>
+      <.section_title>{gettext("Signed-in devices")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <%= for session <- @sessions do %>
+          <.device_row
+            session={session}
+            current?={session.id == @current_session_id}
+            user={@user}
+          />
+        <% end %>
+      </ul>
+      <div :if={Enum.any?(@sessions, &(&1.id != @current_session_id))} class="mt-4">
+        <.link
+          href={~p"/#{@user}/settings/devices"}
+          method="delete"
+          data-confirm={gettext("Log out of every device except this one?")}
+          class="inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {gettext("Log out all other devices")}
+        </.link>
+      </div>
+    </.card>
+
+    <%!-- Passkeys (issue #795): enrol a phishing-resistant credential (Touch ID,
+          Windows Hello, a security key) for a faster return login that skips the
+          email PIN. The add control and the WebAuthn ceremony are driven by
+          assets/js/webauthn.js: the enrol block is hidden until the browser is
+          confirmed to support passkeys (otherwise the unsupported note shows
+          instead), so the email-PIN flow is always the dependable fallback. --%>
+    <.card>
+      <.section_title>{gettext("Passkeys")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Sign in with Touch ID, Windows Hello or a security key instead of waiting for an email PIN. Your email PIN stays available as a backup."
+        )}
+      </p>
+
+      <ul
+        :if={@passkeys != []}
+        class="mt-3 divide-y divide-slate-100 dark:divide-slate-800"
+      >
+        <%= for passkey <- @passkeys do %>
+          <.passkey_row passkey={passkey} user={@user} />
+        <% end %>
+      </ul>
+      <p :if={@passkeys == []} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+        {gettext("You have not added any passkeys yet.")}
+      </p>
+
+      <div id="passkey-enroll" hidden class="mt-4">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div class="sm:max-w-xs">
+            <label
+              for="passkey-nickname"
+              class="block text-sm font-medium text-slate-900 dark:text-white"
+            >
+              {gettext("Name (optional)")}
+            </label>
+            <input
+              id="passkey-nickname"
+              type="text"
+              maxlength="100"
+              placeholder={gettext("e.g. MacBook")}
+              class={input_class()}
+            />
+          </div>
+          <button
+            type="button"
+            data-webauthn-register
+            data-nickname-input="passkey-nickname"
+            data-challenge-url={~p"/#{@user}/settings/passkeys/challenge"}
+            data-create-url={~p"/#{@user}/settings/passkeys"}
+            data-error-generic={gettext("Could not add the passkey. Please try again.")}
+            class="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            {gettext("Add a passkey")}
+          </button>
+        </div>
+        <p data-webauthn-error hidden class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
+      </div>
+
+      <p
+        data-webauthn-unsupported
+        hidden
+        class="mt-4 text-sm text-slate-600 dark:text-slate-400"
+      >
+        {gettext("This browser does not support passkeys.")}
+      </p>
+    </.card>
+  </div>
+</.settings_shell>

@@ -1,11 +1,18 @@
-<.page_header
+<%!-- The owner manages this section inside the shared settings shell
+(back to Settings, sidebar on md+); a visitor — or the owner previewing
+as public — gets the classic breadcrumbs page, unchanged, so the public
+rendering and its agent-format docs stay untouched. --%>
+<.settings_shell
+  user={@user}
+  active={:education}
   title={gettext("Education")}
+  enabled={@as_owner?}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Education")
   ]}
-/>
+>
 
 <.card_section
   empty={Enum.empty?(@education)}
@@ -14,3 +21,4 @@
 >
   <%= render "card_list.html", assigns %>
 </.card_section>
+</.settings_shell>

@@ -797,6 +797,44 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
+  How many entries the member has in each profile-content section, for the
+  settings hub's per-row counts ("Work experience · 7"). One `union_all` round
+  trip instead of eight aggregates, in the house style of the profile's totals.
+  Returns a map keyed by section:
+
+      %{work_experiences: 7, educations: 0, urls: 3, social_media_accounts: 5,
+        emails: 2, phone_numbers: 1, addresses: 1, tags: 9}
+  """
+  def profile_section_counts(%User{id: user_id}) do
+    sections = [
+      {Vutuv.Profiles.WorkExperience, "work_experiences"},
+      {Vutuv.Profiles.Education, "educations"},
+      {Vutuv.Profiles.Url, "urls"},
+      {Vutuv.Profiles.SocialMediaAccount, "social_media_accounts"},
+      {Email, "emails"},
+      {Vutuv.Profiles.PhoneNumber, "phone_numbers"},
+      {Vutuv.Profiles.Address, "addresses"},
+      {Vutuv.Tags.UserTag, "tags"}
+    ]
+
+    query =
+      sections
+      |> Enum.map(fn {schema, section} -> section_count(schema, section, user_id) end)
+      |> Enum.reduce(fn q, acc -> union_all(acc, ^q) end)
+
+    query
+    |> Repo.all()
+    |> Map.new(fn %{section: section, n: n} -> {String.to_existing_atom(section), n} end)
+  end
+
+  defp section_count(schema, section, user_id) do
+    from(row in schema,
+      where: row.user_id == ^user_id,
+      select: %{section: type(^section, :string), n: count(row.id)}
+    )
+  end
+
+  @doc """
   The user behind a current profile slug, or nil. Only resolves the *active*
   slug (links rendered now), not retired ones — those stay a controller-plug
   concern (`VutuvWeb.Plug.ResolveSlug`).

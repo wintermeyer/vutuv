@@ -583,10 +583,20 @@ defmodule VutuvWeb.Router do
       get("/usernames/availability", UsernameController, :availability)
       resources("/usernames", UsernameController, only: [:new, :create])
 
-      # Account settings, split off the old single edit form into focused,
-      # owner-only pages (SettingsController). put + patch both, to match
-      # whichever method <.form for={changeset} emits for a persisted record.
+      # Settings, split off the old single edit form into focused, owner-only
+      # pages (SettingsController). GET /settings is the hub: the one grouped
+      # map of everything a member can change about themselves (profile
+      # sections, account, privacy, notifications, apps, delete). put + patch
+      # both, to match whichever method <.form for={changeset} emits for a
+      # persisted record.
       get("/settings", SettingsController, :index)
+      # The account areas, carved out of the old everything-on-one-scroll
+      # account hub: sign-in & security, language & maps, your data, and the
+      # delete-account danger page.
+      get("/settings/security", SettingsController, :security)
+      get("/settings/preferences", SettingsController, :preferences)
+      get("/settings/data", SettingsController, :data)
+      get("/settings/delete", SettingsController, :delete_account)
       get("/settings/privacy", SettingsController, :privacy)
       put("/settings/privacy", SettingsController, :update_privacy)
       patch("/settings/privacy", SettingsController, :update_privacy)

@@ -1,7 +1,6 @@
 defmodule VutuvWeb.ImportHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.UserHelpers
 
   @doc "One selectable candidate: a checkbox + label, greyed when it is a duplicate."
   attr(:id, :string, required: true)

@@ -1,11 +1,19 @@
-<.page_header
-  title={gettext("Links belonging to ") <> full_name(@user)}
+<%!-- The owner manages this section inside the shared settings shell
+(back to Settings, sidebar on md+); a visitor — or the owner previewing
+as public — gets the classic breadcrumbs page, unchanged, so the public
+rendering and its agent-format docs stay untouched. --%>
+<.settings_shell
+  user={@user}
+  active={:links}
+  title={gettext("Links")}
+  public_title={gettext("Links belonging to ") <> full_name(@user)}
+  enabled={@as_owner?}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Links")
   ]}
-/>
+>
 
 <.card_section
   empty={Enum.empty?(@urls)}
@@ -21,3 +29,4 @@
     <%= render "card_list.html", assigns %>
   </.reorderable_section>
 </.card_section>
+</.settings_shell>

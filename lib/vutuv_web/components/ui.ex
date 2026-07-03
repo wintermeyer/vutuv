@@ -2340,48 +2340,201 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The settings sub-navigation shared by the profile editor and the settings
-  pages: a row of underline tabs (Profile / Privacy / Notifications / Apps /
-  Account) so the once-single edit form now reads as a small set of focused
-  pages you can move between. `active` is the current tab key
-  (`:profile | :privacy | :notifications | :apps | :account`).
+  The grouped settings menu: the **one map** of everything a member can change
+  about themselves, shared by the settings hub (`/:slug/settings`, tappable
+  rows) and the desktop sidebar (`<.settings_sidebar>`). Three groups: the
+  profile-content sections, the account areas, and the rest (privacy,
+  notifications, apps, delete). Returns `{group_label, [{label, path, key}]}`;
+  `key` names the page for the active state and the hub's per-section counts.
+  If a new editable area is added to the app, it joins this menu — if it is
+  not on the hub, it does not exist.
+  """
+  def settings_menu(user) do
+    [
+      {gettext("Profile"),
+       [
+         {gettext("Basics & photos"), ~p"/#{user}/edit", :basics},
+         {gettext("Experience"), ~p"/#{user}/work_experiences", :work},
+         {gettext("Education"), ~p"/#{user}/educations", :education},
+         {gettext("Links"), ~p"/#{user}/links", :links},
+         {gettext("Social Media"), ~p"/#{user}/social_media_accounts", :social},
+         {gettext("Email addresses"), ~p"/#{user}/emails", :emails},
+         {gettext("Phone numbers"), ~p"/#{user}/phone_numbers", :phones},
+         {gettext("Addresses"), ~p"/#{user}/addresses", :addresses},
+         {gettext("Tags"), ~p"/#{user}/tags", :tags}
+       ]},
+      {gettext("Account"),
+       [
+         {gettext("Sign-in & security"), ~p"/#{user}/settings/security", :security},
+         {gettext("Language & maps"), ~p"/#{user}/settings/preferences", :preferences},
+         {gettext("Your data"), ~p"/#{user}/settings/data", :data}
+       ]},
+      {gettext("More"),
+       [
+         {gettext("Privacy"), ~p"/#{user}/settings/privacy", :privacy},
+         {gettext("Notifications"), ~p"/#{user}/settings/notifications", :notifications},
+         {gettext("Apps"), ~p"/#{user}/settings/apps", :apps},
+         {gettext("Delete account"), ~p"/#{user}/settings/delete", :delete}
+       ]}
+    ]
+  end
+
+  @doc """
+  One tappable row on the settings hub (and the profile editor's mobile
+  "More profile sections" card): the whole row is the link (mobile-first tap
+  target), with an optional entry count for the profile-content sections and a
+  trailing chevron. The count is wrapped in a bare `data-hub-count` span so
+  tests can pin it, and formatted through `compact_count/1` like every
+  rendered number. `danger` renders the one red row (delete account).
+  """
+  attr(:navigate, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:count, :integer, default: nil)
+  attr(:count_key, :atom, default: nil)
+  attr(:danger, :boolean, default: false)
+
+  def hub_row(assigns) do
+    ~H"""
+    <li>
+      <.link
+        navigate={@navigate}
+        class="flex items-center justify-between gap-4 px-4 py-3 hover:bg-slate-50 sm:px-5 dark:hover:bg-slate-800/60"
+      >
+        <span class={[
+          "font-medium",
+          if(@danger,
+            do: "text-red-600 dark:text-red-400",
+            else: "text-slate-900 dark:text-white"
+          )
+        ]}>
+          {@label}
+        </span>
+        <span class="flex shrink-0 items-center gap-3">
+          <span :if={not is_nil(@count)} class="text-sm text-slate-600 dark:text-slate-400">
+            <span data-hub-count={@count_key}>{compact_count(@count)}</span>
+          </span>
+          <span aria-hidden="true" class="text-slate-600 dark:text-slate-400">›</span>
+        </span>
+      </.link>
+    </li>
+    """
+  end
+
+  @doc """
+  The desktop settings sidebar (md and up): the full `settings_menu/1` as a
+  persistent left navigation, so on a large screen you always see where you
+  are. On phones the hub page plays this role instead. The "Delete account"
+  entry is the one red link (danger, like its page).
   """
   attr(:user, Vutuv.Accounts.User, required: true)
-  attr(:active, :atom, required: true)
-  attr(:class, :string, default: nil)
+  attr(:active, :atom, default: nil)
+  attr(:class, :any, default: nil)
 
-  def settings_nav(assigns) do
-    tabs = [
-      {gettext("Profile"), ~p"/#{assigns.user}/edit", :profile},
-      {gettext("Privacy"), ~p"/#{assigns.user}/settings/privacy", :privacy},
-      {gettext("Notifications"), ~p"/#{assigns.user}/settings/notifications", :notifications},
-      {gettext("Apps"), ~p"/#{assigns.user}/settings/apps", :apps},
-      {gettext("Account"), ~p"/#{assigns.user}/settings", :account}
-    ]
-
-    assigns = assign(assigns, :tabs, tabs)
+  def settings_sidebar(assigns) do
+    assigns = assign(assigns, :groups, settings_menu(assigns.user))
 
     ~H"""
-    <nav class={[
-      "-mb-px flex flex-wrap gap-x-6 gap-y-1 border-b border-slate-200 text-sm font-semibold dark:border-slate-800",
-      @class
-    ]}>
+    <nav data-settings-sidebar aria-label={gettext("Settings")} class={["text-sm", @class]}>
       <.link
-        :for={{label, href, key} <- @tabs}
-        navigate={href}
-        aria-current={@active == key && "page"}
-        class={[
-          "border-b-2 px-1 py-3",
-          if(@active == key,
-            do: "border-brand-600 text-brand-700 dark:border-brand-400 dark:text-brand-300",
-            else:
-              "border-transparent text-slate-600 hover:border-slate-300 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
-          )
-        ]}
+        navigate={~p"/#{@user}/settings"}
+        class="block rounded-lg px-2 py-1.5 text-base font-bold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
       >
-        {label}
+        {gettext("Settings")}
       </.link>
+      <div :for={{group, entries} <- @groups} class="mt-4">
+        <p class="px-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          {group}
+        </p>
+        <ul class="mt-1 space-y-0.5">
+          <li :for={{label, path, key} <- entries}>
+            <.link
+              navigate={path}
+              aria-current={@active == key && "page"}
+              class={[
+                "block rounded-lg px-2 py-1.5",
+                sidebar_link_class(key, @active)
+              ]}
+            >
+              {label}
+            </.link>
+          </li>
+        </ul>
+      </div>
     </nav>
+    """
+  end
+
+  defp sidebar_link_class(:delete, _active),
+    do:
+      "text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-900/30"
+
+  defp sidebar_link_class(key, key),
+    do: "bg-brand-50 font-semibold text-brand-800 dark:bg-brand-900/40 dark:text-brand-100"
+
+  defp sidebar_link_class(_key, _active),
+    do:
+      "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+
+  @doc """
+  The shared settings shell: every settings page and every owner-viewed
+  profile-section management page renders inside it, so the whole editing
+  surface has **one** navigation pattern. On phones: a "back to Settings" link
+  above the page title. On md+: the persistent `<.settings_sidebar>` beside
+  the content. Both carry a quiet "View profile" link, so wherever you came
+  from, the hub and your profile are one tap away.
+
+  `enabled` (default true) is for the dual public/owner section pages
+  (work experiences, links, tags, ...): pass `enabled={@as_owner?}` and the
+  visitor — or the owner previewing as public — gets the classic
+  `<.page_header>` breadcrumbs view instead, keeping the public rendering
+  and its agent-format docs untouched. `crumbs` and `public_title` feed that
+  fallback only.
+  """
+  attr(:user, Vutuv.Accounts.User, required: true)
+  attr(:title, :string, required: true)
+  attr(:active, :atom, default: nil)
+  attr(:enabled, :boolean, default: true)
+  attr(:crumbs, :list, default: nil)
+  attr(:public_title, :string, default: nil)
+  slot(:inner_block, required: true)
+
+  def settings_shell(%{enabled: false} = assigns) do
+    ~H"""
+    <.page_header title={@public_title || @title} crumbs={@crumbs} />
+    {render_slot(@inner_block)}
+    """
+  end
+
+  def settings_shell(assigns) do
+    ~H"""
+    <div data-settings-shell class="py-6 md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8">
+      <.settings_sidebar
+        user={@user}
+        active={@active}
+        class="hidden self-start md:sticky md:top-20 md:block"
+      />
+      <div class="min-w-0">
+        <div class="mb-4">
+          <.link
+            navigate={~p"/#{@user}/settings"}
+            class="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700 md:hidden dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            <span aria-hidden="true">‹</span>
+            {gettext("Settings")}
+          </.link>
+          <div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 md:mt-0">
+            <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{@title}</h1>
+            <.link
+              navigate={~p"/#{@user}"}
+              class="text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+            >
+              {gettext("View profile")} ›
+            </.link>
+          </div>
+        </div>
+        {render_slot(@inner_block)}
+      </div>
+    </div>
     """
   end
 end

@@ -12,11 +12,15 @@ defmodule VutuvWeb.SettingsControllerTest do
             ~p"/#{user}/settings",
             ~p"/#{user}/settings/privacy",
             ~p"/#{user}/settings/notifications",
-            ~p"/#{user}/settings/apps"
+            ~p"/#{user}/settings/apps",
+            ~p"/#{user}/settings/security",
+            ~p"/#{user}/settings/preferences",
+            ~p"/#{user}/settings/data",
+            ~p"/#{user}/settings/delete"
           ] do
-        # Every settings page carries the shared sub-nav (so they are reachable
-        # from one another); each one's own H1 is now its tab name, not the old
-        # shared "Settings".
+        # Every settings page carries a way to every other settings area (the
+        # hub lists them; the subpages carry the sidebar), so they are always
+        # reachable from one another.
         assert conn |> recycle() |> get(path) |> html_response(200) =~
                  ~s(href="#{~p"/#{user}/settings/privacy"}")
       end
@@ -28,39 +32,93 @@ defmodule VutuvWeb.SettingsControllerTest do
 
       assert conn |> recycle() |> get(~p"/#{other}/settings") |> html_response(403)
       assert conn |> recycle() |> get(~p"/#{other}/settings/privacy") |> html_response(403)
-      assert conn |> recycle() |> get(~p"/#{other}/settings/notifications") |> html_response(403)
-      assert conn |> recycle() |> get(~p"/#{other}/settings/apps") |> html_response(403)
+      assert conn |> recycle() |> get(~p"/#{other}/settings/security") |> html_response(403)
+      assert conn |> recycle() |> get(~p"/#{other}/settings/delete") |> html_response(403)
     end
   end
 
-  describe "the settings sub-navigation" do
-    test "the account hub links to all five tabs (Profile / Privacy / Notifications / Apps / Account)",
-         %{conn: conn} do
+  describe "the settings hub" do
+    # The hub is the one map of everything a member can change about
+    # themselves: profile content, account matters, privacy, notifications,
+    # apps and the delete exit. If it is not on the hub, it does not exist.
+    test "lists every editable area", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       html = conn |> get(~p"/#{user}/settings") |> html_response(200)
 
+      # Profile content sections.
       assert html =~ ~s(href="#{~p"/#{user}/edit"}")
+      assert html =~ ~s(href="#{~p"/#{user}/work_experiences"}")
+      assert html =~ ~s(href="#{~p"/#{user}/educations"}")
+      assert html =~ ~s(href="#{~p"/#{user}/links"}")
+      assert html =~ ~s(href="#{~p"/#{user}/social_media_accounts"}")
+      assert html =~ ~s(href="#{~p"/#{user}/emails"}")
+      assert html =~ ~s(href="#{~p"/#{user}/phone_numbers"}")
+      assert html =~ ~s(href="#{~p"/#{user}/addresses"}")
+      assert html =~ ~s(href="#{~p"/#{user}/tags"}")
+      # Account subpages (split off the old mega-page).
+      assert html =~ ~s(href="#{~p"/#{user}/settings/security"}")
+      assert html =~ ~s(href="#{~p"/#{user}/settings/preferences"}")
+      assert html =~ ~s(href="#{~p"/#{user}/settings/data"}")
+      # The rest.
       assert html =~ ~s(href="#{~p"/#{user}/settings/privacy"}")
       assert html =~ ~s(href="#{~p"/#{user}/settings/notifications"}")
       assert html =~ ~s(href="#{~p"/#{user}/settings/apps"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings"}")
+      assert html =~ ~s(href="#{~p"/#{user}/settings/delete"}")
     end
 
-    test "the profile editor carries the same sub-nav, so settings are reachable", %{conn: conn} do
+    test "shows a live count for the profile content sections", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert_list(2, :work_experience, user: user)
+      insert(:url, user: user)
+
+      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+
+      assert html =~ ~s(<span data-hub-count="work">2</span>)
+      assert html =~ ~s(<span data-hub-count="links">1</span>)
+      assert html =~ ~s(<span data-hub-count="education">0</span>)
+    end
+
+    test "the hub itself carries no destructive control, only the door to it", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+
+      # Deleting starts on its own page, never straight from the hub row.
+      refute html =~ ~s(id="delete-account")
+      assert html =~ ~s(href="#{~p"/#{user}/settings/delete"}")
+    end
+  end
+
+  describe "the profile editor (/edit)" do
+    test "links every other profile section, so it is no dead end", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       html = conn |> get(~p"/#{user}/edit") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/settings/privacy"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/apps"}")
+      for path <- [
+            ~p"/#{user}/work_experiences",
+            ~p"/#{user}/educations",
+            ~p"/#{user}/links",
+            ~p"/#{user}/social_media_accounts",
+            ~p"/#{user}/emails",
+            ~p"/#{user}/phone_numbers",
+            ~p"/#{user}/addresses",
+            ~p"/#{user}/tags"
+          ] do
+        assert html =~ ~s(href="#{path}")
+      end
+    end
+
+    test "carries the way back to the hub and the cover-photo anchor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+
       assert html =~ ~s(href="#{~p"/#{user}/settings"}")
+      assert html =~ ~s(id="cover")
     end
   end
 
   describe "page titles" do
     # Each page owns its <title> so the browser tab/history no longer falls back
-    # to the bare member name. The h1 names the tab (Account/Privacy/...); the
-    # title is the longer "... settings" string, so matching it cannot collide
-    # with the h1 or nav label.
+    # to the bare member name.
     test "each settings and edit page sets its own page title", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
@@ -69,7 +127,11 @@ defmodule VutuvWeb.SettingsControllerTest do
             {~p"/#{user}/settings/privacy", "Privacy settings"},
             {~p"/#{user}/settings/notifications", "Notification settings"},
             {~p"/#{user}/settings/apps", "Apps &amp; API"},
-            {~p"/#{user}/settings", "Account settings"}
+            {~p"/#{user}/settings", "Settings"},
+            {~p"/#{user}/settings/security", "Sign-in &amp; security"},
+            {~p"/#{user}/settings/preferences", "Language &amp; maps"},
+            {~p"/#{user}/settings/data", "Your data"},
+            {~p"/#{user}/settings/delete", "Delete account"}
           ] do
         html = conn |> recycle() |> get(path) |> html_response(200)
         assert html =~ "<title" and html =~ title
@@ -128,8 +190,7 @@ defmodule VutuvWeb.SettingsControllerTest do
   end
 
   describe "privacy: safety card" do
-    test "groups blocked members and content under review, both moved off the account hub",
-         %{conn: conn} do
+    test "groups blocked members and content under review", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
 
@@ -279,27 +340,51 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
-  describe "account hub" do
-    test "surfaces username, emails, language, data export and delete", %{conn: conn} do
+  describe "sign-in & security page" do
+    test "surfaces username, email addresses, devices and passkeys", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/#{user}/settings/security") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/#{user}/usernames/new"}")
       assert html =~ ~s(href="#{~p"/#{user}/emails"}")
-      assert html =~ ~s(href="#{~p"/#{user}/export"}")
-      assert html =~ ~s(action="#{~p"/#{user}/settings/language"}")
-      assert html =~ ~s(id="delete-account")
+      # The device list (this test session is a signed-in device).
+      assert html =~ "Last active"
+      # The passkey enrol block.
+      assert html =~ "data-webauthn-register"
     end
+  end
 
-    test "no longer carries blocking, moderation, or the developer apps/API rows", %{conn: conn} do
+  describe "language & maps page" do
+    test "carries the interface-language and map-preference forms", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/#{user}/settings/preferences") |> html_response(200)
 
-      # Blocking + moderation moved to Privacy; apps/tokens/API moved to Apps.
-      refute html =~ ~s(href="#{~p"/blocks"}")
-      refute html =~ ~s(href="#{~p"/moderation/cases"}")
-      refute html =~ ~s(href="#{~p"/connected_apps"}")
-      refute html =~ ~s(href="#{~p"/access_tokens"}")
+      assert html =~ ~s(action="#{~p"/#{user}/settings/language"}")
+      assert html =~ ~s(action="#{~p"/#{user}/settings/maps"}")
+      assert html =~ "map_google?"
+      assert html =~ "map_openstreetmap?"
+      assert html =~ "map_apple?"
+      assert html =~ "default_map_service"
+    end
+  end
+
+  describe "your data page" do
+    test "surfaces the export download and the LinkedIn import", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings/data") |> html_response(200)
+
+      assert html =~ ~s(href="#{~p"/#{user}/export"}")
+      assert html =~ ~s(href="#{~p"/#{user}/settings/import/linkedin"}")
+    end
+  end
+
+  describe "delete account page" do
+    test "carries the warning and the PIN-mailing delete control", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings/delete") |> html_response(200)
+
+      assert html =~ ~s(id="delete-account")
+      assert html =~ "It cannot be undone"
     end
   end
 
@@ -315,31 +400,19 @@ defmodule VutuvWeb.SettingsControllerTest do
   end
 
   describe "interface language" do
-    test "saving the language persists locale and stays on the account hub", %{conn: conn} do
+    test "saving the language persists locale and stays on the preferences page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       conn = put(conn, ~p"/#{user}/settings/language", user: %{"locale" => "de"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings"
+      assert redirected_to(conn) == ~p"/#{user}/settings/preferences"
       assert Repo.get(User, user.id).locale == "de"
     end
   end
 
   describe "map preferences" do
-    test "the account hub offers the maps form with every service and the default", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
-
-      assert html =~ ~s(action="#{~p"/#{user}/settings/maps"}")
-      assert html =~ "map_google?"
-      assert html =~ "map_openstreetmap?"
-      assert html =~ "map_apple?"
-      assert html =~ "default_map_service"
-    end
-
-    test "saving persists the enabled services and the default, and stays on the hub", %{
-      conn: conn
-    } do
+    test "saving persists the enabled services and the default, and stays on the preferences page",
+         %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
       conn =
@@ -352,7 +425,7 @@ defmodule VutuvWeb.SettingsControllerTest do
           }
         )
 
-      assert redirected_to(conn) == ~p"/#{user}/settings"
+      assert redirected_to(conn) == ~p"/#{user}/settings/preferences"
 
       assert %User{
                map_google?: true,
