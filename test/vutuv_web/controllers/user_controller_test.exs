@@ -708,6 +708,17 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "e.g. Jr. or PhD"
   end
 
+  test "the edit form does not autofocus a field, so the page opens at the top", %{
+    conn: conn
+  } do
+    # The Photos card sits above the name section, so an autofocused first-name
+    # input made the browser scroll the page down on load. The page must open
+    # scrolled to the top instead.
+    {conn, user} = create_and_login_user(conn)
+    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    refute html =~ "autofocus"
+  end
+
   test "the Photos section previews the current avatar, and the cover only when set",
        %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
