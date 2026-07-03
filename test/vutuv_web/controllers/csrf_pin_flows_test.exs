@@ -92,7 +92,7 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
     test "completes the two-step account deletion with CSRF enforced", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = delete(conn, ~p"/#{user}")
+      conn = delete(conn, ~p"/#{user}", username: user.username)
       assert html_response(conn, 200) =~ "_csrf_token"
       pin = sent_pin()
 

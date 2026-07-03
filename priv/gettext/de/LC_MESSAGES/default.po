@@ -705,7 +705,7 @@ msgstr "URL"
 msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr "Der User %{name} wurde angelegt. Eine E-Mail mit einem PIN wurde verschickt."
 
-#: lib/vutuv_web/controllers/user_controller.ex:174
+#: lib/vutuv_web/controllers/user_controller.ex:206
 #, elixir-autogen
 msgid "User deleted successfully."
 msgstr "User wurde gelöscht."
@@ -1397,7 +1397,7 @@ msgstr "Tags"
 
 #: lib/vutuv_web/controllers/email_controller.ex:148
 #: lib/vutuv_web/controllers/session_controller.ex:371
-#: lib/vutuv_web/controllers/user_controller.ex:189
+#: lib/vutuv_web/controllers/user_controller.ex:221
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr "Zu viele fehlerhafter Versuche."
@@ -1633,7 +1633,7 @@ msgstr "Datenschutzerklärung"
 msgid "Nutzungsbedingungen"
 msgstr "Nutzungsbedingungen"
 
-#: lib/vutuv_web/templates/settings/delete_account.html.heex:22
+#: lib/vutuv_web/templates/settings/delete_account.html.heex:57
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:26
 #, elixir-autogen, elixir-format
 msgid "Delete my account"
@@ -1784,8 +1784,8 @@ msgstr "Diese E-Mail-Adresse konnte nicht hinzugefügt werden."
 #: lib/vutuv_web/controllers/session_controller.ex:176
 #: lib/vutuv_web/controllers/session_controller.ex:207
 #: lib/vutuv_web/controllers/session_controller.ex:223
-#: lib/vutuv_web/controllers/user_controller.ex:144
-#: lib/vutuv_web/controllers/user_controller.ex:159
+#: lib/vutuv_web/controllers/user_controller.ex:162
+#: lib/vutuv_web/controllers/user_controller.ex:191
 #, elixir-autogen, elixir-format
 msgid "Too many attempts. Please try again later."
 msgstr "Zu viele Versuche. Bitte versuchen Sie es später erneut."
@@ -5220,13 +5220,13 @@ msgstr "API-Dokumentation"
 #: lib/vutuv_web/live/admin/user_delete_live.ex:116
 #: lib/vutuv_web/live/admin/user_delete_live.ex:228
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:78
-#: lib/vutuv_web/templates/settings/delete_account.html.heex:7
 #: lib/vutuv_web/templates/settings/delete_account.html.heex:9
+#: lib/vutuv_web/templates/settings/delete_account.html.heex:11
 #, elixir-autogen, elixir-format
 msgid "Delete account"
 msgstr "Konto löschen"
 
-#: lib/vutuv_web/templates/settings/delete_account.html.heex:19
+#: lib/vutuv_web/templates/settings/delete_account.html.heex:53
 #, elixir-autogen, elixir-format
 msgid "Start deleting your account? We will email you a PIN to confirm."
 msgstr ""
@@ -5244,7 +5244,7 @@ msgstr "Die Anzeige konnte nicht genehmigt werden."
 msgid "This case has already been resolved."
 msgstr "Dieser Fall ist bereits erledigt."
 
-#: lib/vutuv_web/templates/settings/delete_account.html.heex:11
+#: lib/vutuv_web/templates/settings/delete_account.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
 msgstr ""
@@ -8442,3 +8442,13 @@ msgstr "Export"
 #, elixir-autogen, elixir-format
 msgid "The file is in JSON format and includes your profile, posts, messages and settings. It contains private data, so store it carefully."
 msgstr "Die Datei ist im JSON-Format und enthält Ihr Profil, Ihre Beiträge, Nachrichten und Einstellungen. Sie enthält private Daten, bewahren Sie sie also sorgfältig auf."
+
+#: lib/vutuv_web/controllers/user_controller.ex:142
+#, elixir-autogen, elixir-format
+msgid "Please type your username exactly as shown to confirm the deletion."
+msgstr "Bitte geben Sie zur Bestätigung der Löschung Ihren Benutzernamen genau wie angezeigt ein."
+
+#: lib/vutuv_web/templates/settings/delete_account.html.heex:30
+#, elixir-autogen, elixir-format
+msgid "Type your username to confirm:"
+msgstr "Geben Sie zur Bestätigung Ihren Benutzernamen ein:"

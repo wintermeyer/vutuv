@@ -1,9 +1,11 @@
 <%!-- The destructive action on its own page: the hub only carries a red door
 here, so deleting is easy to find but impossible to trigger in passing. A
-clearly-labelled card with a red ring, the canonical red control, a
-plain-language warning and a confirm dialog; the DELETE itself stays
-UserController.delete (it mails the confirmation PIN). Written as a raw card
-so the red ring doesn't fight the slate ring baked into <.card>. --%>
+clearly-labelled card with a red ring, a plain-language warning, and a
+type-your-username confirmation gate in front of the canonical red control. The
+username is shown so a member who forgot it can still confirm. The DELETE itself
+stays UserController.delete (it re-checks the username server-side, then mails
+the confirmation PIN). Written as a raw card so the red ring doesn't fight the
+slate ring baked into <.card>. --%>
 <.settings_shell user={@user} active={:delete} title={gettext("Delete account")}>
   <section class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-red-200 dark:bg-slate-900 dark:ring-red-900/50">
     <.section_title>{gettext("Delete account")}</.section_title>
@@ -12,14 +14,49 @@ so the red ring doesn't fight the slate ring baked into <.card>. --%>
         "This permanently removes your profile, posts, messages and everything else. We email you a PIN to confirm. It cannot be undone."
       )}
     </p>
-    <.link
-      id="delete-account"
-      href={~p"/#{@user}"}
+
+    <.form
+      :let={f}
+      for={%{}}
+      as={:account}
+      action={~p"/#{@user}"}
       method="delete"
-      data-confirm={gettext("Start deleting your account? We will email you a PIN to confirm.")}
-      class="mt-4 inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+      id="delete-account-form"
+      data-delete-gate
+      data-username={@user.username}
+      class="mt-5"
     >
-      {gettext("Delete my account")}
-    </.link>
+      <label for="delete-username" class="block text-sm font-medium text-slate-700 dark:text-slate-300">
+        {gettext("Type your username to confirm:")}
+      </label>
+      <p class="mt-1 select-all text-base font-semibold text-slate-900 dark:text-slate-100">
+        @{@user.username}
+      </p>
+      {text_input(f, :username,
+        id: "delete-username",
+        name: "username",
+        value: "",
+        autocomplete: "off",
+        autocapitalize: "off",
+        autocorrect: "off",
+        spellcheck: "false",
+        "data-delete-gate-input": true,
+        class: input_class() <> " mt-2 max-w-xs"
+      )}
+
+      <div class="mt-4">
+        <button
+          type="submit"
+          id="delete-account"
+          data-delete-gate-submit
+          data-confirm={
+            gettext("Start deleting your account? We will email you a PIN to confirm.")
+          }
+          class="inline-flex items-center rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-red-600"
+        >
+          {gettext("Delete my account")}
+        </button>
+      </div>
+    </.form>
   </section>
 </.settings_shell>

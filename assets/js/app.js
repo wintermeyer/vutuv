@@ -557,6 +557,37 @@ function setupSelectAll() {
 }
 onReady(setupSelectAll)
 
+// "Type your username to confirm" gate on the account-deletion page
+// (<form data-delete-gate>, see settings/delete_account.html.heex). Progressive
+// enhancement only: with JS off the red button stays clickable and the server
+// re-checks the username (UserController.delete), so this just disables the
+// button until the field matches, sparing a needless round-trip. The match is
+// normalized the same way the server does it: trim, drop a leading "@",
+// lower-case.
+function normalizeUsername(value) {
+  return value.trim().replace(/^@+/, "").toLowerCase()
+}
+
+function wireDeleteGate(form) {
+  if (!once(form, "deleteGate")) return
+  const input = form.querySelector("[data-delete-gate-input]")
+  const submit = form.querySelector("[data-delete-gate-submit]")
+  const expected = normalizeUsername(form.dataset.username || "")
+  if (!input || !submit || !expected) return
+
+  const sync = () => {
+    submit.disabled = normalizeUsername(input.value) !== expected
+  }
+
+  input.addEventListener("input", sync)
+  sync()
+}
+
+function setupDeleteGate() {
+  document.querySelectorAll("form[data-delete-gate]").forEach(wireDeleteGate)
+}
+onReady(setupDeleteGate)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

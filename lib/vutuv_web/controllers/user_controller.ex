@@ -126,8 +126,26 @@ defmodule VutuvWeb.UserController do
   end
 
   # Step 1: mail a PIN and render the PIN-entry form. Nothing is deleted yet.
-  def delete(conn, _params) do
+  # The member must first re-type their own username (the /settings/delete
+  # form): a deliberate, hard-to-do-in-passing confirmation. The JS on that
+  # page only disables the button until the field matches, so this server-side
+  # check is the real gate (it also guards no-JS and scripted requests).
+  def delete(conn, params) do
     user = conn.assigns[:current_user]
+
+    if confirm_username_matches?(user, params) do
+      mail_deletion_pin(conn, user)
+    else
+      conn
+      |> put_flash(
+        :error,
+        gettext("Please type your username exactly as shown to confirm the deletion.")
+      )
+      |> redirect(to: ~p"/settings/delete")
+    end
+  end
+
+  defp mail_deletion_pin(conn, user) do
     email = Accounts.first_email_value(user)
 
     case RateLimit.check(conn, :account_deletion, email) do
@@ -144,6 +162,20 @@ defmodule VutuvWeb.UserController do
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
         |> redirect(to: ~p"/#{user}")
     end
+  end
+
+  # Usernames are stored lower-cased ([a-z0-9_]); accept the member's input
+  # case-insensitively and tolerate a stray leading "@" or surrounding space.
+  defp confirm_username_matches?(%User{username: username}, params) do
+    typed =
+      params
+      |> Map.get("username", "")
+      |> to_string()
+      |> String.trim()
+      |> String.trim_leading("@")
+      |> String.downcase()
+
+    typed != "" and typed == username
   end
 
   # Step 2: the PIN confirms the deletion, which is then irreversible.

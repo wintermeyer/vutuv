@@ -800,6 +800,11 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "Delete account"
     # The consequence is spelled out before the user acts...
     assert html =~ "cannot be undone"
+    # ...the username is shown so a member who forgot it can still confirm...
+    assert html =~ "@#{user.username}"
+    # ...it must be typed into the confirmation field that gates the button...
+    assert html =~ ~s(name="username")
+    assert html =~ ~s(data-delete-gate)
     # ...and the control is the canonical red danger button with a confirm
     # dialog (id pinned so the shell's logout delete-link doesn't match).
     assert html =~ ~s(id="delete-account")
@@ -920,9 +925,9 @@ defmodule VutuvWeb.UserControllerTest do
   test "deletes chosen resource after confirming the PIN", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    # Step 1: request deletion. Nothing is deleted yet; a PIN is mailed and the
-    # confirmation form is shown.
-    conn = delete(conn, ~p"/#{user}")
+    # Step 1: request deletion, confirming with the typed username. Nothing is
+    # deleted yet; a PIN is mailed and the confirmation form is shown.
+    conn = delete(conn, ~p"/#{user}", username: user.username)
     assert html_response(conn, 200) =~ "PIN"
     assert Repo.get(User, user.id)
 
@@ -938,11 +943,23 @@ defmodule VutuvWeb.UserControllerTest do
   test "does not delete the account when the PIN is wrong", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    conn = delete(conn, ~p"/#{user}")
+    conn = delete(conn, ~p"/#{user}", username: user.username)
     assert_received {:email, _email}
 
     conn = post(conn, ~p"/account_deletion", account_deletion: %{pin: "000000"})
     assert html_response(conn, 200) =~ "PIN"
+    assert Repo.get(User, user.id)
+  end
+
+  test "does not start deletion when the confirmation username is wrong", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+
+    # A wrong (or empty) username is rejected before anything happens: no PIN is
+    # mailed and the account is untouched. This is the server-side half of the
+    # gate — the JS only disables the button, so the check cannot live in JS.
+    conn = delete(conn, ~p"/#{user}", username: "not-my-username")
+    assert redirected_to(conn) == ~p"/settings/delete"
+    refute_received {:email, _email}
     assert Repo.get(User, user.id)
   end
 
