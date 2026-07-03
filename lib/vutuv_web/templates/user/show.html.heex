@@ -10,12 +10,16 @@ on drift. --%>
 <%!-- md, not lg: portrait iPads (768-834px CSS width) get the desktop
 content+rail columns too; user_row and the rail cards truncate cleanly at
 the resulting ~200px rail width. --%>
-<div class="grid gap-6 py-6 md:grid-cols-3">
-  <%!-- min-w-0 so the column can shrink below its content's min-content on a
-  phone (below md the grid is a single implicit `auto` track): the Posts section
-  renders `truncate` parent-excerpts and Markdown bodies that would otherwise
-  force the column past the viewport and scroll the page sideways. --%>
-  <div class="min-w-0 space-y-6 md:col-span-2">
+<div class="flex flex-col gap-6 py-6 md:grid md:grid-cols-3">
+  <%!-- Below md the page is a single flex column and BOTH columns are `contents`,
+  so every card (main content AND rail) is one flex child of this container and
+  can be reordered on a phone: Followers / Following / Who-to-follow drop to the
+  end via `order-*`. At md+ the columns become real boxes again (`md:block` +
+  `md:col-span-2` / the implicit rail track), so the desktop content+rail grid is
+  byte-for-byte unchanged. `md:min-w-0` keeps the desktop main column shrinkable
+  (mobile_overflow_test guards this); on a phone the flex column already stops a
+  long unbreakable descendant from widening the page. --%>
+  <div class="contents md:block md:min-w-0 md:space-y-6 md:col-span-2">
     <%!-- The owner's moderation notice: a frozen / suspended profile is
     invisible to everyone else, so tell the owner what is going on and where
     to act. Visitors never reach this page (EnsureActivated 404s first). --%>
@@ -506,8 +510,13 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- Follower / following previews (latest 3 each, full lists behind "View All").
-    Side by side in two columns on sm+, stacked on mobile. --%>
-    <div class="grid gap-6 sm:grid-cols-2">
+    Side by side in two columns on sm+, stacked on mobile. `order-1` drops the
+    pair below the rail's own cards on a phone (see the main column comment); at
+    md+ it sits at the foot of the main content column as before. --%>
+    <div
+      :if={@follower_count > 0 or @followee_count > 0}
+      class="order-1 grid gap-6 sm:grid-cols-2 md:order-none"
+    >
       <.card :if={@follower_count > 0} id="profile-followers">
         <.section_title class="mb-4">{ngettext("Follower", "Followers", @follower_count)}</.section_title>
         <ul class="space-y-4">
@@ -548,8 +557,10 @@ the resulting ~200px rail width. --%>
     </div>
   </div>
 
-  <%!-- Right rail --%>
-  <aside class="space-y-6">
+  <%!-- Right rail. `contents` on a phone (see the main column comment) so its
+  cards join the single flex column and can interleave with the main column's;
+  a real box again at md+. --%>
+  <aside class="contents md:block md:space-y-6">
     <%!-- General info leads the rail: who the person is (gender + birthday).
     The headline already lives in the header. --%>
     <.card
@@ -900,8 +911,13 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- "Who to follow" comes after the profile's own details (contact, info,
-    links): the member's own card leads, discovery of other people follows. --%>
-    <.card :if={Enum.count(@recommended_users) > 0} id="profile-who-to-follow">
+    links): the member's own card leads, discovery of other people follows.
+    `order-1` groups it with Followers / Following at the end on a phone. --%>
+    <.card
+      :if={Enum.count(@recommended_users) > 0}
+      id="profile-who-to-follow"
+      class="order-1 md:order-none"
+    >
       <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
       <ul class="space-y-4">
         <.user_row
@@ -920,13 +936,16 @@ the resulting ~200px rail width. --%>
     the same page as Markdown, plain text, JSON, XML and vCard, kept last as the
     rail's quiet utility footer. A human visitor browsing in German gets the
     German rendering via ?lang=; the canonical extension URLs (head alternates,
-    llms.txt) stay English. --%>
-    <.other_formats_card
-      base_path={"/" <> @user.username}
-      locale={@locale}
-      vcard
-      id="profile-other-formats"
-    />
+    llms.txt) stay English. `order-2` keeps it the very last card on a phone,
+    below the reordered Followers / Following / Who-to-follow group. --%>
+    <div class="order-2 md:order-none">
+      <.other_formats_card
+        base_path={"/" <> @user.username}
+        locale={@locale}
+        vcard
+        id="profile-other-formats"
+      />
+    </div>
   </aside>
 </div>
 
