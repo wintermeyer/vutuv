@@ -10,6 +10,8 @@ defmodule VutuvWeb.ImportController do
   """
   use VutuvWeb, :controller
 
+  require Logger
+
   # Routed under /settings: the pipeline (RequireLogin + SettingsUser +
   # EnsureActivated) provides :user = the logged-in member; AuthUser stays as
   # a belt-and-braces guard.
@@ -21,13 +23,16 @@ defmodule VutuvWeb.ImportController do
   alias Vutuv.Imports.LinkedIn
   alias VutuvWeb.RateLimit
 
-  # A LinkedIn export is a handful of small CSVs; cap the upload so a huge file
-  # can't be posted here.
-  @max_upload_bytes 20_000_000
+  # LinkedIn's "larger data archive" runs to tens of megabytes for an active
+  # account (message dumps ride along), so allow a generous upload — the parse
+  # only ever inflates the small CSVs. Keep this below the multipart :length
+  # in the endpoint (64 MB), or the friendly too-large flash can never fire.
+  @max_upload_bytes 50_000_000
 
   def new(conn, _params) do
     render(conn, "new.html",
       user: conn.assigns[:user],
+      max_upload_bytes: @max_upload_bytes,
       page_title: gettext("Import from LinkedIn")
     )
   end
@@ -46,18 +51,13 @@ defmodule VutuvWeb.ImportController do
 
     case result do
       {:ok, parsed} ->
-        render(conn, "preview.html",
-          user: user,
-          candidates: LinkedIn.mark_duplicates(user, parsed),
-          payload: Jason.encode!(LinkedIn.payload_map(parsed)),
-          page_title: gettext("Import from LinkedIn")
-        )
+        render_preview(conn, user, parsed)
 
       {:error, :too_large} ->
         redirect_with_error(
           conn,
           user,
-          gettext("That file is too large. A LinkedIn export is only a few megabytes.")
+          gettext("That file is too large. Please upload a ZIP of at most 50 MB.")
         )
 
       {:error, :archive_too_large} ->
@@ -73,9 +73,6 @@ defmodule VutuvWeb.ImportController do
           user,
           gettext("That does not look like a LinkedIn data export ZIP.")
         )
-
-      _ ->
-        redirect_with_error(conn, user, gettext("The file could not be read. Please try again."))
     end
   end
 
@@ -104,10 +101,31 @@ defmodule VutuvWeb.ImportController do
     end
   end
 
+  # The parse itself is fully rescued inside LinkedIn, but the preview
+  # assembly after it (duplicate marking, the payload JSON) was the one
+  # stretch of the upload flow that could still raise — and did, on a CSV a
+  # member had re-saved in a non-UTF-8 encoding. Whatever an archive does, the
+  # member gets a flash and the form back, never the 500 page.
+  defp render_preview(conn, user, parsed) do
+    render(conn, "preview.html",
+      user: user,
+      candidates: LinkedIn.mark_duplicates(user, parsed),
+      payload: Jason.encode!(LinkedIn.payload_map(parsed)),
+      page_title: gettext("Import from LinkedIn")
+    )
+  rescue
+    error ->
+      Logger.error(
+        "LinkedIn import preview failed: " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      redirect_with_error(conn, user, gettext("The file could not be read. Please try again."))
+  end
+
   defp parse_upload(upload) do
-    with :ok <- within_size_limit(upload),
-         {:ok, binary} <- File.read(upload.path) do
-      LinkedIn.parse(binary)
+    with :ok <- within_size_limit(upload) do
+      LinkedIn.parse_file(upload.path)
     end
   end
 

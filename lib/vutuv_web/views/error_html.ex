@@ -31,6 +31,17 @@ defmodule VutuvWeb.ErrorHTML do
     |> error_page()
   end
 
+  # An upload beyond Plug.Parsers' multipart cap raises before any controller
+  # runs, so the friendly per-form messages never get a chance — the member
+  # uploading a too-big LinkedIn archive or photo gets this card instead of
+  # the bare fallback text.
+  def render("413.html", assigns) do
+    assigns
+    |> Map.new()
+    |> Map.merge(%{code: 413, message: gettext("The file you sent is too large.")})
+    |> error_page()
+  end
+
   # The admin-area 403 for a logged-in member: instead of a bare error it
   # answers the natural follow-up question - how does one become an admin?
   def render("403_admin.html", assigns) do

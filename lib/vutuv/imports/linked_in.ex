@@ -77,8 +77,22 @@ defmodule Vutuv.Imports.LinkedIn do
   `{:error, :invalid_archive}` for anything that is not a readable ZIP.
   """
   def parse(zip_binary) when is_binary(zip_binary) do
-    with {:ok, names} <- safe_entry_names(zip_binary),
-         {:ok, files} <- extract(zip_binary, names) do
+    do_parse(zip_binary)
+  end
+
+  @doc """
+  Like `parse/1`, but reads the ZIP from a file on disk (the uploaded temp
+  file), so the archive is never loaded into memory whole — `:zip` only
+  inflates the selected small entries.
+  """
+  def parse_file(path) when is_binary(path) do
+    do_parse(String.to_charlist(path))
+  end
+
+  # `:zip` accepts both an in-memory binary and a filename charlist.
+  defp do_parse(zip_source) do
+    with {:ok, names} <- safe_entry_names(zip_source),
+         {:ok, files} <- extract(zip_source, names) do
       {:ok, build(files)}
     end
   end
@@ -100,8 +114,8 @@ defmodule Vutuv.Imports.LinkedIn do
   @max_entry_bytes 15_000_000
   @max_total_bytes 40_000_000
 
-  defp safe_entry_names(binary) do
-    case :zip.list_dir(binary) do
+  defp safe_entry_names(zip_source) do
+    case :zip.list_dir(zip_source) do
       {:ok, table} ->
         entries =
           for {:zip_file, name, info, _comment, _offset, _comp} <- table,
@@ -136,18 +150,31 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp directory?(name), do: List.last(name) == ?/
 
-  defp extract(_binary, []), do: {:ok, []}
+  defp extract(_zip_source, []), do: {:ok, []}
 
-  defp extract(binary, names) do
-    case :zip.unzip(binary, [:memory, {:file_list, names}]) do
+  defp extract(zip_source, names) do
+    case :zip.unzip(zip_source, [:memory, {:file_list, names}]) do
       {:ok, entries} ->
-        {:ok, Enum.map(entries, fn {name, content} -> {to_string(name), content} end)}
+        {:ok,
+         Enum.map(entries, fn {name, content} -> {to_string(name), ensure_utf8(content)} end)}
 
       {:error, _reason} ->
         {:error, :invalid_archive}
     end
   rescue
     _ -> {:error, :invalid_archive}
+  end
+
+  # LinkedIn writes UTF-8, but a member who opens a CSV in Excel and re-saves
+  # it before re-zipping ships Windows-1252/Latin-1 bytes. Everything
+  # downstream assumes valid UTF-8 (Jason.encode! of the preview payload
+  # raises on a stray byte and 500ed the upload), so transcode anything
+  # invalid as Latin-1 — total, since every byte is a Latin-1 codepoint.
+  defp ensure_utf8(content) do
+    case :unicode.characters_to_binary(content) do
+      valid when is_binary(valid) -> valid
+      _ -> :unicode.characters_to_binary(content, :latin1, :utf8)
+    end
   end
 
   defp build(files) do

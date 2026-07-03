@@ -67,8 +67,13 @@ defmodule VutuvWeb.Endpoint do
   plug(Plug.RequestId)
   plug(Plug.Logger)
 
+  # The multipart cap must sit above the LinkedIn import's 50 MB limit
+  # (ImportController), or its friendly too-large flash can never fire — the
+  # default 8 MB rejected the very archives the import page asks members to
+  # download. Beyond 64 MB Plug raises and the member gets the styled 413 page
+  # (VutuvWeb.ErrorHTML). nginx's client_max_body_size must stay >= this.
   plug(Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
+    parsers: [:urlencoded, {:multipart, length: 64_000_000}, :json],
     pass: ["*/*"],
     json_decoder: Jason
   )

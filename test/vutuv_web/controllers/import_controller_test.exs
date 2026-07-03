@@ -76,6 +76,44 @@ defmodule VutuvWeb.ImportControllerTest do
     refute File.exists?(upload.path)
   end
 
+  # The regression behind the "500 on upload" bug report: a CSV re-saved in
+  # Excel (Windows-1252/Latin-1) before re-zipping used to crash the preview's
+  # Jason.encode! and render the 500 page instead of anything helpful.
+  test "an archive with a Latin-1 encoded CSV still previews", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    latin1_csv =
+      :unicode.characters_to_binary(
+        "Company Name,Title,Description,Location,Started On,Finished On\n" <>
+          "Müller GmbH,Geschäftsführer,,Berlin,2020,\n",
+        :utf8,
+        :latin1
+      )
+
+    conn =
+      post(conn, ~p"/settings/import/linkedin", %{
+        "import" => %{"archive" => upload_zip([{"Positions.csv", latin1_csv}])}
+      })
+
+    body = html_response(conn, 200)
+    assert body =~ "linkedin-import-preview"
+    assert body =~ "Müller GmbH"
+  end
+
+  test "an oversized upload is rejected with the friendly flash", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    path = Path.join(System.tmp_dir!(), "big_#{System.unique_integer([:positive])}.zip")
+    File.write!(path, :binary.copy(<<0>>, 50_000_001))
+    on_exit(fn -> File.rm(path) end)
+    upload = %Plug.Upload{path: path, filename: "big.zip", content_type: "application/zip"}
+
+    conn =
+      post(conn, ~p"/settings/import/linkedin", %{"import" => %{"archive" => upload}})
+
+    assert redirected_to(conn) == ~p"/settings/import/linkedin"
+    assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "50 MB"
+  end
+
   test "a non-zip upload is rejected with a flash", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     path = Path.join(System.tmp_dir!(), "notzip_#{System.unique_integer([:positive])}.zip")

@@ -28,7 +28,7 @@ msgstr "Eintrag hinzufügen"
 #: lib/vutuv_web/templates/address/card_list.html.heex:6
 #: lib/vutuv_web/templates/address/show.html.heex:2
 #: lib/vutuv_web/templates/address/show.html.heex:7
-#: lib/vutuv_web/templates/user/show.html.heex:854
+#: lib/vutuv_web/templates/user/show.html.heex:874
 #, elixir-autogen
 msgid "Address"
 msgid_plural "Addresses"
@@ -957,41 +957,41 @@ msgstr "Mann"
 msgid "Page not found"
 msgstr "Seite nicht verfügbar"
 
-#: lib/vutuv_web/views/error_html.ex:72
+#: lib/vutuv_web/views/error_html.ex:83
 #, elixir-autogen
 msgid "This page does not exist"
 msgstr "Diese Seite gibt es nicht"
 
-#: lib/vutuv_web/views/error_html.ex:74
+#: lib/vutuv_web/views/error_html.ex:85
 #, elixir-autogen
 msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
 msgstr ""
 "Mea Culpa: Genau diesen fehlerhaften Link hatten wir tatsächlich einmal in "
 "einem Newsletter. Wir bitten um Entschuldigung!"
 
-#: lib/vutuv_web/views/error_html.ex:79
+#: lib/vutuv_web/views/error_html.ex:90
 #, elixir-autogen
 msgid "The word"
 msgstr "Das Wort"
 
-#: lib/vutuv_web/views/error_html.ex:80
+#: lib/vutuv_web/views/error_html.ex:91
 #, elixir-autogen
 msgid "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
 msgstr ""
 "in dieser Adresse ist nur ein Platzhalter. Ersetzen Sie es durch den "
 "tatsächlichen Benutzernamen der Person, deren Profil Sie besuchen möchten."
 
-#: lib/vutuv_web/views/error_html.ex:85
+#: lib/vutuv_web/views/error_html.ex:96
 #, elixir-autogen
 msgid "For example, this profile really exists:"
 msgstr "Dieses Profil gibt es zum Beispiel wirklich:"
 
-#: lib/vutuv_web/views/error_html.ex:89
+#: lib/vutuv_web/views/error_html.ex:100
 #, elixir-autogen
 msgid "Do not know the username? Try the"
 msgstr "Sie kennen den Benutzernamen nicht? Probieren Sie die"
 
-#: lib/vutuv_web/views/error_html.ex:90
+#: lib/vutuv_web/views/error_html.ex:101
 #, elixir-autogen
 msgid "search page"
 msgstr "Suchseite"
@@ -1589,9 +1589,9 @@ msgstr "Admin-Bereich"
 msgid "Alerts"
 msgstr "Mitteilungen"
 
-#: lib/vutuv_web/views/error_html.ex:54
-#: lib/vutuv_web/views/error_html.ex:93
-#: lib/vutuv_web/views/error_html.ex:115
+#: lib/vutuv_web/views/error_html.ex:65
+#: lib/vutuv_web/views/error_html.ex:104
+#: lib/vutuv_web/views/error_html.ex:126
 #, elixir-autogen, elixir-format
 msgid "Back to the start page"
 msgstr "Zur Startseite"
@@ -1665,7 +1665,7 @@ msgstr "Empfehlen"
 msgid "Follow"
 msgstr "Folgen"
 
-#: lib/vutuv_web/views/error_html.ex:111
+#: lib/vutuv_web/views/error_html.ex:122
 #, elixir-autogen, elixir-format
 msgid "If you think this is a bug, please"
 msgstr "Falls das ein Fehler ist, bitte"
@@ -1811,7 +1811,7 @@ msgid "We sent a PIN to your new email address. Enter it below to confirm the ad
 msgstr "Wir haben einen PIN an Ihre neue E-Mail-Adresse geschickt. Geben Sie ihn unten ein, um die Adresse zu bestätigen."
 
 #: lib/vutuv_web/live/post_live/feed.ex:511
-#: lib/vutuv_web/templates/user/show.html.heex:938
+#: lib/vutuv_web/templates/user/show.html.heex:958
 #, elixir-autogen, elixir-format
 msgid "Who to follow"
 msgstr "Vorgeschlagene Profile"
@@ -1840,7 +1840,7 @@ msgstr[1] "Follower"
 msgid "following"
 msgstr "folgt"
 
-#: lib/vutuv_web/views/error_html.ex:112
+#: lib/vutuv_web/views/error_html.ex:123
 #, elixir-autogen, elixir-format
 msgid "submit a bug report"
 msgstr "einen Fehlerbericht erstellen"
@@ -2700,7 +2700,7 @@ msgid "Add a social media account"
 msgstr "Social-Media-Konto hinzufügen"
 
 #: lib/vutuv_web/templates/address/manage.html.heex:8
-#: lib/vutuv_web/templates/user/show.html.heex:856
+#: lib/vutuv_web/templates/user/show.html.heex:876
 #, elixir-autogen, elixir-format
 msgid "Add an address"
 msgstr "Adresse hinzufügen"
@@ -2722,7 +2722,7 @@ msgstr "Persönliche Angaben hinzufügen"
 msgid "Add work experience"
 msgstr "Berufserfahrung hinzufügen"
 
-#: lib/vutuv_web/live/user_profile_live.ex:735
+#: lib/vutuv_web/live/user_profile_live.ex:803
 #: lib/vutuv_web/templates/user/show.html.heex:306
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
@@ -4501,7 +4501,7 @@ msgstr "Sie haben niemanden blockiert."
 msgid "You unblocked @%{slug}."
 msgstr "Sie haben die Blockierung von @%{slug} aufgehoben."
 
-#: lib/vutuv_web/views/error_html.ex:44
+#: lib/vutuv_web/views/error_html.ex:55
 #, elixir-autogen, elixir-format
 msgid "Admin rights are granted by the operator of this vutuv instance, directly in the database:"
 msgstr "Admin-Rechte vergibt der Betreiber dieser vutuv-Instanz, direkt in der Datenbank:"
@@ -4523,12 +4523,12 @@ msgstr "Mitglieder finden"
 msgid "Follows"
 msgstr "Folgt"
 
-#: lib/vutuv_web/views/error_html.ex:50
+#: lib/vutuv_web/views/error_html.ex:61
 #, elixir-autogen, elixir-format
 msgid "If you do not run this instance yourself, please contact the operator."
 msgstr "Wenn Sie diese Instanz nicht selbst betreiben, wenden Sie sich bitte an den Betreiber."
 
-#: lib/vutuv_web/views/error_html.ex:51
+#: lib/vutuv_web/views/error_html.ex:62
 #, elixir-autogen, elixir-format
 msgid "Legal notice"
 msgstr "Impressum"
@@ -4543,7 +4543,7 @@ msgstr "Noch keine Follower."
 msgid "Not following anyone yet."
 msgstr "Folgt noch niemandem."
 
-#: lib/vutuv_web/views/error_html.ex:42
+#: lib/vutuv_web/views/error_html.ex:53
 #, elixir-autogen, elixir-format
 msgid "This area is reserved for administrators."
 msgstr "Dieser Bereich ist Administratoren vorbehalten."
@@ -4620,7 +4620,7 @@ msgstr "müller"
 msgid "searches first names only (last: for last names)"
 msgstr "sucht nur in Vornamen (nachname: für Nachnamen)"
 
-#: lib/vutuv_web/live/user_profile_live.ex:723
+#: lib/vutuv_web/live/user_profile_live.ex:791
 #: lib/vutuv_web/templates/user/show.html.heex:343
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
@@ -5348,7 +5348,7 @@ msgstr "Profil vervollständigen"
 msgid "A few quick steps so people can find and recognize you."
 msgstr "Ein paar schnelle Schritte, damit andere Sie finden und erkennen."
 
-#: lib/vutuv_web/live/user_profile_live.ex:725
+#: lib/vutuv_web/live/user_profile_live.ex:793
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr "Profilfoto hinzufügen"
@@ -6019,7 +6019,7 @@ msgstr "z. B. MacBook"
 msgid "or"
 msgstr "oder"
 
-#: lib/vutuv_web/live/user_profile_live.ex:729
+#: lib/vutuv_web/live/user_profile_live.ex:797
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr "Kurzbeschreibung hinzufügen"
@@ -6062,7 +6062,7 @@ msgstr[1] "Beiträge"
 msgid "After choosing a file you can reposition and zoom it."
 msgstr "Nach der Auswahl einer Datei können Sie sie verschieben und zoomen."
 
-#: lib/vutuv_web/templates/user/show.html.heex:903
+#: lib/vutuv_web/templates/user/show.html.heex:923
 #, elixir-autogen, elixir-format
 msgid "Also on"
 msgstr "Auch auf"
@@ -6249,9 +6249,9 @@ msgstr "Anzuzeigende Kartendienste"
 msgid "Maps"
 msgstr "Karten"
 
-#: lib/vutuv_web/templates/user/show.html.heex:889
-#: lib/vutuv_web/templates/user/show.html.heex:897
 #: lib/vutuv_web/templates/user/show.html.heex:909
+#: lib/vutuv_web/templates/user/show.html.heex:917
+#: lib/vutuv_web/templates/user/show.html.heex:929
 #, elixir-autogen, elixir-format
 msgid "Open in %{name}"
 msgstr "In %{name} öffnen"
@@ -8049,49 +8049,49 @@ msgstr "Noch keine Mitglieder."
 msgid "Nobody is online right now."
 msgstr "Zurzeit ist niemand online."
 
-#: lib/vutuv_web/controllers/import_controller.ex:156
+#: lib/vutuv_web/controllers/import_controller.ex:174
 #, elixir-autogen, elixir-format
 msgid "%{count} education entry"
 msgid_plural "%{count} education entries"
 msgstr[0] "%{count} Ausbildungseintrag"
 msgstr[1] "%{count} Ausbildungseinträge"
 
-#: lib/vutuv_web/controllers/import_controller.ex:158
+#: lib/vutuv_web/controllers/import_controller.ex:176
 #, elixir-autogen, elixir-format
 msgid "%{count} link"
 msgid_plural "%{count} links"
 msgstr[0] "%{count} Link"
 msgstr[1] "%{count} Links"
 
-#: lib/vutuv_web/controllers/import_controller.ex:162
+#: lib/vutuv_web/controllers/import_controller.ex:180
 #, elixir-autogen, elixir-format
 msgid "%{count} phone number"
 msgid_plural "%{count} phone numbers"
 msgstr[0] "%{count} Telefonnummer"
 msgstr[1] "%{count} Telefonnummern"
 
-#: lib/vutuv_web/controllers/import_controller.ex:164
+#: lib/vutuv_web/controllers/import_controller.ex:182
 #, elixir-autogen, elixir-format
 msgid "%{count} profile field"
 msgid_plural "%{count} profile fields"
 msgstr[0] "%{count} Profilfeld"
 msgstr[1] "%{count} Profilfelder"
 
-#: lib/vutuv_web/controllers/import_controller.ex:160
+#: lib/vutuv_web/controllers/import_controller.ex:178
 #, elixir-autogen, elixir-format
 msgid "%{count} social account"
 msgid_plural "%{count} social accounts"
 msgstr[0] "%{count} Social-Media-Konto"
 msgstr[1] "%{count} Social-Media-Konten"
 
-#: lib/vutuv_web/controllers/import_controller.ex:157
+#: lib/vutuv_web/controllers/import_controller.ex:175
 #, elixir-autogen, elixir-format
 msgid "%{count} tag"
 msgid_plural "%{count} tags"
 msgstr[0] "%{count} Tag"
 msgstr[1] "%{count} Tags"
 
-#: lib/vutuv_web/controllers/import_controller.ex:154
+#: lib/vutuv_web/controllers/import_controller.ex:172
 #, elixir-autogen, elixir-format
 msgid "%{count} work experience"
 msgid_plural "%{count} work experiences"
@@ -8167,8 +8167,8 @@ msgstr "Das haben wir in Ihrem Export gefunden. Entfernen Sie das Häkchen bei a
 msgid "Import"
 msgstr "Import"
 
-#: lib/vutuv_web/controllers/import_controller.ex:31
-#: lib/vutuv_web/controllers/import_controller.ex:53
+#: lib/vutuv_web/controllers/import_controller.ex:36
+#: lib/vutuv_web/controllers/import_controller.ex:114
 #: lib/vutuv_web/templates/import/new.html.heex:1
 #: lib/vutuv_web/templates/import/preview.html.heex:1
 #, elixir-autogen, elixir-format
@@ -8180,12 +8180,12 @@ msgstr "Von LinkedIn importieren"
 msgid "Import selected"
 msgstr "Auswahl importieren"
 
-#: lib/vutuv_web/controllers/import_controller.ex:170
+#: lib/vutuv_web/controllers/import_controller.ex:188
 #, elixir-autogen, elixir-format
 msgid "Imported %{items}."
 msgstr "%{items} importiert."
 
-#: lib/vutuv_web/controllers/import_controller.ex:169
+#: lib/vutuv_web/controllers/import_controller.ex:187
 #, elixir-autogen, elixir-format
 msgid "Nothing new to import."
 msgstr "Nichts Neues zu importieren."
@@ -8199,7 +8199,7 @@ msgstr "Nichts Neues zu importieren."
 msgid "Phone numbers"
 msgstr "Telefonnummern"
 
-#: lib/vutuv_web/controllers/import_controller.ex:84
+#: lib/vutuv_web/controllers/import_controller.ex:81
 #, elixir-autogen, elixir-format
 msgid "Please choose your LinkedIn export ZIP first."
 msgstr "Bitte wählen Sie zuerst Ihre LinkedIn-Export-ZIP-Datei."
@@ -8235,17 +8235,17 @@ msgstr "Schritt 2: Laden Sie die ZIP-Datei hier hoch"
 msgid "That does not look like a LinkedIn data export ZIP."
 msgstr "Das sieht nicht nach einem LinkedIn-Datenexport (ZIP) aus."
 
-#: lib/vutuv_web/controllers/import_controller.ex:78
+#: lib/vutuv_web/controllers/import_controller.ex:123
 #, elixir-autogen, elixir-format
 msgid "The file could not be read. Please try again."
 msgstr "Die Datei konnte nicht gelesen werden. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/controllers/import_controller.ex:102
+#: lib/vutuv_web/controllers/import_controller.ex:99
 #, elixir-autogen, elixir-format
 msgid "The import could not be completed. Please try again."
 msgstr "Der Import konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/templates/import/new.html.heex:120
+#: lib/vutuv_web/templates/import/new.html.heex:129
 #, elixir-autogen, elixir-format
 msgid "Upload and preview"
 msgstr "Hochladen und Vorschau"
@@ -8273,12 +8273,7 @@ msgstr ""
 "Dieses Archiv ist zu groß oder enthält zu viele Dateien, um es sicher zu "
 "importieren."
 
-#: lib/vutuv_web/controllers/import_controller.ex:60
-#, elixir-autogen, elixir-format
-msgid "That file is too large. A LinkedIn export is only a few megabytes."
-msgstr "Diese Datei ist zu groß. Ein LinkedIn-Export ist nur wenige Megabyte groß."
-
-#: lib/vutuv_web/controllers/import_controller.ex:121
+#: lib/vutuv_web/controllers/import_controller.ex:139
 #, elixir-autogen, elixir-format
 msgid "Too many imports. Please try again in a little while."
 msgstr "Zu viele Importe. Bitte versuchen Sie es in Kürze erneut."
@@ -8293,7 +8288,7 @@ msgstr "Ein Foto und eine Kurzbeschreibung machen Ihr Profil komplett."
 msgid "At least three tags, separated by a comma or a space."
 msgstr "Mindestens drei Tags, mit Komma oder Leerzeichen getrennt."
 
-#: lib/vutuv_web/live/user_profile_live.ex:748
+#: lib/vutuv_web/live/user_profile_live.ex:816
 #, elixir-autogen, elixir-format
 msgid "For example, a thought on %{tag}."
 msgstr "Zum Beispiel ein Gedanke zu %{tag}."
@@ -8303,7 +8298,7 @@ msgstr "Zum Beispiel ein Gedanke zu %{tag}."
 msgid "Please check the fields marked in red."
 msgstr "Bitte prüfen Sie die rot markierten Felder."
 
-#: lib/vutuv_web/controllers/import_controller.ex:182
+#: lib/vutuv_web/controllers/import_controller.ex:200
 #, elixir-autogen, elixir-format
 msgid "Skipped %{count} entry that is already on your profile or taken by another member."
 msgid_plural "Skipped %{count} entries that are already on your profile or taken by another member."
@@ -8376,7 +8371,7 @@ msgstr "Sie entscheiden genau, was übernommen wird. Im nächsten Schritt zeigen
 msgid "Import your LinkedIn profile data into your vutuv profile. From your export we can fill in:"
 msgstr "Importieren Sie die Daten Ihres LinkedIn-Profils in Ihr vutuv Profil. Aus Ihrem Export können wir übernehmen:"
 
-#: lib/vutuv_web/templates/import/new.html.heex:108
+#: lib/vutuv_web/templates/import/new.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Drag your ZIP file here, or click to choose one."
 msgstr "Ziehen Sie Ihre ZIP-Datei hierher oder klicken Sie, um eine auszuwählen."
@@ -8455,3 +8450,23 @@ msgstr "Meine neuesten Social-Media-Beiträge auf meinem Profil anzeigen"
 #, elixir-autogen, elixir-format
 msgid "When off, the Social Media card lists your accounts without any posts."
 msgstr "Wenn deaktiviert, zeigt die Social-Media-Karte Ihre Konten ohne Beiträge."
+
+#: lib/vutuv_web/controllers/import_controller.ex:60
+#, elixir-autogen, elixir-format
+msgid "That file is too large. Please upload a ZIP of at most 50 MB."
+msgstr "Diese Datei ist zu groß. Bitte laden Sie eine ZIP-Datei mit höchstens 50 MB hoch."
+
+#: lib/vutuv_web/views/error_html.ex:41
+#, elixir-autogen, elixir-format
+msgid "The file you sent is too large."
+msgstr "Die gesendete Datei ist zu groß."
+
+#: lib/vutuv_web/templates/import/new.html.heex:92
+#, elixir-autogen, elixir-format
+msgid "This file is too large. Please choose a ZIP of at most 50 MB."
+msgstr "Diese Datei ist zu groß. Bitte wählen Sie eine ZIP-Datei mit höchstens 50 MB."
+
+#: lib/vutuv_web/templates/import/new.html.heex:115
+#, elixir-autogen, elixir-format
+msgid "ZIP file, up to 50 MB."
+msgstr "ZIP-Datei, bis zu 50 MB."

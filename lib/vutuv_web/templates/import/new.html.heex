@@ -88,6 +88,8 @@
     >
       <label
         data-dropzone
+        data-max-bytes={@max_upload_bytes}
+        data-too-large={gettext("This file is too large. Please choose a ZIP of at most 50 MB.")}
         class="group flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center transition-colors hover:border-brand-400 hover:bg-brand-50 has-[:focus-visible]:border-brand-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-brand-500 data-[dragover]:border-brand-500 data-[dragover]:bg-brand-50 dark:border-slate-700 dark:bg-slate-800/50 dark:hover:border-brand-500 dark:hover:bg-slate-800 dark:data-[dragover]:border-brand-500 dark:data-[dragover]:bg-slate-800"
       >
         <svg
@@ -108,6 +110,10 @@
           {gettext("Drag your ZIP file here, or click to choose one.")}
         </span>
         <span data-dropzone-name class="hidden text-sm font-medium text-slate-900 dark:text-slate-100"></span>
+        <span data-dropzone-error class="hidden text-sm font-medium text-red-600 dark:text-red-400"></span>
+        <span class="text-xs text-slate-600 dark:text-slate-400">
+          {gettext("ZIP file, up to 50 MB.")}
+        </span>
         <input
           type="file"
           name="import[archive]"
@@ -116,7 +122,10 @@
           data-dropzone-input
         />
       </label>
-      <.button type="submit" class="w-full whitespace-nowrap sm:w-auto">
+      <.button
+        type="submit"
+        class="w-full whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+      >
         {gettext("Upload and preview")}
       </.button>
     </.form>

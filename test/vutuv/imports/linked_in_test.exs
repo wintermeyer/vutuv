@@ -202,6 +202,52 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
   end
 
+  describe "non-UTF-8 archives" do
+    # LinkedIn writes UTF-8, but a member who opens a CSV in Excel and re-saves
+    # it before re-zipping ships Windows-1252/Latin-1 bytes. Those must not
+    # survive into the parse result: everything downstream assumes valid UTF-8,
+    # and Jason.encode! of the preview payload raises on a stray byte (the
+    # import's 500).
+    test "a Latin-1 encoded CSV is transcoded to UTF-8" do
+      csv =
+        :unicode.characters_to_binary(
+          "Company Name,Title,Description,Location,Started On,Finished On\n" <>
+            "Müller GmbH,Geschäftsführer,,Berlin,2020,\n",
+          :utf8,
+          :latin1
+        )
+
+      {:ok, result} = LinkedIn.parse(zip([{"Positions.csv", csv}]))
+
+      assert [%{params: %{"organization" => "Müller GmbH", "title" => "Geschäftsführer"}}] =
+               result.positions
+
+      # The preview payload must be JSON-encodable (raised before the fix).
+      assert is_binary(Jason.encode!(LinkedIn.payload_map(result)))
+    end
+  end
+
+  describe "parse_file/1" do
+    test "reads the archive from a file on disk" do
+      path =
+        Path.join(System.tmp_dir!(), "linkedin_parse_#{System.unique_integer([:positive])}.zip")
+
+      File.write!(path, zip([{"Profile.csv", profile_csv()}]))
+      on_exit(fn -> File.rm(path) end)
+
+      assert {:ok, result} = LinkedIn.parse_file(path)
+      assert result.profile.first_name == "Stefan"
+    end
+
+    test "a non-zip file is an invalid archive" do
+      path = Path.join(System.tmp_dir!(), "notzip_#{System.unique_integer([:positive])}.zip")
+      File.write!(path, "this is not a zip file")
+      on_exit(fn -> File.rm(path) end)
+
+      assert LinkedIn.parse_file(path) == {:error, :invalid_archive}
+    end
+  end
+
   describe "zip-bomb defense" do
     test "skips an oversized single entry but still imports the small CSVs" do
       big = :binary.copy(<<0>>, 16_000_000)

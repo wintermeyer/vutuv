@@ -471,13 +471,26 @@ function wireDropzone(zone) {
   if (!input) return
   const prompt = zone.querySelector("[data-dropzone-prompt]")
   const name = zone.querySelector("[data-dropzone-name]")
+  // Optional size guard: the zone carries the byte cap and a localized
+  // message, so an oversized pick is flagged (and the submit disabled) before
+  // the member waits out a doomed upload. The server still enforces the cap.
+  const error = zone.querySelector("[data-dropzone-error]")
+  const form = zone.closest("form")
+  const submit = form && form.querySelector('button[type="submit"]')
+  const maxBytes = parseInt(zone.dataset.maxBytes || "", 10)
 
   const showChosen = () => {
     const file = input.files && input.files[0]
     if (!file || !name) return
+    const tooBig = Boolean(maxBytes) && file.size > maxBytes
     name.textContent = file.name
     name.classList.remove("hidden")
     if (prompt) prompt.classList.add("hidden")
+    if (error) {
+      error.textContent = tooBig ? zone.dataset.tooLarge || "" : ""
+      error.classList.toggle("hidden", !tooBig)
+    }
+    if (submit) submit.disabled = tooBig
   }
 
   input.addEventListener("change", showChosen)

@@ -22,6 +22,14 @@ defmodule VutuvWeb.ErrorHTMLTest do
     assert render_to_string("404.html") =~ ~s(href="/")
   end
 
+  # An upload beyond Plug.Parsers' multipart cap raises before any controller
+  # runs; the member uploading a too-big LinkedIn archive or photo deserves the
+  # styled card, not the bare fallback text.
+  test "renders 413.html as a styled page" do
+    assert render_to_string("413.html") =~ "too large"
+    assert render_to_string("413.html") =~ ~s(href="/")
+  end
+
   test "render any other" do
     assert ErrorHTML.render("505.html", []) =~
              "HTTP Version Not Supported"
