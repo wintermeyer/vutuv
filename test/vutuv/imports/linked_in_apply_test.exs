@@ -96,6 +96,74 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
            ) == 1
   end
 
+  # The 22001 regression behind the "500 on import" bug report: LinkedIn
+  # allows 2,000-character position descriptions, but the columns were
+  # varchar(255) — the insert raised Postgrex.Error (string_data_right_
+  # truncation) inside the one import transaction and the confirm step 500ed
+  # on every attempt.
+  test "imports a position and an education with LinkedIn-length descriptions" do
+    user = insert(:user)
+    long = String.trim(String.duplicate("Verantwortlich für alles Mögliche. ", 50))
+
+    positions_csv =
+      "Company Name,Title,Description,Location,Started On,Finished On\n" <>
+        "Müller GmbH,Geschäftsführer,\"#{long}\",Berlin,2020,\n"
+
+    education_csv =
+      "School Name,Start Date,End Date,Notes,Degree Name,Activities\n" <>
+        "MIT,2010,2014,\"#{long}\",BSc,\"#{long}\"\n"
+
+    {:ok, parsed} =
+      LinkedIn.parse(zip([{"Positions.csv", positions_csv}, {"Education.csv", education_csv}]))
+
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.positions == 1
+    assert summary.created.educations == 1
+
+    position = Repo.get_by(WorkExperience, user_id: user.id, organization: "Müller GmbH")
+    assert String.length(position.description) > 255
+
+    education = Repo.get_by(Education, user_id: user.id, school: "MIT")
+    assert String.length(education.description) > 255
+  end
+
+  # A field that genuinely cannot fit its column (a 300-character title) must
+  # become a changeset error counted as skipped — never a raised Postgres
+  # length error, which would abort the transaction and 500 the whole import.
+  test "an overlong title is skipped, the entries after it still land" do
+    user = insert(:user)
+    long_title = String.duplicate("x", 300)
+
+    csv =
+      "Company Name,Title,Description,Location,Started On,Finished On\n" <>
+        "Acme,#{long_title},,Berlin,2020,\n" <>
+        "Beta,Engineer,,Berlin,2021,\n"
+
+    {:ok, parsed} = LinkedIn.parse(zip([{"Positions.csv", csv}]))
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.positions == 1
+    assert summary.skipped.positions == 1
+    assert Repo.get_by(WorkExperience, user_id: user.id, organization: "Beta")
+    refute Repo.get_by(WorkExperience, user_id: user.id, organization: "Acme")
+  end
+
+  test "an overlong website URL is skipped, not crashed" do
+    user = insert(:user)
+    long_url = "https://example.com/" <> String.duplicate("a", 300)
+
+    profile_csv =
+      "First Name,Last Name,Maiden Name,Address,Birth Date,Headline,Summary,Industry,Zip Code,Geo Location,Twitter Handles,Websites,Instant Messengers\n" <>
+        "Stefan,Wintermeyer,,,,,,,,,,[PORTFOLIO:#{long_url}],\n"
+
+    {:ok, parsed} = LinkedIn.parse(zip([{"Profile.csv", profile_csv}]))
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.urls == 0
+    assert summary.skipped.urls == 1
+  end
+
   test "fills a blank headline but never overwrites an existing one" do
     blank = insert(:user, headline: nil)
 

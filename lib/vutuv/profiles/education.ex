@@ -36,6 +36,13 @@ defmodule Vutuv.Profiles.Education do
     model
     |> cast(params, @cast_fields)
     |> validate_required([:school])
+    # Match the varchar(255) columns (and cap the text description sanely) so
+    # an oversized value is a changeset error, never a raised Postgres 22001 —
+    # inside the import transaction that raise 500ed the whole import.
+    |> validate_length(:school, max: 255)
+    |> validate_length(:degree, max: 255)
+    |> validate_length(:field_of_study, max: 255)
+    |> validate_length(:description, max: 10_000)
     |> validate_dates
     |> validate_inclusion(:start_month, 1..12)
     |> validate_inclusion(:end_month, 1..12)
@@ -48,6 +55,9 @@ defmodule Vutuv.Profiles.Education do
       less_than_or_equal_to: current_year()
     )
     |> create_slug
+    # The slug derives from the school name, so a near-cap value can still
+    # overrun its own varchar(255) column.
+    |> validate_length(:slug, max: 255)
     |> unique_constraint(:slug)
   end
 

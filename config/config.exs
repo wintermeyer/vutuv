@@ -29,9 +29,18 @@ config :vutuv, ecto_repos: [Vutuv.Repo]
 
 # Every id is a UUID v7 (Vutuv.UUIDv7); new migrations default to binary_id
 # columns so `create table` / `references` need no per-call type overrides.
+#
+# disconnect_on_error_codes: a migration that widens a column type (e.g. the
+# varchar -> text description widen) invalidates the old release's cached
+# prepared statements, and Postgres answers them with 0A000
+# :feature_not_supported ("cached plan must not change result type"). Dropping
+# the connection on that code makes the pool re-prepare on fresh connections
+# immediately instead of erroring once per cached statement — keeps the
+# still-serving release healthy through blue/green migrations.
 config :vutuv, Vutuv.Repo,
   migration_primary_key: [type: :binary_id],
-  migration_foreign_key: [type: :binary_id]
+  migration_foreign_key: [type: :binary_id],
+  disconnect_on_error_codes: [:feature_not_supported]
 
 # Best-effort background work spawned from request handling. Both run under
 # Vutuv.TaskSupervisor; the flags let tests disable them so the SQL Sandbox

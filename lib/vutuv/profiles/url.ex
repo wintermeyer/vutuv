@@ -33,6 +33,9 @@ defmodule Vutuv.Profiles.Url do
     |> cast(params, [:value, :description, :broken?])
     |> put_screenshot(params)
     |> validate_required([:value])
+    # varchar(255) column: an overlong URL must fail as a changeset error,
+    # never as a raised Postgres 22001 (which 500ed the LinkedIn import).
+    |> validate_length(:value, max: 255)
     |> validate_length(:description, max: 45)
     |> ensure_http_prefix
     |> validate_url

@@ -89,6 +89,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     model
     |> cast(params, @required_fields ++ @optional_fields)
     |> validate_required([:provider, :value])
+    # varchar(255) column: an overlong handle must fail as a changeset error,
+    # never as a raised Postgres 22001 (which 500ed the LinkedIn import).
+    |> validate_length(:value, max: 255)
     |> unique_constraint(:value_provider, message: "Someone has already claimed this account")
     |> normalize_value()
     |> validate_value()
