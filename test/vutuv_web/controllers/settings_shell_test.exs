@@ -27,8 +27,9 @@ defmodule VutuvWeb.SettingsShellTest do
         # The way back to the hub, and the sidebar to every sibling area.
         assert html =~ ~s(href="#{~p"/settings"}")
         assert html =~ ~s(href="#{~p"/settings/privacy"}")
-        # No classic profile breadcrumbs inside the editor.
-        refute html =~ ~s(class="breadcrumbs")
+        # Every shell page carries the "Einstellungen / <page>" breadcrumbs
+        # (left-aligned in the content column), matching the new/edit forms.
+        assert html =~ ~s(class="breadcrumbs mx-0"), "expected shell breadcrumbs on #{path}"
       end
     end
 

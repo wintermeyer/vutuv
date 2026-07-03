@@ -2514,14 +2514,16 @@ defmodule VutuvWeb.UI do
       />
       <div class="min-w-0">
         <div class="mb-4">
-          <.link
-            navigate={~p"/settings"}
-            class="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700 md:hidden dark:text-brand-400 dark:hover:text-brand-300"
-          >
-            <span aria-hidden="true">‹</span>
-            {gettext("Settings")}
-          </.link>
-          <div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 md:mt-0">
+          <%!-- "Einstellungen / <page>" trail — the same classic .breadcrumbs
+          rendering the new/edit forms show, so orientation and the way back
+          read identically across the whole settings area (it replaced the
+          mobile-only "‹ Settings" back link and shows at every width). mx-0
+          overrides the class's centered 48rem measure so the trail
+          left-aligns with the h1. --%>
+          <div class="breadcrumbs mx-0">
+            {VutuvWeb.UserHelpers.gen_breadcrumbs([{gettext("Settings"), ~p"/settings"}, @title])}
+          </div>
+          <div class="mt-1 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{@title}</h1>
             <.link
               navigate={~p"/#{@user}"}
