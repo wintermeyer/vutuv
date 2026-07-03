@@ -94,15 +94,16 @@ which would otherwise render the hint heavier than its own heading. --%>
       </.form>
     </.card>
 
-    <%!-- Mastodon posts: the inline feed on the profile's Social Media card
-          (Vutuv.Mastodon). A positive flag like the online dot above: default
-          on, so a listed Mastodon account shows its latest public posts until
-          the member opts out here. --%>
+    <%!-- Social media posts: the inline feed card on the profile
+          (Vutuv.SocialFeed, Mastodon + Bluesky). A positive flag like the
+          online dot above: default on, so a listed account shows its latest
+          public posts until the member opts out here. The column keeps its
+          historical name (show_mastodon_feed?) but gates the whole card. --%>
     <.card>
-      <.section_title>{gettext("Mastodon posts")}</.section_title>
+      <.section_title>{gettext("Social media posts")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
         {gettext(
-          "If you list a Mastodon account, your profile can show your latest public posts from it."
+          "If you list a Mastodon or Bluesky account, your profile can show your latest public posts from it."
         )}
       </p>
 
@@ -110,13 +111,13 @@ which would otherwise render the hint heavier than its own heading. --%>
         :let={f}
         for={@changeset}
         action={~p"/#{@user}/settings/privacy"}
-        id="mastodon-feed-form"
+        id="social-feed-form"
         class="mt-5 space-y-5"
       >
-        <.setting_toggle label={gettext("Show my latest Mastodon posts on my profile")}>
+        <.setting_toggle label={gettext("Show my latest social media posts on my profile")}>
           <:checkbox><%= checkbox f, :show_mastodon_feed?, class: checkbox_class() %></:checkbox>
           {gettext(
-            "When off, the Social Media card lists your Mastodon account without any posts."
+            "When off, the Social Media card lists your accounts without any posts."
           )}
         </.setting_toggle>
 

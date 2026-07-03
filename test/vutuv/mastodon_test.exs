@@ -3,9 +3,8 @@ defmodule Vutuv.MastodonTest do
   use Vutuv.DataCase
 
   alias Vutuv.Mastodon
-  alias Vutuv.Mastodon.Feed
-  alias Vutuv.Mastodon.Post
-  alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.SocialFeed.Feed
+  alias Vutuv.SocialFeed.Post
 
   @handle "alice@example.social"
   @avatar_bytes <<137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0>>
@@ -62,13 +61,6 @@ defmodule Vutuv.MastodonTest do
         "spoiler_text" => ""
       },
       attrs
-    )
-  end
-
-  defp mastodon_account(attrs \\ []) do
-    insert(
-      :social_media_account,
-      Keyword.merge([provider: "Mastodon", value: @handle, user: insert_activated_user()], attrs)
     )
   end
 
@@ -293,146 +285,6 @@ defmodule Vutuv.MastodonTest do
       assert_receive {:req, "/api/v1/accounts/lookup", _}
       assert_receive {:req, "/api/v1/accounts/42/statuses", _}
       refute_receive {:req, _, _}
-    end
-  end
-
-  describe "record_result/2 backoff ladder" do
-    test "a transient failure schedules the first 15-minute retry" do
-      account = mastodon_account()
-
-      assert {:retry_in_minutes, 15} = Mastodon.record_result(@handle, {:error, :transient})
-
-      account = Repo.get!(SocialMediaAccount, account.id)
-      assert account.fetch_failures == 1
-      assert account.fetch_disabled_at == nil
-      assert_in_delta DateTime.diff(account.fetch_retry_at, DateTime.utc_now()), 15 * 60, 5
-    end
-
-    test "consecutive failures walk 15/30/60/360/720/1440/2880 minutes" do
-      account = mastodon_account()
-
-      expected = [15, 30, 60, 360, 720, 1440, 2880]
-
-      for {minutes, round} <- Enum.with_index(expected, 1) do
-        assert {:retry_in_minutes, ^minutes} =
-                 Mastodon.record_result(@handle, {:error, :transient})
-
-        reloaded = Repo.get!(SocialMediaAccount, account.id)
-        assert reloaded.fetch_failures == round
-        assert reloaded.fetch_disabled_at == nil
-
-        assert_in_delta DateTime.diff(reloaded.fetch_retry_at, DateTime.utc_now()),
-                        minutes * 60,
-                        5
-      end
-    end
-
-    test "the failure after the 48-hour step deactivates the account for good" do
-      account = mastodon_account()
-
-      Repo.update_all(SocialMediaAccount, set: [fetch_failures: 7])
-
-      assert :disabled = Mastodon.record_result(@handle, {:error, :transient})
-
-      account = Repo.get!(SocialMediaAccount, account.id)
-      assert %DateTime{} = account.fetch_disabled_at
-    end
-
-    test "a hard :gone error deactivates immediately" do
-      account = mastodon_account()
-
-      assert :disabled = Mastodon.record_result(@handle, {:error, :gone})
-
-      account = Repo.get!(SocialMediaAccount, account.id)
-      assert %DateTime{} = account.fetch_disabled_at
-    end
-
-    test "success resets the fetch state" do
-      account = mastodon_account()
-
-      retry_at = DateTime.add(DateTime.utc_now(:second), 3600)
-
-      Repo.update_all(SocialMediaAccount,
-        set: [fetch_failures: 3, fetch_retry_at: retry_at, fetch_disabled_at: retry_at]
-      )
-
-      assert :reset = Mastodon.record_result(@handle, {:ok, []})
-
-      account = Repo.get!(SocialMediaAccount, account.id)
-      assert account.fetch_failures == 0
-      assert account.fetch_retry_at == nil
-      assert account.fetch_disabled_at == nil
-    end
-
-    test "an unknown handle records nothing but still classifies" do
-      assert {:retry_in_minutes, 15} =
-               Mastodon.record_result("ghost@nowhere.example", {:error, :transient})
-
-      assert :disabled = Mastodon.record_result("ghost@nowhere.example", {:error, :gone})
-      assert :reset = Mastodon.record_result("ghost@nowhere.example", {:ok, []})
-    end
-  end
-
-  describe "fetch gating" do
-    test "fetchable?/1 honors the retry window and permanent deactivation" do
-      account = mastodon_account()
-      assert Mastodon.fetchable?(account)
-
-      future = DateTime.add(DateTime.utc_now(:second), 600)
-      past = DateTime.add(DateTime.utc_now(:second), -600)
-
-      refute Mastodon.fetchable?(%{account | fetch_retry_at: future})
-      assert Mastodon.fetchable?(%{account | fetch_retry_at: past})
-      refute Mastodon.fetchable?(%{account | fetch_disabled_at: past})
-    end
-
-    test "request_posts/1 is a no-op while the feature flag is off" do
-      # config/test.exs turns :fetch_mastodon_posts off.
-      assert Mastodon.request_posts(mastodon_account()) == :ignored
-    end
-
-    test "editing the handle resets the fetch state" do
-      account = mastodon_account()
-
-      Repo.update_all(SocialMediaAccount,
-        set: [
-          fetch_failures: 8,
-          fetch_disabled_at: DateTime.utc_now(:second),
-          fetch_retry_at: DateTime.utc_now(:second)
-        ]
-      )
-
-      account = Repo.get!(SocialMediaAccount, account.id)
-
-      {:ok, updated} =
-        account
-        |> SocialMediaAccount.changeset(%{"value" => "bob@other.example"})
-        |> Repo.update()
-
-      assert updated.fetch_failures == 0
-      assert updated.fetch_retry_at == nil
-      assert updated.fetch_disabled_at == nil
-
-      # An unrelated update (same handle) keeps the state untouched.
-      unchanged = SocialMediaAccount.changeset(updated, %{"value" => "bob@other.example"})
-      assert Ecto.Changeset.get_change(unchanged, :fetch_failures) == nil
-    end
-
-    test "accounts_of/1 lists every Mastodon account, other providers excluded" do
-      user = insert_activated_user()
-      insert(:social_media_account, provider: "GitHub", value: "octo", user: user)
-      one = insert(:social_media_account, provider: "Mastodon", value: @handle, user: user)
-
-      two =
-        insert(:social_media_account, provider: "Mastodon", value: "b@other.social", user: user)
-
-      loaded = Repo.preload(user, :social_media_accounts)
-
-      assert Enum.map(Mastodon.accounts_of(loaded), & &1.id) |> Enum.sort() ==
-               Enum.sort([one.id, two.id])
-
-      assert Mastodon.accounts_of(Repo.preload(insert_activated_user(), :social_media_accounts)) ==
-               []
     end
   end
 end

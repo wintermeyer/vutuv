@@ -257,7 +257,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
-      assert html =~ ~s(id="mastodon-feed-form")
+      assert html =~ ~s(id="social-feed-form")
       assert html =~ "show_mastodon_feed?"
     end
 

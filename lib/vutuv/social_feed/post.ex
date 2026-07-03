@@ -1,9 +1,9 @@
-defmodule Vutuv.Mastodon.Post do
+defmodule Vutuv.SocialFeed.Post do
   @moduledoc """
-  One Mastodon status as the profile page shows it: sanitized plain text, the
-  status URL on its home instance, and when it was posted. Built exclusively
-  by `Vutuv.Mastodon.fetch_posts/1`; the `text` is already stripped to plain
-  text there (never render it with `raw/1`).
+  One remote social post as the profile page shows it: sanitized plain text,
+  the post's URL on its home network, and when it was posted. Built
+  exclusively by the provider clients' `fetch_posts/1`; the `text` is already
+  reduced to plain text there (never render it with `raw/1`).
 
   `html` is presentation data the web layer fills in
   (`VutuvWeb.UserProfileLive` via `VutuvWeb.Markdown.render_remote/1`): the

@@ -12,13 +12,14 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     # the reorder/move actions), never cast from user params. NULLs sort last so
     # legacy rows fall back to creation order until reordered. See Vutuv.Ordering.
     field(:position, :integer)
-    # Remote-fetch health for the inline Mastodon feed (Vutuv.Mastodon); only
-    # meaningful for provider "Mastodon". Managed by Vutuv.Mastodon after each
-    # fetch, never cast from user params: consecutive failures walk an
-    # escalating backoff ladder via fetch_retry_at, and fetch_disabled_at
-    # switches updating off for good (ladder exhausted, or a hard error such
-    # as the account no longer existing). changeset/2 resets all three when
-    # the handle changes, so fixing a typo re-enables the feed.
+    # Remote-fetch health for the inline social feeds (Vutuv.SocialFeed);
+    # only meaningful for the feed-capable providers (Mastodon, Bluesky).
+    # Managed by Vutuv.SocialFeed after each fetch, never cast from user
+    # params: consecutive failures walk an escalating backoff ladder via
+    # fetch_retry_at, and fetch_disabled_at switches updating off for good
+    # (ladder exhausted, or a hard error such as the account no longer
+    # existing). changeset/2 resets all three when the handle changes, so
+    # fixing a typo re-enables the feed.
     field(:fetch_failures, :integer, default: 0)
     field(:fetch_retry_at, :utc_datetime)
     field(:fetch_disabled_at, :utc_datetime)
@@ -69,10 +70,14 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"GitHub", ""}
   ]
 
-  # A single-token handle (every provider but Mastodon); a leading "@" is optional.
+  # A single-token handle (every provider but Mastodon and Bluesky); a
+  # leading "@" is optional.
   @handle_format ~r/^@?[A-Za-z0-9._-]+$/u
   # A federated Mastodon handle: user@instance.tld.
   @mastodon_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
+  # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
+  # domain) — the same shape Vutuv.Bluesky embeds in the AppView query.
+  @bluesky_format ~r/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -113,6 +118,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
         parsed =
           case get_field(changeset, :provider) do
             "Mastodon" -> parse_mastodon(value)
+            "Bluesky" -> parse_bluesky(value)
             _ -> parse_value(value)
           end
 
@@ -138,6 +144,23 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     end
   end
 
+  # A Bluesky handle is a domain, lowercase by definition. Accept a bare
+  # handle, a leading "@", a pasted bsky.app profile URL, or a plain name
+  # without a dot (assume the default .bsky.social namespace), and store the
+  # full domain form Vutuv.Bluesky fetches by.
+  defp parse_bluesky(value) do
+    case parse_value(value) do
+      handle when is_binary(handle) ->
+        handle = String.downcase(handle)
+        if String.contains?(handle, "."), do: handle, else: handle <> ".bsky.social"
+
+      # Nothing extractable (e.g. a lone "@"); keep the input for
+      # validate_value/1 to reject with the Bluesky-specific message.
+      _ ->
+        value
+    end
+  end
+
   defp validate_value(changeset) do
     provider = get_field(changeset, :provider)
 
@@ -147,10 +170,14 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   end
 
   defp valid_value?("Mastodon", value), do: Regex.match?(@mastodon_format, value)
+  defp valid_value?("Bluesky", value), do: Regex.match?(@bluesky_format, value)
   defp valid_value?(_provider, value), do: Regex.match?(@handle_format, value)
 
   defp invalid_message("Mastodon"),
     do: "Enter your full Mastodon handle, e.g. @user@instance.social"
+
+  defp invalid_message("Bluesky"),
+    do: "Enter your Bluesky handle, e.g. name.bsky.social"
 
   defp invalid_message(_), do: "Invalid account name"
 

@@ -27,7 +27,6 @@ defmodule VutuvWeb.UserProfileLive do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
-  alias Vutuv.Mastodon
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
@@ -37,6 +36,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Repo
   alias Vutuv.Social
   alias Vutuv.Social.Follow
+  alias Vutuv.SocialFeed
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
@@ -78,10 +78,10 @@ defmodule VutuvWeb.UserProfileLive do
       |> assign(:shell_path, session["request_path"])
       |> load_profile()
 
-    # Only a real visitor triggers the (cached, single-flight) Mastodon
+    # Only a real visitor triggers the (cached, single-flight) social feed
     # fetches; the disconnected SEO pass stays a no-network render. Rebinds:
     # the accounts being fetched carry the loading spinner on their rows.
-    socket = if connected?(socket), do: request_mastodon_posts(socket), else: socket
+    socket = if connected?(socket), do: request_social_feed_posts(socket), else: socket
 
     {:ok, socket}
   end
@@ -272,20 +272,22 @@ defmodule VutuvWeb.UserProfileLive do
     posts_viewer = posts_scope(socket.assigns.preview_as, socket.assigns.current_user)
     posts = Vutuv.Posts.profile_posts(socket.assigns.user, posts_viewer)
 
-    {:noreply, socket |> assign(:posts, posts) |> refresh_mastodon_stamps()}
+    {:noreply, socket |> assign(:posts, posts) |> refresh_social_feed_stamps()}
   end
 
-  # The Mastodon FeedCache answered a mount-time request (or a concurrent
+  # The social feed cache answered a mount-time request (or a concurrent
   # visitor's fetch this page joined — single-flight): drop the account's
   # loading spinner and, on success, fold the feed into the mixed posts card.
   # An error keeps the page exactly as it is (fail silent).
-  def handle_info({:mastodon_posts, handle, result}, socket) do
-    if Enum.any?(socket.assigns.mastodon_accounts, &(&1.value == handle)) do
+  def handle_info({:social_feed_posts, provider, handle, result}, socket) do
+    key = {provider, handle}
+
+    if Enum.any?(socket.assigns.social_feed_accounts, &(feed_key(&1) == key)) do
       socket =
         socket
-        |> assign(:mastodon_loading, MapSet.delete(socket.assigns.mastodon_loading, handle))
-        |> put_mastodon_feed(handle, result)
-        |> assign_mastodon_entries()
+        |> assign(:social_feed_loading, MapSet.delete(socket.assigns.social_feed_loading, key))
+        |> put_social_feed(key, result)
+        |> assign_social_feed_entries()
 
       {:noreply, socket}
     else
@@ -295,21 +297,24 @@ defmodule VutuvWeb.UserProfileLive do
 
   # The fetch never answered (a crashed cache loses its waiters): stop the
   # spinner rather than let it spin forever; the posts simply stay absent.
-  def handle_info({:mastodon_loading_timeout, handle}, socket) do
-    loading = MapSet.delete(socket.assigns.mastodon_loading, handle)
-    {:noreply, assign(socket, :mastodon_loading, loading)}
+  def handle_info({:social_feed_loading_timeout, key}, socket) do
+    loading = MapSet.delete(socket.assigns.social_feed_loading, key)
+    {:noreply, assign(socket, :social_feed_loading, loading)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
 
-  # The Mastodon posts' <.post_time> wording ("09:50 Uhr" -> "Gestern, ...")
+  # The remote posts' <.post_time> wording ("09:50 Uhr" -> "Gestern, ...")
   # is computed at render, but the feed data itself is unchanged at midnight
   # and assign/3 skips equal values — flip through empty so the card
   # re-renders with the new Berlin day, like the vutuv posts above.
-  defp refresh_mastodon_stamps(socket) do
-    case socket.assigns.mastodon_entries do
-      [] -> socket
-      entries -> socket |> assign(:mastodon_entries, []) |> assign(:mastodon_entries, entries)
+  defp refresh_social_feed_stamps(socket) do
+    case socket.assigns.social_feed_entries do
+      [] ->
+        socket
+
+      entries ->
+        socket |> assign(:social_feed_entries, []) |> assign(:social_feed_entries, entries)
     end
   end
 
@@ -468,40 +473,40 @@ defmodule VutuvWeb.UserProfileLive do
     # Builds the social slice (counts, header pill state, follow previews); reads
     # :view_viewer / :recommended_users / :preview_as set above, so it goes last.
     |> put_social_assigns(user)
-    |> put_mastodon_assigns(user)
+    |> put_social_feed_assigns(user)
   end
 
-  # The inline Mastodon feeds (Vutuv.Mastodon): every Mastodon account on the
-  # profile, whatever the FeedCache already holds for each — a synchronous ETS
-  # read, never the network. The fast path runs on connected sockets only, so
-  # the disconnected (SEO / crawler) pass renders without posts, consistent
-  # with the agent formats (ProfileDoc deliberately excludes them).
-  defp put_mastodon_assigns(socket, user) do
-    accounts =
-      if Mastodon.enabled?() and user.show_mastodon_feed? do
-        Mastodon.accounts_of(user)
-      else
-        []
-      end
-
-    feeds = if connected?(socket), do: cached_mastodon_feeds(accounts), else: %{}
+  # The inline social feeds (Vutuv.SocialFeed): every feed-capable account
+  # (Mastodon, Bluesky) on the profile, whatever the cache already holds for
+  # each — a synchronous ETS read, never the network. The fast path runs on
+  # connected sockets only, so the disconnected (SEO / crawler) pass renders
+  # without posts, consistent with the agent formats (ProfileDoc deliberately
+  # excludes them).
+  defp put_social_feed_assigns(socket, user) do
+    accounts = if user.show_mastodon_feed?, do: SocialFeed.accounts_of(user), else: []
+    feeds = if connected?(socket), do: cached_social_feeds(accounts), else: %{}
 
     socket
-    |> assign(:mastodon_accounts, accounts)
-    |> assign(:mastodon_feeds, feeds)
-    |> assign(:mastodon_loading, MapSet.new())
-    |> assign_mastodon_entries()
+    |> assign(:social_feed_accounts, accounts)
+    |> assign(:social_feeds, feeds)
+    |> assign(:social_feed_loading, MapSet.new())
+    |> assign_social_feed_entries()
   end
+
+  # An account's key in the feeds map / loading set: the same {provider,
+  # handle} pair the cache keys by (two providers could store an identical
+  # value).
+  defp feed_key(account), do: {account.provider, account.value}
 
   # The strict %Feed{} matches double as armor: an entry written by an older
   # code version (dev code reload; the ETS table outlives the modules) must
   # degrade to "no posts", never crash the profile mount.
-  defp cached_mastodon_feeds(accounts) do
+  defp cached_social_feeds(accounts) do
     accounts
     |> Enum.flat_map(fn account ->
-      with {:ok, %Mastodon.Feed{} = feed} <- Mastodon.cached_posts(account.value),
-           %Mastodon.Feed{} = rendered <- rendered_mastodon_feed(feed) do
-        [{account.value, rendered}]
+      with {:ok, %SocialFeed.Feed{} = feed} <- SocialFeed.cached_posts(account),
+           %SocialFeed.Feed{} = rendered <- rendered_social_feed(feed) do
+        [{feed_key(account), rendered}]
       else
         _ -> []
       end
@@ -509,40 +514,40 @@ defmodule VutuvWeb.UserProfileLive do
     |> Map.new()
   end
 
-  defp put_mastodon_feed(socket, handle, {:ok, %Mastodon.Feed{} = feed}) do
-    case rendered_mastodon_feed(feed) do
-      %Mastodon.Feed{} = rendered ->
-        feeds = Map.put(socket.assigns.mastodon_feeds, handle, rendered)
-        assign(socket, :mastodon_feeds, feeds)
+  defp put_social_feed(socket, key, {:ok, %SocialFeed.Feed{} = feed}) do
+    case rendered_social_feed(feed) do
+      %SocialFeed.Feed{} = rendered ->
+        feeds = Map.put(socket.assigns.social_feeds, key, rendered)
+        assign(socket, :social_feeds, feeds)
 
       _stale ->
         socket
     end
   end
 
-  defp put_mastodon_feed(socket, _handle, _error), do: socket
+  defp put_social_feed(socket, _key, _error), do: socket
 
   # The mixed timeline the "Social media posts" card renders: every fetched
   # account's posts tagged with their feed (name/avatar/url), newest first —
-  # a member with several Mastodon accounts gets one merged list.
-  defp assign_mastodon_entries(socket) do
+  # a member's Mastodon and Bluesky accounts merge into one list.
+  defp assign_social_feed_entries(socket) do
     entries =
-      socket.assigns.mastodon_feeds
-      |> Enum.flat_map(fn {_handle, feed} -> Enum.map(feed.posts, &%{feed: feed, post: &1}) end)
+      socket.assigns.social_feeds
+      |> Enum.flat_map(fn {_key, feed} -> Enum.map(feed.posts, &%{feed: feed, post: &1}) end)
       |> Enum.sort_by(& &1.post.created_at, {:desc, DateTime})
 
-    assign(socket, :mastodon_entries, entries)
+    assign(socket, :social_feed_entries, entries)
   end
 
   # The cache carries the domain feed (plain text); the page shows each post
   # through the member-post pipeline (Markdown, autolinked URLs, #hashtags to
-  # our tag pages — @mentions deliberately not linked, they name fediverse
+  # our tag pages — @mentions deliberately not linked, they name remote
   # accounts, not vutuv members). Rendered once per arriving feed, not per
   # re-render. Map.put (not struct-update) plus the rescue is stale-shape
   # armor: the ETS table outlives a dev code reload, so an entry written by an
   # older module version may carry posts without the newest struct fields —
   # that must degrade to "no posts", never crash the profile mount.
-  defp rendered_mastodon_feed(%Mastodon.Feed{} = feed) do
+  defp rendered_social_feed(%SocialFeed.Feed{} = feed) do
     %{
       feed
       | posts: Enum.map(feed.posts, &Map.put(&1, :html, VutuvWeb.Markdown.render_remote(&1.text)))
@@ -553,34 +558,34 @@ defmodule VutuvWeb.UserProfileLive do
 
   # How long an account row may show its loading spinner before giving up
   # (the fetch itself is hard-capped well below this).
-  @mastodon_loading_timeout :timer.seconds(15)
+  @social_feed_loading_timeout :timer.seconds(15)
 
-  # Ask the FeedCache for every feed not already rendered; each reply arrives
-  # as a {:mastodon_posts, ...} message. request_posts/1 re-checks each
-  # account's persisted backoff/deactivation gate, so a struggling instance is
+  # Ask the cache for every feed not already rendered; each reply arrives as
+  # a {:social_feed_posts, ...} message. request_posts/1 re-checks each
+  # account's persisted backoff/deactivation gate, so a struggling server is
   # left in peace no matter how often the profile is opened. Accounts actually
-  # being fetched go into :mastodon_loading — their rows show the spinner.
-  defp request_mastodon_posts(socket) do
-    Enum.reduce(socket.assigns.mastodon_accounts, socket, fn account, socket ->
-      if Map.has_key?(socket.assigns.mastodon_feeds, account.value) do
+  # being fetched go into :social_feed_loading — their rows show the spinner.
+  defp request_social_feed_posts(socket) do
+    Enum.reduce(socket.assigns.social_feed_accounts, socket, fn account, socket ->
+      if Map.has_key?(socket.assigns.social_feeds, feed_key(account)) do
         socket
       else
-        request_one_mastodon_feed(socket, account)
+        request_one_social_feed(socket, account)
       end
     end)
   end
 
-  defp request_one_mastodon_feed(socket, account) do
-    case Mastodon.request_posts(account) do
+  defp request_one_social_feed(socket, account) do
+    case SocialFeed.request_posts(account) do
       :ok ->
         Process.send_after(
           self(),
-          {:mastodon_loading_timeout, account.value},
-          @mastodon_loading_timeout
+          {:social_feed_loading_timeout, feed_key(account)},
+          @social_feed_loading_timeout
         )
 
-        loading = MapSet.put(socket.assigns.mastodon_loading, account.value)
-        assign(socket, :mastodon_loading, loading)
+        loading = MapSet.put(socket.assigns.social_feed_loading, feed_key(account))
+        assign(socket, :social_feed_loading, loading)
 
       :ignored ->
         socket

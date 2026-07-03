@@ -84,9 +84,10 @@ defmodule Vutuv.Accounts.User do
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
     field(:show_online_status?, :boolean, default: true)
-    # Whether a listed Mastodon account shows its latest public posts inline on
-    # the profile's Social Media card (Vutuv.Mastodon). Default on; the opt-out
-    # lives on the Privacy settings page.
+    # Whether the profile's "Social media posts" card shows the latest public
+    # posts of the listed feed-capable accounts (Vutuv.SocialFeed: Mastodon +
+    # Bluesky — the column name predates Bluesky and gates the whole card).
+    # Default on; the opt-out lives on the Privacy settings page.
     field(:show_mastodon_feed?, :boolean, default: true)
     # The viewer's map preferences (set on the account settings hub, applied to
     # every address this member looks at): which map services to show and which

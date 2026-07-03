@@ -22,11 +22,11 @@ defmodule Vutuv.Application do
         # Must start after PubSub (it depends on it) and before the Endpoint.
         VutuvWeb.Presence,
         {Task.Supervisor, name: Vutuv.TaskSupervisor},
-        # Caches + single-flights the inline Mastodon feed fetches. Starts
-        # after the TaskSupervisor (its fetch tasks run under it); does no
-        # work until a profile visit asks, and :fetch_mastodon_posts gates
-        # that in tests.
-        Vutuv.Mastodon.FeedCache,
+        # Caches + single-flights the inline social feed fetches (Mastodon,
+        # Bluesky). Starts after the TaskSupervisor (its fetch tasks run under
+        # it); does no work until a profile visit asks, and the per-provider
+        # feature flags gate that in tests.
+        Vutuv.SocialFeed.Cache,
         Vutuv.RateLimiter,
         VutuvWeb.Endpoint
       ] ++

@@ -58,6 +58,41 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       refute changeset.valid?
       assert changeset.errors[:value]
     end
+
+    test "rejects a Mastodon-style handle for Bluesky" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Bluesky",
+          value: "alice@example.social"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+  end
+
+  describe "Bluesky value parsing" do
+    test "stores the handle lowercased, stripping a leading @" do
+      assert value_for(%{provider: "Bluesky", value: "@Alice.Bsky.Social"}) ==
+               "alice.bsky.social"
+    end
+
+    test "a bare name without a dot gets the default .bsky.social namespace" do
+      assert value_for(%{provider: "Bluesky", value: "alice"}) == "alice.bsky.social"
+    end
+
+    test "a custom-domain handle is stored as typed" do
+      assert value_for(%{provider: "Bluesky", value: "alice.example.com"}) ==
+               "alice.example.com"
+    end
+
+    test "extracts the handle from a pasted profile URL" do
+      assert value_for(%{
+               provider: "Bluesky",
+               value: "https://bsky.app/profile/alice.bsky.social"
+             }) ==
+               "alice.bsky.social"
+    end
   end
 
   describe "Mastodon value parsing" do

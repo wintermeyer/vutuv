@@ -732,15 +732,14 @@ the resulting ~200px rail width. --%>
               class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
             />
             <span class="truncate font-medium">{social_handle(account)}</span>
-            <%!-- The Mastodon feed for this account is being fetched in the
-            background (Vutuv.Mastodon); the spinner disappears when the
-            result lands (or the 15 s give-up timer fires). --%>
+            <%!-- The social feed for this account (Mastodon, Bluesky) is
+            being fetched in the background (Vutuv.SocialFeed); the spinner
+            disappears when the result lands (or the 15 s give-up timer
+            fires). Only requested accounts ever enter the loading set, so no
+            provider check is needed here. --%>
             <span
-              :if={
-                account.provider == "Mastodon" and
-                  MapSet.member?(@mastodon_loading, account.value)
-              }
-              data-mastodon-loading
+              :if={MapSet.member?(@social_feed_loading, {account.provider, account.value})}
+              data-feed-loading
               title={gettext("Loading posts")}
               class="shrink-0"
             >
@@ -767,21 +766,21 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
-    <%!-- The mixed social-network feed (Vutuv.Mastodon): the latest public
-    posts of every Mastodon account listed above, merged newest-first into
-    one card, fetched after connect and cached. Renders only once something
-    arrived — while loading, on fetch errors, with the owner's opt-out off,
-    and on the disconnected (SEO) pass there is simply no card. Each entry
-    mirrors the post card's author header (avatar + name + Berlin time
-    linking to the status), without the action bar and menu — the avatar is
-    the server-fetched data URI (never a hotlink; a visitor's browser must
-    not contact the federated instance), falling back to the same initials
-    tile a picture-less member gets. --%>
-    <.card :if={@mastodon_entries != []} id="profile-social-posts">
+    <%!-- The mixed social-network feed (Vutuv.SocialFeed): the latest public
+    posts of every Mastodon and Bluesky account listed above, merged
+    newest-first into one card, fetched after connect and cached. Renders
+    only once something arrived — while loading, on fetch errors, with the
+    owner's opt-out off, and on the disconnected (SEO) pass there is simply
+    no card. Each entry mirrors the post card's author header (avatar + name
+    + Berlin time linking to the post), without the action bar and menu — the
+    avatar is the server-fetched data URI (never a hotlink; a visitor's
+    browser must not contact the remote network), falling back to the same
+    initials tile a picture-less member gets. --%>
+    <.card :if={@social_feed_entries != []} id="profile-social-posts">
       <.section_header title={gettext("Social media posts")} />
       <ul class="-mb-2 divide-y divide-slate-100 dark:divide-slate-800">
         <li
-          :for={entry <- @mastodon_entries}
+          :for={entry <- @social_feed_entries}
           class="relative py-3 transition first:pt-1 last:pb-2 hover:bg-slate-50 dark:hover:bg-slate-800/40"
         >
           <%!-- Stretched link: clicking anywhere on the row that is not
@@ -833,7 +832,7 @@ the resulting ~200px rail width. --%>
                   class="shrink-0 text-sm text-slate-500 hover:text-brand-700"
                 >
                   <.post_time
-                    id={"mastodon-time-#{entry.feed.handle}-#{entry.post.id}"}
+                    id={"feed-time-#{entry.feed.handle}-#{entry.post.id}"}
                     at={entry.post.created_at}
                   />
                 </.link>

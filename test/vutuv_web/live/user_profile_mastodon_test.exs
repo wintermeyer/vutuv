@@ -2,20 +2,21 @@ defmodule VutuvWeb.UserProfileMastodonTest do
   @moduledoc """
   The inline Mastodon feed on the profile's Social Media card. Not async: the
   feature flag and the Req seam live in the application env, and the app-wide
-  FeedCache writes fetch state through the shared SQL Sandbox connection.
-  Every test uses its own handle so the shared cache cannot leak between them.
+  social feed cache writes fetch state through the shared SQL Sandbox
+  connection. Every test uses its own handle so the shared cache cannot leak
+  between them.
   """
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
 
-  alias Vutuv.Mastodon.Feed
-  alias Vutuv.Mastodon.FeedCache
-  alias Vutuv.Mastodon.Post
   alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.SocialFeed.Cache
+  alias Vutuv.SocialFeed.Feed
+  alias Vutuv.SocialFeed.Post
 
   @section "#profile-social-posts"
-  @spinner "#profile-social-media [data-mastodon-loading]"
+  @spinner "#profile-social-media [data-feed-loading]"
 
   defp unique_handle, do: "alice#{System.unique_integer([:positive])}@example.social"
 
@@ -28,8 +29,8 @@ defmodule VutuvWeb.UserProfileMastodonTest do
   defp enable_mastodon do
     Application.put_env(:vutuv, :fetch_mastodon_posts, true)
     on_exit(fn -> Application.put_env(:vutuv, :fetch_mastodon_posts, false) end)
-    FeedCache.reset()
-    on_exit(fn -> FeedCache.reset() end)
+    Cache.reset()
+    on_exit(fn -> Cache.reset() end)
   end
 
   defp stub_mastodon(fun) do
@@ -194,8 +195,8 @@ defmodule VutuvWeb.UserProfileMastodonTest do
   end
 
   defp warm_cache(handle) do
-    FeedCache.request(handle, self())
-    assert_receive {:mastodon_posts, ^handle, result}
+    Cache.request("Mastodon", handle, self())
+    assert_receive {:social_feed_posts, "Mastodon", ^handle, result}
     result
   end
 
@@ -258,7 +259,7 @@ defmodule VutuvWeb.UserProfileMastodonTest do
         ]
       }
 
-      send(view.pid, {:mastodon_posts, handle, {:ok, feed}})
+      send(view.pid, {:social_feed_posts, "Mastodon", handle, {:ok, feed}})
       assert render(view) =~ "Fresh toot"
       assert has_element?(view, @section)
       # No avatar in the feed -> the initials tile stands in, like a
@@ -266,7 +267,11 @@ defmodule VutuvWeb.UserProfileMastodonTest do
       assert has_element?(view, ~s(#{@section} span[data-avatar]))
 
       # A result for some other handle changes nothing.
-      send(view.pid, {:mastodon_posts, "other@example.social", {:ok, %{feed | posts: []}}})
+      send(
+        view.pid,
+        {:social_feed_posts, "Mastodon", "other@example.social", {:ok, %{feed | posts: []}}}
+      )
+
       assert has_element?(view, @section)
     end
 
@@ -284,9 +289,9 @@ defmodule VutuvWeb.UserProfileMastodonTest do
       assert_receive {:req, "/api/v1/accounts/lookup", task_pid}
       # Join the fetch's waiter list so the test is notified from the same
       # fan-out as the view; the get_state call then syncs the view's mailbox.
-      FeedCache.request(handle, self())
+      Cache.request("Mastodon", handle, self())
       send(task_pid, :go)
-      assert_receive {:mastodon_posts, ^handle, {:ok, _}}
+      assert_receive {:social_feed_posts, "Mastodon", ^handle, {:ok, _}}
       _ = :sys.get_state(view.pid)
 
       refute has_element?(view, @spinner)
@@ -427,7 +432,7 @@ defmodule VutuvWeb.UserProfileMastodonTest do
 
       # Even a stray cache message cannot switch the feed on.
       feed = %Feed{name: "Alice", handle: handle, url: row_url(handle), posts: []}
-      send(view.pid, {:mastodon_posts, handle, {:ok, feed}})
+      send(view.pid, {:social_feed_posts, "Mastodon", handle, {:ok, feed}})
       refute has_element?(view, @section)
     end
   end

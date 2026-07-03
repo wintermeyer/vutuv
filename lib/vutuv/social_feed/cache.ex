@@ -1,49 +1,50 @@
-defmodule Vutuv.Mastodon.FeedCache do
+defmodule Vutuv.SocialFeed.Cache do
   @moduledoc """
-  The per-handle cache and fetch coordinator for the inline Mastodon feed.
+  The per-account cache and fetch coordinator for the inline social feeds
+  (`Vutuv.SocialFeed`).
 
   One GenServer owns a `read_concurrency` ETS table of
-  `{handle, result, expires_at}` rows (result is `{:ok, posts}` or
-  `{:error, reason}`); page processes read it directly through `lookup/2` and
-  never block on the network.
+  `{{provider, handle}, result, expires_at}` rows (result is `{:ok, %Feed{}}`
+  or `{:error, reason}`); page processes read it directly through `lookup/2`
+  and never block on the network.
 
   Every miss funnels through the GenServer, which is what makes the
   **single-flight guarantee** hold: a miss either starts exactly one
-  supervised fetch task for that handle or joins the waiter list of the one
+  supervised fetch task for that account or joins the waiter list of the one
   already in flight — N concurrent visitors of a popular profile at cache
   expiry produce exactly one outbound fetch, and every waiter gets the one
-  result as a `{:mastodon_posts, handle, result}` message. Failures are held
-  for exactly the account's backoff window (`Vutuv.Mastodon.record_result/2`
-  decides), so a struggling instance is not re-asked before its
-  `fetch_retry_at`.
+  result as a `{:social_feed_posts, provider, handle, result}` message.
+  Failures are held for exactly the account's backoff window
+  (`Vutuv.SocialFeed.record_result/3` decides), so a struggling server is not
+  re-asked before its `fetch_retry_at`.
 
   Like `Vutuv.Social.PopularUsers`, `name:`/`table:`/TTL opts are injectable
   so tests run isolated instances; the app-wide instance always starts (it
-  does no work until a page requests a fetch, and `Vutuv.Mastodon.enabled?/0`
-  gates that in tests).
+  does no work until a page requests a fetch, and the per-provider feature
+  flags gate that in tests).
   """
   use GenServer
 
   require Logger
 
-  alias Vutuv.Mastodon
-  alias Vutuv.Mastodon.Feed
+  alias Vutuv.SocialFeed
+  alias Vutuv.SocialFeed.Feed
 
   @table __MODULE__
   @posts_ttl :timer.minutes(15)
-  # A deactivated handle's ETS tombstone; the durable "never again" lives on
+  # A deactivated account's ETS tombstone; the durable "never again" lives on
   # the account row, this only spares the GenServer repeat visits.
   @disabled_ttl :timer.hours(48)
   @sweep_interval :timer.minutes(30)
 
   @doc """
-  The cached result for a handle: `{:ok, posts}`, `{:error, reason}`, or
-  `:miss` (absent, expired, or the table does not exist yet). A caller-side
-  ETS read; expired rows are left for the sweep.
+  The cached result for a `{provider, handle}` key: `{:ok, %Feed{}}`,
+  `{:error, reason}`, or `:miss` (absent, expired, or the table does not exist
+  yet). A caller-side ETS read; expired rows are left for the sweep.
   """
-  def lookup(handle, table \\ @table) do
-    case :ets.lookup(table, handle) do
-      [{^handle, result, expires_at}] ->
+  def lookup({_provider, _handle} = key, table \\ @table) do
+    case :ets.lookup(table, key) do
+      [{^key, result, expires_at}] ->
         if System.monotonic_time(:millisecond) < expires_at, do: result, else: :miss
 
       [] ->
@@ -54,12 +55,12 @@ defmodule Vutuv.Mastodon.FeedCache do
   end
 
   @doc """
-  Asks for a handle's posts; the result arrives at `pid` as a
-  `{:mastodon_posts, handle, result}` message — immediately when cached,
-  otherwise after the (single-flight) fetch.
+  Asks for an account's posts; the result arrives at `pid` as a
+  `{:social_feed_posts, provider, handle, result}` message — immediately when
+  cached, otherwise after the (single-flight) fetch.
   """
-  def request(handle, pid, server \\ __MODULE__) do
-    GenServer.cast(server, {:fetch, handle, pid})
+  def request(provider, handle, pid, server \\ __MODULE__) do
+    GenServer.cast(server, {:fetch, {provider, handle}, pid})
   end
 
   @doc "Drops every cached entry (tests)."
@@ -85,9 +86,9 @@ defmodule Vutuv.Mastodon.FeedCache do
       table: table,
       posts_ttl: Keyword.get(opts, :posts_ttl, @posts_ttl),
       sweep_interval: Keyword.get(opts, :sweep_interval, @sweep_interval),
-      # handle => [waiter pids] — one key per fetch in flight.
+      # {provider, handle} => [waiter pids] — one key per fetch in flight.
       inflight: %{},
-      # task ref => handle, to route the task's reply and DOWN.
+      # task ref => {provider, handle}, to route the task's reply and DOWN.
       refs: %{}
     }
 
@@ -96,35 +97,37 @@ defmodule Vutuv.Mastodon.FeedCache do
   end
 
   @impl true
-  def handle_cast({:fetch, handle, pid}, state) do
-    case lookup(handle, state.table) do
+  def handle_cast({:fetch, key, pid}, state) do
+    case lookup(key, state.table) do
       :miss ->
-        {:noreply, start_or_join(handle, pid, state)}
+        {:noreply, start_or_join(key, pid, state)}
 
       result ->
         # Filled since the caller's own lookup missed (or it never looked):
         # answer straight from the cache.
-        send(pid, {:mastodon_posts, handle, result})
+        notify(pid, key, result)
         {:noreply, state}
     end
   end
 
   # The single-flight core: a miss either joins the waiter list of the fetch
-  # already running for this handle — never a second fetch — or starts the one
-  # supervised fetch task.
-  defp start_or_join(handle, pid, state) do
-    if Map.has_key?(state.inflight, handle) do
-      put_in(state.inflight[handle], [pid | state.inflight[handle]])
+  # already running for this account — never a second fetch — or starts the
+  # one supervised fetch task.
+  defp start_or_join(key, pid, state) do
+    if Map.has_key?(state.inflight, key) do
+      put_in(state.inflight[key], [pid | state.inflight[key]])
     else
+      {provider, handle} = key
+
       task =
         Task.Supervisor.async_nolink(Vutuv.TaskSupervisor, fn ->
-          Mastodon.fetch_posts(handle)
+          SocialFeed.fetch_posts(provider, handle)
         end)
 
       %{
         state
-        | inflight: Map.put(state.inflight, handle, [pid]),
-          refs: Map.put(state.refs, task.ref, handle)
+        | inflight: Map.put(state.inflight, key, [pid]),
+          refs: Map.put(state.refs, task.ref, key)
       }
     end
   end
@@ -143,7 +146,7 @@ defmodule Vutuv.Mastodon.FeedCache do
 
   # The fetch task crashed before replying (fetch_posts rescues, so this is
   # unexpected); count it as a transient failure so waiters never hang and the
-  # instance still gets its backoff.
+  # server still gets its backoff.
   def handle_info({:DOWN, ref, :process, _pid, _reason}, state)
       when is_map_key(state.refs, ref) do
     finish(ref, {:error, :transient}, state)
@@ -161,32 +164,35 @@ defmodule Vutuv.Mastodon.FeedCache do
   def handle_info(_other, state), do: {:noreply, state}
 
   defp finish(ref, result, state) do
-    {handle, refs} = Map.pop(state.refs, ref)
-    {waiters, inflight} = Map.pop(state.inflight, handle, [])
+    {key, refs} = Map.pop(state.refs, ref)
+    {waiters, inflight} = Map.pop(state.inflight, key, [])
 
     ttl =
-      case record_result(handle, result, state) do
+      case record_result(key, result) do
         :reset -> state.posts_ttl
         {:retry_in_minutes, minutes} -> :timer.minutes(minutes)
         :disabled -> @disabled_ttl
       end
 
-    :ets.insert(state.table, {handle, result, System.monotonic_time(:millisecond) + ttl})
+    :ets.insert(state.table, {key, result, System.monotonic_time(:millisecond) + ttl})
 
     # Waiters that navigated away are dead pids — send/2 to those is a no-op.
-    for pid <- waiters, do: send(pid, {:mastodon_posts, handle, result})
+    for pid <- waiters, do: notify(pid, key, result)
 
     {:noreply, %{state | refs: refs, inflight: inflight}}
   end
 
+  defp notify(pid, {provider, handle}, result),
+    do: send(pid, {:social_feed_posts, provider, handle, result})
+
   # The backoff bookkeeping must never take the cache down with it; on a DB
   # hiccup fall back to the first rung so nothing is hammered meanwhile.
-  defp record_result(handle, result, _state) do
-    Mastodon.record_result(handle, result)
+  defp record_result({provider, handle}, result) do
+    SocialFeed.record_result(provider, handle, result)
   rescue
     error ->
       Logger.warning(
-        "mastodon fetch state for #{inspect(handle)} not recorded: #{inspect(error)}"
+        "social feed fetch state for #{inspect({provider, handle})} not recorded: #{inspect(error)}"
       )
 
       case result do
