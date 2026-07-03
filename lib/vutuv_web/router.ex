@@ -141,6 +141,15 @@ defmodule VutuvWeb.Router do
     # (vutuv.de/benutzername). Both are ReservedSlugs so no member can shadow them.
     get("/username", PageController, :username_placeholder)
     get("/benutzername", PageController, :username_placeholder)
+    # The July 2026 newsletter shipped its profile link with the {{username}}
+    # merge tag unsubstituted inside the href (the Markdown autolinker had
+    # percent-encoded the braces, hiding the tag from the substitution), so
+    # thousands of inboxes link to /%7B%7Busername%7D%7D. Phoenix matches
+    # routes on percent-DECODED segments, so this literal route catches those
+    # clicks: logged-in members go to their own profile (what the link meant),
+    # everyone else gets the placeholder helper. Braces are invalid in
+    # usernames, so no member can ever shadow it.
+    get("/{{username}}", PageController, :newsletter_username_placeholder)
     get("/listings/most_followed_users", PageController, :most_followed_users)
 
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it

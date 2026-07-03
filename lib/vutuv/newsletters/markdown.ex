@@ -13,7 +13,12 @@ defmodule Vutuv.Newsletters.Markdown do
   Merge variables use a `{{name}}` syntax that survives Earmark untouched, so the
   body is rendered to HTML **once** and the per-recipient values are substituted
   into the finished HTML afterwards (`apply_vars/3`), HTML-escaped for the HTML
-  body and raw for the plain-text body and the subject line.
+  body and raw for the plain-text body and the subject line. One exception:
+  Earmark's autolinker percent-encodes the braces of a tag inside a bare URL's
+  `href` (`/{{username}}` becomes `/%7B%7Busername%7D%7D`, invisible to
+  `apply_vars/3` while the link *text* still substitutes - a newsletter once
+  shipped 3,075 broken profile links that way), so `style_nodes/2` decodes those
+  back to the literal form as part of the render.
 
   ## Click tracking
 
@@ -65,6 +70,12 @@ defmodule Vutuv.Newsletters.Markdown do
   }
 
   @var_re ~r/\{\{\s*([a-zA-Z_]+)\s*\}\}/
+
+  # A merge tag whose braces Earmark's autolinker percent-encoded inside an
+  # href. Decoded back to the literal form during the render so `apply_vars/3`
+  # reaches link targets too; targeted at exactly the tag shape (no blanket
+  # href-decoding).
+  @encoded_var_re ~r/%7B%7B([a-zA-Z_]+)%7D%7D/i
 
   @doc """
   The merge variables a newsletter body / subject may use, with a short
@@ -143,7 +154,8 @@ defmodule Vutuv.Newsletters.Markdown do
   end
 
   defp style_node({tag, attrs, content, meta}, hosts) do
-    {tag, attrs |> with_style(tag) |> track_link(tag, hosts), style_nodes(content, hosts), meta}
+    styled = attrs |> with_style(tag) |> decode_merge_tags(tag) |> track_link(tag, hosts)
+    {tag, styled, style_nodes(content, hosts), meta}
   end
 
   # Text nodes (binaries) and anything else pass through unchanged.
@@ -180,6 +192,18 @@ defmodule Vutuv.Newsletters.Markdown do
       :error -> attrs
     end
   end
+
+  # Restores percent-encoded merge tags in an <a>'s href to their literal
+  # `{{name}}` form (see @encoded_var_re). Always on, not gated on tracking -
+  # the admin preview substitutes the same way the send does.
+  defp decode_merge_tags(attrs, "a") do
+    Enum.map(attrs, fn
+      {"href", url} -> {"href", Regex.replace(@encoded_var_re, url, "{{\\1}}")}
+      other -> other
+    end)
+  end
+
+  defp decode_merge_tags(attrs, _tag), do: attrs
 
   # Appends the click-tracking placeholder to an internal link's href. Only
   # touches <a> tags, and only when tracking is on (hosts != []). The visible

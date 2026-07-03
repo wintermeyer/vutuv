@@ -198,6 +198,28 @@ defmodule VutuvWeb.PageControllerTest do
     end
   end
 
+  describe "GET /{{username}} (the unsubstituted newsletter merge tag)" do
+    # The July 2026 newsletter shipped its profile link with the {{username}}
+    # merge tag unsubstituted inside the href, so 3,075 inboxes hold a link to
+    # /%7B%7Busername%7D%7D. Phoenix matches routes on percent-decoded
+    # segments, so a literal /{{username}} route catches those clicks: a
+    # logged-in member is taken where the newsletter meant to send them -
+    # their own profile - and everyone else gets the placeholder explanation.
+    test "redirects a logged-in member to their own profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = get(conn, "/%7B%7Busername%7D%7D")
+
+      assert redirected_to(conn) == ~p"/#{user}"
+    end
+
+    test "shows the placeholder helper to an anonymous visitor", %{conn: conn} do
+      body = conn |> get("/%7B%7Busername%7D%7D") |> html_response(404)
+
+      assert body =~ ~s(href="/wintermeyer")
+    end
+  end
+
   describe "GET / JSON-LD" do
     # The dead Twitter handle was retired; it must not linger in the static
     # JSON-LD sameAs block on the start page.

@@ -82,6 +82,23 @@ defmodule VutuvWeb.PageController do
     |> render("username_placeholder.html")
   end
 
+  @doc """
+  The rescue for `/{{username}}` — the unsubstituted newsletter merge tag.
+
+  The July 2026 newsletter shipped its profile link with the `{{username}}`
+  merge tag still literal inside the href (the Markdown autolinker had
+  percent-encoded the braces, hiding the tag from the substitution), so
+  thousands of inboxes hold a link to `/%7B%7Busername%7D%7D`. A logged-in
+  member is forwarded to where that link was meant to point — their own
+  profile; everyone else gets the same placeholder helper as `/username`.
+  """
+  def newsletter_username_placeholder(conn, params) do
+    case conn.assigns[:current_user] do
+      %User{} = user -> redirect(conn, to: ~p"/#{user}")
+      _nil -> username_placeholder(conn, params)
+    end
+  end
+
   def new_registration(conn, %{"user" => user_params}) do
     email = user_params["emails"]["0"]["value"]
 

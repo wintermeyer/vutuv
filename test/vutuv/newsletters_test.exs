@@ -92,6 +92,32 @@ defmodule Vutuv.NewslettersTest do
       assert html =~ "<strong>text</strong>"
     end
 
+    test "a merge tag inside a bare URL is still substituted into the link target" do
+      # Earmark's autolinker percent-encodes the braces in the href
+      # (/%7B%7Busername%7D%7D) while the visible link text keeps {{username}},
+      # so a substitution running only on the literal form fixes the text but
+      # leaves the link target broken - the July 2026 newsletter shipped 3,075
+      # profile links that 404'd exactly this way.
+      html =
+        "Dein Profil: https://vutuv.de/{{username}}"
+        |> Markdown.to_email_html()
+        |> Markdown.apply_vars(%{"username" => "erika"}, escape: true)
+
+      assert html =~ ~s(href="https://vutuv.de/erika")
+      refute html =~ "%7B"
+      refute html =~ "{{username}}"
+    end
+
+    test "a merge tag in a tracked bare URL gets both the value and the click token" do
+      html =
+        "Dein Profil: http://localhost:4000/{{username}}"
+        |> Markdown.to_email_html(track: true)
+        |> Markdown.apply_vars(%{"username" => "erika"}, escape: true)
+        |> Markdown.put_click_token("TOKEN-123")
+
+      assert html =~ ~s(href="http://localhost:4000/erika?nlt=TOKEN-123")
+    end
+
     test "to_email_html/1 turns a single newline into a line break (multi-line signatures)" do
       html = Markdown.to_email_html("Viele Grüße\nStefan Wintermeyer")
       assert html =~ "Viele Grüße"
