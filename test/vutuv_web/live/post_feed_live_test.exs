@@ -613,6 +613,26 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#discover-posts")
     end
 
+    test "the excerpt spans line breaks and clamps at four lines, not one", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      author = other_user(first_name: "Long", last_name: "Winded")
+
+      {:ok, post} =
+        Posts.create_post(author, %{
+          body: "First line of thought.\n\nA second paragraph that must stay visible."
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      excerpt = ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+
+      # The excerpt is no longer cut at the first line break …
+      assert has_element?(live, excerpt, "A second paragraph that must stay visible.")
+      # … and the visual cut is the four-line CSS clamp instead of one-line truncate.
+      assert has_element?(live, "#{excerpt}.line-clamp-4")
+      refute has_element?(live, "#{excerpt}.truncate")
+    end
+
     test "the reload control draws a fresh random handful without a reload", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       # More eligible authors than the 5 shown, so each draw picks a subset.
