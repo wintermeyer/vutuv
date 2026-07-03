@@ -812,19 +812,23 @@ the resulting ~200px rail width. --%>
                 size="sm"
                 alt=""
               />
-              <%!-- The network badge: identical text cross-posted to
-              Mastodon and Bluesky renders as near-identical rows, so the
-              avatar corner names the source network (the accessible name
-              rides on the display-name link's title below). --%>
-              <span
-                data-feed-network={entry.provider}
-                title={entry.provider}
-                class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
-              >
-                <.social_icon
-                  provider={entry.provider}
-                  class="h-2.5 w-2.5 text-slate-600 dark:text-slate-300"
-                />
+              <%!-- The network badges: identical text cross-posted to
+              Mastodon and Bluesky collapses into this one row, so the
+              avatar corner names every source network — one chip per
+              network, overlapping when there are several (the accessible
+              name rides on the display-name link's title below). --%>
+              <span class="absolute -bottom-1 -right-1 flex -space-x-1">
+                <span
+                  :for={source <- entry.sources}
+                  data-feed-network={source.provider}
+                  title={source.provider <> ": @" <> source.feed.handle}
+                  class="flex h-4 w-4 items-center justify-center rounded-full bg-white ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+                >
+                  <.social_icon
+                    provider={source.provider}
+                    class="h-2.5 w-2.5 text-slate-600 dark:text-slate-300"
+                  />
+                </span>
               </span>
             </.link>
 
@@ -834,7 +838,9 @@ the resulting ~200px rail width. --%>
                   href={entry.feed.url}
                   target="_blank"
                   rel="noopener nofollow"
-                  title={entry.provider <> ": @" <> entry.feed.handle}
+                  title={
+                    Enum.map_join(entry.sources, " · ", &(&1.provider <> ": @" <> &1.feed.handle))
+                  }
                   class="truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
                 >
                   {entry.feed.name}

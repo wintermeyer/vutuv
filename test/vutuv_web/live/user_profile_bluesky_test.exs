@@ -200,6 +200,79 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
       assert has_element?(view, ~s(#{@section} [data-feed-network="Mastodon"]))
     end
 
+    test "identical cross-posts collapse into one row wearing both network badges", %{conn: conn} do
+      bluesky_handle = unique_handle()
+      mastodon_handle = "anna#{System.unique_integer([:positive])}@example.social"
+
+      Application.put_env(:vutuv, :fetch_mastodon_posts, true)
+      on_exit(fn -> Application.put_env(:vutuv, :fetch_mastodon_posts, false) end)
+
+      owner = owner_with_bluesky(bluesky_handle)
+      insert(:social_media_account, provider: "Mastodon", value: mastodon_handle, user: owner)
+
+      # The same posting on both networks: Mastodon carries the full text,
+      # the Bluesky copy is the truncated crosspost (300-char cap), fired a
+      # minute later.
+      full_text =
+        "Wenn die Leute mal ihre eigenen Jobs so schnell und gründlich machen würden, " <>
+          "wie sie es bei Bauwerksanierungen fordern, dann wäre schon viel gewonnen."
+
+      truncated = String.slice(full_text, 0, 80) <> "…"
+
+      serve_one_post(bluesky_handle, truncated)
+
+      Application.put_env(:vutuv, :mastodon_req_options,
+        plug: fn conn ->
+          case conn.request_path do
+            "/api/v1/accounts/lookup" ->
+              Plug.Conn.send_resp(conn, 200, Jason.encode!(%{"id" => "7"}))
+
+            "/api/v1/accounts/7/statuses" ->
+              Plug.Conn.send_resp(
+                conn,
+                200,
+                Jason.encode!([
+                  %{
+                    "id" => "71",
+                    "created_at" => "2026-07-02T09:59:00.000Z",
+                    "content" => "<p>#{full_text}</p>",
+                    "url" => "https://example.social/@anna/71",
+                    "visibility" => "public",
+                    "sensitive" => false,
+                    "spoiler_text" => ""
+                  }
+                ])
+              )
+          end
+        end
+      )
+
+      on_exit(fn -> Application.delete_env(:vutuv, :mastodon_req_options) end)
+
+      assert {:ok, _} = warm_cache("Bluesky", bluesky_handle)
+      assert {:ok, _} = warm_cache("Mastodon", mastodon_handle)
+
+      {:ok, view, html} = live(conn, ~p"/#{owner}")
+
+      assert has_element?(view, @section)
+
+      # One row, not two: the section's list carries a single entry...
+      rows =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#profile-social-posts li")
+
+      assert Enum.count(rows) == 1
+
+      # ...showing the fullest copy (Mastodon's untruncated text), wearing
+      # BOTH network badges.
+      section_html = view |> element(@section) |> render()
+      assert section_html =~ "viel gewonnen"
+      refute section_html =~ "…"
+      assert has_element?(view, ~s(#{@section} li [data-feed-network="Mastodon"]))
+      assert has_element?(view, ~s(#{@section} li [data-feed-network="Bluesky"]))
+    end
+
     test "the owner's opt-out hides the Bluesky feed and stops the fetch", %{conn: conn} do
       handle = unique_handle()
       serve_one_post(handle, "Should stay invisible")

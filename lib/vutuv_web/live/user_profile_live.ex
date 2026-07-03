@@ -531,17 +531,80 @@ defmodule VutuvWeb.UserProfileLive do
   # account's posts tagged with their feed (name/avatar/url) and network,
   # newest first — a member's Mastodon and Bluesky accounts merge into one
   # list. The provider comes from the map key (never the cached struct, so a
-  # stale ETS shape cannot break it); the template badges each entry with it,
-  # which is what keeps identical cross-posts distinguishable.
+  # stale ETS shape cannot break it). Cross-posts (the same text pushed to
+  # both networks) collapse into one row whose `sources` carry every network
+  # badge; a lone post's `sources` is just its own network.
   defp assign_social_feed_entries(socket) do
     entries =
       socket.assigns.social_feeds
       |> Enum.flat_map(fn {{provider, _handle}, feed} ->
-        Enum.map(feed.posts, &%{provider: provider, feed: feed, post: &1})
+        Enum.map(feed.posts, fn post ->
+          %{
+            provider: provider,
+            feed: feed,
+            post: post,
+            key: cross_post_key(post.text),
+            sources: [%{provider: provider, feed: feed}]
+          }
+        end)
       end)
+      |> merge_cross_posts()
       |> Enum.sort_by(& &1.post.created_at, {:desc, DateTime})
 
     assign(socket, :social_feed_entries, entries)
+  end
+
+  # There is no shared id across networks — a crosspost is two unrelated
+  # posts (a Mastodon status id and a Bluesky record key that know nothing of
+  # each other) — so duplicates are matched by normalized text within a
+  # posting window. The prefix rule catches the truncated copy: Bluesky caps
+  # posts at 300 characters, so crossposters cut the text there.
+  @cross_post_window_seconds 24 * 60 * 60
+  @cross_post_prefix_min 40
+
+  # Longest text first, so a group's keeper (the fullest copy, usually the
+  # Mastodon one) is fixed before its truncated siblings arrive; the earlier
+  # post wins a length tie (it is the original). A sibling contributes only
+  # its network badge.
+  defp merge_cross_posts(entries) do
+    entries
+    |> Enum.sort_by(&{-String.length(&1.post.text), DateTime.to_unix(&1.post.created_at)})
+    |> Enum.reduce([], fn entry, kept ->
+      case Enum.find_index(kept, &cross_post?(&1, entry)) do
+        nil -> kept ++ [entry]
+        index -> List.update_at(kept, index, &add_source(&1, entry))
+      end
+    end)
+  end
+
+  # One badge per network: a second account on an already-badged network
+  # would only repeat the same glyph.
+  defp add_source(keeper, entry) do
+    %{keeper | sources: Enum.uniq_by(keeper.sources ++ entry.sources, & &1.provider)}
+  end
+
+  defp cross_post?(a, b) do
+    a.key != "" and b.key != "" and
+      abs(DateTime.diff(a.post.created_at, b.post.created_at)) <= @cross_post_window_seconds and
+      same_cross_post_text?(a.key, b.key)
+  end
+
+  defp same_cross_post_text?(key, key), do: true
+
+  defp same_cross_post_text?(a, b) do
+    {long, short} = if String.length(a) >= String.length(b), do: {a, b}, else: {b, a}
+    String.length(short) >= @cross_post_prefix_min and String.starts_with?(long, short)
+  end
+
+  # What survives each network's own rendering differences: links are dropped
+  # (every network truncates a displayed URL its own way), punctuation and
+  # whitespace collapse (the "…" a crossposter appends included), case folds.
+  defp cross_post_key(text) do
+    text
+    |> String.downcase()
+    |> String.replace(~r{https?://\S+}u, " ")
+    |> String.replace(~r/[^\p{L}\p{N}]+/u, " ")
+    |> String.trim()
   end
 
   # The cache carries the domain feed (plain text); the page shows each post
