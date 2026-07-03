@@ -28,7 +28,7 @@ defmodule VutuvWeb.ImportControllerTest do
 
   test "the upload form renders for the owner", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings/import/linkedin") |> html_response(200)
+    html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
     assert html =~ "linkedin-import-form"
     # The drag-and-drop enhancement wraps the file input in a dropzone, but the
     # input must keep its name so the plain multipart POST still works with JS off.
@@ -38,23 +38,23 @@ defmodule VutuvWeb.ImportControllerTest do
 
   test "the page links to LinkedIn's data export page and shows the screenshot", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings/import/linkedin") |> html_response(200)
+    html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
     assert html =~ "https://www.linkedin.com/mypreferences/d/download-my-data"
     assert html =~ "/images/linkedin-download-my-data.webp"
   end
 
-  test "a member cannot open another member's import page", %{conn: conn} do
-    {conn, _user} = create_and_login_user(conn)
-    other = insert(:activated_user)
-    conn = get(conn, ~p"/#{other}/settings/import/linkedin")
-    assert conn.status == 403
+  test "a guest cannot open the import page", %{conn: conn} do
+    # /settings is user-agnostic and login-required: the import page always
+    # belongs to whoever is signed in, and a guest is turned away.
+    conn = get(conn, ~p"/settings/import/linkedin")
+    assert redirected_to(conn) == "/"
   end
 
   test "uploading an archive shows a preview of the candidates", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
     conn =
-      post(conn, ~p"/#{user}/settings/import/linkedin", %{
+      post(conn, ~p"/settings/import/linkedin", %{
         "import" => %{"archive" => upload_zip(@sample_files)}
       })
 
@@ -72,7 +72,7 @@ defmodule VutuvWeb.ImportControllerTest do
     {conn, user} = create_and_login_user(conn)
     upload = upload_zip(@sample_files)
 
-    post(conn, ~p"/#{user}/settings/import/linkedin", %{"import" => %{"archive" => upload}})
+    post(conn, ~p"/settings/import/linkedin", %{"import" => %{"archive" => upload}})
 
     refute File.exists?(upload.path)
   end
@@ -84,9 +84,9 @@ defmodule VutuvWeb.ImportControllerTest do
     upload = %Plug.Upload{path: path, filename: "x.zip", content_type: "application/zip"}
 
     conn =
-      post(conn, ~p"/#{user}/settings/import/linkedin", %{"import" => %{"archive" => upload}})
+      post(conn, ~p"/settings/import/linkedin", %{"import" => %{"archive" => upload}})
 
-    assert redirected_to(conn) == ~p"/#{user}/settings/import/linkedin"
+    assert redirected_to(conn) == ~p"/settings/import/linkedin"
   end
 
   test "confirm imports only the checked candidates", %{conn: conn} do
@@ -97,7 +97,7 @@ defmodule VutuvWeb.ImportControllerTest do
 
     # Select the position, leave the Elixir skill unchecked.
     conn =
-      post(conn, ~p"/#{user}/settings/import/linkedin/apply", %{
+      post(conn, ~p"/settings/import/linkedin/apply", %{
         "payload" => payload,
         "selected" => [position_id]
       })

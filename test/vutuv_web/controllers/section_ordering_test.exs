@@ -24,10 +24,10 @@ defmodule VutuvWeb.SectionOrderingTest do
       insert(:url, user: owner)
 
       for section <- ~w(phone_numbers addresses social_media_accounts emails links) do
-        html = conn |> get("/#{owner.username}/#{section}") |> html_response(200)
+        html = conn |> get("/settings/#{section}") |> html_response(200)
 
         assert html =~ ~s(phx-hook="Reorder"),
-               "expected the embedded reorder tool on the owner's #{section} page"
+               "expected the embedded reorder tool on the /settings/#{section} editor"
       end
     end
 
@@ -84,11 +84,11 @@ defmodule VutuvWeb.SectionOrderingTest do
     test "phone numbers", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      post(conn, ~p"/#{user}/phone_numbers",
+      post(conn, ~p"/settings/phone_numbers",
         phone_number: %{"value" => "0261-123456", "number_type" => "Work"}
       )
 
-      post(conn, ~p"/#{user}/phone_numbers",
+      post(conn, ~p"/settings/phone_numbers",
         phone_number: %{"value" => "0261-654321", "number_type" => "Work"}
       )
 
@@ -99,11 +99,11 @@ defmodule VutuvWeb.SectionOrderingTest do
     test "addresses", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      post(conn, ~p"/#{user}/addresses",
+      post(conn, ~p"/settings/addresses",
         address: %{"description" => "Home", "country" => "Germany"}
       )
 
-      post(conn, ~p"/#{user}/addresses",
+      post(conn, ~p"/settings/addresses",
         address: %{"description" => "Work", "country" => "Germany"}
       )
 
@@ -114,11 +114,11 @@ defmodule VutuvWeb.SectionOrderingTest do
     test "social media accounts", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      post(conn, ~p"/#{user}/social_media_accounts",
+      post(conn, ~p"/settings/social_media_accounts",
         social_media_account: %{"provider" => "GitHub", "value" => "octocat"}
       )
 
-      post(conn, ~p"/#{user}/social_media_accounts",
+      post(conn, ~p"/settings/social_media_accounts",
         social_media_account: %{"provider" => "Twitter", "value" => "jack"}
       )
 

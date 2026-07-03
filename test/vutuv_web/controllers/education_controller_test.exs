@@ -15,18 +15,18 @@ defmodule VutuvWeb.EducationControllerTest do
     {conn, user} = create_and_login_user(conn)
 
     conn =
-      post(conn, ~p"/#{user}/educations", %{
+      post(conn, ~p"/settings/educations", %{
         "education" => %{"school" => "Acme University", "degree" => "BSc"}
       })
 
-    assert redirected_to(conn) == ~p"/#{user}/educations"
+    assert redirected_to(conn) == ~p"/settings/educations"
     assert Repo.get_by(Education, school: "Acme University", user_id: user.id)
   end
 
   test "return 422 when creating an education with no school", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = post(conn, ~p"/#{user}/educations", %{"education" => %{"degree" => "BSc"}})
-    assert html_response(conn, 422) =~ ~p"/#{user}/educations"
+    conn = post(conn, ~p"/settings/educations", %{"education" => %{"degree" => "BSc"}})
+    assert html_response(conn, 422) =~ ~p"/settings/educations"
   end
 
   test "redirect when updating an education", %{conn: conn} do
@@ -34,22 +34,22 @@ defmodule VutuvWeb.EducationControllerTest do
     education = insert(:education, user: user)
 
     conn =
-      put(conn, ~p"/#{user}/educations/#{education}", %{
+      put(conn, ~p"/settings/educations/#{education}", %{
         "education" => %{"school" => "New School"}
       })
 
     # Changing the school regenerates the slug (like a work experience), so the
     # redirect points at the reloaded record, not the pre-update struct.
     updated = Repo.get(Education, education.id)
-    assert redirected_to(conn) == ~p"/#{user}/educations/#{updated}"
+    assert redirected_to(conn) == ~p"/settings/educations"
     assert updated.school == "New School"
   end
 
   test "redirect when deleting an education", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     education = insert(:education, user: user)
-    conn = delete(conn, ~p"/#{user}/educations/#{education}")
-    assert redirected_to(conn) == ~p"/#{user}/educations"
+    conn = delete(conn, ~p"/settings/educations/#{education}")
+    assert redirected_to(conn) == ~p"/settings/educations"
     refute Repo.get(Education, education.id)
   end
 
@@ -59,7 +59,7 @@ defmodule VutuvWeb.EducationControllerTest do
     education = insert(:education, user: other)
 
     # ResolveOwnedSlug scopes to the logged-in owner, so a foreign slug 404s.
-    conn = get(conn, ~p"/#{other}/educations/#{education}/edit")
+    conn = get(conn, ~p"/settings/educations/#{education}/edit")
     assert conn.status == 404
   end
 

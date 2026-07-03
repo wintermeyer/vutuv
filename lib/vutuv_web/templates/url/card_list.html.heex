@@ -13,8 +13,8 @@
     <div class="text">
       <.row_actions
         :if={@as_owner?}
-        edit_to={~p"/#{@user}/links/#{url}/edit"}
-        delete_to={~p"/#{@user}/links/#{url}"}
+        edit_to={~p"/settings/links/#{url}/edit"}
+        delete_to={~p"/settings/links/#{url}"}
       />
       <div class="title">
         <%= url.description %>

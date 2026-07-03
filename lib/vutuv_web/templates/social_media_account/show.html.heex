@@ -12,8 +12,8 @@
   <.row_actions
     :if={same_user?(@user, @current_user)}
     class="mb-4"
-    edit_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}/edit"}
-    delete_to={~p"/#{@user}/social_media_accounts/#{@social_media_account}"}
+    edit_to={~p"/settings/social_media_accounts/#{@social_media_account}/edit"}
+    delete_to={~p"/settings/social_media_accounts/#{@social_media_account}"}
   />
 
   <h2 class="card__label"><%= gettext("Provider") %></h2>

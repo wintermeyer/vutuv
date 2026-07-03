@@ -59,7 +59,7 @@ defmodule VutuvWeb.UserControllerTest do
     end
 
     test "changing the name revokes verification and explains why", %{conn: conn, user: user} do
-      conn = put(conn, ~p"/#{user}", user: %{"first_name" => "Totally Different"})
+      conn = put(conn, ~p"/settings/profile", user: %{"first_name" => "Totally Different"})
 
       assert redirected_to(conn)
       refute Repo.get!(User, user.id).identity_verified?
@@ -70,7 +70,7 @@ defmodule VutuvWeb.UserControllerTest do
     end
 
     test "changing the birthday revokes verification", %{conn: conn, user: user} do
-      conn = put(conn, ~p"/#{user}", user: %{"birthdate" => "1991-07-01"})
+      conn = put(conn, ~p"/settings/profile", user: %{"birthdate" => "1991-07-01"})
 
       refute Repo.get!(User, user.id).identity_verified?
       assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "verified badge"
@@ -80,7 +80,7 @@ defmodule VutuvWeb.UserControllerTest do
       conn: conn,
       user: user
     } do
-      conn = put(conn, ~p"/#{user}", user: %{"headline" => "Open to work"})
+      conn = put(conn, ~p"/settings/profile", user: %{"headline" => "Open to work"})
 
       assert Repo.get!(User, user.id).identity_verified?
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "updated"
@@ -646,19 +646,20 @@ defmodule VutuvWeb.UserControllerTest do
     # shows that e-mail plus the "Add a phone number" tile (e-mail and phone
     # share one card now) and a "Manage emails" footer.
     for path <- [
-          ~p"/#{user}/phone_numbers/new",
-          ~p"/#{user}/links/new",
-          ~p"/#{user}/social_media_accounts/new",
-          ~p"/#{user}/addresses/new",
-          ~p"/#{user}/work_experiences/new"
+          ~p"/settings/phone_numbers/new",
+          ~p"/settings/links/new",
+          ~p"/settings/social_media_accounts/new",
+          ~p"/settings/addresses/new",
+          ~p"/settings/work_experiences/new"
         ] do
       assert html =~ path
     end
 
     # Tags are never empty on a fresh account (sign-up requires three), so the
-    # Tags card is already a showcase: a Manage footer instead of the add tile.
-    refute html =~ ~s(href="#{~p"/#{user}/tags/new"}")
-    assert html =~ ~s(href="#{~p"/#{user}/tags"}")
+    # Tags card is already a showcase: a Manage footer (into the /settings
+    # editor) instead of the add tile.
+    refute html =~ ~s(href="#{~p"/settings/tags/new"}")
+    assert html =~ ~s(href="#{~p"/settings/tags"}")
   end
 
   test "empty sections invite the owner to add information instead of dead-ending", %{conn: conn} do
@@ -698,7 +699,7 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "renders form for editing chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
     # The slimmed edit page is the profile content only, grouped into sections.
     assert html =~ "Your name"
     assert html =~ "First Name"
@@ -715,7 +716,7 @@ defmodule VutuvWeb.UserControllerTest do
     # input made the browser scroll the page down on load. The page must open
     # scrolled to the top instead.
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
     refute html =~ "autofocus"
   end
 
@@ -726,7 +727,7 @@ defmodule VutuvWeb.UserControllerTest do
     # The avatar preview always reflects the live state (the initials tile when
     # there is no upload), so the owner sees what visitors currently see before
     # picking a replacement.
-    html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
     assert html =~ "Current avatar"
     # No cover uploaded yet, so no cover preview (we don't preview the gradient
     # placeholder as if it were a photo).
@@ -734,13 +735,13 @@ defmodule VutuvWeb.UserControllerTest do
 
     # Once a cover photo exists, it is shown above the upload field.
     {:ok, _} = user |> Ecto.Changeset.change(cover_photo: "cover.avif") |> Repo.update()
-    html = conn |> recycle() |> get(~p"/#{user}/edit") |> html_response(200)
+    html = conn |> recycle() |> get(~p"/settings/profile") |> html_response(200)
     assert html =~ "Current cover photo"
   end
 
   test "updates chosen resource and redirects when data is valid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = put(conn, ~p"/#{user}", user: @update_attrs)
+    conn = put(conn, ~p"/settings/profile", user: @update_attrs)
     assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get_by(User, @update_attrs)
   end
@@ -764,7 +765,7 @@ defmodule VutuvWeb.UserControllerTest do
     assert search_term_values(user) != []
 
     # Submit only the first name (no last_name key, as a partial/non-form post).
-    conn = put(conn, ~p"/#{user}", user: %{"first_name" => "Janet"})
+    conn = put(conn, ~p"/settings/profile", user: %{"first_name" => "Janet"})
     assert redirected_to(conn) == ~p"/#{user}"
 
     values = search_term_values(user)
@@ -777,14 +778,14 @@ defmodule VutuvWeb.UserControllerTest do
     # single ISO 8601 string rather than the old date_select year/month/day map.
     {conn, user} = create_and_login_user(conn)
 
-    conn = put(conn, ~p"/#{user}", user: %{"birthdate" => "1990-04-15"})
+    conn = put(conn, ~p"/settings/profile", user: %{"birthdate" => "1990-04-15"})
     assert redirected_to(conn) == ~p"/#{user}"
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
   end
 
   test "the privacy page asks the search-engine and the AI question separately", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+    html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
     # The two consents now live on the Privacy tab as positively-framed
     # checkboxes (the field is the opt-out noindex?/noai?, the box is "Allow").
@@ -794,7 +795,7 @@ defmodule VutuvWeb.UserControllerTest do
 
   test "the delete-account page carries a clear, confirmed Delete account control", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    html = conn |> get(~p"/#{user}/settings/delete") |> html_response(200)
+    html = conn |> get(~p"/settings/delete") |> html_response(200)
 
     assert html =~ "Delete account"
     # The consequence is spelled out before the user acts...
@@ -813,13 +814,13 @@ defmodule VutuvWeb.UserControllerTest do
     # Blocked members and the owner's moderation cases now live on the Privacy
     # tab under a "Safety" card, where members look for them (both used to be in
     # the account hub, blocking under a mislabelled "Privacy & security" card).
-    privacy = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+    privacy = conn |> get(~p"/settings/privacy") |> html_response(200)
     assert privacy =~ ~s(href="#{~p"/blocks"}")
     assert privacy =~ ~s(href="#{~p"/moderation/cases"}")
 
     # Connected apps and API tokens moved to their own Apps tab, reachable only
     # from there for a normal user (no shell or profile link).
-    apps = conn |> recycle() |> get(~p"/#{user}/settings/apps") |> html_response(200)
+    apps = conn |> recycle() |> get(~p"/settings/apps") |> html_response(200)
     assert apps =~ ~s(href="#{~p"/connected_apps"}")
     assert apps =~ ~s(href="#{~p"/access_tokens"}")
   end
@@ -830,7 +831,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "updates the search-engine and AI consents independently", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    conn = put(conn, ~p"/#{user}", user: %{"noindex?" => "true", "noai?" => "false"})
+    conn = put(conn, ~p"/settings/profile", user: %{"noindex?" => "true", "noai?" => "false"})
     assert redirected_to(conn) == ~p"/#{user}"
     assert %{noindex?: true, noai?: false} = Repo.get(User, user.id)
   end
@@ -858,7 +859,7 @@ defmodule VutuvWeb.UserControllerTest do
     %{emails: [email]} = Repo.preload(user, :emails)
 
     conn =
-      put(conn, ~p"/#{user}",
+      put(conn, ~p"/settings/profile",
         user: %{
           "first_name" => "Updated",
           "emails" => %{
@@ -878,12 +879,13 @@ defmodule VutuvWeb.UserControllerTest do
   } do
     {conn, user} = create_and_login_user(conn)
 
-    edit = conn |> get(~p"/#{user}/edit") |> html_response(200)
+    edit = conn |> get(~p"/settings/profile") |> html_response(200)
     refute edit =~ "user[emails]"
 
-    # Email management (a PIN-verified flow) lives on the account hub now.
-    hub = conn |> recycle() |> get(~p"/#{user}/settings") |> html_response(200)
-    assert hub =~ ~p"/#{user}/emails"
+    # Email management (a PIN-verified flow) lives on the sign-in & security
+    # page now.
+    hub = conn |> recycle() |> get(~p"/settings/security") |> html_response(200)
+    assert hub =~ ~p"/settings/emails"
   end
 
   test "the landing-page registration form still asks for the email address", %{conn: conn} do
@@ -891,22 +893,26 @@ defmodule VutuvWeb.UserControllerTest do
     assert html_response(conn, 200) =~ "user[emails][0][value]"
   end
 
-  test "renders 403 when editing or updating another user's profile", %{conn: conn} do
+  test "another member's old edit URL only redirects; there is no slug update route",
+       %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
     other = insert_activated_user()
 
-    assert conn |> get(~p"/#{other}/edit") |> html_response(403)
+    # The old /:slug/edit is a plain redirect into your OWN settings — it can
+    # never open someone else's editor because /settings is user-agnostic.
+    assert conn |> get(~p"/#{other}/edit") |> redirected_to() == "/settings/profile"
 
+    # The slug-based profile update route is gone entirely (404).
     assert conn
            |> recycle()
-           |> put(~p"/#{other}", user: @update_attrs)
-           |> html_response(403)
+           |> put("/#{other.username}", user: @update_attrs)
+           |> html_response(404)
   end
 
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    conn = put(conn, ~p"/#{user}", user: @invalid_update_attrs)
+    conn = put(conn, ~p"/settings/profile", user: @invalid_update_attrs)
     # The edit form re-renders (422) with its grouped sections intact.
     assert html_response(conn, 422) =~ "Your name"
   end
@@ -1105,7 +1111,7 @@ defmodule VutuvWeb.UserControllerTest do
       refute html =~ ~p"/messages/with/#{user}"
       # This member allows indexing and AI, so the banner makes no exception
       # and there is no link to the privacy settings.
-      refute html =~ ~p"/#{user}/settings/privacy"
+      refute html =~ ~p"/settings/privacy"
     end
 
     test "public preview links to privacy settings when indexing or AI use is restricted",
@@ -1119,7 +1125,7 @@ defmodule VutuvWeb.UserControllerTest do
       html = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
 
       assert html =~ "More about this."
-      assert html =~ ~p"/#{user}/settings/privacy"
+      assert html =~ ~p"/settings/privacy"
     end
 
     test "the public preview shows only public posts, hiding audience-restricted ones",

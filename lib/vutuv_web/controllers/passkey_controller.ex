@@ -18,9 +18,10 @@ defmodule VutuvWeb.PasskeyController do
   """
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.UserResolveSlug)
+  # Routed under /settings: the pipeline (RequireLogin + SettingsUser +
+  # EnsureActivated) provides :user = the logged-in member; AuthUser stays as
+  # a belt-and-braces guard.
   plug(VutuvWeb.Plug.AuthUser)
-  plug(VutuvWeb.Plug.EnsureActivated)
 
   alias Vutuv.Credentials
   alias Vutuv.Sessions
@@ -50,7 +51,7 @@ defmodule VutuvWeb.PasskeyController do
       {:ok, _credential} ->
         conn
         |> put_flash(:info, gettext("Passkey added."))
-        |> json(%{ok: true, redirect: ~p"/#{user}/settings/security"})
+        |> json(%{ok: true, redirect: ~p"/settings/security"})
 
       _ ->
         conn
@@ -72,7 +73,7 @@ defmodule VutuvWeb.PasskeyController do
 
     conn
     |> put_flash(:info, gettext("Passkey removed."))
-    |> redirect(to: ~p"/#{user}/settings/security")
+    |> redirect(to: ~p"/settings/security")
   end
 
   defp passkey_nickname(conn, params) do

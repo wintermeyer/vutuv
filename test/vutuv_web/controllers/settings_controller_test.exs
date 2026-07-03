@@ -9,31 +9,40 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       for path <- [
-            ~p"/#{user}/settings",
-            ~p"/#{user}/settings/privacy",
-            ~p"/#{user}/settings/notifications",
-            ~p"/#{user}/settings/apps",
-            ~p"/#{user}/settings/security",
-            ~p"/#{user}/settings/preferences",
-            ~p"/#{user}/settings/data",
-            ~p"/#{user}/settings/delete"
+            ~p"/settings",
+            ~p"/settings/privacy",
+            ~p"/settings/notifications",
+            ~p"/settings/apps",
+            ~p"/settings/security",
+            ~p"/settings/preferences",
+            ~p"/settings/data",
+            ~p"/settings/delete"
           ] do
         # Every settings page carries a way to every other settings area (the
         # hub lists them; the subpages carry the sidebar), so they are always
         # reachable from one another.
         assert conn |> recycle() |> get(path) |> html_response(200) =~
-                 ~s(href="#{~p"/#{user}/settings/privacy"}")
+                 ~s(href="#{~p"/settings/privacy"}")
       end
     end
 
-    test "another member gets a 403", %{conn: conn} do
-      {conn, _me} = create_and_login_user(conn)
-      other = insert_activated_user()
+    test "logged out, every settings page requires a login", %{conn: conn} do
+      for path <- [~p"/settings", ~p"/settings/privacy", ~p"/settings/delete"] do
+        assert conn |> recycle() |> get(path) |> redirected_to() == "/"
+      end
+    end
 
-      assert conn |> recycle() |> get(~p"/#{other}/settings") |> html_response(403)
-      assert conn |> recycle() |> get(~p"/#{other}/settings/privacy") |> html_response(403)
-      assert conn |> recycle() |> get(~p"/#{other}/settings/security") |> html_response(403)
-      assert conn |> recycle() |> get(~p"/#{other}/settings/delete") |> html_response(403)
+    test "the old slug-based settings URLs redirect into /settings", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      assert conn |> recycle() |> get("/#{user.username}/settings") |> redirected_to() ==
+               "/settings"
+
+      assert conn |> recycle() |> get("/#{user.username}/settings/privacy") |> redirected_to() ==
+               "/settings/privacy"
+
+      assert conn |> recycle() |> get("/#{user.username}/edit") |> redirected_to() ==
+               "/settings/profile"
     end
   end
 
@@ -43,27 +52,27 @@ defmodule VutuvWeb.SettingsControllerTest do
     # apps and the delete exit. If it is not on the hub, it does not exist.
     test "lists every editable area", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/settings") |> html_response(200)
 
       # Profile content sections.
-      assert html =~ ~s(href="#{~p"/#{user}/edit"}")
-      assert html =~ ~s(href="#{~p"/#{user}/work_experiences"}")
-      assert html =~ ~s(href="#{~p"/#{user}/educations"}")
-      assert html =~ ~s(href="#{~p"/#{user}/links"}")
-      assert html =~ ~s(href="#{~p"/#{user}/social_media_accounts"}")
-      assert html =~ ~s(href="#{~p"/#{user}/emails"}")
-      assert html =~ ~s(href="#{~p"/#{user}/phone_numbers"}")
-      assert html =~ ~s(href="#{~p"/#{user}/addresses"}")
-      assert html =~ ~s(href="#{~p"/#{user}/tags"}")
+      assert html =~ ~s(href="#{~p"/settings/profile"}")
+      assert html =~ ~s(href="#{~p"/settings/work_experiences"}")
+      assert html =~ ~s(href="#{~p"/settings/educations"}")
+      assert html =~ ~s(href="#{~p"/settings/links"}")
+      assert html =~ ~s(href="#{~p"/settings/social_media_accounts"}")
+      assert html =~ ~s(href="#{~p"/settings/emails"}")
+      assert html =~ ~s(href="#{~p"/settings/phone_numbers"}")
+      assert html =~ ~s(href="#{~p"/settings/addresses"}")
+      assert html =~ ~s(href="#{~p"/settings/tags"}")
       # Account subpages (split off the old mega-page).
-      assert html =~ ~s(href="#{~p"/#{user}/settings/security"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/preferences"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/data"}")
+      assert html =~ ~s(href="#{~p"/settings/security"}")
+      assert html =~ ~s(href="#{~p"/settings/preferences"}")
+      assert html =~ ~s(href="#{~p"/settings/data"}")
       # The rest.
-      assert html =~ ~s(href="#{~p"/#{user}/settings/privacy"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/notifications"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/apps"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/delete"}")
+      assert html =~ ~s(href="#{~p"/settings/privacy"}")
+      assert html =~ ~s(href="#{~p"/settings/notifications"}")
+      assert html =~ ~s(href="#{~p"/settings/apps"}")
+      assert html =~ ~s(href="#{~p"/settings/delete"}")
     end
 
     test "shows a live count for the profile content sections", %{conn: conn} do
@@ -71,7 +80,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       insert_list(2, :work_experience, user: user)
       insert(:url, user: user)
 
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/settings") |> html_response(200)
 
       assert html =~ ~s(<span data-hub-count="work">2</span>)
       assert html =~ ~s(<span data-hub-count="links">1</span>)
@@ -80,28 +89,28 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "the hub itself carries no destructive control, only the door to it", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings") |> html_response(200)
+      html = conn |> get(~p"/settings") |> html_response(200)
 
       # Deleting starts on its own page, never straight from the hub row.
       refute html =~ ~s(id="delete-account")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/delete"}")
+      assert html =~ ~s(href="#{~p"/settings/delete"}")
     end
   end
 
   describe "the profile editor (/edit)" do
     test "links every other profile section, so it is no dead end", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+      html = conn |> get(~p"/settings/profile") |> html_response(200)
 
       for path <- [
-            ~p"/#{user}/work_experiences",
-            ~p"/#{user}/educations",
-            ~p"/#{user}/links",
-            ~p"/#{user}/social_media_accounts",
-            ~p"/#{user}/emails",
-            ~p"/#{user}/phone_numbers",
-            ~p"/#{user}/addresses",
-            ~p"/#{user}/tags"
+            ~p"/settings/work_experiences",
+            ~p"/settings/educations",
+            ~p"/settings/links",
+            ~p"/settings/social_media_accounts",
+            ~p"/settings/emails",
+            ~p"/settings/phone_numbers",
+            ~p"/settings/addresses",
+            ~p"/settings/tags"
           ] do
         assert html =~ ~s(href="#{path}")
       end
@@ -109,9 +118,9 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "carries the way back to the hub and the cover-photo anchor", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/edit") |> html_response(200)
+      html = conn |> get(~p"/settings/profile") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/settings"}")
+      assert html =~ ~s(href="#{~p"/settings"}")
       assert html =~ ~s(id="cover")
     end
   end
@@ -123,15 +132,15 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       for {path, title} <- [
-            {~p"/#{user}/edit", "Edit profile"},
-            {~p"/#{user}/settings/privacy", "Privacy settings"},
-            {~p"/#{user}/settings/notifications", "Notification settings"},
-            {~p"/#{user}/settings/apps", "Apps &amp; API"},
-            {~p"/#{user}/settings", "Settings"},
-            {~p"/#{user}/settings/security", "Sign-in &amp; security"},
-            {~p"/#{user}/settings/preferences", "Language &amp; maps"},
-            {~p"/#{user}/settings/data", "Your data"},
-            {~p"/#{user}/settings/delete", "Delete account"}
+            {~p"/settings/profile", "Edit profile"},
+            {~p"/settings/privacy", "Privacy settings"},
+            {~p"/settings/notifications", "Notification settings"},
+            {~p"/settings/apps", "Apps &amp; API"},
+            {~p"/settings", "Settings"},
+            {~p"/settings/security", "Sign-in &amp; security"},
+            {~p"/settings/preferences", "Language &amp; maps"},
+            {~p"/settings/data", "Your data"},
+            {~p"/settings/delete", "Delete account"}
           ] do
         html = conn |> recycle() |> get(path) |> html_response(200)
         assert html =~ "<title" and html =~ title
@@ -148,7 +157,7 @@ defmodule VutuvWeb.SettingsControllerTest do
          %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+      html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       # Plain-language nuance for the layperson (no jargon): a public page can
       # still be read, but we tell engines/AI we do not want it, and the
@@ -170,11 +179,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {:ok, _} = Accounts.update_user(user, %{"noindex?" => "true", "noai?" => "true"})
 
       conn =
-        put(conn, ~p"/#{user}/settings/privacy",
-          user: %{"noindex?" => "false", "noai?" => "false"}
-        )
+        put(conn, ~p"/settings/privacy", user: %{"noindex?" => "false", "noai?" => "false"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert %{noindex?: false, noai?: false} = Repo.get(User, user.id)
     end
 
@@ -182,9 +189,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        put(conn, ~p"/#{user}/settings/privacy", user: %{"noindex?" => "true", "noai?" => "true"})
+        put(conn, ~p"/settings/privacy", user: %{"noindex?" => "true", "noai?" => "true"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert %{noindex?: true, noai?: true} = Repo.get(User, user.id)
     end
   end
@@ -192,7 +199,7 @@ defmodule VutuvWeb.SettingsControllerTest do
   describe "privacy: safety card" do
     test "groups blocked members and content under review", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+      html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/blocks"}")
       assert html =~ ~s(href="#{~p"/moderation/cases"}")
@@ -205,7 +212,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "the toggle shows on the privacy page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+      html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(id="online-status-form")
       assert html =~ "show_online_status?"
@@ -215,9 +222,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       assert Repo.get(User, user.id).show_online_status? == true
 
-      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "false"})
+      conn = put(conn, ~p"/settings/privacy", user: %{"show_online_status?" => "false"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert Repo.get(User, user.id).show_online_status? == false
     end
 
@@ -225,9 +232,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       {:ok, _} = Accounts.update_user(user, %{"show_online_status?" => "false"})
 
-      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "true"})
+      conn = put(conn, ~p"/settings/privacy", user: %{"show_online_status?" => "true"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert Repo.get(User, user.id).show_online_status? == true
     end
 
@@ -235,7 +242,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       Vutuv.Activity.subscribe(user.id)
 
-      put(conn, ~p"/#{user}/settings/privacy", user: %{"show_online_status?" => "false"})
+      put(conn, ~p"/settings/privacy", user: %{"show_online_status?" => "false"})
 
       assert_receive {:presence_pref, false}
     end
@@ -247,7 +254,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "the toggle shows on the privacy page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+      html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(id="mastodon-feed-form")
       assert html =~ "show_mastodon_feed?"
@@ -257,9 +264,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       assert Repo.get(User, user.id).show_mastodon_feed? == true
 
-      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_mastodon_feed?" => "false"})
+      conn = put(conn, ~p"/settings/privacy", user: %{"show_mastodon_feed?" => "false"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert Repo.get(User, user.id).show_mastodon_feed? == false
     end
 
@@ -267,9 +274,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
       {:ok, _} = Accounts.update_user(user, %{"show_mastodon_feed?" => "false"})
 
-      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_mastodon_feed?" => "true"})
+      conn = put(conn, ~p"/settings/privacy", user: %{"show_mastodon_feed?" => "true"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/privacy"
       assert Repo.get(User, user.id).show_mastodon_feed? == true
     end
   end
@@ -279,7 +286,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        put(conn, ~p"/#{user}/settings/notifications",
+        put(conn, ~p"/settings/notifications",
           user: %{
             "notification_emails?" => "false",
             "email_on_endorsement?" => "true",
@@ -287,7 +294,7 @@ defmodule VutuvWeb.SettingsControllerTest do
           }
         )
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/notifications"
+      assert redirected_to(conn) == ~p"/settings/notifications"
 
       assert %User{
                notification_emails?: false,
@@ -298,7 +305,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "the page offers a checkbox for every email type and links the bell", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/notifications") |> html_response(200)
+      html = conn |> get(~p"/settings/notifications") |> html_response(200)
 
       assert html =~ "notification_emails?"
       # The connection-request opt-in is gone (no request flow any more).
@@ -315,7 +322,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        put(conn, ~p"/#{user}/settings/notifications",
+        put(conn, ~p"/settings/notifications",
           user: %{
             "notification_emails?" => "true",
             "dm_email_each_message?" => "true",
@@ -323,7 +330,7 @@ defmodule VutuvWeb.SettingsControllerTest do
           }
         )
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/notifications"
+      assert redirected_to(conn) == ~p"/settings/notifications"
 
       assert %User{dm_email_each_message?: true, dm_email_delay_minutes: 30} =
                Repo.get(User, user.id)
@@ -333,7 +340,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        put(conn, ~p"/#{user}/settings/notifications", user: %{"dm_email_delay_minutes" => "7"})
+        put(conn, ~p"/settings/notifications", user: %{"dm_email_delay_minutes" => "7"})
 
       assert html_response(conn, 422)
       assert Repo.get(User, user.id).dm_email_delay_minutes == 15
@@ -343,10 +350,10 @@ defmodule VutuvWeb.SettingsControllerTest do
   describe "sign-in & security page" do
     test "surfaces username, email addresses, devices and passkeys", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/security") |> html_response(200)
+      html = conn |> get(~p"/settings/security") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/usernames/new"}")
-      assert html =~ ~s(href="#{~p"/#{user}/emails"}")
+      assert html =~ ~s(href="#{~p"/settings/usernames/new"}")
+      assert html =~ ~s(href="#{~p"/settings/emails"}")
       # The device list (this test session is a signed-in device).
       assert html =~ "Last active"
       # The passkey enrol block.
@@ -357,10 +364,10 @@ defmodule VutuvWeb.SettingsControllerTest do
   describe "language & maps page" do
     test "carries the interface-language and map-preference forms", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/preferences") |> html_response(200)
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
 
-      assert html =~ ~s(action="#{~p"/#{user}/settings/language"}")
-      assert html =~ ~s(action="#{~p"/#{user}/settings/maps"}")
+      assert html =~ ~s(action="#{~p"/settings/language"}")
+      assert html =~ ~s(action="#{~p"/settings/maps"}")
       assert html =~ "map_google?"
       assert html =~ "map_openstreetmap?"
       assert html =~ "map_apple?"
@@ -371,17 +378,17 @@ defmodule VutuvWeb.SettingsControllerTest do
   describe "your data page" do
     test "surfaces the export download and the LinkedIn import", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/data") |> html_response(200)
+      html = conn |> get(~p"/settings/data") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/export"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/import/linkedin"}")
+      assert html =~ ~s(href="#{~p"/settings/export"}")
+      assert html =~ ~s(href="#{~p"/settings/import/linkedin"}")
     end
   end
 
   describe "delete account page" do
     test "carries the warning and the PIN-mailing delete control", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/delete") |> html_response(200)
+      html = conn |> get(~p"/settings/delete") |> html_response(200)
 
       assert html =~ ~s(id="delete-account")
       assert html =~ "It cannot be undone"
@@ -391,7 +398,7 @@ defmodule VutuvWeb.SettingsControllerTest do
   describe "apps tab" do
     test "surfaces connected apps, access tokens and the API docs cross-link", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/settings/apps") |> html_response(200)
+      html = conn |> get(~p"/settings/apps") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/connected_apps"}")
       assert html =~ ~s(href="#{~p"/access_tokens"}")
@@ -403,9 +410,9 @@ defmodule VutuvWeb.SettingsControllerTest do
     test "saving the language persists locale and stays on the preferences page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = put(conn, ~p"/#{user}/settings/language", user: %{"locale" => "de"})
+      conn = put(conn, ~p"/settings/language", user: %{"locale" => "de"})
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/preferences"
+      assert redirected_to(conn) == ~p"/settings/preferences"
       assert Repo.get(User, user.id).locale == "de"
     end
   end
@@ -416,7 +423,7 @@ defmodule VutuvWeb.SettingsControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        put(conn, ~p"/#{user}/settings/maps",
+        put(conn, ~p"/settings/maps",
           user: %{
             "map_google?" => "true",
             "map_openstreetmap?" => "false",
@@ -425,7 +432,7 @@ defmodule VutuvWeb.SettingsControllerTest do
           }
         )
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/preferences"
+      assert redirected_to(conn) == ~p"/settings/preferences"
 
       assert %User{
                map_google?: true,
@@ -438,7 +445,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     test "an unknown default is rejected by the changeset", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = put(conn, ~p"/#{user}/settings/maps", user: %{"default_map_service" => "bing"})
+      conn = put(conn, ~p"/settings/maps", user: %{"default_map_service" => "bing"})
 
       assert html_response(conn, 422)
       assert Repo.get(User, user.id).default_map_service == "google"

@@ -72,13 +72,13 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
     end
 
     test "new forms render", %{conn: conn, user: user} do
-      renders(conn, ~p"/#{user}/edit")
-      renders(conn, ~p"/#{user}/emails/new")
-      renders(conn, ~p"/#{user}/phone_numbers/new")
-      renders(conn, ~p"/#{user}/links/new")
-      renders(conn, ~p"/#{user}/social_media_accounts/new")
-      renders(conn, ~p"/#{user}/work_experiences/new")
-      renders(conn, ~p"/#{user}/addresses/new")
+      renders(conn, ~p"/settings/profile")
+      renders(conn, ~p"/settings/emails/new")
+      renders(conn, ~p"/settings/phone_numbers/new")
+      renders(conn, ~p"/settings/links/new")
+      renders(conn, ~p"/settings/social_media_accounts/new")
+      renders(conn, ~p"/settings/work_experiences/new")
+      renders(conn, ~p"/settings/addresses/new")
     end
 
     test "show/edit for sub-resources render", %{
@@ -90,11 +90,11 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       address: address,
       social: social
     } do
-      renders(conn, ~p"/#{user}/emails/#{email}/edit")
-      renders(conn, ~p"/#{user}/phone_numbers/#{phone}/edit")
-      renders(conn, ~p"/#{user}/links/#{url}/edit")
-      renders(conn, ~p"/#{user}/addresses/#{address}/edit")
-      renders(conn, ~p"/#{user}/social_media_accounts/#{social}/edit")
+      renders(conn, ~p"/settings/emails/#{email}/edit")
+      renders(conn, ~p"/settings/phone_numbers/#{phone}/edit")
+      renders(conn, ~p"/settings/links/#{url}/edit")
+      renders(conn, ~p"/settings/addresses/#{address}/edit")
+      renders(conn, ~p"/settings/social_media_accounts/#{social}/edit")
     end
 
     test "public listing and global tag pages render", %{conn: conn, tag: tag} do
@@ -153,7 +153,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "create a phone number", %{conn: conn, user: user} do
       conn =
-        post(conn, ~p"/#{user}/phone_numbers",
+        post(conn, ~p"/settings/phone_numbers",
           phone_number: %{value: "+49 30 5550000", number_type: "Cell"}
         )
 
@@ -162,20 +162,22 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "create a link", %{conn: conn, user: user} do
       conn =
-        post(conn, ~p"/#{user}/links", url: %{value: "https://example.org/", description: "Site"})
+        post(conn, ~p"/settings/links",
+          url: %{value: "https://example.org/", description: "Site"}
+        )
 
       assert conn.status < 500, "link create -> #{conn.status}"
     end
 
     test "update a phone number", %{conn: conn, user: user, phone: phone} do
       conn =
-        put(conn, ~p"/#{user}/phone_numbers/#{phone}", phone_number: %{value: "+49 30 5551111"})
+        put(conn, ~p"/settings/phone_numbers/#{phone}", phone_number: %{value: "+49 30 5551111"})
 
       assert conn.status < 500, "phone update -> #{conn.status}"
     end
 
     test "delete a phone number", %{conn: conn, user: user, phone: phone} do
-      conn = delete(conn, ~p"/#{user}/phone_numbers/#{phone}")
+      conn = delete(conn, ~p"/settings/phone_numbers/#{phone}")
       assert conn.status < 500, "phone delete -> #{conn.status}"
     end
 

@@ -1,0 +1,12 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/work_experiences
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:work} title={gettext("Experience")}>
+  <.card_section
+    empty={Enum.empty?(@work_experience)}
+    add_href={~p"/settings/work_experiences/new"}
+    add_label={gettext("Add work experience")}
+  >
+    <%= render "card_list.html", assigns %>
+  </.card_section>
+</.settings_shell>

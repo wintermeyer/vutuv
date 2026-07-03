@@ -15,11 +15,20 @@ defmodule VutuvWeb.PhoneNumberController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", phone_numbers: phone_numbers)
+        render(conn, "index.html", as_owner?: false, phone_numbers: phone_numbers)
       end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers) end
+    )
+  end
+
+  # The owner's editor (GET /settings/phone_numbers).
+  def manage(conn, _params) do
+    phone_numbers = Repo.all(PhoneNumber.ordered(assoc(conn.assigns[:user], :phone_numbers)))
+
+    render(conn, "manage.html",
+      phone_numbers: phone_numbers,
+      as_owner?: true,
+      page_title: gettext("Phone numbers")
     )
   end
 
@@ -45,7 +54,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Phone number created successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/phone_numbers",
+      redirect_to: ~p"/settings/phone_numbers",
       render: "new.html"
     )
   end
@@ -71,7 +80,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Phone number updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/phone_numbers/#{&1}",
+      redirect_to: fn _entry -> ~p"/settings/phone_numbers" end,
       render: "edit.html",
       assigns: [phone_number: phone_number]
     )
@@ -82,7 +91,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.delete(conn, phone_number,
       flash: gettext("Phone number deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/phone_numbers"
+      redirect_to: ~p"/settings/phone_numbers"
     )
   end
 end

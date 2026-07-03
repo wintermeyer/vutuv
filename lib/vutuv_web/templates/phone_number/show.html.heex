@@ -12,8 +12,8 @@
   <.row_actions
     :if={same_user?(@user, @current_user)}
     class="mb-4"
-    edit_to={~p"/#{@user}/phone_numbers/#{@phone_number}/edit"}
-    delete_to={~p"/#{@user}/phone_numbers/#{@phone_number}"}
+    edit_to={~p"/settings/phone_numbers/#{@phone_number}/edit"}
+    delete_to={~p"/settings/phone_numbers/#{@phone_number}"}
   />
 
   <h2 class="card__label"><%= gettext("Number Type") %></h2>

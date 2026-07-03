@@ -1,7 +1,7 @@
 <.page_header
   title={gettext("Username")}
   crumbs={[
-    {gettext("Settings"), ~p"/#{@user}/settings"},
+    {gettext("Settings"), ~p"/settings"},
     gettext("Username")
   ]}
 />
@@ -35,7 +35,7 @@
       <%= render("form_content.html",
         backlink: ~p"/#{@user}/edit",
         changeset: @changeset,
-        action: ~p"/#{@user}/usernames",
+        action: ~p"/settings/usernames",
         user: @user
       ) %>
     <% else %>

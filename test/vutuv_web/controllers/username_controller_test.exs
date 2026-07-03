@@ -10,20 +10,22 @@ defmodule VutuvWeb.UsernameControllerTest do
   alias Vutuv.Accounts.User
 
   describe "authorization" do
-    test "the username page is owner-only", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      other = insert_activated_user()
+    test "the username page always edits the logged-in member's own handle", %{conn: conn} do
+      # /settings is user-agnostic: whoever opens it edits themselves; there is
+      # no URL that could open someone ELSE's username form.
+      {conn, user} = create_and_login_user(conn)
 
-      assert conn |> get("/#{other.username}/usernames/new") |> html_response(403)
+      html = conn |> get("/settings/usernames/new") |> html_response(200)
+      assert html =~ "@#{user.username}"
     end
 
     test "guests cannot see or use the username page", %{conn: conn} do
       user = insert_activated_user()
 
-      assert conn |> get("/#{user.username}/usernames/new") |> html_response(403)
+      assert conn |> get("/settings/usernames/new") |> redirected_to() == "/"
 
-      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "hijacked"})
-      assert conn.status == 403
+      conn = post(conn, "/settings/usernames", user: %{"username" => "hijacked"})
+      assert redirected_to(conn) == "/"
       refute Repo.get(User, user.id).username == "hijacked"
     end
   end
@@ -32,7 +34,7 @@ defmodule VutuvWeb.UsernameControllerTest do
     test "shows the current handle and the quota", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      html = conn |> get("/#{user.username}/usernames/new") |> html_response(200)
+      html = conn |> get("/settings/usernames/new") |> html_response(200)
 
       assert html =~ "@#{user.username}"
       assert html =~ ~s(id="slug-form")
@@ -52,7 +54,7 @@ defmodule VutuvWeb.UsernameControllerTest do
         {:ok, _} = Vutuv.Accounts.update_username(db_user, %{"username" => "used_up_#{n}"})
       end
 
-      html = conn |> get("/used_up_4/usernames/new") |> html_response(200)
+      html = conn |> get("/settings/usernames/new") |> html_response(200)
 
       refute html =~ ~s(id="slug-form")
       assert html =~ gettext("You have used all 4 username changes of the last 90 days.")
@@ -64,7 +66,7 @@ defmodule VutuvWeb.UsernameControllerTest do
       {conn, user} = create_and_login_user(conn)
       old_handle = user.username
 
-      conn = post(conn, "/#{old_handle}/usernames", user: %{"username" => "Brand_New"})
+      conn = post(conn, "/settings/usernames", user: %{"username" => "Brand_New"})
 
       assert redirected_to(conn) == "/brand_new"
       assert Repo.get(User, user.id).username == "brand_new"
@@ -77,7 +79,7 @@ defmodule VutuvWeb.UsernameControllerTest do
     test "an invalid handle re-renders the form with the error", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "not valid!"})
+      conn = post(conn, "/settings/usernames", user: %{"username" => "not valid!"})
 
       assert html_response(conn, 200) =~ "may only contain letters, numbers, and underscores"
       assert Repo.get(User, user.id).username == user.username
@@ -87,7 +89,7 @@ defmodule VutuvWeb.UsernameControllerTest do
       insert(:user, username: "wanted_handle")
       {conn, user} = create_and_login_user(conn)
 
-      conn = post(conn, "/#{user.username}/usernames", user: %{"username" => "wanted_handle"})
+      conn = post(conn, "/settings/usernames", user: %{"username" => "wanted_handle"})
 
       assert html_response(conn, 200) =~ "has already been taken"
     end
@@ -100,7 +102,7 @@ defmodule VutuvWeb.UsernameControllerTest do
         {:ok, _} = Vutuv.Accounts.update_username(db_user, %{"username" => "spent_#{n}"})
       end
 
-      conn = post(conn, "/spent_4/usernames", user: %{"username" => "one_too_many"})
+      conn = post(conn, "/settings/usernames", user: %{"username" => "one_too_many"})
 
       assert conn.status == 200
       assert Repo.get(User, user.id).username == "spent_4"
@@ -111,7 +113,7 @@ defmodule VutuvWeb.UsernameControllerTest do
     test "answers free, taken, and invalid", %{conn: conn} do
       insert(:user, username: "claimed_handle")
       {conn, user} = create_and_login_user(conn)
-      base = "/#{user.username}/usernames/availability"
+      base = "/settings/usernames/availability"
 
       # The route lives in the :browser pipeline (`accepts ["html"]`), so the
       # form's fetch() must negotiate via its default */* Accept header - an
@@ -137,10 +139,10 @@ defmodule VutuvWeb.UsernameControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       # The username lives on the sign-in & security page of Settings.
-      html = conn |> get("/#{user.username}/settings/security") |> html_response(200)
+      html = conn |> get("/settings/security") |> html_response(200)
 
       assert html =~ "@#{user.username}"
-      assert html =~ "/#{user.username}/usernames/new"
+      assert html =~ "/settings/usernames/new"
     end
   end
 

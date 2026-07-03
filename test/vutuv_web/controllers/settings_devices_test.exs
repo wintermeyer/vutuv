@@ -22,7 +22,7 @@ defmodule VutuvWeb.SettingsDevicesTest do
   describe "the signed-in-devices card" do
     test "lists the current device, marked, with no logout button", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      conn = get(conn, ~p"/#{user}/settings/security")
+      conn = get(conn, ~p"/settings/security")
       body = html_response(conn, 200)
 
       assert body =~ "Signed-in devices"
@@ -38,24 +38,25 @@ defmodule VutuvWeb.SettingsDevicesTest do
       {conn1, user} = create_and_login_user(conn)
       conn2 = second_device(conn)
 
-      conn1 = get(conn1, ~p"/#{user}/settings/security")
-      conn2 = get(conn2, ~p"/#{user}/settings/security")
+      conn1 = get(conn1, ~p"/settings/security")
+      conn2 = get(conn2, ~p"/settings/security")
       id1 = conn1.assigns.current_session_id
       id2 = conn2.assigns.current_session_id
       assert id1 && id2 && id1 != id2
 
       # From device 1, log device 2 out.
-      conn1 = delete(conn1, ~p"/#{user}/settings/devices/#{id2}")
-      assert redirected_to(conn1) == ~p"/#{user}/settings/security"
+      conn1 = delete(conn1, ~p"/settings/devices/#{id2}")
+      assert redirected_to(conn1) == ~p"/settings/security"
 
-      # Device 2's very next request falls back to the anonymous view (403 on
-      # the owner-only page) and its session cookie is dropped.
-      conn2 = get(conn2, ~p"/#{user}/settings/security")
-      assert html_response(conn2, 403)
+      # Device 2's very next request falls back to the anonymous view (the
+      # login-required /settings scope redirects home) and its session cookie
+      # is dropped.
+      conn2 = get(conn2, ~p"/settings/security")
+      assert redirected_to(conn2) == "/"
       refute get_session(conn2, :user_id)
 
       # Device 1 is untouched.
-      conn1 = get(conn1, ~p"/#{user}/settings/security")
+      conn1 = get(conn1, ~p"/settings/security")
       assert conn1.assigns.current_user.id == user.id
     end
 
@@ -65,8 +66,8 @@ defmodule VutuvWeb.SettingsDevicesTest do
       victim = insert(:user)
       {_token, victim_session} = Sessions.start_session(victim, build_conn(), alert: false)
 
-      conn1 = delete(conn1, ~p"/#{user}/settings/devices/#{victim_session.id}")
-      assert redirected_to(conn1) == ~p"/#{user}/settings/security"
+      conn1 = delete(conn1, ~p"/settings/devices/#{victim_session.id}")
+      assert redirected_to(conn1) == ~p"/settings/security"
       # The foreign session is untouched (scoped lookup makes it invisible).
       assert Sessions.get_session(victim, victim_session.id).revoked_at == nil
     end
@@ -75,17 +76,17 @@ defmodule VutuvWeb.SettingsDevicesTest do
       {conn1, user} = create_and_login_user(conn)
       conn2 = second_device(conn)
 
-      conn1 = get(conn1, ~p"/#{user}/settings/security")
-      conn2 = get(conn2, ~p"/#{user}/settings/security")
+      conn1 = get(conn1, ~p"/settings/security")
+      conn2 = get(conn2, ~p"/settings/security")
       id1 = conn1.assigns.current_session_id
 
-      conn1 = delete(conn1, ~p"/#{user}/settings/devices")
-      assert redirected_to(conn1) == ~p"/#{user}/settings/security"
+      conn1 = delete(conn1, ~p"/settings/devices")
+      assert redirected_to(conn1) == ~p"/settings/security"
 
       assert Sessions.list_active(user) |> Enum.map(& &1.id) == [id1]
 
-      conn2 = get(conn2, ~p"/#{user}/settings/security")
-      assert html_response(conn2, 403)
+      conn2 = get(conn2, ~p"/settings/security")
+      assert redirected_to(conn2) == "/"
     end
   end
 end

@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/social_media_accounts
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:social} title={gettext("Social Media")}>
+  <.card_section
+    empty={Enum.empty?(@social_media_accounts)}
+    add_href={~p"/settings/social_media_accounts/new"}
+    add_label={gettext("Add a social media account")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="social_media_accounts"
+      slug={@user.username}
+      editable={@social_media_accounts != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

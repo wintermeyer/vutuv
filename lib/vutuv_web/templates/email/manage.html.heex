@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/emails
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:emails} title={gettext("Email addresses")}>
+  <.card_section
+    empty={Enum.empty?(@emails)}
+    add_href={~p"/settings/emails/new"}
+    add_label={gettext("Add an email address")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="emails"
+      slug={@user.username}
+      editable={@emails != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

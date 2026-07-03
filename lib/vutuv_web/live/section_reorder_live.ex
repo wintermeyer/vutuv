@@ -127,8 +127,8 @@ defmodule VutuvWeb.SectionReorderLive do
           </div>
 
           <.row_actions
-            edit_to={edit_path(@slug, @section, entry.id)}
-            delete_to={entry_path(@slug, @section, entry.id)}
+            edit_to={edit_path(@section, entry.id)}
+            delete_to={entry_path(@section, entry.id)}
           />
         </li>
       </ul>
@@ -233,18 +233,18 @@ defmodule VutuvWeb.SectionReorderLive do
 
   # Verified routes need literal path segments, so each section gets its own
   # clause rather than an interpolated `~p"/#{slug}/#{section}/…"`.
-  defp edit_path(slug, "links", id), do: ~p"/#{slug}/links/#{id}/edit"
-  defp edit_path(slug, "phone_numbers", id), do: ~p"/#{slug}/phone_numbers/#{id}/edit"
-  defp edit_path(slug, "addresses", id), do: ~p"/#{slug}/addresses/#{id}/edit"
+  defp edit_path("links", id), do: ~p"/settings/links/#{id}/edit"
+  defp edit_path("phone_numbers", id), do: ~p"/settings/phone_numbers/#{id}/edit"
+  defp edit_path("addresses", id), do: ~p"/settings/addresses/#{id}/edit"
 
-  defp edit_path(slug, "social_media_accounts", id),
-    do: ~p"/#{slug}/social_media_accounts/#{id}/edit"
+  defp edit_path("social_media_accounts", id),
+    do: ~p"/settings/social_media_accounts/#{id}/edit"
 
-  defp edit_path(slug, "emails", id), do: ~p"/#{slug}/emails/#{id}/edit"
+  defp edit_path("emails", id), do: ~p"/settings/emails/#{id}/edit"
 
-  defp entry_path(slug, "links", id), do: ~p"/#{slug}/links/#{id}"
-  defp entry_path(slug, "phone_numbers", id), do: ~p"/#{slug}/phone_numbers/#{id}"
-  defp entry_path(slug, "addresses", id), do: ~p"/#{slug}/addresses/#{id}"
-  defp entry_path(slug, "social_media_accounts", id), do: ~p"/#{slug}/social_media_accounts/#{id}"
-  defp entry_path(slug, "emails", id), do: ~p"/#{slug}/emails/#{id}"
+  defp entry_path("links", id), do: ~p"/settings/links/#{id}"
+  defp entry_path("phone_numbers", id), do: ~p"/settings/phone_numbers/#{id}"
+  defp entry_path("addresses", id), do: ~p"/settings/addresses/#{id}"
+  defp entry_path("social_media_accounts", id), do: ~p"/settings/social_media_accounts/#{id}"
+  defp entry_path("emails", id), do: ~p"/settings/emails/#{id}"
 end

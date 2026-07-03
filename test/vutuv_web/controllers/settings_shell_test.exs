@@ -1,59 +1,50 @@
 defmodule VutuvWeb.SettingsShellTest do
   @moduledoc """
-  The shared settings shell on the profile-content section pages (issue: the
-  old two-worlds split between /:slug/edit and the profile's "Manage" pages).
-
-  The owner sees every section management page inside the settings shell: a
-  "back to Settings" link, the page title, a "View profile" link, and (on md+)
-  the sidebar listing every settings area. A visitor (or the owner previewing
-  as public) keeps the classic breadcrumbs view, so the public rendering and
-  its agent-format docs stay untouched.
+  The shared settings shell across the user-agnostic /settings scope (the
+  hub's subpages and every section editor), and the clean split it enables:
+  /settings/<section> is the editor (shell, sidebar, back link), while the
+  /:slug/<section> twin stays the classic public breadcrumbs page for every
+  viewer, with only a quiet "Manage ›" bridge for the owner.
   """
   use VutuvWeb.ConnCase, async: true
 
-  describe "section pages for the owner" do
-    test "the section index renders inside the settings shell", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/work_experiences") |> html_response(200)
-
-      assert html =~ "data-settings-shell"
-      # The way back to the hub and the sidebar to every sibling area.
-      assert html =~ ~s(href="#{~p"/#{user}/settings"}")
-      assert html =~ ~s(href="#{~p"/#{user}/links"}")
-      assert html =~ ~s(href="#{~p"/#{user}/settings/privacy"}")
-      # No classic profile breadcrumbs in the shell.
-      refute html =~ ~s(class="breadcrumbs")
-    end
-
-    test "every section index carries the shell", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+  describe "the /settings editors" do
+    test "every section editor renders inside the settings shell", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
 
       for path <- [
-            ~p"/#{user}/work_experiences",
-            ~p"/#{user}/educations",
-            ~p"/#{user}/links",
-            ~p"/#{user}/social_media_accounts",
-            ~p"/#{user}/emails",
-            ~p"/#{user}/phone_numbers",
-            ~p"/#{user}/addresses",
-            ~p"/#{user}/tags"
+            ~p"/settings/work_experiences",
+            ~p"/settings/educations",
+            ~p"/settings/links",
+            ~p"/settings/social_media_accounts",
+            ~p"/settings/emails",
+            ~p"/settings/phone_numbers",
+            ~p"/settings/addresses",
+            ~p"/settings/tags"
           ] do
-        assert conn |> recycle() |> get(path) |> html_response(200) =~ "data-settings-shell"
+        html = conn |> recycle() |> get(path) |> html_response(200)
+        assert html =~ "data-settings-shell", "expected the shell on #{path}"
+        # The way back to the hub, and the sidebar to every sibling area.
+        assert html =~ ~s(href="#{~p"/settings"}")
+        assert html =~ ~s(href="#{~p"/settings/privacy"}")
+        # No classic profile breadcrumbs inside the editor.
+        refute html =~ ~s(class="breadcrumbs")
       end
     end
 
     test "the new-entry form's breadcrumbs lead back to settings, not the public users trail",
          %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      html = conn |> get(~p"/#{user}/work_experiences/new") |> html_response(200)
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/work_experiences/new") |> html_response(200)
 
-      assert html =~ ~s(href="#{~p"/#{user}/settings"}")
+      assert html =~ ~s(href="#{~p"/settings"}")
+      assert html =~ ~s(href="#{~p"/settings/work_experiences"}")
       refute html =~ ">Users<"
     end
   end
 
-  describe "section pages for everyone else" do
-    test "a visitor keeps the classic breadcrumbs view", %{conn: conn} do
+  describe "the public /:slug section pages" do
+    test "a visitor gets the classic breadcrumbs page with no settings chrome", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       other = insert_activated_user()
 
@@ -61,22 +52,21 @@ defmodule VutuvWeb.SettingsShellTest do
 
       refute html =~ "data-settings-shell"
       assert html =~ ~s(class="breadcrumbs")
-      refute html =~ ~s(href="#{~p"/#{other}/settings"}")
+      refute html =~ ~s(class="profile-header__manage")
     end
 
-    test "the owner previewing as public sees the visitor view", %{conn: conn} do
+    test "the owner gets the same public page plus the quiet Manage bridge", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      html =
-        conn
-        |> get(~p"/#{user}/work_experiences?view_as=public")
-        |> html_response(200)
+      html = conn |> get(~p"/#{user}/links") |> html_response(200)
 
       refute html =~ "data-settings-shell"
       assert html =~ ~s(class="breadcrumbs")
+      assert html =~ ~s(class="profile-header__manage")
+      assert html =~ ~s(href="#{~p"/settings/links"}")
     end
 
-    test "a logged-out visitor keeps the classic view too", %{conn: conn} do
+    test "a logged-out visitor gets the classic page too", %{conn: conn} do
       other = insert_activated_user()
       html = conn |> get(~p"/#{other}/work_experiences") |> html_response(200)
 

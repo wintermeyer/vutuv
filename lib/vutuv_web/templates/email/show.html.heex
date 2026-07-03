@@ -12,8 +12,8 @@
   <.row_actions
     :if={same_user?(@user, @current_user)}
     class="mb-4"
-    edit_to={~p"/#{@user}/emails/#{@email}/edit"}
-    delete_to={~p"/#{@user}/emails/#{@email}"}
+    edit_to={~p"/settings/emails/#{@email}/edit"}
+    delete_to={~p"/settings/emails/#{@email}"}
   />
 
   <h2 class="card__label"><%= gettext("Email") %></h2>

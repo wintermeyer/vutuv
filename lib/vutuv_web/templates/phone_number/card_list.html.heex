@@ -17,8 +17,8 @@
       <td class="text-right">
         <.row_actions
           :if={@as_owner?}
-          edit_to={~p"/#{@user}/phone_numbers/#{number}/edit"}
-          delete_to={~p"/#{@user}/phone_numbers/#{number}"}
+          edit_to={~p"/settings/phone_numbers/#{number}/edit"}
+          delete_to={~p"/settings/phone_numbers/#{number}"}
         />
       </td>
     </tr>

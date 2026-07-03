@@ -1,24 +1,16 @@
-<%!-- The owner manages this section inside the shared settings shell
-(back to Settings, sidebar on md+); a visitor — or the owner previewing
-as public — gets the classic breadcrumbs page, unchanged, so the public
-rendering and its agent-format docs stay untouched. --%>
-<.settings_shell
-  user={@user}
-  active={:education}
+<%!-- The public showcase view of this section — identical for every viewer,
+and exactly what the agent-format docs render. The owner edits at
+/settings/educations; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
   title={gettext("Education")}
-  enabled={@as_owner?}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/educations"}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Education")
   ]}
->
+/>
 
-<.card_section
-  empty={Enum.empty?(@education)}
-  add_href={@as_owner? && ~p"/#{@current_user}/educations/new"}
-  add_label={gettext("Add education")}
->
+<.card_section empty={Enum.empty?(@education)}>
   <%= render "card_list.html", assigns %>
 </.card_section>
-</.settings_shell>

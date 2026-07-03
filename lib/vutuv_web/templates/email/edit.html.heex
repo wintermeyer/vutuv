@@ -1,10 +1,10 @@
 
 <.page_header crumbs={[
-  {gettext("Settings"), ~p"/#{@user}/settings"},
-  {gettext("Emails"), ~p"/#{@user}/emails"},
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Emails"), ~p"/settings/emails"},
   gettext("Edit")
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/#{@user}/emails", changeset: @changeset, action: ~p"/#{@user}/emails/#{@email}", delete_to: ~p"/#{@user}/emails/#{@email}", edit: true %>
+  <%= render "form_content.html", backlink: ~p"/settings/emails", changeset: @changeset, action: ~p"/settings/emails/#{@email}", delete_to: ~p"/settings/emails/#{@email}", edit: true %>
 </.card_section>

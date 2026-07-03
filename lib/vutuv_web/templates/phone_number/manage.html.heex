@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/phone_numbers
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:phones} title={gettext("Phone numbers")}>
+  <.card_section
+    empty={Enum.empty?(@phone_numbers)}
+    add_href={~p"/settings/phone_numbers/new"}
+    add_label={gettext("Add a phone number")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="phone_numbers"
+      slug={@user.username}
+      editable={@phone_numbers != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

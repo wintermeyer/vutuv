@@ -1,30 +1,22 @@
-<%!-- The owner manages this section inside the shared settings shell
-(back to Settings, sidebar on md+); a visitor — or the owner previewing
-as public — gets the classic breadcrumbs page, unchanged, so the public
-rendering and its agent-format docs stay untouched. --%>
-<.settings_shell
-  user={@user}
-  active={:tags}
-  title={gettext("Tags")}
-  public_title={gettext("Tags of %{name}", name: full_name(@user))}
-  enabled={@as_owner?}
+<%!-- The public showcase view of this member's tags — identical for every
+viewer, and exactly what the agent-format docs render. The owner edits at
+/settings/tags; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
+  title={gettext("Tags of %{name}", name: full_name(@user))}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/tags"}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Tags")
   ]}
->
+/>
 
-<.card_section
-  empty={Enum.empty?(@user_tags)}
-  add_href={@as_owner? && ~p"/#{@current_user}/tags/new"}
->
+<.card_section empty={Enum.empty?(@user_tags)}>
   <div class="card__tablewrap">
   <table>
     <thead>
       <tr>
         <th><%= gettext "Tag name" %></th>
-        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -33,16 +25,9 @@ rendering and its agent-format docs stay untouched. --%>
           <td>
             <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
           </td>
-          <td class="text-right">
-            <.row_actions
-              :if={@as_owner?}
-              delete_to={~p"/#{@user}/tags/#{user_tag}"}
-            />
-          </td>
         </tr>
       <% end %>
     </tbody>
   </table>
   </div>
 </.card_section>
-</.settings_shell>

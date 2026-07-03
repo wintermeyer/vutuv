@@ -18,7 +18,7 @@ defmodule VutuvWeb.ExportControllerTest do
   }
 
   defp download(conn, user) do
-    get(conn, ~p"/#{user}/export")
+    get(conn, ~p"/settings/export")
   end
 
   test "the owner downloads one JSON file with their data", %{conn: conn} do
@@ -53,14 +53,10 @@ defmodule VutuvWeb.ExportControllerTest do
     assert data["schema_version"]
   end
 
-  test "another logged-in member is refused", %{conn: conn} do
-    owner = insert(:activated_user)
-    insert(:email, user: owner)
-    {conn, _other} = create_and_login_user(conn)
-
-    conn = download(conn, owner)
-
-    assert conn.status == 403
+  test "a guest is sent to the login flow, not the export", %{conn: conn} do
+    # /settings is user-agnostic and login-required: there is no URL for
+    # someone ELSE's export any more, and a guest is turned away.
+    assert conn |> get(~p"/settings/export") |> redirected_to() == "/"
   end
 
   test "logged out is refused", %{conn: conn} do

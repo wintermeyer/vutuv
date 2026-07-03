@@ -37,6 +37,18 @@ defmodule VutuvWeb.Router do
     plug(Plugs.EnsureActivated)
   end
 
+  # The user-agnostic settings scope: every /settings/* page operates on the
+  # logged-in member (SettingsUser assigns :user = :current_user), so one
+  # shareable URL — vutuv.de/settings/links — opens each member's own editor,
+  # while the /:slug twins stay the public showcase view. NoIndex keeps the
+  # editor pages out of search results.
+  pipeline :settings_pipe do
+    plug(Plugs.NoIndex)
+    plug(Plugs.RequireLogin)
+    plug(Plugs.SettingsUser)
+    plug(Plugs.EnsureActivated)
+  end
+
   # Gates the whole /admin scope in one place, so a new admin controller
   # cannot forget the auth plugs and ship world-accessible.
   pipeline :admin do
@@ -556,10 +568,131 @@ defmodule VutuvWeb.Router do
     match(:*, "/*path", NotFoundController, :show, assigns: %{api_scope: :none})
   end
 
+  # The member's own editing world, user-agnostic: every /settings/* page
+  # operates on the logged-in member (the :settings_pipe pipeline assigns
+  # :user = :current_user), so any of these URLs can be handed to any member —
+  # "open vutuv.de/settings/links" — and opens *their own* editor. The
+  # /:slug/... twins in the scope below stay the pure public showcase view.
+  # Must stay ABOVE the /:slug catch-all scope ("settings" is also a reserved
+  # slug, so no member can claim it).
+  scope "/settings", VutuvWeb do
+    pipe_through([:browser, :settings_pipe])
+
+    # The hub: the one grouped map of everything a member can change.
+    get("/", SettingsController, :index)
+
+    # The profile basics (photos, name, about you) — the old /:slug/edit.
+    get("/profile", UserController, :edit)
+    put("/profile", UserController, :update)
+    patch("/profile", UserController, :update)
+
+    # The account areas: sign-in & security, language & maps, your data, and
+    # the delete-account danger page. put + patch both, to match whichever
+    # method <.form for={changeset} emits for a persisted record.
+    get("/security", SettingsController, :security)
+    get("/preferences", SettingsController, :preferences)
+    get("/data", SettingsController, :data)
+    get("/delete", SettingsController, :delete_account)
+    get("/privacy", SettingsController, :privacy)
+    put("/privacy", SettingsController, :update_privacy)
+    patch("/privacy", SettingsController, :update_privacy)
+    get("/notifications", SettingsController, :notifications)
+    put("/notifications", SettingsController, :update_notifications)
+    patch("/notifications", SettingsController, :update_notifications)
+    # Read-only developer hub: connected apps + personal API tokens.
+    get("/apps", SettingsController, :apps)
+    put("/language", SettingsController, :update_language)
+    patch("/language", SettingsController, :update_language)
+    put("/maps", SettingsController, :update_maps)
+    patch("/maps", SettingsController, :update_maps)
+    # Signed-in devices: DELETE one by id, or all-but-this-one (issue #794).
+    delete("/devices/:id", SettingsController, :revoke_session)
+    delete("/devices", SettingsController, :revoke_other_sessions)
+    # Passkeys (issue #795): the WebAuthn registration ceremony is
+    # challenge → create (both JSON), plus remove-by-id.
+    post("/passkeys/challenge", PasskeyController, :challenge)
+    post("/passkeys", PasskeyController, :create)
+    delete("/passkeys/:id", PasskeyController, :delete)
+    # The owner's personal data download (GDPR): one JSON file.
+    get("/export", ExportController, :show)
+    # Import a LinkedIn data-export ZIP: upload -> preview -> apply the picks.
+    get("/import/linkedin", ImportController, :new)
+    post("/import/linkedin", ImportController, :create)
+    post("/import/linkedin/apply", ImportController, :confirm)
+    # Changing the username: the form, the POST, and the live availability
+    # check behind the form's as-you-type verdict.
+    get("/usernames/availability", UsernameController, :availability)
+    resources("/usernames", UsernameController, only: [:new, :create], as: :settings_username)
+
+    # The profile-content section editors, each mirroring its public
+    # /:slug/<section> twin. `manage` is the editor index (add tile, reorder,
+    # row actions, inside the settings shell); new/create/edit/update/delete
+    # live only here — the /:slug routes serve just the public index + show.
+    get("/emails", EmailController, :manage)
+    # PIN-entry step for the email-change flow (issue #759).
+    post("/emails/confirmation", EmailController, :confirm)
+
+    resources("/emails", EmailController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_email
+    )
+
+    get("/phone_numbers", PhoneNumberController, :manage)
+
+    resources("/phone_numbers", PhoneNumberController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_phone_number
+    )
+
+    get("/links", UrlController, :manage)
+
+    resources("/links", UrlController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_link
+    )
+
+    get("/social_media_accounts", SocialMediaAccountController, :manage)
+
+    resources("/social_media_accounts", SocialMediaAccountController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_social_media_account
+    )
+
+    # Pin one work experience as the profile job title, or clear back to the
+    # automatic heuristic (issue #833).
+    put("/work_experiences/:id/pin", WorkExperienceController, :pin)
+    delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
+    get("/work_experiences", WorkExperienceController, :manage)
+
+    resources("/work_experiences", WorkExperienceController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_work_experience
+    )
+
+    get("/educations", EducationController, :manage)
+
+    resources("/educations", EducationController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_education
+    )
+
+    get("/addresses", AddressController, :manage)
+
+    resources("/addresses", AddressController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_address
+    )
+
+    get("/tags", UserTagController, :manage)
+    resources("/tags", UserTagController, only: [:new, :create, :delete], as: :settings_tag)
+  end
+
   # Profiles live at the URL root: /:slug is the profile page, /:slug/... the
   # per-user sub-pages. This scope must stay LAST — every route above wins by
   # definition order, and Vutuv.Accounts.ReservedSlugs keeps users from
-  # claiming those path words as slugs.
+  # claiming those path words as slugs. Everything under /:slug is the PUBLIC
+  # showcase view (or a redirect into /settings); editing happens in the
+  # /settings scope above.
   scope "/", VutuvWeb do
     pipe_through(:browser)
 
@@ -567,68 +700,20 @@ defmodule VutuvWeb.Router do
     # unverified users and search covers discovery. No :new/:create either —
     # registration is the landing-page form (POST /new_registration); the
     # UserController versions were unreachable (EnsureActivated 404'd them).
-    resources "/", UserController, param: "slug", except: [:index, :new, :create] do
+    # No :edit/:update — the basics form lives at /settings/profile now.
+    resources "/", UserController,
+      param: "slug",
+      except: [:index, :new, :create, :edit, :update] do
       pipe_through(:user_pipe)
-      # The owner's personal data download (GDPR): one JSON file. Owner-only,
-      # enforced by the controller's RequireLogin + AuthUser plugs.
-      get("/export", ExportController, :show)
+      # The old owner URLs: everything editable moved to the user-agnostic
+      # /settings scope. Redirect so bookmarks and muscle memory keep working.
+      get("/edit", UserController, :edit_redirect)
+      get("/settings", SettingsController, :legacy_redirect)
+      get("/settings/*rest", SettingsController, :legacy_redirect)
       # The session-aware vCard (all emails for the owner / a follower-back
       # viewer); the anonymous canonical vCard is /:slug.vcf.
       get("/vcard", VCardController, :get)
-      resources("/emails", EmailController)
-      # PIN-entry step for the email-change flow (issue #759).
-      post("/emails/confirmation", EmailController, :confirm)
-      # Changing the username: the form, the POST, and the live
-      # availability check behind the form's as-you-type verdict.
-      get("/usernames/availability", UsernameController, :availability)
-      resources("/usernames", UsernameController, only: [:new, :create])
-
-      # Settings, split off the old single edit form into focused, owner-only
-      # pages (SettingsController). GET /settings is the hub: the one grouped
-      # map of everything a member can change about themselves (profile
-      # sections, account, privacy, notifications, apps, delete). put + patch
-      # both, to match whichever method <.form for={changeset} emits for a
-      # persisted record.
-      get("/settings", SettingsController, :index)
-      # The account areas, carved out of the old everything-on-one-scroll
-      # account hub: sign-in & security, language & maps, your data, and the
-      # delete-account danger page.
-      get("/settings/security", SettingsController, :security)
-      get("/settings/preferences", SettingsController, :preferences)
-      get("/settings/data", SettingsController, :data)
-      get("/settings/delete", SettingsController, :delete_account)
-      get("/settings/privacy", SettingsController, :privacy)
-      put("/settings/privacy", SettingsController, :update_privacy)
-      patch("/settings/privacy", SettingsController, :update_privacy)
-      get("/settings/notifications", SettingsController, :notifications)
-      put("/settings/notifications", SettingsController, :update_notifications)
-      patch("/settings/notifications", SettingsController, :update_notifications)
-      # Read-only developer hub: connected apps + personal API tokens, split off
-      # the account hub so neither page is overloaded.
-      get("/settings/apps", SettingsController, :apps)
-      # Import a LinkedIn data-export ZIP: upload -> preview -> apply the picks.
-      get("/settings/import/linkedin", ImportController, :new)
-      post("/settings/import/linkedin", ImportController, :create)
-      post("/settings/import/linkedin/apply", ImportController, :confirm)
-      # The interface-language form lives on the account hub (GET /settings); it
-      # only needs a write target, not its own page.
-      put("/settings/language", SettingsController, :update_language)
-      patch("/settings/language", SettingsController, :update_language)
-      # Map preferences (which map services to show on addresses + the default)
-      # also live on the account hub (GET /settings); they only need a write target.
-      put("/settings/maps", SettingsController, :update_maps)
-      patch("/settings/maps", SettingsController, :update_maps)
-      # Signed-in devices: the list lives on the account hub (GET /settings).
-      # DELETE one device by id, or all-but-this-one (issue #794).
-      delete("/settings/devices/:id", SettingsController, :revoke_session)
-      delete("/settings/devices", SettingsController, :revoke_other_sessions)
-      # Passkeys (issue #795): enrol from the account hub (the WebAuthn
-      # registration ceremony is challenge → create, both JSON) and remove one
-      # by id. The list itself renders on GET /settings. Owner-only, like the
-      # rest of this controller — a passkey can only be added while logged in.
-      post("/settings/passkeys/challenge", PasskeyController, :challenge)
-      post("/settings/passkeys", PasskeyController, :create)
-      delete("/settings/passkeys/:id", PasskeyController, :delete)
+      resources("/emails", EmailController, only: [:index, :show])
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])
       resources("/connections", ConnectionController, only: [:index])
@@ -638,22 +723,13 @@ defmodule VutuvWeb.Router do
         as: :tag_endorsement
       )
 
-      resources("/phone_numbers", PhoneNumberController)
-      resources("/links", UrlController)
-      resources("/social_media_accounts", SocialMediaAccountController)
-      # Pin one work experience as the profile job title, or clear back to the
-      # automatic heuristic (issue #833). Owner-only, on the management page;
-      # the extra `/pin` segment keeps these distinct from the resources below.
-      put("/work_experiences/:id/pin", WorkExperienceController, :pin)
-      delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
-      resources("/work_experiences", WorkExperienceController)
-      resources("/educations", EducationController)
-      resources("/addresses", AddressController)
-
-      resources("/tags", UserTagController,
-        only: [:new, :create, :show, :delete, :index],
-        as: :tag
-      )
+      resources("/phone_numbers", PhoneNumberController, only: [:index, :show])
+      resources("/links", UrlController, only: [:index, :show])
+      resources("/social_media_accounts", SocialMediaAccountController, only: [:index, :show])
+      resources("/work_experiences", WorkExperienceController, only: [:index, :show])
+      resources("/educations", EducationController, only: [:index, :show])
+      resources("/addresses", AddressController, only: [:index, :show])
+      resources("/tags", UserTagController, only: [:index, :show], as: :tag)
 
       # The public list of everyone who endorses this member for one tag (the
       # profile Tags popover's "and N more" link). It lives under the user-tag

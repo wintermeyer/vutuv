@@ -13,36 +13,36 @@ defmodule VutuvWeb.UrlControllerTest do
 
   test "redirect when creating valid url", %{conn: conn} do
     {conn, user} = create_url(conn, "example.org")
-    assert redirected_to(conn) == ~p"/#{user}/links"
+    assert redirected_to(conn) == ~p"/settings/links"
     assert Repo.get_by(Url, value: "http://example.org", user_id: user.id)
   end
 
   test "return 422 when creating invalid url", %{conn: conn} do
     {conn, user} = create_url(conn, "invalid_url")
-    assert html_response(conn, 422) =~ ~p"/#{user}/links"
+    assert html_response(conn, 422) =~ ~p"/settings/links"
     refute Repo.get_by(Url, value: "invalid_url", user_id: user.id)
   end
 
   test "return 422 when creating empty url", %{conn: conn} do
     {conn, user} = create_url(conn, "")
-    assert html_response(conn, 422) =~ ~p"/#{user}/links"
+    assert html_response(conn, 422) =~ ~p"/settings/links"
   end
 
   test "redirect when setting valid url", %{conn: conn} do
     {conn, user, url} = set_url(conn, "example.org")
-    assert redirected_to(conn) == ~p"/#{user}/links/#{url}"
+    assert redirected_to(conn) == ~p"/settings/links"
     assert Repo.get(Url, url.id).value == "http://example.org"
   end
 
   test "return 422 when setting invalid url", %{conn: conn} do
     {conn, user, url} = set_url(conn, "invalid_url")
-    assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
+    assert html_response(conn, 422) =~ ~p"/settings/links/#{url}"
     refute Repo.get(Url, url.id).value == "invalid_url"
   end
 
   test "return 422 when setting empty url", %{conn: conn} do
     {conn, user, url} = set_url(conn, "")
-    assert html_response(conn, 422) =~ ~p"/#{user}/links/#{url}"
+    assert html_response(conn, 422) =~ ~p"/settings/links/#{url}"
   end
 
   test "breadcrumbs escape user-authored text instead of injecting raw HTML", %{conn: conn} do
@@ -81,8 +81,8 @@ defmodule VutuvWeb.UrlControllerTest do
   test "redirect when deleting url", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     url = insert(:url, user: user)
-    conn = delete(conn, ~p"/#{user}/links/#{url}")
-    assert redirected_to(conn) == ~p"/#{user}/links"
+    conn = delete(conn, ~p"/settings/links/#{url}")
+    assert redirected_to(conn) == ~p"/settings/links"
     refute Repo.get(Url, url.id)
   end
 
@@ -95,8 +95,8 @@ defmodule VutuvWeb.UrlControllerTest do
     test "new links get the next position", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      post(conn, ~p"/#{user}/links", url: %{"value" => "one.example", "description" => "one"})
-      post(conn, ~p"/#{user}/links", url: %{"value" => "two.example", "description" => "two"})
+      post(conn, ~p"/settings/links", url: %{"value" => "one.example", "description" => "one"})
+      post(conn, ~p"/settings/links", url: %{"value" => "two.example", "description" => "two"})
 
       [first, second] = Repo.all(Url.ordered(Ecto.assoc(user, :urls)))
       assert first.value == "http://one.example"
@@ -117,15 +117,17 @@ defmodule VutuvWeb.UrlControllerTest do
       assert alpha < bravo, "expected the position-1 link to render before position-2"
     end
 
-    test "the owner sees the reorder tool, a visitor does not", %{conn: conn} do
+    test "the /settings editor carries the reorder tool, the public page does not", %{
+      conn: conn
+    } do
       {owner_conn, user} = create_and_login_user(conn)
       insert_list(2, :url, user: user)
 
-      owner_html = owner_conn |> get(~p"/#{user}/links") |> html_response(200)
+      owner_html = owner_conn |> get(~p"/settings/links") |> html_response(200)
       assert owner_html =~ ~s(phx-hook="Reorder")
 
-      visitor_html = build_conn() |> get(~p"/#{user}/links") |> html_response(200)
-      refute visitor_html =~ ~s(phx-hook="Reorder")
+      public_html = build_conn() |> get(~p"/#{user}/links") |> html_response(200)
+      refute public_html =~ ~s(phx-hook="Reorder")
     end
   end
 
@@ -133,7 +135,7 @@ defmodule VutuvWeb.UrlControllerTest do
     {conn, user} = create_and_login_user(conn)
 
     conn =
-      post(conn, ~p"/#{user}/links", url: %{"value" => url_value, "description" => "test"})
+      post(conn, ~p"/settings/links", url: %{"value" => url_value, "description" => "test"})
 
     {conn, user}
   end
@@ -143,7 +145,7 @@ defmodule VutuvWeb.UrlControllerTest do
     url = insert(:url, user: user)
 
     conn =
-      put(conn, ~p"/#{user}/links/#{url}", url: %{"value" => url_value, "description" => "test"})
+      put(conn, ~p"/settings/links/#{url}", url: %{"value" => url_value, "description" => "test"})
 
     {conn, user, url}
   end

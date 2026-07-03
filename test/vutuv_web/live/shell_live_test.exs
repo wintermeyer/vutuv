@@ -147,9 +147,9 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, ~s(#{menu} a[href="/stefan"]))
     assert has_element?(view, ~s(#{menu} a[href="/bookmarks"]))
     assert has_element?(view, ~s(#{menu} a[href="/likes"]))
-    # "Settings" opens the settings hub (the one map of everything editable),
-    # not the profile-basics form it used to alias.
-    assert has_element?(view, ~s(#{menu} a[href="/stefan/settings"]))
+    # "Settings" opens the user-agnostic settings hub (the one map of
+    # everything editable), not the profile-basics form it used to alias.
+    assert has_element?(view, ~s(#{menu} a[href="/settings"]))
     # Log out folds into the menu (its own door icon in the bar is gone).
     assert has_element?(view, ~s(#{menu} a[href="/logout"][data-method="delete"]))
     # The desktop-only trigger that opens the keyboard-shortcuts overlay.

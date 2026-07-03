@@ -1,8 +1,8 @@
 <.page_header
   title={gettext("Import from LinkedIn")}
   crumbs={[
-    {gettext("Settings"), ~p"/#{@user}/settings"},
-    {gettext("Your data"), ~p"/#{@user}/settings/data"},
+    {gettext("Settings"), ~p"/settings"},
+    {gettext("Your data"), ~p"/settings/data"},
     gettext("Import from LinkedIn")
   ]}
 />
@@ -88,7 +88,7 @@
 
     <.form
       for={to_form(%{}, as: :import)}
-      action={~p"/#{@user}/settings/import/linkedin"}
+      action={~p"/settings/import/linkedin"}
       method="post"
       multipart
       id="linkedin-import-form"

@@ -1736,9 +1736,16 @@ defmodule VutuvWeb.UI do
   buttons, …) keep their hand-written markup.
 
   Use it as `<.page_header title={…} crumbs={[gettext("Users"), {full_name(@user), ~p"/…"}, gettext("Emails")]} />`.
+
+  `manage_to` (optional, falsy = absent) renders a quiet right-aligned
+  "Manage ›" link in the title row — the owner's bridge from a public section
+  page (/:slug/links) to its /settings editor. Gate it at the call site
+  (`manage_to={same_user?(@user, @current_user) && ~p"/settings/links"}`), so
+  a visitor's page carries nothing.
   """
   attr(:title, :string, default: nil)
   attr(:crumbs, :list, default: nil)
+  attr(:manage_to, :any, default: nil)
 
   def page_header(assigns) do
     ~H"""
@@ -1746,6 +1753,9 @@ defmodule VutuvWeb.UI do
       <div class="profile-header__info">
         <h1>{@title}</h1>
       </div>
+      <.link :if={@manage_to} navigate={@manage_to} class="profile-header__manage">
+        {gettext("Manage")} ›
+      </.link>
     </div>
     <%!-- New/edit forms pass only crumbs; still give the page one h1 (the last
     crumb is its identity) so screen-reader and keyboard heading navigation work. --%>
@@ -2057,10 +2067,14 @@ defmodule VutuvWeb.UI do
   attr(:total, :integer, required: true)
   attr(:preview, :integer, required: true)
   attr(:owner, :boolean, default: false)
+  attr(:manage_href, :any, default: nil)
 
   def manage_footer(assigns) do
     ~H"""
-    <.card_footer_link :if={@total > @preview or (@owner and @total >= 1)} href={@href}>
+    <.card_footer_link
+      :if={@total > @preview or (@owner and @total >= 1)}
+      href={if @total > @preview, do: @href, else: @manage_href || @href}
+    >
       <%= if @total > @preview do %>
         {gettext("View All")} ({compact_count(@total)})
       <% else %>
@@ -2071,12 +2085,12 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  The owner-only **"View as" preview switcher** shared by the profile
-  (`/:slug`) and every profile section page (`/:slug/work_experiences`,
-  `/phone_numbers`, …). A segmented control — You / Public — that
-  reloads the current page server-side with `?view_as=<mode>`
-  (resolved by `VutuvWeb.ViewAs` for sections, `VutuvWeb.UserController` for the
-  profile), plus an active-mode banner.
+  The owner-only **"View as" preview switcher** on the profile (`/:slug`) — a
+  segmented control (You / Public) that re-renders the page by tier, plus an
+  active-mode banner. It is profile-only now: the section pages are pure
+  public views (their editors live under /settings), so there is nothing to
+  preview there and `VutuvWeb.UserController`/`UserProfileLive` are the only
+  resolvers of `?view_as=`.
 
   **Rendered once, from the `app` layout** (`layout/app.html.heex`), pinned at
   the top of `<main>` right below the top navigation bar so it looks and sits
@@ -2349,32 +2363,32 @@ defmodule VutuvWeb.UI do
   If a new editable area is added to the app, it joins this menu — if it is
   not on the hub, it does not exist.
   """
-  def settings_menu(user) do
+  def settings_menu do
     [
       {gettext("Profile"),
        [
-         {gettext("Basics & photos"), ~p"/#{user}/edit", :basics},
-         {gettext("Experience"), ~p"/#{user}/work_experiences", :work},
-         {gettext("Education"), ~p"/#{user}/educations", :education},
-         {gettext("Links"), ~p"/#{user}/links", :links},
-         {gettext("Social Media"), ~p"/#{user}/social_media_accounts", :social},
-         {gettext("Email addresses"), ~p"/#{user}/emails", :emails},
-         {gettext("Phone numbers"), ~p"/#{user}/phone_numbers", :phones},
-         {gettext("Addresses"), ~p"/#{user}/addresses", :addresses},
-         {gettext("Tags"), ~p"/#{user}/tags", :tags}
+         {gettext("Basics & photos"), ~p"/settings/profile", :basics},
+         {gettext("Experience"), ~p"/settings/work_experiences", :work},
+         {gettext("Education"), ~p"/settings/educations", :education},
+         {gettext("Links"), ~p"/settings/links", :links},
+         {gettext("Social Media"), ~p"/settings/social_media_accounts", :social},
+         {gettext("Email addresses"), ~p"/settings/emails", :emails},
+         {gettext("Phone numbers"), ~p"/settings/phone_numbers", :phones},
+         {gettext("Addresses"), ~p"/settings/addresses", :addresses},
+         {gettext("Tags"), ~p"/settings/tags", :tags}
        ]},
       {gettext("Account"),
        [
-         {gettext("Sign-in & security"), ~p"/#{user}/settings/security", :security},
-         {gettext("Language & maps"), ~p"/#{user}/settings/preferences", :preferences},
-         {gettext("Your data"), ~p"/#{user}/settings/data", :data}
+         {gettext("Sign-in & security"), ~p"/settings/security", :security},
+         {gettext("Language & maps"), ~p"/settings/preferences", :preferences},
+         {gettext("Your data"), ~p"/settings/data", :data}
        ]},
       {gettext("More"),
        [
-         {gettext("Privacy"), ~p"/#{user}/settings/privacy", :privacy},
-         {gettext("Notifications"), ~p"/#{user}/settings/notifications", :notifications},
-         {gettext("Apps"), ~p"/#{user}/settings/apps", :apps},
-         {gettext("Delete account"), ~p"/#{user}/settings/delete", :delete}
+         {gettext("Privacy"), ~p"/settings/privacy", :privacy},
+         {gettext("Notifications"), ~p"/settings/notifications", :notifications},
+         {gettext("Apps"), ~p"/settings/apps", :apps},
+         {gettext("Delete account"), ~p"/settings/delete", :delete}
        ]}
     ]
   end
@@ -2431,12 +2445,12 @@ defmodule VutuvWeb.UI do
   attr(:class, :any, default: nil)
 
   def settings_sidebar(assigns) do
-    assigns = assign(assigns, :groups, settings_menu(assigns.user))
+    assigns = assign(assigns, :groups, settings_menu())
 
     ~H"""
     <nav data-settings-sidebar aria-label={gettext("Settings")} class={["text-sm", @class]}>
       <.link
-        navigate={~p"/#{@user}/settings"}
+        navigate={~p"/settings"}
         class="block rounded-lg px-2 py-1.5 text-base font-bold text-slate-900 hover:text-brand-700 dark:text-white dark:hover:text-brand-300"
       >
         {gettext("Settings")}
@@ -2476,34 +2490,19 @@ defmodule VutuvWeb.UI do
       "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
 
   @doc """
-  The shared settings shell: every settings page and every owner-viewed
-  profile-section management page renders inside it, so the whole editing
-  surface has **one** navigation pattern. On phones: a "back to Settings" link
-  above the page title. On md+: the persistent `<.settings_sidebar>` beside
-  the content. Both carry a quiet "View profile" link, so wherever you came
-  from, the hub and your profile are one tap away.
-
-  `enabled` (default true) is for the dual public/owner section pages
-  (work experiences, links, tags, ...): pass `enabled={@as_owner?}` and the
-  visitor — or the owner previewing as public — gets the classic
-  `<.page_header>` breadcrumbs view instead, keeping the public rendering
-  and its agent-format docs untouched. `crumbs` and `public_title` feed that
-  fallback only.
+  The shared settings shell: every page in the user-agnostic /settings scope —
+  the hub's subpages and the section editors (manage.html) — renders inside
+  it, so the whole editing surface has **one** navigation pattern. On phones:
+  a "back to Settings" link above the page title. On md+: the persistent
+  `<.settings_sidebar>` beside the content. Both carry a quiet "View profile"
+  link, so wherever you came from, the hub and your profile are one tap away.
+  The public /:slug section pages never render it — they use the classic
+  `<.page_header>` with the owner's `manage_to` bridge instead.
   """
   attr(:user, Vutuv.Accounts.User, required: true)
   attr(:title, :string, required: true)
   attr(:active, :atom, default: nil)
-  attr(:enabled, :boolean, default: true)
-  attr(:crumbs, :list, default: nil)
-  attr(:public_title, :string, default: nil)
   slot(:inner_block, required: true)
-
-  def settings_shell(%{enabled: false} = assigns) do
-    ~H"""
-    <.page_header title={@public_title || @title} crumbs={@crumbs} />
-    {render_slot(@inner_block)}
-    """
-  end
 
   def settings_shell(assigns) do
     ~H"""
@@ -2516,7 +2515,7 @@ defmodule VutuvWeb.UI do
       <div class="min-w-0">
         <div class="mb-4">
           <.link
-            navigate={~p"/#{@user}/settings"}
+            navigate={~p"/settings"}
             class="inline-flex items-center gap-1 text-sm font-semibold text-brand-600 hover:text-brand-700 md:hidden dark:text-brand-400 dark:hover:text-brand-300"
           >
             <span aria-hidden="true">‹</span>

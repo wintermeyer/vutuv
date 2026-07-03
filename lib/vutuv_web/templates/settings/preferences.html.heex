@@ -9,7 +9,7 @@ subset and land back here. --%>
       <.form
         :let={f}
         for={@changeset}
-        action={~p"/#{@user}/settings/language"}
+        action={~p"/settings/language"}
         class="mt-4 space-y-3"
       >
         <.form_error changeset={@changeset} />
@@ -48,7 +48,7 @@ subset and land back here. --%>
       <.form
         :let={f}
         for={@changeset}
-        action={~p"/#{@user}/settings/maps"}
+        action={~p"/settings/maps"}
         class="mt-5 space-y-5"
       >
         <.form_error changeset={@changeset} />

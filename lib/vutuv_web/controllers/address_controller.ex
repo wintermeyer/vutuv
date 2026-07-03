@@ -18,11 +18,23 @@ defmodule VutuvWeb.AddressController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", user: user, addresses: user.addresses)
+        render(conn, "index.html", as_owner?: false, user: user, addresses: user.addresses)
       end,
       doc: fn -> SectionDocs.build_index(user, :addresses, user.addresses) end
+    )
+  end
+
+  # The owner's editor (GET /settings/addresses).
+  def manage(conn, _params) do
+    user =
+      conn.assigns[:user]
+      |> Repo.preload(addresses: Address.ordered())
+
+    render(conn, "manage.html",
+      user: user,
+      addresses: user.addresses,
+      as_owner?: true,
+      page_title: gettext("Addresses")
     )
   end
 
@@ -43,7 +55,7 @@ defmodule VutuvWeb.AddressController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Address created successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/addresses",
+      redirect_to: ~p"/settings/addresses",
       render: "new.html",
       assigns: [country: get_template(conn)]
     )
@@ -75,7 +87,7 @@ defmodule VutuvWeb.AddressController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Address updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/addresses/#{&1}",
+      redirect_to: fn _entry -> ~p"/settings/addresses" end,
       render: "edit.html",
       assigns: [address: address, country: get_template(conn)]
     )
@@ -86,7 +98,7 @@ defmodule VutuvWeb.AddressController do
 
     ControllerHelpers.delete(conn, address,
       flash: gettext("Address deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/addresses"
+      redirect_to: ~p"/settings/addresses"
     )
   end
 

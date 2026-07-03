@@ -17,7 +17,7 @@ the desktop sidebar renders, so hub and sidebar can never drift apart. --%>
   </div>
 
   <div class="space-y-8">
-    <section :for={{group, entries} <- settings_menu(@user)}>
+    <section :for={{group, entries} <- settings_menu()}>
       <h2 class="mb-2 px-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {group}
       </h2>

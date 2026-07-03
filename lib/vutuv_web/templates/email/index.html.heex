@@ -1,32 +1,16 @@
-<%!-- The owner manages this section inside the shared settings shell
-(back to Settings, sidebar on md+); a visitor — or the owner previewing
-as public — gets the classic breadcrumbs page, unchanged, so the public
-rendering and its agent-format docs stay untouched. --%>
-<.settings_shell
-  user={@user}
-  active={:emails}
-  title={gettext("Email addresses")}
-  public_title={gettext("Emails belonging to ") <> full_name(@user)}
-  enabled={@as_owner?}
+<%!-- The public showcase view of this section — identical for every viewer,
+and exactly what the agent-format docs render. The owner edits at
+/settings/emails; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
+  title={gettext("Emails belonging to ") <> full_name(@user)}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/emails"}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Emails")
   ]}
->
+/>
 
-<.card_section
-  empty={Enum.empty?(@emails)}
-  add_href={@as_owner? && ~p"/#{@current_user}/emails/new"}
-  add_label={gettext("Add an email address")}
->
-  <.reorderable_section
-    conn={@conn}
-    section="emails"
-    slug={@user.username}
-    editable={@as_owner? and @emails != []}
-  >
-    <%= render "card_list.html", assigns %>
-  </.reorderable_section>
+<.card_section empty={Enum.empty?(@emails)}>
+  <%= render "card_list.html", assigns %>
 </.card_section>
-</.settings_shell>

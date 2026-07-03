@@ -10,13 +10,13 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
         <.account_row
           title={gettext("Username")}
           subtitle={"@" <> @user.username}
-          href={~p"/#{@user}/usernames/new"}
+          href={~p"/settings/usernames/new"}
           label={gettext("Change")}
         />
         <.account_row
           title={gettext("Email addresses")}
           subtitle={gettext("Add, remove or pick your primary address.")}
-          href={~p"/#{@user}/emails"}
+          href={~p"/settings/emails"}
           label={gettext("Manage")}
         />
       </ul>
@@ -39,7 +39,7 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
       </ul>
       <div :if={Enum.any?(@sessions, &(&1.id != @current_session_id))} class="mt-4">
         <.link
-          href={~p"/#{@user}/settings/devices"}
+          href={~p"/settings/devices"}
           method="delete"
           data-confirm={gettext("Log out of every device except this one?")}
           class="inline-flex items-center rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
@@ -96,8 +96,8 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
             type="button"
             data-webauthn-register
             data-nickname-input="passkey-nickname"
-            data-challenge-url={~p"/#{@user}/settings/passkeys/challenge"}
-            data-create-url={~p"/#{@user}/settings/passkeys"}
+            data-challenge-url={~p"/settings/passkeys/challenge"}
+            data-create-url={~p"/settings/passkeys"}
             data-error-generic={gettext("Could not add the passkey. Please try again.")}
             class="shrink-0 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
           >

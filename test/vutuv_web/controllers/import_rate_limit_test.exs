@@ -35,7 +35,7 @@ defmodule VutuvWeb.ImportRateLimitTest do
     # The first two uploads render the preview; the third is throttled.
     for _ <- 1..2 do
       resp =
-        post(conn, ~p"/#{user}/settings/import/linkedin", %{
+        post(conn, ~p"/settings/import/linkedin", %{
           "import" => %{"archive" => upload_zip()}
         })
 
@@ -43,10 +43,10 @@ defmodule VutuvWeb.ImportRateLimitTest do
     end
 
     resp =
-      post(conn, ~p"/#{user}/settings/import/linkedin", %{
+      post(conn, ~p"/settings/import/linkedin", %{
         "import" => %{"archive" => upload_zip()}
       })
 
-    assert redirected_to(resp) == ~p"/#{user}/settings/import/linkedin"
+    assert redirected_to(resp) == ~p"/settings/import/linkedin"
   end
 end

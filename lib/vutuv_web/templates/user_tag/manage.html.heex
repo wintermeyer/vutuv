@@ -1,0 +1,29 @@
+<%!-- The owner's tag editor — the user-agnostic /settings URL (whoever opens
+it edits their own tags). The public twin at /:slug/tags shows the plain
+showcase view. Tags have no edit form: add or delete only. --%>
+<.settings_shell user={@user} active={:tags} title={gettext("Tags")}>
+  <.card_section empty={Enum.empty?(@user_tags)} add_href={~p"/settings/tags/new"}>
+    <div class="card__tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th><%= gettext "Tag name" %></th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <%= for user_tag <- @user_tags do %>
+            <tr>
+              <td>
+                <%= link Vutuv.Tags.UserTag.name(user_tag), to: ~p"/#{@user}/tags/#{user_tag}" %>
+              </td>
+              <td class="text-right">
+                <.row_actions delete_to={~p"/settings/tags/#{user_tag}"} />
+              </td>
+            </tr>
+          <% end %>
+        </tbody>
+      </table>
+    </div>
+  </.card_section>
+</.settings_shell>

@@ -58,19 +58,6 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
-  The emails list for the owner's "View as" preview on `/:slug/emails`
-  (`VutuvWeb.ViewAs`). A private (`public?: false`) address is owner-only, so the
-  Public preview shows only the public addresses; the preview deliberately
-  renders the visitor's view, not the owner's. Outside a preview (`nil`) it falls
-  back to the real visitor's permission via `emails_for_display/2` (which hands
-  the owner all of their own addresses).
-  """
-  def emails_for_preview(user, _visitor, :public),
-    do: Repo.all(Vutuv.Ordering.by_position(from(e in assoc(user, :emails), where: e.public?)))
-
-  def emails_for_preview(user, visitor, nil), do: emails_for_display(user, visitor)
-
-  @doc """
   Whether `visitor` may see `user`'s private (`public?: false`) email addresses.
   A private address is **owner-only**: visible to the member themselves and to
   nobody else. (It previously also granted access to everyone the owner

@@ -33,9 +33,8 @@ defmodule VutuvWeb.WorkExperienceController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html",
+        render(conn, "index.html",
+          as_owner?: false,
           user: user,
           work_experience: user.work_experiences,
           # The pinned profile job title (issue #833), so the management list can
@@ -44,6 +43,25 @@ defmodule VutuvWeb.WorkExperienceController do
         )
       end,
       doc: fn -> SectionDocs.build_index(user, :work_experiences, user.work_experiences) end
+    )
+  end
+
+  # The owner's editor (GET /settings/work_experiences), including the
+  # profile-job-title pin chooser (issue #833).
+  def manage(conn, _params) do
+    user =
+      conn.assigns[:user]
+      |> Repo.preload(
+        work_experiences:
+          from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date()
+      )
+
+    render(conn, "manage.html",
+      user: user,
+      work_experience: user.work_experiences,
+      profile_work_experience_id: user.profile_work_experience_id,
+      as_owner?: true,
+      page_title: gettext("Experience")
     )
   end
 
@@ -58,12 +76,12 @@ defmodule VutuvWeb.WorkExperienceController do
       {:ok, _user} ->
         conn
         |> put_flash(:info, gettext("This job title now appears on your profile."))
-        |> redirect(to: ~p"/#{user}/work_experiences")
+        |> redirect(to: ~p"/settings/work_experiences")
 
       {:error, _} ->
         conn
         |> put_flash(:error, gettext("That work experience could not be pinned."))
-        |> redirect(to: ~p"/#{user}/work_experiences")
+        |> redirect(to: ~p"/settings/work_experiences")
     end
   end
 
@@ -73,7 +91,7 @@ defmodule VutuvWeb.WorkExperienceController do
 
     conn
     |> put_flash(:info, gettext("Your profile job title is chosen automatically again."))
-    |> redirect(to: ~p"/#{user}/work_experiences")
+    |> redirect(to: ~p"/settings/work_experiences")
   end
 
   def new(conn, _params) do
@@ -89,7 +107,7 @@ defmodule VutuvWeb.WorkExperienceController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Work experience created successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/work_experiences",
+      redirect_to: ~p"/settings/work_experiences",
       render: "new.html",
       assigns: [current_year: current_year()]
     )
@@ -122,7 +140,7 @@ defmodule VutuvWeb.WorkExperienceController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Work experience updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/work_experiences/#{&1}",
+      redirect_to: fn _entry -> ~p"/settings/work_experiences" end,
       render: "edit.html",
       assigns: [work_experience: work_experience, current_year: current_year()]
     )
@@ -133,7 +151,7 @@ defmodule VutuvWeb.WorkExperienceController do
   def delete(conn, _params) do
     ControllerHelpers.delete(conn, conn.assigns[:job],
       flash: gettext("Work experience deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/work_experiences"
+      redirect_to: ~p"/settings/work_experiences"
     )
   end
 end

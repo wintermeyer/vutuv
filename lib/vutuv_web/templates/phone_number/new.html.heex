@@ -1,9 +1,9 @@
 <.page_header crumbs={[
-  {gettext("Settings"), ~p"/#{@user}/settings"},
-  {gettext("Phone Numbers"), ~p"/#{@user}/phone_numbers"},
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Phone Numbers"), ~p"/settings/phone_numbers"},
   gettext("New")
 ]} />
 
 <.card_section>
-  <%= render "form_content.html", backlink: ~p"/#{@user}/phone_numbers", changeset: @changeset, action: ~p"/#{@user}/phone_numbers" %>
+  <%= render "form_content.html", backlink: ~p"/settings/phone_numbers", changeset: @changeset, action: ~p"/settings/phone_numbers" %>
 </.card_section>

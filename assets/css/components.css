@@ -185,12 +185,28 @@ body.stretch main {
 }
 
 /* ---------- Page header (title banner on subpages) ---------- */
+/* Flex so the optional owner "Manage ›" bridge (page_header's manage_to)
+   right-aligns beside the h1; pages with just the h1 render unchanged. */
 .profile-header {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
   text-align: left;
   margin-bottom: 0.5rem;
   padding: 1rem 0 0;
   overflow: visible;
+}
+.profile-header__manage {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.profile-header__manage:hover {
+  color: #1e40af;
+  text-decoration: underline;
 }
 .profile-header__info h1 {
   font-size: 1.5rem;
@@ -1082,6 +1098,13 @@ ul.thumbs li .text .url a {
 }
 
 @media (prefers-color-scheme: dark) {
+  .profile-header__manage {
+    color: #93c5fd;
+  }
+  .profile-header__manage:hover {
+    color: #bfdbfe;
+  }
+
   /* Page canvas + base text: legacy.css hardcodes `#eee`/`#333` on body. */
   body {
     background: #020617;

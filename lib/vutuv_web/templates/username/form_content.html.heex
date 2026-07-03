@@ -11,7 +11,7 @@
       autocomplete: "off",
       autocapitalize: "none",
       spellcheck: "false",
-      data: [availability_url: ~p"/#{@user}/usernames/availability"]
+      data: [availability_url: ~p"/settings/usernames/availability"]
     ) %>
     <%= error_tag(f, :username) %>
     <%!-- Filled in live by the availability checker in app.js. --%>

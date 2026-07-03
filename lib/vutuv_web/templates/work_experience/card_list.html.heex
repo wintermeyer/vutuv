@@ -68,7 +68,7 @@ Public preview. --%>
           <.pin_star filled class="h-4 w-4" />
           {gettext("Shown on your profile")}
           <.link
-            href={~p"/#{@user}/work_experiences/#{circle.job}/pin"}
+            href={~p"/settings/work_experiences/#{circle.job}/pin"}
             method="delete"
             class="ml-1.5 font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
           >
@@ -77,7 +77,7 @@ Public preview. --%>
         </span>
         <.link
           :if={@profile_work_experience_id != circle.job.id}
-          href={~p"/#{@user}/work_experiences/#{circle.job}/pin"}
+          href={~p"/settings/work_experiences/#{circle.job}/pin"}
           method="put"
           class="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400"
         >
@@ -89,8 +89,8 @@ Public preview. --%>
         :if={@as_owner?}
         align={:start}
         class="mt-2"
-        edit_to={~p"/#{@user}/work_experiences/#{circle.job}/edit"}
-        delete_to={~p"/#{@user}/work_experiences/#{circle.job}"}
+        edit_to={~p"/settings/work_experiences/#{circle.job}/edit"}
+        delete_to={~p"/settings/work_experiences/#{circle.job}"}
       />
     </div>
     <div

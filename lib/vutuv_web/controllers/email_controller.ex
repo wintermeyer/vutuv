@@ -17,21 +17,33 @@ defmodule VutuvWeb.EmailController do
   def index(conn, _params) do
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn = VutuvWeb.ViewAs.assign_preview(conn)
+        # The public showcase view for everyone, the owner included: public
+        # addresses only. Private addresses show solely on /settings/emails.
+        emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
 
-        emails =
-          VutuvWeb.UserHelpers.emails_for_preview(
-            conn.assigns[:user],
-            conn.assigns[:current_user],
-            conn.assigns[:preview_as]
-          )
-
-        render(conn, "index.html", emails: emails, emails_counter: length(emails))
+        render(conn, "index.html",
+          emails: emails,
+          emails_counter: length(emails),
+          as_owner?: false
+        )
       end,
       doc: fn ->
         emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
         SectionDocs.build_index(conn.assigns[:user], :emails, emails)
       end
+    )
+  end
+
+  # The owner's editor (GET /settings/emails): every address, private ones
+  # included, with the add tile, reorder tool and per-row actions.
+  def manage(conn, _params) do
+    emails = VutuvWeb.UserHelpers.emails_for_permission(conn.assigns[:user], true)
+
+    render(conn, "manage.html",
+      emails: emails,
+      emails_counter: length(emails),
+      as_owner?: true,
+      page_title: gettext("Email addresses")
     )
   end
 
@@ -80,7 +92,7 @@ defmodule VutuvWeb.EmailController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/settings/emails")
     end
   end
 
@@ -93,7 +105,7 @@ defmodule VutuvWeb.EmailController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many attempts. Please try again later."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/settings/emails")
     end
   end
 
@@ -118,7 +130,7 @@ defmodule VutuvWeb.EmailController do
           {:error, _changeset} ->
             conn
             |> put_flash(:error, gettext("That email could not be added."))
-            |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+            |> redirect(to: ~p"/settings/emails")
         end
 
       {:error, reason} ->
@@ -129,12 +141,12 @@ defmodule VutuvWeb.EmailController do
       {:expired, message} ->
         conn
         |> put_flash(:error, message)
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/settings/emails")
 
       :lockout ->
         conn
         |> put_flash(:error, gettext("Too many incorrect attempts."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+        |> redirect(to: ~p"/settings/emails")
     end
   end
 
@@ -204,7 +216,7 @@ defmodule VutuvWeb.EmailController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Email updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/emails/#{&1}",
+      redirect_to: fn _email -> ~p"/settings/emails" end,
       render: "edit.html",
       assigns: [email: email]
     )
@@ -220,11 +232,11 @@ defmodule VutuvWeb.EmailController do
 
       conn
       |> put_flash(:info, gettext("Email deleted successfully."))
-      |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+      |> redirect(to: ~p"/settings/emails")
     else
       conn
       |> put_flash(:error, gettext("Cannot delete final email."))
-      |> redirect(to: ~p"/#{conn.assigns[:user]}/emails")
+      |> redirect(to: ~p"/settings/emails")
     end
   end
 end

@@ -1,6 +1,6 @@
 <.page_header crumbs={[
-  {gettext("Settings"), ~p"/#{@user}/settings"},
-  {gettext("Emails"), ~p"/#{@user}/emails"},
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Emails"), ~p"/settings/emails"},
   gettext("Confirm")
 ]} />
 
@@ -12,7 +12,7 @@
     :let={f}
     for={%{}}
     as={:email_confirmation}
-    action={~p"/#{@user}/emails/confirmation"}
+    action={~p"/settings/emails/confirmation"}
     id="email-confirmation-form"
     class="editform"
   >
@@ -24,6 +24,6 @@
         inputmode: "numeric",
         placeholder: gettext("Enter your PIN") %>
     </div>
-    <.form_actions backlink={~p"/#{@user}/emails"} />
+    <.form_actions backlink={~p"/settings/emails"} />
   </.form>
 </.card_section>

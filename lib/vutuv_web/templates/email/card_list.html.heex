@@ -26,8 +26,8 @@
       <td class="text-right">
         <.row_actions
           :if={@as_owner?}
-          edit_to={~p"/#{@user}/emails/#{email}/edit"}
-          delete_to={~p"/#{@user}/emails/#{email}"}
+          edit_to={~p"/settings/emails/#{email}/edit"}
+          delete_to={~p"/settings/emails/#{email}"}
         />
       </td>
     </tr>

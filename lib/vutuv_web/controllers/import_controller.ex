@@ -10,9 +10,10 @@ defmodule VutuvWeb.ImportController do
   """
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.UserResolveSlug)
+  # Routed under /settings: the pipeline (RequireLogin + SettingsUser +
+  # EnsureActivated) provides :user = the logged-in member; AuthUser stays as
+  # a belt-and-braces guard.
   plug(VutuvWeb.Plug.AuthUser)
-  plug(VutuvWeb.Plug.EnsureActivated)
   # After the auth plugs, so a non-owner 403s (and is never counted). Throttles
   # the decompress/parse (create) and the DB write (confirm), per member + IP.
   plug(:rate_limit when action in [:create, :confirm])
@@ -118,7 +119,7 @@ defmodule VutuvWeb.ImportController do
       :rate_limited ->
         conn
         |> put_flash(:error, gettext("Too many imports. Please try again in a little while."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/settings/import/linkedin")
+        |> redirect(to: ~p"/settings/import/linkedin")
         |> halt()
     end
   end
@@ -130,10 +131,10 @@ defmodule VutuvWeb.ImportController do
     end
   end
 
-  defp redirect_with_error(conn, user, message) do
+  defp redirect_with_error(conn, _user, message) do
     conn
     |> put_flash(:error, message)
-    |> redirect(to: ~p"/#{user}/settings/import/linkedin")
+    |> redirect(to: ~p"/settings/import/linkedin")
   end
 
   # "Imported 1 work experience, 2 tags. Skipped 3 entries …". The skip reason

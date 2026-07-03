@@ -13,7 +13,7 @@ defmodule VutuvWeb.EmailControllerTest do
       {conn, user} = create_and_login_user(conn)
 
       conn =
-        post(conn, ~p"/#{user}/emails",
+        post(conn, ~p"/settings/emails",
           email: %{"value" => "work@example.com", "email_type" => "Work"}
         )
 
@@ -23,7 +23,7 @@ defmodule VutuvWeb.EmailControllerTest do
       conn =
         submit_with_csrf(
           conn,
-          ~p"/#{user}/emails/confirmation",
+          ~p"/settings/emails/confirmation",
           %{"email_confirmation" => %{"pin" => pin}}
         )
 
@@ -37,7 +37,7 @@ defmodule VutuvWeb.EmailControllerTest do
       flush_emails()
 
       conn =
-        post(conn, ~p"/#{user}/emails", email: %{"value" => "foo@bar", "email_type" => "Other"})
+        post(conn, ~p"/settings/emails", email: %{"value" => "foo@bar", "email_type" => "Other"})
 
       # Re-renders the new form with the format error instead of advancing to
       # the PIN step...
@@ -52,7 +52,7 @@ defmodule VutuvWeb.EmailControllerTest do
       {conn, user} = create_and_login_user(conn)
       %{emails: [email]} = Repo.preload(user, :emails)
 
-      conn = get(conn, ~p"/#{user}/emails/#{email}/edit")
+      conn = get(conn, ~p"/settings/emails/#{email}/edit")
       html = html_response(conn, 200)
 
       assert html =~ email.value
@@ -68,11 +68,11 @@ defmodule VutuvWeb.EmailControllerTest do
       refute email.public?
 
       conn =
-        put(conn, ~p"/#{user}/emails/#{email}",
+        put(conn, ~p"/settings/emails/#{email}",
           email: %{"value" => "hijacked@example.com", "public?" => "true"}
         )
 
-      assert redirected_to(conn) == ~p"/#{user}/emails/#{email}"
+      assert redirected_to(conn) == ~p"/settings/emails"
       reloaded = Repo.get(Email, email.id)
       assert reloaded.value == email.value
       assert reloaded.public?
@@ -84,9 +84,9 @@ defmodule VutuvWeb.EmailControllerTest do
       # The registration backfill default until the owner picks one.
       assert email.email_type == "Other"
 
-      conn = put(conn, ~p"/#{user}/emails/#{email}", email: %{"email_type" => "Personal"})
+      conn = put(conn, ~p"/settings/emails/#{email}", email: %{"email_type" => "Personal"})
 
-      assert redirected_to(conn) == ~p"/#{user}/emails/#{email}"
+      assert redirected_to(conn) == ~p"/settings/emails"
       assert Repo.get(Email, email.id).email_type == "Personal"
     end
   end

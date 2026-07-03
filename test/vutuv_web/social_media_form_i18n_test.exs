@@ -19,7 +19,7 @@ defmodule VutuvWeb.SocialMediaFormI18nTest do
   test "the provider prompt is translated, not a hardcoded English island", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 
-    html = conn |> get(~p"/#{user}/social_media_accounts/new") |> html_response(200)
+    html = conn |> get(~p"/settings/social_media_accounts/new") |> html_response(200)
 
     # The old hardcoded English prompt must be gone (it now goes through gettext).
     refute html =~ "Select a Social Media Provider"

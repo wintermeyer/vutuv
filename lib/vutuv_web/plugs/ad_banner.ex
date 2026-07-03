@@ -69,11 +69,15 @@ defmodule VutuvWeb.Plug.AdBanner do
 
   defp booking_pages?(conn), do: conn.path_info |> List.first() == "ads"
 
-  # The profile editor (/:slug/edit) and the settings pages (/:slug/settings/*):
-  # focused, owner-only forms, not somewhere a visitor is browsing. The second
-  # path segment is the discriminator, so a deeper "edit" (e.g.
-  # /:slug/links/:id/edit) is unaffected.
-  defp account_pages?(conn), do: Enum.at(conn.path_info, 1) in ["edit", "settings"]
+  # The whole /settings scope (the user-agnostic editors) plus the old
+  # /:slug/edit and /:slug/settings/* redirect stubs: focused, owner-only
+  # forms, not somewhere a visitor is browsing. A deeper "edit" segment on a
+  # public page (e.g. /:slug/links/:id/edit no longer exists, but the guard
+  # keys on the first/second segment only) is unaffected.
+  defp account_pages?(conn) do
+    List.first(conn.path_info) == "settings" or
+      Enum.at(conn.path_info, 1) in ["edit", "settings"]
+  end
 
   defp recently_seen?(conn) do
     case get_session(conn, :ad_seen_at) do

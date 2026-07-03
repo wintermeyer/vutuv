@@ -103,7 +103,7 @@ defmodule VutuvWeb.SettingsHTML do
         </span>
         <.link
           :if={!@current?}
-          href={~p"/#{@user}/settings/devices/#{@session.id}"}
+          href={~p"/settings/devices/#{@session.id}"}
           method="delete"
           data-confirm={gettext("Log this device out of your account?")}
           class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
@@ -149,7 +149,7 @@ defmodule VutuvWeb.SettingsHTML do
       </div>
       <div class="shrink-0">
         <.link
-          href={~p"/#{@user}/settings/passkeys/#{@passkey.id}"}
+          href={~p"/settings/passkeys/#{@passkey.id}"}
           method="delete"
           data-confirm={gettext("Remove this passkey?")}
           class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"

@@ -32,11 +32,23 @@ defmodule VutuvWeb.UserTagController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", user: user, user_tags: user.user_tags)
+        render(conn, "index.html", as_owner?: false, user: user, user_tags: user.user_tags)
       end,
       doc: fn -> SectionDocs.build_index(user, :tags, user.user_tags) end
+    )
+  end
+
+  # The owner's editor (GET /settings/tags): add or delete, tags have no edit.
+  def manage(conn, _params) do
+    user =
+      conn.assigns[:user]
+      |> Repo.preload(user_tags: UserTag.ordered_by_endorsements())
+
+    render(conn, "manage.html",
+      user: user,
+      user_tags: user.user_tags,
+      as_owner?: true,
+      page_title: gettext("Tags")
     )
   end
 
@@ -70,14 +82,14 @@ defmodule VutuvWeb.UserTagController do
 
         conn
         |> put_flash(:info, tags_added_flash(length(results) - failures, failures))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
+        |> redirect(to: ~p"/settings/tags")
     end
   end
 
   defp create_single(conn, user, value) do
     ControllerHelpers.save(conn, Vutuv.Tags.add_user_tag(user, value),
       flash: gettext("User tag created successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/tags",
+      redirect_to: ~p"/settings/tags",
       render: "new.html"
     )
   end
@@ -156,6 +168,6 @@ defmodule VutuvWeb.UserTagController do
 
     conn
     |> put_flash(:info, gettext("User tag deleted successfully."))
-    |> redirect(to: ~p"/#{conn.assigns[:user]}/tags")
+    |> redirect(to: ~p"/settings/tags")
   end
 end

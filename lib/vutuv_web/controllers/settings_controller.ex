@@ -9,15 +9,19 @@ defmodule VutuvWeb.SettingsController do
   and the delete-account danger page. The profile basics (photos, name, about)
   stay on `UserController.edit`.
 
-  Owner-only, enforced exactly like the edit page: `UserResolveSlug` resolves
-  the `:slug`, `AuthUser` 403s anyone who is not that member, `EnsureActivated`
-  keeps it consistent with the rest of the `/:slug` scope.
+  Routed user-agnostically under /settings (see the router's :settings_pipe):
+  RequireLogin + SettingsUser assign :user = the logged-in member, so the same
+  URL edits whoever opens it. The only slug-routed action left is
+  `legacy_redirect`, which sends old /:slug/settings/* bookmarks here.
   """
   use VutuvWeb, :controller
 
-  plug(VutuvWeb.Plug.UserResolveSlug)
-  plug(VutuvWeb.Plug.AuthUser)
-  plug(VutuvWeb.Plug.EnsureActivated)
+  # Under /settings the pipeline (RequireLogin + SettingsUser +
+  # EnsureActivated) provides :user = the logged-in member; AuthUser then
+  # holds trivially and stays as a belt-and-braces guard. legacy_redirect is
+  # the one slug-routed action (old /:slug/settings/* bookmarks) and redirects
+  # whoever arrives to their own /settings.
+  plug(VutuvWeb.Plug.AuthUser when action not in [:legacy_redirect])
 
   plug(
     :scrub_params,
@@ -117,13 +121,11 @@ defmodule VutuvWeb.SettingsController do
   end
 
   def update_privacy(conn, %{"user" => params}) do
-    user = conn.assigns[:user]
-
     save(
       conn,
       params,
       "privacy.html",
-      ~p"/#{user}/settings/privacy",
+      ~p"/settings/privacy",
       gettext("Privacy settings saved."),
       # The member's open shells only re-read "Show when I'm online" on a full
       # reload, so push the new value to them to start/stop their dot live.
@@ -144,13 +146,11 @@ defmodule VutuvWeb.SettingsController do
   end
 
   def update_notifications(conn, %{"user" => params}) do
-    user = conn.assigns[:user]
-
     save(
       conn,
       params,
       "notifications.html",
-      ~p"/#{user}/settings/notifications",
+      ~p"/settings/notifications",
       gettext("Notification settings saved.")
     )
   end
@@ -160,13 +160,11 @@ defmodule VutuvWeb.SettingsController do
   # than the profile editor. It posts back to that page and rerenders it on
   # error.
   def update_language(conn, %{"user" => params}) do
-    user = conn.assigns[:user]
-
     save(
       conn,
       params,
       "preferences.html",
-      ~p"/#{user}/settings/preferences",
+      ~p"/settings/preferences",
       gettext("Language updated.")
     )
   end
@@ -177,13 +175,11 @@ defmodule VutuvWeb.SettingsController do
   # plus the default select; `Vutuv.Maps` reconciles a default that points at
   # a disabled service at render time, so no extra validation here.
   def update_maps(conn, %{"user" => params}) do
-    user = conn.assigns[:user]
-
     save(
       conn,
       params,
       "preferences.html",
-      ~p"/#{user}/settings/preferences",
+      ~p"/settings/preferences",
       gettext("Map preferences saved.")
     )
   end
@@ -203,7 +199,7 @@ defmodule VutuvWeb.SettingsController do
 
     conn
     |> put_flash(:info, gettext("That device has been logged out."))
-    |> redirect(to: ~p"/#{user}/settings/security")
+    |> redirect(to: ~p"/settings/security")
   end
 
   # Log out every other device, keeping the current one (so the member is not
@@ -214,8 +210,20 @@ defmodule VutuvWeb.SettingsController do
 
     conn
     |> put_flash(:info, gettext("All other devices have been logged out."))
-    |> redirect(to: ~p"/#{user}/settings/security")
+    |> redirect(to: ~p"/settings/security")
   end
+
+  # The old owner URLs (/:slug/settings and /:slug/settings/whatever) moved
+  # to the user-agnostic /settings scope; send bookmarks and muscle memory to
+  # the same subpath there. Whoever arrives lands on their OWN settings (or
+  # the login flow), which is exactly what the old URL meant.
+  def legacy_redirect(conn, params) do
+    rest = params["rest"] || []
+    redirect(conn, to: "/settings" <> subpath(rest))
+  end
+
+  defp subpath([]), do: ""
+  defp subpath(rest), do: "/" <> Enum.join(rest, "/")
 
   # The settings sub-forms each submit only their own fields; Accounts.update_user/2
   # casts that subset and leaves the rest of the profile untouched. On success we

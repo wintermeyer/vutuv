@@ -59,26 +59,17 @@ defmodule VutuvWeb.PasskeyControllerTest do
 
   describe "enrolment access control" do
     test "a logged-out visitor cannot reach the enrolment endpoints", %{conn: conn} do
-      user = insert_activated_user()
-
-      assert conn |> post(~p"/#{user}/settings/passkeys/challenge") |> html_response(403)
-    end
-
-    test "another member gets a 403", %{conn: conn} do
-      {conn, _me} = create_and_login_user(conn)
-      other = insert_activated_user()
-
-      assert conn
-             |> recycle()
-             |> post(~p"/#{other}/settings/passkeys/challenge")
-             |> html_response(403)
+      # /settings is login-required; an anonymous POST is turned away before
+      # any passkey code runs. (There is no foreign-member case any more: the
+      # user-agnostic URL always operates on whoever is signed in.)
+      assert conn |> post(~p"/settings/passkeys/challenge") |> redirected_to() == "/"
     end
   end
 
-  describe "POST /:slug/settings/passkeys/challenge (owner)" do
+  describe "POST /settings/passkeys/challenge (owner)" do
     test "returns registration options and stores the challenge", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      conn = conn |> recycle() |> post(~p"/#{user}/settings/passkeys/challenge")
+      conn = conn |> recycle() |> post(~p"/settings/passkeys/challenge")
 
       body = json_response(conn, 200)
       assert body["rp"]["id"] == "localhost"
@@ -91,23 +82,23 @@ defmodule VutuvWeb.PasskeyControllerTest do
       # submit_with_csrf scrapes the token from a rendered <form>; the security
       # page carries none with a single session, so grab it from the
       # preferences page (same session, same token).
-      conn = get(conn, ~p"/#{user}/settings/preferences")
+      conn = get(conn, ~p"/settings/preferences")
 
-      conn = submit_with_csrf(conn, ~p"/#{user}/settings/passkeys/challenge", %{})
+      conn = submit_with_csrf(conn, ~p"/settings/passkeys/challenge", %{})
       assert json_response(conn, 200)
     end
   end
 
-  describe "POST /:slug/settings/passkeys (create)" do
+  describe "POST /settings/passkeys (create)" do
     test "a bogus attestation is refused and persists nothing", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      conn = conn |> recycle() |> post(~p"/#{user}/settings/passkeys/challenge")
+      conn = conn |> recycle() |> post(~p"/settings/passkeys/challenge")
       assert json_response(conn, 200)
 
       conn =
         conn
         |> recycle()
-        |> post(~p"/#{user}/settings/passkeys", %{
+        |> post(~p"/settings/passkeys", %{
           "attestationObject" => b64("bad"),
           "clientDataJSON" => b64("{}"),
           "nickname" => "MacBook"
@@ -118,14 +109,14 @@ defmodule VutuvWeb.PasskeyControllerTest do
     end
   end
 
-  describe "DELETE /:slug/settings/passkeys/:id" do
+  describe "DELETE /settings/passkeys/:id" do
     test "the owner can remove a passkey", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       credential = insert(:user_credential, user: user)
 
-      conn = delete(recycle(conn), ~p"/#{user}/settings/passkeys/#{credential.id}")
+      conn = delete(recycle(conn), ~p"/settings/passkeys/#{credential.id}")
 
-      assert redirected_to(conn) == ~p"/#{user}/settings/security"
+      assert redirected_to(conn) == ~p"/settings/security"
       assert Credentials.count_for_user(user) == 0
     end
 
@@ -133,11 +124,11 @@ defmodule VutuvWeb.PasskeyControllerTest do
       {conn, user} = create_and_login_user(conn)
       credential = insert(:user_credential, user: user, nickname: "My Laptop")
 
-      html = conn |> get(~p"/#{user}/settings/security") |> html_response(200)
+      html = conn |> get(~p"/settings/security") |> html_response(200)
 
       assert html =~ "Passkeys"
       assert html =~ "My Laptop"
-      assert html =~ ~p"/#{user}/settings/passkeys/#{credential.id}"
+      assert html =~ ~p"/settings/passkeys/#{credential.id}"
     end
   end
 

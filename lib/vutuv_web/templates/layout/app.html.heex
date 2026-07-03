@@ -56,12 +56,12 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 <% end %>
 
 <main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 md:pb-10">
-  <%!-- Owner-only "View as" preview switcher, rendered here (not per page) so it
-  sits the same way on the profile and every section page: a full-width bar
-  right below the top navigation bar. `@can_preview?` is set only on the owner's
-  own profile/section pages (VutuvWeb.ViewAs + UserController), all dead pages,
-  so `@conn` is present whenever this branch runs. base_path is the current
-  page's path, so each segment reloads *this* page with `?view_as=<mode>`. --%>
+  <%!-- Owner-only "View as" preview switcher — profile-only now (the section
+  pages are pure public views; their editors live under /settings). Rendered
+  here (not per page) as a full-width bar right below the top navigation bar.
+  `@can_preview?` is set only on the owner's own profile (UserController /
+  UserProfileLive). base_path is the current page's path, so each segment
+  reloads *this* page with `?view_as=<mode>`. --%>
   <%= if assigns[:can_preview?] do %>
     <%!-- Width follows the page's content so the bar lines up with what's below
     it: the profile grid spans the full main column (max-w-6xl, flagged with
@@ -75,7 +75,7 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
       base_path={(assigns[:conn] && @conn.request_path) || @view_as_base_path}
       preview_as={assigns[:preview_as]}
       public_restricted?={@user.noindex? or @user.noai?}
-      settings_path={~p"/#{@user}/settings/privacy"}
+      settings_path={~p"/settings/privacy"}
       class={[
         "mx-auto mt-6",
         if(assigns[:view_as_full_width?], do: "max-w-6xl", else: "max-w-3xl")

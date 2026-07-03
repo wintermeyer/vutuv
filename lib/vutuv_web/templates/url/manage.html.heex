@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/links
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:links} title={gettext("Links")}>
+  <.card_section
+    empty={Enum.empty?(@urls)}
+    add_href={~p"/settings/links/new"}
+    add_label={gettext("Add a link")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="links"
+      slug={@user.username}
+      editable={@urls != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

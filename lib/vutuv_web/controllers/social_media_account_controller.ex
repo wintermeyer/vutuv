@@ -16,13 +16,29 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", user: user, social_media_accounts: user.social_media_accounts)
+        render(conn, "index.html",
+          as_owner?: false,
+          user: user,
+          social_media_accounts: user.social_media_accounts
+        )
       end,
       doc: fn ->
         SectionDocs.build_index(user, :social_media_accounts, user.social_media_accounts)
       end
+    )
+  end
+
+  # The owner's editor (GET /settings/social_media_accounts).
+  def manage(conn, _params) do
+    user =
+      conn.assigns[:user]
+      |> Repo.preload(social_media_accounts: SocialMediaAccount.ordered())
+
+    render(conn, "manage.html",
+      user: user,
+      social_media_accounts: user.social_media_accounts,
+      as_owner?: true,
+      page_title: gettext("Social Media")
     )
   end
 
@@ -68,7 +84,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
         conn
         |> put_flash(:info, info)
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/social_media_accounts")
+        |> redirect(to: ~p"/settings/social_media_accounts")
 
       {:error, changeset} ->
         conn |> put_status(:unprocessable_entity) |> render("new.html", changeset: changeset)
@@ -98,7 +114,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Social media account updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/social_media_accounts/#{&1}",
+      redirect_to: fn _entry -> ~p"/settings/social_media_accounts" end,
       render: "edit.html",
       assigns: [social_media_account: social_media_account]
     )
@@ -109,7 +125,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     ControllerHelpers.delete(conn, social_media_account,
       flash: gettext("Social media account deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/social_media_accounts"
+      redirect_to: ~p"/settings/social_media_accounts"
     )
   end
 end

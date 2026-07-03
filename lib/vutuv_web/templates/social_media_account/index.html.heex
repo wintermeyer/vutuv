@@ -1,32 +1,16 @@
-<%!-- The owner manages this section inside the shared settings shell
-(back to Settings, sidebar on md+); a visitor — or the owner previewing
-as public — gets the classic breadcrumbs page, unchanged, so the public
-rendering and its agent-format docs stay untouched. --%>
-<.settings_shell
-  user={@user}
-  active={:social}
-  title={gettext("Social Media")}
-  public_title={gettext("Profiles belonging to ") <> full_name(@user)}
-  enabled={@as_owner?}
+<%!-- The public showcase view of this section — identical for every viewer,
+and exactly what the agent-format docs render. The owner edits at
+/settings/social_media_accounts; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
+  title={gettext("Profiles belonging to ") <> full_name(@user)}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/social_media_accounts"}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     gettext("Social Media Profiles")
   ]}
->
+/>
 
-<.card_section
-  empty={Enum.empty?(@social_media_accounts)}
-  add_href={@as_owner? && ~p"/#{@current_user}/social_media_accounts/new"}
-  add_label={gettext("Add a social media account")}
->
-  <.reorderable_section
-    conn={@conn}
-    section="social_media_accounts"
-    slug={@user.username}
-    editable={@as_owner? and @social_media_accounts != []}
-  >
-    <%= render "card_list.html", assigns %>
-  </.reorderable_section>
+<.card_section empty={Enum.empty?(@social_media_accounts)}>
+  <%= render "card_list.html", assigns %>
 </.card_section>
-</.settings_shell>

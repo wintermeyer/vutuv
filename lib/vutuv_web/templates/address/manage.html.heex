@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/addresses
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:addresses} title={gettext("Addresses")}>
+  <.card_section
+    empty={Enum.empty?(@addresses)}
+    add_href={~p"/settings/addresses/new"}
+    add_label={gettext("Add an address")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="addresses"
+      slug={@user.username}
+      editable={@addresses != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

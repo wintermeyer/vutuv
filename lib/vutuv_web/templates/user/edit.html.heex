@@ -6,7 +6,7 @@ md+ the sidebar lists them, on phones the "More profile sections" card below
 the form does, so this page is never a dead end (the "Edit profile" button
 lands here). --%>
 <.settings_shell user={@user} active={:basics} title={gettext("Basics & photos")}>
-  <.form :let={f} for={@changeset} action={~p"/#{@user}"} multipart class="space-y-6">
+  <.form :let={f} for={@changeset} action={~p"/settings/profile"} multipart class="space-y-6">
     <.form_error changeset={@changeset} />
 
     <.card>
@@ -174,7 +174,7 @@ lands here). --%>
   <%!-- On phones the sidebar is hidden, so list the sibling profile sections
   here — a member who tapped "Edit profile" to add a job must not hit a dead
   end. Same rows as the hub, minus this very page. --%>
-  <% [{_profile_group, profile_entries} | _rest] = settings_menu(@user) %>
+  <% [{_profile_group, profile_entries} | _rest] = settings_menu() %>
   <section class="mt-8 md:hidden">
     <h2 class="mb-2 px-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("More profile sections")}

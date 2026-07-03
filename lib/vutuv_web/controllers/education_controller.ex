@@ -31,11 +31,23 @@ defmodule VutuvWeb.EducationController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", user: user, education: user.educations)
+        render(conn, "index.html", as_owner?: false, user: user, education: user.educations)
       end,
       doc: fn -> SectionDocs.build_index(user, :educations, user.educations) end
+    )
+  end
+
+  # The owner's editor (GET /settings/educations).
+  def manage(conn, _params) do
+    user =
+      conn.assigns[:user]
+      |> Repo.preload(educations: from(e in Education) |> Education.order_by_date())
+
+    render(conn, "manage.html",
+      user: user,
+      education: user.educations,
+      as_owner?: true,
+      page_title: gettext("Education")
     )
   end
 
@@ -52,7 +64,7 @@ defmodule VutuvWeb.EducationController do
 
     ControllerHelpers.save(conn, Repo.insert(changeset),
       flash: gettext("Education created successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/educations",
+      redirect_to: ~p"/settings/educations",
       render: "new.html",
       assigns: [current_year: current_year()]
     )
@@ -85,7 +97,7 @@ defmodule VutuvWeb.EducationController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Education updated successfully."),
-      redirect_to: &~p"/#{conn.assigns[:user]}/educations/#{&1}",
+      redirect_to: fn _entry -> ~p"/settings/educations" end,
       render: "edit.html",
       assigns: [education: education, current_year: current_year()]
     )
@@ -96,7 +108,7 @@ defmodule VutuvWeb.EducationController do
   def delete(conn, _params) do
     ControllerHelpers.delete(conn, conn.assigns[:education],
       flash: gettext("Education deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/educations"
+      redirect_to: ~p"/settings/educations"
     )
   end
 end

@@ -15,12 +15,17 @@ defmodule VutuvWeb.UrlController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        conn
-        |> VutuvWeb.ViewAs.assign_preview()
-        |> render("index.html", urls: urls)
+        render(conn, "index.html", as_owner?: false, urls: urls)
       end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :links, urls) end
     )
+  end
+
+  # The owner's editor (GET /settings/links): the same list plus the add
+  # tile, reorder tool and per-row actions, inside the settings shell.
+  def manage(conn, _params) do
+    urls = Repo.all(Url.ordered(assoc(conn.assigns[:user], :urls)))
+    render(conn, "manage.html", urls: urls, as_owner?: true, page_title: gettext("Links"))
   end
 
   def new(conn, _params) do
@@ -49,7 +54,7 @@ defmodule VutuvWeb.UrlController do
 
         conn
         |> put_flash(:info, gettext("Link created successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/links")
+        |> redirect(to: ~p"/settings/links")
 
       {:error, changeset} ->
         conn
@@ -83,7 +88,7 @@ defmodule VutuvWeb.UrlController do
 
         conn
         |> put_flash(:info, gettext("Link updated successfully."))
-        |> redirect(to: ~p"/#{conn.assigns[:user]}/links/#{url}")
+        |> redirect(to: ~p"/settings/links")
 
       {:error, changeset} ->
         conn
@@ -97,7 +102,7 @@ defmodule VutuvWeb.UrlController do
 
     ControllerHelpers.delete(conn, url,
       flash: gettext("Link deleted successfully."),
-      redirect_to: ~p"/#{conn.assigns[:user]}/links"
+      redirect_to: ~p"/settings/links"
     )
   end
 end

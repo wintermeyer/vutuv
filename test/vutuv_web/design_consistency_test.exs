@@ -52,7 +52,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
         conn
         |> recycle()
         |> put_req_header("accept-language", "de")
-        |> get(~p"/#{user}/emails/#{email}/edit")
+        |> get(~p"/settings/emails/#{email}/edit")
 
       html = html_response(conn, 200)
       assert html =~ "Öffentlich"
@@ -100,9 +100,9 @@ defmodule VutuvWeb.DesignConsistencyTest do
       user: user
     } do
       for path <- [
-            ~p"/#{user}/usernames/new",
-            ~p"/#{user}/social_media_accounts/new",
-            ~p"/#{user}/phone_numbers/new"
+            ~p"/settings/usernames/new",
+            ~p"/settings/social_media_accounts/new",
+            ~p"/settings/phone_numbers/new"
           ] do
         html = conn |> get(path) |> html_response(200)
 
@@ -173,19 +173,19 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn: conn,
       user: user
     } do
-      conn = get(conn, ~p"/#{user}/phone_numbers/new")
+      conn = get(conn, ~p"/settings/phone_numbers/new")
       html = html_response(conn, 200)
 
       refute html =~ "alert-danger"
       refute html =~ "Please check the fields marked in red"
 
       # The Cancel link points back to the @backlink the controller passes.
-      assert html =~ ~s(class="button button--cancel" href="#{~p"/#{user}/phone_numbers"}")
+      assert html =~ ~s(class="button button--cancel" href="#{~p"/settings/phone_numbers"}")
       assert html =~ ~s(<button class="button" type="submit">)
     end
 
     test "a failed submit re-renders the form with the error banner", %{conn: conn, user: user} do
-      conn = post(conn, ~p"/#{user}/phone_numbers", phone_number: %{"value" => ""})
+      conn = post(conn, ~p"/settings/phone_numbers", phone_number: %{"value" => ""})
       html = html_response(conn, 422)
 
       # The banner is a compact status strip: warning icon + one actionable
@@ -221,7 +221,8 @@ defmodule VutuvWeb.DesignConsistencyTest do
       conn: conn,
       user: user
     } do
-      conn = get(conn, ~p"/#{user}/phone_numbers")
+      _ = user
+      conn = get(conn, ~p"/settings/phone_numbers")
       html = html_response(conn, 200)
 
       # The legacy card shell still wraps it.
@@ -231,7 +232,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       # The empty owner card is the dashed add tile linking into the new-route,
       # not the old card__empty line + bottom card__morelink.
       assert html =~ "data-empty-add"
-      assert html =~ ~p"/#{user}/phone_numbers/new"
+      assert html =~ ~p"/settings/phone_numbers/new"
       refute html =~ ~s(class="card__morelink")
     end
 
@@ -247,7 +248,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     end
 
     test "a new page wraps its form in the card section shell", %{conn: conn, user: user} do
-      conn = get(conn, ~p"/#{user}/phone_numbers/new")
+      conn = get(conn, ~p"/settings/phone_numbers/new")
       html = html_response(conn, 200)
 
       assert html =~ ~s(class="card-list")
@@ -275,7 +276,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
     test "the email card_list renders calm labeled Edit and Delete actions",
          %{conn: conn, user: user} do
       [email | _] = user.emails
-      conn = get(conn, ~p"/#{user}/emails")
+      conn = get(conn, ~p"/settings/emails")
       html = html_response(conn, 200)
 
       # Calm labeled text actions, not the loud icon-glyph button pair.
@@ -285,7 +286,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
       # Edit links to the edit route; Delete deletes via the delete method
       # (edit-before-delete order is guaranteed by the row_actions component).
-      assert html =~ ~s(href="#{~p"/#{user}/emails/#{email}/edit"}")
+      assert html =~ ~s(href="#{~p"/settings/emails/#{email}/edit"}")
       assert html =~ ~s(data-method="delete")
     end
 
@@ -299,10 +300,10 @@ defmodule VutuvWeb.DesignConsistencyTest do
       # POST against a path that has no POST route. The calm Delete link still
       # emits the delete method (CSRF) against the entry path.
       assert html =~ ~s(data-method="delete")
-      assert html =~ ~s(data-to="#{~p"/#{user}/addresses/#{address}"}")
+      assert html =~ ~s(data-to="#{~p"/settings/addresses/#{address}"}")
 
       # Edit link present; the loud icon glyphs and danger button are gone.
-      assert html =~ ~s(href="#{~p"/#{user}/addresses/#{address}/edit"}")
+      assert html =~ ~s(href="#{~p"/settings/addresses/#{address}/edit"}")
       refute html =~ ~s(<i class="icon icon--delete"></i>)
       refute html =~ "button--danger"
     end

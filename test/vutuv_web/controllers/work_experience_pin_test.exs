@@ -52,8 +52,8 @@ defmodule VutuvWeb.WorkExperiencePinTest do
   test "the owner pins a role and the profile header follows", ctx do
     %{conn: conn, user: user, past: past} = ctx
 
-    conn = put(conn, ~p"/#{user}/work_experiences/#{past}/pin")
-    assert redirected_to(conn) == ~p"/#{user}/work_experiences"
+    conn = put(conn, ~p"/settings/work_experiences/#{past}/pin")
+    assert redirected_to(conn) == ~p"/settings/work_experiences"
     assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "appears on your profile"
 
     assert Repo.get!(User, user.id).profile_work_experience_id == past.id
@@ -82,7 +82,7 @@ defmodule VutuvWeb.WorkExperiencePinTest do
       )
     end
 
-    conn = put(conn, ~p"/#{user}/work_experiences/#{past}/pin")
+    conn = put(conn, ~p"/settings/work_experiences/#{past}/pin")
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
     assert meta_description(html) =~ "Past Role @ ThenCo"
@@ -91,38 +91,40 @@ defmodule VutuvWeb.WorkExperiencePinTest do
   test "clearing the pin falls back to the automatic heuristic", ctx do
     %{conn: conn, user: user, past: past} = ctx
 
-    conn = put(conn, ~p"/#{user}/work_experiences/#{past}/pin")
+    conn = put(conn, ~p"/settings/work_experiences/#{past}/pin")
     assert Repo.get!(User, user.id).profile_work_experience_id == past.id
 
-    conn = delete(conn, ~p"/#{user}/work_experiences/#{past}/pin")
-    assert redirected_to(conn) == ~p"/#{user}/work_experiences"
+    conn = delete(conn, ~p"/settings/work_experiences/#{past}/pin")
+    assert redirected_to(conn) == ~p"/settings/work_experiences"
     assert is_nil(Repo.get!(User, user.id).profile_work_experience_id)
 
     html = conn |> get(~p"/#{user}") |> html_response(200)
     assert meta_description(html) =~ "Current Role @ NowCo"
   end
 
-  test "the management list offers the chooser to the owner", ctx do
-    %{conn: conn, user: user, past: past, current: current} = ctx
+  test "the /settings editor offers the chooser to the owner", ctx do
+    %{conn: conn, past: past, current: current} = ctx
 
-    html = conn |> get(~p"/#{user}/work_experiences") |> html_response(200)
+    html = conn |> get(~p"/settings/work_experiences") |> html_response(200)
 
     # A pin link per role while nothing is pinned yet.
-    assert html =~ ~p"/#{user}/work_experiences/#{past}/pin"
-    assert html =~ ~p"/#{user}/work_experiences/#{current}/pin"
+    assert html =~ ~p"/settings/work_experiences/#{past}/pin"
+    assert html =~ ~p"/settings/work_experiences/#{current}/pin"
     assert html =~ "chosen automatically"
   end
 
-  test "a visitor never sees the chooser", %{user: user, current: current} do
-    # Logged-out: the management page is public, but the chooser is owner-only.
+  test "the public page never shows the chooser", %{user: user, current: current} do
+    # The public /:slug page is a pure showcase; the chooser lives only on the
+    # /settings editor.
     html = build_conn() |> get(~p"/#{user}/work_experiences") |> html_response(200)
-    refute html =~ ~p"/#{user}/work_experiences/#{current}/pin"
+    refute html =~ ~p"/settings/work_experiences/#{current}/pin"
     refute html =~ "chosen automatically"
   end
 
   test "a logged-out request cannot pin", %{user: user, past: past} do
-    conn = put(build_conn(), ~p"/#{user}/work_experiences/#{past}/pin")
-    assert conn.status == 403
+    # /settings is login-required, so an anonymous pin is turned away first.
+    conn = put(build_conn(), ~p"/settings/work_experiences/#{past}/pin")
+    assert redirected_to(conn) == "/"
     assert is_nil(Repo.get!(User, user.id).profile_work_experience_id)
   end
 

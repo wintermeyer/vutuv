@@ -19,9 +19,9 @@ defmodule VutuvWeb.UserTagControllerTest do
       user: user,
       base: base
     } do
-      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir"})
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "Elixir"})
 
-      assert redirected_to(conn) == ~p"/#{user}/tags"
+      assert redirected_to(conn) == ~p"/settings/tags"
       assert tag_count(user) == base + 1
     end
 
@@ -30,17 +30,17 @@ defmodule VutuvWeb.UserTagControllerTest do
       user: user,
       base: base
     } do
-      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, Phoenix  Ruby"})
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "Elixir, Phoenix  Ruby"})
 
-      assert redirected_to(conn) == ~p"/#{user}/tags"
+      assert redirected_to(conn) == ~p"/settings/tags"
       # Both the comma and the (doubled) space split, so this is three tags.
       assert tag_count(user) == base + 3
     end
 
     test "ignores empty segments between commas", %{conn: conn, user: user, base: base} do
-      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: "Elixir, , Ruby,"})
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "Elixir, , Ruby,"})
 
-      assert redirected_to(conn) == ~p"/#{user}/tags"
+      assert redirected_to(conn) == ~p"/settings/tags"
       assert tag_count(user) == base + 2
     end
 
@@ -49,7 +49,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       user: user,
       base: base
     } do
-      conn = post(conn, ~p"/#{user}/tags", tag_param: %{value: ""})
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: ""})
 
       assert html_response(conn, 200) =~ "editform"
       assert tag_count(user) == base
@@ -84,7 +84,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "DELETE returns a clean 404 instead of crashing", %{conn: conn, user: user} do
-      conn = delete(conn, ~p"/#{user}/tags/does-not-exist")
+      conn = delete(conn, ~p"/settings/tags/does-not-exist")
 
       assert conn.status == 404
       assert conn.halted

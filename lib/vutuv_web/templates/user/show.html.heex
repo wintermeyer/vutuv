@@ -48,7 +48,7 @@ the resulting ~200px rail width. --%>
         <% end %>
         <.link
           :if={@as_owner?}
-          href={~p"/#{@user}/edit" <> "#cover"}
+          href={~p"/settings/profile" <> "#cover"}
           title={if cover_url, do: gettext("Change cover photo"), else: gettext("Add a cover photo")}
           class="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/30 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/50"
         >
@@ -93,7 +93,7 @@ the resulting ~200px rail width. --%>
           >
             <%= cond do %>
               <% @as_owner? -> %>
-                <.button href={~p"/#{@user}/edit"}>{gettext("Edit profile")}</.button>
+                <.button href={~p"/settings/profile"}>{gettext("Edit profile")}</.button>
               <% @viewer_block -> %>
                 <%!-- I blocked this member: the only control is Unblock; Follow /
                 Message / the menu would all refuse. --%>
@@ -327,7 +327,7 @@ the resulting ~200px rail width. --%>
       (tags have no edit form). --%>
       <.section_header title={gettext("Tags")} />
 
-      <.empty_add :if={@as_owner? and Enum.count(@user_tags) == 0} href={~p"/#{@user}/tags/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@user_tags) == 0} href={~p"/settings/tags/new"}>
         {gettext("Add a tag")}
       </.empty_add>
 
@@ -348,6 +348,7 @@ the resulting ~200px rail width. --%>
 
       <.manage_footer
         href={~p"/#{@user}/tags"}
+        manage_href={~p"/settings/tags"}
         total={@totals.user_tags}
         preview={10}
         owner={@as_owner?}
@@ -358,7 +359,7 @@ the resulting ~200px rail width. --%>
     <.card :if={@work_experience != [] or @as_owner?} id="profile-experience">
       <.section_header title={gettext("Experience")} />
 
-      <.empty_add :if={@as_owner? and @work_experience == []} href={~p"/#{@user}/work_experiences/new"}>
+      <.empty_add :if={@as_owner? and @work_experience == []} href={~p"/settings/work_experiences/new"}>
         {gettext("Add work experience")}
       </.empty_add>
 
@@ -409,6 +410,7 @@ the resulting ~200px rail width. --%>
 
       <.manage_footer
         href={~p"/#{@user}/work_experiences"}
+        manage_href={~p"/settings/work_experiences"}
         total={@totals.jobs}
         preview={3}
         owner={@as_owner?}
@@ -419,7 +421,7 @@ the resulting ~200px rail width. --%>
     <.card :if={@education != [] or @as_owner?} id="profile-education">
       <.section_header title={gettext("Education")} />
 
-      <.empty_add :if={@as_owner? and @education == []} href={~p"/#{@user}/educations/new"}>
+      <.empty_add :if={@as_owner? and @education == []} href={~p"/settings/educations/new"}>
         {gettext("Add education")}
       </.empty_add>
 
@@ -454,6 +456,7 @@ the resulting ~200px rail width. --%>
 
       <.manage_footer
         href={~p"/#{@user}/educations"}
+        manage_href={~p"/settings/educations"}
         total={@totals.educations}
         preview={3}
         owner={@as_owner?}
@@ -466,7 +469,7 @@ the resulting ~200px rail width. --%>
     to the bundled placeholder while a screenshot is still missing. --%>
     <.card :if={@totals.links > 0 or @as_owner?} id="profile-links">
       <.section_header title={ngettext("Link", "Links", @totals.links)} />
-      <.empty_add :if={@as_owner? and @totals.links == 0} href={~p"/#{@user}/links/new"}>
+      <.empty_add :if={@as_owner? and @totals.links == 0} href={~p"/settings/links/new"}>
         {gettext("Add a link")}
       </.empty_add>
       <%!-- sm:gap-x-18 widens only the desktop column gutter to 72px so both
@@ -503,6 +506,7 @@ the resulting ~200px rail width. --%>
       </div>
       <.manage_footer
         href={~p"/#{@user}/links"}
+        manage_href={~p"/settings/links"}
         total={@totals.links}
         preview={3}
         owner={@as_owner?}
@@ -572,7 +576,7 @@ the resulting ~200px rail width. --%>
       set it is a clean showcase with a quiet "Ändern" footer to /edit. --%>
       <% has_general_info = @user.birthdate || (@user.gender && @user.gender != "other") %>
       <.section_header title={gettext("General Info")} />
-      <.empty_add :if={@as_owner? && !has_general_info} href={~p"/#{@user}/edit"}>
+      <.empty_add :if={@as_owner? && !has_general_info} href={~p"/settings/profile"}>
         {gettext("Add personal details")}
       </.empty_add>
       <%!-- Icon rows: one line per datum (person = gender, cake = birthday); the
@@ -600,7 +604,7 @@ the resulting ~200px rail width. --%>
           </dd>
         </div>
       </dl>
-      <.card_footer_link :if={@as_owner? && has_general_info} href={~p"/#{@user}/edit"}>
+      <.card_footer_link :if={@as_owner? && has_general_info} href={~p"/settings/profile"}>
         {gettext("Edit")}
       </.card_footer_link>
     </.card>
@@ -617,7 +621,7 @@ the resulting ~200px rail width. --%>
       id="profile-contact"
     >
       <.section_header title={gettext("Contact")} />
-      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/#{@user}/emails/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/settings/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
       <%!-- Contact channels grouped into Beruflich/Privat: e-mails are work
@@ -660,7 +664,7 @@ the resulting ~200px rail width. --%>
           </ul>
         </div>
       </div>
-      <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/#{@user}/phone_numbers/new"}>
+      <.empty_add :if={@as_owner? and @totals.numbers == 0} href={~p"/settings/phone_numbers/new"}>
         {gettext("Add a phone number")}
       </.empty_add>
       <%!-- One folded footer for both channels ("Manage emails · Manage phone
@@ -673,7 +677,7 @@ the resulting ~200px rail width. --%>
       >
         <.link
           :if={show_email_manage}
-          href={~p"/#{@user}/emails"}
+          href={~p"/settings/emails"}
           class="text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
         >
           {gettext("Manage emails")}
@@ -681,7 +685,7 @@ the resulting ~200px rail width. --%>
         <span :if={show_email_manage and show_phone_link} aria-hidden="true" class="text-slate-300 dark:text-slate-600">·</span>
         <.link
           :if={show_phone_link}
-          href={~p"/#{@user}/phone_numbers"}
+          href={if @totals.numbers > 3, do: ~p"/#{@user}/phone_numbers", else: ~p"/settings/phone_numbers"}
           class="text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
         >
           <%= if @totals.numbers > 3 do %>
@@ -698,7 +702,7 @@ the resulting ~200px rail width. --%>
       id="profile-social-media"
     >
       <.section_header title={gettext("Social Media")} />
-      <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/#{@user}/social_media_accounts/new"}>
+      <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/settings/social_media_accounts/new"}>
         {gettext("Add a social media account")}
       </.empty_add>
 
@@ -744,6 +748,7 @@ the resulting ~200px rail width. --%>
 
       <.manage_footer
         href={~p"/#{@user}/social_media_accounts"}
+        manage_href={~p"/settings/social_media_accounts"}
         total={Enum.count(@user.social_media_accounts)}
         preview={Enum.count(@user.social_media_accounts)}
         owner={@as_owner?}
@@ -836,7 +841,7 @@ the resulting ~200px rail width. --%>
 
     <.card :if={@totals.addresses > 0 or @as_owner?} id="profile-addresses">
       <.section_header title={ngettext("Address", "Addresses", @totals.addresses)} />
-      <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/#{@user}/addresses/new"}>
+      <.empty_add :if={@as_owner? and @totals.addresses == 0} href={~p"/settings/addresses/new"}>
         {gettext("Add an address")}
       </.empty_add>
       <%!-- Icon block: a map-pin leads the entry; the description is the bold
@@ -904,6 +909,7 @@ the resulting ~200px rail width. --%>
       </ul>
       <.manage_footer
         href={~p"/#{@user}/addresses"}
+        manage_href={~p"/settings/addresses"}
         total={@totals.addresses}
         preview={3}
         owner={@as_owner?}

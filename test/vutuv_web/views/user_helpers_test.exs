@@ -348,17 +348,6 @@ defmodule VutuvWeb.UserHelpersTest do
       assert "public@example.com" in followed_sees
       refute "secret@example.com" in followed_sees
     end
-
-    test "emails_for_preview/3 shows the Public preview only public addresses" do
-      owner = insert(:user, email_confirmed?: true)
-      insert(:email, user: owner, public?: true, value: "public@example.com")
-      insert(:email, user: owner, public?: false, value: "secret@example.com")
-
-      # Public is the only visitor preview tier left (Vernetzt was dropped).
-      values = Enum.map(UserHelpers.emails_for_preview(owner, nil, :public), & &1.value)
-      assert "public@example.com" in values
-      refute "secret@example.com" in values
-    end
   end
 
   # Re-read the work experiences in the same id order the listing helpers use
