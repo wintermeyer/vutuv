@@ -225,8 +225,10 @@ defmodule VutuvWeb.UserProfileMastodonTest do
              )
 
       # The post row mirrors the post-card header: display name + the
-      # server-fetched data-URI avatar (never a hotlink to the instance).
+      # server-fetched data-URI avatar (never a hotlink to the instance),
+      # badged with the network glyph.
       assert html =~ "Alice Beispiel"
+      assert has_element?(view, ~s(#{@section} [data-feed-network="Mastodon"]))
       assert has_element?(view, ~s(#{@section} img[data-avatar]))
       avatar_src = view |> element(~s(#{@section} img[data-avatar])) |> render()
       assert avatar_src =~ "data:image/png;base64,"

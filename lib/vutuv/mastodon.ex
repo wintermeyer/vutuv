@@ -107,13 +107,29 @@ defmodule Vutuv.Mastodon do
   # lookup answers. `avatar_static` is preferred over `avatar` so an animated
   # avatar arrives as its still version.
   defp account_meta(account, user, instance) do
+    name =
+      presence(strip_custom_emoji(account["display_name"])) ||
+        presence(account["username"]) || user
+
     %{
       id: to_string(account["id"]),
-      name: presence(account["display_name"]) || presence(account["username"]) || user,
+      name: name,
       url: presence(account["url"]) || "https://#{instance}/@#{user}",
       avatar_url: presence(account["avatar_static"]) || presence(account["avatar"])
     }
   end
+
+  # Display names may embed custom-emoji shortcodes (":verified:"); the
+  # images they name are per-instance, so here the tokens would render as
+  # literal ":verified:" text — drop them. Mastodon delimits shortcodes with
+  # non-word boundaries, which is what keeps a plain time ("10:30:45") intact.
+  defp strip_custom_emoji(value) when is_binary(value) do
+    value
+    |> String.replace(~r/(?<=^|\W):\w{2,}:(?=\W|$)/u, "")
+    |> String.replace(~r/\s{2,}/, " ")
+  end
+
+  defp strip_custom_emoji(value), do: value
 
   defp presence(value) when is_binary(value) do
     case String.trim(value) do

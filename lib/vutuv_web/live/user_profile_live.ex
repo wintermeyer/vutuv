@@ -528,12 +528,17 @@ defmodule VutuvWeb.UserProfileLive do
   defp put_social_feed(socket, _key, _error), do: socket
 
   # The mixed timeline the "Social media posts" card renders: every fetched
-  # account's posts tagged with their feed (name/avatar/url), newest first —
-  # a member's Mastodon and Bluesky accounts merge into one list.
+  # account's posts tagged with their feed (name/avatar/url) and network,
+  # newest first — a member's Mastodon and Bluesky accounts merge into one
+  # list. The provider comes from the map key (never the cached struct, so a
+  # stale ETS shape cannot break it); the template badges each entry with it,
+  # which is what keeps identical cross-posts distinguishable.
   defp assign_social_feed_entries(socket) do
     entries =
       socket.assigns.social_feeds
-      |> Enum.flat_map(fn {_key, feed} -> Enum.map(feed.posts, &%{feed: feed, post: &1}) end)
+      |> Enum.flat_map(fn {{provider, _handle}, feed} ->
+        Enum.map(feed.posts, &%{provider: provider, feed: feed, post: &1})
+      end)
       |> Enum.sort_by(& &1.post.created_at, {:desc, DateTime})
 
     assign(socket, :social_feed_entries, entries)

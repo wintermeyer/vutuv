@@ -125,6 +125,10 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
       assert avatar_src =~ "data:image/png;base64,"
       refute avatar_src =~ "cdn.example"
 
+      # The avatar carries the network badge, so cross-posted entries from
+      # different networks stay distinguishable.
+      assert has_element?(view, ~s(#{@section} [data-feed-network="Bluesky"]))
+
       # The plain account row keeps its profile link next to the posts.
       profile_url = "https://bsky.app/profile/#{handle}"
       assert has_element?(view, ~s(#profile-social-media a[href="#{profile_url}"]))
@@ -189,6 +193,11 @@ defmodule VutuvWeb.UserProfileBlueskyTest do
       {bluesky_at, _} = :binary.match(html, "Neuer Bluesky-Beitrag")
       {mastodon_at, _} = :binary.match(html, "Älterer Mastodon-Beitrag")
       assert bluesky_at < mastodon_at
+
+      # Each entry names its network via the avatar badge — the one visible
+      # difference when the same text is cross-posted to both.
+      assert has_element?(view, ~s(#{@section} [data-feed-network="Bluesky"]))
+      assert has_element?(view, ~s(#{@section} [data-feed-network="Mastodon"]))
     end
 
     test "the owner's opt-out hides the Bluesky feed and stops the fetch", %{conn: conn} do

@@ -126,6 +126,19 @@ defmodule Vutuv.MastodonTest do
       refute_receive {:req, _, _}
     end
 
+    test "custom-emoji shortcodes are stripped from the display name" do
+      serve([status(%{})], lookup: %{"display_name" => "Johannes Mirus :verified:"})
+      assert {:ok, %Feed{name: "Johannes Mirus"}} = Mastodon.fetch_posts(@handle)
+
+      # A shortcode-only display name falls back like an empty one.
+      serve([status(%{})], lookup: %{"display_name" => ":verified:", "username" => "alice"})
+      assert {:ok, %Feed{name: "alice"}} = Mastodon.fetch_posts(@handle)
+
+      # A time is not a shortcode: the token boundaries must be non-word.
+      serve([status(%{})], lookup: %{"display_name" => "Alice (Live 10:30:45)"})
+      assert {:ok, %Feed{name: "Alice (Live 10:30:45)"}} = Mastodon.fetch_posts(@handle)
+    end
+
     test "keeps only public and unlisted statuses, at most three" do
       serve([
         status(%{"id" => "1", "visibility" => "private"}),
