@@ -62,7 +62,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
       # input-shaped pill), not the dashed onboarding tile; the h1 stays for
       # screen readers only. The old Likes/Bookmarks header links were
       # redundant — both live in the avatar menu and as tabs on the saved hub.
-      assert has_element?(view, "#open-composer", "Write a post")
+      assert has_element?(view, "#open-composer[data-composer-trigger]", "Write a post")
       refute has_element?(view, "#open-composer[data-empty-add]")
       assert has_element?(view, "#feed h1.sr-only", "Feed")
       refute has_element?(view, ~s(#feed a[href="/likes"]))

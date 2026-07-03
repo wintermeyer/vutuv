@@ -194,6 +194,62 @@ defmodule VutuvWeb.PostComponents do
   def post_row_class, do: "py-4 first:pt-0 last:pb-0"
 
   @doc """
+  The collapsed composer trigger: the viewer's avatar beside an input-shaped
+  pill, the composer pattern every network trains. Card-weight on purpose —
+  its dashed `<.empty_add>` predecessor was an outline rather than a surface
+  and read as a void next to solid cards.
+
+  Two homes, one look: the top of **/feed** (no `href`, so it renders a
+  `<button>` whose reveal is wired via `rest` — `id="open-composer"` +
+  `phx-click="open-composer"`, the id both the "n" shortcut and the `#compose`
+  arrival hash click) and the **profile's Beiträge card**
+  (`href={~p"/feed#compose"}`, a link that opens the feed with the composer
+  revealed and focused). The default `surface={:card}` carries its own white
+  card shell for standing alone on the canvas; pass `surface={:flat}` when it
+  sits inside an existing card. Carries `data-composer-trigger` for tests.
+  """
+  attr(:viewer, :any, required: true, doc: "the viewer; their avatar anchors the row")
+  attr(:href, :any, default: nil)
+  attr(:surface, :atom, default: :card, values: [:card, :flat])
+  attr(:class, :any, default: nil)
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  def composer_trigger(assigns) do
+    assigns =
+      assign(assigns, :shell_class, [
+        "group flex w-full items-center gap-3 text-left",
+        assigns.surface == :card &&
+          "rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800",
+        assigns.class
+      ])
+
+    ~H"""
+    <%= if @href do %>
+      <.link href={@href} data-composer-trigger class={@shell_class} {@rest}>
+        <.composer_trigger_body viewer={@viewer}>{render_slot(@inner_block)}</.composer_trigger_body>
+      </.link>
+    <% else %>
+      <button type="button" data-composer-trigger class={@shell_class} {@rest}>
+        <.composer_trigger_body viewer={@viewer}>{render_slot(@inner_block)}</.composer_trigger_body>
+      </button>
+    <% end %>
+    """
+  end
+
+  attr(:viewer, :any, required: true)
+  slot(:inner_block, required: true)
+
+  defp composer_trigger_body(assigns) do
+    ~H"""
+    <.avatar user={@viewer} size="md" />
+    <span class="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700">
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
+
+  @doc """
   One row of a threaded post timeline — the single rendering of a
   post-with-context shared by the feed, the profile Posts section, the saved
   lists, the post archive and the permalink reply thread, so a reply reads the

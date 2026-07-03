@@ -410,17 +410,15 @@ defmodule VutuvWeb.UI do
   On the **profile** it shows only while the card is **empty** (guard with
   `:if={same_user?(…) and <collection empty>}`); once there are entries the card
   is a clean showcase with a `<.card_footer_link>` "Verwalten ›" instead. The
-  exceptions are Beiträge (compose tile stays always) and General Info (empty
-  tile graduates to an "Ändern ›" footer). On the legacy **management pages**
-  `<.card_section>` renders it above the list, empty or populated (those are the
-  editor). Pass the call-to-action label as the inner block (e.g.
-  `gettext("Add work experience")`); carries a `data-empty-add` hook for tests.
+  exceptions are Beiträge (whose compose affordance stays always but is the
+  avatar-card `<.composer_trigger>` in `VutuvWeb.PostComponents`, not this tile)
+  and General Info (empty tile graduates to an "Ändern ›" footer). On the legacy
+  **management pages** `<.card_section>` renders it above the list, empty or
+  populated (those are the editor). Pass the call-to-action label as the inner
+  block (e.g. `gettext("Add work experience")`); carries a `data-empty-add` hook
+  for tests.
   """
-  # With `href` it is a link to the new-entry form (the usual case). Without
-  # `href` it renders a `<button>` instead, so the same dashed tile can drive a
-  # LiveView action via the global `rest` (e.g. the /feed composer reveal passes
-  # `phx-click` + `id`) — keeping one compose/add affordance across the app.
-  attr(:href, :any, default: nil)
+  attr(:href, :any, required: true, doc: "the new-entry form this tile links to")
   attr(:class, :any, default: nil)
   attr(:rest, :global)
   slot(:inner_block, required: true)
@@ -431,17 +429,10 @@ defmodule VutuvWeb.UI do
     assigns = assign(assigns, :base_class, @empty_add_class)
 
     ~H"""
-    <%= if @href do %>
-      <.link href={@href} data-empty-add class={[@base_class, @class]} {@rest}>
-        <.empty_add_glyph />
-        {render_slot(@inner_block)}
-      </.link>
-    <% else %>
-      <button type="button" data-empty-add class={[@base_class, "w-full", @class]} {@rest}>
-        <.empty_add_glyph />
-        {render_slot(@inner_block)}
-      </button>
-    <% end %>
+    <.link href={@href} data-empty-add class={[@base_class, @class]} {@rest}>
+      <.empty_add_glyph />
+      {render_slot(@inner_block)}
+    </.link>
     """
   end
 

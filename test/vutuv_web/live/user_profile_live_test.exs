@@ -268,18 +268,21 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "the owner's 'Write a post' compose tile" do
+  describe "the owner's 'Write a post' composer trigger" do
     test "links to the feed with the composer pre-opened", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # The tile must land on /feed#compose, not bare /feed — the #compose hash
-      # is what reveals and focuses the composer on arrival (the same path the
-      # "n" keyboard shortcut uses), so clicking it opens the new-post form
-      # straight away instead of dropping the owner on a closed composer.
-      tile = element(view, "#profile-posts [data-empty-add]")
-      assert render(tile) =~ ~s(href="/feed#compose")
+      # The same avatar-card trigger as the feed's (shared <.composer_trigger>,
+      # not the dashed onboarding tile). It must land on /feed#compose, not
+      # bare /feed — the #compose hash is what reveals and focuses the composer
+      # on arrival (the same path the "n" keyboard shortcut uses), so clicking
+      # it opens the new-post form straight away instead of dropping the owner
+      # on a closed composer.
+      trigger = element(view, "#profile-posts [data-composer-trigger]")
+      assert render(trigger) =~ ~s(href="/feed#compose")
+      refute has_element?(view, "#profile-posts [data-empty-add]")
     end
   end
 

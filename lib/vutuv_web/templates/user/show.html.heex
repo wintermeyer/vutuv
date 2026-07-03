@@ -286,13 +286,22 @@ the resulting ~200px rail width. --%>
       shares the "Post" msgid and must not be repurposed. --%>
       <.section_header title={pngettext("profile", "Post", "Posts", @posts_total)} />
 
-      <%!-- Compose affordance on top, the convention everywhere. Links to the
-      feed with the `#compose` hash so the composer reveals and focuses on
-      arrival (the same path the "n" keyboard shortcut uses) — clicking here
-      opens the new-post form straight away instead of a closed composer. --%>
-      <.empty_add :if={@as_owner?} href={~p"/feed#compose"} class={@posts != [] && "mb-4"}>
+      <%!-- Compose affordance on top, the convention everywhere: the same
+      avatar-card trigger as the feed's (shared <.composer_trigger>, flat
+      inside this card). Links to the feed with the `#compose` hash so the
+      composer reveals and focuses on arrival (the same path the "n" keyboard
+      shortcut uses) — clicking here opens the new-post form straight away
+      instead of a closed composer. --%>
+      <.composer_trigger
+        :if={@as_owner?}
+        viewer={@user}
+        href={~p"/feed#compose"}
+        surface={:flat}
+        id="profile-composer"
+        class={@posts != [] && "mb-4"}
+      >
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
-      </.empty_add>
+      </.composer_trigger>
 
 <%!-- Threaded Posts list — the shared <.post_thread_entry>: a reply nests the
       post it answers as an inline context preview joined by the thread rail, a

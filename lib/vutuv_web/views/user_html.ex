@@ -1,7 +1,10 @@
 defmodule VutuvWeb.UserHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.PostComponents, only: [post_list: 1, post_row_class: 0, post_thread_entry: 1]
+
+  import VutuvWeb.PostComponents,
+    only: [composer_trigger: 1, post_list: 1, post_row_class: 0, post_thread_entry: 1]
+
   import VutuvWeb.UserHelpers
 
   alias Vutuv.Profiles.SocialMediaAccount
