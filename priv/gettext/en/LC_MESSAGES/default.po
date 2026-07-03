@@ -28,7 +28,7 @@ msgstr ""
 #: lib/vutuv_web/templates/address/card_list.html.heex:6
 #: lib/vutuv_web/templates/address/show.html.heex:2
 #: lib/vutuv_web/templates/address/show.html.heex:7
-#: lib/vutuv_web/templates/user/show.html.heex:721
+#: lib/vutuv_web/templates/user/show.html.heex:827
 #, elixir-autogen
 msgid "Address"
 msgid_plural "Addresses"
@@ -578,6 +578,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/notifications.html.heex:68
 #: lib/vutuv_web/templates/settings/privacy.html.heex:66
 #: lib/vutuv_web/templates/settings/privacy.html.heex:94
+#: lib/vutuv_web/templates/settings/privacy.html.heex:126
 #: lib/vutuv_web/templates/user/edit.html.heex:164
 #, elixir-autogen
 msgid "Save"
@@ -650,7 +651,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/block_controller.ex:31
 #: lib/vutuv_web/controllers/follow_controller.ex:24
 #: lib/vutuv_web/controllers/user_save_controller.ex:45
-#: lib/vutuv_web/live/user_profile_live.ex:107
+#: lib/vutuv_web/live/user_profile_live.ex:113
 #, elixir-autogen
 msgid "Something went wrong"
 msgstr ""
@@ -1802,7 +1803,7 @@ msgid "We sent a PIN to your new email address. Enter it below to confirm the ad
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/feed.ex:482
-#: lib/vutuv_web/templates/user/show.html.heex:799
+#: lib/vutuv_web/templates/user/show.html.heex:905
 #, elixir-autogen, elixir-format
 msgid "Who to follow"
 msgstr ""
@@ -2691,7 +2692,7 @@ msgid "Add a social media account"
 msgstr ""
 
 #: lib/vutuv_web/templates/address/index.html.heex:13
-#: lib/vutuv_web/templates/user/show.html.heex:723
+#: lib/vutuv_web/templates/user/show.html.heex:829
 #, elixir-autogen, elixir-format
 msgid "Add an address"
 msgstr ""
@@ -2713,7 +2714,7 @@ msgstr ""
 msgid "Add work experience"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:570
+#: lib/vutuv_web/live/user_profile_live.ex:729
 #: lib/vutuv_web/templates/user/show.html.heex:290
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
@@ -2723,7 +2724,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/apps.html.heex:16
 #: lib/vutuv_web/templates/settings/apps.html.heex:22
 #: lib/vutuv_web/templates/settings/index.html.heex:25
-#: lib/vutuv_web/templates/settings/privacy.html.heex:109
+#: lib/vutuv_web/templates/settings/privacy.html.heex:141
 #, elixir-autogen, elixir-format
 msgid "Manage"
 msgstr ""
@@ -4454,7 +4455,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/block/index.html.heex:1
 #: lib/vutuv_web/templates/block/index.html.heex:1
-#: lib/vutuv_web/templates/settings/privacy.html.heex:106
+#: lib/vutuv_web/templates/settings/privacy.html.heex:138
 #, elixir-autogen, elixir-format
 msgid "Blocked members"
 msgstr ""
@@ -4487,7 +4488,7 @@ msgid "You have not blocked anyone."
 msgstr ""
 
 #: lib/vutuv_web/controllers/block_controller.ex:86
-#: lib/vutuv_web/live/user_profile_live.ex:211
+#: lib/vutuv_web/live/user_profile_live.ex:217
 #, elixir-autogen, elixir-format
 msgid "You unblocked @%{slug}."
 msgstr ""
@@ -4611,7 +4612,7 @@ msgstr ""
 msgid "searches first names only (last: for last names)"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:558
+#: lib/vutuv_web/live/user_profile_live.ex:717
 #: lib/vutuv_web/templates/user/show.html.heex:327
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
@@ -5243,7 +5244,7 @@ msgstr ""
 msgid "Your data"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:112
+#: lib/vutuv_web/templates/settings/privacy.html.heex:144
 #, elixir-autogen, elixir-format
 msgid "Content under review"
 msgstr ""
@@ -5314,7 +5315,7 @@ msgstr ""
 msgid "A few quick steps so people can find and recognize you."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:560
+#: lib/vutuv_web/live/user_profile_live.ex:719
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr ""
@@ -5425,7 +5426,7 @@ msgstr ""
 msgid "Notification settings saved."
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:107
+#: lib/vutuv_web/templates/settings/privacy.html.heex:139
 #, elixir-autogen, elixir-format
 msgid "People who cannot interact with you."
 msgstr ""
@@ -5456,7 +5457,7 @@ msgstr ""
 msgid "Third-party apps you authorized."
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:115
+#: lib/vutuv_web/templates/settings/privacy.html.heex:147
 #, elixir-autogen, elixir-format
 msgid "View"
 msgstr ""
@@ -5471,7 +5472,7 @@ msgstr ""
 msgid "Your post"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:113
+#: lib/vutuv_web/templates/settings/privacy.html.heex:145
 #, elixir-autogen, elixir-format
 msgid "Your posts or profile a moderator is looking at."
 msgstr ""
@@ -5612,7 +5613,7 @@ msgstr ""
 msgid "Replies to and likes on your posts"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:103
+#: lib/vutuv_web/templates/settings/privacy.html.heex:135
 #, elixir-autogen, elixir-format
 msgid "Safety"
 msgstr ""
@@ -5693,25 +5694,25 @@ msgid "You cannot block yourself."
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_save_controller.ex:23
-#: lib/vutuv_web/live/user_profile_live.ex:177
+#: lib/vutuv_web/live/user_profile_live.ex:183
 #, elixir-autogen, elixir-format
 msgid "Bookmark removed."
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_save_controller.ex:19
-#: lib/vutuv_web/live/user_profile_live.ex:174
+#: lib/vutuv_web/live/user_profile_live.ex:180
 #, elixir-autogen, elixir-format
 msgid "Bookmarked."
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_save_controller.ex:31
-#: lib/vutuv_web/live/user_profile_live.ex:183
+#: lib/vutuv_web/live/user_profile_live.ex:189
 #, elixir-autogen, elixir-format
 msgid "Like removed."
 msgstr ""
 
 #: lib/vutuv_web/controllers/user_save_controller.ex:27
-#: lib/vutuv_web/live/user_profile_live.ex:180
+#: lib/vutuv_web/live/user_profile_live.ex:186
 #, elixir-autogen, elixir-format
 msgid "Liked."
 msgstr ""
@@ -5979,7 +5980,7 @@ msgstr ""
 msgid "or"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:564
+#: lib/vutuv_web/live/user_profile_live.ex:723
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr ""
@@ -6022,7 +6023,7 @@ msgstr[1] ""
 msgid "After choosing a file you can reposition and zoom it."
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:770
+#: lib/vutuv_web/templates/user/show.html.heex:876
 #, elixir-autogen, elixir-format
 msgid "Also on"
 msgstr ""
@@ -6209,9 +6210,9 @@ msgstr ""
 msgid "Maps"
 msgstr ""
 
-#: lib/vutuv_web/templates/user/show.html.heex:756
-#: lib/vutuv_web/templates/user/show.html.heex:764
-#: lib/vutuv_web/templates/user/show.html.heex:776
+#: lib/vutuv_web/templates/user/show.html.heex:862
+#: lib/vutuv_web/templates/user/show.html.heex:870
+#: lib/vutuv_web/templates/user/show.html.heex:882
 #, elixir-autogen, elixir-format
 msgid "Open in %{name}"
 msgstr ""
@@ -6522,7 +6523,7 @@ msgid "Mute"
 msgstr ""
 
 #: lib/vutuv_web/controllers/follow_controller.ex:49
-#: lib/vutuv_web/live/user_profile_live.ex:159
+#: lib/vutuv_web/live/user_profile_live.ex:165
 #, elixir-autogen, elixir-format
 msgid "Muted. Their posts no longer appear in your feed."
 msgstr ""
@@ -6544,7 +6545,7 @@ msgid "Unmute"
 msgstr ""
 
 #: lib/vutuv_web/controllers/follow_controller.ex:51
-#: lib/vutuv_web/live/user_profile_live.ex:161
+#: lib/vutuv_web/live/user_profile_live.ex:167
 #, elixir-autogen, elixir-format
 msgid "Unmuted. Their posts appear in your feed again."
 msgstr ""
@@ -8255,7 +8256,7 @@ msgstr ""
 msgid "At least three tags, separated by a comma or a space."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:583
+#: lib/vutuv_web/live/user_profile_live.ex:742
 #, elixir-autogen, elixir-format
 msgid "For example, a thought on %{tag}."
 msgstr ""
@@ -8271,3 +8272,33 @@ msgid "Skipped %{count} entry that is already on your profile or taken by anothe
 msgid_plural "Skipped %{count} entries that are already on your profile or taken by another member."
 msgstr[0] ""
 msgstr[1] ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:106
+#, elixir-autogen, elixir-format
+msgid "If you list a Mastodon account, your profile can show your latest public posts from it."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:104
+#, elixir-autogen, elixir-format
+msgid "Mastodon posts"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:118
+#, elixir-autogen, elixir-format
+msgid "Show my latest Mastodon posts on my profile"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:120
+#, elixir-autogen, elixir-format
+msgid "When off, the Social Media card lists your Mastodon account without any posts."
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:717
+#, elixir-autogen, elixir-format
+msgid "Loading posts"
+msgstr ""
+
+#: lib/vutuv_web/templates/user/show.html.heex:753
+#, elixir-autogen, elixir-format
+msgid "Social media posts"
+msgstr ""

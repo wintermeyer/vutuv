@@ -705,6 +705,28 @@ the resulting ~200px rail width. --%>
               class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
             />
             <span class="truncate font-medium">{social_handle(account)}</span>
+            <%!-- The Mastodon feed for this account is being fetched in the
+            background (Vutuv.Mastodon); the spinner disappears when the
+            result lands (or the 15 s give-up timer fires). --%>
+            <span
+              :if={
+                account.provider == "Mastodon" and
+                  MapSet.member?(@mastodon_loading, account.value)
+              }
+              data-mastodon-loading
+              title={gettext("Loading posts")}
+              class="shrink-0"
+            >
+              <svg
+                class="h-3.5 w-3.5 animate-spin text-slate-400 dark:text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+              </svg>
+            </span>
           </.social_link>
         </li>
       </ul>
@@ -715,6 +737,90 @@ the resulting ~200px rail width. --%>
         preview={Enum.count(@user.social_media_accounts)}
         owner={@as_owner?}
       />
+    </.card>
+
+    <%!-- The mixed social-network feed (Vutuv.Mastodon): the latest public
+    posts of every Mastodon account listed above, merged newest-first into
+    one card, fetched after connect and cached. Renders only once something
+    arrived — while loading, on fetch errors, with the owner's opt-out off,
+    and on the disconnected (SEO) pass there is simply no card. Each entry
+    mirrors the post card's author header (avatar + name + Berlin time
+    linking to the status), without the action bar and menu — the avatar is
+    the server-fetched data URI (never a hotlink; a visitor's browser must
+    not contact the federated instance), falling back to the same initials
+    tile a picture-less member gets. --%>
+    <.card :if={@mastodon_entries != []} id="profile-social-posts">
+      <.section_header title={gettext("Social media posts")} />
+      <ul class="-mb-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <li
+          :for={entry <- @mastodon_entries}
+          class="relative py-3 transition first:pt-1 last:pb-2 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+        >
+          <%!-- Stretched link: clicking anywhere on the row that is not
+          itself a link opens the post on its home network. The inner links
+          are position:relative (the wrapper's [&_a]:relative), so they paint
+          above this overlay and stay clickable. Hidden from AT and the tab
+          order — the timestamp link below is the accessible path to the same
+          URL (the avatar-dupe pattern). --%>
+          <.link
+            href={entry.post.url}
+            target="_blank"
+            rel="noopener nofollow ugc"
+            class="absolute inset-0"
+            aria-hidden="true"
+            tabindex="-1"
+          ></.link>
+          <div class="flex items-start gap-3 [&_a]:relative">
+            <.link
+              href={entry.feed.url}
+              target="_blank"
+              rel="noopener nofollow"
+              class="shrink-0"
+              aria-hidden="true"
+              tabindex="-1"
+            >
+              <.avatar
+                src={entry.feed.avatar}
+                user={%{avatar: nil, first_name: entry.feed.name, last_name: nil}}
+                size="sm"
+                alt=""
+              />
+            </.link>
+
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-baseline gap-x-2">
+                <.link
+                  href={entry.feed.url}
+                  target="_blank"
+                  rel="noopener nofollow"
+                  title={"@" <> entry.feed.handle}
+                  class="truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+                >
+                  {entry.feed.name}
+                </.link>
+                <.link
+                  href={entry.post.url}
+                  target="_blank"
+                  rel="noopener nofollow ugc"
+                  class="shrink-0 text-sm text-slate-500 hover:text-brand-700"
+                >
+                  <.post_time
+                    id={"mastodon-time-#{entry.feed.handle}-#{entry.post.id}"}
+                    at={entry.post.created_at}
+                  />
+                </.link>
+              </div>
+
+              <%!-- The member-post pipeline's output (Markdown, autolinked
+              URLs, #hashtags to our tag pages; sanitized like member posts,
+              so raw/1 is safe here). --%>
+              <div class="markdown mt-2 line-clamp-5 text-slate-800 dark:text-slate-200">
+                {Phoenix.HTML.raw(entry.post.html)}
+              </div>
+            </div>
+          </div>
+        </li>
+      </ul>
     </.card>
 
     <.card :if={@totals.addresses > 0 or @as_owner?} id="profile-addresses">

@@ -84,6 +84,10 @@ defmodule Vutuv.Accounts.User do
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
     field(:show_online_status?, :boolean, default: true)
+    # Whether a listed Mastodon account shows its latest public posts inline on
+    # the profile's Social Media card (Vutuv.Mastodon). Default on; the opt-out
+    # lives on the Privacy settings page.
+    field(:show_mastodon_feed?, :boolean, default: true)
     # The viewer's map preferences (set on the account settings hub, applied to
     # every address this member looks at): which map services to show and which
     # one is the default rendered as the primary "Open in …" button. Defaults
@@ -175,7 +179,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth

@@ -18,7 +18,9 @@ defmodule VutuvWeb.Markdown do
   alias VutuvWeb.UserHelpers
 
   @url_display_max 40
-  @trailing_punct ~w(. , ; : ! ?)
+  # `…` included: remote (Mastodon) text is length-capped with a trailing
+  # ellipsis that must not become part of a link target.
+  @trailing_punct ~w(. , ; : ! ? …)
   @preview_limit 1000
   # When a whole block would overflow the preview, keep a word-cut of it (so a
   # one-line intro above a long block doesn't leave a one-line preview) — but
@@ -78,6 +80,33 @@ defmodule VutuvWeb.Markdown do
   end
 
   def render_post(_, _), do: Phoenix.HTML.raw("")
+
+  @doc """
+  Render **remote** plain text — a Mastodon post reduced to text by
+  `Vutuv.Mastodon.text_content/1` — with the same treatment a member post
+  gets, minus what must not apply to a foreign namespace:
+
+    * bare URLs autolink (display-truncated), Markdown formatting renders,
+      everything is sanitized — the same `render_pipeline/1` as posts;
+    * every `<img>` is dropped: there is no own-attachment whitelist for
+      remote content, and a hotlink would leak each reader's IP;
+    * `#hashtags` link to our tag pages through the same non-empty-tag gate;
+    * `@mentions` deliberately stay plain text — a Mastodon `@name` names an
+      account in the fediverse, not the vutuv member who happens to share
+      the handle, so linking it would point at the wrong person.
+
+  Returns an HTML **string** (not `safe`): the caller renders it with
+  `raw/1`; it is sanitized exactly like member-post HTML.
+  """
+  def render_remote(text) when is_binary(text) do
+    text
+    |> render_pipeline()
+    |> strip_img_tags()
+    |> open_links_in_new_tab()
+    |> linkify_entities(:hashtags_only)
+  end
+
+  def render_remote(_), do: ""
 
   # The shared core both renderers run: escape raw HTML, autolink bare URLs,
   # render the Markdown, undo the double-escape, sanitize.
@@ -173,17 +202,17 @@ defmodule VutuvWeb.Markdown do
   # Each body resolves its handles and its hashtags in **one** DB query each;
   # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
   # in `markdown_test.exs` keep working without a sandbox).
-  defp linkify_entities(html) do
+  defp linkify_entities(html, mode \\ :all) do
     # Cheap bail-out for the common case: no `@`/`#` means no entity to link,
     # so the feed hot path skips tokenizing and scanning entirely.
     if String.contains?(html, "@") or String.contains?(html, "#") do
-      linkify_present_entities(html)
+      linkify_present_entities(html, mode)
     else
       html
     end
   end
 
-  defp linkify_present_entities(html) do
+  defp linkify_present_entities(html, mode) do
     tokens = tokenize_html(html)
 
     case entity_candidates(tokens) do
@@ -191,7 +220,11 @@ defmodule VutuvWeb.Markdown do
         html
 
       {mentions, hashtags} ->
-        users = Accounts.get_users_by_usernames(mentions)
+        # With an empty user map every mention falls through as plain text
+        # (`mention_link/3`), which is exactly what :hashtags_only wants.
+        users =
+          if mode == :all, do: Accounts.get_users_by_usernames(mentions), else: %{}
+
         tags = Tags.linkable_slugs(hashtags)
 
         tokens

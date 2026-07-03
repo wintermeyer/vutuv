@@ -63,6 +63,12 @@ config :vutuv, :reconcile_member_count, true
 # back to the direct ranking query, so tests always see fresh data.
 config :vutuv, :refresh_popular_users, true
 
+# The inline Mastodon posts on profile Social Media cards (Vutuv.Mastodon).
+# Tests turn this off: every profile LiveView test performs a connected mount
+# and must never fetch a federated instance (Mastodon tests flip it on
+# per-test and stub HTTP via :mastodon_req_options).
+config :vutuv, :fetch_mastodon_posts, true
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

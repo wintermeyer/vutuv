@@ -39,6 +39,10 @@ config :vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{93, 184, 216, 34}]} 
 config :vutuv, :async_email, false
 config :vutuv, :reconcile_member_count, false
 config :vutuv, :refresh_popular_users, false
+# Every profile LiveView test performs a connected mount; the inline Mastodon
+# feed must never fetch a federated instance from there. The Mastodon tests
+# flip this on per-test and stub HTTP via :mastodon_req_options.
+config :vutuv, :fetch_mastodon_posts, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

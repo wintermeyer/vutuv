@@ -94,6 +94,10 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),
       addresses: Enum.map(user.addresses, &SectionDocs.address_entry/1),
+      # The inline Mastodon posts (Vutuv.Mastodon) are deliberately absent:
+      # they are connected-only dynamic external content, fetched after the
+      # LiveView connects, so neither the crawler-visible disconnected HTML
+      # nor these documents include them — the formats stay consistent.
       social_media: Enum.map(user.social_media_accounts, &SectionDocs.social_entry/1),
       posts: Enum.map(posts, &post_entry/1)
     })

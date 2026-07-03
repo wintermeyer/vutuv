@@ -180,6 +180,39 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
+  describe "privacy: Mastodon posts" do
+    # A positive flag like the online dot: default on, unchecking opts out of
+    # the inline Mastodon posts on the profile's Social Media card.
+
+    test "the toggle shows on the privacy page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/#{user}/settings/privacy") |> html_response(200)
+
+      assert html =~ ~s(id="mastodon-feed-form")
+      assert html =~ "show_mastodon_feed?"
+    end
+
+    test "unchecking hides the Mastodon posts from the profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      assert Repo.get(User, user.id).show_mastodon_feed? == true
+
+      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_mastodon_feed?" => "false"})
+
+      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert Repo.get(User, user.id).show_mastodon_feed? == false
+    end
+
+    test "checking shows them again", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _} = Accounts.update_user(user, %{"show_mastodon_feed?" => "false"})
+
+      conn = put(conn, ~p"/#{user}/settings/privacy", user: %{"show_mastodon_feed?" => "true"})
+
+      assert redirected_to(conn) == ~p"/#{user}/settings/privacy"
+      assert Repo.get(User, user.id).show_mastodon_feed? == true
+    end
+  end
+
   describe "notifications: granular email toggles" do
     test "saving the per-type toggles persists each one and stays on the page", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

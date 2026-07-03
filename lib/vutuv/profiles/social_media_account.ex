@@ -12,6 +12,16 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     # the reorder/move actions), never cast from user params. NULLs sort last so
     # legacy rows fall back to creation order until reordered. See Vutuv.Ordering.
     field(:position, :integer)
+    # Remote-fetch health for the inline Mastodon feed (Vutuv.Mastodon); only
+    # meaningful for provider "Mastodon". Managed by Vutuv.Mastodon after each
+    # fetch, never cast from user params: consecutive failures walk an
+    # escalating backoff ladder via fetch_retry_at, and fetch_disabled_at
+    # switches updating off for good (ladder exhausted, or a hard error such
+    # as the account no longer existing). changeset/2 resets all three when
+    # the handle changes, so fixing a typo re-enables the feed.
+    field(:fetch_failures, :integer, default: 0)
+    field(:fetch_retry_at, :utc_datetime)
+    field(:fetch_disabled_at, :utc_datetime)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
@@ -78,6 +88,18 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> normalize_value()
     |> validate_value()
     |> validate_inclusion(:provider, @accepted_providers)
+    |> reset_fetch_state()
+  end
+
+  # A changed handle is a different remote account, so any accumulated fetch
+  # backoff or permanent deactivation no longer applies — the member fixing a
+  # typo (or re-saving the row) re-enables the Mastodon feed.
+  defp reset_fetch_state(changeset) do
+    if get_change(changeset, :value) do
+      change(changeset, fetch_failures: 0, fetch_retry_at: nil, fetch_disabled_at: nil)
+    else
+      changeset
+    end
   end
 
   # Reduce whatever the member typed (a bare handle, a leading "@", a pasted
