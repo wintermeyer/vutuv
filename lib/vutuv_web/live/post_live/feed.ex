@@ -380,14 +380,25 @@ defmodule VutuvWeb.PostLive.Feed do
           in the avatar menu and as tabs on the saved hub. --%>
           <h1 class="sr-only">{gettext("Feed")}</h1>
 
-          <%!-- Collapsed by default: the same dashed compose tile as the
-          profile's Beiträge section (<.empty_add>), reused as a reveal trigger
-          so the compose affordance reads identically across the app. The
-          composer stays mounted (just hidden) so a half-typed draft survives a
-          background feed re-render; posting or Cancel collapses it again. --%>
-          <.empty_add :if={!@composer_open?} id="open-composer" phx-click="open-composer">
-            {gettext("Write a post")}
-          </.empty_add>
+          <%!-- Collapsed by default: a card-weight trigger (avatar + an
+          input-shaped pill, the composer pattern every network trains) instead
+          of the dashed <.empty_add> tile, which is an outline rather than a
+          surface and read as a void floating over the canvas next to the solid
+          rail cards. The composer stays mounted (just hidden) so a half-typed
+          draft survives a background feed re-render; posting or Cancel
+          collapses it again. --%>
+          <button
+            :if={!@composer_open?}
+            type="button"
+            id="open-composer"
+            phx-click="open-composer"
+            class="group flex w-full items-center gap-3 rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800"
+          >
+            <.avatar user={@current_user} size="md" />
+            <span class="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700">
+              {gettext("Write a post")}
+            </span>
+          </button>
 
           <div id="composer-panel" class={[!@composer_open? && "hidden"]}>
             <.live_component
