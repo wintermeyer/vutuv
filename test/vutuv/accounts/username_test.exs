@@ -65,6 +65,9 @@ defmodule Vutuv.Accounts.SlugTest do
             "tags",
             "login",
             "messages",
+            # The whole user-agnostic editing scope (v7.35.0) hangs off this
+            # one word - a member named "settings" must stay impossible.
+            "settings",
             "assets",
             "users",
             "username",
