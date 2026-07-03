@@ -69,15 +69,35 @@ defmodule Vutuv.Notifications.Emailer do
   request a login PIN, and a verified PIN clears the mark again.
   """
   def deliver(%Swoosh.Email{} = email) do
-    if suppressed?(email) do
-      Logger.info("Suppressed email \"#{email.subject}\" to undeliverable address")
-      :suppressed
-    else
-      email
-      |> stamp_headers()
-      |> Vutuv.Mailer.deliver()
+    cond do
+      malformed_recipient?(email) ->
+        Logger.warning("Dropped email \"#{email.subject}\" to a malformed address")
+        {:error, :invalid_recipient}
+
+      suppressed?(email) ->
+        Logger.info("Suppressed email \"#{email.subject}\" to undeliverable address")
+        :suppressed
+
+      true ->
+        email
+        |> stamp_headers()
+        |> Vutuv.Mailer.deliver()
     end
   end
+
+  # gen_smtp's puny-encoding raises on whitespace in a recipient address (one
+  # legacy address took down a whole newsletter broadcast that way), so the
+  # chokepoint drops such mail with an error tuple instead of letting every
+  # caller crash. Deliberately narrow - whitespace or empty only; anything
+  # else malformed still gets an orderly {:error, _} from the adapter itself.
+  defp malformed_recipient?(%Swoosh.Email{to: to}) when is_list(to) and to != [] do
+    Enum.any?(to, fn
+      {_name, address} when is_binary(address) -> address == "" or address =~ ~r/\s/
+      _other -> true
+    end)
+  end
+
+  defp malformed_recipient?(_email), do: false
 
   # The idempotent header-stamping pipeline shared by `base_email/0` and the
   # `deliver/1` chokepoint, so the robot headers, bounce envelope sender and

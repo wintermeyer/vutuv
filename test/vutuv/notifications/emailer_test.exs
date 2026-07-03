@@ -70,6 +70,34 @@ defmodule Vutuv.Notifications.EmailerTest do
       assert_email_sent(fn sent -> assert sent.headers["Sender"] == "bounces@vutuv.de" end)
     end
 
+    test "drops mail to an address containing whitespace instead of crashing" do
+      # gen_smtp's puny-encoding raises on whitespace in an address; unguarded,
+      # that exception took down a whole 2,424-recipient newsletter broadcast.
+      # The chokepoint must turn it into an orderly error for every mail path
+      # (PINs, notifications, chat) - ~450 legacy addresses stay irreparable.
+      email =
+        Emailer.base_email()
+        |> Swoosh.Email.to("someone@gmail. com")
+        |> Swoosh.Email.subject("Whitespace address")
+        |> Swoosh.Email.text_body("hi")
+
+      assert Emailer.deliver(email) == {:error, :invalid_recipient}
+      assert_no_email_sent()
+    end
+
+    test "drops mail to an empty address instead of crashing" do
+      # Swoosh.Email.to/2 refuses an empty address, so one can only arrive in
+      # a hand-assembled struct - which is exactly what the guard is for.
+      email =
+        Emailer.base_email()
+        |> Swoosh.Email.subject("Empty address")
+        |> Swoosh.Email.text_body("hi")
+        |> Map.put(:to, [{"Nobody", ""}])
+
+      assert Emailer.deliver(email) == {:error, :invalid_recipient}
+      assert_no_email_sent()
+    end
+
     test "re-applies the robot headers even when a builder forgot the base" do
       raw =
         Swoosh.Email.new()
