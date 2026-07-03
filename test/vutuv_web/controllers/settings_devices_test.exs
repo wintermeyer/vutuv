@@ -61,7 +61,7 @@ defmodule VutuvWeb.SettingsDevicesTest do
     end
 
     test "a member cannot revoke a session that is not theirs", %{conn: conn} do
-      {conn1, user} = create_and_login_user(conn)
+      {conn1, _user} = create_and_login_user(conn)
 
       victim = insert(:user)
       {_token, victim_session} = Sessions.start_session(victim, build_conn(), alert: false)

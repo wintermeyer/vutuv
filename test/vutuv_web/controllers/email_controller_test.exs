@@ -10,7 +10,7 @@ defmodule VutuvWeb.EmailControllerTest do
 
   describe "create" do
     test "the chosen Work/Personal/Other type rides through PIN confirmation", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       conn =
         post(conn, ~p"/settings/emails",
@@ -32,7 +32,7 @@ defmodule VutuvWeb.EmailControllerTest do
     end
 
     test "rejects a malformed address before mailing a PIN", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       # Drain the login PIN (and any stragglers) so the refute below is precise.
       flush_emails()
 

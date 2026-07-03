@@ -78,7 +78,7 @@ defmodule VutuvWeb.PasskeyControllerTest do
     end
 
     test "the challenge endpoint survives CSRF enforcement", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       # submit_with_csrf scrapes the token from a rendered <form>; the security
       # page carries none with a single session, so grab it from the
       # preferences page (same session, same token).

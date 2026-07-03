@@ -83,7 +83,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       {:ok, conn: conn, user: user}
     end
 
-    test "DELETE returns a clean 404 instead of crashing", %{conn: conn, user: user} do
+    test "DELETE returns a clean 404 instead of crashing", %{conn: conn, user: _user} do
       conn = delete(conn, ~p"/settings/tags/does-not-exist")
 
       assert conn.status == 404

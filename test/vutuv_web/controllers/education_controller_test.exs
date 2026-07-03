@@ -24,7 +24,7 @@ defmodule VutuvWeb.EducationControllerTest do
   end
 
   test "return 422 when creating an education with no school", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     conn = post(conn, ~p"/settings/educations", %{"education" => %{"degree" => "BSc"}})
     assert html_response(conn, 422) =~ ~p"/settings/educations"
   end

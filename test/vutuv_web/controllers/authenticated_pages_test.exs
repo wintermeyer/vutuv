@@ -71,7 +71,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/#{user}/addresses")
     end
 
-    test "new forms render", %{conn: conn, user: user} do
+    test "new forms render", %{conn: conn, user: _user} do
       renders(conn, ~p"/settings/profile")
       renders(conn, ~p"/settings/emails/new")
       renders(conn, ~p"/settings/phone_numbers/new")
@@ -83,7 +83,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
 
     test "show/edit for sub-resources render", %{
       conn: conn,
-      user: user,
+      user: _user,
       email: email,
       phone: phone,
       url: url,
@@ -151,7 +151,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       %{conn: conn, user: user, other: insert(:user), phone: insert(:phone_number, user: user)}
     end
 
-    test "create a phone number", %{conn: conn, user: user} do
+    test "create a phone number", %{conn: conn, user: _user} do
       conn =
         post(conn, ~p"/settings/phone_numbers",
           phone_number: %{value: "+49 30 5550000", number_type: "Cell"}
@@ -160,7 +160,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       assert conn.status < 500, "phone create -> #{conn.status}"
     end
 
-    test "create a link", %{conn: conn, user: user} do
+    test "create a link", %{conn: conn, user: _user} do
       conn =
         post(conn, ~p"/settings/links",
           url: %{value: "https://example.org/", description: "Site"}
@@ -169,14 +169,14 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       assert conn.status < 500, "link create -> #{conn.status}"
     end
 
-    test "update a phone number", %{conn: conn, user: user, phone: phone} do
+    test "update a phone number", %{conn: conn, user: _user, phone: phone} do
       conn =
         put(conn, ~p"/settings/phone_numbers/#{phone}", phone_number: %{value: "+49 30 5551111"})
 
       assert conn.status < 500, "phone update -> #{conn.status}"
     end
 
-    test "delete a phone number", %{conn: conn, user: user, phone: phone} do
+    test "delete a phone number", %{conn: conn, user: _user, phone: phone} do
       conn = delete(conn, ~p"/settings/phone_numbers/#{phone}")
       assert conn.status < 500, "phone delete -> #{conn.status}"
     end

@@ -87,7 +87,7 @@ defmodule VutuvWeb.UsernameControllerTest do
 
     test "a handle in use by someone else re-renders with the error", %{conn: conn} do
       insert(:user, username: "wanted_handle")
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       conn = post(conn, "/settings/usernames", user: %{"username" => "wanted_handle"})
 
@@ -112,7 +112,7 @@ defmodule VutuvWeb.UsernameControllerTest do
   describe "availability check" do
     test "answers free, taken, and invalid", %{conn: conn} do
       insert(:user, username: "claimed_handle")
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       base = "/settings/usernames/availability"
 
       # The route lives in the :browser pipeline (`accepts ["html"]`), so the

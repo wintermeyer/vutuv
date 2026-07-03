@@ -1,7 +1,6 @@
 defmodule VutuvWeb.ImportControllerTest do
   use VutuvWeb.ConnCase, async: true
 
-  import Vutuv.Factory
   import Ecto.Query
 
   alias Vutuv.Imports.LinkedIn
@@ -27,7 +26,7 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "the upload form renders for the owner", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
     assert html =~ "linkedin-import-form"
     # The drag-and-drop enhancement wraps the file input in a dropzone, but the
@@ -37,7 +36,7 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "the page links to LinkedIn's data export page and shows the screenshot", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/import/linkedin") |> html_response(200)
     assert html =~ "https://www.linkedin.com/mypreferences/d/download-my-data"
     assert html =~ "/images/linkedin-download-my-data.webp"
@@ -51,7 +50,7 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "uploading an archive shows a preview of the candidates", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
 
     conn =
       post(conn, ~p"/settings/import/linkedin", %{
@@ -69,7 +68,7 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "the uploaded temp file is deleted after parsing", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     upload = upload_zip(@sample_files)
 
     post(conn, ~p"/settings/import/linkedin", %{"import" => %{"archive" => upload}})
@@ -78,7 +77,7 @@ defmodule VutuvWeb.ImportControllerTest do
   end
 
   test "a non-zip upload is rejected with a flash", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     path = Path.join(System.tmp_dir!(), "notzip_#{System.unique_integer([:positive])}.zip")
     File.write!(path, "this is not a zip")
     upload = %Plug.Upload{path: path, filename: "x.zip", content_type: "application/zip"}

@@ -24,24 +24,24 @@ defmodule VutuvWeb.UrlControllerTest do
   end
 
   test "return 422 when creating empty url", %{conn: conn} do
-    {conn, user} = create_url(conn, "")
+    {conn, _user} = create_url(conn, "")
     assert html_response(conn, 422) =~ ~p"/settings/links"
   end
 
   test "redirect when setting valid url", %{conn: conn} do
-    {conn, user, url} = set_url(conn, "example.org")
+    {conn, _user, url} = set_url(conn, "example.org")
     assert redirected_to(conn) == ~p"/settings/links"
     assert Repo.get(Url, url.id).value == "http://example.org"
   end
 
   test "return 422 when setting invalid url", %{conn: conn} do
-    {conn, user, url} = set_url(conn, "invalid_url")
+    {conn, _user, url} = set_url(conn, "invalid_url")
     assert html_response(conn, 422) =~ ~p"/settings/links/#{url}"
     refute Repo.get(Url, url.id).value == "invalid_url"
   end
 
   test "return 422 when setting empty url", %{conn: conn} do
-    {conn, user, url} = set_url(conn, "")
+    {conn, _user, url} = set_url(conn, "")
     assert html_response(conn, 422) =~ ~p"/settings/links/#{url}"
   end
 

@@ -17,7 +17,7 @@ defmodule VutuvWeb.ExportControllerTest do
     "tag_list" => @registration_tags
   }
 
-  defp download(conn, user) do
+  defp download(conn, _user) do
     get(conn, ~p"/settings/export/download")
   end
 

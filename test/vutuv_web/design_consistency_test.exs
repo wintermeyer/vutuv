@@ -97,7 +97,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
     test "the editforms carry the editform structure, not Bootstrap classes", %{
       conn: conn,
-      user: user
+      user: _user
     } do
       for path <- [
             ~p"/settings/usernames/new",
@@ -171,7 +171,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
 
     test "a fresh form hides the error banner but shows Cancel + Submit", %{
       conn: conn,
-      user: user
+      user: _user
     } do
       conn = get(conn, ~p"/settings/phone_numbers/new")
       html = html_response(conn, 200)
@@ -184,7 +184,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       assert html =~ ~s(<button class="button" type="submit">)
     end
 
-    test "a failed submit re-renders the form with the error banner", %{conn: conn, user: user} do
+    test "a failed submit re-renders the form with the error banner", %{conn: conn, user: _user} do
       conn = post(conn, ~p"/settings/phone_numbers", phone_number: %{"value" => ""})
       html = html_response(conn, 422)
 
@@ -247,7 +247,7 @@ defmodule VutuvWeb.DesignConsistencyTest do
       refute html =~ ~s(class="card__morelink")
     end
 
-    test "a new page wraps its form in the card section shell", %{conn: conn, user: user} do
+    test "a new page wraps its form in the card section shell", %{conn: conn, user: _user} do
       conn = get(conn, ~p"/settings/phone_numbers/new")
       html = html_response(conn, 200)
 

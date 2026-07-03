@@ -70,7 +70,7 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
 
   describe "email change" do
     test "completes the two-step email confirmation with CSRF enforced", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       conn = post(conn, ~p"/settings/emails", email: %{"value" => "added@example.com"})
       assert html_response(conn, 200) =~ "_csrf_token"

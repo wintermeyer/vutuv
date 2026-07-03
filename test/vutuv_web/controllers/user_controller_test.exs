@@ -698,7 +698,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "renders form for editing chosen resource", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/profile") |> html_response(200)
     # The slimmed edit page is the profile content only, grouped into sections.
     assert html =~ "Your name"
@@ -715,7 +715,7 @@ defmodule VutuvWeb.UserControllerTest do
     # The Photos card sits above the name section, so an autofocused first-name
     # input made the browser scroll the page down on load. The page must open
     # scrolled to the top instead.
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/profile") |> html_response(200)
     refute html =~ "autofocus"
   end
@@ -784,7 +784,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "the privacy page asks the search-engine and the AI question separately", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
     # The two consents now live on the Privacy tab as positively-framed
@@ -814,7 +814,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "the otherwise-unfindable account & privacy pages are reachable from settings", %{
     conn: conn
   } do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
 
     # Blocked members and the owner's moderation cases now live on the Privacy
     # tab under a "Safety" card, where members look for them (both used to be in
@@ -882,7 +882,7 @@ defmodule VutuvWeb.UserControllerTest do
   test "the edit form has no email inputs; the account hub links to email management", %{
     conn: conn
   } do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
 
     edit = conn |> get(~p"/settings/profile") |> html_response(200)
     refute edit =~ "user[emails]"
@@ -916,7 +916,7 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   test "does not update chosen resource and renders errors when data is invalid", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
     conn = put(conn, ~p"/settings/profile", user: @invalid_update_attrs)
     # The edit form re-renders (422) with its grouped sections intact.
     assert html_response(conn, 422) =~ "Your name"

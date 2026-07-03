@@ -6,7 +6,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "access control" do
     test "the settings pages render for the owner", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       for path <- [
             ~p"/settings",
@@ -51,7 +51,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # themselves: profile content, account matters, privacy, notifications,
     # apps and the delete exit. If it is not on the hub, it does not exist.
     test "lists every editable area", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings") |> html_response(200)
 
       # Profile content sections.
@@ -89,7 +89,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
 
     test "the hub itself carries no destructive control, only the door to it", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings") |> html_response(200)
 
       # Deleting starts on its own page, never straight from the hub row.
@@ -100,7 +100,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "the profile editor (/edit)" do
     test "links every other profile section, so it is no dead end", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/profile") |> html_response(200)
 
       for path <- [
@@ -118,7 +118,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
 
     test "carries the way back to the hub and the cover-photo anchor", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/profile") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/settings"}")
@@ -130,7 +130,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # Each page owns its <title> so the browser tab/history no longer falls back
     # to the bare member name.
     test "each settings and edit page sets its own page title", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       for {path, title} <- [
             {~p"/settings/profile", "Edit profile"},
@@ -156,7 +156,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
     test "the card explains the opt-out in plain terms, with exact specifics for the technical reader",
          %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
 
       html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
@@ -199,7 +199,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "privacy: safety card" do
     test "groups blocked members and content under review", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/blocks"}")
@@ -212,7 +212,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # checking submits "true", unchecking submits the hidden "false".
 
     test "the toggle shows on the privacy page", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(id="online-status-form")
@@ -254,7 +254,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # the inline Mastodon posts on the profile's Social Media card.
 
     test "the toggle shows on the privacy page", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/privacy") |> html_response(200)
 
       assert html =~ ~s(id="mastodon-feed-form")
@@ -305,7 +305,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
 
     test "the page offers a checkbox for every email type and links the bell", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/notifications") |> html_response(200)
 
       assert html =~ "notification_emails?"
@@ -350,7 +350,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "sign-in & security page" do
     test "surfaces username, email addresses, devices and passkeys", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/security") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/settings/usernames/new"}")
@@ -364,7 +364,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "language & maps page" do
     test "carries the interface-language and map-preference forms", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/preferences") |> html_response(200)
 
       assert html =~ ~s(action="#{~p"/settings/language"}")
@@ -403,7 +403,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "delete account page" do
     test "carries the warning and the PIN-mailing delete control", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/delete") |> html_response(200)
 
       assert html =~ ~s(id="delete-account")
@@ -413,7 +413,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
   describe "apps tab" do
     test "surfaces connected apps, access tokens and the API docs cross-link", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/apps") |> html_response(200)
 
       assert html =~ ~s(href="#{~p"/connected_apps"}")

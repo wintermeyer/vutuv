@@ -30,7 +30,7 @@ defmodule VutuvWeb.ImportRateLimitTest do
   end
 
   test "throttles a member's repeated imports", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
 
     # The first two uploads render the preview; the third is throttled.
     for _ <- 1..2 do

@@ -17,7 +17,7 @@ defmodule VutuvWeb.SocialMediaFormI18nTest do
   defp de(msgid), do: Gettext.gettext(@backend, msgid)
 
   test "the provider prompt is translated, not a hardcoded English island", %{conn: conn} do
-    {conn, user} = create_and_login_user(conn)
+    {conn, _user} = create_and_login_user(conn)
 
     html = conn |> get(~p"/settings/social_media_accounts/new") |> html_response(200)
 
