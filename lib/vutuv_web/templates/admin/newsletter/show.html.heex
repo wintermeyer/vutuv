@@ -267,6 +267,7 @@
           <option value="">{gettext("All statuses")}</option>
           <option value="sent" selected={@filters.status == "sent"}>{gettext("Sent")}</option>
           <option value="suppressed" selected={@filters.status == "suppressed"}>{gettext("Suppressed")}</option>
+          <option value="invalid" selected={@filters.status == "invalid"}>{gettext("Invalid")}</option>
           <option value="error" selected={@filters.status == "error"}>{gettext("Error")}</option>
         </select>
       </div>

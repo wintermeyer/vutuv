@@ -3290,7 +3290,7 @@ msgstr "Dazu stehen. Der Inhalt bleibt verborgen, bis einer unserer Admins entsc
 #: lib/vutuv_web/templates/admin/newsletter/index.html.heex:50
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:11
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:264
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:295
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "Status"
 msgstr "Status"
@@ -6477,7 +6477,7 @@ msgstr "Das rohe Bounce-Protokoll, neueste zuerst."
 #: lib/vutuv_web/live/admin/deliverability_live.ex:213
 #: lib/vutuv_web/live/admin/deliverability_live.ex:250
 #: lib/vutuv_web/templates/admin/newsletter/clicks.html.heex:27
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:295
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "When"
 msgstr "Wann"
@@ -6702,7 +6702,7 @@ msgid "Body"
 msgstr "Text"
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:259
-#: lib/vutuv_web/views/admin/newsletter_html.ex:27
+#: lib/vutuv_web/views/admin/newsletter_html.ex:28
 #, elixir-autogen, elixir-format
 msgid "Broadcast"
 msgstr "Massenversand"
@@ -6782,8 +6782,8 @@ msgstr "Zielgruppe bearbeiten"
 msgid "Edit newsletter"
 msgstr "Newsletter bearbeiten"
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:270
-#: lib/vutuv_web/views/admin/newsletter_html.ex:22
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:271
+#: lib/vutuv_web/views/admin/newsletter_html.ex:23
 #, elixir-autogen, elixir-format
 msgid "Error"
 msgstr "Fehler"
@@ -6793,7 +6793,7 @@ msgstr "Fehler"
 msgid "Every email sent for this newsletter. Filter, search and sort; click a column to sort."
 msgstr "Jede für diesen Newsletter versendete E-Mail. Filtern, suchen und sortieren; zum Sortieren auf eine Spalte klicken."
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:275
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:276
 #, elixir-autogen, elixir-format
 msgid "Filter"
 msgstr "Filtern"
@@ -6804,7 +6804,7 @@ msgid "Filters"
 msgstr "Filter"
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:254
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:295
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "Kind"
 msgstr "Art"
@@ -6900,7 +6900,7 @@ msgstr "Newsletter"
 msgid "No audiences yet."
 msgstr "Noch keine Zielgruppen."
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:285
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:286
 #, elixir-autogen, elixir-format
 msgid "No deliveries match your filters."
 msgstr "Keine Sendungen entsprechen Ihren Filtern."
@@ -6915,7 +6915,7 @@ msgstr "Noch keine Newsletter."
 msgid "No tag with that name."
 msgstr "Kein Tag mit diesem Namen."
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:288
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:289
 #, elixir-autogen, elixir-format
 msgid "Nothing sent yet."
 msgstr "Noch nichts versendet."
@@ -6950,7 +6950,7 @@ msgstr "Wählen Sie, welche E-Mails vutuv Ihnen senden darf. Jede E-Mail hat ein
 msgid "Please enter a valid email address."
 msgstr "Bitte geben Sie eine gültige E-Mail-Adresse ein."
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:295
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:296
 #, elixir-autogen, elixir-format
 msgid "Recipient"
 msgstr "Empfänger"
@@ -6966,7 +6966,7 @@ msgstr "Empfänger"
 msgid "Rendered with your own account data for the variables."
 msgstr "Mit Ihren eigenen Kontodaten für die Variablen dargestellt."
 
-#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:280
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:281
 #, elixir-autogen, elixir-format
 msgid "Reset"
 msgstr "Zurücksetzen"
@@ -7061,7 +7061,7 @@ msgid "Tag found: %{name}"
 msgstr "Tag gefunden: %{name}"
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:258
-#: lib/vutuv_web/views/admin/newsletter_html.ex:26
+#: lib/vutuv_web/views/admin/newsletter_html.ex:27
 #, elixir-autogen, elixir-format
 msgid "Test"
 msgstr "Test"
@@ -8470,3 +8470,13 @@ msgstr "Diese Datei ist zu groß. Bitte wählen Sie eine ZIP-Datei mit höchsten
 #, elixir-autogen, elixir-format
 msgid "ZIP file, up to 50 MB."
 msgstr "ZIP-Datei, bis zu 50 MB."
+
+#: lib/vutuv_web/templates/admin/newsletter/show.html.heex:270
+#, elixir-autogen, elixir-format
+msgid "Invalid"
+msgstr "Ungültig"
+
+#: lib/vutuv_web/views/admin/newsletter_html.ex:22
+#, elixir-autogen, elixir-format
+msgid "Invalid address (skipped)"
+msgstr "Ungültige Adresse (übersprungen)"

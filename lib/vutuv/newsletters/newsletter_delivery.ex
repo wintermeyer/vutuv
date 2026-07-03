@@ -5,9 +5,11 @@ defmodule Vutuv.Newsletters.NewsletterDelivery do
   This is the log the admin asked for ("when which email went out"). `kind` is
   `test` (a preview to an arbitrary address) or `broadcast` (one of the mass
   send); `status` is `sent`, `suppressed` (the email chokepoint dropped a
-  bounced address) or `error`. `user_id` is the recipient member when there is
-  one, `nil` for a test to an address that is not a member. Rows are written
-  directly (not cast) by `Vutuv.Newsletters`; `inserted_at` is the "when".
+  bounced address), `invalid` (a malformed stored address that was skipped
+  rather than attempted) or `error`. `user_id` is the recipient member when
+  there is one, `nil` for a test to an address that is not a member. Rows are
+  written directly (not cast) by `Vutuv.Newsletters`; `inserted_at` is the
+  "when".
   """
 
   use VutuvWeb, :model
@@ -15,7 +17,7 @@ defmodule Vutuv.Newsletters.NewsletterDelivery do
   alias Vutuv.Newsletters.Newsletter
 
   @kinds ~w(test broadcast)
-  @statuses ~w(sent suppressed error)
+  @statuses ~w(sent suppressed invalid error)
 
   schema "newsletter_deliveries" do
     field(:email, :string)

@@ -8,8 +8,9 @@ defmodule Vutuv.NewslettersTest do
   """
   use Vutuv.DataCase
 
+  alias Vutuv.Accounts.Email
   alias Vutuv.Newsletters
-  alias Vutuv.Newsletters.Markdown
+  alias Vutuv.Newsletters.{Markdown, Newsletter, NewsletterDelivery}
   alias VutuvWeb.NewsletterToken
 
   defp admin, do: insert(:activated_user, first_name: "Erika", admin?: true)
@@ -350,6 +351,180 @@ defmodule Vutuv.NewslettersTest do
       assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
       newsletter = Newsletters.get_newsletter!(newsletter.id)
       assert {:error, :already_sent} = Newsletters.start_broadcast(newsletter)
+    end
+
+    test "a malformed stored address gets an invalid row and does not halt the broadcast" do
+      admin = admin()
+      ann = member_with_email("ann@example.com", first_name: "Ann")
+      bad = member_with_email("placeholder@example.com", first_name: "Bad")
+      zoe = member_with_email("zoe@example.com", first_name: "Zoe")
+
+      # Legacy import data holds addresses no changeset would accept today.
+      # Bypass the validation the same way the data got in: directly in SQL.
+      # This exact shape (a space inside the domain) crashed the July 2026
+      # broadcast at recipient 573/2424: the SMTP adapter's puny-encoding
+      # raises on it instead of returning an error tuple.
+      Repo.update_all(from(e in Email, where: e.user_id == ^bad.id),
+        set: [value: "bad@gmail. com"]
+      )
+
+      newsletter = draft(admin)
+      assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
+
+      newsletter = Newsletters.get_newsletter!(newsletter.id)
+      assert newsletter.status == "sent"
+      assert newsletter.recipient_count == 3
+
+      by_user = Map.new(Newsletters.list_deliveries(newsletter), &{&1.user_id, &1})
+      assert by_user[ann.id].status == "sent"
+      assert by_user[zoe.id].status == "sent"
+      assert by_user[bad.id].status == "invalid"
+      assert by_user[bad.id].email == "bad@gmail. com"
+
+      addresses = flush_emails() |> Enum.map(fn e -> e.to |> hd() |> elem(1) end)
+      assert Enum.sort(addresses) == ["ann@example.com", "zoe@example.com"]
+    end
+
+    test "a trailing-space address is trimmed and delivered" do
+      admin = admin()
+      tim = member_with_email("placeholder@example.com", first_name: "Tim")
+
+      Repo.update_all(from(e in Email, where: e.user_id == ^tim.id),
+        set: [value: "tim@example.com "]
+      )
+
+      newsletter = draft(admin)
+      assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
+
+      assert [%{status: "sent", email: "tim@example.com"}] =
+               Newsletters.list_deliveries(newsletter)
+
+      assert [%{to: [{_, "tim@example.com"}]}] = flush_emails()
+    end
+  end
+
+  describe "resume_broadcast/1" do
+    test "finishes a broadcast that died mid-send, skipping already-delivered recipients" do
+      admin = admin()
+      ann = member_with_email("ann@example.com", first_name: "Ann")
+      member_with_email("bob@example.com", first_name: "Bob")
+
+      newsletter = draft(admin)
+
+      # Simulate the crash: locked to "sending", ann already delivered, then
+      # the send task died (a deploy or an exception) before reaching bob.
+      Repo.update_all(from(n in Newsletter, where: n.id == ^newsletter.id),
+        set: [status: "sending"]
+      )
+
+      Repo.insert!(%NewsletterDelivery{
+        newsletter_id: newsletter.id,
+        user_id: ann.id,
+        email: "ann@example.com",
+        kind: "broadcast",
+        status: "sent"
+      })
+
+      newsletter = Newsletters.get_newsletter!(newsletter.id)
+      assert {:ok, :started} = Newsletters.resume_broadcast(newsletter)
+
+      resumed = Newsletters.get_newsletter!(newsletter.id)
+      assert resumed.status == "sent"
+      assert resumed.sent_at
+      # The final tally covers the whole broadcast, not just the resumed part.
+      assert resumed.recipient_count == 2
+
+      # Ann was not mailed again: only bob's email went out, and she keeps
+      # exactly one delivery row.
+      assert [%{to: [{_, "bob@example.com"}]}] = flush_emails()
+      assert Newsletters.count_deliveries(resumed, %{kind: "broadcast"}) == 2
+    end
+
+    test "refuses a newsletter that is not sending" do
+      newsletter = draft(admin())
+      assert {:error, :not_sending} = Newsletters.resume_broadcast(newsletter)
+    end
+
+    test "the CAS lock lets exactly one resumer win" do
+      admin = admin()
+      member_with_email("ann@example.com")
+      newsletter = draft(admin)
+
+      Repo.update_all(from(n in Newsletter, where: n.id == ^newsletter.id),
+        set: [status: "sending"]
+      )
+
+      stale = Newsletters.get_newsletter!(newsletter.id)
+
+      assert {:ok, :started} = Newsletters.resume_broadcast(stale)
+      # A second resumer holding the same stale snapshot loses the CAS.
+      assert {:error, :not_sending} = Newsletters.resume_broadcast(stale)
+      flush_emails()
+    end
+  end
+
+  describe "stuck_newsletters/1" do
+    defp force_sending(newsletter, updated_at) do
+      Repo.update_all(from(n in Newsletter, where: n.id == ^newsletter.id),
+        set: [status: "sending", updated_at: updated_at]
+      )
+    end
+
+    defp backdated_delivery(newsletter, at) do
+      delivery =
+        Repo.insert!(%NewsletterDelivery{
+          newsletter_id: newsletter.id,
+          email: "row@example.com",
+          kind: "broadcast",
+          status: "sent"
+        })
+
+      Repo.update_all(from(d in NewsletterDelivery, where: d.id == ^delivery.id),
+        set: [inserted_at: at]
+      )
+    end
+
+    test "finds sending newsletters whose delivery activity went quiet" do
+      admin = admin()
+      old = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -600, :second)
+
+      stuck = draft(admin)
+      force_sending(stuck, old)
+      backdated_delivery(stuck, old)
+
+      # Still actively sending: its latest row is fresh, so it is left alone
+      # (this is what makes the sweep safe during a blue/green deploy overlap).
+      active = draft(admin)
+      force_sending(active, old)
+
+      Repo.insert!(%NewsletterDelivery{
+        newsletter_id: active.id,
+        email: "fresh@example.com",
+        kind: "broadcast",
+        status: "sent"
+      })
+
+      # Died before its first row: stale updated_at, no rows at all.
+      rowless = draft(admin)
+      force_sending(rowless, old)
+
+      draft(admin)
+
+      ids = Newsletters.stuck_newsletters() |> Enum.map(& &1.id) |> MapSet.new()
+      assert stuck.id in ids
+      assert rowless.id in ids
+      refute active.id in ids
+      assert MapSet.size(ids) == 2
+    end
+
+    test "a freshly locked send without rows is not yet stuck" do
+      newsletter = draft(admin())
+
+      Repo.update_all(from(n in Newsletter, where: n.id == ^newsletter.id),
+        set: [status: "sending"]
+      )
+
+      assert Newsletters.stuck_newsletters() == []
     end
   end
 

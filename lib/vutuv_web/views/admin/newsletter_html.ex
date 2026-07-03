@@ -19,6 +19,7 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
   @doc "Human label for a delivery status."
   def delivery_status_label("sent"), do: gettext("Sent")
   def delivery_status_label("suppressed"), do: gettext("Suppressed (bounced address)")
+  def delivery_status_label("invalid"), do: gettext("Invalid address (skipped)")
   def delivery_status_label("error"), do: gettext("Error")
   def delivery_status_label(other), do: other
 

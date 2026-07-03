@@ -14,6 +14,8 @@ defmodule Vutuv.Newsletters do
   import Ecto.Query
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
+  require Logger
+
   alias Ecto.Changeset
   alias Vutuv.Accounts
   alias Vutuv.Accounts.{Email, User}
@@ -140,20 +142,81 @@ defmodule Vutuv.Newsletters do
   """
   def start_broadcast(%Newsletter{} = newsletter, group_id \\ nil) do
     case lock_for_sending(newsletter, group_id) do
-      {:ok, locked} ->
-        run = fn -> run_broadcast(locked) end
-
-        if Application.get_env(:vutuv, :async_email, true) do
-          {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, run)
-        else
-          run.()
-        end
-
-        {:ok, :started}
-
-      :error ->
-        {:error, :already_sent}
+      {:ok, locked} -> launch_broadcast(locked)
+      :error -> {:error, :already_sent}
     end
+  end
+
+  @doc """
+  Resumes a broadcast whose send task died mid-loop (a crash on one recipient,
+  or a blue/green deploy stopping the slot): re-runs the send for every
+  recipient who has no broadcast delivery row yet. Only a newsletter in
+  `sending` can be resumed, and a compare-and-swap on `updated_at` ensures
+  exactly one resumer wins even when two nodes sweep at once (the deploy
+  overlap window). Returns `{:ok, :started}` or `{:error, :not_sending}`.
+  """
+  def resume_broadcast(%Newsletter{} = newsletter) do
+    now = NaiveDateTime.utc_now(:second)
+
+    {count, _} =
+      Repo.update_all(
+        from(n in Newsletter,
+          where:
+            n.id == ^newsletter.id and n.status == "sending" and
+              n.updated_at == ^newsletter.updated_at
+        ),
+        set: [updated_at: now]
+      )
+
+    if count == 1 do
+      Newsletter |> Repo.get!(newsletter.id) |> launch_broadcast()
+    else
+      {:error, :not_sending}
+    end
+  end
+
+  @stale_after_minutes 5
+
+  @doc """
+  Newsletters stuck mid-broadcast: status `sending` with no delivery activity
+  for `minutes` (default #{@stale_after_minutes}). Activity is the latest
+  broadcast delivery row, with `updated_at` covering a send that died before
+  its first row. The staleness window is what makes the periodic resume safe
+  during a blue/green deploy overlap: while the old slot is still actively
+  sending, its rows are fresh and the new slot leaves the newsletter alone.
+  """
+  def stuck_newsletters(minutes \\ @stale_after_minutes) do
+    cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -minutes * 60, :second)
+
+    Repo.all(
+      from(n in Newsletter,
+        as: :newsletter,
+        where: n.status == "sending",
+        where: n.updated_at < ^cutoff,
+        where:
+          not exists(
+            from(d in NewsletterDelivery,
+              where:
+                d.newsletter_id == parent_as(:newsletter).id and d.kind == "broadcast" and
+                  d.inserted_at >= ^cutoff
+            )
+          )
+      )
+    )
+  end
+
+  # Runs the (idempotent) broadcast in the background - inline in tests, where
+  # :async_email is false.
+  defp launch_broadcast(%Newsletter{} = locked) do
+    run = fn -> run_broadcast(locked) end
+
+    if Application.get_env(:vutuv, :async_email, true) do
+      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, run)
+    else
+      run.()
+    end
+
+    {:ok, :started}
   end
 
   @doc "The number of members a broadcast to everyone would reach right now."
@@ -838,23 +901,24 @@ defmodule Vutuv.Newsletters do
     content_html = Markdown.to_email_html(newsletter.body, track: true)
     now = NaiveDateTime.utc_now(:second)
 
-    count =
-      now
-      |> recipient_query(newsletter.group_id)
-      |> Repo.all()
-      |> Enum.reduce(0, fn {user, email}, acc ->
-        send_and_log(
-          newsletter,
-          content_html,
-          user,
-          email,
-          "broadcast",
-          user.id,
-          UnsubscribeToken.url(user, :newsletter_emails?)
-        )
+    now
+    |> recipient_query(newsletter)
+    |> Repo.all()
+    |> Enum.each(fn {user, email} ->
+      send_and_log(
+        newsletter,
+        content_html,
+        user,
+        email,
+        "broadcast",
+        user.id,
+        UnsubscribeToken.url(user, :newsletter_emails?)
+      )
+    end)
 
-        acc + 1
-      end)
+    # Count the whole protocol, not this run: after a resume the tally must
+    # cover the rows the original (crashed) send already wrote.
+    count = count_deliveries(newsletter, %{kind: "broadcast"})
 
     Repo.update_all(
       from(n in Newsletter, where: n.id == ^newsletter.id),
@@ -864,9 +928,10 @@ defmodule Vutuv.Newsletters do
     {:ok, count}
   end
 
-  # Builds the email from the prepared content (rendered once, variables
-  # substituted per recipient), sends it through the chokepoint, and records the
-  # outcome in the delivery log.
+  # Sends one recipient's email and records the outcome in the delivery log.
+  # The address is trimmed and validated first: the legacy import left ~950
+  # addresses with whitespace in them, and one such address must cost one
+  # "invalid" row, never the rest of the broadcast.
   defp send_and_log(
          newsletter,
          content_html,
@@ -876,25 +941,14 @@ defmodule Vutuv.Newsletters do
          log_user_id,
          unsubscribe_url
        ) do
-    subs = substitutions(subs_user, to_email)
-    click_token = NewsletterToken.sign(newsletter, subs_user)
+    to_email = String.trim(to_email)
 
     status =
-      %{
-        to_name: UserHelpers.name_for_email_to_field(subs_user),
-        to_email: to_email,
-        subject: Markdown.apply_vars(newsletter.subject, subs),
-        locale: email_locale(subs_user),
-        content_html:
-          content_html
-          |> Markdown.apply_vars(subs, escape: true)
-          |> Markdown.put_click_token(click_token),
-        content_text: Markdown.apply_vars(newsletter.body, subs),
-        unsubscribe_url: unsubscribe_url
-      }
-      |> Emailer.newsletter_email()
-      |> Emailer.deliver()
-      |> delivery_status()
+      if Regex.match?(@email_re, to_email) do
+        deliver_one(newsletter, content_html, subs_user, to_email, unsubscribe_url)
+      else
+        "invalid"
+      end
 
     Repo.insert!(%NewsletterDelivery{
       newsletter_id: newsletter.id,
@@ -903,6 +957,47 @@ defmodule Vutuv.Newsletters do
       kind: kind,
       status: status
     })
+  end
+
+  # Builds the email from the prepared content (rendered once, variables
+  # substituted per recipient) and sends it through the chokepoint. Any crash
+  # becomes an "error" status instead of killing the whole broadcast loop: a
+  # single address with a space in its domain once took down a 2,424-recipient
+  # send, because the SMTP adapter's puny-encoding raises on such input.
+  defp deliver_one(newsletter, content_html, subs_user, to_email, unsubscribe_url) do
+    subs = substitutions(subs_user, to_email)
+    click_token = NewsletterToken.sign(newsletter, subs_user)
+
+    %{
+      to_name: UserHelpers.name_for_email_to_field(subs_user),
+      to_email: to_email,
+      subject: Markdown.apply_vars(newsletter.subject, subs),
+      locale: email_locale(subs_user),
+      content_html:
+        content_html
+        |> Markdown.apply_vars(subs, escape: true)
+        |> Markdown.put_click_token(click_token),
+      content_text: Markdown.apply_vars(newsletter.body, subs),
+      unsubscribe_url: unsubscribe_url
+    }
+    |> Emailer.newsletter_email()
+    |> Emailer.deliver()
+    |> delivery_status()
+  rescue
+    exception ->
+      Logger.error(
+        "Newsletter #{newsletter.id} delivery to #{to_email} crashed: " <>
+          Exception.message(exception)
+      )
+
+      "error"
+  catch
+    kind, reason ->
+      Logger.error(
+        "Newsletter #{newsletter.id} delivery to #{to_email} #{kind}: #{inspect(reason)}"
+      )
+
+      "error"
   end
 
   defp delivery_status({:ok, _email}), do: "sent"
@@ -931,12 +1026,22 @@ defmodule Vutuv.Newsletters do
   # email (DISTINCT ON the user, ordered by position). Bounced addresses are
   # skipped by the join; if every address bounced the member is unreachable_at
   # and already filtered out above. With a `group_id`, narrowed to that group's
-  # (snapshot) members — who must still be eligible right now.
-  defp recipient_query(now, group_id) do
+  # (snapshot) members — who must still be eligible right now. Members who
+  # already have a broadcast delivery row are excluded, which makes the
+  # broadcast idempotent: a resume after a mid-send crash mails only the rest.
+  defp recipient_query(now, %Newsletter{id: newsletter_id, group_id: group_id}) do
     base =
       from(u in eligible_users(now),
         join: e in Email,
         on: e.user_id == u.id and is_nil(e.undeliverable_at),
+        where:
+          not exists(
+            from(d in NewsletterDelivery,
+              where:
+                d.newsletter_id == ^newsletter_id and d.user_id == parent_as(:u).id and
+                  d.kind == "broadcast"
+            )
+          ),
         distinct: u.id,
         order_by: [asc: u.id, asc: e.position],
         select: {u, e.value}

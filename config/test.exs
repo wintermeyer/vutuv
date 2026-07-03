@@ -28,6 +28,9 @@ config :vutuv, :daily_report_email, false
 # Deliverability context and parser are called directly in their tests.
 config :vutuv, :bounce_watcher, false
 config :vutuv, :sweep_unreachable_accounts, false
+# The stuck-broadcast sweep would touch the sandbox from outside; tests call
+# Vutuv.Newsletters.BroadcastResumer.sweep/0 directly.
+config :vutuv, :resume_stuck_broadcasts, false
 # No headless Chromium in tests; the evidence capture is exercised manually.
 config :vutuv, :capture_report_evidence, false
 # Resolve every host to a fixed public IP so the SSRF fetch-time check
