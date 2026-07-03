@@ -28,10 +28,17 @@ Public preview. --%>
   </span>
 </p>
 
+<%!-- The duration circles (right column) are showcase decoration: they rank
+roles by how long they ran for a *reader*. The /settings editor is a working
+list (pin, edit, delete), so it drops the circles and their grid column; the
+public /:slug page keeps them. --%>
 <div>
   <div
     :for={circle <- circle_durations(@work_experience, :compact)}
-    class="grid grid-cols-[6.5rem_1fr_4rem] items-start gap-3"
+    class={[
+      "grid items-start gap-3",
+      if(@as_owner?, do: "grid-cols-[6.5rem_1fr]", else: "grid-cols-[6.5rem_1fr_4rem]")
+    ]}
   >
     <% dates =
       duration_with_detail(
@@ -94,6 +101,7 @@ Public preview. --%>
       />
     </div>
     <div
+      :if={!@as_owner?}
       class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
       style={"width: #{circle.size}rem; height: #{circle.size}rem"}
       title={gettext("Time in this role")}

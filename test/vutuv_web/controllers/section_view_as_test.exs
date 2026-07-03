@@ -42,10 +42,12 @@ defmodule VutuvWeb.SectionViewAsTest do
       # No owner chrome on the public page itself.
       refute html =~ ~p"/settings/work_experiences/new"
       refute html =~ ~p"/settings/work_experiences/#{job}/edit"
-      # Timeline content: title, organization and the full description all show.
+      # Timeline content: title, organization and the full description all show,
+      # including the showcase-only duration circles.
       assert html =~ "Founder"
       assert html =~ "Wintermeyer Consulting"
       assert html =~ "Built the thing"
+      assert html =~ "Time in this role"
     end
 
     test "a stale ?view_as=public URL renders the same public page", %{
@@ -75,6 +77,9 @@ defmodule VutuvWeb.SectionViewAsTest do
       assert html =~ ~p"/settings/work_experiences/new"
       assert html =~ ~p"/settings/work_experiences/#{job}/edit"
       assert html =~ "Founder"
+      # The duration circles are showcase decoration; the editor is a working
+      # list and drops them (they stay on the public /:slug page).
+      refute html =~ "Time in this role"
     end
   end
 
