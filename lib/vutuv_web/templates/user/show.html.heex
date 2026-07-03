@@ -292,13 +292,16 @@ the resulting ~200px rail width. --%>
       composer reveals and focuses on arrival (the same path the "n" keyboard
       shortcut uses) — clicking here opens the new-post form straight away
       instead of a closed composer. --%>
+      <%!-- When posts follow, the trigger takes the list's own row rhythm
+      (16px + hairline + 16px, the post rows' divide-y spacing) — a bare mb-4
+      read as half a row, gluing the trigger to the first post. --%>
       <.composer_trigger
         :if={@as_owner?}
         viewer={@user}
         href={~p"/feed#compose"}
         surface={:flat}
         id="profile-composer"
-        class={@posts != [] && "mb-4"}
+        class={@posts != [] && "mb-4 border-b border-slate-100 pb-4 dark:border-slate-800"}
       >
         {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
       </.composer_trigger>

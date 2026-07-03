@@ -227,23 +227,36 @@ defmodule VutuvWeb.PostComponents do
     ~H"""
     <%= if @href do %>
       <.link href={@href} data-composer-trigger class={@shell_class} {@rest}>
-        <.composer_trigger_body viewer={@viewer}>{render_slot(@inner_block)}</.composer_trigger_body>
+        <.composer_trigger_body viewer={@viewer} surface={@surface}>
+          {render_slot(@inner_block)}
+        </.composer_trigger_body>
       </.link>
     <% else %>
       <button type="button" data-composer-trigger class={@shell_class} {@rest}>
-        <.composer_trigger_body viewer={@viewer}>{render_slot(@inner_block)}</.composer_trigger_body>
+        <.composer_trigger_body viewer={@viewer} surface={@surface}>
+          {render_slot(@inner_block)}
+        </.composer_trigger_body>
       </button>
     <% end %>
     """
   end
 
   attr(:viewer, :any, required: true)
+  attr(:surface, :atom, required: true)
   slot(:inner_block, required: true)
 
+  # Standalone (:card, the feed) carries the big `md` avatar as the page's
+  # anchor. Flat (:flat) sits among post rows, so it follows their grammar:
+  # the same `sm` avatar the post headers use (a bigger one towers over the
+  # list and shifts the pill off the post text column) and a py-2 pill, which
+  # at text-sm comes out exactly avatar-high (36px).
   defp composer_trigger_body(assigns) do
     ~H"""
-    <.avatar user={@viewer} size="md" />
-    <span class="flex-1 rounded-full bg-slate-100 px-4 py-2.5 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700">
+    <.avatar user={@viewer} size={if(@surface == :card, do: "md", else: "sm")} />
+    <span class={[
+      "flex-1 rounded-full bg-slate-100 px-4 text-sm text-slate-500 group-hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:group-hover:bg-slate-700",
+      if(@surface == :card, do: "py-2.5", else: "py-2")
+    ]}>
       {render_slot(@inner_block)}
     </span>
     """

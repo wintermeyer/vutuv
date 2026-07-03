@@ -283,6 +283,13 @@ defmodule VutuvWeb.UserProfileLiveTest do
       trigger = element(view, "#profile-posts [data-composer-trigger]")
       assert render(trigger) =~ ~s(href="/feed#compose")
       refute has_element?(view, "#profile-posts [data-empty-add]")
+
+      # Flat inside the post list, the trigger follows the rows' grammar: the
+      # same `sm` avatar the post headers use (h-9), not the feed card's `md` —
+      # a bigger avatar towers over the list and shifts the pill off the post
+      # text column.
+      assert render(trigger) =~ "h-9 w-9"
+      refute render(trigger) =~ "h-12 w-12"
     end
   end
 
