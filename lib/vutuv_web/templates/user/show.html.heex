@@ -999,11 +999,7 @@ the resulting ~200px rail width. --%>
     card needs no owner guard. Shares the rail's order-2 utility footer with
     the formats card below. --%>
     <div class="order-2 md:order-none">
-      <.cv_card
-        user={@user}
-        machine_formats={not VutuvWeb.ContentPolicy.agent_docs_blocked?(@user)}
-        id="profile-cv-card"
-      />
+      <.cv_card user={@user} id="profile-cv-card" />
     </div>
 
     <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):

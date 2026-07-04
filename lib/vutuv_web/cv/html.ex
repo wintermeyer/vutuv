@@ -61,12 +61,20 @@ defmodule VutuvWeb.CV.Html do
         ""
       end
 
-    contact =
-      [cv.email, cv.phone, cv.profile_url]
+    # The profile link is a real clickable link (opens the vutuv profile);
+    # the email/phone stay plain text.
+    contact_items =
+      [
+        cv.email && esc(cv.email),
+        cv.phone && esc(cv.phone),
+        cv.profile_url && ~s(<a href="#{esc(cv.profile_url)}">#{esc(cv.profile_url)}</a>)
+      ]
       |> Enum.filter(& &1)
-      |> Enum.map_join(" &middot; ", &esc/1)
 
-    contact = if contact == "", do: "", else: ~s(<p class="contact">#{contact}</p>)
+    contact =
+      if contact_items == [],
+        do: "",
+        else: ~s(<p class="contact">#{Enum.join(contact_items, " &middot; ")}</p>)
 
     address =
       if cv.address_lines == [] do
@@ -160,6 +168,7 @@ defmodule VutuvWeb.CV.Html do
     h1 { font-size: 28px; margin: 0; line-height: 1.2; }
     .headline { margin: 4px 0 0; font-size: 15px; color: #334155; }
     .contact { margin: 8px 0 0; font-size: 13px; color: #334155; overflow-wrap: anywhere; }
+    .contact a { color: #1d4ed8; }
     h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #64748b;
          border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; margin: 28px 0 12px; }
     .entry { margin: 0 0 14px; break-inside: avoid; }

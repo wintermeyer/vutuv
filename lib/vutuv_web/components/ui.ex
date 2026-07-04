@@ -299,31 +299,17 @@ defmodule VutuvWeb.UI do
 
   @doc """
   The profile rail's **CV / Lebenslauf card** (issue #841): this profile as
-  a formatted CV for a job application, offered to **every** viewer — the CV
-  (`VutuvWeb.CV`, served under `/:slug/cv`) carries only data the viewer can
-  already see, so a private email never leaves the owner's own download. The
-  primary link opens the builder (`/:slug/cv`), where any viewer can untick
-  sections/entries or anonymize the CV and then print or download; the chips
-  below are one-click **full** downloads (Word / OpenDocument / HTML / LaTeX
-  / JSON Resume). `machine_formats={false}` (the same full machine-export
-  opt-out the agent docs honor) drops the JSON Resume chip — that URL answers
-  404 for such a profile unless the owner asks.
+  a formatted CV for a job application, offered to **every** viewer. One
+  affordance only — an "Open CV" button to the builder (`/:slug/cv`), where
+  any viewer picks what to include, anonymizes, prints or downloads (the
+  format chips live there, not here). The CV (`VutuvWeb.CV`) carries only
+  data the viewer can already see, so a private email never leaves the
+  owner's own download.
   """
   attr(:user, Vutuv.Accounts.User, required: true)
-  attr(:machine_formats, :boolean, default: true)
   attr(:rest, :global)
 
   def cv_card(assigns) do
-    files =
-      [
-        {"Word (.docx)", "docx"},
-        {"OpenDocument (.odt)", "odt"},
-        {"HTML", "html"},
-        {"LaTeX (.tex)", "tex"}
-      ] ++ if assigns.machine_formats, do: [{"JSON Resume", "json"}], else: []
-
-    assigns = assign(assigns, :files, files)
-
     ~H"""
     <.card {@rest}>
       <%!-- Not plain "CV": the German label would double the Experience
@@ -340,15 +326,6 @@ defmodule VutuvWeb.UI do
       >
         {gettext("Open CV")}
       </.link>
-      <div class="mt-3 flex flex-wrap gap-1.5">
-        <.link
-          :for={{label, format} <- @files}
-          href={~p"/#{@user}/cv/download/#{format}"}
-          class={format_chip_class()}
-        >
-          {label}
-        </.link>
-      </div>
     </.card>
     """
   end

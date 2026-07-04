@@ -78,11 +78,10 @@ defmodule VutuvWeb.CVControllerTest do
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
 
+      # The card offers only the "Open CV" button; the download formats live
+      # in the builder, not on the profile.
       assert body =~ ~s(href="/#{owner.username}/cv")
-
-      for format <- ~w(docx odt html tex json) do
-        assert body =~ ~s(href="/#{owner.username}/cv/download/#{format}")
-      end
+      refute body =~ ~s(href="/#{owner.username}/cv/download/docx")
     end
   end
 
@@ -106,6 +105,10 @@ defmodule VutuvWeb.CVControllerTest do
       assert body =~ "blog.example.org"
       assert body =~ "cv-owner@example.com"
       assert body =~ "alpha-tag"
+
+      # The vutuv profile link is a real clickable link, not plain text.
+      profile_url = "#{VutuvWeb.Endpoint.url()}/#{user.username}"
+      assert body =~ ~s(<a href="#{profile_url}">#{profile_url}</a>)
 
       # The user-written description is escaped, never raw HTML.
       assert body =~ "Shipping &lt;fast&gt; &amp; 100% maintainable code_bases"

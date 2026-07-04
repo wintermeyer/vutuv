@@ -185,6 +185,12 @@ defmodule VutuvWeb.CVLive do
                 <span class="w-28 shrink-0 text-sm font-medium text-slate-900 dark:text-slate-100">
                   {label}
                 </span>
+                <img
+                  :if={key == "photo"}
+                  src={@cv.photo}
+                  alt=""
+                  class="h-10 w-10 shrink-0 self-center rounded object-cover ring-1 ring-slate-200 dark:ring-slate-700"
+                />
                 <span :if={preview} class="min-w-0 truncate text-sm text-slate-600 dark:text-slate-400">
                   {preview}
                 </span>
