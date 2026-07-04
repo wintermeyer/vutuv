@@ -1,0 +1,370 @@
+defmodule Vutuv.Fediverse do
+  @moduledoc """
+  Follow-only ActivityPub federation (outbound).
+
+  People on Mastodon and other Fediverse servers can follow a member who
+  opted in (`users.fediverse_followers?`, the Fediverse settings page) and
+  receive their **public** posts; nothing federates inbound — no remote
+  posts, likes or replies are stored, only who follows whom and where to
+  deliver. The moving parts:
+
+    * actors — the member's RSA keypair (`Vutuv.Fediverse.Actor`), created
+      lazily on opt-in; `VutuvWeb.Fediverse.Docs` renders the documents.
+    * followers — remote actors following a member
+      (`Vutuv.Fediverse.Follower`), written by the inbox on Follow/Undo.
+    * deliveries — a DB-backed outbound queue (`Vutuv.Fediverse.Delivery`)
+      drained by `Vutuv.Fediverse.Deliverer` with signed POSTs
+      (`Vutuv.Fediverse.HttpSignature`), mirroring the webhooks queue.
+
+  Everything sits behind the global `:fediverse_enabled` switch
+  (FEDIVERSE_ENABLED, for installations that must not call out — intranets)
+  and behind the per-member opt-in: consent first, because deletion of
+  federated copies on remote servers is not enforceable.
+  """
+
+  import Ecto.Query
+
+  require Logger
+
+  alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse.Actor
+  alias Vutuv.Fediverse.Deliverer
+  alias Vutuv.Fediverse.Delivery
+  alias Vutuv.Fediverse.Follower
+  alias Vutuv.Fediverse.HttpSignature
+  alias Vutuv.Fediverse.Keys
+  alias Vutuv.Posts.Post
+  alias Vutuv.Posts.PostDenial
+  alias Vutuv.Repo
+  alias VutuvWeb.Fediverse.Docs
+
+  @max_attempts 8
+  @max_body_bytes 500_000
+
+  @doc "The installation-wide switch (FEDIVERSE_ENABLED; off = no endpoints, no deliveries)."
+  def enabled?, do: Application.get_env(:vutuv, :fediverse_enabled, true)
+
+  @doc """
+  Whether this member takes part: the global switch, their opt-in, a
+  confirmed address and an account in good standing (a frozen, suspended or
+  deactivated profile is hidden on vutuv, so it must not keep federating).
+  """
+  def federated?(%User{} = user) do
+    enabled?() and user.fediverse_followers? and user.email_confirmed? and
+      is_nil(user.frozen_at) and is_nil(user.deactivated_at) and not suspended?(user)
+  end
+
+  defp suspended?(%User{suspended_until: nil}), do: false
+
+  defp suspended?(%User{suspended_until: until}),
+    do: NaiveDateTime.compare(until, NaiveDateTime.utc_now()) == :gt
+
+  ## Actors
+
+  @doc "The member's actor (keypair), created on first use. Race-safe."
+  def ensure_actor(%User{} = user) do
+    case get_actor(user) do
+      nil ->
+        {private_pem, public_pem} = Keys.generate()
+
+        %Actor{user_id: user.id, private_key_pem: private_pem, public_key_pem: public_pem}
+        |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id])
+
+        {:ok, get_actor(user)}
+
+      actor ->
+        {:ok, actor}
+    end
+  end
+
+  def get_actor(%User{id: user_id}), do: Repo.get_by(Actor, user_id: user_id)
+
+  ## Remote followers
+
+  @doc "Records a remote follower (idempotent per remote actor)."
+  def add_follower(%User{} = user, attrs) do
+    %Follower{user_id: user.id}
+    |> Follower.changeset(attrs)
+    |> Repo.insert(
+      on_conflict: {:replace, [:inbox_uri, :shared_inbox_uri, :updated_at]},
+      conflict_target: [:user_id, :actor_uri]
+    )
+  end
+
+  def remove_follower(%User{id: user_id}, actor_uri) do
+    Repo.delete_all(
+      from(f in Follower, where: f.user_id == ^user_id and f.actor_uri == ^actor_uri)
+    )
+
+    :ok
+  end
+
+  def follower_count(%User{id: user_id}) do
+    Repo.aggregate(from(f in Follower, where: f.user_id == ^user_id), :count)
+  end
+
+  @doc "How many public posts the member has (the outbox totalItems)."
+  def public_post_count(%User{id: user_id}) do
+    Repo.aggregate(
+      from(p in Post,
+        as: :post,
+        where: p.user_id == ^user_id,
+        where: not exists(from(d in PostDenial, where: d.post_id == parent_as(:post).id))
+      ),
+      :count
+    )
+  end
+
+  @doc """
+  The distinct inboxes a member's activities go to: one per server where the
+  remote declared a sharedInbox (however many followers live there), else the
+  per-actor inbox.
+  """
+  def delivery_inboxes(%User{id: user_id}) do
+    Repo.all(
+      from(f in Follower,
+        where: f.user_id == ^user_id,
+        distinct: true,
+        select: coalesce(f.shared_inbox_uri, f.inbox_uri)
+      )
+    )
+  end
+
+  ## Federating posts (called from Vutuv.Posts after commit)
+
+  @doc "A freshly published post -> Create(Note) to every follower inbox."
+  def federate_new_post(%Post{} = post), do: maybe_federate(post, &Docs.create_activity/2)
+
+  @doc """
+  An edited post -> Update(Note); one whose audience closed -> Delete, so
+  remote copies follow the post out of public view (best effort — remote
+  deletion is advisory by protocol).
+  """
+  def federate_post_update(%Post{} = post) do
+    if Vutuv.Posts.restricted?(post) do
+      federate_post_delete(post)
+    else
+      maybe_federate(post, &Docs.update_activity/2)
+    end
+  end
+
+  @doc "A deleted post -> Delete(Tombstone) (best effort)."
+  def federate_post_delete(%Post{id: post_id, user_id: user_id}) do
+    with true <- enabled?(),
+         %User{} = user <- Repo.get(User, user_id),
+         true <- federated?(user),
+         [_ | _] = inboxes <- delivery_inboxes(user) do
+      enqueue(user, inboxes, Docs.delete_activity(post_id, user))
+    else
+      _ -> :skip
+    end
+  end
+
+  defp maybe_federate(%Post{} = post, builder) do
+    with true <- enabled?(),
+         %User{} = user <- Repo.get(User, post.user_id),
+         true <- federated?(user),
+         false <- Vutuv.Posts.restricted?(post),
+         [_ | _] = inboxes <- delivery_inboxes(user) do
+      post = Repo.preload(post, [:images, reply_ref: [:parent_author]])
+      enqueue(user, inboxes, builder.(post, user))
+    else
+      _ -> :skip
+    end
+  end
+
+  @doc "Answers a Follow with Accept, straight to the follower's own inbox."
+  def accept_follow(%User{} = user, follow_object, inbox_uri) do
+    enqueue(user, [inbox_uri], Docs.accept_activity(user, follow_object))
+  end
+
+  defp enqueue(user, inboxes, activity) do
+    json = Jason.encode!(activity)
+    now = DateTime.utc_now(:second)
+    stamp = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+    rows =
+      Enum.map(inboxes, fn inbox ->
+        %{
+          id: Vutuv.UUIDv7.generate(),
+          user_id: user.id,
+          inbox_uri: inbox,
+          activity_json: json,
+          attempts: 0,
+          next_attempt_at: now,
+          inserted_at: stamp,
+          updated_at: stamp
+        }
+      end)
+
+    Repo.insert_all(Delivery, rows)
+    Deliverer.nudge()
+    :ok
+  end
+
+  ## Outbound deliveries (drained by Vutuv.Fediverse.Deliverer)
+
+  @doc "Sends every due delivery (called by the Deliverer; returns how many)."
+  def deliver_due do
+    now = DateTime.utc_now(:second)
+
+    due =
+      Repo.all(
+        from(d in Delivery,
+          where: d.attempts < @max_attempts and d.next_attempt_at <= ^now,
+          limit: 100,
+          preload: [:user]
+        )
+      )
+
+    due
+    |> Task.async_stream(&attempt/1, max_concurrency: 5, timeout: 30_000, on_timeout: :kill_task)
+    |> Stream.run()
+
+    length(due)
+  end
+
+  defp attempt(%Delivery{user: %User{} = user} = delivery) do
+    with %Actor{} = actor <- get_actor(user),
+         %URI{scheme: "https", host: host} <- URI.parse(delivery.inbox_uri),
+         false <- Vutuv.Ssrf.resolves_to_internal?(host) do
+      post_activity(delivery, user, actor)
+    else
+      # No key, a non-https inbox or an internal target: undeliverable for
+      # good, so the row goes instead of clogging the queue.
+      _ -> Repo.delete(delivery)
+    end
+  end
+
+  defp attempt(%Delivery{} = delivery), do: Repo.delete(delivery)
+
+  defp post_activity(delivery, user, actor) do
+    body = delivery.activity_json
+
+    headers =
+      HttpSignature.signed_headers(
+        "post",
+        delivery.inbox_uri,
+        body,
+        Docs.key_id(user),
+        actor.private_key_pem
+      ) ++
+        [{"content-type", "application/activity+json"}, {"user-agent", user_agent()}]
+
+    options =
+      Keyword.merge(
+        [
+          url: delivery.inbox_uri,
+          body: body,
+          headers: headers,
+          receive_timeout: 10_000,
+          retry: false,
+          redirect: false
+        ],
+        Application.get_env(:vutuv, :fediverse_req_options, [])
+      )
+
+    case Req.post(options) do
+      {:ok, %Req.Response{status: status}} when status in 200..299 ->
+        Repo.delete(delivery)
+
+      # The inbox is gone for good — no point retrying.
+      {:ok, %Req.Response{status: status}} when status in [404, 410] ->
+        Repo.delete(delivery)
+
+      {:ok, %Req.Response{status: status}} ->
+        fail(delivery, "HTTP #{status}")
+
+      {:error, exception} ->
+        fail(delivery, Exception.message(exception))
+    end
+  end
+
+  defp fail(%Delivery{attempts: attempts} = delivery, error) when attempts + 1 >= @max_attempts do
+    Logger.info("fediverse delivery to #{delivery.inbox_uri} gave up: #{error}")
+    Repo.delete(delivery)
+  end
+
+  defp fail(%Delivery{attempts: attempts} = delivery, error) do
+    delivery
+    |> Ecto.Changeset.change(
+      attempts: attempts + 1,
+      next_attempt_at: backoff_at(attempts + 1),
+      last_error: String.slice(error, 0, 255)
+    )
+    |> Repo.update()
+  end
+
+  # 2, 4, 8 ... minutes — the webhook ladder; attempt 8 sits about 4h out.
+  defp backoff_at(attempts) do
+    DateTime.add(DateTime.utc_now(:second), trunc(:math.pow(2, attempts)) * 60)
+  end
+
+  ## Remote actors
+
+  @doc """
+  Fetches a remote actor document (by its id or a keyId — the fragment is
+  stripped): https only, SSRF-guarded, size-capped. Returns the delivery
+  coordinates and the key deliveries from that actor are verified against.
+  """
+  def fetch_remote_actor(uri, signer \\ nil) do
+    bare = uri |> URI.parse() |> struct!(fragment: nil) |> URI.to_string()
+
+    with {:parse, %URI{scheme: "https", host: host}} <- {:parse, URI.parse(bare)},
+         {:ssrf, false} <- {:ssrf, Vutuv.Ssrf.resolves_to_internal?(host)},
+         {:ok, %Req.Response{status: 200, body: body}} <- ap_get(bare, signer),
+         {:size, true} <- {:size, byte_size(body) <= @max_body_bytes},
+         {:ok, %{"id" => id, "inbox" => inbox} = doc} <- Jason.decode(body) do
+      {:ok,
+       %{
+         id: id,
+         inbox: inbox,
+         shared_inbox: get_in(doc, ["endpoints", "sharedInbox"]),
+         public_key_id: get_in(doc, ["publicKey", "id"]),
+         public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"])
+       }}
+    else
+      {:parse, _} -> {:error, :https_only}
+      {:ssrf, true} -> {:error, :internal_host}
+      {:size, false} -> {:error, :too_large}
+      {:ok, %Req.Response{status: status}} -> {:error, {:http, status}}
+      {:error, _} = error -> error
+      other -> {:error, {:bad_actor, other}}
+    end
+  end
+
+  defp ap_get(url, signer) do
+    signature_headers =
+      case signer do
+        {key_id, private_key_pem} ->
+          HttpSignature.signed_headers("get", url, nil, key_id, private_key_pem)
+
+        nil ->
+          []
+      end
+
+    options =
+      Keyword.merge(
+        [
+          url: url,
+          headers:
+            signature_headers ++
+              [{"accept", "application/activity+json"}, {"user-agent", user_agent()}],
+          receive_timeout: 8_000,
+          retry: false,
+          redirect: false,
+          decode_body: false
+        ],
+        Application.get_env(:vutuv, :fediverse_req_options, [])
+      )
+
+    Req.get(options)
+  end
+
+  defp user_agent do
+    public_url =
+      Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] || "https://vutuv.de/"
+
+    "vutuv/#{Application.spec(:vutuv, :vsn)} (+#{String.trim_trailing(public_url, "/")})"
+  end
+end

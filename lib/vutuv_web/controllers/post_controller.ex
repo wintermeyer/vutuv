@@ -22,11 +22,14 @@ defmodule VutuvWeb.PostController do
   plug(VutuvWeb.Plug.EnsureActivated when action in [:show, :index])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete])
 
+  alias Vutuv.Fediverse
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Social
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.PostDoc
+  alias VutuvWeb.Fediverse.Docs, as: FediverseDocs
+  alias VutuvWeb.FediverseController
 
   # The author archive: /:slug/posts, optionally scoped to a year, month or
   # day (/:slug/posts/2026[/06[/06]]), offset-paginated like the other
@@ -158,6 +161,11 @@ defmodule VutuvWeb.PostController do
             # and the query string (?lang=de) across the canonical redirect.
             redirect(conn, to: canonical <> redirect_query(conn))
 
+          # An ActivityPub Accept gets the Note (remote servers dereference a
+          # federated post's id) — public posts of federating members only.
+          federated_note_request?(conn, author, post) ->
+            send_note(conn, author, post)
+
           format != :html ->
             send_post_doc(conn, format, author, post)
 
@@ -240,6 +248,25 @@ defmodule VutuvWeb.PostController do
 
   # The agent formats render strictly the anonymous view: a post a
   # logged-out visitor cannot see has no agent documents either.
+  defp federated_note_request?(conn, author, post) do
+    FediverseController.ap_request?(conn) and Fediverse.federated?(author) and
+      Posts.visible_to?(post, nil)
+  end
+
+  # The ActivityPub rendering of a public post (see Vutuv.Fediverse).
+  defp send_note(conn, author, post) do
+    post = Repo.preload(post, [:images, reply_ref: [:parent_author]])
+
+    note =
+      post
+      |> FediverseDocs.note(author)
+      |> Map.put("@context", "https://www.w3.org/ns/activitystreams")
+
+    conn
+    |> put_resp_content_type("application/activity+json")
+    |> send_resp(200, Jason.encode!(note))
+  end
+
   defp send_post_doc(conn, format, author, post) do
     if Posts.visible_to?(post, nil) do
       AgentDocs.send_doc(conn, format, PostDoc.build(author, post))

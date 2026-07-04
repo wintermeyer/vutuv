@@ -10,10 +10,13 @@ defmodule VutuvWeb.UserController do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Fediverse
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
+  alias VutuvWeb.Fediverse.Docs
+  alias VutuvWeb.FediverseController
   alias VutuvWeb.RateLimit
 
   plug(:scrub_params, "user" when action in [:update])
@@ -24,13 +27,32 @@ defmodule VutuvWeb.UserController do
   # gains or loses public data, ProfileDoc must follow (the drift test
   # agent_docs_drift_test.exs enforces it).
   def show(conn, params) do
-    # The profile is the one page that also serves :vcf; the doc embeds the
-    # photo only for that format, so the doc fun takes the negotiated format.
-    AgentDocs.respond(conn,
-      allowed: AgentDocs.formats(),
-      html: &show_html(&1, params),
-      doc: &ProfileDoc.build(conn.assigns[:user], include_photo: &1 == :vcf)
-    )
+    user = conn.assigns[:user]
+
+    # An ActivityPub Accept on the profile URL gets the actor document (what
+    # Mastodon fetches when someone pastes the profile URL into its search) —
+    # or a 404 for members who don't federate, which AP clients read as
+    # "nothing here" instead of choking on HTML.
+    cond do
+      FediverseController.ap_request?(conn) and Fediverse.federated?(user) ->
+        {:ok, actor} = Fediverse.ensure_actor(user)
+
+        conn
+        |> put_resp_content_type("application/activity+json")
+        |> send_resp(200, Jason.encode!(Docs.actor(user, actor)))
+
+      FediverseController.ap_request?(conn) ->
+        send_resp(conn, 404, "")
+
+      true ->
+        # The profile is the one page that also serves :vcf; the doc embeds the
+        # photo only for that format, so the doc fun takes the negotiated format.
+        AgentDocs.respond(conn,
+          allowed: AgentDocs.formats(),
+          html: &show_html(&1, params),
+          doc: &ProfileDoc.build(conn.assigns[:user], include_photo: &1 == :vcf)
+        )
+    end
   end
 
   # The human profile is a LiveView (VutuvWeb.UserProfileLive): the controller
@@ -63,6 +85,9 @@ defmodule VutuvWeb.UserController do
     # to their Mastodon profile gets it shown as verified there — Fediverse
     # identity without any federation.
     |> assign(:rel_me_urls, rel_me_urls(user))
+    # Federating members advertise their actor document, so a pasted profile
+    # URL resolves in Mastodon's search even from the HTML rendering.
+    |> maybe_assign_actor_alternate(user)
     # The member's search/AI opt-outs as a response header, belt and braces
     # to the layout's robots meta tag (the post pages and the agent-format
     # documents already answer with it).
@@ -77,6 +102,14 @@ defmodule VutuvWeb.UserController do
         "user_id" => conn.assigns[:current_user_id]
       }
     )
+  end
+
+  defp maybe_assign_actor_alternate(conn, user) do
+    if Fediverse.federated?(user) do
+      assign(conn, :activity_json_alternate, Docs.actor_url(user))
+    else
+      conn
+    end
   end
 
   # The canonical URLs of the member's listed social accounts (position

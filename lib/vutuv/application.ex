@@ -39,6 +39,7 @@ defmodule Vutuv.Application do
         optional_child(:moderation_sweeper, Vutuv.Moderation.Sweeper) ++
         optional_child(:prune_search_history, Vutuv.Search.HistorySweeper) ++
         optional_child(:webhook_deliverer, Vutuv.Webhooks.Deliverer) ++
+        optional_child(:fediverse_deliverer, Vutuv.Fediverse.Deliverer) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++
         optional_child(:bounce_watcher, Vutuv.Deliverability.Watcher) ++
         optional_child(:sweep_unreachable_accounts, Vutuv.Deliverability.Sweeper) ++

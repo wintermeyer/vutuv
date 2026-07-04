@@ -107,6 +107,7 @@ Everything else has a default (the vutuv.de production value):
 | `APPEAL_REPLY_TO` | (vutuv.de's) | Reply-To on the account-deactivation (strike 3) email |
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
+| `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 
 The defaults marked **Set this** are vutuv.de's operator identity — a fresh
@@ -231,6 +232,9 @@ vutuv runs fine without internet access:
 
 - Set `PHX_SCHEME=http` if the intranet has no TLS (and `PHX_HOST` to the
   internal host name). With TLS, nothing special is needed.
+- Set `FEDIVERSE_ENABLED=false`: follow-only ActivityPub federation delivers
+  posts to remote servers and fetches remote actor documents — pointless and
+  noisy without internet access.
 - Turn off the features that call out to the internet (compile-time flags in
   `config/config.exs`): `:fetch_gravatar` (avatar lookup at registration),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on

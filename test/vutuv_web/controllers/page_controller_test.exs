@@ -159,6 +159,11 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Angemeldete Geräte"
       assert body =~ "User-Agent"
 
+      # Follow-only federation must be disclosed: opt-in, follower addresses
+      # stored, public posts delivered, remote deletion not enforceable.
+      assert body =~ "Fediverse (ActivityPub)"
+      assert body =~ "nicht erzwingen"
+
       # The old generic shop/e-commerce boilerplate is gone for good: vutuv has
       # no shopping cart, ships no goods and runs no third-party transport.
       refute body =~ "Warenkorb"

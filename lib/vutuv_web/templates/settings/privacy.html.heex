@@ -127,39 +127,6 @@ which would otherwise render the hint heavier than its own heading. --%>
       </.form>
     </.card>
 
-    <%!-- Fediverse opt-in: deliberately ahead of the feature. The switch
-          measures real demand before we invest in ActivityPub and collects the
-          per-member consent any future federation must be gated on (remote
-          deletion is unenforceable, so opt-in is the only lawful default).
-          Nothing reads the flag until federation ships — the copy says so. --%>
-    <.card>
-      <.section_title>{gettext("Fediverse")}</.section_title>
-      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext(
-          "We are preparing an optional connection to the Fediverse, the network of services like Mastodon."
-        )}
-      </p>
-
-      <.form
-        :let={f}
-        for={@changeset}
-        action={~p"/settings/privacy"}
-        id="fediverse-form"
-        class="mt-5 space-y-5"
-      >
-        <.setting_toggle label={gettext("Allow followers from the Fediverse")}>
-          <:checkbox><%= checkbox f, :fediverse_followers?, class: checkbox_class() %></:checkbox>
-          {gettext(
-            "This feature is still in the works and will ship later; the switch already records your choice. Once it arrives, people on Mastodon and other Fediverse services can follow you and read your public posts over there. While it is off, your profile never takes part."
-          )}
-        </.setting_toggle>
-
-        <div class="pt-1">
-          <.button type="submit">{gettext("Save")}</.button>
-        </div>
-      </.form>
-    </.card>
-
     <%!-- Safety: the two things you reach for when someone is a problem or your
           content is being looked at. Grouped in one card (two rows) so neither
           reads as a lonely one-line card. --%>

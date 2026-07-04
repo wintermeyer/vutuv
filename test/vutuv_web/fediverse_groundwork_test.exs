@@ -59,24 +59,38 @@ defmodule VutuvWeb.FediverseGroundworkTest do
       refute user.fediverse_followers?
     end
 
-    test "shows on the privacy settings page, marked as upcoming", %{conn: conn} do
+    test "lives on its own settings page (moved off the privacy page)", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
 
-      body = conn |> get(~p"/settings/privacy") |> html_response(200)
+      body = conn |> get(~p"/settings/fediverse") |> html_response(200)
 
-      assert body =~ "Fediverse"
       assert body =~ ~s(name="user[fediverse_followers?]")
-      # The honest label: the switch records the choice, the feature ships later.
-      assert body =~ "will ship later"
+      assert body =~ ~s(action="#{~p"/settings/fediverse"}")
+
+      privacy = conn |> recycle() |> get(~p"/settings/privacy") |> html_response(200)
+      refute privacy =~ ~s(name="user[fediverse_followers?]")
     end
 
-    test "the privacy form persists the opt-in", %{conn: conn} do
+    test "the settings hub lists the Fediverse page", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      body = conn |> get(~p"/settings") |> html_response(200)
+
+      assert body =~ ~s(href="#{~p"/settings/fediverse"}")
+    end
+
+    test "opting in persists, mints the actor keys and shows the handle", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
+      assert Vutuv.Fediverse.get_actor(user) == nil
 
-      conn = put(conn, ~p"/settings/privacy", %{"user" => %{"fediverse_followers?" => "true"}})
+      conn = put(conn, ~p"/settings/fediverse", %{"user" => %{"fediverse_followers?" => "true"}})
 
-      assert redirected_to(conn) == ~p"/settings/privacy"
+      assert redirected_to(conn) == ~p"/settings/fediverse"
       assert Vutuv.Accounts.get_user(user.id).fediverse_followers?
+      assert %Vutuv.Fediverse.Actor{} = Vutuv.Fediverse.get_actor(user)
+
+      body = conn |> recycle() |> get(~p"/settings/fediverse") |> html_response(200)
+      assert body =~ "@#{user.username}@#{VutuvWeb.Endpoint.host()}"
     end
 
     # The settings-hub restructure moved the update routes to the

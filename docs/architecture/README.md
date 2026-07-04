@@ -12,6 +12,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 |---|---|
 | [realtime.md](realtime.md) | the LiveView app shell, live pages, reload-free updates over PubSub, presence & online dots, notifications, Berlin-time post stamps, the live member counter |
 | [social-graph.md](social-graph.md) | follows, vernetzt (mutual follows), per-follow mute, blocking |
+| [fediverse.md](fediverse.md) | follow-only ActivityPub federation: WebFinger, actors, the inbox, signed deliveries |
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
 | [search.md](search.md) | the search page, query operators, post full-text search |
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |

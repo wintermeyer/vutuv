@@ -141,6 +141,40 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # Follow-only federation (Vutuv.Fediverse): the member's handle, the
+  # remote-follower count and the opt-in. Enabling mints the actor keypair
+  # right away, so WebFinger answers the moment the switch is on.
+  def fediverse(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(
+      conn,
+      "fediverse.html",
+      fediverse_assigns(user) ++
+        [user: user, changeset: User.changeset(user), page_title: gettext("Fediverse")]
+    )
+  end
+
+  def update_fediverse(conn, %{"user" => params}) do
+    save(
+      conn,
+      params,
+      "fediverse.html",
+      ~p"/settings/fediverse",
+      gettext("Fediverse settings saved."),
+      fn saved ->
+        if saved.fediverse_followers?, do: Vutuv.Fediverse.ensure_actor(saved)
+      end
+    )
+  end
+
+  defp fediverse_assigns(user) do
+    [
+      follower_count: Vutuv.Fediverse.follower_count(user),
+      fediverse_host: VutuvWeb.Endpoint.host()
+    ]
+  end
+
   def notifications(conn, _params) do
     user = conn.assigns[:user]
 
@@ -254,7 +288,13 @@ defmodule VutuvWeb.SettingsController do
   end
 
   # Every settings form page re-renders with user + changeset; the pages that
-  # need more (the security page's devices and passkeys) carry no forms.
+  # need more (the security page's devices and passkeys) carry no forms —
+  # except the Fediverse page, whose shell shows the follower count.
+  defp error_assigns(conn, "fediverse.html", changeset) do
+    [user: conn.assigns[:user], changeset: changeset] ++
+      fediverse_assigns(conn.assigns[:user])
+  end
+
   defp error_assigns(conn, _template, changeset),
     do: [user: conn.assigns[:user], changeset: changeset]
 end

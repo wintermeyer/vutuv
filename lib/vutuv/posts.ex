@@ -101,6 +101,9 @@ defmodule Vutuv.Posts do
         {:ok, post} ->
           post = preload_post(post)
           broadcast_new_post(post)
+          # Follow-only federation: a federating author's public post goes
+          # out to their remote followers (no-op for everyone else).
+          Vutuv.Fediverse.federate_new_post(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -139,6 +142,7 @@ defmodule Vutuv.Posts do
           post = preload_post(post)
           broadcast_new_post(post)
           broadcast_reply(parent, post)
+          Vutuv.Fediverse.federate_new_post(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -192,7 +196,11 @@ defmodule Vutuv.Posts do
         # A reported post that its owner edits leaves the moderation freezer
         # (the owner's self-service round; see Vutuv.Moderation).
         Vutuv.Moderation.content_edited(updated)
-        {:ok, preload_post(updated)}
+        updated = preload_post(updated)
+        # Remote copies follow the edit (Update) — or, if the audience just
+        # closed, leave public view (Delete, best effort).
+        Vutuv.Fediverse.federate_post_update(updated)
+        {:ok, updated}
 
       {:error, _} = error ->
         error
@@ -231,6 +239,8 @@ defmodule Vutuv.Posts do
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
         Vutuv.Moderation.content_deleted(deleted)
+        # Remote copies get a Delete(Tombstone) — best effort by protocol.
+        Vutuv.Fediverse.federate_post_delete(deleted)
         {:ok, deleted}
 
       {:error, _} = error ->

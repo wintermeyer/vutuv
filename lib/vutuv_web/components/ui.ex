@@ -2393,6 +2393,7 @@ defmodule VutuvWeb.UI do
       {gettext("More"),
        [
          {gettext("Privacy"), ~p"/settings/privacy", :privacy},
+         {gettext("Fediverse"), ~p"/settings/fediverse", :fediverse},
          {gettext("Notifications"), ~p"/settings/notifications", :notifications},
          {gettext("Apps"), ~p"/settings/apps", :apps},
          {gettext("Delete account"), ~p"/settings/delete", :delete}

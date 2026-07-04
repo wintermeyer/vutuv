@@ -121,6 +121,13 @@ if config_env() == :prod do
     config :vutuv, :operator_address, operator_address
   end
 
+  # Follow-only ActivityPub federation. FEDIVERSE_ENABLED=false turns every
+  # Fediverse endpoint and delivery off — for installations that must not
+  # call out (intranets). Per member it is opt-in either way.
+  if System.get_env("FEDIVERSE_ENABLED") == "false" do
+    config :vutuv, :fediverse_enabled, false
+  end
+
   # Avatars and URL screenshots are written under this root and served by
   # nginx (location /avatars/, /screenshots/). Override with UPLOADS_DIR_PREFIX;
   # the default must match the nginx alias root or fresh uploads will 404.

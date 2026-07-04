@@ -7,7 +7,10 @@ defmodule VutuvWeb.Router do
   end
 
   pipeline :browser do
-    plug(:accepts, ["html"])
+    # activity+json rides along so ActivityPub requests reach the profile and
+    # post-permalink controllers (they branch on FediverseController.ap_request?
+    # and fall back to plain HTML for everyone else).
+    plug(:accepts, ["html", "activity+json"])
     plug(:fetch_session)
     plug(:fetch_flash)
     # Records a click on a newsletter's tracked vutuv.de link and redirects to
@@ -114,6 +117,16 @@ defmodule VutuvWeb.Router do
     get("/.well-known/agent-skills/vutuv/SKILL.md", WellKnownController, :agent_skill)
     get("/.well-known/security.txt", WellKnownController, :security_txt)
     get("/security.txt", WellKnownController, :security_txt)
+    # ActivityPub follow-only federation (Vutuv.Fediverse): WebFinger
+    # discovery plus the per-member actor endpoints. Machine-to-machine like
+    # the feeds above — no session/CSRF; the inbox authenticates remote
+    # servers by HTTP signature instead. All of it 404s for members without
+    # the opt-in and while :fediverse_enabled is off.
+    get("/.well-known/webfinger", FediverseController, :webfinger)
+    get("/:slug/actor", FediverseController, :actor)
+    get("/:slug/actor/followers", FediverseController, :followers)
+    get("/:slug/actor/outbox", FediverseController, :outbox)
+    post("/:slug/actor/inbox", FediverseController, :inbox)
     # Deploy readiness probe (see VutuvWeb.HealthController). No pipeline:
     # it is hit by curl on localhost and must not depend on sessions or
     # content negotiation.
@@ -622,6 +635,9 @@ defmodule VutuvWeb.Router do
     get("/privacy", SettingsController, :privacy)
     put("/privacy", SettingsController, :update_privacy)
     patch("/privacy", SettingsController, :update_privacy)
+    get("/fediverse", SettingsController, :fediverse)
+    put("/fediverse", SettingsController, :update_fediverse)
+    patch("/fediverse", SettingsController, :update_fediverse)
     get("/notifications", SettingsController, :notifications)
     put("/notifications", SettingsController, :update_notifications)
     patch("/notifications", SettingsController, :update_notifications)

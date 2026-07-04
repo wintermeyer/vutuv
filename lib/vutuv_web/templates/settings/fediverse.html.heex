@@ -1,0 +1,72 @@
+<%!-- Follow-only federation (Vutuv.Fediverse), the member's own page: what
+taking part means, their handle, the remote-follower count and the opt-in.
+Moved out of the privacy page when federation went live — a real feature
+deserves more room than one toggle row. --%>
+<.settings_shell user={@user} active={:fediverse} title={gettext("Fediverse")}>
+  <div class="space-y-6">
+    <.card>
+      <.section_title>{gettext("Fediverse")}</.section_title>
+      <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines — they don't need a vutuv account for that."
+        )}
+      </p>
+
+      <%= if Vutuv.Fediverse.federated?(@user) do %>
+        <div class="mt-5 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/50">
+          <p class="font-semibold text-slate-700 dark:text-slate-200">
+            {gettext("Your Fediverse handle")}
+          </p>
+          <p class="mt-1">
+            <code class="select-all rounded bg-slate-100 px-1.5 py-0.5 text-slate-800 dark:bg-slate-800 dark:text-slate-100">@{@user.username}@{@fediverse_host}</code>
+          </p>
+          <p class="mt-2 text-slate-600 dark:text-slate-400">
+            {gettext(
+              "Anyone on Mastodon can paste this handle into their search and follow you from there."
+            )}
+          </p>
+          <p class="mt-2 text-slate-600 dark:text-slate-400">
+            {gettext("Followers from the Fediverse:")} {compact_count(@follower_count)}
+          </p>
+        </div>
+      <% end %>
+
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/settings/fediverse"}
+        id="fediverse-form"
+        class="mt-5 space-y-5"
+      >
+        <.form_error changeset={@changeset} />
+
+        <.setting_toggle label={gettext("Allow followers from the Fediverse")}>
+          <:checkbox><%= checkbox f, :fediverse_followers?, class: checkbox_class() %></:checkbox>
+          {gettext(
+            "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered — copies already delivered to other servers may remain there, outside our reach."
+          )}
+        </.setting_toggle>
+
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+
+    <%!-- The no-federation-needed sibling feature, so members find both. --%>
+    <.card>
+      <.section_title>{gettext("Get verified on Mastodon")}</.section_title>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Independent of federation: your vutuv profile links your listed social media accounts with rel=\"me\", so adding your profile address to your Mastodon profile shows it there as verified."
+        )}
+        <.link
+          href={~p"/settings/social_media_accounts"}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Manage social media accounts")}
+        </.link>
+      </p>
+    </.card>
+  </div>
+</.settings_shell>

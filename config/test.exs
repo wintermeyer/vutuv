@@ -20,6 +20,7 @@ config :vutuv, :prune_search_history, false
 # stubbed HTTP layer); the polling GenServer would touch the sandbox from
 # outside. Vutuv.Webhooks.Deliverer.nudge/0 casts into the void then.
 config :vutuv, :webhook_deliverer, false
+config :vutuv, :fediverse_deliverer, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false

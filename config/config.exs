@@ -21,6 +21,15 @@ config :logger, :console,
 
 config :phoenix, :json_library, Jason
 
+# The ActivityPub media type (follow-only federation, Vutuv.Fediverse): the
+# :browser pipeline must let an `Accept: application/activity+json` request
+# through to the profile / post-permalink controllers, which answer it with
+# the actor / Note documents. Changing this map requires recompiling the mime
+# dep once (mix deps.clean --build mime).
+config :mime, :types, %{
+  "application/activity+json" => ["activity+json"]
+}
+
 config :phoenix, :generators,
   migration: true,
   binary_id: true
@@ -54,6 +63,14 @@ config :vutuv, :fetch_gravatar, true
 # dashboard 404. "ads" stays a reserved username slug either way, so the
 # handle is kept free for when the system is switched back on.
 config :vutuv, :ads_enabled, false
+
+# Follow-only ActivityPub federation (Vutuv.Fediverse): people on Mastodon
+# & Co. can follow opted-in members and receive their public posts. Off =
+# every Fediverse endpoint 404s and nothing is ever delivered — the switch
+# for installations that must not call out (intranets). Runtime override:
+# FEDIVERSE_ENABLED=false (config/runtime.exs). Per member it stays opt-in
+# either way (users.fediverse_followers?).
+config :vutuv, :fediverse_enabled, true
 
 # The site-wide AI-crawler stance (see VutuvWeb.ContentPolicy): :permissive
 # welcomes search, live AI input AND model training; :block_training keeps

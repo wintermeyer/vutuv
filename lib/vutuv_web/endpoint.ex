@@ -72,10 +72,15 @@ defmodule VutuvWeb.Endpoint do
   # default 8 MB rejected the very archives the import page asks members to
   # download. Beyond 64 MB Plug raises and the member gets the styled 413 page
   # (VutuvWeb.ErrorHTML). nginx's client_max_body_size must stay >= this.
+  # body_reader: the ActivityPub inbox verifies an HTTP signature over the
+  # raw body bytes, which the JSON parser (application/activity+json is a
+  # +json type) would otherwise consume — VutuvWeb.RawBodyReader keeps a copy
+  # for exactly that one path.
   plug(Plug.Parsers,
     parsers: [:urlencoded, {:multipart, length: 64_000_000}, :json],
     pass: ["*/*"],
-    json_decoder: Jason
+    json_decoder: Jason,
+    body_reader: {VutuvWeb.RawBodyReader, :read_body, []}
   )
 
   plug(Plug.MethodOverride)
