@@ -44,14 +44,20 @@ jobs:
           otp-version: "28.5.0.1"
           elixir-version: "1.20.0-otp-28"
 
+      # The key hashes config/*.exs too: compile-time application env for
+      # dependencies (e.g. the :mime :types map) is baked into the cached
+      # _build, and Elixir's compile-env validation rightly fails the build
+      # when a restored cache disagrees with the current config (this turned
+      # main red in v7.43.0 when activity+json was registered). restore-keys
+      # deliberately dropped for _build: a stale partial restore is exactly
+      # the poison the key is meant to prevent.
       - name: Cache deps and _build
         uses: actions/cache@v5
         with:
           path: |
             deps
             _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', 'config/*.exs') }}
 
       - run: mix deps.get
 
