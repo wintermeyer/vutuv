@@ -38,18 +38,26 @@ onReady(() =>
 )
 
 // Feed/profile post previews clamp the body to six lines. Reveal the "Read more"
-// link (with its length hint) only when the body is really cut: either the
-// source was truncated server-side (data-server-truncated, already visible with
-// no JS) or a short post still overflows the CSS line-clamp — which the server
-// can't know, since wrapping is width- and font-dependent. scrollHeight beats
-// clientHeight on a clamped box exactly when lines are hidden.
+// link only when the body is really cut: either the source was truncated
+// server-side (data-server-truncated, already visible with no JS) or a longer
+// body still overflows the CSS line-clamp — which the server can't know, since
+// wrapping is width- and font-dependent.
+//
+// A genuinely clipped body hides at least one whole line box, so require the
+// overflow to clear most of a line before revealing. A bare few pixels is
+// layout slop — block margins counted inside the -webkit-box line clamp,
+// sub-pixel rounding — on a post that is in fact wholly visible. The old 4px
+// tolerance let that slop sprout a "Read more" link on a short, fully-readable
+// post (issue #880); a per-line threshold ignores it while still catching every
+// real clip (a clipped seventh line is a full line box tall, whatever its text).
 function revealPreviewClamp(el) {
   const body = el.querySelector("[data-clamp-body]")
   const link = el.querySelector("[data-read-more]")
   if (!body || !link) return
+  const lineHeight = parseFloat(getComputedStyle(body).lineHeight) || 20
   const clipped =
     el.dataset.serverTruncated === "true" ||
-    body.scrollHeight - body.clientHeight > 4
+    body.scrollHeight - body.clientHeight > lineHeight * 0.75
   link.classList.toggle("hidden", !clipped)
 }
 
@@ -61,6 +69,14 @@ function sweepPreviewClamps() {
 }
 
 onReady(sweepPreviewClamps)
+
+// A late web-font swap (FOUT) reflows the text and changes how many lines wrap,
+// so re-measure once fonts are ready: a card first measured with the wider
+// fallback font can otherwise keep a "Read more" link the final font makes
+// needless. Cards that stream in later mount post-font, so their hook handles it.
+if (document.fonts && document.fonts.ready) {
+  document.fonts.ready.then(sweepPreviewClamps)
+}
 
 let previewClampResizeTimer
 window.addEventListener("resize", () => {

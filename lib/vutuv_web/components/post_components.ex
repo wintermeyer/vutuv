@@ -127,7 +127,6 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:report_menu_id, "post-report-#{entry_key}")
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
-      |> assign(:body_length_hint, preview_length_hint(assigns))
       |> assign(:author?, Posts.author?(assigns.post, viewer))
       |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
       |> assign(:frozen?, assigns.post.frozen_at != nil)
@@ -146,7 +145,6 @@ defmodule VutuvWeb.PostComponents do
       mode={@mode}
       body_html={@body_html}
       body_id={@body_id}
-      body_length_hint={@body_length_hint}
       truncated?={@truncated?}
       restricted?={@restricted?}
       permalink={@permalink}
@@ -585,7 +583,6 @@ defmodule VutuvWeb.PostComponents do
   attr(:mode, :atom, required: true)
   attr(:body_html, :any, required: true)
   attr(:body_id, :string, required: true)
-  attr(:body_length_hint, :any, default: nil)
   attr(:truncated?, :boolean, required: true)
   attr(:restricted?, :boolean, required: true)
   attr(:permalink, :string, required: true)
@@ -702,13 +699,15 @@ defmodule VutuvWeb.PostComponents do
           </div>
 
           <%!-- Preview mode: the body is clamped to six lines and paired with a
-          "Read more" link carrying the full post's length. The PostPreviewClamp
-          hook (live pages) / the data-post-preview sweep (dead pages) reveals the
-          link whenever the body is really cut — either the source was truncated
-          server-side (@truncated?, shown with no JS too) or a short post still
+          plain "Read more" link to the permalink. The PostPreviewClamp hook
+          (live pages) / the data-post-preview sweep (dead pages) reveals the
+          link only when the body is really cut — either the source was truncated
+          server-side (@truncated?, shown with no JS too) or a longer body still
           overflows the CSS line-clamp, which the server can't know because
           wrapping is width- and font-dependent. With JS off a css-only clamp
-          keeps the native line-clamp ellipsis and no link, which is fine. --%>
+          keeps the native line-clamp ellipsis and no link, which is fine.
+          No length metric (issue #880): a word count was meaningless once the
+          reader had the preview, and slipped onto fully-visible posts. --%>
           <div
             :if={@mode == :preview and @post.body != ""}
             id={@body_id}
@@ -724,17 +723,11 @@ defmodule VutuvWeb.PostComponents do
               href={@permalink}
               data-read-more
               class={[
-                "mt-1 inline-flex items-baseline gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700",
+                "mt-1 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700",
                 not @truncated? && "hidden"
               ]}
             >
               {gettext("Read more")}
-              <span
-                :if={@body_length_hint}
-                class="text-xs font-normal text-slate-500 dark:text-slate-400"
-              >
-                · {@body_length_hint}
-              </span>
             </.link>
           </div>
 
@@ -947,24 +940,6 @@ defmodule VutuvWeb.PostComponents do
       state -> state
     end
   end
-
-  # The "how long is the whole post" hint shown beside a preview's "Read more"
-  # link: the full body's word count, formatted (never a bare integer) and
-  # pluralised. `nil` in full mode (the whole post is on screen already) and for
-  # a bodyless image-only post (no link renders). Counts the full source, not the
-  # possibly-truncated snippet, so it answers "how long is the whole post".
-  defp preview_length_hint(%{mode: :preview, post: %{body: body}}) when body != "" do
-    count = body |> String.split() |> length()
-
-    ngettext(
-      "%{formatted} word total",
-      "%{formatted} words total",
-      count,
-      formatted: compact_count(count)
-    )
-  end
-
-  defp preview_length_hint(_), do: nil
 
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username
