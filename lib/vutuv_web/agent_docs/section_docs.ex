@@ -136,6 +136,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       degree: edu.degree,
       field_of_study: edu.field_of_study,
       description: edu.description,
+      # The CV category (issue #849): university | apprenticeship | school.
+      kind: edu.kind,
       start: year_month(edu.start_year, edu.start_month),
       end: year_month(edu.end_year, edu.end_month)
     }

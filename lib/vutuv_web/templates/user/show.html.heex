@@ -452,10 +452,21 @@ the resulting ~200px rail width. --%>
       </.empty_add>
 
       <%!-- A year-led date range on the left, the degree/school on a rail.
-      Entries arrive newest-first (Education.order_by_date). --%>
-      <div :if={@education != []}>
+      Entries arrive newest-first (Education.order_by_date) and, like the
+      section page, split into the CV categories (issue #849) under their own
+      headings once a non-university entry exists. --%>
+      <div
+        :for={{kind, entries} <- VutuvWeb.EducationHTML.group_by_kind(@education)}
+        class="mt-6 first:mt-0"
+      >
+        <h3
+          :if={VutuvWeb.EducationHTML.show_kind_headings?(@education)}
+          class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+        >
+          {VutuvWeb.EducationHTML.kind_label(kind)}
+        </h3>
         <div
-          :for={edu <- @education}
+          :for={edu <- entries}
           class="grid grid-cols-[6.5rem_1fr] items-start gap-3"
         >
           <div class="pt-0.5 text-right text-xs font-semibold leading-tight text-slate-500 dark:text-slate-400 tabular-nums">

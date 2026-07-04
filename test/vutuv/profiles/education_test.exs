@@ -80,4 +80,57 @@ defmodule Vutuv.Profiles.EducationTest do
       assert %{end_month: [_]} = errors_on(cs)
     end
   end
+
+  describe "kind (issue #849: university | apprenticeship | school)" do
+    test "defaults to university when not given" do
+      cs = changeset(%{})
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_field(cs, :kind) == "university"
+    end
+
+    test "accepts each known category" do
+      for kind <- Education.kinds() do
+        cs = changeset(%{"kind" => kind})
+
+        assert cs.valid?
+        assert Ecto.Changeset.get_field(cs, :kind) == kind
+      end
+    end
+
+    test "rejects an unknown category" do
+      cs = changeset(%{"kind" => "bootcamp"})
+
+      refute cs.valid?
+      assert %{kind: [_]} = errors_on(cs)
+    end
+
+    test "rejects nulling the category (the column is NOT NULL)" do
+      cs = changeset(%{"kind" => nil})
+
+      refute cs.valid?
+      assert %{kind: [_]} = errors_on(cs)
+    end
+  end
+
+  describe "group_by_kind/1" do
+    test "orders the groups university, apprenticeship, school and drops empty ones" do
+      abitur = %Education{kind: "school", school: "Gymnasium"}
+      degree = %Education{kind: "university", school: "MIT"}
+
+      assert Education.group_by_kind([abitur, degree]) == [
+               {"university", [degree]},
+               {"school", [abitur]}
+             ]
+    end
+
+    test "keeps the given (date) order within a group" do
+      newer = %Education{kind: "apprenticeship", school: "IHK 2024"}
+      older = %Education{kind: "apprenticeship", school: "IHK 2020"}
+
+      assert Education.group_by_kind([newer, older]) == [
+               {"apprenticeship", [newer, older]}
+             ]
+    end
+  end
 end

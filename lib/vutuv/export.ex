@@ -85,6 +85,7 @@ defmodule Vutuv.Export do
             :degree,
             :field_of_study,
             :description,
+            :kind,
             :start_month,
             :start_year,
             :end_month,

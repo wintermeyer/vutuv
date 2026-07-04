@@ -13,6 +13,12 @@
     <%= error_tag f, :degree %>
   </.editform_field>
 
+  <.editform_field form={f} field={:kind}>
+    <%= label f, :kind, gettext("Category") %>
+    <%= select f, :kind, kind_options() %>
+    <%= error_tag f, :kind %>
+  </.editform_field>
+
   <.editform_field form={f} field={:field_of_study}>
     <%= label f, :field_of_study, gettext("Field of study") %>
     <%= text_input f, :field_of_study %>

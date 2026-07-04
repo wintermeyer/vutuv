@@ -35,13 +35,13 @@ defmodule Vutuv.ExportTest do
     refute Map.has_key?(profile, :email_on_connection_request)
   end
 
-  test "education entries are included in the export" do
+  test "education entries are included in the export, with their CV category (issue #849)" do
     user = insert(:activated_user)
-    insert(:education, user: user, school: "Acme University", degree: "BSc")
+    insert(:education, user: user, school: "Acme University", degree: "BSc", kind: "school")
 
     data = Export.build(user)
 
-    assert [%{school: "Acme University", degree: "BSc"}] = data.educations
+    assert [%{school: "Acme University", degree: "BSc", kind: "school"}] = data.educations
   end
 
   test "work experiences carry their CV category (issue #840)" do

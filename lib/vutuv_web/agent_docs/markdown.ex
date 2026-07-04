@@ -288,6 +288,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # notes — both, like the HTML page shows them.
   defp education_line(edu) do
     period = work_period(edu)
+    kind_note = education_kind_note(edu)
     title = Enum.join(Enum.filter([edu.degree, edu.school], & &1), ", ")
 
     detail =
@@ -296,9 +297,22 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       |> Enum.map_join(" — ", &md_text/1)
 
     ["- ", title]
+    |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if detail != "", do: [": #{detail}"], else: [])
     |> Enum.join()
+  end
+
+  # The non-default education categories (issue #849) are called out on the
+  # entry line, like work_kind_note/1 does for work experiences; a plain
+  # degree stays unmarked. Shared with the text renderer.
+  @doc false
+  def education_kind_note(edu) do
+    case Map.get(edu, :kind) do
+      "apprenticeship" -> gettext("Vocational Training")
+      "school" -> gettext("School Education")
+      _university -> nil
+    end
   end
 
   @doc false

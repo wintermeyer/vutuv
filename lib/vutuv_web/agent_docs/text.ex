@@ -286,11 +286,13 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp education_line(edu) do
     period = Markdown.work_period(edu)
+    kind_note = Markdown.education_kind_note(edu)
     title = Enum.join(Enum.filter([edu.degree, edu.school], & &1), ", ")
     detail = [edu.field_of_study, edu.description] |> Enum.filter(& &1) |> Enum.join(" — ")
 
     "* " <>
       title <>
+      if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
       if(detail != "", do: ": #{detail}", else: "")
   end

@@ -16,6 +16,9 @@
     delete_to={~p"/settings/educations/#{@education}"}
   />
 
+  <h2 class="card__label"><%= gettext("Category") %></h2>
+  <p><%= kind_label(@education.kind) %></p>
+
   <h2 class="card__label"><%= gettext("Time Period") %></h2>
   <p>
     <%= format_duration(@education.start_month, @education.start_year, @education.end_month, @education.end_year) %>

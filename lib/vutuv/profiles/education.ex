@@ -4,11 +4,17 @@ defmodule Vutuv.Profiles.Education do
   use VutuvWeb, :model
   import Ecto.Query
 
+  # The CV categories (issue #849, mirroring WorkExperience's #840 kinds):
+  # a degree, a Berufsausbildung, general schooling. Display order everywhere
+  # is this list's order — the way a CV reads, highest attained first.
+  @kinds ~w(university apprenticeship school)
+
   schema "educations" do
     field(:school, :string)
     field(:degree, :string)
     field(:field_of_study, :string)
     field(:description, :string)
+    field(:kind, :string, default: "university")
     field(:start_month, :integer)
     field(:start_year, :integer)
     field(:end_month, :integer)
@@ -20,7 +26,22 @@ defmodule Vutuv.Profiles.Education do
     timestamps()
   end
 
-  @cast_fields ~w(school degree field_of_study description start_month start_year end_month end_year slug)a
+  @cast_fields ~w(school degree field_of_study description kind start_month start_year end_month end_year slug)a
+
+  @doc "The known categories, in display order."
+  def kinds, do: @kinds
+
+  @doc """
+  Splits an already-ordered list into its CV categories: `{kind, entries}`
+  pairs in `kinds/0` order, empty categories dropped, the given (date) order
+  kept within each — the same contract as `WorkExperience.group_by_kind/1`,
+  so all list renderings of this section group identically.
+  """
+  def group_by_kind(educations) do
+    groups = Enum.group_by(educations, & &1.kind)
+
+    for kind <- @kinds, entries = groups[kind], do: {kind, entries}
+  end
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -35,7 +56,8 @@ defmodule Vutuv.Profiles.Education do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
-    |> validate_required([:school])
+    |> validate_required([:school, :kind])
+    |> validate_inclusion(:kind, @kinds)
     # Match the varchar(255) columns (and cap the text description sanely) so
     # an oversized value is a changeset error, never a raised Postgres 22001 —
     # inside the import transaction that raise 500ed the whole import.

@@ -56,6 +56,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       description: "Thesis on load distribution"
     )
 
+    # An apprenticeship entry (issue #849): the HTML pages show its category
+    # heading, the docs carry the kind — asserted per-format below.
+    insert(:education,
+      user: user,
+      school: "Handwerkskammer Brückenstadt",
+      degree: "Gesellenbrief",
+      field_of_study: nil,
+      description: nil,
+      kind: "apprenticeship",
+      start_year: 2008,
+      end_year: 2011
+    )
+
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
@@ -109,6 +122,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # education
       "Bridge University",
       "MSc Structures",
+      # the apprenticeship entry (issue #849); its category is asserted
+      # per-format below (no single substring covers HTML label + raw kind)
+      "Handwerkskammer Brückenstadt",
+      "Gesellenbrief",
       # tags
       "Bridgebuilding",
       # links / contact / social / phone / address
@@ -124,6 +141,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     ]
 
     for fact <- facts, do: assert_fact_everywhere(rendered, fact)
+
+    # The education category (issue #849): the HTML page shows the group
+    # heading, md/txt mark the entry line, JSON/XML carry the raw kind.
+    assert rendered.html =~ "Vocational Training"
+    assert rendered.md =~ "[Vocational Training]"
+    assert rendered.txt =~ "[Vocational Training]"
+
+    assert Enum.any?(
+             Jason.decode!(rendered.json)["educations"],
+             &(&1["kind"] == "apprenticeship")
+           )
+
+    assert rendered.xml =~ "<kind>apprenticeship</kind>"
 
     # The counters: HTML renders "1 follower", the docs carry the number.
     assert rendered.html =~ "follower"
@@ -365,7 +395,9 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     assert Jason.decode!(rendered.json)["type"] == "work_experience"
 
-    [edu] = Repo.all(Ecto.assoc(user, :educations))
+    edu =
+      Repo.one!(from(e in Ecto.assoc(user, :educations), where: e.school == "Bridge University"))
+
     rendered = formats_for("/drift_tester/educations/#{edu.id}")
 
     for fact <- ["Bridge University", "Structural Engineering", "Thesis on load distribution"],

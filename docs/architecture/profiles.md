@@ -66,6 +66,18 @@ profile, owner CRUD on the management page, and Markdown / plain text / JSON /
 XML siblings under the same URL plus an extension (kept in sync by the
 agent-docs drift test), plus a line in the GDPR data export.
 
+Education entries carry a **category** too (issue #849, the twin of the
+work-experience kinds above): `educations.kind` is `university` |
+`apprenticeship` | `school`, default `university` (the correct reading of
+nearly every pre-existing row on a professional network; the rest are one
+edit away). Same mechanics as #840: a Kategorie select on the form, grouped
+headings (Studium / Berufsausbildung / Schulbildung) on every list rendering
+via `Education.group_by_kind/1`, shown only once a non-university entry
+exists; `kind` rides along in the agent formats and the GDPR export. A
+work-study program (duales Studium) or an apprenticeship's Berufsschule is
+deliberately **not** a linked entity — members file an entry in each section;
+revisit linking only if members ask.
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts and
