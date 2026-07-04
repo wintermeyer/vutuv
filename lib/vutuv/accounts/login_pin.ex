@@ -7,6 +7,10 @@ defmodule Vutuv.Accounts.LoginPin do
     field(:payload, :string)
     field(:type, :string)
     field(:minted_at, :naive_datetime)
+    # Set once the PIN has been successfully used. A re-submission of an
+    # already-consumed PIN is then reported as "already used", not "expired"
+    # (issue #839): `minted_at` alone could not tell the two apart.
+    field(:consumed_at, :naive_datetime)
     # `pin_hash` stores the peppered, salted HMAC of the PIN (hex), never plaintext.
     field(:pin_hash, :string)
     field(:pin_salt, :binary)
@@ -22,6 +26,7 @@ defmodule Vutuv.Accounts.LoginPin do
       :payload,
       :type,
       :minted_at,
+      :consumed_at,
       :pin_hash,
       :pin_salt,
       :pin_login_attempts

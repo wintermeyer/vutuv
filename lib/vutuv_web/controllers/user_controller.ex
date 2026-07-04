@@ -268,6 +268,11 @@ defmodule VutuvWeb.UserController do
         |> put_flash(:error, reason)
         |> render("delete_confirmation.html", body_class: "stretch")
 
+      {:already_used, message} ->
+        conn
+        |> put_flash(:info, message)
+        |> redirect(to: ~p"/#{user}")
+
       {:expired, message} ->
         conn
         |> put_flash(:error, message)

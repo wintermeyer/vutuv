@@ -260,8 +260,34 @@ defmodule Vutuv.AccountsTest do
       assert {:ok, %User{id: id}} = Accounts.check_pin(user, pin, "delete")
       assert id == user.id
 
-      # A consumed PIN is expired and cannot be replayed.
-      assert {:expired, _} = Accounts.check_pin(user, pin, "delete")
+      # A consumed PIN cannot be replayed, and it is reported as "already used"
+      # rather than "expired": a double-submit of the classic PIN form right
+      # after a successful login must not tell the member their fresh PIN timed
+      # out (issue #839).
+      assert {:already_used, _} = Accounts.check_pin(user, pin, "delete")
+    end
+
+    test "a re-submitted consumed login PIN reads as already used, not expired (issue #839)" do
+      user = insert(:user)
+      insert(:email, user: user, value: "dup@example.com")
+      pin = Accounts.gen_pin_for(user, "login")
+
+      # First submit logs in and consumes the PIN; the classic (non-LiveView)
+      # PIN form can be posted twice (double-tap, back navigation, a retried
+      # request), and that duplicate must not surface as "PIN expired".
+      assert {:ok, %User{}} = Accounts.check_pin("dup@example.com", pin, "login")
+      assert {:already_used, _} = Accounts.check_pin("dup@example.com", pin, "login")
+    end
+
+    test "re-minting a PIN clears the consumed marker" do
+      user = insert(:user)
+      pin = Accounts.gen_pin_for(user, "delete")
+      assert {:ok, %User{}} = Accounts.check_pin(user, pin, "delete")
+      assert {:already_used, _} = Accounts.check_pin(user, pin, "delete")
+
+      # A freshly requested PIN starts a clean life — never seen as already used.
+      pin = Accounts.gen_pin_for(user, "delete")
+      assert {:ok, %User{}} = Accounts.check_pin(user, pin, "delete")
     end
 
     test "returns the carried value for the email-change flow" do

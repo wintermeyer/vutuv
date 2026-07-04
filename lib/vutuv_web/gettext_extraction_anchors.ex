@@ -13,7 +13,8 @@ defmodule VutuvWeb.GettextExtractionAnchors do
   msgid, add the same literal here.
 
     * `Male` / `Female` / `Diverse` — `Vutuv.Accounts.User.gender_gettext/1`
-    * `Incorrect PIN` / `PIN expired` — the PIN check messages in `Vutuv.Accounts`
+    * `Incorrect PIN` / `PIN expired` / `This PIN has already been used.` — the
+      PIN check messages in `Vutuv.Accounts`
     * `Connected` — the connection relationship word guarded by
       `VutuvWeb.ConnectionVocabularyTest` (issue #797), asserted via the runtime
       API so the test file itself does not inject a msgid.
@@ -29,6 +30,7 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Diverse"),
       gettext("Incorrect PIN"),
       gettext("PIN expired"),
+      gettext("This PIN has already been used."),
       gettext("Connected")
     ]
   end
