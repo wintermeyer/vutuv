@@ -57,9 +57,10 @@ defmodule VutuvWeb.WellKnownController do
 
   def security_txt(conn, _params) do
     expires = DateTime.utc_now() |> DateTime.add(180, :day) |> DateTime.truncate(:second)
+    {_name, operator_email} = Application.fetch_env!(:vutuv, :operator_recipient)
 
     body = """
-    Contact: mailto:sw@wintermeyer-consulting.de
+    Contact: mailto:#{operator_email}
     Expires: #{DateTime.to_iso8601(expires)}
     Preferred-Languages: en, de
     Canonical: #{AgentDocs.abs_url("/.well-known/security.txt")}

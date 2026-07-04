@@ -29,6 +29,36 @@ defmodule Vutuv.Release do
   end
 
   @doc """
+  Grants admin rights to the member behind a username or email address — how a
+  production installation mints its (first) admin (`Vutuv.Accounts.promote_admin/1`;
+  the flag is never settable through a form or the API):
+
+      bin/vutuv eval 'Vutuv.Release.promote_admin("stefan.wintermeyer")'
+  """
+  def promote_admin(identifier) when is_binary(identifier) do
+    load_app()
+    [repo] = repos()
+
+    {:ok, _, _} =
+      Ecto.Migrator.with_repo(repo, fn _repo ->
+        case Vutuv.Accounts.promote_admin(identifier) do
+          {:ok, user} ->
+            IO.puts("@#{user.username} is an admin now.")
+
+          {:error, :not_found} ->
+            IO.puts(
+              "No member found for #{inspect(identifier)} (looked up as @handle and email)."
+            )
+
+          {:error, changeset} ->
+            IO.puts("Could not promote #{inspect(identifier)}: #{inspect(changeset.errors)}")
+        end
+      end)
+
+    :ok
+  end
+
+  @doc """
   Re-derives every served image version from the private originals per the
   current `Vutuv.Uploads.Spec` (see `Vutuv.Uploads.Regenerator`). Safe to run
   while the app serves traffic (only the repo is started — no port binding):

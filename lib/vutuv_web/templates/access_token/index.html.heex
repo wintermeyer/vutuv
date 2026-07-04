@@ -11,7 +11,7 @@
   <p class="text-sm text-slate-500 dark:text-slate-400">
     {gettext(
       "Personal access tokens let scripts and third-party tools use the vutuv API as you, limited to the permissions you pick. Revoking a token cuts off its access immediately. Documentation: "
-    )}<a href={~p"/developers"} class="font-semibold text-brand-600 hover:text-brand-700">vutuv.de/developers</a>
+    )}<a href={~p"/developers"} class="font-semibold text-brand-600 hover:text-brand-700">{VutuvWeb.Endpoint.host()}/developers</a>
   </p>
 
   <.secret_once

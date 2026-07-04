@@ -51,18 +51,25 @@ defmodule VutuvWeb.PageController do
   end
 
   def impressum(conn, _params) do
-    render(conn, "impressum.html")
+    render_legal(conn, "impressum", gettext("About us"))
   end
 
   def datenschutzerklaerung(conn, _params) do
-    render(conn, "datenschutzerklaerung.html")
+    render_legal(conn, "datenschutzerklaerung", gettext("Datenschutzerklärung"))
   end
 
-  # The platform terms of use (AGB / Nutzungsbedingungen). German legal text,
-  # hardcoded like the Impressum / Datenschutzerklärung (legal copy is not
-  # translated); incorporated into the contract via the sign-up consent line.
+  # The platform terms of use (AGB / Nutzungsbedingungen), incorporated into
+  # the contract via the sign-up consent line.
   def nutzungsbedingungen(conn, _params) do
-    render(conn, "nutzungsbedingungen.html", page_title: gettext("Nutzungsbedingungen"))
+    render_legal(conn, "nutzungsbedingungen", gettext("Nutzungsbedingungen"))
+  end
+
+  # The legal pages are per-installation content (every operator states their
+  # own identity), written by admins at /admin/legal as trusted Markdown and
+  # stored in Vutuv.Legal. Legal copy itself is not translated; only the title
+  # and the not-written-yet placeholder are.
+  defp render_legal(conn, slug, title) do
+    render(conn, "legal.html", page: Vutuv.Legal.get_page(slug), page_title: title)
   end
 
   @doc """

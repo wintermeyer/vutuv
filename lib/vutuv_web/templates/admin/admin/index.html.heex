@@ -169,6 +169,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="scale"
+      title={gettext("Legal pages")}
+      href={~p"/admin/legal"}
+      id="admin-legal-link"
+      cta={gettext("Edit the legal pages")}
+    >
+      {gettext(
+        "Impressum, Datenschutzerklärung and Nutzungsbedingungen: every installation publishes its own operator identity here."
+      )}
+    </.admin_card>
+
+    <.admin_card
       icon="key"
       title={gettext("API applications")}
       count={@api_apps_count}

@@ -4,11 +4,12 @@ Thanks for helping! The short version:
 
 ## Getting started
 
-Follow the [Development Setup](README.md#development-setup) in the README
-(`mise` for Erlang/Elixir, PostgreSQL 17, libvips, then `mix setup` and
-`mix phx.server`). Emails land in the browser at
+Follow the [Development Setup](docs/DEVELOPERS.md#development-setup) in the
+developer guide (`mise` for Erlang/Elixir, PostgreSQL 17, libvips, then
+`mix setup` and `mix phx.server`). Emails land in the browser at
 [/sent_emails](http://localhost:4000/sent_emails) — you'll need that for the
-PIN login flow.
+PIN login flow. Installing vutuv to *run* it (rather than develop it) is
+covered separately in [docs/ADMINS.md](docs/ADMINS.md).
 
 ## Ground rules
 

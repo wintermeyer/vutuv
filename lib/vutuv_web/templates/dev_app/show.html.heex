@@ -68,8 +68,8 @@
     </div>
 
     <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
-      {gettext("Authorize URL:")} <code>https://vutuv.de/oauth/authorize</code>
-      &middot; {gettext("Token URL:")} <code>https://vutuv.de/oauth/token</code>
+      {gettext("Authorize URL:")} <code>{VutuvWeb.Endpoint.url()}/oauth/authorize</code>
+      &middot; {gettext("Token URL:")} <code>{VutuvWeb.Endpoint.url()}/oauth/token</code>
       &middot;
       <a
         href={~p"/developers/authentication"}

@@ -410,6 +410,14 @@ defmodule VutuvWeb.Router do
     post("/deliverability/users/:id/thaw", DeliverabilityController, :thaw)
     post("/deliverability/emails/:id/clear", DeliverabilityController, :clear_address)
 
+    # The installation's legal pages (Impressum, Datenschutzerklärung,
+    # Nutzungsbedingungen): per-installation trusted Markdown, edited here,
+    # rendered by the public PageController routes. The set of pages is fixed,
+    # so there is no :new/:create/:delete.
+    get("/legal", LegalPageController, :index)
+    get("/legal/:slug/edit", LegalPageController, :edit)
+    put("/legal/:slug", LegalPageController, :update)
+
     # The email newsletter ("Rundbrief"): compose/store a draft, send a test to
     # one address, broadcast to all members, and read the per-recipient delivery
     # log. See Vutuv.Newsletters; test/broadcast are the two extra POST actions.

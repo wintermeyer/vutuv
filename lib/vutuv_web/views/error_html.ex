@@ -53,10 +53,10 @@ defmodule VutuvWeb.ErrorHTML do
       <h1 class="error-page__title">{gettext("This area is reserved for administrators.")}</h1>
       <p class="error-page__hint">
         {gettext(
-          "Admin rights are granted by the operator of this vutuv instance, directly in the database:"
+          "Admin rights are granted by the operator of this vutuv instance, from the server's command line:"
         )}
       </p>
-      <p class="error-page__hint"><code>UPDATE users SET administrator = TRUE WHERE ...;</code></p>
+      <p class="error-page__hint"><code>mix vutuv.admin.promote &lt;handle&gt;</code></p>
       <p class="error-page__hint">
         {gettext("If you do not run this instance yourself, please contact the operator.")}
         <a href="/impressum">{gettext("Legal notice")}</a>
@@ -92,9 +92,12 @@ defmodule VutuvWeb.ErrorHTML do
           "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
         )}
       </p>
+      <%!-- The example must exist on every installation, so it points at the
+            founder's profile on vutuv.de absolutely instead of assuming this
+            host has a member called wintermeyer. --%>
       <p class="error-page__hint">
         {gettext("For example, this profile really exists:")}
-        <a href="/wintermeyer">vutuv.de/wintermeyer</a>
+        <a href="https://vutuv.de/wintermeyer">vutuv.de/wintermeyer</a>
       </p>
       <p class="error-page__hint">
         {gettext("Do not know the username? Try the")}

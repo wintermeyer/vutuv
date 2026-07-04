@@ -3,8 +3,8 @@ defmodule VutuvWeb.Admin.AdminAccessTest do
 
   # The admin area 403s for everyone but admins - but a logged-in member who
   # wonders "how does one become an admin here?" deserves an answer instead
-  # of a bare error: admin rights are granted by the instance operator,
-  # directly in the database.
+  # of a bare error: admin rights are granted by the instance operator, from
+  # the server's command line (mix vutuv.admin.promote / Release.promote_admin).
 
   test "a logged-in non-admin gets the how-to-become-admin explanation", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
@@ -13,7 +13,10 @@ defmodule VutuvWeb.Admin.AdminAccessTest do
     html = html_response(conn, 403)
 
     assert html =~ "reserved for administrators"
-    assert html =~ "administrator = TRUE"
+    assert html =~ "vutuv.admin.promote"
+    # The pre-v7 column name is history; the old SQL hint must stay gone
+    # (the column is admin? now, so that statement would just error).
+    refute html =~ "administrator = TRUE"
     assert html =~ ~p"/impressum"
   end
 
@@ -21,7 +24,7 @@ defmodule VutuvWeb.Admin.AdminAccessTest do
     conn = get(conn, ~p"/admin")
 
     assert redirected_to(conn)
-    refute conn.resp_body =~ "administrator = TRUE"
+    refute conn.resp_body =~ "vutuv.admin.promote"
   end
 
   test "an admin passes through", %{conn: conn} do

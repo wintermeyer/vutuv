@@ -13,13 +13,16 @@ defmodule VutuvWeb.RobotsTxt do
 
   alias VutuvWeb.ContentPolicy
 
-  @header """
-  # robots.txt for vutuv.de
-  #
-  # vutuv is the friendly social/business network.
-  # Humans and robots are welcome and overly enthusiastic crawlers
-  # are politely asked to read the house rules.
-  """
+  # Built at call time so the comment names the installation's own host.
+  defp header do
+    """
+    # robots.txt for #{VutuvWeb.Endpoint.host()}
+    #
+    # vutuv is the friendly social/business network.
+    # Humans and robots are welcome and overly enthusiastic crawlers
+    # are politely asked to read the house rules.
+    """
+  end
 
   @path_rules """
   # Help yourself to the public stuff: profiles, tags, listings.
@@ -64,7 +67,7 @@ defmodule VutuvWeb.RobotsTxt do
 
   def render(:permissive) do
     [
-      @header,
+      header(),
       group("everyone", ["*"], @path_rules, ContentPolicy.render_signals(true, true, true)),
       "\n# AI crawlers are welcome too — same house rules, said explicitly.\n",
       group(nil, @training_bots ++ @retrieval_bots, @path_rules, allowed_signals(:permissive)),
@@ -75,7 +78,7 @@ defmodule VutuvWeb.RobotsTxt do
 
   def render(:block_training) do
     [
-      @header,
+      header(),
       group("everyone", ["*"], @path_rules, allowed_signals(:block_training)),
       "\n# Retrieval and AI search may read; model training may not.\n",
       group(nil, @retrieval_bots, @path_rules, allowed_signals(:block_training)),

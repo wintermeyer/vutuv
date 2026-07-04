@@ -844,6 +844,34 @@ defmodule Vutuv.Accounts do
   end
 
   @doc """
+  Grants admin rights to the member behind a username or email address.
+
+  `admin?` is deliberately never castable through any form or the API, so this
+  is the one code path that sets it — called from the command line when an
+  installation mints its (first) admin: `mix vutuv.admin.promote <handle>` in
+  development, `bin/vutuv eval 'Vutuv.Release.promote_admin("<handle>")'` on a
+  production release. Idempotent.
+  """
+  def promote_admin(identifier) when is_binary(identifier) do
+    identifier = identifier |> String.trim() |> String.downcase()
+
+    case get_user_by_username(identifier) || get_user_by_email_value(identifier) do
+      nil -> {:error, :not_found}
+      user -> user |> Ecto.Changeset.change(admin?: true) |> Repo.update()
+    end
+  end
+
+  defp get_user_by_email_value(value) do
+    Repo.one(
+      from(u in User,
+        join: e in assoc(u, :emails),
+        where: e.value == ^value,
+        limit: 1
+      )
+    )
+  end
+
+  @doc """
   Resolves many usernames to their members in **one** query, keyed by the
   lowercased username. Powers the `@handle` mention links the Markdown renderer
   writes (`VutuvWeb.Markdown`), so a post or message with several mentions costs

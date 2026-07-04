@@ -1,0 +1,23 @@
+<div class="mx-auto max-w-3xl py-6">
+  <.page_header title={@page_title} />
+
+  <.card class="leading-relaxed text-slate-700 dark:text-slate-300 [&_a]:font-medium [&_a]:text-brand-600 hover:[&_a]:text-brand-700 [&_h3]:mt-8 [&_h3]:mb-3 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-900 dark:[&_h3]:text-white [&_h4]:mt-6 [&_h4]:mb-2 [&_h4]:font-semibold [&_h4]:text-slate-900 dark:[&_h4]:text-white">
+    <%= if @page do %>
+      <div class="markdown text-slate-800 dark:text-slate-200">
+        {raw(VutuvWeb.DevDocMarkdown.to_html(@page.body, breaks: true))}
+      </div>
+    <% else %>
+      <p class="card__empty">
+        {gettext("The operator of this installation has not published this page yet.")}
+      </p>
+      <p :if={@current_user && @current_user.admin?} class="mt-4 text-sm">
+        <.link
+          href={~p"/admin/legal"}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Write it under Admin › Legal pages")}
+        </.link>
+      </p>
+    <% end %>
+  </.card>
+</div>

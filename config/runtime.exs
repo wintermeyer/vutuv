@@ -37,13 +37,89 @@ if config_env() == :prod do
   host = System.get_env("PHX_HOST") || "vutuv.de"
   port = String.to_integer(System.get_env("PORT") || "4003")
 
+  # The public scheme. https is the right answer on the internet; an intranet
+  # installation without TLS sets PHX_SCHEME=http (and usually PHX_URL_PORT).
+  scheme = System.get_env("PHX_SCHEME") || "https"
+
+  default_url_port = if scheme == "https", do: "443", else: "80"
+  url_port = String.to_integer(System.get_env("PHX_URL_PORT") || default_url_port)
+
+  # Allowed websocket origins: the canonical host plus its www. sibling (a
+  # tolerated alias that redirects; the canonical domain carries no www).
+  # CHECK_ORIGINS appends extra origins, comma-separated, for installations
+  # served under more than one name.
+  extra_origins =
+    "CHECK_ORIGINS"
+    |> System.get_env("")
+    |> String.split(",", trim: true)
+    |> Enum.map(&String.trim/1)
+
+  url_authority = if url_port in [80, 443], do: host, else: "#{host}:#{url_port}"
+
   config :vutuv, VutuvWeb.Endpoint,
     server: true,
-    url: [host: host, port: 443, scheme: "https"],
+    url: [host: host, port: url_port, scheme: scheme],
     http: [ip: {127, 0, 0, 1}, port: port],
     secret_key_base: secret_key_base,
-    check_origin: ["https://#{host}", "https://www.vutuv.de"],
-    public_url: "https://#{host}/"
+    check_origin:
+      ["#{scheme}://#{url_authority}", "#{scheme}://www.#{url_authority}"] ++ extra_origins,
+    public_url: "#{scheme}://#{url_authority}/"
+
+  # Outbound SMTP. The defaults deliver in plaintext to a local relay on the
+  # loopback (the vutuv.de production setup: Postfix on the same host).
+  # STARTTLS to 127.0.0.1 fails the handshake there ("wrong version number")
+  # and silently drops the mail; TLS on loopback adds nothing, and Postfix
+  # still uses TLS for its onward hops to the real MX. An installation using
+  # a remote smarthost sets SMTP_RELAY/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD
+  # and SMTP_TLS=always (STARTTLS) or SMTP_SSL=true (implicit TLS, port 465).
+  smtp_tls =
+    case System.get_env("SMTP_TLS", "never") do
+      "always" -> :always
+      "if_available" -> :if_available
+      _never -> :never
+    end
+
+  config :vutuv, Vutuv.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: System.get_env("SMTP_RELAY") || "127.0.0.1",
+    port: String.to_integer(System.get_env("SMTP_PORT") || "25"),
+    username: System.get_env("SMTP_USERNAME") || "",
+    password: System.get_env("SMTP_PASSWORD") || "",
+    tls: smtp_tls,
+    ssl: System.get_env("SMTP_SSL") == "true",
+    retries: 3
+
+  # Operator identity overrides (defaults in config/config.exs are the
+  # vutuv.de values; see the "Operator identity" block there).
+  if from_address = System.get_env("MAILER_FROM_ADDRESS") do
+    config :vutuv, :mailer_from, {System.get_env("MAILER_FROM_NAME") || "vutuv", from_address}
+  end
+
+  if bounce_address = System.get_env("BOUNCE_ADDRESS") do
+    config :vutuv, :bounce_address, bounce_address
+  end
+
+  if appeal_reply_to = System.get_env("APPEAL_REPLY_TO") do
+    config :vutuv, :appeal_reply_to, appeal_reply_to
+  end
+
+  if operator_email = System.get_env("OPERATOR_EMAIL") do
+    config :vutuv,
+           :operator_recipient,
+           {System.get_env("OPERATOR_NAME") || operator_email, operator_email}
+  end
+
+  if operator_name = System.get_env("OPERATOR_NAME") do
+    config :vutuv, :operator_name, operator_name
+  end
+
+  if operator_url = System.get_env("OPERATOR_URL") do
+    config :vutuv, :operator_url, operator_url
+  end
+
+  if operator_address = System.get_env("OPERATOR_ADDRESS") do
+    config :vutuv, :operator_address, operator_address
+  end
 
   # Avatars and URL screenshots are written under this root and served by
   # nginx (location /avatars/, /screenshots/). Override with UPLOADS_DIR_PREFIX;
@@ -70,7 +146,7 @@ if config_env() == :prod do
   config :vutuv, :post_image_serving, :send_file
 
   # Bearer token for POST /webhooks/bounces (the Postfix bounce pipe, see
-  # README "Email bounce handling"). Unset => the endpoint 404s, bounce
+  # docs/ADMINS.md "Email deliverability"). Unset => the endpoint 404s, bounce
   # handling is simply off; nothing else breaks.
   config :vutuv, :bounce_webhook_token, System.get_env("BOUNCE_WEBHOOK_TOKEN")
 

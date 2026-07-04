@@ -117,10 +117,10 @@ defmodule VutuvWeb.EmailComponents do
                 </tr>
                 <tr>
                   <td class="email-footer" style={footer_style()}>
-                    <p style="margin:0 0 2px;">vutuv is a service provided by Wintermeyer Consulting.
-                      <a href="https://wintermeyer-consulting.de" style="color:#475569;">wintermeyer-consulting.de</a>
+                    <p style="margin:0 0 2px;">vutuv is a service provided by {operator_name()}.
+                      <a href={operator_url()} style="color:#475569;">{operator_url_label()}</a>
                     </p>
-                    <p style="margin:0 0 2px;">Johannes-Müller-Str. 10 - 56068 Koblenz - Germany</p>
+                    <p style="margin:0 0 2px;">{operator_address()}</p>
                   </td>
                 </tr>
               </table>
@@ -309,6 +309,15 @@ defmodule VutuvWeb.EmailComponents do
     </.email_muted>
     """
   end
+
+  # The operator credit in the footer follows the per-installation config
+  # (see the "Operator identity" block in config/config.exs).
+  defp operator_name, do: Application.fetch_env!(:vutuv, :operator_name)
+  defp operator_url, do: Application.fetch_env!(:vutuv, :operator_url)
+  defp operator_address, do: Application.fetch_env!(:vutuv, :operator_address)
+
+  # The visible link text: the URL without its scheme ("wintermeyer-consulting.de").
+  defp operator_url_label, do: String.replace(operator_url(), ~r{^https?://}, "")
 
   # Style strings, built here (where the @font/@mono module attributes work) and
   # called from the templates as `style={p_style()}` etc.

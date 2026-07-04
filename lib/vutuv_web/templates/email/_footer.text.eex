@@ -1,3 +1,3 @@
 <% _ = assigns %>--
-vutuv is a service provided by Wintermeyer Consulting. https://wintermeyer-consulting.de
-Johannes-Müller-Str. 10 - 56068 Koblenz - Germany
+vutuv is a service provided by <%= Application.fetch_env!(:vutuv, :operator_name) %>. <%= Application.fetch_env!(:vutuv, :operator_url) %>
+<%= Application.fetch_env!(:vutuv, :operator_address) %>

@@ -90,7 +90,19 @@ defmodule VutuvWeb.PageControllerTest do
   end
 
   describe "GET /nutzungsbedingungen" do
+    test "renders a neutral placeholder while the operator wrote nothing yet",
+         %{conn: conn} do
+      body = conn |> get(~p"/nutzungsbedingungen") |> html_response(200)
+
+      assert body =~ "Nutzungsbedingungen"
+      assert body =~ "not published this page yet"
+      # No operator identity leaks from the old hardcoded template (the
+      # company name itself stays in the shared footer, so probe the street).
+      refute body =~ "Johannes-Müller-Str."
+    end
+
     test "renders the terms of use page", %{conn: conn} do
+      seed_legal!("nutzungsbedingungen")
       body = conn |> get(~p"/nutzungsbedingungen") |> html_response(200)
 
       assert body =~ "Nutzungsbedingungen"
@@ -99,13 +111,17 @@ defmodule VutuvWeb.PageControllerTest do
       # A few load-bearing sections of the actual terms.
       assert body =~ "Haftung"
       assert body =~ "Schlussbestimmungen"
+      # The Markdown body arrives rendered, not as raw source.
+      assert body =~ "<h3"
+      refute body =~ "### §"
       # It is finished text now, not a marked-up draft.
       refute body =~ "noch nicht rechtsverbindlich"
     end
   end
 
   describe "GET /datenschutzerklaerung" do
-    test "renders the vutuv-specific privacy policy", %{conn: conn} do
+    test "renders the vutuv.de privacy policy once seeded", %{conn: conn} do
+      seed_legal!("datenschutzerklaerung")
       body = conn |> get(~p"/datenschutzerklaerung") |> html_response(200)
 
       # The honest, upfront note leads the page: vutuv only works if people
@@ -153,6 +169,7 @@ defmodule VutuvWeb.PageControllerTest do
     # can be abused for reverse tabnabbing. The page no longer carries any such
     # links, but should one ever return it must keep rel="noopener noreferrer".
     test "any external target=_blank links carry rel=noopener noreferrer" do
+      seed_legal!("datenschutzerklaerung")
       body = build_conn() |> get(~p"/datenschutzerklaerung") |> html_response(200)
 
       for [anchor] <- Regex.scan(~r/<a[^>]*target="_blank"[^>]*>/, body) do
@@ -175,7 +192,7 @@ defmodule VutuvWeb.PageControllerTest do
       # It names the placeholder and links a real example profile.
       assert body =~ "username"
       assert body =~ "wintermeyer"
-      assert body =~ ~s(href="/wintermeyer")
+      assert body =~ ~s(href="https://vutuv.de/wintermeyer")
     end
 
     # The German username help text points at vutuv.de/benutzername, so the
@@ -183,7 +200,7 @@ defmodule VutuvWeb.PageControllerTest do
     test "the German placeholder /benutzername shows the same helper", %{conn: conn} do
       body = conn |> get(~p"/benutzername") |> html_response(404)
 
-      assert body =~ ~s(href="/wintermeyer")
+      assert body =~ ~s(href="https://vutuv.de/wintermeyer")
     end
 
     test "renders the placeholder page even when a member exists at the example slug",
@@ -194,7 +211,7 @@ defmodule VutuvWeb.PageControllerTest do
 
       body = conn |> get(~p"/username") |> html_response(404)
 
-      assert body =~ ~s(href="/wintermeyer")
+      assert body =~ ~s(href="https://vutuv.de/wintermeyer")
     end
   end
 
@@ -216,7 +233,7 @@ defmodule VutuvWeb.PageControllerTest do
     test "shows the placeholder helper to an anonymous visitor", %{conn: conn} do
       body = conn |> get("/%7B%7Busername%7D%7D") |> html_response(404)
 
-      assert body =~ ~s(href="/wintermeyer")
+      assert body =~ ~s(href="https://vutuv.de/wintermeyer")
     end
   end
 
@@ -628,5 +645,17 @@ defmodule VutuvWeb.PageControllerTest do
         where: e.value == ^value
       )
     )
+  end
+
+  # Stores the vutuv.de legal text for a page, from the same frozen snapshot
+  # the established-install seed migration reads (fresh DBs like this test DB
+  # deliberately get no rows, so each test seeds what it asserts).
+  defp seed_legal!(slug) do
+    body =
+      :vutuv
+      |> Application.app_dir("priv/repo/seed_data/legal/#{slug}.md")
+      |> File.read!()
+
+    {:ok, _page} = Vutuv.Legal.upsert_page(slug, %{body: body})
   end
 end

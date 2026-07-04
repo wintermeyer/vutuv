@@ -15,9 +15,14 @@ defmodule VutuvWeb.DevDocMarkdown do
   A Markdown string to an HTML string, with an `id` on every heading derived
   from its text (lowercased, punctuation dropped, spaces to hyphens, duplicates
   suffixed `-1`, `-2`, ...), matching the slug GitHub generates.
+
+  `opts` are Earmark options. The legal pages pass `breaks: true` (a single
+  newline becomes a hard `<br>`, like the newsletter renderer) so admins can
+  write address blocks naturally; the dev docs keep the default paragraph
+  semantics.
   """
-  def to_html(markdown) when is_binary(markdown) do
-    {:ok, ast, _messages} = Earmark.as_ast(markdown)
+  def to_html(markdown, opts \\ []) when is_binary(markdown) do
+    {:ok, ast, _messages} = Earmark.as_ast(markdown, opts)
 
     ast
     |> add_heading_ids()

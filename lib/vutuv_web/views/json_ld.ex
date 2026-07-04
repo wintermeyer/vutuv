@@ -55,7 +55,7 @@ defmodule VutuvWeb.JsonLd do
       "@context" => "https://schema.org",
       "@type" => "WebSite",
       "name" => "vutuv",
-      "alternateName" => "www.vutuv.de",
+      "alternateName" => "www." <> VutuvWeb.Endpoint.host(),
       "url" => VutuvWeb.Endpoint.url(),
       "potentialAction" => %{
         "@type" => "SearchAction",

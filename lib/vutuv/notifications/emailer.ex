@@ -29,8 +29,18 @@ defmodule Vutuv.Notifications.Emailer do
   alias VutuvWeb.EmailText
   alias VutuvWeb.Plug.Locale
 
-  @from_address {"vutuv", "no-reply@vutuv.de"}
-  @from_domain @from_address |> elem(1) |> String.split("@") |> List.last()
+  # The visible From ({name, address}) on every message. Per-installation:
+  # config :vutuv, :mailer_from, overridable at boot via MAILER_FROM_NAME /
+  # MAILER_FROM_ADDRESS (config/runtime.exs).
+  defp from_address, do: Application.fetch_env!(:vutuv, :mailer_from)
+
+  defp from_domain, do: from_address() |> elem(1) |> String.split("@") |> List.last()
+
+  # The operator of this installation: receives the daily report, the ad
+  # bookings and the account-deleted notices — never a member-facing address.
+  # config :vutuv, :operator_recipient, overridable via OPERATOR_NAME /
+  # OPERATOR_EMAIL (config/runtime.exs).
+  defp operator_recipient, do: Application.fetch_env!(:vutuv, :operator_recipient)
 
   # Always-safe headers for every message.
   #
@@ -43,11 +53,14 @@ defmodule Vutuv.Notifications.Emailer do
     {"X-Auto-Response-Suppress", "All"}
   ]
 
-  # Opt-in headers for bulk mail only (see bulk_headers/1).
-  @bulk_headers [
-    {"Precedence", "bulk"},
-    {"List-Unsubscribe", "<mailto:no-reply@vutuv.de?subject=unsubscribe>"}
-  ]
+  # Opt-in headers for bulk mail only (see bulk_headers/1). Built at call time
+  # because the unsubscribe mailto follows the configured From address.
+  defp bulk_header_list do
+    [
+      {"Precedence", "bulk"},
+      {"List-Unsubscribe", "<mailto:#{elem(from_address(), 1)}?subject=unsubscribe>"}
+    ]
+  end
 
   @doc """
   Base builder every email starts from. Sets the `From` and the auto-generated
@@ -55,7 +68,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def base_email do
     new()
-    |> from(@from_address)
+    |> from(from_address())
     |> stamp_headers()
   end
 
@@ -136,14 +149,14 @@ defmodule Vutuv.Notifications.Emailer do
   defp message_id(%Swoosh.Email{headers: %{"Message-ID" => _}} = email), do: email
 
   defp message_id(email),
-    do: header(email, "Message-ID", "<#{Vutuv.UUIDv7.generate()}@#{@from_domain}>")
+    do: header(email, "Message-ID", "<#{Vutuv.UUIDv7.generate()}@#{from_domain()}>")
 
   @doc """
   Adds the bulk-only headers (`Precedence: bulk`, `List-Unsubscribe`). These are
   **not** safe for one-to-one transactional mail because `Precedence: bulk` can
   hurt inbox placement, so they are opt-in and applied only to bulk mail.
   """
-  def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, @bulk_headers)
+  def bulk_headers(%Swoosh.Email{} = email), do: put_headers(email, bulk_header_list())
 
   def login_email(pin, email, %Vutuv.Accounts.User{email_confirmed?: false} = user) do
     gen_email(pin, email, user, "registration_email", fn ->
@@ -313,8 +326,10 @@ defmodule Vutuv.Notifications.Emailer do
   # mailto is the fallback for everything else. Transactional mail (PINs,
   # moderation notices) must NOT carry these - it cannot be opted out of.
   defp unsubscribe_headers(email, url) do
+    mailto = "mailto:#{elem(from_address(), 1)}?subject=unsubscribe"
+
     email
-    |> header("List-Unsubscribe", "<#{url}>, <mailto:no-reply@vutuv.de?subject=unsubscribe>")
+    |> header("List-Unsubscribe", "<#{url}>, <#{mailto}>")
     |> header("List-Unsubscribe-Post", "List-Unsubscribe=One-Click")
   end
 
@@ -418,8 +433,6 @@ defmodule Vutuv.Notifications.Emailer do
 
   ## Ad bookings (see Vutuv.Ads.book_ad/2, the only caller)
 
-  @ad_booking_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
-
   @doc """
   The operator notice for a new ad booking: the booked day, the billing
   address and the full ad text — everything the manually written invoice
@@ -430,7 +443,7 @@ defmodule Vutuv.Notifications.Emailer do
     base_email()
     # A booking the member just made; never suppressed (see deliver/1).
     |> put_private(:user_initiated, true)
-    |> to(@ad_booking_recipient)
+    |> to(operator_recipient())
     |> subject("vutuv Anzeigenbuchung für den #{Calendar.strftime(ad.day, "%d.%m.%Y")}")
     |> render_bodies("ad_booking", "de", %{
       ad: ad,
@@ -471,8 +484,6 @@ defmodule Vutuv.Notifications.Emailer do
 
   ## Operator notices (fixed German recipient, no member ever receives them)
 
-  @operator_recipient {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
-
   @doc """
   The operator's daily report: confirmed-by-PIN new registrations, the day's
   posts/reposts/likes/bookmarks, and the day's email-deliverability events
@@ -482,14 +493,14 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def daily_report_email(%DailyReport{} = report) do
     base_email()
-    |> to(@operator_recipient)
+    |> to(operator_recipient())
     |> subject(DailyReport.email_subject(report))
     |> render_bodies("daily_report", "de", %{report: report, url: public_url()})
   end
 
   @doc """
   Operator notice that an admin deleted a member account. Goes to the operator
-  (`@operator_recipient`) and **never** to the deleted member: it records what
+  (the configured `:operator_recipient`) and **never** to the deleted member: it records what
   was removed - the account's name, @handle, id, every email address and phone
   number, the post count and the join date, all captured before the cascade -
   plus the exact deletion timestamp (UTC and Europe/Berlin wall-clock). Fixed
@@ -499,7 +510,7 @@ defmodule Vutuv.Notifications.Emailer do
   """
   def account_deleted_notice(snapshot) do
     base_email()
-    |> to(@operator_recipient)
+    |> to(operator_recipient())
     |> subject("vutuv: Konto @#{snapshot.username} gelöscht")
     |> render_bodies("account_deleted_notice", "de", %{account: deletion_display(snapshot)})
   end

@@ -84,16 +84,42 @@ config :vutuv, :fetch_bluesky_posts, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
+# --- Operator identity ------------------------------------------------------
+# Everything naming the party who runs THIS installation lives behind these
+# keys, so another company can run vutuv without editing source. The defaults
+# are the vutuv.de values; config/runtime.exs overrides each from an
+# environment variable at boot (names in parentheses). The legal pages
+# (Impressum etc.) are per-installation data too — see Vutuv.Legal.
+
+# The visible From ({name, address}) on every outbound email
+# (MAILER_FROM_NAME / MAILER_FROM_ADDRESS).
+config :vutuv, :mailer_from, {"vutuv", "no-reply@vutuv.de"}
+
 # The SMTP envelope sender (Sender header -> MAIL FROM) for all outbound
 # mail: bounces (DSNs) come back to this one mailbox, which production
 # Postfix pipes into POST /webhooks/bounces (see Vutuv.Notifications.Bounces).
+# (BOUNCE_ADDRESS)
 config :vutuv, :bounce_address, "bounces@vutuv.de"
 
 # The visible From (no-reply@vutuv.de) is not read, but the strike-3
 # deactivation mail invites the member to appeal by replying. That one mail
 # carries a Reply-To to this monitored contact so an appeal reaches a human
 # (see Vutuv.Notifications.Emailer.moderation_deactivation_email/2).
+# (APPEAL_REPLY_TO)
 config :vutuv, :appeal_reply_to, "sw@wintermeyer-consulting.de"
+
+# Who receives the operator notices (daily report, ad bookings, account-
+# deleted records) — never a member-facing address. Also the security.txt
+# contact. (OPERATOR_NAME / OPERATOR_EMAIL)
+config :vutuv, :operator_recipient, {"Stefan Wintermeyer", "sw@wintermeyer-consulting.de"}
+
+# The operator credit in the site and email footers ("a service provided
+# by ..."), and the one-line postal address every email footer carries.
+# (OPERATOR_NAME / OPERATOR_URL / OPERATOR_ADDRESS)
+config :vutuv, :operator_name, "Wintermeyer Consulting"
+config :vutuv, :operator_url, "https://wintermeyer-consulting.de"
+config :vutuv, :operator_address, "Johannes-Müller-Str. 10 - 56068 Koblenz - Germany"
+# -----------------------------------------------------------------------------
 
 # Mail is delivered via SMTP (prod) and the Local/Test adapters elsewhere, none
 # of which need an HTTP API client. Disabling it avoids pulling in hackney.

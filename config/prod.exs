@@ -13,16 +13,6 @@ config :vutuv, VutuvWeb.Endpoint,
 
 config :logger, level: :error
 
-config :vutuv, Vutuv.Mailer,
-  adapter: Swoosh.Adapters.SMTP,
-  relay: "127.0.0.1",
-  port: 25,
-  username: "",
-  password: "",
-  # Deliver in plaintext over the loopback to the local Postfix relay.
-  # STARTTLS to 127.0.0.1 fails the handshake here ("wrong version number")
-  # and silently drops the mail; TLS on loopback adds nothing, and Postfix
-  # still uses TLS for its onward hops to the real MX.
-  tls: :never,
-  ssl: false,
-  retries: 3
+# The SMTP mailer is configured at boot in config/runtime.exs (SMTP_RELAY,
+# SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_TLS, SMTP_SSL), defaulting to
+# the local loopback relay the vutuv.de production host runs.

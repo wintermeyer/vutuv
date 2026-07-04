@@ -1,0 +1,58 @@
+<.page_header
+  title={gettext("Legal pages")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Legal pages")]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p class="mb-4 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Every installation states its own operator identity here. These pages are legally required in Germany; a page that is not written yet shows visitors a neutral placeholder."
+      )}
+    </p>
+
+    <div class="card__tablewrap">
+      <table class="pure-table">
+        <thead>
+          <tr>
+            <th>{gettext("Page")}</th>
+            <th>{gettext("Status")}</th>
+            <th>{gettext("Last edited")}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr :for={slug <- Vutuv.Legal.slugs()}>
+            <td>
+              <.link href={page_path(slug)} class="font-medium text-brand-600 hover:text-brand-700">
+                {page_name(slug)}
+              </.link>
+            </td>
+            <td>
+              <%= if @pages[slug] do %>
+                {gettext("Published")}
+              <% else %>
+                <span class="font-semibold text-red-600 dark:text-red-400">
+                  {gettext("Not written yet")}
+                </span>
+              <% end %>
+            </td>
+            <td>
+              <%= if page = @pages[slug] do %>
+                {fmt(page.updated_at)}
+              <% end %>
+            </td>
+            <td class="text-right">
+              <.link
+                href={~p"/admin/legal/#{slug}/edit"}
+                class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+              >
+                {gettext("Edit")}
+              </.link>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

@@ -165,6 +165,12 @@ defmodule VutuvWeb.Admin.AdminHTML do
         <% "megaphone" -> %>
           <path d="M4 9.5v5a1 1 0 0 0 1 1h2.6l8 4.4V4.1l-8 4.4H5a1 1 0 0 0-1 1Z" />
           <path d="M18 9.6a3.5 3.5 0 0 1 0 4.8" />
+        <% "scale" -> %>
+          <path d="M12 3v18" />
+          <path d="M4 7h16" />
+          <path d="m7 7-3 7a3 3 0 0 0 6 0L7 7Z" />
+          <path d="m17 7-3 7a3 3 0 0 0 6 0l-3-7Z" />
+          <path d="M8 21h8" />
         <% "trash" -> %>
           <path d="M4 6.5h16" />
           <path d="M9 6.5V4.8a1.3 1.3 0 0 1 1.3-1.3h3.4A1.3 1.3 0 0 1 15 4.8v1.7" />

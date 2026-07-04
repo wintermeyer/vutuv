@@ -61,21 +61,15 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     case Repo.insert(changeset) do
       {:ok, social_media_account} ->
+        # The GitHub wink is product-level (the vutuv source repo), so it fits
+        # every installation; operator-specific plugs (the old @vutuv Twitter /
+        # @wintermeyer Instagram lines) were dropped when vutuv became
+        # installable by third parties.
         info =
           case social_media_account.provider do
-            "Twitter" ->
-              gettext(
-                "Social media account created successfully. Shameless plug: Follow our Twitter account @vutuv"
-              )
-
             "GitHub" ->
               gettext(
                 "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
-              )
-
-            "Instagram" ->
-              gettext(
-                "Social media account created successfully. Shameless plug: Check out the Instagram account of @wintermeyer"
               )
 
             _ ->

@@ -1,0 +1,45 @@
+<.page_header
+  title={page_name(@slug)}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Legal pages"), ~p"/admin/legal"},
+    page_name(@slug)
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <.form :let={f} for={@changeset} action={~p"/admin/legal/#{@slug}"} class="space-y-5">
+      <.form_error changeset={@changeset} />
+
+      <div>
+        <label
+          for="legal_page_body"
+          class="block text-sm font-semibold text-slate-700 dark:text-slate-200"
+        >
+          {gettext("Content")}
+        </label>
+        <%= textarea(f, :body,
+          id: "legal_page_body",
+          rows: 24,
+          class: [input_class(f, :body), "resize-y font-mono"]
+        ) %>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Markdown is supported (headings, bold, lists, links). The page is published the moment you save it."
+          )}
+        </p>
+      </div>
+
+      <div class="flex items-center gap-4 pt-1">
+        <.button type="submit">{gettext("Publish page")}</.button>
+        <.link
+          href={~p"/admin/legal"}
+          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Cancel")}
+        </.link>
+      </div>
+    </.form>
+  </section>
+</div>

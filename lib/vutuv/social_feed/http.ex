@@ -75,6 +75,9 @@ defmodule Vutuv.SocialFeed.Http do
   end
 
   defp user_agent do
-    "vutuv/#{Application.spec(:vutuv, :vsn)} (+https://www.vutuv.de)"
+    public_url =
+      Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] || "https://vutuv.de/"
+
+    "vutuv/#{Application.spec(:vutuv, :vsn)} (+#{String.trim_trailing(public_url, "/")})"
   end
 end
