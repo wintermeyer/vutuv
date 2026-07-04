@@ -113,6 +113,39 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "preview_tag_names/1" do
+    # Backs the live preview on the add-tag form (issue #848): the names a
+    # submit of the given input will actually attach, resolved the same way
+    # `create_or_link_tag/2` links.
+
+    test "keeps a fresh name exactly as typed" do
+      assert Tags.preview_tag_names("WebAssembly Rust") == ["WebAssembly", "Rust"]
+    end
+
+    test "an existing tag wins with its stored display name" do
+      insert(:tag, name: "ahmetsun", slug: "ahmetsun")
+      insert(:tag, name: "CLAUDE", slug: "claude")
+
+      # Matched case-insensitively by name ("AhmetSun" → "ahmetsun") and by
+      # slug ("claude" → the tag displaying "CLAUDE").
+      assert Tags.preview_tag_names("AhmetSun, claude, Fresh") ==
+               ["ahmetsun", "CLAUDE", "Fresh"]
+    end
+
+    test "collapses case-insensitive duplicates, keeping the first spelling" do
+      assert Tags.preview_tag_names("php PHP php Go") == ["php", "Go"]
+    end
+
+    test "strips the hashtag form and blank segments" do
+      assert Tags.preview_tag_names("#Elixir, , #") == ["Elixir"]
+    end
+
+    test "returns [] for blank and nil input" do
+      assert Tags.preview_tag_names("  ,  ") == []
+      assert Tags.preview_tag_names(nil) == []
+    end
+  end
+
   describe "add_user_tag/2 rejects spaces" do
     test "a spaced name that is not an existing tag fails validation" do
       user = insert(:user)

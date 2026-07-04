@@ -114,3 +114,8 @@ msgstr "darf keine Leerzeichen enthalten"
 ## (Vutuv.Accounts.User.registration_changeset/2).
 msgid "Please enter at least %{min} different tags."
 msgstr "Bitte geben Sie mindestens %{min} verschiedene Tags ein."
+
+## Custom message from the duplicate-tag unique constraint
+## (Vutuv.Tags.UserTag.changeset/2).
+msgid "You already have this tag."
+msgstr "Sie haben dieses Tag bereits."

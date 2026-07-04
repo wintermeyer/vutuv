@@ -368,6 +368,16 @@ defmodule VutuvWeb.Router do
       live("/likes", PostLive.Saved, :likes)
       live("/bookmarks", PostLive.Saved, :bookmarks)
     end
+
+    # The add-tag form previews, as the member types, exactly which tags a
+    # submit will attach (issue #848). It saves over the socket too, so the
+    # dead UserTagController keeps only manage + delete (and the public
+    # index/show/endorsers).
+    scope "/settings", VutuvWeb do
+      pipe_through([:browser, :settings_pipe])
+
+      live("/tags/new", TagNewLive, :new)
+    end
   end
 
   scope "/admin", VutuvWeb.Admin, as: :admin do
@@ -731,7 +741,10 @@ defmodule VutuvWeb.Router do
     )
 
     get("/tags", UserTagController, :manage)
-    resources("/tags", UserTagController, only: [:new, :create, :delete], as: :settings_tag)
+    # The add-tag form (new) is VutuvWeb.TagNewLive (the live_session above),
+    # which also saves over its socket. The dead create stays: the public tag
+    # page's "Add this tag" button POSTs here (issue #844 pinned the URL).
+    resources("/tags", UserTagController, only: [:create, :delete], as: :settings_tag)
   end
 
   # Profiles live at the URL root: /:slug is the profile page, /:slug/... the

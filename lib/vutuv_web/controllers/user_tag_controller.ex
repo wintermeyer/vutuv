@@ -18,7 +18,6 @@ defmodule VutuvWeb.UserTagController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
   alias VutuvWeb.AgentDocs.SectionDocs
-  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.UserHelpers
 
   # Index and show are also served as Markdown / text / JSON via
@@ -52,58 +51,37 @@ defmodule VutuvWeb.UserTagController do
     )
   end
 
-  def new(conn, _params) do
-    changeset = UserTag.changeset(%UserTag{})
-    render(conn, "new.html", changeset: changeset)
-  end
-
-  # Accepts a single tag or several comma-separated ones ("PHP, JavaScript, Go").
-  # Inserts go through `Vutuv.Tags.add_user_tag/2` (shared with the sign-up
-  # form's tag field). A single tag keeps the inline-error re-render (a
-  # duplicate / invalid name shown on the form); a batch redirects with a
-  # count of how many were added.
+  # The add-tag *form* lives in `VutuvWeb.TagNewLive` (/settings/tags/new),
+  # which previews the parsed tags while the member types and saves over its
+  # socket (issue #848). This dead create stays for plain-HTTP callers — the
+  # public tag page's "Add this tag" button POSTs here (issue #844 pinned the
+  # URL) — and always redirects; the inline-error re-render retired with the
+  # dead form template. Same parse + case-insensitive dedupe as the LiveView,
+  # so both entry points attach the same tags for the same input.
   def create(conn, %{"tag_param" => tag_param}) do
     user = conn.assigns[:current_user]
 
-    case Vutuv.Tags.parse_tag_names(tag_param["value"]) do
-      # Nothing usable typed: re-render the form with the error banner. (Never
-      # hand a nil/blank value to create_or_link_tag — it would crash on
-      # String.downcase/1.)
+    parsed =
+      tag_param["value"]
+      |> Vutuv.Tags.parse_tag_names()
+      |> Enum.uniq_by(&String.downcase/1)
+
+    case parsed do
       [] ->
-        changeset = %UserTag{} |> UserTag.changeset(%{}) |> Map.put(:action, :insert)
-        render(conn, "new.html", changeset: changeset)
+        conn
+        |> put_flash(:error, gettext("Please enter a tag."))
+        |> redirect(to: ~p"/settings/tags/new")
 
-      [single] ->
-        create_single(conn, user, single)
-
-      many ->
-        results = Enum.map(many, &Vutuv.Tags.add_user_tag(user, &1))
+      names ->
+        results = Enum.map(names, &Vutuv.Tags.add_user_tag(user, &1))
         failures = Enum.count(results, &match?({:error, _}, &1))
+        successes = length(results) - failures
+        kind = if successes == 0, do: :error, else: :info
 
         conn
-        |> put_flash(:info, tags_added_flash(length(results) - failures, failures))
+        |> put_flash(kind, UserHelpers.tags_added_flash(successes, failures))
         |> redirect(to: ~p"/settings/tags")
     end
-  end
-
-  defp create_single(conn, user, value) do
-    ControllerHelpers.save(conn, Vutuv.Tags.add_user_tag(user, value),
-      flash: gettext("User tag created successfully."),
-      redirect_to: ~p"/settings/tags",
-      render: "new.html"
-    )
-  end
-
-  defp tags_added_flash(successes, 0) do
-    ngettext("Added %{count} tag.", "Added %{count} tags.", successes, count: successes)
-  end
-
-  defp tags_added_flash(successes, failures) do
-    gettext(
-      "Added %{successes} of %{total} tags (the rest were duplicates or invalid).",
-      successes: successes,
-      total: successes + failures
-    )
   end
 
   def show(conn, %{"id" => _id}) do

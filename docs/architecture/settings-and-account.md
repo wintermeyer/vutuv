@@ -33,6 +33,17 @@ The account areas are focused subpages: Sign-in & security
 owner URLs (`/:slug/edit`, `/:slug/settings/*`) redirect to their `/settings`
 twins.
 
+The **add-tag form** (`/settings/tags/new`) is a LiveView
+(`VutuvWeb.TagNewLive`, issue #848): while the member types it previews the
+tags a submit will attach — split on commas and spaces, leading `#` stripped,
+matched case-insensitively against the existing global tags (whose stored
+display name wins, so a camel-case variant of an existing lowercase tag
+previews as the lowercase chip the profile will actually show), duplicates
+collapsed. `Vutuv.Tags.preview_tag_names/1` computes the preview, and the save
+path dedupes the same way, so preview and outcome always agree. The public tag
+page's "Add this tag" button still POSTs to the dead
+`UserTagController.create`, which now always redirects.
+
 ## New-member onboarding
 
 Sign-up requires **at least three distinct tags** (tags are how members are

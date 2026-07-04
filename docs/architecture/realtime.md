@@ -24,6 +24,11 @@ The **feed** (`/feed`, `VutuvWeb.PostLive.Feed`) is fronted the same way by
 [agents-and-seo.md](agents-and-seo.md)), so it is the one LiveView no longer in
 the `live_session`.
 
+The **add-tag form** (`/settings/tags/new`, `VutuvWeb.TagNewLive`) is the first
+live `/settings` page: it previews the parsed tags while the member types and
+saves over the socket (see
+[settings-and-account.md](settings-and-account.md)).
+
 **Every state-changing control fires a LiveView event, so the page never
 reloads**: the follow pill, the ⋯-menu mute/bookmark/like/block (and unblock),
 the follower/following/who-to-follow follow buttons, the tag-endorsement pills,

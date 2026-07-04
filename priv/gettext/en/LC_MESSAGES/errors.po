@@ -114,3 +114,8 @@ msgstr ""
 ## (Vutuv.Accounts.User.registration_changeset/2).
 msgid "Please enter at least %{min} different tags."
 msgstr ""
+
+## Custom message from the duplicate-tag unique constraint
+## (Vutuv.Tags.UserTag.changeset/2).
+msgid "You already have this tag."
+msgstr ""

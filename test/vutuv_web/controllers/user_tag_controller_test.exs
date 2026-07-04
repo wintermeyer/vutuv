@@ -6,46 +6,13 @@ defmodule VutuvWeb.UserTagControllerTest do
   defp tag_count(user),
     do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
 
-  # Issue #845: the add-tag form under /settings/tags/new posted to the retired
-  # /:slug/tags URL, which only serves GET (index/show), so every submit 404ed
-  # in production. The create tests below post to /settings/tags directly, so
-  # they never noticed the wrong rendered action= — assert the action the
-  # browser actually submits, not just the route we know exists.
-  describe "new (the add-tag form)" do
-    setup %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      {:ok, conn: conn, user: user}
-    end
-
-    test "renders a form that posts to /settings/tags, not /:slug/tags", %{
-      conn: conn,
-      user: user
-    } do
-      html = conn |> get(~p"/settings/tags/new") |> html_response(200)
-
-      assert html =~ ~s(action="/settings/tags")
-      refute html =~ ~s(action="/#{user.username}/tags")
-    end
-
-    test "submitting the rendered form actually adds the tag", %{conn: conn, user: user} do
-      base = tag_count(user)
-
-      # Drive the form the way the browser does: read its action= and post there.
-      action =
-        conn
-        |> get(~p"/settings/tags/new")
-        |> html_response(200)
-        |> then(&Regex.run(~r/<form[^>]*action="([^"]+)"/, &1, capture: :all_but_first))
-        |> hd()
-
-      conn = post(conn, action, tag_param: %{value: "Elixir"})
-
-      assert redirected_to(conn) == ~p"/settings/tags"
-      assert tag_count(user) == base + 1
-    end
-  end
-
-  describe "create (the one place tags are added — single or comma-separated)" do
+  # The add-tag *form* (/settings/tags/new) is `VutuvWeb.TagNewLive` and saves
+  # over its socket — see tag_new_live_test.exs. This dead create endpoint
+  # stays for plain-HTTP callers: the public tag page's "Add this tag" button
+  # POSTs here (issue #844 pinned the URL, tag_controller_test asserts the
+  # button's rendered target). It always redirects — its error template
+  # retired with the dead form.
+  describe "create (the tag page's \"Add this tag\" button)" do
     # The signed-up account already carries its three registration tags, so
     # every count below is relative to that baseline.
     setup %{conn: conn} do
@@ -76,21 +43,39 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert tag_count(user) == base + 3
     end
 
-    test "ignores empty segments between commas", %{conn: conn, user: user, base: base} do
-      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "Elixir, , Ruby,"})
+    test "ignores empty segments and case-insensitive duplicates", %{
+      conn: conn,
+      user: user,
+      base: base
+    } do
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "Elixir, , elixir, Ruby,"})
 
       assert redirected_to(conn) == ~p"/settings/tags"
       assert tag_count(user) == base + 2
     end
 
-    test "re-renders the form with an error when nothing usable is typed", %{
+    test "a tag the member already has redirects with an error flash", %{
+      conn: conn,
+      user: user,
+      base: base
+    } do
+      {:ok, _} = Vutuv.Tags.add_user_tag(user, "Elixir")
+
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "elixir"})
+
+      assert redirected_to(conn) == ~p"/settings/tags"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "duplicates or invalid"
+      assert tag_count(user) == base + 1
+    end
+
+    test "redirects to the add-tag form when nothing usable is sent", %{
       conn: conn,
       user: user,
       base: base
     } do
       conn = post(conn, ~p"/settings/tags", tag_param: %{value: ""})
 
-      assert html_response(conn, 200) =~ "editform"
+      assert redirected_to(conn) == ~p"/settings/tags/new"
       assert tag_count(user) == base
     end
   end

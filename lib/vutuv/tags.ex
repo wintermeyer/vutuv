@@ -42,6 +42,38 @@ defmodule Vutuv.Tags do
   def parse_tag_names(_), do: []
 
   @doc """
+  The display names a submit of `value` on the add-tag form will actually
+  attach, in typed order — the live preview of issue #848. Each parsed name is
+  resolved the way `Tag.create_or_link_tag/2` links: an existing tag matched
+  case-insensitively by name or slug keeps its stored display name (typing
+  `"AhmetSun"` when the tag `ahmetsun` exists yields the chip `ahmetsun`),
+  while an unmatched name becomes a fresh tag displaying exactly as typed.
+  Case-insensitive duplicates collapse to the first spelling, mirroring the
+  single row the profile would end up with (the form's save path dedupes the
+  same way, so preview and outcome always agree).
+  """
+  def preview_tag_names(value) do
+    case value |> parse_tag_names() |> Enum.uniq_by(&String.downcase/1) do
+      [] ->
+        []
+
+      names ->
+        downcased = Enum.map(names, &String.downcase/1)
+
+        display_by_key =
+          from(t in Tag,
+            where: fragment("lower(?)", t.name) in ^downcased or t.slug in ^downcased,
+            select: {fragment("lower(?)", t.name), t.slug, t.name}
+          )
+          |> Repo.all()
+          |> Enum.flat_map(fn {lower_name, slug, name} -> [{lower_name, name}, {slug, name}] end)
+          |> Map.new()
+
+        Enum.map(names, &Map.get(display_by_key, String.downcase(&1), &1))
+    end
+  end
+
+  @doc """
   Tags `user` with `name`, creating the global tag or linking the existing
   one. Returns the `Repo.insert` result; a duplicate or invalid name comes
   back as `{:error, changeset}`.

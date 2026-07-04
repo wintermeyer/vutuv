@@ -1,6 +1,8 @@
 defmodule VutuvWeb.UserHelpers do
   @moduledoc false
 
+  use Gettext, backend: VutuvWeb.Gettext
+
   import Ecto.Query
   import Ecto, only: [assoc: 2]
   import Phoenix.HTML, only: [raw: 1, safe_to_string: 1]
@@ -24,6 +26,24 @@ defmodule VutuvWeb.UserHelpers do
     [honorific_prefix, first_name, last_name, honorific_suffix]
     |> Enum.reject(&(&1 == "" || &1 == nil))
     |> Enum.join(" ")
+  end
+
+  @doc """
+  The flash for a batch tag add — shared by the two places tags are attached:
+  `VutuvWeb.TagNewLive` (the add-tag form's socket save) and
+  `VutuvWeb.UserTagController.create` (the public tag page's "Add this tag"
+  button), so the member-facing wording cannot drift between them.
+  """
+  def tags_added_flash(successes, 0) do
+    ngettext("Added %{count} tag.", "Added %{count} tags.", successes, count: successes)
+  end
+
+  def tags_added_flash(successes, failures) do
+    gettext(
+      "Added %{successes} of %{total} tags (the rest were duplicates or invalid).",
+      successes: successes,
+      total: successes + failures
+    )
   end
 
   def first_and_last(%User{first_name: first_name, last_name: last_name}, seperator \\ " ") do

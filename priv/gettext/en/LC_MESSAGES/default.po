@@ -437,6 +437,7 @@ msgstr ""
 msgid "Name"
 msgstr ""
 
+#: lib/vutuv_web/live/tag_new_live.ex:45
 #: lib/vutuv_web/templates/access_token/new.html.heex:1
 #: lib/vutuv_web/templates/ad/new.html.heex:3
 #: lib/vutuv_web/templates/address/new.html.heex:4
@@ -448,7 +449,6 @@ msgstr ""
 #: lib/vutuv_web/templates/phone_number/new.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:4
 #: lib/vutuv_web/templates/url/new.html.heex:4
-#: lib/vutuv_web/templates/user_tag/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/new.html.heex:4
 #, elixir-autogen
 msgid "New"
@@ -1363,9 +1363,12 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:30
 #: lib/vutuv_web/agent_docs/text.ex:324
 #: lib/vutuv_web/components/ui.ex:2384
-#: lib/vutuv_web/controllers/user_tag_controller.ex:51
+#: lib/vutuv_web/controllers/user_tag_controller.ex:50
 #: lib/vutuv_web/live/search_live.ex:147
 #: lib/vutuv_web/live/search_live.ex:321
+#: lib/vutuv_web/live/tag_new_live.ex:34
+#: lib/vutuv_web/live/tag_new_live.ex:44
+#: lib/vutuv_web/live/tag_new_live.ex:53
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:138
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
@@ -1377,10 +1380,8 @@ msgstr ""
 #: lib/vutuv_web/templates/tag/show.html.heex:4
 #: lib/vutuv_web/templates/user/show.html.heex:340
 #: lib/vutuv_web/templates/user_tag/endorsers.html.heex:4
-#: lib/vutuv_web/templates/user_tag/form_content.html.heex:5
 #: lib/vutuv_web/templates/user_tag/index.html.heex:10
 #: lib/vutuv_web/templates/user_tag/manage.html.heex:4
-#: lib/vutuv_web/templates/user_tag/new.html.heex:3
 #: lib/vutuv_web/templates/user_tag/show.html.heex:6
 #, elixir-autogen
 msgid "Tags"
@@ -1502,12 +1503,12 @@ msgstr ""
 msgid "Unendorsed tag successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_tag_controller.ex:91
+#: lib/vutuv_web/live/tag_new_live.ex:108
 #, elixir-autogen
 msgid "User tag created successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_tag_controller.ex:170
+#: lib/vutuv_web/controllers/user_tag_controller.ex:148
 #, elixir-autogen
 msgid "User tag deleted successfully."
 msgstr ""
@@ -2731,24 +2732,24 @@ msgstr ""
 msgid "Write a post"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_tag_controller.ex:98
+#: lib/vutuv_web/views/user_helpers.ex:38
 #, elixir-autogen, elixir-format
 msgid "Added %{count} tag."
 msgid_plural "Added %{count} tags."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/user_tag_controller.ex:102
+#: lib/vutuv_web/views/user_helpers.ex:42
 #, elixir-autogen, elixir-format
 msgid "Added %{successes} of %{total} tags (the rest were duplicates or invalid)."
 msgstr ""
 
-#: lib/vutuv_web/templates/user_tag/form_content.html.heex:6
+#: lib/vutuv_web/live/tag_new_live.ex:64
 #, elixir-autogen, elixir-format
 msgid "PHP, JavaScript, Origami, Recruiting"
 msgstr ""
 
-#: lib/vutuv_web/templates/user_tag/form_content.html.heex:7
+#: lib/vutuv_web/live/tag_new_live.ex:55
 #, elixir-autogen, elixir-format
 msgid "Separate tags with a comma or a space."
 msgstr ""
@@ -4392,6 +4393,7 @@ msgid "Edit the ad"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1002
+#: lib/vutuv_web/live/tag_new_live.ex:72
 #: lib/vutuv_web/templates/ad/preview.html.heex:3
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:122
 #, elixir-autogen, elixir-format
@@ -5274,6 +5276,7 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2532
 #: lib/vutuv_web/controllers/settings_controller.ex:46
 #: lib/vutuv_web/live/shell_live.ex:351
+#: lib/vutuv_web/live/tag_new_live.ex:43
 #: lib/vutuv_web/templates/address/edit.html.heex:2
 #: lib/vutuv_web/templates/address/new.html.heex:2
 #: lib/vutuv_web/templates/education/edit.html.heex:2
@@ -5288,7 +5291,6 @@ msgstr ""
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:2
 #: lib/vutuv_web/templates/url/edit.html.heex:2
 #: lib/vutuv_web/templates/url/new.html.heex:2
-#: lib/vutuv_web/templates/user_tag/new.html.heex:2
 #: lib/vutuv_web/templates/username/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:2
 #: lib/vutuv_web/templates/work_experience/new.html.heex:2
@@ -8712,4 +8714,19 @@ msgstr ""
 #: lib/vutuv_web/views/education_html.ex:20
 #, elixir-autogen, elixir-format
 msgid "Vocational Training"
+msgstr ""
+
+#: lib/vutuv_web/controllers/user_tag_controller.ex:72
+#, elixir-autogen, elixir-format
+msgid "Please enter a tag."
+msgstr ""
+
+#: lib/vutuv_web/live/tag_new_live.ex:73
+#, elixir-autogen, elixir-format
+msgid "This will create the following tags:"
+msgstr ""
+
+#: lib/vutuv_web/live/tag_new_live.ex:55
+#, elixir-autogen, elixir-format
+msgid "Tip:"
 msgstr ""
