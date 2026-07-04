@@ -173,7 +173,9 @@ defmodule VutuvWeb.ApiV2.PostController do
     |> Map.put(:post_id, post.id)
   end
 
-  defp feed_entry(%{post: post, reposted_by: reposted_by}) do
+  defp feed_entry(%{post: post} = entry) do
+    reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
+
     %{
       id: post.id,
       url: VutuvWeb.AgentDocs.abs_url(Posts.path(post)),
@@ -181,7 +183,10 @@ defmodule VutuvWeb.ApiV2.PostController do
       published_on: post.published_on,
       body_markdown: post.body,
       tags: Enum.map(post.tags, & &1.name),
-      reposted_by: reposted_by && VutuvWeb.AgentDocs.person_ref(reposted_by)
+      # `reposted_by` stays the newest reposter (unchanged shape); `reposters`
+      # adds the whole follow-scoped roster behind the entry, newest first.
+      reposted_by: entry[:reposted_by] && VutuvWeb.AgentDocs.person_ref(entry[:reposted_by]),
+      reposters: Enum.map(reposters, &VutuvWeb.AgentDocs.person_ref/1)
     }
   end
 

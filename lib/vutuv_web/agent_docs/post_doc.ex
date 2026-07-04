@@ -84,19 +84,26 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
   defp period_suffix(label), do: " · #{label}"
 
   @doc """
-  One timeline entry (`%{post:, reposted_by:}`) as a compact doc map: id, the
-  post URL, author + repost names, publish date and a one-line excerpt. Shared
-  by the author archive (above) and the personalized feed
+  One timeline entry (`%{post:, reposted_by:, reposters:}`) as a compact doc
+  map: id, the post URL, author + repost names, publish date and a one-line
+  excerpt. Shared by the author archive (above) and the personalized feed
   (`VutuvWeb.AgentDocs.FeedDoc`), so the two render a post the same way.
+
+  `reposters` is every reposter behind the entry (the feed carries the whole
+  follow-scoped roster; the archive a single one), newest first, as names —
+  `reposted_by` stays the newest for callers that want just the one name.
   """
-  def timeline_entry(%{post: post, reposted_by: reposted_by}) do
+  def timeline_entry(%{post: post} = entry) do
+    reposters = entry[:reposters] || List.wrap(entry[:reposted_by])
+
     %{
       id: post.id,
       url: AgentDocs.abs_url(Posts.path(post)),
       author: UserHelpers.full_name(post.user),
       published_on: post.published_on,
       excerpt: AgentDocs.excerpt(post.body),
-      reposted_by: reposted_by && UserHelpers.full_name(reposted_by)
+      reposted_by: entry[:reposted_by] && UserHelpers.full_name(entry[:reposted_by]),
+      reposters: Enum.map(reposters, &UserHelpers.full_name/1)
     }
   end
 

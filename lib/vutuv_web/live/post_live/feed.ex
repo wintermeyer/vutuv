@@ -195,7 +195,14 @@ defmodule VutuvWeb.PostLive.Feed do
         cursor: socket.assigns.cursor
       )
 
-    entries = with_engagement(page.entries, socket.assigns.current_user)
+    # A post shown higher up (as a newer repost, or nested in a shown thread)
+    # must not reappear on an older page: `feed_page/2` dedups within a page but
+    # can't see the ones already on screen. The higher card already carries the
+    # complete follow-scoped roster, so dropping the older duplicate loses
+    # nothing. Filter before the engagement batch so it queries only survivors.
+    shown = shown_post_ids(socket.assigns.entries)
+    fresh = Enum.reject(page.entries, &MapSet.member?(shown, &1.post.id))
+    entries = with_engagement(fresh, socket.assigns.current_user)
 
     {:noreply,
      socket
@@ -260,6 +267,7 @@ defmodule VutuvWeb.PostLive.Feed do
           id: "post-#{post.id}",
           post: post,
           reposted_by: nil,
+          reposters: [],
           at: post.inserted_at,
           engagement: nil
         }
@@ -267,24 +275,48 @@ defmodule VutuvWeb.PostLive.Feed do
     insert_entry(socket, entry, author_id)
   end
 
+  # A repost arrived over the viewer's activity topic. The fan-out only reaches
+  # a reposter's *followers* (or the reposter), so the reposter always belongs
+  # in this viewer's roster. Where the post already sits decides what happens:
+  # fold the new face into an on-screen card's stack (in place, no reshuffle —
+  # the card only climbs on the next reload), or into a card still behind the
+  # pill; skip it silently when the post is already visible nested inside a
+  # shown thread; otherwise it is new and takes the usual own/pill path.
   def handle_info(
         {:new_repost, %{repost_id: repost_id, post_id: post_id, reposter_id: reposter_id}},
         socket
       ) do
-    post = Posts.get_post(post_id)
     reposter = Vutuv.Repo.get(Vutuv.Accounts.User, reposter_id)
 
-    entry =
-      post && reposter &&
-        %{
-          id: "repost-#{repost_id}",
-          post: post,
-          reposted_by: reposter,
-          at: NaiveDateTime.utc_now(:second),
-          engagement: nil
-        }
+    cond do
+      is_nil(reposter) ->
+        {:noreply, socket}
 
-    insert_entry(socket, entry, reposter_id)
+      shown = Enum.find(socket.assigns.entries, &(&1.post.id == post_id)) ->
+        {:noreply, restack_shown(socket, shown, reposter)}
+
+      MapSet.member?(shown_post_ids(socket.assigns.entries), post_id) ->
+        {:noreply, socket}
+
+      pending = Enum.find(socket.assigns.pending_posts, &(&1.post.id == post_id)) ->
+        {:noreply, restack_pending(socket, pending, reposter)}
+
+      true ->
+        post = Posts.get_post(post_id)
+
+        entry =
+          post &&
+            %{
+              id: "repost-#{repost_id}",
+              post: post,
+              reposted_by: reposter,
+              reposters: [reposter],
+              at: NaiveDateTime.utc_now(:second),
+              engagement: nil
+            }
+
+        insert_entry(socket, entry, reposter_id)
+    end
   end
 
   # A post was deleted: drop its entry from the stream and from any pending
@@ -391,6 +423,48 @@ defmodule VutuvWeb.PostLive.Feed do
     |> Map.put(:engagement, Posts.post_engagement(entry.post.id, user.id))
   end
 
+  # Every post id currently represented on screen — each streamed entry's own
+  # post plus every ancestor it nests — so a live or paged repost of an
+  # already-shown post updates that card (or drops) instead of duplicating it.
+  defp shown_post_ids(entries) do
+    for entry <- entries,
+        post <- [entry.post | entry[:ancestors] || []],
+        into: MapSet.new(),
+        do: post.id
+  end
+
+  # Fold a new reposter into an on-screen card's avatar stack, in place: keep
+  # the entry's stream id (so the row updates where it sits, no jump) and just
+  # grow the roster + rename the newest reposter. A repost we already counted
+  # (idempotent re-broadcast) is a no-op.
+  defp restack_shown(socket, entry, reposter) do
+    if Enum.any?(entry.reposters, &(&1.id == reposter.id)) do
+      socket
+    else
+      updated = %{entry | reposters: [reposter | entry.reposters], reposted_by: reposter}
+
+      socket
+      |> update(:entries, &replace_entry(&1, entry.id, updated))
+      |> stream_insert(:posts, updated, update_only: true)
+    end
+  end
+
+  # Same fold for a card still waiting behind the "show new" pill: it has no
+  # stream row yet, so only its pending map grows (it reveals with the full
+  # stack when the pill is clicked).
+  defp restack_pending(socket, pending, reposter) do
+    if Enum.any?(pending.reposters, &(&1.id == reposter.id)) do
+      socket
+    else
+      updated = %{pending | reposters: [reposter | pending.reposters], reposted_by: reposter}
+      update(socket, :pending_posts, &replace_entry(&1, pending.id, updated))
+    end
+  end
+
+  defp replace_entry(entries, id, updated) do
+    Enum.map(entries, fn entry -> if entry.id == id, do: updated, else: entry end)
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -470,6 +544,7 @@ defmodule VutuvWeb.PostLive.Feed do
                 ancestors={entry[:ancestors]}
                 ancestor_engagement={entry[:ancestor_engagement] || %{}}
                 reposted_by={entry.reposted_by}
+                reposters={entry[:reposters]}
                 entry_id={entry.id}
                 conn_or_socket={@socket}
                 engagement={entry.engagement}

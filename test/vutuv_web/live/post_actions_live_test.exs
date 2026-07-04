@@ -211,19 +211,77 @@ defmodule VutuvWeb.PostActionsLiveTest do
       assert has_element?(feed, "#feed-posts", "Reposted by Carla Carrier")
     end
 
-    test "your own repost prepends immediately", %{conn: conn} do
+    test "reposting a post already in your feed restacks it in place, no duplicate", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       friend = other_user()
       insert(:follow, follower: user, followee: friend)
       post = create_post!(friend, %{body: "boost me"})
 
       {:ok, feed, _html} = live(conn, ~p"/feed")
+      # The post is already on the feed as the friend's original (the viewer
+      # follows friend), so reposting it must not spawn a second card — it folds
+      # a "Reposted by" line onto the row that is already there.
+      assert has_element?(feed, "#feed-post-#{post.id}")
 
       feed |> element("#post-actions-post-#{post.id}-repost") |> render_click()
 
       html = render(feed)
-      assert html =~ ~s(id="feed-repost-)
       assert html =~ "Reposted by"
+      # Still exactly one card for the post: the body appears once and no
+      # standalone repost row was created.
+      assert length(String.split(html, "boost me")) - 1 == 1
+      refute html =~ ~s(id="feed-repost-)
+      assert has_element?(feed, "#feed-post-#{post.id}")
+    end
+
+    test "an own repost of an off-feed post prepends a fresh card via broadcast", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # A stranger's post: not on the viewer's feed already, so reposting it
+      # (from a profile / permalink elsewhere) is genuinely new to this feed.
+      post = create_post!(other_user(), %{body: "found elsewhere"})
+
+      {:ok, feed, _html} = live(conn, ~p"/feed")
+      refute has_element?(feed, "#feed-posts", "found elsewhere")
+
+      # The viewer reposts it on another surface; the open feed hears the
+      # broadcast and prepends a fresh repost card (own activity, no pill).
+      :ok = Posts.repost_post(user, post)
+      _ = :sys.get_state(feed.pid)
+
+      assert has_element?(feed, ~s(#feed-posts [id^="feed-repost-"]))
+      assert has_element?(feed, "#feed-posts", "found elsewhere")
+      assert has_element?(feed, "#feed-posts", "Reposted by")
+    end
+
+    test "a second followee reposting an on-screen post grows the stack in place", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      carla = other_user(first_name: "Carla", last_name: "Carrier")
+      bruno = other_user(first_name: "Bruno", last_name: "Booster")
+      insert(:follow, follower: user, followee: carla)
+      insert(:follow, follower: user, followee: bruno)
+      post = create_post!(other_user(), %{body: "widely shared"})
+
+      {:ok, feed, _html} = live(conn, ~p"/feed")
+
+      # Carla's repost surfaces the post (behind the pill); reveal it.
+      :ok = Posts.repost_post(carla, post)
+      feed |> element("#show-new-posts") |> render_click()
+      assert has_element?(feed, "#feed-posts", "widely shared")
+
+      # Bruno then reposts the same post: it must not add a second card, it must
+      # join the stack on the one already shown.
+      :ok = Posts.repost_post(bruno, post)
+      _ = :sys.get_state(feed.pid)
+
+      # Exactly one card in the timeline for the post (the stranger's post also
+      # shows in the discover rail, so scope the count to the feed list).
+      feed_html = feed |> element("#feed-posts") |> render()
+      assert length(String.split(feed_html, "widely shared")) - 1 == 1
+      # Both reposters' avatars are in the stack (linked to their profiles).
+      assert has_element?(feed, ~s(#feed-posts a[href="/#{carla.username}"] [data-avatar]))
+      assert has_element?(feed, ~s(#feed-posts a[href="/#{bruno.username}"] [data-avatar]))
+      # The sentence names the newest (Bruno) and counts the other.
+      assert feed_html =~ "Reposted by Bruno Booster"
     end
   end
 

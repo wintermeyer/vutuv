@@ -1278,7 +1278,9 @@ defmodule VutuvWeb.UI do
 
   @doc """
   User avatar. Pass `user` (a `%Vutuv.Accounts.User{}`, resolved via `Vutuv.Avatar`)
-  or a raw `src`. Sizes `xs|sm|md|lg`; `shape` `circle` (default) or `square`.
+  or a raw `src`. Sizes `2xs|xs|sm|md|lg` (`2xs` is the 20px inline size for
+  compact attribution strips like the post card's "Reposted by" avatar stack);
+  `shape` `circle` (default) or `square`.
 
   Set `presence` to overlay the real-time green "online" dot: the avatar is
   wrapped in a `[data-presence-user-id]` span that the Presence JS hook toggles
@@ -1290,7 +1292,7 @@ defmodule VutuvWeb.UI do
   attr(:user, :any, default: nil)
   attr(:src, :string, default: nil)
   attr(:alt, :string, default: "")
-  attr(:size, :string, default: "md", values: ~w(xs sm md lg))
+  attr(:size, :string, default: "md", values: ~w(2xs xs sm md lg))
   attr(:shape, :string, default: "circle", values: ~w(circle square))
   attr(:class, :string, default: nil)
   attr(:presence, :boolean, default: false)
@@ -1343,7 +1345,7 @@ defmodule VutuvWeb.UI do
   which would otherwise hide the dot behind the photo).
   """
   attr(:id, :any, default: nil)
-  attr(:size, :string, default: "sm", values: ~w(xs sm md lg))
+  attr(:size, :string, default: "sm", values: ~w(2xs xs sm md lg))
   slot(:inner_block, required: true)
 
   def presence_wrap(%{id: nil} = assigns) do
@@ -1469,21 +1471,24 @@ defmodule VutuvWeb.UI do
     end
   end
 
+  defp avatar_size("2xs"), do: "h-5 w-5"
   defp avatar_size("xs"), do: "h-8 w-8"
   defp avatar_size("sm"), do: "h-9 w-9"
   defp avatar_size("lg"), do: "h-24 w-24"
   defp avatar_size(_), do: "h-12 w-12"
 
+  defp initials_text_size("2xs"), do: "text-[9px]"
   defp initials_text_size("xs"), do: "text-xs"
   defp initials_text_size("sm"), do: "text-xs"
   defp initials_text_size("lg"), do: "text-3xl"
   defp initials_text_size(_), do: "text-base"
 
-  defp avatar_url_size(size) when size in ["xs", "sm"], do: :thumb
+  defp avatar_url_size(size) when size in ["2xs", "xs", "sm"], do: :thumb
   defp avatar_url_size(_), do: :medium
 
   # Presence-dot position + size, scaled to the avatar. Nudged just outside the
   # lower-right so the white ring reads as a status badge on the corner.
+  defp presence_dot_pos("2xs"), do: "-bottom-0.5 -right-0.5 h-2 w-2"
   defp presence_dot_pos("xs"), do: "-bottom-0.5 -right-0.5 h-2.5 w-2.5"
   defp presence_dot_pos("sm"), do: "-bottom-0.5 -right-0.5 h-3 w-3"
   defp presence_dot_pos("lg"), do: "bottom-1 right-1 h-4 w-4"

@@ -8,6 +8,7 @@ defmodule Vutuv.PostsTest do
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostReply
+  alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostTag
 
   # Feed authors must be activated (consistent with follower counts etc.), so
@@ -20,6 +21,17 @@ defmodule Vutuv.PostsTest do
     at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
     Repo.update_all(from(p in Post, where: p.id == ^post.id), set: [inserted_at: at])
     %{post | inserted_at: at}
+  end
+
+  # Repost order ties at second precision too; shift `reposter`'s repost of
+  # `post` into the past so "newest reposter" assertions stay deterministic.
+  defp backdate_repost!(reposter, post, seconds) do
+    at = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -seconds)
+
+    Repo.update_all(
+      from(r in PostRepost, where: r.user_id == ^reposter.id and r.post_id == ^post.id),
+      set: [inserted_at: at]
+    )
   end
 
   describe "create_post/2" do
@@ -528,6 +540,148 @@ defmodule Vutuv.PostsTest do
       :ok = Posts.repost_post(stranger, post)
 
       assert %{entries: []} = Posts.feed_page(viewer)
+    end
+
+    test "many reposts of one post collapse into a single entry with the reposter roster" do
+      viewer = user()
+      author = user()
+      early = user()
+      late = user()
+      follow!(viewer, early)
+      follow!(viewer, late)
+
+      post = create_post!(author, %{body: "much shared"})
+      backdate_post!(post, 600)
+      :ok = Posts.repost_post(early, post)
+      backdate_repost!(early, post, 300)
+      :ok = Posts.repost_post(late, post)
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert entry.post.id == post.id
+      # The newest repost carries the entry; every followed reposter joins the
+      # roster, newest first.
+      assert entry.reposted_by.id == late.id
+      assert Enum.map(entry.reposters, & &1.id) == [late.id, early.id]
+    end
+
+    test "a repost resurfaces a followed author's post once, at the repost position" do
+      viewer = user()
+      author = user()
+      friend = user()
+      follow!(viewer, author)
+      follow!(viewer, friend)
+
+      post = create_post!(author, %{body: "original words"})
+      backdate_post!(post, 600)
+      mine = create_post!(viewer, %{body: "mine"})
+      backdate_post!(mine, 300)
+      :ok = Posts.repost_post(friend, post)
+
+      # One entry for the reposted post — the repost carries it (that's why it
+      # sits on top), the standalone original row is gone.
+      %{entries: entries} = Posts.feed_page(viewer)
+      assert Enum.map(entries, & &1.post.id) == [post.id, mine.id]
+
+      [entry, _mine] = entries
+      assert entry.reposted_by.id == friend.id
+      assert String.starts_with?(entry.id, "repost-")
+    end
+
+    test "the roster holds only followed reposters and yourself, not strangers" do
+      viewer = user()
+      author = user()
+      friend = user()
+      stranger = user()
+      follow!(viewer, friend)
+
+      post = create_post!(author, %{body: "roster"})
+      backdate_post!(post, 600)
+      :ok = Posts.repost_post(stranger, post)
+      backdate_repost!(stranger, post, 300)
+      :ok = Posts.repost_post(friend, post)
+      backdate_repost!(friend, post, 120)
+      :ok = Posts.repost_post(viewer, post)
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      # The stranger reposted most recently of the three but is invisible here:
+      # the roster explains why the post is in *this* feed, so it holds only
+      # followed reposters and the viewer, newest first.
+      assert Enum.map(entry.reposters, & &1.id) == [viewer.id, friend.id]
+      assert entry.reposted_by.id == viewer.id
+    end
+
+    test "plain post entries carry an empty roster" do
+      viewer = user()
+      create_post!(viewer, %{body: "no reposts"})
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert entry.reposters == []
+      assert entry.reposted_by == nil
+    end
+
+    test "a muted follow's repost neither surfaces the post nor joins the roster" do
+      viewer = user()
+      author = user()
+      noisy = user()
+      friend = user()
+      follow!(viewer, noisy)
+      follow!(viewer, friend)
+
+      post = create_post!(author, %{body: "muted path"})
+      backdate_post!(post, 600)
+      :ok = Posts.repost_post(noisy, post)
+      backdate_repost!(noisy, post, 300)
+      :ok = Posts.repost_post(friend, post)
+
+      fid = Vutuv.Social.follow_id(viewer.id, noisy.id)
+      Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
+
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert Enum.map(entry.reposters, & &1.id) == [friend.id]
+    end
+
+    test "a repost of a post shown inside a conversation drops for the page" do
+      viewer = user()
+      author = user()
+      replier = user()
+      reposter = user()
+      follow!(viewer, author)
+      follow!(viewer, replier)
+      follow!(viewer, reposter)
+
+      parent = create_post!(author, %{body: "thread root"})
+      backdate_post!(parent, 600)
+      {:ok, reply} = Posts.create_reply(replier, parent, %{body: "thread reply"})
+      backdate_post!(reply, 300)
+      :ok = Posts.repost_post(reposter, parent)
+
+      # The conversation wins: the parent already renders as a full card nested
+      # inside the thread, so a standalone repost card would show it twice.
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert entry.post.id == reply.id
+      assert Enum.map(entry.ancestors, & &1.id) == [parent.id]
+    end
+
+    test "a reposted reply nests its parent instead of also showing it standalone" do
+      viewer = user()
+      author = user()
+      replier = user()
+      reposter = user()
+      follow!(viewer, author)
+      follow!(viewer, reposter)
+
+      parent = create_post!(author, %{body: "parent words"})
+      backdate_post!(parent, 600)
+      {:ok, reply} = Posts.create_reply(replier, parent, %{body: "the reply"})
+      backdate_post!(reply, 300)
+      :ok = Posts.repost_post(reposter, reply)
+
+      # The reposted reply nests the followed author's parent as its context
+      # card, so the parent's own standalone row is a duplicate and drops.
+      assert %{entries: [entry]} = Posts.feed_page(viewer)
+      assert entry.post.id == reply.id
+      assert entry.reposted_by.id == reposter.id
+      assert Enum.map(entry.ancestors, & &1.id) == [parent.id]
     end
 
     test "paginates a mixed posts-and-reposts timeline without gaps or repeats" do

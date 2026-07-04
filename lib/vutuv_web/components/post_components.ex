@@ -27,6 +27,11 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
 
+  # How many reposter faces the "Reposted by" avatar stack shows before the
+  # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
+  # on a phone (5 × 20px avatars, overlapped, plus the chip and the sentence).
+  @repost_stack_cap 5
+
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
 
@@ -60,6 +65,14 @@ defmodule VutuvWeb.PostComponents do
   attr(:reposted_by, :any,
     default: nil,
     doc: "%User{} who carried this post into the timeline — renders the \"Reposted by\" line"
+  )
+
+  attr(:reposters, :any,
+    default: nil,
+    doc:
+      "every reposter behind the entry (newest first, from Posts.feed_page/2) — " <>
+        "renders the banner's avatar stack. nil falls back to [reposted_by], so " <>
+        "single-reposter callers (profile, dead lists) need not pass it"
   )
 
   attr(:entry_id, :string,
@@ -114,6 +127,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
       |> assign(:frozen?, assigns.post.frozen_at != nil)
       |> assign(:reply_banner, reply_banner(assigns.post, assigns.show_reply_banner))
+      |> assign(:reposters, repost_roster(assigns))
       |> assign(
         :edited?,
         NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
@@ -136,6 +150,7 @@ defmodule VutuvWeb.PostComponents do
       viewer_follow={@viewer_follow}
       frozen?={@frozen?}
       reposted_by={@reposted_by}
+      reposters={@reposters}
       reply_banner={@reply_banner}
       conn_or_socket={@conn_or_socket}
       actions_id={@actions_id}
@@ -311,6 +326,7 @@ defmodule VutuvWeb.PostComponents do
   )
 
   attr(:reposted_by, :any, default: nil)
+  attr(:reposters, :any, default: nil)
   attr(:entry_id, :string, default: nil)
   attr(:surface, :atom, default: :flat, values: [:card, :flat])
   attr(:conn_or_socket, :any, required: true)
@@ -337,6 +353,7 @@ defmodule VutuvWeb.PostComponents do
         viewer_follow={@viewer_follow}
         engagement={@engagement}
         reposted_by={@reposted_by}
+        reposters={@reposters}
         entry_id={@entry_id}
         surface={@surface}
         conn_or_socket={@conn_or_socket}
@@ -373,6 +390,7 @@ defmodule VutuvWeb.PostComponents do
           engagement: assigns.ancestor_engagement[post.id],
           viewer_follow: nil,
           reposted_by: nil,
+          reposters: nil,
           entry_id: "#{leaf_key}-parent-#{post.id}"
         }
       end)
@@ -384,6 +402,7 @@ defmodule VutuvWeb.PostComponents do
           engagement: assigns.engagement,
           viewer_follow: assigns.viewer_follow,
           reposted_by: assigns.reposted_by,
+          reposters: assigns.reposters,
           entry_id: assigns.entry_id
         }
       ]
@@ -441,6 +460,7 @@ defmodule VutuvWeb.PostComponents do
             viewer_follow={item.viewer_follow}
             engagement={item.engagement}
             reposted_by={item.reposted_by}
+            reposters={item.reposters}
             entry_id={item.entry_id}
             surface={@surface}
             conn_or_socket={@conn_or_socket}
@@ -567,6 +587,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:viewer_follow, :any, default: nil)
   attr(:frozen?, :boolean, required: true)
   attr(:reposted_by, :any, required: true)
+  attr(:reposters, :list, required: true)
   attr(:reply_banner, :any, required: true)
   attr(:conn_or_socket, :any, required: true)
   attr(:actions_id, :string, required: true)
@@ -596,16 +617,7 @@ defmodule VutuvWeb.PostComponents do
         {gettext("Only you can see this post while a report about it is handled.")}
       </.frozen_banner>
 
-      <p
-        :if={@reposted_by}
-        class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
-        data-reposted-by={@reposted_by.id}
-      >
-        <.icon_repost class="h-4 w-4" />
-        <.link href={~p"/#{@reposted_by}"} class="hover:text-brand-700">
-          {gettext("Reposted by %{name}", name: full_name(@reposted_by))}
-        </.link>
-      </p>
+      <.reposted_banner reposters={@reposters} />
 
       <%!-- The reply banner: the live parent links its permalink; a deleted
       parent degrades to the author's profile, a deleted account to a
@@ -805,6 +817,79 @@ defmodule VutuvWeb.PostComponents do
           </.card_menu>
         </div>
       </div>
+    </div>
+    """
+  end
+
+  # The "Reposted by" attribution line: an overlapping avatar stack (the
+  # reposters the viewer follows, newest first) plus a sentence naming the
+  # newest one. The stack shows at most `@repost_stack_cap` faces; a further
+  # `+N` chip stands in for the rest, so a wildly-reposted post stays a tidy
+  # one-line strip instead of a wall of avatars. Callers with a single
+  # reposter (the profile Posts section, the dead archive/permalink lists)
+  # pass a one-element roster, which folds into one avatar and the plain
+  # "Reposted by NAME" — byte-compatible with the old single-name banner.
+  attr(:reposters, :list, required: true)
+
+  # The banner's avatar stack: single-reposter callers (the profile, the dead
+  # archive/permalink lists) pass only `reposted_by`, which folds into a
+  # one-avatar roster; the feed passes the whole `reposters` list.
+  defp repost_roster(%{reposters: reposters}) when is_list(reposters), do: reposters
+  defp repost_roster(%{reposted_by: reposted_by}), do: List.wrap(reposted_by)
+
+  defp reposted_banner(%{reposters: []} = assigns), do: ~H""
+
+  defp reposted_banner(assigns) do
+    reposters = assigns.reposters
+    shown = Enum.take(reposters, @repost_stack_cap)
+
+    assigns =
+      assigns
+      |> assign(:primary, hd(reposters))
+      |> assign(:shown, Enum.with_index(shown))
+      |> assign(:overflow, length(reposters) - length(shown))
+      # Everyone besides the named (newest) reposter — the "and N others" tail.
+      |> assign(:others, length(reposters) - 1)
+
+    ~H"""
+    <div
+      class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400"
+      data-reposted-by={@primary.id}
+    >
+      <.icon_repost class="h-4 w-4 shrink-0" />
+      <%!-- The stack's avatars link to each reposter; the sentence beside it
+      names them, so the stack itself is decorative for assistive tech. --%>
+      <div class="flex shrink-0 items-center" aria-hidden="true">
+        <.link
+          :for={{reposter, i} <- @shown}
+          href={~p"/#{reposter}"}
+          title={full_name(reposter)}
+          class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && "-ml-1.5"]}
+        >
+          <.avatar user={reposter} size="2xs" />
+        </.link>
+        <span
+          :if={@overflow > 0}
+          class="-ml-1.5 inline-flex h-5 items-center rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900"
+        >
+          +{compact_count(@overflow)}
+        </span>
+      </div>
+      <span class="min-w-0 truncate">
+        <%= if @others == 0 do %>
+          <.link href={~p"/#{@primary}"} class="hover:text-brand-700">
+            {gettext("Reposted by %{name}", name: full_name(@primary))}
+          </.link>
+        <% else %>
+          {ngettext(
+            "Reposted by %{name} and %{formatted} other",
+            "Reposted by %{name} and %{formatted} others",
+            @others,
+            name: full_name(@primary),
+            formatted: compact_count(@others)
+          )}
+        <% end %>
+      </span>
     </div>
     """
   end

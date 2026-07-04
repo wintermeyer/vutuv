@@ -118,6 +118,29 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       conn = get(authed(conn, token), "/api/2.0/feed?cursor=garbage")
       assert conn.status == 400
     end
+
+    test "a multiply-reposted post is one feed entry carrying the reposter roster", %{
+      conn: conn,
+      me: me,
+      token: token
+    } do
+      renate = insert_activated_user(first_name: "Renate", last_name: "Repost")
+      bruno = insert_activated_user(first_name: "Bruno", last_name: "Booster")
+      follow!(me, renate)
+      follow!(me, bruno)
+      post = insert(:post, user: insert_activated_user(), body: "shared twice")
+      :ok = Posts.repost_post(renate, post)
+      :ok = Posts.repost_post(bruno, post)
+
+      body = json_response(get(authed(conn, token), "/api/2.0/feed"), 200)
+      entries = Enum.filter(body["posts"], &(&1["id"] == post.id))
+
+      # One entry, not two; the roster is person refs, newest first, and
+      # `reposted_by` stays the newest single ref.
+      assert [entry] = entries
+      assert Enum.map(entry["reposters"], & &1["name"]) == ["Bruno Booster", "Renate Repost"]
+      assert entry["reposted_by"]["name"] == "Bruno Booster"
+    end
   end
 
   describe "replies" do

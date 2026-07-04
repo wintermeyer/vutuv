@@ -67,6 +67,36 @@ defmodule VutuvWeb.NewsfeedControllerTest do
       assert doc.resp_body =~ "type: feed"
     end
 
+    test "several followees reposting one post collapse to a single line with a roster", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      renate = insert(:user, email_confirmed?: true, first_name: "Renate", last_name: "Repost")
+      bruno = insert(:user, email_confirmed?: true, first_name: "Bruno", last_name: "Booster")
+      insert(:follow, follower: user, followee: renate)
+      insert(:follow, follower: user, followee: bruno)
+
+      {:ok, post} =
+        Posts.create_post(insert(:user, email_confirmed?: true), %{body: "much shared"})
+
+      :ok = Posts.repost_post(renate, post)
+      :ok = Posts.repost_post(bruno, post)
+
+      body = get(conn, "/feed.md").resp_body
+
+      # One line for the post (no duplicate), naming the newest reposter and
+      # counting the rest.
+      assert length(String.split(body, "much shared")) - 1 == 1
+      assert body =~ "reposted by Bruno Booster and 1 more"
+
+      # JSON exposes the full roster as names (the AgentDocs entry shape, where
+      # author/reposted_by are names too), newest first.
+      json = Jason.decode!(recycle(conn) |> get("/feed.json") |> Map.get(:resp_body))
+      entry = Enum.find(json["posts"], &(&1["id"] == post.id))
+      assert entry["reposters"] == ["Bruno Booster", "Renate Repost"]
+      assert entry["reposted_by"] == "Bruno Booster"
+    end
+
     test "?lang=de renders the German labels", %{conn: conn} do
       {conn, _user} = feed_with_post(conn)
 

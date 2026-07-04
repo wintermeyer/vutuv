@@ -301,12 +301,32 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp link_line(%{description: description, url: url}), do: "* #{description}: #{url}"
 
   defp post_lines(post) do
-    reposted =
-      if post[:reposted_by],
-        do: " (#{gettext("reposted by %{name}", name: post.reposted_by)})",
-        else: ""
+    "* #{post.published_on}#{repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"
+  end
 
-    "* #{post.published_on}#{reposted}: #{post.excerpt}\n  #{post.url}"
+  # "(reposted by A)" for a lone reposter, "(reposted by A and 3 more)" once a
+  # post carries a whole roster (the feed's follow-scoped reposters, newest
+  # first). Falls back to the single `reposted_by` name for docs that carry
+  # only that (the profile posts section).
+  defp repost_suffix(post) do
+    case repost_names(post) do
+      [] ->
+        ""
+
+      [name] ->
+        " (#{gettext("reposted by %{name}", name: name)})"
+
+      [name | rest] ->
+        " (#{gettext("reposted by %{name} and %{count} more", name: name, count: length(rest))})"
+    end
+  end
+
+  defp repost_names(post) do
+    cond do
+      is_list(post[:reposters]) and post[:reposters] != [] -> post[:reposters]
+      post[:reposted_by] -> [post[:reposted_by]]
+      true -> []
+    end
   end
 
   defp person_line(person, prefix \\ "* ") do

@@ -37,6 +37,18 @@ line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 (most-followed members you do not yet follow,
 `Vutuv.Social.most_followed_users/1`, live follow).
 
+**A post appears at most once.** When several followed members repost the same
+post — or the viewer already follows its author, so it would also show as its
+own original — the entries collapse onto the newest event
+(`Posts.collapse_reposts/1`), and the surviving card shows an overlapping
+**avatar stack** of the reposters the viewer follows (plus the viewer),
+newest first, capped at five faces with a `+N` chip and an "and N others" tail
+(`Posts.attach_reposters/2` fills the roster in one query; the banner is
+`PostComponents.reposted_banner/1`). Cross-page the LiveView drops a repost of a
+post already on screen, and a live `{:new_repost}` for a shown post grows that
+card's stack **in place** (no reshuffle — it only climbs to the repost's
+position on the next reload).
+
 The profile page and the archive show the author's timeline (posts + reposts).
 
 Audiences are **deny-based** (`Vutuv.Posts`): a post with no denials is public;
@@ -80,7 +92,9 @@ appear and disappear live across sessions.
 **Reposts** work on public posts only and distribute the post into the
 reposter's followers' feeds; while reposts exist the author cannot restrict the
 post's audience (the composer pins it to Public, `Vutuv.Posts.update_post/2`
-enforces it) but can always delete the post.
+enforces it) but can always delete the post. In a follower's feed the reposters
+they follow collapse behind one card's avatar stack (see the feed section
+above), so a widely-reposted post is one entry, not one card per reposter.
 
 ## Replies (threads)
 

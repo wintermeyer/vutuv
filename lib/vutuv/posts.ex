@@ -910,11 +910,19 @@ defmodule Vutuv.Posts do
   One page of `viewer`'s newsfeed: own posts plus posts **and reposts** of
   followed (activated) authors, visibility-filtered, newest first.
 
-  Entries are maps `%{id:, post:, reposted_by:, at:}` — `id` is
+  Entries are maps `%{id:, post:, reposted_by:, reposters:, at:}` — `id` is
   `"post-<id>"` / `"repost-<id>"` (unique per entry, the stream DOM id),
-  `reposted_by` the carrying user (or `nil` for original posts), `at` the
-  feed timestamp (publication or repost time). Posts are preloaded for
+  `reposted_by` the carrying user (or `nil` for original posts), `reposters`
+  every reposter the viewer follows plus the viewer themselves (newest first,
+  `[]` for original posts — the roster behind the card's avatar stack), `at`
+  the feed timestamp (publication or repost time). Posts are preloaded for
   rendering.
+
+  A post appears **once per page**, at its newest event: several followed
+  members reposting the same post collapse into one entry, and a repost of a
+  post the viewer also follows directly replaces the standalone original
+  (`collapse_reposts/1`). Cross-page duplicates are the LiveView's job — the
+  cursor merge can't see previous pages.
 
   Returns `%{entries:, more?:, next_cursor:}` — pass `cursor:` back for the
   next older page. The cursor (and the merge across the two sources) is the
@@ -931,7 +939,14 @@ defmodule Vutuv.Posts do
         cursor
       )
 
-    %{page | entries: page.entries |> hydrate_posts() |> collapse_threads()}
+    entries =
+      page.entries
+      |> hydrate_posts()
+      |> collapse_threads()
+      |> collapse_reposts()
+      |> attach_reposters(viewer)
+
+    %{page | entries: entries}
   end
 
   defp feed_post_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
@@ -1090,6 +1105,81 @@ defmodule Vutuv.Posts do
           []
         end
     end)
+  end
+
+  # The same post can land on one page several times: through more than one
+  # followed reposter, and through its standalone original entry when the
+  # viewer follows the author too. A feed shows a post once, so collapse the
+  # duplicates onto the newest occurrence — the event that put it this high on
+  # the page. Entries arrive newest-first and a repost always postdates its
+  # post's publication, so `uniq_by` keeps the newest repost and drops both
+  # older reposts and the standalone original.
+  #
+  # Two thread exceptions keep a conversation whole:
+  #   * a post rendering as a full card inside a collapsed thread (carrier or
+  #     nested ancestor) stays with its conversation — the competing repost
+  #     entry drops instead, since deduping the thread away would take the
+  #     other posts of the conversation with it;
+  #   * conversely, a kept repost entry nests its own present ancestors
+  #     (`collapse_threads/1` gives reposts the one-level chain), so a
+  #     *standalone* original already shown inside that repost card drops.
+  defp collapse_reposts(entries) do
+    threaded_ids =
+      for %{reposted_by: nil, ancestors: [_ | _]} = entry <- entries,
+          post <- [entry.post | entry.ancestors],
+          into: MapSet.new(),
+          do: post.id
+
+    kept =
+      entries
+      |> Enum.reject(&(&1.reposted_by != nil and MapSet.member?(threaded_ids, &1.post.id)))
+      |> Enum.uniq_by(& &1.post.id)
+
+    repost_nested_ids =
+      for %{reposted_by: %User{}} = entry <- kept,
+          post <- entry.ancestors,
+          into: MapSet.new(),
+          do: post.id
+
+    Enum.reject(kept, fn entry ->
+      entry.reposted_by == nil and entry.ancestors == [] and
+        MapSet.member?(repost_nested_ids, entry.post.id)
+    end)
+  end
+
+  # Completes each repost-carried entry with every reposter the viewer follows
+  # (plus the viewer themselves), newest first — one indexed query for the
+  # whole page, regardless of which repost happened to carry the entry. The
+  # roster is deliberately follow-scoped: it explains why the post is in
+  # *this* feed; the global repost count already lives on the action bar.
+  defp attach_reposters(entries, %User{} = viewer) do
+    post_ids = for %{reposted_by: %User{}} = entry <- entries, do: entry.post.id
+    rosters = reposter_rosters(post_ids, viewer)
+
+    Enum.map(entries, fn
+      %{reposted_by: %User{}} = entry ->
+        reposters = Map.get(rosters, entry.post.id, [entry.reposted_by])
+        entry |> Map.put(:reposters, reposters) |> Map.put(:reposted_by, hd(reposters))
+
+      entry ->
+        Map.put(entry, :reposters, [])
+    end)
+  end
+
+  defp reposter_rosters([], _viewer), do: %{}
+
+  defp reposter_rosters(post_ids, %User{id: viewer_id}) do
+    from(r in PostRepost,
+      join: u in User,
+      on: u.id == r.user_id,
+      where: r.post_id in ^post_ids,
+      where: r.user_id == ^viewer_id or r.user_id in subquery(followees_of(viewer_id)),
+      where: r.user_id == ^viewer_id or account_confirmed_row(u),
+      order_by: [desc: r.inserted_at, desc: r.id],
+      select: {r.post_id, u}
+    )
+    |> Repo.all()
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
   end
 
   # The posts `post` answers, oldest first. Walk up the reply chain, preferring
