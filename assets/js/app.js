@@ -37,6 +37,37 @@ onReady(() =>
   document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
 )
 
+// Feed/profile post previews clamp the body to six lines. Reveal the "Read more"
+// link (with its length hint) only when the body is really cut: either the
+// source was truncated server-side (data-server-truncated, already visible with
+// no JS) or a short post still overflows the CSS line-clamp — which the server
+// can't know, since wrapping is width- and font-dependent. scrollHeight beats
+// clientHeight on a clamped box exactly when lines are hidden.
+function revealPreviewClamp(el) {
+  const body = el.querySelector("[data-clamp-body]")
+  const link = el.querySelector("[data-read-more]")
+  if (!body || !link) return
+  const clipped =
+    el.dataset.serverTruncated === "true" ||
+    body.scrollHeight - body.clientHeight > 4
+  link.classList.toggle("hidden", !clipped)
+}
+
+// Sweep every preview on the page (classic pages, and the initial static render
+// of live pages). The PostPreviewClamp hook re-checks each one on stream patches;
+// a debounced resize sweep catches reflows that change how many lines wrap.
+function sweepPreviewClamps() {
+  document.querySelectorAll("[data-post-preview]").forEach(revealPreviewClamp)
+}
+
+onReady(sweepPreviewClamps)
+
+let previewClampResizeTimer
+window.addEventListener("resize", () => {
+  clearTimeout(previewClampResizeTimer)
+  previewClampResizeTimer = setTimeout(sweepPreviewClamps, 150)
+})
+
 // Hooks. ClearOnSubmit resets a form right after it is submitted (used by the
 // message composer so the input empties once a message is sent). LocalTime
 // localizes timestamps (see above). ScrollBottom keeps a chat thread pinned
@@ -55,6 +86,17 @@ const Hooks = {
     },
     updated() {
       localizeTime(this.el)
+    },
+  },
+  // Post-preview clamp (see revealPreviewClamp above): reveal the "Read more"
+  // link when the six-line-clamped body overflows. Re-checks on every stream
+  // patch so a re-rendered card measures again.
+  PostPreviewClamp: {
+    mounted() {
+      revealPreviewClamp(this.el)
+    },
+    updated() {
+      revealPreviewClamp(this.el)
     },
   },
   ScrollBottom: {

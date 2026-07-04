@@ -49,6 +49,17 @@ post already on screen, and a live `{:new_repost}` for a shown post grows that
 card's stack **in place** (no reshuffle — it only climbs to the repost's
 position on the next reload).
 
+**Preview truncation.** A timeline card (`mode={:preview}`) clamps the body to
+six lines (`line-clamp-6`) and, when there is more, shows a "Read more" link to
+the permalink that names the whole post's length (its word count). Very long
+bodies are additionally cut server-side at a block boundary
+(`VutuvWeb.Markdown.render_preview/2`, ~1000 chars) — that case reveals the link
+with no JS. A short body that merely overflows the CSS clamp can't be detected on
+the server (wrapping is width/font-dependent), so the link ships hidden and the
+`PostPreviewClamp` JS hook (a `[data-post-preview]` sweep on classic pages)
+reveals it by measuring the clamped body. With JS off such a card keeps the
+native line-clamp ellipsis. The permalink (`mode={:full}`) never clamps.
+
 The profile page and the archive show the author's timeline (posts + reposts).
 
 Audiences are **deny-based** (`Vutuv.Posts`): a post with no denials is public;

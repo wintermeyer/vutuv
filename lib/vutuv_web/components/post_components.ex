@@ -103,6 +103,12 @@ defmodule VutuvWeb.PostComponents do
     viewer = assigns.viewer
     user? = match?(%User{}, viewer)
 
+    # Every per-card DOM id derives from the timeline entry when there is one:
+    # the same post can render twice on a page (original + repost), and the ids
+    # must stay unique. Bound once here so the id assigns below don't each repeat
+    # the `entry_id || post.id` fallback.
+    entry_key = assigns.entry_id || assigns.post.id
+
     assigns =
       assigns
       |> assign(:body_html, body_html)
@@ -110,19 +116,18 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:restricted?, Posts.restricted?(assigns.post))
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
-      # Both ids derive from the timeline entry when there is one: the same
-      # post can render twice on a page (original + repost), and DOM ids
-      # must stay unique.
-      |> assign(:actions_id, "post-actions-#{assigns.entry_id || assigns.post.id}")
+      |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
       # dead page the standalone bar reads it from the session instead. nil (not
       # the `false` an `&&` would yield) — Posts.post_engagement/2 only accepts a
       # user id or nil.
       |> assign(:viewer_id, if(user?, do: viewer.id))
-      |> assign(:menu_id, "post-menu-#{assigns.entry_id || assigns.post.id}")
-      |> assign(:report_menu_id, "post-report-#{assigns.entry_id || assigns.post.id}")
-      |> assign(:time_id, "post-time-#{assigns.entry_id || assigns.post.id}")
+      |> assign(:menu_id, "post-menu-#{entry_key}")
+      |> assign(:report_menu_id, "post-report-#{entry_key}")
+      |> assign(:time_id, "post-time-#{entry_key}")
+      |> assign(:body_id, "post-body-#{entry_key}")
+      |> assign(:body_length_hint, preview_length_hint(assigns))
       |> assign(:author?, Posts.author?(assigns.post, viewer))
       |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
       |> assign(:frozen?, assigns.post.frozen_at != nil)
@@ -140,6 +145,8 @@ defmodule VutuvWeb.PostComponents do
       post={@post}
       mode={@mode}
       body_html={@body_html}
+      body_id={@body_id}
+      body_length_hint={@body_length_hint}
       truncated?={@truncated?}
       restricted?={@restricted?}
       permalink={@permalink}
@@ -577,6 +584,8 @@ defmodule VutuvWeb.PostComponents do
   attr(:post, :any, required: true)
   attr(:mode, :atom, required: true)
   attr(:body_html, :any, required: true)
+  attr(:body_id, :string, required: true)
+  attr(:body_length_hint, :any, default: nil)
   attr(:truncated?, :boolean, required: true)
   attr(:restricted?, :boolean, required: true)
   attr(:permalink, :string, required: true)
@@ -684,20 +693,50 @@ defmodule VutuvWeb.PostComponents do
             </span>
           </div>
 
+          <%!-- Full mode: the whole body, no clamp. --%>
           <div
-            :if={@post.body != ""}
-            class={["markdown mt-2 text-slate-800 dark:text-slate-200", @mode == :preview && "line-clamp-5"]}
+            :if={@mode == :full and @post.body != ""}
+            class="markdown mt-2 text-slate-800 dark:text-slate-200"
           >
             {@body_html}
           </div>
 
-          <.link
-            :if={@mode == :preview && @truncated?}
-            href={@permalink}
-            class="mt-1 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
+          <%!-- Preview mode: the body is clamped to six lines and paired with a
+          "Read more" link carrying the full post's length. The PostPreviewClamp
+          hook (live pages) / the data-post-preview sweep (dead pages) reveals the
+          link whenever the body is really cut — either the source was truncated
+          server-side (@truncated?, shown with no JS too) or a short post still
+          overflows the CSS line-clamp, which the server can't know because
+          wrapping is width- and font-dependent. With JS off a css-only clamp
+          keeps the native line-clamp ellipsis and no link, which is fine. --%>
+          <div
+            :if={@mode == :preview and @post.body != ""}
+            id={@body_id}
+            phx-hook="PostPreviewClamp"
+            data-post-preview
+            data-server-truncated={to_string(@truncated?)}
+            class="mt-2"
           >
-            {gettext("Read more")}
-          </.link>
+            <div class="markdown line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
+              {@body_html}
+            </div>
+            <.link
+              href={@permalink}
+              data-read-more
+              class={[
+                "mt-1 inline-flex items-baseline gap-1.5 text-sm font-semibold text-brand-600 hover:text-brand-700",
+                not @truncated? && "hidden"
+              ]}
+            >
+              {gettext("Read more")}
+              <span
+                :if={@body_length_hint}
+                class="text-xs font-normal text-slate-500 dark:text-slate-400"
+              >
+                · {@body_length_hint}
+              </span>
+            </.link>
+          </div>
 
           <%= if @mode == :preview do %>
             <%!-- A single image keeps its aspect ratio at column width
@@ -908,6 +947,24 @@ defmodule VutuvWeb.PostComponents do
       state -> state
     end
   end
+
+  # The "how long is the whole post" hint shown beside a preview's "Read more"
+  # link: the full body's word count, formatted (never a bare integer) and
+  # pluralised. `nil` in full mode (the whole post is on screen already) and for
+  # a bodyless image-only post (no link renders). Counts the full source, not the
+  # possibly-truncated snippet, so it answers "how long is the whole post".
+  defp preview_length_hint(%{mode: :preview, post: %{body: body}}) when body != "" do
+    count = body |> String.split() |> length()
+
+    ngettext(
+      "%{formatted} word total",
+      "%{formatted} words total",
+      count,
+      formatted: compact_count(count)
+    )
+  end
+
+  defp preview_length_hint(_), do: nil
 
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username

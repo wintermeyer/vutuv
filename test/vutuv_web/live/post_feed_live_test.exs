@@ -885,4 +885,62 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "still here"
     end
   end
+
+  describe "preview truncation" do
+    test "clamps the body to six lines and carries a Read more link with the full length", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      # 40 words, well under the 1000-char source limit, so the source is NOT
+      # cut server-side: the only clipping is the CSS line clamp, which only the
+      # browser can measure. The link is therefore present but hidden until the
+      # PostPreviewClamp JS confirms the body overflows.
+      body = String.duplicate("lorem ", 40) |> String.trim()
+      {:ok, post} = Posts.create_post(user, %{body: body})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # One more line than before: line-clamp-6, not line-clamp-5.
+      assert has_element?(live, "#feed-posts [data-clamp-body].line-clamp-6")
+      refute has_element?(live, "#feed-posts [data-clamp-body].line-clamp-5")
+
+      # The Read more link points at the permalink and names the full length.
+      # It ships hidden (a css-only clamp) for the JS to reveal.
+      assert has_element?(
+               live,
+               ~s(#feed-posts a[data-read-more].hidden[href="#{Posts.path(post)}"]),
+               "40 words total"
+             )
+    end
+
+    test "a source-truncated post shows the Read more link with no JS", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 250 words / ~1250 chars: over the source limit, so the preview is cut
+      # server-side and the link must be visible without waiting for JS.
+      body = String.duplicate("word ", 250) |> String.trim()
+      {:ok, post} = Posts.create_post(user, %{body: body})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      assert has_element?(live, ~s(#feed-posts a[data-read-more][href="#{Posts.path(post)}"]))
+      # Visible from the server: the read-more link is not hidden.
+      refute has_element?(live, "#feed-posts a[data-read-more].hidden")
+      # The length hint counts the whole post, not the truncated snippet.
+      assert has_element?(live, "#feed-posts a[data-read-more]", "250 words total")
+    end
+
+    test "a one-line post shows no length hint and no visible Read more link", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "just a line"})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # The link is present (JS decides visibility) but ships hidden, and the
+      # short body is never source-truncated.
+      assert has_element?(
+               live,
+               ~s(#feed-posts a[data-read-more].hidden[href="#{Posts.path(post)}"])
+             )
+    end
+  end
 end
