@@ -68,8 +68,9 @@ defmodule Vutuv.Search do
   `ort:x` / `stadt:x` / `city:x` (has an address in that city) - both
   combinable with a name ("müller tag:php"). A query wrapped in double quotes
   sets `exact?` (equality instead of substring + phonetics). Options: `:scope`
-  (`:all | :people | :tags | :posts`, the UI filter; operators override it)
-  and `:exact` (the UI toggle, OR-ed with the quotes).
+  (`:all | :people | :tags | :posts`, the UI filter; operators override it,
+  reported back as `scope_pinned?`) and `:exact` (the UI toggle, OR-ed with
+  the quotes).
   """
   def parse(value, opts \\ []) when is_binary(value) do
     raw = value |> String.trim() |> String.downcase()
@@ -85,12 +86,10 @@ defmodule Vutuv.Search do
         end
       end)
 
-    scope =
-      if Enum.any?([:tag, :first_name, :last_name, :slug, :city], &fields[&1]) do
-        :people
-      else
-        valid_scope(opts[:scope])
-      end
+    # People operators pin the scope: the UI chips cannot override them, so
+    # `scope_pinned?` lets the search page render them as disabled (#846).
+    scope_pinned? = Enum.any?([:tag, :first_name, :last_name, :slug, :city], &fields[&1])
+    scope = if scope_pinned?, do: :people, else: valid_scope(opts[:scope])
 
     %{
       raw: raw,
@@ -101,7 +100,8 @@ defmodule Vutuv.Search do
       slug: fields[:slug],
       city: fields[:city],
       exact?: quoted? or opts[:exact] == true,
-      scope: scope
+      scope: scope,
+      scope_pinned?: scope_pinned?
     }
   end
 

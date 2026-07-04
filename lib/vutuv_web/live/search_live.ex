@@ -48,8 +48,9 @@ defmodule VutuvWeb.SearchLive do
      |> assign(:scope, scope)
      |> assign(:exact, exact)
      # Operators in the query override the scope chips; highlight what the
-     # search actually did.
+     # search actually did and disable the chips that can do nothing (#846).
      |> assign(:effective_scope, (results && results.parsed.scope) || scope)
+     |> assign(:scope_pinned?, (results && results.parsed.scope_pinned?) || false)
      |> assign(:results, results)
      |> assign_needles(results)
      |> assign_people_maps(results)
@@ -149,7 +150,25 @@ defmodule VutuvWeb.SearchLive do
   attr(:id, :string, required: true)
   attr(:patch, :string, required: true)
   attr(:active, :boolean, required: true)
+  attr(:disabled, :boolean, default: false)
+  attr(:title, :string, default: nil)
   slot(:inner_block, required: true)
+
+  # A disabled chip is a static span: with a people operator in the query the
+  # scope is pinned, so a link that changes nothing would just look broken
+  # (#846).
+  defp filter_chip(%{disabled: true} = assigns) do
+    ~H"""
+    <span
+      id={@id}
+      aria-disabled="true"
+      title={@title}
+      class="cursor-not-allowed rounded-full bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-600 opacity-40 dark:bg-slate-800 dark:text-slate-300"
+    >
+      {render_slot(@inner_block)}
+    </span>
+    """
+  end
 
   defp filter_chip(assigns) do
     ~H"""
@@ -197,6 +216,8 @@ defmodule VutuvWeb.SearchLive do
           id={"search-scope-#{scope}"}
           patch={search_path(@q, scope, @exact)}
           active={@effective_scope == scope}
+          disabled={@scope_pinned? and scope != :people}
+          title={gettext("Not available while the search uses a people filter.")}
         >
           {scope_label(scope)}
         </.filter_chip>
@@ -207,6 +228,14 @@ defmodule VutuvWeb.SearchLive do
           <span :if={@exact}>✓ </span>{gettext("Exact matches only")}
         </.filter_chip>
       </div>
+
+      <p
+        :if={@scope_pinned?}
+        id="search-scope-pinned-hint"
+        class="mt-2 text-xs text-slate-600 dark:text-slate-400"
+      >
+        {gettext("Your search uses a people filter such as tag: or city:, so it only finds people.")}
+      </p>
 
       <p
         :if={@results == nil and String.trim(@q) != ""}

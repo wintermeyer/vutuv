@@ -169,6 +169,14 @@ defmodule Vutuv.SearchTest do
       assert %{scope: :all} = Search.parse("meier", scope: :bogus)
     end
 
+    test "people operators mark the scope as pinned, plain queries do not" do
+      assert %{scope_pinned?: true} = Search.parse("tag:php", scope: :tags)
+      assert %{scope_pinned?: true} = Search.parse("city:hamburg", scope: :posts)
+      assert %{scope_pinned?: true} = Search.parse("@stefan")
+      assert %{scope_pinned?: false} = Search.parse("meier", scope: :tags)
+      assert %{scope_pinned?: false} = Search.parse("meier")
+    end
+
     test "an unknown operator stays ordinary text" do
       assert %{text: "foo:bar", tag: nil} = Search.parse("foo:bar")
     end

@@ -292,6 +292,39 @@ defmodule VutuvWeb.SearchLiveTest do
       assert has_element?(view, "#search-tags", "1")
     end
 
+    # Issue #846: with a people operator in the query the parser pins the
+    # search to people, so the other scope chips did nothing when clicked.
+    # They must read as disabled instead of as working tabs.
+    test "a people operator disables the other scope chips with a hint", %{conn: conn} do
+      tag = insert(:tag, name: "PHP", slug: "php")
+      insert(:user_tag, tag: tag, user: insert(:activated_user))
+
+      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+
+      # People is highlighted as what the search actually did ...
+      assert has_element?(view, "#search-scope-people.bg-brand-600")
+      # ... and the other scopes render as static disabled chips, not links.
+      for scope <- ~w(all tags posts) do
+        refute has_element?(view, "a#search-scope-#{scope}")
+        assert has_element?(view, ~s(span#search-scope-#{scope}[aria-disabled="true"]))
+      end
+
+      assert has_element?(view, "#search-scope-pinned-hint")
+      # The exact toggle still applies to operator queries, so it stays a link.
+      assert has_element?(view, "a#search-exact-toggle")
+    end
+
+    test "clearing the operator re-enables the scope chips", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+      refute has_element?(view, "a#search-scope-tags")
+
+      view |> form("#search-form") |> render_change(%{q: "php"})
+      assert_patch(view, ~p"/search?q=php")
+
+      assert has_element?(view, "a#search-scope-tags")
+      refute has_element?(view, "#search-scope-pinned-hint")
+    end
+
     test "tag: lists the people with that tag instead of the tag itself", %{conn: conn} do
       tag = insert(:tag, name: "PHP", slug: "php")
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")

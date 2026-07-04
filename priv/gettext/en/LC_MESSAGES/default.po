@@ -448,7 +448,7 @@ msgstr ""
 #: lib/vutuv_web/templates/phone_number/new.html.heex:4
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:4
 #: lib/vutuv_web/templates/url/new.html.heex:4
-#: lib/vutuv_web/templates/user_tag/new.html.heex:6
+#: lib/vutuv_web/templates/user_tag/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/new.html.heex:4
 #, elixir-autogen
 msgid "New"
@@ -603,7 +603,7 @@ msgstr ""
 #: lib/vutuv_web/live/admin/user_delete_live.ex:125
 #: lib/vutuv_web/live/admin/user_live.ex:244
 #: lib/vutuv_web/live/search_live.ex:33
-#: lib/vutuv_web/live/search_live.ex:179
+#: lib/vutuv_web/live/search_live.ex:198
 #: lib/vutuv_web/live/shell_live.ex:264
 #: lib/vutuv_web/live/shell_live.ex:409
 #: lib/vutuv_web/templates/layout/app.html.heex:138
@@ -1102,12 +1102,12 @@ msgstr ""
 msgid "Can't find URL"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:225
+#: lib/vutuv_web/live/search_live.ex:254
 #, elixir-autogen
 msgid "Our search will try to match similar names to your search, so don't worry about spelling."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:220
+#: lib/vutuv_web/live/search_live.ex:249
 #, elixir-autogen
 msgid "Search Tips"
 msgstr ""
@@ -1234,7 +1234,6 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:43
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:2
-#: lib/vutuv_web/templates/user_tag/new.html.heex:2
 #, elixir-autogen
 msgid "New tag"
 msgstr ""
@@ -1365,8 +1364,8 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/text.ex:322
 #: lib/vutuv_web/components/ui.ex:2384
 #: lib/vutuv_web/controllers/user_tag_controller.ex:51
-#: lib/vutuv_web/live/search_live.ex:146
-#: lib/vutuv_web/live/search_live.ex:292
+#: lib/vutuv_web/live/search_live.ex:147
+#: lib/vutuv_web/live/search_live.ex:321
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:138
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
@@ -1381,6 +1380,7 @@ msgstr ""
 #: lib/vutuv_web/templates/user_tag/form_content.html.heex:5
 #: lib/vutuv_web/templates/user_tag/index.html.heex:10
 #: lib/vutuv_web/templates/user_tag/manage.html.heex:4
+#: lib/vutuv_web/templates/user_tag/new.html.heex:3
 #: lib/vutuv_web/templates/user_tag/show.html.heex:6
 #, elixir-autogen
 msgid "Tags"
@@ -1510,11 +1510,6 @@ msgstr ""
 #: lib/vutuv_web/controllers/user_tag_controller.ex:170
 #, elixir-autogen
 msgid "User tag deleted successfully."
-msgstr ""
-
-#: lib/vutuv_web/templates/user_tag/new.html.heex:5
-#, elixir-autogen
-msgid "User tags"
 msgstr ""
 
 #: web/templates/admin/tag_closure/index.html.eex:35
@@ -2171,8 +2166,8 @@ msgstr ""
 #: lib/vutuv_web/controllers/user_controller.ex:72
 #: lib/vutuv_web/live/admin/dashboard_live.ex:149
 #: lib/vutuv_web/live/post_live/saved.ex:305
-#: lib/vutuv_web/live/search_live.ex:147
-#: lib/vutuv_web/live/search_live.ex:306
+#: lib/vutuv_web/live/search_live.ex:148
+#: lib/vutuv_web/live/search_live.ex:335
 #: lib/vutuv_web/views/admin/report_html.ex:15
 #, elixir-autogen, elixir-format
 msgid "Posts"
@@ -4438,7 +4433,7 @@ msgstr ""
 msgid "Undeliverable"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:222
+#: lib/vutuv_web/live/search_live.ex:251
 #, elixir-autogen, elixir-format
 msgid "You can search for a name, email, or tag, or for words in public posts."
 msgstr ""
@@ -4536,74 +4531,74 @@ msgstr ""
 msgid "This area is reserved for administrators."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:338
+#: lib/vutuv_web/live/search_live.ex:367
 #, elixir-autogen, elixir-format
 msgid "No results for \"%{query}\""
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:275
+#: lib/vutuv_web/live/search_live.ex:304
 #, elixir-autogen, elixir-format
 msgid "Not an exact match, but sounds like your search."
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/saved.ex:308
-#: lib/vutuv_web/live/search_live.ex:145
-#: lib/vutuv_web/live/search_live.ex:248
+#: lib/vutuv_web/live/search_live.ex:146
+#: lib/vutuv_web/live/search_live.ex:277
 #, elixir-autogen, elixir-format
 msgid "People"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:216
+#: lib/vutuv_web/live/search_live.ex:245
 #, elixir-autogen, elixir-format
 msgid "Results appear once you have typed at least three letters."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:272
+#: lib/vutuv_web/live/search_live.ex:301
 #, elixir-autogen, elixir-format
 msgid "Similar names"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:144
+#: lib/vutuv_web/live/search_live.ex:145
 #, elixir-autogen, elixir-format
 msgid "All"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:207
+#: lib/vutuv_web/live/search_live.ex:228
 #, elixir-autogen, elixir-format
 msgid "Exact matches only"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:241
+#: lib/vutuv_web/live/search_live.ex:270
 #, elixir-autogen, elixir-format
 msgid "in quotes: exact matches only, no similar names"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:239
+#: lib/vutuv_web/live/search_live.ex:268
 #, elixir-autogen, elixir-format
 msgid "searches usernames"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:237
+#: lib/vutuv_web/live/search_live.ex:266
 #, elixir-autogen, elixir-format
 msgid "only people with an address in this city"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:236
+#: lib/vutuv_web/live/search_live.ex:265
 #, elixir-autogen, elixir-format
 msgid "city:koblenz"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:232
+#: lib/vutuv_web/live/search_live.ex:261
 #, elixir-autogen, elixir-format
 msgid "first:stefan"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:240
+#: lib/vutuv_web/live/search_live.ex:269
 #, elixir-autogen, elixir-format
 msgid "miller"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:233
+#: lib/vutuv_web/live/search_live.ex:262
 #, elixir-autogen, elixir-format
 msgid "searches first names only (last: for last names)"
 msgstr ""
@@ -4619,7 +4614,7 @@ msgstr ""
 msgid "Add this tag"
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:186
+#: lib/vutuv_web/live/search_live.ex:205
 #, elixir-autogen, elixir-format
 msgid "Search for people, tags, or posts"
 msgstr ""
@@ -4629,7 +4624,7 @@ msgstr ""
 msgid "This tag doesn't have a description yet."
 msgstr ""
 
-#: lib/vutuv_web/live/search_live.ex:235
+#: lib/vutuv_web/live/search_live.ex:264
 #, elixir-autogen, elixir-format
 msgid "only people with this tag, combinable: miller tag:php"
 msgstr ""
@@ -5293,7 +5288,7 @@ msgstr ""
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:2
 #: lib/vutuv_web/templates/url/edit.html.heex:2
 #: lib/vutuv_web/templates/url/new.html.heex:2
-#: lib/vutuv_web/templates/user_tag/new.html.heex:4
+#: lib/vutuv_web/templates/user_tag/new.html.heex:2
 #: lib/vutuv_web/templates/username/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:2
 #: lib/vutuv_web/templates/work_experience/new.html.heex:2
@@ -8688,4 +8683,14 @@ msgstr ""
 #: lib/vutuv_web/views/work_experience_html.ex:28
 #, elixir-autogen, elixir-format
 msgid "Volunteering"
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:220
+#, elixir-autogen, elixir-format
+msgid "Not available while the search uses a people filter."
+msgstr ""
+
+#: lib/vutuv_web/live/search_live.ex:237
+#, elixir-autogen, elixir-format
+msgid "Your search uses a people filter such as tag: or city:, so it only finds people."
 msgstr ""
