@@ -244,31 +244,46 @@ defmodule VutuvWeb.UI do
   on the agent links via `locale`; the vCard carries no translatable labels, so
   it skips the `?lang=` suffix. The feed renders it twice (desktop rail + a
   `md:hidden` bottom copy), so pass `id` / `class` through the global `rest`.
+
+  `machine_formats={false}` (a fully machine-opted-out member, see
+  `VutuvWeb.ContentPolicy.agent_docs_blocked?/1`) drops the Markdown / text /
+  JSON / XML chips — those URLs answer 404 for such a profile — and shows a
+  short note in their place; the vCard chip stays when `vcard` is set.
   """
   attr(:base_path, :string, required: true)
   attr(:locale, :any, default: nil)
   attr(:vcard, :boolean, default: false)
+  attr(:machine_formats, :boolean, default: true)
   attr(:rest, :global)
 
   def other_formats_card(assigns) do
     lang = if assigns.locale in [nil, "en"], do: "", else: "?lang=#{assigns.locale}"
     base = assigns.base_path
 
-    formats =
-      [
-        {gettext("Markdown"), base <> ".md" <> lang},
-        {gettext("Text only"), base <> ".txt" <> lang},
-        {"JSON", base <> ".json" <> lang},
-        {"XML", base <> ".xml" <> lang}
-      ] ++ if assigns.vcard, do: [{gettext("vCard"), base <> ".vcf"}], else: []
+    machine_chips =
+      if assigns.machine_formats do
+        [
+          {gettext("Markdown"), base <> ".md" <> lang},
+          {gettext("Text only"), base <> ".txt" <> lang},
+          {"JSON", base <> ".json" <> lang},
+          {"XML", base <> ".xml" <> lang}
+        ]
+      else
+        []
+      end
 
-    assigns = assign(assigns, :formats, formats)
+    vcard_chip = if assigns.vcard, do: [{gettext("vCard"), base <> ".vcf"}], else: []
+
+    assigns = assign(assigns, :formats, machine_chips ++ vcard_chip)
 
     ~H"""
     <.card {@rest}>
       <.section_title class="mb-4">{gettext("Other formats")}</.section_title>
+      <p :if={!@machine_formats} class="mb-3 text-xs text-slate-600 dark:text-slate-400">
+        {gettext("This profile is not offered as a Markdown, text, JSON or XML export.")}
+      </p>
       <%!-- Chips: a wrapping row of small tags instead of a one-per-row list. --%>
-      <div class="flex flex-wrap gap-1.5">
+      <div :if={@formats != []} class="flex flex-wrap gap-1.5">
         <.link
           :for={{label, href} <- @formats}
           href={href}

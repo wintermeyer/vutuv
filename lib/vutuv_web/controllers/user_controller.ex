@@ -4,6 +4,7 @@ defmodule VutuvWeb.UserController do
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :confirm_delete])
   plug(VutuvWeb.Plug.AuthUser when action in [:edit, :update])
   plug(VutuvWeb.Plug.EnsureActivated when action not in [:delete, :confirm_delete])
+  plug(VutuvWeb.Plug.AgentExportOptOut when action in [:show])
   import VutuvWeb.UserHelpers
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 

@@ -2,7 +2,7 @@
   title={gettext("Members: %{letter}", letter: @label)}
   crumbs={[
     {gettext("Home"), ~p"/"},
-    {gettext("Member directory"), ~p"/members"},
+    {gettext("Member directory"), ~p"/system/members"},
     @label
   ]}
 />
@@ -15,7 +15,7 @@
       <%= for entry <- @entries do %>
         <%= if entry.count > 0 do %>
           <a
-            href={~p"/members/#{entry.letter}"}
+            href={~p"/system/members/#{entry.letter}"}
             aria-current={entry.letter == @letter && "page"}
             class={[
               "rounded px-2 py-1 font-semibold",
@@ -53,6 +53,6 @@
       })}
     <% end %>
 
-    <.pager params={@conn.params} total={@total} />
+    <.pager params={@conn.params} total={@total} per_page={@per_page} />
   </section>
 </div>

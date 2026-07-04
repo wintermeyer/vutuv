@@ -45,6 +45,19 @@ defmodule VutuvWeb.ContentPolicy do
   def robots_directives(true, true), do: "noindex, noai, noimageai"
 
   @doc """
+  True when a member fully opted out of machine use — `noindex?` (search
+  engines) **and** `noai?` (AI agents) both set. Their profile namespace
+  then serves no agent documents at all (`VutuvWeb.Plug.AgentExportOptOut`
+  404s the `.md`/`.txt`/`.json`/`.xml` URLs) and the profile shows a note
+  where the "Other formats" card would link them. One opt-out alone blocks
+  nothing: those documents keep flowing with the choice embedded in the
+  headers and every body format, because a single opt-out still permits
+  the other machine audience. The vCard is never gated (a human
+  contact-exchange format).
+  """
+  def agent_docs_blocked?(%{noindex?: noindex?, noai?: noai?}), do: noindex? and noai?
+
+  @doc """
   Stamps `robots_directives/2` as the response's `X-Robots-Tag` header (a
   no-op when there is nothing to declare). The one conn-level application
   of the directives, shared by the agent docs, the feeds, the post pages

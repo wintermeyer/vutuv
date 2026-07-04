@@ -273,17 +273,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "member directory index in every format" do
-    rendered = formats_for("/members")
+    rendered = formats_for("/system/members")
 
     # Greta Gradient sits under G, Fanny Follower under F — every format
     # must link both letter pages.
-    assert_fact_everywhere(rendered, "/members/g")
-    assert_fact_everywhere(rendered, "/members/f")
+    assert_fact_everywhere(rendered, "/system/members/g")
+    assert_fact_everywhere(rendered, "/system/members/f")
     assert Jason.decode!(rendered.json)["type"] == "directory"
   end
 
   test "member directory letter page in every format" do
-    rendered = formats_for("/members/g")
+    rendered = formats_for("/system/members/g")
 
     assert_fact_everywhere(rendered, "Greta Gradient")
     # Each listed member's tags ride along in every format, like their name.

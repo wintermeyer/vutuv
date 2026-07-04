@@ -199,7 +199,17 @@ defmodule VutuvWeb.AgentDocs do
   assigns `:agent_doc_alternates`, which the root layout renders as
   `<link rel="alternate">` tags.
   """
-  def put_html_alternates(conn, formats \\ @default_formats) do
+  def put_html_alternates(conn, formats \\ @default_formats)
+
+  # A fully machine-opted-out member's page must not advertise its agent
+  # documents — they 404 (VutuvWeb.Plug.AgentExportOptOut, which sets this
+  # mark). No assign also keeps the alternates out of the Link header
+  # (VutuvWeb.Plug.AgentLinks reads the same assign).
+  def put_html_alternates(%{private: %{vutuv_agent_docs_blocked: true}} = conn, _formats) do
+    conn
+  end
+
+  def put_html_alternates(conn, formats) do
     path = canonical_path(conn.request_path)
     query = query_suffix(conn)
 

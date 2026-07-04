@@ -18,16 +18,19 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   """
 
   # Router prefixes (current and legacy), endpoint/static paths, and a few
-  # conventional names kept free for future use.
+  # conventional names kept free for future use. New site pages (listings,
+  # directories, tools) go under the already-reserved /system/ prefix instead
+  # of claiming another root word — see CLAUDE.md; the member directory
+  # (/system/members) set the pattern, freeing "members" as a handle again.
   @route_slugs ~w(
     about access_tokens admin ads api assets avatars benutzername blocks blog bookmarks
     community connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
     follows fonts groups health help images impressum jobs js legal likes listings live
-    llms.txt login logout mail maps members memberships messages moderation new news
+    llms.txt login logout mail maps memberships messages moderation new news
     notifications oauth phoenix post_images posts press privacy reports robots.txt
     screenshots search search_queries security.txt sent_emails sessions settings
-    sitemap.xml sitemaps socket status support tags team terms tidewave unsubscribe
+    sitemap.xml sitemaps socket status support system tags team terms tidewave unsubscribe
     user_bookmarks user_likes username users webhooks www
   )
 

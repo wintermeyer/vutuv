@@ -4,7 +4,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   following lists (`/:slug/followers`, `/:slug/following`), the connections
   list (`/:slug/connections`), the tag page (`/tags/:slug`), the
   most-followed listing (`/listings/most_followed_users`) and the member
-  directory (`/members` + `/members/:letter`).
+  directory (`/system/members` + `/system/members/:letter`).
 
   The follow and connection lists are noindexed in HTML (the `NoIndex`
   plug + robots.txt), so their docs carry `noindex: true` plus
@@ -128,12 +128,12 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   end
 
   @doc """
-  The member-directory overview (`/members`): one entry per letter bucket
+  The member-directory overview (`/system/members`): one entry per letter bucket
   with its member count and letter-page URL. Zero-count letters ride along
   so the doc mirrors the HTML page's full A-Z strip.
   """
   def build_directory_index(entries, total) do
-    AgentDocs.doc_meta("directory", "/members")
+    AgentDocs.doc_meta("directory", "/system/members")
     |> Map.merge(%{
       title: gettext("Member directory"),
       description:
@@ -143,20 +143,20 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       total: total,
       letters:
         Enum.map(entries, fn %{letter: letter, count: count} ->
-          %{letter: letter, count: count, url: AgentDocs.abs_url("/members/#{letter}")}
+          %{letter: letter, count: count, url: AgentDocs.abs_url("/system/members/#{letter}")}
         end)
     })
   end
 
   @doc """
-  One page of a member-directory letter (`/members/:letter`). Same doc type
+  One page of a member-directory letter (`/system/members/:letter`). Same doc type
   as the most-followed listing — it is a plain people list; the directory
   context lives in the title and the canonical URL.
   """
   def build_directory_letter(letter, label, people, total, work_info_by_id, tags_by_id) do
     title = gettext("Members: %{letter}", letter: label)
 
-    AgentDocs.doc_meta("listing", "/members/#{letter}")
+    AgentDocs.doc_meta("listing", "/system/members/#{letter}")
     |> Map.merge(%{
       title: title,
       description:

@@ -980,6 +980,7 @@ the resulting ~200px rail width. --%>
         base_path={"/" <> @user.username}
         locale={@locale}
         vcard
+        machine_formats={not VutuvWeb.ContentPolicy.agent_docs_blocked?(@user)}
         id="profile-other-formats"
       />
     </div>

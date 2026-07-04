@@ -211,6 +211,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "type: #{doc.type}",
       "schema_version: #{doc.schema_version}",
       "generated_at: #{DateTime.to_iso8601(doc.generated_at)}",
+      # The page's opt-outs, embedded in the document body itself so a reader
+      # that never sees the Content-Signal / X-Robots-Tag headers (a saved
+      # file, a pasted snippet) still carries the member's choice.
+      doc.noindex && "noindex: true",
+      doc.noai && "noai: true",
       "---"
     ]
     |> Enum.reject(&is_nil/1)

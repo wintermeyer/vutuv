@@ -32,7 +32,7 @@ defmodule Vutuv.Sitemap do
                   "/datenschutzerklaerung",
                   "/nutzungsbedingungen",
                   "/listings/most_followed_users",
-                  "/members",
+                  "/system/members",
                   "/ads",
                   "/tags",
                   "/developers"

@@ -399,7 +399,11 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc[:username] && "username: #{doc.username}",
       doc[:avatar_url] && "avatar_url: #{doc.avatar_url}",
       "generated_at: #{DateTime.to_iso8601(doc.generated_at)}",
-      "canonical: #{doc.url}"
+      "canonical: #{doc.url}",
+      # The page's opt-outs, embedded like the Markdown frontmatter does, so
+      # a saved copy still carries the member's choice without the headers.
+      doc.noindex && "noindex: true",
+      doc.noai && "noai: true"
     ]
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n")

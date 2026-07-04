@@ -1,7 +1,7 @@
 defmodule VutuvWeb.DirectoryController do
   @moduledoc """
-  The public member directory: `/members` is the A-Z overview,
-  `/members/:letter` one letter's members (paginated, sorted by last name).
+  The public member directory: `/system/members` is the A-Z overview,
+  `/system/members/:letter` one letter's members (paginated, sorted by last name).
   The crawl-friendly sibling of the sitemap for search engines that browse
   links instead of `/sitemap.xml` — and a browsable index for humans. Only
   the crawlable member set shows up (`Vutuv.Directory.indexable_users/0`);
@@ -57,6 +57,7 @@ defmodule VutuvWeb.DirectoryController do
           entries: Directory.letter_entries(),
           users: users,
           total: total,
+          per_page: Directory.per_page(),
           work_info_by_id: work_info_by_id,
           tags_by_id: tags_by_id,
           following_by_id: UserHelpers.following_map(conn.assigns[:current_user], users)

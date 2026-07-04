@@ -173,6 +173,9 @@ defmodule VutuvWeb.PageController do
   Documents carry `schema_version` (currently #{AgentDocs.schema_version()};
   additions are non-breaking) and `generated_at`. Responses carry a
   `Content-Signal` header; respect it — members can opt out of search/AI use.
+  A single opt-out is also embedded in the document body (`noindex` /
+  `noai`). A member who opted out of BOTH serves no profile documents at
+  all: their profile-namespace extension URLs answer 404 (the vCard stays).
 
   ## Pages
 
@@ -187,8 +190,8 @@ defmodule VutuvWeb.PageController do
   - `/<username>/tags/<tag>/endorsers` — everyone who endorses this member for that tag
   - `/tags/<tag>` — a tag and its most endorsed members
   - `/listings/most_followed_users` — the most followed members
-  - `/members` — the member directory: everyone open to search engines,
-    filed by last-name initial at `/members/<a-z|other>`
+  - `/system/members` — the member directory: everyone open to search engines,
+    filed by last-name initial at `/system/members/<a-z|other>`
   - `/ads` — the daily text ad: price, conditions, next available day
     (booking happens online and requires a login)
 

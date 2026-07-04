@@ -1,6 +1,6 @@
 defmodule Vutuv.Directory do
   @moduledoc """
-  The public member directory (`/members`): the one definition of the
+  The public member directory (`/system/members`): the one definition of the
   **crawlable member set** — activated members who have not opted out of
   search engines (`noindex?: false`) and are not moderation-hidden — grouped
   alphabetically for browsing. `Vutuv.Sitemap` advertises the same set to
@@ -24,6 +24,11 @@ defmodule Vutuv.Directory do
 
   # The URL segment of the non-letter bucket; SQL spells it "#".
   @other "other"
+
+  # Deliberately denser than the site-wide 250 (`Vutuv.Pages.max_page_items/0`):
+  # a directory page is browsed, not scanned once, so short pages with a
+  # visible pager beat one endless scroll.
+  @per_page 50
 
   # ascii() is deliberate: BETWEEN 'a' AND 'z' would be collation-dependent
   # (an ICU locale sorts 'ä' inside that range), while the code-point check
@@ -92,6 +97,9 @@ defmodule Vutuv.Directory do
   @doc "True for a letter segment the directory serves: a-z or `other`."
   def valid_letter?(letter), do: letter in @letters or letter == @other
 
+  @doc "The directory's page size (the `per_page` behind `members_page/2` and the pager)."
+  def per_page, do: @per_page
+
   @doc """
   The crawlable member set: activated, indexable (`noindex?: false`), not
   moderation-hidden. The shared base of the directory pages and the
@@ -126,7 +134,8 @@ defmodule Vutuv.Directory do
   @doc """
   One page of a letter's members as `%{users: users, total: total}`, sorted
   by last name then first name (id as the creation-order tiebreaker), paged
-  by the `?page` param like every browse page (`Vutuv.Pages`).
+  by the `?page` param like every browse page (`Vutuv.Pages`) at
+  `per_page/0` members per page.
   """
   def members_page(letter, params) do
     base = where(indexable_users(), [u], letter_bucket(u) == ^bucket_key(letter))
@@ -135,7 +144,7 @@ defmodule Vutuv.Directory do
     users =
       base
       |> order_by([u], asc: name_sort_key(u), asc: u.first_name, asc: u.id)
-      |> Vutuv.Pages.paginate(params, total)
+      |> Vutuv.Pages.paginate(params, total, @per_page)
       |> Repo.all()
 
     %{users: users, total: total}

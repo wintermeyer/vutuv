@@ -22,7 +22,7 @@
       <%= for entry <- @entries do %>
         <%= if entry.count > 0 do %>
           <a
-            href={~p"/members/#{entry.letter}"}
+            href={~p"/system/members/#{entry.letter}"}
             data-letter={entry.letter}
             data-count={entry.count}
             class="flex flex-col items-center rounded-lg px-2 py-3 ring-1 ring-slate-200 hover:bg-brand-50 dark:ring-slate-800 dark:hover:bg-brand-900/40"

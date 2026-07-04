@@ -35,6 +35,7 @@ defmodule VutuvWeb.Router do
     plug(Plugs.NoIndex)
     plug(Plugs.UserResolveSlug)
     plug(Plugs.EnsureActivated)
+    plug(Plugs.AgentExportOptOut)
   end
 
   # The user-agnostic settings scope: every /settings/* page operates on the
@@ -154,10 +155,12 @@ defmodule VutuvWeb.Router do
 
     # The public member directory: the A-Z overview plus one page per letter.
     # The crawl surface for search engines that follow links instead of
-    # reading /sitemap.xml, and a browsable index for humans ("members" is a
-    # ReservedSlug; the letter pages carry agent-format siblings).
-    get("/members", DirectoryController, :index)
-    get("/members/:letter", DirectoryController, :show)
+    # reading /sitemap.xml, and a browsable index for humans (the letter
+    # pages carry agent-format siblings). It lives under /system/ — the one
+    # reserved word future site pages share, so each new page stops burning
+    # another root path word that members could have had as a handle.
+    get("/system/members", DirectoryController, :index)
+    get("/system/members/:letter", DirectoryController, :show)
 
     # The signed-in member's newsfeed. A controller (not a bare `live`) so it
     # can negotiate the agent-format siblings (/feed.md/.txt/.json/.xml,
