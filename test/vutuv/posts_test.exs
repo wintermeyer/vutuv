@@ -591,6 +591,33 @@ defmodule Vutuv.PostsTest do
       entries = Posts.feed_page(viewer).entries
       assert Enum.map(entries, & &1.id) == ["post-#{reply.id}"]
     end
+
+    test "a branching thread (a post answered twice) collapses into one entry" do
+      # A reply nests the whole conversation it answers as full cards. When one
+      # post has *two* replies that both land on the page, each branch used to
+      # carry the shared ancestors, so the entire thread rendered once per branch
+      # — it appeared twice in the feed (the real report: root -> "Und?" ->
+      # "Kommt an", the last answered by BOTH an Oliver reply and a Stefan reply).
+      # The whole conversation must collapse into a single feed entry.
+      viewer = user()
+      other = user()
+      follow!(viewer, other)
+
+      root = create_post!(other, %{body: "root"})
+      {:ok, mid} = Posts.create_reply(viewer, root, %{body: "und?"})
+      {:ok, branch} = Posts.create_reply(other, mid, %{body: "kommt an"})
+      # `branch` is answered twice — once by the followee, once by the viewer.
+      {:ok, leaf_a} = Posts.create_reply(other, branch, %{body: "ausgehende replies"})
+      {:ok, leaf_b} = Posts.create_reply(viewer, branch, %{body: "blick auf issue 843"})
+
+      assert [entry] = Posts.feed_page(viewer).entries
+
+      # Every post of the thread appears exactly once (its ancestors plus the
+      # leaf), no post repeated across branches.
+      shown = Enum.map(entry.ancestors, & &1.id) ++ [entry.post.id]
+      assert Enum.sort(shown) == Enum.sort([root.id, mid.id, branch.id, leaf_a.id, leaf_b.id])
+      assert Enum.uniq(shown) == shown
+    end
   end
 
   describe "discover_posts/2" do

@@ -1026,35 +1026,70 @@ defmodule Vutuv.Posts do
   end
 
   # A reply renders as a conversation: the posts it answers are stacked above it
-  # as full cards (`<.post_thread_entry>`). So when a reply *and its ancestors*
-  # all land on the same page, the ancestors' own standalone rows are visible
-  # duplicates — and a middle post (a reply that is itself another reply's
-  # parent) used to show up twice: once nested under its reply, once as its own
-  # row nesting *its* parent. Collapse each thread: drop every entry whose post
-  # is an ancestor of another entry (it renders inside that thread instead), and
-  # annotate each surviving leaf with `:ancestors` — the ordered, oldest-first
-  # list of the posts it answers — so the whole thread renders once, no matter
-  # how many posts or authors it spans.
+  # as full cards (`<.post_thread_entry>`). So when several posts of one thread
+  # land on the same page they must collapse into a *single* feed entry —
+  # otherwise each post shows both on its own and nested under its reply.
   #
-  # The chain is walked one link at a time through the entries themselves (each
-  # carries its direct parent in the preloaded `reply_ref`), so it reaches as
-  # far up as its posts are present on the page; the first parent that is not an
-  # entry is kept as a single nested context (its own parent is not preloaded).
-  # Reposts always render standalone, so they are never dropped.
+  # A thread is not always a line. When one post is answered by two replies (a
+  # branch) and both land on the page, walking strictly up each leaf gave each
+  # branch the same shared ancestors, so the whole conversation rendered once per
+  # branch — the thread appeared twice in the feed. So group the present
+  # (non-repost) post entries into threads by their topmost reachable post (the
+  # anchor), and per thread keep exactly one carrier entry — its newest post —
+  # annotated with every *other* present thread post as its oldest-first
+  # `:ancestors`. Replies are always newer than the posts they answer, so oldest
+  # -first is a valid nesting order (a parent always precedes its children) and
+  # the branch siblings simply stack in time order; the whole thread renders
+  # once, no matter how many posts, authors or branches it spans.
+  #
+  # The chain to each anchor is walked one link at a time through the entries
+  # themselves (each carries its direct parent in the preloaded `reply_ref`), so
+  # it reaches as far up as its posts are present on the page; the first parent
+  # that is not an entry is kept as the single nested context above the anchor
+  # (its own parent is not preloaded). Reposts always render standalone, so they
+  # are never grouped, dropped, or made a carrier.
   defp collapse_threads(entries) do
     by_id =
       for %{reposted_by: nil, post: %{id: id} = post} <- entries, into: %{}, do: {id, post}
 
-    absorbed =
-      for %{post: post} <- entries,
-          ancestor <- ancestor_chain(post, by_id),
-          Map.has_key?(by_id, ancestor.id),
-          into: MapSet.new(),
-          do: ancestor.id
+    # Oldest-first path (topmost context down to the post itself) for every
+    # present post entry; its head is the thread anchor.
+    paths =
+      Map.new(by_id, fn {id, post} -> {id, ancestor_chain(post, by_id) ++ [post]} end)
 
-    entries
-    |> Enum.reject(fn e -> is_nil(e.reposted_by) and MapSet.member?(absorbed, e.post.id) end)
-    |> Enum.map(fn e -> Map.put(e, :ancestors, ancestor_chain(e.post, by_id)) end)
+    # Every post of each thread, deduped and oldest-first, keyed by anchor id.
+    thread_posts =
+      paths
+      |> Enum.group_by(fn {_id, path} -> hd(path).id end, fn {_id, path} -> path end)
+      |> Map.new(fn {anchor, branch_paths} ->
+        posts =
+          branch_paths
+          |> Enum.concat()
+          |> Enum.uniq_by(& &1.id)
+          |> Enum.sort_by(& &1.inserted_at, NaiveDateTime)
+
+        {anchor, posts}
+      end)
+
+    # The one carrier entry per thread: its newest post (the last, oldest-first).
+    carrier_ids =
+      MapSet.new(thread_posts, fn {_anchor, posts} -> List.last(posts).id end)
+
+    Enum.flat_map(entries, fn
+      %{reposted_by: reposted_by} = entry when not is_nil(reposted_by) ->
+        # Reposts render standalone; keep the one-level parent nesting they had.
+        [Map.put(entry, :ancestors, ancestor_chain(entry.post, by_id))]
+
+      %{post: post} = entry ->
+        if MapSet.member?(carrier_ids, post.id) do
+          anchor = hd(Map.fetch!(paths, post.id)).id
+          ancestors = thread_posts |> Map.fetch!(anchor) |> Enum.drop(-1)
+          [Map.put(entry, :ancestors, ancestors)]
+        else
+          # A non-carrier thread member: it renders inside the carrier's chain.
+          []
+        end
+    end)
   end
 
   # The posts `post` answers, oldest first. Walk up the reply chain, preferring
