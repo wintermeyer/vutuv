@@ -329,7 +329,9 @@ defmodule VutuvWeb.CVLive do
           </.card>
         </div>
 
-        <aside class="space-y-4">
+        <%!-- On a phone the download panel leads (order-first); at md+ it
+        returns to the right column. --%>
+        <aside class="order-first space-y-4 md:order-none">
           <.card>
             <.section_title class="mb-1">{gettext("Download")}</.section_title>
             <p class="mb-4 text-xs text-slate-600 dark:text-slate-400">
