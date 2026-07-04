@@ -71,6 +71,55 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     end
   end
 
+  # Other networks allow characters vutuv's own username never will. LinkedIn
+  # slugs, for one, carry German umlauts (sebastian-hädrich) — so the generic
+  # handle validation must accept anything non-blank, not just [A-Za-z0-9._-].
+  # See issue #854 (follow-up of #748).
+  describe "changeset/2 non-ASCII handles for regular providers (#854)" do
+    test "accepts a LinkedIn handle containing German umlauts" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "LinkedIn",
+          value: "sebastian-hädrich"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :value) == "sebastian-hädrich"
+    end
+
+    test "extracts an umlaut handle from a pasted LinkedIn profile URL" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "LinkedIn",
+          value: "https://www.linkedin.com/in/sebastian-hädrich/"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :value) == "sebastian-hädrich"
+    end
+
+    test "accepts a percent-encoded umlaut handle from a pasted LinkedIn URL" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "LinkedIn",
+          value: "https://www.linkedin.com/in/sebastian-h%C3%A4drich/"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :value) == "sebastian-h%C3%A4drich"
+    end
+
+    test "still rejects a blank handle after normalization" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{provider: "LinkedIn", value: "old"}, %{
+          value: "   "
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+  end
+
   describe "Bluesky value parsing" do
     test "stores the handle lowercased, stripping a leading @" do
       assert value_for(%{provider: "Bluesky", value: "@Alice.Bsky.Social"}) ==

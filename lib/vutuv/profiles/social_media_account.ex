@@ -70,9 +70,6 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"GitHub", ""}
   ]
 
-  # A single-token handle (every provider but Mastodon and Bluesky); a
-  # leading "@" is optional.
-  @handle_format ~r/^@?[A-Za-z0-9._-]+$/u
   # A federated Mastodon handle: user@instance.tld.
   @mastodon_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
   # A Bluesky handle: a lowercase domain (name.bsky.social, or a custom
@@ -174,7 +171,12 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   defp valid_value?("Mastodon", value), do: Regex.match?(@mastodon_format, value)
   defp valid_value?("Bluesky", value), do: Regex.match?(@bluesky_format, value)
-  defp valid_value?(_provider, value), do: Regex.match?(@handle_format, value)
+  # Every other provider (LinkedIn, XING, Facebook, GitHub, …) accepts any
+  # non-blank handle. These networks allow characters vutuv's own username
+  # never will — German umlauts in a LinkedIn slug (sebastian-hädrich), dots,
+  # apostrophes — so we only require that normalization left something behind
+  # and defer the size limit to the varchar(255) cap. Issue #854 (from #748).
+  defp valid_value?(_provider, value), do: is_binary(value) and String.trim(value) != ""
 
   defp invalid_message("Mastodon"),
     do: "Enter your full Mastodon handle, e.g. @user@instance.social"
