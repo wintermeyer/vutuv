@@ -16,7 +16,7 @@
 		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @recommended_users))}
 	<% end %>
   <%= if @conn.assigns[:current_user] && !(has_tag?(assigns[:current_user], assigns[:tag])) do %>
-  <%= button to: ~p"/#{@current_user}/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "button" do %>
+  <%= button to: ~p"/settings/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "button" do %>
   <i class="icon icon--plus"></i> <%= gettext("Add this tag") %>
   <% end %>
   <% end %>

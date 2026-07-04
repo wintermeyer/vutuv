@@ -1,13 +1,10 @@
-<.page_header
-  title={gettext("New tag")}
-  crumbs={[
-    {gettext("Settings"), ~p"/settings"},
-    {gettext("User tags"), ~p"/#{@conn.assigns[:user]}/tags"},
-    gettext("New")
-  ]}
-/>
+<.page_header crumbs={[
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Tags"), ~p"/settings/tags"},
+  gettext("New")
+]} />
 
 <.card_section>
-  <%= render "form_content.html", conn: @conn, backlink: ~p"/#{@conn.assigns[:user]}/tags", changeset: @changeset,
-                          action: ~p"/#{@conn.assigns[:user]}/tags" %>
+  <%= render "form_content.html", conn: @conn, backlink: ~p"/settings/tags", changeset: @changeset,
+                          action: ~p"/settings/tags" %>
 </.card_section>

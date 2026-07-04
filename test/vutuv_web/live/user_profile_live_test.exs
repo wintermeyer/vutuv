@@ -293,6 +293,27 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "onboarding checklist 'Add a tag' step (issue #845)" do
+    test "links to the /settings/tags/new form, not the retired /:slug/tags/new", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+
+      # Strip the three registration tags so the step is incomplete: the
+      # checklist only renders a *link* for a not-done step. The account is
+      # freshly registered, so it is still inside the onboarding window and the
+      # checklist shows.
+      Repo.delete_all(from(ut in Tags.UserTag, where: ut.user_id == ^owner.id))
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+      html = render(view)
+
+      # /:slug/tags/new has no new-form route: it matches the tag show action
+      # (id="new") and 404s. The add-tag form lives under /settings.
+      assert html =~ "Add a tag"
+      assert html =~ ~s(href="/settings/tags/new")
+      refute html =~ ~s(href="/#{owner.username}/tags/new")
+    end
+  end
+
   describe "posts section author links" do
     test "a post author's avatar and name link to their profile", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)

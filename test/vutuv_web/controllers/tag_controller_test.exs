@@ -28,4 +28,23 @@ defmodule VutuvWeb.TagControllerTest do
       assert conn.halted
     end
   end
+
+  # Issue #844: the "Add this tag" button on a tag page posted to the retired
+  # /:slug/tags URL, which serves only GET, so a logged-in visitor clicking it
+  # got a 404 instead of the tag landing on their profile. The button renders
+  # through Phoenix's button/2 helper (a data-to + data-method="post" element),
+  # so assert the target it actually submits to, not just the create route.
+  describe "the \"Add this tag\" button (logged-in visitor without the tag)" do
+    test "posts to /settings/tags, not /:slug/tags", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:tag, name: "Elixir", slug: "elixir")
+
+      html = conn |> get(~p"/tags/elixir") |> html_response(200)
+
+      assert html =~ "Add this tag"
+      assert html =~ ~s(data-to="/settings/tags?tag_param[value]=Elixir")
+      assert html =~ ~s(data-method="post")
+      refute html =~ ~s(data-to="/#{user.username}/tags)
+    end
+  end
 end

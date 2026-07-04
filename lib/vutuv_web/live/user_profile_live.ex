@@ -788,7 +788,7 @@ defmodule VutuvWeb.UserProfileLive do
       # (people finish lists they have visibly started). It stays actionable
       # for tag-less accounts from before the minimum, in their
       # dormant-return window.
-      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/#{user}/tags/new"},
+      %{label: gettext("Add a tag"), done: user.user_tags != [], href: ~p"/settings/tags/new"},
       %{
         label: gettext("Add a profile photo"),
         done: present?(user.avatar),
