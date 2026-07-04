@@ -52,6 +52,11 @@ view, so no server-side rendering dependency exists. --%>
         "Word and OpenDocument files open in any office suite. LaTeX is the source for typesetting the CV yourself, and JSON Resume is the open machine-readable format from jsonresume.org."
       )}
     </p>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "The CV is also offered on your public profile. A visitor's download contains only what they can see there anyway; private email addresses appear only in your own."
+      )}
+    </p>
   </.card>
   <.card class="mt-6">
     <.section_title>{gettext("Download your data")}</.section_title>

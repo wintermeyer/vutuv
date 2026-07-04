@@ -44,7 +44,7 @@ defmodule VutuvWeb.CV.Html do
 
   defp hint do
     """
-    <div class="noprint">#{esc(gettext("This is the print view of your CV. Use your browser's print dialog (Ctrl+P or Cmd+P) and choose \"Save as PDF\" to get a PDF file."))}</div>
+    <div class="noprint">#{esc(gettext("This is the print view of this CV. Use your browser's print dialog (Ctrl+P or Cmd+P) and choose \"Save as PDF\" to get a PDF file."))}</div>
     """
   end
 

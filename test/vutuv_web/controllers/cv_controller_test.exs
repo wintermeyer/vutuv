@@ -1,9 +1,10 @@
 defmodule VutuvWeb.CVControllerTest do
   @moduledoc """
-  The formatted CV download (issue #841): the owner turns their profile into
-  a print-ready Lebenslauf at /:slug/export/cv/*, offered as HTML / LaTeX /
-  Word (.docx) / OpenDocument (.odt) / JSON Resume. Owner-only, like the
-  GDPR export beside it — the CV bundles the member's contact details.
+  The formatted CV download (issue #841): a profile as a print-ready
+  Lebenslauf at /:slug/export/cv/*, offered as HTML / LaTeX / Word (.docx) /
+  OpenDocument (.odt) / JSON Resume. Public like the profile itself — every
+  viewer gets the CV built from the data they may see (private emails stay
+  owner-only), and the profile page links the formats for everyone.
   """
   use VutuvWeb.ConnCase
 
@@ -106,6 +107,20 @@ defmodule VutuvWeb.CVControllerTest do
 
       conn = get(conn, ~p"/settings")
       assert html_response(conn, 200) =~ ~s(href="/#{user.username}/export")
+    end
+  end
+
+  describe "the profile page" do
+    test "links the CV formats for every visitor", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user))
+
+      body = conn |> get(~p"/#{owner}") |> html_response(200)
+
+      assert body =~ ~s(href="/#{owner.username}/export/cv/preview")
+
+      for format <- ~w(html tex docx odt json) do
+        assert body =~ ~s(href="/#{owner.username}/export/cv/#{format}")
+      end
     end
   end
 
@@ -261,28 +276,66 @@ defmodule VutuvWeb.CVControllerTest do
   end
 
   describe "access" do
-    test "a guest is sent to the login flow", %{conn: conn} do
+    # The CV is public like the profile: every viewer downloads it built
+    # from the data they may see. Only /:slug/export (the GDPR dump beside
+    # the CV) stays owner-only — covered in export_controller_test.
+    test "a guest downloads the CV, with public contact data only", %{conn: conn} do
       owner = seed_profile(insert(:activated_user))
+      insert(:email, user: owner, value: "visible@example.com", public?: true)
+      insert(:email, user: owner, value: "secret@example.com", public?: false)
 
-      for path <- [
-            ~p"/#{owner}/export",
-            ~p"/#{owner}/export/cv/preview",
-            ~p"/#{owner}/export/cv/html"
-          ] do
-        assert conn |> recycle() |> get(path) |> redirected_to() == "/"
-      end
+      body = conn |> get(~p"/#{owner}/export/cv/preview") |> html_response(200)
+
+      assert body =~ "Senior Developer"
+      assert body =~ "visible@example.com"
+      refute body =~ "secret@example.com"
+
+      docx = conn |> recycle() |> get(~p"/#{owner}/export/cv/docx")
+      assert docx.status == 200
+      refute docx.resp_body =~ "secret@example.com"
     end
 
-    test "another member gets the 403 page — a CV bundles contact details", %{conn: conn} do
-      owner = seed_profile(insert(:activated_user))
-      {conn, _visitor} = create_and_login_user(conn)
+    test "the owner's own CV still carries their private email", %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+      # The registration address defaults to public?: false — pin that the
+      # email the owner preview shows really is a private one.
+      refute Enum.any?(Vutuv.Repo.preload(user, :emails).emails, & &1.public?)
 
-      for path <- [
-            ~p"/#{owner}/export/cv/preview",
-            ~p"/#{owner}/export/cv/docx"
-          ] do
-        assert conn |> recycle() |> get(path) |> html_response(403)
-      end
+      body = conn |> get(~p"/#{user}/export/cv/preview") |> html_response(200)
+      assert body =~ "cv-owner@example.com"
+    end
+
+    test "a machine-opted-out member's JSON stays owner-only", %{conn: conn} do
+      # noindex? AND noai? is the full machine-export opt-out (the agent-doc
+      # .json 404s, VutuvWeb.Plug.AgentExportOptOut), so the machine-readable
+      # JSON Resume follows it for everyone but the owner; the human-use
+      # formats stay available like the profile page itself.
+      owner =
+        :activated_user
+        |> insert(noindex?: true, noai?: true)
+        |> seed_profile()
+
+      assert conn |> get(~p"/#{owner}/export/cv/json") |> response(404)
+      assert conn |> recycle() |> get(~p"/#{owner}/export/cv/docx") |> response(200)
+
+      {conn, _visitor} =
+        create_and_login_user(conn, %{
+          "emails" => %{"0" => %{"value" => "other-member@example.com"}},
+          "first_name" => "Other",
+          "tag_list" => @registration_tags
+        })
+
+      assert conn |> get(~p"/#{owner}/export/cv/json") |> response(404)
+    end
+
+    test "the machine-opted-out owner still gets their own JSON", %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+
+      user
+      |> Ecto.Changeset.change(%{noindex?: true, noai?: true})
+      |> Vutuv.Repo.update!()
+
+      assert conn |> get(~p"/#{user}/export/cv/json") |> response(200)
     end
   end
 end

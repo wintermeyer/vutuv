@@ -5,10 +5,12 @@ defmodule VutuvWeb.CV do
   `.Odt`, `.JsonResume`), the way `VutuvWeb.AgentDocs.ProfileDoc` feeds the
   agent formats (issue #841).
 
-  Owner-only by design: the CV bundles contact details (first email, first
-  phone number, first address, whatever their visibility), because the owner
-  downloads their *own* document to attach to a job application. Never build
-  this for another viewer.
+  Built through a viewer's eyes: anyone may download the CV of data they can
+  already see — work, education, tags, links, phone numbers and addresses
+  are public profile sections, and the email resolves per viewer
+  (`UserHelpers.emails_for_display/2`), so a private address only ever
+  appears in the owner's own download. Pass the `:viewer` option; nil is
+  the anonymous public view.
 
   The body is a list of uniform `sections` (heading + entries of
   `%{period, title, organization, description}`): the issue #840
@@ -36,12 +38,14 @@ defmodule VutuvWeb.CV do
   @doc """
   Options:
 
+    * `:viewer` — the user whose eyes the CV is built through (default nil,
+      the anonymous public view). Only the email is viewer-sensitive.
     * `:photo` — also derive the avatar as a JPEG data URI (used by the
       HTML/print rendering only, so the text formats skip the image work).
   """
   def build(user, opts \\ []) do
     user = preload(user)
-    emails = UserHelpers.emails_for_permission(user, true)
+    emails = UserHelpers.emails_for_display(user, Keyword.get(opts, :viewer))
 
     %{
       name: UserHelpers.full_name(user),

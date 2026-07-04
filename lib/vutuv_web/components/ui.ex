@@ -284,10 +284,69 @@ defmodule VutuvWeb.UI do
       </p>
       <%!-- Chips: a wrapping row of small tags instead of a one-per-row list. --%>
       <div :if={@formats != []} class="flex flex-wrap gap-1.5">
+        <.link :for={{label, href} <- @formats} href={href} class={format_chip_class()}>
+          {label}
+        </.link>
+      </div>
+    </.card>
+    """
+  end
+
+  # The small format chip shared by <.other_formats_card> and <.cv_card>.
+  defp format_chip_class do
+    "inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+  end
+
+  @doc """
+  The profile rail's **CV / Lebenslauf card** (issue #841): this profile as
+  a formatted CV for a job application, downloadable by **every** viewer —
+  the documents (`VutuvWeb.CV`, served by `VutuvWeb.CVController` under
+  `/:slug/export/cv/*`) carry only data the viewer can already see, so a
+  private email never leaves the owner's own download. Chips after
+  `<.other_formats_card>`'s pattern: the print view first (the PDF path,
+  opens in a new tab), then the Word / OpenDocument / HTML / LaTeX / JSON
+  Resume files. `machine_formats={false}` (the same full machine-export
+  opt-out the agent docs honor) drops the JSON Resume chip — that URL
+  answers 404 for such a profile unless the owner asks.
+  """
+  attr(:user, Vutuv.Accounts.User, required: true)
+  attr(:machine_formats, :boolean, default: true)
+  attr(:rest, :global)
+
+  def cv_card(assigns) do
+    files =
+      [
+        {"Word (.docx)", "docx"},
+        {"OpenDocument (.odt)", "odt"},
+        {"HTML", "html"},
+        {"LaTeX (.tex)", "tex"}
+      ] ++ if assigns.machine_formats, do: [{"JSON Resume", "json"}], else: []
+
+    assigns = assign(assigns, :files, files)
+
+    ~H"""
+    <.card {@rest}>
+      <%!-- Not plain "CV": the German label would double the Experience
+      card's "Lebenslauf" heading on the same page. --%>
+      <.section_title class="mb-4">{gettext("CV download")}</.section_title>
+      <p class="mb-3 text-xs text-slate-600 dark:text-slate-400">
+        {gettext(
+          "This profile as a formatted CV for job applications. The print view turns into a PDF via the browser's print dialog."
+        )}
+      </p>
+      <div class="flex flex-wrap gap-1.5">
         <.link
-          :for={{label, href} <- @formats}
-          href={href}
-          class="inline-flex items-center rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-brand-50 hover:text-brand-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-brand-900/30 dark:hover:text-brand-200"
+          href={~p"/#{@user}/export/cv/preview"}
+          target="_blank"
+          rel="noopener"
+          class={format_chip_class()}
+        >
+          {gettext("Print view")}
+        </.link>
+        <.link
+          :for={{label, format} <- @files}
+          href={"/#{@user.username}/export/cv/#{format}"}
+          class={format_chip_class()}
         >
           {label}
         </.link>

@@ -126,10 +126,17 @@ section there (just like `Accounts.delete_user/1` must learn to delete it)
 
 ## CV download (Lebenslauf)
 
-Every member can turn their profile into a formatted CV for a job application
-from their export corner (`/:slug/export`, issue #841), where it sits beside
-the GDPR download — clearly labelled as the presentation document, not the
-data dump.
+Every profile can be downloaded as a formatted CV for a job application. The
+CV is **public like the profile**: a card on the profile page links the
+formats for every visitor, and each document is built through the viewer's
+eyes (`VutuvWeb.CV` takes a `:viewer`) — only the email is viewer-sensitive,
+so a private address appears solely in the owner's own download. The owner
+additionally finds the CV in their export corner (`/:slug/export`, issue
+#841), beside the GDPR download — clearly labelled as the presentation
+document, not the data dump. One machine-export nuance: for a fully
+machine-opted-out member (`agent_docs_blocked?`, the members whose agent
+`.json` 404s) the JSON Resume answers 404 to everyone but the owner; the
+human-use formats stay available like the profile page itself.
 
 `VutuvWeb.CV` builds one data map (the `ProfileDoc` pattern): the issue #840
 work-experience categories in CV order (employment, internships,

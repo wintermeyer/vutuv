@@ -994,6 +994,18 @@ the resulting ~200px rail width. --%>
       </ul>
     </.card>
 
+    <%!-- The formatted CV / Lebenslauf downloads (issue #841), for every
+    viewer: the documents carry only data the viewer can already see, so the
+    card needs no owner guard. Shares the rail's order-2 utility footer with
+    the formats card below. --%>
+    <div class="order-2 md:order-none">
+      <.cv_card
+        user={@user}
+        machine_formats={not VutuvWeb.ContentPolicy.agent_docs_blocked?(@user)}
+        id="profile-cv-card"
+      />
+    </div>
+
     <%!-- This profile in agent-/machine-readable formats (VutuvWeb.AgentDocs):
     the same page as Markdown, plain text, JSON, XML and vCard, kept last as the
     rail's quiet utility footer. A human visitor browsing in German gets the
