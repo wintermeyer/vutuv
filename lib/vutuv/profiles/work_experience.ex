@@ -4,10 +4,15 @@ defmodule Vutuv.Profiles.WorkExperience do
   use VutuvWeb, :model
   import Ecto.Query
 
+  # The CV categories (issue #840): a paid job, a Praktikum, an Ehrenamt.
+  # Display order everywhere is this list's order.
+  @kinds ~w(employment internship volunteer)
+
   schema "work_experiences" do
     field(:organization, :string)
     field(:title, :string)
     field(:description, :string)
+    field(:kind, :string, default: "employment")
     field(:start_month, :integer)
     field(:start_year, :integer)
     field(:end_month, :integer)
@@ -19,7 +24,10 @@ defmodule Vutuv.Profiles.WorkExperience do
     timestamps()
   end
 
-  @cast_fields ~w(title description start_month start_year organization end_month end_year slug)a
+  @cast_fields ~w(title description kind start_month start_year organization end_month end_year slug)a
+
+  @doc "The known categories, in display order."
+  def kinds, do: @kinds
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -30,7 +38,8 @@ defmodule Vutuv.Profiles.WorkExperience do
   def changeset(model, params \\ %{}) do
     model
     |> cast(params, @cast_fields)
-    |> validate_required([:title, :organization])
+    |> validate_required([:title, :organization, :kind])
+    |> validate_inclusion(:kind, @kinds)
     # Match the varchar(255) columns (and cap the text description sanely) so
     # an oversized value is a changeset error, never a raised Postgres 22001 —
     # inside the import transaction that raise 500ed the whole import.
@@ -108,6 +117,19 @@ defmodule Vutuv.Profiles.WorkExperience do
     else
       changeset
     end
+  end
+
+  @doc """
+  Splits an already-ordered list into its CV categories: `{kind, entries}`
+  pairs in `kinds/0` order (employment, internship, volunteer), empty
+  categories dropped, the given (date) order kept within each. The shared
+  grouping for every list rendering, so the profile card, the section page
+  and the editor can never disagree on category order.
+  """
+  def group_by_kind(work_experiences) do
+    groups = Enum.group_by(work_experiences, & &1.kind)
+
+    for kind <- @kinds, entries = groups[kind], do: {kind, entries}
   end
 
   @doc """

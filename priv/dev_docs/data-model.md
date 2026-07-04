@@ -62,7 +62,7 @@ your own profile via `POST/PATCH/DELETE /me/<section>`:
 | `social_media_accounts` | `provider`, `value` (handle) | Providers: Facebook, Twitter, Instagram, YouTube, Snapchat, LinkedIn, XING, GitHub. |
 | `addresses` | `description`, `line_1`…`line_4`, `zip_code`, `city`, `state`, `country` | |
 | `phone_numbers` | `value`, `number_type` | Read responses return the type as `type`; writes take `number_type`. |
-| `work_experiences` | `title`, `organization`, `description`, `start_year`, `start_month`, `end_year`, `end_month` | An open `end` means "current position"; the most recent current one feeds the profile's `current_position`. |
+| `work_experiences` | `title`, `organization`, `description`, `kind`, `start_year`, `start_month`, `end_year`, `end_month` | `kind` files the entry as `employment` (default), `internship` or `volunteer`. An open `end` means "current position"; the most recent current one feeds the profile's `current_position`. |
 
 Entry `id`s are stable — store them to update or delete later.
 

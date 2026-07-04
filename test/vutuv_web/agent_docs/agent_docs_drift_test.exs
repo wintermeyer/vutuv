@@ -33,6 +33,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     insert(:work_experience, user: user, title: "Bridge Engineer", organization: "Span AG")
 
+    # A volunteer entry (issue #840): the HTML pages show its category heading,
+    # the docs carry the kind — the "volunteer" fact below keeps them in sync.
+    # Closed-ended, so it never becomes the header job (the vCard's TITLE/ORG
+    # assertions pin Span AG).
+    insert(:work_experience,
+      user: user,
+      title: "River Guardian",
+      organization: "Water Watch",
+      kind: "volunteer",
+      start_month: 2,
+      start_year: 2016,
+      end_month: 6,
+      end_year: 2019
+    )
+
     insert(:education,
       user: user,
       school: "Bridge University",
@@ -85,6 +100,12 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # experience
       "Bridge Engineer",
       "Span AG",
+      # the volunteer entry and its category (issue #840): HTML shows the
+      # "Volunteering" heading, md/txt the "[Volunteering]" note, json/xml
+      # the kind field — "volunteer" is the common substring of all of them
+      "River Guardian",
+      "Water Watch",
+      "volunteer",
       # education
       "Bridge University",
       "MSc Structures",
@@ -332,7 +353,11 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "a single section entry page serves all formats", %{user: user} do
-    work = Repo.one!(Ecto.assoc(user, :work_experiences))
+    work =
+      Repo.one!(
+        from(w in Ecto.assoc(user, :work_experiences), where: w.title == "Bridge Engineer")
+      )
+
     rendered = formats_for("/drift_tester/work_experiences/#{work.slug}")
 
     for fact <- ["Bridge Engineer", "Span AG", "Building things"],

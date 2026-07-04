@@ -69,4 +69,69 @@ defmodule Vutuv.Profiles.WorkExperienceTest do
       assert %{end_month: [_]} = errors_on(cs)
     end
   end
+
+  describe "kind (issue #840: employment | internship | volunteer)" do
+    test "defaults to employment when not given" do
+      cs = changeset(%{})
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_field(cs, :kind) == "employment"
+    end
+
+    test "accepts each known category" do
+      for kind <- WorkExperience.kinds() do
+        cs = changeset(%{"kind" => kind})
+
+        assert cs.valid?
+        assert Ecto.Changeset.get_field(cs, :kind) == kind
+      end
+    end
+
+    test "rejects an unknown category" do
+      cs = changeset(%{"kind" => "hobby"})
+
+      refute cs.valid?
+      assert %{kind: [_]} = errors_on(cs)
+    end
+
+    test "a blank param falls back to the employment default, never NULL" do
+      cs =
+        WorkExperience.changeset(%WorkExperience{kind: "volunteer"}, %{
+          "organization" => "Acme",
+          "title" => "Chair",
+          "kind" => ""
+        })
+
+      assert cs.valid?
+      assert Ecto.Changeset.get_field(cs, :kind) == "employment"
+    end
+
+    test "rejects nulling the category (the column is NOT NULL)" do
+      cs = changeset(%{"kind" => nil})
+
+      refute cs.valid?
+      assert %{kind: [_]} = errors_on(cs)
+    end
+  end
+
+  describe "group_by_kind/1" do
+    test "orders the groups employment, internship, volunteer and drops empty ones" do
+      volunteer = %WorkExperience{kind: "volunteer", title: "Chair"}
+      job = %WorkExperience{kind: "employment", title: "Engineer"}
+
+      assert WorkExperience.group_by_kind([volunteer, job]) == [
+               {"employment", [job]},
+               {"volunteer", [volunteer]}
+             ]
+    end
+
+    test "keeps the given (date) order within a group" do
+      newer = %WorkExperience{kind: "internship", title: "Intern 2024"}
+      older = %WorkExperience{kind: "internship", title: "Intern 2020"}
+
+      assert WorkExperience.group_by_kind([newer, older]) == [
+               {"internship", [newer, older]}
+             ]
+    end
+  end
 end

@@ -3,6 +3,8 @@ defmodule VutuvWeb.WorkExperienceHTML do
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
 
+  alias Vutuv.Profiles.WorkExperience
+
   @doc """
   The `{label, value}` options for the start/end month selects on the
   work-experience form — defined once (the form needs the list twice) and
@@ -10,6 +12,47 @@ defmodule VutuvWeb.WorkExperienceHTML do
   """
   def month_options do
     for n <- 1..12, do: {month_name(n), n}
+  end
+
+  @doc """
+  The category name of a single entry (issue #840), for the form's picker
+  and the entry show page.
+  """
+  def kind_name("employment"), do: gettext("Employment")
+  def kind_name("internship"), do: gettext("Internship")
+  def kind_name("volunteer"), do: gettext("Volunteer position")
+
+  @doc "A category's group heading on the list renderings."
+  def kind_label("employment"), do: gettext("Professional Experience")
+  def kind_label("internship"), do: gettext("Internships")
+  def kind_label("volunteer"), do: gettext("Volunteering")
+
+  @doc "The `{label, value}` options for the form's category select."
+  def kind_options do
+    for kind <- WorkExperience.kinds(), do: {kind_name(kind), kind}
+  end
+
+  @doc """
+  `circle_durations/2` split into the CV categories: `{kind, circles}` pairs
+  in display order. The circles are sized over the **whole** list first, so a
+  short internship never inflates to the diameter of a decade-long job just
+  because it leads its own group.
+  """
+  def grouped_circles(work_experiences, label_style) do
+    groups =
+      work_experiences
+      |> circle_durations(label_style)
+      |> Enum.group_by(& &1.job.kind)
+
+    for kind <- WorkExperience.kinds(), circles = groups[kind], do: {kind, circles}
+  end
+
+  @doc """
+  Category headings appear only once a non-employment entry exists — the
+  common jobs-only member keeps the familiar single unlabeled timeline.
+  """
+  def show_kind_headings?(work_experiences) do
+    Enum.any?(work_experiences, &(&1.kind != "employment"))
   end
 
   @doc """

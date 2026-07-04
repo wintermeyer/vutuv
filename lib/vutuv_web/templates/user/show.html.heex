@@ -382,10 +382,24 @@ the resulting ~200px rail width. --%>
       right whose size (sqrt of its length, so the gaps stay legible) ranks the
       roles by how long they ran. The circle column is a fixed width and the
       circle is centred in it, so every circle shares one horizontal centre.
-      Work experiences arrive newest-first (WorkExperience.order_by_date). --%>
-      <div :if={@work_experience != []}>
+      Work experiences arrive newest-first (WorkExperience.order_by_date) and,
+      like the section page, split into the CV categories (issue #840) under
+      their own headings once a non-employment entry exists. --%>
+      <div
+        :for={
+          {kind, circles} <-
+            VutuvWeb.WorkExperienceHTML.grouped_circles(@work_experience, :compact)
+        }
+        class="mt-6 first:mt-0"
+      >
+        <h3
+          :if={VutuvWeb.WorkExperienceHTML.show_kind_headings?(@work_experience)}
+          class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+        >
+          {VutuvWeb.WorkExperienceHTML.kind_label(kind)}
+        </h3>
         <div
-          :for={circle <- VutuvWeb.WorkExperienceHTML.circle_durations(@work_experience, :compact)}
+          :for={circle <- circles}
           class="grid grid-cols-[6.5rem_1fr_4rem] items-start gap-3"
         >
           <% dates =

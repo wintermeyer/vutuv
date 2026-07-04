@@ -273,11 +273,13 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp work_line(work) do
     period = Markdown.work_period(work)
+    kind_note = Markdown.work_kind_note(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
     description = Map.get(work, :description)
 
     "* " <>
       line <>
+      if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
       if description, do: ": #{description}", else: ""
   end

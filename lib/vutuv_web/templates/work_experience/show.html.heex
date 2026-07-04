@@ -16,6 +16,9 @@
     delete_to={~p"/settings/work_experiences/#{@work_experience}"}
   />
 
+  <h2 class="card__label"><%= gettext("Category") %></h2>
+  <p><%= kind_name(@work_experience.kind) %></p>
+
   <h2 class="card__label"><%= gettext("Time Period") %></h2>
   <p>
     <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>

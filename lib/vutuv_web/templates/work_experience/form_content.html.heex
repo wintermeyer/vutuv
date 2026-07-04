@@ -13,6 +13,12 @@
     <%= error_tag f, :title %>
   </.editform_field>
 
+  <.editform_field form={f} field={:kind}>
+    <%= label f, :kind, gettext("Category") %>
+    <%= select f, :kind, kind_options() %>
+    <%= error_tag f, :kind %>
+  </.editform_field>
+
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
     <%= textarea f, :description, rows: 3 %>

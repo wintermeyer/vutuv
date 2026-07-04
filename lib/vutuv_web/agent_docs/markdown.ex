@@ -259,12 +259,28 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp work_line(work) do
     period = work_period(work)
+    kind_note = work_kind_note(work)
     description = Map.get(work, :description)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
+    |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])
     |> Enum.join()
+  end
+
+  # The non-default CV categories (issue #840) are called out on the entry
+  # line, mirroring the HTML pages' category headings; a plain job stays
+  # unmarked, like the page's jobs-only timeline. Shared with the text
+  # renderer. Singular wording (one entry), the same msgids as the form's
+  # category picker.
+  @doc false
+  def work_kind_note(work) do
+    case Map.get(work, :kind) do
+      "internship" -> gettext("Internship")
+      "volunteer" -> gettext("Volunteer position")
+      _employment -> nil
+    end
   end
 
   # Shares work_period/1 (the education entry carries the same :start / :end

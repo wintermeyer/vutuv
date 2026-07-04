@@ -43,4 +43,13 @@ defmodule Vutuv.ExportTest do
 
     assert [%{school: "Acme University", degree: "BSc"}] = data.educations
   end
+
+  test "work experiences carry their CV category (issue #840)" do
+    user = insert(:activated_user)
+    insert(:work_experience, user: user, title: "Chair", kind: "volunteer")
+
+    data = Export.build(user)
+
+    assert [%{title: "Chair", kind: "volunteer"}] = data.work_experiences
+  end
 end

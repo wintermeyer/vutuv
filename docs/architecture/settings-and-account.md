@@ -79,7 +79,8 @@ file input, so it still works with JS off).
 
 The parser is filename-independent (it classifies each CSV by its header
 signature, since LinkedIn localizes the names), tolerates a UTF-8 BOM and CRLF,
-and maps Positions → work experiences, Education → the new education section,
+and maps Positions → work experiences, Volunteering → work experiences with
+the volunteer category (issue #840), Education → the new education section,
 Skills → tags, and the profile's Websites / Twitter handles → links / social
 accounts; `Connections.csv` is skipped and email addresses are shown read-only
 (never auto-created, since each is PIN-verified).

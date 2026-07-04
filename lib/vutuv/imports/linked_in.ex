@@ -97,8 +97,9 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
-  # Zip-bomb defense. The CSVs we need (profile, positions, education, skills,
-  # phone) are tiny; a LinkedIn export's bulk (connections, messages, media) we
+  # Zip-bomb defense. The CSVs we need (profile, positions, volunteering,
+  # education, skills, phone) are tiny; a LinkedIn export's bulk (connections,
+  # messages, media) we
   # don't touch. So we read the ZIP's central directory FIRST (no decompression),
   # then:
   #   * skip any single entry that declares more than @max_entry_bytes — the big
@@ -183,10 +184,17 @@ defmodule Vutuv.Imports.LinkedIn do
     {profile, profile_urls, profile_social} =
       rows_by_type |> Map.get(:profile, []) |> List.first() |> parse_profile()
 
+    positions = rows_by_type |> Map.get(:positions, []) |> Enum.map(&position_candidate/1)
+
+    # Volunteering.csv (issue #840) joins the positions list as work
+    # experiences with kind "volunteer", so the whole preview/apply pipeline
+    # handles them like any other role.
+    volunteering =
+      rows_by_type |> Map.get(:volunteering, []) |> Enum.map(&volunteer_candidate/1)
+
     %{
       profile: profile,
-      positions:
-        rows_by_type |> Map.get(:positions, []) |> Enum.map(&position_candidate/1) |> tidy(),
+      positions: tidy(positions ++ volunteering),
       educations:
         rows_by_type |> Map.get(:educations, []) |> Enum.map(&education_candidate/1) |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
@@ -246,19 +254,26 @@ defmodule Vutuv.Imports.LinkedIn do
 
   # Classify by header signature (filename-independent), with an English
   # filename fallback for the odd export whose headers we don't recognize.
+  # First matching signature wins, so :positions (Title) is checked before
+  # :volunteering (Role).
+  @header_signatures [
+    positions: ["Company Name", "Title"],
+    volunteering: ["Company Name", "Role"],
+    educations: ["School Name"],
+    connections: ["Connected On"],
+    profile: ["First Name", "Headline"],
+    phones: ["Number"],
+    emails: ["Email Address"]
+  ]
+
+  defp classify(_name, ["Name"]), do: :skills
+
   defp classify(name, headers) do
     set = MapSet.new(headers)
 
-    cond do
-      subset?(["Company Name", "Title"], set) -> :positions
-      member?("School Name", set) -> :educations
-      member?("Connected On", set) -> :connections
-      subset?(["First Name", "Headline"], set) -> :profile
-      headers == ["Name"] -> :skills
-      member?("Number", set) -> :phones
-      member?("Email Address", set) -> :emails
-      true -> filename_fallback(name)
-    end
+    Enum.find_value(@header_signatures, filename_fallback(name), fn {type, required} ->
+      if subset?(required, set), do: type
+    end)
   end
 
   defp filename_fallback(name) do
@@ -266,6 +281,7 @@ defmodule Vutuv.Imports.LinkedIn do
 
     cond do
       String.starts_with?(base, "positions") -> :positions
+      String.starts_with?(base, "volunteering") -> :volunteering
       String.starts_with?(base, "education") -> :educations
       String.starts_with?(base, "skills") -> :skills
       String.starts_with?(base, "profile") -> :profile
@@ -276,7 +292,6 @@ defmodule Vutuv.Imports.LinkedIn do
   end
 
   defp subset?(keys, set), do: Enum.all?(keys, &MapSet.member?(set, &1))
-  defp member?(key, set), do: MapSet.member?(set, key)
 
   # ── Profile.csv → name/headline scalars + Websites/Twitter candidates ──
 
@@ -371,6 +386,42 @@ defmodule Vutuv.Imports.LinkedIn do
           "organization" => org,
           "title" => title,
           "description" => blank_nil(row["Description"]),
+          "start_month" => sm,
+          "start_year" => sy,
+          "end_month" => em,
+          "end_year" => ey
+        }
+      }
+    end
+  end
+
+  # ── Volunteering.csv → WorkExperience params (kind: volunteer, issue #840) ──
+
+  defp volunteer_candidate(row) do
+    {sm, sy} = parse_month_year(row["Started On"] || row["Start Date"])
+    {em, ey} = parse_month_year(row["Finished On"] || row["End Date"])
+    org = blank_nil(row["Company Name"])
+    title = blank_nil(row["Role"])
+
+    # LinkedIn files the cause ("Environment", …) in its own column; folding it
+    # into the description keeps it without a schema field of its own.
+    description =
+      [blank_nil(row["Cause"]), blank_nil(row["Description"])]
+      |> compact()
+      |> Enum.join(" · ")
+      |> blank_nil()
+
+    if is_nil(org) or is_nil(title) do
+      nil
+    else
+      %{
+        id: cid("volunteer", "#{downcase(org)}|#{downcase(title)}"),
+        label: [title, org] |> compact() |> Enum.join(" @ "),
+        params: %{
+          "organization" => org,
+          "title" => title,
+          "kind" => "volunteer",
+          "description" => description,
           "start_month" => sm,
           "start_year" => sy,
           "end_month" => em,

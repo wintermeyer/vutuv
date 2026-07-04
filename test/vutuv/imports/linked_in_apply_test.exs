@@ -44,6 +44,25 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count) == 2
   end
 
+  test "a volunteer role lands as a work experience with kind volunteer (issue #840)" do
+    user = insert(:user)
+
+    archive =
+      zip([
+        {"Volunteering.csv",
+         "Company Name,Role,Cause,Started On,Finished On,Description\n" <>
+           "Water Watch,River Guardian,Environment,Feb 2016,Jun 2019,Cleanups\n"}
+      ])
+
+    {:ok, parsed} = LinkedIn.parse(archive)
+    {:ok, summary} = LinkedIn.apply_selection(user, parsed)
+
+    assert summary.created.positions == 1
+
+    assert %{kind: "volunteer", title: "River Guardian"} =
+             Repo.get_by(WorkExperience, user_id: user.id, organization: "Water Watch")
+  end
+
   test "a second apply of the same selection inserts nothing (dedup)" do
     user = insert(:user)
     {:ok, parsed} = LinkedIn.parse(sample_archive())

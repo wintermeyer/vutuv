@@ -167,6 +167,61 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
   end
 
+  describe "Volunteering.csv" do
+    test "maps volunteer roles into position candidates with kind volunteer (issue #840)" do
+      csv = """
+      Company Name,Role,Cause,Started On,Finished On,Description
+      Water Watch,River Guardian,Environment,Feb 2016,Jun 2019,Monthly river cleanups
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Volunteering.csv", csv}]))
+
+      assert [vol] = result.positions
+      assert vol.params["organization"] == "Water Watch"
+      assert vol.params["title"] == "River Guardian"
+      assert vol.params["kind"] == "volunteer"
+      assert vol.params["start_month"] == 2
+      assert vol.params["start_year"] == 2016
+      assert vol.params["end_month"] == 6
+      assert vol.params["end_year"] == 2019
+      # The cause rides along in the description, so it is not lost.
+      assert vol.params["description"] =~ "Monthly river cleanups"
+      assert vol.params["description"] =~ "Environment"
+      # The preview label marks the category.
+      assert vol.label =~ "River Guardian @ Water Watch"
+    end
+
+    test "volunteer roles append after the paid positions" do
+      positions = """
+      Company Name,Title,Description,Location,Started On,Finished On
+      Acme,Engineer,,Berlin,2020,
+      """
+
+      volunteering = """
+      Company Name,Role,Cause,Started On,Finished On,Description
+      Water Watch,River Guardian,,2016,2019,
+      """
+
+      {:ok, result} =
+        LinkedIn.parse(zip([{"Volunteering.csv", volunteering}, {"Positions.csv", positions}]))
+
+      assert [%{params: %{"organization" => "Acme"}}, %{params: %{"kind" => "volunteer"}}] =
+               result.positions
+    end
+
+    test "a volunteer row without organization or role is dropped" do
+      csv = """
+      Company Name,Role,Cause,Started On,Finished On,Description
+      ,River Guardian,,2016,,
+      Water Watch,,,2016,,
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Volunteering.csv", csv}]))
+
+      assert result.positions == []
+    end
+  end
+
   describe "classification and scope" do
     test "classifies by header signature, not filename (localized names)" do
       csv = """

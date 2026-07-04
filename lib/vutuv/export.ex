@@ -70,6 +70,7 @@ defmodule Vutuv.Export do
             :organization,
             :title,
             :description,
+            :kind,
             :start_month,
             :start_year,
             :end_month,

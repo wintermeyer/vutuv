@@ -117,7 +117,8 @@ auth -X DELETE $API/me/work_experiences/0190abcd-…
 ```
 
 Field names per section: work_experiences (`title`, `organization`,
-`description`, `start_year`, `start_month`, `end_year`, `end_month`),
+`description`, `kind` = `employment`/`internship`/`volunteer` (default
+`employment`), `start_year`, `start_month`, `end_year`, `end_month`),
 links (`value` = the URL, `description`), social_media_accounts
 (`provider`, `value`), addresses (`description`, `line_1`…`line_4`,
 `zip_code`, `city`, `state`, `country`), phone_numbers (`value`,
