@@ -85,11 +85,9 @@ the resulting ~200px rail width. --%>
         banner. (Owner sees Edit profile; a blocker sees Unblock.) --%>
         <div class="-mt-12 flex items-end gap-4">
           <.avatar user={@user} size="lg" shape="square" loading="eager" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900" presence />
-          <%!-- pointer-events-none in preview: the controls render so the owner
-          sees exactly what a member gets, but they are inert. --%>
           <div
             id="profile-actions"
-            class={["ml-auto flex items-center justify-end gap-2", @preview? && "pointer-events-none"]}
+            class="ml-auto flex items-center justify-end gap-2"
           >
             <%= cond do %>
               <% @as_owner? -> %>
@@ -130,8 +128,7 @@ the resulting ~200px rail width. --%>
         / block) lives here on the right rather than in the cluster beside the
         avatar, so the follow pill gets the full width up there to breathe. Guarded
         by the same condition as the pill (the cond's can_act? branch: logged-in,
-        not the owner, not a blocker) so a blocker still only sees Unblock, and it
-        stays inert in preview. --%>
+        not the owner, not a blocker) so a blocker still only sees Unblock. --%>
         <div class="mt-4 flex items-center justify-between gap-3">
           <h1 class="flex items-center gap-2 text-2xl font-bold text-slate-900 dark:text-white">
             {full_name(@user)}
@@ -141,7 +138,7 @@ the resulting ~200px rail width. --%>
           </h1>
           <div
             :if={can_act? && !@as_owner? && !@viewer_block}
-            class={["shrink-0", @preview? && "pointer-events-none"]}
+            class="shrink-0"
           >
             <.card_menu id="profile-actions-menu">
               <%!-- Message is the primary positive action; it leads the menu. --%>
@@ -319,7 +316,7 @@ the resulting ~200px rail width. --%>
             reposted_by={entry.reposted_by}
             entry_id={entry.id}
             conn_or_socket={@socket}
-            viewer={@view_viewer}
+            viewer={@current_user}
             surface={:flat}
           />
         </div>
@@ -564,8 +561,8 @@ the resulting ~200px rail width. --%>
           <.user_row
             :for={user <- @followers}
             user={user}
-            current_user={@view_viewer}
-            current_user_id={@view_viewer_id}
+            current_user={@current_user}
+            current_user_id={@current_user_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
             live?
@@ -584,8 +581,8 @@ the resulting ~200px rail width. --%>
           <.user_row
             :for={user <- @followees}
             user={user}
-            current_user={@view_viewer}
-            current_user_id={@view_viewer_id}
+            current_user={@current_user}
+            current_user_id={@current_user_id}
             work_info_by_id={@work_info_by_id}
             following_by_id={@following_by_id}
             live?
@@ -985,8 +982,8 @@ the resulting ~200px rail width. --%>
         <.user_row
           :for={user <- @recommended_users}
           user={user}
-          current_user={@view_viewer}
-          current_user_id={@view_viewer_id}
+          current_user={@current_user}
+          current_user_id={@current_user_id}
           work_info_by_id={@work_info_by_id}
           following_by_id={@following_by_id}
           live?

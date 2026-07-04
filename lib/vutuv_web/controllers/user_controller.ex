@@ -60,9 +60,10 @@ defmodule VutuvWeb.UserController do
   # the HTML render to the socket so every viewer control runs without a reload
   # and the counts/tags update live. The user is already resolved + activated by
   # the plugs above; the LiveView re-loads everything from the id (the session
-  # only carries serializable values). `?view_as=` stays a full reload (owner
-  # preview), so the controller reads it here and threads it through.
-  defp show_html(conn, params) do
+  # only carries serializable values). Signed-in members always see their own
+  # view of a profile; there is no owner "view as public" preview — to see the
+  # public view you log out.
+  defp show_html(conn, _params) do
     # The profile also advertises the member's RSS feed next to the agent
     # formats respond/2 already put there.
     conn =
@@ -75,9 +76,8 @@ defmodule VutuvWeb.UserController do
     user = conn.assigns[:user]
 
     # Drop the controller's own `:app` layout: the LiveView brings the `:app`
-    # layout itself (with the socket assigns the "View as" switcher reads), so
-    # without this the page chrome — ShellLive included — renders twice. The
-    # root layout (the document <head>) still applies.
+    # layout itself, so without this the page chrome — ShellLive included —
+    # renders twice. The root layout (the document <head>) still applies.
     conn
     # rel="me" identity links in the <head> for the member's listed social
     # accounts (the visible chips already carry rel="me" too). This is what
@@ -96,7 +96,6 @@ defmodule VutuvWeb.UserController do
     |> live_render(VutuvWeb.UserProfileLive,
       session: %{
         "profile_user_id" => user.id,
-        "view_as" => params["view_as"],
         "locale" => conn.assigns[:locale],
         "request_path" => conn.request_path,
         "user_id" => conn.assigns[:current_user_id]

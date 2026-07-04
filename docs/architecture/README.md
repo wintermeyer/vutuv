@@ -16,7 +16,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [posts-and-feed.md](posts-and-feed.md) | posts, deny-based audiences, the `/feed` timeline, likes/bookmarks/reposts, reply threads, post images |
 | [search.md](search.md) | the search page, query operators, post full-text search |
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
-| [profiles.md](profiles.md) | what a profile shows: view-as, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
+| [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |

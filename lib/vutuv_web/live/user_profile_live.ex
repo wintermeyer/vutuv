@@ -70,7 +70,6 @@ defmodule VutuvWeb.UserProfileLive do
       |> assign(:current_user, current_user)
       |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:profile_user_id, profile_user_id)
-      |> assign(:view_as_param, session["view_as"])
       # The shared layout reads @locale (contact / address localization, the
       # "Other formats" ?lang= suffix) and @shell_path (the embedded ShellLive)
       # straight off the socket; the controller hands both through the session.
@@ -117,10 +116,8 @@ defmodule VutuvWeb.UserProfileLive do
   def handle_event("unfollow", %{"id" => follow_id}, socket) do
     me = socket.assigns.current_user
 
-    # `not preview?` rejects the owner's inert preview pill (its sentinel
-    # "preview" id is not a real follow); scoped to the viewer, so a request can
-    # only drop the viewer's own edge.
-    if me && not socket.assigns.preview? do
+    # Scoped to the viewer, so a request can only drop the viewer's own edge.
+    if me do
       Social.unfollow!(me.id, follow_id)
       {:noreply, refresh_social(socket)}
     else
@@ -157,7 +154,7 @@ defmodule VutuvWeb.UserProfileLive do
   def handle_event("toggle_mute", %{"id" => follow_id}, socket) do
     me = socket.assigns.current_user
 
-    if me && not socket.assigns.preview? && follow_id == socket.assigns.header_follow_id do
+    if me && follow_id == socket.assigns.header_follow_id do
       follow = Social.toggle_follow_mute!(me.id, follow_id)
 
       message =
@@ -221,18 +218,6 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
-  # Owner-only "View as" preview switch (the layout's switcher), live: re-run the
-  # whole load with the chosen tier so posts/emails/header all reflect it
-  # server-side, with no reload. `view_as/2` maps "you" (and anything unknown)
-  # back to the owner's own view. Honored only for the owner (can_preview?).
-  def handle_event("view_as", %{"mode" => mode}, socket) do
-    if socket.assigns.can_preview? do
-      {:noreply, socket |> assign(:view_as_param, mode) |> load_profile()}
-    else
-      {:noreply, socket}
-    end
-  end
-
   # ── Live updates from elsewhere ──
   # Broadcast on the owner's topic by Vutuv.Social / Vutuv.Tags, so the page
   # reflects changes made on another page or by another member.
@@ -269,8 +254,7 @@ defmodule VutuvWeb.UserProfileLive do
   # A fresh list (new identity) is what makes change tracking re-render the
   # `:for` over @posts; content barely differs, only the relative wording.
   def handle_info(:day_changed, socket) do
-    posts_viewer = posts_scope(socket.assigns.preview_as, socket.assigns.current_user)
-    posts = Vutuv.Posts.profile_posts(socket.assigns.user, posts_viewer)
+    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
 
     {:noreply, socket |> assign(:posts, posts) |> refresh_social_feed_stamps()}
   end
@@ -368,12 +352,10 @@ defmodule VutuvWeb.UserProfileLive do
   # The follow-graph slice of the assigns, shared by the initial load and the
   # live refresh so the two can't drift: the three counts, the header pill's
   # directional state, and the follower / following previews (plus the per-row
-  # work-info and follow-state maps those rows read). Reads preview_as /
-  # current_user / view_viewer / recommended_users off the socket, so set those
-  # before piping through here.
+  # work-info and follow-state maps those rows read). Reads current_user /
+  # recommended_users off the socket, so set those before piping through here.
   defp put_social_assigns(socket, user) do
-    %{preview_as: preview_as, current_user: current_user, view_viewer: view_viewer} =
-      socket.assigns
+    current_user = socket.assigns.current_user
 
     followers = Enum.map(user.inbound_follows, & &1.follower)
     followees = Enum.map(user.outbound_follows, & &1.followee)
@@ -384,7 +366,7 @@ defmodule VutuvWeb.UserProfileLive do
     # The header's whole follow state derives from at most the two directional
     # follow edges (viewer→owner, owner→viewer); resolve both once here instead
     # of the six overlapping lookups the four header_* helpers used to fire.
-    rel = header_relationship(preview_as, current_user, user)
+    rel = header_relationship(current_user, user)
 
     socket
     |> assign(:user, user)
@@ -398,7 +380,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:followers, followers)
     |> assign(:followees, followees)
     |> assign(:work_info_by_id, work_information_map(preview_users, 24))
-    |> assign(:following_by_id, following_map(view_viewer, preview_users))
+    |> assign(:following_by_id, following_map(current_user, preview_users))
   end
 
   # Re-read the visible tags (with their endorsers), so an endorse / unendorse
@@ -423,10 +405,7 @@ defmodule VutuvWeb.UserProfileLive do
     user = preload_user_for_show(base_user)
     owner? = !!(current_user && current_user.id == user.id)
 
-    preview_as = view_as(owner?, socket.assigns.view_as_param)
-    posts_viewer = posts_scope(preview_as, current_user)
-    view_viewer = preview_viewer(preview_as, current_user)
-    private_emails? = private_emails?(preview_as, current_user, user)
+    private_emails? = private_emails?(current_user, user)
 
     # preload_user_for_show loaded ALL work experiences (date-ordered for the
     # Experience card); resolve the header's current job from the id-sorted
@@ -439,27 +418,19 @@ defmodule VutuvWeb.UserProfileLive do
         user.profile_work_experience_id
       )
 
-    recommended_users = recommended_users(user, view_viewer)
+    recommended_users = recommended_users(user, current_user)
 
-    posts_total = Vutuv.Posts.count_author_posts(user, posts_viewer)
-    as_owner? = owner? and is_nil(preview_as)
+    posts_total = Vutuv.Posts.count_author_posts(user, current_user)
     steps = completion_steps(user, posts_total)
-    show_completion? = as_owner? and Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
+    show_completion? = owner? and Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
 
     socket
-    |> assign(:can_preview?, owner?)
-    |> assign(:view_as_full_width?, true)
-    |> assign(:view_as_base_path, ~p"/#{user}")
-    |> assign(:preview_as, preview_as)
-    |> assign(:preview?, not is_nil(preview_as))
-    |> assign(:as_owner?, as_owner?)
-    |> assign(:view_viewer, view_viewer)
-    |> assign(:view_viewer_id, view_viewer && view_viewer.id)
+    |> assign(:as_owner?, owner?)
     |> assign(:vcard_full?, private_emails?)
     |> assign(:viewer_block, viewer_block(current_user, user))
-    |> assign(:user_saved, header_user_saved(preview_as, current_user, user))
+    |> assign(:user_saved, header_user_saved(current_user, user))
     |> assign(:emails, profile_emails(private_emails?, current_user, user))
-    |> assign(:posts, Vutuv.Posts.profile_posts(user, posts_viewer))
+    |> assign(:posts, Vutuv.Posts.profile_posts(user, current_user))
     |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
     |> assign(:work_experience, Enum.take(user.work_experiences, 3))
@@ -471,7 +442,7 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:recommended_users, recommended_users)
     |> assign(:totals, totals)
     # Builds the social slice (counts, header pill state, follow previews); reads
-    # :view_viewer / :recommended_users / :preview_as set above, so it goes last.
+    # :current_user / :recommended_users set above, so it goes last.
     |> put_social_assigns(user)
     |> put_social_feed_assigns(user)
   end
@@ -660,24 +631,11 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
-  # ── "View as" preview helpers (owner-only) ──
+  # ── Viewer-scoping helpers ──
 
-  defp view_as(false, _param), do: nil
-  defp view_as(true, "public"), do: :public
-  defp view_as(true, _param), do: nil
-
-  defp posts_scope(:public, _current_user), do: nil
-  defp posts_scope(nil, current_user), do: current_user
-
-  defp preview_viewer(nil, current_user), do: current_user
-  defp preview_viewer(_preview, _current_user), do: nil
-
-  # A private address is owner-only, so no visitor preview tier ever reveals it;
-  # only the owner's own view (nil, resolved through user_has_permissions?/2,
-  # which is now same_user?/2) does.
-  defp private_emails?(preview, _current_user, _user) when not is_nil(preview), do: false
-
-  defp private_emails?(nil, current_user, user),
+  # A private address is owner-only: only the owner's own view (resolved through
+  # user_has_permissions?/2, which is now same_user?/2) reveals it.
+  defp private_emails?(current_user, user),
     do: !!user_has_permissions?(user, current_user)
 
   # private_emails? already resolved whether the viewer may see private
@@ -689,9 +647,8 @@ defmodule VutuvWeb.UserProfileLive do
   # directional follow edges — the viewer's outbound edge to the owner and the
   # owner's inbound edge back — returned as one map. Replaces four helpers that
   # re-read the same edges six times (two follow_id, the two-exists connected?,
-  # and a follow_edge for the mute state). The only preview tier is Public, which
-  # falls through here as the owner viewing their own profile (all-false).
-  defp header_relationship(_preview, current_user, user) do
+  # and a follow_edge for the mute state).
+  defp header_relationship(current_user, user) do
     if current_user && current_user.id != user.id do
       outbound = Social.follow_edge(current_user.id, user.id)
       inbound = Social.follow_edge(user.id, current_user.id)
@@ -713,7 +670,7 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
-  defp header_user_saved(_preview, current_user, user) do
+  defp header_user_saved(current_user, user) do
     if current_user && current_user.id != user.id do
       Social.user_saved_flags(current_user, user)
     end
@@ -843,9 +800,9 @@ defmodule VutuvWeb.UserProfileLive do
   # (listing someone you already follow as a suggestion is pointless; the rail
   # used to come back all "Following" rows). When the topical pool is mostly
   # already-followed and runs thin, we top it up from the most-followed pool so
-  # the rail still fills with fresh faces. `viewer` is the effective viewer
-  # (`view_viewer`, nil when logged out or previewing as the public), so a
-  # logged-out visitor gets unfiltered suggestions and no follow state.
+  # the rail still fills with fresh faces. `viewer` is the current user (nil when
+  # logged out), so a logged-out visitor gets unfiltered suggestions and no
+  # follow state.
   defp recommended_users(user, viewer) do
     topical =
       case first_tag(user) do

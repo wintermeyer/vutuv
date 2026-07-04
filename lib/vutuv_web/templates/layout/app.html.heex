@@ -56,32 +56,6 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
 <% end %>
 
 <main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 md:pb-10">
-  <%!-- Owner-only "View as" preview switcher — profile-only now (the section
-  pages are pure public views; their editors live under /settings). Rendered
-  here (not per page) as a full-width bar right below the top navigation bar.
-  `@can_preview?` is set only on the owner's own profile (UserController /
-  UserProfileLive). base_path is the current page's path, so each segment
-  reloads *this* page with `?view_as=<mode>`. --%>
-  <%= if assigns[:can_preview?] do %>
-    <%!-- Width follows the page's content so the bar lines up with what's below
-    it: the profile grid spans the full main column (max-w-6xl, flagged with
-    @view_as_full_width? by UserController), while the seven section pages
-    center their content at max-w-3xl (`.card-list` etc.) and get that. mt-6
-    lifts it off the nav / ad strip; mx-auto centers the narrow case. The
-    section pages are dead views (@conn); the profile is a LiveView, which has no
-    @conn and hands its path through @view_as_base_path instead. --%>
-    <.view_as_switcher
-      live?={!assigns[:conn]}
-      base_path={(assigns[:conn] && @conn.request_path) || @view_as_base_path}
-      preview_as={assigns[:preview_as]}
-      public_restricted?={@user.noindex? or @user.noai?}
-      settings_path={~p"/settings/privacy"}
-      class={[
-        "mx-auto mt-6",
-        if(assigns[:view_as_full_width?], do: "max-w-6xl", else: "max-w-3xl")
-      ]}
-    />
-  <% end %>
   {@inner_content}
 </main>
 

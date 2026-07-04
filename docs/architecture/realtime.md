@@ -31,8 +31,8 @@ saves over the socket (see
 
 **Every state-changing control fires a LiveView event, so the page never
 reloads**: the follow pill, the ⋯-menu mute/bookmark/like/block (and unblock),
-the follower/following/who-to-follow follow buttons, the tag-endorsement pills,
-and the owner "View as" switcher. The follower/following/connection counts and
+the follower/following/who-to-follow follow buttons, and the tag-endorsement
+pills. The follower/following/connection counts and
 the tag-endorsement counts also update **live over PubSub even when the change
 is made on another page or by another member** (e.g. someone follows you from
 their feed); plain links (Message, Report, vCard, the agent-format links) stay

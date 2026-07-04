@@ -1057,7 +1057,7 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
-  describe "owner 'view as' profile preview" do
+  describe "the 'View as' switcher is gone (log out for the public view)" do
     # Two emails so the private/public split is unambiguous: the owner sees
     # both; every visitor (followers, connections, the public alike) sees only
     # the public one, because a private address is owner-only.
@@ -1068,99 +1068,54 @@ defmodule VutuvWeb.UserControllerTest do
       {conn, user}
     end
 
-    test "owner's default view carries the switcher and the full private profile", %{conn: conn} do
+    test "the owner sees their full private profile with no switcher and no preview",
+         %{conn: conn} do
       {conn, user} = owner_with_emails(conn)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      # The switcher is the persistent entry point; no banner until a preview
-      # is active.
-      assert html =~ "view-as-switcher"
+      # The whole toggle is removed: no switcher bar, no preview banner, no
+      # phx-click tier buttons. The owner always sees their own view.
+      refute html =~ "view-as-switcher"
       refute html =~ "view-as-banner"
-      # The switcher is rendered once from the app layout; on the profile (a
-      # LiveView) its segments are phx-click buttons, so switching tiers
-      # re-renders with no reload (the dead section pages keep ?view_as= links).
-      assert html =~ ~s(phx-click="view_as")
-      # Two tiers now (You / Öffentlich). "Follower" and "Vernetzt" were both
-      # dropped: Follower rendered like Public, and Vernetzt stopped revealing
-      # anything extra once private emails became owner-only.
-      refute html =~ ~s(phx-value-mode="follower")
-      refute html =~ ~s(phx-value-mode="connection")
-      assert html =~ ~s(phx-value-mode="public")
-      # The profile grid is full width, so the bar spans the full main column
-      # (max-w-6xl); the section pages get the narrower max-w-3xl instead.
-      assert html =~ "mt-6 max-w-6xl"
+      refute html =~ ~s(phx-click="view_as")
+      # The full owner view: owner chrome plus both the private and public email.
       assert html =~ "Edit profile"
       assert html =~ "secret@example.com"
       assert html =~ "shown@example.com"
     end
 
-    test "the removed Follower tier (?view_as=follower) falls back to the owner's own view",
+    test "a stale ?view_as= link is ignored: the owner still sees their own view",
          %{conn: conn} do
       {conn, user} = owner_with_emails(conn)
 
-      # "Follower" was dropped from the switcher because it showed exactly what
-      # the public sees on the profile. A stale ?view_as=follower link is now an
-      # unknown tier, so it resolves to nil: the owner's own full view (banner
-      # gone, owner chrome and private email back).
-      html = conn |> get(~p"/#{user}?#{[view_as: "follower"]}") |> html_response(200)
-
-      refute html =~ "view-as-banner"
-      assert html =~ "Edit profile"
-      assert html =~ "secret@example.com"
-      assert html =~ "shown@example.com"
-    end
-
-    test "the removed Connected tier (?view_as=connection) falls back to the owner's own view",
-         %{conn: conn} do
-      {conn, user} = owner_with_emails(conn)
-
-      # "Vernetzt" was dropped from the switcher once private emails went
-      # owner-only and it no longer revealed anything a Public viewer wouldn't.
-      # A stale ?view_as=connection link is now an unknown tier, so it resolves
-      # to nil: the owner's own full view (banner gone, owner chrome and private
-      # email back).
-      html = conn |> get(~p"/#{user}?#{[view_as: "connection"]}") |> html_response(200)
-
-      refute html =~ "view-as-banner"
-      assert html =~ "Edit profile"
-      assert html =~ "secret@example.com"
-      assert html =~ "shown@example.com"
-    end
-
-    test "previewing as the public hides private data, owner chrome and every action control",
-         %{conn: conn} do
-      {conn, user} = owner_with_emails(conn)
-
+      # Old bookmarked ?view_as= links no longer switch anything (the param is
+      # dead), so the owner sees their own full view: no banner, owner chrome and
+      # the private email present.
       html = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
 
-      assert html =~ "view-as-banner"
-      refute html =~ "Edit profile"
+      refute html =~ "view-as-switcher"
+      refute html =~ "view-as-banner"
+      assert html =~ "Edit profile"
+      assert html =~ "secret@example.com"
+      assert html =~ "shown@example.com"
+    end
+
+    test "a logged-out visitor sees the public view without the private email", %{conn: conn} do
+      {_conn, user} = owner_with_emails(conn)
+
+      # Logging out is now the way to see the public view: no switcher, and the
+      # private address is hidden while the public one shows.
+      html = build_conn() |> get(~p"/#{user}") |> html_response(200)
+
+      refute html =~ "view-as-switcher"
       refute html =~ "secret@example.com"
       assert html =~ "shown@example.com"
-      refute html =~ ~p"/messages/with/#{user}"
-      # This member allows indexing and AI, so the banner makes no exception
-      # and there is no link to the privacy settings.
-      refute html =~ ~p"/settings/privacy"
     end
 
-    test "public preview links to privacy settings when indexing or AI use is restricted",
+    test "a logged-out visitor sees only public posts, not audience-restricted ones",
          %{conn: conn} do
-      # The public banner says search engines see the page, but this member has
-      # turned indexing off (noai? is the symmetric case), so the banner adds a
-      # "More about this." link to the privacy page that explains/manages it.
-      {conn, user} = owner_with_emails(conn)
-      user = user |> change(noindex?: true) |> Repo.update!()
-
-      html = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
-
-      assert html =~ "More about this."
-      assert html =~ ~p"/settings/privacy"
-    end
-
-    test "the public preview shows only public posts, hiding audience-restricted ones",
-         %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+      {_conn, user} = create_and_login_user(conn)
       {:ok, _} = Vutuv.Posts.create_post(user, %{body: "everyone post"})
 
       {:ok, _} =
@@ -1169,32 +1124,11 @@ defmodule VutuvWeb.UserControllerTest do
           denials: [%{"wildcard" => "non_followers"}]
         })
 
-      {:ok, _} =
-        Vutuv.Posts.create_post(user, %{
-          body: "connections post",
-          denials: [%{"wildcard" => "non_connections"}]
-        })
-
-      # The only visitor preview now is Public: it shows the public post and
-      # hides every audience-restricted one. (Follower/connection-scoped posts
-      # still reach those audiences on the real profile; there is just no owner
-      # preview tier for them any more.)
-      public = conn |> get(~p"/#{user}?#{[view_as: "public"]}") |> html_response(200)
-      assert public =~ "everyone post"
-      refute public =~ "followers post"
-      refute public =~ "connections post"
-    end
-
-    test "a stranger's ?view_as= is ignored: no switcher, no preview, no leak", %{conn: conn} do
-      {conn, _visitor} = create_and_login_user(conn)
-      owner = insert_activated_user()
-      insert(:email, user: owner, value: "secret@example.com", public?: false)
-
-      html = conn |> get(~p"/#{owner}?#{[view_as: "public"]}") |> html_response(200)
-
-      refute html =~ "view-as-switcher"
-      refute html =~ "view-as-banner"
-      refute html =~ "secret@example.com"
+      # The anonymous public profile shows the public post and hides every
+      # audience-restricted one (the same scoping the owner previewed before).
+      html = build_conn() |> get(~p"/#{user}") |> html_response(200)
+      assert html =~ "everyone post"
+      refute html =~ "followers post"
     end
 
     # The actual screenshot bug, on the real profile (no preview): "private" used

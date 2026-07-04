@@ -6,19 +6,18 @@ has agent-format siblings ([agents-and-seo.md](agents-and-seo.md)), and
 members edit all of it from the settings hub
 ([settings-and-account.md](settings-and-account.md)).
 
-## Profile "view as" preview
+## Owner vs. public view
 
-On your own profile a slim "Ansehen als" switcher re-renders the page as `Sie`
-(your full view) or `Öffentlich` (logged-out visitors and search engines).
+A signed-in member always sees their **own** view of any profile (their own or
+someone else's). There is no owner "view as public" toggle: to see the public
+view a member logs out. The anonymous public view — the same one search engines
+and the agent-format siblings get — hides owner chrome and private data (private
+emails are owner-only) and enforces post visibility server-side, so restricted
+content never reaches the anonymous HTML. A stale `?view_as=` query string is
+inert (the profile ignores it).
 
-The public preview drops the owner chrome and enforces post visibility
-**server-side** via `?view_as=public` (`Vutuv.Posts.scope_visible_preview/2`),
-so restricted content never reaches the preview HTML.
-
-Honored only for the owner; a stranger's `?view_as=` is ignored.
-
-The profile-section pages no longer carry the switcher: `/:slug/<section>` IS
-the public view for everyone, and editing happens at `/settings/<section>`.
+The profile-section pages behave the same way: `/:slug/<section>` IS the public
+view for everyone, and editing happens at `/settings/<section>`.
 
 ## Profile job title chooser (issue #833)
 

@@ -237,33 +237,21 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
-  describe "owner 'View as' preview without a reload" do
-    test "switching tiers previews and clears live", %{conn: conn} do
+  describe "no 'View as' switcher (removed)" do
+    test "the owner always sees their own full view; there is no switcher to preview",
+         %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
       insert(:email, user: owner, value: "secret@example.com", public?: false)
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}")
 
-      # Own view: the switcher is present, no preview banner, private email shown.
-      assert has_element?(view, "#view-as-switcher")
+      # The whole toggle is gone: no switcher, no preview banner, no phx-click
+      # tier buttons. To see the public view an owner logs out.
+      refute has_element?(view, "#view-as-switcher")
       refute has_element?(view, "#view-as-banner")
-      assert render(view) =~ "secret@example.com"
+      refute has_element?(view, ~s([phx-click="view_as"]))
 
-      # Two tiers only: You / Public. The Follower and Vernetzt segments are both
-      # gone (Follower looked like Public; Vernetzt stopped revealing anything
-      # extra once private emails became owner-only).
-      assert has_element?(view, ~s(button[phx-value-mode="public"]))
-      refute has_element?(view, ~s(button[phx-value-mode="connection"]))
-      refute has_element?(view, ~s(button[phx-value-mode="follower"]))
-
-      # Preview as the public: banner appears and the private email drops, live.
-      view |> element(~s(button[phx-click="view_as"][phx-value-mode="public"])) |> render_click()
-      assert has_element?(view, "#view-as-banner")
-      refute render(view) =~ "secret@example.com"
-
-      # Back to "You": banner gone, private email back.
-      view |> element(~s(button[phx-click="view_as"][phx-value-mode="you"])) |> render_click()
-      refute has_element?(view, "#view-as-banner")
+      # Their own view still carries the private email and the owner chrome.
       assert render(view) =~ "secret@example.com"
     end
   end

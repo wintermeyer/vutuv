@@ -29,16 +29,18 @@ pages — both render `PostComponents.post_actions/1` and share `PostLive.Action
   `live_render(conn, UserProfileLive, …)` after `put_layout(html: false)` (so the `:app`
   layout — ShellLive included — renders once, from the LiveView, not twice). Because it is
   off-router it **cannot** use `Live.InitAssigns` as its `on_mount` (that hook attaches a
-  `:handle_params` hook, which an off-router LiveView rejects) and has no `handle_params`,
-  so `?view_as=` stays a full reload; mount mirrors InitAssigns (current_user + locale) and
-  reads the path/locale/profile id/view_as from the session the controller passes. It
+  `:handle_params` hook, which an off-router LiveView rejects) and has no `handle_params`;
+  mount mirrors InitAssigns (current_user + locale) and
+  reads the path/locale/profile id from the session the controller passes. It
   renders the one profile markup — `VutuvWeb.UserHTML.show/1` (the embedded
-  `templates/user/show.html.heex`) — so keep `ProfileDoc` in sync (drift test). The header
+  `templates/user/show.html.heex`) — so keep `ProfileDoc` in sync (drift test). A signed-in
+  member always sees their own view of a profile; there is **no** owner "view as public"
+  preview (to see the public view you log out), so there is no `?view_as=` handling.
   **Every state-changing control is `phx-click`, handled here, no reload:** the header
   follow pill, the tag-endorsement pills, the ⋯-menu Mute/Bookmark/Like/Block and the
-  Unblock control, the follower/following/who-to-follow `user_row` follow buttons, and the
-  owner "View as" switcher — all pass `live?` to their `VutuvWeb.UI` components
-  (`follow_button`/`follow_relationship`/`tag_vote`/`card_menu`/`user_row`/`view_as_switcher`).
+  Unblock control, and the follower/following/who-to-follow `user_row` follow buttons —
+  all pass `live?` to their `VutuvWeb.UI` components
+  (`follow_button`/`follow_relationship`/`tag_vote`/`card_menu`/`user_row`).
   Counts and tags also update live over PubSub (see the social-graph note below). The
   **post action bars** are in-process `PostLive.ActionsComponent`s here (not their own
   `live_render` — that flashed on every stream re-render), and the profile drops a deleted
