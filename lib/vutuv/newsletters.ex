@@ -119,7 +119,10 @@ defmodule Vutuv.Newsletters do
   def deliver_test(%Newsletter{} = newsletter, email, %User{} = admin) when is_binary(email) do
     email = String.trim(email)
 
-    if Regex.match?(@email_re, email) do
+    # The regex places no upper bound, but newsletter_deliveries.email is
+    # varchar(255): an oversized address must be a clean {:error, :invalid_email}
+    # rather than a raised Postgres 22001 from send_and_log's Repo.insert!.
+    if Regex.match?(@email_re, email) and String.length(email) <= 254 do
       content_html = Markdown.to_email_html(newsletter.body, track: true)
       unsubscribe_url = UnsubscribeToken.url(admin, :newsletter_emails?)
 

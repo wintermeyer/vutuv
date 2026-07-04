@@ -29,6 +29,17 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  A member's display name for admin lists: their full name, or `@handle` when
+  they have no name set. Shared by the admin user list and the delete flow.
+  """
+  def member_name(user) do
+    case String.trim(full_name(user)) do
+      "" -> "@" <> (user.username || "")
+      name -> name
+    end
+  end
+
+  @doc """
   The flash for a batch tag add — shared by the two places tags are attached:
   `VutuvWeb.TagNewLive` (the add-tag form's socket save) and
   `VutuvWeb.UserTagController.create` (the public tag page's "Add this tag"
@@ -44,10 +55,6 @@ defmodule VutuvWeb.UserHelpers do
       successes: successes,
       total: successes + failures
     )
-  end
-
-  def first_and_last(%User{first_name: first_name, last_name: last_name}, seperator \\ " ") do
-    "#{first_name}#{if first_name && last_name, do: seperator}#{last_name}"
   end
 
   def name_for_email_to_field(%User{first_name: first_name, last_name: last_name}) do
@@ -443,12 +450,6 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   def user_follows_user?(_, _), do: false
-
-  def visitor?(_, nil), do: false
-
-  def visitor?(conn, current_user) do
-    !same_user?(conn.assigns[:user], current_user)
-  end
 
   def same_user?(%User{id: id}, %User{id: id}), do: true
   def same_user?(_, _), do: false

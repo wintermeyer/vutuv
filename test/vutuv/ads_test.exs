@@ -64,6 +64,14 @@ defmodule Vutuv.AdsTest do
       assert flush_emails() != []
     end
 
+    test "rejects a billing field longer than the varchar(255) column" do
+      attrs = Map.put(@valid_attrs, "billing_company", String.duplicate("a", 256))
+
+      assert {:error, changeset} = Ads.book_ad(booker(), attrs)
+      assert Enum.any?(errors_on(changeset).billing_company, &(&1 =~ "at most 255"))
+      assert flush_emails() == []
+    end
+
     test "rejects days beyond the booking window" do
       beyond = Date.add(Ads.last_bookable_day(), 1)
       attrs = Map.put(@valid_attrs, "day", Date.to_iso8601(beyond))

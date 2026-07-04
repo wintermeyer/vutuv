@@ -89,6 +89,20 @@ defmodule VutuvWeb.SavedLiveTest do
     assert %{liked?: false} = Vutuv.Social.user_saved_flags(user, liked)
   end
 
+  test "unsave-person with a tampered non-UUID id is a no-op, not a crash", %{conn: conn} do
+    {conn, user} = create_and_login_user(conn)
+    liked = other_user(first_name: "Keeper")
+    :ok = Vutuv.Social.like_user(user, liked)
+
+    {:ok, view, _html} = live(conn, ~p"/likes?tab=people")
+
+    # A non-UUID id must not raise an Ecto.CastError and crash the LiveView.
+    render_click(view, "unsave-person", %{"id" => "not-a-uuid"})
+
+    assert has_element?(view, "#saved-people li", "Keeper")
+    assert %{liked?: true} = Vutuv.Social.user_saved_flags(user, liked)
+  end
+
   test "liking a member in another session prepends them live", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     {:ok, view, _html} = live(conn, ~p"/likes?tab=people")

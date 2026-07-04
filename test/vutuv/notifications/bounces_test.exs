@@ -41,6 +41,40 @@ defmodule Vutuv.Notifications.BouncesTest do
   --ABC--
   """
 
+  # Same shape as @failed_dsn but a policy rejection (DMARC/authentication),
+  # not a dead mailbox: must NOT deactivate a live address.
+  @policy_failed_dsn """
+  From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+  Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+  --ABC
+  Content-Type: message/delivery-status
+
+  Final-Recipient: rfc822; dead@example.com
+  Action: failed
+  Status: 5.7.1
+  Diagnostic-Code: smtp; 550 5.7.1 Message rejected by DMARC policy
+
+  --ABC--
+  """
+
+  # A give-up on a transient failure (4.x): the MTA stopped, but this is not a
+  # recipient failure, so it must NOT deactivate a live address either.
+  @transient_failed_dsn """
+  From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
+  Content-Type: multipart/report; report-type=delivery-status; boundary="ABC"
+
+  --ABC
+  Content-Type: message/delivery-status
+
+  Final-Recipient: rfc822; dead@example.com
+  Action: failed
+  Status: 4.4.7
+  Diagnostic-Code: smtp; 450 4.4.7 Delivery time expired
+
+  --ABC--
+  """
+
   @delayed_dsn """
   From: MAILER-DAEMON@mail.example.com (Mail Delivery System)
   Subject: Delayed Mail (still being retried)
@@ -87,6 +121,26 @@ defmodule Vutuv.Notifications.BouncesTest do
     test "a failure for an address we do not know is still recorded" do
       assert {:ok, :failed} = Bounces.record(@failed_dsn)
       assert [%EmailBounce{email_value: "dead@example.com"}] = Repo.all(EmailBounce)
+    end
+
+    test "a policy failure (5.7.x) is recorded but does NOT deactivate the address" do
+      {_user, email} = user_with_email("dead@example.com")
+
+      assert {:ok, :ignored} = Bounces.record(@policy_failed_dsn)
+
+      # A DMARC/authentication rejection is not a dead mailbox: the live
+      # address stays deliverable, matching the log watcher's classification.
+      assert reload(email).undeliverable_at == nil
+      assert Repo.all(EmailBounce) == []
+    end
+
+    test "a transient failure (4.x) is ignored, not deactivated" do
+      {_user, email} = user_with_email("dead@example.com")
+
+      assert {:ok, :ignored} = Bounces.record(@transient_failed_dsn)
+
+      assert reload(email).undeliverable_at == nil
+      assert Repo.all(EmailBounce) == []
     end
 
     test "a delay DSN is ignored (Postfix is still retrying)" do

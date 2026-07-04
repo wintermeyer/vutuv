@@ -189,10 +189,7 @@ defmodule VutuvWeb.CV.Docx do
     "<w:p>#{p_props}<w:r>#{r_props}#{runs}</w:r></w:p>"
   end
 
-  defp esc(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-  end
+  # The canonical XML text escape (also escapes " and ', harmless in element
+  # text) — the one definition shared with the sitemap/feed/odt renderers.
+  defp esc(text), do: VutuvWeb.Xml.escape(text)
 end

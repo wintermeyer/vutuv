@@ -369,7 +369,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # post carries a whole roster (the feed's follow-scoped reposters, newest
   # first). Falls back to the single `reposted_by` name for docs that carry
   # only that (the profile posts section).
-  defp repost_suffix(post) do
+  @doc false
+  def repost_suffix(post) do
     case repost_names(post) do
       [] ->
         ""
@@ -382,7 +383,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     end
   end
 
-  defp repost_names(post) do
+  @doc false
+  def repost_names(post) do
     cond do
       is_list(post[:reposters]) and post[:reposters] != [] -> post[:reposters]
       post[:reposted_by] -> [post[:reposted_by]]
@@ -434,7 +436,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp tags_line(tags), do: "Tags: " <> Enum.map_join(tags, ", ", &"##{&1}")
 
   # The public engagement counters, mirroring the HTML action bar.
-  defp engagement_line(doc) do
+  @doc false
+  def engagement_line(doc) do
     "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
       "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
   end

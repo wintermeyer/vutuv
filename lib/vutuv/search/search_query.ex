@@ -23,6 +23,10 @@ defmodule Vutuv.Search.SearchQuery do
     model
     |> cast(params, [:value, :email?])
     |> validate_required([:value, :email?])
+    # varchar(255) column fed from raw ?q= URL input: an oversized query must
+    # be a skipped changeset error, never a raised Postgres 22001 that would
+    # crash-loop SearchLive on every re-mount from the same URL.
+    |> validate_length(:value, max: 255)
     |> cast_assoc(:search_query_results)
     |> cast_assoc(:search_query_requesters)
     |> unique_constraint(:value)

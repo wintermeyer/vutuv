@@ -7387,15 +7387,15 @@ msgstr[1] ""
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:176
 #, elixir-autogen
-msgid "Sent to %{count} member."
-msgid_plural "Sent to %{count} members."
+msgid "Sent to %{formatted} member."
+msgid_plural "Sent to %{formatted} members."
 msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:202
 #, elixir-autogen
-msgid "The newsletter will be sent to %{count} person. This cannot be undone."
-msgid_plural "The newsletter will be sent to %{count} people. This cannot be undone."
+msgid "The newsletter will be sent to %{formatted} person. This cannot be undone."
+msgid_plural "The newsletter will be sent to %{formatted} people. This cannot be undone."
 msgstr[0] ""
 msgstr[1] ""
 

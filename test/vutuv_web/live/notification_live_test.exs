@@ -30,6 +30,17 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ ~s(href="/#{follower.username}")
     end
 
+    test "renders the row timestamp as a viewer-localizable UTC time", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:follow, follower: insert(:user, first_name: "Grace"), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # Not a raw server-UTC <time>: it must carry the LocalTime marker and an
+      # ISO-8601 datetime with a trailing Z so the viewer sees their own date.
+      assert render(live) =~ ~r/<time[^>]*data-localtime[^>]*datetime="\d{4}-\d{2}-\d{2}T[^"]*Z"/
+    end
+
     test "a derived row shows the actor's real avatar when they have one", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

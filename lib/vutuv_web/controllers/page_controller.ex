@@ -107,7 +107,14 @@ defmodule VutuvWeb.PageController do
   end
 
   def new_registration(conn, %{"user" => user_params}) do
-    email = user_params["emails"]["0"]["value"]
+    # Extract defensively: a malformed "emails" param (not the nested
+    # %{"0" => %{"value" => …}} the form produces) must reach register_user/2
+    # as a plain error changeset, not crash on chained Access indexing.
+    email =
+      case user_params do
+        %{"emails" => %{"0" => %{"value" => value}}} -> value
+        _ -> nil
+      end
 
     case Vutuv.Accounts.register_user(conn, user_params) do
       {:ok, _user} ->

@@ -142,6 +142,19 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
              }) ==
                "alice.bsky.social"
     end
+
+    test "rejects a handle that overflows varchar(255) only after normalization" do
+      # 250 chars fits the column, but ".bsky.social" is appended AFTER, so the
+      # length must be validated on the normalized value (else Postgres 22001).
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Bluesky",
+          value: String.duplicate("a", 250)
+        })
+
+      refute changeset.valid?
+      assert Enum.any?(errors_on(changeset).value, &(&1 =~ "at most"))
+    end
   end
 
   describe "Mastodon value parsing" do

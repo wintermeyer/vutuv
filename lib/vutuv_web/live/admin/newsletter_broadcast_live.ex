@@ -149,14 +149,14 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
                   {gettext("All eligible members")}
                 </option>
                 <option :for={g <- @groups} value={g.id} selected={g.id == @selected_group_id}>
-                  {g.name} ({g.member_count})
+                  {g.name} ({compact_count(g.member_count)})
                 </option>
               </select>
             </form>
 
             <p class="mt-3 text-sm text-slate-700 dark:text-slate-200">
               {gettext("This selection reaches")}
-              <strong id="reach-count">{@reach}</strong> {ngettext("member.", "members.", @reach)}
+              <strong id="reach-count">{delimited_count(@reach)}</strong> {ngettext("member.", "members.", @reach)}
             </p>
 
             <div class="mt-4">
@@ -173,9 +173,9 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
           <% _ -> %>
             <h1>{gettext("Done")}</h1>
             <p class="mt-1 text-sm text-slate-700 dark:text-slate-200">
-              {ngettext("Sent to %{count} member.", "Sent to %{count} members.",
+              {ngettext("Sent to %{formatted} member.", "Sent to %{formatted} members.",
                 @newsletter.recipient_count,
-                count: @newsletter.recipient_count
+                formatted: delimited_count(@newsletter.recipient_count)
               )}
             </p>
             {progress(assigns)}
@@ -200,10 +200,10 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
         <h2 class="text-lg font-bold text-slate-900 dark:text-white">{gettext("Are you sure?")}</h2>
         <p class="mt-2 text-sm text-slate-700 dark:text-slate-200">
           {ngettext(
-            "The newsletter will be sent to %{count} person. This cannot be undone.",
-            "The newsletter will be sent to %{count} people. This cannot be undone.",
+            "The newsletter will be sent to %{formatted} person. This cannot be undone.",
+            "The newsletter will be sent to %{formatted} people. This cannot be undone.",
             @confirm_count,
-            count: @confirm_count
+            formatted: delimited_count(@confirm_count)
           )}
         </p>
         <div class="mt-6 flex items-center justify-end gap-3">

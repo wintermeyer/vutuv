@@ -86,11 +86,13 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     model
     |> cast(params, @required_fields ++ @optional_fields)
     |> validate_required([:provider, :value])
-    # varchar(255) column: an overlong handle must fail as a changeset error,
-    # never as a raised Postgres 22001 (which 500ed the LinkedIn import).
-    |> validate_length(:value, max: 255)
     |> unique_constraint(:value_provider, message: "Someone has already claimed this account")
     |> normalize_value()
+    # varchar(255) column: an overlong handle must fail as a changeset error,
+    # never as a raised Postgres 22001 (which 500ed the LinkedIn import). Check
+    # the NORMALIZED value — Bluesky appends ".bsky.social", so a handle that
+    # fit before normalization can overflow the column afterwards.
+    |> validate_length(:value, max: 255)
     |> validate_value()
     |> validate_inclusion(:provider, @accepted_providers)
     |> reset_fetch_state()

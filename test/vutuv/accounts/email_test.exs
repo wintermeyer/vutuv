@@ -16,6 +16,16 @@ defmodule Vutuv.Accounts.EmailTest do
         assert %{value: [_]} = errors_on(changeset)
       end
     end
+
+    test "rejects an address longer than the varchar(255) column" do
+      # Passes the format regex but would raise Postgres 22001 on insert.
+      long = String.duplicate("a", 290) <> "@ex.co"
+      changeset = Email.changeset(%Email{}, %{"value" => long})
+
+      refute changeset.valid?
+      assert %{value: [msg]} = errors_on(changeset)
+      assert msg =~ "at most"
+    end
   end
 
   describe "email_type" do

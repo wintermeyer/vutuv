@@ -21,4 +21,27 @@ defmodule Vutuv.SocialFeed.Post do
           html: String.t() | nil,
           created_at: DateTime.t()
         }
+
+  # Remote post text is clamped to this many characters (with an ellipsis) in
+  # both provider feeds.
+  @max_text_length 500
+
+  @doc "The trimmed value, or nil when it is blank/whitespace-only."
+  def presence(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  def presence(_value), do: nil
+
+  @doc "Clamps remote post text to #{@max_text_length} characters with a trailing ellipsis."
+  def truncate(text) do
+    if String.length(text) > @max_text_length do
+      String.slice(text, 0, @max_text_length - 1) <> "…"
+    else
+      text
+    end
+  end
 end

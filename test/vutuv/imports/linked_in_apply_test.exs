@@ -197,4 +197,16 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
     assert set_result.created.profile == []
     assert Repo.reload(set).headline == "My own headline"
   end
+
+  test "selection_from_payload drops an unknown/tampered profile key instead of raising" do
+    # The payload is client-controlled; a tampered key must be dropped, not
+    # crash String.to_existing_atom/1 with an ArgumentError (a 500 on confirm).
+    selection =
+      LinkedIn.selection_from_payload(
+        %{"profile" => %{"zzz_not_a_field" => "x", "first_name" => "Ada"}},
+        ["profile:zzz_not_a_field", "profile:first_name"]
+      )
+
+    assert selection.profile == %{first_name: "Ada"}
+  end
 end

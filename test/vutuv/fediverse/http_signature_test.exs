@@ -99,6 +99,22 @@ defmodule Vutuv.Fediverse.HttpSignatureTest do
                )
     end
 
+    test "a non-numeric date is rejected, not raised", %{priv: priv, pub: pub, key_id: key_id} do
+      # Signed over a malformed (attacker-controlled) date so the signature and
+      # digest pass and check_date is actually reached: it must return an error,
+      # not raise an ArgumentError that 500s the inbox.
+      headers =
+        HttpSignature.signed_headers("post", "https://m.example/inbox", "x", key_id, priv,
+          date: "Xxx, 01 Jul abcd 00:00:00 GMT"
+        )
+
+      assert {:error, :bad_date} ==
+               HttpSignature.valid?(
+                 %{method: "post", path: "/inbox", headers: Map.new(headers), body: "x"},
+                 pub
+               )
+    end
+
     test "a stale date is rejected", %{priv: priv, pub: pub, key_id: key_id} do
       stale =
         DateTime.utc_now()

@@ -74,7 +74,12 @@ defmodule Vutuv.SocialFeed.Http do
     end
   end
 
-  defp user_agent do
+  @doc """
+  vutuv's outbound `User-Agent` string, `vutuv/<vsn> (+<public_url>)`. Shared
+  by the social-feed clients and the fediverse client so every outbound request
+  identifies the installation the same way.
+  """
+  def user_agent do
     public_url =
       Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] || "https://vutuv.de/"
 

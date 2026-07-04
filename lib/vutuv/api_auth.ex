@@ -284,13 +284,6 @@ defmodule Vutuv.ApiAuth do
   end
 
   defp touch_last_used(%Token{} = token) do
-    now = DateTime.utc_now(:second)
-
-    if is_nil(token.last_used_at) or
-         DateTime.diff(now, token.last_used_at) >= @last_used_resolution_seconds do
-      token |> Ecto.Changeset.change(last_used_at: now) |> Repo.update!()
-    else
-      token
-    end
+    Repo.touch_throttled(token, :last_used_at, @last_used_resolution_seconds)
   end
 end

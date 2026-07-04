@@ -37,7 +37,9 @@ defmodule Vutuv.Search do
   # how long who-searched-what is retained. Change here to adjust the policy.
   @history_retention_days 90
 
-  @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}$/
+  # TLD bound is {2,} (not {2,4}): modern TLDs run long (.online, .software),
+  # and an unrecognized email would wrongly fall through to phonetic name search.
+  @email_regex ~r/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/
 
   # Operator keys (German first, English alias) → parsed field.
   @field_ops %{

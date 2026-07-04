@@ -18,7 +18,7 @@ defmodule VutuvWeb.Admin.UserDeleteLive do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.Accounts
 
@@ -95,13 +95,6 @@ defmodule VutuvWeb.Admin.UserDeleteLive do
 
   # A blank query is the "start here" state, distinct from "searched, no hits".
   defp searched?(query), do: String.trim(to_string(query)) != ""
-
-  defp member_name(user) do
-    case String.trim(full_name(user)) do
-      "" -> "@" <> (user.username || "")
-      name -> name
-    end
-  end
 
   @impl true
   def render(assigns) do

@@ -30,9 +30,6 @@ defmodule Vutuv.Mastodon do
   @posts_shown 3
   @statuses_limit 20
 
-  # Rendered post text is capped; some instances allow 5000+ character posts.
-  @max_text_length 500
-
   # Same shape the SocialMediaAccount changeset enforces; no ":" keeps port
   # injection out of the URL (https, port 443 only).
   @handle_format ~r/^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+$/u
@@ -108,14 +105,14 @@ defmodule Vutuv.Mastodon do
   # avatar arrives as its still version.
   defp account_meta(account, user, instance) do
     name =
-      presence(strip_custom_emoji(account["display_name"])) ||
-        presence(account["username"]) || user
+      Post.presence(strip_custom_emoji(account["display_name"])) ||
+        Post.presence(account["username"]) || user
 
     %{
       id: to_string(account["id"]),
       name: name,
-      url: presence(account["url"]) || "https://#{instance}/@#{user}",
-      avatar_url: presence(account["avatar_static"]) || presence(account["avatar"])
+      url: Post.presence(account["url"]) || "https://#{instance}/@#{user}",
+      avatar_url: Post.presence(account["avatar_static"]) || Post.presence(account["avatar"])
     }
   end
 
@@ -130,15 +127,6 @@ defmodule Vutuv.Mastodon do
   end
 
   defp strip_custom_emoji(value), do: value
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_value), do: nil
 
   defp fetch_statuses(instance, id) do
     # The id came from the remote server's JSON; only a plain token may be
@@ -189,7 +177,7 @@ defmodule Vutuv.Mastodon do
     spoiler = String.trim(to_string(status["spoiler_text"] || ""))
 
     cond do
-      spoiler != "" -> truncate(spoiler)
+      spoiler != "" -> Post.truncate(spoiler)
       status["sensitive"] == true -> ""
       true -> text_content(to_string(status["content"] || ""))
     end
@@ -209,7 +197,7 @@ defmodule Vutuv.Mastodon do
     |> HtmlSanitizeEx.strip_tags()
     |> decode_entities()
     |> String.trim()
-    |> truncate()
+    |> Post.truncate()
   end
 
   # strip_tags/1 returns text with the base named entities still escaped (the
@@ -223,13 +211,5 @@ defmodule Vutuv.Mastodon do
     |> String.replace("&#39;", "'")
     |> String.replace("&nbsp;", " ")
     |> String.replace("&amp;", "&")
-  end
-
-  defp truncate(text) do
-    if String.length(text) > @max_text_length do
-      String.slice(text, 0, @max_text_length - 1) <> "…"
-    else
-      text
-    end
   end
 end

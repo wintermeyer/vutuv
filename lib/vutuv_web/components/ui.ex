@@ -713,7 +713,7 @@ defmodule VutuvWeb.UI do
         navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
         class="mt-1 block px-1 text-[11px] text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-300"
       >
-        {gettext("and %{count} more", count: @extra)}
+        {gettext("and %{count} more", count: compact_count(@extra))}
       </.link>
     </div>
     """

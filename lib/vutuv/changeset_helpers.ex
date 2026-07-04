@@ -88,4 +88,67 @@ defmodule Vutuv.ChangesetHelpers do
     |> String.normalize(:nfd)
     |> String.replace(~r/\W/u, "")
   end
+
+  @doc """
+  Validates a profile "period" entry's dates — shared by the work-experience
+  and education changesets so the two can't drift: a month requires its year,
+  the end must not precede the start, and each year sits in
+  `1920..current_year` (matching the form's year <select>).
+  """
+  def validate_period(changeset) do
+    changeset
+    |> validate_dates()
+    |> validate_inclusion(:start_month, 1..12)
+    |> validate_inclusion(:end_month, 1..12)
+    |> validate_number(:start_year,
+      greater_than_or_equal_to: 1920,
+      less_than_or_equal_to: current_year()
+    )
+    |> validate_number(:end_year,
+      greater_than_or_equal_to: 1920,
+      less_than_or_equal_to: current_year()
+    )
+  end
+
+  defp validate_dates(changeset) do
+    end_month = get_field(changeset, :end_month)
+    end_year = get_field(changeset, :end_year)
+    start_month = get_field(changeset, :start_month)
+    start_year = get_field(changeset, :start_year)
+
+    changeset =
+      if presence_correct?(start_year, start_month),
+        do: changeset,
+        else: add_error(changeset, :start_year, "If month is present, year must be present.")
+
+    changeset =
+      if presence_correct?(end_year, end_month),
+        do: changeset,
+        else: add_error(changeset, :end_year, "If month is present, year must be present.")
+
+    changeset =
+      if date_range_correct?(start_year, end_year),
+        do: changeset,
+        else: add_error(changeset, :end_month, "End date must be later than start date")
+
+    if start_year && end_year && start_year == end_year do
+      if date_range_correct?(start_month, end_month),
+        do: changeset,
+        else: add_error(changeset, :end_month, "End date must be later than start date")
+    else
+      changeset
+    end
+  end
+
+  # A month without a year is the only invalid combination.
+  defp presence_correct?(year, month) do
+    not is_nil(year) or is_nil(month)
+  end
+
+  defp date_range_correct?(start, finish) when is_nil(start) or is_nil(finish), do: true
+  defp date_range_correct?(start, finish), do: start <= finish
+
+  # The upper bound on a period year, matching the form's year <select>
+  # (@current_year..1920): a period can't start or end in a future year.
+  defp current_year, do: Date.utc_today().year
 end

@@ -152,9 +152,15 @@ defmodule Vutuv.Fediverse.HttpSignature do
   @months ~w(Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec)
 
   defp parse_date(day, mon, year) do
-    case Enum.find_index(@months, &(&1 == String.capitalize(mon))) do
-      nil -> :error
-      index -> Date.new(String.to_integer(year), index + 1, String.to_integer(day))
+    # Integer.parse/1 (not String.to_integer/1) so an attacker-controlled Date
+    # header with a non-numeric day/year flows to {:error, :bad_date} instead of
+    # raising an ArgumentError that 500s (and floods the log on) the AP inbox.
+    with index when not is_nil(index) <- Enum.find_index(@months, &(&1 == String.capitalize(mon))),
+         {y, ""} <- Integer.parse(year),
+         {d, ""} <- Integer.parse(day) do
+      Date.new(y, index + 1, d)
+    else
+      _ -> :error
     end
   end
 

@@ -286,6 +286,14 @@ defmodule Vutuv.NewslettersTest do
 
       assert Newsletters.list_deliveries(newsletter) == []
     end
+
+    test "rejects an over-long address without a 22001 (varchar(255) column)" do
+      newsletter = draft(admin())
+      long = "a@" <> String.duplicate("x", 300) <> ".com"
+
+      assert {:error, :invalid_email} = Newsletters.deliver_test(newsletter, long, admin())
+      assert Newsletters.list_deliveries(newsletter) == []
+    end
   end
 
   describe "start_broadcast/1" do

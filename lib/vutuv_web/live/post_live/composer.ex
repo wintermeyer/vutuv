@@ -458,7 +458,7 @@ defmodule VutuvWeb.PostLive.Composer do
           >{@body}</textarea>
 
           <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
-            {String.length(@body)} / {Post.max_body_length()}
+            {delimited_count(String.length(@body))} / {delimited_count(Post.max_body_length())}
           </p>
 
           <%!-- Uploaded images: thumbnail + alt input + inline/remove actions --%>

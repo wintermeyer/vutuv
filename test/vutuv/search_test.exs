@@ -83,6 +83,16 @@ defmodule Vutuv.SearchTest do
       assert results.similar_people == []
     end
 
+    test "an address on a long modern TLD is still recognized as an email" do
+      user = insert(:activated_user)
+      insert(:email, user: user, value: "anna@example.online", public?: true)
+
+      results = Search.instant("anna@example.online")
+
+      assert Enum.map(results.exact_people, & &1.id) == [user.id]
+      assert results.similar_people == []
+    end
+
     test "a private email address is not findable" do
       # public? defaults to false; the owner controls discoverability, so a
       # private address must not even confirm that an account exists.
@@ -349,6 +359,13 @@ defmodule Vutuv.SearchTest do
 
       assert query.email?
       assert Enum.map(Repo.preload(query, :user_results).user_results, & &1.id) == [user.id]
+    end
+
+    test "an over-long query is skipped, not raised (varchar(255) column)" do
+      # A ?q= URL can carry an arbitrarily long query with no client maxlength;
+      # it must not crash-loop SearchLive with a Postgres 22001.
+      assert {:error, %Ecto.Changeset{}} = Search.record_query(String.duplicate("a", 300), nil)
+      assert Repo.aggregate(SearchQuery, :count) == 0
     end
   end
 end

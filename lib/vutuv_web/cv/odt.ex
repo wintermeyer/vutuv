@@ -140,10 +140,7 @@ defmodule VutuvWeb.CV.Odt do
     "<text:p#{style_attr}>#{body}</text:p>"
   end
 
-  defp esc(text) do
-    text
-    |> String.replace("&", "&amp;")
-    |> String.replace("<", "&lt;")
-    |> String.replace(">", "&gt;")
-  end
+  # The canonical XML text escape (also escapes " and ', harmless in element
+  # text) — the one definition shared with the sitemap/feed/docx renderers.
+  defp esc(text), do: VutuvWeb.Xml.escape(text)
 end

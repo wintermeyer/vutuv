@@ -519,45 +519,6 @@ defmodule Vutuv.Posts do
     |> scope_unfrozen(viewer)
   end
 
-  @doc """
-  The owner's "view as" preview twin of `scope_visible/2`: instead of looking
-  up the viewer's real follow / connection rows, it simulates a relationship
-  from boolean flags, so the owner can see their own timeline as a follower or
-  a connection (vernetzt) would. Custom per-user / per-group denials never
-  match a simulated viewer (it is nobody specific), so a preview shows what an
-  otherwise-unrestricted member in that relationship would see. `'logged_out'`
-  denials are absent here, matching `scope_visible/2`'s logged-in (`%User{}`)
-  branch — a preview viewer is always "logged in".
-  """
-  def scope_visible_preview(query, %{
-        follower?: follower?,
-        followee?: followee?,
-        connection?: connection?
-      }) do
-    from(p in query,
-      where:
-        fragment(
-          """
-          NOT EXISTS (
-            SELECT 1 FROM post_denials d
-            WHERE d.post_id = ?
-              AND (
-                d.wildcard = 'everyone'
-                OR (d.wildcard = 'non_followers' AND ?)
-                OR (d.wildcard = 'non_followees' AND ?)
-                OR (d.wildcard = 'non_connections' AND ?)
-              )
-          )
-          """,
-          p.id,
-          ^(not follower?),
-          ^(not followee?),
-          ^(not connection?)
-        )
-    )
-    |> scope_unfrozen(nil)
-  end
-
   # The moderation arm of scope_visible/2: frozen posts and posts whose
   # author's account is hidden (frozen / suspended / deactivated) vanish from
   # every list, except the author's own. The SQL twin of moderation_hidden?/1;
@@ -1356,9 +1317,6 @@ defmodule Vutuv.Posts do
   # The author's timeline rows — own posts (dated by publication) and own
   # reposts (dated by the repost) — as one subquery the callers count,
   # period-scope and page like a plain table.
-  # The owner's "view as" preview passes a `{:preview, flags}` tuple as the
-  # viewer; everyone else passes a real `%User{}` / nil.
-  defp scope_timeline(query, {:preview, flags}), do: scope_visible_preview(query, flags)
   defp scope_timeline(query, viewer), do: scope_visible(query, viewer)
 
   defp author_timeline_query(%User{id: author_id}, viewer) do

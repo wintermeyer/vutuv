@@ -412,6 +412,17 @@ defmodule VutuvWeb.PageControllerTest do
       assert hd(user.emails).public?
     end
 
+    # A tampered/malformed "emails" param (a bare string instead of the nested
+    # %{"0" => %{"value" => …}} map the form builds) must re-render the form,
+    # not 500 on chained Access indexing.
+    test "a malformed emails param re-renders the form instead of crashing", %{conn: conn} do
+      attrs = %{"emails" => "x", "first_name" => "Foo", "tag_list" => "Elixir Cooking Origami"}
+
+      conn = post(conn, ~p"/new_registration", user: attrs)
+
+      assert html_response(conn, 422)
+    end
+
     # The sign-up form's "Your tags" field must actually land as user tags;
     # it used to be cast into the virtual `tag_list` and silently dropped.
     test "creates user tags from the comma-separated tag list", %{conn: conn} do

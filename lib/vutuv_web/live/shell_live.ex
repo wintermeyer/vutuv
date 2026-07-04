@@ -135,7 +135,11 @@ defmodule VutuvWeb.ShellLive do
   end
 
   defp initial_count(path, prefix, user_id, counter) do
-    if String.starts_with?(path, prefix), do: 0, else: counter.(user_id)
+    # Match the route boundary, not a raw prefix: a profile whose slug merely
+    # begins with "messages"/"notifications" (e.g. /messagesanna) must not zero
+    # the badge as if the member were sitting on that page.
+    on_page? = path == prefix or String.starts_with?(path, prefix <> "/")
+    if on_page?, do: 0, else: counter.(user_id)
   end
 
   # Where the logo goes. Normally "home" ("/", which routes a logged-in member

@@ -59,7 +59,7 @@
               <a href={~p"/admin/newsletters/#{n}"} class="font-semibold">{n.subject}</a>
             </td>
             <td>{status_label(n.status)}</td>
-            <td>{if n.status == "sent", do: n.recipient_count, else: ""}</td>
+            <td>{if n.status == "sent", do: delimited_count(n.recipient_count), else: ""}</td>
             <td>{fmt(n.inserted_at)}</td>
             <td>{fmt(n.sent_at)}</td>
           </tr>

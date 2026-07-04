@@ -77,10 +77,12 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
     stats_by_reporter =
       Moderation.reporter_stats_map(Enum.map(case_record.reports, & &1.reporter_id))
 
+    content = Moderation.case_content(case_record)
+
     socket
     |> assign(:case, case_record)
-    |> assign(:content, Moderation.case_content(case_record))
-    |> assign(:conversation_context, conversation_context(case_record))
+    |> assign(:content, content)
+    |> assign(:conversation_context, conversation_context(case_record, content))
     |> assign(:owner_active_strikes, Moderation.active_strike_count(case_record.owner))
     |> assign(:events, Moderation.case_events(case_record))
     |> assign(
@@ -96,15 +98,14 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
   end
 
   # For message cases: the reported message in its conversation (the last few
-  # messages before it), so the admin can judge bullying in context.
-  defp conversation_context(%Case{content_type: "message"} = case_record) do
-    case Moderation.case_content(case_record) do
-      nil -> []
-      message -> Chat.moderation_context(message)
-    end
-  end
+  # messages before it), so the admin can judge bullying in context. Takes the
+  # already-loaded content (assign_case fetched it) rather than re-querying.
+  defp conversation_context(%Case{content_type: "message"}, nil), do: []
 
-  defp conversation_context(_case_record), do: []
+  defp conversation_context(%Case{content_type: "message"}, message),
+    do: Chat.moderation_context(message)
+
+  defp conversation_context(_case_record, _content), do: []
 
   @impl true
   def render(assigns) do

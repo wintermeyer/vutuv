@@ -49,6 +49,27 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, @mail_badge, "1")
   end
 
+  test "zeroes the messages badge on the messages page but not a look-alike slug", %{conn: conn} do
+    user = with_unread_message(insert(:user))
+
+    # On the messages page itself the badge deliberately starts at zero.
+    {:ok, on_page, _} =
+      live_isolated(conn, VutuvWeb.ShellLive,
+        session: session_for(user, %{"path" => "/messages"})
+      )
+
+    refute has_element?(on_page, @mail_badge)
+
+    # A profile whose slug merely BEGINS with "messages" is not that page,
+    # so the real unread count must still show.
+    {:ok, on_profile, _} =
+      live_isolated(conn, VutuvWeb.ShellLive,
+        session: session_for(user, %{"path" => "/messagesanna"})
+      )
+
+    assert has_element?(on_profile, @mail_badge, "1")
+  end
+
   test "the messages badge counts unread conversations, not message events", %{conn: conn} do
     user = with_unread_message(insert(:user))
     {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))

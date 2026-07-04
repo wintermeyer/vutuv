@@ -172,7 +172,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
            :info,
            gettext("Audience \"%{name}\" saved (%{count} members).",
              name: group.name,
-             count: group.member_count
+             count: delimited_count(group.member_count)
            )
          )
          |> push_navigate(to: ~p"/admin/newsletter_groups")}
@@ -602,7 +602,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                   </.link>
                 </td>
                 <td class="text-sm text-slate-600 dark:text-slate-400">{summary(group)}</td>
-                <td>{group.member_count}</td>
+                <td>{compact_count(group.member_count)}</td>
                 <td class="text-right">
                   <.link
                     navigate={~p"/admin/newsletter_groups/#{group.id}/edit"}
@@ -903,7 +903,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                     checked={g.id in (@form[:included_group_ids].value || [])}
                     class={checkbox_class()}
                   />
-                  {g.name} <span class="text-slate-500">({g.member_count})</span>
+                  {g.name} <span class="text-slate-500">({compact_count(g.member_count)})</span>
                 </label>
               </div>
             </div>
@@ -928,7 +928,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                     checked={g.id in (@form[:excluded_group_ids].value || [])}
                     class={checkbox_class()}
                   />
-                  {g.name} <span class="text-slate-500">({g.member_count})</span>
+                  {g.name} <span class="text-slate-500">({compact_count(g.member_count)})</span>
                 </label>
               </div>
             </div>
@@ -937,11 +937,11 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
           <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/30">
             <p class="text-sm text-slate-700 dark:text-slate-200">
               {gettext("Members matching")}:
-              <strong class="text-lg" id="match-count">{@match_count}</strong>
+              <strong class="text-lg" id="match-count">{delimited_count(@match_count)}</strong>
             </p>
             <p :if={@effective_count != @match_count} class="mt-1 text-sm text-slate-700 dark:text-slate-200">
               {gettext("This audience will be capped to")}:
-              <strong id="effective-count">{@effective_count}</strong>
+              <strong id="effective-count">{delimited_count(@effective_count)}</strong>
             </p>
           </div>
 
@@ -996,42 +996,15 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
               </span>
             </div>
 
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                <%= if @member_search in [nil, ""] do %>
-                  {gettext("Preview")}
-                <% else %>
-                  {gettext("Search results")}
-                <% end %>
-                <span class="font-normal text-slate-500">
-                  ({gettext("page %{page} of %{pages}, %{total} total",
-                    page: @list_page,
-                    pages: list_pages(@list_total),
-                    total: @list_total
-                  )})
-                </span>
-              </p>
-              <div :if={list_pages(@list_total) > 1} class="flex items-center gap-2">
-                <button
-                  type="button"
-                  phx-click="list_page"
-                  phx-value-page={@list_page - 1}
-                  disabled={@list_page <= 1}
-                  class={preview_nav_class()}
-                >
-                  {gettext("Previous")}
-                </button>
-                <button
-                  type="button"
-                  phx-click="list_page"
-                  phx-value-page={@list_page + 1}
-                  disabled={@list_page >= list_pages(@list_total)}
-                  class={preview_nav_class()}
-                >
-                  {gettext("Next")}
-                </button>
-              </div>
-            </div>
+            <.list_pager
+              label={
+                if @member_search in [nil, ""],
+                  do: gettext("Preview"),
+                  else: gettext("Search results")
+              }
+              page={@list_page}
+              total={@list_total}
+            />
 
             <p :if={@members == []} class="card__empty">{gettext("No members.")}</p>
 
@@ -1068,7 +1041,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             <div class="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/30">
               <p class="text-sm text-slate-700 dark:text-slate-200">
                 {gettext("Accounts in this audience")}:
-                <strong class="text-lg" id="account-count">{@match_count}</strong>
+                <strong class="text-lg" id="account-count">{delimited_count(@match_count)}</strong>
               </p>
               <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
                 {gettext("Only these accounts get the newsletter. Search for members below and add them one by one.")}
@@ -1120,38 +1093,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
             </div>
 
             <div :if={@member_search not in [nil, ""]} id="account-search-results" class="space-y-3">
-              <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
-                  {gettext("Search results")}
-                  <span class="font-normal text-slate-500">
-                    ({gettext("page %{page} of %{pages}, %{total} total",
-                      page: @list_page,
-                      pages: list_pages(@list_total),
-                      total: @list_total
-                    )})
-                  </span>
-                </p>
-                <div :if={list_pages(@list_total) > 1} class="flex items-center gap-2">
-                  <button
-                    type="button"
-                    phx-click="list_page"
-                    phx-value-page={@list_page - 1}
-                    disabled={@list_page <= 1}
-                    class={preview_nav_class()}
-                  >
-                    {gettext("Previous")}
-                  </button>
-                  <button
-                    type="button"
-                    phx-click="list_page"
-                    phx-value-page={@list_page + 1}
-                    disabled={@list_page >= list_pages(@list_total)}
-                    class={preview_nav_class()}
-                  >
-                    {gettext("Next")}
-                  </button>
-                </div>
-              </div>
+              <.list_pager label={gettext("Search results")} page={@list_page} total={@list_total} />
 
               <p :if={@members == []} class="card__empty">{gettext("No members.")}</p>
 
@@ -1207,6 +1149,49 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
   defp preview_nav_class do
     "rounded-lg bg-slate-100 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-200 " <>
       "disabled:cursor-not-allowed disabled:opacity-40 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+  end
+
+  # The "page X of Y, Z total" heading + Previous/Next controls shared by the
+  # filters-mode preview and the accounts-mode search results.
+  attr(:label, :string, required: true)
+  attr(:page, :integer, required: true)
+  attr(:total, :integer, required: true)
+
+  defp list_pager(assigns) do
+    ~H"""
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+        {@label}
+        <span class="font-normal text-slate-500">
+          ({gettext("page %{page} of %{pages}, %{total} total",
+            page: @page,
+            pages: list_pages(@total),
+            total: @total
+          )})
+        </span>
+      </p>
+      <div :if={list_pages(@total) > 1} class="flex items-center gap-2">
+        <button
+          type="button"
+          phx-click="list_page"
+          phx-value-page={@page - 1}
+          disabled={@page <= 1}
+          class={preview_nav_class()}
+        >
+          {gettext("Previous")}
+        </button>
+        <button
+          type="button"
+          phx-click="list_page"
+          phx-value-page={@page + 1}
+          disabled={@page >= list_pages(@total)}
+          class={preview_nav_class()}
+        >
+          {gettext("Next")}
+        </button>
+      </div>
+    </div>
+    """
   end
 
   # The segmented build-mode tab: brand-filled when active, quiet otherwise.

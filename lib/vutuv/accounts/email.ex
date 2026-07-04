@@ -42,6 +42,9 @@ defmodule Vutuv.Accounts.Email do
     |> validate_format(:value, ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/,
       message: "must be a valid email address"
     )
+    # varchar(255) column and the RFC 5321 254-char address cap: an oversized
+    # address must fail as a changeset error, never as a raised Postgres 22001.
+    |> validate_length(:value, max: 254)
     |> unique_constraint(:value)
     |> fill_md5sum
   end

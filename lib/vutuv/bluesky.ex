@@ -35,9 +35,6 @@ defmodule Vutuv.Bluesky do
   @posts_shown 3
   @feed_limit 20
 
-  # Bluesky caps posts at 300 graphemes; the guard matches Mastodon's anyway.
-  @max_text_length 500
-
   # A Bluesky handle is a lowercase domain (name.bsky.social, or a custom
   # domain). Only this shape may be embedded in the AppView query and the
   # bsky.app profile/post URLs.
@@ -124,8 +121,8 @@ defmodule Vutuv.Bluesky do
 
   defp profile_meta(profile, handle) do
     %{
-      name: presence(profile["displayName"]) || handle,
-      avatar_url: presence(profile["avatar"]),
+      name: Post.presence(profile["displayName"]) || handle,
+      avatar_url: Post.presence(profile["avatar"]),
       hidden_when_logged_out?: has_label?(profile["labels"], "!no-unauthenticated")
     }
   end
@@ -134,15 +131,6 @@ defmodule Vutuv.Bluesky do
     do: Enum.any?(labels, &(is_map(&1) and &1["val"] == value))
 
   defp has_label?(_labels, _value), do: false
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_value), do: nil
 
   defp fetch_feed(handle) do
     url =
@@ -178,7 +166,7 @@ defmodule Vutuv.Bluesky do
 
   defp to_post(%{"post" => %{"uri" => uri, "record" => record} = post}, handle)
        when is_binary(uri) and is_map(record) do
-    text = record["text"] |> to_string() |> String.trim() |> truncate()
+    text = record["text"] |> to_string() |> String.trim() |> Post.truncate()
     created = record["createdAt"]
     rkey = uri |> String.split("/") |> List.last()
 
@@ -201,12 +189,4 @@ defmodule Vutuv.Bluesky do
   end
 
   defp to_post(_item, _handle), do: nil
-
-  defp truncate(text) do
-    if String.length(text) > @max_text_length do
-      String.slice(text, 0, @max_text_length - 1) <> "…"
-    else
-      text
-    end
-  end
 end

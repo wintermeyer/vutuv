@@ -131,6 +131,30 @@ defmodule VutuvWeb.CVLive do
 
   defp download_formats, do: @formats
 
+  # The include/exclude heading toggle shared by every CV card (each section,
+  # the Tags card, the Links card): a checkbox that dims its card when unchecked.
+  attr(:hide, :any, required: true)
+  attr(:key, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp heading_toggle(assigns) do
+    ~H"""
+    <label class={[
+      "flex cursor-pointer items-center gap-3",
+      shown?(@hide, @key) || "opacity-50"
+    ]}>
+      <input
+        type="checkbox"
+        class={checkbox_class()}
+        checked={shown?(@hide, @key)}
+        phx-click="toggle"
+        phx-value-key={@key}
+      />
+      <.section_title>{render_slot(@inner_block)}</.section_title>
+    </label>
+    """
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -207,19 +231,7 @@ defmodule VutuvWeb.CVLive do
           </.card>
 
           <.card :for={section <- @cv.sections}>
-            <label class={[
-              "flex cursor-pointer items-center gap-3",
-              shown?(@hide, section.key) || "opacity-50"
-            ]}>
-              <input
-                type="checkbox"
-                class={checkbox_class()}
-                checked={shown?(@hide, section.key)}
-                phx-click="toggle"
-                phx-value-key={section.key}
-              />
-              <.section_title>{section.heading}</.section_title>
-            </label>
+            <.heading_toggle hide={@hide} key={section.key}>{section.heading}</.heading_toggle>
             <div class={["mt-3 space-y-2", shown?(@hide, section.key) || "opacity-40"]}>
               <label
                 :for={entry <- section.entries}
@@ -254,19 +266,7 @@ defmodule VutuvWeb.CVLive do
           </.card>
 
           <.card :if={@cv.skills != []}>
-            <label class={[
-              "flex cursor-pointer items-center gap-3",
-              shown?(@hide, "tags") || "opacity-50"
-            ]}>
-              <input
-                type="checkbox"
-                class={checkbox_class()}
-                checked={shown?(@hide, "tags")}
-                phx-click="toggle"
-                phx-value-key="tags"
-              />
-              <.section_title>{gettext("Tags")}</.section_title>
-            </label>
+            <.heading_toggle hide={@hide} key="tags">{gettext("Tags")}</.heading_toggle>
             <div class={["mt-3 flex flex-wrap gap-2", shown?(@hide, "tags") || "opacity-40"]}>
               <button
                 :for={skill <- @cv.skills}
@@ -287,19 +287,7 @@ defmodule VutuvWeb.CVLive do
           </.card>
 
           <.card :if={@cv.links != []}>
-            <label class={[
-              "flex cursor-pointer items-center gap-3",
-              shown?(@hide, "links") || "opacity-50"
-            ]}>
-              <input
-                type="checkbox"
-                class={checkbox_class()}
-                checked={shown?(@hide, "links")}
-                phx-click="toggle"
-                phx-value-key="links"
-              />
-              <.section_title>{gettext("Links")}</.section_title>
-            </label>
+            <.heading_toggle hide={@hide} key="links">{gettext("Links")}</.heading_toggle>
             <div class={["mt-3 space-y-1", shown?(@hide, "links") || "opacity-40"]}>
               <label
                 :for={link <- @cv.links}

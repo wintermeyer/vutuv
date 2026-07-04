@@ -210,7 +210,7 @@ defmodule VutuvWeb.NotificationLive.Index do
               data-reply-preview="true"
             />
             <span class="text-xs uppercase tracking-wide text-slate-500">
-              {kind_label(n.kind)}<span :if={n[:at]}> &middot; <time>{format_at(n.at)}</time></span>
+              {kind_label(n.kind)}<span :if={n[:at]}> &middot; <.local_time id={"notif-at-#{n.id}"} at={n.at} format="%Y-%m-%d" /></span>
             </span>
           </div>
         </li>
@@ -244,24 +244,19 @@ defmodule VutuvWeb.NotificationLive.Index do
   # badge colour and gets the handshake glyph.
   @connection_kinds ~w(connection)
 
-  defp kind_classes("follower"),
-    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  # Event kinds that share the brand badge colour (follower/reply/connection/
+  # the report-protection notice), so the class string lives in one place.
+  @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  @brand_kinds ~w(follower reply connection report_protection)
 
   defp kind_classes("endorsement"), do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"
 
-  defp kind_classes("reply"),
-    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-
   defp kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
-
-  defp kind_classes(kind) when kind in @connection_kinds,
-    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
 
   defp kind_classes("moderation"),
     do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
 
-  defp kind_classes("report_protection"),
-    do: "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+  defp kind_classes(kind) when kind in @brand_kinds, do: @brand_kind_classes
 
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
 
@@ -353,11 +348,6 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   defp notification_text(n), do: n[:text]
-
-  defp format_at(%mod{} = at) when mod in [NaiveDateTime, DateTime],
-    do: Calendar.strftime(at, "%Y-%m-%d")
-
-  defp format_at(_), do: nil
 
   # Reply and like notifications carry post ids the row can quote: a like the
   # liked post (`:post_id`), a reply both the recipient's own post that was

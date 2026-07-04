@@ -64,6 +64,15 @@ defmodule Vutuv.Ads.Ad do
       :billing_country
     ])
     |> validate_length(:content, max: @content_max_length)
+    # The billing fields are free-text varchar(255) columns: an oversized value
+    # must be a changeset error, never a raised Postgres 22001 on booking.
+    |> validate_length(:billing_name, max: 255)
+    |> validate_length(:billing_company, max: 255)
+    |> validate_length(:billing_street, max: 255)
+    |> validate_length(:billing_zip_code, max: 255)
+    |> validate_length(:billing_city, max: 255)
+    |> validate_length(:billing_country, max: 255)
+    |> validate_length(:vat_id, max: 255)
     |> validate_future_day()
     |> unique_constraint(:day, message: "has already been booked")
   end

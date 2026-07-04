@@ -7411,17 +7411,17 @@ msgstr[1] "Mitglieder."
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:176
 #, elixir-autogen
-msgid "Sent to %{count} member."
-msgid_plural "Sent to %{count} members."
-msgstr[0] "An %{count} Mitglied versendet."
-msgstr[1] "An %{count} Mitglieder versendet."
+msgid "Sent to %{formatted} member."
+msgid_plural "Sent to %{formatted} members."
+msgstr[0] "An %{formatted} Mitglied versendet."
+msgstr[1] "An %{formatted} Mitglieder versendet."
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:202
 #, elixir-autogen
-msgid "The newsletter will be sent to %{count} person. This cannot be undone."
-msgid_plural "The newsletter will be sent to %{count} people. This cannot be undone."
-msgstr[0] "Der Newsletter wird an %{count} Person versendet. Das kann nicht rückgängig gemacht werden."
-msgstr[1] "Der Newsletter wird an %{count} Personen versendet. Das kann nicht rückgängig gemacht werden."
+msgid "The newsletter will be sent to %{formatted} person. This cannot be undone."
+msgid_plural "The newsletter will be sent to %{formatted} people. This cannot be undone."
+msgstr[0] "Der Newsletter wird an %{formatted} Person versendet. Das kann nicht rückgängig gemacht werden."
+msgstr[1] "Der Newsletter wird an %{formatted} Personen versendet. Das kann nicht rückgängig gemacht werden."
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:34
 #, elixir-autogen

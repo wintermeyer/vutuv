@@ -15,7 +15,7 @@ defmodule VutuvWeb.Admin.UserLive do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.UserHelpers, only: [full_name: 1]
+  import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.Accounts
   alias Vutuv.Pages
@@ -149,13 +149,6 @@ defmodule VutuvWeb.Admin.UserLive do
 
   # Any filter narrowing the default view (drives the empty-state copy + Clear).
   defp filtered?(filters), do: filters.q != nil or filters.reg != "pin" or filters.flag != "all"
-
-  defp member_name(user) do
-    case String.trim(full_name(user)) do
-      "" -> "@" <> (user.username || "")
-      name -> name
-    end
-  end
 
   # The status badges a row carries, in order, as {label, tone} tuples.
   defp status_badges(user) do

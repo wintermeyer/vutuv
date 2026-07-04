@@ -85,7 +85,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
       tags_line(doc.tags),
-      engagement_line(doc),
+      Markdown.engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),
       section(
         "#{gettext("Replies")} (#{doc.reply_count})",
@@ -301,34 +301,13 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp link_line(%{description: description, url: url}), do: "* #{description}: #{url}"
 
   defp post_lines(post) do
-    "* #{post.published_on}#{repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"
+    "* #{post.published_on}#{Markdown.repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"
   end
 
   # "(reposted by A)" for a lone reposter, "(reposted by A and 3 more)" once a
   # post carries a whole roster (the feed's follow-scoped reposters, newest
   # first). Falls back to the single `reposted_by` name for docs that carry
   # only that (the profile posts section).
-  defp repost_suffix(post) do
-    case repost_names(post) do
-      [] ->
-        ""
-
-      [name] ->
-        " (#{gettext("reposted by %{name}", name: name)})"
-
-      [name | rest] ->
-        " (#{gettext("reposted by %{name} and %{count} more", name: name, count: length(rest))})"
-    end
-  end
-
-  defp repost_names(post) do
-    cond do
-      is_list(post[:reposters]) and post[:reposters] != [] -> post[:reposters]
-      post[:reposted_by] -> [post[:reposted_by]]
-      true -> []
-    end
-  end
-
   defp person_line(person, prefix \\ "* ") do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
     "#{prefix}#{person.name}#{work}#{tags_suffix(Map.get(person, :tags))}\n  #{person.url}"
@@ -359,12 +338,6 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.join(tags, ", ")
-
-  # The public engagement counters, mirroring the HTML action bar.
-  defp engagement_line(doc) do
-    "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
-      "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
-  end
 
   defp page_hint(total, listed) when total > length(listed) do
     " — " <> gettext("%{count} on this page, use ?page=N", count: length(listed))

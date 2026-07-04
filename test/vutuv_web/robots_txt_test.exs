@@ -43,6 +43,12 @@ defmodule VutuvWeb.RobotsTxtTest do
     test "advertises the sitemap with an absolute URL" do
       assert RobotsTxt.render(:permissive) =~ "\nSitemap: http://localhost:4001/sitemap.xml\n"
     end
+
+    test "blocks the public /educations detail page like its section siblings" do
+      # /:slug/educations is a public per-user detail page just like
+      # /:slug/work_experiences, so it must be disallowed too.
+      assert RobotsTxt.render(:permissive) =~ "Disallow: /*/educations"
+    end
   end
 
   describe "render(:block_training)" do

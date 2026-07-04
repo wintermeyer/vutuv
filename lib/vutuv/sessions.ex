@@ -104,14 +104,7 @@ defmodule Vutuv.Sessions do
   every request. Returns the (possibly unchanged) session.
   """
   def touch(%UserSession{} = session) do
-    now = DateTime.utc_now(:second)
-
-    if is_nil(session.last_seen_at) or
-         DateTime.diff(now, session.last_seen_at) >= @last_seen_resolution_seconds do
-      session |> Ecto.Changeset.change(last_seen_at: now) |> Repo.update!()
-    else
-      session
-    end
+    Repo.touch_throttled(session, :last_seen_at, @last_seen_resolution_seconds)
   end
 
   # ── The owner's signed-in-devices list ──

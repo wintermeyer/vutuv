@@ -150,16 +150,24 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   # The People tab's inline Remove: un-save right here and drop the row. The
-  # context scopes the delete to (me, target), so a bogus id is a harmless no-op.
+  # context scopes the delete to (me, target). A non-UUID id is a genuine no-op
+  # (cast_or_nil) — building %User{id: id} from the raw phx-value used to raise
+  # an Ecto.CastError in the scoped delete despite the "harmless" comment.
   def handle_event("unsave-person", %{"id" => id}, socket) do
-    target = %User{id: id}
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil ->
+        {:noreply, socket}
 
-    case socket.assigns.live_action do
-      :likes -> Social.unlike_user(socket.assigns.current_user, target)
-      :bookmarks -> Social.unbookmark_user(socket.assigns.current_user, target)
+      uuid ->
+        target = %User{id: uuid}
+
+        case socket.assigns.live_action do
+          :likes -> Social.unlike_user(socket.assigns.current_user, target)
+          :bookmarks -> Social.unbookmark_user(socket.assigns.current_user, target)
+        end
+
+        {:noreply, stream_delete_by_dom_id(socket, :people, "people-#{uuid}")}
     end
-
-    {:noreply, stream_delete_by_dom_id(socket, :people, "people-#{id}")}
   end
 
   # ── Live sync ──

@@ -451,15 +451,21 @@ defmodule Vutuv.Moderation do
   """
   def escalate_overdue do
     now = NaiveDateTime.utc_now(:second)
-    overdue = from(c in Case, where: c.status == "pending_owner" and c.owner_deadline_at < ^now)
-    ids = Repo.all(from(c in overdue, select: c.id))
 
-    {count, _} =
-      Repo.update_all(overdue, set: [status: "escalated", escalated_at: now, updated_at: now])
+    # RETURNING the ids the UPDATE actually changed (one atomic statement)
+    # rather than a separate SELECT then UPDATE: otherwise a case that leaves
+    # pending_owner in the gap between the two gets a bogus 'escalated_deadline'
+    # event and the logged count diverges from the events written.
+    {_count, ids} =
+      from(c in Case,
+        where: c.status == "pending_owner" and c.owner_deadline_at < ^now,
+        select: c.id
+      )
+      |> Repo.update_all(set: [status: "escalated", escalated_at: now, updated_at: now])
 
     for id <- ids, do: Repo.insert!(%Event{case_id: id, action: "escalated_deadline"})
 
-    count
+    length(ids)
   end
 
   ## Admin queue + rulings

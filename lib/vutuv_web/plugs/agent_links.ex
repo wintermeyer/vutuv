@@ -19,8 +19,6 @@ defmodule VutuvWeb.Plug.AgentLinks do
   @global ~s(</llms.txt>; rel="describedby"; type="text/markdown", ) <>
             ~s(</sitemap.xml>; rel="sitemap"; type="application/xml")
 
-  def global, do: @global
-
   @impl Plug
   def init(opts), do: opts
 

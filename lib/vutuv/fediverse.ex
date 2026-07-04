@@ -36,6 +36,7 @@ defmodule Vutuv.Fediverse do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostDenial
   alias Vutuv.Repo
+  alias Vutuv.SocialFeed.Http
   alias VutuvWeb.Fediverse.Docs
 
   @max_attempts 8
@@ -249,7 +250,7 @@ defmodule Vutuv.Fediverse do
         Docs.key_id(user),
         actor.private_key_pem
       ) ++
-        [{"content-type", "application/activity+json"}, {"user-agent", user_agent()}]
+        [{"content-type", "application/activity+json"}, {"user-agent", Http.user_agent()}]
 
     options =
       Keyword.merge(
@@ -349,7 +350,7 @@ defmodule Vutuv.Fediverse do
           url: url,
           headers:
             signature_headers ++
-              [{"accept", "application/activity+json"}, {"user-agent", user_agent()}],
+              [{"accept", "application/activity+json"}, {"user-agent", Http.user_agent()}],
           receive_timeout: 8_000,
           retry: false,
           redirect: false,
@@ -359,12 +360,5 @@ defmodule Vutuv.Fediverse do
       )
 
     Req.get(options)
-  end
-
-  defp user_agent do
-    public_url =
-      Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url] || "https://vutuv.de/"
-
-    "vutuv/#{Application.spec(:vutuv, :vsn)} (+#{String.trim_trailing(public_url, "/")})"
   end
 end

@@ -47,6 +47,7 @@ defmodule VutuvWeb.RobotsTxt do
   Disallow: /*/addresses
   Disallow: /*/connections
   Disallow: /*/edit
+  Disallow: /*/educations
   Disallow: /*/emails
   Disallow: /*/followers
   Disallow: /*/following

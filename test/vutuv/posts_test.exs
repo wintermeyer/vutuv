@@ -898,7 +898,10 @@ defmodule Vutuv.PostsTest do
       assert total == 2
       assert Enum.map(entries, & &1.post.id) |> Enum.sort() == Enum.sort([original.id, own.id])
 
-      today = Date.utc_today()
+      # `published_on` (and the repost's on_date) is the Berlin calendar day, so
+      # the period must be built from the Berlin day too — a plain Date.utc_today()
+      # diverges for the ~2h each night when the Berlin date is already tomorrow.
+      today = Vutuv.BerlinTime.today()
       {entries, total} = Posts.author_posts_page(author, nil, %{}, {today, today})
       assert total == 2
       assert length(entries) == 2

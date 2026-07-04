@@ -412,6 +412,25 @@ defmodule Vutuv.ModerationTest do
       assert Moderation.escalate_overdue() == 0
       assert Repo.get!(Case, case_record.id).status == "pending_owner"
     end
+
+    test "writes exactly one escalated_deadline event per escalated case", %{
+      owner: owner,
+      reporter: reporter
+    } do
+      past = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600)
+
+      for _ <- 1..2 do
+        c = report!(reporter, insert_post(owner))
+        Repo.update_all(from(x in Case, where: x.id == ^c.id), set: [owner_deadline_at: past])
+      end
+
+      count = Moderation.escalate_overdue()
+
+      events = Repo.all(from(e in Event, where: e.action == "escalated_deadline"))
+      # The returned count, the rows updated and the events written must agree.
+      assert count == 2
+      assert length(events) == count
+    end
   end
 
   describe "admin rulings" do

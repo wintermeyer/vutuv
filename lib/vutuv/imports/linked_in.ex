@@ -548,6 +548,11 @@ defmodule Vutuv.Imports.LinkedIn do
   # preview list.
   @profile_fields [first_name: "First name", last_name: "Last name", headline: "Headline"]
 
+  # "first_name" => :first_name … the whitelist pick_profile/2 maps client keys
+  # through, so a tampered payload key is dropped instead of crashing
+  # String.to_existing_atom/1 with an ArgumentError (a 500 on import confirm).
+  @allowed_profile_fields Map.new(@profile_fields, fn {k, _} -> {Atom.to_string(k), k} end)
+
   @doc """
   Marks each candidate with `duplicate?: true` when the member already has it,
   and turns the profile scalars into display candidates (with `fillable?`, so the
@@ -640,8 +645,9 @@ defmodule Vutuv.Imports.LinkedIn do
   defp pick_profile(profile, set) do
     for {field, value} <- profile,
         MapSet.member?(set, "profile:#{field}"),
+        Map.has_key?(@allowed_profile_fields, field),
         into: %{},
-        do: {String.to_existing_atom(field), value}
+        do: {@allowed_profile_fields[field], value}
   end
 
   @doc """

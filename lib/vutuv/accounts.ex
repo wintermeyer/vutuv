@@ -1194,16 +1194,6 @@ defmodule Vutuv.Accounts do
   def get_user(id), do: Repo.get(User, id)
 
   @doc """
-  Switches non-essential notification email (the unread-message nudge) on or
-  off. The off switch is reachable without a login: the signed token in every
-  notification email authorizes it (`VutuvWeb.UnsubscribeToken`), so a
-  recipient locked out of their account can still stop the mail.
-  """
-  def set_notification_emails(%User{} = user, enabled?) when is_boolean(enabled?) do
-    set_email_pref(user, :notification_emails?, enabled?)
-  end
-
-  @doc """
   Switches one notification-email preference on or off. `field` must be one of
   `User.email_pref_fields/0` (the unsubscribe allowlist), so a tokenized
   one-click unsubscribe link can only ever flip a real email preference, never
