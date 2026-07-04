@@ -70,13 +70,14 @@ defmodule VutuvWeb.Plug.AdBanner do
   defp booking_pages?(conn), do: conn.path_info |> List.first() == "ads"
 
   # The whole /settings scope (the user-agnostic editors) plus the old
-  # /:slug/edit and /:slug/settings/* redirect stubs: focused, owner-only
-  # forms, not somewhere a visitor is browsing. A deeper "edit" segment on a
-  # public page (e.g. /:slug/links/:id/edit no longer exists, but the guard
-  # keys on the first/second segment only) is unaffected.
+  # /:slug/edit and /:slug/settings/* redirect stubs and the owner-only
+  # /:slug/export corner (issue #841): focused, owner-only pages, not
+  # somewhere a visitor is browsing. A deeper "edit" segment on a public
+  # page (e.g. /:slug/links/:id/edit no longer exists, but the guard keys
+  # on the first/second segment only) is unaffected.
   defp account_pages?(conn) do
     List.first(conn.path_info) == "settings" or
-      Enum.at(conn.path_info, 1) in ["edit", "settings"]
+      Enum.at(conn.path_info, 1) in ["edit", "settings", "export"]
   end
 
   defp recently_seen?(conn) do

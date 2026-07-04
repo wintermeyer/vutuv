@@ -91,12 +91,14 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  # The export page: explains the GDPR download and offers it as a button
-  # (the file itself is GET /settings/export/download, ExportController).
-  def export(conn, _params) do
-    user = conn.assigns[:user]
-    render(conn, "export.html", user: user, page_title: gettext("Export"))
-  end
+  # The export area lives under the profile now (/:slug/export, where issue
+  # #841 put the formatted CV beside the GDPR download); send the settings-era
+  # URLs there — the download URL straight to the file.
+  def export_redirect(conn, _params),
+    do: redirect(conn, to: ~p"/#{conn.assigns[:user]}/export")
+
+  def export_download_redirect(conn, _params),
+    do: redirect(conn, to: ~p"/#{conn.assigns[:user]}/export/download")
 
   # "Ihre Daten" was split into Import and Export; the drawer URL lived only
   # briefly, so its bookmarks land on the hub.

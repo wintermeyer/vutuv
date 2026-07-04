@@ -747,7 +747,8 @@ defmodule VutuvWeb.UI do
   attr(:class, :string, default: nil)
 
   attr(:rest, :global,
-    include: ~w(download name value disabled form title phx-click phx-value-id phx-disable-with)
+    include:
+      ~w(download name value disabled form title target rel phx-click phx-value-id phx-disable-with)
   )
 
   slot(:inner_block, required: true)
@@ -2368,8 +2369,12 @@ defmodule VutuvWeb.UI do
   `key` names the page for the active state and the hub's per-section counts.
   If a new editable area is added to the app, it joins this menu — if it is
   not on the hub, it does not exist.
+
+  Takes the member because the Export row leaves the user-agnostic /settings
+  world: the export area (GDPR download + the issue #841 CV) lives under the
+  profile at `/:slug/export`.
   """
-  def settings_menu do
+  def settings_menu(user) do
     [
       {gettext("Profile"),
        [
@@ -2388,7 +2393,7 @@ defmodule VutuvWeb.UI do
          {gettext("Sign-in & security"), ~p"/settings/security", :security},
          {gettext("Language & maps"), ~p"/settings/preferences", :preferences},
          {gettext("Import"), ~p"/settings/import/linkedin", :import},
-         {gettext("Export"), ~p"/settings/export", :export}
+         {gettext("Export"), ~p"/#{user}/export", :export}
        ]},
       {gettext("More"),
        [
@@ -2453,7 +2458,7 @@ defmodule VutuvWeb.UI do
   attr(:class, :any, default: nil)
 
   def settings_sidebar(assigns) do
-    assigns = assign(assigns, :groups, settings_menu())
+    assigns = assign(assigns, :groups, settings_menu(assigns.user))
 
     ~H"""
     <nav data-settings-sidebar aria-label={gettext("Settings")} class={["text-sm", @class]}>

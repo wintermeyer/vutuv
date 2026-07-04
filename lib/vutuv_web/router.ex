@@ -665,10 +665,11 @@ defmodule VutuvWeb.Router do
     post("/passkeys/challenge", PasskeyController, :challenge)
     post("/passkeys", PasskeyController, :create)
     delete("/passkeys/:id", PasskeyController, :delete)
-    # Export: the page explains the GDPR download; /export/download is the
-    # actual one-JSON-file response.
-    get("/export", SettingsController, :export)
-    get("/export/download", ExportController, :show)
+    # The export area moved to the profile (/:slug/export, where issue #841
+    # put the formatted CV beside the GDPR download); the settings-era URLs
+    # redirect so bookmarks keep working.
+    get("/export", SettingsController, :export_redirect)
+    get("/export/download", SettingsController, :export_download_redirect)
     # "Ihre Daten" was split into Import and Export (its two rows); redirect
     # the short-lived drawer URL to the hub.
     get("/data", SettingsController, :data_redirect)
@@ -773,6 +774,14 @@ defmodule VutuvWeb.Router do
       # The session-aware vCard (all emails for the owner / a follower-back
       # viewer); the anonymous canonical vCard is /:slug.vcf.
       get("/vcard", VCardController, :get)
+      # The member's export corner (issue #841), owner-only (RequireLogin +
+      # AuthUser in the controllers): /export is the overview, /export/cv/*
+      # the formatted CV / Lebenslauf (print view = the PDF path, plus the
+      # html/tex/docx/odt/json files), /export/download the GDPR JSON.
+      get("/export", ExportController, :index)
+      get("/export/download", ExportController, :download)
+      get("/export/cv/preview", CVController, :preview)
+      get("/export/cv/:format", CVController, :download)
       resources("/emails", EmailController, only: [:index, :show])
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])

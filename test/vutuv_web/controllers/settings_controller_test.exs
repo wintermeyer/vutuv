@@ -15,7 +15,6 @@ defmodule VutuvWeb.SettingsControllerTest do
             ~p"/settings/apps",
             ~p"/settings/security",
             ~p"/settings/preferences",
-            ~p"/settings/export",
             ~p"/settings/delete"
           ] do
         # Every settings page carries a way to every other settings area (the
@@ -51,7 +50,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     # themselves: profile content, account matters, privacy, notifications,
     # apps and the delete exit. If it is not on the hub, it does not exist.
     test "lists every editable area", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
+      {conn, user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings") |> html_response(200)
 
       # Profile content sections.
@@ -68,7 +67,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ ~s(href="#{~p"/settings/security"}")
       assert html =~ ~s(href="#{~p"/settings/preferences"}")
       assert html =~ ~s(href="#{~p"/settings/import/linkedin"}")
-      assert html =~ ~s(href="#{~p"/settings/export"}")
+      # The export area lives under the profile (issue #841), but the hub
+      # keeps the row so it stays discoverable where people look for it.
+      assert html =~ ~s(href="#{~p"/#{user}/export"}")
       # The rest.
       assert html =~ ~s(href="#{~p"/settings/privacy"}")
       assert html =~ ~s(href="#{~p"/settings/notifications"}")
@@ -140,7 +141,6 @@ defmodule VutuvWeb.SettingsControllerTest do
             {~p"/settings", "Settings"},
             {~p"/settings/security", "Sign-in &amp; security"},
             {~p"/settings/preferences", "Language &amp; maps"},
-            {~p"/settings/export", "Export"},
             {~p"/settings/delete", "Delete account"}
           ] do
         html = conn |> recycle() |> get(path) |> html_response(200)
@@ -376,13 +376,18 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
-  describe "export page" do
-    test "explains the download and offers it as a button", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      html = conn |> get(~p"/settings/export") |> html_response(200)
+  describe "export redirects" do
+    # The export area lives under the profile now (/:slug/export, issue
+    # #841); the settings-era URLs keep working as redirects.
+    test "the old /settings/export URLs redirect to the profile's export corner",
+         %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
 
-      assert html =~ "data-settings-shell"
-      assert html =~ ~s(href="#{~p"/settings/export/download"}")
+      assert conn |> recycle() |> get("/settings/export") |> redirected_to() ==
+               "/#{user.username}/export"
+
+      assert conn |> recycle() |> get("/settings/export/download") |> redirected_to() ==
+               "/#{user.username}/export/download"
     end
 
     test "the old /settings/data URL redirects to the hub", %{conn: conn} do

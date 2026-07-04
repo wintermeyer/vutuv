@@ -174,7 +174,7 @@ lands here). --%>
   <%!-- On phones the sidebar is hidden, so list the sibling profile sections
   here — a member who tapped "Edit profile" to add a job must not hit a dead
   end. Same rows as the hub, minus this very page. --%>
-  <% [{_profile_group, profile_entries} | _rest] = settings_menu() %>
+  <% [{_profile_group, profile_entries} | _rest] = settings_menu(@user) %>
   <section class="mt-8 md:hidden">
     <h2 class="mb-2 px-1 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("More profile sections")}

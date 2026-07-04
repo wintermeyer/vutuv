@@ -1,0 +1,70 @@
+<%!-- The member's export corner (/:slug/export, issue #841): the formatted
+CV / Lebenslauf for a job application and the GDPR data dump, side by side.
+Owner-only (AuthUser). PDF is the browser's own print dialog on the print
+view, so no server-side rendering dependency exists. --%>
+<div class="mx-auto max-w-3xl py-6">
+  <div class="flex items-baseline justify-between gap-4">
+    <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{gettext("Export")}</h1>
+    <.link
+      navigate={~p"/settings"}
+      class="text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+    >
+      {gettext("Settings")} ›
+    </.link>
+  </div>
+  <.card class="mt-6">
+    <.section_title>{gettext("Your profile as a CV")}</.section_title>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Turn your profile into a formatted CV for a job application: work experience, internships, volunteering, education, tags and links, with your first email address, phone number and address as contact details."
+      )}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Open the print view to check the result. For a PDF, use your browser's print dialog there and choose \"Save as PDF\"."
+      )}
+    </p>
+    <.button
+      id="cv-preview"
+      href={~p"/#{@user}/export/cv/preview"}
+      target="_blank"
+      rel="noopener"
+      class="mt-4"
+    >
+      {gettext("Open print view")}
+    </.button>
+    <p class="mt-6 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Download the CV as a file instead, for example to adapt it to one specific application before sending it."
+      )}
+    </p>
+    <div class="mt-3 flex flex-wrap gap-2" id="cv-downloads">
+      <.button variant="secondary" href={~p"/#{@user}/export/cv/docx"}>Word (.docx)</.button>
+      <.button variant="secondary" href={~p"/#{@user}/export/cv/odt"}>
+        OpenDocument (.odt)
+      </.button>
+      <.button variant="secondary" href={~p"/#{@user}/export/cv/html"}>HTML</.button>
+      <.button variant="secondary" href={~p"/#{@user}/export/cv/tex"}>LaTeX (.tex)</.button>
+      <.button variant="secondary" href={~p"/#{@user}/export/cv/json"}>JSON Resume</.button>
+    </div>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Word and OpenDocument files open in any office suite. LaTeX is the source for typesetting the CV yourself, and JSON Resume is the open machine-readable format from jsonresume.org."
+      )}
+    </p>
+  </.card>
+  <.card class="mt-6">
+    <.section_title>{gettext("Download your data")}</.section_title>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+      {gettext("Download everything vutuv stores about you, as one file.")}
+    </p>
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "The file is in JSON format and includes your profile, posts, messages and settings. It contains private data, so store it carefully."
+      )}
+    </p>
+    <.button id="data-export-download" href={~p"/#{@user}/export/download"} class="mt-4">
+      {gettext("Download")}
+    </.button>
+  </.card>
+</div>

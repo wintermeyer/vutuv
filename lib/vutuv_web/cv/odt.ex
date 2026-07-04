@@ -1,0 +1,149 @@
+defmodule VutuvWeb.CV.Odt do
+  @moduledoc """
+  The CV as an OpenDocument text (`.odt`) — the vendor-neutral editable
+  alternative to `.docx` (LibreOffice, OpenOffice; Word opens it too).
+
+  Like the Docx renderer this builds the ZIP package by hand with Erlang's
+  `:zip`: per the ODF spec the uncompressed `mimetype` file leads the
+  archive (only the `.xml` parts are deflated), which is what lets file
+  managers sniff the type from the first bytes.
+  """
+
+  use Gettext, backend: VutuvWeb.Gettext
+
+  @mimetype "application/vnd.oasis.opendocument.text"
+
+  def render(cv) do
+    files = [
+      {~c"mimetype", @mimetype},
+      {~c"META-INF/manifest.xml", manifest()},
+      {~c"styles.xml", styles()},
+      {~c"content.xml", content(cv)}
+    ]
+
+    {:ok, {_name, binary}} =
+      :zip.create(~c"cv.odt", files, [:memory, {:compress, [~c".xml"]}])
+
+    binary
+  end
+
+  defp manifest do
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+    <manifest:file-entry manifest:full-path="/" manifest:media-type="#{@mimetype}"/>
+    <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+    <manifest:file-entry manifest:full-path="styles.xml" manifest:media-type="text/xml"/>
+    </manifest:manifest>
+    """
+  end
+
+  defp styles do
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <office:document-styles xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" office:version="1.2">
+    <office:styles/>
+    </office:document-styles>
+    """
+  end
+
+  defp content(cv) do
+    body =
+      [
+        p(cv.name, "CVTitle"),
+        cv.headline && p(cv.headline, "CVHeadline"),
+        contact(cv),
+        address(cv),
+        Enum.map(cv.sections, &section/1),
+        skills(cv.skills),
+        links(cv.links)
+      ]
+      |> List.flatten()
+      |> Enum.filter(& &1)
+      |> Enum.join()
+
+    """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" office:version="1.2">
+    <office:automatic-styles>
+    <style:style style:name="CVTitle" style:family="paragraph"><style:text-properties fo:font-size="22pt" fo:font-weight="bold"/></style:style>
+    <style:style style:name="CVHeadline" style:family="paragraph"><style:text-properties fo:font-size="12pt" fo:color="#334155"/></style:style>
+    <style:style style:name="CVHeading" style:family="paragraph"><style:paragraph-properties fo:margin-top="6mm" fo:margin-bottom="2mm"/><style:text-properties fo:font-size="10pt" fo:font-weight="bold" fo:color="#475569"/></style:style>
+    <style:style style:name="CVMuted" style:family="paragraph"><style:text-properties fo:font-size="10pt" fo:color="#64748b"/></style:style>
+    <style:style style:name="CVBold" style:family="text"><style:text-properties fo:font-weight="bold"/></style:style>
+    </office:automatic-styles>
+    <office:body>
+    <office:text>
+    #{body}
+    </office:text>
+    </office:body>
+    </office:document-content>
+    """
+  end
+
+  defp contact(cv) do
+    line =
+      [cv.email, cv.phone, cv.profile_url]
+      |> Enum.filter(& &1)
+      |> Enum.join(" | ")
+
+    if line != "", do: p(line, "CVMuted")
+  end
+
+  defp address(%{address_lines: []}), do: nil
+  defp address(cv), do: p(Enum.join(cv.address_lines, ", "), "CVMuted")
+
+  defp section(%{heading: heading, entries: entries}) do
+    [heading(heading) | Enum.map(entries, &entry/1)]
+  end
+
+  defp entry(entry) do
+    role =
+      [entry.title, entry.organization]
+      |> Enum.filter(& &1)
+      |> Enum.join(", ")
+
+    role_p = ~s(<text:p><text:span text:style-name="CVBold">#{esc(role)}</text:span></text:p>)
+
+    [
+      role_p,
+      entry.period && p(entry.period, "CVMuted"),
+      entry.description && p(entry.description)
+    ]
+  end
+
+  defp skills([]), do: nil
+  defp skills(skills), do: [heading(gettext("Tags")), p(Enum.join(skills, " | "))]
+
+  defp links([]), do: nil
+
+  defp links(links) do
+    lines =
+      for link <- links do
+        p(if(link.label, do: "#{link.label}: #{link.url}", else: link.url))
+      end
+
+    [heading(gettext("Links")) | lines]
+  end
+
+  defp heading(text) do
+    ~s(<text:h text:style-name="CVHeading" text:outline-level="1">#{esc(text)}</text:h>)
+  end
+
+  defp p(text, style \\ nil) do
+    body =
+      text
+      |> String.split(~r/\r?\n/)
+      |> Enum.map_join("<text:line-break/>", &esc/1)
+
+    style_attr = if style, do: ~s( text:style-name="#{style}"), else: ""
+    "<text:p#{style_attr}>#{body}</text:p>"
+  end
+
+  defp esc(text) do
+    text
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+  end
+end

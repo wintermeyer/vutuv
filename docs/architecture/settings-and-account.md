@@ -27,7 +27,7 @@ itself.
 
 The account areas are focused subpages: Sign-in & security
 (`/settings/security`), Language & maps (`/settings/preferences`), Import
-(`/settings/import/linkedin`), Export (`/settings/export`) and Delete account
+(`/settings/import/linkedin`), Export (`/:slug/export`, the profile-scoped export corner) and Delete account
 (`/settings/delete`). "Profil bearbeiten" jumps to the basics form
 (`/settings/profile`), which ends in links to the sibling sections; the old
 owner URLs (`/:slug/edit`, `/:slug/settings/*`) redirect to their `/settings`
@@ -114,10 +114,41 @@ and the uploaded temp file is deleted as soon as it is read.
 ## Data export (GDPR)
 
 Every member can download everything vutuv stores about them as one JSON file
-from the Export settings page (`/settings/export`).
+from their export corner (`/:slug/export`; the file is
+`/:slug/export/download`). The settings-era URLs (`/settings/export`,
+`/settings/export/download`) redirect there.
 
 Strictly owner-only — it includes private data (all email addresses, direct
 messages, ad bookings).
 
 `Vutuv.Export` builds the document; a new per-user subsystem must add its
 section there (just like `Accounts.delete_user/1` must learn to delete it)
+
+## CV download (Lebenslauf)
+
+Every member can turn their profile into a formatted CV for a job application
+from their export corner (`/:slug/export`, issue #841), where it sits beside
+the GDPR download — clearly labelled as the presentation document, not the
+data dump.
+
+`VutuvWeb.CV` builds one data map (the `ProfileDoc` pattern): the issue #840
+work-experience categories in CV order (employment, internships,
+volunteering), education in its issue #849 categories (university,
+apprenticeship, school — collapsed to one "Education" section for the common
+degrees-only member, like the profile), tags, links, and the member's
+**first** email / phone number / address as contact details. Owner-only by design — the CV
+bundles contact details regardless of their public visibility, because the
+owner downloads their *own* document.
+
+One renderer per format, all dependency-free (nothing for an air-gapped
+install to configure):
+
+- **Print view** (`/:slug/export/cv/preview`): a self-contained HTML document
+  with an `@media print` A4 setup. **PDF = the browser's print dialog** on
+  this view; there is no server-side PDF renderer (yet — that would be an
+  external binary behind a config flag).
+- **Downloads** (`/:slug/export/cv/:format`): `html` (the same
+  document), `tex` (plain `article`-class LaTeX, all specials escaped),
+  `docx` / `odt` (minimal OOXML / ODF ZIP packages built with Erlang's
+  `:zip`), and `json` (the [JSON Resume](https://jsonresume.org) schema;
+  internships join `work`, volunteering maps to `volunteer`).

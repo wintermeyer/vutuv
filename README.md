@@ -22,8 +22,10 @@ We use the [MIT License](LICENSE).
   and XML; RSS feeds, sitemap, JSON-LD, `/llms.txt` and a REST API
   (`/api/2.0`, OAuth 2 + personal access tokens, webhooks).
 - Built-in moderation (family-friendly by design), admin panel, newsletter
-  system, GDPR data export, and per-installation legal pages (Impressum,
-  Datenschutzerklärung, Nutzungsbedingungen) edited at `/admin/legal`.
+  system, GDPR data export, a formatted CV (Lebenslauf) download for job
+  applications (print/PDF, Word, OpenDocument, LaTeX, JSON Resume), and
+  per-installation legal pages (Impressum, Datenschutzerklärung,
+  Nutzungsbedingungen) edited at `/admin/legal`.
 - German and English UI; dark mode follows the system.
 
 Technology: Elixir / Phoenix 1.8, PostgreSQL, Bandit, Tailwind CSS v4,
