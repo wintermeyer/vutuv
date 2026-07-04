@@ -299,15 +299,15 @@ defmodule VutuvWeb.UI do
 
   @doc """
   The profile rail's **CV / Lebenslauf card** (issue #841): this profile as
-  a formatted CV for a job application, downloadable by **every** viewer —
-  the documents (`VutuvWeb.CV`, served by `VutuvWeb.CVController` under
-  `/:slug/export/cv/*`) carry only data the viewer can already see, so a
-  private email never leaves the owner's own download. Chips after
-  `<.other_formats_card>`'s pattern: the print view first (the PDF path,
-  opens in a new tab), then the Word / OpenDocument / HTML / LaTeX / JSON
-  Resume files. `machine_formats={false}` (the same full machine-export
-  opt-out the agent docs honor) drops the JSON Resume chip — that URL
-  answers 404 for such a profile unless the owner asks.
+  a formatted CV for a job application, offered to **every** viewer — the CV
+  (`VutuvWeb.CV`, served under `/:slug/cv`) carries only data the viewer can
+  already see, so a private email never leaves the owner's own download. The
+  primary link opens the builder (`/:slug/cv`), where any viewer can untick
+  sections/entries or anonymize the CV and then print or download; the chips
+  below are one-click **full** downloads (Word / OpenDocument / HTML / LaTeX
+  / JSON Resume). `machine_formats={false}` (the same full machine-export
+  opt-out the agent docs honor) drops the JSON Resume chip — that URL answers
+  404 for such a profile unless the owner asks.
   """
   attr(:user, Vutuv.Accounts.User, required: true)
   attr(:machine_formats, :boolean, default: true)
@@ -331,21 +331,19 @@ defmodule VutuvWeb.UI do
       <.section_title class="mb-4">{gettext("CV download")}</.section_title>
       <p class="mb-3 text-xs text-slate-600 dark:text-slate-400">
         {gettext(
-          "This profile as a formatted CV for job applications. The print view turns into a PDF via the browser's print dialog."
+          "This profile as a formatted CV for job applications. Open it to pick what to include, anonymize it, print or download."
         )}
       </p>
-      <div class="flex flex-wrap gap-1.5">
-        <.link
-          href={~p"/#{@user}/export/cv/preview"}
-          target="_blank"
-          rel="noopener"
-          class={format_chip_class()}
-        >
-          {gettext("Print view")}
-        </.link>
+      <.link
+        href={~p"/#{@user}/cv"}
+        class="block w-full rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        {gettext("Open CV")}
+      </.link>
+      <div class="mt-3 flex flex-wrap gap-1.5">
         <.link
           :for={{label, format} <- @files}
-          href={"/#{@user.username}/export/cv/#{format}"}
+          href={~p"/#{@user}/cv/download/#{format}"}
           class={format_chip_class()}
         >
           {label}

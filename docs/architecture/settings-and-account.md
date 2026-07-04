@@ -124,38 +124,48 @@ messages, ad bookings).
 `Vutuv.Export` builds the document; a new per-user subsystem must add its
 section there (just like `Accounts.delete_user/1` must learn to delete it)
 
-## CV download (Lebenslauf)
+## CV (Lebenslauf) — `/:slug/cv`
 
-Every profile can be downloaded as a formatted CV for a job application. The
-CV is **public like the profile**: a card on the profile page links the
-formats for every visitor, and each document is built through the viewer's
-eyes (`VutuvWeb.CV` takes a `:viewer`) — only the email is viewer-sensitive,
-so a private address appears solely in the owner's own download. The owner
-additionally finds the CV in their export corner (`/:slug/export`, issue
-#841), beside the GDPR download — clearly labelled as the presentation
-document, not the data dump. One machine-export nuance: for a fully
-machine-opted-out member (`agent_docs_blocked?`, the members whose agent
-`.json` 404s) the JSON Resume answers 404 to everyone but the owner; the
-human-use formats stay available like the profile page itself.
+Every profile can be turned into a formatted CV for a job application, at its
+own **public** URL `/:slug/cv` (issue #841). It is public like the profile:
+the profile rail links it for every visitor, and each document is built
+through the viewer's eyes (`VutuvWeb.CV.build/2` takes a `:viewer`) — only the
+email is viewer-sensitive, so a private address appears solely in the owner's
+own download. The owner also finds a link to it from their data page
+(`/:slug/export`), which otherwise hosts the owner-only GDPR dump.
 
-`VutuvWeb.CV` builds one data map (the `ProfileDoc` pattern): the issue #840
+**`/:slug/cv` is an interactive builder** (`VutuvWeb.CVLive`, embedded by
+`VutuvWeb.CVController.show` via `live_render`, the profile's pattern). The
+left column is the CV as an include/exclude checklist — every identity field
+(name, photo, tagline, email, phone, address, profile link), every section
+and every single entry has a toggle, plus an **Anonymize** preset that hides
+the name, photo and contact details in one click. The right column is the
+download panel. So a recruiter can drop sections, tailor the CV to a role, or
+forward a bias-free anonymized version. Nothing is persisted: the selection
+lives in the socket and is encoded into every download/print link as
+`?hide=<comma-separated keys>` (identity keys, section keys — a work/education
+category or `tags`/`links` — and entry UUIDs), which `CVController` parses and
+`VutuvWeb.CV.apply_hide/2` applies before rendering.
+
+`VutuvWeb.CV.build/2` produces one keyed data map: the issue #840
 work-experience categories in CV order (employment, internships,
 volunteering), education in its issue #849 categories (university,
 apprenticeship, school — collapsed to one "Education" section for the common
 degrees-only member, like the profile), tags, links, and the member's
-**first** email / phone number / address as contact details. Owner-only by design — the CV
-bundles contact details regardless of their public visibility, because the
-owner downloads their *own* document.
+**first** email / phone number / address as contact details.
 
 One renderer per format, all dependency-free (nothing for an air-gapped
 install to configure):
 
-- **Print view** (`/:slug/export/cv/preview`): a self-contained HTML document
-  with an `@media print` A4 setup. **PDF = the browser's print dialog** on
-  this view; there is no server-side PDF renderer (yet — that would be an
-  external binary behind a config flag).
-- **Downloads** (`/:slug/export/cv/:format`): `html` (the same
-  document), `tex` (plain `article`-class LaTeX, all specials escaped),
-  `docx` / `odt` (minimal OOXML / ODF ZIP packages built with Erlang's
-  `:zip`), and `json` (the [JSON Resume](https://jsonresume.org) schema;
-  internships join `work`, volunteering maps to `volunteer`).
+- **Print view** (`/:slug/cv/print`): a self-contained HTML document with an
+  `@media print` A4 setup. **PDF = the browser's print dialog** on this view;
+  there is no server-side PDF renderer (yet — that would be an external binary
+  behind a config flag, split into #853).
+- **Downloads** (`/:slug/cv/download/:format`): `html` (the same document),
+  `tex` (plain `article`-class LaTeX, all specials escaped), `docx` / `odt`
+  (minimal OOXML / ODF ZIP packages built with Erlang's `:zip`), and `json`
+  (the [JSON Resume](https://jsonresume.org) schema; internships join `work`,
+  volunteering maps to `volunteer`). The machine-readable `json` is the one
+  format withheld — it answers 404 for a fully machine-opted-out member
+  (`agent_docs_blocked?`, whose agent `.json` also 404s) to everyone but the
+  owner; the human-use formats stay public like the profile page itself.

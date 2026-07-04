@@ -12,9 +12,10 @@ defmodule VutuvWeb.CV.Latex do
   use Gettext, backend: VutuvWeb.Gettext
 
   def render(cv) do
+    name = if cv.name, do: "{\\LARGE\\bfseries #{esc(cv.name)}}\n", else: ""
+
     """
-    % #{esc(gettext("CV"))}: #{esc(cv.name)}
-    % #{esc(gettext("Generated from your vutuv profile"))}: #{url(cv.profile_url)}
+    % #{esc(title(cv))}
     \\documentclass[11pt,a4paper]{article}
     \\usepackage[T1]{fontenc}
     \\usepackage[utf8]{inputenc}
@@ -24,8 +25,7 @@ defmodule VutuvWeb.CV.Latex do
     \\setlength{\\parindent}{0pt}
     \\begin{document}
 
-    {\\LARGE\\bfseries #{esc(cv.name)}}
-    #{headline(cv)}
+    #{name}#{headline(cv)}
     #{contact(cv)}
     #{Enum.map_join(cv.sections, "\n", &section/1)}
     #{skills(cv.skills)}
@@ -34,15 +34,20 @@ defmodule VutuvWeb.CV.Latex do
     """
   end
 
+  defp title(%{name: nil}), do: gettext("CV")
+  defp title(%{name: name}), do: "#{gettext("CV")}: #{name}"
+
   defp headline(%{headline: nil}), do: ""
   defp headline(%{headline: headline}), do: "\n\\medskip\n\n#{esc(headline)}\n"
 
   defp contact(cv) do
+    url_part = if cv.profile_url, do: ["\\url{#{url(cv.profile_url)}}"], else: []
+
     line =
       [cv.email, cv.phone]
       |> Enum.filter(& &1)
       |> Enum.map(&esc/1)
-      |> Kernel.++(["\\url{#{url(cv.profile_url)}}"])
+      |> Kernel.++(url_part)
       |> Enum.join(" \\textbar{} ")
 
     address =
@@ -52,7 +57,7 @@ defmodule VutuvWeb.CV.Latex do
         "\n\n" <> Enum.map_join(cv.address_lines, ", ", &esc/1)
       end
 
-    "\n\\medskip\n\n#{line}#{address}\n"
+    if line == "" and address == "", do: "", else: "\n\\medskip\n\n#{line}#{address}\n"
   end
 
   defp section(%{heading: heading, entries: entries}) do
@@ -85,7 +90,7 @@ defmodule VutuvWeb.CV.Latex do
   defp skills(skills) do
     """
     \\section*{#{esc(gettext("Tags"))}}
-    #{Enum.map_join(skills, " \\textbullet{} ", &esc/1)}
+    #{Enum.map_join(skills, " \\textbullet{} ", fn skill -> esc(skill.name) end)}
     """
   end
 

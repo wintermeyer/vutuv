@@ -1,7 +1,6 @@
-<%!-- The member's export corner (/:slug/export, issue #841): the formatted
-CV / Lebenslauf for a job application and the GDPR data dump, side by side.
-Owner-only (AuthUser). PDF is the browser's own print dialog on the print
-view, so no server-side rendering dependency exists. --%>
+<%!-- The owner's data area (/:slug/export, issue #841): a pointer to the
+public CV builder plus the owner-only GDPR data dump. The CV itself lives at
+/:slug/cv (public, viewer-scoped); the GDPR download here is owner-only. --%>
 <div class="mx-auto max-w-3xl py-6">
   <div class="flex items-baseline justify-between gap-4">
     <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{gettext("Export")}</h1>
@@ -16,47 +15,17 @@ view, so no server-side rendering dependency exists. --%>
     <.section_title>{gettext("Your profile as a CV")}</.section_title>
     <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
-        "Turn your profile into a formatted CV for a job application: work experience, internships, volunteering, education, tags and links, with your first email address, phone number and address as contact details."
+        "Turn your profile into a formatted CV for a job application: pick what to include, anonymize it, then print (Save as PDF) or download it as Word, OpenDocument, HTML, LaTeX or JSON Resume."
       )}
     </p>
     <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
-        "Open the print view to check the result. For a PDF, use your browser's print dialog there and choose \"Save as PDF\"."
+        "The CV is public, on your profile: a visitor's download contains only what they can see there anyway, and private email addresses appear only in your own."
       )}
     </p>
-    <.button
-      id="cv-preview"
-      href={~p"/#{@user}/export/cv/preview"}
-      target="_blank"
-      rel="noopener"
-      class="mt-4"
-    >
-      {gettext("Open print view")}
+    <.button id="open-cv" href={~p"/#{@user}/cv"} class="mt-4">
+      {gettext("Open CV")}
     </.button>
-    <p class="mt-6 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "Download the CV as a file instead, for example to adapt it to one specific application before sending it."
-      )}
-    </p>
-    <div class="mt-3 flex flex-wrap gap-2" id="cv-downloads">
-      <.button variant="secondary" href={~p"/#{@user}/export/cv/docx"}>Word (.docx)</.button>
-      <.button variant="secondary" href={~p"/#{@user}/export/cv/odt"}>
-        OpenDocument (.odt)
-      </.button>
-      <.button variant="secondary" href={~p"/#{@user}/export/cv/html"}>HTML</.button>
-      <.button variant="secondary" href={~p"/#{@user}/export/cv/tex"}>LaTeX (.tex)</.button>
-      <.button variant="secondary" href={~p"/#{@user}/export/cv/json"}>JSON Resume</.button>
-    </div>
-    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "Word and OpenDocument files open in any office suite. LaTeX is the source for typesetting the CV yourself, and JSON Resume is the open machine-readable format from jsonresume.org."
-      )}
-    </p>
-    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
-      {gettext(
-        "The CV is also offered on your public profile. A visitor's download contains only what they can see there anyway; private email addresses appear only in your own."
-      )}
-    </p>
   </.card>
   <.card class="mt-6">
     <.section_title>{gettext("Download your data")}</.section_title>

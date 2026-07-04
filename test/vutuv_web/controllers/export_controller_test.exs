@@ -28,9 +28,10 @@ defmodule VutuvWeb.ExportControllerTest do
     conn = get(conn, ~p"/#{user}/export")
     body = html_response(conn, 200)
 
-    # Assert the rendered hrefs, not just the routes we know exist.
+    # Assert the rendered hrefs, not just the routes we know exist. The CV
+    # lives at its own public URL now; the export page links to it.
     assert body =~ ~s(href="/#{user.username}/export/download")
-    assert body =~ ~s(href="/#{user.username}/export/cv/preview")
+    assert body =~ ~s(href="/#{user.username}/cv")
   end
 
   test "the owner downloads one JSON file with their data", %{conn: conn} do

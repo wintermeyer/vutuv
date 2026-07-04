@@ -50,7 +50,7 @@ defmodule VutuvWeb.CV.Odt do
   defp content(cv) do
     body =
       [
-        p(cv.name, "CVTitle"),
+        cv.name && p(cv.name, "CVTitle"),
         cv.headline && p(cv.headline, "CVHeadline"),
         contact(cv),
         address(cv),
@@ -113,7 +113,7 @@ defmodule VutuvWeb.CV.Odt do
   end
 
   defp skills([]), do: nil
-  defp skills(skills), do: [heading(gettext("Tags")), p(Enum.join(skills, " | "))]
+  defp skills(skills), do: [heading(gettext("Tags")), p(Enum.map_join(skills, " | ", & &1.name))]
 
   defp links([]), do: nil
 

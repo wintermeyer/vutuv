@@ -26,7 +26,7 @@ defmodule VutuvWeb.CV.JsonResume do
       "work" => work(cv.work_groups),
       "volunteer" => volunteer(cv.work_groups),
       "education" => Enum.map(cv.educations, &education/1),
-      "skills" => Enum.map(cv.skills, &%{"name" => &1})
+      "skills" => Enum.map(cv.skills, &%{"name" => &1.name})
     }
     |> Enum.reject(fn {_key, value} -> value == [] end)
     |> Map.new()

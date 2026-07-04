@@ -1,22 +1,27 @@
 defmodule VutuvWeb.CVController do
   @moduledoc """
-  The formatted CV (Lebenslauf) documents at `/:slug/export/cv/*`, issue
-  #841: `preview` serves the print-ready HTML document inline (browser
-  print dialog = the PDF path), `download` sends one of the file formats as
+  The formatted CV (Lebenslauf) at `/:slug/cv`, issue #841. `show` embeds the
+  interactive builder `VutuvWeb.CVLive` (via `live_render/3`, the profile's
+  pattern); `print` serves the print-ready HTML document inline (the PDF path
+  = the browser's print dialog); `download` sends one of the file formats as
   an attachment.
 
-  Public like the profile itself: every viewer gets the CV built from the
-  data they may already see (`VutuvWeb.CV` resolves the email per viewer,
-  so a private address only appears in the owner's own download), and the
-  profile page links the formats for everyone. The one exception mirrors
-  the agent docs: for a fully machine-opted-out member
-  (`ContentPolicy.agent_docs_blocked?/1` — the same members whose
-  `/:slug.json` 404s) the machine-readable JSON Resume answers 404 to
-  everyone but the owner. The owner-only overview page (with the GDPR dump
-  beside the CV) is `ExportController.index`.
+  Public like the profile: every viewer gets the CV built from the data they
+  may already see (`VutuvWeb.CV` resolves the email per viewer, so a private
+  address only appears in the owner's own download). All three actions honor
+  the builder's `?hide=<keys>` selection — a comma-separated set of identity
+  fields, section keys and entry ids to leave out — so a shared/anonymized
+  link carries its trimming. The one gate mirrors the agent docs: the
+  machine-readable JSON Resume 404s for a fully machine-opted-out member
+  (`ContentPolicy.agent_docs_blocked?/1`) to everyone but the owner.
+
+  The owner-only GDPR data dump keeps its own home at `/:slug/export`
+  (`ExportController`).
   """
 
   use VutuvWeb, :controller
+
+  import Phoenix.LiveView.Controller, only: [live_render: 3]
 
   alias VutuvWeb.ContentPolicy
   alias VutuvWeb.ControllerHelpers
@@ -30,10 +35,27 @@ defmodule VutuvWeb.CVController do
     "json" => "application/json"
   }
 
-  def preview(conn, _params) do
+  def show(conn, _params) do
+    user = conn.assigns[:user]
+
+    conn
+    |> ContentPolicy.put_robots_header(user.noindex?, user.noai?)
+    |> put_layout(html: false)
+    |> live_render(VutuvWeb.CVLive,
+      session: %{
+        "profile_user_id" => user.id,
+        "locale" => conn.assigns[:locale],
+        "request_path" => conn.request_path,
+        "user_id" => conn.assigns[:current_user_id]
+      }
+    )
+  end
+
+  def print(conn, params) do
     document =
       conn.assigns[:user]
       |> CV.build(viewer: conn.assigns[:current_user], photo: true)
+      |> CV.apply_hide(parse_hide(params))
       |> CV.Html.render(print_hint: true)
 
     conn
@@ -41,24 +63,39 @@ defmodule VutuvWeb.CVController do
     |> send_resp(200, document)
   end
 
-  def download(conn, %{"format" => format}) when is_map_key(@content_types, format) do
+  def download(conn, %{"format" => format} = params) when is_map_key(@content_types, format) do
     user = conn.assigns[:user]
     viewer = conn.assigns[:current_user]
 
     if format == "json" and machine_export_blocked?(user, viewer) do
       ControllerHelpers.render_error(conn, 404)
     else
-      cv = CV.build(user, viewer: viewer, photo: format == "html")
-      filename = "cv-#{user.username}-#{Date.utc_today()}.#{format}"
+      hide = parse_hide(params)
+      cv = user |> CV.build(viewer: viewer, photo: format == "html") |> CV.apply_hide(hide)
 
       send_download(conn, {:binary, render_format(format, cv)},
-        filename: filename,
+        filename: filename(user, hide, format),
         content_type: Map.fetch!(@content_types, format)
       )
     end
   end
 
   def download(conn, _params), do: ControllerHelpers.render_error(conn, 404)
+
+  # A comma-separated list of hide-keys (identity fields / section keys /
+  # entry ids); only ever removes data, so no validation beyond splitting.
+  defp parse_hide(params) do
+    (params["hide"] || "")
+    |> String.split(",", trim: true)
+    |> MapSet.new()
+  end
+
+  # An anonymized CV (name hidden) drops the username from the filename too.
+  defp filename(user, hide, format) do
+    if MapSet.member?(hide, "name"),
+      do: "cv-#{Date.utc_today()}.#{format}",
+      else: "cv-#{user.username}-#{Date.utc_today()}.#{format}"
+  end
 
   defp machine_export_blocked?(user, viewer) do
     ContentPolicy.agent_docs_blocked?(user) and (is_nil(viewer) or viewer.id != user.id)

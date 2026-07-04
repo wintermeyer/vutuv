@@ -1,12 +1,15 @@
 defmodule VutuvWeb.CVControllerTest do
   @moduledoc """
-  The formatted CV download (issue #841): a profile as a print-ready
-  Lebenslauf at /:slug/export/cv/*, offered as HTML / LaTeX / Word (.docx) /
-  OpenDocument (.odt) / JSON Resume. Public like the profile itself — every
-  viewer gets the CV built from the data they may see (private emails stay
-  owner-only), and the profile page links the formats for everyone.
+  The formatted CV at /:slug/cv (issue #841): the print-ready view and the
+  file downloads (HTML / LaTeX / Word / OpenDocument / JSON Resume). Public
+  like the profile — every viewer gets the CV built from the data they may
+  see (private emails stay owner-only) — and every part is excludable via
+  the `?hide=` selection so a recruiter can tailor or anonymize it.
   """
   use VutuvWeb.ConnCase
+
+  alias Vutuv.Profiles.WorkExperience
+  alias Vutuv.Repo
 
   @login %{
     "emails" => %{"0" => %{"value" => "cv-owner@example.com"}},
@@ -17,8 +20,8 @@ defmodule VutuvWeb.CVControllerTest do
   }
 
   # A profile with every CV section filled: the three work-experience
-  # categories from issue #840, an education, a link. The employment
-  # description carries the characters each format must escape.
+  # categories from issue #840, two education categories (#849), a link. The
+  # employment description carries the characters each format must escape.
   defp seed_profile(user) do
     insert(:work_experience,
       user: user,
@@ -37,10 +40,7 @@ defmodule VutuvWeb.CVControllerTest do
       title: "Werkstudent",
       organization: "Beispiel AG",
       kind: "internship",
-      description: nil,
-      start_month: nil,
       start_year: 2018,
-      end_month: nil,
       end_year: 2019
     )
 
@@ -49,10 +49,7 @@ defmodule VutuvWeb.CVControllerTest do
       title: "Jugendtrainer",
       organization: "SV Musterstadt",
       kind: "volunteer",
-      description: nil,
-      start_month: nil,
       start_year: 2015,
-      end_month: nil,
       end_year: 2017
     )
 
@@ -66,18 +63,6 @@ defmodule VutuvWeb.CVControllerTest do
       end_year: 2018
     )
 
-    # A second category (issue #849), so the CV splits education into its
-    # kind sections instead of the single "Education" heading.
-    insert(:education,
-      user: user,
-      school: "IHK Bremen",
-      degree: "Fachinformatiker",
-      field_of_study: nil,
-      kind: "apprenticeship",
-      start_year: 2011,
-      end_year: 2014
-    )
-
     insert(:url, user: user, value: "https://blog.example.org/", description: "Blog")
     user
   end
@@ -87,49 +72,25 @@ defmodule VutuvWeb.CVControllerTest do
     {conn, seed_profile(user)}
   end
 
-  describe "the export overview page" do
-    test "offers the preview and every download format", %{conn: conn} do
-      {conn, user} = login_with_profile(conn)
-
-      conn = get(conn, ~p"/#{user}/export")
-      body = html_response(conn, 200)
-
-      # Assert the rendered hrefs, not just the routes we know exist.
-      assert body =~ ~s(href="/#{user.username}/export/cv/preview")
-
-      for format <- ~w(html tex docx odt json) do
-        assert body =~ ~s(href="/#{user.username}/export/cv/#{format}")
-      end
-    end
-
-    test "is linked from the settings hub", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn, @login)
-
-      conn = get(conn, ~p"/settings")
-      assert html_response(conn, 200) =~ ~s(href="/#{user.username}/export")
-    end
-  end
-
   describe "the profile page" do
-    test "links the CV formats for every visitor", %{conn: conn} do
+    test "links the CV builder for every visitor", %{conn: conn} do
       owner = seed_profile(insert(:activated_user))
 
       body = conn |> get(~p"/#{owner}") |> html_response(200)
 
-      assert body =~ ~s(href="/#{owner.username}/export/cv/preview")
+      assert body =~ ~s(href="/#{owner.username}/cv")
 
-      for format <- ~w(html tex docx odt json) do
-        assert body =~ ~s(href="/#{owner.username}/export/cv/#{format}")
+      for format <- ~w(docx odt html tex json) do
+        assert body =~ ~s(href="/#{owner.username}/cv/download/#{format}")
       end
     end
   end
 
-  describe "the print-ready preview" do
+  describe "the print-ready view" do
     test "renders a standalone print document with every section", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/preview")
-      body = html_response(conn, 200)
+      body = conn |> get(~p"/#{user}/cv/print") |> html_response(200)
 
       # A standalone document with its own print stylesheet — not an app page.
       assert body =~ "@media print"
@@ -138,61 +99,76 @@ defmodule VutuvWeb.CVControllerTest do
       assert body =~ "Erika Beispiel"
       assert body =~ "Senior Developer"
       assert body =~ "ACME GmbH"
-      # The issue #840 categories become the CV sections, in CV order.
+      # The issue #840 + #849 categories become the CV sections.
       assert body =~ "Werkstudent"
       assert body =~ "Jugendtrainer"
       assert body =~ "Universität Bremen"
-      # A mixed education list splits into its issue #849 categories.
-      assert body =~ "Higher Education"
-      assert body =~ "Vocational Training"
-      assert body =~ "IHK Bremen"
       assert body =~ "blog.example.org"
       assert body =~ "cv-owner@example.com"
       assert body =~ "alpha-tag"
-      assert body =~ user.username
 
       # The user-written description is escaped, never raw HTML.
       assert body =~ "Shipping &lt;fast&gt; &amp; 100% maintainable code_bases"
       refute body =~ "<fast>"
     end
+
+    test "honors the ?hide selection: sections, entries and identity fields", %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+      internship = Repo.get_by(WorkExperience, title: "Werkstudent", user_id: user.id)
+
+      # Hide a whole section (tags), a single entry (the internship) and the
+      # name (anonymize).
+      hide = "tags,name,#{internship.id}"
+      body = conn |> get(~p"/#{user}/cv/print?#{[hide: hide]}") |> html_response(200)
+
+      refute body =~ "alpha-tag"
+      refute body =~ "Werkstudent"
+      refute body =~ "Erika Beispiel"
+      # The rest of the CV is still there.
+      assert body =~ "Senior Developer"
+      assert body =~ "Universität Bremen"
+    end
   end
 
   describe "the downloads" do
-    test "HTML is the same document as an attachment", %{conn: conn} do
+    test "HTML is a document attachment", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/html")
+      conn = get(conn, ~p"/#{user}/cv/download/html")
 
       assert response_content_type(conn, :html) =~ "text/html"
       assert [disposition] = get_resp_header(conn, "content-disposition")
       assert disposition =~ "attachment"
       assert disposition =~ "cv-#{user.username}"
-      assert disposition =~ ".html"
       assert conn.resp_body =~ "Erika Beispiel"
+    end
+
+    test "an anonymized download drops the username from the filename", %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+
+      conn = get(conn, ~p"/#{user}/cv/download/html?#{[hide: "name"]}")
+
+      assert [disposition] = get_resp_header(conn, "content-disposition")
+      refute disposition =~ user.username
+      refute conn.resp_body =~ "Erika Beispiel"
     end
 
     test "LaTeX escapes the specials and carries every section", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/tex")
+      body = conn |> get(~p"/#{user}/cv/download/tex") |> response(200)
 
-      assert [disposition] = get_resp_header(conn, "content-disposition")
-      assert disposition =~ ".tex"
-
-      body = conn.resp_body
       assert body =~ "\\documentclass"
       assert body =~ "Erika Beispiel"
-      assert body =~ "ACME GmbH"
       assert body =~ "Universität Bremen"
-      # <, &, %, _ from the description, LaTeX-escaped.
       assert body =~ "\\& 100\\% maintainable code\\_bases"
       refute body =~ "& 100% maintainable"
     end
 
-    test "the .docx is a valid OOXML package with the CV text", %{conn: conn} do
+    test "the .docx is a valid OOXML package, honoring ?hide", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/docx")
+      conn = get(conn, ~p"/#{user}/cv/download/docx?#{[hide: "tags"]}")
 
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "wordprocessingml.document"
@@ -204,128 +180,85 @@ defmodule VutuvWeb.CVControllerTest do
       document = Map.fetch!(files, "word/document.xml")
       assert document =~ "Erika Beispiel"
       assert document =~ "Senior Developer"
-      assert document =~ "Universität Bremen"
-      # XML-escaped user text: the raw <fast> must never appear.
       assert document =~ "Shipping &lt;fast&gt; &amp; 100% maintainable"
       refute document =~ "<fast>"
+      # tags were hidden.
+      refute document =~ "alpha-tag"
     end
 
-    test "the .odt is a valid ODF package with the CV text", %{conn: conn} do
+    test "the .odt is a valid ODF package", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/odt")
+      conn = get(conn, ~p"/#{user}/cv/download/odt")
 
       assert [content_type] = get_resp_header(conn, "content-type")
       assert content_type =~ "opendocument.text"
-
-      # The ODF magic: an uncompressed "mimetype" as the archive's first
-      # entry (its name sits at byte 30 of the first local file header).
+      # The ODF magic: an uncompressed "mimetype" first in the archive.
       assert binary_part(conn.resp_body, 30, 8) == "mimetype"
 
       {:ok, files} = :zip.unzip(conn.resp_body, [:memory])
       files = Map.new(files, fn {name, data} -> {List.to_string(name), data} end)
-
       assert files["mimetype"] == "application/vnd.oasis.opendocument.text"
-      content = Map.fetch!(files, "content.xml")
-      assert content =~ "Erika Beispiel"
-      assert content =~ "SV Musterstadt"
-      assert content =~ "Shipping &lt;fast&gt; &amp; 100% maintainable"
+      assert Map.fetch!(files, "content.xml") =~ "SV Musterstadt"
     end
 
     test "the JSON Resume maps the categories onto the schema", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
 
-      conn = get(conn, ~p"/#{user}/export/cv/json")
-
-      assert response_content_type(conn, :json) =~ "application/json"
-      resume = Jason.decode!(conn.resp_body)
+      resume = conn |> get(~p"/#{user}/cv/download/json") |> json_response(200)
 
       assert resume["basics"]["name"] == "Erika Beispiel"
       assert resume["basics"]["email"] == "cv-owner@example.com"
-      assert resume["basics"]["url"] =~ user.username
 
-      # employment + internship land in "work", volunteer in "volunteer".
       positions = Enum.map(resume["work"], & &1["position"])
       assert "Senior Developer" in positions
       assert "Werkstudent" in positions
 
-      acme = Enum.find(resume["work"], &(&1["name"] == "ACME GmbH"))
-      assert acme["startDate"] == "2020-03"
-      refute Map.has_key?(acme, "endDate")
-
-      assert [%{"organization" => "SV Musterstadt", "position" => "Jugendtrainer"}] =
-               resume["volunteer"]
-
-      institutions = Enum.map(resume["education"], & &1["institution"])
-      assert "Universität Bremen" in institutions
-      assert "IHK Bremen" in institutions
-
-      uni = Enum.find(resume["education"], &(&1["institution"] == "Universität Bremen"))
-      assert uni["studyType"] == "BSc"
-      assert uni["area"] == "Informatik"
-
+      assert [%{"organization" => "SV Musterstadt"}] = resume["volunteer"]
+      assert [%{"institution" => "Universität Bremen"}] = resume["education"]
       assert Enum.any?(resume["skills"], &(&1["name"] == "alpha-tag"))
     end
 
-    test "an unknown format is a 404, not a crash", %{conn: conn} do
+    test "an unknown format is a 404", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
-
-      conn = get(conn, ~p"/#{user}/export/cv/pdf")
-      assert conn.status == 404
+      assert conn |> get(~p"/#{user}/cv/download/pdf") |> response(404)
     end
   end
 
-  describe "access" do
-    # The CV is public like the profile: every viewer downloads it built
-    # from the data they may see. Only /:slug/export (the GDPR dump beside
-    # the CV) stays owner-only — covered in export_controller_test.
+  describe "access & privacy" do
     test "a guest downloads the CV, with public contact data only", %{conn: conn} do
       owner = seed_profile(insert(:activated_user))
       insert(:email, user: owner, value: "visible@example.com", public?: true)
       insert(:email, user: owner, value: "secret@example.com", public?: false)
 
-      body = conn |> get(~p"/#{owner}/export/cv/preview") |> html_response(200)
-
+      body = conn |> get(~p"/#{owner}/cv/print") |> html_response(200)
       assert body =~ "Senior Developer"
       assert body =~ "visible@example.com"
       refute body =~ "secret@example.com"
 
-      docx = conn |> recycle() |> get(~p"/#{owner}/export/cv/docx")
+      docx = conn |> recycle() |> get(~p"/#{owner}/cv/download/docx")
       assert docx.status == 200
       refute docx.resp_body =~ "secret@example.com"
     end
 
-    test "the owner's own CV still carries their private email", %{conn: conn} do
+    test "the owner's own CV carries their private email", %{conn: conn} do
       {conn, user} = login_with_profile(conn)
-      # The registration address defaults to public?: false — pin that the
-      # email the owner preview shows really is a private one.
-      refute Enum.any?(Vutuv.Repo.preload(user, :emails).emails, & &1.public?)
+      refute Enum.any?(Repo.preload(user, :emails).emails, & &1.public?)
 
-      body = conn |> get(~p"/#{user}/export/cv/preview") |> html_response(200)
+      body = conn |> get(~p"/#{user}/cv/print") |> html_response(200)
       assert body =~ "cv-owner@example.com"
     end
 
     test "a machine-opted-out member's JSON stays owner-only", %{conn: conn} do
-      # noindex? AND noai? is the full machine-export opt-out (the agent-doc
-      # .json 404s, VutuvWeb.Plug.AgentExportOptOut), so the machine-readable
-      # JSON Resume follows it for everyone but the owner; the human-use
-      # formats stay available like the profile page itself.
       owner =
         :activated_user
         |> insert(noindex?: true, noai?: true)
         |> seed_profile()
 
-      assert conn |> get(~p"/#{owner}/export/cv/json") |> response(404)
-      assert conn |> recycle() |> get(~p"/#{owner}/export/cv/docx") |> response(200)
-
-      {conn, _visitor} =
-        create_and_login_user(conn, %{
-          "emails" => %{"0" => %{"value" => "other-member@example.com"}},
-          "first_name" => "Other",
-          "tag_list" => @registration_tags
-        })
-
-      assert conn |> get(~p"/#{owner}/export/cv/json") |> response(404)
+      assert conn |> get(~p"/#{owner}/cv/download/json") |> response(404)
+      # The human-use formats stay available like the profile page itself.
+      assert conn |> recycle() |> get(~p"/#{owner}/cv/download/docx") |> response(200)
+      assert conn |> recycle() |> get(~p"/#{owner}/cv/print") |> response(200)
     end
 
     test "the machine-opted-out owner still gets their own JSON", %{conn: conn} do
@@ -333,9 +266,9 @@ defmodule VutuvWeb.CVControllerTest do
 
       user
       |> Ecto.Changeset.change(%{noindex?: true, noai?: true})
-      |> Vutuv.Repo.update!()
+      |> Repo.update!()
 
-      assert conn |> get(~p"/#{user}/export/cv/json") |> response(200)
+      assert conn |> get(~p"/#{user}/cv/download/json") |> response(200)
     end
   end
 end

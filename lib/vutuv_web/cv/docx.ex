@@ -84,7 +84,7 @@ defmodule VutuvWeb.CV.Docx do
   defp document(cv) do
     body =
       [
-        paragraph(cv.name, style: "Title"),
+        cv.name && paragraph(cv.name, style: "Title"),
         cv.headline && paragraph(cv.headline),
         contact(cv),
         address(cv),
@@ -141,7 +141,7 @@ defmodule VutuvWeb.CV.Docx do
   defp skills(skills) do
     [
       paragraph(gettext("Tags"), style: "Heading1"),
-      paragraph(Enum.join(skills, " | "))
+      paragraph(Enum.map_join(skills, " | ", & &1.name))
     ]
   end
 

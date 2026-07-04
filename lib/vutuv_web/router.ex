@@ -774,14 +774,18 @@ defmodule VutuvWeb.Router do
       # The session-aware vCard (all emails for the owner / a follower-back
       # viewer); the anonymous canonical vCard is /:slug.vcf.
       get("/vcard", VCardController, :get)
-      # The member's export corner (issue #841), owner-only (RequireLogin +
-      # AuthUser in the controllers): /export is the overview, /export/cv/*
-      # the formatted CV / Lebenslauf (print view = the PDF path, plus the
-      # html/tex/docx/odt/json files), /export/download the GDPR JSON.
+      # The owner-only GDPR data export (RequireLogin + AuthUser in the
+      # controller): the overview page + the one-JSON-file download.
       get("/export", ExportController, :index)
       get("/export/download", ExportController, :download)
-      get("/export/cv/preview", CVController, :preview)
-      get("/export/cv/:format", CVController, :download)
+      # The public, viewer-scoped CV / Lebenslauf (issue #841): the
+      # interactive builder LiveView, the print-ready view (the PDF path via
+      # the browser print dialog) and the file downloads (docx/odt/html/tex/
+      # json). Every part is include/excludable, so a recruiter can tailor or
+      # anonymize the CV; the selection rides along as ?hide=<keys>.
+      get("/cv", CVController, :show)
+      get("/cv/print", CVController, :print)
+      get("/cv/download/:format", CVController, :download)
       resources("/emails", EmailController, only: [:index, :show])
       resources("/followers", FollowerController, only: [:index])
       resources("/following", FolloweeController, only: [:index])

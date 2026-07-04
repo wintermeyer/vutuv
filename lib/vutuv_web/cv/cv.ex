@@ -2,8 +2,8 @@ defmodule VutuvWeb.CV do
   @moduledoc """
   The member's profile as one CV (Lebenslauf) data map — the single source
   the download renderers share (`VutuvWeb.CV.Html`, `.Latex`, `.Docx`,
-  `.Odt`, `.JsonResume`), the way `VutuvWeb.AgentDocs.ProfileDoc` feeds the
-  agent formats (issue #841).
+  `.Odt`, `.JsonResume`) and the interactive builder `VutuvWeb.CVLive`
+  (issue #841).
 
   Built through a viewer's eyes: anyone may download the CV of data they can
   already see — work, education, tags, links, phone numbers and addresses
@@ -12,14 +12,26 @@ defmodule VutuvWeb.CV do
   appears in the owner's own download. Pass the `:viewer` option; nil is
   the anonymous public view.
 
-  The body is a list of uniform `sections` (heading + entries of
-  `%{period, title, organization, description}`): the issue #840
-  work-experience categories in their fixed order (employment, internships,
-  volunteering), then education in its issue #849 categories (university,
-  apprenticeship, school — collapsed to one "Education" section for the
-  common degrees-only member, like the profile). `work_groups`/`educations`
-  additionally carry the raw fields for the JSON Resume renderer, which
-  needs the category and the year/month parts rather than display strings.
+  **Every part carries a stable key** so the builder can offer per-item
+  include/exclude and encode the choice in the download URLs — a recruiter
+  can drop sections, single entries, or the identifying fields (name, photo,
+  contact) to forward an anonymized CV. `apply_hide/2` takes a `MapSet` of
+  those keys and returns the trimmed map the renderers consume:
+
+    * identity fields — `"name"`, `"photo"`, `"headline"`, `"email"`,
+      `"phone"`, `"address"`, `"url"` (the profile link)
+    * whole sections — a work/education category key (`"employment"`,
+      `"internship"`, `"volunteer"`, `"university"`, `"apprenticeship"`,
+      `"school"`, or `"education"` when the categories are collapsed),
+      plus `"tags"` and `"links"`
+    * single entries — the record's UUID
+
+  The body is a list of uniform `sections` (`%{key, heading, entries}`, each
+  entry `%{id, period, title, organization, description}`): the issue #840
+  work categories in fixed order, then education in its issue #849 categories
+  (collapsed to one "Education" section for the common degrees-only member,
+  like the profile). `work_groups`/`educations` additionally carry the raw
+  fields for the JSON Resume renderer.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
@@ -34,6 +46,27 @@ defmodule VutuvWeb.CV do
   alias VutuvWeb.EducationHTML
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.WorkExperienceHTML
+
+  # The identity fields, in header order, as `{hide-key, cv-map field}`. The
+  # builder renders a toggle per field that has a value; the "Anonymize"
+  # preset hides all but the headline (a job title, not a name).
+  @identity_fields [
+    {"name", :name},
+    {"photo", :photo},
+    {"headline", :headline},
+    {"email", :email},
+    {"phone", :phone},
+    {"address", :address_lines},
+    {"url", :profile_url}
+  ]
+
+  @anonymize ~w(name photo email phone address url)
+
+  @doc "The identity fields as `{key, cv-field}`, in header order."
+  def identity_fields, do: @identity_fields
+
+  @doc "The keys the Anonymize preset hides (name, photo, contact, profile link)."
+  def anonymize_keys, do: @anonymize
 
   @doc """
   Options:
@@ -55,12 +88,35 @@ defmodule VutuvWeb.CV do
       email: first_value(emails),
       phone: first_value(user.phone_numbers),
       address_lines: address_lines(List.first(user.addresses)),
-      links: Enum.map(user.urls, &%{label: presence(&1.description), url: &1.value}),
+      links: Enum.map(user.urls, &%{id: &1.id, label: presence(&1.description), url: &1.value}),
       sections: sections(user),
-      skills: Enum.map(user.user_tags, &UserTag.name/1),
+      skills: Enum.map(user.user_tags, &%{id: &1.id, name: UserTag.name(&1)}),
       photo: photo(user, opts),
       work_groups: work_groups(user),
       educations: Enum.map(user.educations, &education_raw/1)
+    }
+  end
+
+  @doc """
+  Trim a built CV to the viewer's selection: drop every identity field,
+  section and entry whose key is in `hide` (a `MapSet` of strings), and any
+  section left empty. `MapSet.new()` is a no-op that returns the full CV.
+  """
+  def apply_hide(cv, %MapSet{} = hide) do
+    %{
+      cv
+      | name: hidden(cv.name, "name", hide),
+        photo: hidden(cv.photo, "photo", hide),
+        headline: hidden(cv.headline, "headline", hide),
+        email: hidden(cv.email, "email", hide),
+        phone: hidden(cv.phone, "phone", hide),
+        profile_url: hidden(cv.profile_url, "url", hide),
+        address_lines: if(MapSet.member?(hide, "address"), do: [], else: cv.address_lines),
+        sections: filter_sections(cv.sections, hide),
+        skills: filter_by_id(cv.skills, "tags", hide),
+        links: filter_by_id(cv.links, "links", hide),
+        work_groups: filter_work_groups(cv.work_groups, hide),
+        educations: filter_educations(cv.educations, hide)
     }
   end
 
@@ -73,6 +129,42 @@ defmodule VutuvWeb.CV do
 
   def year_month(year, month),
     do: "#{year}-#{String.pad_leading(Integer.to_string(month), 2, "0")}"
+
+  defp hidden(value, key, hide), do: if(MapSet.member?(hide, key), do: nil, else: value)
+
+  defp filter_sections(sections, hide) do
+    sections
+    |> Enum.reject(&MapSet.member?(hide, &1.key))
+    |> Enum.map(fn section ->
+      %{section | entries: Enum.reject(section.entries, &MapSet.member?(hide, &1.id))}
+    end)
+    |> Enum.reject(&(&1.entries == []))
+  end
+
+  defp filter_by_id(list, section_key, hide) do
+    if MapSet.member?(hide, section_key),
+      do: [],
+      else: Enum.reject(list, &MapSet.member?(hide, &1.id))
+  end
+
+  defp filter_work_groups(groups, hide) do
+    groups
+    |> Enum.reject(fn {kind, _entries} -> MapSet.member?(hide, kind) end)
+    |> Enum.map(fn {kind, entries} ->
+      {kind, Enum.reject(entries, &MapSet.member?(hide, &1.id))}
+    end)
+    |> Enum.reject(fn {_kind, entries} -> entries == [] end)
+  end
+
+  defp filter_educations(educations, hide) do
+    if MapSet.member?(hide, "education") do
+      []
+    else
+      Enum.reject(educations, fn edu ->
+        MapSet.member?(hide, edu.kind) or MapSet.member?(hide, edu.id)
+      end)
+    end
+  end
 
   # The same ordered associations the profile page shows, so the CV can
   # never disagree with the profile about order.
@@ -91,6 +183,7 @@ defmodule VutuvWeb.CV do
     work =
       for {kind, entries} <- WorkExperience.group_by_kind(user.work_experiences) do
         %{
+          key: kind,
           heading: WorkExperienceHTML.kind_label(kind),
           entries: Enum.map(entries, &work_entry/1)
         }
@@ -101,6 +194,7 @@ defmodule VutuvWeb.CV do
 
   defp work_entry(work) do
     %{
+      id: work.id,
       period: period(work),
       title: work.title,
       organization: work.organization,
@@ -111,19 +205,26 @@ defmodule VutuvWeb.CV do
   defp education_sections([]), do: []
 
   # The issue #849 education categories, mirroring the profile's rule: the
-  # common degrees-only member keeps one plain "Education" section, and the
-  # Studium / Berufsausbildung / Schulbildung headings appear only once a
-  # non-university entry exists.
+  # common degrees-only member keeps one plain "Education" section (key
+  # "education"), and the Studium / Berufsausbildung / Schulbildung headings
+  # (keyed by kind) appear only once a non-university entry exists.
   defp education_sections(educations) do
     if EducationHTML.show_kind_headings?(educations) do
       for {kind, entries} <- Education.group_by_kind(educations) do
         %{
+          key: kind,
           heading: EducationHTML.kind_label(kind),
           entries: Enum.map(entries, &education_entry/1)
         }
       end
     else
-      [%{heading: gettext("Education"), entries: Enum.map(educations, &education_entry/1)}]
+      [
+        %{
+          key: "education",
+          heading: gettext("Education"),
+          entries: Enum.map(educations, &education_entry/1)
+        }
+      ]
     end
   end
 
@@ -139,6 +240,7 @@ defmodule VutuvWeb.CV do
       if degree_line == "", do: {edu.school, nil}, else: {degree_line, edu.school}
 
     %{
+      id: edu.id,
       period: period(edu),
       title: title,
       organization: organization,
@@ -169,6 +271,7 @@ defmodule VutuvWeb.CV do
 
   defp work_raw(work) do
     %{
+      id: work.id,
       title: work.title,
       organization: work.organization,
       description: presence(work.description),
@@ -179,6 +282,8 @@ defmodule VutuvWeb.CV do
 
   defp education_raw(edu) do
     %{
+      id: edu.id,
+      kind: edu.kind,
       school: edu.school,
       degree: presence(edu.degree),
       field_of_study: presence(edu.field_of_study),

@@ -26,7 +26,7 @@ defmodule VutuvWeb.CV.Html do
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="robots" content="noindex"/>
-    <title>#{esc(gettext("CV"))}: #{esc(cv.name)}</title>
+    <title>#{esc(title(cv))}</title>
     <style>#{css()}</style>
     </head>
     <body>
@@ -41,6 +41,11 @@ defmodule VutuvWeb.CV.Html do
     </html>
     """
   end
+
+  # The document title carries the name unless it has been hidden
+  # (anonymized), then just "CV".
+  defp title(%{name: nil}), do: gettext("CV")
+  defp title(%{name: name}), do: "#{gettext("CV")}: #{name}"
 
   defp hint do
     """
@@ -61,6 +66,8 @@ defmodule VutuvWeb.CV.Html do
       |> Enum.filter(& &1)
       |> Enum.map_join(" &middot; ", &esc/1)
 
+    contact = if contact == "", do: "", else: ~s(<p class="contact">#{contact}</p>)
+
     address =
       if cv.address_lines == [] do
         ""
@@ -68,12 +75,15 @@ defmodule VutuvWeb.CV.Html do
         ~s(<p class="contact">#{Enum.map_join(cv.address_lines, ", ", &esc/1)}</p>)
       end
 
+    name = if cv.name, do: ~s(<h1>#{esc(cv.name)}</h1>), else: ""
+    headline = if cv.headline, do: ~s(<p class="headline">#{esc(cv.headline)}</p>), else: ""
+
     """
     <header class="head">
     <div>
-    <h1>#{esc(cv.name)}</h1>
-    #{if cv.headline, do: ~s(<p class="headline">#{esc(cv.headline)}</p>), else: ""}
-    <p class="contact">#{contact}</p>
+    #{name}
+    #{headline}
+    #{contact}
     #{address}
     </div>
     #{photo}
@@ -115,7 +125,7 @@ defmodule VutuvWeb.CV.Html do
     """
     <section>
     <h2>#{esc(gettext("Tags"))}</h2>
-    <p class="skills">#{Enum.map_join(skills, " &middot; ", &esc/1)}</p>
+    <p class="skills">#{Enum.map_join(skills, " &middot; ", fn skill -> esc(skill.name) end)}</p>
     </section>
     """
   end
