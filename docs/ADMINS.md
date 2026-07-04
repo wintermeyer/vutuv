@@ -15,8 +15,9 @@ Related documents: [README](../README.md) (overview) ·
 ## What you need
 
 - A Linux server (the reference installation runs Debian; anything that runs
-  Erlang works). One host is enough — vutuv.de serves ~60,000 profiles from a
-  single machine.
+  Erlang works). One host is enough to start (vutuv.de has run on a single
+  machine so far); very large installations can spread across multiple nodes,
+  which Elixir/BEAM supports natively.
 - **PostgreSQL 17** (older 14+ versions likely work, 17 is what is tested).
 - **Erlang and Elixir** to build the release — install via
   [mise](https://mise.jdx.dev/) (`mise install` reads the pinned versions from

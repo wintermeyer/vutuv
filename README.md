@@ -22,8 +22,9 @@ We use the [MIT License](LICENSE).
 - German and English UI; dark mode follows the system.
 
 Technology: Elixir / Phoenix 1.8, PostgreSQL, Bandit, Tailwind CSS v4,
-libvips (AVIF images). One modest server is enough — vutuv.de serves ~60,000
-profiles from a single machine.
+libvips (AVIF images). A single modest server goes a long way (vutuv.de has
+yet to outgrow one), and because vutuv is built on Elixir it scales out to
+multiple nodes for very large installations.
 
 ## Run your own installation
 
@@ -43,9 +44,10 @@ mix setup             # deps, database, assets
 mix phx.server        # http://localhost:4000
 ```
 
-The full developer guide — prerequisites (PostgreSQL 17, libvips), the
-architecture, the context modules, tests and how vutuv.de itself is deployed —
-lives in **[docs/DEVELOPERS.md](docs/DEVELOPERS.md)**. Ground rules for
+The developer guide (prerequisites, setup, tests, how vutuv.de itself is
+deployed) lives in **[docs/DEVELOPERS.md](docs/DEVELOPERS.md)**; the
+architecture is documented one subsystem per file in
+**[docs/architecture/](docs/architecture/README.md)**. Ground rules for
 contributions: **[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## API
