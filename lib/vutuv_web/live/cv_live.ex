@@ -36,6 +36,13 @@ defmodule VutuvWeb.CVLive do
     owner? = current_user && current_user.id == user.id
     machine_ok? = owner? || not ContentPolicy.agent_docs_blocked?(user)
 
+    # Name-qualify the tab/OpenGraph title and give the CV page its own
+    # OpenGraph description, so a shared link reads as "<Name>'s Lebenslauf",
+    # not the generic site pitch (the socket assigns reach VutuvWeb.OpenGraph
+    # in the document head, like the profile's do). The on-page h1 stays the
+    # short "CV" from the template.
+    name = full_name(user)
+
     socket =
       socket
       |> assign(:current_user, current_user)
@@ -45,7 +52,14 @@ defmodule VutuvWeb.CVLive do
       |> assign(:machine_ok?, machine_ok?)
       |> assign(:locale, session["locale"])
       |> assign(:shell_path, session["request_path"])
-      |> assign(:page_title, gettext("CV"))
+      |> assign(:page_title, gettext("CV of %{name}", name: name))
+      |> assign(
+        :meta_description,
+        gettext(
+          "The CV of %{name} on vutuv: work experience, education and skills to view and download.",
+          name: name
+        )
+      )
       |> assign(:cv, CV.build(user, viewer: current_user, photo: true))
       |> put_hide(MapSet.new())
 

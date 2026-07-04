@@ -72,6 +72,21 @@ defmodule VutuvWeb.CVControllerTest do
     {conn, seed_profile(user)}
   end
 
+  describe "OpenGraph" do
+    test "names the member's CV in the title and description", %{conn: conn} do
+      owner = seed_profile(insert(:activated_user, first_name: "Erika", last_name: "Beispiel"))
+
+      body = conn |> get(~p"/#{owner}/cv") |> html_response(200)
+
+      # The shared-link card reads as this person's CV, not the site pitch.
+      assert body =~ ~s(<meta property="og:title" content="CV of Erika Beispiel">)
+      assert body =~ ~s(property="og:description" content="The CV of Erika Beispiel on vutuv)
+      refute body =~ "Your Fast and Free Career Network"
+      # The avatar stays the OG image (og:type profile), so the card shows the face.
+      assert body =~ ~s(<meta property="og:type" content="profile">)
+    end
+  end
+
   describe "the profile page" do
     test "links the CV builder for every visitor", %{conn: conn} do
       owner = seed_profile(insert(:activated_user))

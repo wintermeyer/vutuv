@@ -63,7 +63,9 @@ defmodule VutuvWeb.OpenGraph do
   def description(assigns) do
     ca = conn_assigns(assigns)
 
-    post_excerpt(ca) || member_info(ca) ||
+    # A page may set its own description (the CV builder describes the member's
+    # Lebenslauf); otherwise fall back to the post / member / site pitch.
+    ca[:meta_description] || post_excerpt(ca) || member_info(ca) ||
       gettext(
         "Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds."
       )
