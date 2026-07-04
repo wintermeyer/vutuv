@@ -1,7 +1,12 @@
 # vutuv
 
 vutuv is a free, fast and open source social network service to host and share
-information about humans and organizations. The reference installation runs at
+information about humans and organizations. It started as an alternative to
+[LinkedIn](https://www.linkedin.com), but has since become a mix of LinkedIn,
+[Facebook](https://www.facebook.com) and [X](https://x.com), since all three
+cover very similar ground. We merge the best features of all worlds and then
+sprinkle some magic dust over it to make it special. The reference
+installation runs at
 [vutuv.de](https://vutuv.de); **anyone can run their own** — on the public
 internet or inside a company intranet.
 
