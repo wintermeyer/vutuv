@@ -3,6 +3,20 @@ defmodule Vutuv.Profiles.Address do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [trim_fields: 2]
+
+  @string_fields [
+    :description,
+    :line_1,
+    :line_2,
+    :line_3,
+    :line_4,
+    :zip_code,
+    :city,
+    :state,
+    :country
+  ]
+
   schema "addresses" do
     field(:description, :string)
     field(:line_1, :string)
@@ -33,17 +47,8 @@ defmodule Vutuv.Profiles.Address do
   """
   def changeset(model, params \\ %{}) do
     model
-    |> cast(params, [
-      :description,
-      :line_1,
-      :line_2,
-      :line_3,
-      :line_4,
-      :zip_code,
-      :city,
-      :state,
-      :country
-    ])
+    |> cast(params, @string_fields)
+    |> trim_fields(@string_fields)
     |> validate_required([:description, :country])
     |> validate_length(:description, max: 100)
     |> validate_length(:line_1, max: 255)

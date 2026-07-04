@@ -62,6 +62,27 @@ defmodule Vutuv.ChangesetHelpers do
     update_change(changeset, :value, &String.downcase/1)
   end
 
+  @doc """
+  Trims leading/trailing whitespace from each of `fields`, collapsing a value
+  left blank to `nil` so a whitespace-only entry counts as absent for
+  `validate_required`. Run it right after `cast/3`, before the length
+  validations, so they measure the trimmed value.
+  """
+  def trim_fields(changeset, fields) do
+    Enum.reduce(fields, changeset, fn field, acc ->
+      update_change(acc, field, &trim_or_nil/1)
+    end)
+  end
+
+  defp trim_or_nil(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp trim_or_nil(value), do: value
+
   def normalize_name(string) do
     string
     |> String.normalize(:nfd)
