@@ -138,6 +138,11 @@ defmodule VutuvWeb.EmailController do
         |> put_flash(:error, reason)
         |> render("confirm.html", user: conn.assigns[:user])
 
+      {:already_used, message} ->
+        conn
+        |> put_flash(:info, message)
+        |> redirect(to: ~p"/settings/emails")
+
       {:expired, message} ->
         conn
         |> put_flash(:error, message)

@@ -49,6 +49,27 @@ defmodule VutuvWeb.CsrfPinFlowsTest do
       assert redirected_to(conn) == ~p"/feed"
     end
 
+    test "a double-submitted PIN reassures instead of reporting it expired (issue #839)" do
+      user = insert(:user, email_confirmed?: true)
+      insert(:email, value: "double@example.com", user: user)
+
+      conn = post(build_conn(), ~p"/login", session: %{"email" => "double@example.com"})
+      pin = sent_pin()
+
+      # First submit logs in and consumes the one-time PIN.
+      first = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
+      assert get_session(first, :user_id) == user.id
+
+      # A second submit of the SAME PIN — a double-tap or back-navigation still
+      # carrying the pin cookie — must NOT tell the member their fresh PIN
+      # expired. It reassures them with an :info notice instead (the pre-#839
+      # bug flashed the "PIN expired" error even though they had just logged in).
+      second = submit_with_csrf(conn, ~p"/login", %{"session" => %{"pin" => pin}})
+      assert redirected_to(second) == ~p"/login"
+      refute Phoenix.Flash.get(second.assigns.flash, :error)
+      assert Phoenix.Flash.get(second.assigns.flash, :info) =~ "already"
+    end
+
     test "greets a returning member by name and counts their unread conversations" do
       user = insert(:user, email_confirmed?: true)
       insert(:email, value: "greet@example.com", user: user)

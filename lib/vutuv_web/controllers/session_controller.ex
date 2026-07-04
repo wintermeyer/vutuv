@@ -310,6 +310,19 @@ defmodule VutuvWeb.SessionController do
             |> redirect(to: ~p"/")
         end
 
+      # already used — the classic PIN form was submitted twice (a double-tap or
+      # back-navigation): the first submit already logged them in, so this is
+      # not a failure. Reassure with an :info flash instead of the old scary
+      # "PIN expired" error, and drop the spent cookie (issue #839).
+      {:already_used, _message} ->
+        conn
+        |> Accounts.delete_pin_cookie()
+        |> put_flash(
+          :info,
+          gettext("This PIN was already used. If that was you, you are already signed in.")
+        )
+        |> redirect(to: ~p"/login")
+
       # expired, drop cookie
       {:expired, message} ->
         conn

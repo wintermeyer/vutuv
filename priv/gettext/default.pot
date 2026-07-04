@@ -111,7 +111,7 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: lib/vutuv_web/controllers/email_controller.ex:238
+#: lib/vutuv_web/controllers/email_controller.ex:243
 #, elixir-autogen
 msgid "Cannot delete final email."
 msgstr ""
@@ -215,12 +215,12 @@ msgstr ""
 msgid "Email created successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/email_controller.ex:234
+#: lib/vutuv_web/controllers/email_controller.ex:239
 #, elixir-autogen
 msgid "Email deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/email_controller.ex:218
+#: lib/vutuv_web/controllers/email_controller.ex:223
 #, elixir-autogen
 msgid "Email updated successfully."
 msgstr ""
@@ -792,7 +792,7 @@ msgstr ""
 msgid "We reserve the right to stop this service or delete your account anytime without warning."
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:412
+#: lib/vutuv_web/controllers/session_controller.ex:425
 #, elixir-autogen
 msgid "Welcome back!"
 msgstr ""
@@ -946,12 +946,12 @@ msgstr ""
 msgid "Select a year"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:28
+#: lib/vutuv_web/gettext_extraction_anchors.ex:29
 #, elixir-autogen
 msgid "Female"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:27
+#: lib/vutuv_web/gettext_extraction_anchors.ex:28
 #, elixir-autogen
 msgid "Male"
 msgstr ""
@@ -1387,9 +1387,9 @@ msgstr ""
 msgid "Tags"
 msgstr ""
 
-#: lib/vutuv_web/controllers/email_controller.ex:148
-#: lib/vutuv_web/controllers/session_controller.ex:371
-#: lib/vutuv_web/controllers/user_controller.ex:278
+#: lib/vutuv_web/controllers/email_controller.ex:153
+#: lib/vutuv_web/controllers/session_controller.ex:384
+#: lib/vutuv_web/controllers/user_controller.ex:283
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr ""
@@ -2161,14 +2161,14 @@ msgstr ""
 msgid "Post"
 msgstr ""
 
-#: lib/vutuv_web/controllers/post_controller.ex:203
+#: lib/vutuv_web/controllers/post_controller.ex:205
 #, elixir-autogen, elixir-format
 msgid "Post deleted successfully."
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/post_doc.ex:74
-#: lib/vutuv_web/controllers/post_controller.ex:51
-#: lib/vutuv_web/controllers/post_controller.ex:59
+#: lib/vutuv_web/controllers/post_controller.ex:54
+#: lib/vutuv_web/controllers/post_controller.ex:62
 #: lib/vutuv_web/controllers/user_controller.ex:72
 #: lib/vutuv_web/live/admin/dashboard_live.ex:149
 #: lib/vutuv_web/live/post_live/saved.ex:305
@@ -2335,7 +2335,7 @@ msgstr ""
 msgid "View all %{count} posts"
 msgstr ""
 
-#: lib/vutuv_web/controllers/post_controller.ex:129
+#: lib/vutuv_web/controllers/post_controller.ex:132
 #, elixir-autogen, elixir-format
 msgid "All posts"
 msgstr ""
@@ -2433,7 +2433,7 @@ msgstr ""
 msgid "Unfollow"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:392
+#: lib/vutuv_web/controllers/session_controller.ex:405
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv!"
 msgstr ""
@@ -2637,12 +2637,12 @@ msgstr ""
 msgid "Allow search engines to index your profile"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:409
+#: lib/vutuv_web/controllers/session_controller.ex:422
 #, elixir-autogen, elixir-format
 msgid "Welcome back, %{name}!"
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:420
+#: lib/vutuv_web/controllers/session_controller.ex:433
 #, elixir-autogen, elixir-format
 msgid "You have %{count} new message."
 msgid_plural "You have %{count} new messages."
@@ -2861,7 +2861,7 @@ msgid_plural "Followers"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:388
+#: lib/vutuv_web/controllers/session_controller.ex:401
 #, elixir-autogen, elixir-format
 msgid "Welcome to vutuv, %{name}!"
 msgstr ""
@@ -3330,13 +3330,13 @@ msgid "The report is justified. The content stays hidden and the owner gets a st
 msgstr ""
 
 #: lib/vutuv_web/controllers/session_controller.ex:269
-#: lib/vutuv_web/controllers/session_controller.ex:360
+#: lib/vutuv_web/controllers/session_controller.ex:373
 #, elixir-autogen, elixir-format
 msgid "This account has been deactivated."
 msgstr ""
 
 #: lib/vutuv_web/controllers/session_controller.ex:260
-#: lib/vutuv_web/controllers/session_controller.ex:351
+#: lib/vutuv_web/controllers/session_controller.ex:364
 #, elixir-autogen, elixir-format
 msgid "This account is suspended until %{date}."
 msgstr ""
@@ -5374,7 +5374,7 @@ msgstr ""
 msgid "Your tags (e.g. JavaScript, Cooking, Origami, Cat)"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:29
+#: lib/vutuv_web/gettext_extraction_anchors.ex:30
 #, elixir-autogen, elixir-format
 msgid "Diverse"
 msgstr ""
@@ -7112,7 +7112,7 @@ msgstr[1] ""
 msgid "open the dev email inbox"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:32
+#: lib/vutuv_web/gettext_extraction_anchors.ex:34
 #, elixir-autogen, elixir-format
 msgid "Connected"
 msgstr ""
@@ -7894,7 +7894,7 @@ msgstr ""
 msgid "Identity-verified"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:30
+#: lib/vutuv_web/gettext_extraction_anchors.ex:31
 #, elixir-autogen, elixir-format
 msgid "Incorrect PIN"
 msgstr ""
@@ -7930,7 +7930,7 @@ msgstr ""
 msgid "Open the member browser"
 msgstr ""
 
-#: lib/vutuv_web/gettext_extraction_anchors.ex:31
+#: lib/vutuv_web/gettext_extraction_anchors.ex:32
 #, elixir-autogen, elixir-format
 msgid "PIN expired"
 msgstr ""
@@ -8234,7 +8234,7 @@ msgstr ""
 msgid "Too many imports. Please try again in a little while."
 msgstr ""
 
-#: lib/vutuv_web/controllers/session_controller.ex:405
+#: lib/vutuv_web/controllers/session_controller.ex:418
 #, elixir-autogen, elixir-format
 msgid "A photo and a short tagline make your profile complete."
 msgstr ""
@@ -8641,4 +8641,14 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Your Fediverse handle"
+msgstr ""
+
+#: lib/vutuv_web/gettext_extraction_anchors.ex:33
+#, elixir-autogen, elixir-format
+msgid "This PIN has already been used."
+msgstr ""
+
+#: lib/vutuv_web/controllers/session_controller.ex:322
+#, elixir-autogen, elixir-format
+msgid "This PIN was already used. If that was you, you are already signed in."
 msgstr ""

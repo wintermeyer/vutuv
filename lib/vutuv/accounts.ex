@@ -425,13 +425,23 @@ defmodule Vutuv.Accounts do
       type: type,
       payload: payload,
       minted_at: NaiveDateTime.utc_now(:second),
+      consumed_at: nil,
       pin_hash: hash_pin(pin, salt),
       pin_salt: salt,
       pin_login_attempts: 0
     })
     |> Repo.insert!(
       on_conflict:
-        {:replace, [:payload, :minted_at, :pin_hash, :pin_salt, :pin_login_attempts, :updated_at]},
+        {:replace,
+         [
+           :payload,
+           :minted_at,
+           :consumed_at,
+           :pin_hash,
+           :pin_salt,
+           :pin_login_attempts,
+           :updated_at
+         ]},
       conflict_target: [:user_id, :type]
     )
 
@@ -479,10 +489,32 @@ defmodule Vutuv.Accounts do
     |> Repo.update!()
   end
 
+  # A one-time PIN is spent the moment it verifies. We stamp *when* rather than
+  # only nulling `minted_at` (which also marks a timeout or a lockout), so a
+  # re-submission can be reported as "already used" instead of the misleading
+  # "PIN expired" a member saw right after a successful login (issue #839).
+  defp mark_consumed(login_pin) do
+    login_pin
+    |> LoginPin.changeset(%{consumed_at: NaiveDateTime.utc_now(:second)})
+    |> Repo.update!()
+  end
+
+  defp consumed?(%{consumed_at: nil}), do: false
+  defp consumed?(%{consumed_at: _}), do: true
+
   defp pin_expired?(%{minted_at: nil}), do: true
 
   defp pin_expired?(%{minted_at: date_time}) do
     NaiveDateTime.diff(NaiveDateTime.utc_now(), date_time, :second) > @pin_expire_time
+  end
+
+  # Prod runs at Logger level :error, so these surface only in dev/staging — but
+  # they record *why* a PIN was turned away (never the PIN or the address) so a
+  # future report like issue #839 is diagnosable without guessing.
+  defp log_pin_rejected(%LoginPin{} = login_pin, reason) do
+    Logger.info(
+      "login_pin rejected: reason=#{reason} type=#{login_pin.type} user_id=#{login_pin.user_id}"
+    )
   end
 
   # A registration mints the account and its first "login" PIN in the same
@@ -734,12 +766,22 @@ defmodule Vutuv.Accounts do
 
   defp verify_pin(%LoginPin{} = login_pin, pin) do
     cond do
+      # Checked before expiry and before re-validating: a PIN that was already
+      # used successfully must never be replayed, and a duplicate submission of
+      # it (a double-tap or back-navigation of the classic PIN form) reads as
+      # "already used", not "expired" — the member had in fact just logged in
+      # (issue #839).
+      consumed?(login_pin) ->
+        log_pin_rejected(login_pin, "already_used")
+        {:already_used, Gettext.gettext(VutuvWeb.Gettext, "This PIN has already been used.")}
+
       pin_expired?(login_pin) ->
         expire_pin(login_pin)
+        log_pin_rejected(login_pin, "expired")
         {:expired, Gettext.gettext(VutuvWeb.Gettext, "PIN expired")}
 
       valid_pin?(login_pin, pin) ->
-        expire_pin(login_pin)
+        mark_consumed(login_pin)
         pin_response(login_pin)
 
       true ->

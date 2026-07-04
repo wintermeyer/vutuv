@@ -4,6 +4,18 @@ vutuv is **passwordless**. The baseline login is a two-step email-PIN flow
 (`/login` mails a 6-digit PIN, the second step verifies it; no password is ever
 stored).
 
+The PIN lives in `login_pins` (one row per `(user, type)`, shared by the
+`login`, `email` change and `delete` flows). It stays valid for 30 minutes from
+when it is minted (`minted_at`) and it is **one-time**: a successful check stamps
+`consumed_at`, so it can never be replayed. A classic (non-LiveView) PIN form can
+be posted twice — a double-tap, a back-navigation, a retried request — so
+`Vutuv.Accounts.check_pin/3` tells an **already-used** PIN (`consumed_at` set →
+`{:already_used, _}`, a calm "already used" notice because the first submit
+already logged the member in) apart from a genuinely **expired** one
+(`minted_at` past the window, or cleared → `{:expired, _}`). Collapsing the two
+once told members who had just logged in that their fresh PIN had expired
+(issue #839).
+
 Returning members can also enrol one or more **passkeys** (WebAuthn / FIDO2 —
 Touch ID, Windows Hello, a security key) from the Account hub and sign in with
 one as an **alternative first factor**, skipping the email round-trip entirely
