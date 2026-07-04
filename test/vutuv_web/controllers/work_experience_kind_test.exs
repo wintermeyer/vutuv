@@ -1,10 +1,11 @@
 defmodule VutuvWeb.WorkExperienceKindTest do
   @moduledoc """
   The CV categories on work experiences (issue #840): a member files each
-  entry as employment, internship (Praktikum) or volunteer position
-  (Ehrenamt), and every list rendering groups the entries under distinctly
-  labeled headings — but only once a non-employment entry exists, so the
-  common jobs-only profile keeps its familiar single timeline.
+  entry as employment, self-employment (Freiberuflich / Selbstständig),
+  internship (Praktikum), volunteer position (Ehrenamt) or other activity
+  (Sonstige Tätigkeit), and every list rendering groups the entries under
+  distinctly labeled headings — but only once a non-employment entry exists,
+  so the common jobs-only profile keeps its familiar single timeline.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -29,8 +30,10 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       assert html =~ ~s(action="/settings/work_experiences")
       assert html =~ ~s(<select id="work_experience_kind" name="work_experience[kind]")
       assert html =~ ~s(value="employment")
+      assert html =~ ~s(value="self_employed")
       assert html =~ ~s(value="internship")
       assert html =~ ~s(value="volunteer")
+      assert html =~ ~s(value="other")
     end
 
     test "create persists the chosen category", %{conn: conn, user: user} do
@@ -79,6 +82,18 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       assert html =~ "Volunteering"
     end
 
+    test "groups self-employment and other activities under their own headings",
+         %{conn: conn, user: user} do
+      insert_job(user, title: "Engineer", organization: "Acme Corp")
+      insert_job(user, title: "Consultant", organization: "Solo", kind: "self_employed")
+      insert_job(user, title: "Language Course", organization: "Volkshochschule", kind: "other")
+
+      html = conn |> get(~p"/#{user}/work_experiences") |> html_response(200)
+
+      assert html =~ "Freelance / Self-employed"
+      assert html =~ "Other activities"
+    end
+
     test "a jobs-only member keeps the single unlabeled timeline", %{conn: conn, user: user} do
       insert_job(user, title: "Engineer", organization: "Acme Corp")
 
@@ -109,6 +124,16 @@ defmodule VutuvWeb.WorkExperienceKindTest do
 
       assert html =~ "Category"
       assert html =~ "Volunteer position"
+    end
+
+    test "names the self-employment category", %{conn: conn, user: user} do
+      job =
+        insert_job(user, title: "Consultant", organization: "Solo", kind: "self_employed")
+
+      html = conn |> get(~p"/#{user}/work_experiences/#{job}") |> html_response(200)
+
+      assert html =~ "Category"
+      assert html =~ "Freelance / Self-employed"
     end
   end
 

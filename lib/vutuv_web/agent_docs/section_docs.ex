@@ -121,7 +121,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       title: work.title,
       organization: work.organization,
       description: work.description,
-      # The CV category (issue #840): employment | internship | volunteer.
+      # The CV category (issue #840): employment | self_employed | internship |
+      # volunteer | other.
       kind: work.kind,
       start: year_month(work.start_year, work.start_month),
       end: year_month(work.end_year, work.end_month)

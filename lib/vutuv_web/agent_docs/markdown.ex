@@ -277,8 +277,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   @doc false
   def work_kind_note(work) do
     case Map.get(work, :kind) do
+      "self_employed" -> gettext("Freelance / Self-employed")
       "internship" -> gettext("Internship")
       "volunteer" -> gettext("Volunteer position")
+      "other" -> gettext("Other activities")
       _employment -> nil
     end
   end

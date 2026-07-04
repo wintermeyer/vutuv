@@ -4,9 +4,10 @@ defmodule Vutuv.Profiles.WorkExperience do
   use VutuvWeb, :model
   import Ecto.Query
 
-  # The CV categories (issue #840): a paid job, a Praktikum, an Ehrenamt.
-  # Display order everywhere is this list's order.
-  @kinds ~w(employment internship volunteer)
+  # The CV categories (issue #840): a paid job, self-employment/freelance,
+  # a Praktikum, an Ehrenamt, and a catch-all for anything else. Display order
+  # everywhere is this list's order.
+  @kinds ~w(employment self_employed internship volunteer other)
 
   schema "work_experiences" do
     field(:organization, :string)

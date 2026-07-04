@@ -4,11 +4,11 @@ defmodule VutuvWeb.CV.JsonResume do
   machine-readable résumé format, so members can feed their vutuv profile
   into the JSON Resume theme/tooling ecosystem.
 
-  Category mapping: employment **and** internships become `work` entries
-  (the schema has no internship section), volunteering becomes `volunteer`,
-  tags become `skills`, the profile links become `basics.profiles` and the
-  address becomes `basics.location`. Keys with no value are dropped, as the
-  schema expects.
+  Category mapping: employment, self-employment, internships **and** other
+  activities become `work` entries (the schema has no separate section for
+  them), volunteering becomes `volunteer`, tags become `skills`, the profile
+  links become `basics.profiles` and the address becomes `basics.location`.
+  Keys with no value are dropped, as the schema expects.
   """
 
   @schema_url "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json"
@@ -37,7 +37,9 @@ defmodule VutuvWeb.CV.JsonResume do
   end
 
   defp work(work_groups) do
-    for {kind, entries} <- work_groups, kind in ["employment", "internship"], entry <- entries do
+    for {kind, entries} <- work_groups,
+        kind in ["employment", "self_employed", "internship", "other"],
+        entry <- entries do
       compact(%{
         "name" => entry.organization,
         "position" => entry.title,

@@ -70,7 +70,7 @@ defmodule Vutuv.Profiles.WorkExperienceTest do
     end
   end
 
-  describe "kind (issue #840: employment | internship | volunteer)" do
+  describe "kind (issue #840: employment | self_employed | internship | volunteer | other)" do
     test "defaults to employment when not given" do
       cs = changeset(%{})
 
@@ -122,6 +122,18 @@ defmodule Vutuv.Profiles.WorkExperienceTest do
       assert WorkExperience.group_by_kind([volunteer, job]) == [
                {"employment", [job]},
                {"volunteer", [volunteer]}
+             ]
+    end
+
+    test "orders self_employed after employment and other last" do
+      other = %WorkExperience{kind: "other", title: "Course"}
+      self_employed = %WorkExperience{kind: "self_employed", title: "Consultant"}
+      job = %WorkExperience{kind: "employment", title: "Engineer"}
+
+      assert WorkExperience.group_by_kind([other, self_employed, job]) == [
+               {"employment", [job]},
+               {"self_employed", [self_employed]},
+               {"other", [other]}
              ]
     end
 

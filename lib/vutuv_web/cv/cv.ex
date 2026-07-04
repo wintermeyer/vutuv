@@ -21,9 +21,9 @@ defmodule VutuvWeb.CV do
     * identity fields — `"name"`, `"photo"`, `"headline"`, `"email"`,
       `"phone"`, `"address"`, `"url"` (the profile link)
     * whole sections — a work/education category key (`"employment"`,
-      `"internship"`, `"volunteer"`, `"university"`, `"apprenticeship"`,
-      `"school"`, or `"education"` when the categories are collapsed),
-      plus `"tags"` and `"links"`
+      `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
+      `"university"`, `"apprenticeship"`, `"school"`, or `"education"` when
+      the categories are collapsed), plus `"tags"` and `"links"`
     * single entries — the record's UUID
 
   The body is a list of uniform `sections` (`%{key, heading, entries}`, each
