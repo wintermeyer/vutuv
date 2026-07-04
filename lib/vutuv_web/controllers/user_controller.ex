@@ -11,6 +11,7 @@ defmodule VutuvWeb.UserController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.RateLimit
@@ -56,6 +57,12 @@ defmodule VutuvWeb.UserController do
     # without this the page chrome — ShellLive included — renders twice. The
     # root layout (the document <head>) still applies.
     conn
+    # rel="me" identity links in the <head> for the member's listed social
+    # accounts (the visible chips already carry rel="me" too). This is what
+    # Mastodon's link verification reads: a member who adds their profile URL
+    # to their Mastodon profile gets it shown as verified there — Fediverse
+    # identity without any federation.
+    |> assign(:rel_me_urls, rel_me_urls(user))
     # The member's search/AI opt-outs as a response header, belt and braces
     # to the layout's robots meta tag (the post pages and the agent-format
     # documents already answer with it).
@@ -70,6 +77,18 @@ defmodule VutuvWeb.UserController do
         "user_id" => conn.assigns[:current_user_id]
       }
     )
+  end
+
+  # The canonical URLs of the member's listed social accounts (position
+  # order), skipping handle-only providers that have no linkable URL — the
+  # <head> rel="me" set the root layout renders for show_html above.
+  defp rel_me_urls(user) do
+    user
+    |> Ecto.assoc(:social_media_accounts)
+    |> SocialMediaAccount.ordered()
+    |> Repo.all()
+    |> Enum.map(&SocialMediaAccount.url/1)
+    |> Enum.filter(&String.starts_with?(&1, "http"))
   end
 
   # The old /:slug/edit: the basics form moved to the user-agnostic

@@ -16,4 +16,22 @@ shows the plain showcase view. --%>
       <%= render "card_list.html", assigns %>
     </.reorderable_section>
   </.card_section>
+
+  <%!-- Mastodon's built-in link verification: the profile already answers with
+        rel="me" links for every account listed here, so the missing half is the
+        member knowing to backlink. No federation involved. --%>
+  <div class="card-list">
+    <section class="card">
+      <.section_title>{gettext("Get verified on Mastodon")}</.section_title>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Your vutuv profile links every account listed here back with a rel=\"me\" tag. Mastodon uses exactly that for its link verification: add"
+        )}
+        <code class="select-all rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-100">{url(~p"/#{@user}")}</code>
+        {gettext(
+          "as a link in your Mastodon profile settings, and Mastodon will show it as verified with a green check."
+        )}
+      </p>
+    </section>
+  </div>
 </.settings_shell>

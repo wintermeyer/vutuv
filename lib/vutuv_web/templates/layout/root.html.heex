@@ -42,6 +42,9 @@
       href={alt.href}
       title={alt[:title]}
     />
+    <%!-- rel="me" identity links (profile pages): the member's listed social
+    accounts, read by Mastodon's link verification (VutuvWeb.UserController). --%>
+    <link :for={me <- assigns[:rel_me_urls] || []} rel="me" href={me} />
     <link rel="stylesheet" href={~p"/assets/app.css"} />
     <script defer src={~p"/assets/app.js"}></script>
   </head>

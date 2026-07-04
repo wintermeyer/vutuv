@@ -1,12 +1,12 @@
 # vutuv
 
-vutuv is a free, fast and open source social network service to host and share
-information about humans and organizations. It started as an alternative to
-[LinkedIn](https://www.linkedin.com), but has since become a mix of LinkedIn,
-[Facebook](https://www.facebook.com) and [X](https://x.com), since all three
-cover very similar ground. We merge the best features of all worlds and then
-sprinkle some magic dust over it to make it special. The reference
-installation runs at
+Many people call vutuv **the LinkedIn of the Fediverse**: a free, fast and
+open source social network for the profiles of humans and organizations. It
+began as a LinkedIn alternative and picked up the good parts of X and
+Facebook along the way: posts, likes, reposts, replies and direct messages.
+And it federates, so members can be followed from Mastodon and the rest of
+the Fediverse (ActivityPub, opt-in per member). The reference installation
+runs at
 [vutuv.de](https://vutuv.de); **anyone can run their own** — on the public
 internet or inside a company intranet.
 

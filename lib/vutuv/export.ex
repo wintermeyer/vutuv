@@ -125,6 +125,7 @@ defmodule Vutuv.Export do
       locale: user.locale,
       noindex: user.noindex?,
       noai: user.noai?,
+      fediverse_followers: user.fediverse_followers?,
       notification_emails: user.notification_emails?,
       email_on_endorsement: user.email_on_endorsement?,
       email_on_follower: user.email_on_follower?,

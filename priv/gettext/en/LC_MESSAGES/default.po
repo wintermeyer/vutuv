@@ -594,6 +594,7 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/privacy.html.heex:64
 #: lib/vutuv_web/templates/settings/privacy.html.heex:92
 #: lib/vutuv_web/templates/settings/privacy.html.heex:125
+#: lib/vutuv_web/templates/settings/privacy.html.heex:158
 #: lib/vutuv_web/templates/user/edit.html.heex:164
 #, elixir-autogen
 msgid "Save"
@@ -709,12 +710,12 @@ msgstr ""
 msgid "User %{name} created successfully. An email has been sent with your PIN."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:211
+#: lib/vutuv_web/controllers/user_controller.ex:230
 #, elixir-autogen
 msgid "User deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:130
+#: lib/vutuv_web/controllers/user_controller.ex:149
 #, elixir-autogen
 msgid "User updated successfully."
 msgstr ""
@@ -1387,7 +1388,7 @@ msgstr ""
 
 #: lib/vutuv_web/controllers/email_controller.ex:148
 #: lib/vutuv_web/controllers/session_controller.ex:371
-#: lib/vutuv_web/controllers/user_controller.ex:226
+#: lib/vutuv_web/controllers/user_controller.ex:245
 #, elixir-autogen
 msgid "Too many incorrect attempts."
 msgstr ""
@@ -1630,7 +1631,7 @@ msgstr ""
 msgid "Delete my account"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:90
+#: lib/vutuv_web/controllers/user_controller.ex:109
 #: lib/vutuv_web/templates/user/show.html.heex:96
 #, elixir-autogen, elixir-format
 msgid "Edit profile"
@@ -1775,8 +1776,8 @@ msgstr ""
 #: lib/vutuv_web/controllers/session_controller.ex:176
 #: lib/vutuv_web/controllers/session_controller.ex:207
 #: lib/vutuv_web/controllers/session_controller.ex:223
-#: lib/vutuv_web/controllers/user_controller.ex:167
-#: lib/vutuv_web/controllers/user_controller.ex:196
+#: lib/vutuv_web/controllers/user_controller.ex:186
+#: lib/vutuv_web/controllers/user_controller.ex:215
 #, elixir-autogen, elixir-format
 msgid "Too many attempts. Please try again later."
 msgstr ""
@@ -2167,7 +2168,7 @@ msgstr ""
 #: lib/vutuv_web/agent_docs/post_doc.ex:74
 #: lib/vutuv_web/controllers/post_controller.ex:51
 #: lib/vutuv_web/controllers/post_controller.ex:59
-#: lib/vutuv_web/controllers/user_controller.ex:49
+#: lib/vutuv_web/controllers/user_controller.ex:50
 #: lib/vutuv_web/live/admin/dashboard_live.ex:149
 #: lib/vutuv_web/live/post_live/saved.ex:305
 #: lib/vutuv_web/live/search_live.ex:147
@@ -2723,7 +2724,7 @@ msgstr ""
 #: lib/vutuv_web/components/ui.ex:2087
 #: lib/vutuv_web/templates/settings/apps.html.heex:14
 #: lib/vutuv_web/templates/settings/apps.html.heex:20
-#: lib/vutuv_web/templates/settings/privacy.html.heex:140
+#: lib/vutuv_web/templates/settings/privacy.html.heex:173
 #: lib/vutuv_web/templates/settings/security.html.heex:20
 #, elixir-autogen, elixir-format
 msgid "Manage"
@@ -4455,7 +4456,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/block/index.html.heex:1
 #: lib/vutuv_web/templates/block/index.html.heex:1
-#: lib/vutuv_web/templates/settings/privacy.html.heex:137
+#: lib/vutuv_web/templates/settings/privacy.html.heex:170
 #, elixir-autogen, elixir-format
 msgid "Blocked members"
 msgstr ""
@@ -5237,7 +5238,7 @@ msgstr ""
 msgid "You can no longer reply to this post."
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:143
+#: lib/vutuv_web/templates/settings/privacy.html.heex:176
 #, elixir-autogen, elixir-format
 msgid "Content under review"
 msgstr ""
@@ -5444,7 +5445,7 @@ msgstr ""
 msgid "Notification settings saved."
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:138
+#: lib/vutuv_web/templates/settings/privacy.html.heex:171
 #, elixir-autogen, elixir-format
 msgid "People who cannot interact with you."
 msgstr ""
@@ -5475,7 +5476,7 @@ msgstr ""
 msgid "Third-party apps you authorized."
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:146
+#: lib/vutuv_web/templates/settings/privacy.html.heex:179
 #, elixir-autogen, elixir-format
 msgid "View"
 msgstr ""
@@ -5490,7 +5491,7 @@ msgstr ""
 msgid "Your post"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:144
+#: lib/vutuv_web/templates/settings/privacy.html.heex:177
 #, elixir-autogen, elixir-format
 msgid "Your posts or profile a moderator is looking at."
 msgstr ""
@@ -5624,7 +5625,7 @@ msgstr ""
 msgid "Replies to and likes on your posts"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/privacy.html.heex:134
+#: lib/vutuv_web/templates/settings/privacy.html.heex:167
 #, elixir-autogen, elixir-format
 msgid "Safety"
 msgstr ""
@@ -7984,7 +7985,7 @@ msgstr ""
 msgid "Verified"
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:123
+#: lib/vutuv_web/controllers/user_controller.ex:142
 #, elixir-autogen, elixir-format
 msgid "Your verified badge was removed because you changed your name, gender or date of birth. We re-check identity against those details so members can trust verified profiles and nobody can set up a fake verified account. An admin can verify you again anytime."
 msgstr ""
@@ -8367,7 +8368,7 @@ msgstr ""
 msgid "The file is in JSON format and includes your profile, posts, messages and settings. It contains private data, so store it carefully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/user_controller.ex:147
+#: lib/vutuv_web/controllers/user_controller.ex:166
 #, elixir-autogen, elixir-format
 msgid "Please type your username exactly as shown to confirm the deletion."
 msgstr ""
@@ -8523,7 +8524,7 @@ msgstr ""
 msgid "Last edited"
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/legal_page_controller.ex:21
+#: lib/vutuv_web/controllers/admin/legal_page_controller.ex:22
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:173
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:2
@@ -8562,7 +8563,7 @@ msgstr ""
 msgid "The operator of this installation has not published this page yet."
 msgstr ""
 
-#: lib/vutuv_web/controllers/admin/legal_page_controller.ex:37
+#: lib/vutuv_web/controllers/admin/legal_page_controller.ex:38
 #, elixir-autogen, elixir-format
 msgid "The page has been published."
 msgstr ""
@@ -8570,4 +8571,39 @@ msgstr ""
 #: lib/vutuv_web/templates/page/legal.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Write it under Admin › Legal pages"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:150
+#, elixir-autogen, elixir-format
+msgid "Allow followers from the Fediverse"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:136
+#, elixir-autogen, elixir-format
+msgid "Fediverse"
+msgstr ""
+
+#: lib/vutuv_web/templates/social_media_account/manage.html.heex:25
+#, elixir-autogen, elixir-format
+msgid "Get verified on Mastodon"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:152
+#, elixir-autogen, elixir-format
+msgid "This feature is still in the works and will ship later; the switch already records your choice. Once it arrives, people on Mastodon and other Fediverse services can follow you and read your public posts over there. While it is off, your profile never takes part."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/privacy.html.heex:138
+#, elixir-autogen, elixir-format
+msgid "We are preparing an optional connection to the Fediverse, the network of services like Mastodon."
+msgstr ""
+
+#: lib/vutuv_web/templates/social_media_account/manage.html.heex:27
+#, elixir-autogen, elixir-format
+msgid "Your vutuv profile links every account listed here back with a rel=\"me\" tag. Mastodon uses exactly that for its link verification: add"
+msgstr ""
+
+#: lib/vutuv_web/templates/social_media_account/manage.html.heex:31
+#, elixir-autogen, elixir-format
+msgid "as a link in your Mastodon profile settings, and Mastodon will show it as verified with a green check."
 msgstr ""
