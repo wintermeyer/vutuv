@@ -44,6 +44,13 @@ defmodule VutuvWeb.UsernameControllerTest do
       # The limit is spelled out, and so is what is left of it.
       assert html =~ gettext("You can change your username up to 4 times within 90 days.")
       assert html =~ gettext("4 of 4 changes left.")
+
+      # The Cancel link returns to the settings page this form is opened from
+      # (Sign-in & security), not the retired /:slug/edit URL that only survives
+      # via a legacy redirect (the #845 class of bug: an editor still aiming at a
+      # /:slug route).
+      assert html =~ ~s(href="/settings/security")
+      refute html =~ ~s(href="/#{user.username}/edit")
     end
 
     test "with the quota used up it shows the next possible date, not the form", %{conn: conn} do

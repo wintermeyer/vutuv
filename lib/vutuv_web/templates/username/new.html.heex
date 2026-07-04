@@ -33,7 +33,7 @@
 
     <%= if @quota.remaining > 0 do %>
       <%= render("form_content.html",
-        backlink: ~p"/#{@user}/edit",
+        backlink: ~p"/settings/security",
         changeset: @changeset,
         action: ~p"/settings/usernames",
         user: @user
