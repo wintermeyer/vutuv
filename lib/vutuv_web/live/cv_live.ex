@@ -131,6 +131,13 @@ defmodule VutuvWeb.CVLive do
 
   defp download_formats, do: @formats
 
+  # The linked "jsonresume.org" in the download hint. The sentence around it is
+  # developer/translator text and the target is a constant, so the whole line is
+  # rendered with raw/1 (no user input) — this is the safe HTML for the link.
+  defp jsonresume_link do
+    ~s(<a href="https://jsonresume.org" target="_blank" rel="noopener" class="underline hover:text-brand-700">jsonresume.org</a>)
+  end
+
   # The include/exclude heading toggle shared by every CV card (each section,
   # the Tags card, the Links card): a checkbox that dims its card when unchecked.
   attr(:hide, :any, required: true)
@@ -339,8 +346,11 @@ defmodule VutuvWeb.CVLive do
               </a>
             </div>
             <p class="mt-4 text-xs text-slate-600 dark:text-slate-400">
-              {gettext(
-                "For a PDF, open the print view and choose \"Save as PDF\" in your browser's print dialog. Word and OpenDocument are editable; LaTeX is the typesetting source; JSON Resume is the open jsonresume.org format."
+              {raw(
+                gettext(
+                  "For a PDF, open the print view and choose \"Save as PDF\" in your browser's print dialog. Word and OpenDocument are editable; LaTeX is the typesetting source; JSON Resume is the open %{link} format.",
+                  link: jsonresume_link()
+                )
               )}
             </p>
           </.card>

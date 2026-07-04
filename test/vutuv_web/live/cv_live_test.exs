@@ -75,6 +75,14 @@ defmodule VutuvWeb.CVLiveTest do
       assert has_element?(view, "#cv-print[href*='hide=internship']")
     end
 
+    test "the JSON Resume explainer links to jsonresume.org (#862)", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
+
+      # The download hint names "jsonresume.org" — it must be a real link so a
+      # reader can reach the format's home, not bare text to retype.
+      assert has_element?(view, "a[href='https://jsonresume.org']", "jsonresume.org")
+    end
+
     test "Anonymize hides the identity fields in the download links", %{conn: conn, owner: owner} do
       {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
 
