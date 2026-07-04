@@ -20,7 +20,6 @@ defmodule VutuvWeb.CVLive do
   import VutuvWeb.UserHelpers
 
   alias Vutuv.Accounts
-  alias VutuvWeb.ContentPolicy
   alias VutuvWeb.CV
   alias VutuvWeb.Live.InitAssigns
 
@@ -30,11 +29,6 @@ defmodule VutuvWeb.CVLive do
     VutuvWeb.LiveLocale.put_locale(current_user, session)
 
     user = Accounts.get_user(session["profile_user_id"])
-    # Everyone else's CV is public; only the machine-readable JSON Resume is
-    # withheld from a fully machine-opted-out member (its URL 404s), matching
-    # the agent docs. The owner always gets every format of their own.
-    owner? = current_user && current_user.id == user.id
-    machine_ok? = owner? || not ContentPolicy.agent_docs_blocked?(user)
 
     # Name-qualify the tab/OpenGraph title and give the CV page its own
     # OpenGraph description, so a shared link reads as "<Name>'s Lebenslauf",
@@ -48,8 +42,6 @@ defmodule VutuvWeb.CVLive do
       |> assign(:current_user, current_user)
       |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:user, user)
-      |> assign(:owner?, owner?)
-      |> assign(:machine_ok?, machine_ok?)
       |> assign(:locale, session["locale"])
       |> assign(:shell_path, session["request_path"])
       |> assign(:page_title, gettext("CV of %{name}", name: name))
@@ -127,15 +119,17 @@ defmodule VutuvWeb.CVLive do
   defp identity_preview("address", lines), do: Enum.join(lines, ", ")
   defp identity_preview(_key, value), do: value
 
+  # Every viewer is offered every format: they all render the same public CV
+  # (the private email resolves per viewer in VutuvWeb.CV), so none is gated.
   @formats [
     {"Word (.docx)", "docx"},
     {"OpenDocument (.odt)", "odt"},
     {"HTML", "html"},
-    {"LaTeX (.tex)", "tex"}
+    {"LaTeX (.tex)", "tex"},
+    {"JSON Resume", "json"}
   ]
 
-  defp download_formats(true), do: @formats ++ [{"JSON Resume", "json"}]
-  defp download_formats(false), do: @formats
+  defp download_formats, do: @formats
 
   @impl true
   def render(assigns) do
@@ -348,7 +342,7 @@ defmodule VutuvWeb.CVLive do
             </a>
             <div class="mt-3 grid gap-2">
               <a
-                :for={{label, format} <- download_formats(@machine_ok?)}
+                :for={{label, format} <- download_formats()}
                 id={"cv-download-#{format}"}
                 href={~p"/#{@user}/cv/download/#{format}?#{@query}"}
                 class="rounded-lg bg-slate-100 px-4 py-2 text-center text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"

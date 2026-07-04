@@ -11,9 +11,10 @@ defmodule VutuvWeb.CVController do
   address only appears in the owner's own download). All three actions honor
   the builder's `?hide=<keys>` selection — a comma-separated set of identity
   fields, section keys and entry ids to leave out — so a shared/anonymized
-  link carries its trimming. The one gate mirrors the agent docs: the
-  machine-readable JSON Resume 404s for a fully machine-opted-out member
-  (`ContentPolicy.agent_docs_blocked?/1`) to everyone but the owner.
+  link carries its trimming. Every download format, JSON Resume included, is
+  offered to every viewer: they all render the same public CV a member chose
+  to export, so none is gated (the profile's agent-doc opt-out governs
+  crawler access to the profile, not a member-initiated CV download).
 
   The owner-only GDPR data dump keeps its own home at `/:slug/export`
   (`ExportController`).
@@ -66,18 +67,13 @@ defmodule VutuvWeb.CVController do
   def download(conn, %{"format" => format} = params) when is_map_key(@content_types, format) do
     user = conn.assigns[:user]
     viewer = conn.assigns[:current_user]
+    hide = parse_hide(params)
+    cv = user |> CV.build(viewer: viewer, photo: format == "html") |> CV.apply_hide(hide)
 
-    if format == "json" and machine_export_blocked?(user, viewer) do
-      ControllerHelpers.render_error(conn, 404)
-    else
-      hide = parse_hide(params)
-      cv = user |> CV.build(viewer: viewer, photo: format == "html") |> CV.apply_hide(hide)
-
-      send_download(conn, {:binary, render_format(format, cv)},
-        filename: filename(user, hide, format),
-        content_type: Map.fetch!(@content_types, format)
-      )
-    end
+    send_download(conn, {:binary, render_format(format, cv)},
+      filename: filename(user, hide, format),
+      content_type: Map.fetch!(@content_types, format)
+    )
   end
 
   def download(conn, _params), do: ControllerHelpers.render_error(conn, 404)
@@ -95,10 +91,6 @@ defmodule VutuvWeb.CVController do
     if MapSet.member?(hide, "name"),
       do: "cv-#{Date.utc_today()}.#{format}",
       else: "cv-#{user.username}-#{Date.utc_today()}.#{format}"
-  end
-
-  defp machine_export_blocked?(user, viewer) do
-    ContentPolicy.agent_docs_blocked?(user) and (is_nil(viewer) or viewer.id != user.id)
   end
 
   defp render_format("html", cv), do: CV.Html.render(cv)

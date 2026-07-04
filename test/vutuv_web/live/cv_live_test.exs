@@ -91,13 +91,15 @@ defmodule VutuvWeb.CVLiveTest do
   end
 
   describe "the JSON Resume download" do
-    test "is hidden for a machine-opted-out member seen by a visitor", %{conn: conn} do
+    test "is offered for a machine-opted-out member too", %{conn: conn} do
+      # The JSON Resume is a member-initiated CV export of the same public CV
+      # as every other format, so the agent-doc opt-out no longer hides it.
       owner = seed(insert(:user, email_confirmed?: true, noindex?: true, noai?: true))
 
       {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
 
       assert has_element?(view, "#cv-download-docx")
-      refute has_element?(view, "#cv-download-json")
+      assert has_element?(view, "#cv-download-json")
     end
   end
 end

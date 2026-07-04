@@ -64,6 +64,15 @@ defmodule VutuvWeb.CVControllerTest do
     )
 
     insert(:url, user: user, value: "https://blog.example.org/", description: "Blog")
+
+    insert(:address,
+      user: user,
+      line_1: "Musterstraße 1",
+      zip_code: "12345",
+      city: "Musterstadt",
+      country: "Deutschland"
+    )
+
     user
   end
 
@@ -235,6 +244,14 @@ defmodule VutuvWeb.CVControllerTest do
       assert [%{"organization" => "SV Musterstadt"}] = resume["volunteer"]
       assert [%{"institution" => "Universität Bremen"}] = resume["education"]
       assert Enum.any?(resume["skills"], &(&1["name"] == "alpha-tag"))
+
+      # The address becomes basics.location, the links become basics.profiles.
+      assert resume["basics"]["location"]["address"] =~ "Musterstadt"
+
+      assert Enum.any?(
+               resume["basics"]["profiles"],
+               &(&1["network"] == "Blog" and &1["url"] == "https://blog.example.org/")
+             )
     end
 
     test "an unknown format is a 404", %{conn: conn} do
@@ -267,26 +284,20 @@ defmodule VutuvWeb.CVControllerTest do
       assert body =~ "cv-owner@example.com"
     end
 
-    test "a machine-opted-out member's JSON stays owner-only", %{conn: conn} do
+    test "a machine-opted-out member's JSON downloads for any viewer", %{conn: conn} do
+      # The JSON Resume is a member-initiated export of the same public CV as
+      # every other download format, so the agent-doc opt-out no longer gates
+      # it: a guest gets the same 200 as the human-use formats.
       owner =
         :activated_user
         |> insert(noindex?: true, noai?: true)
         |> seed_profile()
 
-      assert conn |> get(~p"/#{owner}/cv/download/json") |> response(404)
-      # The human-use formats stay available like the profile page itself.
+      resume = conn |> get(~p"/#{owner}/cv/download/json") |> json_response(200)
+      assert resume["basics"]["name"]
+
       assert conn |> recycle() |> get(~p"/#{owner}/cv/download/docx") |> response(200)
       assert conn |> recycle() |> get(~p"/#{owner}/cv/print") |> response(200)
-    end
-
-    test "the machine-opted-out owner still gets their own JSON", %{conn: conn} do
-      {conn, user} = login_with_profile(conn)
-
-      user
-      |> Ecto.Changeset.change(%{noindex?: true, noai?: true})
-      |> Repo.update!()
-
-      assert conn |> get(~p"/#{user}/cv/download/json") |> response(200)
     end
   end
 end
