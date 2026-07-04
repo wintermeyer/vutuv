@@ -81,7 +81,7 @@ msgstr "Sind Sie sicher?"
 msgid "Avatar"
 msgstr "Avatar"
 
-#: lib/vutuv_web/templates/user/edit.html.heex:155
+#: lib/vutuv_web/templates/user/edit.html.heex:175
 #, elixir-autogen
 msgid "Birthdate"
 msgstr "Geburtstag"
@@ -106,7 +106,7 @@ msgstr "Geburtstag"
 #: lib/vutuv_web/templates/user/delete_confirmation.html.heex:25
 #: lib/vutuv_web/templates/user/edit.html.heex:41
 #: lib/vutuv_web/templates/user/edit.html.heex:83
-#: lib/vutuv_web/templates/user/edit.html.heex:169
+#: lib/vutuv_web/templates/user/edit.html.heex:189
 #, elixir-autogen
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -603,7 +603,7 @@ msgstr "Öffentlich (für alle sichtbar) oder Privat (nur für Sie sichtbar)"
 #: lib/vutuv_web/templates/settings/privacy.html.heex:64
 #: lib/vutuv_web/templates/settings/privacy.html.heex:92
 #: lib/vutuv_web/templates/settings/privacy.html.heex:125
-#: lib/vutuv_web/templates/user/edit.html.heex:164
+#: lib/vutuv_web/templates/user/edit.html.heex:184
 #, elixir-autogen
 msgid "Save"
 msgstr "Speichern"
@@ -2020,7 +2020,7 @@ msgstr "Oktober"
 msgid "September"
 msgstr "September"
 
-#: lib/vutuv_web/templates/user/edit.html.heex:149
+#: lib/vutuv_web/templates/user/edit.html.heex:156
 #, elixir-autogen, elixir-format
 msgid "Markdown is supported: bold, italics, links and lists."
 msgstr "Markdown wird unterstützt: Fett, Kursiv, Links und Listen."
@@ -6028,7 +6028,7 @@ msgid "Add a tagline"
 msgstr "Kurzbeschreibung hinzufügen"
 
 #: lib/vutuv_web/live/cv_live.ex:110
-#: lib/vutuv_web/templates/user/edit.html.heex:146
+#: lib/vutuv_web/templates/user/edit.html.heex:152
 #, elixir-autogen, elixir-format
 msgid "Tagline"
 msgstr "Kurzbeschreibung"
@@ -8366,7 +8366,7 @@ msgstr "Basisdaten & Fotos"
 msgid "Language & maps"
 msgstr "Sprache & Karten"
 
-#: lib/vutuv_web/templates/user/edit.html.heex:180
+#: lib/vutuv_web/templates/user/edit.html.heex:200
 #, elixir-autogen, elixir-format
 msgid "More profile sections"
 msgstr "Weitere Profil-Bereiche"
@@ -8895,3 +8895,8 @@ msgstr "Sonstige Tätigkeiten"
 #, elixir-autogen, elixir-format
 msgid "For a PDF, open the print view and choose \"Save as PDF\" in your browser's print dialog. Word and OpenDocument are editable; LaTeX is the typesetting source; JSON Resume is the open %{link} format."
 msgstr "Für ein PDF öffnen Sie die Druckansicht und wählen im Druckdialog Ihres Browsers \"Als PDF speichern\". Word und OpenDocument sind bearbeitbar, LaTeX ist der Quelltext zum Setzen, und JSON Resume ist das offene Format von %{link}."
+
+#: lib/vutuv_web/templates/user/edit.html.heex:164
+#, elixir-autogen, elixir-format
+msgid "characters"
+msgstr "Zeichen"

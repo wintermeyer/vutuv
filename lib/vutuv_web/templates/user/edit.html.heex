@@ -142,12 +142,32 @@ lands here). --%>
     <.card>
       <.section_title>{gettext("About you")}</.section_title>
       <div class="mt-4 space-y-5">
-        <div>
+        <%!-- The Tagline (headline) column is varchar(255). A live counter (the
+        CharCounter enhancement in app.js) shows how much of that budget is used
+        as "N/255 characters", so the writer can tell at a glance whether they
+        trimmed enough — the server still validates the cap (error_tag below).
+        The number is language-neutral; only the static "characters" word is
+        translated, and it never pluralizes in the "N/255" form. --%>
+        <div data-char-counter data-max="255">
           <%= label f, :headline, gettext("Tagline"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= textarea f, :headline, rows: 3, class: input_class() %>
-          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Markdown is supported: bold, italics, links and lists.")}
-          </p>
+          <%= textarea f, :headline, rows: 3, class: input_class(), data: [char_count_input: true] %>
+          <div class="mt-1 flex items-start justify-between gap-3">
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+              {gettext("Markdown is supported: bold, italics, links and lists.")}
+            </p>
+            <p
+              data-char-count-readout
+              data-over="false"
+              aria-live="polite"
+              class="shrink-0 whitespace-nowrap text-sm text-slate-600 data-[over=true]:font-medium data-[over=true]:text-red-600 dark:text-slate-400 dark:data-[over=true]:text-red-400"
+            >
+              <span data-char-count>{String.length(to_string(Phoenix.HTML.Form.input_value(f, :headline)))}</span>/255 {gettext(
+                "characters"
+              )}
+              <span data-char-ok aria-hidden="true" class="text-emerald-600 dark:text-emerald-400">✓</span>
+              <span data-char-over aria-hidden="true" class="hidden">⚠</span>
+            </p>
+          </div>
           <%= error_tag f, :headline %>
         </div>
         <div class="grid gap-5 sm:grid-cols-2">

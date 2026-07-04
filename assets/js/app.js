@@ -643,6 +643,42 @@ function setupDeleteGate() {
 }
 onReady(setupDeleteGate)
 
+// Live character counter for a length-capped text field (the profile Tagline,
+// see user/edit.html.heex). A [data-char-counter] wrapper with data-max holds a
+// [data-char-count-input] field and a [data-char-count-readout] showing
+// "N/max characters"; as the writer types we update the number and flip the
+// readout to its over-limit state (red, ⚠ instead of ✓) so they can tell at a
+// glance whether they trimmed enough before submitting. Server-side
+// validate_length stays the source of truth — this only spares a round-trip.
+// Counts code points (not UTF-16 units) so an emoji or astral char reads as one.
+function wireCharCounter(wrap) {
+  if (!once(wrap, "charCounter")) return
+  const input = wrap.querySelector("[data-char-count-input]")
+  const readout = wrap.querySelector("[data-char-count-readout]")
+  const output = wrap.querySelector("[data-char-count]")
+  const ok = wrap.querySelector("[data-char-ok]")
+  const over = wrap.querySelector("[data-char-over]")
+  const max = parseInt(wrap.dataset.max, 10)
+  if (!input || !readout || !output || !max) return
+
+  const update = () => {
+    const used = [...input.value].length
+    const isOver = used > max
+    output.textContent = used
+    readout.dataset.over = isOver ? "true" : "false"
+    if (ok) ok.classList.toggle("hidden", isOver)
+    if (over) over.classList.toggle("hidden", !isOver)
+  }
+
+  input.addEventListener("input", update)
+  update()
+}
+
+function setupCharCounters() {
+  document.querySelectorAll("[data-char-counter]").forEach(wireCharCounter)
+}
+onReady(setupCharCounters)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

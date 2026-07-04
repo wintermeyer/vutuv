@@ -709,6 +709,19 @@ defmodule VutuvWeb.UserControllerTest do
     assert html =~ "e.g. Jr. or PhD"
   end
 
+  test "the Tagline field carries a live character counter capped at 255 (#873)", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
+
+    # The headline textarea is wired for the JS counter, and the readout names
+    # the 255-char cap so the writer sees how much room is left (and whether
+    # they trimmed enough) before submitting, instead of counting by hand.
+    assert html =~ "data-char-count-input"
+    assert html =~ "data-char-counter"
+    assert html =~ ~s(data-max="255")
+    assert html =~ "characters"
+  end
+
   test "the edit form does not autofocus a field, so the page opens at the top", %{
     conn: conn
   } do
