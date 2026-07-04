@@ -12,7 +12,7 @@
 # the bounce back and forth.
 
 TOKEN_FILE=/etc/vutuv/bounce-webhook-token
-URL=${VUTUV_BOUNCE_URL:-https://www.vutuv.de/webhooks/bounces}
+URL=${VUTUV_BOUNCE_URL:-https://vutuv.de/webhooks/bounces}
 
 [ -r "$TOKEN_FILE" ] || exit 0
 

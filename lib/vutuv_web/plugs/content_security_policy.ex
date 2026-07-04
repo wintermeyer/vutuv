@@ -17,7 +17,7 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   `connect-src` names the websocket origin explicitly: not every browser
   matches `ws(s)://` against a plain `'self'`, and without it the LiveView
   socket cannot join. Derived per request from scheme/host/port, so dev
-  (`ws://localhost:4000`) and prod (`wss://www.vutuv.de`) both come out
+  (`ws://localhost:4000`) and prod (`wss://vutuv.de`) both come out
   right without configuration.
   """
 

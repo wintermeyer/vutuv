@@ -669,7 +669,7 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   # The configured canonical host (with a trailing slash), e.g.
-  # "https://www.vutuv.de/" — every URL an email names builds on it.
+  # "https://vutuv.de/" — every URL an email names builds on it.
   defp public_url, do: Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
 
   # The body template is selected by the recipient's locale; render the
