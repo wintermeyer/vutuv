@@ -725,12 +725,13 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   # The visible-tag preload, shared by the initial load and the live refresh:
-  # the 10 most-endorsed tags, each with only its visible endorsers (and the
-  # endorser preloaded for the roster), so a hidden account can't inflate the
-  # count (issue #783).
+  # up to 30 tags (honor tags first, then most-endorsed), each with only its
+  # visible endorsers (and the endorser preloaded for the roster), so a hidden
+  # account can't inflate the count (issue #783). Keep this cap in sync with the
+  # `preview={30}` the Tags card's manage_footer uses in show.html.heex.
   defp user_tags_query do
     UserTag.ordered_by_endorsements()
-    |> limit(10)
+    |> limit(30)
     |> preload(endorsements: ^UserTagEndorsement.visible_with_endorser())
   end
 

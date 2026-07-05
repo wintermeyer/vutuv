@@ -411,6 +411,34 @@ defmodule Vutuv.TagsTest do
       assert bob.id in ids
       assert length(ids) == 2
     end
+
+    test "ordered_by_endorsements/0 sorts honor tags first, ahead of the most-endorsed tag" do
+      owner = insert(:user, email_confirmed?: true)
+
+      # A self-assigned tag with several visible endorsements.
+      popular = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+
+      for _ <- 1..3 do
+        insert(:user_tag_endorsement,
+          user_tag: popular,
+          user: insert(:user, email_confirmed?: true)
+        )
+      end
+
+      # An honor tag is never endorsable, so its count is 0; it must still lead.
+      honor =
+        insert(:user_tag,
+          user: owner,
+          tag: insert(:tag, name: "Vutuv Developer", slug: "vutuv_developer", honor?: true)
+        )
+
+      ordered =
+        UserTag.ordered_by_endorsements()
+        |> where(user_id: ^owner.id)
+        |> Repo.all()
+
+      assert Enum.map(ordered, & &1.id) == [honor.id, popular.id]
+    end
   end
 
   describe "user_tag_endorsements" do

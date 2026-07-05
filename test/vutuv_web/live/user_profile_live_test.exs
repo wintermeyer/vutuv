@@ -85,6 +85,47 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "tags card ordering and cap" do
+    test "an honor tag leads the section, ahead of an endorsed self-assigned tag", %{conn: conn} do
+      owner = insert_activated_user()
+
+      # A self-assigned tag with a visible endorsement.
+      popular = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+      insert(:user_tag_endorsement, user_tag: popular, user: insert_activated_user())
+
+      # An honor tag (never endorsable, count 0) must still render first.
+      insert(:user_tag,
+        user: owner,
+        tag: insert(:tag, name: "Vutuv Developer", slug: "vutuv_developer", honor?: true)
+      )
+
+      {:ok, _view, html} = live(conn, ~p"/#{owner}")
+
+      {honor_at, _} = :binary.match(html, "/#{owner.username}/tags/vutuv_developer")
+      {popular_at, _} = :binary.match(html, "/#{owner.username}/tags/elixir")
+      assert honor_at < popular_at
+    end
+
+    test "renders up to 30 tags, then hands off to the View-all footer", %{conn: conn} do
+      owner = insert_activated_user()
+
+      # 31 tags (all zero-endorsement, so slug-alphabetical): tag01 .. tag31.
+      for i <- 1..31 do
+        slug = "tag" <> String.pad_leading(Integer.to_string(i), 2, "0")
+        insert(:user_tag, user: owner, tag: insert(:tag, name: slug, slug: slug))
+      end
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The 30th tag renders (the old cap was 10, so this proves the higher cap),
+      chip = fn slug -> ~s(a[href="/#{owner.username}/tags/#{slug}"]) end
+      assert has_element?(view, chip.("tag30"))
+      # but the 31st is cut, and the "View all (31)" footer links to the full list.
+      refute has_element?(view, chip.("tag31"))
+      assert has_element?(view, ~s(a[href="/#{owner.username}/tags"]))
+    end
+  end
+
   describe "live updates from another page" do
     test "a follow made elsewhere bumps this profile's follower count live", %{conn: conn} do
       owner = insert_activated_user()

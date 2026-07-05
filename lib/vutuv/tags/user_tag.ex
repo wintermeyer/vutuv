@@ -26,10 +26,13 @@ defmodule Vutuv.Tags.UserTag do
   end
 
   @doc """
-  A user's tags ordered most endorsed first, ties alphabetically — the
-  display order of the profile page and its agent documents (both preload
-  through this query; compose with `Ecto.Query.limit/2` for the page's
-  cut). The ordering count rides along as the virtual `endorsement_count`;
+  A user's tags ordered honor tags first, then most endorsed, ties
+  alphabetically — the display order of the profile page and its agent
+  documents (both preload through this query; compose with `Ecto.Query.limit/2`
+  for the page's cut). An honor tag is an admin-granted badge and is never
+  endorsable, so it carries a count of 0; leading with `honor?` keeps it at the
+  top of the section instead of sinking to the bottom among the zero-count
+  tags. The ordering count rides along as the virtual `endorsement_count`;
   callers that need the endorsement *rows* (the profile page's upvote
   state) add `preload(:endorsements)` themselves.
   """
@@ -48,10 +51,11 @@ defmodule Vutuv.Tags.UserTag do
         account_confirmed_row(endorser) and
           not account_hidden(endorser.id),
       left_join: t in assoc(u, :tag),
-      order_by: [desc: count(endorser.id), asc: t.slug],
+      # `desc: t.honor?` sorts true (honor) before false, so admin badges lead.
+      order_by: [desc: t.honor?, desc: count(endorser.id), asc: t.slug],
       # Postgres requires every ordered, non-aggregated column in GROUP BY;
       # each user_tag has exactly one tag, so this keeps one row per user_tag.
-      group_by: [u.id, t.slug],
+      group_by: [u.id, t.slug, t.honor?],
       select_merge: %{endorsement_count: count(endorser.id)},
       preload: [:tag]
     )
