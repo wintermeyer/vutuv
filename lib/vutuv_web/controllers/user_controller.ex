@@ -142,8 +142,9 @@ defmodule VutuvWeb.UserController do
     )
   end
 
-  def update(conn, %{"user" => user_params}) do
+  def update(conn, %{"user" => user_params} = params) do
     user = conn.assigns[:user]
+    user_params = clear_birthdate_if_requested(user_params, params)
 
     # Go through Accounts.update_user/2 so the people-search index is rebuilt
     # from the changeset's final field values, not the raw params. The old local
@@ -161,6 +162,20 @@ defmodule VutuvWeb.UserController do
         |> render("edit.html", user: user, changeset: changeset)
     end
   end
+
+  # The native <input type="date"> on the profile editor gives no clear button
+  # in some browsers (notably Safari on macOS, where it renders as mm/dd/yyyy
+  # spinners), so a member who set a birthday could never remove it (issue #901).
+  # The editor's "Remove date of birth" button submits `clear_birthdate`; honour
+  # it by nilling the date before it reaches the changeset, since without JS the
+  # date input still carries its old value alongside the clear request. (The JS
+  # enhancement instead empties the field client-side, which the changeset
+  # already nils from the resulting "".)
+  defp clear_birthdate_if_requested(user_params, %{"clear_birthdate" => _}) do
+    Map.put(user_params, "birthdate", nil)
+  end
+
+  defp clear_birthdate_if_requested(user_params, _params), do: user_params
 
   # Editing a name or birthday auto-revokes a prior identity verification
   # (User.changeset/2). When that happened, explain it instead of the generic

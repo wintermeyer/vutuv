@@ -187,6 +187,23 @@ lands here). --%>
             <%= label f, :birthdate, gettext("Birthdate"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
             <%= date_input f, :birthdate, max: Date.to_iso8601(Date.utc_today()), class: input_class() %>
             <%= error_tag f, :birthdate %>
+            <%!-- The native date input offers no clear button in some browsers
+            (Safari on macOS), so a member could set a birthday but never remove
+            it (issue #901). This button empties the field: the JS enhancement
+            (data-clear-field) clears it client-side so the member can Save; with
+            JS off it submits clear_birthdate and the controller nils it. Shown
+            only while a birthday is set. --%>
+            <button
+              :if={@user.birthdate}
+              type="submit"
+              name="clear_birthdate"
+              value="1"
+              formnovalidate
+              data-clear-field="user_birthdate"
+              class="mt-2 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+            >
+              {gettext("Remove date of birth")}
+            </button>
           </div>
         </div>
       </div>

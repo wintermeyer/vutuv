@@ -705,6 +705,31 @@ function setupCharCounters() {
 }
 onReady(setupCharCounters)
 
+// A "clear this field" button (the profile editor's "Remove date of birth",
+// see user/edit.html.heex). The native <input type="date"> gives no clear
+// affordance in some browsers (Safari on macOS renders spinners with no ✕), so
+// a member could set a birthday but never remove it (issue #901). The button
+// carries data-clear-field={target input id}; here we empty that input so the
+// member reviews the change and then Saves. With JS off the same button is a
+// real submit (name=clear_birthdate) and the controller nils the field, so this
+// only spares the extra round-trip and the accidental save of other edits.
+function wireClearField(btn) {
+  if (!once(btn, "clearField")) return
+  const input = document.getElementById(btn.dataset.clearField)
+  if (!input) return
+  btn.addEventListener("click", (e) => {
+    e.preventDefault()
+    input.value = ""
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.focus()
+  })
+}
+
+function setupClearFields() {
+  document.querySelectorAll("[data-clear-field]").forEach(wireClearField)
+}
+onReady(setupClearFields)
+
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,
 // then drop the node. Its ✕ removes it immediately AND keeps ads away for

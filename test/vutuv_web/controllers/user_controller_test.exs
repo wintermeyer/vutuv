@@ -796,6 +796,49 @@ defmodule VutuvWeb.UserControllerTest do
     assert Repo.get(User, user.id).birthdate == ~D[1990-04-15]
   end
 
+  test "an empty date field clears the birthdate", %{conn: conn} do
+    # Clearing the native date input submits an empty string; the changeset must
+    # nil the birthdate rather than treat the blank as "no change" (issue #901).
+    {conn, user} = create_and_login_user(conn)
+
+    user |> Ecto.Changeset.change(%{birthdate: ~D[1990-04-15]}) |> Repo.update!()
+
+    conn = put(conn, ~p"/settings/profile", user: %{"birthdate" => ""})
+    assert redirected_to(conn) == ~p"/#{user}"
+    assert is_nil(Repo.get(User, user.id).birthdate)
+  end
+
+  test "the Remove-date-of-birth button clears the birthdate even when the input still carries a value",
+       %{conn: conn} do
+    # The native <input type="date"> gives no clear affordance in some browsers
+    # (Safari on macOS), so the editor renders a "Remove date of birth" submit
+    # button. With JS off it submits `clear_birthdate` while the date input still
+    # holds its old value; the controller must still nil the birthdate (#901).
+    {conn, user} = create_and_login_user(conn)
+
+    user |> Ecto.Changeset.change(%{birthdate: ~D[1990-04-15]}) |> Repo.update!()
+
+    # The button renders only while a birthdate is set, and posts to the same URL.
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
+    assert html =~ ~s(name="clear_birthdate")
+
+    conn =
+      put(conn, ~p"/settings/profile",
+        user: %{"birthdate" => "1990-04-15"},
+        clear_birthdate: "1"
+      )
+
+    assert redirected_to(conn) == ~p"/#{user}"
+    assert is_nil(Repo.get(User, user.id).birthdate)
+  end
+
+  test "the Remove-date-of-birth button is hidden when no birthdate is set", %{conn: conn} do
+    {conn, _user} = create_and_login_user(conn)
+
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
+    refute html =~ ~s(name="clear_birthdate")
+  end
+
   test "the privacy page asks the search-engine and the AI question separately", %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
     html = conn |> get(~p"/settings/privacy") |> html_response(200)
