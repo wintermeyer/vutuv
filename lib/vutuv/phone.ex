@@ -9,6 +9,9 @@ defmodule Vutuv.Phone do
   digit-stripped target for the `tel:` link.
   """
 
+  alias ExPhoneNumber.Metadata
+  alias Vutuv.Cldr.Territory
+
   # Numbers are stored by a mostly-German userbase; this is the region used to
   # interpret a value typed without an international `+` prefix.
   @default_region "DE"
@@ -63,6 +66,34 @@ defmodule Vutuv.Phone do
     end
   rescue
     _ -> :error
+  end
+
+  @doc """
+  The country annotation for a number *as it is displayed to a `locale` viewer*,
+  or `nil` when there is nothing to annotate (issue #892).
+
+  Returns `{flag, region, calling_code}` — e.g. `{"🇩🇪", "DE", 49}` — where the
+  flag is the CLDR unicode flag emoji for the number's ISO region (from
+  `Vutuv.Cldr.Territory`) and `region`/`calling_code` feed the "+49 is the
+  calling code of DE" tooltip.
+
+  It is deliberately gated on `national/2`: the flag appears **only when the
+  displayed number still carries its international `+` prefix**. A German number
+  shown to a German viewer renders in national form (`0261 9886803`, no prefix),
+  so it gets no flag; a foreign number, or any number shown to a non-German
+  viewer, keeps its `+…` prefix and is annotated. Unparseable values and unknown
+  regions return `nil`.
+  """
+  def country_flag(value, locale) when is_binary(value) do
+    if String.starts_with?(national(value, locale), "+") do
+      with {:ok, number} <- parse(value),
+           region when is_binary(region) <- Metadata.get_region_code_for_number(number),
+           {:ok, flag} <- Territory.to_unicode_flag(region) do
+        {flag, region, number.country_code}
+      else
+        _ -> nil
+      end
+    end
   end
 
   @doc """

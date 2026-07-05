@@ -787,11 +787,23 @@ the resulting ~200px rail width. --%>
               </a>
             </li>
             <li :for={number <- group_phones}>
+              <%!-- Flag of the calling code's country (issue #892), shown only
+              when the displayed number keeps its international "+" prefix
+              (Vutuv.Phone.country_flag gates on national/2). The tooltip names
+              the calling code and its ISO region. --%>
+              <% flag = Vutuv.Phone.country_flag(number.value, @locale) %>
               <a
                 href={"tel:" <> Vutuv.Phone.tel(number.value)}
                 class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
               >
                 <.detail_icon name="phone" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
+                <span
+                  :if={flag}
+                  class="shrink-0 text-base leading-none"
+                  role="img"
+                  title={gettext("+%{code} is the calling code of %{region}", code: elem(flag, 2), region: elem(flag, 1))}
+                  aria-label={gettext("+%{code} is the calling code of %{region}", code: elem(flag, 2), region: elem(flag, 1))}
+                >{elem(flag, 0)}</span>
                 <span class="font-medium">{Vutuv.Phone.national(number.value, @locale)}</span>
               </a>
             </li>

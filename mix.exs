@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.62.0",
+      version: "7.63.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -80,6 +80,12 @@ defmodule Vutuv.MixProject do
       # (Google's libphonenumber port). Used by Vutuv.Phone to render German
       # numbers in local format for `de` viewers while keeping E.164 in tel: links.
       {:ex_phone_number, "~> 0.4"},
+
+      # CLDR territory data (compile-time, no runtime network → intranet-safe):
+      # Vutuv.Cldr.Territory turns the ISO region of an international phone number
+      # (from ex_phone_number) into a flag emoji shown next to the number (#892).
+      {:ex_cldr, "~> 2.47"},
+      {:ex_cldr_territories, "~> 2.12"},
 
       # Passkey / WebAuthn (FIDO2) login: server-side verification of the
       # registration and authentication ceremonies (see Vutuv.Credentials). The

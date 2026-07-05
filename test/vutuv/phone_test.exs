@@ -58,6 +58,31 @@ defmodule Vutuv.PhoneTest do
     end
   end
 
+  describe "country_flag/2" do
+    test "annotates a foreign number with its flag + region for a de viewer" do
+      assert Phone.country_flag("+421903419345", "de") == {"🇸🇰", "SK", 421}
+      assert Phone.country_flag("+41 78 956 91 14", "de") == {"🇨🇭", "CH", 41}
+    end
+
+    test "annotates a German number for a non-de viewer (still shows +49)" do
+      assert Phone.country_flag("+49 261 9886803", "en") == {"🇩🇪", "DE", 49}
+      assert Phone.country_flag("+49 261 9886803", nil) == {"🇩🇪", "DE", 49}
+    end
+
+    test "adds no flag when the number is shown in national form (no +prefix)" do
+      # A de viewer sees a German number as "0261 9886803" — no international
+      # prefix, so per issue #892 there is nothing to annotate.
+      assert Phone.country_flag("+49 261 9886803", "de") == nil
+      assert Phone.country_flag("017629544122", "de") == nil
+    end
+
+    test "returns nil for an unparseable or unknown value" do
+      assert Phone.country_flag("not a phone", "en") == nil
+      assert Phone.country_flag("12", "en") == nil
+      assert Phone.country_flag("", "en") == nil
+    end
+  end
+
   describe "tel/1" do
     test "returns the E.164 form for the tel: link" do
       assert Phone.tel("+49 261 9886803") == "+492619886803"

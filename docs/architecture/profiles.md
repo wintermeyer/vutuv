@@ -207,6 +207,16 @@ keeps the canonical E.164 form, via `Vutuv.Phone` (the
 `ex_phone_number`/libphonenumber port); foreign numbers and non-German viewers
 see the stored value unchanged.
 
+Whenever a number is displayed **with** its international `+…` prefix, the card
+shows the calling code's country **flag** before it, with a `+49 is the calling
+code of DE`-style tooltip naming the calling code and its ISO region (issue
+#892). `Vutuv.Phone.country_flag/2` gates on the same national/2 seam — a German
+number in national form (no `+` prefix) gets no flag — resolves the ISO region
+via libphonenumber and turns it into the flag emoji through `Vutuv.Cldr.Territory`
+(`ex_cldr_territories`). That CLDR data is **compiled in**, so no runtime network
+is needed; the backend `Vutuv.Cldr` carries only the `Cldr.Territory` provider,
+which keeps it safe for air-gapped intranet installs.
+
 On the way **in**, the changeset (`Vutuv.Phone.normalize/1`) parses a typed
 number against the default `DE` region, rejects anything libphonenumber does not
 recognise as a *valid* number (so only real numbers are saved), and stores the
