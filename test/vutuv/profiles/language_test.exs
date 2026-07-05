@@ -83,20 +83,21 @@ defmodule Vutuv.Profiles.LanguageTest do
   end
 
   describe "ordered/1" do
-    test "sorts highest proficiency first, then by language code" do
+    test "sorts by the member's chosen position (issue #894), NULLs last then creation order" do
       user = insert(:user)
-      insert(:language, user: user, language_code: "en", proficiency: "b2")
-      insert(:language, user: user, language_code: "de", proficiency: "native")
-      insert(:language, user: user, language_code: "fr", proficiency: "native")
+      # Proficiency no longer drives the sort: a B2 the member put first leads
+      # its native tongue; a nil-position (legacy) row falls to the end.
+      insert(:language, user: user, language_code: "en", proficiency: "b2", position: 1)
+      insert(:language, user: user, language_code: "de", proficiency: "native", position: 2)
+      insert(:language, user: user, language_code: "fr", proficiency: "native", position: nil)
 
       ordered =
         Language.ordered()
         |> where(user_id: ^user.id)
         |> Repo.all()
-        |> Enum.map(&{&1.language_code, &1.proficiency})
+        |> Enum.map(& &1.language_code)
 
-      # native leads (de before fr within the level), then the B2.
-      assert ordered == [{"de", "native"}, {"fr", "native"}, {"en", "b2"}]
+      assert ordered == ["en", "de", "fr"]
     end
   end
 

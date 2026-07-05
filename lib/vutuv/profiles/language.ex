@@ -4,20 +4,26 @@ defmodule Vutuv.Profiles.Language do
 
   The language itself is stored as an ISO 639-1 code (see `Vutuv.Languages`);
   the proficiency is `"native"` or a CEFR level (`a1`..`c2`). Entries display
-  highest proficiency first (native, then C2 down to A1), the way the profile
-  card and a CV read.
+  in the member's own order (issue #894): they reorder the section like every
+  other profile section, and the **first** entry is the language they prefer to
+  be contacted in. Proficiency stays visible as the per-entry badge; it no
+  longer drives the sort.
   """
 
   use VutuvWeb, :model
-  import Ecto.Query
 
   # Proficiency levels in display order, highest first: a mother tongue, then
-  # the CEFR scale (Common European Framework of Reference for Languages).
+  # the CEFR scale (Common European Framework of Reference for Languages). The
+  # order is the form's select order and the migration's backfill seed; it no
+  # longer sorts the section (the member's `position` does — see `ordered/1`).
   @proficiencies ~w(native c2 c1 b2 b1 a2 a1)
 
   schema "languages" do
     field(:language_code, :string)
     field(:proficiency, :string)
+    # The member's chosen display order; nil sorts last (legacy / mid-deploy
+    # rows) until reordered. Set programmatically, never cast. See Vutuv.Ordering.
+    field(:position, :integer)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
@@ -26,17 +32,8 @@ defmodule Vutuv.Profiles.Language do
   @doc "The proficiency levels, highest first."
   def proficiencies, do: @proficiencies
 
-  @doc """
-  Entries in display order: highest proficiency first (native, then C2..A1),
-  then alphabetically by language code within a level.
-  """
-  def ordered(query \\ __MODULE__) do
-    order_by(query, [l],
-      asc:
-        fragment("array_position(?, ?)", type(^@proficiencies, {:array, :string}), l.proficiency),
-      asc: l.language_code
-    )
-  end
+  @doc "Languages in the member's chosen order (see `Vutuv.Ordering`)."
+  def ordered(query \\ __MODULE__), do: Vutuv.Ordering.by_position(query)
 
   @doc """
   Creates a changeset based on the `model` and `params`.

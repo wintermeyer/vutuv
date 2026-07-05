@@ -6,9 +6,11 @@ defmodule VutuvWeb.SectionReorderLive do
   template gates the `live_render` on `@as_owner?` — so visitors and the "View
   as" preview keep the read-only `card_list`.
 
-  One LiveView serves all five orderable sections (phone numbers, addresses,
-  social media accounts, email addresses and links); the `section` (the URL
-  segment) and the owner's `slug` arrive in the embedded session, the
+  One LiveView serves all six orderable sections (phone numbers, addresses,
+  social media accounts, email addresses, links and languages — where the order
+  additionally means preference, the first language being the member's preferred
+  contact language, issue #894); the `section` (the URL segment) and the owner's
+  `slug` arrive in the embedded session, the
   authenticated owner in the raw browser session's `user_id` (merged under the
   curated session by `Phoenix.LiveView.Static`, exactly like `ShellLive`). Every
   reorder/move is scoped to that `user_id` through `Vutuv.Ordering`, so the
@@ -34,6 +36,7 @@ defmodule VutuvWeb.SectionReorderLive do
   import VutuvWeb.UrlHTML, only: [linkable_url: 1, display_url: 1]
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
   import VutuvWeb.PhoneNumberHTML, only: [phone_type_label: 1]
+  import VutuvWeb.LanguageHTML, only: [language_name: 1, proficiency_badge: 1]
   import VutuvWeb.UserHelpers, only: [format_address: 2]
 
   alias Vutuv.Profiles.SocialMediaAccount
@@ -45,7 +48,8 @@ defmodule VutuvWeb.SectionReorderLive do
     "addresses" => Vutuv.Profiles.Address,
     "social_media_accounts" => Vutuv.Profiles.SocialMediaAccount,
     "emails" => Vutuv.Accounts.Email,
-    "links" => Vutuv.Profiles.Url
+    "links" => Vutuv.Profiles.Url,
+    "languages" => Vutuv.Profiles.Language
   }
 
   @impl true
@@ -87,9 +91,7 @@ defmodule VutuvWeb.SectionReorderLive do
   def render(assigns) do
     ~H"""
     <div>
-      <p class="reorder__hint">
-        {gettext("Drag to reorder, or use the arrows. The order is the one shown on your profile.")}
-      </p>
+      <p class="reorder__hint">{hint(@section)}</p>
 
       <ul id={"reorder-" <> @section} class="reorder" phx-hook="Reorder">
         <li
@@ -102,7 +104,12 @@ defmodule VutuvWeb.SectionReorderLive do
           <span class="reorder__handle" aria-hidden="true" title={gettext("Drag to reorder")}>⠿</span>
 
           <div class="reorder__body">
-            <.entry_body section={@section} entry={entry} locale={@locale} />
+            <.entry_body
+              section={@section}
+              entry={entry}
+              locale={@locale}
+              preferred?={idx == 0 and length(@entries) > 1}
+            />
           </div>
 
           <div class="reorder__move">
@@ -127,14 +134,25 @@ defmodule VutuvWeb.SectionReorderLive do
           </div>
 
           <.row_actions
-            edit_to={edit_path(@section, entry.id)}
-            delete_to={entry_path(@section, entry.id)}
+            edit_to={edit_path(@section, entry)}
+            delete_to={entry_path(@section, entry)}
           />
         </li>
       </ul>
     </div>
     """
   end
+
+  # The reorder hint. Languages get their own line because their order *means*
+  # preference (issue #894); every other section's order is presentational.
+  defp hint("languages"),
+    do:
+      gettext(
+        "Drag to reorder, or use the arrows. The first language is your preferred contact language."
+      )
+
+  defp hint(_section),
+    do: gettext("Drag to reorder, or use the arrows. The order is the one shown on your profile.")
 
   # --- Section-specific row body. One clause per section so the LiveView holds
   # the same identifying facts the read-only card_list shows. ---
@@ -207,6 +225,24 @@ defmodule VutuvWeb.SectionReorderLive do
     """
   end
 
+  defp entry_body(%{section: "languages"} = assigns) do
+    ~H"""
+    <div class="reorder__text">
+      <div class="reorder__title">
+        {language_name(@entry.language_code)}
+        <span class="ml-1 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+          {proficiency_badge(@entry.proficiency)}
+        </span>
+      </div>
+      <%!-- Order is preference (issue #894): the top entry, once there is a
+      choice, is the language this member prefers to be contacted in. --%>
+      <div :if={@preferred?} class="reorder__sub">
+        {gettext("Preferred contact language")}
+      </div>
+    </div>
+    """
+  end
+
   defp entry_body(assigns), do: ~H""
 
   # --- Loading + helpers ---
@@ -232,19 +268,27 @@ defmodule VutuvWeb.SectionReorderLive do
   defp schema(socket), do: Map.fetch!(@schemas, socket.assigns.section)
 
   # Verified routes need literal path segments, so each section gets its own
-  # clause rather than an interpolated `~p"/#{slug}/#{section}/…"`.
-  defp edit_path("links", id), do: ~p"/settings/links/#{id}/edit"
-  defp edit_path("phone_numbers", id), do: ~p"/settings/phone_numbers/#{id}/edit"
-  defp edit_path("addresses", id), do: ~p"/settings/addresses/#{id}/edit"
+  # clause rather than an interpolated `~p"/#{slug}/#{section}/…"`. The entry is
+  # interpolated whole so `Phoenix.Param` decides the route param: the default
+  # is the row id, but `Language` derives it to its ISO code, so languages need
+  # no special clause here.
+  defp edit_path("links", entry), do: ~p"/settings/links/#{entry}/edit"
+  defp edit_path("phone_numbers", entry), do: ~p"/settings/phone_numbers/#{entry}/edit"
+  defp edit_path("addresses", entry), do: ~p"/settings/addresses/#{entry}/edit"
 
-  defp edit_path("social_media_accounts", id),
-    do: ~p"/settings/social_media_accounts/#{id}/edit"
+  defp edit_path("social_media_accounts", entry),
+    do: ~p"/settings/social_media_accounts/#{entry}/edit"
 
-  defp edit_path("emails", id), do: ~p"/settings/emails/#{id}/edit"
+  defp edit_path("emails", entry), do: ~p"/settings/emails/#{entry}/edit"
+  defp edit_path("languages", entry), do: ~p"/settings/languages/#{entry}/edit"
 
-  defp entry_path("links", id), do: ~p"/settings/links/#{id}"
-  defp entry_path("phone_numbers", id), do: ~p"/settings/phone_numbers/#{id}"
-  defp entry_path("addresses", id), do: ~p"/settings/addresses/#{id}"
-  defp entry_path("social_media_accounts", id), do: ~p"/settings/social_media_accounts/#{id}"
-  defp entry_path("emails", id), do: ~p"/settings/emails/#{id}"
+  defp entry_path("links", entry), do: ~p"/settings/links/#{entry}"
+  defp entry_path("phone_numbers", entry), do: ~p"/settings/phone_numbers/#{entry}"
+  defp entry_path("addresses", entry), do: ~p"/settings/addresses/#{entry}"
+
+  defp entry_path("social_media_accounts", entry),
+    do: ~p"/settings/social_media_accounts/#{entry}"
+
+  defp entry_path("emails", entry), do: ~p"/settings/emails/#{entry}"
+  defp entry_path("languages", entry), do: ~p"/settings/languages/#{entry}"
 end

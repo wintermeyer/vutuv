@@ -511,7 +511,8 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- Languages (issue #865): a glyph, the language name and a proficiency
-    badge, highest proficiency first (Language.ordered). --%>
+    badge, in the member's own order (Language.ordered). Once there is a choice,
+    the first entry is marked their preferred contact language (issue #894). --%>
     <.card :if={@languages != [] or @as_owner?} id="profile-languages">
       <.section_header title={gettext("Languages")} />
 
@@ -521,7 +522,7 @@ the resulting ~200px rail width. --%>
 
       <ul class="divide-y divide-slate-100 dark:divide-slate-800">
         <li
-          :for={language <- @languages}
+          :for={{language, idx} <- Enum.with_index(@languages)}
           class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
         >
           <VutuvWeb.LanguageHTML.language_glyph class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -531,9 +532,10 @@ the resulting ~200px rail width. --%>
           >
             {VutuvWeb.LanguageHTML.language_name(language.language_code)}
           </.link>
-          <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+          <span class="shrink-0 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
             {VutuvWeb.LanguageHTML.proficiency_badge(language.proficiency)}
           </span>
+          <VutuvWeb.LanguageHTML.language_preferred_badge :if={idx == 0 and length(@languages) > 1} />
         </li>
       </ul>
 

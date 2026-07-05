@@ -63,5 +63,25 @@ defmodule VutuvWeb.LanguageHTML do
     """
   end
 
+  @doc """
+  The small "Preferred" marker on a member's first language (issue #894): a slate
+  pill, deliberately quieter than the brand proficiency badge, with the full
+  phrase in its `title`. Shared by the profile card and the public section list
+  so both read the same. Guard it at the call site with
+  `:if={idx == 0 and length(@languages) > 1}` — the marker only means something
+  once there is a choice. (The reorder tool renders the same intent as a
+  `.reorder__sub` subtext, not this pill.)
+  """
+  def language_preferred_badge(assigns) do
+    ~H"""
+    <span
+      class="shrink-0 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+      title={gettext("Preferred contact language")}
+    >
+      {gettext("Preferred")}
+    </span>
+    """
+  end
+
   embed_templates("../templates/language/*")
 end

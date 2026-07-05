@@ -49,9 +49,14 @@ defmodule VutuvWeb.LanguageController do
   end
 
   def create(conn, %{"language" => language_params}) do
+    user = conn.assigns[:user]
+
     changeset =
-      conn.assigns[:user]
-      |> build_assoc(:languages)
+      user
+      # New languages land at the end of the member's chosen order. `position`
+      # is set on the struct (not cast) so a forged param can't move it;
+      # reordering itself lives in VutuvWeb.SectionReorderLive via Vutuv.Ordering.
+      |> build_assoc(:languages, position: Vutuv.Ordering.next_position(Language, user.id))
       |> Language.changeset(language_params)
 
     ControllerHelpers.save(conn, Repo.insert(changeset),

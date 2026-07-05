@@ -7,6 +7,13 @@ shows the plain showcase view. --%>
     add_href={~p"/settings/languages/new"}
     add_label={gettext("Add a language")}
   >
-    <%= render "card_list.html", assigns %>
+    <.reorderable_section
+      conn={@conn}
+      section="languages"
+      slug={@user.username}
+      editable={@languages != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
   </.card_section>
 </.settings_shell>

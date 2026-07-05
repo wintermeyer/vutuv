@@ -1,11 +1,12 @@
 <%!-- The language list, shared by the public /:slug/languages index and the
 /settings/languages editor. Each row is a neutral glyph, the language name
 (linking to its entry page), a proficiency badge, and, for the owner, the
-calm Edit/Delete actions. Entries arrive highest-proficiency first
-(Language.ordered). --%>
+calm Edit/Delete actions. Entries arrive in the member's own order
+(Language.ordered) — and once there is a choice, the first is marked their
+preferred contact language (issue #894). --%>
 <ul class="divide-y divide-slate-100 dark:divide-slate-800">
   <li
-    :for={language <- @languages}
+    :for={{language, idx} <- Enum.with_index(@languages)}
     class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
   >
     <.language_glyph class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
@@ -15,9 +16,10 @@ calm Edit/Delete actions. Entries arrive highest-proficiency first
     >
       {language_name(language.language_code)}
     </.link>
-    <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+    <span class="shrink-0 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
       {proficiency_badge(language.proficiency)}
     </span>
+    <.language_preferred_badge :if={idx == 0 and length(@languages) > 1} />
     <.row_actions
       :if={@as_owner?}
       class="ml-auto"

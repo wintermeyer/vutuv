@@ -81,7 +81,8 @@ revisit linking only if members ask.
 
 Members list the **languages they speak** with a proficiency level (issue #865,
 `Vutuv.Profiles.Language`, `/:slug/languages`). Each entry is a language plus a
-level, displayed highest proficiency first (native, then C2 down to A1).
+level, displayed in the member's own order (issue #894) — see the reorder note
+below.
 
 The **language is stored as an ISO 639-1 code** (`"en"`, `"de"`) rather than a
 free-text name: the data stays machine-readable (a BCP 47 primary subtag),
@@ -94,9 +95,23 @@ language_code)` keeps a language from being listed twice.
 
 The **proficiency** is `native` or a CEFR level (`a1`..`c2`). The badge shows the
 compact form ("Native" / "B2"); the form and entry page show the descriptive
-label ("Native speaker" / "B2 (Upper intermediate)"). `Language.ordered/1` sorts
-by proficiency rank (a Postgres `array_position` over the level list) then
-language code, so every rendering agrees on the order.
+label ("Native speaker" / "B2 (Upper intermediate)"). Proficiency is shown per
+entry but **no longer drives the sort**: `Language.ordered/1` delegates to
+`Vutuv.Ordering.by_position/1`, so the member's own order wins (see below).
+
+**Order is preference (issue #894).** Because a proficiency sort always floats a
+member's mother tongue to the top, it cannot express "please write to me in my
+second language". So languages joined the ordered sections: the member reorders
+them by drag or arrows, and the **first entry is their preferred contact
+language**. Once there is a choice (2+ languages) that first entry carries a
+small "Preferred" marker on the profile card, the public section page and the
+reorder tool, and the agent-doc siblings flag it too (md/txt gloss "(Preferred
+contact language)", a `preferred: true` field in JSON/XML) so recruiters and
+machines read the intent. The rule "the head of the ordered list, when 2+, is
+preferred" lives in `VutuvWeb.AgentDocs.SectionDocs.language_entries/1` for the
+docs and as a `first-of-2+` guard in the two profile templates. The
+`add_position_to_languages` migration backfilled existing rows in the old
+proficiency order, so no one's list reshuffled on deploy.
 
 Like the other sections it has a profile card, owner CRUD on
 `/settings/languages`, Markdown / plain text / JSON / XML siblings (kept in sync
@@ -144,15 +159,21 @@ preview tells the member to review), and dedups by name + issuer on re-import.
 
 ## Ordered profile sections
 
-Members arrange their links, phone numbers, addresses, social media accounts and
-email addresses in the order they want instead of by creation date (a nullable
-`position` column per table, backfilled in creation order; the shared
-`Vutuv.Ordering` context owns the bookkeeping).
+Members arrange their links, phone numbers, addresses, social media accounts,
+email addresses and languages in the order they want instead of by creation date
+(a nullable `position` column per table, backfilled in creation order — except
+languages, backfilled in their old proficiency order; the shared `Vutuv.Ordering`
+context owns the bookkeeping). For languages the order additionally **means
+preference** (issue #894, the first is the preferred contact language); for the
+others it is purely presentational.
 
-Each management page (`/:slug/links`, `/phone_numbers`, `/addresses`,
-`/social_media_accounts`, `/emails`) carries an owner-only ordering tool, the
-embedded `VutuvWeb.SectionReorderLive` (rendered with `live_render`, like the
-app shell): drag an entry by its handle, or use the per-row up/down arrows.
+Each management page (`/settings/links`, `/phone_numbers`, `/addresses`,
+`/social_media_accounts`, `/emails`, `/languages`) carries an owner-only ordering
+tool, the embedded `VutuvWeb.SectionReorderLive` (rendered with `live_render`,
+like the app shell): drag an entry by its handle, or use the per-row up/down
+arrows. Most sections key their per-row edit/delete routes on the row id;
+languages address entries by their ISO code (`Phoenix.Param`), which is why
+`SectionReorderLive`'s `edit_path`/`entry_path` take the whole entry.
 
 Both persist over the LiveView socket with **no page reload** (the `Reorder` JS
 hook does the drag; the arrows are `phx-click`), and the arrow reorders glide

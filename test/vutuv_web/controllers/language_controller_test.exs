@@ -116,4 +116,52 @@ defmodule VutuvWeb.LanguageControllerTest do
       assert html =~ "German"
     end
   end
+
+  describe "preferred contact language marker (issue #894)" do
+    setup do
+      owner = insert_activated_user()
+      # English first (the member's preference), German native second — order,
+      # not proficiency, decides. Positions pin the order deterministically.
+      insert(:language, user: owner, language_code: "en", proficiency: "b2", position: 1)
+      insert(:language, user: owner, language_code: "de", proficiency: "native", position: 2)
+      %{owner: owner}
+    end
+
+    test "the public languages page marks the first entry", %{owner: owner} do
+      html = build_conn() |> get(~p"/#{owner}/languages") |> html_response(200)
+      assert html =~ "Preferred"
+    end
+
+    test "the Markdown sibling glosses the first language", %{owner: owner} do
+      body = build_conn() |> get("/#{owner.username}/languages.md") |> response(200)
+      # The English entry (listed first) carries the gloss; German does not.
+      assert body =~ "English: B2 (Preferred contact language)"
+      refute body =~ "German: Native (Preferred"
+    end
+
+    test "the JSON sibling flags the first language", %{owner: owner} do
+      body = build_conn() |> get("/#{owner.username}/languages.json") |> response(200)
+      json = Jason.decode!(body)
+      [first, second] = json["entries"]
+      assert first["code"] == "en" and first["preferred"] == true
+      refute Map.has_key?(second, "preferred")
+    end
+
+    test "the profile doc marks it too", %{owner: owner} do
+      body = build_conn() |> get("/#{owner.username}.json") |> response(200)
+      [first | _] = Jason.decode!(body)["languages"]
+      assert first["code"] == "en" and first["preferred"] == true
+    end
+  end
+
+  test "a lone language carries no preferred marker" do
+    owner = insert_activated_user()
+    insert(:language, user: owner, language_code: "en", proficiency: "b2", position: 1)
+
+    html = build_conn() |> get(~p"/#{owner}/languages") |> html_response(200)
+    refute html =~ "Preferred"
+
+    body = build_conn() |> get("/#{owner.username}/languages.md") |> response(200)
+    refute body =~ "Preferred contact language"
+  end
 end

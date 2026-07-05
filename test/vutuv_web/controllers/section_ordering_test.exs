@@ -11,6 +11,7 @@ defmodule VutuvWeb.SectionOrderingTest do
   import Vutuv.Factory
 
   alias Vutuv.Profiles.Address
+  alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.SocialMediaAccount
 
@@ -22,8 +23,9 @@ defmodule VutuvWeb.SectionOrderingTest do
       insert(:social_media_account, user: owner)
       insert(:email, user: owner)
       insert(:url, user: owner)
+      insert(:language, user: owner)
 
-      for section <- ~w(phone_numbers addresses social_media_accounts emails links) do
+      for section <- ~w(phone_numbers addresses social_media_accounts emails links languages) do
         html = conn |> get("/settings/#{section}") |> html_response(200)
 
         assert html =~ ~s(phx-hook="Reorder"),
@@ -124,6 +126,24 @@ defmodule VutuvWeb.SectionOrderingTest do
 
       assert Repo.all(SocialMediaAccount.ordered(Ecto.assoc(user, :social_media_accounts)))
              |> Enum.map(& &1.position) == [1, 2]
+    end
+
+    test "languages (issue #894)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post(conn, ~p"/settings/languages",
+        language: %{"language_code" => "de", "proficiency" => "native"}
+      )
+
+      post(conn, ~p"/settings/languages",
+        language: %{"language_code" => "en", "proficiency" => "b2"}
+      )
+
+      ordered = Repo.all(Language.ordered(Ecto.assoc(user, :languages)))
+      assert Enum.map(ordered, & &1.position) == [1, 2]
+      # Order is creation order, not proficiency: the native German no longer
+      # jumps ahead of the earlier-added entry.
+      assert Enum.map(ordered, & &1.language_code) == ["de", "en"]
     end
   end
 end

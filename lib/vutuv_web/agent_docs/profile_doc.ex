@@ -97,7 +97,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
       qualifications: Enum.map(user.qualifications, &SectionDocs.qualification_entry/1),
-      languages: Enum.map(user.languages, &SectionDocs.language_entry/1),
+      languages: SectionDocs.language_entries(user.languages),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
       phone_numbers: Enum.map(user.phone_numbers, &SectionDocs.phone_entry/1),

@@ -11,6 +11,7 @@ defmodule VutuvWeb.SectionReorderLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Accounts.Email
+  alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Url
 
@@ -116,6 +117,54 @@ defmodule VutuvWeb.SectionReorderLiveTest do
 
       assert Repo.get(Email, priv.id).position == 1
       assert Repo.get(Email, pub.id).position == 2
+    end
+  end
+
+  describe "languages (issue #894)" do
+    test "the tool lists each language with its proficiency badge", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:language, user: user, language_code: "de", proficiency: "native", position: 1)
+
+      {:ok, _view, html} = mount_tool(conn, user, "languages")
+
+      assert html =~ "German"
+      assert html =~ "Native"
+      # The edit/delete links address the entry by its ISO code, not its UUID.
+      assert html =~ "/settings/languages/de/edit"
+    end
+
+    test "an up-arrow click reorders the owner's languages, no reload", %{conn: conn} do
+      user = insert_activated_user()
+      de = insert(:language, user: user, language_code: "de", proficiency: "native", position: 1)
+      en = insert(:language, user: user, language_code: "en", proficiency: "b2", position: 2)
+
+      {:ok, view, _html} = mount_tool(conn, user, "languages")
+
+      view
+      |> element("button[phx-value-id='#{en.id}'][phx-value-dir='up']")
+      |> render_click()
+
+      assert Repo.get(Language, en.id).position == 1
+      assert Repo.get(Language, de.id).position == 2
+    end
+
+    test "the first of 2+ languages is marked the preferred contact language", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:language, user: user, language_code: "en", proficiency: "b2", position: 1)
+      insert(:language, user: user, language_code: "de", proficiency: "native", position: 2)
+
+      {:ok, _view, html} = mount_tool(conn, user, "languages")
+
+      assert html =~ "Preferred contact language"
+    end
+
+    test "a lone language carries no preferred marker", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:language, user: user, language_code: "en", proficiency: "b2", position: 1)
+
+      {:ok, _view, html} = mount_tool(conn, user, "languages")
+
+      refute html =~ "Preferred contact language"
     end
   end
 end

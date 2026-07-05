@@ -260,7 +260,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
-  defp entry_line("languages", language), do: "- #{md_text(language.name)}: #{language.level}"
+
+  defp entry_line("languages", language),
+    do: "- #{md_text(language.name)}: #{language.level}#{language_preferred_gloss(language)}"
+
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
   defp entry_line("social_media_accounts", account), do: social_line(account)
@@ -273,6 +276,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   def endorsements_label(tag) do
     gettext("%{count} endorsements", count: tag.endorsements)
   end
+
+  @doc """
+  The trailing " (Preferred contact language)" gloss on the member's first
+  language (issue #894), or `""` for the rest. Shared by both text renderers so
+  the machine-readable intent reads the same in Markdown and plain text.
+  """
+  def language_preferred_gloss(%{preferred: true}),
+    do: " (" <> gettext("Preferred contact language") <> ")"
+
+  def language_preferred_gloss(_language), do: ""
 
   defp work_line(work) do
     period = work_period(work)

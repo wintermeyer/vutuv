@@ -279,7 +279,10 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
-  defp entry_line("languages", language), do: "* #{language.name}: #{language.level}"
+
+  defp entry_line("languages", language),
+    do: "* #{language.name}: #{language.level}#{Markdown.language_preferred_gloss(language)}"
+
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "* #{email.type}: #{email.value}"
   defp entry_line("social_media_accounts", account), do: "* #{account.provider}: #{account.url}"

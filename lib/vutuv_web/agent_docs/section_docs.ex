@@ -49,7 +49,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   def build_index(user, section, entries) when is_map_key(@sections, section) do
     segment = Atom.to_string(section)
     title = index_title(section, UserHelpers.full_name(user))
-    entries = Enum.map(entries, &entry(section, &1))
+    entries = index_entries(section, entries)
 
     AgentDocs.doc_meta(segment, "/#{user.username}/#{segment}", noindex: true, noai: true)
     |> Map.merge(%{
@@ -123,6 +123,11 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry(:emails, record), do: email_entry(record)
   defp entry(:tags, record), do: tag_entry(record)
 
+  # An index's whole entry list. Languages need the list (not per-record `entry/2`)
+  # to flag the preferred head, so they route through `language_entries/1`.
+  defp index_entries(:languages, records), do: language_entries(records)
+  defp index_entries(section, records), do: Enum.map(records, &entry(section, &1))
+
   # The shared entry vocabulary (also used by ProfileDoc).
 
   # Every entry map carries the record's id: the public docs gain a stable
@@ -172,6 +177,20 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       awarded: year_month(qualification.awarded_year, qualification.awarded_month),
       expires: year_month(qualification.expires_year, qualification.expires_month)
     }
+  end
+
+  @doc """
+  A member's language entries, mapped to doc maps and — once there is a choice
+  (2+ languages) — with the head flagged `preferred: true` (issue #894). The
+  entries arrive in the member's own order (`Language.ordered/1`), so the first
+  is the language they prefer to be contacted in. Shared by the profile doc and
+  the `/:slug/languages` index doc so both mark it identically.
+  """
+  def language_entries(languages) do
+    case Enum.map(languages, &language_entry/1) do
+      [first | [_ | _] = rest] -> [Map.put(first, :preferred, true) | rest]
+      entries -> entries
+    end
   end
 
   @doc false
