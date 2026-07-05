@@ -241,6 +241,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   # One entry of a profile section — the same line on the profile page and
   # on the section's own index / show pages.
+  # An honor tag is an admin-granted badge, not a peer-vouched skill, so it shows
+  # the "honor tag" marker in place of the endorsement count.
+  defp entry_line("tags", %{honor: true} = tag),
+    do: "- [#{tag.name}](#{tag.url}) (#{gettext("honor tag")})"
+
   defp entry_line("tags", tag), do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)

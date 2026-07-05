@@ -35,4 +35,58 @@
       <%= @tag.description %>
     </p>
   <% end %>
+
+  <h1>
+    <strong><%= gettext "Honor tag" %>:</strong>
+  </h1>
+  <p>
+    <%= if @tag.honor?, do: gettext("Yes"), else: gettext("No") %>
+  </p>
 </.card_section>
+
+<%= if @tag.honor? do %>
+  <.card_section>
+    <h1>
+      <strong><%= gettext "Members with this tag" %></strong>
+    </h1>
+    <p class="editform__hint">
+      <%= gettext(
+        "Only site admins can grant or remove this tag. Removing a member here does not delete the tag; deleting the tag above removes it from everyone."
+      ) %>
+    </p>
+
+    <.form for={%{}} action={~p"/admin/tags/#{@tag}/members"} class="editform">
+      <div class="editform__field">
+        <label for="tag-member"><%= gettext "Add a member (by @handle or email)" %></label>
+        <input type="text" id="tag-member" name="member" autocomplete="off" />
+      </div>
+      <div class="editform__actions">
+        <button class="button" type="submit"><%= gettext "Add member" %></button>
+      </div>
+    </.form>
+
+    <%= if @holders == [] do %>
+      <p class="card__empty"><%= gettext "No members hold this tag yet." %></p>
+    <% else %>
+      <div class="card__tablewrap">
+        <table class="pure-table">
+          <tbody>
+            <tr :for={holder <- @holders}>
+              <td>
+                <.link navigate={~p"/#{holder}"}><%= full_name(holder) %></.link>
+                <span class="breakwrap">@<%= holder.username %></span>
+              </td>
+              <td class="text-right">
+                <.edit_delete_actions
+                  delete_to={~p"/admin/tags/#{@tag}/members/#{holder.id}"}
+                  title_delete={gettext("Remove from tag")}
+                  confirm={gettext("Remove this member from the tag?")}
+                />
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </.card_section>
+<% end %>

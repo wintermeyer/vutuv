@@ -138,14 +138,18 @@ defmodule VutuvWeb.UserTagController do
   end
 
   def delete(conn, %{"id" => _id}) do
-    user_tag = conn.assigns[:user_tag]
+    # Through the Tags.delete_user_tag/1 chokepoint so an honor tag
+    # (a badge a member did not grant themselves) cannot be shed here.
+    case Vutuv.Tags.delete_user_tag(conn.assigns[:user_tag]) do
+      {:ok, _} ->
+        conn
+        |> put_flash(:info, gettext("User tag deleted successfully."))
+        |> redirect(to: ~p"/settings/tags")
 
-    # Here we use delete! (with a bang) because we expect
-    # it to always work (and if it does not, it will raise).
-    Repo.delete!(user_tag)
-
-    conn
-    |> put_flash(:info, gettext("User tag deleted successfully."))
-    |> redirect(to: ~p"/settings/tags")
+      {:error, :honor} ->
+        conn
+        |> put_flash(:error, gettext("This tag can only be removed by a site admin."))
+        |> redirect(to: ~p"/settings/tags")
+    end
   end
 end

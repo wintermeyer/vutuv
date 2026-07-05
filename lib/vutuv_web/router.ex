@@ -419,6 +419,13 @@ defmodule VutuvWeb.Router do
 
     resources("/tags", TagController, param: "slug")
 
+    # The member roster of an honor tag (the "vutuv_developer" badge):
+    # add a member by @handle/email, remove one. Only meaningful for a tag
+    # flagged honor?; the roster block on the tag's show page is gated on
+    # it. `:id` on delete is the member's user id.
+    post("/tags/:tag_slug/members", TagMemberController, :create)
+    delete("/tags/:tag_slug/members/:id", TagMemberController, :delete)
+
     # The registered OAuth apps + the bad-player kill switch. The list is a
     # LiveView (below) so suspend/unsuspend act reload-free; these POSTs are the
     # no-JS / scriptable fallback.

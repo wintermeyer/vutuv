@@ -8,6 +8,7 @@ defmodule VutuvWeb.Admin.TagController do
     field: :slug
   )
 
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias VutuvWeb.ControllerHelpers
 
@@ -38,7 +39,8 @@ defmodule VutuvWeb.Admin.TagController do
   end
 
   def show(conn, _params) do
-    render(conn, "show.html", tag: conn.assigns[:tag])
+    tag = conn.assigns[:tag]
+    render(conn, "show.html", tag: tag, holders: Tags.tag_holders(tag))
   end
 
   def edit(conn, _params) do

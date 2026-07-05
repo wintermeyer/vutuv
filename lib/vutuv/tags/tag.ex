@@ -10,6 +10,10 @@ defmodule Vutuv.Tags.Tag do
     field(:slug, :string)
     field(:name, :string)
     field(:description, :string)
+    # When true the tag is reserved site-wide: only site admins can assign or
+    # remove it (the "vutuv_developer" badge). Set only through the admin edit
+    # form / the generic changeset head — never the member "value" head below.
+    field(:honor?, :boolean, default: false)
 
     has_many(:user_tags, Vutuv.Tags.UserTag)
 
@@ -36,7 +40,7 @@ defmodule Vutuv.Tags.Tag do
 
   def changeset(struct, params) do
     struct
-    |> cast(params, [:slug, :name, :description])
+    |> cast(params, [:slug, :name, :description, :honor?])
     |> maybe_gen_slug()
     |> shared_validations()
   end
@@ -64,7 +68,7 @@ defmodule Vutuv.Tags.Tag do
 
   def edit_changeset(struct, params \\ %{}) do
     struct
-    |> cast(params, [:slug, :name, :description])
+    |> cast(params, [:slug, :name, :description, :honor?])
     |> shared_validations()
   end
 

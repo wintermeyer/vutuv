@@ -264,6 +264,101 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "honor tags" do
+    # A tag flagged honor? is reserved site-wide: a member can neither
+    # self-assign nor self-remove it, and it is not endorsable. Only the admin
+    # chokepoints (admin_assign_tag/2, admin_unassign_tag/2) touch the roster.
+
+    test "add_user_tag/2 refuses a reserved (honor) tag" do
+      user = insert(:user)
+      insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+
+      assert {:error, changeset} = Tags.add_user_tag(user, "vutuv_developer")
+      assert %{tag_id: [_ | _]} = errors_on(changeset)
+      # Nothing was inserted for this member.
+      refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
+    end
+
+    test "add_user_tag/2 refuses a reserved tag matched case-insensitively" do
+      user = insert(:user)
+      insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+
+      assert {:error, _changeset} = Tags.add_user_tag(user, "Vutuv_Developer")
+      refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
+    end
+
+    test "add_user_tag/2 still links a normal (not honor) existing tag" do
+      user = insert(:user)
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "elixir")
+      assert user_tag.tag_id == tag.id
+    end
+
+    test "admin_assign_tag/2 assigns an honor tag to a member" do
+      user = insert(:user)
+      tag = insert(:tag, honor?: true)
+
+      assert {:ok, user_tag} = Tags.admin_assign_tag(tag, user)
+      assert user_tag.user_id == user.id
+      assert user_tag.tag_id == tag.id
+    end
+
+    test "admin_assign_tag/2 a second time returns the composite-unique error" do
+      user = insert(:user)
+      tag = insert(:tag, honor?: true)
+
+      assert {:ok, _} = Tags.admin_assign_tag(tag, user)
+      assert {:error, changeset} = Tags.admin_assign_tag(tag, user)
+      assert %{user_id_tag_id: ["You already have this tag."]} = errors_on(changeset)
+    end
+
+    test "admin_unassign_tag/2 removes the assignment and is idempotent" do
+      user = insert(:user)
+      tag = insert(:tag, honor?: true)
+      insert(:user_tag, user: user, tag: tag)
+
+      assert Tags.admin_unassign_tag(tag, user) == 1
+      assert Tags.admin_unassign_tag(tag, user) == 0
+    end
+
+    test "delete_user_tag/1 refuses an honor tag but deletes a normal one" do
+      user = insert(:user)
+      managed = insert(:user_tag, user: user, tag: insert(:tag, honor?: true))
+      normal = insert(:user_tag, user: user, tag: insert(:tag))
+
+      assert {:error, :honor} = Tags.delete_user_tag(managed)
+      assert Repo.get(UserTag, managed.id)
+
+      assert {:ok, _} = Tags.delete_user_tag(normal)
+      refute Repo.get(UserTag, normal.id)
+    end
+
+    test "create_endorsement/1 refuses an honor tag" do
+      endorser = insert(:user, email_confirmed?: true)
+      user_tag = insert(:user_tag, user: insert(:user), tag: insert(:tag, honor?: true))
+
+      assert {:error, _} =
+               Tags.create_endorsement(%{user_id: endorser.id, user_tag_id: user_tag.id})
+
+      refute Tags.endorsed?(user_tag.id, endorser.id)
+    end
+
+    test "tag_holders/1 lists the members carrying the tag" do
+      tag = insert(:tag, honor?: true)
+      alice = insert(:user, first_name: "Alice", last_name: "Adams")
+      bob = insert(:user, first_name: "Bob", last_name: "Baker")
+      _other = insert(:user)
+      insert(:user_tag, user: alice, tag: tag)
+      insert(:user_tag, user: bob, tag: tag)
+
+      ids = tag |> Tags.tag_holders() |> Enum.map(& &1.id)
+      assert alice.id in ids
+      assert bob.id in ids
+      assert length(ids) == 2
+    end
+  end
+
   describe "user_tag_endorsements" do
     test "create_endorsement/1 creates an endorsement" do
       user = insert(:user)

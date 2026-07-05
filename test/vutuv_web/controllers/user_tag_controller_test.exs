@@ -78,6 +78,52 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert redirected_to(conn) == ~p"/settings/tags/new"
       assert tag_count(user) == base
     end
+
+    test "refuses a reserved (honor) tag name", %{conn: conn, user: user, base: base} do
+      insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: "vutuv_developer"})
+
+      assert redirected_to(conn) == ~p"/settings/tags"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "duplicates or invalid"
+      assert tag_count(user) == base
+    end
+  end
+
+  # An honor tag is a badge only admins grant/remove, so a
+  # member cannot shed one from their own profile (the /settings tags editor).
+  describe "delete guards honor tags" do
+    setup %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, conn: conn, user: user}
+    end
+
+    test "a member cannot remove an honor tag from themselves", %{conn: conn, user: user} do
+      tag = insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+      {:ok, _} = Vutuv.Tags.admin_assign_tag(tag, user)
+
+      conn = delete(conn, ~p"/settings/tags/#{tag.slug}")
+
+      assert redirected_to(conn) == ~p"/settings/tags"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "site admin"
+
+      assert Repo.exists?(
+               from(ut in UserTag, where: ut.user_id == ^user.id and ut.tag_id == ^tag.id)
+             )
+    end
+
+    test "a member can still remove a normal tag", %{conn: conn, user: user} do
+      {:ok, user_tag} = Vutuv.Tags.add_user_tag(user, "Elixir")
+      tag_id = user_tag.tag_id
+
+      conn = delete(conn, ~p"/settings/tags/elixir")
+
+      assert redirected_to(conn) == ~p"/settings/tags"
+
+      refute Repo.exists?(
+               from(ut in UserTag, where: ut.user_id == ^user.id and ut.tag_id == ^tag_id)
+             )
+    end
   end
 
   # `UserTagController.resolve_slug` is a plug that runs before every action.

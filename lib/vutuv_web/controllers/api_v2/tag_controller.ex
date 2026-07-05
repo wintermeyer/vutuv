@@ -37,8 +37,15 @@ defmodule VutuvWeb.ApiV2.TagController do
   def delete(conn, %{"id" => id}) do
     case VutuvWeb.ControllerHelpers.get_owned(conn.assigns.current_user, :user_tags, id) do
       %{} = user_tag ->
-        Repo.delete!(user_tag)
-        send_resp(conn, 204, "")
+        case Tags.delete_user_tag(user_tag) do
+          {:ok, _} ->
+            send_resp(conn, 204, "")
+
+          {:error, :honor} ->
+            Problem.send_problem(conn, 403, "Forbidden",
+              detail: "This is an honor tag and can only be removed by a site admin."
+            )
+        end
 
       nil ->
         Problem.not_found(conn)

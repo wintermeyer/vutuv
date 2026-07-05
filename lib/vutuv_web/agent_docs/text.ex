@@ -262,6 +262,9 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   # One entry of a profile section — the same line on the profile page and
   # on the section's own index / show pages.
+  defp entry_line("tags", %{honor: true} = tag),
+    do: "* #{tag.name} (#{gettext("honor tag")})"
+
   defp entry_line("tags", tag), do: "* #{tag.name} (#{Markdown.endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)

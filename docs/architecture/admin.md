@@ -87,6 +87,38 @@ Query, filter and sort live in `Vutuv.Accounts.admin_user_filters/1` +
 
 Admins-only via the `:admin` live_session (`on_mount :require_admin`).
 
+## Tags and honor tags (`/admin/tags`)
+
+`/admin/tags` is the classic CRUD over the shared global tag catalog
+(`Vutuv.Tags.Tag`: slug, name, description) — create, rename and delete the tags
+members share. Deleting a tag removes it from every member who holds it
+(cascading FK).
+
+A tag can be flagged an **honor tag** (`tags.honor?`, edited on the tag's page).
+That reserves the tag name site-wide as an **admin-granted badge** — think
+`vutuv_developer` for the core team. The rules:
+
+- **Members cannot self-assign it.** `Vutuv.Tags.add_user_tag/2` (the single
+  self-assign chokepoint behind the tags editor, the JSON API, the LinkedIn
+  import and account setup) refuses any name that resolves to an honor
+  tag.
+- **Members cannot self-remove it.** Self-removal goes through
+  `Vutuv.Tags.delete_user_tag/1`, which refuses an honor user_tag
+  (`{:error, :honor}`); the tags editor and the JSON API both inherit the
+  guard.
+- **Only admins grant/remove it.** The tag's `/admin/tags/:slug` page grows a
+  **member roster** (`VutuvWeb.Admin.TagMemberController`): add a member by
+  `@handle` or email, list the holders, remove one. Assignment runs through
+  `Vutuv.Tags.admin_assign_tag/2` / `admin_unassign_tag/2`, which bypass the
+  reservation deliberately (the route is admin-gated).
+- **It is not endorsable** and renders with a small "honor tag" marker on the
+  profile chip and in the `.md`/`.txt`/`.json`/`.xml` agent-doc siblings
+  (`SectionDocs.tag_entry/1` carries `honor`).
+
+Reserve honor for **fresh** names. Flipping an already-widely-held tag
+locks its existing holders out of self-removal (there is no per-assignment
+"granted by admin" record); the edit form warns about this.
+
 ## Delete account (`/admin/users/delete`)
 
 A focused, admins-only **LiveView** for permanently removing an account.

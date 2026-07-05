@@ -180,6 +180,29 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.html =~ "drift_tester"
   end
 
+  test "profile: an honor tag is marked as such in every format", %{user: user} do
+    honor = insert(:tag, name: "Vutuvdeveloper", slug: "vutuvdeveloper", honor?: true)
+    insert(:user_tag, user: user, tag: honor)
+
+    rendered = formats_for("/drift_tester")
+
+    # The tag name rides along in every format like any tag.
+    assert_fact_everywhere(rendered, "Vutuvdeveloper")
+
+    # And every format marks it an honor tag rather than counting endorsements —
+    # it is an authoritative badge, not a peer vouch.
+    assert rendered.md =~ "honor tag"
+    assert rendered.txt =~ "honor tag"
+    assert rendered.html =~ "Honor tag"
+
+    tag_json =
+      Jason.decode!(rendered.json)["tags"]
+      |> Enum.find(&(&1["name"] == "Vutuvdeveloper"))
+
+    assert tag_json["honor"] == true
+    assert rendered.xml =~ "<honor>true</honor>"
+  end
+
   test "profile vCard carries the same contact facts", %{user: _user} do
     body = get(build_conn(), "/drift_tester.vcf").resp_body
 

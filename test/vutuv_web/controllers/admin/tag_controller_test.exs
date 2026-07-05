@@ -53,5 +53,25 @@ defmodule VutuvWeb.Admin.TagControllerTest do
       assert conn.status == 404
       assert conn.halted
     end
+
+    test "the edit form offers the honor checkbox", %{conn: conn} do
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      html = conn |> get(~p"/admin/tags/#{tag}/edit") |> html_response(200)
+      assert html =~ ~s(name="tag[honor?]")
+    end
+  end
+
+  describe "the honor flag" do
+    test "the edit form persists it both on and off", %{conn: conn} do
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+
+      conn = put(conn, ~p"/admin/tags/#{tag}", tag: %{"honor?" => "true"})
+      assert redirected_to(conn) == ~p"/admin/tags/#{tag}"
+      assert Repo.reload(tag).honor?
+
+      conn = conn |> recycle() |> put(~p"/admin/tags/#{tag}", tag: %{"honor?" => "false"})
+      assert redirected_to(conn) == ~p"/admin/tags/#{tag}"
+      refute Repo.reload(tag).honor?
+    end
   end
 end

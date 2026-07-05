@@ -895,12 +895,24 @@ defmodule Vutuv.Accounts do
   production release. Idempotent.
   """
   def promote_admin(identifier) when is_binary(identifier) do
-    identifier = identifier |> String.trim() |> String.downcase()
-
-    case get_user_by_username(identifier) || get_user_by_email_value(identifier) do
+    case get_user_by_handle_or_email(identifier) do
       nil -> {:error, :not_found}
       user -> user |> Ecto.Changeset.change(admin?: true) |> Repo.update()
     end
+  end
+
+  @doc """
+  Resolves a member from a free-typed identifier — a username (with or without a
+  leading `@`) or one of their email addresses — or `nil` when nothing matches.
+  The one lookup admins type a member into: `promote_admin/1` and the
+  honor tag roster (`VutuvWeb.Admin.TagMemberController`) share it, so
+  "give @handle the tag" and "make handle an admin" accept the same input.
+  """
+  def get_user_by_handle_or_email(identifier) when is_binary(identifier) do
+    identifier =
+      identifier |> String.trim() |> String.trim_leading("@") |> String.downcase()
+
+    get_user_by_username(identifier) || get_user_by_email_value(identifier)
   end
 
   defp get_user_by_email_value(value) do

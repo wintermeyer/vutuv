@@ -77,13 +77,98 @@ defmodule Vutuv.Tags do
   Tags `user` with `name`, creating the global tag or linking the existing
   one. Returns the `Repo.insert` result; a duplicate or invalid name comes
   back as `{:error, changeset}`.
+
+  An **honor** tag is reserved: a member typing its name here is refused
+  with `{:error, changeset}` (the tag can only be granted through
+  `admin_assign_tag/2`). This is the single self-assign chokepoint — the tags
+  page, the JSON API, the LinkedIn import and account setup all reach it — so
+  one guard covers every member entry point.
   """
   def add_user_tag(%User{} = user, name) when is_binary(name) do
-    user
-    |> Ecto.build_assoc(:user_tags, %{})
+    changeset =
+      user
+      |> Ecto.build_assoc(:user_tags, %{})
+      |> UserTag.changeset()
+      |> Tag.create_or_link_tag(%{"value" => name})
+
+    if reserved_tag?(changeset) do
+      {:error, reserved_tag_error(changeset)}
+    else
+      Repo.insert(changeset)
+    end
+  end
+
+  # Only the *link* branch of `Tag.create_or_link_tag/2` puts a `:tag_id` change
+  # (a freshly built tag is always `honor?: false`), so a member can only
+  # reach an honor tag by linking the existing reserved one. Nothing to
+  # look up unless a `:tag_id` was set.
+  defp reserved_tag?(changeset) do
+    case Ecto.Changeset.get_change(changeset, :tag_id) do
+      nil -> false
+      tag_id -> Repo.get(Tag, tag_id).honor?
+    end
+  end
+
+  defp reserved_tag_error(changeset) do
+    changeset
+    |> Ecto.Changeset.add_error(
+      :tag_id,
+      "is reserved and can only be assigned by a site admin"
+    )
+    |> Map.put(:action, :insert)
+  end
+
+  @doc """
+  Assigns an honor (or any) tag to `user`, bypassing the reservation in
+  `add_user_tag/2`. The admin roster chokepoint (`VutuvWeb.Admin.TagMemberController`),
+  gated by admin auth at the route. A re-assign comes back as `{:error, changeset}`
+  via the composite unique constraint.
+  """
+  def admin_assign_tag(%Tag{} = tag, %User{} = user) do
+    %UserTag{user_id: user.id, tag_id: tag.id}
     |> UserTag.changeset()
-    |> Tag.create_or_link_tag(%{"value" => name})
     |> Repo.insert()
+  end
+
+  @doc """
+  Removes `tag` from `user` (the admin roster's remove control). Returns the
+  number of rows deleted (0 or 1), so removing one that is already gone is a
+  no-op rather than a raise.
+  """
+  def admin_unassign_tag(%Tag{} = tag, %User{} = user) do
+    {count, _} =
+      from(ut in UserTag, where: ut.tag_id == ^tag.id and ut.user_id == ^user.id)
+      |> Repo.delete_all()
+
+    count
+  end
+
+  @doc """
+  Removes a member's own tag. The chokepoint for member self-removal (the tags
+  editor and the JSON API both go through here): an **honor** tag is
+  refused with `{:error, :honor}` — only an admin can take it back —
+  while a normal tag is deleted and returned as `{:ok, user_tag}`.
+  """
+  def delete_user_tag(%UserTag{} = user_tag) do
+    if UserTag.tag(user_tag).honor? do
+      {:error, :honor}
+    else
+      {:ok, Repo.delete!(user_tag)}
+    end
+  end
+
+  @doc """
+  The members carrying `tag`, ordered by name — the admin roster on the tag's
+  page. Narrow listing-row select, like the tag page's `recommended_users/1`.
+  """
+  def tag_holders(%Tag{} = tag) do
+    from(u in User,
+      join: ut in assoc(u, :user_tags),
+      where: ut.tag_id == ^tag.id,
+      order_by: [asc: u.last_name, asc: u.first_name],
+      select: struct(u, ^User.listing_fields())
+    )
+    |> Repo.all()
   end
 
   @doc """
@@ -123,15 +208,34 @@ defmodule Vutuv.Tags do
   endorsement paths must come through here (not a raw `Repo.insert`).
   """
   def create_endorsement(attrs) do
-    result = %UserTagEndorsement{} |> UserTagEndorsement.changeset(attrs) |> Repo.insert()
+    if endorsement_target_honor?(attrs) do
+      # An honor tag is an authoritative badge, not a peer vouch, so it
+      # is not endorsable. The profile hides the pill; this guards a crafted
+      # request that reaches the chokepoint anyway.
+      {:error, :honor}
+    else
+      result = %UserTagEndorsement{} |> UserTagEndorsement.changeset(attrs) |> Repo.insert()
 
-    with {:ok, endorsement} <- result do
-      # notify_endorsement preloaded the owner already, so reuse the id it
-      # returns for the live-count broadcast instead of re-querying it.
-      broadcast_endorsement_changed(notify_endorsement(endorsement), endorsement.user_tag_id)
+      with {:ok, endorsement} <- result do
+        # notify_endorsement preloaded the owner already, so reuse the id it
+        # returns for the live-count broadcast instead of re-querying it.
+        broadcast_endorsement_changed(notify_endorsement(endorsement), endorsement.user_tag_id)
+      end
+
+      result
     end
+  end
 
-    result
+  defp endorsement_target_honor?(attrs) do
+    user_tag_id = Map.get(attrs, :user_tag_id) || Map.get(attrs, "user_tag_id")
+
+    is_binary(user_tag_id) and
+      Repo.exists?(
+        from(ut in UserTag,
+          join: t in assoc(ut, :tag),
+          where: ut.id == ^user_tag_id and t.honor?
+        )
+      )
   end
 
   @doc """

@@ -557,11 +557,17 @@ defmodule VutuvWeb.UI do
 
   def tag_vote(assigns) do
     user_tag = assigns.user_tag
+    # An honor tag is an authoritative, admin-granted badge, not a peer vouch:
+    # never votable, no count pill, no roster — just the name + the honor marker.
+    honor? = UserTag.tag(user_tag).honor?
     viewer = assigns.viewer
     viewer_id = viewer && viewer.id
     total = Enum.count(user_tag.endorsements)
-    can_vote? = viewer_id && viewer_id != assigns.user.id
-    endorsed? = viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
+    can_vote? = !honor? && viewer_id && viewer_id != assigns.user.id
+
+    endorsed? =
+      !honor? && viewer_id && Enum.any?(user_tag.endorsements, &(&1.user_id == viewer_id))
+
     # An actionable viewer's own row is pre-rendered in the popover (hidden until
     # they endorse, then revealed by the JS toggle), so keep them out of the server
     # roster to avoid showing them twice.
@@ -569,6 +575,7 @@ defmodule VutuvWeb.UI do
 
     assigns =
       assigns
+      |> assign(:honor?, honor?)
       |> assign(:can_vote?, can_vote?)
       |> assign(:endorsed?, endorsed?)
       |> assign(:total, total)
@@ -578,15 +585,16 @@ defmodule VutuvWeb.UI do
       # Whether the hover roster has anything to show right now. An actionable viewer
       # on a still-unendorsed, no-other-endorser tag still gets the popover in the DOM
       # (so the JS can reveal their row on endorse) but with hover disabled until then.
-      |> assign(:roster_active?, others != [] || endorsed?)
+      |> assign(:roster_active?, !honor? && (others != [] || endorsed?))
 
     ~H"""
     <div class="group relative inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium hover:z-30 focus-within:z-30 dark:bg-brand-900/40">
       <.link
         navigate={~p"/#{@user}/tags/#{@user_tag}"}
-        class="text-brand-700 hover:underline dark:text-brand-100"
+        class="inline-flex items-center gap-1 text-brand-700 hover:underline dark:text-brand-100"
       >
         {UserTag.truncated_name(@user_tag)}
+        <.honor_tag_badge :if={@honor?} />
       </.link>
       <%!-- Actionable viewer (logged-in non-owner): the count pill itself is the
       endorse toggle. It looks just like the read-only pill until you endorse, then
@@ -619,11 +627,11 @@ defmodule VutuvWeb.UI do
       inline after the name, no endorsement-word so the Tags section stays about tags
       (tag_wording_test). The actionable viewer above gets the same pill as a button. --%>
       <span
-        :if={!@can_vote? and @total > 0}
+        :if={!@can_vote? && @total > 0 && !@honor?}
         class="inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-brand-100 px-1 text-[11px] font-bold tabular-nums text-brand-700 dark:bg-brand-800 dark:text-brand-100"
       >{@count}</span>
       <.voter_popover
-        :if={@total > 0 or @can_vote?}
+        :if={(@total > 0 || @can_vote?) && !@honor?}
         user={@user}
         user_tag={@user_tag}
         others={@others}
@@ -633,6 +641,28 @@ defmodule VutuvWeb.UI do
         active?={@roster_active?}
       />
     </div>
+    """
+  end
+
+  # The small honor marker on an honor-tag chip: an icon only (no text in the
+  # flow, so tag_wording_test stays about tags), labelled for assistive tech via
+  # title/aria-label. Marks a vutuv-granted badge as distinct from a self-claimed
+  # tag.
+  defp honor_tag_badge(assigns) do
+    ~H"""
+    <span
+      class="inline-flex shrink-0 text-brand-600 dark:text-brand-400"
+      title={gettext("Honor tag")}
+      aria-label={gettext("Honor tag")}
+    >
+      <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path
+          fill-rule="evenodd"
+          d="M8.603 3.799A4.49 4.49 0 0 1 12 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 0 1 3.498 1.307 4.491 4.491 0 0 1 1.307 3.497A4.49 4.49 0 0 1 21.75 12a4.49 4.49 0 0 1-1.549 3.397 4.491 4.491 0 0 1-1.307 3.497 4.491 4.491 0 0 1-3.497 1.307A4.49 4.49 0 0 1 12 21.75a4.49 4.49 0 0 1-3.397-1.549 4.49 4.49 0 0 1-3.498-1.306 4.491 4.491 0 0 1-1.307-3.498A4.49 4.49 0 0 1 2.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 0 1 1.307-3.497 4.49 4.49 0 0 1 3.5-1.307Zm7.007 6.387a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </span>
     """
   end
 

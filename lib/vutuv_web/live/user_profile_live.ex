@@ -302,14 +302,18 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
-  # Only a logged-in non-owner may endorse, and only a tag actually shown on
-  # this profile (the pill is rendered for those alone), so an arbitrary
-  # user_tag id from a crafted event is ignored.
+  # Only a logged-in non-owner may endorse, and only a *non* honor tag
+  # actually shown on this profile (the pill is rendered for those alone), so an
+  # arbitrary user_tag id — or a crafted endorse of an honor tag — is
+  # ignored.
   defp can_endorse?(socket, user_tag_id) do
     me = socket.assigns.current_user
 
     me && me.id != socket.assigns.user.id &&
-      Enum.any?(socket.assigns.user_tags, &(&1.id == user_tag_id))
+      Enum.any?(
+        socket.assigns.user_tags,
+        &(&1.id == user_tag_id and not &1.tag.honor?)
+      )
   end
 
   # Run a private-save toggle (bookmark/like a member) for a logged-in

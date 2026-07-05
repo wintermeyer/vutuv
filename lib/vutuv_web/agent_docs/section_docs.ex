@@ -186,6 +186,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       name: UserTag.name(user_tag),
       slug: user_tag.tag.slug,
       endorsements: endorsement_count(user_tag),
+      # An honor tag is an admin-granted badge (not self-assigned, not
+      # endorsable). Carried so every format can mark it.
+      honor: user_tag.tag.honor?,
       url: AgentDocs.abs_url("/tags/#{user_tag.tag.slug}")
     }
   end

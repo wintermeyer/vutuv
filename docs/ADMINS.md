@@ -290,3 +290,21 @@ Run on the server, against the release:
 
 Note: `bin/vutuv eval` is the supported console entry point; `rpc`/`remote`
 need distribution, which the reference setup disables.
+
+## Honor tags
+
+Besides the tags members give themselves, an admin can define **honor**
+tags: badges that only admins grant, e.g. `vutuv_developer` for your
+core team. Members can neither add nor remove them, and they are not endorsable.
+
+From the admin panel (`/admin` → Tags):
+
+1. Create the tag (or open an existing one), then **Edit** it and tick
+   **Honor**.
+2. On the tag's page, use **Add a member (by @handle or email)** to grant it, and
+   the per-row **Remove** to take it back. The page lists everyone who holds it.
+
+The badge shows on the member's profile (and its `.md`/`.json`/… siblings) with a
+small "honor tag" marker. Reserve honor for **new** tag names: flipping a
+tag that members already hold makes them keep it but blocks them from removing it
+themselves.

@@ -16,6 +16,18 @@
     <%= text_input f, :description %>
     <%= error_tag f, :description %>
   </.editform_field>
+  <.editform_field form={f} field={:honor?}>
+    <label>
+      <%= checkbox f, :honor? %>
+      <%= gettext("Honor tag (only site admins can assign it)") %>
+    </label>
+    <p class="editform__hint">
+      <%= gettext(
+        "Members can neither add nor remove this tag; grant it to members on the tag page. If the tag already has members, they keep it but can no longer remove it themselves."
+      ) %>
+    </p>
+    <%= error_tag f, :honor? %>
+  </.editform_field>
   <% else %>
   <.editform_field form={f} field={:value}>
     <%= label f, :value %>
