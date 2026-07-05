@@ -697,30 +697,89 @@ function setupCharCounters() {
 }
 onReady(setupCharCounters)
 
-// A "clear this field" button (the profile editor's "Remove date of birth",
-// see user/edit.html.heex). The native <input type="date"> gives no clear
-// affordance in some browsers (Safari on macOS renders spinners with no ✕), so
-// a member could set a birthday but never remove it (issue #901). The button
-// carries data-clear-field={target input id}; here we empty that input so the
-// member reviews the change and then Saves. With JS off the same button is a
-// real submit (name=clear_birthdate) and the controller nils the field, so this
-// only spares the extra round-trip and the accidental save of other edits.
-function wireClearField(btn) {
-  if (!once(btn, "clearField")) return
-  const input = document.getElementById(btn.dataset.clearField)
-  if (!input) return
-  btn.addEventListener("click", (e) => {
+// The profile editor's "Remove date of birth" control (see user/edit.html.heex).
+// The native <input type="date"> gives no clear affordance in some browsers
+// (Safari on macOS renders spinners with no ✕), so a member could set a birthday
+// but never remove it (issue #901). The trigger is a real submit
+// (name=clear_birthdate) so it still works with JS off; here we intercept it and
+// ask "Are you sure?" in a designed dialog first, then submit for real. We use
+// form.requestSubmit(trigger) so the trigger's name/value ride along and the
+// controller nils the date even though the date input still carries its old
+// value (form.submit() would drop the submitter, and thus clear_birthdate).
+function setupBirthdayRemove() {
+  const trigger = document.querySelector("[data-birthday-remove]")
+  const modal = document.getElementById("birthday-remove-modal")
+  if (!trigger || !modal || !once(modal, "birthdayRemove")) return
+
+  const confirmBtn = modal.querySelector("[data-birthday-remove-confirm]")
+  let lastFocused = null
+
+  const open = () => {
+    lastFocused = document.activeElement
+    modal.classList.remove("hidden")
+    confirmBtn?.focus()
+  }
+  const close = () => {
+    modal.classList.add("hidden")
+    if (lastFocused && typeof lastFocused.focus === "function") lastFocused.focus()
+    lastFocused = null
+  }
+
+  trigger.addEventListener("click", (e) => {
     e.preventDefault()
-    input.value = ""
-    input.dispatchEvent(new Event("input", { bubbles: true }))
-    input.focus()
+    open()
+  })
+
+  confirmBtn?.addEventListener("click", () => {
+    const form = trigger.form
+    close()
+    if (form && form.requestSubmit) {
+      form.requestSubmit(trigger)
+    } else if (form) {
+      // Fallback for browsers without requestSubmit: carry clear_birthdate by hand.
+      const hidden = document.createElement("input")
+      hidden.type = "hidden"
+      hidden.name = trigger.name
+      hidden.value = trigger.value
+      form.appendChild(hidden)
+      form.submit()
+    }
+  })
+
+  // Cancel button and backdrop dismiss without removing anything.
+  modal.addEventListener("click", (e) => {
+    if (
+      e.target.closest("[data-birthday-remove-cancel]") ||
+      e.target.hasAttribute("data-birthday-remove-backdrop")
+    ) {
+      close()
+    }
+  })
+
+  // Esc closes; Tab cycles between the two buttons so focus can't slip behind
+  // the modal. (The keyboard-shortcuts handler also swallows shortcuts while a
+  // [data-block-shortcuts] modal is open, so "n"/"g …" don't fire behind it.)
+  modal.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      e.preventDefault()
+      close()
+      return
+    }
+    if (e.key !== "Tab") return
+    const buttons = modal.querySelectorAll("button")
+    if (buttons.length === 0) return
+    const first = buttons[0]
+    const last = buttons[buttons.length - 1]
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault()
+      last.focus()
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault()
+      first.focus()
+    }
   })
 }
-
-function setupClearFields() {
-  document.querySelectorAll("[data-clear-field]").forEach(wireClearField)
-}
-onReady(setupClearFields)
+onReady(setupBirthdayRemove)
 
 // The ad banner (layout strip between navigation and content, see
 // VutuvWeb.Plug.AdBanner) disappears on its own after two minutes: fade out,

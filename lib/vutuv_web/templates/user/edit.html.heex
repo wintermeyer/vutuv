@@ -189,19 +189,29 @@ lands here). --%>
             <%= error_tag f, :birthdate %>
             <%!-- The native date input offers no clear button in some browsers
             (Safari on macOS), so a member could set a birthday but never remove
-            it (issue #901). This button empties the field: the JS enhancement
-            (data-clear-field) clears it client-side so the member can Save; with
-            JS off it submits clear_birthdate and the controller nils it. Shown
-            only while a birthday is set. --%>
+            it (issue #901). This is a real clear_birthdate submit (works with JS
+            off — the controller nils the date). With JS the birthday-remove
+            enhancement in app.js intercepts the click and asks for confirmation
+            in the dialog below, then submits for real. Shown only while a
+            birthday is set. --%>
             <button
               :if={@user.birthdate}
               type="submit"
               name="clear_birthdate"
               value="1"
               formnovalidate
-              data-clear-field="user_birthdate"
-              class="mt-2 text-sm font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200"
+              data-birthday-remove
+              aria-haspopup="dialog"
+              aria-controls="birthday-remove-modal"
+              class="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
             >
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.02-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+                />
+              </svg>
               {gettext("Remove date of birth")}
             </button>
           </div>
@@ -219,6 +229,49 @@ lands here). --%>
       </.link>
     </div>
   </.form>
+
+  <%!-- "Are you sure?" dialog for removing the date of birth. Rendered only while
+  a birthday is set (like the trigger) and hidden until the birthday-remove
+  enhancement in app.js opens it; its Remove button submits the edit form's
+  clear_birthdate control for real. JS off never sees it — the trigger is a plain
+  submit then. Uses the same overlay recipe as the keyboard-shortcuts help. --%>
+  <div
+    :if={@user.birthdate}
+    id="birthday-remove-modal"
+    class="hidden fixed inset-0 z-[60] items-center justify-center p-4 [&:not(.hidden)]:flex"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="birthday-remove-title"
+    data-block-shortcuts
+  >
+    <div data-birthday-remove-backdrop class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"></div>
+    <div class="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
+      <h2 id="birthday-remove-title" class="text-lg font-bold text-slate-900 dark:text-white">
+        {gettext("Remove your date of birth?")}
+      </h2>
+      <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
+        )}
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button
+          type="button"
+          data-birthday-remove-cancel
+          class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+        >
+          {gettext("Cancel")}
+        </button>
+        <button
+          type="button"
+          data-birthday-remove-confirm
+          class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+        >
+          {gettext("Remove date of birth")}
+        </button>
+      </div>
+    </div>
+  </div>
 
   <%!-- On phones the sidebar is hidden, so list the sibling profile sections
   here — a member who tapped "Edit profile" to add a job must not hit a dead

@@ -832,11 +832,34 @@ defmodule VutuvWeb.UserControllerTest do
     assert is_nil(Repo.get(User, user.id).birthdate)
   end
 
-  test "the Remove-date-of-birth button is hidden when no birthdate is set", %{conn: conn} do
+  test "the Remove-date-of-birth control opens a confirm dialog before clearing", %{conn: conn} do
+    # The remove control is a real submit (no-JS fallback) hooked by app.js, which
+    # intercepts the click and asks "Are you sure?" in a designed dialog before
+    # submitting for real. Assert both the hooked trigger and the dialog markup
+    # render so the JS enhancement has something to wire (issue #901 polish).
+    {conn, user} = create_and_login_user(conn)
+
+    user |> Ecto.Changeset.change(%{birthdate: ~D[1990-04-15]}) |> Repo.update!()
+
+    html = conn |> get(~p"/settings/profile") |> html_response(200)
+
+    # Trigger: still a real clear_birthdate submit (no-JS path), now hooked.
+    assert html =~ "data-birthday-remove"
+    assert html =~ ~s(name="clear_birthdate")
+
+    # The confirm dialog and its two controls.
+    assert html =~ ~s(id="birthday-remove-modal")
+    assert html =~ "data-birthday-remove-confirm"
+    assert html =~ "data-birthday-remove-cancel"
+  end
+
+  test "the Remove-date-of-birth control and dialog are hidden when no birthdate is set",
+       %{conn: conn} do
     {conn, _user} = create_and_login_user(conn)
 
     html = conn |> get(~p"/settings/profile") |> html_response(200)
     refute html =~ ~s(name="clear_birthdate")
+    refute html =~ ~s(id="birthday-remove-modal")
   end
 
   test "the privacy page asks the search-engine and the AI question separately", %{conn: conn} do

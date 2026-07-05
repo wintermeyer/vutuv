@@ -122,6 +122,14 @@ function overlay() {
   return document.getElementById("shortcuts-overlay")
 }
 
+// A designed confirm dialog (e.g. the profile editor's "Remove date of birth")
+// marks itself [data-block-shortcuts] and shows by dropping its `hidden` class.
+// While one is open it is modal, so every shortcut but Escape must stay inert
+// behind it — otherwise "n"/"g …" would act on the page under the dialog.
+function blockingModalOpen() {
+  return !!document.querySelector("[data-block-shortcuts]:not(.hidden)")
+}
+
 function overlayOpen() {
   const o = overlay()
   return o && !o.classList.contains("hidden")
@@ -169,6 +177,10 @@ function handleKey(e) {
     resetSequence()
     return
   }
+
+  // A non-shortcuts confirm dialog (data-block-shortcuts) is open: it owns Esc
+  // itself and every other key must not reach the shortcut handlers below.
+  if (blockingModalOpen()) return
 
   // While the help dialog is open it is modal: Tab stays trapped on its close
   // button, "?" closes it, and every other shortcut is inert behind it.
