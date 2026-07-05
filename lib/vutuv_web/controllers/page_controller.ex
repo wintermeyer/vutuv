@@ -7,15 +7,29 @@ defmodule VutuvWeb.PageController do
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
 
-  def index(conn, _params) do
+  def index(conn, params) do
+    # An invitation link lands here with the invited person's data in the query
+    # (first_name, last_name, gender, tags, email — see Vutuv.Invitations). Stamp
+    # the invitation's first visit (a no-op for a plain visitor or an unknown
+    # address) and prefill the sign-up form with whatever the inviter entered.
+    Vutuv.Invitations.record_visit(params["email"])
+
     # Sign-up form defaults: preselect "männlich" (gender), pre-check "show on
     # profile" (public?: true) and preselect the "Work" email type. These prime
     # the form's controls only - the User/Email schemas keep their own defaults
     # for every other code path, so an address created without an explicit
     # choice still stays private.
     changeset =
-      User.changeset(%User{gender: "male"})
-      |> Ecto.Changeset.put_assoc(:emails, [%Email{public?: true, email_type: "Work"}])
+      %User{
+        gender: prefill_gender(params["gender"]),
+        first_name: presence(params["first_name"]),
+        last_name: presence(params["last_name"]),
+        tag_list: presence(params["tags"])
+      }
+      |> User.changeset()
+      |> Ecto.Changeset.put_assoc(:emails, [
+        %Email{public?: true, email_type: "Work", value: presence(params["email"])}
+      ])
 
     prefetch = "/listings/most_followed_users"
 
@@ -117,7 +131,10 @@ defmodule VutuvWeb.PageController do
       end
 
     case Vutuv.Accounts.register_user(conn, user_params) do
-      {:ok, _user} ->
+      {:ok, user} ->
+        # If this address was invited with the auto-follow flag, the inviter now
+        # follows the new member (a no-op otherwise). See Vutuv.Invitations.
+        Vutuv.Invitations.apply_auto_follow(email, user)
         handle_post_registration_login(conn, email)
 
       {:error, changeset} ->
@@ -296,4 +313,20 @@ defmodule VutuvWeb.PageController do
         |> halt()
     end
   end
+
+  # Only honor a prefilled gender the sign-up form actually offers; otherwise
+  # keep the form's own "male" default.
+  defp prefill_gender(gender) when gender in ["male", "female", "other"], do: gender
+  defp prefill_gender(_), do: "male"
+
+  # Trim a prefill param down to its content, or nil when blank/absent, so an
+  # empty query value leaves the field empty rather than pre-filling "".
+  defp presence(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp presence(_), do: nil
 end

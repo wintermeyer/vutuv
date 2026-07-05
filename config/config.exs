@@ -101,6 +101,13 @@ config :vutuv, :fetch_bluesky_posts, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
+# The most invitations a single member may send in one Berlin calendar day
+# (see Vutuv.Invitations) — the abuse guard on outbound invite email, which
+# protects the installation's sender reputation. Tune it per installation
+# (a small intranet may want it higher/lower). Runtime override:
+# INVITATION_DAILY_CAP (config/runtime.exs).
+config :vutuv, :invitation_daily_cap, 50
+
 # --- Operator identity ------------------------------------------------------
 # Everything naming the party who runs THIS installation lives behind these
 # keys, so another company can run vutuv without editing source. The defaults

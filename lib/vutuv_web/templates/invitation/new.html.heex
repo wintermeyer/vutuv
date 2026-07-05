@@ -1,0 +1,110 @@
+<% label_class = "block text-sm font-medium text-slate-700 dark:text-slate-200 mb-1" %>
+<% hint_class = "mt-1 text-sm text-slate-600 dark:text-slate-400" %>
+<div class="py-6">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
+      {gettext("Invite a friend to vutuv")}
+    </h1>
+    <p class={"mt-2 #{hint_class}"}>
+      {gettext(
+        "Fill in what you know about the person. We email them a link that opens the sign-up form already filled in, so they only have to confirm."
+      )}
+    </p>
+
+    <div class="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm font-medium text-brand-700 ring-1 ring-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:ring-brand-800">
+      {gettext(
+        "Thank you for spreading the word! vutuv grows through word of mouth, so every invitation you send really helps."
+      )}
+    </div>
+
+    <.card class="mt-6">
+      <.form :let={f} for={@changeset} action={~p"/system/invitations"} class="space-y-6">
+        <.form_error changeset={@changeset} />
+
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div>
+            {label(f, :first_name, gettext("First name"), class: label_class)}
+            {text_input(f, :first_name,
+              class: input_class(f, :first_name),
+              placeholder: gettext("First name"),
+              "aria-invalid": f.errors[:first_name] && "true"
+            )}
+            {error_tag(f, :first_name)}
+          </div>
+          <div>
+            {label(f, :last_name, gettext("Last name"), class: label_class)}
+            {text_input(f, :last_name,
+              class: input_class(f, :last_name),
+              placeholder: gettext("Last name"),
+              "aria-invalid": f.errors[:last_name] && "true"
+            )}
+            {error_tag(f, :last_name)}
+          </div>
+        </div>
+        <p class={hint_class}>{gettext("Enter at least a first or a last name.")}</p>
+
+        <div>
+          {label(f, :email, gettext("Email address"), class: label_class)}
+          {email_input(f, :email,
+            class: input_class(f, :email),
+            placeholder: gettext("name@example.com"),
+            required: true,
+            "aria-invalid": f.errors[:email] && "true"
+          )}
+          {error_tag(f, :email)}
+        </div>
+
+        <div>
+          {label(f, :gender, gettext("Gender"), class: label_class)}
+          {select(f, :gender, gender_options(), class: input_class(f, :gender))}
+          {error_tag(f, :gender)}
+        </div>
+
+        <div>
+          {label(f, :tag_list, gettext("Tags"), class: label_class)}
+          {text_input(f, :tag_list,
+            class: input_class(f, :tag_list),
+            placeholder: gettext("e.g. JavaScript, Cooking, Origami"),
+            "aria-invalid": f.errors[:tag_list] && "true"
+          )}
+          <p :if={!f.errors[:tag_list]} class={hint_class}>
+            {gettext("Optional. They can adjust these when they sign up.")}
+          </p>
+          {error_tag(f, :tag_list)}
+        </div>
+
+        <div>
+          {label(f, :message, gettext("Personal message"), class: label_class)}
+          {textarea(f, :message,
+            class: [input_class(f, :message), "resize-y"],
+            rows: 4,
+            placeholder: gettext("Add a personal note (optional)"),
+            "aria-invalid": f.errors[:message] && "true"
+          )}
+          <p :if={!f.errors[:message]} class={hint_class}>
+            {gettext("Optional. Shown inside the invitation email.")}
+          </p>
+          {error_tag(f, :message)}
+        </div>
+
+        <div>
+          {label(f, :locale, gettext("Language of the invitation"), class: label_class)}
+          {select(f, :locale, locale_options(), class: input_class(f, :locale))}
+          {error_tag(f, :locale)}
+        </div>
+
+        <label class="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-200">
+          {checkbox(f, :auto_follow, class: checkbox_class())}
+          <span>{gettext("Automatically follow this person once they join vutuv.")}</span>
+        </label>
+
+        <div class="flex justify-end">
+          {submit(gettext("Send invitation"),
+            class:
+              "rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          )}
+        </div>
+      </.form>
+    </.card>
+  </div>
+</div>

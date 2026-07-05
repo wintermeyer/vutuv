@@ -1,0 +1,24 @@
+<.email_layout preheader={"#{@inviter_name} invited you to join vutuv"} locale={@locale}>
+  <.email_p>{@greeting},</.email_p>
+  <.email_p>
+    {@inviter_name} (<.email_link href={@inviter_url}>{@inviter_url}</.email_link>) has invited
+    you to join vutuv, the fair and open professional network.
+  </.email_p>
+  <%= if @message do %>
+    <.email_p>Along with a personal message:</.email_p>
+    <.email_quote body={@message} />
+  <% end %>
+  <.email_p>
+    vutuv accounts are free. Creating your profile takes about a minute. We have already
+    filled in what {@inviter_name} entered for you, so you only need to confirm:
+  </.email_p>
+  <.email_button href={@invite_url}>Create my profile</.email_button>
+  <.email_p>
+    If you would rather not join, you can simply ignore this email.
+  </.email_p>
+  <.email_p>
+    We do not store your personal data unasked, and we send only one invitation to any
+    email address.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

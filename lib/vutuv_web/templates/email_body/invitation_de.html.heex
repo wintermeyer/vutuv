@@ -1,0 +1,25 @@
+<.email_layout preheader={"#{@inviter_name} hat Sie zu vutuv eingeladen"} locale={@locale}>
+  <.email_p>{@greeting},</.email_p>
+  <.email_p>
+    {@inviter_name} (<.email_link href={@inviter_url}>{@inviter_url}</.email_link>) hat Sie zu
+    vutuv eingeladen, dem fairen und offenen beruflichen Netzwerk.
+  </.email_p>
+  <%= if @message do %>
+    <.email_p>Dazu eine persönliche Nachricht:</.email_p>
+    <.email_quote body={@message} />
+  <% end %>
+  <.email_p>
+    vutuv-Accounts sind gratis. Ihr Profil zu erstellen dauert etwa eine Minute. Wir haben
+    bereits ausgefüllt, was {@inviter_name} für Sie eingetragen hat, Sie müssen es nur noch
+    bestätigen:
+  </.email_p>
+  <.email_button href={@invite_url}>Profil erstellen</.email_button>
+  <.email_p>
+    Falls Sie nicht beitreten möchten, können Sie diese E-Mail einfach ignorieren.
+  </.email_p>
+  <.email_p>
+    Wir speichern Ihre persönlichen Daten nicht ungefragt und senden an eine E-Mail-Adresse
+    nur eine einzige Einladung.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

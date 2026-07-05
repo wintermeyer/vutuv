@@ -109,6 +109,7 @@ Everything else has a default (the vutuv.de production value):
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
+| `INVITATION_DAILY_CAP` | `50` | Most invitations a single member may send per day (abuse guard on outbound invite email) |
 
 The defaults marked **Set this** are vutuv.de's operator identity — a fresh
 installation should override all of them on day one, or your daily reports

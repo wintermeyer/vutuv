@@ -1,0 +1,63 @@
+<% hint_class = "text-sm text-slate-600 dark:text-slate-400" %>
+<div class="py-6">
+  <div class="mx-auto max-w-2xl">
+    <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
+      {gettext("Your invitation is on its way")}
+    </h1>
+    <p class={"mt-2 #{hint_class}"}>
+      {gettext(
+        "If this is the first invitation to that address, we are sending it by email right now. Thank you for helping vutuv grow!"
+      )}
+    </p>
+
+    <.card class="mt-6">
+      <div class="space-y-2 text-sm">
+        <div class="flex gap-3">
+          <span class="w-32 shrink-0 text-slate-600 dark:text-slate-400">{gettext("To")}</span>
+          <span class="min-w-0 font-medium text-slate-900 dark:text-slate-100">
+            {@preview.to_name}
+          </span>
+        </div>
+        <div class="flex gap-3">
+          <span class="w-32 shrink-0 text-slate-600 dark:text-slate-400">
+            {gettext("Email address")}
+          </span>
+          <span class="min-w-0 break-words font-medium text-slate-900 dark:text-slate-100">
+            {@preview.to_email}
+          </span>
+        </div>
+        <div class="flex gap-3">
+          <span class="w-32 shrink-0 text-slate-600 dark:text-slate-400">{gettext("Subject")}</span>
+          <span class="min-w-0 font-medium text-slate-900 dark:text-slate-100">
+            {@preview.subject}
+          </span>
+        </div>
+      </div>
+
+      <p class={"mt-4 border-t border-slate-100 pt-4 #{hint_class} dark:border-slate-800"}>
+        {gettext("This is exactly what they receive:")}
+      </p>
+      <div class="mt-2 overflow-hidden rounded-xl ring-1 ring-slate-200 dark:ring-slate-800">
+        <%!-- The rendered email in a sandboxed iframe (no scripts run) so its
+              own inline styles stay isolated from the page. --%>
+        <iframe
+          srcdoc={@preview.html_body}
+          sandbox="allow-same-origin"
+          title={gettext("Invitation email preview")}
+          loading="lazy"
+          class="h-[640px] w-full bg-white"
+        >
+        </iframe>
+      </div>
+    </.card>
+
+    <div class="mt-6">
+      <.link
+        href={~p"/system/invitations/new"}
+        class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        {gettext("Send another invitation")}
+      </.link>
+    </div>
+  </div>
+</div>

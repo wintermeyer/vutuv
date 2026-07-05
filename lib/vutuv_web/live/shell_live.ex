@@ -346,6 +346,10 @@ defmodule VutuvWeb.ShellLive do
                     {gettext("Likes")}
                   </.link>
 
+                  <.link href={~p"/system/invitations/new"} class={[menu_item_class(), "block"]}>
+                    {gettext("Invite a friend")}
+                  </.link>
+
                   <div class="my-1 border-t border-slate-100 dark:border-slate-800"></div>
 
                   <%!-- "Settings" opens the settings hub — the one grouped map of

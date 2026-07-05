@@ -1,0 +1,23 @@
+<%= @greeting %>,
+
+<%= @inviter_name %> (<%= @inviter_url %>) hat Sie zu vutuv eingeladen, dem
+fairen und offenen beruflichen Netzwerk.
+<%= if @message do %>
+Dazu eine persönliche Nachricht:
+
+  <%= @message %>
+<% end %>
+vutuv-Accounts sind gratis. Ihr Profil zu erstellen dauert etwa eine Minute.
+Wir haben bereits ausgefüllt, was <%= @inviter_name %> für Sie eingetragen hat,
+Sie müssen es nur noch bestätigen:
+
+<%= @invite_url %>
+
+Falls Sie nicht beitreten möchten, können Sie diese E-Mail einfach ignorieren.
+
+Wir speichern Ihre persönlichen Daten nicht ungefragt und senden an eine
+E-Mail-Adresse nur eine einzige Einladung.
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

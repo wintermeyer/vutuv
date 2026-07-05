@@ -18,6 +18,8 @@ We use the [MIT License](LICENSE).
   links, contact details) with follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn).
+- Invite non-members by email: the link opens the sign-up form prefilled, with
+  an optional personal note and opt-in auto-follow.
 - Agent-ready: every public page is also served as Markdown, plain text, JSON
   and XML; RSS feeds, sitemap, JSON-LD, `/llms.txt` and a REST API
   (`/api/2.0`, OAuth 2 + personal access tokens, webhooks).

@@ -377,6 +377,81 @@ defmodule Vutuv.Notifications.Emailer do
   defp newsletter_unsubscribe(email, nil), do: email
   defp newsletter_unsubscribe(email, url), do: unsubscribe_headers(email, url)
 
+  @doc """
+  Invites a non-member to join, on behalf of `inviter` (see `Vutuv.Invitations`).
+
+  Unlike every other builder the recipient has no account, so the language is
+  the one the inviter chose (not a recipient `user.locale`) and the greeting is
+  built inline in the template rather than from a `%User{}`. The link opens the
+  sign-up form prefilled with the data the inviter entered (`prefill`); an
+  optional personal `message` is quoted in the body when present.
+
+  Deliberately not flagged `user_initiated`: bounce suppression should still
+  apply, so a previously-undeliverable address is not mailed again.
+  """
+  def invitation_email(%{
+        inviter: %Vutuv.Accounts.User{} = inviter,
+        to_email: to_email,
+        locale: locale,
+        message: message,
+        prefill: prefill
+      }) do
+    locale = get_locale(locale)
+    inviter_name = VutuvWeb.UserHelpers.full_name(inviter)
+
+    base_email()
+    |> to({invitee_name(prefill, to_email), to_email})
+    |> subject(
+      recipient_subject(locale, fn ->
+        gettext("%{name} invited you to vutuv", name: inviter_name)
+      end)
+    )
+    |> render_bodies("invitation", locale, %{
+      greeting: invitation_greeting(locale, prefill),
+      inviter_name: inviter_name,
+      inviter_url: public_url() <> inviter.username,
+      message: message,
+      invite_url: invitation_signup_url(prefill),
+      url: public_url()
+    })
+  end
+
+  # The invited person's salutation. Reuses the app-wide greeting convention
+  # (VutuvWeb.UserHelpers.email_greeting/1) so a known gender + surname yields a
+  # personal "Guten Tag Frau Musterfrau" / "Dear …"; without them it degrades to
+  # the plain greeting. Built from a throwaway struct — the recipient has no
+  # account.
+  defp invitation_greeting(locale, prefill) do
+    VutuvWeb.UserHelpers.email_greeting(%Vutuv.Accounts.User{
+      locale: locale,
+      gender: prefill["gender"],
+      first_name: prefill["first_name"],
+      last_name: prefill["last_name"]
+    })
+  end
+
+  # The invite link: the landing page prefilled from the sign-up fields the
+  # inviter entered. VutuvWeb.PageController.index reads these query keys. Pairs
+  # are sorted so the URL is stable (assertable in tests).
+  defp invitation_signup_url(prefill) do
+    query =
+      prefill
+      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
+      |> Enum.sort()
+      |> URI.encode_query()
+
+    if query == "", do: public_url(), else: public_url() <> "?" <> query
+  end
+
+  defp invitee_name(prefill, to_email) do
+    name =
+      [prefill["first_name"], prefill["last_name"]]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(" ")
+
+    if name == "", do: to_email, else: name
+  end
+
   ## Login security (see Vutuv.Sessions.start_session/3, the only caller)
 
   @doc """
