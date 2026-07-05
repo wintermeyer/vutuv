@@ -60,6 +60,29 @@ defmodule VutuvWeb.SessionControllerTest do
     end
   end
 
+  describe "DELETE /logout" do
+    test "signs a logged-in member out and redirects to their profile", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = delete(conn, ~p"/logout")
+
+      assert redirected_to(conn) == ~p"/#{user}"
+      refute get_session(conn, :user_id)
+    end
+
+    # The route is intentionally unguarded, so an anonymous request can reach the
+    # action: a double-submit race (a double-click or a client retry) fires a
+    # second DELETE /logout after the first already revoked the session, so it
+    # arrives with no current_user. The action must not build ~p"/#{nil}" (which
+    # raises ArgumentError -> 500); it bounces such requests to the start page.
+    test "redirects an anonymous logout to the start page instead of crashing", %{conn: conn} do
+      conn = delete(conn, ~p"/logout")
+
+      assert redirected_to(conn) == ~p"/"
+      refute get_session(conn, :user_id)
+    end
+  end
+
   describe "POST /login" do
     test "does not start a login for an already-logged-in user", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)

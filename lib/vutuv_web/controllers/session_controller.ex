@@ -282,10 +282,17 @@ defmodule VutuvWeb.SessionController do
 
   def delete(conn, _) do
     user = conn.assigns[:current_user]
+    conn = Accounts.logout(conn)
 
-    conn
-    |> Accounts.logout()
-    |> redirect(to: ~p"/#{user}")
+    # The route is intentionally unguarded, so an anonymous request can reach
+    # here — most realistically a double-submit race (a double-click or a client
+    # retry) whose second DELETE lands after the first already revoked the
+    # session, leaving current_user nil. Building ~p"/#{nil}" would raise
+    # ArgumentError ("cannot convert nil to param") and 500, so send those home.
+    case user do
+      %User{} = user -> redirect(conn, to: ~p"/#{user}")
+      _ -> redirect(conn, to: ~p"/")
+    end
   end
 
   defp verify_login_pin(conn, email, pin, context) do
