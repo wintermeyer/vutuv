@@ -55,7 +55,12 @@ VutuvWeb.Plug.AdBanner); app.js removes the strip after two minutes. --%>
   <.ad_banner banner={@ad_banner} />
 <% end %>
 
-<main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 md:pb-10">
+<%!-- pb-24 clears the fixed mobile tab bar on normal pages. The full-screen
+chat (/messages, marked data-chat-fullscreen) sizes itself exactly to the
+viewport, so on phones it drops that padding to avoid a dead scroll below the
+thread. A utility variant is required (not a components.css rule) so it beats
+the base pb-24 utility. --%>
+<main class="mx-auto min-h-[60vh] max-w-6xl px-4 pb-24 has-[[data-chat-fullscreen]]:max-md:pb-0 md:pb-10">
   {@inner_content}
 </main>
 

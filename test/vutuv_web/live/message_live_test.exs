@@ -109,15 +109,19 @@ defmodule VutuvWeb.MessageLiveTest do
       assert html =~ "<br"
     end
 
-    test "the composer explains Markdown support and the send shortcut", %{conn: conn} do
+    test "the composer starts at two rows and drops the helper line", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       conversation = insert_conversation_between(me, insert_activated_user())
 
-      {:ok, _view, html} = live(conn, ~p"/messages/#{conversation.id}")
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-      # A small helper line so users don't have to guess these (issue #903).
-      assert html =~ "Markdown"
-      assert html =~ "Enter"
+      # The composer opens at two rows so a reply has room to breathe (it still
+      # autogrows past that as you type).
+      assert has_element?(view, "#message-body[rows='2']")
+
+      # The Markdown / Ctrl+Enter helper line was removed to keep the composer
+      # compact; both features still work, they are just no longer spelled out.
+      refute has_element?(view, "#send-shortcut-key")
     end
 
     test "a deleted message disappears live from open threads", %{conn: conn} do
@@ -426,6 +430,26 @@ defmodule VutuvWeb.MessageLiveTest do
       {:ok, show_view, _} = live(conn, ~p"/messages/#{conversation.id}")
       assert has_element?(show_view, "aside.hidden")
       assert has_element?(show_view, "#back-to-list")
+    end
+
+    test "the chat fills the viewport as a full-screen mobile layout", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # On phones the thread fills the whole viewport between the sticky top bar
+      # and the bottom tab bar (100dvh-8rem), with the composer sitting in-flow
+      # at the bottom — nothing extra pinned. The data-chat-fullscreen marker
+      # drives the components.css rule that hides the site footer on mobile so it
+      # does not add a second scroll below the thread.
+      assert has_element?(view, "#messages[data-chat-fullscreen].h-\\[calc\\(100dvh-8rem\\)\\]")
+
+      # The composer is an ordinary bottom-of-flow form, not a separately fixed
+      # dock (that approach was dropped) — the thread just scrolls above it.
+      assert has_element?(view, "#message-thread.flex-1.overflow-y-auto")
+      assert has_element?(view, "#message-form")
+      refute has_element?(view, "#composer-dock")
     end
   end
 

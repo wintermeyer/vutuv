@@ -1097,6 +1097,17 @@ ul.thumbs li .text .url a {
   max-width: 100%;
 }
 
+/* Full-screen mobile chat (the /messages LiveView, marked with
+   data-chat-fullscreen). Below md (768px) the thread already fills the viewport
+   between the sticky top bar and the fixed bottom tab bar, so the shared site
+   footer would only add a second scroll below it — hide it here. Desktop is
+   untouched: the footer shows and the two-panel layout scrolls normally.
+   (main's bottom padding is dropped on the <main> element itself, with a
+   utility variant, since a utility beats this components-layer rule.) */
+@media (width < 48rem) {
+  body:has([data-chat-fullscreen]) footer { display: none; }
+}
+
 @media (prefers-color-scheme: dark) {
   .profile-header__manage {
     color: #93c5fd;

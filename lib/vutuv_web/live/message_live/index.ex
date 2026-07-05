@@ -431,7 +431,16 @@ defmodule VutuvWeb.MessageLive.Index do
   @impl true
   def render(assigns) do
     ~H"""
-    <div id="messages" class="flex h-[calc(100vh-9rem)] gap-4 py-6 md:h-[calc(100vh-7rem)]">
+    <%!-- Full-screen chat on phones: the thread fills the whole viewport between
+    the sticky top bar (h-16) and the mobile bottom tab bar (h-16), so 100dvh-8rem
+    (dvh, not vh, tracks the shrinking mobile viewport). data-chat-fullscreen lets
+    components.css hide the site footer here (it would otherwise add a second
+    scroll below the thread). Desktop keeps the two-panel 100vh-7rem layout. --%>
+    <div
+      id="messages"
+      data-chat-fullscreen
+      class="flex h-[calc(100dvh-8rem)] gap-4 py-2 md:h-[calc(100vh-7rem)] md:py-6"
+    >
       <h1 class="sr-only">{gettext("Messages")}</h1>
       <%!-- Conversation list. Full-width on mobile while no thread is open;
             once one is, the thread takes over and the list moves behind the
@@ -632,6 +641,11 @@ defmodule VutuvWeb.MessageLive.Index do
           <.request_actions id={@conversation.id} />
         </div>
 
+        <%!-- Issue #903: a textarea (not a single-line input) so long, multi-line
+        messages are possible. It starts at two rows for breathing room and grows
+        with its content, then scrolls (MessageComposer hook); Cmd/Ctrl+Enter sends
+        while plain Enter inserts a newline. The row is items-end so the Send button
+        stays anchored to the bottom-right corner as the textarea grows. --%>
         <.form
           :if={Chat.can_send?(@conversation, @current_user.id)}
           for={@form}
@@ -639,39 +653,20 @@ defmodule VutuvWeb.MessageLive.Index do
           phx-hook="ClearOnSubmit"
           phx-submit="send"
           phx-change="typing"
-          class="flex flex-col gap-1.5 border-t border-slate-200 p-3 dark:border-slate-800"
+          class="flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800"
         >
-          <div class="flex items-end gap-2">
-            <%!-- Issue #903: a textarea (not a single-line input) so long,
-            multi-line messages are possible. It grows with its content up to a
-            few lines and then scrolls (MessageComposer hook), and Cmd/Ctrl+Enter
-            sends while plain Enter inserts a newline. --%>
-            <textarea
-              id="message-body"
-              name="message[body]"
-              rows="1"
-              phx-hook="MessageComposer"
-              autocomplete="off"
-              placeholder={gettext("Write a message…")}
-              class="max-h-40 min-h-0 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-            >{@form[:body].value}</textarea>
-            <button type="submit" class="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-              {gettext("Send")}
-            </button>
-          </div>
-          <%!-- Quiet helper line so the two things a user would otherwise have to
-          guess are spelled out: Markdown works, and how to send by keyboard. --%>
-          <p class="px-1 text-xs text-slate-600 dark:text-slate-400">
-            {gettext("Markdown is supported.")}
-            <span class="mx-1 text-slate-400 dark:text-slate-600" aria-hidden="true">·</span>
-            <kbd
-              id="send-shortcut-key"
-              class="rounded border border-slate-300 px-1 font-sans text-slate-700 dark:border-slate-600 dark:text-slate-300"
-            >{gettext("Ctrl")}</kbd>
-            <span aria-hidden="true">+</span>
-            <kbd class="rounded border border-slate-300 px-1 font-sans text-slate-700 dark:border-slate-600 dark:text-slate-300">Enter</kbd>
-            {gettext("to send")}
-          </p>
+          <textarea
+            id="message-body"
+            name="message[body]"
+            rows="2"
+            phx-hook="MessageComposer"
+            autocomplete="off"
+            placeholder={gettext("Write a message…")}
+            class="max-h-40 min-h-0 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+          >{@form[:body].value}</textarea>
+          <button type="submit" class="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            {gettext("Send")}
+          </button>
         </.form>
 
         <p
