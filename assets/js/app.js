@@ -43,21 +43,31 @@ onReady(() =>
 // body still overflows the CSS line-clamp — which the server can't know, since
 // wrapping is width- and font-dependent.
 //
-// A genuinely clipped body hides at least one whole line box, so require the
-// overflow to clear most of a line before revealing. A bare few pixels is
-// layout slop — block margins counted inside the -webkit-box line clamp,
-// sub-pixel rounding — on a post that is in fact wholly visible. The old 4px
-// tolerance let that slop sprout a "Read more" link on a short, fully-readable
-// post (issue #880); a per-line threshold ignores it while still catching every
-// real clip (a clipped seventh line is a full line box tall, whatever its text).
+// Measure the body's true, unclamped height and compare it to what the clamp
+// actually shows. Do NOT read scrollHeight straight off the clamped element:
+// the `line-clamp-6` class renders as `display: -webkit-box`, whose scrollHeight
+// WebKit (Safari/iOS) over-reports on a wholly-visible post, so every short post
+// sprouted a bogus "Weiterlesen" (issue #880, reopened). Instead read the clamped
+// height (clientHeight — the painted box height, honest in every engine), then
+// drop to `display: block` for one synchronous measurement so scrollHeight reports
+// the natural block height (also honest everywhere), and restore the clamp. Both
+// heights share the same margin structure, so their difference is the exact amount
+// of body the clamp hides. A genuine clip hides at least a whole line box; require
+// the difference to clear most of a line so sub-pixel rounding never trips it.
 function revealPreviewClamp(el) {
   const body = el.querySelector("[data-clamp-body]")
   const link = el.querySelector("[data-read-more]")
   if (!body || !link) return
-  const lineHeight = parseFloat(getComputedStyle(body).lineHeight) || 20
-  const clipped =
-    el.dataset.serverTruncated === "true" ||
-    body.scrollHeight - body.clientHeight > lineHeight * 0.75
+  let clipped = el.dataset.serverTruncated === "true"
+  if (!clipped) {
+    const lineHeight = parseFloat(getComputedStyle(body).lineHeight) || 20
+    const clampedHeight = body.clientHeight
+    const prevDisplay = body.style.display
+    body.style.display = "block"
+    const naturalHeight = body.scrollHeight
+    body.style.display = prevDisplay
+    clipped = naturalHeight - clampedHeight > lineHeight * 0.75
+  }
   link.classList.toggle("hidden", !clipped)
 }
 

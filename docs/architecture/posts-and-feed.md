@@ -58,10 +58,17 @@ chars) — that case reveals the link with no JS. A longer body that merely
 overflows the CSS clamp can't be detected on the server (wrapping is
 width/font-dependent), so the link ships hidden and the `PostPreviewClamp` JS
 hook (a `[data-post-preview]` sweep on classic pages, re-run on resize and
-`document.fonts.ready`) reveals it — but only when the clamped body hides more
-than ~one line, so a few pixels of layout slop no longer sprout a "Read more" on
-a wholly-visible post (the #880 bug). With JS off such a card keeps the native
-line-clamp ellipsis. The permalink (`mode={:full}`) never clamps.
+`document.fonts.ready`) reveals it — but only when the clamp actually hides more
+than ~one line. It measures that by reading the clamped `clientHeight` (the
+painted height), then dropping the node to `display: block` for one synchronous
+read of its natural `scrollHeight`; the difference is the amount hidden. It does
+**not** read `scrollHeight` off the clamped node, because `line-clamp-6` renders
+as `display: -webkit-box`, whose `scrollHeight` WebKit/Safari over-reports on a
+fully-visible post — that over-report sprouted the false "Read more" of issue
+#880, and it clears any pixel threshold, so the earlier threshold-only fix did
+not hold on Safari; measuring the natural block height sidesteps the buggy number
+entirely. With JS off such a card keeps the native line-clamp ellipsis. The
+permalink (`mode={:full}`) never clamps.
 
 The profile page and the archive show the author's timeline (posts + reposts).
 

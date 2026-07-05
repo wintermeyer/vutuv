@@ -704,9 +704,12 @@ defmodule VutuvWeb.PostComponents do
           link only when the body is really cut — either the source was truncated
           server-side (@truncated?, shown with no JS too) or a longer body still
           overflows the CSS line-clamp, which the server can't know because
-          wrapping is width- and font-dependent. With JS off a css-only clamp
-          keeps the native line-clamp ellipsis and no link, which is fine.
-          No length metric (issue #880): a word count was meaningless once the
+          wrapping is width- and font-dependent. The hook decides by comparing the
+          clamped clientHeight against the body's natural (display:block) height,
+          never the -webkit-box's own scrollHeight (WebKit over-reports it on a
+          fully-visible post — the recurring #880 false "Read more"). With JS off a
+          css-only clamp keeps the native line-clamp ellipsis and no link, which is
+          fine. No length metric (issue #880): a word count was meaningless once the
           reader had the preview, and slipped onto fully-visible posts. --%>
           <div
             :if={@mode == :preview and @post.body != ""}
