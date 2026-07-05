@@ -39,36 +39,28 @@ onReady(() =>
 
 // Feed/profile post previews clamp the body to six lines. Reveal the "Read more"
 // link only when the body is really cut: either the source was truncated
-// server-side (data-server-truncated, already visible with no JS) or a longer
-// body still overflows the CSS line-clamp — which the server can't know, since
-// wrapping is width- and font-dependent.
+// server-side (data-server-truncated, shown with no JS) or a longer body still
+// overflows the six-line CSS clamp — which the server can't know, since wrapping
+// is width- and font-dependent. A clamped element hides content exactly when its
+// full content height (scrollHeight) is taller than its painted box
+// (clientHeight); the +1 absorbs sub-pixel rounding.
 //
-// Measure the body's true, unclamped height and compare it to what the clamp
-// actually shows. Do NOT read scrollHeight straight off the clamped element:
-// the `line-clamp-6` class renders as `display: -webkit-box`, whose scrollHeight
-// WebKit (Safari/iOS) over-reports on a wholly-visible post, so every short post
-// sprouted a bogus "Weiterlesen" (issue #880, reopened). Instead read the clamped
-// height (clientHeight — the painted box height, honest in every engine), then
-// drop to `display: block` for one synchronous measurement so scrollHeight reports
-// the natural block height (also honest everywhere), and restore the clamp. Both
-// heights share the same margin structure, so their difference is the exact amount
-// of body the clamp hides. A genuine clip hides at least a whole line box; require
-// the difference to clear most of a line so sub-pixel rounding never trips it.
+// The link ships hidden and this reveals it, toggling BOTH `hidden` and
+// `inline-block`. Both are `display` utilities and `.inline-block` is emitted
+// after `.hidden` in the Tailwind bundle, so a link carrying both computes
+// `display: inline-block` and shows regardless of `hidden`. That cascade
+// conflict — not any measurement quirk — is what made "Read more" appear on
+// every post, short or long, in every browser (issue #880). Keeping the two
+// classes mutually exclusive is the actual fix.
 function revealPreviewClamp(el) {
   const body = el.querySelector("[data-clamp-body]")
   const link = el.querySelector("[data-read-more]")
   if (!body || !link) return
-  let clipped = el.dataset.serverTruncated === "true"
-  if (!clipped) {
-    const lineHeight = parseFloat(getComputedStyle(body).lineHeight) || 20
-    const clampedHeight = body.clientHeight
-    const prevDisplay = body.style.display
-    body.style.display = "block"
-    const naturalHeight = body.scrollHeight
-    body.style.display = prevDisplay
-    clipped = naturalHeight - clampedHeight > lineHeight * 0.75
-  }
+  const clipped =
+    el.dataset.serverTruncated === "true" ||
+    body.scrollHeight > body.clientHeight + 1
   link.classList.toggle("hidden", !clipped)
+  link.classList.toggle("inline-block", clipped)
 }
 
 // Sweep every preview on the page (classic pages, and the initial static render

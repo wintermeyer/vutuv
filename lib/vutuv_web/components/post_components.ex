@@ -699,18 +699,20 @@ defmodule VutuvWeb.PostComponents do
           </div>
 
           <%!-- Preview mode: the body is clamped to six lines and paired with a
-          plain "Read more" link to the permalink. The PostPreviewClamp hook
-          (live pages) / the data-post-preview sweep (dead pages) reveals the
-          link only when the body is really cut — either the source was truncated
-          server-side (@truncated?, shown with no JS too) or a longer body still
-          overflows the CSS line-clamp, which the server can't know because
-          wrapping is width- and font-dependent. The hook decides by comparing the
-          clamped clientHeight against the body's natural (display:block) height,
-          never the -webkit-box's own scrollHeight (WebKit over-reports it on a
-          fully-visible post — the recurring #880 false "Read more"). With JS off a
-          css-only clamp keeps the native line-clamp ellipsis and no link, which is
-          fine. No length metric (issue #880): a word count was meaningless once the
-          reader had the preview, and slipped onto fully-visible posts. --%>
+          plain "Read more" link to the permalink. The link's display is set by
+          mutually exclusive classes — `inline-block` when the source was
+          truncated server-side (@truncated?, shown with no JS), else `hidden`.
+          They must never coexist: both set `display` and Tailwind emits
+          `.inline-block` after `.hidden`, so a link carrying both shows
+          regardless of `hidden` (the real #880 bug — "Read more" on every post,
+          every browser). The PostPreviewClamp hook (live pages) / data-post-preview
+          sweep (dead pages) flips the pair when a longer body overflows the CSS
+          clamp, which the server can't know because wrapping is width- and
+          font-dependent; it decides with the standard clamp test (body scrollHeight
+          exceeds clientHeight). With JS off a css-only clamp keeps the native
+          ellipsis and no link. No length metric (issue #880): a word count was
+          meaningless once the reader had the preview, and slipped onto
+          fully-visible posts. --%>
           <div
             :if={@mode == :preview and @post.body != ""}
             id={@body_id}
@@ -726,8 +728,8 @@ defmodule VutuvWeb.PostComponents do
               href={@permalink}
               data-read-more
               class={[
-                "mt-1 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700",
-                not @truncated? && "hidden"
+                "mt-1 text-sm font-semibold text-brand-600 hover:text-brand-700",
+                if(@truncated?, do: "inline-block", else: "hidden")
               ]}
             >
               {gettext("Read more")}

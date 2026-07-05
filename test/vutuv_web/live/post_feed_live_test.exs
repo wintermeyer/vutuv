@@ -912,6 +912,12 @@ defmodule VutuvWeb.PostFeedLiveTest do
                "Read more"
              )
 
+      # Issue #880 (the real bug): the hidden link must NOT also carry
+      # `inline-block`. Both set `display` and Tailwind emits `.inline-block`
+      # after `.hidden`, so a link with both computes `display: inline-block` and
+      # showed "Read more" on every post in every browser, defeating `hidden`.
+      refute has_element?(live, "#feed-posts a[data-read-more].inline-block")
+
       # Issue #880: the word-count hint is gone — it was meaningless and even
       # rendered on posts short enough to be fully visible.
       refute render(live) =~ "words total"
@@ -934,7 +940,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
                "Read more"
              )
 
-      # Visible from the server: the read-more link is not hidden.
+      # Visible from the server via `inline-block`, and never `hidden` — the two
+      # are mutually exclusive so `hidden` can actually hide (issue #880).
+      assert has_element?(live, "#feed-posts a[data-read-more].inline-block")
       refute has_element?(live, "#feed-posts a[data-read-more].hidden")
       refute render(live) =~ "words total"
     end
@@ -953,6 +961,9 @@ defmodule VutuvWeb.PostFeedLiveTest do
                live,
                ~s(#feed-posts a[data-read-more].hidden[href="#{Posts.path(post)}"])
              )
+
+      # Issue #880: hidden must win — no competing `inline-block` on the link.
+      refute has_element?(live, "#feed-posts a[data-read-more].inline-block")
 
       refute render(live) =~ "words total"
     end
