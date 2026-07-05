@@ -417,6 +417,13 @@ defmodule VutuvWeb.Router do
     # legacy POST both use.
     post("/users", UserController, :update)
 
+    # The Honor tags overview: the discoverable home for the admin-granted
+    # badges (mint one in a step, see holder counts, jump to each roster).
+    # Defined before the tag catalog so `/admin/honor_tags` is a distinct path,
+    # not swallowed by `/admin/tags/:slug`.
+    get("/honor_tags", HonorTagController, :index)
+    post("/honor_tags", HonorTagController, :create)
+
     resources("/tags", TagController, param: "slug")
 
     # The member roster of an honor tag (the "vutuv_developer" badge):

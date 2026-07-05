@@ -8,6 +8,9 @@
 
 <div class="card-list">
   <section class="card">
+    <p>
+      <%= link gettext("Honor tags ›"), to: ~p"/admin/honor_tags", class: "card__morelink" %>
+    </p>
     <div class="card__tablewrap">
     <table>
       <thead>
@@ -21,7 +24,13 @@
       <tbody>
     <%= for tag <- @tags do %>
         <tr>
-          <td><%= tag.name %></td>
+          <td>
+            <%= tag.name %>
+            <span
+              :if={tag.honor?}
+              class="ml-1 inline-flex items-center rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
+            ><%= gettext "Honor tag" %></span>
+          </td>
           <td><%= tag.slug %></td>
 
           <td>

@@ -145,6 +145,19 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="medal"
+      title={gettext("Honor tags")}
+      count={@honor_tags_count}
+      href={~p"/admin/honor_tags"}
+      id="admin-honor-tags-link"
+      cta={gettext("Manage honor tags")}
+    >
+      {gettext(
+        "Official badges you grant, like vutuv_developer for the core team. See who holds each and add or remove members."
+      )}
+    </.admin_card>
+
+    <.admin_card
       icon="at"
       title={gettext("Usernames")}
       href={~p"/admin/usernames"}

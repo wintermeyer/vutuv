@@ -344,6 +344,60 @@ defmodule Vutuv.TagsTest do
       refute Tags.endorsed?(user_tag.id, endorser.id)
     end
 
+    test "honor_tags/0 lists honor tags with holder counts, name-ordered" do
+      alpha = insert(:tag, name: "Alpha", slug: "alpha", honor?: true)
+      _beta = insert(:tag, name: "Beta", slug: "beta", honor?: true)
+      _normal = insert(:tag, name: "Gamma", slug: "gamma")
+      insert(:user_tag, user: insert(:user), tag: alpha)
+      insert(:user_tag, user: insert(:user), tag: alpha)
+
+      assert [{%{name: "Alpha"}, 2}, {%{name: "Beta"}, 0}] = Tags.honor_tags()
+    end
+
+    test "honor_tags_count/0 counts only honor tags" do
+      insert(:tag, honor?: true)
+      insert(:tag, honor?: true)
+      insert(:tag)
+
+      assert Tags.honor_tags_count() == 2
+    end
+
+    test "declare_honor_tag/1 creates a brand-new honor tag" do
+      assert {:ok, tag} = Tags.declare_honor_tag("vutuv_contributor")
+      assert tag.honor?
+      assert tag.name == "vutuv_contributor"
+      assert tag.slug == "vutuv-contributor"
+    end
+
+    test "declare_honor_tag/1 flips an existing holder-less tag" do
+      existing = insert(:tag, name: "mentor", slug: "mentor")
+
+      assert {:ok, tag} = Tags.declare_honor_tag("Mentor")
+      assert tag.id == existing.id
+      assert tag.honor?
+    end
+
+    test "declare_honor_tag/1 is idempotent on an existing honor tag" do
+      existing = insert(:tag, name: "mentor", slug: "mentor", honor?: true)
+
+      assert {:ok, tag} = Tags.declare_honor_tag("mentor")
+      assert tag.id == existing.id
+    end
+
+    test "declare_honor_tag/1 refuses to silently flip a tag members already hold" do
+      existing = insert(:tag, name: "elixir", slug: "elixir")
+      insert(:user_tag, user: insert(:user), tag: existing)
+
+      assert {:error, :has_holders, tag} = Tags.declare_honor_tag("elixir")
+      assert tag.id == existing.id
+      refute Repo.reload(existing).honor?
+    end
+
+    test "declare_honor_tag/1 rejects a spaced name" do
+      assert {:error, changeset} = Tags.declare_honor_tag("core team")
+      refute changeset.valid?
+    end
+
     test "tag_holders/1 lists the members carrying the tag" do
       tag = insert(:tag, honor?: true)
       alice = insert(:user, first_name: "Alice", last_name: "Adams")

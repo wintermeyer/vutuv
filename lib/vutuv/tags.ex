@@ -172,6 +172,79 @@ defmodule Vutuv.Tags do
   end
 
   @doc """
+  Every honor tag with its current holder count, name-ordered — the admin
+  "Honor tags" overview (`/admin/honor_tags`). Returns `[{%Tag{}, count}]`.
+  """
+  def honor_tags do
+    from(t in Tag,
+      where: t.honor?,
+      left_join: ut in assoc(t, :user_tags),
+      group_by: t.id,
+      order_by: [asc: t.name],
+      select: {t, count(ut.id)}
+    )
+    |> Repo.all()
+  end
+
+  @doc "How many honor tags exist (the dashboard tile's count)."
+  def honor_tags_count do
+    Repo.aggregate(from(t in Tag, where: t.honor?), :count)
+  end
+
+  @doc """
+  Declares `name` an honor tag from the admin "Honor tags" page — the one-step
+  create the buried create-then-edit flow replaces. Create-or-flip, with a guard
+  on the one dangerous case:
+
+    * no such tag yet → create it flagged honor → `{:ok, tag}`
+    * the tag exists and is already honor → `{:ok, tag}` (idempotent)
+    * it exists, is not honor, and **no one holds it** → safe to flip → `{:ok, tag}`
+    * it exists, is not honor, and **members already hold it** →
+      `{:error, :has_holders, tag}` so the caller can route the admin to the
+      edit form's retroactive-lock warning instead of silently locking holders
+    * an invalid name (blank / contains spaces) → `{:error, changeset}`
+  """
+  def declare_honor_tag(name) when is_binary(name) do
+    value = Tag.normalize_value(name)
+
+    case find_tag_by_value(value) do
+      nil ->
+        %Tag{}
+        |> Tag.changeset(%{"value" => value})
+        |> Ecto.Changeset.put_change(:honor?, true)
+        |> Repo.insert()
+
+      %Tag{honor?: true} = tag ->
+        {:ok, tag}
+
+      %Tag{} = tag ->
+        if tag_has_holders?(tag) do
+          {:error, :has_holders, tag}
+        else
+          tag |> Ecto.Changeset.change(honor?: true) |> Repo.update()
+        end
+    end
+  end
+
+  # A stored tag whose name (case-insensitive) or slug equals the typed value.
+  # A spaced value can never match an existing (space-free) tag, so it falls
+  # through to the insert branch and the changeset rejects it there.
+  defp find_tag_by_value(value) do
+    downcased = String.downcase(value)
+
+    Repo.one(
+      from(t in Tag,
+        where: fragment("lower(?)", t.name) == ^downcased or t.slug == ^downcased,
+        limit: 1
+      )
+    )
+  end
+
+  defp tag_has_holders?(%Tag{} = tag) do
+    Repo.exists?(from(ut in UserTag, where: ut.tag_id == ^tag.id))
+  end
+
+  @doc """
   Given candidate tag slugs (the `#hashtags` in a Markdown body), returns the
   `MapSet` of those naming a real tag with **at least one visible member** — a
   confirmed, non-hidden user carries the tag, so its `/tags/:slug` page actually

@@ -1,0 +1,69 @@
+<.page_header
+  title={gettext("Honor tags")}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    gettext("Honor tags")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p class="editform__hint">
+      <%= gettext(
+        "Honor tags are official, admin-granted badges (like vutuv_developer for the core team). Members cannot add or remove them themselves, and they are not endorsable. Create one below, then add members on its page."
+      ) %>
+    </p>
+
+    <.form for={%{}} action={~p"/admin/honor_tags"} class="editform">
+      <div class="editform__field">
+        <label for="honor-tag-name"><%= gettext "New honor tag (a single word)" %></label>
+        <input
+          type="text"
+          id="honor-tag-name"
+          name="honor_tag[name]"
+          autocomplete="off"
+          placeholder="vutuv_developer"
+        />
+      </div>
+      <div class="editform__actions">
+        <button class="button" type="submit"><%= gettext "Create honor tag" %></button>
+      </div>
+    </.form>
+  </section>
+</div>
+
+<div class="card-list">
+  <section class="card">
+    <%= if @honor_tags == [] do %>
+      <p class="card__empty"><%= gettext "No honor tags yet. Create one above." %></p>
+    <% else %>
+      <div class="card__tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th><%= gettext "Tag" %></th>
+              <th><%= gettext "Members" %></th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr :for={{tag, holders} <- @honor_tags}>
+              <td>
+                <.link navigate={~p"/tags/#{tag}"}><%= tag.name %></.link>
+              </td>
+              <td><%= compact_count(holders) %></td>
+              <td class="text-right">
+                <.link
+                  navigate={~p"/admin/tags/#{tag}"}
+                  class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  <%= gettext "Manage members" %>
+                </.link>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    <% end %>
+  </section>
+</div>

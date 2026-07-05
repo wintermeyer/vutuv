@@ -443,7 +443,7 @@ msgstr "Mehr"
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:588
 #: lib/vutuv_web/live/cv_live.ex:107
 #: lib/vutuv_web/templates/access_token/new.html.heex:8
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:15
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:18
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:17
 #: lib/vutuv_web/templates/dev_app/form_content.html.heex:5
 #, elixir-autogen
@@ -638,7 +638,7 @@ msgstr "Anzeigen"
 msgid "Sign up for a free account"
 msgstr "Gratis Account erstellen"
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:16
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:19
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:24
 #, elixir-autogen
 msgid "Slug"
@@ -1182,6 +1182,7 @@ msgstr "Lokalisierung hinzufügen"
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:4
 #: lib/vutuv_web/templates/admin/ad/show.html.heex:4
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:1
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:4
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:4
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:3
 #: lib/vutuv_web/templates/admin/moderation/reporters.html.heex:4
@@ -1254,7 +1255,7 @@ msgstr "PIN eingeben"
 msgid "Enter your pin"
 msgstr "PIN eingeben"
 
-#: lib/vutuv_web/templates/admin/tag/index.html.heex:43
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:52
 #: lib/vutuv_web/templates/admin/tag/new.html.heex:2
 #, elixir-autogen
 msgid "New tag"
@@ -4144,7 +4145,7 @@ msgstr "Preis: %{price}. Zahlung per Rechnung; der Tag wird sofort reserviert un
 msgid "vutuv shows a single, text-only ad per calendar day: discreet, between the navigation and the content, in the style of classic text ads."
 msgstr "vutuv zeigt eine einzige, reine Textanzeige pro Kalendertag: dezent, zwischen Navigation und Inhalt, im Stil klassischer Textanzeigen."
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:211
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:224
 #, elixir-autogen, elixir-format
 msgid "%{count} ad is waiting for approval."
 msgid_plural "%{count} ads are waiting for approval."
@@ -4159,7 +4160,7 @@ msgstr "Anzeigen-Abnahme"
 
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:5
 #: lib/vutuv_web/templates/admin/ad/show.html.heex:5
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:201
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:214
 #, elixir-autogen, elixir-format
 msgid "Ads"
 msgstr "Anzeigen"
@@ -4224,7 +4225,7 @@ msgstr "Meine Anzeigenbuchungen"
 msgid "My bookings"
 msgstr "Meine Buchungen"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:209
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:222
 #, elixir-autogen, elixir-format
 msgid "No ads waiting for approval."
 msgstr "Keine Anzeigen warten auf Freischaltung."
@@ -4234,7 +4235,7 @@ msgstr "Keine Anzeigen warten auf Freischaltung."
 msgid "No upcoming ads."
 msgstr "Keine anstehenden Anzeigen."
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:206
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:219
 #, elixir-autogen, elixir-format
 msgid "Open the ad review"
 msgstr "Zur Anzeigen-Abnahme"
@@ -4848,7 +4849,7 @@ msgstr "\"%{name}\" hat keinen Zugriff mehr auf Ihr Konto."
 msgid "%{app} wants to access your vutuv account. It would be allowed to:"
 msgstr "%{app} möchte auf Ihr vutuv-Konto zugreifen. Es dürfte:"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:191
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:204
 #, elixir-autogen, elixir-format
 msgid "%{count} registered third-party application. Suspending one cuts off all of its tokens."
 msgid_plural "%{count} registered third-party applications. Suspending one cuts off all of its tokens."
@@ -4858,7 +4859,7 @@ msgstr[1] "%{count} registrierte Drittanbieter-Anwendungen. Eine Sperrung schalt
 #: lib/vutuv_web/live/admin/api_app_live.ex:21
 #: lib/vutuv_web/live/admin/api_app_live.ex:57
 #: lib/vutuv_web/live/admin/api_app_live.ex:58
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:185
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:198
 #, elixir-autogen, elixir-format
 msgid "API applications"
 msgstr "API-Anwendungen"
@@ -4946,7 +4947,7 @@ msgstr "Dokumentation"
 msgid "Generate a new client secret? The current one stops working."
 msgstr "Neues Client-Secret erzeugen? Das aktuelle funktioniert dann nicht mehr."
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:189
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:202
 #, elixir-autogen, elixir-format
 msgid "Manage applications"
 msgstr "Anwendungen verwalten"
@@ -6123,7 +6124,7 @@ msgstr[1] "%{count} Jahre"
 msgid "Age"
 msgstr "Alter"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:166
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:179
 #, elixir-autogen, elixir-format
 msgid "Confirmed new registrations and the day's posts, reposts, likes and bookmarks. Time-travel to any past day."
 msgstr "Bestätigte neue Registrierungen sowie Beiträge, Reposts, Likes und Lesezeichen des Tages. Zeitreise zu jedem vergangenen Tag."
@@ -6133,7 +6134,7 @@ msgstr "Bestätigte neue Registrierungen sowie Beiträge, Reposts, Likes und Les
 msgid "Count"
 msgstr "Anzahl"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:161
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:174
 #: lib/vutuv_web/templates/admin/report/index.html.heex:2
 #: lib/vutuv_web/templates/admin/report/index.html.heex:5
 #, elixir-autogen, elixir-format
@@ -6180,7 +6181,7 @@ msgstr "Nächster Tag"
 msgid "No activity on this day."
 msgstr "An diesem Tag gab es keine Aktivität."
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:164
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:177
 #, elixir-autogen, elixir-format
 msgid "Open the daily report"
 msgstr "Tagesbericht öffnen"
@@ -6826,6 +6827,7 @@ msgstr "Höchstalter"
 #: lib/vutuv_web/live/admin/user_live.ex:183
 #: lib/vutuv_web/live/admin/user_live.ex:190
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:66
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:45
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:90
 #, elixir-autogen, elixir-format
 msgid "Members"
@@ -7046,6 +7048,7 @@ msgid "Suppressed (bounced address)"
 msgstr "Unterdrückt (unzustellbare Adresse)"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:814
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "Tag"
 msgstr "Tag"
@@ -7487,7 +7490,7 @@ msgstr "Kommunikation"
 msgid "Content & taxonomy"
 msgstr "Inhalte & Taxonomie"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:158
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:171
 #, elixir-autogen, elixir-format
 msgid "System & insights"
 msgstr "System & Auswertungen"
@@ -7502,19 +7505,19 @@ msgstr "Tags verwalten"
 msgid "Create, rename and remove the tags members can add to their profile."
 msgstr "Tags anlegen, umbenennen und entfernen, die Mitglieder ihrem Profil hinzufügen können."
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:149
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:162
 #: lib/vutuv_web/templates/admin/username/index.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "Usernames"
 msgstr "Benutzernamen"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:152
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:165
 #: lib/vutuv_web/templates/admin/username/index.html.heex:2
 #, elixir-autogen, elixir-format
 msgid "Disable a username"
 msgstr "Benutzernamen deaktivieren"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:154
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:167
 #, elixir-autogen, elixir-format
 msgid "Take an unwanted username away from a member by force-renaming the account."
 msgstr "Einem Mitglied einen unerwünschten Benutzernamen entziehen, indem das Konto zwangsumbenannt wird."
@@ -8499,7 +8502,7 @@ msgstr "Admin-Rechte vergibt der Betreiber dieser vutuv-Instanz, über die Komma
 msgid "Content"
 msgstr "Inhalt"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:176
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:189
 #, elixir-autogen, elixir-format
 msgid "Edit the legal pages"
 msgstr "Rechtstexte bearbeiten"
@@ -8514,7 +8517,7 @@ msgstr "Jede Installation hinterlegt hier die Angaben ihres eigenen Betreibers. 
 msgid "Impressum"
 msgstr "Impressum"
 
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:178
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:191
 #, elixir-autogen, elixir-format
 msgid "Impressum, Datenschutzerklärung and Nutzungsbedingungen: every installation publishes its own operator identity here."
 msgstr "Impressum, Datenschutzerklärung und Nutzungsbedingungen: Jede Installation veröffentlicht hier die Angaben ihres eigenen Betreibers."
@@ -8525,7 +8528,7 @@ msgid "Last edited"
 msgstr "Zuletzt bearbeitet"
 
 #: lib/vutuv_web/controllers/admin/legal_page_controller.ex:22
-#: lib/vutuv_web/templates/admin/admin/index.html.heex:173
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:186
 #: lib/vutuv_web/templates/admin/legal_page/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:2
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:3
@@ -8982,6 +8985,7 @@ msgstr "Ja"
 
 #: lib/vutuv_web/components/ui.ex:687
 #: lib/vutuv_web/components/ui.ex:688
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:32
 #: lib/vutuv_web/templates/admin/tag/show.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Honor tag"
@@ -9440,3 +9444,66 @@ msgstr "Offen für Angebote"
 #, elixir-autogen, elixir-format
 msgid "Shown as a badge next to your tagline so people can see whether you are open to opportunities."
 msgstr "Wird als Abzeichen neben Ihrer Kurzbeschreibung angezeigt, damit andere sehen, ob Sie offen für neue Möglichkeiten sind."
+
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "Create honor tag"
+msgstr "Ehren-Tag erstellen"
+
+#: lib/vutuv_web/controllers/admin/honor_tag_controller.ex:44
+#: lib/vutuv_web/controllers/admin/honor_tag_controller.ex:51
+#, elixir-autogen, elixir-format
+msgid "Enter a single word with no spaces."
+msgstr "Bitte ein einzelnes Wort ohne Leerzeichen eingeben."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:149
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:2
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Honor tags"
+msgstr "Ehren-Tags"
+
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:12
+#, elixir-autogen, elixir-format
+msgid "Honor tags are official, admin-granted badges (like vutuv_developer for the core team). Members cannot add or remove them themselves, and they are not endorsable. Create one below, then add members on its page."
+msgstr "Ehren-Tags sind offizielle, von Admins vergebene Abzeichen (etwa vutuv_developer für das Kernteam). Mitglieder können sie nicht selbst hinzufügen oder entfernen, und sie sind nicht empfehlbar. Erstellen Sie unten einen und fügen Sie dann auf seiner Seite Mitglieder hinzu."
+
+#: lib/vutuv_web/templates/admin/tag/index.html.heex:12
+#, elixir-autogen, elixir-format
+msgid "Honor tags ›"
+msgstr "Ehren-Tags ›"
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:153
+#, elixir-autogen, elixir-format
+msgid "Manage honor tags"
+msgstr "Ehren-Tags verwalten"
+
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:60
+#, elixir-autogen, elixir-format
+msgid "Manage members"
+msgstr "Mitglieder verwalten"
+
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:19
+#, elixir-autogen, elixir-format
+msgid "New honor tag (a single word)"
+msgstr "Neuer Ehren-Tag (ein einzelnes Wort)"
+
+#: lib/vutuv_web/templates/admin/honor_tag/index.html.heex:38
+#, elixir-autogen, elixir-format
+msgid "No honor tags yet. Create one above."
+msgstr "Noch keine Ehren-Tags. Erstellen Sie oben einen."
+
+#: lib/vutuv_web/templates/admin/admin/index.html.heex:155
+#, elixir-autogen, elixir-format
+msgid "Official badges you grant, like vutuv_developer for the core team. See who holds each and add or remove members."
+msgstr "Offizielle Abzeichen, die Sie vergeben, etwa vutuv_developer für das Kernteam. Sehen Sie, wer welches trägt, und fügen Sie Mitglieder hinzu oder entfernen Sie sie."
+
+#: lib/vutuv_web/controllers/admin/honor_tag_controller.ex:35
+#, elixir-autogen, elixir-format
+msgid "The tag “%{name}” already exists and members hold it. Review it here before making it an honor tag."
+msgstr "Das Tag „%{name}“ existiert bereits und Mitglieder tragen es. Prüfen Sie es hier, bevor Sie es zu einem Ehren-Tag machen."
+
+#: lib/vutuv_web/controllers/admin/honor_tag_controller.ex:24
+#, elixir-autogen, elixir-format
+msgid "“%{name}” is an honor tag now. Add members below."
+msgstr "„%{name}“ ist jetzt ein Ehren-Tag. Fügen Sie unten Mitglieder hinzu."
