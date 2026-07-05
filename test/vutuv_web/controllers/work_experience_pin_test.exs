@@ -54,7 +54,7 @@ defmodule VutuvWeb.WorkExperiencePinTest do
 
     conn = put(conn, ~p"/settings/work_experiences/#{past}/pin")
     assert redirected_to(conn) == ~p"/settings/work_experiences"
-    assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "appears on your profile"
+    assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "at the top of your profile"
 
     assert Repo.get!(User, user.id).profile_work_experience_id == past.id
 
@@ -107,10 +107,33 @@ defmodule VutuvWeb.WorkExperiencePinTest do
 
     html = conn |> get(~p"/settings/work_experiences") |> html_response(200)
 
-    # A pin link per role while nothing is pinned yet.
+    # A "Show at top of profile" pin link per role while nothing is pinned yet,
+    # and no revert control (there is nothing to revert from).
     assert html =~ ~p"/settings/work_experiences/#{past}/pin"
     assert html =~ ~p"/settings/work_experiences/#{current}/pin"
-    assert html =~ "chosen automatically"
+    assert html =~ "Show at top of profile"
+    # The automatic-mode explainer names what the heuristic currently resolves
+    # to, so "automatic" doesn't read as "nothing" (issue #883).
+    assert html =~ "picked automatically"
+    assert html =~ "Current Role @ NowCo"
+    refute html =~ "Choose automatically instead"
+  end
+
+  test "with a role pinned the editor names it and offers a clear revert to automatic", ctx do
+    %{conn: conn, user: user, past: past} = ctx
+
+    conn = put(conn, ~p"/settings/work_experiences/#{past}/pin")
+    assert Repo.get!(User, user.id).profile_work_experience_id == past.id
+
+    html = conn |> get(~p"/settings/work_experiences") |> html_response(200)
+
+    # The explainer states which role leads the profile top, and the single
+    # always-visible "Choose automatically instead" link replaces the old
+    # cryptic per-row "Use automatic" (issue #883).
+    assert html =~ "Past Role @ ThenCo shows at the top of your profile"
+    assert html =~ "Choose automatically instead"
+    assert html =~ "Shown at the top of your profile"
+    refute html =~ "picked automatically"
   end
 
   test "the public page never shows the chooser", %{user: user, current: current} do
@@ -118,7 +141,8 @@ defmodule VutuvWeb.WorkExperiencePinTest do
     # /settings editor.
     html = build_conn() |> get(~p"/#{user}/work_experiences") |> html_response(200)
     refute html =~ ~p"/settings/work_experiences/#{current}/pin"
-    refute html =~ "chosen automatically"
+    refute html =~ "picked automatically"
+    refute html =~ "Show at top of profile"
   end
 
   test "a logged-out request cannot pin", %{user: user, past: past} do
@@ -134,11 +158,15 @@ defmodule VutuvWeb.WorkExperiencePinTest do
     backend = VutuvWeb.Gettext
     Gettext.put_locale(backend, "de")
 
-    assert Gettext.gettext(backend, "Show on profile") == "Auf Profil anzeigen"
-    assert Gettext.gettext(backend, "Use automatic") == "Automatisch verwenden"
-    assert Gettext.gettext(backend, "Shown on your profile") == "Auf Ihrem Profil sichtbar"
+    assert Gettext.gettext(backend, "Show at top of profile") == "Oben im Profil anzeigen"
 
-    assert Gettext.gettext(backend, "This job title now appears on your profile.") ==
-             "Dieser Jobtitel erscheint jetzt auf Ihrem Profil."
+    assert Gettext.gettext(backend, "Choose automatically instead") ==
+             "Stattdessen automatisch wählen"
+
+    assert Gettext.gettext(backend, "Shown at the top of your profile") ==
+             "Wird oben in Ihrem Profil angezeigt"
+
+    assert Gettext.gettext(backend, "This job title now shows at the top of your profile.") ==
+             "Dieser Jobtitel wird jetzt oben in Ihrem Profil angezeigt."
   end
 end

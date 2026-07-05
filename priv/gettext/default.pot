@@ -818,17 +818,17 @@ msgstr ""
 msgid "Work Experiences"
 msgstr ""
 
-#: lib/vutuv_web/controllers/work_experience_controller.ex:109
+#: lib/vutuv_web/controllers/work_experience_controller.ex:112
 #, elixir-autogen
 msgid "Work experience created successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/work_experience_controller.ex:153
+#: lib/vutuv_web/controllers/work_experience_controller.ex:156
 #, elixir-autogen
 msgid "Work experience deleted successfully."
 msgstr ""
 
-#: lib/vutuv_web/controllers/work_experience_controller.ex:142
+#: lib/vutuv_web/controllers/work_experience_controller.ex:145
 #, elixir-autogen
 msgid "Work experience updated successfully."
 msgstr ""
@@ -1910,7 +1910,7 @@ msgstr[0] ""
 msgstr[1] ""
 
 #: lib/vutuv_web/templates/user/show.html.heex:427
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:117
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:130
 #, elixir-autogen, elixir-format
 msgid "Time in this role"
 msgstr ""
@@ -7753,44 +7753,9 @@ msgstr ""
 msgid "We wait a little before emailing, so you can read the message yourself first. These two settings apply only while unread-message emails are on."
 msgstr ""
 
-#: lib/vutuv_web/controllers/work_experience_controller.ex:78
-#, elixir-autogen
-msgid "This job title now appears on your profile."
-msgstr ""
-
 #: lib/vutuv_web/controllers/work_experience_controller.ex:83
 #, elixir-autogen
 msgid "That work experience could not be pinned."
-msgstr ""
-
-#: lib/vutuv_web/controllers/work_experience_controller.ex:93
-#, elixir-autogen
-msgid "Your profile job title is chosen automatically again."
-msgstr ""
-
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:19
-#, elixir-autogen
-msgid "%{title} @ %{organization} is shown as your profile job title."
-msgstr ""
-
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:25
-#, elixir-autogen
-msgid "Your profile job title is chosen automatically. Pick a role below to control which title leads your profile."
-msgstr ""
-
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:86
-#, elixir-autogen
-msgid "Shown on your profile"
-msgstr ""
-
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:92
-#, elixir-autogen
-msgid "Use automatic"
-msgstr ""
-
-#: lib/vutuv_web/templates/work_experience/card_list.html.heex:102
-#, elixir-autogen
-msgid "Show on profile"
 msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:19
@@ -8851,4 +8816,39 @@ msgstr ""
 #: lib/vutuv_web/templates/user/edit.html.heex:164
 #, elixir-autogen, elixir-format
 msgid "characters"
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:25
+#, elixir-autogen, elixir-format
+msgid "%{job} shows at the top of your profile."
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:33
+#, elixir-autogen, elixir-format
+msgid "Choose automatically instead"
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:115
+#, elixir-autogen, elixir-format
+msgid "Show at top of profile"
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:106
+#, elixir-autogen, elixir-format
+msgid "Shown at the top of your profile"
+msgstr ""
+
+#: lib/vutuv_web/controllers/work_experience_controller.ex:95
+#, elixir-autogen, elixir-format
+msgid "The job title at the top of your profile is chosen automatically again."
+msgstr ""
+
+#: lib/vutuv_web/templates/work_experience/card_list.html.heex:39
+#, elixir-autogen, elixir-format
+msgid "The job title at the top of your profile is picked automatically. Right now it's %{job}. Pick a role below to choose it yourself."
+msgstr ""
+
+#: lib/vutuv_web/controllers/work_experience_controller.ex:78
+#, elixir-autogen, elixir-format
+msgid "This job title now shows at the top of your profile."
 msgstr ""

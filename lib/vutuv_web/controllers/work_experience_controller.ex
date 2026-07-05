@@ -75,7 +75,7 @@ defmodule VutuvWeb.WorkExperienceController do
     case Accounts.pin_profile_work_experience(user, conn.assigns[:job]) do
       {:ok, _user} ->
         conn
-        |> put_flash(:info, gettext("This job title now appears on your profile."))
+        |> put_flash(:info, gettext("This job title now shows at the top of your profile."))
         |> redirect(to: ~p"/settings/work_experiences")
 
       {:error, _} ->
@@ -90,7 +90,10 @@ defmodule VutuvWeb.WorkExperienceController do
     {:ok, _user} = Accounts.unpin_profile_work_experience(user)
 
     conn
-    |> put_flash(:info, gettext("Your profile job title is chosen automatically again."))
+    |> put_flash(
+      :info,
+      gettext("The job title at the top of your profile is chosen automatically again.")
+    )
     |> redirect(to: ~p"/settings/work_experiences")
   end
 
