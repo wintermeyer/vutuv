@@ -1780,7 +1780,7 @@ msgid "Pardon us! Something went wrong."
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:130
-#: lib/vutuv_web/live/message_live/index.ex:653
+#: lib/vutuv_web/live/message_live/index.ex:659
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:186
 #, elixir-autogen, elixir-format
 msgid "Send"
@@ -1846,7 +1846,7 @@ msgstr ""
 msgid "Who to follow"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:649
+#: lib/vutuv_web/live/message_live/index.ex:655
 #, elixir-autogen, elixir-format
 msgid "Write a message…"
 msgstr ""
@@ -2540,7 +2540,7 @@ msgstr ""
 msgid "%{name} is typing…"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:665
+#: lib/vutuv_web/live/message_live/index.ex:685
 #, elixir-autogen, elixir-format
 msgid "@%{slug} has not accepted your message request yet."
 msgstr ""
@@ -2597,7 +2597,7 @@ msgstr ""
 msgid "Requests"
 msgstr ""
 
-#: lib/vutuv_web/live/message_live/index.ex:674
+#: lib/vutuv_web/live/message_live/index.ex:694
 #, elixir-autogen, elixir-format
 msgid "Select a conversation."
 msgstr ""
@@ -9708,4 +9708,19 @@ msgstr ""
 #: lib/vutuv_web/templates/user/edit.html.heex:253
 #, elixir-autogen, elixir-format
 msgid "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
+msgstr ""
+
+#: lib/vutuv_web/live/message_live/index.ex:670
+#, elixir-autogen, elixir-format
+msgid "Ctrl"
+msgstr ""
+
+#: lib/vutuv_web/live/message_live/index.ex:665
+#, elixir-autogen, elixir-format
+msgid "Markdown is supported."
+msgstr ""
+
+#: lib/vutuv_web/live/message_live/index.ex:673
+#, elixir-autogen, elixir-format
+msgid "to send"
 msgstr ""

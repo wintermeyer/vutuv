@@ -1785,7 +1785,7 @@ msgid "Pardon us! Something went wrong."
 msgstr "Entschuldigung! Etwas ist schiefgelaufen."
 
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:130
-#: lib/vutuv_web/live/message_live/index.ex:653
+#: lib/vutuv_web/live/message_live/index.ex:659
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:186
 #, elixir-autogen, elixir-format
 msgid "Send"
@@ -1851,7 +1851,7 @@ msgstr "Wir haben einen PIN an Ihre neue E-Mail-Adresse geschickt. Geben Sie ihn
 msgid "Who to follow"
 msgstr "Vorgeschlagene Profile"
 
-#: lib/vutuv_web/live/message_live/index.ex:649
+#: lib/vutuv_web/live/message_live/index.ex:655
 #, elixir-autogen, elixir-format
 msgid "Write a message…"
 msgstr "Nachricht schreiben…"
@@ -2545,7 +2545,7 @@ msgstr "%{names} schreiben…"
 msgid "%{name} is typing…"
 msgstr "%{name} schreibt…"
 
-#: lib/vutuv_web/live/message_live/index.ex:665
+#: lib/vutuv_web/live/message_live/index.ex:685
 #, elixir-autogen, elixir-format
 msgid "@%{slug} has not accepted your message request yet."
 msgstr "@%{slug} hat Ihre Nachrichtenanfrage noch nicht angenommen."
@@ -2602,7 +2602,7 @@ msgstr "Online"
 msgid "Requests"
 msgstr "Anfragen"
 
-#: lib/vutuv_web/live/message_live/index.ex:674
+#: lib/vutuv_web/live/message_live/index.ex:694
 #, elixir-autogen, elixir-format
 msgid "Select a conversation."
 msgstr "Wählen Sie eine Unterhaltung aus."
@@ -9750,3 +9750,18 @@ msgstr "Geburtsdatum entfernen?"
 #, elixir-autogen, elixir-format
 msgid "Your date of birth will be removed and your age will no longer be shown on your profile. You can add it again at any time."
 msgstr "Ihr Geburtsdatum wird entfernt und Ihr Alter wird nicht mehr in Ihrem Profil angezeigt. Sie können es jederzeit wieder hinzufügen."
+
+#: lib/vutuv_web/live/message_live/index.ex:670
+#, elixir-autogen, elixir-format
+msgid "Ctrl"
+msgstr "Strg"
+
+#: lib/vutuv_web/live/message_live/index.ex:665
+#, elixir-autogen, elixir-format
+msgid "Markdown is supported."
+msgstr "Markdown wird unterstützt."
+
+#: lib/vutuv_web/live/message_live/index.ex:673
+#, elixir-autogen, elixir-format
+msgid "to send"
+msgstr "zum Senden"

@@ -98,6 +98,46 @@ const Hooks = {
       })
     },
   },
+  // The message composer textarea (issue #903). Grows with its content up to
+  // the CSS max-height and then scrolls, so long/multi-line messages are easy
+  // to write. Cmd+Enter (Mac) / Ctrl+Enter (elsewhere) sends; plain Enter
+  // inserts a newline. Also swaps the "Ctrl" hint to the ⌘ symbol on a Mac so
+  // the little help line matches the actual key.
+  MessageComposer: {
+    mounted() {
+      this.autogrow = () => {
+        this.el.style.height = "auto"
+        this.el.style.height = `${this.el.scrollHeight}px`
+      }
+      this.autogrow()
+      this.el.addEventListener("input", this.autogrow)
+
+      this.el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault()
+          if (this.el.form) this.el.form.requestSubmit()
+        }
+      })
+
+      // After a send the form is reset (ClearOnSubmit); shrink back to one row.
+      if (this.el.form) {
+        this.el.form.addEventListener("submit", () => {
+          window.requestAnimationFrame(() => this.autogrow())
+        })
+      }
+
+      const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || "")
+      if (isMac) {
+        const key = document.getElementById("send-shortcut-key")
+        if (key) key.textContent = "⌘"
+      }
+    },
+    // A server-driven re-render (e.g. the value cleared after send) can change
+    // the content; re-measure so the height tracks it.
+    updated() {
+      this.autogrow()
+    },
+  },
   LocalTime: {
     mounted() {
       localizeTime(this.el)

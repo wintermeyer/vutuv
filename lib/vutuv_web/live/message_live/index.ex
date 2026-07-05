@@ -639,19 +639,39 @@ defmodule VutuvWeb.MessageLive.Index do
           phx-hook="ClearOnSubmit"
           phx-submit="send"
           phx-change="typing"
-          class="flex gap-2 border-t border-slate-200 p-3 dark:border-slate-800"
+          class="flex flex-col gap-1.5 border-t border-slate-200 p-3 dark:border-slate-800"
         >
-          <input
-            type="text"
-            name="message[body]"
-            value={@form[:body].value}
-            autocomplete="off"
-            placeholder={gettext("Write a message…")}
-            class="min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          />
-          <button type="submit" class="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
-            {gettext("Send")}
-          </button>
+          <div class="flex items-end gap-2">
+            <%!-- Issue #903: a textarea (not a single-line input) so long,
+            multi-line messages are possible. It grows with its content up to a
+            few lines and then scrolls (MessageComposer hook), and Cmd/Ctrl+Enter
+            sends while plain Enter inserts a newline. --%>
+            <textarea
+              id="message-body"
+              name="message[body]"
+              rows="1"
+              phx-hook="MessageComposer"
+              autocomplete="off"
+              placeholder={gettext("Write a message…")}
+              class="max-h-40 min-h-0 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
+            >{@form[:body].value}</textarea>
+            <button type="submit" class="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+              {gettext("Send")}
+            </button>
+          </div>
+          <%!-- Quiet helper line so the two things a user would otherwise have to
+          guess are spelled out: Markdown works, and how to send by keyboard. --%>
+          <p class="px-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("Markdown is supported.")}
+            <span class="mx-1 text-slate-400 dark:text-slate-600" aria-hidden="true">·</span>
+            <kbd
+              id="send-shortcut-key"
+              class="rounded border border-slate-300 px-1 font-sans text-slate-700 dark:border-slate-600 dark:text-slate-300"
+            >{gettext("Ctrl")}</kbd>
+            <span aria-hidden="true">+</span>
+            <kbd class="rounded border border-slate-300 px-1 font-sans text-slate-700 dark:border-slate-600 dark:text-slate-300">Enter</kbd>
+            {gettext("to send")}
+          </p>
         </.form>
 
         <p

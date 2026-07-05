@@ -77,6 +77,49 @@ defmodule VutuvWeb.MessageLiveTest do
       assert html =~ "For the record"
     end
 
+    test "the composer is a multi-line textarea, not a single-line input", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # Issue #903: a single-line <input> made long/multi-line messages
+      # impossible. The composer must be a <textarea>.
+      assert has_element?(view, "textarea[name='message[body]']")
+      refute has_element?(view, "input[name='message[body]']")
+    end
+
+    test "a multi-line message keeps its line breaks", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      view
+      |> form("#message-form", message: %{body: "First line\nSecond line"})
+      |> render_submit()
+
+      _ = :sys.get_state(view.pid)
+
+      {:ok, _view, html} = live(conn, ~p"/messages/#{conversation.id}")
+      assert html =~ "First line"
+      assert html =~ "Second line"
+      # Earmark renders a lone newline as a <br> (breaks: true), so the two
+      # lines stay visually separate inside the bubble.
+      assert html =~ "<br"
+    end
+
+    test "the composer explains Markdown support and the send shortcut", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, _view, html} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # A small helper line so users don't have to guess these (issue #903).
+      assert html =~ "Markdown"
+      assert html =~ "Enter"
+    end
+
     test "a deleted message disappears live from open threads", %{conn: conn} do
       {conn, me} = create_and_login_user(conn)
       {_other_conn, other} = login_other_user()
