@@ -15,13 +15,20 @@ defmodule Vutuv.PhoneTest do
       assert Phone.national("0171-1783428", "de") == "0171 1783428"
     end
 
-    test "leaves the value untouched for non-de viewers" do
+    test "formats a number in international form for non-de viewers" do
+      # An already-spaced value is returned unchanged; a run-together one is
+      # spaced out so it reads cleanly (issue: unreadable +447840875616).
       assert Phone.national("+49 261 9886803", "en") == "+49 261 9886803"
       assert Phone.national("+49 261 9886803", nil) == "+49 261 9886803"
+      assert Phone.national("+492619886803", "en") == "+49 261 9886803"
     end
 
-    test "never strips the country code off a foreign number, even for de viewers" do
-      assert Phone.national("+421903419345", "de") == "+421903419345"
+    test "formats a foreign number in international form (keeping its country code), even for de viewers" do
+      # Never converted to German national form (the +country code stays), but
+      # grouped with spaces instead of returned as a run-together string.
+      assert Phone.national("+447840875616", "de") == "+44 7840 875616"
+      assert Phone.national("+447840875616", "en") == "+44 7840 875616"
+      assert Phone.national("+421903419345", "de") == "+421 903 419 345"
       assert Phone.national("+41 78 956 91 14", "de") == "+41 78 956 91 14"
     end
 
@@ -29,6 +36,25 @@ defmodule Vutuv.PhoneTest do
       assert Phone.national("not a phone", "de") == "not a phone"
       assert Phone.national("12", "de") == "12"
       assert Phone.national("", "de") == ""
+    end
+  end
+
+  describe "display/1" do
+    test "formats a valid number in international form, spacing a run-together legacy value" do
+      assert Phone.display("+447840875616") == "+44 7840 875616"
+      assert Phone.display("+492619886803") == "+49 261 9886803"
+      assert Phone.display("+421903419345") == "+421 903 419 345"
+    end
+
+    test "leaves an already-formatted number unchanged" do
+      assert Phone.display("+49 30 5550100") == "+49 30 5550100"
+      assert Phone.display("+41 78 956 91 14") == "+41 78 956 91 14"
+    end
+
+    test "falls back to the stored value when it cannot be parsed or validated" do
+      assert Phone.display("not a phone") == "not a phone"
+      assert Phone.display("12") == "12"
+      assert Phone.display("") == ""
     end
   end
 

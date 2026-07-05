@@ -20,6 +20,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Languages
+  alias Vutuv.Phone
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
@@ -237,7 +238,10 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  def phone_entry(phone), do: %{id: phone.id, type: phone.number_type, value: phone.value}
+  # `Phone.display/1` renders the number in readable international form, matching
+  # the HTML section/show pages and spacing any legacy run-together value.
+  def phone_entry(phone),
+    do: %{id: phone.id, type: phone.number_type, value: Phone.display(phone.value)}
 
   @doc false
   def email_entry(email), do: %{id: email.id, type: email.email_type, value: email.value}

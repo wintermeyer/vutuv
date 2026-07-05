@@ -23,5 +23,12 @@ defmodule VutuvWeb.PhoneNumberHTML do
   """
   defdelegate tel_href(value), to: Vutuv.Phone, as: :tel
 
+  @doc """
+  The number in readable international form for display on the (locale-agnostic)
+  section and show pages, spacing a legacy run-together value. Delegates to
+  `Vutuv.Phone.display/1`; the locale-aware profile card uses `national/2`.
+  """
+  defdelegate display_number(value), to: Vutuv.Phone, as: :display
+
   embed_templates("../templates/phone_number/*")
 end

@@ -40,6 +40,7 @@ defmodule VutuvWeb.CV do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Languages
+  alias Vutuv.Phone
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -98,7 +99,7 @@ defmodule VutuvWeb.CV do
       username: user.username,
       profile_url: VutuvWeb.Endpoint.url() <> "/" <> user.username,
       email: first_value(emails),
-      phone: first_value(user.phone_numbers),
+      phone: phone_display(first_value(user.phone_numbers)),
       address_lines: address_lines(List.first(user.addresses)),
       birthdate: birthdate(user),
       gender: gender(user),
@@ -389,6 +390,11 @@ defmodule VutuvWeb.CV do
 
   defp first_value([%{value: value} | _rest]), do: presence(value)
   defp first_value(_none), do: nil
+
+  # Readable international grouping for the CV's contact line (Vutuv.Phone.display/1),
+  # matching the profile and spacing a legacy run-together value.
+  defp phone_display(nil), do: nil
+  defp phone_display(value), do: Phone.display(value)
 
   defp address_lines(nil), do: []
 

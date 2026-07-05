@@ -52,7 +52,9 @@ defmodule VutuvWeb.SectionShowPagesTest do
       html = get(conn, ~p"/#{user}/phone_numbers/#{phone}") |> html_response(200)
 
       assert html =~ ~s(href="tel:+49305550100")
-      assert html =~ "+49 30 555 0100"
+      # Shown in canonical international grouping (Vutuv.Phone.display/1), so a
+      # non-canonically-spaced stored value is regrouped, not echoed verbatim.
+      assert html =~ "+49 30 5550100"
       refute html =~ "About this Phone Number"
     end
   end

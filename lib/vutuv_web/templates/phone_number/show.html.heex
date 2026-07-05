@@ -1,10 +1,10 @@
 <.page_header
-  title={@phone_number.value}
+  title={display_number(@phone_number.value)}
   crumbs={[
     gettext("Users"),
     {full_name(@user), ~p"/#{@user}"},
     {gettext("Phone Numbers"), ~p"/#{@user}/phone_numbers"},
-    @phone_number.value
+    display_number(@phone_number.value)
   ]}
 />
 
@@ -19,5 +19,5 @@
   <h2 class="card__label"><%= gettext("Number Type") %></h2>
   <p><%= phone_type_label(@phone_number.number_type) %></p>
   <h2 class="card__label"><%= gettext("Number") %></h2>
-  <p><a href={"tel:" <> tel_href(@phone_number.value)}><%= @phone_number.value %></a></p>
+  <p><a href={"tel:" <> tel_href(@phone_number.value)}><%= display_number(@phone_number.value) %></a></p>
 </.card_section>

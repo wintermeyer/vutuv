@@ -13,7 +13,7 @@
       <td>
       <%= link phone_type_label(number.number_type), to: ~p"/#{@user}/phone_numbers/#{number}" %>
       </td>
-      <td><%= number.value %></td>
+      <td><%= display_number(number.value) %></td>
       <td class="text-right">
         <.row_actions
           :if={@as_owner?}

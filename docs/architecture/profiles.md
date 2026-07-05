@@ -204,8 +204,14 @@ breaking change that bumped the agent-doc `schema_version`.
 On the profile contact card, German numbers are shown to **German viewers** in
 national format (`+49 261 9886803` → `0261 9886803`) while every `tel:` link
 keeps the canonical E.164 form, via `Vutuv.Phone` (the
-`ex_phone_number`/libphonenumber port); foreign numbers and non-German viewers
-see the stored value unchanged.
+`ex_phone_number`/libphonenumber port). Every other displayed number keeps its
+international `+country` prefix but is **grouped with spaces**
+(`+447840875616` → `+44 7840 875616`) so it reads cleanly instead of running
+together; the country code is never stripped. The locale-aware rendering is
+`Vutuv.Phone.national/2`; the section/show pages and the agent-doc siblings use
+the locale-independent `Vutuv.Phone.display/1`, which applies the same
+international grouping (and re-spaces a legacy value stored without spaces). An
+unparseable or invalid value falls back to the stored text unchanged.
 
 Whenever a number is displayed **with** its international `+…` prefix, the card
 shows the calling code's country **flag** before it, with a `+49 is the calling
