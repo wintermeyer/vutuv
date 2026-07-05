@@ -8,6 +8,7 @@ defmodule VutuvWeb.CVControllerTest do
   """
   use VutuvWeb.ConnCase
 
+  alias Ecto.Changeset
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
 
@@ -20,8 +21,10 @@ defmodule VutuvWeb.CVControllerTest do
   }
 
   # A profile with every CV section filled: the three work-experience
-  # categories from issue #840, two education categories (#849), a link. The
-  # employment description carries the characters each format must escape.
+  # categories from issue #840, two education categories (#849), a link, a
+  # spoken language (#865), a certificate (#859), a social media account and
+  # personal details. The employment description carries the characters each
+  # format must escape.
   defp seed_profile(user) do
     insert(:work_experience,
       user: user,
@@ -73,7 +76,20 @@ defmodule VutuvWeb.CVControllerTest do
       country: "Deutschland"
     )
 
+    insert(:language, user: user, language_code: "en", proficiency: "c2")
+
+    insert(:qualification,
+      user: user,
+      name: "AWS Certified Solutions Architect",
+      issuer: "Amazon Web Services",
+      awarded_year: 2023
+    )
+
+    insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+
     user
+    |> Changeset.change(%{birthdate: ~D[1990-05-15]})
+    |> Repo.update!()
   end
 
   defp login_with_profile(conn) do
@@ -137,6 +153,34 @@ defmodule VutuvWeb.CVControllerTest do
       # The user-written description is escaped, never raw HTML.
       assert body =~ "Shipping &lt;fast&gt; &amp; 100% maintainable code_bases"
       refute body =~ "<fast>"
+    end
+
+    test "carries the newer sections and honors hiding them", %{conn: conn} do
+      {conn, user} = login_with_profile(conn)
+
+      body = conn |> get(~p"/#{user}/cv/print") |> html_response(200)
+
+      # Sections added after the CV shipped are all present: spoken languages
+      # (#865), certificates (#859), social media accounts and personal details.
+      assert body =~ "English"
+      assert body =~ "AWS Certified Solutions Architect"
+      assert body =~ "GitHub"
+      assert body =~ "octocat"
+      # The date of birth (its year is unique — work years differ).
+      assert body =~ "1990"
+
+      # Each new part is excludable through ?hide, like every other.
+      hidden =
+        conn
+        |> recycle()
+        |> get(~p"/#{user}/cv/print?#{[hide: "social_media,languages,birthdate"]}")
+        |> html_response(200)
+
+      refute hidden =~ "octocat"
+      refute hidden =~ "English"
+      refute hidden =~ "1990"
+      # An untouched new section stays.
+      assert hidden =~ "AWS Certified Solutions Architect"
     end
 
     test "honors the ?hide selection: sections, entries and identity fields", %{conn: conn} do
@@ -252,6 +296,18 @@ defmodule VutuvWeb.CVControllerTest do
                resume["basics"]["profiles"],
                &(&1["network"] == "Blog" and &1["url"] == "https://blog.example.org/")
              )
+
+      # Social media accounts join basics.profiles too, with the handle as the
+      # username and the derived profile URL.
+      assert Enum.any?(
+               resume["basics"]["profiles"],
+               &(&1["network"] == "GitHub" and &1["username"] == "octocat" and
+                   &1["url"] =~ "github.com/octocat")
+             )
+
+      # Spoken languages and certificates map onto their own schema sections.
+      assert Enum.any?(resume["languages"], &(&1["language"] == "English"))
+      assert Enum.any?(resume["certificates"], &(&1["name"] =~ "AWS Certified"))
     end
 
     test "an unknown format is a 404", %{conn: conn} do

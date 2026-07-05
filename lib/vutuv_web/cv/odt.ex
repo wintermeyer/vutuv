@@ -54,11 +54,13 @@ defmodule VutuvWeb.CV.Odt do
         cv.headline && p(cv.headline, "CVHeadline"),
         contact(cv),
         address(cv),
+        details(cv),
         Enum.map(cv.sections, &section/1),
         skills(cv.skills),
         qualifications(cv.qualifications),
         languages(cv.languages),
-        links(cv.links)
+        links(cv.links),
+        social_media(cv.social_media)
       ]
       |> List.flatten()
       |> Enum.filter(& &1)
@@ -94,6 +96,18 @@ defmodule VutuvWeb.CV.Odt do
 
   defp address(%{address_lines: []}), do: nil
   defp address(cv), do: p(Enum.join(cv.address_lines, ", "), "CVMuted")
+
+  defp details(cv) do
+    line =
+      [detail(gettext("Date of birth"), cv.birthdate), detail(gettext("Gender"), cv.gender)]
+      |> Enum.filter(& &1)
+      |> Enum.join(" | ")
+
+    if line != "", do: p(line, "CVMuted")
+  end
+
+  defp detail(_label, nil), do: nil
+  defp detail(label, value), do: "#{label}: #{value}"
 
   defp section(%{heading: heading, entries: entries}) do
     [heading(heading) | Enum.map(entries, &entry/1)]
@@ -144,6 +158,15 @@ defmodule VutuvWeb.CV.Odt do
       end
 
     [heading(gettext("Links")) | lines]
+  end
+
+  defp social_media([]), do: nil
+
+  defp social_media(accounts) do
+    lines =
+      for account <- accounts, do: p("#{account.provider}: #{account.url || account.handle}")
+
+    [heading(gettext("Social Media")) | lines]
   end
 
   defp heading(text) do

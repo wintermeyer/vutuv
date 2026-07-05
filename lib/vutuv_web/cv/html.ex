@@ -38,6 +38,7 @@ defmodule VutuvWeb.CV.Html do
     #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
     #{links(cv.links)}
+    #{social_media(cv.social_media)}
     </div>
     </body>
     </html>
@@ -56,37 +57,26 @@ defmodule VutuvWeb.CV.Html do
   end
 
   defp header(cv) do
-    photo =
-      if cv.photo do
-        ~s(<img class="photo" src="#{cv.photo}" alt=""/>)
-      else
-        ""
-      end
+    photo = if cv.photo, do: ~s(<img class="photo" src="#{cv.photo}" alt=""/>), else: ""
+    name = if cv.name, do: ~s(<h1>#{esc(cv.name)}</h1>), else: ""
+    headline = if cv.headline, do: ~s(<p class="headline">#{esc(cv.headline)}</p>), else: ""
 
     # The profile link is a real clickable link (opens the vutuv profile);
     # the email/phone stay plain text.
-    contact_items =
-      [
+    contact =
+      contact_paragraph([
         cv.email && esc(cv.email),
         cv.phone && esc(cv.phone),
         cv.profile_url && ~s(<a href="#{esc(cv.profile_url)}">#{esc(cv.profile_url)}</a>)
-      ]
-      |> Enum.filter(& &1)
+      ])
 
-    contact =
-      if contact_items == [],
-        do: "",
-        else: ~s(<p class="contact">#{Enum.join(contact_items, " &middot; ")}</p>)
+    address = contact_paragraph(Enum.map(cv.address_lines, &esc/1), ", ")
 
-    address =
-      if cv.address_lines == [] do
-        ""
-      else
-        ~s(<p class="contact">#{Enum.map_join(cv.address_lines, ", ", &esc/1)}</p>)
-      end
-
-    name = if cv.name, do: ~s(<h1>#{esc(cv.name)}</h1>), else: ""
-    headline = if cv.headline, do: ~s(<p class="headline">#{esc(cv.headline)}</p>), else: ""
+    details =
+      contact_paragraph([
+        detail(gettext("Date of birth"), cv.birthdate),
+        detail(gettext("Gender"), cv.gender)
+      ])
 
     """
     <header class="head">
@@ -95,11 +85,24 @@ defmodule VutuvWeb.CV.Html do
     #{headline}
     #{contact}
     #{address}
+    #{details}
     </div>
     #{photo}
     </header>
     """
   end
+
+  # A `.contact` paragraph joining the present items (already-escaped HTML
+  # fragments, or nil/false to drop) with `sep`, or "" when none are present.
+  defp contact_paragraph(items, sep \\ " &middot; ") do
+    case Enum.filter(items, & &1) do
+      [] -> ""
+      present -> ~s(<p class="contact">#{Enum.join(present, sep)}</p>)
+    end
+  end
+
+  defp detail(_label, nil), do: nil
+  defp detail(label, value), do: esc("#{label}: #{value}")
 
   defp section(%{heading: heading, entries: entries}) do
     """
@@ -181,6 +184,27 @@ defmodule VutuvWeb.CV.Html do
     """
     <section>
     <h2>#{esc(gettext("Links"))}</h2>
+    <ul class="links">#{items}</ul>
+    </section>
+    """
+  end
+
+  defp social_media([]), do: ""
+
+  defp social_media(accounts) do
+    items =
+      Enum.map_join(accounts, fn account ->
+        target =
+          if account.url,
+            do: ~s(<a href="#{esc(account.url)}">#{esc(account.url)}</a>),
+            else: esc(account.handle)
+
+        ~s(<li>#{esc(account.provider)}: #{target}</li>)
+      end)
+
+    """
+    <section>
+    <h2>#{esc(gettext("Social Media"))}</h2>
     <ul class="links">#{items}</ul>
     </section>
     """

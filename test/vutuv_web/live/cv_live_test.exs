@@ -30,6 +30,9 @@ defmodule VutuvWeb.CVLiveTest do
     )
 
     insert(:education, user: user, school: "Universität Bremen", degree: "BSc", start_year: 2014)
+    insert(:language, user: user, language_code: "en", proficiency: "c2")
+    insert(:qualification, user: user, name: "AWS Certified Solutions Architect")
+    insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
     user
   end
 
@@ -39,7 +42,9 @@ defmodule VutuvWeb.CVLiveTest do
         insert(:user,
           first_name: "Erika",
           last_name: "Beispiel",
-          email_confirmed?: true
+          email_confirmed?: true,
+          birthdate: ~D[1990-05-15],
+          gender: "female"
         )
       )
 
@@ -73,6 +78,22 @@ defmodule VutuvWeb.CVLiveTest do
 
       assert has_element?(view, "#cv-download-docx[href*='hide=internship']")
       assert has_element?(view, "#cv-print[href*='hide=internship']")
+    end
+
+    test "offers toggles for the newer sections and personal details", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}/cv")
+
+      # Sections added after the CV shipped each get their own toggle card.
+      assert has_element?(view, "input[phx-value-key='languages']")
+      assert has_element?(view, "input[phx-value-key='qualifications']")
+      assert has_element?(view, "input[phx-value-key='social_media']")
+      # Date of birth and gender ride in the header identity toggles.
+      assert has_element?(view, "input[phx-value-key='birthdate']")
+      assert has_element?(view, "input[phx-value-key='gender']")
+
+      # Unticking one encodes it into every download link.
+      view |> element("input[phx-value-key='social_media']") |> render_click()
+      assert has_element?(view, "#cv-download-docx[href*='hide=social_media']")
     end
 
     test "the JSON Resume explainer links to jsonresume.org (#862)", %{conn: conn, owner: owner} do

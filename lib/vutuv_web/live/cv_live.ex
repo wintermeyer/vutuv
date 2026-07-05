@@ -112,6 +112,8 @@ defmodule VutuvWeb.CVLive do
   defp identity_label("phone"), do: gettext("Phone number")
   defp identity_label("address"), do: gettext("Address")
   defp identity_label("url"), do: gettext("Profile link")
+  defp identity_label("birthdate"), do: gettext("Date of birth")
+  defp identity_label("gender"), do: gettext("Gender")
 
   # A short preview of the field's value beside its toggle (the photo has no
   # text, so its label carries the meaning).
@@ -362,6 +364,30 @@ defmodule VutuvWeb.CVLive do
                 />
                 <span class="text-sm text-slate-700 dark:text-slate-300">
                   <span class="font-medium">{language.name}</span>: {language.fluency}
+                </span>
+              </label>
+            </div>
+          </.card>
+
+          <.card :if={@cv.social_media != []}>
+            <.heading_toggle hide={@hide} key="social_media">{gettext("Social Media")}</.heading_toggle>
+            <div class={["mt-3 space-y-1", shown?(@hide, "social_media") || "opacity-40"]}>
+              <label
+                :for={account <- @cv.social_media}
+                class={[
+                  "flex cursor-pointer items-baseline gap-3 rounded-lg px-2 py-1.5",
+                  shown?(@hide, account.id) || "line-through opacity-50"
+                ]}
+              >
+                <input
+                  type="checkbox"
+                  class={checkbox_class()}
+                  checked={shown?(@hide, account.id)}
+                  phx-click="toggle"
+                  phx-value-key={account.id}
+                />
+                <span class="min-w-0 truncate text-sm text-slate-700 dark:text-slate-300">
+                  <span class="font-medium">{account.provider}:</span> {account.handle}
                 </span>
               </label>
             </div>

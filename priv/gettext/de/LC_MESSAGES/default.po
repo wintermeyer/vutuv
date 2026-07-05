@@ -169,7 +169,7 @@ msgstr "Beschreibung"
 msgid "Disable"
 msgstr "Inaktivieren"
 
-#: lib/vutuv_web/live/cv_live.ex:375
+#: lib/vutuv_web/live/cv_live.ex:401
 #: lib/vutuv_web/templates/export/index.html.heex:41
 #: lib/vutuv_web/templates/user/show.html.heex:223
 #, elixir-autogen
@@ -318,6 +318,11 @@ msgstr "Folge ich"
 
 #: lib/vutuv_web/agent_docs/markdown.ex:244
 #: lib/vutuv_web/agent_docs/text.ex:265
+#: lib/vutuv_web/cv/docx.ex:128
+#: lib/vutuv_web/cv/html.ex:78
+#: lib/vutuv_web/cv/latex.ex:64
+#: lib/vutuv_web/cv/odt.ex:102
+#: lib/vutuv_web/live/cv_live.ex:116
 #: lib/vutuv_web/templates/page/index.html.heex:64
 #: lib/vutuv_web/templates/user/edit.html.heex:105
 #: lib/vutuv_web/templates/user/show.html.heex:723
@@ -389,11 +394,11 @@ msgstr "Link wurde geändert."
 #: lib/vutuv_web/agent_docs/text.ex:49
 #: lib/vutuv_web/components/ui.ex:2364
 #: lib/vutuv_web/controllers/url_controller.ex:28
-#: lib/vutuv_web/cv/docx.ex:177
-#: lib/vutuv_web/cv/html.ex:183
-#: lib/vutuv_web/cv/latex.ex:127
-#: lib/vutuv_web/cv/odt.ex:146
-#: lib/vutuv_web/live/cv_live.ex:297
+#: lib/vutuv_web/cv/docx.ex:191
+#: lib/vutuv_web/cv/html.ex:186
+#: lib/vutuv_web/cv/latex.ex:140
+#: lib/vutuv_web/cv/odt.ex:160
+#: lib/vutuv_web/live/cv_live.ex:299
 #: lib/vutuv_web/templates/import/new.html.heex:12
 #: lib/vutuv_web/templates/import/preview.html.heex:40
 #: lib/vutuv_web/templates/url/edit.html.heex:3
@@ -651,6 +656,11 @@ msgstr "Slug"
 #: lib/vutuv_web/agent_docs/text.ex:52
 #: lib/vutuv_web/components/ui.ex:2365
 #: lib/vutuv_web/controllers/social_media_account_controller.ex:41
+#: lib/vutuv_web/cv/docx.ex:202
+#: lib/vutuv_web/cv/html.ex:207
+#: lib/vutuv_web/cv/latex.ex:155
+#: lib/vutuv_web/cv/odt.ex:169
+#: lib/vutuv_web/live/cv_live.ex:373
 #: lib/vutuv_web/templates/social_media_account/manage.html.heex:4
 #: lib/vutuv_web/templates/user/show.html.heex:850
 #, elixir-autogen
@@ -1395,11 +1405,11 @@ msgstr "Tag-URLs"
 #: lib/vutuv_web/agent_docs/text.ex:350
 #: lib/vutuv_web/components/ui.ex:2369
 #: lib/vutuv_web/controllers/user_tag_controller.ex:50
-#: lib/vutuv_web/cv/docx.ex:145
-#: lib/vutuv_web/cv/html.ex:137
-#: lib/vutuv_web/cv/latex.ex:94
-#: lib/vutuv_web/cv/odt.ex:118
-#: lib/vutuv_web/live/cv_live.ex:276
+#: lib/vutuv_web/cv/docx.ex:159
+#: lib/vutuv_web/cv/html.ex:140
+#: lib/vutuv_web/cv/latex.ex:107
+#: lib/vutuv_web/cv/odt.ex:132
+#: lib/vutuv_web/live/cv_live.ex:278
 #: lib/vutuv_web/live/search_live.ex:147
 #: lib/vutuv_web/live/search_live.ex:321
 #: lib/vutuv_web/live/tag_new_live.ex:34
@@ -6976,7 +6986,7 @@ msgstr "Empfänger"
 msgid "Rendered with your own account data for the variables."
 msgstr "Mit Ihren eigenen Kontodaten für die Variablen dargestellt."
 
-#: lib/vutuv_web/live/cv_live.ex:202
+#: lib/vutuv_web/live/cv_live.ex:204
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:281
 #, elixir-autogen, elixir-format
 msgid "Reset"
@@ -8087,7 +8097,7 @@ msgstr "Abschluss"
 #: lib/vutuv_web/agent_docs/text.ex:38
 #: lib/vutuv_web/components/ui.ex:2361
 #: lib/vutuv_web/controllers/education_controller.ex:50
-#: lib/vutuv_web/cv/cv.ex:235
+#: lib/vutuv_web/cv/cv.ex:250
 #: lib/vutuv_web/templates/education/edit.html.heex:3
 #: lib/vutuv_web/templates/education/index.html.heex:5
 #: lib/vutuv_web/templates/education/index.html.heex:10
@@ -8724,11 +8734,11 @@ msgstr "Nicht verfügbar, solange die Suche einen Personen-Filter verwendet."
 msgid "Your search uses a people filter such as tag: or city:, so it only finds people."
 msgstr "Ihre Suche verwendet einen Personen-Filter wie tag: oder ort:, daher findet sie nur Personen."
 
-#: lib/vutuv_web/cv/html.ex:49
 #: lib/vutuv_web/cv/html.ex:50
-#: lib/vutuv_web/cv/latex.ex:39
+#: lib/vutuv_web/cv/html.ex:51
 #: lib/vutuv_web/cv/latex.ex:40
-#: lib/vutuv_web/live/cv_live.ex:176
+#: lib/vutuv_web/cv/latex.ex:41
+#: lib/vutuv_web/live/cv_live.ex:178
 #, elixir-autogen, elixir-format
 msgid "CV"
 msgstr "Lebenslauf"
@@ -8770,7 +8780,7 @@ msgstr "Die folgenden Tags werden erstellt:"
 msgid "Tip:"
 msgstr "Tipp:"
 
-#: lib/vutuv_web/cv/html.ex:54
+#: lib/vutuv_web/cv/html.ex:55
 #, elixir-autogen, elixir-format
 msgid "This is the print view of this CV. Use your browser's print dialog (Ctrl+P or Cmd+P) and choose \"Save as PDF\" to get a PDF file."
 msgstr "Dies ist die Druckansicht dieses Lebenslaufs. Nutzen Sie den Druckdialog Ihres Browsers (Strg+P oder Cmd+P) und wählen Sie \"Als PDF speichern\", um eine PDF-Datei zu erhalten."
@@ -8792,7 +8802,7 @@ msgstr[1] "Repostet von %{name} und %{formatted} weiteren"
 msgid "reposted by %{name} and %{count} more"
 msgstr "repostet von %{name} und %{count} weiteren"
 
-#: lib/vutuv_web/live/cv_live.ex:194
+#: lib/vutuv_web/live/cv_live.ex:196
 #, elixir-autogen, elixir-format
 msgid "Anonymize"
 msgstr "Anonymisieren"
@@ -8802,12 +8812,12 @@ msgstr "Anonymisieren"
 msgid "Email address"
 msgstr "E-Mail-Adresse"
 
-#: lib/vutuv_web/live/cv_live.ex:377
+#: lib/vutuv_web/live/cv_live.ex:403
 #, elixir-autogen, elixir-format
 msgid "Every download reflects the parts you selected."
 msgstr "Jeder Download enthält genau die ausgewählten Teile."
 
-#: lib/vutuv_web/live/cv_live.ex:208
+#: lib/vutuv_web/live/cv_live.ex:210
 #, elixir-autogen, elixir-format
 msgid "Header"
 msgstr "Kopfzeile"
@@ -8823,12 +8833,12 @@ msgstr "Lebenslauf öffnen"
 msgid "Photo"
 msgstr "Foto"
 
-#: lib/vutuv_web/live/cv_live.ex:183
+#: lib/vutuv_web/live/cv_live.ex:185
 #, elixir-autogen, elixir-format
 msgid "Pick what to include. Untick single entries or whole sections, or anonymize the CV by hiding the name, photo and contact details."
 msgstr "Wählen Sie aus, was enthalten sein soll. Haken Sie einzelne Einträge oder ganze Abschnitte ab, oder anonymisieren Sie den Lebenslauf, indem Sie Name, Foto und Kontaktdaten ausblenden."
 
-#: lib/vutuv_web/live/cv_live.ex:386
+#: lib/vutuv_web/live/cv_live.ex:412
 #, elixir-autogen, elixir-format
 msgid "Print / Save as PDF"
 msgstr "Drucken / Als PDF speichern"
@@ -8877,7 +8887,7 @@ msgstr "Freiberuflich / Selbstständig"
 msgid "Other activities"
 msgstr "Sonstige Tätigkeiten"
 
-#: lib/vutuv_web/live/cv_live.ex:400
+#: lib/vutuv_web/live/cv_live.ex:426
 #, elixir-autogen, elixir-format
 msgid "For a PDF, open the print view and choose \"Save as PDF\" in your browser's print dialog. Word and OpenDocument are editable; LaTeX is the typesetting source; JSON Resume is the open %{link} format."
 msgstr "Für ein PDF öffnen Sie die Druckansicht und wählen im Druckdialog Ihres Browsers \"Als PDF speichern\". Word und OpenDocument sind bearbeitbar, LaTeX ist der Quelltext zum Setzen, und JSON Resume ist das offene Format von %{link}."
@@ -9241,11 +9251,11 @@ msgstr "Sprache erfolgreich aktualisiert."
 #: lib/vutuv_web/agent_docs/text.ex:46
 #: lib/vutuv_web/components/ui.ex:2363
 #: lib/vutuv_web/controllers/language_controller.ex:42
-#: lib/vutuv_web/cv/docx.ex:163
-#: lib/vutuv_web/cv/html.ex:166
-#: lib/vutuv_web/cv/latex.ex:112
-#: lib/vutuv_web/cv/odt.ex:133
-#: lib/vutuv_web/live/cv_live.ex:347
+#: lib/vutuv_web/cv/docx.ex:177
+#: lib/vutuv_web/cv/html.ex:169
+#: lib/vutuv_web/cv/latex.ex:125
+#: lib/vutuv_web/cv/odt.ex:147
+#: lib/vutuv_web/live/cv_live.ex:349
 #: lib/vutuv_web/templates/language/edit.html.heex:3
 #: lib/vutuv_web/templates/language/index.html.heex:10
 #: lib/vutuv_web/templates/language/manage.html.heex:4
@@ -9565,11 +9575,11 @@ msgstr "Zertifikate"
 #: lib/vutuv_web/agent_docs/text.ex:42
 #: lib/vutuv_web/components/ui.ex:2362
 #: lib/vutuv_web/controllers/qualification_controller.ex:47
-#: lib/vutuv_web/cv/docx.ex:154
-#: lib/vutuv_web/cv/html.ex:150
-#: lib/vutuv_web/cv/latex.ex:103
-#: lib/vutuv_web/cv/odt.ex:124
-#: lib/vutuv_web/live/cv_live.ex:322
+#: lib/vutuv_web/cv/docx.ex:168
+#: lib/vutuv_web/cv/html.ex:153
+#: lib/vutuv_web/cv/latex.ex:116
+#: lib/vutuv_web/cv/odt.ex:138
+#: lib/vutuv_web/live/cv_live.ex:324
 #: lib/vutuv_web/templates/import/preview.html.heex:27
 #: lib/vutuv_web/templates/qualification/edit.html.heex:3
 #: lib/vutuv_web/templates/qualification/index.html.heex:11
@@ -9714,3 +9724,12 @@ msgstr "Bevorzugte Kontaktsprache"
 #, elixir-autogen, elixir-format
 msgid "+%{code} is the calling code of %{region}"
 msgstr "+%{code} ist die Ländervorwahl von %{region}"
+
+#: lib/vutuv_web/cv/docx.ex:128
+#: lib/vutuv_web/cv/html.ex:77
+#: lib/vutuv_web/cv/latex.ex:64
+#: lib/vutuv_web/cv/odt.ex:102
+#: lib/vutuv_web/live/cv_live.ex:115
+#, elixir-autogen, elixir-format
+msgid "Date of birth"
+msgstr "Geburtsdatum"

@@ -137,22 +137,27 @@ own download. The owner also finds a link to it from their data page
 **`/:slug/cv` is an interactive builder** (`VutuvWeb.CVLive`, embedded by
 `VutuvWeb.CVController.show` via `live_render`, the profile's pattern). The
 left column is the CV as an include/exclude checklist — every identity field
-(name, photo, tagline, email, phone, address, profile link), every section
-and every single entry has a toggle, plus an **Anonymize** preset that hides
-the name, photo and contact details in one click. The right column is the
+(name, photo, tagline, email, phone, address, profile link, date of birth,
+gender), every section and every single entry has a toggle, plus an
+**Anonymize** preset that hides the name, photo, contact details, personal
+details and social media accounts in one click. The right column is the
 download panel. So a recruiter can drop sections, tailor the CV to a role, or
 forward a bias-free anonymized version. Nothing is persisted: the selection
 lives in the socket and is encoded into every download/print link as
 `?hide=<comma-separated keys>` (identity keys, section keys — a work/education
-category or `tags`/`links` — and entry UUIDs), which `CVController` parses and
-`VutuvWeb.CV.apply_hide/2` applies before rendering.
+category or `tags`/`qualifications`/`languages`/`links`/`social_media` — and
+entry UUIDs), which `CVController` parses and `VutuvWeb.CV.apply_hide/2`
+applies before rendering.
 
-`VutuvWeb.CV.build/2` produces one keyed data map: the issue #840
-work-experience categories in CV order (employment, internships,
-volunteering), education in its issue #849 categories (university,
-apprenticeship, school — collapsed to one "Education" section for the common
-degrees-only member, like the profile), tags, links, and the member's
-**first** email / phone number / address as contact details.
+`VutuvWeb.CV.build/2` produces one keyed data map, kept in step with the
+profile as sections are added: the issue #840 work-experience categories in CV
+order (employment, internships, volunteering), education in its issue #849
+categories (university, apprenticeship, school — collapsed to one "Education"
+section for the common degrees-only member, like the profile), tags, spoken
+languages (#865), certificates & licenses (#859), links, social media
+accounts, the member's **first** email / phone number / address as contact
+details, and the personal details (date of birth, gender). Whenever a new
+profile data section ships, add it here too.
 
 One renderer per format, all dependency-free (nothing for an air-gapped
 install to configure):
@@ -165,7 +170,9 @@ install to configure):
   `tex` (plain `article`-class LaTeX, all specials escaped), `docx` / `odt`
   (minimal OOXML / ODF ZIP packages built with Erlang's `:zip`), and `json`
   (the [JSON Resume](https://jsonresume.org) schema; internships join `work`,
-  volunteering maps to `volunteer`). The machine-readable `json` is the one
-  format withheld — it answers 404 for a fully machine-opted-out member
-  (`agent_docs_blocked?`, whose agent `.json` also 404s) to everyone but the
-  owner; the human-use formats stay public like the profile page itself.
+  volunteering maps to `volunteer`, spoken languages become `languages`,
+  certificates `certificates`, links and social media accounts
+  `basics.profiles`). Every format is a member-initiated export of the same
+  public CV, so all of them — the machine-readable `json` included — stay
+  public like the profile page itself, even for a fully machine-opted-out
+  member (`noindex?` + `noai?`).

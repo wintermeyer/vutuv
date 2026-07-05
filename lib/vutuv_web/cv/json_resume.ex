@@ -7,9 +7,11 @@ defmodule VutuvWeb.CV.JsonResume do
   Category mapping: employment, self-employment, internships **and** other
   activities become `work` entries (the schema has no separate section for
   them), volunteering becomes `volunteer`, tags become `skills`, spoken
-  languages become `languages`, the profile links become `basics.profiles`
-  and the address becomes `basics.location`. Keys with no value are dropped,
-  as the schema expects.
+  languages become `languages`, the profile links **and** social media
+  accounts become `basics.profiles`, and the address becomes
+  `basics.location`. Keys with no value are dropped, as the schema expects.
+  (The schema has no birthdate/gender fields, so those personal details ride
+  only on the human-readable formats, not here.)
   """
 
   @schema_url "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json"
@@ -25,7 +27,7 @@ defmodule VutuvWeb.CV.JsonResume do
           "phone" => cv.phone,
           "url" => cv.profile_url,
           "location" => location(cv.address_lines),
-          "profiles" => profiles(cv.links)
+          "profiles" => profiles(cv.links, cv.social_media)
         }),
       "work" => work(cv.work_groups),
       "volunteer" => volunteer(cv.work_groups),
@@ -71,16 +73,29 @@ defmodule VutuvWeb.CV.JsonResume do
   defp location([]), do: nil
   defp location(lines), do: %{"address" => Enum.join(lines, ", ")}
 
-  # Each profile link becomes a `profiles` entry (the link's description is
-  # its network name); a link without a URL is dropped, and no links at all
-  # drops the whole key.
-  defp profiles(links) do
-    entries =
+  # Each profile link and social media account becomes a `profiles` entry (the
+  # link's description / the provider name is the network); a link without a
+  # URL is dropped, a social account keeps its handle as `username` even when
+  # its provider has no URL scheme. No profiles at all drops the whole key.
+  defp profiles(links, social) do
+    from_links =
       for %{url: url} = link <- links, is_binary(url) and url != "" do
         compact(%{"network" => link.label, "url" => url})
       end
 
-    if entries == [], do: nil, else: entries
+    from_social =
+      for account <- social do
+        compact(%{
+          "network" => account.provider,
+          "username" => account.handle,
+          "url" => account.url
+        })
+      end
+
+    case from_links ++ from_social do
+      [] -> nil
+      entries -> entries
+    end
   end
 
   defp education(entry) do

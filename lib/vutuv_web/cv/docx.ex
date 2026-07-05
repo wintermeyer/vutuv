@@ -88,11 +88,13 @@ defmodule VutuvWeb.CV.Docx do
         cv.headline && paragraph(cv.headline),
         contact(cv),
         address(cv),
+        details(cv),
         Enum.map(cv.sections, &section/1),
         skills(cv.skills),
         qualifications(cv.qualifications),
         languages(cv.languages),
-        links(cv.links)
+        links(cv.links),
+        social_media(cv.social_media)
       ]
       |> List.flatten()
       |> Enum.filter(& &1)
@@ -120,6 +122,18 @@ defmodule VutuvWeb.CV.Docx do
 
   defp address(%{address_lines: []}), do: nil
   defp address(cv), do: paragraph(Enum.join(cv.address_lines, ", "), muted: true)
+
+  defp details(cv) do
+    line =
+      [detail(gettext("Date of birth"), cv.birthdate), detail(gettext("Gender"), cv.gender)]
+      |> Enum.filter(& &1)
+      |> Enum.join(" | ")
+
+    if line != "", do: paragraph(line, muted: true)
+  end
+
+  defp detail(_label, nil), do: nil
+  defp detail(label, value), do: "#{label}: #{value}"
 
   defp section(%{heading: heading, entries: entries}) do
     [paragraph(heading, style: "Heading1") | Enum.map(entries, &entry/1)]
@@ -175,6 +189,17 @@ defmodule VutuvWeb.CV.Docx do
       end
 
     [paragraph(gettext("Links"), style: "Heading1") | lines]
+  end
+
+  defp social_media([]), do: nil
+
+  defp social_media(accounts) do
+    lines =
+      for account <- accounts do
+        paragraph("#{account.provider}: #{account.url || account.handle}")
+      end
+
+    [paragraph(gettext("Social Media"), style: "Heading1") | lines]
   end
 
   # One paragraph; newlines in the text become soft line breaks.

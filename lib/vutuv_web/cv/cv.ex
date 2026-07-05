@@ -19,11 +19,13 @@ defmodule VutuvWeb.CV do
   those keys and returns the trimmed map the renderers consume:
 
     * identity fields — `"name"`, `"photo"`, `"headline"`, `"email"`,
-      `"phone"`, `"address"`, `"url"` (the profile link)
+      `"phone"`, `"address"`, `"url"` (the profile link), `"birthdate"` and
+      `"gender"` (the personal details)
     * whole sections — a work/education category key (`"employment"`,
       `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
       `"university"`, `"apprenticeship"`, `"school"`, or `"education"` when
-      the categories are collapsed), plus `"tags"`, `"languages"` and `"links"`
+      the categories are collapsed), plus `"tags"`, `"qualifications"`,
+      `"languages"`, `"links"` and `"social_media"`
     * single entries — the record's UUID
 
   The body is a list of uniform `sections` (`%{key, heading, entries}`, each
@@ -36,12 +38,14 @@ defmodule VutuvWeb.CV do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Languages
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
+  alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
@@ -53,7 +57,9 @@ defmodule VutuvWeb.CV do
 
   # The identity fields, in header order, as `{hide-key, cv-map field}`. The
   # builder renders a toggle per field that has a value; the "Anonymize"
-  # preset hides all but the headline (a job title, not a name).
+  # preset hides all but the headline (a job title, not a name). Date of birth
+  # and gender are personal details that ride here too, so a member can drop
+  # them (and the Anonymize preset does, since they are bias-prone).
   @identity_fields [
     {"name", :name},
     {"photo", :photo},
@@ -61,10 +67,12 @@ defmodule VutuvWeb.CV do
     {"email", :email},
     {"phone", :phone},
     {"address", :address_lines},
-    {"url", :profile_url}
+    {"url", :profile_url},
+    {"birthdate", :birthdate},
+    {"gender", :gender}
   ]
 
-  @anonymize ~w(name photo email phone address url)
+  @anonymize ~w(name photo email phone address url birthdate gender social_media)
 
   @doc "The identity fields as `{key, cv-field}`, in header order."
   def identity_fields, do: @identity_fields
@@ -92,7 +100,10 @@ defmodule VutuvWeb.CV do
       email: first_value(emails),
       phone: first_value(user.phone_numbers),
       address_lines: address_lines(List.first(user.addresses)),
+      birthdate: birthdate(user),
+      gender: gender(user),
       links: Enum.map(user.urls, &%{id: &1.id, label: presence(&1.description), url: &1.value}),
+      social_media: Enum.map(user.social_media_accounts, &social_media_entry/1),
       sections: sections(user),
       skills: Enum.map(user.user_tags, &%{id: &1.id, name: UserTag.name(&1)}),
       qualifications: Enum.map(user.qualifications, &qualification_entry/1),
@@ -117,12 +128,15 @@ defmodule VutuvWeb.CV do
         email: hidden(cv.email, "email", hide),
         phone: hidden(cv.phone, "phone", hide),
         profile_url: hidden(cv.profile_url, "url", hide),
+        birthdate: hidden(cv.birthdate, "birthdate", hide),
+        gender: hidden(cv.gender, "gender", hide),
         address_lines: if(MapSet.member?(hide, "address"), do: [], else: cv.address_lines),
         sections: filter_sections(cv.sections, hide),
         skills: filter_by_id(cv.skills, "tags", hide),
         qualifications: filter_by_id(cv.qualifications, "qualifications", hide),
         languages: filter_by_id(cv.languages, "languages", hide),
         links: filter_by_id(cv.links, "links", hide),
+        social_media: filter_by_id(cv.social_media, "social_media", hide),
         work_groups: filter_work_groups(cv.work_groups, hide),
         educations: filter_educations(cv.educations, hide)
     }
@@ -184,6 +198,7 @@ defmodule VutuvWeb.CV do
       # A CV is a public document, so it hides expired credentials too (#859).
       qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
       languages: Language.ordered(),
+      social_media_accounts: SocialMediaAccount.ordered(),
       phone_numbers: PhoneNumber.ordered(),
       urls: Url.ordered(),
       addresses: Address.ordered()
@@ -338,6 +353,39 @@ defmodule VutuvWeb.CV do
       present -> "#{name} (#{Enum.join(present, ", ")})"
     end
   end
+
+  # A social media account for the CV: the provider name, the visitor-facing
+  # handle and the public profile URL (nil for a provider with no canonical
+  # URL scheme, e.g. Snapchat — then the renderers fall back to the handle).
+  defp social_media_entry(account) do
+    url = SocialMediaAccount.url(account)
+
+    %{
+      id: account.id,
+      provider: account.provider,
+      handle: social_handle(account),
+      url: if(String.starts_with?(url, "http"), do: url, else: nil)
+    }
+  end
+
+  # Mirrors VutuvWeb.UserHTML.social_handle/1: the Twitter/Mastodon/Instagram
+  # handles read with a leading "@", every other provider bare.
+  defp social_handle(%{provider: provider, value: value})
+       when provider in ~w(Twitter Mastodon Instagram),
+       do: "@" <> value
+
+  defp social_handle(%{value: value}), do: value
+
+  # The member's date of birth as the formatted string the profile shows
+  # (locale-aware via UserHelpers.format_birthdate/1), nil when unset.
+  defp birthdate(user), do: presence(UserHelpers.format_birthdate(user))
+
+  # The gender label, following the profile's rule: shown only for a concrete
+  # value, hidden for the unset default ("other"/nil).
+  defp gender(%{gender: value}) when is_binary(value) and value != "other",
+    do: User.gender_gettext(value)
+
+  defp gender(_user), do: nil
 
   defp first_value([%{value: value} | _rest]), do: presence(value)
   defp first_value(_none), do: nil

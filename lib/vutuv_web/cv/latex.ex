@@ -32,6 +32,7 @@ defmodule VutuvWeb.CV.Latex do
     #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
     #{links(cv.links)}
+    #{social_media(cv.social_media)}
     \\end{document}
     """
   end
@@ -59,8 +60,20 @@ defmodule VutuvWeb.CV.Latex do
         "\n\n" <> Enum.map_join(cv.address_lines, ", ", &esc/1)
       end
 
-    if line == "" and address == "", do: "", else: "\n\\medskip\n\n#{line}#{address}\n"
+    details =
+      [detail(gettext("Date of birth"), cv.birthdate), detail(gettext("Gender"), cv.gender)]
+      |> Enum.filter(& &1)
+      |> Enum.join(" \\textbar{} ")
+
+    details = if details == "", do: "", else: "\n\n" <> details
+
+    if line == "" and address == "" and details == "",
+      do: "",
+      else: "\n\\medskip\n\n#{line}#{address}#{details}\n"
   end
+
+  defp detail(_label, nil), do: nil
+  defp detail(label, value), do: "#{esc(label)}: #{esc(value)}"
 
   defp section(%{heading: heading, entries: entries}) do
     """
@@ -125,6 +138,21 @@ defmodule VutuvWeb.CV.Latex do
 
     """
     \\section*{#{esc(gettext("Links"))}}
+    #{items}
+    """
+  end
+
+  defp social_media([]), do: ""
+
+  defp social_media(accounts) do
+    items =
+      Enum.map_join(accounts, "\n\n", fn account ->
+        target = if account.url, do: "\\url{#{url(account.url)}}", else: esc(account.handle)
+        "#{esc(account.provider)}: #{target}"
+      end)
+
+    """
+    \\section*{#{esc(gettext("Social Media"))}}
     #{items}
     """
   end
