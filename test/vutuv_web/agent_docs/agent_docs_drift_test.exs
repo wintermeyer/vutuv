@@ -69,6 +69,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       end_year: 2011
     )
 
+    insert(:language, user: user, language_code: "fr", proficiency: "native")
+
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
@@ -128,6 +130,11 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "Gesellenbrief",
       # tags
       "Bridgebuilding",
+      # languages (issue #865): the localized name and the proficiency both
+      # appear in every format (HTML badge "Native", md/txt "French: Native",
+      # JSON/XML the raw "native" proficiency)
+      "French",
+      "native",
       # links / contact / social / phone / address
       "bridges.example.org",
       "greta.public@example.com",
@@ -374,6 +381,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         "Structural Engineering",
         "Thesis on load distribution"
       ],
+      languages: ["French", "native"],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
       addresses: ["Berlin", "10115"],
@@ -425,6 +433,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     for fact <- ["Bridge University", "Structural Engineering", "Thesis on load distribution"],
         do: assert_fact_everywhere(rendered, fact)
+
+    rendered = formats_for("/drift_tester/languages/fr")
+    assert_fact_everywhere(rendered, "French")
+    assert Jason.decode!(rendered.json)["type"] == "language"
 
     [url] = Repo.all(Ecto.assoc(user, :urls))
     rendered = formats_for("/drift_tester/links/#{url.id}")

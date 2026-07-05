@@ -2327,6 +2327,7 @@ defmodule VutuvWeb.UI do
          {gettext("Basics & photos"), ~p"/settings/profile", :basics},
          {gettext("Experience"), ~p"/settings/work_experiences", :work},
          {gettext("Education"), ~p"/settings/educations", :education},
+         {gettext("Languages"), ~p"/settings/languages", :languages},
          {gettext("Links"), ~p"/settings/links", :links},
          {gettext("Social Media"), ~p"/settings/social_media_accounts", :social},
          {gettext("Email addresses"), ~p"/settings/emails", :emails},

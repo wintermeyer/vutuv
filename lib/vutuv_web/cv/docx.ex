@@ -90,6 +90,7 @@ defmodule VutuvWeb.CV.Docx do
         address(cv),
         Enum.map(cv.sections, &section/1),
         skills(cv.skills),
+        languages(cv.languages),
         links(cv.links)
       ]
       |> List.flatten()
@@ -142,6 +143,15 @@ defmodule VutuvWeb.CV.Docx do
     [
       paragraph(gettext("Tags"), style: "Heading1"),
       paragraph(Enum.map_join(skills, " | ", & &1.name))
+    ]
+  end
+
+  defp languages([]), do: nil
+
+  defp languages(languages) do
+    [
+      paragraph(gettext("Languages"), style: "Heading1"),
+      paragraph(Enum.map_join(languages, " | ", &"#{&1.name} (#{&1.fluency})"))
     ]
   end
 

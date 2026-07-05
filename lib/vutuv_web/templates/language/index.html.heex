@@ -1,0 +1,16 @@
+<%!-- The public showcase view of this section — identical for every viewer,
+and exactly what the agent-format docs render. The owner edits at
+/settings/languages; the header carries a quiet "Manage" bridge there. --%>
+<.page_header
+  title={gettext("Languages spoken by ") <> full_name(@user)}
+  manage_to={same_user?(@user, @current_user) && ~p"/settings/languages"}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    gettext("Languages")
+  ]}
+/>
+
+<.card_section empty={Enum.empty?(@languages)}>
+  <%= render "card_list.html", assigns %>
+</.card_section>

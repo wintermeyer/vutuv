@@ -14,8 +14,8 @@ We use the [MIT License](LICENSE).
 
 ## What it does
 
-- Public member profiles (work experience, education, tags, links, contact
-  details) with follow relationships, posts, likes/reposts/replies and
+- Public member profiles (work experience, education, spoken languages, tags,
+  links, contact details) with follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn).
 - Agent-ready: every public page is also served as Markdown, plain text, JSON

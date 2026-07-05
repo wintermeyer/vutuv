@@ -56,6 +56,7 @@ defmodule VutuvWeb.SettingsController do
     %{
       work: counts.work_experiences,
       education: counts.educations,
+      languages: counts.languages,
       links: counts.urls,
       social: counts.social_media_accounts,
       emails: counts.emails,

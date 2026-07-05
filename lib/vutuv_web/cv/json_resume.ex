@@ -6,9 +6,10 @@ defmodule VutuvWeb.CV.JsonResume do
 
   Category mapping: employment, self-employment, internships **and** other
   activities become `work` entries (the schema has no separate section for
-  them), volunteering becomes `volunteer`, tags become `skills`, the profile
-  links become `basics.profiles` and the address becomes `basics.location`.
-  Keys with no value are dropped, as the schema expects.
+  them), volunteering becomes `volunteer`, tags become `skills`, spoken
+  languages become `languages`, the profile links become `basics.profiles`
+  and the address becomes `basics.location`. Keys with no value are dropped,
+  as the schema expects.
   """
 
   @schema_url "https://raw.githubusercontent.com/jsonresume/resume-schema/v1.0.0/schema.json"
@@ -29,7 +30,8 @@ defmodule VutuvWeb.CV.JsonResume do
       "work" => work(cv.work_groups),
       "volunteer" => volunteer(cv.work_groups),
       "education" => Enum.map(cv.educations, &education/1),
-      "skills" => Enum.map(cv.skills, &%{"name" => &1.name})
+      "skills" => Enum.map(cv.skills, &%{"name" => &1.name}),
+      "languages" => Enum.map(cv.languages, &%{"language" => &1.name, "fluency" => &1.fluency})
     }
     |> Enum.reject(fn {_key, value} -> value == [] end)
     |> Map.new()

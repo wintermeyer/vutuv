@@ -77,6 +77,34 @@ work-study program (duales Studium) or an apprenticeship's Berufsschule is
 deliberately **not** a linked entity — members file an entry in each section;
 revisit linking only if members ask.
 
+## Languages profile section
+
+Members list the **languages they speak** with a proficiency level (issue #865,
+`Vutuv.Profiles.Language`, `/:slug/languages`). Each entry is a language plus a
+level, displayed highest proficiency first (native, then C2 down to A1).
+
+The **language is stored as an ISO 639-1 code** (`"en"`, `"de"`) rather than a
+free-text name: the data stays machine-readable (a BCP 47 primary subtag),
+consistent across members, and localizable — `Vutuv.Languages` holds a curated
+list of the world's most spoken languages and renders each name through Gettext,
+so the same `"en"` reads "English" or "Englisch" depending on the viewer. The
+member picks from a `<select>`; `Vutuv.Languages.known?/1` gates the changeset so
+a stray code can never be stored, and a unique index on `(user_id,
+language_code)` keeps a language from being listed twice.
+
+The **proficiency** is `native` or a CEFR level (`a1`..`c2`). The badge shows the
+compact form ("Native" / "B2"); the form and entry page show the descriptive
+label ("Native speaker" / "B2 (Upper intermediate)"). `Language.ordered/1` sorts
+by proficiency rank (a Postgres `array_position` over the level list) then
+language code, so every rendering agrees on the order.
+
+Like the other sections it has a profile card, owner CRUD on
+`/settings/languages`, Markdown / plain text / JSON / XML siblings (kept in sync
+by the agent-docs drift test), an `/api/2.0` read+write section, a line in the
+GDPR export, and its own "Sprachen" section on the CV (issue #841, mapped to the
+JSON Resume `languages` field). Linking a language to a specific work experience
+or qualification is deliberately left out for now (revisit if members ask).
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts and

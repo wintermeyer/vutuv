@@ -139,6 +139,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:work_experiences, Vutuv.Profiles.WorkExperience)
     has_many(:educations, Vutuv.Profiles.Education)
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
+    has_many(:languages, Vutuv.Profiles.Language)
 
     # The work experience the member pinned as their profile job title (issue
     # #833). nil = pick it automatically (UserHelpers.current_job/1). Set only

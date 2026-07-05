@@ -19,7 +19,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
 
   use VutuvWeb, :controller
 
-  alias Vutuv.Profiles.{Address, PhoneNumber, SocialMediaAccount, Url, WorkExperience}
+  alias Vutuv.Profiles.{Address, Language, PhoneNumber, SocialMediaAccount, Url, WorkExperience}
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
@@ -31,7 +31,8 @@ defmodule VutuvWeb.ApiV2.SectionController do
     links: %{assoc: :urls, schema: Url},
     social_media_accounts: %{assoc: :social_media_accounts, schema: SocialMediaAccount},
     addresses: %{assoc: :addresses, schema: Address},
-    phone_numbers: %{assoc: :phone_numbers, schema: PhoneNumber}
+    phone_numbers: %{assoc: :phone_numbers, schema: PhoneNumber},
+    languages: %{assoc: :languages, schema: Language}
   }
 
   def index(conn, %{"slug" => slug}) do

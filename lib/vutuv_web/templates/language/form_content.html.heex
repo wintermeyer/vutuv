@@ -1,0 +1,17 @@
+<.form :let={f} for={@changeset} action={@action} class="editform">
+  <.form_error changeset={@changeset} />
+
+  <.editform_field form={f} field={:language_code}>
+    <%= label f, :language_code, gettext("Language") %>
+    <%= select f, :language_code, language_options(), prompt: gettext("Select a language"), autofocus: true %>
+    <%= error_tag f, :language_code %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:proficiency}>
+    <%= label f, :proficiency, gettext("Proficiency") %>
+    <%= select f, :proficiency, proficiency_options(), prompt: gettext("Select a proficiency") %>
+    <%= error_tag f, :proficiency %>
+  </.editform_field>
+
+  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
+</.form>

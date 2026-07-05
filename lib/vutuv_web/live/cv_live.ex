@@ -316,6 +316,30 @@ defmodule VutuvWeb.CVLive do
               </label>
             </div>
           </.card>
+
+          <.card :if={@cv.languages != []}>
+            <.heading_toggle hide={@hide} key="languages">{gettext("Languages")}</.heading_toggle>
+            <div class={["mt-3 space-y-1", shown?(@hide, "languages") || "opacity-40"]}>
+              <label
+                :for={language <- @cv.languages}
+                class={[
+                  "flex cursor-pointer items-baseline gap-3 rounded-lg px-2 py-1.5",
+                  shown?(@hide, language.id) || "line-through opacity-50"
+                ]}
+              >
+                <input
+                  type="checkbox"
+                  class={checkbox_class()}
+                  checked={shown?(@hide, language.id)}
+                  phx-click="toggle"
+                  phx-value-key={language.id}
+                />
+                <span class="text-sm text-slate-700 dark:text-slate-300">
+                  <span class="font-medium">{language.name}</span>: {language.fluency}
+                </span>
+              </label>
+            </div>
+          </.card>
         </div>
 
         <%!-- On a phone the download panel leads (order-first); at md+ it

@@ -851,6 +851,7 @@ defmodule Vutuv.Accounts do
     sections = [
       {Vutuv.Profiles.WorkExperience, "work_experiences"},
       {Vutuv.Profiles.Education, "educations"},
+      {Vutuv.Profiles.Language, "languages"},
       {Vutuv.Profiles.Url, "urls"},
       {Vutuv.Profiles.SocialMediaAccount, "social_media_accounts"},
       {Email, "emails"},

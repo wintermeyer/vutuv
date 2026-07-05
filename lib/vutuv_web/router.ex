@@ -516,7 +516,7 @@ defmodule VutuvWeb.Router do
     # email list is viewer-aware). Which section a route means travels in
     # the route assigns.
     for section <- ~w(work_experiences links social_media_accounts addresses
-                      phone_numbers emails tags)a do
+                      phone_numbers emails tags languages)a do
       get("/users/:slug/#{section}", SectionController, :index,
         assigns: %{section: section, api_scope: "profile:read"}
       )
@@ -525,7 +525,7 @@ defmodule VutuvWeb.Router do
     # Writes on the authorized user's own sections. No email routes (an
     # address is a PIN-verified identity); tags go through TagController.
     for section <- ~w(work_experiences links social_media_accounts addresses
-                      phone_numbers)a do
+                      phone_numbers languages)a do
       post("/me/#{section}", SectionController, :create,
         assigns: %{section: section, api_scope: "profile:write"}
       )
@@ -741,6 +741,13 @@ defmodule VutuvWeb.Router do
       as: :settings_education
     )
 
+    get("/languages", LanguageController, :manage)
+
+    resources("/languages", LanguageController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_language
+    )
+
     get("/addresses", AddressController, :manage)
 
     resources("/addresses", AddressController,
@@ -808,6 +815,7 @@ defmodule VutuvWeb.Router do
       resources("/social_media_accounts", SocialMediaAccountController, only: [:index, :show])
       resources("/work_experiences", WorkExperienceController, only: [:index, :show])
       resources("/educations", EducationController, only: [:index, :show])
+      resources("/languages", LanguageController, only: [:index, :show])
       resources("/addresses", AddressController, only: [:index, :show])
       resources("/tags", UserTagController, only: [:index, :show], as: :tag)
 

@@ -19,9 +19,11 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Languages
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.LanguageHTML
   alias VutuvWeb.UserHelpers
 
   # section (= URL segment = index doc type) => show doc type. The doc maps
@@ -30,6 +32,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @sections %{
     work_experiences: "work_experience",
     educations: "education",
+    languages: "language",
     links: "link",
     social_media_accounts: "social_media_account",
     addresses: "address",
@@ -76,6 +79,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp index_title(:work_experiences, name), do: gettext("Work experience of %{name}", name: name)
   defp index_title(:educations, name), do: gettext("Education of %{name}", name: name)
+  defp index_title(:languages, name), do: gettext("Languages of %{name}", name: name)
   defp index_title(:links, name), do: gettext("Links of %{name}", name: name)
 
   defp index_title(:social_media_accounts, name),
@@ -92,6 +96,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:educations, entry),
     do: Enum.join(Enum.filter([entry.degree, entry.school], & &1), " · ")
 
+  defp entry_title(:languages, entry), do: entry.name
+
   defp entry_title(:links, entry), do: entry.description || entry.url
   defp entry_title(:social_media_accounts, entry), do: entry.provider
   defp entry_title(:addresses, entry), do: entry.description || entry.city || gettext("Address")
@@ -101,6 +107,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp entry(:work_experiences, record), do: work_entry(record)
   defp entry(:educations, record), do: education_entry(record)
+  defp entry(:languages, record), do: language_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
   defp entry(:addresses, record), do: address_entry(record)
@@ -141,6 +148,20 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       kind: edu.kind,
       start: year_month(edu.start_year, edu.start_month),
       end: year_month(edu.end_year, edu.end_month)
+    }
+  end
+
+  @doc false
+  def language_entry(language) do
+    %{
+      id: language.id,
+      # The stored ISO 639-1 code (a BCP 47 primary subtag) for machines, the
+      # localized name for humans, and the raw proficiency level (native /
+      # a1..c2) — the same facts the profile card shows.
+      code: language.language_code,
+      name: Languages.name(language.language_code),
+      proficiency: language.proficiency,
+      level: LanguageHTML.proficiency_badge(language.proficiency)
     }
   end
 

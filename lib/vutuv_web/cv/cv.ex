@@ -23,7 +23,7 @@ defmodule VutuvWeb.CV do
     * whole sections — a work/education category key (`"employment"`,
       `"self_employed"`, `"internship"`, `"volunteer"`, `"other"`,
       `"university"`, `"apprenticeship"`, `"school"`, or `"education"` when
-      the categories are collapsed), plus `"tags"` and `"links"`
+      the categories are collapsed), plus `"tags"`, `"languages"` and `"links"`
     * single entries — the record's UUID
 
   The body is a list of uniform `sections` (`%{key, heading, entries}`, each
@@ -36,14 +36,17 @@ defmodule VutuvWeb.CV do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Languages
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.EducationHTML
+  alias VutuvWeb.LanguageHTML
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.WorkExperienceHTML
 
@@ -91,6 +94,7 @@ defmodule VutuvWeb.CV do
       links: Enum.map(user.urls, &%{id: &1.id, label: presence(&1.description), url: &1.value}),
       sections: sections(user),
       skills: Enum.map(user.user_tags, &%{id: &1.id, name: UserTag.name(&1)}),
+      languages: Enum.map(user.languages, &language_entry/1),
       photo: photo(user, opts),
       work_groups: work_groups(user),
       educations: Enum.map(user.educations, &education_raw/1)
@@ -114,6 +118,7 @@ defmodule VutuvWeb.CV do
         address_lines: if(MapSet.member?(hide, "address"), do: [], else: cv.address_lines),
         sections: filter_sections(cv.sections, hide),
         skills: filter_by_id(cv.skills, "tags", hide),
+        languages: filter_by_id(cv.languages, "languages", hide),
         links: filter_by_id(cv.links, "links", hide),
         work_groups: filter_work_groups(cv.work_groups, hide),
         educations: filter_educations(cv.educations, hide)
@@ -173,6 +178,7 @@ defmodule VutuvWeb.CV do
       user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
       educations: Education.order_by_date(Education),
+      languages: Language.ordered(),
       phone_numbers: PhoneNumber.ordered(),
       urls: Url.ordered(),
       addresses: Address.ordered()
@@ -290,6 +296,16 @@ defmodule VutuvWeb.CV do
       description: presence(edu.description),
       start: year_month(edu.start_year, edu.start_month),
       end: year_month(edu.end_year, edu.end_month)
+    }
+  end
+
+  # A language line ("German — Native speaker"): the localized name plus the
+  # descriptive proficiency label, so a Lebenslauf reads the level in words.
+  defp language_entry(language) do
+    %{
+      id: language.id,
+      name: Languages.name(language.language_code),
+      fluency: LanguageHTML.proficiency_label(language.proficiency)
     }
   end
 

@@ -497,6 +497,42 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- Languages (issue #865): a glyph, the language name and a proficiency
+    badge, highest proficiency first (Language.ordered). --%>
+    <.card :if={@languages != [] or @as_owner?} id="profile-languages">
+      <.section_header title={gettext("Languages")} />
+
+      <.empty_add :if={@as_owner? and @languages == []} href={~p"/settings/languages/new"}>
+        {gettext("Add a language")}
+      </.empty_add>
+
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        <li
+          :for={language <- @languages}
+          class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+        >
+          <VutuvWeb.LanguageHTML.language_glyph class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
+          <.link
+            href={~p"/#{@user}/languages/#{language}"}
+            class="font-medium text-slate-900 hover:text-brand-700 dark:text-white"
+          >
+            {VutuvWeb.LanguageHTML.language_name(language.language_code)}
+          </.link>
+          <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+            {VutuvWeb.LanguageHTML.proficiency_badge(language.proficiency)}
+          </span>
+        </li>
+      </ul>
+
+      <.manage_footer
+        href={~p"/#{@user}/languages"}
+        manage_href={~p"/settings/languages"}
+        total={@totals.languages}
+        preview={6}
+        owner={@as_owner?}
+      />
+    </.card>
+
     <%!-- Links: preview cards built from the page screenshots that
     Vutuv.PageScreenshot captures on link create/update. Lives in the wide
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back

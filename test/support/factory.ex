@@ -174,6 +174,13 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def language_factory do
+    %Vutuv.Profiles.Language{
+      language_code: sequence(:language_code, ~w(en de fr es it)),
+      proficiency: "b2"
+    }
+  end
+
   def follow_factory do
     %Vutuv.Social.Follow{}
   end

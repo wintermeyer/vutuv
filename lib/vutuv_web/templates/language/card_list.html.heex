@@ -1,0 +1,28 @@
+<%!-- The language list, shared by the public /:slug/languages index and the
+/settings/languages editor. Each row is a neutral glyph, the language name
+(linking to its entry page), a proficiency badge, and, for the owner, the
+calm Edit/Delete actions. Entries arrive highest-proficiency first
+(Language.ordered). --%>
+<ul class="divide-y divide-slate-100 dark:divide-slate-800">
+  <li
+    :for={language <- @languages}
+    class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+  >
+    <.language_glyph class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
+    <.link
+      href={~p"/#{@user}/languages/#{language}"}
+      class="font-medium text-slate-900 hover:text-brand-700 dark:text-white"
+    >
+      {language_name(language.language_code)}
+    </.link>
+    <span class="inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+      {proficiency_badge(language.proficiency)}
+    </span>
+    <.row_actions
+      :if={@as_owner?}
+      class="ml-auto"
+      edit_to={~p"/settings/languages/#{language}/edit"}
+      delete_to={~p"/settings/languages/#{language}"}
+    />
+  </li>
+</ul>

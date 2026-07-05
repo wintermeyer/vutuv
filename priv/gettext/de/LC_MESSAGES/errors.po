@@ -119,3 +119,8 @@ msgstr "Bitte geben Sie mindestens %{min} verschiedene Tags ein."
 ## (Vutuv.Tags.UserTag.changeset/2).
 msgid "You already have this tag."
 msgstr "Sie haben dieses Tag bereits."
+
+## Custom message from the duplicate-language unique constraint
+## (Vutuv.Profiles.Language.changeset/2).
+msgid "is already listed"
+msgstr "ist bereits eingetragen"

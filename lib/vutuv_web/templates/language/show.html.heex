@@ -1,0 +1,24 @@
+<.page_header
+  title={language_name(@language.language_code)}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Languages"), ~p"/#{@user}/languages"},
+    language_name(@language.language_code)
+  ]}
+/>
+
+<.card_section>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/settings/languages/#{@language}/edit"}
+    delete_to={~p"/settings/languages/#{@language}"}
+  />
+
+  <h2 class="card__label"><%= gettext("Language") %></h2>
+  <p><%= language_name(@language.language_code) %></p>
+
+  <h2 class="card__label"><%= gettext("Proficiency") %></h2>
+  <p><%= proficiency_label(@language.proficiency) %></p>
+</.card_section>

@@ -38,6 +38,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Education"),
         Enum.map(doc.educations, &entry_line("educations", &1))
       ),
+      section(
+        gettext("Languages"),
+        Enum.map(doc.languages, &entry_line("languages", &1))
+      ),
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
@@ -249,6 +253,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("tags", tag), do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
+  defp entry_line("languages", language), do: "- #{md_text(language.name)}: #{language.level}"
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
   defp entry_line("social_media_accounts", account), do: social_line(account)

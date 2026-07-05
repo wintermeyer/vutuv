@@ -31,6 +31,7 @@ defmodule Vutuv.Export do
         :addresses,
         :work_experiences,
         :educations,
+        :languages,
         :social_media_accounts,
         :urls,
         :search_terms,
@@ -92,6 +93,8 @@ defmodule Vutuv.Export do
             :end_year
           ])
         ),
+      languages:
+        Enum.map(user.languages, &%{code: &1.language_code, proficiency: &1.proficiency}),
       social_media_accounts:
         Enum.map(user.social_media_accounts, &%{provider: &1.provider, value: &1.value}),
       links: Enum.map(user.urls, &%{url: &1.value, description: &1.description}),

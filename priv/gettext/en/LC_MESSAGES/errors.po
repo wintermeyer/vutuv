@@ -119,3 +119,8 @@ msgstr ""
 ## (Vutuv.Tags.UserTag.changeset/2).
 msgid "You already have this tag."
 msgstr ""
+
+## Custom message from the duplicate-language unique constraint
+## (Vutuv.Profiles.Language.changeset/2).
+msgid "is already listed"
+msgstr ""
