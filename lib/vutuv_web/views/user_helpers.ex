@@ -29,6 +29,21 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` options for the Basics form's employment-status select
+  (issue #870): the two real statuses derived from the schema's single source
+  (`User.employment_statuses/0` mapped through `User.employment_status_label/1`,
+  the same wording the profile badge and agent docs show), preceded by the
+  form-local blank "not open to work" default, whose empty value `cast/3` folds
+  back to nil. Building it here keeps the select from re-typing the label set.
+  """
+  def employment_status_options do
+    [
+      {gettext("Not open to work"), ""}
+      | Enum.map(User.employment_statuses(), &{User.employment_status_label(&1), &1})
+    ]
+  end
+
+  @doc """
   A member's display name for admin lists: their full name, or `@handle` when
   they have no name set. Shared by the admin user list and the delete flow.
   """

@@ -13,6 +13,8 @@ defmodule VutuvWeb.GettextExtractionAnchors do
   msgid, add the same literal here.
 
     * `Male` / `Female` / `Diverse` — `Vutuv.Accounts.User.gender_gettext/1`
+    * `Open to offers` / `Looking for a job` — the employment-status labels
+      `Vutuv.Accounts.User.employment_status_label/1` returns (issue #870)
     * `Incorrect PIN` / `PIN expired` / `This PIN has already been used.` — the
       PIN check messages in `Vutuv.Accounts`
     * `Connected` — the connection relationship word guarded by
@@ -31,7 +33,9 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Incorrect PIN"),
       gettext("PIN expired"),
       gettext("This PIN has already been used."),
-      gettext("Connected")
+      gettext("Connected"),
+      gettext("Open to offers"),
+      gettext("Looking for a job")
     ]
   end
 end

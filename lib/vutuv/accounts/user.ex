@@ -13,6 +13,13 @@ defmodule Vutuv.Accounts.User do
     field(:honorific_prefix, :string)
     field(:honorific_suffix, :string)
     field(:gender, :string)
+    # The member's job-availability signal (issue #870), shown as a badge next
+    # to the tagline on the profile. nil = not specified (the default, no
+    # badge); "open" = employed but open to offers; "looking" = actively
+    # looking for a new role. `cast/3` folds the form's blank "not open to
+    # work" choice back to nil (its default empty_values), and the changeset's
+    # validate_inclusion pins it to the set.
+    field(:employment_status, :string)
     field(:birthdate, :date)
     field(:locale, :string)
     # An admin checked this person's physical ID against their name: this IS that
@@ -187,7 +194,17 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service headline first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service headline employment_status first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+
+  # The job-availability values a member can advertise (issue #870), other
+  # than the "not specified" default which is stored as nil. The single source
+  # of truth for the changeset's validate_inclusion and, via
+  # employment_statuses/0, the edit form's select options
+  # (VutuvWeb.UserHelpers.employment_status_options/0), so the form can never
+  # offer a value the changeset would reject.
+  @employment_statuses ~w(open looking)
+
+  def employment_statuses, do: @employment_statuses
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
@@ -232,6 +249,7 @@ defmodule Vutuv.Accounts.User do
     # pattern-matches the `User` struct.
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
+    |> validate_inclusion(:employment_status, @employment_statuses)
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> revoke_verification_on_identity_change()
@@ -376,6 +394,20 @@ defmodule Vutuv.Accounts.User do
       |> add_error(:nickname, message)
     end
   end
+
+  @doc """
+  The human, translated label for an employment status, or nil for the unset
+  default (nil / any unknown value renders no badge). Mirrors
+  `gender_gettext/1`: a schema-level gettext helper the profile badge, the
+  edit form and the agent documents all read, so the wording lives in one
+  place. "open" = employed but listening, "looking" = actively job-hunting.
+  """
+  def employment_status_label("open"), do: Gettext.gettext(VutuvWeb.Gettext, "Open to offers")
+
+  def employment_status_label("looking"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Looking for a job")
+
+  def employment_status_label(_), do: nil
 
   def gender_gettext("male"), do: Gettext.gettext(VutuvWeb.Gettext, "Male")
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")

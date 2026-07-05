@@ -163,15 +163,28 @@ the resulting ~200px rail width. --%>
             </.card_menu>
           </div>
         </div>
-        <%!-- Headline is user-written Markdown through the safe VutuvWeb.Markdown
+        <%!-- Tagline row: the headline sits beside the employment-status badge
+        (issue #870) so "Looking for a job" / "Open to offers" reads right next
+        to what the member wrote. The wrapper shows if either is present; the
+        badge renders nothing for the unset default, so a member who never set
+        a status keeps the plain tagline. items-center keeps the pill on the
+        first line of a one-line tagline (the common case); a multi-line
+        Markdown tagline simply wraps below.
+        Headline is user-written Markdown through the safe VutuvWeb.Markdown
         pipeline; the arbitrary-variant classes flatten Earmark's <p>, restore the
         list markers Preflight strips (the edit form promises "Listen"), and tint
         inline links/code to match the muted sub-line. --%>
         <div
-          :if={@user.headline}
-          class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
+          :if={@user.headline || @user.employment_status}
+          class="flex flex-wrap items-center gap-x-2.5 gap-y-1"
         >
-          {VutuvWeb.Markdown.render(@user.headline)}
+          <div
+            :if={@user.headline}
+            class="text-slate-500 dark:text-slate-400 [&_p]:m-0 [&_p+p]:mt-1 [&_ul]:my-1 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1 [&_ol]:list-decimal [&_ol]:pl-5 [&_a]:text-brand-600 dark:[&_a]:text-brand-400 [&_a]:hover:text-brand-700 [&_code]:rounded [&_code]:bg-black/10 [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em] dark:[&_code]:bg-white/10"
+          >
+            {VutuvWeb.Markdown.render(@user.headline)}
+          </div>
+          <.employment_status_badge status={@user.employment_status} />
         </div>
         <p :if={@work_info not in [nil, ""]} class="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
           {@work_info}

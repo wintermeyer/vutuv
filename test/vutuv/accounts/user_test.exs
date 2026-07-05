@@ -131,6 +131,52 @@ defmodule Vutuv.Accounts.UserTest do
     end
   end
 
+  describe "employment status (issue #870)" do
+    defp employment_changeset(status) do
+      User.changeset(%User{}, %{"first_name" => "first_name", "employment_status" => status})
+    end
+
+    test "accepts open and looking" do
+      assert employment_changeset("open").valid?
+      assert Ecto.Changeset.get_field(employment_changeset("open"), :employment_status) == "open"
+
+      assert employment_changeset("looking").valid?
+    end
+
+    test "the blank \"not open to work\" choice folds back to nil" do
+      changeset = employment_changeset("")
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :employment_status) == nil
+    end
+
+    test "accepts no employment status at all" do
+      assert User.changeset(%User{}, %{"first_name" => "first_name"}).valid?
+    end
+
+    test "rejects an unknown value" do
+      changeset = employment_changeset("freelancing")
+
+      refute changeset.valid?
+      assert %{employment_status: [_]} = errors_on(changeset)
+    end
+
+    test "clearing a previously set status back to \"not open\" saves nil" do
+      user = %User{first_name: "first_name", employment_status: "looking"}
+      changeset = User.changeset(user, %{"employment_status" => ""})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :employment_status) == nil
+    end
+
+    test "employment_status_label/1 translates the known values and nils the rest" do
+      assert User.employment_status_label("open") == "Open to offers"
+      assert User.employment_status_label("looking") == "Looking for a job"
+      assert User.employment_status_label(nil) == nil
+      assert User.employment_status_label("bogus") == nil
+    end
+  end
+
   describe "tag list" do
     defp tag_list_changeset(tag_list) do
       User.changeset(%User{}, %{"first_name" => "first_name", "tag_list" => tag_list})

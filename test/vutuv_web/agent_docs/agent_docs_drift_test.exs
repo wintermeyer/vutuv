@@ -21,7 +21,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         last_name: "Gradient",
         headline: "Builds bridges between humans and agents",
         gender: "female",
-        birthdate: ~D[1991-04-23]
+        birthdate: ~D[1991-04-23],
+        employment_status: "looking"
       )
 
     insert(:email,
@@ -161,6 +162,14 @@ defmodule VutuvWeb.AgentDocsDriftTest do
            )
 
     assert rendered.xml =~ "<kind>apprenticeship</kind>"
+
+    # The employment status (issue #870): the HTML badge and the md/txt fact
+    # line show the human label, JSON/XML carry the raw machine value.
+    assert rendered.html =~ "Looking for a job"
+    assert rendered.md =~ "Employment status: Looking for a job"
+    assert rendered.txt =~ "Employment status: Looking for a job"
+    assert Jason.decode!(rendered.json)["employment_status"] == "looking"
+    assert rendered.xml =~ "<employment_status>looking</employment_status>"
 
     # The counters: HTML renders "1 follower", the docs carry the number.
     assert rendered.html =~ "follower"

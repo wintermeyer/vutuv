@@ -170,6 +170,18 @@ lands here). --%>
           </div>
           <%= error_tag f, :headline %>
         </div>
+        <%!-- Employment status (issue #870): a job-availability signal shown as
+        a badge next to the tagline. Options come from the schema's single
+        source (employment_status_options/0); the blank first option is the
+        default "not open to work" state (stored as nil, no badge). --%>
+        <div>
+          <%= label f, :employment_status, gettext("Employment status"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <%= select f, :employment_status, employment_status_options(), class: input_class() %>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext("Shown as a badge next to your tagline so people can see whether you are open to opportunities.")}
+          </p>
+          <%= error_tag f, :employment_status %>
+        </div>
         <div class="grid gap-5 sm:grid-cols-2">
           <div>
             <%= label f, :birthdate, gettext("Birthdate"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>

@@ -252,6 +252,8 @@ defmodule VutuvWeb.AgentDocs.Text do
 
     [
       doc.verified && gettext("Verified profile: yes"),
+      doc.employment_status &&
+        "#{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
       "#{gettext("Member since")}: #{doc.member_since}",
       counts.followers > 0 && "#{gettext("Followers")}: #{counts.followers}",
       counts.following > 0 && "#{gettext("Following")}: #{counts.following}",

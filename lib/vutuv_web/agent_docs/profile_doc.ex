@@ -74,6 +74,10 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       honorific_suffix: user.honorific_suffix,
       username: user.username,
       verified: user.identity_verified?,
+      # The job-availability signal (issue #870), the machine value nil /
+      # "open" / "looking". The md/txt renderers turn it into the same human
+      # label the profile badge shows; JSON/XML keep the raw value.
+      employment_status: user.employment_status,
       headline_markdown: user.headline,
       work_info: work_info,
       current_position: current_position(job),

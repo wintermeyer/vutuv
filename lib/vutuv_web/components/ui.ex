@@ -22,6 +22,7 @@ defmodule VutuvWeb.UI do
 
   import PhoenixHTMLHelpers.Link, only: [button: 2]
 
+  alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Tags.UserTag
 
@@ -520,6 +521,37 @@ defmodule VutuvWeb.UI do
   defp chip_class,
     do:
       "inline-flex items-center gap-2 rounded-lg bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  @doc """
+  The member's **employment-status badge** (issue #870): a small brand-tint
+  pill that reads "Open to offers" or "Looking for a job", shown next to the
+  tagline in the profile header so a visitor can see at a glance whether the
+  member is available. Renders **nothing** for the unset default (`nil`) or any
+  unknown value, so it is safe to drop in unconditionally. The wording is the
+  schema's single source (`Vutuv.Accounts.User.employment_status_label/1`), so
+  the badge, the edit form's select and the agent documents can never disagree.
+  """
+  attr(:status, :string, default: nil)
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+
+  def employment_status_badge(assigns) do
+    assigns = assign(assigns, :label, User.employment_status_label(assigns.status))
+
+    ~H"""
+    <span
+      :if={@label}
+      class={[
+        "inline-flex items-center whitespace-nowrap rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-semibold text-brand-700 ring-1 ring-brand-100 dark:bg-brand-900/40 dark:text-brand-100 dark:ring-brand-900/60",
+        @class
+      ]}
+      data-employment-status={@status}
+      {@rest}
+    >
+      {@label}
+    </span>
+    """
+  end
 
   @doc """
   The profile **Tags** chip: a tag whose name links to the tag page, the
