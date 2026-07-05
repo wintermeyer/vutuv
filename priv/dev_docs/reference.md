@@ -83,7 +83,8 @@ auth -X PATCH $API/me \
 ## Profile sections
 
 Sections: `work_experiences`, `links`, `social_media_accounts`,
-`addresses`, `phone_numbers`, `languages`, `emails` (read-only), `tags`.
+`addresses`, `phone_numbers`, `languages`, `qualifications`, `emails`
+(read-only), `tags`.
 
 ### GET /users/:username/&lt;section&gt;
 
@@ -123,7 +124,10 @@ links (`value` = the URL, `description`), social_media_accounts
 (`provider`, `value`), addresses (`description`, `line_1`…`line_4`,
 `zip_code`, `city`, `state`, `country`), phone_numbers (`value`,
 `number_type`), languages (`language_code` = an ISO 639-1 code such as
-`en`/`de`, `proficiency` = `native` or a CEFR level `a1`…`c2`).
+`en`/`de`, `proficiency` = `native` or a CEFR level `a1`…`c2`),
+qualifications (`name`, `kind` = `certification`/`license` (default
+`certification`), `issuer`, `awarded_year`, `awarded_month`,
+`expires_year`, `expires_month`, `credential_id`, `url`).
 `number_type` must be one of `Work`, `Cell`, `Home`, `Fax`
 (case-sensitive); any other value is rejected with `422`.
 

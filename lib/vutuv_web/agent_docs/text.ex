@@ -39,6 +39,10 @@ defmodule VutuvWeb.AgentDocs.Text do
         Enum.map(doc.educations, &entry_line("educations", &1))
       ),
       section(
+        gettext("Certificates & licenses"),
+        Enum.map(doc.qualifications, &entry_line("qualifications", &1))
+      ),
+      section(
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
@@ -274,6 +278,7 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("tags", tag), do: "* #{tag.name} (#{Markdown.endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
+  defp entry_line("qualifications", qualification), do: qualification_line(qualification)
   defp entry_line("languages", language), do: "* #{language.name}: #{language.level}"
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "* #{email.type}: #{email.value}"
@@ -305,6 +310,15 @@ defmodule VutuvWeb.AgentDocs.Text do
       if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
       if(detail != "", do: ": #{detail}", else: "")
+  end
+
+  defp qualification_line(qualification) do
+    facts = Markdown.qualification_facts(qualification)
+
+    "* " <>
+      qualification.name <>
+      if(facts == "", do: "", else: ": #{facts}") <>
+      if(qualification.url, do: " #{qualification.url}", else: "")
   end
 
   defp link_line(%{description: nil, url: url}), do: "* #{url}"

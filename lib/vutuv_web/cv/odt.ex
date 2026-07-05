@@ -56,6 +56,7 @@ defmodule VutuvWeb.CV.Odt do
         address(cv),
         Enum.map(cv.sections, &section/1),
         skills(cv.skills),
+        qualifications(cv.qualifications),
         languages(cv.languages),
         links(cv.links)
       ]
@@ -115,6 +116,15 @@ defmodule VutuvWeb.CV.Odt do
 
   defp skills([]), do: nil
   defp skills(skills), do: [heading(gettext("Tags")), p(Enum.map_join(skills, " | ", & &1.name))]
+
+  defp qualifications([]), do: nil
+
+  defp qualifications(qualifications) do
+    [
+      heading(gettext("Certificates & licenses")),
+      p(Enum.map_join(qualifications, " | ", & &1.label))
+    ]
+  end
 
   defp languages([]), do: nil
 

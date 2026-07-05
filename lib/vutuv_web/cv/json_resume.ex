@@ -31,7 +31,8 @@ defmodule VutuvWeb.CV.JsonResume do
       "volunteer" => volunteer(cv.work_groups),
       "education" => Enum.map(cv.educations, &education/1),
       "skills" => Enum.map(cv.skills, &%{"name" => &1.name}),
-      "languages" => Enum.map(cv.languages, &%{"language" => &1.name, "fluency" => &1.fluency})
+      "languages" => Enum.map(cv.languages, &%{"language" => &1.name, "fluency" => &1.fluency}),
+      "certificates" => Enum.map(cv.qualifications, &certificate/1)
     }
     |> Enum.reject(fn {_key, value} -> value == [] end)
     |> Map.new()
@@ -89,6 +90,17 @@ defmodule VutuvWeb.CV.JsonResume do
       "area" => entry.field_of_study,
       "startDate" => entry.start,
       "endDate" => entry.end
+    })
+  end
+
+  # A JSON Resume `certificates[]` entry (name / date / issuer / url); certs
+  # and licences alike map here, the only credential section the schema has.
+  defp certificate(qualification) do
+    compact(%{
+      "name" => qualification.name,
+      "date" => qualification.date,
+      "issuer" => qualification.issuer,
+      "url" => qualification.url
     })
   end
 

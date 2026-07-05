@@ -27,6 +27,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Accounts.User
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
@@ -38,6 +39,7 @@ defmodule Vutuv.Imports.LinkedIn do
     profile: %{},
     positions: [],
     educations: [],
+    certifications: [],
     skills: [],
     emails: [],
     phones: [],
@@ -197,6 +199,11 @@ defmodule Vutuv.Imports.LinkedIn do
       positions: tidy(positions ++ volunteering),
       educations:
         rows_by_type |> Map.get(:educations, []) |> Enum.map(&education_candidate/1) |> tidy(),
+      certifications:
+        rows_by_type
+        |> Map.get(:certifications, [])
+        |> Enum.map(&certification_candidate/1)
+        |> tidy(),
       skills: rows_by_type |> Map.get(:skills, []) |> parse_skills(),
       emails: rows_by_type |> Map.get(:emails, []) |> Enum.map(&email_info/1),
       phones: rows_by_type |> Map.get(:phones, []) |> Enum.map(&phone_candidate/1) |> tidy(),
@@ -260,6 +267,9 @@ defmodule Vutuv.Imports.LinkedIn do
     positions: ["Company Name", "Title"],
     volunteering: ["Company Name", "Role"],
     educations: ["School Name"],
+    # Certifications.csv: Name, Url, Authority, Started On, Finished On,
+    # License Number. "Name" + "Authority" together are unique to this file.
+    certifications: ["Name", "Authority"],
     connections: ["Connected On"],
     profile: ["First Name", "Headline"],
     phones: ["Number"],
@@ -276,19 +286,25 @@ defmodule Vutuv.Imports.LinkedIn do
     end)
   end
 
+  # An English filename prefix -> candidate type, for the odd export whose
+  # header row we don't recognize. First matching prefix wins.
+  @filename_prefixes [
+    {"positions", :positions},
+    {"volunteering", :volunteering},
+    {"education", :educations},
+    {"certification", :certifications},
+    {"skills", :skills},
+    {"profile", :profile},
+    {"phonenumbers", :phones},
+    {"connections", :connections}
+  ]
+
   defp filename_fallback(name) do
     base = name |> Path.basename() |> String.downcase()
 
-    cond do
-      String.starts_with?(base, "positions") -> :positions
-      String.starts_with?(base, "volunteering") -> :volunteering
-      String.starts_with?(base, "education") -> :educations
-      String.starts_with?(base, "skills") -> :skills
-      String.starts_with?(base, "profile") -> :profile
-      String.starts_with?(base, "phonenumbers") -> :phones
-      String.starts_with?(base, "connections") -> :connections
-      true -> :unknown
-    end
+    Enum.find_value(@filename_prefixes, :unknown, fn {prefix, type} ->
+      if String.starts_with?(base, prefix), do: type
+    end)
   end
 
   defp subset?(keys, set), do: Enum.all?(keys, &MapSet.member?(set, &1))
@@ -467,6 +483,42 @@ defmodule Vutuv.Imports.LinkedIn do
     |> blank_nil()
   end
 
+  # ── Certifications.csv → Qualification params (issue #859) ──
+  #
+  # LinkedIn drops no licence/certificate distinction, so every imported row
+  # lands as a certification; the preview tells the member to check the section.
+  # "Started On" is the award date, "Finished On" the (optional) expiry.
+
+  defp certification_candidate(row) do
+    name = blank_nil(row["Name"])
+
+    # The name is required by Qualification.changeset — a nameless row could
+    # never import, so it is dropped here (like a school-less education).
+    if is_nil(name) do
+      nil
+    else
+      {am, ay} = parse_month_year(row["Started On"])
+      {em, ey} = parse_month_year(row["Finished On"])
+      issuer = blank_nil(row["Authority"])
+
+      %{
+        id: cid("certification", "#{downcase(name)}|#{downcase(issuer)}"),
+        label: [name, issuer] |> compact() |> Enum.join(", "),
+        params: %{
+          "name" => name,
+          "kind" => "certification",
+          "issuer" => issuer,
+          "awarded_month" => am,
+          "awarded_year" => ay,
+          "expires_month" => em,
+          "expires_year" => ey,
+          "credential_id" => blank_nil(row["License Number"]),
+          "url" => blank_nil(row["Url"])
+        }
+      }
+    end
+  end
+
   # ── Skills.csv → tag tokens ──
   #
   # vutuv tags are single tokens (no spaces), so a multi-word LinkedIn skill
@@ -565,6 +617,8 @@ defmodule Vutuv.Imports.LinkedIn do
     %{
       positions: mark(parsed.positions, existing.positions, &position_key(&1.params)),
       educations: mark(parsed.educations, existing.educations, &education_key(&1.params)),
+      certifications:
+        mark(parsed.certifications, existing.certifications, &certification_key(&1.params)),
       urls: mark(parsed.urls, existing.urls, &downcase(&1.params["value"])),
       social: mark(parsed.social, existing.social, &social_key(&1.params)),
       phones: mark(parsed.phones, existing.phones, &digits(&1.params["value"])),
@@ -601,6 +655,7 @@ defmodule Vutuv.Imports.LinkedIn do
     %{
       "positions" => Enum.map(parsed.positions, &Map.take(&1, [:id, :params])),
       "educations" => Enum.map(parsed.educations, &Map.take(&1, [:id, :params])),
+      "certifications" => Enum.map(parsed.certifications, &Map.take(&1, [:id, :params])),
       "urls" => Enum.map(parsed.urls, &Map.take(&1, [:id, :params])),
       "social" => Enum.map(parsed.social, &Map.take(&1, [:id, :params])),
       "phones" => Enum.map(parsed.phones, &Map.take(&1, [:id, :params])),
@@ -622,6 +677,7 @@ defmodule Vutuv.Imports.LinkedIn do
     %{
       positions: pick(payload["positions"], set),
       educations: pick(payload["educations"], set),
+      certifications: pick(payload["certifications"], set),
       urls: pick(payload["urls"], set),
       social: pick(payload["social"], set),
       phones: pick(payload["phones"], set),
@@ -670,6 +726,11 @@ defmodule Vutuv.Imports.LinkedIn do
           {education_key(c.params), &Education.changeset(&1, c.params), :educations}
         end)
 
+      {existing, certifications} =
+        insert_scoped(existing, :certifications, Map.get(selection, :certifications, []), fn c ->
+          {certification_key(c.params), &Qualification.changeset(&1, c.params), :qualifications}
+        end)
+
       {existing, urls} =
         insert_scoped(existing, :urls, Map.get(selection, :urls, []), fn c ->
           {downcase(c.params["value"]), &Url.changeset(&1, c.params), :urls}
@@ -694,6 +755,7 @@ defmodule Vutuv.Imports.LinkedIn do
         created: %{
           positions: positions.created,
           educations: educations.created,
+          certifications: certifications.created,
           urls: urls.created,
           social: social.created,
           phones: phones.created,
@@ -703,6 +765,7 @@ defmodule Vutuv.Imports.LinkedIn do
         skipped: %{
           positions: positions.skipped,
           educations: educations.skipped,
+          certifications: certifications.skipped,
           urls: urls.skipped,
           social: social.skipped,
           phones: phones.skipped,
@@ -815,6 +878,10 @@ defmodule Vutuv.Imports.LinkedIn do
         keys(Education, user.id, fn r ->
           education_key(%{"school" => r.school, "degree" => r.degree})
         end),
+      certifications:
+        keys(Qualification, user.id, fn r ->
+          certification_key(%{"name" => r.name, "issuer" => r.issuer})
+        end),
       urls: keys(Url, user.id, fn r -> downcase(r.value) end),
       social:
         keys(SocialMediaAccount, user.id, fn r ->
@@ -857,6 +924,13 @@ defmodule Vutuv.Imports.LinkedIn do
     case downcase(school) do
       nil -> nil
       s -> "#{s}|#{downcase(degree)}"
+    end
+  end
+
+  defp certification_key(%{"name" => name} = params) do
+    case downcase(name) do
+      nil -> nil
+      n -> "#{n}|#{downcase(params["issuer"])}"
     end
   end
 

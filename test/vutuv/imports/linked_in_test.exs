@@ -103,6 +103,44 @@ defmodule Vutuv.Imports.LinkedInTest do
     end
   end
 
+  describe "Certifications.csv (issue #859)" do
+    test "maps name, authority, dates, licence number and url as a certification" do
+      csv = """
+      Name,Url,Authority,Started On,Finished On,License Number
+      AWS Solutions Architect,https://verify.example.org/a,Amazon Web Services,Jan 2023,Jan 2026,AWS-1234
+      """
+
+      {:ok, result} = LinkedIn.parse(zip([{"Certifications.csv", csv}]))
+
+      assert [cert] = result.certifications
+      assert cert.params["name"] == "AWS Solutions Architect"
+      assert cert.params["kind"] == "certification"
+      assert cert.params["issuer"] == "Amazon Web Services"
+      assert cert.params["awarded_month"] == 1
+      assert cert.params["awarded_year"] == 2023
+      assert cert.params["expires_year"] == 2026
+      assert cert.params["credential_id"] == "AWS-1234"
+      assert cert.params["url"] == "https://verify.example.org/a"
+    end
+
+    test "classifies by header even when the file is named oddly" do
+      csv =
+        "Name,Url,Authority,Started On,Finished On,License Number\nCSM,,Scrum Alliance,2022,,\n"
+
+      {:ok, result} = LinkedIn.parse(zip([{"weird_name.csv", csv}]))
+
+      assert [cert] = result.certifications
+      assert cert.params["name"] == "CSM"
+    end
+
+    test "a certification row without a name is dropped" do
+      csv = "Name,Url,Authority,Started On,Finished On,License Number\n,,Some Authority,2022,,\n"
+      {:ok, result} = LinkedIn.parse(zip([{"Certifications.csv", csv}]))
+
+      assert result.certifications == []
+    end
+  end
+
   describe "Skills.csv" do
     test "splits multi-word skills into single-token tag candidates and dedups" do
       csv = "Name\nElixir\nRuby on Rails\nElixir\n"

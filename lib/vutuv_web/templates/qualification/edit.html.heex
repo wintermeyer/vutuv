@@ -1,0 +1,9 @@
+<.page_header crumbs={[
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Certificates & licenses"), ~p"/settings/qualifications"},
+  gettext("Edit")
+]} />
+
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/settings/qualifications", changeset: @changeset, action: ~p"/settings/qualifications/#{@qualification}", delete_to: ~p"/settings/qualifications/#{@qualification}" %>
+</.card_section>

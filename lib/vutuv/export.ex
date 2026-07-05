@@ -31,6 +31,7 @@ defmodule Vutuv.Export do
         :addresses,
         :work_experiences,
         :educations,
+        :qualifications,
         :languages,
         :social_media_accounts,
         :urls,
@@ -91,6 +92,21 @@ defmodule Vutuv.Export do
             :start_year,
             :end_month,
             :end_year
+          ])
+        ),
+      qualifications:
+        Enum.map(
+          user.qualifications,
+          &Map.take(&1, [
+            :name,
+            :kind,
+            :issuer,
+            :awarded_month,
+            :awarded_year,
+            :expires_month,
+            :expires_year,
+            :credential_id,
+            :url
           ])
         ),
       languages:

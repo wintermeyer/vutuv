@@ -39,6 +39,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         Enum.map(doc.educations, &entry_line("educations", &1))
       ),
       section(
+        gettext("Certificates & licenses"),
+        Enum.map(doc.qualifications, &entry_line("qualifications", &1))
+      ),
+      section(
         gettext("Languages"),
         Enum.map(doc.languages, &entry_line("languages", &1))
       ),
@@ -255,6 +259,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("tags", tag), do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)})"
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
+  defp entry_line("qualifications", qualification), do: qualification_line(qualification)
   defp entry_line("languages", language), do: "- #{md_text(language.name)}: #{language.level}"
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
@@ -328,6 +333,40 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       _university -> nil
     end
   end
+
+  # A credential line: the name, then its facts, then the verification link as
+  # an autolink. Blank facts drop out, so a bare-name entry is just "- Name".
+  defp qualification_line(qualification) do
+    facts = qualification_facts(qualification)
+
+    base =
+      if facts == "",
+        do: "- #{md_text(qualification.name)}",
+        else: "- #{md_text(qualification.name)}: #{md_text(facts)}"
+
+    if qualification.url, do: base <> " <#{md_url(qualification.url)}>", else: base
+  end
+
+  # The credential's facts joined with middots — shared with the plain-text
+  # renderer (like work_period/1) so the wording stays in one place. Returns
+  # plain text; each renderer applies its own escaping. Kind, issuer, the
+  # awarded and "valid until" dates and the credential id.
+  @doc false
+  def qualification_facts(qualification) do
+    [
+      qualification_kind_label(qualification.kind),
+      qualification.issuer,
+      qualification.awarded && gettext("awarded %{date}", date: qualification.awarded),
+      qualification.expires && gettext("valid until %{date}", date: qualification.expires),
+      qualification.credential_id && gettext("ID: %{id}", id: qualification.credential_id)
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join(" · ")
+  end
+
+  @doc false
+  def qualification_kind_label("license"), do: gettext("License")
+  def qualification_kind_label(_certification), do: gettext("Certificate")
 
   @doc false
   def work_period(work) do

@@ -31,6 +31,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
@@ -76,6 +77,10 @@ defmodule VutuvWeb.UserProfileLive do
       # straight off the socket; the controller hands both through the session.
       |> assign(:locale, session["locale"])
       |> assign(:shell_path, session["request_path"])
+      # The Certificates & licenses card's All / Certificates / Licenses tab
+      # (issue #859), one of "all" / "certification" / "license". Set once here
+      # so it survives the PubSub re-renders that rebuild the profile assigns.
+      |> assign(:qualifications_tab, "all")
       |> load_profile()
 
     # Only a real visitor triggers the (cached, single-flight) social feed
@@ -147,6 +152,13 @@ defmodule VutuvWeb.UserProfileLive do
     else
       {:noreply, socket}
     end
+  end
+
+  # Filter the Certificates & licenses card to one kind (issue #859). Pure view
+  # state — no query — so an unknown value simply falls back to :all.
+  def handle_event("qualifications_tab", %{"tab" => tab}, socket) do
+    tab = if tab in ~w(certification license), do: tab, else: "all"
+    {:noreply, assign(socket, :qualifications_tab, tab)}
   end
 
   # Mute / unmute the viewer's own follow (feed-only, silent). Scoped to the
@@ -406,9 +418,10 @@ defmodule VutuvWeb.UserProfileLive do
     current_user = socket.assigns.current_user
     base_user = Repo.get!(User, socket.assigns.profile_user_id)
 
+    owner? = !!(current_user && current_user.id == base_user.id)
+
     totals = assoc_totals(base_user)
-    user = preload_user_for_show(base_user)
-    owner? = !!(current_user && current_user.id == user.id)
+    user = preload_user_for_show(base_user, owner?)
 
     private_emails? = private_emails?(current_user, user)
 
@@ -441,6 +454,10 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:work_experience, Enum.take(user.work_experiences, 3))
     |> assign(:education, user.educations)
     |> assign(:languages, user.languages)
+    # Expired-credential hiding (issue #859) is already applied in the preload
+    # via Qualification.visible_to(owner?): a visitor gets only valid entries,
+    # the owner gets all of theirs (their card marks the lapsed ones).
+    |> assign(:qualifications, user.qualifications)
     |> assign(:header_job, header_job)
     |> assign(:work_info, work_information_string_for_job(header_job, 60))
     |> assign(:completion_steps, steps)
@@ -682,7 +699,7 @@ defmodule VutuvWeb.UserProfileLive do
     end
   end
 
-  defp preload_user_for_show(user) do
+  defp preload_user_for_show(user, owner?) do
     user
     |> Repo.preload(
       social_media_accounts: SocialMediaAccount.ordered(),
@@ -695,6 +712,10 @@ defmodule VutuvWeb.UserProfileLive do
         from(e in Education, limit: 3)
         |> Education.order_by_date(),
       languages: Language.ordered() |> limit(6),
+      # visible_to(owner?) hides expired credentials from visitors in SQL (the
+      # same scope the section page, CV and agent docs use), so the card renders
+      # what is loaded — no in-memory filter, and limit-after-filter is correct.
+      qualifications: Qualification.visible_to(owner?) |> Qualification.ordered() |> limit(8),
       phone_numbers: PhoneNumber.ordered() |> limit(3),
       urls: Url.ordered() |> limit(3),
       addresses: Address.ordered() |> limit(3),
@@ -723,6 +744,7 @@ defmodule VutuvWeb.UserProfileLive do
       |> union_all(^section_count(WorkExperience, uid, "jobs"))
       |> union_all(^section_count(Education, uid, "educations"))
       |> union_all(^section_count(Language, uid, "languages"))
+      |> union_all(^section_count(Qualification, uid, "qualifications"))
       |> union_all(^section_count(PhoneNumber, uid, "numbers"))
       |> union_all(^section_count(Url, uid, "links"))
       |> union_all(^section_count(Address, uid, "addresses"))
@@ -734,6 +756,7 @@ defmodule VutuvWeb.UserProfileLive do
       jobs: Map.get(counts, "jobs", 0),
       educations: Map.get(counts, "educations", 0),
       languages: Map.get(counts, "languages", 0),
+      qualifications: Map.get(counts, "qualifications", 0),
       numbers: Map.get(counts, "numbers", 0),
       links: Map.get(counts, "links", 0),
       addresses: Map.get(counts, "addresses", 0)

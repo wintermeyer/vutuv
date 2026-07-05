@@ -1,0 +1,61 @@
+<.form :let={f} for={@changeset} action={@action} class="editform">
+  <.form_error changeset={@changeset} />
+
+  <.editform_field form={f} field={:name}>
+    <%= label f, :name, gettext("Name") %>
+    <%= text_input f, :name, autofocus: true %>
+    <span class="editform__hint"><%= gettext("e.g. AWS Solutions Architect – Associate") %></span>
+    <%= error_tag f, :name %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:kind}>
+    <%= label f, :kind, gettext("Type") %>
+    <%= select f, :kind, kind_options() %>
+    <%= error_tag f, :kind %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:issuer}>
+    <%= label f, :issuer, gettext("Issuer") %>
+    <%= text_input f, :issuer %>
+    <span class="editform__hint"><%= gettext("e.g. Amazon Web Services") %></span>
+    <%= error_tag f, :issuer %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:awarded_year}>
+    <%= label f, :awarded_year, gettext("Issued year") %>
+    <%= select f, :awarded_year, award_year_options(), prompt: gettext("Select a year") %>
+    <%= error_tag f, :awarded_year %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:awarded_month}>
+    <%= label f, :awarded_month, gettext("Issued month") %>
+    <%= select f, :awarded_month, month_number_options(), prompt: gettext("Select a month") %>
+    <%= error_tag f, :awarded_month %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:expires_year}>
+    <%= label f, :expires_year, gettext("Expiry year") %>
+    <%= select f, :expires_year, expiry_year_options(), prompt: gettext("Does not expire") %>
+    <%= error_tag f, :expires_year %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:expires_month}>
+    <%= label f, :expires_month, gettext("Expiry month") %>
+    <%= select f, :expires_month, month_number_options(), prompt: gettext("Select a month") %>
+    <%= error_tag f, :expires_month %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:credential_id}>
+    <%= label f, :credential_id, gettext("Credential ID") %>
+    <%= text_input f, :credential_id %>
+    <%= error_tag f, :credential_id %>
+  </.editform_field>
+
+  <.editform_field form={f} field={:url}>
+    <%= label f, :url, gettext("Verification link") %>
+    <%= text_input f, :url, type: "url", placeholder: "https://" %>
+    <%= error_tag f, :url %>
+  </.editform_field>
+
+  <.form_actions backlink={@backlink} delete_to={assigns[:delete_to]} />
+</.form>

@@ -72,6 +72,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     insert(:language, user: user, language_code: "fr", proficiency: "native")
 
+    # A certificate (issue #859): its name, issuer and verification URL appear
+    # in every format — asserted below.
+    insert(:qualification,
+      user: user,
+      name: "Chartered Structural Engineer",
+      kind: "certification",
+      # A single-token issuer: the 80-column plain-text renderer hard-wraps on
+      # word boundaries, so a long multi-word value would straddle a line break
+      # and stop being a contiguous substring (true of any long value in txt).
+      issuer: "IStructE",
+      awarded_year: 2016,
+      credential_id: "MIStructE-42",
+      url: "http://istructe.example.org/verify/42"
+    )
+
     insert(:url, user: user, value: "http://bridges.example.org/", description: "Bridge blog")
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
@@ -136,6 +151,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # JSON/XML the raw "native" proficiency)
       "French",
       "native",
+      # qualifications (issue #859): the credential name and its issuer appear
+      # in every format (the profile card's meta line, md/txt, JSON/XML)
+      "Chartered Structural Engineer",
+      "IStructE",
       # links / contact / social / phone / address
       "bridges.example.org",
       "greta.public@example.com",
@@ -391,6 +410,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         "Thesis on load distribution"
       ],
       languages: ["French", "native"],
+      qualifications: ["Chartered Structural Engineer", "IStructE"],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
       addresses: ["Berlin", "10115"],
@@ -446,6 +466,11 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     rendered = formats_for("/drift_tester/languages/fr")
     assert_fact_everywhere(rendered, "French")
     assert Jason.decode!(rendered.json)["type"] == "language"
+
+    qualification = Repo.one!(Ecto.assoc(user, :qualifications))
+    rendered = formats_for("/drift_tester/qualifications/#{qualification.id}")
+    assert_fact_everywhere(rendered, "Chartered Structural Engineer")
+    assert Jason.decode!(rendered.json)["type"] == "qualification"
 
     [url] = Repo.all(Ecto.assoc(user, :urls))
     rendered = formats_for("/drift_tester/links/#{url.id}")

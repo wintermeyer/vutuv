@@ -1,0 +1,12 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/qualifications
+shows the plain showcase view (and hides expired credentials). --%>
+<.settings_shell user={@user} active={:qualifications} title={gettext("Certificates & licenses")}>
+  <.card_section
+    empty={Enum.empty?(@qualifications)}
+    add_href={~p"/settings/qualifications/new"}
+    add_label={gettext("Add a certificate or license")}
+  >
+    <%= render "card_list.html", assigns %>
+  </.card_section>
+</.settings_shell>

@@ -24,6 +24,15 @@
         <.candidate_row :for={c <- @candidates.educations} id={c.id} label={c.label} duplicate?={c.duplicate?} />
       </.candidate_section>
 
+      <.candidate_section title={gettext("Certificates & licenses")} items={@candidates.certifications}>
+        <p :if={@candidates.certifications != []} class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+          {gettext(
+            "LinkedIn does not say whether an entry is a certificate or a license, so we import all of them as certificates. Please review the section afterwards and switch any that are licenses."
+          )}
+        </p>
+        <.candidate_row :for={c <- @candidates.certifications} id={c.id} label={c.label} duplicate?={c.duplicate?} />
+      </.candidate_section>
+
       <.candidate_section title={gettext("Tags")} items={@candidates.skills}>
         <.candidate_row :for={c <- @candidates.skills} id={c.id} label={c.label} duplicate?={c.duplicate?} />
       </.candidate_section>

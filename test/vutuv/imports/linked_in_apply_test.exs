@@ -10,6 +10,7 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
 
   alias Vutuv.Imports.LinkedIn
   alias Vutuv.Profiles.Education
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Tags.UserTag
 
@@ -25,6 +26,8 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
        "Company Name,Title,Description,Location,Started On,Finished On\nAcme,Engineer,,Berlin,2020,\n"},
       {"Education.csv",
        "School Name,Start Date,End Date,Notes,Degree Name,Activities\nMIT,2010,2014,,BSc,\n"},
+      {"Certifications.csv",
+       "Name,Url,Authority,Started On,Finished On,License Number\nAWS SA,,Amazon,Jan 2023,,AWS-1\n"},
       {"Skills.csv", "Name\nElixir\nPhoenix\n"}
     ])
   end
@@ -37,11 +40,30 @@ defmodule Vutuv.Imports.LinkedInApplyTest do
 
     assert summary.created.positions == 1
     assert summary.created.educations == 1
+    assert summary.created.certifications == 1
     assert summary.created.skills == 2
 
     assert Repo.get_by(WorkExperience, user_id: user.id, organization: "Acme")
     assert Repo.get_by(Education, user_id: user.id, school: "MIT")
+
+    cert = Repo.get_by(Qualification, user_id: user.id, name: "AWS SA")
+    assert cert.kind == "certification"
+    assert cert.issuer == "Amazon"
+    assert cert.awarded_year == 2023
+
     assert Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count) == 2
+  end
+
+  test "a re-import does not double a certification (issue #859)" do
+    user = insert(:user)
+    {:ok, parsed} = LinkedIn.parse(sample_archive())
+
+    {:ok, _first} = LinkedIn.apply_selection(user, parsed)
+    {:ok, second} = LinkedIn.apply_selection(user, parsed)
+
+    assert second.created.certifications == 0
+    assert second.skipped.certifications == 1
+    assert Repo.aggregate(from(q in Qualification, where: q.user_id == ^user.id), :count) == 1
   end
 
   test "a volunteer role lands as a work experience with kind volunteer (issue #840)" do

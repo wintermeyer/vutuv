@@ -35,6 +35,7 @@ defmodule VutuvWeb.CV.Html do
     #{header(cv)}
     #{Enum.map_join(cv.sections, &section/1)}
     #{skills(cv.skills)}
+    #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
     #{links(cv.links)}
     </div>
@@ -135,6 +136,19 @@ defmodule VutuvWeb.CV.Html do
     <section>
     <h2>#{esc(gettext("Tags"))}</h2>
     <p class="skills">#{Enum.map_join(skills, " &middot; ", fn skill -> esc(skill.name) end)}</p>
+    </section>
+    """
+  end
+
+  defp qualifications([]), do: ""
+
+  defp qualifications(qualifications) do
+    items = Enum.map_join(qualifications, " &middot; ", &esc(&1.label))
+
+    """
+    <section>
+    <h2>#{esc(gettext("Certificates & licenses"))}</h2>
+    <p class="skills">#{items}</p>
     </section>
     """
   end

@@ -546,6 +546,55 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- Certificates & licenses (issue #859): credentials with an issuer and,
+    unlike a degree, an optional expiry. An All / Certificates / Licenses tabber
+    appears only when the member holds both kinds. Expired credentials are
+    hidden from visitors and shown to the owner (@qualifications is pre-filtered
+    in the LiveView). --%>
+    <.card :if={@qualifications != [] or @as_owner?} id="profile-qualifications">
+      <.section_header title={gettext("Certificates & licenses")} />
+
+      <.empty_add :if={@as_owner? and @qualifications == []} href={~p"/settings/qualifications/new"}>
+        {gettext("Add a certificate or license")}
+      </.empty_add>
+
+      <div
+        :if={VutuvWeb.QualificationHTML.mixed_kinds?(@qualifications)}
+        class="mb-4 flex gap-1 rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
+      >
+        <button
+          :for={{value, label} <- VutuvWeb.QualificationHTML.tabs()}
+          type="button"
+          phx-click="qualifications_tab"
+          phx-value-tab={value}
+          class={VutuvWeb.QualificationHTML.tab_class(@qualifications_tab == value)}
+        >
+          {label}
+        </button>
+      </div>
+
+      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
+        <li
+          :for={qualification <- VutuvWeb.QualificationHTML.tab_entries(@qualifications, @qualifications_tab)}
+          class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+        >
+          <VutuvWeb.QualificationHTML.qualification_row
+            user={@user}
+            qualification={qualification}
+            as_owner?={@as_owner?}
+          />
+        </li>
+      </ul>
+
+      <.manage_footer
+        href={~p"/#{@user}/qualifications"}
+        manage_href={~p"/settings/qualifications"}
+        total={@totals.qualifications}
+        preview={8}
+        owner={@as_owner?}
+      />
+    </.card>
+
     <%!-- Links: preview cards built from the page screenshots that
     Vutuv.PageScreenshot captures on link create/update. Lives in the wide
     main column so the thumbnails get room; Vutuv.Screenshot.url/2 falls back

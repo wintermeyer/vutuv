@@ -41,6 +41,7 @@ defmodule VutuvWeb.CV do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
@@ -94,6 +95,7 @@ defmodule VutuvWeb.CV do
       links: Enum.map(user.urls, &%{id: &1.id, label: presence(&1.description), url: &1.value}),
       sections: sections(user),
       skills: Enum.map(user.user_tags, &%{id: &1.id, name: UserTag.name(&1)}),
+      qualifications: Enum.map(user.qualifications, &qualification_entry/1),
       languages: Enum.map(user.languages, &language_entry/1),
       photo: photo(user, opts),
       work_groups: work_groups(user),
@@ -118,6 +120,7 @@ defmodule VutuvWeb.CV do
         address_lines: if(MapSet.member?(hide, "address"), do: [], else: cv.address_lines),
         sections: filter_sections(cv.sections, hide),
         skills: filter_by_id(cv.skills, "tags", hide),
+        qualifications: filter_by_id(cv.qualifications, "qualifications", hide),
         languages: filter_by_id(cv.languages, "languages", hide),
         links: filter_by_id(cv.links, "links", hide),
         work_groups: filter_work_groups(cv.work_groups, hide),
@@ -178,6 +181,8 @@ defmodule VutuvWeb.CV do
       user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
       educations: Education.order_by_date(Education),
+      # A CV is a public document, so it hides expired credentials too (#859).
+      qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
       languages: Language.ordered(),
       phone_numbers: PhoneNumber.ordered(),
       urls: Url.ordered(),
@@ -307,6 +312,31 @@ defmodule VutuvWeb.CV do
       name: Languages.name(language.language_code),
       fluency: LanguageHTML.proficiency_label(language.proficiency)
     }
+  end
+
+  # A credential line for the CV (issue #859): the structured facts for the
+  # JSON Resume shape (`name` / `issuer` / `date` / `url`) plus a ready-made
+  # `label` ("AWS Solutions Architect (Amazon Web Services, 2023)") the text
+  # formats print, so the joining logic lives here once, not in each renderer.
+  defp qualification_entry(qualification) do
+    issuer = presence(qualification.issuer)
+    date = year_month(qualification.awarded_year, qualification.awarded_month)
+
+    %{
+      id: qualification.id,
+      name: qualification.name,
+      issuer: issuer,
+      date: date,
+      url: presence(qualification.url),
+      label: qualification_label(qualification.name, [issuer, date])
+    }
+  end
+
+  defp qualification_label(name, details) do
+    case Enum.reject(details, &is_nil/1) do
+      [] -> name
+      present -> "#{name} (#{Enum.join(present, ", ")})"
+    end
   end
 
   defp first_value([%{value: value} | _rest]), do: presence(value)

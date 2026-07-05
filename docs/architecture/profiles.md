@@ -105,6 +105,43 @@ GDPR export, and its own "Sprachen" section on the CV (issue #841, mapped to the
 JSON Resume `languages` field). Linking a language to a specific work experience
 or qualification is deliberately left out for now (revisit if members ask).
 
+## Certificates & licenses profile section
+
+Members list **certificates and licenses** (issue #859,
+`Vutuv.Profiles.Qualification`, `/:slug/qualifications`): an AWS certification,
+an Approbation, a Scrum Master badge — credentials with an issuer and, unlike a
+degree, no school period and an **optional expiry**. Purely additive; it touches
+nothing else. Each entry has a `name`, a `kind` (`certification` | `license`),
+an `issuer`, an awarded and an optional expiry `year`/`month`, a `credential_id`,
+and a display-only verification `url` (scheme-validated to http(s), **never
+fetched server-side** — SSRF). A nullable `education_id` FK is reserved for issue
+#857 (folding degrees into this table) and is always NULL today.
+
+**Expired credentials are hidden from the public and shown to the owner.**
+`Qualification.visible_to(owner?)` is the single SQL scope for this: the profile
+preload (through `owner?`), the public `/:slug/qualifications` page, the CV and
+the agent docs all compose it, so they hide the same lapsed entries; the owner's
+own profile card and the `/settings/qualifications` editor show all of theirs and
+mark the lapsed ones with an "Expired" badge (`Qualification.expired?/2`, the
+per-entry twin of the scope — keep the two in sync). Entries display most
+recently awarded first (`Qualification.ordered/1`).
+
+The **profile card** carries an All / Certificates / Licenses tabber (a
+`phx-click` filter on `UserProfileLive`, shown only when the member holds both
+kinds); the public **section page** splits the same two kinds with
+`group_by_kind` headings. Like the other sections it has owner CRUD on
+`/settings/qualifications`, Markdown / plain text / JSON / XML siblings (kept in
+sync by the agent-docs drift test), an `/api/2.0` read+write section, a line in
+the GDPR export, and a "Zertifikate & Lizenzen" section on the CV (issue #841,
+mapped to the JSON Resume `certificates` field).
+
+The concrete win shipped day one: **LinkedIn's `Certifications.csv`** — read by
+nobody and discarded on every import before this — now lands here. The importer
+(`Vutuv.Imports.LinkedIn`) classifies the file, maps `Name`/`Authority`/`Started
+On`/`Finished On`/`License Number`/`Url` to qualification fields, imports
+everything as a certification (LinkedIn carries no licence/cert signal; the
+preview tells the member to review), and dedups by name + issuer on re-import.
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts and

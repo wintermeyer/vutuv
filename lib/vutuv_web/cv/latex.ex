@@ -29,6 +29,7 @@ defmodule VutuvWeb.CV.Latex do
     #{contact(cv)}
     #{Enum.map_join(cv.sections, "\n", &section/1)}
     #{skills(cv.skills)}
+    #{qualifications(cv.qualifications)}
     #{languages(cv.languages)}
     #{links(cv.links)}
     \\end{document}
@@ -92,6 +93,15 @@ defmodule VutuvWeb.CV.Latex do
     """
     \\section*{#{esc(gettext("Tags"))}}
     #{Enum.map_join(skills, " \\textbullet{} ", fn skill -> esc(skill.name) end)}
+    """
+  end
+
+  defp qualifications([]), do: ""
+
+  defp qualifications(qualifications) do
+    """
+    \\section*{#{esc(gettext("Certificates & licenses"))}}
+    #{Enum.map_join(qualifications, " \\textbullet{} ", &esc(&1.label))}
     """
   end
 

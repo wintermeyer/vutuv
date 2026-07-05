@@ -32,6 +32,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @sections %{
     work_experiences: "work_experience",
     educations: "education",
+    qualifications: "qualification",
     languages: "language",
     links: "link",
     social_media_accounts: "social_media_account",
@@ -79,6 +80,10 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp index_title(:work_experiences, name), do: gettext("Work experience of %{name}", name: name)
   defp index_title(:educations, name), do: gettext("Education of %{name}", name: name)
+
+  defp index_title(:qualifications, name),
+    do: gettext("Certificates & licenses of %{name}", name: name)
+
   defp index_title(:languages, name), do: gettext("Languages of %{name}", name: name)
   defp index_title(:links, name), do: gettext("Links of %{name}", name: name)
 
@@ -96,6 +101,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry_title(:educations, entry),
     do: Enum.join(Enum.filter([entry.degree, entry.school], & &1), " · ")
 
+  defp entry_title(:qualifications, entry), do: entry.name
+
   defp entry_title(:languages, entry), do: entry.name
 
   defp entry_title(:links, entry), do: entry.description || entry.url
@@ -107,6 +114,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp entry(:work_experiences, record), do: work_entry(record)
   defp entry(:educations, record), do: education_entry(record)
+  defp entry(:qualifications, record), do: qualification_entry(record)
   defp entry(:languages, record), do: language_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
@@ -148,6 +156,21 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       kind: edu.kind,
       start: year_month(edu.start_year, edu.start_month),
       end: year_month(edu.end_year, edu.end_month)
+    }
+  end
+
+  @doc false
+  def qualification_entry(qualification) do
+    %{
+      id: qualification.id,
+      name: qualification.name,
+      # certification | license.
+      kind: qualification.kind,
+      issuer: qualification.issuer,
+      credential_id: qualification.credential_id,
+      url: qualification.url,
+      awarded: year_month(qualification.awarded_year, qualification.awarded_month),
+      expires: year_month(qualification.expires_year, qualification.expires_month)
     }
   end
 

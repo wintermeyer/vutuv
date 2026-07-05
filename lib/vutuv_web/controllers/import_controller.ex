@@ -172,6 +172,12 @@ defmodule VutuvWeb.ImportController do
         ngettext("%{count} work experience", "%{count} work experiences", created.positions),
       created.educations > 0 &&
         ngettext("%{count} education entry", "%{count} education entries", created.educations),
+      created.certifications > 0 &&
+        ngettext(
+          "%{count} certificate or license",
+          "%{count} certificates or licenses",
+          created.certifications
+        ),
       created.skills > 0 && ngettext("%{count} tag", "%{count} tags", created.skills),
       created.urls > 0 && ngettext("%{count} link", "%{count} links", created.urls),
       created.social > 0 &&
@@ -188,8 +194,8 @@ defmodule VutuvWeb.ImportController do
   defp imported_message(parts), do: gettext("Imported %{items}.", items: Enum.join(parts, ", "))
 
   defp skipped_total(skipped) do
-    skipped.positions + skipped.educations + skipped.skills + skipped.urls + skipped.social +
-      skipped.phones
+    skipped.positions + skipped.educations + skipped.certifications + skipped.skills +
+      skipped.urls + skipped.social + skipped.phones
   end
 
   defp append_skipped(message, 0), do: message

@@ -181,6 +181,15 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def qualification_factory do
+    %Vutuv.Profiles.Qualification{
+      name: sequence(:qualification_name, &"AWS Solutions Architect #{&1}"),
+      kind: "certification",
+      issuer: "Amazon Web Services",
+      awarded_year: 2023
+    }
+  end
+
   def follow_factory do
     %Vutuv.Social.Follow{}
   end

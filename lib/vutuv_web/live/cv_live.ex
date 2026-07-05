@@ -317,6 +317,32 @@ defmodule VutuvWeb.CVLive do
             </div>
           </.card>
 
+          <.card :if={@cv.qualifications != []}>
+            <.heading_toggle hide={@hide} key="qualifications">
+              {gettext("Certificates & licenses")}
+            </.heading_toggle>
+            <div class={["mt-3 space-y-1", shown?(@hide, "qualifications") || "opacity-40"]}>
+              <label
+                :for={qualification <- @cv.qualifications}
+                class={[
+                  "flex cursor-pointer items-baseline gap-3 rounded-lg px-2 py-1.5",
+                  shown?(@hide, qualification.id) || "line-through opacity-50"
+                ]}
+              >
+                <input
+                  type="checkbox"
+                  class={checkbox_class()}
+                  checked={shown?(@hide, qualification.id)}
+                  phx-click="toggle"
+                  phx-value-key={qualification.id}
+                />
+                <span class="text-sm text-slate-700 dark:text-slate-300">
+                  {qualification.label}
+                </span>
+              </label>
+            </div>
+          </.card>
+
           <.card :if={@cv.languages != []}>
             <.heading_toggle hide={@hide} key="languages">{gettext("Languages")}</.heading_toggle>
             <div class={["mt-3 space-y-1", shown?(@hide, "languages") || "opacity-40"]}>

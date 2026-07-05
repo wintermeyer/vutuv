@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
   alias Vutuv.Profiles.PhoneNumber
+  alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Profiles.Url
   alias Vutuv.Profiles.WorkExperience
@@ -95,6 +96,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       tags: Enum.map(user.user_tags, &SectionDocs.tag_entry/1),
       work_experiences: Enum.map(user.work_experiences, &SectionDocs.work_entry/1),
       educations: Enum.map(user.educations, &SectionDocs.education_entry/1),
+      qualifications: Enum.map(user.qualifications, &SectionDocs.qualification_entry/1),
       languages: Enum.map(user.languages, &SectionDocs.language_entry/1),
       links: Enum.map(user.urls, &SectionDocs.link_entry/1),
       emails: Enum.map(emails, &SectionDocs.email_entry/1),
@@ -119,6 +121,8 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       user_tags: UserTag.ordered_by_endorsements(),
       work_experiences: WorkExperience.order_by_date(WorkExperience),
       educations: Education.order_by_date(Education),
+      # The anonymous public view hides expired credentials (issue #859).
+      qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
       languages: Language.ordered(),
       # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
       # documents list these contact sections the same way the HTML pages do.

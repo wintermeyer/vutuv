@@ -1,0 +1,46 @@
+<.page_header
+  title={@qualification.name}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Certificates & licenses"), ~p"/#{@user}/qualifications"},
+    @qualification.name
+  ]}
+/>
+
+<.card_section>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/settings/qualifications/#{@qualification}/edit"}
+    delete_to={~p"/settings/qualifications/#{@qualification}"}
+  />
+
+  <h2 class="card__label"><%= gettext("Type") %></h2>
+  <p><%= kind_name(@qualification.kind) %></p>
+
+  <%= if @qualification.issuer do %>
+    <h2 class="card__label"><%= gettext("Issuer") %></h2>
+    <p><%= @qualification.issuer %></p>
+  <% end %>
+
+  <%= if @qualification.awarded_year do %>
+    <h2 class="card__label"><%= gettext("Issued") %></h2>
+    <p><%= Enum.reject([@qualification.awarded_month, @qualification.awarded_year], &is_nil/1) |> Enum.join("/") %></p>
+  <% end %>
+
+  <%= if @qualification.expires_year do %>
+    <h2 class="card__label"><%= gettext("Expires") %></h2>
+    <p><%= Enum.reject([@qualification.expires_month, @qualification.expires_year], &is_nil/1) |> Enum.join("/") %></p>
+  <% end %>
+
+  <%= if @qualification.credential_id do %>
+    <h2 class="card__label"><%= gettext("Credential ID") %></h2>
+    <p><%= @qualification.credential_id %></p>
+  <% end %>
+
+  <%= if @qualification.url do %>
+    <h2 class="card__label"><%= gettext("Verification link") %></h2>
+    <p><a href={@qualification.url} target="_blank" rel="nofollow noopener noreferrer"><%= @qualification.url %></a></p>
+  <% end %>
+</.card_section>
