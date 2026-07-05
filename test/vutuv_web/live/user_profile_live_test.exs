@@ -437,4 +437,30 @@ defmodule VutuvWeb.UserProfileLiveTest do
       refute render(view) =~ "soon deleted"
     end
   end
+
+  describe "languages card" do
+    test "renders each language as a wrapping pill with its level, no Preferred marker",
+         %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      insert(:language, user: owner, language_code: "en", proficiency: "native")
+      insert(:language, user: owner, language_code: "fr", proficiency: "a2")
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The card lays its entries out as pills in a single wrapping flex row,
+      # not a stack of full-width rows.
+      assert has_element?(view, "#profile-languages [data-language-pill]", "English")
+      assert has_element?(view, "#profile-languages [data-language-pill]", "French")
+
+      # Each pill still carries the compact proficiency badge (Native / A2)...
+      html = render(view)
+      assert html =~ "Native"
+      assert html =~ "A2"
+
+      # ...but the profile card drops the quieter "Preferred" contact-language
+      # marker; that detail lives on the dedicated /:slug/languages page.
+      refute has_element?(view, "#profile-languages", "Preferred")
+    end
+  end
 end

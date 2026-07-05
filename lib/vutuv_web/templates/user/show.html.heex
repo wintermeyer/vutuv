@@ -510,9 +510,12 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
-    <%!-- Languages (issue #865): a glyph, the language name and a proficiency
-    badge, in the member's own order (Language.ordered). Once there is a choice,
-    the first entry is marked their preferred contact language (issue #894). --%>
+    <%!-- Languages (issue #865): the language name plus a compact proficiency
+    badge, in the member's own order (Language.ordered). On the profile card the
+    entries flow as pills in a wrapping row so a handful of languages read at a
+    glance instead of eating a full-width row each; the "preferred contact
+    language" marker (issue #894) is kept for the dedicated /:slug/languages page
+    and the agent docs, not this summary. --%>
     <.card :if={@languages != [] or @as_owner?} id="profile-languages">
       <.section_header title={gettext("Languages")} />
 
@@ -520,24 +523,21 @@ the resulting ~200px rail width. --%>
         {gettext("Add a language")}
       </.empty_add>
 
-      <ul class="divide-y divide-slate-100 dark:divide-slate-800">
-        <li
-          :for={{language, idx} <- Enum.with_index(@languages)}
-          class="flex items-center gap-3 py-3 first:pt-0 last:pb-0"
+      <div :if={@languages != []} class="flex flex-wrap gap-2">
+        <.link
+          :for={language <- @languages}
+          data-language-pill
+          href={~p"/#{@user}/languages/#{language}"}
+          class="inline-flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-1.5 text-sm ring-1 ring-slate-200 transition-colors hover:ring-brand-300 dark:bg-slate-800/60 dark:ring-slate-700 dark:hover:ring-brand-400"
         >
-          <VutuvWeb.LanguageHTML.language_glyph class="h-5 w-5 shrink-0 text-slate-400 dark:text-slate-500" />
-          <.link
-            href={~p"/#{@user}/languages/#{language}"}
-            class="font-medium text-slate-900 hover:text-brand-700 dark:text-white"
-          >
+          <span class="font-medium text-slate-900 dark:text-white">
             {VutuvWeb.LanguageHTML.language_name(language.language_code)}
-          </.link>
-          <span class="shrink-0 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+          </span>
+          <span class="inline-flex items-center rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
             {VutuvWeb.LanguageHTML.proficiency_badge(language.proficiency)}
           </span>
-          <VutuvWeb.LanguageHTML.language_preferred_badge :if={idx == 0 and length(@languages) > 1} />
-        </li>
-      </ul>
+        </.link>
+      </div>
 
       <.manage_footer
         href={~p"/#{@user}/languages"}
