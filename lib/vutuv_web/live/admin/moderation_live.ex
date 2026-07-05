@@ -33,7 +33,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
     <div class="card-list">
       <section class="card">
         <div class="flex items-center justify-between gap-4">
-          <h1>{gettext("Open cases")} ({length(@cases)})</h1>
+          <h1>{gettext("Open cases")} ({compact_count(length(@cases))})</h1>
           <a
             href={~p"/admin/moderation/reporters"}
             class="text-sm font-semibold text-brand-600 hover:text-brand-700"
@@ -81,7 +81,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
                 <td>
                   <a href={~p"/#{case_record.owner}"}>@{case_record.owner.username}</a>
                 </td>
-                <td>{length(case_record.reports)}</td>
+                <td>{compact_count(length(case_record.reports))}</td>
                 <td><.local_time at={case_record.inserted_at} id={"case-time-#{case_record.id}"} /></td>
                 <td class="text-right">
                   <a

@@ -5,7 +5,7 @@
   add_label={gettext("Register an application")}
   empty={false}
 >
-  <p class="text-sm text-slate-500 dark:text-slate-400">
+  <p class="text-sm text-slate-600 dark:text-slate-400">
     {gettext(
       "OAuth applications let other members connect your software with their vutuv account through a consent screen, instead of pasting tokens. Documentation: "
     )}<a
@@ -27,7 +27,7 @@
             >
               {app.name}
             </.link>
-            <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+            <p class="truncate text-sm text-slate-600 dark:text-slate-400">
               <code>{app.client_id}</code>
             </p>
             <p :if={app.suspended_at} class="text-sm font-semibold text-red-600">

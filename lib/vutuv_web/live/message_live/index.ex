@@ -606,7 +606,7 @@ defmodule VutuvWeb.MessageLive.Index do
               navigate={~p"/reports/new?#{[type: "message", id: m.id, return_to: "/messages/#{m.conversation_id}"]}"}
               title={gettext("Report this message")}
               aria-label={gettext("Report this message")}
-              class="text-xs text-slate-300 opacity-60 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100 dark:text-slate-600 dark:hover:text-red-400"
+              class="text-xs text-slate-400 opacity-60 transition group-hover:opacity-100 hover:text-red-600 focus:opacity-100 dark:text-slate-600 dark:hover:text-red-400"
             >
               ⚑
             </.link>

@@ -14,7 +14,7 @@
     </div>
 
     <%!-- The trail back up a scoped archive: All posts / 2026 / 06 / 06. --%>
-    <p :if={@period_crumbs != []} class="text-sm text-slate-500">
+    <p :if={@period_crumbs != []} class="text-sm text-slate-600 dark:text-slate-400">
       <span :for={{{label, href}, index} <- Enum.with_index(@period_crumbs)}>
         <span :if={index > 0}>/</span>
         <.link :if={href} href={href} class="font-semibold text-brand-600 hover:text-brand-700">

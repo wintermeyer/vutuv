@@ -556,7 +556,7 @@ defmodule VutuvWeb.PostComponents do
           >
             {full_name(@post.user)}
           </.link>
-          <span class="text-xs text-slate-500 dark:text-slate-400">
+          <span class="text-xs text-slate-600 dark:text-slate-400">
             {"@" <> @post.user.username} ·
             <.post_time id={@time_id} at={@post.inserted_at} />
           </span>
@@ -631,7 +631,7 @@ defmodule VutuvWeb.PostComponents do
       <%= case @reply_banner do %>
         <% {:parent, parent_author, parent_path} -> %>
           <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
             data-reply-banner="parent"
           >
             <.icon_reply class="h-4 w-4" />
@@ -641,7 +641,7 @@ defmodule VutuvWeb.PostComponents do
           </p>
         <% {:author_only, parent_author} -> %>
           <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
             data-reply-banner="author-only"
           >
             <.icon_reply class="h-4 w-4" />
@@ -651,7 +651,7 @@ defmodule VutuvWeb.PostComponents do
           </p>
         <% :gone -> %>
           <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"
+            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
             data-reply-banner="gone"
           >
             <.icon_reply class="h-4 w-4" />
@@ -676,14 +676,14 @@ defmodule VutuvWeb.PostComponents do
             >
               {full_name(@post.user)}
             </.link>
-            <.link href={@permalink} class="text-sm text-slate-500 hover:text-brand-700">
+            <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700">
               <.post_time id={@time_id} at={@post.inserted_at} />
             </.link>
-            <span :if={@edited?} class="text-xs text-slate-500">{gettext("edited")}</span>
+            <span :if={@edited?} class="text-xs text-slate-600 dark:text-slate-400">{gettext("edited")}</span>
             <span
               :if={@restricted?}
               title={gettext("Limited audience")}
-              class="text-xs text-slate-500"
+              class="text-xs text-slate-600 dark:text-slate-400"
               aria-label={gettext("Limited audience")}
             >
               🔒
@@ -885,7 +885,7 @@ defmodule VutuvWeb.PostComponents do
 
     ~H"""
     <div
-      class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400"
+      class="mb-3 flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-400"
       data-reposted-by={@primary.id}
     >
       <.icon_repost class="h-4 w-4 shrink-0" />
@@ -988,7 +988,7 @@ defmodule VutuvWeb.PostComponents do
           and last glyphs line up with the column edges. --%>
     <div
       :if={@engagement}
-      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-500 dark:text-slate-400"
+      class="-mx-2 mt-3 flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400"
     >
       <.action_button
         id={"#{@id}-like"}
@@ -1059,7 +1059,7 @@ defmodule VutuvWeb.PostComponents do
         "hover:bg-slate-100 dark:hover:bg-slate-800",
         # components.css colors bare `a, button` brand-600, which beats the
         # wrapper's inherited slate — so the muted color sits on the link.
-        "text-slate-500 dark:text-slate-400"
+        "text-slate-600 dark:text-slate-400"
       ]}
     >
       <.icon_reply />
@@ -1107,7 +1107,7 @@ defmodule VutuvWeb.PostComponents do
         !@disabled && "hover:bg-slate-100 dark:hover:bg-slate-800",
         # components.css colors bare `a, button` brand-600, which beats the
         # wrapper's inherited slate — so the state color sits on the button.
-        if(@active?, do: @active_class, else: "text-slate-500 dark:text-slate-400")
+        if(@active?, do: @active_class, else: "text-slate-600 dark:text-slate-400")
       ]}
     >
       {render_slot(@icon)}

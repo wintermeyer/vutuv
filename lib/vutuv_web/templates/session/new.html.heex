@@ -26,7 +26,7 @@
     </button>
     <p data-webauthn-error hidden class="mt-2 text-sm text-red-600 dark:text-red-400"></p>
 
-    <div class="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
+    <div class="my-5 flex items-center gap-3 text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
       <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span>
       {gettext("or")}
       <span class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></span>
@@ -38,13 +38,13 @@
     <.button type="submit" class="w-full">{gettext("Log in")}</.button>
   </.form>
 
-  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+  <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
     {gettext("No account yet?")}
     <a href={~p"/"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Sign up here.")}</a>
   </p>
 
   <%= if dev_mailbox?() do %>
-    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
       <a
         href="/sent_emails"
         target="_blank"

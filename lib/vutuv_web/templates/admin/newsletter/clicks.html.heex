@@ -34,7 +34,7 @@
             <td>{fmt(click.inserted_at)}</td>
             <td class="breakwrap">
               <a :if={click.user} href={~p"/#{click.user}"}>@{click.user.username}</a>
-              <span :if={is_nil(click.user)} class="text-slate-500">{gettext("(deleted member)")}</span>
+              <span :if={is_nil(click.user)} class="text-slate-600 dark:text-slate-400">{gettext("(deleted member)")}</span>
             </td>
             <td class="breakwrap">
               <a href={click.url} target="_blank" rel="noopener">{click.url}</a>

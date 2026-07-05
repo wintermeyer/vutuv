@@ -309,7 +309,7 @@
             <td>{kind_label(d.kind)}</td>
             <td class="breakwrap">
               <a :if={d.user} href={~p"/#{d.user}"}>@{d.user.username}</a>
-              <span class="text-slate-500">{d.email}</span>
+              <span class="text-slate-600 dark:text-slate-400">{d.email}</span>
             </td>
             <td>{delivery_status_label(d.status)}</td>
           </tr>

@@ -19,11 +19,11 @@
           <div class="flex flex-wrap items-center gap-3">
             <span class="text-lg font-bold text-slate-900 dark:text-slate-100">{ad.day}</span>
             <VutuvWeb.AdHTML.status_badge ad={ad} />
-            <span class="ml-auto text-sm text-slate-500 dark:text-slate-400">
+            <span class="ml-auto text-sm text-slate-600 dark:text-slate-400">
               {VutuvWeb.AgentDocs.AdsDoc.price_display()}
             </span>
           </div>
-          <p :if={is_nil(ad.approved_at)} class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+          <p :if={is_nil(ad.approved_at)} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("We review every ad before it runs. You will see the approval here.")}
           </p>
           <div class="markdown mt-2 rounded-lg bg-slate-50 p-3 text-sm text-slate-700 dark:bg-slate-800/60 dark:text-slate-300">

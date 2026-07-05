@@ -453,7 +453,7 @@ defmodule VutuvWeb.PostLive.Saved do
       <div class="min-w-0 flex-1 text-sm">
         <.link navigate={~p"/#{@person}"} class="block truncate font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100">
           {highlight(full_name(@person), @needle)}
-          <span class="font-normal text-slate-500 dark:text-slate-400">@{@person.username}</span>
+          <span class="font-normal text-slate-600 dark:text-slate-400">@{@person.username}</span>
         </.link>
         <p :if={present_headline(@person)} class="mb-0 truncate text-sm text-slate-600 dark:text-slate-400">
           {highlight(present_headline(@person), @needle)}

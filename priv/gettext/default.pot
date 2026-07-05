@@ -8615,12 +8615,12 @@ msgstr ""
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:10
 #, elixir-autogen, elixir-format
-msgid "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines — they don't need a vutuv account for that."
+msgid "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines. They don't need a vutuv account for that."
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:45
 #, elixir-autogen, elixir-format
-msgid "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered — copies already delivered to other servers may remain there, outside our reach."
+msgid "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered. Copies already delivered to other servers may remain there, outside our reach."
 msgstr ""
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:18

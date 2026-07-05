@@ -8656,13 +8656,13 @@ msgstr "Social-Media-Konten verwalten"
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:10
 #, elixir-autogen, elixir-format
-msgid "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines — they don't need a vutuv account for that."
-msgstr "Mastodon und viele weitere Dienste bilden ein großes, offenes Netzwerk: das Fediverse. Wenn Sie teilnehmen, können Ihnen Menschen von dort folgen, und Ihre öffentlichen vutuv-Beiträge erscheinen in deren Timelines — ganz ohne vutuv-Konto."
+msgid "Mastodon and many other services form one big, open network: the Fediverse. If you take part, people there can follow you, and your public vutuv posts appear in their timelines. They don't need a vutuv account for that."
+msgstr "Mastodon und viele weitere Dienste bilden ein großes, offenes Netzwerk: das Fediverse. Wenn Sie teilnehmen, können Ihnen Menschen von dort folgen, und Ihre öffentlichen vutuv-Beiträge erscheinen in deren Timelines, ganz ohne vutuv-Konto."
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:45
 #, elixir-autogen, elixir-format
-msgid "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered — copies already delivered to other servers may remain there, outside our reach."
-msgstr "Wenn aktiviert, ist Ihr Profil von Mastodon & Co. aus auffindbar und Ihre öffentlichen Beiträge werden an Ihre Fediverse-Follower zugestellt. Wenn deaktiviert, ist Ihr Profil dort nicht auffindbar und nichts wird zugestellt — bereits an fremde Server ausgelieferte Kopien können dort verbleiben, außerhalb unseres Zugriffs."
+msgid "When on, your profile can be found from Mastodon & Co. and your public posts are delivered to your Fediverse followers. When off, your profile is not discoverable there and nothing is delivered. Copies already delivered to other servers may remain there, outside our reach."
+msgstr "Wenn aktiviert, ist Ihr Profil von Mastodon & Co. aus auffindbar und Ihre öffentlichen Beiträge werden an Ihre Fediverse-Follower zugestellt. Wenn deaktiviert, ist Ihr Profil dort nicht auffindbar und nichts wird zugestellt. Bereits an fremde Server ausgelieferte Kopien können dort verbleiben, außerhalb unseres Zugriffs."
 
 #: lib/vutuv_web/templates/settings/fediverse.html.heex:18
 #, elixir-autogen, elixir-format

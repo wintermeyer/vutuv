@@ -82,7 +82,7 @@ defmodule VutuvWeb.Admin.ApiAppLive do
                   <.link href={~p"/#{app.user}"} class="text-brand-600 hover:text-brand-700">
                     @{app.user.username}
                   </.link>
-                  <span class="text-slate-500">({full_name(app.user)})</span>
+                  <span class="text-slate-600 dark:text-slate-400">({full_name(app.user)})</span>
                 </td>
                 <td>
                   <.local_time at={app.inserted_at} id={"api-app-time-#{app.id}"} format="%Y-%m-%d" />

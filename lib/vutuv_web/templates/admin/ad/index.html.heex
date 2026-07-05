@@ -8,8 +8,8 @@
 
 <div class="card-list">
   <section class="card">
-    <h1>{gettext("Upcoming ads")} ({length(@upcoming_ads)})</h1>
-    <p class="mt-1 text-sm text-slate-500">
+    <h1>{gettext("Upcoming ads")} ({compact_count(length(@upcoming_ads))})</h1>
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "Every ad must be approved before it runs. Check that it is family-friendly (community guidelines) before approving."
       )}

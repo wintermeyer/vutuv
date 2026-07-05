@@ -502,7 +502,7 @@ defmodule VutuvWeb.PostLive.Composer do
           </ul>
 
           <%!-- In-flight uploads --%>
-          <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-500">
+          <div :for={entry <- @uploads.images.entries} class="mt-2 flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
             <span class="truncate">{entry.client_name}</span>
             <progress value={entry.progress} max="100" class="h-2 flex-1">{entry.progress}%</progress>
             <button
@@ -595,7 +595,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   name="post[deny_wildcards][non_connections]"
                   value="true"
                   checked={MapSet.member?(@deny_wildcards, "non_connections")}
-                  class="rounded border-slate-300"
+                  class={checkbox_class()}
                 />
                 {gettext("People who aren't my connections")}
               </label>
@@ -605,7 +605,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   name="post[deny_wildcards][non_followers]"
                   value="true"
                   checked={MapSet.member?(@deny_wildcards, "non_followers")}
-                  class="rounded border-slate-300"
+                  class={checkbox_class()}
                 />
                 {gettext("People who don't follow me")}
               </label>
@@ -615,7 +615,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   name="post[deny_wildcards][non_followees]"
                   value="true"
                   checked={MapSet.member?(@deny_wildcards, "non_followees")}
-                  class="rounded border-slate-300"
+                  class={checkbox_class()}
                 />
                 {gettext("People I don't follow")}
               </label>
@@ -625,7 +625,7 @@ defmodule VutuvWeb.PostLive.Composer do
                   name="post[deny_wildcards][logged_out]"
                   value="true"
                   checked={MapSet.member?(@deny_wildcards, "logged_out")}
-                  class="rounded border-slate-300"
+                  class={checkbox_class()}
                 />
                 {gettext("Logged-out visitors")}
               </label>
@@ -687,7 +687,7 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
-          <p class="mt-2 text-sm text-slate-500 dark:text-slate-400" id={"#{@id}-audience-summary"}>
+          <p class="mt-2 text-sm text-slate-600 dark:text-slate-400" id={"#{@id}-audience-summary"}>
             {audience_summary(assigns)}
           </p>
 

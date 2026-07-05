@@ -144,16 +144,16 @@ defmodule VutuvWeb.PostActionsLiveTest do
       %{view: actions} = feed_actions(conn, post)
 
       like = "#post-actions-post-#{post.id}-like"
-      assert actions |> element(like) |> render() =~ "text-slate-500"
+      assert actions |> element(like) |> render() =~ "text-slate-600"
 
       actions |> element(like) |> render_click()
       html = actions |> element(like) |> render()
       assert html =~ "text-accent"
-      refute html =~ "text-slate-500"
+      refute html =~ "text-slate-600"
 
       # The untouched buttons keep the muted state color.
       assert actions |> element("#post-actions-post-#{post.id}-repost") |> render() =~
-               "text-slate-500"
+               "text-slate-600"
     end
 
     # The counter span stays mounted (invisible at zero) so a first like

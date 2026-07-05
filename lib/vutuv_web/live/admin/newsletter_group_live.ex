@@ -516,7 +516,9 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     do: ngettext("minus 1 group", "minus %{count} groups", length(ids))
 
   defp accounts_summary(_sign, []), do: nil
-  defp accounts_summary(sign, ids), do: "#{sign}#{length(ids)} " <> gettext("accounts")
+
+  defp accounts_summary(sign, ids),
+    do: "#{sign}#{compact_count(length(ids))} " <> gettext("accounts")
 
   @impl true
   def render(%{live_action: :index} = assigns), do: render_index(assigns)
@@ -538,7 +540,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
         <span class="block truncate text-sm font-medium text-slate-800 dark:text-slate-100">
           {UserHelpers.full_name(@user)}
         </span>
-        <span class="block truncate text-xs text-slate-500">@{@user.username}</span>
+        <span class="block truncate text-xs text-slate-600 dark:text-slate-400">@{@user.username}</span>
       </span>
     </.link>
     """
@@ -903,7 +905,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                     checked={g.id in (@form[:included_group_ids].value || [])}
                     class={checkbox_class()}
                   />
-                  {g.name} <span class="text-slate-500">({compact_count(g.member_count)})</span>
+                  {g.name} <span class="text-slate-600 dark:text-slate-400">({compact_count(g.member_count)})</span>
                 </label>
               </div>
             </div>
@@ -928,7 +930,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                     checked={g.id in (@form[:excluded_group_ids].value || [])}
                     class={checkbox_class()}
                   />
-                  {g.name} <span class="text-slate-500">({compact_count(g.member_count)})</span>
+                  {g.name} <span class="text-slate-600 dark:text-slate-400">({compact_count(g.member_count)})</span>
                 </label>
               </div>
             </div>
@@ -979,7 +981,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
               >
                 @{u.username} ✕
               </button>
-              <span :if={@excluded_extra > 0} class="text-xs text-slate-500">
+              <span :if={@excluded_extra > 0} class="text-xs text-slate-600 dark:text-slate-400">
                 {gettext("+%{count} more", count: @excluded_extra)}
               </span>
             </div>
@@ -991,7 +993,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
               <button type="button" phx-click="unselect_all" class={preview_nav_class()}>
                 {gettext("Unselect all")}
               </button>
-              <span class="text-xs text-slate-500">
+              <span class="text-xs text-slate-600 dark:text-slate-400">
                 {gettext("applies to the whole list, not just this page")}
               </span>
             </div>
@@ -1162,7 +1164,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-sm font-semibold text-slate-700 dark:text-slate-200">
         {@label}
-        <span class="font-normal text-slate-500">
+        <span class="font-normal text-slate-600 dark:text-slate-400">
           ({gettext("page %{page} of %{pages}, %{total} total",
             page: @page,
             pages: list_pages(@total),

@@ -18,7 +18,7 @@ member keeps the single unlabeled list. --%>
     :for={edu <- entries}
     class="grid grid-cols-[6.5rem_1fr] items-start gap-3"
   >
-    <div class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-500 dark:text-slate-400">
+    <div class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-600 dark:text-slate-400">
       {format_duration(edu.start_month, edu.start_year, edu.end_month, edu.end_year, :year_first)}
     </div>
     <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
@@ -29,7 +29,7 @@ member keeps the single unlabeled list. --%>
       >
         {edu.degree || edu.school}
       </.link>
-      <p :if={edu.degree} class="text-sm text-slate-500">{edu.school}</p>
+      <p :if={edu.degree} class="text-sm text-slate-600 dark:text-slate-400">{edu.school}</p>
       <p :if={edu.field_of_study} class="text-sm text-slate-600 dark:text-slate-400">
         {edu.field_of_study}
       </p>

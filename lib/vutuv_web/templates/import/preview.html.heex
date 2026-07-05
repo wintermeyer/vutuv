@@ -25,7 +25,7 @@
       </.candidate_section>
 
       <.candidate_section title={gettext("Certificates & licenses")} items={@candidates.certifications}>
-        <p :if={@candidates.certifications != []} class="mb-2 text-xs text-slate-500 dark:text-slate-400">
+        <p :if={@candidates.certifications != []} class="mb-2 text-xs text-slate-600 dark:text-slate-400">
           {gettext(
             "LinkedIn does not say whether an entry is a certificate or a license, so we import all of them as certificates. Please review the section afterwards and switch any that are licenses."
           )}
@@ -75,7 +75,7 @@
             {gettext("add an email address")}
           </.link>.
         </p>
-        <ul class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+        <ul class="mt-2 text-sm text-slate-600 dark:text-slate-400">
           <li :for={email <- @candidates.emails}>{email.value}</li>
         </ul>
       </div>

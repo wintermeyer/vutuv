@@ -2,7 +2,7 @@
 
 <div class="card-list">
   <section class="card">
-    <p class="text-sm text-slate-500 dark:text-slate-400">
+    <p class="text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "These applications may use your vutuv account, limited to the permissions you granted them. Withdrawing access cuts them off immediately."
       )}
@@ -19,7 +19,7 @@
               <ul class="mt-1 space-y-0.5">
                 <li
                   :for={scope <- grant.scopes}
-                  class="text-sm text-slate-500 dark:text-slate-400"
+                  class="text-sm text-slate-600 dark:text-slate-400"
                 >
                   {Vutuv.ApiAuth.Scopes.description(scope)}
                 </li>

@@ -196,7 +196,7 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
       id="confirm-modal"
     >
-      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl dark:bg-slate-900">
+      <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
         <h2 class="text-lg font-bold text-slate-900 dark:text-white">{gettext("Are you sure?")}</h2>
         <p class="mt-2 text-sm text-slate-700 dark:text-slate-200">
           {ngettext(

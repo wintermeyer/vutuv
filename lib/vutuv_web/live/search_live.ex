@@ -240,7 +240,7 @@ defmodule VutuvWeb.SearchLive do
       <p
         :if={@results == nil and String.trim(@q) != ""}
         id="search-hint"
-        class="mt-3 text-sm text-slate-500 dark:text-slate-400"
+        class="mt-3 text-sm text-slate-600 dark:text-slate-400"
       >
         {gettext("Results appear once you have typed at least three letters.")}
       </p>
@@ -259,15 +259,15 @@ defmodule VutuvWeb.SearchLive do
         key (both always work), so each locale shows its own spelling. --%>
         <dl id="search-syntax" class="mt-4 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-[auto_1fr]">
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("first:stefan")}</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("searches first names only (last: for last names)")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches first names only (last: for last names)")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">tag:php</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("only people with this tag, combinable: miller tag:php")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with this tag, combinable: miller tag:php")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("city:koblenz")}</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">@stefan</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("searches usernames")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches usernames")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">"{gettext("miller")}"</dt>
-          <dd class="m-0 font-normal text-slate-500 dark:text-slate-400">{gettext("in quotes: exact matches only, no similar names")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("in quotes: exact matches only, no similar names")}</dd>
         </dl>
       </.card>
 
@@ -297,10 +297,10 @@ defmodule VutuvWeb.SearchLive do
               @results.exact_people != [] && "border-t border-slate-100 pt-4 dark:border-slate-800"
             ]}
           >
-            <h3 class="text-sm font-semibold text-slate-500 dark:text-slate-400">
+            <h3 class="text-sm font-semibold text-slate-600 dark:text-slate-400">
               {gettext("Similar names")}
             </h3>
-            <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-500">
+            <p class="mt-0.5 text-xs text-slate-600 dark:text-slate-400">
               {gettext("Not an exact match, but sounds like your search.")}
             </p>
             <ul class="mt-3 space-y-4">
@@ -345,8 +345,8 @@ defmodule VutuvWeb.SearchLive do
                   >
                     {UserHelpers.full_name(post.user)}
                   </.link>
-                  <span class="text-slate-500 dark:text-slate-400">@{post.user.username}</span>
-                  <span class="text-slate-600 dark:text-slate-500">· {post.published_on}</span>
+                  <span class="text-slate-600 dark:text-slate-400">@{post.user.username}</span>
+                  <span class="text-slate-600 dark:text-slate-400">· {post.published_on}</span>
                 </p>
                 <.link
                   href={~p"/#{post.user}/posts/#{post.id}"}

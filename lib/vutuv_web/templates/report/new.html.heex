@@ -3,12 +3,12 @@
     <h1 class="text-xl font-bold text-slate-900 dark:text-white">
       {gettext("Report this content")}
     </h1>
-    <p :if={is_nil(@severed_owner)} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <p :if={is_nil(@severed_owner)} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "Your report is anonymous. If it checks out, the content is hidden right away and the owner is asked to fix it."
       )}
     </p>
-    <p :if={@severed_owner} class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <p :if={@severed_owner} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "If your report checks out, the content is hidden right away and the owner is asked to fix it."
       )}
@@ -68,7 +68,7 @@
             <span class="block font-semibold text-slate-900 dark:text-white">
               {category_label(category)}
             </span>
-            <span class="block text-sm text-slate-500 dark:text-slate-400">
+            <span class="block text-sm text-slate-600 dark:text-slate-400">
               {category_hint(category)}
             </span>
           </span>
@@ -98,7 +98,7 @@
         <a
           :if={@return_to}
           href={@return_to}
-          class="text-sm font-semibold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+          class="text-sm font-semibold text-slate-600 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
         >
           {gettext("Cancel")}
         </a>

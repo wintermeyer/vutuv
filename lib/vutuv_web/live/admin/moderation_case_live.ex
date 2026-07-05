@@ -137,7 +137,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                   "ml-2",
                   if(@owner_active_strikes > 0,
                     do: "font-semibold text-red-600 dark:text-red-400",
-                    else: "text-slate-500"
+                    else: "text-slate-600 dark:text-slate-400"
                   )
                 ]}>
                   {ngettext("%{count} active strike", "%{count} active strikes", @owner_active_strikes)}
@@ -160,17 +160,17 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 {status_badge(@case)}
               </span>
             </p>
-            <p class="mt-1 text-slate-500">
+            <p class="mt-1 text-slate-600 dark:text-slate-400">
               {gettext("Reported on %{date}",
                 date: Calendar.strftime(@case.inserted_at, "%Y-%m-%d %H:%M")
               )}
             </p>
-            <p :if={@case.owner_deadline_at} class="text-slate-500">
+            <p :if={@case.owner_deadline_at} class="text-slate-600 dark:text-slate-400">
               {gettext("Owner deadline: %{date}",
                 date: Calendar.strftime(@case.owner_deadline_at, "%Y-%m-%d %H:%M")
               )}
             </p>
-            <p :if={@case.escalated_at} class="text-slate-500">
+            <p :if={@case.escalated_at} class="text-slate-600 dark:text-slate-400">
               {gettext("Escalated on %{date}",
                 date: Calendar.strftime(@case.escalated_at, "%Y-%m-%d %H:%M")
               )}
@@ -211,7 +211,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               />
             </a>
           </div>
-          <p class="mt-1 text-xs text-slate-500">
+          <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {gettext("Scroll inside the frame, or click to open the full image.")}
           </p>
         </div>
@@ -261,7 +261,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
                 @{report.reporter.username}
               </a>
               <% stats = @reporter_stats[report.id] %>
-              <span class="text-slate-500">
+              <span class="text-slate-600 dark:text-slate-400">
                 · {ngettext("%{count} report so far", "%{count} reports so far", stats.total)}, {gettext(
                   "%{rejected} rejected, %{abusive} abusive",
                   rejected: stats.rejected,
@@ -273,7 +273,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               „{report.note}"
             </p>
             <% severance = @severance_by_reporter[report.reporter_id] %>
-            <p :if={severance} class="mt-1 text-xs text-slate-500">
+            <p :if={severance} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
               <%= if severance.restored_at do %>
                 {gettext("The protective separation from the owner was lifted on %{date}.",
                   date: Calendar.strftime(severance.restored_at, "%Y-%m-%d")
@@ -301,15 +301,15 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
             <.local_time
               at={event.inserted_at}
               id={"event-time-#{event.id}"}
-              class="shrink-0 pt-0.5 text-xs tabular-nums text-slate-500"
+              class="shrink-0 pt-0.5 text-xs tabular-nums text-slate-600 dark:text-slate-400"
             />
             <span>
               {event_label(event.action)}
-              <a :if={event.actor} href={~p"/#{event.actor}"} class="text-slate-500 hover:text-brand-700">
+              <a :if={event.actor} href={~p"/#{event.actor}"} class="text-slate-600 dark:text-slate-400 hover:text-brand-700">
                 · @{event.actor.username}
               </a>
               <% detail = event_detail(event.action, event.detail) %>
-              <span :if={detail not in [nil, ""]} class="text-slate-500">· {detail}</span>
+              <span :if={detail not in [nil, ""]} class="text-slate-600 dark:text-slate-400">· {detail}</span>
             </span>
           </li>
         </ol>

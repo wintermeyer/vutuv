@@ -334,7 +334,7 @@ defmodule VutuvWeb.ShellLive do
                     <span class="block truncate text-sm font-semibold text-slate-900 dark:text-slate-100">
                       {@user_name}
                     </span>
-                    <span class="block text-xs text-slate-500 dark:text-slate-400">
+                    <span class="block text-xs text-slate-600 dark:text-slate-400">
                       {gettext("View profile")}
                     </span>
                   </.link>
@@ -431,7 +431,7 @@ defmodule VutuvWeb.ShellLive do
 
   defp tab(assigns) do
     ~H"""
-    <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-500 dark:text-slate-400">
+    <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-600 dark:text-slate-400">
       <span class="relative">
         {render_slot(@inner_block)}
         <.count_badge

@@ -11,14 +11,14 @@
     <.button type="submit" class="w-full">{gettext("submit")}</.button>
   </.form>
 
-  <p class="mt-4 text-sm text-slate-500 dark:text-slate-400">
+  <p class="mt-4 text-sm text-slate-600 dark:text-slate-400">
     {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
   </p>
 
   <.pin_actions />
 
   <%= if dev_mailbox?() do %>
-    <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
       <a
         href="/sent_emails"
         target="_blank"

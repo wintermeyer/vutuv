@@ -249,7 +249,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
   @brand_kinds ~w(follower reply connection report_protection)
 
-  defp kind_classes("endorsement"), do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30"
+  defp kind_classes("endorsement"),
+    do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
 
   defp kind_classes("like"), do: "bg-accent/10 text-accent dark:bg-accent/20"
 

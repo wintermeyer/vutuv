@@ -34,7 +34,7 @@ hidden in the Public preview. --%>
         </.link>
       </span>
     <% true -> %>
-      <.pin_star class="mt-0.5 h-4 w-4 shrink-0 text-slate-500 dark:text-slate-400" />
+      <.pin_star class="mt-0.5 h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400" />
       <span>
         {gettext(
           "The job title at the top of your profile is picked automatically. Right now it's %{job}. Pick a role below to choose it yourself.",
@@ -74,7 +74,7 @@ member keeps the single unlabeled timeline. --%>
         circle.job.end_year
       ) %>
     <div
-      class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-500 dark:text-slate-400"
+      class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-600 dark:text-slate-400"
       title={dates.detail}
     >
       {dates.label}
@@ -87,7 +87,7 @@ member keeps the single unlabeled timeline. --%>
       >
         {circle.job.title}
       </.link>
-      <p class="text-sm text-slate-500">
+      <p class="text-sm text-slate-600 dark:text-slate-400">
         {circle.job.organization}<%= if circle.length do %> · {circle.length}<% end %>
       </p>
       <p :if={circle.job.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">

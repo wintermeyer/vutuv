@@ -645,7 +645,7 @@ defmodule VutuvWeb.PostLive.Feed do
                     >
                       {UserHelpers.full_name(post.user)}
                     </.link>
-                    <span class="text-slate-500 dark:text-slate-400">
+                    <span class="text-slate-600 dark:text-slate-400">
                       · <.post_time at={post.inserted_at} />
                     </span>
                   </p>

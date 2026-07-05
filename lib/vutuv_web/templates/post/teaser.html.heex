@@ -19,7 +19,7 @@ leak). --%>
               {gettext("This post is for followers of %{name}", name: full_name(@author))}
             <% end %>
           </h1>
-          <p class="mt-1 text-slate-500 dark:text-slate-400">
+          <p class="mt-1 text-slate-600 dark:text-slate-400">
             <%= if @teaser_kind == :connect do %>
               {gettext("Follow each other to connect with %{name} and read it.", name: full_name(@author))}
             <% else %>

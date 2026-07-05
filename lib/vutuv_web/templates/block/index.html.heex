@@ -6,7 +6,7 @@
   "block my ex" case). Posts to the same BlockController.create. --%>
   <section class="card">
     <h2 class="text-lg font-semibold text-slate-900 dark:text-white">{gettext("Block someone")}</h2>
-    <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
       {gettext("Type a member's @handle. You do not have to visit their profile.")}
     </p>
     <.form
@@ -30,7 +30,7 @@
   </section>
 
   <section class="card">
-    <p class="text-sm text-slate-500 dark:text-slate-400">
+    <p class="text-sm text-slate-600 dark:text-slate-400">
       {gettext(
         "Blocked members cannot follow you, connect with you, message you, or reply to your posts - and you cannot interact with them either. Blocking removed any follows and connection between you; unblocking does not restore them."
       )}
@@ -50,7 +50,7 @@
               >
                 {full_name(block.blocked)}
               </.link>
-              <p class="truncate text-sm text-slate-500 dark:text-slate-400">
+              <p class="truncate text-sm text-slate-600 dark:text-slate-400">
                 @{block.blocked.username}
               </p>
             </div>

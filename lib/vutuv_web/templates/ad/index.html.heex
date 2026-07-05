@@ -23,7 +23,7 @@ the two renderings cannot drift apart. --%>
         </li>
       <% end %>
     </ul>
-    <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+    <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
       <.link href={~p"/community"} class="font-semibold text-brand-600 hover:text-brand-700">
         {gettext("Read the community guidelines")}
       </.link>
@@ -49,7 +49,7 @@ the two renderings cannot drift apart. --%>
             {gettext("fully booked")}
           <% end %>
         </dd>
-        <dd class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+        <dd class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext("Bookings are open through %{last}.", last: Vutuv.Ads.last_bookable_day())}
         </dd>
       </div>
@@ -57,7 +57,7 @@ the two renderings cannot drift apart. --%>
 
     <div class="mt-8">
       <.button href={~p"/ads/new"}>{gettext("Book your ad")}</.button>
-      <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
         {gettext("Booking requires a vutuv login.")}
         <.link
           :if={@conn.assigns[:current_user]}

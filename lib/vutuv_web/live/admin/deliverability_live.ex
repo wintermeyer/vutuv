@@ -126,7 +126,7 @@ defmodule VutuvWeb.Admin.DeliverabilityLive do
               <tr :for={u <- @frozen} id={"frozen-#{u.id}"}>
                 <td>
                   <a href={~p"/#{u}"}>
-                    {full_name(u)} <span class="text-slate-500">@{u.username}</span>
+                    {full_name(u)} <span class="text-slate-600 dark:text-slate-400">@{u.username}</span>
                   </a>
                 </td>
                 <td class="breakwrap">{dead_addresses(u)}</td>
@@ -178,7 +178,7 @@ defmodule VutuvWeb.Admin.DeliverabilityLive do
                 <td class="breakwrap">{e.value}</td>
                 <td>
                   <a :if={e.user} href={~p"/#{e.user}"}>@{e.user.username}</a>
-                  <span :if={is_nil(e.user)} class="text-slate-500">{gettext("(unknown)")}</span>
+                  <span :if={is_nil(e.user)} class="text-slate-600 dark:text-slate-400">{gettext("(unknown)")}</span>
                 </td>
                 <td><.local_time at={e.undeliverable_at} id={"deactivated-time-#{e.id}"} /></td>
                 <td class="text-right">
@@ -225,7 +225,7 @@ defmodule VutuvWeb.Admin.DeliverabilityLive do
                   <%= if member = ev.user_id && Map.get(@users, ev.user_id) do %>
                     <a href={~p"/#{member}"}>@{member.username}</a>
                   <% end %>
-                  <span :if={ev.email_value} class="text-slate-500">{ev.email_value}</span>
+                  <span :if={ev.email_value} class="text-slate-600 dark:text-slate-400">{ev.email_value}</span>
                 </td>
                 <td>{reason_label(ev.detail)}</td>
                 <td>{actor_link(ev.actor_id, @users)}</td>

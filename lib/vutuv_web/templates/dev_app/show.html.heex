@@ -22,13 +22,13 @@
 
     <dl class="space-y-3 text-sm">
       <div>
-        <dt class="font-semibold text-slate-500 dark:text-slate-400">{gettext("Client ID")}</dt>
+        <dt class="font-semibold text-slate-600 dark:text-slate-400">{gettext("Client ID")}</dt>
         <dd>
           <code class="select-all text-slate-800 dark:text-slate-100">{@app.client_id}</code>
         </dd>
       </div>
       <div>
-        <dt class="font-semibold text-slate-500 dark:text-slate-400">
+        <dt class="font-semibold text-slate-600 dark:text-slate-400">
           {gettext("Client secret")}
         </dt>
         <dd class="text-slate-700 dark:text-slate-200">
@@ -36,7 +36,7 @@
         </dd>
       </div>
       <div>
-        <dt class="font-semibold text-slate-500 dark:text-slate-400">
+        <dt class="font-semibold text-slate-600 dark:text-slate-400">
           {gettext("Redirect URLs")}
         </dt>
         <dd>
@@ -48,7 +48,7 @@
         </dd>
       </div>
       <div :if={@app.description}>
-        <dt class="font-semibold text-slate-500 dark:text-slate-400">{gettext("Description")}</dt>
+        <dt class="font-semibold text-slate-600 dark:text-slate-400">{gettext("Description")}</dt>
         <dd class="text-slate-700 dark:text-slate-200">{@app.description}</dd>
       </div>
     </dl>
@@ -67,7 +67,7 @@
       </.button>
     </div>
 
-    <p class="mt-6 text-sm text-slate-500 dark:text-slate-400">
+    <p class="mt-6 text-sm text-slate-600 dark:text-slate-400">
       {gettext("Authorize URL:")} <code>{VutuvWeb.Endpoint.url()}/oauth/authorize</code>
       &middot; {gettext("Token URL:")} <code>{VutuvWeb.Endpoint.url()}/oauth/token</code>
       &middot;
@@ -102,7 +102,7 @@
               <p class="truncate font-medium text-slate-800 dark:text-slate-100">
                 <code>{webhook.url}</code>
               </p>
-              <p class="text-sm text-slate-500 dark:text-slate-400">
+              <p class="text-sm text-slate-600 dark:text-slate-400">
                 {Enum.join(webhook.events, ", ")}
               </p>
               <p :if={not webhook.active?} class="text-sm font-semibold text-red-600">
