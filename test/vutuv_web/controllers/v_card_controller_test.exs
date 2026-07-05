@@ -80,6 +80,49 @@ defmodule VutuvWeb.VCardControllerTest do
     refute body =~ "secret@example.com"
   end
 
+  test "emits the member's personal website links as their own URL lines", %{user: user} do
+    insert(:url, user: user, value: "https://ada.example.com/", description: "Homepage")
+
+    body = build_conn() |> get("/vcard-tester/vcard") |> response(200)
+
+    # The personal link rides in its own URL: line (a URI value, so it is NOT
+    # comma/semicolon-escaped the way text values are).
+    assert body =~ "URL:https://ada.example.com/"
+    # ...while the canonical vutuv profile URL line is still there.
+    assert body =~ ~r{^URL:\S+/vcard-tester$}m
+  end
+
+  test "emits every social media account, not just Twitter", %{user: user} do
+    insert(:social_media_account, user: user, provider: "GitHub", value: "ada")
+    insert(:social_media_account, user: user, provider: "LinkedIn", value: "ada-lovelace")
+    insert(:social_media_account, user: user, provider: "Twitter", value: "ada")
+
+    body = build_conn() |> get("/vcard-tester/vcard") |> response(200)
+
+    # Each account becomes an X-SOCIALPROFILE line typed by its lowercased
+    # provider, carrying the canonical profile URL from SocialMediaAccount.url/1.
+    assert body =~ "X-SOCIALPROFILE;type=github:https://github.com/ada"
+    assert body =~ "X-SOCIALPROFILE;type=linkedin:https://www.linkedin.com/in/ada-lovelace"
+    assert body =~ "X-SOCIALPROFILE;type=twitter:http://twitter.com/ada"
+  end
+
+  test "emits a BDAY line with the ISO birth date when the member has one" do
+    insert_activated_user(username: "bday-tester", birthdate: ~D[1991-04-23])
+
+    body = build_conn() |> get("/bday-tester/vcard") |> response(200)
+
+    assert body =~ "\nBDAY:1991-04-23\n"
+  end
+
+  test "omits the BDAY line when the member has no birth date", %{user: user} do
+    # The default factory user carries no birthdate.
+    assert is_nil(user.birthdate)
+
+    body = build_conn() |> get("/vcard-tester/vcard") |> response(200)
+
+    refute body =~ "BDAY"
+  end
+
   test "the N field carries all five components incl. the honorific suffix" do
     insert_activated_user(
       username: "phd-tester",

@@ -6,6 +6,12 @@ defmodule VutuvWeb.AgentDocs.VCard do
   doc as `:vcard_photo` (built only when the profile doc is requested as a
   vCard); emails are whatever the doc carries (public ones by default, the
   legacy session-aware route passes its permitted set).
+
+  URLs come from three places: the canonical vutuv profile URL (`URL:`), the
+  member's personal website links (each an extra `URL:` line, `doc.links`),
+  and their social media accounts (`doc.social_media`), which ride in
+  `X-SOCIALPROFILE;type=<provider>` lines (the Apple/macOS-Contacts extension
+  clients understand), one per account rather than the former Twitter-only line.
   """
 
   def render(%{type: "profile"} = doc) do
@@ -22,10 +28,12 @@ defmodule VutuvWeb.AgentDocs.VCard do
       sanitize(doc.honorific_suffix) <>
       "\nFN:" <>
       sanitize(doc.name) <>
+      bday(doc) <>
       "\nORG:#{organization(doc)}" <>
       "\nTITLE:#{title(doc)}" <>
-      "\nURL:#{doc.url}" <>
+      "\nURL:#{uri(doc.url)}" <>
       "\n" <>
+      links(doc) <>
       photo(doc) <>
       Enum.map_join(doc.phone_numbers, "", fn phone ->
         "TEL;TYPE=" <> sanitize(phone.type) <> ":" <> sanitize(phone.value) <> "\n"
@@ -34,7 +42,7 @@ defmodule VutuvWeb.AgentDocs.VCard do
       Enum.map_join(doc.emails, "", fn email ->
         "EMAIL;TYPE=" <> sanitize(email.type) <> ":" <> sanitize(email.value) <> "\n"
       end) <>
-      twitter(doc) <>
+      social_profiles(doc) <>
       "REV:#{timestamp(doc)}Z\nEND:VCARD"
   end
 
@@ -52,6 +60,13 @@ defmodule VutuvWeb.AgentDocs.VCard do
 
     if(name == "", do: "profile", else: name) <> "_vcard.vcf"
   end
+
+  # vCard 3.0 BDAY takes an ISO date (YYYY-MM-DD); doc.birthdate is a raw Date
+  # or nil. The full date is already public in every other format (the HTML
+  # profile and the md/txt/json/xml siblings all show it), so the vCard carries
+  # it too. Omitted entirely when there is no birth date.
+  defp bday(%{birthdate: %Date{} = date}), do: "\nBDAY:" <> Date.to_iso8601(date)
+  defp bday(_doc), do: ""
 
   defp organization(%{current_position: nil}), do: ""
   defp organization(%{current_position: position}), do: sanitize(position.organization)
@@ -107,11 +122,21 @@ defmodule VutuvWeb.AgentDocs.VCard do
     |> Enum.join(" ")
   end
 
-  defp twitter(doc) do
-    case Enum.find(doc.social_media, &(&1.provider == "Twitter")) do
-      nil -> ""
-      account -> "X-SOCIALPROFILE;type=twitter:#{account.url}\n"
-    end
+  # The member's personal website links (the Links section), each in its own
+  # URL: line. vCard 3.0 allows repeated URL properties; the profile URL is the
+  # first, these follow. The description is dropped (vCard 3.0 has no portable
+  # per-URL label), and the address itself is the point.
+  defp links(doc) do
+    Enum.map_join(doc.links, "", fn link -> "URL:#{uri(link.url)}\n" end)
+  end
+
+  # Every social media account, typed by its lowercased provider. Snapchat has
+  # no canonical profile URL, so SocialMediaAccount.url/1 yields the bare handle
+  # there; every other provider yields a full URL.
+  defp social_profiles(doc) do
+    Enum.map_join(doc.social_media, "", fn account ->
+      "X-SOCIALPROFILE;type=#{String.downcase(account.provider)}:#{uri(account.url)}\n"
+    end)
   end
 
   defp timestamp(doc), do: Calendar.strftime(doc.generated_at, "%Y%m%d%H%M%S")
@@ -131,4 +156,10 @@ defmodule VutuvWeb.AgentDocs.VCard do
     |> String.replace(";", "\\;")
     |> String.replace(",", "\\,")
   end
+
+  # URI values (URL, X-SOCIALPROFILE) are NOT text-escaped: a comma or semicolon
+  # in a URL is literal, not a vCard list separator. But a stray CR/LF (or any
+  # control char) would inject a new vCard line, so strip those defensively.
+  defp uri(nil), do: ""
+  defp uri(value), do: value |> to_string() |> String.replace(~r/[\x00-\x1f\x7f]/, "")
 end
