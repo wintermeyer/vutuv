@@ -1106,6 +1106,18 @@ defmodule Vutuv.Accounts do
     |> Repo.update()
   end
 
+  @doc """
+  Permanently hides the owner's profile-completion checklist (its × control on
+  the profile). The checklist already auto-hides an hour after sign-up; this
+  lets a member dismiss it sooner and for good. Set programmatically, so the
+  flag stays out of every user-facing changeset.
+  """
+  def dismiss_onboarding(%User{} = user) do
+    user
+    |> Ecto.Changeset.change(onboarding_dismissed?: true)
+    |> Repo.update()
+  end
+
   # Avatar/cover files are written to disk only AFTER the row commits, so a
   # rolled-back update (a name too long, a constraint, ...) never orphans them
   # (issue #776). User.changeset already validated the uploads in memory; here

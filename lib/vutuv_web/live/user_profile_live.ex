@@ -25,6 +25,7 @@ defmodule VutuvWeb.UserProfileLive do
   import Ecto.Query
   import VutuvWeb.UserHelpers
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
   alias Vutuv.Profiles.Address
@@ -226,6 +227,22 @@ defmodule VutuvWeb.UserProfileLive do
        socket
        |> put_flash(:info, gettext("You unblocked @%{slug}.", slug: user.username))
        |> load_profile()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # Close the profile-completion checklist for good (its × control). Owner-only;
+  # persists the flag so it stays gone on reload and on any later PubSub
+  # re-render (load_profile re-reads the user and honours onboarding_dismissed?).
+  def handle_event("dismiss_onboarding", _params, socket) do
+    me = socket.assigns.current_user
+    user = socket.assigns.user
+
+    if me && me.id == user.id do
+      {:ok, user} = Accounts.dismiss_onboarding(user)
+
+      {:noreply, socket |> assign(:user, user) |> assign(:show_completion?, false)}
     else
       {:noreply, socket}
     end
@@ -440,7 +457,10 @@ defmodule VutuvWeb.UserProfileLive do
 
     posts_total = Vutuv.Posts.count_author_posts(user, current_user)
     steps = completion_steps(user, posts_total)
-    show_completion? = owner? and Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
+
+    show_completion? =
+      owner? and not user.onboarding_dismissed? and
+        Enum.any?(steps, &(not &1.done)) and onboarding_window?(user)
 
     socket
     |> assign(:as_owner?, owner?)
@@ -812,12 +832,15 @@ defmodule VutuvWeb.UserProfileLive do
   defp present?(value) when is_binary(value), do: String.trim(value) != ""
   defp present?(_), do: true
 
-  defp onboarding_window?(user) do
-    account_fresh?(user) or Vutuv.Sessions.fresh_return?(user)
-  end
+  # The checklist is a brief, one-time post-registration nudge: it shows only
+  # during the first hour after sign-up, then never again. A member who wants it
+  # gone sooner closes it with the × (the dismiss_onboarding event sets
+  # users.onboarding_dismissed? for good — see the show_completion? gate above).
+  @onboarding_window_seconds 60 * 60
 
-  defp account_fresh?(user) do
-    NaiveDateTime.diff(NaiveDateTime.utc_now(), user.inserted_at, :second) < 24 * 60 * 60
+  defp onboarding_window?(user) do
+    NaiveDateTime.diff(NaiveDateTime.utc_now(), user.inserted_at, :second) <
+      @onboarding_window_seconds
   end
 
   # The rail's count, and the size of the popularity pool we top up from when the

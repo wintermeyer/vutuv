@@ -13,33 +13,10 @@ defmodule Vutuv.SessionsTest do
   @chrome_mac "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
   @safari_iphone "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
-  @day 24 * 60 * 60
-  @year 365 * @day
-
   defp conn_with(ua, ip \\ {203, 0, 113, 7}) do
     Plug.Test.conn(:get, "/")
     |> Map.put(:remote_ip, ip)
     |> Plug.Conn.put_req_header("user-agent", ua)
-  end
-
-  # ExMachina and timestamps() always stamp "now", so aging a session past the
-  # windows fresh_return?/1 reads needs a raw column rewrite. inserted_at is
-  # naive (timestamps()), last_seen_at is utc.
-  defp age_session(session, started_ago_s, last_seen_ago_s) do
-    inserted_at =
-      NaiveDateTime.utc_now()
-      |> NaiveDateTime.add(-started_ago_s, :second)
-      |> NaiveDateTime.truncate(:second)
-
-    last_seen_at = DateTime.add(DateTime.utc_now(:second), -last_seen_ago_s, :second)
-
-    {1, _} =
-      Repo.update_all(
-        from(s in UserSession, where: s.id == ^session.id),
-        set: [inserted_at: inserted_at, last_seen_at: last_seen_at]
-      )
-
-    :ok
   end
 
   describe "start_session/3 and active_session/1" do
@@ -228,73 +205,6 @@ defmodule Vutuv.SessionsTest do
       Sessions.start_session(user, conn_with(@chrome_mac))
 
       refute_received {:email, _}
-    end
-  end
-
-  describe "fresh_return?/1 (the profile-completion onboarding window)" do
-    test "a member who just signed in for the first time is in the window" do
-      user = insert(:user)
-      Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-
-      assert Sessions.fresh_return?(user)
-    end
-
-    test "a member with no session at all is not in the window" do
-      assert Sessions.fresh_return?(insert(:user)) == false
-    end
-
-    test "a member continuously signed in for over a day is not in the window" do
-      user = insert(:user)
-      {_t, session} = Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-      # Signed in two days ago and still active right now: established, not fresh.
-      age_session(session, 2 * @day, 0)
-
-      refute Sessions.fresh_return?(user)
-    end
-
-    test "a member returning after more than a year is in the window again" do
-      user = insert(:user)
-      {_t, old} = Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-      # The old session went quiet over a year ago...
-      age_session(old, 2 * @year, @year + @day)
-      # ...then a fresh sign-in just now.
-      Sessions.start_session(user, conn_with(@safari_iphone), alert: false)
-
-      assert Sessions.fresh_return?(user)
-    end
-
-    test "a member last active within the year is not in the window" do
-      user = insert(:user)
-      {_t, recent} = Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-      # Prior session from a month ago, well inside the year...
-      age_session(recent, 40 * @day, 30 * @day)
-      # ...and a fresh sign-in now. Recently active, so not re-onboarding.
-      Sessions.start_session(user, conn_with(@safari_iphone), alert: false)
-
-      refute Sessions.fresh_return?(user)
-    end
-
-    test "a returner signing in on two devices at once still counts" do
-      user = insert(:user)
-      {_t, old} = Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-      age_session(old, 2 * @year, @year + @day)
-      # Phone and laptop both signed in during the return burst, both fresh.
-      Sessions.start_session(user, conn_with(@safari_iphone), alert: false)
-      Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-
-      assert Sessions.fresh_return?(user)
-    end
-
-    test "a long-lived session kept alive all year is read as active, not dormant" do
-      user = insert(:user)
-      {_t, kept_alive} = Sessions.start_session(user, conn_with(@chrome_mac), alert: false)
-      # Started two years ago but last seen just now (never logged out): this
-      # member has been around the whole time, so a fresh sign-in is not a
-      # "return" — last_seen_at, not inserted_at, decides.
-      age_session(kept_alive, 2 * @year, 0)
-      Sessions.start_session(user, conn_with(@safari_iphone), alert: false)
-
-      refute Sessions.fresh_return?(user)
     end
   end
 end

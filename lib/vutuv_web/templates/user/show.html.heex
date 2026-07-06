@@ -234,12 +234,12 @@ the resulting ~200px rail width. --%>
 
     <%!-- New-member onboarding checklist: the few highest-impact steps so a fresh
     profile becomes findable and recognizable fast. Owner-only, shown only inside
-    the onboarding window (a new account's first 24h, or the 24h after a dormant
-    member signs back in) while anything is still undone, and gone once every step
-    is done; @show_completion? carries that gate (see UserController). Each todo
-    links straight to where it is done. Replaces the old 10-minute welcome note.
-    The tag step is already checked for anyone registered since the three-tag
-    sign-up minimum, so the list opens with visible progress. --%>
+    the onboarding window (the first hour after sign-up) while anything is still
+    undone, and gone once every step is done or the owner closes it with the ×
+    (which persists, so it stays gone); @show_completion? carries that gate (see
+    UserProfileLive). Each todo links straight to where it is done. The tag step
+    is already checked for anyone registered since the three-tag sign-up minimum,
+    so the list opens with visible progress. --%>
     <section
       :if={@show_completion?}
       id="profile-completion"
@@ -247,11 +247,27 @@ the resulting ~200px rail width. --%>
     >
       <% done_count = Enum.count(@completion_steps, & &1.done) %>
       <% total = Enum.count(@completion_steps) %>
-      <div class="flex items-baseline justify-between gap-3">
+      <div class="flex items-center justify-between gap-3">
         <h2 class="font-semibold text-brand-800 dark:text-brand-100">{gettext("Complete your profile")}</h2>
-        <span class="text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-200">
-          {done_count}/{total}
-        </span>
+        <div class="flex shrink-0 items-center gap-3">
+          <span class="text-sm font-semibold tabular-nums text-brand-700 dark:text-brand-200">
+            {done_count}/{total}
+          </span>
+          <%!-- Close for good: persists users.onboarding_dismissed? via the
+          LiveView's dismiss_onboarding event, so the card never returns. --%>
+          <button
+            type="button"
+            id="dismiss-completion"
+            phx-click="dismiss_onboarding"
+            aria-label={gettext("Dismiss")}
+            title={gettext("Dismiss")}
+            class="-mr-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-brand-700/70 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-200/70 dark:hover:bg-brand-900/50 dark:hover:text-brand-100"
+          >
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
       <p class="mt-1 text-sm text-brand-700/80 dark:text-brand-200/80">
         {gettext("A few quick steps so people can find and recognize you.")}
@@ -286,6 +302,19 @@ the resulting ~200px rail width. --%>
           <% end %>
         </li>
       </ul>
+
+      <%!-- A quiet link into the LinkedIn importer: the fastest way to fill
+      several of the steps above at once. Owner-only (it lives inside this
+      owner-only card) and part of the same onboarding push. --%>
+      <div class="mt-4 border-t border-brand-100 pt-4 dark:border-brand-900/50">
+        <.link
+          navigate={~p"/settings/import/linkedin"}
+          class="inline-flex items-center gap-1 text-sm font-semibold text-brand-800 hover:underline dark:text-brand-100"
+        >
+          {gettext("Import from LinkedIn")}
+          <span aria-hidden="true">→</span>
+        </.link>
+      </div>
     </section>
 
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed

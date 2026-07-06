@@ -12,6 +12,7 @@ defmodule VutuvWeb.UserProfileLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Accounts
   alias Vutuv.Posts
   alias Vutuv.Social
   alias Vutuv.Tags
@@ -461,6 +462,40 @@ defmodule VutuvWeb.UserProfileLiveTest do
       # ...but the profile card drops the quieter "Preferred" contact-language
       # marker; that detail lives on the dedicated /:slug/languages page.
       refute has_element?(view, "#profile-languages", "Preferred")
+    end
+  end
+
+  describe "profile-completion checklist" do
+    # The owner's onboarding nudge (first hour after sign-up) carries a × to
+    # close it for good and a link into the LinkedIn importer. The window and
+    # visibility rules are covered by the disconnected controller test; here we
+    # drive the connected socket's × click and the persisted effect.
+
+    test "the × closes the checklist and persists the dismissal", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert has_element?(view, "#profile-completion")
+      assert has_element?(view, "#dismiss-completion")
+
+      view |> element("#dismiss-completion") |> render_click()
+
+      # Gone from the page immediately...
+      refute has_element?(view, "#profile-completion")
+      # ...and persisted, so a reload never brings it back.
+      assert Accounts.get_user(user.id).onboarding_dismissed?
+    end
+
+    test "the checklist links into the LinkedIn importer", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      assert has_element?(
+               view,
+               ~s(#profile-completion a[href="#{~p"/settings/import/linkedin"}"])
+             )
     end
   end
 end

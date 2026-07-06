@@ -118,6 +118,10 @@ defmodule Vutuv.Accounts.User do
     field(:email_confirmed?, :boolean, default: false)
     # Set programmatically by Vutuv.Activity.mark_notifications_read/1; never cast.
     field(:notifications_read_at, :naive_datetime)
+    # The owner closed the profile-completion checklist with its × (it also
+    # auto-hides an hour after sign-up). Set programmatically by
+    # Vutuv.Accounts.dismiss_onboarding/1; never cast from a profile form.
+    field(:onboarding_dismissed?, :boolean, default: false)
     # Moderation state, managed by Vutuv.Moderation, never cast from params.
     # frozen_at: profile in the freezer pending review (hidden from everyone
     # but the owner and admins). suspended_until: strike 2, login blocked and

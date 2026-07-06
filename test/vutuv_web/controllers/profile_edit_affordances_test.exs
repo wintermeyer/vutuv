@@ -178,24 +178,42 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
       refute html =~ "Complete your profile"
     end
 
-    test "a long-dormant or legacy owner signing back in sees it again", %{conn: conn} do
+    test "the checklist links to the LinkedIn importer", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      # Age only the account out of the 24h "new account" window. The session
-      # the login just minted is the member's one and only, and it is fresh —
-      # the dormant-return / legacy-first-sign-in window, so it shows again.
-      backdate_account(user)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      # A little pitch plus a link straight into the LinkedIn data import, so a
+      # new member can fill several of the steps at once.
+      assert completion_text(html) =~ "LinkedIn"
+      assert completion_html(html) =~ ~p"/settings/import/linkedin"
+    end
+
+    test "the checklist still shows just under an hour after sign-up", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 59 minutes old: still inside the one-hour onboarding window.
+      backdate_account(user, 59 * 60)
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
       assert html =~ "Complete your profile"
     end
 
-    test "an established owner past the onboarding window no longer sees it", %{conn: conn} do
+    test "the checklist is gone more than an hour after sign-up", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      # Old account, signed in two days ago, still active now: neither the
-      # new-account nor the dormant-return window applies.
-      backdate_account(user)
-      backdate_sessions(user)
+      # 61 minutes old: past the one-hour window, so the nudge never returns.
+      backdate_account(user, 61 * 60)
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      refute html =~ "Complete your profile"
+    end
+
+    test "an owner who dismissed the checklist never sees it again", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # The × persists onboarding_dismissed?; a fresh account with it set stays
+      # inside the window yet shows nothing.
+      {:ok, _} = Repo.update(Ecto.Changeset.change(user, onboarding_dismissed?: true))
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
@@ -208,28 +226,34 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
   # the profile.
   defp completion_text(html) do
     html
-    |> LazyHTML.from_document()
-    |> LazyHTML.query("#profile-completion")
+    |> completion_node()
     |> LazyHTML.text()
   end
 
-  # Push the account's creation out of the 24h "new account" window.
-  defp backdate_account(user), do: backdate(Vutuv.Accounts.User, user.id, :id)
+  # The checklist card's raw HTML, for asserting on links (hrefs) inside it.
+  defp completion_html(html) do
+    html
+    |> completion_node()
+    |> LazyHTML.to_html()
+  end
 
-  # Age every one of the member's sessions so the most recent sign-in is more
-  # than a day old (last_seen_at stays recent — the GET bumps it — so the member
-  # reads as established-and-active, not as a year-dormant returner).
-  defp backdate_sessions(user), do: backdate(Vutuv.Sessions.UserSession, user.id, :user_id)
+  defp completion_node(html) do
+    html
+    |> LazyHTML.from_document()
+    |> LazyHTML.query("#profile-completion")
+  end
 
-  defp backdate(schema, id, key) do
-    two_days_ago =
+  # Rewind the account's creation so it sits `seconds_ago` before now, to place
+  # it inside or outside the one-hour onboarding window.
+  defp backdate_account(user, seconds_ago) do
+    inserted_at =
       NaiveDateTime.utc_now()
-      |> NaiveDateTime.add(-2 * 24 * 60 * 60, :second)
+      |> NaiveDateTime.add(-seconds_ago, :second)
       |> NaiveDateTime.truncate(:second)
 
     Repo.update_all(
-      from(r in schema, where: field(r, ^key) == ^id),
-      set: [inserted_at: two_days_ago]
+      from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+      set: [inserted_at: inserted_at]
     )
   end
 
