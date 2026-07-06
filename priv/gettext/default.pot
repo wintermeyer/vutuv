@@ -1711,7 +1711,7 @@ msgid "It doesn't look like you're following anyone yet. Open the profile of som
 msgstr ""
 
 #: lib/vutuv_web/live/shell_live.ex:388
-#: lib/vutuv_web/views/settings_html.ex:111
+#: lib/vutuv_web/views/settings_html.ex:147
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr ""
@@ -2228,7 +2228,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/post_live/composer.ex:646
 #: lib/vutuv_web/templates/connection/index.html.heex:40
-#: lib/vutuv_web/views/settings_html.ex:157
+#: lib/vutuv_web/views/settings_html.ex:193
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr ""
@@ -2290,7 +2290,7 @@ msgstr ""
 #: lib/vutuv_web/live/shell_live.ex:338
 #: lib/vutuv_web/templates/post/index.html.heex:12
 #: lib/vutuv_web/templates/post/teaser.html.heex:54
-#: lib/vutuv_web/templates/settings/index.html.heex:15
+#: lib/vutuv_web/views/settings_html.ex:94
 #, elixir-autogen, elixir-format
 msgid "View profile"
 msgstr ""
@@ -2347,7 +2347,7 @@ msgid "people you don't follow"
 msgstr ""
 
 #: lib/vutuv_web/views/post_html.ex:19
-#: lib/vutuv_web/views/settings_html.ex:186
+#: lib/vutuv_web/views/settings_html.ex:222
 #, elixir-autogen, elixir-format
 msgid "unknown"
 msgstr ""
@@ -4888,7 +4888,7 @@ msgid "API applications"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/api_app_live.ex:94
-#: lib/vutuv_web/views/settings_html.ex:102
+#: lib/vutuv_web/views/settings_html.ex:138
 #, elixir-autogen, elixir-format
 msgid "Active"
 msgstr ""
@@ -5340,7 +5340,6 @@ msgstr ""
 #: lib/vutuv_web/templates/phone_number/new.html.heex:2
 #: lib/vutuv_web/templates/qualification/edit.html.heex:2
 #: lib/vutuv_web/templates/qualification/new.html.heex:2
-#: lib/vutuv_web/templates/settings/index.html.heex:10
 #: lib/vutuv_web/templates/social_media_account/edit.html.heex:2
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:2
 #: lib/vutuv_web/templates/url/edit.html.heex:2
@@ -5348,6 +5347,7 @@ msgstr ""
 #: lib/vutuv_web/templates/username/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:2
 #: lib/vutuv_web/templates/work_experience/new.html.heex:2
+#: lib/vutuv_web/views/settings_html.ex:89
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr ""
@@ -5837,21 +5837,21 @@ msgstr ""
 msgid "Sort"
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:195
+#: lib/vutuv_web/views/settings_html.ex:231
 #, elixir-autogen, elixir-format
 msgid "%{count} day ago"
 msgid_plural "%{count} days ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/views/settings_html.ex:194
+#: lib/vutuv_web/views/settings_html.ex:230
 #, elixir-autogen, elixir-format
 msgid "%{count} hour ago"
 msgid_plural "%{count} hours ago"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/views/settings_html.ex:193
+#: lib/vutuv_web/views/settings_html.ex:229
 #, elixir-autogen, elixir-format
 msgid "%{count} minute ago"
 msgid_plural "%{count} minutes ago"
@@ -5868,7 +5868,7 @@ msgstr ""
 msgid "Another session was already active on your account."
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:91
+#: lib/vutuv_web/views/settings_html.ex:127
 #, elixir-autogen, elixir-format
 msgid "Last active"
 msgstr ""
@@ -5883,7 +5883,7 @@ msgstr ""
 msgid "Log out of every device except this one?"
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:108
+#: lib/vutuv_web/views/settings_html.ex:144
 #, elixir-autogen, elixir-format
 msgid "Log this device out of your account?"
 msgstr ""
@@ -5908,7 +5908,7 @@ msgstr ""
 msgid "The location looks different from where you usually sign in."
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:92
+#: lib/vutuv_web/views/settings_html.ex:128
 #, elixir-autogen, elixir-format
 msgid "This device"
 msgstr ""
@@ -5918,7 +5918,7 @@ msgstr ""
 msgid "This is the first sign-in we have seen from this device or browser."
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:192
+#: lib/vutuv_web/views/settings_html.ex:228
 #, elixir-autogen, elixir-format
 msgid "just now"
 msgstr ""
@@ -5949,7 +5949,7 @@ msgid "Add a passkey"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1114
-#: lib/vutuv_web/views/settings_html.ex:143
+#: lib/vutuv_web/views/settings_html.ex:179
 #, elixir-autogen, elixir-format
 msgid "Added"
 msgstr ""
@@ -5959,7 +5959,7 @@ msgstr ""
 msgid "Could not add the passkey. Please try again."
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:146
+#: lib/vutuv_web/views/settings_html.ex:182
 #, elixir-autogen, elixir-format
 msgid "Last used"
 msgstr ""
@@ -5969,7 +5969,7 @@ msgstr ""
 msgid "Name (optional)"
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:140
+#: lib/vutuv_web/views/settings_html.ex:176
 #, elixir-autogen, elixir-format
 msgid "Passkey"
 msgstr ""
@@ -5989,7 +5989,7 @@ msgstr ""
 msgid "Passkeys"
 msgstr ""
 
-#: lib/vutuv_web/views/settings_html.ex:154
+#: lib/vutuv_web/views/settings_html.ex:190
 #, elixir-autogen, elixir-format
 msgid "Remove this passkey?"
 msgstr ""
@@ -9891,4 +9891,9 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/security.html.heex:127
 #, elixir-autogen, elixir-format
 msgid "This link always opens your profile, even after you change your username. It is built from a fixed id, so it never breaks on a rename."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/index.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "Pick a section from the menu on the left to view or change it."
 msgstr ""

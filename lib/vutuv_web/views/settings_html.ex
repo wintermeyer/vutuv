@@ -65,6 +65,42 @@ defmodule VutuvWeb.SettingsHTML do
   end
 
   @doc """
+  The desktop frame the hub shares with its subpages: the persistent
+  `<.settings_sidebar>` on the left (md+), the "Settings" title + "View profile"
+  link on the right, and the page body in the slot. This closes the gap the hub
+  used to have — it was a lonely centered column while every subpage carried
+  this sidebar, so the layout jumped on every click into a subpage. Mobile is
+  unchanged: the sidebar is hidden and the body reads as the single centered
+  column it always did (`max-w-2xl`, dropped only from md up so the content
+  fills the wide column beside the sidebar, exactly like a subpage).
+  """
+  attr(:user, Vutuv.Accounts.User, required: true)
+  slot(:inner_block, required: true)
+
+  def hub_frame(assigns) do
+    ~H"""
+    <div class="py-6 md:grid md:grid-cols-[13rem_minmax(0,1fr)] md:gap-8">
+      <.settings_sidebar
+        user={@user}
+        class="hidden self-start md:sticky md:top-20 md:block"
+      />
+      <div class="mx-auto w-full min-w-0 max-w-2xl md:mx-0 md:max-w-none">
+        <div class="mb-6 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white">{gettext("Settings")}</h1>
+          <.link
+            navigate={~p"/#{@user}"}
+            class="text-sm font-medium text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+          >
+            {gettext("View profile")} ›
+          </.link>
+        </div>
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
   One row of the signed-in-devices list (issue #794): the device/browser, its
   approximate location, when it was last active, and either a "this device"
   marker (the current session, no logout — you log it out via the normal logout)

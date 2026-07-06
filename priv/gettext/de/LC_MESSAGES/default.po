@@ -1716,7 +1716,7 @@ msgid "It doesn't look like you're following anyone yet. Open the profile of som
 msgstr "Es sieht so aus, als würden Sie noch niemandem folgen. Öffnen Sie das Profil von jemandem, den Sie kennen oder interessant finden, und klicken Sie auf Folgen!"
 
 #: lib/vutuv_web/live/shell_live.ex:388
-#: lib/vutuv_web/views/settings_html.ex:111
+#: lib/vutuv_web/views/settings_html.ex:147
 #, elixir-autogen, elixir-format
 msgid "Log out"
 msgstr "Ausloggen"
@@ -2233,7 +2233,7 @@ msgstr "Weiterlesen"
 
 #: lib/vutuv_web/live/post_live/composer.ex:646
 #: lib/vutuv_web/templates/connection/index.html.heex:40
-#: lib/vutuv_web/views/settings_html.ex:157
+#: lib/vutuv_web/views/settings_html.ex:193
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr "Entfernen"
@@ -2295,7 +2295,7 @@ msgstr "Upload fehlgeschlagen."
 #: lib/vutuv_web/live/shell_live.ex:338
 #: lib/vutuv_web/templates/post/index.html.heex:12
 #: lib/vutuv_web/templates/post/teaser.html.heex:54
-#: lib/vutuv_web/templates/settings/index.html.heex:15
+#: lib/vutuv_web/views/settings_html.ex:94
 #, elixir-autogen, elixir-format
 msgid "View profile"
 msgstr "Profil ansehen"
@@ -2352,7 +2352,7 @@ msgid "people you don't follow"
 msgstr "Personen, denen Sie nicht folgen"
 
 #: lib/vutuv_web/views/post_html.ex:19
-#: lib/vutuv_web/views/settings_html.ex:186
+#: lib/vutuv_web/views/settings_html.ex:222
 #, elixir-autogen, elixir-format
 msgid "unknown"
 msgstr "unbekannt"
@@ -4893,7 +4893,7 @@ msgid "API applications"
 msgstr "API-Anwendungen"
 
 #: lib/vutuv_web/live/admin/api_app_live.ex:94
-#: lib/vutuv_web/views/settings_html.ex:102
+#: lib/vutuv_web/views/settings_html.ex:138
 #, elixir-autogen, elixir-format
 msgid "Active"
 msgstr "Aktiv"
@@ -5350,7 +5350,6 @@ msgstr "Navigation"
 #: lib/vutuv_web/templates/phone_number/new.html.heex:2
 #: lib/vutuv_web/templates/qualification/edit.html.heex:2
 #: lib/vutuv_web/templates/qualification/new.html.heex:2
-#: lib/vutuv_web/templates/settings/index.html.heex:10
 #: lib/vutuv_web/templates/social_media_account/edit.html.heex:2
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:2
 #: lib/vutuv_web/templates/url/edit.html.heex:2
@@ -5358,6 +5357,7 @@ msgstr "Navigation"
 #: lib/vutuv_web/templates/username/new.html.heex:4
 #: lib/vutuv_web/templates/work_experience/edit.html.heex:2
 #: lib/vutuv_web/templates/work_experience/new.html.heex:2
+#: lib/vutuv_web/views/settings_html.ex:89
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr "Einstellungen"
@@ -5849,21 +5849,21 @@ msgstr "Gespeicherte durchsuchen"
 msgid "Sort"
 msgstr "Sortieren"
 
-#: lib/vutuv_web/views/settings_html.ex:195
+#: lib/vutuv_web/views/settings_html.ex:231
 #, elixir-autogen, elixir-format
 msgid "%{count} day ago"
 msgid_plural "%{count} days ago"
 msgstr[0] "vor %{count} Tag"
 msgstr[1] "vor %{count} Tagen"
 
-#: lib/vutuv_web/views/settings_html.ex:194
+#: lib/vutuv_web/views/settings_html.ex:230
 #, elixir-autogen, elixir-format
 msgid "%{count} hour ago"
 msgid_plural "%{count} hours ago"
 msgstr[0] "vor %{count} Stunde"
 msgstr[1] "vor %{count} Stunden"
 
-#: lib/vutuv_web/views/settings_html.ex:193
+#: lib/vutuv_web/views/settings_html.ex:229
 #, elixir-autogen, elixir-format
 msgid "%{count} minute ago"
 msgid_plural "%{count} minutes ago"
@@ -5880,7 +5880,7 @@ msgstr "Alle anderen Geräte wurden abgemeldet."
 msgid "Another session was already active on your account."
 msgstr "Auf Ihrem Konto war bereits eine andere Sitzung aktiv."
 
-#: lib/vutuv_web/views/settings_html.ex:91
+#: lib/vutuv_web/views/settings_html.ex:127
 #, elixir-autogen, elixir-format
 msgid "Last active"
 msgstr "Zuletzt aktiv"
@@ -5895,7 +5895,7 @@ msgstr "Alle anderen Geräte abmelden"
 msgid "Log out of every device except this one?"
 msgstr "Von allen Geräten außer diesem abmelden?"
 
-#: lib/vutuv_web/views/settings_html.ex:108
+#: lib/vutuv_web/views/settings_html.ex:144
 #, elixir-autogen, elixir-format
 msgid "Log this device out of your account?"
 msgstr "Dieses Gerät von Ihrem Konto abmelden?"
@@ -5920,7 +5920,7 @@ msgstr "Dieses Gerät wurde abgemeldet."
 msgid "The location looks different from where you usually sign in."
 msgstr "Der Ort weicht von dem ab, von dem Sie sich üblicherweise anmelden."
 
-#: lib/vutuv_web/views/settings_html.ex:92
+#: lib/vutuv_web/views/settings_html.ex:128
 #, elixir-autogen, elixir-format
 msgid "This device"
 msgstr "Dieses Gerät"
@@ -5930,7 +5930,7 @@ msgstr "Dieses Gerät"
 msgid "This is the first sign-in we have seen from this device or browser."
 msgstr "Das ist die erste Anmeldung, die wir von diesem Gerät oder Browser gesehen haben."
 
-#: lib/vutuv_web/views/settings_html.ex:192
+#: lib/vutuv_web/views/settings_html.ex:228
 #, elixir-autogen, elixir-format
 msgid "just now"
 msgstr "gerade eben"
@@ -5965,7 +5965,7 @@ msgid "Add a passkey"
 msgstr "Passkey hinzufügen"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1114
-#: lib/vutuv_web/views/settings_html.ex:143
+#: lib/vutuv_web/views/settings_html.ex:179
 #, elixir-autogen, elixir-format
 msgid "Added"
 msgstr "Hinzugefügt"
@@ -5975,7 +5975,7 @@ msgstr "Hinzugefügt"
 msgid "Could not add the passkey. Please try again."
 msgstr "Der Passkey konnte nicht hinzugefügt werden. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/views/settings_html.ex:146
+#: lib/vutuv_web/views/settings_html.ex:182
 #, elixir-autogen, elixir-format
 msgid "Last used"
 msgstr "Zuletzt verwendet"
@@ -5985,7 +5985,7 @@ msgstr "Zuletzt verwendet"
 msgid "Name (optional)"
 msgstr "Name (optional)"
 
-#: lib/vutuv_web/views/settings_html.ex:140
+#: lib/vutuv_web/views/settings_html.ex:176
 #, elixir-autogen, elixir-format
 msgid "Passkey"
 msgstr "Passkey"
@@ -6005,7 +6005,7 @@ msgstr "Passkey entfernt."
 msgid "Passkeys"
 msgstr "Passkeys"
 
-#: lib/vutuv_web/views/settings_html.ex:154
+#: lib/vutuv_web/views/settings_html.ex:190
 #, elixir-autogen, elixir-format
 msgid "Remove this passkey?"
 msgstr "Diesen Passkey entfernen?"
@@ -9933,3 +9933,9 @@ msgstr "Zum Teilen im Alltag ist Ihre normale Profiladresse praktischer:"
 #, elixir-autogen, elixir-format
 msgid "This link always opens your profile, even after you change your username. It is built from a fixed id, so it never breaks on a rename."
 msgstr "Dieser Link öffnet immer Ihr Profil, auch nach einer Änderung Ihres Benutzernamens. Er basiert auf einer festen Kennung und funktioniert daher über jede Umbenennung hinweg."
+
+#: lib/vutuv_web/templates/settings/index.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "Pick a section from the menu on the left to view or change it."
+msgstr ""
+"Wählen Sie links im Menü einen Bereich aus, um ihn anzusehen oder zu ändern."
