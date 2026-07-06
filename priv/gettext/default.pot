@@ -1948,6 +1948,11 @@ msgstr[1] ""
 msgid "Time in this role"
 msgstr ""
 
+#: lib/vutuv_web/views/work_experience_html.ex:472
+#, elixir-autogen, elixir-format
+msgid "Total time at this employer"
+msgstr ""
+
 #: lib/vutuv_web/templates/user/show.html.heex:52
 #, elixir-autogen, elixir-format
 msgid "Add a cover photo"

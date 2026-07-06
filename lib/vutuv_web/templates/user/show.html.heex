@@ -414,20 +414,25 @@ the resulting ~200px rail width. --%>
         {gettext("Add work experience")}
       </.empty_add>
 
-      <%!-- The single-letter "organization initial" boxes were dropped: one
-      letter says nothing about a job. Each role shows a year-led date range (the
-      full month/year rides along as a hover tooltip when the role spans several
-      years), the title and organization on a rail, and a duration circle on the
-      right whose size (sqrt of its length, so the gaps stay legible) ranks the
-      roles by how long they ran. The circle column is a fixed width and the
-      circle is centred in it, so every circle shares one horizontal centre.
+      <%!-- Consecutive roles at the same employer collapse into one company
+      block (LinkedIn-style); a lone role reads like a classic entry
+      with its organization inline. Each block shows a year-led date range (the
+      full month/year rides along as a hover tooltip when it spans several years)
+      on a rail, and a duration circle on the right whose size (sqrt of its
+      length, so the gaps stay legible) ranks the blocks by how long they ran.
       Work experiences arrive newest-first (WorkExperience.order_by_date) and,
       like the section page, split into the CV categories (issue #840) under
-      their own headings once a non-employment entry exists. --%>
+      their own headings once a non-employment entry exists. The block markup is
+      shared with the section page via `experience_block/1`; the preview keeps it
+      tight (no descriptions, no owner controls). --%>
       <div
         :for={
-          {kind, circles} <-
-            VutuvWeb.WorkExperienceHTML.grouped_circles(@work_experience, :compact)
+          {kind, blocks} <-
+            VutuvWeb.WorkExperienceHTML.grouped_clusters(
+              @work_experience,
+              :compact,
+              VutuvWeb.WorkExperienceHTML.profile_preview_limit()
+            )
         }
         class="mt-6 first:mt-0"
       >
@@ -437,47 +442,18 @@ the resulting ~200px rail width. --%>
         >
           {VutuvWeb.WorkExperienceHTML.kind_label(kind)}
         </h3>
-        <div
-          :for={circle <- circles}
-          class="grid grid-cols-[6.5rem_1fr_4rem] items-start gap-3"
-        >
-          <% dates =
-            VutuvWeb.WorkExperienceHTML.duration_with_detail(
-              circle.job.start_month,
-              circle.job.start_year,
-              circle.job.end_month,
-              circle.job.end_year
-            ) %>
-          <div
-            class="pt-0.5 text-right text-xs font-semibold leading-tight text-slate-600 dark:text-slate-400 tabular-nums"
-            title={dates.detail}
-          >
-            {dates.label}
-          </div>
-          <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
-            <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
-            <.link href={~p"/#{@user}/work_experiences/#{circle.job}"} class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white">
-              {circle.job.title}
-            </.link>
-            <p class="text-sm text-slate-600 dark:text-slate-400">
-              {circle.job.organization}<%= if circle.length do %> · {circle.length}<% end %>
-            </p>
-          </div>
-          <div
-            class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold tabular-nums leading-none text-white"
-            style={"width: #{circle.size}rem; height: #{circle.size}rem"}
-            title={gettext("Time in this role")}
-          >
-            <span class="text-[11px]">{circle.label}</span>
-          </div>
-        </div>
+        <VutuvWeb.WorkExperienceHTML.experience_block
+          :for={block <- blocks}
+          block={block}
+          user={@user}
+        />
       </div>
 
       <.manage_footer
         href={~p"/#{@user}/work_experiences"}
         manage_href={~p"/settings/work_experiences"}
         total={@totals.jobs}
-        preview={3}
+        preview={VutuvWeb.WorkExperienceHTML.profile_preview_limit()}
         owner={@as_owner?}
       />
     </.card>

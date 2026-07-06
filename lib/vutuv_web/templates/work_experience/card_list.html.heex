@@ -44,92 +44,33 @@ hidden in the Public preview. --%>
   <% end %>
 </p>
 
-<%!-- The duration circles (right column) are showcase decoration: they rank
-roles by how long they ran for a *reader*. The /settings editor is a working
-list (pin, edit, delete), so it drops the circles and their grid column; the
+<%!-- Consecutive roles at the same employer collapse into one company block
+(LinkedIn-style); a lone role reads like a classic entry. The
+duration circles (right column) are showcase decoration ranking blocks by how
+long they ran for a *reader*: the /settings editor is a working list (pin, edit,
+delete), so it drops the circles and their grid column via `as_owner?`; the
 public /:slug page keeps them.
 
 The timeline is split into the CV categories (issue #840) — employment,
 internships, volunteer positions — each under its own heading; a jobs-only
-member keeps the single unlabeled timeline. --%>
-<div :for={{kind, circles} <- grouped_circles(@work_experience, :compact)} class="mt-8 first:mt-0">
+member keeps the single unlabeled timeline. The block markup itself lives in
+`experience_block/1`, shared with the profile Experience card. --%>
+<div
+  :for={{kind, blocks} <- grouped_clusters(@work_experience, :compact)}
+  class="mt-8 first:mt-0"
+>
   <h2
     :if={show_kind_headings?(@work_experience)}
     class="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
   >
     {kind_label(kind)}
   </h2>
-  <div
-    :for={circle <- circles}
-    class={[
-      "grid items-start gap-3",
-      if(@as_owner?, do: "grid-cols-[6.5rem_1fr]", else: "grid-cols-[6.5rem_1fr_4rem]")
-    ]}
-  >
-    <% dates =
-      duration_with_detail(
-        circle.job.start_month,
-        circle.job.start_year,
-        circle.job.end_month,
-        circle.job.end_year
-      ) %>
-    <div
-      class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-600 dark:text-slate-400"
-      title={dates.detail}
-    >
-      {dates.label}
-    </div>
-    <div class="relative border-l border-slate-200 pb-6 pl-5 dark:border-slate-700">
-      <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
-      <.link
-        href={~p"/#{@user}/work_experiences/#{circle.job}"}
-        class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
-      >
-        {circle.job.title}
-      </.link>
-      <p class="text-sm text-slate-600 dark:text-slate-400">
-        {circle.job.organization}<%= if circle.length do %> · {circle.length}<% end %>
-      </p>
-      <p :if={circle.job.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {circle.job.description}
-      </p>
-      <%!-- The chosen role wears a calm marker; every other role wears a
-      brand-outline pin pill. The single "back to automatic" revert lives in
-      the explainer up top, not here, so it works the same on touch (issue
-      #883). --%>
-      <div :if={@as_owner?} class="mt-2">
-        <span
-          :if={@profile_work_experience_id == circle.job.id}
-          class="inline-flex items-center gap-1 text-xs font-semibold text-brand-700 dark:text-brand-400"
-        >
-          <.pin_star filled class="h-4 w-4" />
-          {gettext("Shown at the top of your profile")}
-        </span>
-        <.link
-          :if={@profile_work_experience_id != circle.job.id}
-          href={~p"/settings/work_experiences/#{circle.job}/pin"}
-          method="put"
-          class="inline-flex items-center gap-1 rounded-full border border-brand-600 px-3 py-1 text-xs font-semibold text-brand-600 hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/40"
-        >
-          <.pin_star class="h-4 w-4" />
-          {gettext("Show at top of profile")}
-        </.link>
-      </div>
-      <.row_actions
-        :if={@as_owner?}
-        align={:start}
-        class="mt-2"
-        edit_to={~p"/settings/work_experiences/#{circle.job}/edit"}
-        delete_to={~p"/settings/work_experiences/#{circle.job}"}
-      />
-    </div>
-    <div
-      :if={!@as_owner?}
-      class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
-      style={"width: #{circle.size}rem; height: #{circle.size}rem"}
-      title={gettext("Time in this role")}
-    >
-      <span class="text-[11px]">{circle.label}</span>
-    </div>
-  </div>
+  <.experience_block
+    :for={block <- blocks}
+    block={block}
+    user={@user}
+    as_owner?={@as_owner?}
+    show_description?={true}
+    profile_work_experience_id={@profile_work_experience_id}
+  />
 </div>

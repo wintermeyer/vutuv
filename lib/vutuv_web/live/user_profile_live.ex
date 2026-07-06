@@ -471,7 +471,11 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:posts, Vutuv.Posts.profile_posts(user, current_user))
     |> assign(:posts_total, posts_total)
     |> assign(:user_tags, user.user_tags)
-    |> assign(:work_experience, Enum.take(user.work_experiences, 3))
+    # The whole history: the Experience card clusters it and previews up to
+    # WorkExperienceHTML.profile_preview_limit/0 roles. Clustering must see every
+    # role so a truncated employer still shows its true total tenure (a preview
+    # cut inside a company must not report only the shown roles' years).
+    |> assign(:work_experience, user.work_experiences)
     |> assign(:education, user.educations)
     |> assign(:languages, user.languages)
     # Expired-credential hiding (issue #859) is already applied in the preload

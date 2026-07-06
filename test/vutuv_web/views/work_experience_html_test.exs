@@ -94,6 +94,232 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
     end
   end
 
+  describe "grouped_clusters/2" do
+    test "consecutive roles at the same employer collapse into one company block" do
+      [{"employment", [block]}] =
+        WorkExperienceHTML.grouped_clusters([
+          job(
+            title: "Director",
+            organization: "OX",
+            start_year: 2022,
+            start_month: 2,
+            end_year: 2025,
+            end_month: 3
+          ),
+          job(
+            title: "Teamlead",
+            organization: "OX",
+            start_year: 2020,
+            start_month: 3,
+            end_year: 2022,
+            end_month: 1
+          ),
+          job(
+            title: "SDM",
+            organization: "OX",
+            start_year: 2016,
+            start_month: 7,
+            end_year: 2020,
+            end_month: 2
+          )
+        ])
+
+      assert block.multi?
+      assert block.organization == "OX"
+      assert Enum.map(block.roles, & &1.job.title) == ["Director", "Teamlead", "SDM"]
+      # The header carries the span from the earliest start to the latest end and
+      # the total tenure across the whole run, not any single role's.
+      assert IO.iodata_to_binary(block.span.label) == "2016 - 2025"
+      assert block.length == "9 years"
+    end
+
+    test "a lone role stays a single block that shows its organization inline" do
+      [{"employment", [block]}] =
+        WorkExperienceHTML.grouped_clusters([
+          job(
+            title: "TPO",
+            organization: "x-ion",
+            start_year: 2025,
+            start_month: 3,
+            end_year: nil,
+            end_month: nil
+          )
+        ])
+
+      refute block.multi?
+      assert hd(block.roles).job.title == "TPO"
+      assert IO.iodata_to_binary(block.span.label) == "2025 - Present"
+    end
+
+    test "two stints at the same employer with another job between stay separate blocks" do
+      [{"employment", blocks}] =
+        WorkExperienceHTML.grouped_clusters([
+          job(
+            title: "Later",
+            organization: "Alt",
+            start_year: 2011,
+            start_month: 1,
+            end_year: 2016,
+            end_month: 1
+          ),
+          job(
+            title: "Mid",
+            organization: "Amooma",
+            start_year: 2011,
+            start_month: 1,
+            end_year: 2011,
+            end_month: 10
+          ),
+          job(
+            title: "Early",
+            organization: "Alt",
+            start_year: 2001,
+            start_month: 1,
+            end_year: 2010,
+            end_month: 1
+          )
+        ])
+
+      assert Enum.map(blocks, & &1.organization) == ["Alt", "Amooma", "Alt"]
+      assert Enum.map(blocks, & &1.multi?) == [false, false, false]
+    end
+
+    test "roles of different categories never merge, even at the same employer" do
+      assert [{"employment", [emp]}, {"internship", [intern]}] =
+               WorkExperienceHTML.grouped_clusters([
+                 job(
+                   title: "Job",
+                   organization: "Acme",
+                   kind: "employment",
+                   start_year: 2020,
+                   end_year: 2022
+                 ),
+                 job(
+                   title: "Intern",
+                   organization: "Acme",
+                   kind: "internship",
+                   start_year: 2019,
+                   end_year: 2020
+                 )
+               ])
+
+      refute emp.multi?
+      refute intern.multi?
+    end
+
+    test "roles without an organization are never clustered together" do
+      [{"employment", blocks}] =
+        WorkExperienceHTML.grouped_clusters([
+          job(title: "A", organization: "", start_year: 2020, end_year: 2021),
+          job(title: "B", organization: "", start_year: 2018, end_year: 2019)
+        ])
+
+      assert length(blocks) == 2
+      assert Enum.all?(blocks, &(not &1.multi?))
+    end
+
+    test "the block circle is ranked by the employer's total tenure, not the longest single role" do
+      [{"employment", [cluster, solo]}] =
+        WorkExperienceHTML.grouped_clusters(
+          [
+            job(
+              title: "A2",
+              organization: "A",
+              start_year: 2010,
+              start_month: 1,
+              end_year: 2015,
+              end_month: 1
+            ),
+            job(
+              title: "A1",
+              organization: "A",
+              start_year: 2005,
+              start_month: 1,
+              end_year: 2010,
+              end_month: 1
+            ),
+            job(
+              title: "B",
+              organization: "B",
+              start_year: 2000,
+              start_month: 1,
+              end_year: 2003,
+              end_month: 1
+            )
+          ],
+          :compact
+        )
+
+      # The 10-year run at "A" (two 5-year roles) fills the largest circle even
+      # though no single role is longer than the 3-year "B".
+      assert cluster.multi?
+      assert cluster.label == "10y"
+      assert cluster.size == 4.0
+      assert cluster.size > solo.size
+    end
+  end
+
+  describe "grouped_clusters/3 display limit" do
+    test "caps the shown roles but keeps each employer's full tenure" do
+      # x-ion (1 role) + 2 of Open-Xchange's 3 roles fit under a 3-role cap; the
+      # third OX role is cut, but the block must still report the whole 9-year,
+      # 2016-2025 tenure — not just the two shown roles' span. Regression guard:
+      # a company cut mid-cluster on the profile preview reported too few years.
+      [{"employment", [x_ion, ox]}] =
+        WorkExperienceHTML.grouped_clusters(
+          [
+            job(title: "TPO", organization: "x-ion", start_year: 2025, start_month: 3),
+            job(
+              title: "Director",
+              organization: "OX",
+              start_year: 2022,
+              start_month: 2,
+              end_year: 2025,
+              end_month: 3
+            ),
+            job(
+              title: "Teamlead",
+              organization: "OX",
+              start_year: 2020,
+              start_month: 3,
+              end_year: 2022,
+              end_month: 1
+            ),
+            job(
+              title: "SDM",
+              organization: "OX",
+              start_year: 2016,
+              start_month: 7,
+              end_year: 2020,
+              end_month: 2
+            )
+          ],
+          :compact,
+          3
+        )
+
+      refute x_ion.multi?
+      assert Enum.map(ox.roles, & &1.job.title) == ["Director", "Teamlead"]
+      assert ox.length == "9 years"
+      assert ox.label == "9y"
+      assert IO.iodata_to_binary(ox.span.label) == "2016 - 2025"
+    end
+
+    test "a limit at or above the role count shows every role" do
+      [{"employment", blocks}] =
+        WorkExperienceHTML.grouped_clusters(
+          [
+            job(title: "A", organization: "Acme", start_year: 2022, end_year: 2024),
+            job(title: "B", organization: "Beta", start_year: 2020, end_year: 2022)
+          ],
+          :compact,
+          10
+        )
+
+      assert Enum.flat_map(blocks, & &1.roles) |> length() == 2
+    end
+  end
+
   describe "format_duration/5 ordering" do
     test "year_first writes the year before the month, month_first is the default" do
       assert IO.iodata_to_binary(
