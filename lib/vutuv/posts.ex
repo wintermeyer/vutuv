@@ -1696,7 +1696,7 @@ defmodule Vutuv.Posts do
   end
 
   defp tag_for_value(value) do
-    case lookup_tag(value) do
+    case Tag.find_by_value(value) do
       %Tag{id: id} -> id
       nil -> insert_tag_for_value(value)
     end
@@ -1706,19 +1706,8 @@ defmodule Vutuv.Posts do
     case Repo.insert(Tag.changeset(%Tag{}, %{"value" => value})) do
       {:ok, tag} -> tag.id
       # Lost a race or invalid value — one more lookup, then give up.
-      {:error, _} -> with(%Tag{id: id} <- lookup_tag(value), do: id)
+      {:error, _} -> with(%Tag{id: id} <- Tag.find_by_value(value), do: id)
     end
-  end
-
-  defp lookup_tag(value) do
-    down = String.downcase(value)
-
-    Repo.one(
-      from(t in Tag,
-        where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
-        limit: 1
-      )
-    )
   end
 
   ## Broadcasts

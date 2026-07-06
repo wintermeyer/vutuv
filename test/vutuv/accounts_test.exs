@@ -92,6 +92,35 @@ defmodule Vutuv.AccountsTest do
                ["Cooking", "Elixir", "Origami"]
     end
 
+    test "the multi-tag sign-up keeps the entered casing (never downcases)" do
+      conn = build_conn()
+      # Internal capitals a downcase would visibly destroy, entered as the
+      # comma- and space-separated batch the sign-up field accepts.
+      attrs = Map.put(@valid_registration, "tag_list", "TypeScript, PostgreSQL WebAssembly")
+
+      assert {:ok, %User{} = user} = Accounts.register_user(conn, attrs)
+
+      assert user.user_tags |> Enum.map(& &1.tag.name) |> Enum.sort() ==
+               ["PostgreSQL", "TypeScript", "WebAssembly"]
+    end
+
+    test "a sign-up tag links to an existing tag, keeping the first writer's spelling" do
+      # A legacy lowercase tag already exists; a member typing it capitalized at
+      # sign-up attaches that same tag rather than minting a case-variant, so the
+      # stored spelling stays what its first writer chose.
+      insert(:tag, name: "elixir", slug: "elixir")
+      conn = build_conn()
+
+      assert {:ok, %User{} = user} =
+               Accounts.register_user(
+                 conn,
+                 Map.put(@valid_registration, "tag_list", "Elixir Cooking Origami")
+               )
+
+      assert user.user_tags |> Enum.map(& &1.tag.name) |> Enum.sort() ==
+               ["Cooking", "Origami", "elixir"]
+    end
+
     test "rejects a registration with fewer than three tags" do
       conn = build_conn()
       attrs = Map.put(@valid_registration, "tag_list", "Elixir Cooking")

@@ -53,6 +53,54 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "tag names are stored first-writer-wins, matched case-insensitively" do
+    # The contract: a tag keeps the casing whoever created it first typed
+    # (capitals and all) and is never auto-downcased; every lookup ignores case.
+    # This guards against re-introducing the old "downcase every tag" behavior at
+    # any entry point.
+    import Ecto.Changeset
+
+    test "the first writer's spelling is what every later member links to" do
+      first = insert(:user)
+      later = insert(:user)
+
+      assert {:ok, ut1} = Tags.add_user_tag(first, "PostgreSQL")
+      tag = Repo.preload(ut1, :tag).tag
+      assert tag.name == "PostgreSQL"
+      assert tag.slug == "postgresql"
+
+      # A later member typing a different casing attaches the SAME tag: the
+      # stored name stays "PostgreSQL" and no case-variant duplicate is minted.
+      assert {:ok, ut2} = Tags.add_user_tag(later, "postgresql")
+      assert Repo.preload(ut2, :tag).tag.id == tag.id
+      assert Repo.get!(Tag, tag.id).name == "PostgreSQL"
+      assert Repo.aggregate(Tag, :count) == 1
+    end
+
+    test "find_by_value/1 matches by name and by slug, case-insensitively" do
+      tag = insert(:tag, name: "GraphQL", slug: "graphql")
+
+      assert Tag.find_by_value("graphql").id == tag.id
+      assert Tag.find_by_value("GRAPHQL").id == tag.id
+      assert Tag.find_by_value("GraphQL").id == tag.id
+      assert is_nil(Tag.find_by_value("Rust"))
+    end
+
+    test "the admin create form stores the typed name verbatim" do
+      changeset = Tag.changeset(%Tag{}, %{"name" => "TypeScript", "slug" => "typescript"})
+      assert get_change(changeset, :name) == "TypeScript"
+      assert {:ok, tag} = Repo.insert(changeset)
+      assert tag.name == "TypeScript"
+    end
+
+    test "the admin edit form can recapitalize a legacy lowercase name" do
+      tag = insert(:tag, name: "elixir", slug: "elixir")
+
+      assert {:ok, updated} = tag |> Tag.edit_changeset(%{"name" => "Elixir"}) |> Repo.update()
+      assert updated.name == "Elixir"
+    end
+  end
+
   describe "parse_tag_names/1" do
     test "splits on both commas and spaces" do
       assert Tags.parse_tag_names("Elixir, Phoenix Go") == ["Elixir", "Phoenix", "Go"]

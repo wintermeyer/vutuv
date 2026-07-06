@@ -120,16 +120,37 @@ defmodule Vutuv.Tags.Tag do
 
   def normalize_value(value), do: value
 
-  defp link_or_build_tag(changeset, value, params) do
-    downcase_value = String.downcase(value)
+  @doc """
+  The stored tag matching `value` case-insensitively by name or slug, or `nil`.
+
+  vutuv keeps a tag's **name exactly as its first writer typed it** — capitals and
+  all (`normalize_value/1` only trims and strips a leading `#`, it never
+  downcases) — while every match ignores case. So `find_by_value("PostgreSQL")`
+  returns the existing `postgresql` tag rather than minting a case-variant
+  duplicate, which is what makes "the first user decides the spelling" hold even
+  when a later member types it differently.
+
+  This is the single place that **loads** a tag by a typed value: the find-or-link
+  paths all resolve through here (`create_or_link_tag/2`, so the tags page / JSON
+  API / account-setup importer; `Vutuv.Tags.declare_honor_tag/1`; `Vutuv.Posts`
+  post tags), so they match a tag identically. Search's tag filters
+  (`Vutuv.Search`) and the `Vutuv.Tags.preview_tag_names/1` batch build the same
+  case-insensitive name-or-slug predicate inline, because they compose it into a
+  larger query rather than fetching a single row.
+  """
+  def find_by_value(value) when is_binary(value) do
+    down = String.downcase(value)
 
     Vutuv.Repo.one(
       from(t in __MODULE__,
-        where: fragment("lower(?)", t.name) == ^downcase_value or t.slug == ^downcase_value,
+        where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
         limit: 1
       )
     )
-    |> case do
+  end
+
+  defp link_or_build_tag(changeset, value, params) do
+    case find_by_value(value) do
       nil ->
         tag = __MODULE__.changeset(%__MODULE__{}, params)
         put_assoc(changeset, :tag, tag)

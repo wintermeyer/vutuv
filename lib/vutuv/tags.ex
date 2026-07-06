@@ -207,7 +207,7 @@ defmodule Vutuv.Tags do
   def declare_honor_tag(name) when is_binary(name) do
     value = Tag.normalize_value(name)
 
-    case find_tag_by_value(value) do
+    case Tag.find_by_value(value) do
       nil ->
         %Tag{}
         |> Tag.changeset(%{"value" => value})
@@ -224,20 +224,6 @@ defmodule Vutuv.Tags do
           tag |> Ecto.Changeset.change(honor?: true) |> Repo.update()
         end
     end
-  end
-
-  # A stored tag whose name (case-insensitive) or slug equals the typed value.
-  # A spaced value can never match an existing (space-free) tag, so it falls
-  # through to the insert branch and the changeset rejects it there.
-  defp find_tag_by_value(value) do
-    downcased = String.downcase(value)
-
-    Repo.one(
-      from(t in Tag,
-        where: fragment("lower(?)", t.name) == ^downcased or t.slug == ^downcased,
-        limit: 1
-      )
-    )
   end
 
   defp tag_has_holders?(%Tag{} = tag) do
