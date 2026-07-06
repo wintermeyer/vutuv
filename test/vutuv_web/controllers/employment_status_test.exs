@@ -29,6 +29,17 @@ defmodule VutuvWeb.EmploymentStatusTest do
       assert html =~ ~s(data-employment-status="open")
     end
 
+    test "renders the badge above the tagline, right below the name", %{conn: conn} do
+      user = insert_activated_user(employment_status: "looking", headline: "Some tagline here")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      # The pill sits on its own line under the name, ahead of the tagline text.
+      badge_at = :binary.match(html, "data-employment-status") |> elem(0)
+      tagline_at = :binary.match(html, "Some tagline here") |> elem(0)
+      assert badge_at < tagline_at
+    end
+
     test "shows no badge for a member who has not set a status", %{conn: conn} do
       user = insert_activated_user(employment_status: nil, headline: "Just here")
 
