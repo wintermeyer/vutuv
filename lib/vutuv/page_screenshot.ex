@@ -50,9 +50,22 @@ defmodule Vutuv.PageScreenshot do
   @doc """
   Renders, frames, and stores the screenshot for `url`.
 
-  Marks the URL `broken?: false` on success and `broken?: true` on failure, so a
-  failed page is not retried by the bulk `urls.create_screenshots` task. Safe
-  to run from an unsupervised `Task` — all failures are logged, never raised.
+  On success the URL is marked `broken?: false`. On failure the two kinds of
+  failure are kept apart:
+
+    * a genuinely un-capturable *target* — an SSRF-refused internal host
+      (issue #777) — is a permanent property of the URL, so it is marked
+      `broken?: true` and the bulk `urls.create_screenshots` task skips it;
+
+    * an *environment* failure — Chromium missing, crashed or timed out (issue
+      #906 was a bad Chromium package upgrade that crashed headless capture) —
+      is transient and hits every URL alike, so the row is **not** poisoned
+      (leaving it for the bulk task to retry once capture works again) and it is
+      logged at `:error` so a broken pipeline is visible under prod's `:error`
+      Logger level rather than failing silently.
+
+  Safe to run from an unsupervised `Task` — all failures are logged, never
+  raised.
   """
   def generate_screenshot(%Url{id: id}) do
     case Repo.get(Url, id) do
@@ -69,14 +82,26 @@ defmodule Vutuv.PageScreenshot do
         File.rm(framed_path)
         :ok
 
-      {:error, reason} ->
-        Logger.warning(
-          "screenshot generation failed for url ##{url.id} (#{url.value}): #{inspect(reason)}"
-        )
-
+      {:error, :internal_target = reason} ->
+        # A permanent property of this URL (SSRF guard, issue #777) and an
+        # expected policy outcome: flag it so the bulk task never retries it,
+        # and log quietly.
+        Logger.warning(failure_message(url, reason))
         set_broken(url, true)
         :error
+
+      {:error, reason} ->
+        # An environment failure (Chromium missing, crashed or timed out): it
+        # affects every URL alike (issue #906), so don't poison the row — leave
+        # `broken?` untouched for the bulk task to retry — and log at :error so
+        # a broken capture pipeline surfaces under prod's :error Logger level.
+        Logger.error(failure_message(url, reason))
+        :error
     end
+  end
+
+  defp failure_message(url, reason) do
+    "screenshot generation failed for url ##{url.id} (#{url.value}): #{inspect(reason)}"
   end
 
   # `url.value` is an untrusted member-supplied profile link. The changeset

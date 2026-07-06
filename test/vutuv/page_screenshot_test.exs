@@ -51,4 +51,32 @@ defmodule Vutuv.PageScreenshotTest do
     assert log =~ "internal_target"
     assert Repo.get!(Vutuv.Profiles.Url, url.id).broken? == true
   end
+
+  test "an environment failure is logged but does not poison the URL, so it is retried later" do
+    user = insert(:user)
+    url = insert(:url, user: user, value: "https://example.com/page", broken?: false)
+
+    # A public host (so the SSRF guard passes) but no usable Chromium: the
+    # capture fails for an *environmental* reason, not because the URL is bad.
+    # Issue #906 was exactly this — a Chromium package upgrade that crashed
+    # headless capture, silently flagging every fresh link `broken?` so it was
+    # never retried even after the environment recovered.
+    Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family ->
+      {:ok, [{93, 184, 216, 34}]}
+    end)
+
+    Application.put_env(:vutuv, :chromium_path, "/nonexistent/definitely-not-chromium")
+
+    log =
+      capture_log(fn ->
+        assert :error = Vutuv.PageScreenshot.generate_screenshot(url)
+      end)
+
+    # Logged at :error so a broken capture pipeline is visible under prod's
+    # :error Logger level, instead of failing silently ...
+    assert log =~ "screenshot generation failed"
+    # ... and the row is left un-poisoned, so the bulk urls.create_screenshots
+    # task retries it once capture works again.
+    refute Repo.get!(Vutuv.Profiles.Url, url.id).broken?
+  end
 end
