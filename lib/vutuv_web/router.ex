@@ -175,6 +175,13 @@ defmodule VutuvWeb.Router do
     get("/system/members", DirectoryController, :index)
     get("/system/members/:letter", DirectoryController, :show)
 
+    # Username-independent profile permalink (issue #904): keyed on the member's
+    # never-changing UUID v7 id, it 302-redirects to their current /:username, so
+    # a link built from it survives every rename. Under /system/ so it does not
+    # burn a root path word; multi-segment, so no collision with the /:slug
+    # profile catch-all further down.
+    get("/system/permalinks/users/:user_id", PermalinkController, :user)
+
     # Invite a friend: the form and its submission. Logged-in only (the
     # controller's RequireLogin plug). It lives under /system/ like the member
     # directory, so it does not permanently burn a root path word a member

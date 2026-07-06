@@ -22,6 +22,31 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
       </ul>
     </.card>
 
+    <%!-- Permanent profile link (issue #904): a username-independent URL that
+          redirects to this member's current profile, so a link built from it
+          survives a future username change. Read-only, nothing to configure. --%>
+    <.card>
+      <.section_title>{gettext("Permanent profile link")}</.section_title>
+      <p class="mt-2 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "This link always opens your profile, even if you change your username later. Your username is yours to change at any time, and changing it makes links to your old address stop working. This one is built from a fixed id that never changes, so it keeps working across every rename."
+        )}
+      </p>
+      <div class="mt-3 rounded-lg bg-slate-50 px-3 py-2 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700">
+        <code class="select-all break-all text-xs text-slate-800 dark:text-slate-100">{url(
+            ~p"/system/permalinks/users/#{@user.id}"
+          )}</code>
+      </div>
+      <p class="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+        {gettext(
+          "For most people the normal profile address is shorter and easier to share, so prefer it unless you specifically need a link that survives a username change:"
+        )}
+        <code class="select-all rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-100">{url(
+            ~p"/#{@user}"
+          )}</code>
+      </p>
+    </.card>
+
     <%!-- Signed-in devices: where this account is logged in, each revocable
           remotely (issue #794). The current device is marked and has no logout
           (you sign it out via the normal logout); every other device has one,

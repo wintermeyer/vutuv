@@ -22,7 +22,7 @@ msgstr "Impressum"
 msgid "Add"
 msgstr "Eintrag hinzufügen"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:110
+#: lib/vutuv_web/agent_docs/section_docs.ex:111
 #: lib/vutuv_web/live/admin/deliverability_live.ex:170
 #: lib/vutuv_web/live/admin/deliverability_live.ex:251
 #: lib/vutuv_web/live/cv_live.ex:113
@@ -1612,7 +1612,7 @@ msgstr "Vorgeschlagen"
 msgid "Admin Area"
 msgstr "Admin-Bereich"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:93
+#: lib/vutuv_web/agent_docs/section_docs.ex:94
 #: lib/vutuv_web/templates/address/index.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Addresses of %{name}"
@@ -1806,7 +1806,7 @@ msgstr "Quellcode"
 msgid "Submit a bug report or feature request"
 msgstr "Fehler melden oder Feature vorschlagen"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:96
+#: lib/vutuv_web/agent_docs/section_docs.ex:97
 #: lib/vutuv_web/templates/user_tag/index.html.heex:5
 #, elixir-autogen, elixir-format
 msgid "Tags of %{name}"
@@ -3988,27 +3988,27 @@ msgstr "Diese Seite auf %{language}: %{url}"
 msgid "Connections of %{name}"
 msgstr "Vernetzungen von %{name}"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:95
+#: lib/vutuv_web/agent_docs/section_docs.ex:96
 #, elixir-autogen, elixir-format
 msgid "Email addresses of %{name}"
 msgstr "E-Mail-Adressen von %{name}"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:88
+#: lib/vutuv_web/agent_docs/section_docs.ex:89
 #, elixir-autogen, elixir-format
 msgid "Links of %{name}"
 msgstr "Links von %{name}"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:94
+#: lib/vutuv_web/agent_docs/section_docs.ex:95
 #, elixir-autogen, elixir-format
 msgid "Phone numbers of %{name}"
 msgstr "Telefonnummern von %{name}"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:91
+#: lib/vutuv_web/agent_docs/section_docs.ex:92
 #, elixir-autogen, elixir-format
 msgid "Social media accounts of %{name}"
 msgstr "Social Media Accounts von %{name}"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:81
+#: lib/vutuv_web/agent_docs/section_docs.ex:82
 #, elixir-autogen, elixir-format
 msgid "Work experience of %{name}"
 msgstr "Lebenslauf von %{name}"
@@ -5885,12 +5885,12 @@ msgstr "Auf Ihrem Konto war bereits eine andere Sitzung aktiv."
 msgid "Last active"
 msgstr "Zuletzt aktiv"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:47
+#: lib/vutuv_web/templates/settings/security.html.heex:72
 #, elixir-autogen, elixir-format
 msgid "Log out all other devices"
 msgstr "Alle anderen Geräte abmelden"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:44
+#: lib/vutuv_web/templates/settings/security.html.heex:69
 #, elixir-autogen, elixir-format
 msgid "Log out of every device except this one?"
 msgstr "Von allen Geräten außer diesem abmelden?"
@@ -5905,7 +5905,7 @@ msgstr "Dieses Gerät von Ihrem Konto abmelden?"
 msgid "New sign-in to your vutuv account"
 msgstr "Neue Anmeldung bei Ihrem vutuv-Konto"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:30
+#: lib/vutuv_web/templates/settings/security.html.heex:55
 #, elixir-autogen, elixir-format
 msgid "Signed-in devices"
 msgstr "Angemeldete Geräte"
@@ -5959,7 +5959,7 @@ msgstr ""
 "Wenn deaktiviert, sieht niemand den grünen Punkt auf Ihrem Avatar, und Sie "
 "erscheinen nie als online."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:104
+#: lib/vutuv_web/templates/settings/security.html.heex:129
 #, elixir-autogen, elixir-format
 msgid "Add a passkey"
 msgstr "Passkey hinzufügen"
@@ -5970,7 +5970,7 @@ msgstr "Passkey hinzufügen"
 msgid "Added"
 msgstr "Hinzugefügt"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:101
+#: lib/vutuv_web/templates/settings/security.html.heex:126
 #, elixir-autogen, elixir-format
 msgid "Could not add the passkey. Please try again."
 msgstr "Der Passkey konnte nicht hinzugefügt werden. Bitte versuchen Sie es erneut."
@@ -5980,7 +5980,7 @@ msgstr "Der Passkey konnte nicht hinzugefügt werden. Bitte versuchen Sie es ern
 msgid "Last used"
 msgstr "Zuletzt verwendet"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:85
+#: lib/vutuv_web/templates/settings/security.html.heex:110
 #, elixir-autogen, elixir-format
 msgid "Name (optional)"
 msgstr "Name (optional)"
@@ -6000,7 +6000,7 @@ msgstr "Passkey hinzugefügt."
 msgid "Passkey removed."
 msgstr "Passkey entfernt."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:59
+#: lib/vutuv_web/templates/settings/security.html.heex:84
 #, elixir-autogen, elixir-format
 msgid "Passkeys"
 msgstr "Passkeys"
@@ -6010,7 +6010,7 @@ msgstr "Passkeys"
 msgid "Remove this passkey?"
 msgstr "Diesen Passkey entfernen?"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:61
+#: lib/vutuv_web/templates/settings/security.html.heex:86
 #, elixir-autogen, elixir-format
 msgid "Sign in with Touch ID, Windows Hello or a security key instead of waiting for an email PIN. Your email PIN stays available as a backup."
 msgstr ""
@@ -6040,12 +6040,12 @@ msgstr "Dieser Passkey konnte nicht registriert werden."
 msgid "That passkey could not be verified."
 msgstr "Dieser Passkey konnte nicht verifiziert werden."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:115
+#: lib/vutuv_web/templates/settings/security.html.heex:140
 #, elixir-autogen, elixir-format
 msgid "This browser does not support passkeys."
 msgstr "Dieser Browser unterstützt keine Passkeys."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:75
+#: lib/vutuv_web/templates/settings/security.html.heex:100
 #, elixir-autogen, elixir-format
 msgid "You have not added any passkeys yet."
 msgstr "Sie haben noch keine Passkeys hinzugefügt."
@@ -6055,7 +6055,7 @@ msgstr "Sie haben noch keine Passkeys hinzugefügt."
 msgid "Your sign-in attempt expired. Please try again."
 msgstr "Ihr Anmeldeversuch ist abgelaufen. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:91
+#: lib/vutuv_web/templates/settings/security.html.heex:116
 #, elixir-autogen, elixir-format
 msgid "e.g. MacBook"
 msgstr "z. B. MacBook"
@@ -7054,7 +7054,7 @@ msgstr "Gesendet"
 #: lib/vutuv_web/templates/admin/newsletter/form_content.html.heex:9
 #: lib/vutuv_web/templates/admin/newsletter/index.html.heex:49
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:128
-#: lib/vutuv_web/templates/invitation/sent.html.heex:19
+#: lib/vutuv_web/templates/invitation/sent.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "Subject"
 msgstr "Betreff"
@@ -8105,7 +8105,7 @@ msgstr "Abschluss"
 #: lib/vutuv_web/agent_docs/text.ex:38
 #: lib/vutuv_web/components/ui.ex:2361
 #: lib/vutuv_web/controllers/education_controller.ex:50
-#: lib/vutuv_web/cv/cv.ex:250
+#: lib/vutuv_web/cv/cv.ex:251
 #: lib/vutuv_web/templates/education/edit.html.heex:3
 #: lib/vutuv_web/templates/education/index.html.heex:5
 #: lib/vutuv_web/templates/education/index.html.heex:10
@@ -8129,7 +8129,7 @@ msgstr "Ausbildung erfolgreich erstellt."
 msgid "Education deleted successfully."
 msgstr "Ausbildung erfolgreich gelöscht."
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:82
+#: lib/vutuv_web/agent_docs/section_docs.ex:83
 #, elixir-autogen, elixir-format
 msgid "Education of %{name}"
 msgstr "Ausbildung von %{name}"
@@ -8817,7 +8817,7 @@ msgstr "Anonymisieren"
 
 #: lib/vutuv_web/live/cv_live.ex:111
 #: lib/vutuv_web/templates/invitation/new.html.heex:47
-#: lib/vutuv_web/templates/invitation/sent.html.heex:17
+#: lib/vutuv_web/templates/invitation/sent.html.heex:23
 #, elixir-autogen, elixir-format
 msgid "Email address"
 msgstr "E-Mail-Adresse"
@@ -9047,7 +9047,7 @@ msgid "A2 (Elementary)"
 msgstr "A2 (Grundkenntnisse)"
 
 #: lib/vutuv_web/templates/language/manage.html.heex:8
-#: lib/vutuv_web/templates/user/show.html.heex:520
+#: lib/vutuv_web/templates/user/show.html.heex:523
 #, elixir-autogen, elixir-format
 msgid "Add a language"
 msgstr "Sprache hinzufügen"
@@ -9271,12 +9271,12 @@ msgstr "Sprache erfolgreich aktualisiert."
 #: lib/vutuv_web/templates/language/manage.html.heex:4
 #: lib/vutuv_web/templates/language/new.html.heex:3
 #: lib/vutuv_web/templates/language/show.html.heex:6
-#: lib/vutuv_web/templates/user/show.html.heex:517
+#: lib/vutuv_web/templates/user/show.html.heex:520
 #, elixir-autogen, elixir-format
 msgid "Languages"
 msgstr "Sprachen"
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:87
+#: lib/vutuv_web/agent_docs/section_docs.ex:88
 #, elixir-autogen, elixir-format
 msgid "Languages of %{name}"
 msgstr "Sprachen von %{name}"
@@ -9606,7 +9606,7 @@ msgstr "Zertifikate & Lizenzen"
 msgid "Certificates & licenses of "
 msgstr "Zertifikate & Lizenzen von "
 
-#: lib/vutuv_web/agent_docs/section_docs.ex:85
+#: lib/vutuv_web/agent_docs/section_docs.ex:86
 #, elixir-autogen, elixir-format
 msgid "Certificates & licenses of %{name}"
 msgstr "Zertifikate & Lizenzen von %{name}"
@@ -9868,7 +9868,7 @@ msgstr "Danke, dass Sie vutuv weiterempfehlen! vutuv lebt von Mundpropaganda, je
 msgid "If this is the first invitation to that address, we are sending it by email right now. Thank you for helping vutuv grow!"
 msgstr "Falls das die erste Einladung an diese Adresse war, versenden wir sie jetzt per E-Mail. Danke, dass Sie vutuv wachsen lassen!"
 
-#: lib/vutuv_web/templates/invitation/sent.html.heex:30
+#: lib/vutuv_web/templates/invitation/sent.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "Invitation email preview"
 msgstr "Vorschau der Einladungs-E-Mail"
@@ -9878,17 +9878,17 @@ msgstr "Vorschau der Einladungs-E-Mail"
 msgid "Invitation sent"
 msgstr "Einladung gesendet"
 
-#: lib/vutuv_web/templates/invitation/sent.html.heex:43
+#: lib/vutuv_web/templates/invitation/sent.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "Send another invitation"
 msgstr "Weitere Einladung senden"
 
-#: lib/vutuv_web/templates/invitation/sent.html.heex:23
+#: lib/vutuv_web/templates/invitation/sent.html.heex:38
 #, elixir-autogen, elixir-format
 msgid "This is exactly what they receive:"
 msgstr "Genau das erhält die Person:"
 
-#: lib/vutuv_web/templates/invitation/sent.html.heex:15
+#: lib/vutuv_web/templates/invitation/sent.html.heex:16
 #, elixir-autogen, elixir-format
 msgid "To"
 msgstr "An"
@@ -9897,3 +9897,18 @@ msgstr "An"
 #, elixir-autogen, elixir-format
 msgid "Your invitation is on its way"
 msgstr "Ihre Einladung ist unterwegs"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:41
+#, elixir-autogen, elixir-format
+msgid "For most people the normal profile address is shorter and easier to share, so prefer it unless you specifically need a link that survives a username change:"
+msgstr "Für die meisten ist die normale Profiladresse kürzer und leichter zu teilen. Nutzen Sie sie, sofern Sie nicht ausdrücklich einen Link brauchen, der eine Namensänderung übersteht:"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "Permanent profile link"
+msgstr "Dauerhafter Profillink"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:31
+#, elixir-autogen, elixir-format
+msgid "This link always opens your profile, even if you change your username later. Your username is yours to change at any time, and changing it makes links to your old address stop working. This one is built from a fixed id that never changes, so it keeps working across every rename."
+msgstr "Dieser Link öffnet immer Ihr Profil, auch wenn Sie später Ihren Benutzernamen ändern. Ihren Benutzernamen können Sie jederzeit ändern, und dann funktionieren Links auf Ihre alte Adresse nicht mehr. Dieser Link basiert auf einer festen Kennung, die sich nie ändert, und funktioniert daher über jede Umbenennung hinweg."

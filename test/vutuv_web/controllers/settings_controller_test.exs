@@ -360,6 +360,16 @@ defmodule VutuvWeb.SettingsControllerTest do
       # The passkey enrol block.
       assert html =~ "data-webauthn-register"
     end
+
+    test "shows the read-only permanent profile link for this account (issue #904)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/security") |> html_response(200)
+
+      # The username-independent permalink URL, built from the fixed id.
+      assert html =~ url(~p"/system/permalinks/users/#{user.id}")
+      # And a nudge toward the normal profile address for everyday sharing.
+      assert html =~ url(~p"/#{user}")
+    end
   end
 
   describe "language & maps page" do
