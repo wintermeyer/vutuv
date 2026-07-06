@@ -5885,12 +5885,12 @@ msgstr "Auf Ihrem Konto war bereits eine andere Sitzung aktiv."
 msgid "Last active"
 msgstr "Zuletzt aktiv"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:72
+#: lib/vutuv_web/templates/settings/security.html.heex:47
 #, elixir-autogen, elixir-format
 msgid "Log out all other devices"
 msgstr "Alle anderen Geräte abmelden"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:69
+#: lib/vutuv_web/templates/settings/security.html.heex:44
 #, elixir-autogen, elixir-format
 msgid "Log out of every device except this one?"
 msgstr "Von allen Geräten außer diesem abmelden?"
@@ -5905,7 +5905,7 @@ msgstr "Dieses Gerät von Ihrem Konto abmelden?"
 msgid "New sign-in to your vutuv account"
 msgstr "Neue Anmeldung bei Ihrem vutuv-Konto"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:55
+#: lib/vutuv_web/templates/settings/security.html.heex:30
 #, elixir-autogen, elixir-format
 msgid "Signed-in devices"
 msgstr "Angemeldete Geräte"
@@ -5959,7 +5959,7 @@ msgstr ""
 "Wenn deaktiviert, sieht niemand den grünen Punkt auf Ihrem Avatar, und Sie "
 "erscheinen nie als online."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:129
+#: lib/vutuv_web/templates/settings/security.html.heex:104
 #, elixir-autogen, elixir-format
 msgid "Add a passkey"
 msgstr "Passkey hinzufügen"
@@ -5970,7 +5970,7 @@ msgstr "Passkey hinzufügen"
 msgid "Added"
 msgstr "Hinzugefügt"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:126
+#: lib/vutuv_web/templates/settings/security.html.heex:101
 #, elixir-autogen, elixir-format
 msgid "Could not add the passkey. Please try again."
 msgstr "Der Passkey konnte nicht hinzugefügt werden. Bitte versuchen Sie es erneut."
@@ -5980,7 +5980,7 @@ msgstr "Der Passkey konnte nicht hinzugefügt werden. Bitte versuchen Sie es ern
 msgid "Last used"
 msgstr "Zuletzt verwendet"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:110
+#: lib/vutuv_web/templates/settings/security.html.heex:85
 #, elixir-autogen, elixir-format
 msgid "Name (optional)"
 msgstr "Name (optional)"
@@ -6000,7 +6000,7 @@ msgstr "Passkey hinzugefügt."
 msgid "Passkey removed."
 msgstr "Passkey entfernt."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:84
+#: lib/vutuv_web/templates/settings/security.html.heex:59
 #, elixir-autogen, elixir-format
 msgid "Passkeys"
 msgstr "Passkeys"
@@ -6010,7 +6010,7 @@ msgstr "Passkeys"
 msgid "Remove this passkey?"
 msgstr "Diesen Passkey entfernen?"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:86
+#: lib/vutuv_web/templates/settings/security.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Sign in with Touch ID, Windows Hello or a security key instead of waiting for an email PIN. Your email PIN stays available as a backup."
 msgstr ""
@@ -6040,12 +6040,12 @@ msgstr "Dieser Passkey konnte nicht registriert werden."
 msgid "That passkey could not be verified."
 msgstr "Dieser Passkey konnte nicht verifiziert werden."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:140
+#: lib/vutuv_web/templates/settings/security.html.heex:115
 #, elixir-autogen, elixir-format
 msgid "This browser does not support passkeys."
 msgstr "Dieser Browser unterstützt keine Passkeys."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:100
+#: lib/vutuv_web/templates/settings/security.html.heex:75
 #, elixir-autogen, elixir-format
 msgid "You have not added any passkeys yet."
 msgstr "Sie haben noch keine Passkeys hinzugefügt."
@@ -6055,7 +6055,7 @@ msgstr "Sie haben noch keine Passkeys hinzugefügt."
 msgid "Your sign-in attempt expired. Please try again."
 msgstr "Ihr Anmeldeversuch ist abgelaufen. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/templates/settings/security.html.heex:116
+#: lib/vutuv_web/templates/settings/security.html.heex:91
 #, elixir-autogen, elixir-format
 msgid "e.g. MacBook"
 msgstr "z. B. MacBook"
@@ -9899,23 +9899,37 @@ msgstr "An"
 msgid "Your invitation is on its way"
 msgstr "Ihre Einladung ist unterwegs"
 
-#: lib/vutuv_web/templates/settings/security.html.heex:41
-#, elixir-autogen, elixir-format
-msgid "For most people the normal profile address is shorter and easier to share, so prefer it unless you specifically need a link that survives a username change:"
-msgstr "Für die meisten ist die normale Profiladresse kürzer und leichter zu teilen. Nutzen Sie sie, sofern Sie nicht ausdrücklich einen Link brauchen, der eine Namensänderung übersteht:"
-
-#: lib/vutuv_web/templates/settings/security.html.heex:29
+#: lib/vutuv_web/templates/settings/security.html.heex:125
 #, elixir-autogen, elixir-format
 msgid "Permanent profile link"
 msgstr "Dauerhafter Profillink"
-
-#: lib/vutuv_web/templates/settings/security.html.heex:31
-#, elixir-autogen, elixir-format
-msgid "This link always opens your profile, even if you change your username later. Your username is yours to change at any time, and changing it makes links to your old address stop working. This one is built from a fixed id that never changes, so it keeps working across every rename."
-msgstr "Dieser Link öffnet immer Ihr Profil, auch wenn Sie später Ihren Benutzernamen ändern. Ihren Benutzernamen können Sie jederzeit ändern, und dann funktionieren Links auf Ihre alte Adresse nicht mehr. Dieser Link basiert auf einer festen Kennung, die sich nie ändert, und funktioniert daher über jede Umbenennung hinweg."
 
 #: lib/vutuv_web/templates/user/show.html.heex:262
 #: lib/vutuv_web/templates/user/show.html.heex:263
 #, elixir-autogen, elixir-format
 msgid "Dismiss"
 msgstr "Schließen"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:141
+#: lib/vutuv_web/templates/settings/security.html.heex:158
+#, elixir-autogen, elixir-format
+msgid "Copied"
+msgstr "Kopiert"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:140
+#: lib/vutuv_web/templates/settings/security.html.heex:144
+#: lib/vutuv_web/templates/settings/security.html.heex:157
+#: lib/vutuv_web/templates/settings/security.html.heex:161
+#, elixir-autogen, elixir-format
+msgid "Copy"
+msgstr "Kopieren"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:148
+#, elixir-autogen, elixir-format
+msgid "For everyday sharing, your normal profile address is shorter:"
+msgstr "Zum Teilen im Alltag ist Ihre normale Profiladresse praktischer:"
+
+#: lib/vutuv_web/templates/settings/security.html.heex:127
+#, elixir-autogen, elixir-format
+msgid "This link always opens your profile, even after you change your username. It is built from a fixed id, so it never breaks on a rename."
+msgstr "Dieser Link öffnet immer Ihr Profil, auch nach einer Änderung Ihres Benutzernamens. Er basiert auf einer festen Kennung und funktioniert daher über jede Umbenennung hinweg."

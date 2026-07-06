@@ -694,6 +694,63 @@ function setupDeleteGate() {
 }
 onReady(setupDeleteGate)
 
+// Copy-to-clipboard button ([data-copy], see settings/security.html.heex's
+// permanent profile link). Progressive enhancement: with JS off the target is
+// select-all so it can be copied by hand; this just makes it one click. The
+// button copies the textContent of the element named by data-copy-target (an
+// id) and, for ~1.5s, swaps its label from data-label-copy to data-label-copied
+// so no translated text is hardcoded here. writeText needs a secure context
+// (https or localhost — every place vutuv runs), so a hidden-textarea +
+// execCommand fallback covers older/insecure ones.
+function copyText(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text)
+  }
+  const area = document.createElement("textarea")
+  area.value = text
+  area.setAttribute("readonly", "")
+  area.style.position = "absolute"
+  area.style.left = "-9999px"
+  document.body.appendChild(area)
+  area.select()
+  try {
+    document.execCommand("copy")
+    return Promise.resolve()
+  } catch (err) {
+    return Promise.reject(err)
+  } finally {
+    document.body.removeChild(area)
+  }
+}
+
+function wireCopyButton(btn) {
+  if (!once(btn, "copy")) return
+  const target = document.getElementById(btn.dataset.copyTarget)
+  const source = () =>
+    btn.dataset.copyText || (target ? target.textContent.trim() : "")
+  const copied = btn.dataset.labelCopied
+  const idle = btn.dataset.labelCopy || btn.textContent
+  let revert
+
+  btn.addEventListener("click", () => {
+    copyText(source())
+      .then(() => {
+        if (!copied) return
+        btn.textContent = copied
+        clearTimeout(revert)
+        revert = setTimeout(() => {
+          btn.textContent = idle
+        }, 1500)
+      })
+      .catch(() => {})
+  })
+}
+
+function setupCopyButtons() {
+  document.querySelectorAll("[data-copy]").forEach(wireCopyButton)
+}
+onReady(setupCopyButtons)
+
 // Live character counter for a length-capped text field (the profile Tagline,
 // see user/edit.html.heex). A [data-char-counter] wrapper with data-max holds a
 // [data-char-count-input] field and a [data-char-count-readout] showing

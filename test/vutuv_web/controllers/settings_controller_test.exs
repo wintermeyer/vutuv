@@ -370,6 +370,29 @@ defmodule VutuvWeb.SettingsControllerTest do
       # And a nudge toward the normal profile address for everyday sharing.
       assert html =~ url(~p"/#{user}")
     end
+
+    test "offers a copy-to-clipboard button on the permalink URL", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/security") |> html_response(200)
+
+      # The permalink <code> carries the id the copy button targets, and the
+      # button is wired for the [data-copy] app.js enhancement.
+      assert html =~ ~s(id="permalink-url")
+      assert html =~ "data-copy"
+      assert html =~ ~s(data-copy-target="permalink-url")
+      # The everyday profile address gets its own copy button too.
+      assert html =~ ~s(id="profile-url")
+      assert html =~ ~s(data-copy-target="profile-url")
+    end
+
+    test "renders the permanent profile link card below the passkeys card", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/security") |> html_response(200)
+
+      {passkeys, _} = :binary.match(html, "Passkeys")
+      {permalink, _} = :binary.match(html, "Permanent profile link")
+      assert permalink > passkeys
+    end
   end
 
   describe "language & maps page" do
