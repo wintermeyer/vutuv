@@ -182,6 +182,31 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      :if={@fediverse_enabled}
+      icon="globe"
+      title={gettext("Fediverse")}
+      count={@fediverse_stats.federating_members}
+      attention={@fediverse_stats.stuck_deliveries > 0}
+      href={~p"/admin/reports"}
+      id="admin-fediverse-link"
+      cta={gettext("See the daily trend")}
+    >
+      <%= if @fediverse_stats.stuck_deliveries > 0 do %>
+        {gettext("Attention:")} {compact_count(@fediverse_stats.stuck_deliveries)} {ngettext(
+          "stuck outbound delivery.",
+          "stuck outbound deliveries.",
+          @fediverse_stats.stuck_deliveries
+        )}
+      <% else %>
+        {gettext("Outbound federation is healthy.")}
+      <% end %>
+      {gettext("%{followers} remote followers, %{queue} queued for delivery.",
+        followers: compact_count(@fediverse_stats.remote_followers),
+        queue: compact_count(@fediverse_stats.queue_depth)
+      )}
+    </.admin_card>
+
+    <.admin_card
       icon="scale"
       title={gettext("Legal pages")}
       href={~p"/admin/legal"}

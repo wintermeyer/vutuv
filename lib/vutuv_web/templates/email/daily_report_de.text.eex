@@ -6,6 +6,7 @@ Neue Beiträge:                              <%= @report.posts %>
 Reposts:                                    <%= @report.reposts %>
 Likes:                                      <%= @report.likes %>
 Lesezeichen:                                <%= @report.bookmarks %>
+Neue Fediverse-Follower:                    <%= @report.fediverse_followers %>
 
 Zustellbarkeit (E-Mail)
 -----------------------

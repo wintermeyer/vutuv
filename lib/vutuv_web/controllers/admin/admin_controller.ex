@@ -23,7 +23,12 @@ defmodule VutuvWeb.Admin.AdminController do
       api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count),
       tags_count: Repo.aggregate(Tag, :count),
       honor_tags_count: Vutuv.Tags.honor_tags_count(),
-      frozen_accounts_count: Vutuv.Deliverability.frozen_count()
+      frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
+      fediverse_enabled: Vutuv.Fediverse.enabled?(),
+      # Only the four COUNTs when the card will actually show them; an
+      # air-gapped install (FEDIVERSE_ENABLED=false) hides the card, mirroring
+      # the ads line above.
+      fediverse_stats: if(Vutuv.Fediverse.enabled?(), do: Vutuv.Fediverse.stats())
     )
   end
 end

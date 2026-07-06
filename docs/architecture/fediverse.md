@@ -55,6 +55,24 @@ every endpoint 404s and nothing is delivered.
   attachments via the public post-image proxy URLs. A public post's permalink
   answers an AP Accept with the Note (remote servers dereference ids).
 
+## Visibility
+
+- **The member** sees who follows them on `/settings/fediverse` (not just the
+  count). The inbox captures each remote actor's `preferredUsername` and
+  display name onto the `Follower` row (`handle`/`name`, cosmetic and
+  truncated); `Fediverse.list_followers/2` returns the most recent, rendered
+  as `@user@host` (`Follower.display_handle/1`, host from the actor URI)
+  linking to the actor. This is **owner-only** — the public followers
+  collection stays count-only, so the list lives in the private settings area,
+  never under `/:slug`.
+- **The operator** sees federation health on `/admin`: `Fediverse.stats/0`
+  reports federating members (the SQL mirror of `federated?/1`), total remote
+  followers, delivery-queue depth and how many rows are stuck (carry a
+  `last_error`); the "Fediverse" dashboard card flags `attention` when a
+  delivery run is stuck, and hides itself when `:fediverse_enabled` is off. The
+  nightly Tagesbericht (`Vutuv.Reports`) counts new remote followers per Berlin
+  day.
+
 ## Deliberate v1 limits
 
 No inbound content (likes/replies/boosts are dropped), no `Announce` for

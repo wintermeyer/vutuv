@@ -109,7 +109,9 @@ defmodule VutuvWeb.FediverseController do
         Fediverse.add_follower(user, %{
           actor_uri: remote.id,
           inbox_uri: remote.inbox,
-          shared_inbox_uri: remote.shared_inbox
+          shared_inbox_uri: remote.shared_inbox,
+          handle: remote.preferred_username,
+          name: remote.name
         })
 
       Fediverse.accept_follow(user, activity, remote.inbox)

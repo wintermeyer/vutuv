@@ -66,6 +66,25 @@ defmodule Vutuv.ReportsTest do
              }
     end
 
+    test "counts new Fediverse followers gained that Berlin day" do
+      user = insert(:user)
+
+      for naive <- [@on_day, @on_day, @other_day] do
+        Repo.insert!(
+          struct(
+            Vutuv.Fediverse.Follower,
+            [
+              user_id: user.id,
+              actor_uri: "https://social.example/users/#{System.unique_integer([:positive])}",
+              inbox_uri: "https://social.example/inbox"
+            ] ++ at(naive)
+          )
+        )
+      end
+
+      assert Reports.daily(@date).fediverse_followers == 2
+    end
+
     test "the day range is half-open: the start instant counts, the end instant does not" do
       author = insert(:user)
       # day_start = 2026-01-14 23:00 UTC (inclusive), day_end = 2026-01-15 23:00 (exclusive).
@@ -96,6 +115,7 @@ defmodule Vutuv.ReportsTest do
         # The subject now carries the non-zero number(s).
         assert email.subject =~ "1 Beitrag"
         assert email.text_body =~ "Neue Beiträge"
+        assert email.text_body =~ "Fediverse-Follower"
         assert email.text_body =~ "Zustellbarkeit"
         assert email.text_body =~ "admin/reports?date=2026-01-15"
       end)

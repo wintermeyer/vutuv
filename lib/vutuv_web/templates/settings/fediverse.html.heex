@@ -28,6 +28,38 @@ deserves more room than one toggle row. --%>
           <p class="mt-2 text-slate-600 dark:text-slate-400">
             {gettext("Followers from the Fediverse:")} {compact_count(@follower_count)}
           </p>
+
+          <%= if @followers != [] do %>
+            <ul class="mt-3 space-y-1.5">
+              <li :for={follower <- @followers}>
+                <a
+                  href={follower.actor_uri}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  class="group flex flex-wrap items-baseline gap-x-2"
+                >
+                  <span
+                    :if={follower.name}
+                    class="font-medium text-slate-700 dark:text-slate-200"
+                  >
+                    {follower.name}
+                  </span>
+                  <span class="text-slate-500 group-hover:text-brand-600 dark:text-slate-400 dark:group-hover:text-brand-400">
+                    {Vutuv.Fediverse.Follower.display_handle(follower)}
+                  </span>
+                </a>
+              </li>
+            </ul>
+            <p
+              :if={@follower_count > length(@followers)}
+              class="mt-2 text-xs text-slate-500 dark:text-slate-400"
+            >
+              {gettext("Showing the most recent %{shown} of %{total}.",
+                shown: delimited_count(length(@followers)),
+                total: delimited_count(@follower_count)
+              )}
+            </p>
+          <% end %>
         </div>
       <% end %>
 

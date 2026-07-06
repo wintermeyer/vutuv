@@ -1,9 +1,10 @@
 defmodule Vutuv.Reports.DailyReport do
   @moduledoc """
   A single day's tally for the operator: confirmed-by-PIN new registrations,
-  how many posts, reposts, likes and bookmarks were created, and the day's
-  email-deliverability events (hard bounces, address deactivations, account
-  freezes and thaws) on one German calendar day (`Vutuv.BerlinTime`).
+  how many posts, reposts, likes and bookmarks were created, how many new
+  Fediverse followers were gained, and the day's email-deliverability events
+  (hard bounces, address deactivations, account freezes and thaws) on one
+  German calendar day (`Vutuv.BerlinTime`).
 
   Built by `Vutuv.Reports.daily/1`, rendered on the admin reports page
   (`VutuvWeb.Admin.ReportController`) and mailed each night by
@@ -18,6 +19,7 @@ defmodule Vutuv.Reports.DailyReport do
     reposts: 0,
     likes: 0,
     bookmarks: 0,
+    fediverse_followers: 0,
     bounces: 0,
     deactivations: 0,
     freezes: 0,
@@ -31,6 +33,7 @@ defmodule Vutuv.Reports.DailyReport do
           reposts: non_neg_integer(),
           likes: non_neg_integer(),
           bookmarks: non_neg_integer(),
+          fediverse_followers: non_neg_integer(),
           bounces: non_neg_integer(),
           deactivations: non_neg_integer(),
           freezes: non_neg_integer(),
@@ -47,6 +50,7 @@ defmodule Vutuv.Reports.DailyReport do
     {:reposts, "Repost", "Reposts"},
     {:likes, "Like", "Likes"},
     {:bookmarks, "Lesezeichen", "Lesezeichen"},
+    {:fediverse_followers, "neuer Fediverse-Follower", "neue Fediverse-Follower"},
     {:bounces, "Bounce", "Bounces"},
     {:deactivations, "deaktivierte Adresse", "deaktivierte Adressen"},
     {:freezes, "eingefrorenes Konto", "eingefrorene Konten"},

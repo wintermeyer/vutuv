@@ -175,6 +175,7 @@ defmodule VutuvWeb.SettingsController do
   defp fediverse_assigns(user) do
     [
       follower_count: Vutuv.Fediverse.follower_count(user),
+      followers: Vutuv.Fediverse.list_followers(user),
       fediverse_host: VutuvWeb.Endpoint.host()
     ]
   end

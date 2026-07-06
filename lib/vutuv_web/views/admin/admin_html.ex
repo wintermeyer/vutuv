@@ -156,6 +156,10 @@ defmodule VutuvWeb.Admin.AdminHTML do
         <% "at" -> %>
           <circle cx="12" cy="12" r="3.6" />
           <path d="M15.6 8.4v4.8a2.4 2.4 0 0 0 4.8 0V12a8.4 8.4 0 1 0-3.3 6.7" />
+        <% "globe" -> %>
+          <circle cx="12" cy="12" r="8.5" />
+          <path d="M3.5 12h17" />
+          <path d="M12 3.5c2.3 2.3 3.7 5.3 3.7 8.5s-1.4 6.2-3.7 8.5c-2.3-2.3-3.7-5.3-3.7-8.5S9.7 5.8 12 3.5Z" />
         <% "chart" -> %>
           <path d="M4 4v16h16" />
           <rect x="6.6" y="13" width="2.6" height="4" rx=".5" />

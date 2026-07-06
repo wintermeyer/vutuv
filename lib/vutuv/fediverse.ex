@@ -23,6 +23,7 @@ defmodule Vutuv.Fediverse do
   """
 
   import Ecto.Query
+  import Vutuv.Moderation.Query, only: [account_hidden_row: 1]
 
   require Logger
 
@@ -102,6 +103,53 @@ defmodule Vutuv.Fediverse do
 
   def follower_count(%User{id: user_id}) do
     Repo.aggregate(from(f in Follower, where: f.user_id == ^user_id), :count)
+  end
+
+  @doc """
+  A member's remote followers, newest first, for their own settings page (the
+  public followers collection stays count-only, so this owner-only view is the
+  only place the list is shown). Capped — a member with a huge following sees
+  the most recent `limit`, the exact total comes from `follower_count/1`.
+  """
+  def list_followers(%User{id: user_id}, limit \\ 50) do
+    Repo.all(
+      from(f in Follower,
+        where: f.user_id == ^user_id,
+        order_by: [desc: f.id],
+        limit: ^limit
+      )
+    )
+  end
+
+  @doc """
+  Installation-wide federation figures for the admin dashboard (issue #843):
+  how many members federate, how many remote followers they have between them,
+  the outbound delivery-queue depth and how many of those rows are stuck
+  (carry a `last_error`), so a broken delivery run is visible at a glance.
+  """
+  def stats do
+    %{
+      federating_members: federating_member_count(),
+      remote_followers: Repo.aggregate(Follower, :count),
+      queue_depth: Repo.aggregate(Delivery, :count),
+      stuck_deliveries:
+        Repo.aggregate(from(d in Delivery, where: not is_nil(d.last_error)), :count)
+    }
+  end
+
+  @doc """
+  Members in good standing who opted in — the SQL mirror of `federated?/1`.
+  The good-standing arm delegates to `Vutuv.Moderation.Query.account_hidden_row/1`
+  (the one spelling of frozen/deactivated/suspended), so a changed suspension
+  boundary is edited in one place instead of drifting from `federated?/1` here.
+  """
+  def federating_member_count do
+    Repo.aggregate(
+      from(u in User,
+        where: u.fediverse_followers? and u.email_confirmed? and not account_hidden_row(u)
+      ),
+      :count
+    )
   end
 
   @doc "How many public posts the member has (the outbox totalItems)."
@@ -321,6 +369,10 @@ defmodule Vutuv.Fediverse do
          id: id,
          inbox: inbox,
          shared_inbox: get_in(doc, ["endpoints", "sharedInbox"]),
+         # Cosmetic, remote-supplied and hostile: cap before it reaches the
+         # follower row so the display fields can never overflow their column.
+         preferred_username: truncate(doc["preferredUsername"]),
+         name: truncate(doc["name"]),
          public_key_id: get_in(doc, ["publicKey", "id"]),
          public_key_pem: get_in(doc, ["publicKey", "publicKeyPem"])
        }}
@@ -333,6 +385,11 @@ defmodule Vutuv.Fediverse do
       other -> {:error, {:bad_actor, other}}
     end
   end
+
+  # A remote actor's display strings are cosmetic and untrusted; keep only a
+  # column's worth (nil and non-strings pass through as nil).
+  defp truncate(value) when is_binary(value), do: String.slice(value, 0, 255)
+  defp truncate(_), do: nil
 
   defp ap_get(url, signer) do
     signature_headers =

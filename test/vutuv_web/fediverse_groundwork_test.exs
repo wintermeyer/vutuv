@@ -93,6 +93,26 @@ defmodule VutuvWeb.FediverseGroundworkTest do
       assert body =~ "@#{user.username}@#{VutuvWeb.Endpoint.host()}"
     end
 
+    test "lists who follows the member from the Fediverse", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      conn = put(conn, ~p"/settings/fediverse", %{"user" => %{"fediverse_followers?" => "true"}})
+      user = Vutuv.Accounts.get_user(user.id)
+
+      {:ok, _} =
+        Vutuv.Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          handle: "alice",
+          name: "Alice Example"
+        })
+
+      body = conn |> recycle() |> get(~p"/settings/fediverse") |> html_response(200)
+
+      assert body =~ "Alice Example"
+      assert body =~ "@alice@social.example"
+      assert body =~ "https://social.example/users/alice"
+    end
+
     # The settings-hub restructure moved the update routes to the
     # user-agnostic /settings URLs, but the privacy/notifications templates
     # kept posting to the retired /:slug/settings twins — every Save button on

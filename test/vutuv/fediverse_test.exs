@@ -8,6 +8,7 @@ defmodule Vutuv.FediverseTest do
 
   alias Vutuv.Fediverse
   alias Vutuv.Fediverse.Delivery
+  alias Vutuv.Fediverse.Follower
   alias VutuvWeb.Fediverse.Docs
 
   defp stub_remote(fun) do
@@ -220,6 +221,8 @@ defmodule Vutuv.FediverseTest do
           Jason.encode!(%{
             "id" => "https://social.example/users/alice",
             "type" => "Person",
+            "preferredUsername" => "alice",
+            "name" => "Alice Example",
             "inbox" => "https://social.example/users/alice/inbox",
             "endpoints" => %{"sharedInbox" => "https://social.example/inbox"},
             "publicKey" => %{
@@ -239,6 +242,8 @@ defmodule Vutuv.FediverseTest do
       assert remote.id == "https://social.example/users/alice"
       assert remote.inbox == "https://social.example/users/alice/inbox"
       assert remote.shared_inbox == "https://social.example/inbox"
+      assert remote.preferred_username == "alice"
+      assert remote.name == "Alice Example"
       assert remote.public_key_pem =~ "BEGIN PUBLIC KEY"
     end
 
@@ -251,6 +256,105 @@ defmodule Vutuv.FediverseTest do
       Application.put_env(:vutuv, :ssrf_resolver, fn _host, _family -> {:ok, [{127, 0, 0, 1}]} end)
 
       assert {:error, _} = Fediverse.fetch_remote_actor("https://internal.example/users/x")
+    end
+  end
+
+  describe "the remote-follower list (settings page)" do
+    test "add_follower captures the remote handle and display name" do
+      user = federated_user()
+
+      {:ok, follower} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          handle: "alice",
+          name: "Alice Example"
+        })
+
+      assert follower.handle == "alice"
+      assert follower.name == "Alice Example"
+    end
+
+    test "list_followers/1 returns a member's followers newest-first" do
+      user = federated_user()
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://social.example/users/alice",
+          inbox_uri: "https://social.example/users/alice/inbox",
+          handle: "alice",
+          name: "Alice Example"
+        })
+
+      {:ok, _} =
+        Fediverse.add_follower(user, %{
+          actor_uri: "https://other.example/users/bob",
+          inbox_uri: "https://other.example/users/bob/inbox",
+          handle: "bob"
+        })
+
+      # Another member's follower must not leak into this member's list.
+      {:ok, _} =
+        Fediverse.add_follower(federated_user(), %{
+          actor_uri: "https://social.example/users/mallory",
+          inbox_uri: "https://social.example/users/mallory/inbox"
+        })
+
+      assert [newest, oldest] = Fediverse.list_followers(user)
+      assert newest.handle == "bob"
+      assert oldest.handle == "alice"
+    end
+
+    test "display_handle/1 renders @user@host, falling back to the actor URI" do
+      captured =
+        %Follower{handle: "alice", actor_uri: "https://social.example/users/alice"}
+
+      derived = %Follower{handle: nil, actor_uri: "https://mastodon.example/@carol"}
+
+      assert Follower.display_handle(captured) == "@alice@social.example"
+      assert Follower.display_handle(derived) == "@carol@mastodon.example"
+    end
+  end
+
+  describe "operational stats" do
+    test "stats/0 reports federating members, remote followers, queue depth and stuck rows" do
+      u1 = federated_user()
+      u2 = federated_user()
+      # Opted in but not in good standing, and a plain member: neither counts.
+      _frozen = federated_user(frozen_at: ~N[2026-07-01 00:00:00])
+      _plain = insert(:activated_user)
+
+      for {u, host} <- [{u1, "a.example"}, {u2, "b.example"}] do
+        {:ok, _} =
+          Fediverse.add_follower(u, %{
+            actor_uri: "https://#{host}/users/x",
+            inbox_uri: "https://#{host}/inbox"
+          })
+      end
+
+      Repo.insert!(%Delivery{
+        user_id: u1.id,
+        inbox_uri: "https://a.example/inbox",
+        activity_json: "{}",
+        attempts: 0,
+        next_attempt_at: DateTime.utc_now(:second)
+      })
+
+      Repo.insert!(%Delivery{
+        user_id: u2.id,
+        inbox_uri: "https://b.example/inbox",
+        activity_json: "{}",
+        attempts: 3,
+        next_attempt_at: DateTime.utc_now(:second),
+        last_error: "HTTP 500"
+      })
+
+      assert Fediverse.stats() == %{
+               federating_members: 2,
+               remote_followers: 2,
+               queue_depth: 2,
+               stuck_deliveries: 1
+             }
     end
   end
 end

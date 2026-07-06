@@ -3,8 +3,9 @@ defmodule Vutuv.Reports do
   Basic daily activity reporting for the site operator.
 
   `daily/1` tallies a single German calendar day (`Vutuv.BerlinTime`):
-  confirmed-by-PIN new registrations and the number of posts, reposts, likes
-  and bookmarks created that day. The admin reports page
+  confirmed-by-PIN new registrations, the number of posts, reposts, likes and
+  bookmarks created that day, and the new Fediverse followers gained. The admin
+  reports page
   (`VutuvWeb.Admin.ReportController`) renders any past day on demand;
   `Vutuv.Reports.DailyReporter` mails the previous day's report just after
   midnight, skipping all-zero days.
@@ -15,6 +16,7 @@ defmodule Vutuv.Reports do
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Deliverability
+  alias Vutuv.Fediverse.Follower
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
   alias Vutuv.Repo
@@ -40,6 +42,7 @@ defmodule Vutuv.Reports do
       reposts: count_between(PostRepost, day_start, day_end),
       likes: count_between(PostLike, day_start, day_end),
       bookmarks: count_between(PostBookmark, day_start, day_end),
+      fediverse_followers: count_between(Follower, day_start, day_end),
       bounces: deliverability.bounces,
       deactivations: deliverability.deactivations,
       freezes: deliverability.freezes,
