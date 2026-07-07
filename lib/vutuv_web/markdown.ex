@@ -5,8 +5,9 @@ defmodule VutuvWeb.Markdown do
   Pipeline: `<` is escaped first, so raw HTML a user types shows up as literal
   text instead of becoming markup (and Earmark never enters its HTML-block mode,
   which would swallow the Markdown around it). Bare `http(s)://` URLs become
-  Markdown links whose display text is truncated (long URLs would wreck chat
-  bubbles); trailing sentence punctuation and unbalanced `)` stay outside the
+  Markdown links whose display text is shortened to the host and first path
+  directory (long URLs would wreck chat bubbles); trailing sentence punctuation
+  and unbalanced `)` stay outside the
   link. Earmark renders the Markdown (bold, italics, links, inline code, lists,
   quotes; newlines become `<br>`), HtmlSanitizeEx strips anything dangerous as a
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
@@ -28,13 +29,18 @@ defmodule VutuvWeb.Markdown do
   @preview_min_block 200
   @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
-  # A `@handle` mention or a `#hashtag`. The leading `@`/`#` must not sit
-  # mid-token: no email `a@b`, no numeric entity `&#39;`, no `@@`/`##`, no
-  # `/path#frag` — hence the negative lookbehinds. The name is matched
-  # permissively (any case/length) and validated against the DB by
-  # `linkify_entities/1`: a non-member, or a missing/empty tag, never links.
-  # Capture 1 = handle, capture 2 = hashtag (exactly one matches per hit).
-  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
+  # A fediverse handle `@user@host.tld`, a local `@handle` mention, or a
+  # `#hashtag`. The leading `@`/`#` must not sit mid-token: no email `a@b`, no
+  # numeric entity `&#39;`, no `@@`/`##`, no `/path#frag` — hence the negative
+  # lookbehinds. The fediverse form is tried **first**, so `@a@b.social` links
+  # to the remote account instead of being mistaken for the local member `@a`;
+  # its host is dot-separated alphanumeric labels ending in a TLD (a trailing
+  # sentence dot stays outside). Handles/tags are matched permissively (any
+  # case/length) and validated against the DB by `linkify_entities/1`: a
+  # non-member, or a missing/empty tag, never links; a fediverse handle needs
+  # no lookup. Captures: 1 = fediverse user, 2 = fediverse host, 3 = local
+  # handle, 4 = hashtag (exactly one kind is set per hit).
+  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
 
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).
@@ -91,8 +97,10 @@ defmodule VutuvWeb.Markdown do
     * every `<img>` is dropped: there is no own-attachment whitelist for
       remote content, and a hotlink would leak each reader's IP;
     * `#hashtags` link to our tag pages through the same non-empty-tag gate;
-    * `@mentions` deliberately stay plain text — a Mastodon `@name` names an
-      account in the fediverse, not the vutuv member who happens to share
+    * a fully-qualified `@user@host` fediverse handle links to that remote
+      account (it unambiguously names one), the same as in a member post;
+    * bare `@mentions` deliberately stay plain text — a Mastodon `@name` names
+      an account in the fediverse, not the vutuv member who happens to share
       the handle, so linking it would point at the wrong person.
 
   Returns an HTML **string** (not `safe`): the caller renders it with
@@ -170,13 +178,41 @@ defmodule VutuvWeb.Markdown do
     Enum.count(graphemes, &(&1 == ")")) > Enum.count(graphemes, &(&1 == "("))
   end
 
-  # Scheme-less display text for a URL, truncated to @url_display_max chars.
+  # Scheme-less, www-less display text for a bare URL, shortened to the host
+  # plus its **first** path directory — any deeper path is collapsed into a
+  # trailing `…`. So a long
+  # "https://www.hostsharing.net/downloads/hostsharing-manual.pdf" reads as
+  # "hostsharing.net/downloads/…" instead of a mid-word character cut.
+  # `@url_display_max` stays a final safety cap for a pathologically long host
+  # or first segment (or a query string on a single-segment path).
   defp truncate_url(url) do
-    display =
-      url
-      |> String.replace_prefix("https://", "")
-      |> String.replace_prefix("http://", "")
+    url
+    |> strip_url_scheme()
+    |> String.replace_prefix("www.", "")
+    |> shorten_url_display()
+    |> cap_url_display()
+  end
 
+  defp strip_url_scheme(url) do
+    url
+    |> String.replace_prefix("https://", "")
+    |> String.replace_prefix("http://", "")
+  end
+
+  # host + first path directory, eliding a deeper path. A bare host — or a host
+  # with only a trailing slash or a single directory — keeps its full text; the
+  # `…` appears only when there is a second path segment to hide.
+  defp shorten_url_display(display) do
+    case String.split(display, "/", parts: 3) do
+      [host] -> host
+      [host, ""] -> host
+      [host, dir] -> host <> "/" <> dir
+      [host, dir, ""] -> host <> "/" <> dir
+      [host, dir, _rest] -> host <> "/" <> dir <> "/…"
+    end
+  end
+
+  defp cap_url_display(display) do
     if String.length(display) > @url_display_max do
       String.slice(display, 0, @url_display_max - 1) <> "…"
     else
@@ -189,15 +225,17 @@ defmodule VutuvWeb.Markdown do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
   end
 
-  ## @handle mentions and #hashtags
+  ## @handle / fediverse mentions and #hashtags
 
   # Turns every `@handle` of an existing member into a same-tab link to their
-  # profile (name in a `title` hover tooltip), and every `#hashtag` of a
-  # non-empty tag into a link to its `/tags/:slug` page. Runs on the
-  # already-rendered, sanitized HTML (after `open_links_in_new_tab/1`, so these
-  # internal links don't get `target="_blank"`), and only on text that is
-  # **not** inside a `code`/`pre`/`a` element — an entity typed in code is
-  # sample text and we never nest a link in a link.
+  # profile (name in a `title` hover tooltip), every fully-qualified
+  # `@user@host` fediverse handle into a **new-tab** link to that remote
+  # account, and every `#hashtag` of a non-empty tag into a link to its
+  # `/tags/:slug` page. Runs on the already-rendered, sanitized HTML (after
+  # `open_links_in_new_tab/1`, so the internal member/tag links stay same-tab
+  # while the fediverse link sets its own `target="_blank"`), and only on text
+  # that is **not** inside a `code`/`pre`/`a` element — an entity typed in code
+  # is sample text and we never nest a link in a link.
   #
   # Each body resolves its handles and its hashtags in **one** DB query each;
   # a body with no `@`/`#` at all does no work (so the pure, DB-free unit tests
@@ -216,12 +254,14 @@ defmodule VutuvWeb.Markdown do
     tokens = tokenize_html(html)
 
     case entity_candidates(tokens) do
-      {[], []} ->
+      {[], [], false} ->
         html
 
-      {mentions, hashtags} ->
+      {mentions, hashtags, _fediverse?} ->
         # With an empty user map every mention falls through as plain text
-        # (`mention_link/3`), which is exactly what :hashtags_only wants.
+        # (`mention_link/3`), which is exactly what :hashtags_only wants. A body
+        # carrying only fediverse handles still reaches here (they need no
+        # lookup, so both `mentions` and `hashtags` stay empty) and gets linked.
         users =
           if mode == :all, do: Accounts.get_users_by_usernames(mentions), else: %{}
 
@@ -239,24 +279,32 @@ defmodule VutuvWeb.Markdown do
 
   # The unique, lowercased {handles, hashtags} sitting in linkable text.
   defp entity_candidates(tokens) do
-    {mentions, hashtags} =
-      reduce_linkable_text(tokens, {[], []}, fn text, acc ->
+    {mentions, hashtags, fediverse?} =
+      reduce_linkable_text(tokens, {[], [], false}, fn text, acc ->
         @entity
         |> Regex.scan(text, capture: :all_but_first)
         |> Enum.reduce(acc, &collect_candidate/2)
       end)
 
-    {Enum.uniq(mentions), Enum.uniq(hashtags)}
+    {Enum.uniq(mentions), Enum.uniq(hashtags), fediverse?}
   end
 
-  # `Regex.scan` truncates trailing unmatched groups, so a mention hit arrives
-  # as `["handle"]` and a hashtag hit as `["", "hashtag"]` — match on the first
-  # group being present (mention) vs empty (hashtag).
-  defp collect_candidate([mention | _], {mentions, hashtags}) when mention != "",
-    do: {[String.downcase(mention) | mentions], hashtags}
+  # `Regex.scan` truncates trailing unmatched groups, so each hit arrives at a
+  # different length: a fediverse handle as `["user", "host"]`, a mention as
+  # `["", "", "handle"]`, a hashtag as `["", "", "", "hashtag"]`. Dispatch on
+  # which group is set. A fediverse handle needs no DB lookup, so it only raises
+  # the `fediverse?` flag — that keeps the token walk from being skipped for a
+  # body whose only entities are fediverse handles.
+  defp collect_candidate([user, host | _], {mentions, hashtags, _fediverse?})
+       when user != "" and host != "",
+       do: {mentions, hashtags, true}
 
-  defp collect_candidate([_, hashtag], {mentions, hashtags}),
-    do: {mentions, [String.downcase(hashtag) | hashtags]}
+  defp collect_candidate([_, _, handle | _], {mentions, hashtags, fediverse?})
+       when handle != "",
+       do: {[String.downcase(handle) | mentions], hashtags, fediverse?}
+
+  defp collect_candidate([_, _, _, hashtag], {mentions, hashtags, fediverse?}),
+    do: {mentions, [String.downcase(hashtag) | hashtags], fediverse?}
 
   # Walks the token stream, applying `fun` to every text token outside a
   # skip element and leaving tags and skipped text untouched.
@@ -302,9 +350,24 @@ defmodule VutuvWeb.Markdown do
 
   defp link_entities_in_text(text, users, tags) do
     Regex.replace(@entity, text, fn
-      whole, handle, "" -> mention_link(whole, handle, users)
-      whole, "", hashtag -> hashtag_link(whole, hashtag, tags)
+      _whole, user, host, "", "" -> fediverse_link(user, host)
+      whole, "", "", handle, "" -> mention_link(whole, handle, users)
+      whole, "", "", "", hashtag -> hashtag_link(whole, hashtag, tags)
     end)
+  end
+
+  # A fediverse handle `@user@host` links to that remote account's profile at
+  # the Mastodon-web convention `https://host/@user` (geno.social and the vast
+  # majority of servers). This is a pure string mapping — no WebFinger lookup —
+  # so it also works on air-gapped installs and never leaks a reader's request
+  # to the remote host at render time. The host is lowercased (hostnames are
+  # case-insensitive); the typed user case is kept in both the URL and the
+  # label. Opens in a new tab like other external links; both parts are a
+  # validated charset (`[A-Za-z0-9_]` / `[A-Za-z0-9.-]`), so no escaping needed.
+  defp fediverse_link(user, host) do
+    href = "https://#{String.downcase(host)}/@#{user}"
+
+    ~s(<a href="#{href}" target="_blank" rel="noopener noreferrer" class="mention">@#{user}@#{host}</a>)
   end
 
   defp mention_link(whole, handle, users) do
