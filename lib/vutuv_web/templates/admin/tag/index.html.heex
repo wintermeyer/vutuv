@@ -11,7 +11,39 @@
     <p>
       <%= link gettext("Honor tags ›"), to: ~p"/admin/honor_tags", class: "card__morelink" %>
     </p>
-    <div class="card__tablewrap">
+
+    <form method="get" action={~p"/admin/tags"} class="mb-4 flex flex-wrap items-end gap-3">
+      <div class="grow">
+        <label for="tag-search" class="block text-sm font-semibold text-slate-700 dark:text-slate-200">
+          {gettext("Search tags")}
+        </label>
+        <input
+          type="search"
+          name="q"
+          id="tag-search"
+          value={@query}
+          placeholder={gettext("name or slug")}
+          class={input_class()}
+        />
+      </div>
+      <button type="submit" class="button" id="search-tags">{gettext("Search")}</button>
+      <a
+        :if={@query != ""}
+        href={~p"/admin/tags"}
+        class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        {gettext("Reset")}
+      </a>
+    </form>
+
+    <p :if={@tags == [] and @query != ""} class="card__empty">
+      {gettext("No tags match your search.")}
+    </p>
+    <p :if={@tags == [] and @query == ""} class="card__empty">
+      {gettext("No tags yet.")}
+    </p>
+
+    <div :if={@tags != []} class="card__tablewrap">
     <table>
       <thead>
         <tr>
@@ -46,7 +78,7 @@
     </table>
     </div>
 
-    <.pager params={@conn.params} total={@tags_count} />
+    <.pager params={@conn.params} total={@tags_count} query={@pager_query} />
 
     <p>
       <%= link gettext("New tag"), to: ~p"/admin/tags/new", class: "card__morelink" %>

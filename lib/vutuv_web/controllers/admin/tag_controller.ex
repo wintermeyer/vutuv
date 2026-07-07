@@ -8,19 +8,43 @@ defmodule VutuvWeb.Admin.TagController do
     field: :slug
   )
 
+  alias Vutuv.Pages
+  alias Vutuv.SearchText
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias VutuvWeb.ControllerHelpers
 
-  def index(conn, _params) do
-    tags_count = Repo.one(from(t in Tag, select: count(t.id)))
+  def index(conn, params) do
+    # Guard against a crafted `?q[x]=1` (a map/list) that `to_string/1` would 500 on.
+    query =
+      case Map.get(params, "q") do
+        q when is_binary(q) -> String.trim(q)
+        _ -> ""
+      end
+
+    base = search_tags(query)
+    tags_count = Repo.aggregate(base, :count)
 
     tags =
-      from(t in Tag, order_by: t.slug)
-      |> Vutuv.Pages.paginate(conn.params, tags_count)
+      from(t in base, order_by: t.slug)
+      |> Pages.paginate(params, tags_count)
       |> Repo.all()
 
-    render(conn, "index.html", tags: tags, tags_count: tags_count)
+    render(conn, "index.html",
+      tags: tags,
+      tags_count: tags_count,
+      query: query,
+      pager_query: (query != "" && %{"q" => query}) || %{}
+    )
+  end
+
+  # Filter tags by a case-insensitive substring of name or slug (the same
+  # match the public tag search uses). An empty query lists every tag.
+  defp search_tags(""), do: from(t in Tag)
+
+  defp search_tags(query) do
+    infix = "%" <> SearchText.escape_like(query) <> "%"
+    from(t in Tag, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
   end
 
   def new(conn, _params) do
