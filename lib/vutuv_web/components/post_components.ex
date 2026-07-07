@@ -5,9 +5,9 @@ defmodule VutuvWeb.PostComponents do
 
   Preview mode cuts the Markdown server-side at a block boundary
   (`VutuvWeb.Markdown.render_preview/2`), clamps to a few lines via CSS for
-  visual consistency, drops inline images and shows every attachment as a
-  thumbnail row instead. Full mode renders inline images in place and the
-  unreferenced attachments as a gallery.
+  visual consistency, and shows every attachment as a thumbnail row. Full
+  mode shows every attachment as a gallery below the body. Post bodies never
+  embed images inline — uploaded pictures are always attachments, shown here.
 
   Not imported globally — `import VutuvWeb.PostComponents` where needed.
   """
@@ -966,13 +966,9 @@ defmodule VutuvWeb.PostComponents do
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username
 
-  # Full mode: attachments the body references inline render in place; the
-  # rest form the gallery. Preview mode handles images separately (thumbs).
-  defp gallery(post, :preview), do: post.images
-
-  defp gallery(post, :full) do
-    Enum.reject(post.images, &PostImage.referenced_in?(&1, post.body))
-  end
+  # Every attachment shows in the gallery (full mode) or the thumbnail row
+  # (preview) — post bodies never embed images inline.
+  defp gallery(post, _mode), do: post.images
 
   @doc """
   Author-facing label for a post-denial wildcard — the one wording for "who

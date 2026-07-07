@@ -175,10 +175,19 @@ retained past account deletion.
 
 ## Post images
 
-Post images are uploaded eagerly in the composer (so inline `![](…)` references
-work before submitting; abandoned uploads are swept after a day), up to 10 per
-post, 6 MB each (`jpg/png/webp`, plus `heic` when the libvips build can decode
-it — capability-detected via `priv/heic_probe.heic`).
+Post images are uploaded eagerly in the composer (abandoned uploads are swept
+after a day), up to 10 per post, 6 MB each (`jpg/png/webp`, plus `heic` when the
+libvips build can decode it — capability-detected via `priv/heic_probe.heic`).
+Attachments are shown as a **gallery** below the post; post **bodies never embed
+images inline**. Two guards, one at each end: `Vutuv.MarkdownContent.validate_no_images/2`
+in `Post.changeset` rejects a body with image Markdown (`![](…)`) on every write
+path (the composer and `POST /api/2.0/posts` alike — a 422 for the API), and
+`VutuvWeb.Markdown.render_post/2` drops every `<img>` at display time (so a
+legacy inline reference in an old body, or a hotlinked remote picture, never
+renders). The composer offers no "insert into text" action, and the Milkdown
+editor strips image nodes client-side. The `VutuvWeb.PostComponents` card renders
+`post.images` as the gallery/thumbnail row. Direct messages share the same rule
+(`Vutuv.Chat.Message` + [messages.md](messages.md)).
 
 All served versions are AVIF (see [images.md](images.md)), EXIF-autorotated and
 **metadata-stripped** (no GPS leaks); the original keeps its metadata in the

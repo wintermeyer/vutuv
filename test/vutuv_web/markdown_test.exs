@@ -12,6 +12,15 @@ defmodule VutuvWeb.MarkdownTest do
     assert html =~ "<code"
   end
 
+  test "drops images — no message body embeds a picture" do
+    html = render("before ![pic](https://evil.example/x.png) after")
+
+    refute html =~ "<img"
+    refute html =~ "evil.example"
+    assert html =~ "before"
+    assert html =~ "after"
+  end
+
   test "renders markdown links opening in a new tab" do
     html = render("see [the docs](https://hexdocs.pm/phoenix)")
     assert html =~ ~s(href="https://hexdocs.pm/phoenix")

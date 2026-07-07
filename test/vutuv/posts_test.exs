@@ -63,6 +63,19 @@ defmodule Vutuv.PostsTest do
       assert %{body: ["can't be blank"]} = errors_on(changeset)
     end
 
+    test "rejects a body that embeds an image (uploads are attachments, not inline)" do
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Posts.create_post(user(), %{body: "hi ![x](/post_images/t/large.avif)"})
+
+      assert "must not contain images" in errors_on(changeset).body
+    end
+
+    test "allows image Markdown shown inside a code sample" do
+      body = "```\n![x](/post_images/t/large.avif)\n```"
+      assert {:ok, post} = Posts.create_post(user(), %{body: body})
+      assert post.body == body
+    end
+
     test "allows an empty body when images are attached" do
       author = user()
       image = insert(:post_image, user: author, post: nil)

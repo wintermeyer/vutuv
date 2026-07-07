@@ -3,6 +3,8 @@ defmodule Vutuv.Posts.Post do
 
   use VutuvWeb, :model
 
+  alias Vutuv.MarkdownContent
+
   @max_body_length 20_000
 
   schema "posts" do
@@ -40,5 +42,9 @@ defmodule Vutuv.Posts.Post do
     |> cast(params, [:body], empty_values: [])
     |> update_change(:body, &String.trim/1)
     |> validate_length(:body, max: @max_body_length)
+    # Post bodies never embed images: uploaded pictures are attachments shown as
+    # a gallery, not inline in the prose. The renderer also drops any `<img>` at
+    # display time (`VutuvWeb.Markdown.render_post/2`); this is the storage guard.
+    |> MarkdownContent.validate_no_images()
   end
 end

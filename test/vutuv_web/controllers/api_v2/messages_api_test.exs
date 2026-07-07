@@ -18,6 +18,16 @@ defmodule VutuvWeb.ApiV2.MessagesApiTest do
   end
 
   describe "POST /users/:slug/messages" do
+    test "a body that embeds an image is a 422", %{conn: conn, other: other, token: token} do
+      conn =
+        json_post(conn, token, "/api/2.0/users/#{other.username}/messages", %{
+          body: "hi ![x](https://evil.example/pixel.png)"
+        })
+
+      assert conn.status == 422
+      assert json_response(conn, 422)["errors"]["body"]
+    end
+
     test "messaging a follower lands directly; thread and list follow", %{
       conn: conn,
       me: me,

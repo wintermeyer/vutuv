@@ -42,6 +42,16 @@ defmodule VutuvWeb.ApiV2.PostsApiTest do
       assert conn.status == 422
     end
 
+    test "a body that embeds an image is a 422", %{conn: conn, token: token} do
+      conn =
+        json_req(conn, :post, token, "/api/2.0/posts", %{
+          body: "hi ![x](/post_images/t/large.avif)"
+        })
+
+      assert conn.status == 422
+      assert json_response(conn, 422)["errors"]["body"]
+    end
+
     test "audience denials apply: a connections-only post hides from strangers", %{
       conn: conn,
       me: me,

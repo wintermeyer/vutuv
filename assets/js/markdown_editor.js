@@ -18,6 +18,12 @@
 // renders them as literal "[ ]" text, so offering them would be a dishonest
 // WYSIWYG. Milkdown's gfm() preset bundles task lists, so we compose the gfm
 // pieces we want by hand rather than using the whole preset.
+//
+// Images are excluded too: post bodies never embed pictures inline (uploaded
+// images are shown as a gallery, not in the prose), and VutuvWeb.Markdown drops
+// every `![](…)` at render time. commonmark bundles an image node, so a pasted
+// picture or a typed `![alt](src)` would otherwise create one; the stripImages
+// plugin below removes any image node so the editor stays honest to what renders.
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import {
   commonmark,
@@ -100,6 +106,29 @@ const placeholder = (text) =>
       })
   )
 
+// Keep the editor image-free: strip any image node the schema might create from
+// a pasted picture or a typed `![alt](src)`. Mirrors the server-side drop in
+// VutuvWeb.Markdown.render_post/2, so the WYSIWYG never shows an image that the
+// rendered post would silently omit.
+const stripImages = $prose(
+  () =>
+    new Plugin({
+      key: new PluginKey("MDE_NO_IMAGES"),
+      appendTransaction(transactions, _oldState, newState) {
+        if (!transactions.some((tr) => tr.docChanged)) return null
+        const ranges = []
+        newState.doc.descendants((node, pos) => {
+          if (node.type.name === "image") ranges.push([pos, pos + node.nodeSize])
+        })
+        if (ranges.length === 0) return null
+        const tr = newState.tr
+        // Delete from the end so the earlier positions stay valid.
+        ranges.reverse().forEach(([from, to]) => tr.delete(from, to))
+        return tr
+      },
+    })
+)
+
 // Toolbar button (data-mde-cmd) -> Milkdown command. Each returns the command
 // key + optional payload; `link` is special-cased (it needs a URL).
 const COMMANDS = {
@@ -152,6 +181,7 @@ export const MarkdownEditor = {
       .use(listener)
       .use(history)
       .use(placeholder(placeholderText))
+      .use(stripImages)
       .create()
 
     this.applyState()

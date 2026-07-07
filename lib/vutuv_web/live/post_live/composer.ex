@@ -5,10 +5,12 @@ defmodule VutuvWeb.PostLive.Composer do
   `Vutuv.Posts.create_reply/3`).
 
   **Images upload eagerly**: the moment a file is picked it is processed
-  (`Vutuv.Posts.create_pending_image/3` — WebP versions, private original)
-  and gets a URL, so the author can reference it inline (`![](…)`) before
-  the post exists. Submit attaches the pending rows; abandoned ones are
-  swept after a day. Each image carries an alt-text input (stored on save).
+  (`Vutuv.Posts.create_pending_image/3` — WebP versions, private original).
+  Submit attaches the pending rows; abandoned ones are swept after a day. Each
+  image carries an alt-text input (stored on save). Attachments are shown as a
+  gallery below the post (`VutuvWeb.PostComponents`); post **bodies never embed
+  images inline** (there is no "insert into text" action, and the renderer
+  drops any `![](…)` from the body — `VutuvWeb.Markdown.render_post/2`).
 
   **Audience:** new posts publish **public** — there is no audience picker on
   the composer. The deny model still stands behind it: an existing restricted
@@ -162,17 +164,6 @@ defmodule VutuvWeb.PostLive.Composer do
   def handle_event("undeny-user", %{"id" => id}, socket) do
     {:noreply,
      assign(socket, :denied_users, Enum.reject(socket.assigns.denied_users, &(&1.id == id)))}
-  end
-
-  def handle_event("insert-inline", %{"id" => id}, socket) do
-    case Enum.find(socket.assigns.images, &(&1.id == id)) do
-      nil ->
-        {:noreply, socket}
-
-      image ->
-        snippet = "\n\n![](#{PostImage.url(image, "large")})\n"
-        {:noreply, assign(socket, :body, String.trim_trailing(socket.assigns.body) <> snippet)}
-    end
   end
 
   def handle_event("remove-image", %{"id" => id}, socket) do
@@ -462,16 +453,6 @@ defmodule VutuvWeb.PostLive.Composer do
                 placeholder={gettext("Describe this image (alt text)")}
                 class={[input_class(), "flex-1"]}
               />
-              <button
-                type="button"
-                phx-click="insert-inline"
-                phx-value-id={image.id}
-                phx-target={@myself}
-                title={gettext("Insert into text")}
-                class="rounded-lg px-2 py-1 text-sm font-semibold text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-800"
-              >
-                ↳ {gettext("Insert")}
-              </button>
               <button
                 type="button"
                 phx-click="remove-image"

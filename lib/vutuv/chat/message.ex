@@ -3,6 +3,8 @@ defmodule Vutuv.Chat.Message do
 
   use VutuvWeb, :model
 
+  alias Vutuv.MarkdownContent
+
   @max_body_length 10_000
 
   schema "messages" do
@@ -29,5 +31,8 @@ defmodule Vutuv.Chat.Message do
     |> update_change(:body, &String.trim/1)
     |> validate_required([:body])
     |> validate_length(:body, max: @max_body_length)
+    # Messages carry no images: the renderer also drops any `<img>` at display
+    # time (`VutuvWeb.Markdown.render/1`); this is the storage-side guard.
+    |> MarkdownContent.validate_no_images()
   end
 end

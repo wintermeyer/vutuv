@@ -11,10 +11,16 @@ defmodule VutuvWeb.Markdown do
   link. Earmark renders the Markdown (bold, italics, links, inline code, lists,
   quotes; newlines become `<br>`), HtmlSanitizeEx strips anything dangerous as a
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
+
+  **Images are always stripped**: no body embeds a picture. A post's uploaded
+  images are attachments shown as a gallery (`VutuvWeb.PostComponents`), a
+  message carries none, and a hotlinked remote image would leak every reader's
+  IP. `Vutuv.MarkdownContent.validate_no_images/2` keeps the `![](…)` from being
+  stored in the first place; `render_pipeline/1` drops any `<img>` that a body
+  already carries at display time.
   """
 
   alias Vutuv.Accounts
-  alias Vutuv.Posts.PostImage
   alias Vutuv.Tags
   alias VutuvWeb.UserHelpers
 
@@ -27,7 +33,6 @@ defmodule VutuvWeb.Markdown do
   # one-line intro above a long block doesn't leave a one-line preview) — but
   # only if at least this many characters of budget remain, else just stop.
   @preview_min_block 200
-  @inline_image ~r/!\[([^\]]*)\]\(([^)\s]+)\)/
 
   # A fediverse handle `@user@host.tld`, a local `@handle` mention, or a
   # `#hashtag`. The leading `@`/`#` must not sit mid-token: no email `a@b`, no
@@ -60,28 +65,19 @@ defmodule VutuvWeb.Markdown do
   @doc """
   Render a post's Markdown (`Phoenix.HTML.safe()`).
 
-  Same pipeline as `render/1`, plus inline images: `![alt](url)` renders as
-  an `<img>` **only** when `url` is a served version of one of the post's
-  own attachments (`images`). Everything else that would become an image —
-  hotlinked remote pictures (a tracking hole: every reader's IP would leak
-  to a third party), other posts' attachments, raw HTML — is dropped or
-  stays escaped text. An empty Markdown alt is filled from the attachment's
-  stored alt text.
-
-  Mechanics: allowed references are swapped for unguessable plain-text
-  markers *before* rendering, every `<img>` the pipeline produces is
-  stripped *after* sanitizing, and the markers are then replaced with
-  `<img>` tags built here from known-safe parts.
+  Same pipeline as `render/1`. Post **bodies never embed images**: every
+  `<img>` the pipeline would produce — an author's own attachment referenced
+  as `![](…)`, a hotlinked remote picture (a tracking hole: every reader's IP
+  would leak to a third party), raw `<img>` HTML — is dropped or stays escaped
+  text. Uploaded pictures are shown as a separate gallery by the post card
+  (`VutuvWeb.PostComponents`), not inline in the prose. The `images` argument
+  is kept for call-site compatibility and is ignored.
   """
-  def render_post(text, images) when is_binary(text) and is_list(images) do
-    {prepared, replacements} = extract_inline_images(text, images)
-
-    prepared
+  def render_post(text, _images) when is_binary(text) do
+    text
     |> render_pipeline()
-    |> strip_img_tags()
     |> open_links_in_new_tab()
     |> linkify_entities()
-    |> inject_inline_images(replacements)
     |> Phoenix.HTML.raw()
   end
 
@@ -109,15 +105,20 @@ defmodule VutuvWeb.Markdown do
   def render_remote(text) when is_binary(text) do
     text
     |> render_pipeline()
-    |> strip_img_tags()
     |> open_links_in_new_tab()
     |> linkify_entities(:hashtags_only)
   end
 
   def render_remote(_), do: ""
 
-  # The shared core both renderers run: escape raw HTML, autolink bare URLs,
-  # render the Markdown, undo the double-escape, sanitize.
+  # The shared core every renderer runs: escape raw HTML, autolink bare URLs,
+  # render the Markdown, undo the double-escape, sanitize, and drop images.
+  # No body — a post, a message, remote content — ever embeds a picture: post
+  # attachments show as a gallery, messages carry none, and a hotlinked remote
+  # image would leak every reader's IP. `MarkdownContent.validate_no_images/2`
+  # stops the `![](…)` from being stored; this stops any already stored one from
+  # displaying (`strip_img_tags/1` runs last, after the sanitizer emits its
+  # `<img>`).
   defp render_pipeline(text) do
     text
     |> strip_break_artifacts()
@@ -127,6 +128,7 @@ defmodule VutuvWeb.Markdown do
     # Earmark escapes the ampersand of our pre-escaped `&lt;` — undo the double.
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
+    |> strip_img_tags()
   end
 
   # The Milkdown editor emits a literal `<br />` for content it has no plain
@@ -439,70 +441,14 @@ defmodule VutuvWeb.Markdown do
     ~s(<a href="/tags/#{slug}" class="hashtag">##{typed_hashtag}</a>)
   end
 
-  ## Inline post images
-
-  # Swaps every allowed `![alt](url)` for a plain-text marker and returns the
-  # replacement <img> HTML per marker. The marker carries a per-render nonce,
-  # so an author cannot type a literal marker that collides with a real one.
-  defp extract_inline_images(text, images) do
-    allowed = allowed_srcs(images)
-    nonce = Base.encode16(:crypto.strong_rand_bytes(6))
-
-    @inline_image
-    |> Regex.scan(text)
-    |> Enum.reduce({text, []}, fn [full, alt, src], {text, replacements} ->
-      case Map.get(allowed, src) do
-        nil ->
-          {text, replacements}
-
-        {image, canonical_src} ->
-          marker = "VUTUVIMG#{nonce}N#{length(replacements)}END"
-
-          {String.replace(text, full, marker, global: false),
-           [{marker, inline_img_html(canonical_src, alt, image)} | replacements]}
-      end
-    end)
-  end
-
-  # Every URL form an old or new body may carry (`PostImage.url_forms/2`,
-  # incl. the pre-AVIF `.webp` form) maps to the image and its **canonical**
-  # URL — the rendered <img> always points at the current format.
-  defp allowed_srcs(images) do
-    for image <- images,
-        version <- PostImage.versions(),
-        src <- PostImage.url_forms(image, version),
-        into: %{} do
-      {src, {image, PostImage.url(image, version)}}
-    end
-  end
-
-  defp inline_img_html(src, md_alt, image) do
-    alt = if md_alt == "", do: image.alt || "", else: md_alt
-
-    dimensions =
-      if image.width && image.height do
-        ~s( width="#{image.width}" height="#{image.height}")
-      else
-        ""
-      end
-
-    ~s(<img src="#{escape(src)}" alt="#{escape(alt)}"#{dimensions} loading="lazy" class="post-inline-image">)
-  end
-
   defp escape(text) do
     text |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
   end
 
-  # Every <img> the pipeline produced is untrusted (remote hotlinks, foreign
-  # attachments); only the marker-injected ones below may survive.
+  # Post bodies never embed images and remote content never hotlinks one, so
+  # every <img> the Markdown pipeline produces is dropped.
   defp strip_img_tags(html) do
     String.replace(html, ~r/<img\b[^>]*>/i, "")
-  end
-
-  defp inject_inline_images(html, replacements) do
-    Enum.reduce(replacements, html, fn {marker, img_html}, html ->
-      String.replace(html, marker, img_html)
-    end)
   end
 
   ## Preview truncation

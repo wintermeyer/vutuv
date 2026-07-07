@@ -294,6 +294,46 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "/post_images/#{attached.token}/feed.avif"
     end
 
+    test "an uploaded image gets alt + remove controls but no inline-insert action", %{
+      conn: conn
+    } do
+      tmp =
+        Path.join(System.tmp_dir!(), "vutuv_feed_noinline_#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(tmp)
+      prev = Application.get_env(:vutuv, :uploads_dir_prefix)
+      Application.put_env(:vutuv, :uploads_dir_prefix, tmp)
+
+      on_exit(fn ->
+        File.rm_rf(tmp)
+
+        if prev,
+          do: Application.put_env(:vutuv, :uploads_dir_prefix, prev),
+          else: Application.delete_env(:vutuv, :uploads_dir_prefix)
+      end)
+
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      {:ok, image} = Image.new(64, 64, color: [10, 100, 200])
+      {:ok, png} = Image.write(image, :memory, suffix: ".png")
+
+      live
+      |> file_input("#composer-form", :images, [
+        %{name: "photo.png", content: png, type: "image/png"}
+      ])
+      |> render_upload("photo.png")
+
+      # The normal upload feature stays: the picker and per-image alt + remove
+      # controls are still there.
+      assert render(live) =~ "Add images"
+      assert has_element?(live, ~s([phx-click="remove-image"]))
+
+      # But there is no way to embed the image inside the Markdown body: the
+      # "Insert into text" action is gone.
+      refute has_element?(live, ~s([phx-click="insert-inline"]))
+    end
+
     test "a refused file is named in a persistent error and the composer recovers", %{
       conn: conn
     } do

@@ -200,6 +200,16 @@ defmodule Vutuv.ChatTest do
       assert Repo.get!(Conversation, conversation.id).last_message_at
     end
 
+    test "rejects a message body that embeds an image" do
+      [a, b] = [user(), user()]
+      conversation = insert_conversation_between(a, b)
+
+      assert {:error, %Ecto.Changeset{} = changeset} =
+               Chat.send_message(a, conversation.id, "hi ![x](https://evil.example/pixel.png)")
+
+      assert "must not contain images" in errors_on(changeset).body
+    end
+
     test "broadcasts to the conversation topic and the recipient's activity topic" do
       [a, b] = [user(), user()]
       conversation = insert_conversation_between(a, b)

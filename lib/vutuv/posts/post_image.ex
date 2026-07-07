@@ -61,27 +61,9 @@ defmodule Vutuv.Posts.PostImage do
   """
   def og_url(%__MODULE__{token: token}), do: "#{token_prefix(token)}og.jpg"
 
-  @doc """
-  Every URL form that may reference this version in a stored post body: the
-  canonical URL plus the pre-AVIF `.webp` form old bodies still carry.
-  Transitional — remove together with `Vutuv.Uploads.Spec.legacy_exts/0`.
-  """
-  def url_forms(%__MODULE__{token: token} = image, version) when version in @versions do
-    [url(image, version), "#{token_prefix(token)}#{version}.webp"]
-  end
-
   @doc "URLs for every served version as a `%{version => url}` map."
   def urls(%__MODULE__{} = image) do
     %{thumb: url(image, "thumb"), feed: url(image, "feed"), large: url(image, "large")}
-  end
-
-  @doc """
-  Whether `body` references this image's proxy URL (any version) inline.
-  Keeps the URL scheme knowledge next to `url/2` — used to decide which
-  attachments render inline vs. in the gallery below the post.
-  """
-  def referenced_in?(%__MODULE__{token: token}, body) when is_binary(body) do
-    String.contains?(body, token_prefix(token))
   end
 
   defp token_prefix(token), do: "/post_images/#{token}/"

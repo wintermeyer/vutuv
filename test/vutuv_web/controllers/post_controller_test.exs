@@ -34,6 +34,30 @@ defmodule VutuvWeb.PostControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == []
     end
 
+    test "an attached image renders as a gallery attachment, never inline in the body", %{
+      conn: conn
+    } do
+      user = insert_activated_user()
+
+      post = create_post!(user, %{body: "See the chart:"})
+      insert(:post_image, user: user, post: post, token: "galtok", alt: "A chart")
+
+      # A legacy body that still carries an inline `![](…)` reference (predating
+      # the no-images rule, so written straight to the row past the changeset):
+      # the picture must still show — as a gallery attachment below the body —
+      # but must never be embedded inside the Markdown prose.
+      Vutuv.Repo.update_all(
+        from(p in Vutuv.Posts.Post, where: p.id == ^post.id),
+        set: [body: "See the chart:\n\n![](/post_images/galtok/large.avif)"]
+      )
+
+      conn = get(conn, Posts.path(post))
+      html = html_response(conn, 200)
+
+      assert html =~ "/post_images/galtok/feed.avif"
+      refute html =~ "post-inline-image"
+    end
+
     test "redirects non-canonical URLs to the canonical form", %{conn: conn} do
       user = insert_activated_user()
       post = create_post!(user, %{body: "x"})
