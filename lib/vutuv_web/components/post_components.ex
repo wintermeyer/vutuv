@@ -669,25 +669,67 @@ defmodule VutuvWeb.PostComponents do
         </.link>
 
         <div class="min-w-0 flex-1">
-          <div class="flex flex-wrap items-baseline gap-x-2">
-            <.link
-              href={~p"/#{@post.user}"}
-              class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
-            >
-              {full_name(@post.user)}
-            </.link>
-            <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700">
-              <.post_time id={@time_id} at={@post.inserted_at} />
-            </.link>
-            <span :if={@edited?} class="text-xs text-slate-600 dark:text-slate-400">{gettext("edited")}</span>
-            <span
-              :if={@restricted?}
-              title={gettext("Limited audience")}
-              class="text-xs text-slate-600 dark:text-slate-400"
-              aria-label={gettext("Limited audience")}
-            >
-              🔒
-            </span>
+          <%!-- The ⋯ menu rides this header row (right-aligned via the name
+          block's flex-1) so the body below spans the full content column. When
+          the menu was a sibling of that column it narrowed it for its whole
+          height, and the body text wrapped early at the menu's left edge. --%>
+          <div class="flex items-start gap-2">
+            <div class="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+              <.link
+                href={~p"/#{@post.user}"}
+                class="font-semibold text-slate-900 hover:text-brand-700 dark:text-white"
+              >
+                {full_name(@post.user)}
+              </.link>
+              <.link href={@permalink} class="text-sm text-slate-600 dark:text-slate-400 hover:text-brand-700">
+                <.post_time id={@time_id} at={@post.inserted_at} />
+              </.link>
+              <span :if={@edited?} class="text-xs text-slate-600 dark:text-slate-400">{gettext("edited")}</span>
+              <span
+                :if={@restricted?}
+                title={gettext("Limited audience")}
+                class="text-xs text-slate-600 dark:text-slate-400"
+                aria-label={gettext("Limited audience")}
+              >
+                🔒
+              </span>
+            </div>
+
+            <%!-- The author's quiet ⋯ menu, on every rendering of their post. --%>
+            <div :if={@author?} class="-mr-1 -mt-1 shrink-0">
+              <.card_menu id={@menu_id}>
+                <:item href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
+                <:item
+                  href={~p"/posts/#{@post.id}"}
+                  method="delete"
+                  confirm={gettext("Delete this post permanently?")}
+                  danger
+                >
+                  {gettext("Delete")}
+                </:item>
+              </.card_menu>
+            </div>
+
+            <%!-- Everyone else gets the same quiet ⋯ menu with the Report action,
+            plus a Mute toggle when the viewer follows this author, so an annoying
+            post can be silenced straight from the feed. Mute keeps the follow (and
+            any vernetzt status); it only drops the author's posts from your feed. --%>
+            <div :if={@reporter?} class="-mr-1 -mt-1 shrink-0">
+              <.card_menu id={@report_menu_id}>
+                <:item
+                  :if={@viewer_follow}
+                  href={~p"/follows/#{@viewer_follow.id}/mute"}
+                  method="put"
+                >
+                  {if @viewer_follow.muted?,
+                    do: gettext("Unmute @%{handle}", handle: @post.user.username),
+                    else: gettext("Mute @%{handle}", handle: @post.user.username)}
+                </:item>
+                <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
+                  {gettext("Report")}
+                </:item>
+              </.card_menu>
+            </div>
           </div>
 
           <%!-- Full mode: the whole body, no clamp. --%>
@@ -827,42 +869,6 @@ defmodule VutuvWeb.PostComponents do
               session: %{"post_id" => @post.id, "id" => @actions_id, "engagement" => @engagement}
             )}
           <% end %>
-        </div>
-
-        <%!-- The author's quiet ⋯ menu, on every rendering of their post. --%>
-        <div :if={@author?} class="shrink-0">
-          <.card_menu id={@menu_id}>
-            <:item href={~p"/posts/#{@post.id}/edit"}>{gettext("Edit")}</:item>
-            <:item
-              href={~p"/posts/#{@post.id}"}
-              method="delete"
-              confirm={gettext("Delete this post permanently?")}
-              danger
-            >
-              {gettext("Delete")}
-            </:item>
-          </.card_menu>
-        </div>
-
-        <%!-- Everyone else gets the same quiet ⋯ menu with the Report action —
-        plus a Mute toggle when the viewer follows this author, so an annoying
-        post can be silenced straight from the feed. Mute keeps the follow (and
-        any vernetzt status); it only drops the author's posts from your feed. --%>
-        <div :if={@reporter?} class="shrink-0">
-          <.card_menu id={@report_menu_id}>
-            <:item
-              :if={@viewer_follow}
-              href={~p"/follows/#{@viewer_follow.id}/mute"}
-              method="put"
-            >
-              {if @viewer_follow.muted?,
-                do: gettext("Unmute @%{handle}", handle: @post.user.username),
-                else: gettext("Mute @%{handle}", handle: @post.user.username)}
-            </:item>
-            <:item href={~p"/reports/new?#{[type: "post", id: @post.id, return_to: @permalink]}"}>
-              {gettext("Report")}
-            </:item>
-          </.card_menu>
         </div>
       </div>
     </div>
