@@ -1,8 +1,8 @@
 defmodule VutuvWeb.PostEditLiveTest do
   @moduledoc """
   The edit page: author-only, prefilled composer, saving redirects to the
-  permalink with the audience replaced, and the permalink coordinates never
-  change.
+  permalink with the audience preserved (there is no audience picker), and the
+  permalink coordinates never change.
   """
   use VutuvWeb.ConnCase
 
@@ -26,8 +26,13 @@ defmodule VutuvWeb.PostEditLiveTest do
       assert html =~ "draft words"
       assert html =~ "elixir"
 
-      assert live |> element("#composer-preset") |> render() =~
-               ~s(option value="followers" selected)
+      # There is no audience picker anymore; the post keeps its followers-only
+      # audience on save (see "editing a restricted post keeps its audience").
+      refute has_element?(live, "#composer-preset")
+
+      # The corner ✕ that collapses the feed composer is feed-only; the edit
+      # page navigates away, so it renders no close-composer control.
+      refute has_element?(live, ~s(button[phx-click="close-composer"]))
     end
 
     test "saving updates the post and navigates to the permalink", %{conn: conn} do
@@ -37,15 +42,122 @@ defmodule VutuvWeb.PostEditLiveTest do
       {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
 
       live
-      |> form("#composer-form", %{"post" => %{"body" => "after", "preset" => "only_me"}})
+      |> form("#composer-form", %{"post" => %{"body" => "after"}})
       |> render_submit()
 
       assert_redirect(live, Posts.path(post))
 
       updated = Posts.get_post(post.id)
       assert updated.body == "after"
-      assert [%{wildcard: "everyone"}] = updated.denials
+      # A public post stays public — there is no picker to change its audience.
+      assert updated.denials == []
       assert updated.published_on == post.published_on
+    end
+
+    test "editing a restricted post keeps its audience", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      {:ok, post} =
+        Posts.create_post(user, %{
+          body: "followers only",
+          denials: [%{"wildcard" => "non_followers"}]
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      # Typing (phx-change) and then saving without an audience field must not
+      # widen a restricted post to public now that the picker is gone.
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "still followers only"}})
+      |> render_change()
+
+      live
+      |> form("#composer-form", %{"post" => %{"body" => "still followers only"}})
+      |> render_submit()
+
+      assert_redirect(live, Posts.path(post))
+
+      updated = Posts.get_post(post.id)
+      assert updated.body == "still followers only"
+      assert [%{wildcard: "non_followers"}] = updated.denials
+    end
+
+    test "editing a custom post collects wildcards and people from the sheet", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      target =
+        insert(:user, email_confirmed?: true, first_name: "Maxima", last_name: "Musterfrau")
+
+      # A pre-existing custom post is the only way to reach the Hide-from sheet
+      # now (new posts publish public, with no audience picker).
+      {:ok, post} =
+        Posts.create_post(user, %{
+          body: "not for everyone",
+          denials: [%{"wildcard" => "logged_out"}]
+        })
+
+      {:ok, live, html} = live(conn, ~p"/posts/#{post.id}/edit")
+      assert html =~ "Hide this post from"
+
+      # Typeahead: search, then deny the person.
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"user_search" => "Maxima"}})
+        |> render_change()
+
+      assert html =~ "Maxima Musterfrau"
+
+      live
+      |> element("#composer-user-results button", "Maxima")
+      |> render_click()
+
+      # Save with the wildcard kept on.
+      live
+      |> form("#composer-form", %{
+        "post" => %{
+          "body" => "not for everyone",
+          "deny_wildcards" => %{"logged_out" => "true"}
+        }
+      })
+      |> render_submit()
+
+      assert_redirect(live, Posts.path(post))
+
+      updated = Posts.get_post(post.id)
+      assert length(updated.denials) == 2
+      assert Enum.any?(updated.denials, &(&1.wildcard == "logged_out"))
+      assert Enum.any?(updated.denials, &(&1.denied_user_id == target.id))
+    end
+
+    test "deny-user with a tampered non-UUID id is a no-op, not a crash", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      _target =
+        insert(:user, email_confirmed?: true, first_name: "Maxima", last_name: "Musterfrau")
+
+      {:ok, post} =
+        Posts.create_post(user, %{
+          body: "not for everyone",
+          denials: [%{"wildcard" => "logged_out"}]
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+
+      # The custom post already shows the sheet; search to surface a deny-user
+      # control, then tamper the id the client sends. A non-UUID must not reach
+      # Repo.get as a raw cast (which would raise CastError and kill the composer).
+      live
+      |> form("#composer-form", %{"post" => %{"user_search" => "Maxima"}})
+      |> render_change()
+
+      live
+      |> element("#composer-user-results button", "Maxima")
+      |> render_click(%{"id" => "not-a-uuid"})
+
+      assert Process.alive?(live.pid)
+      assert render(live) =~ "Hide this post from"
+      # The tampered id denied nobody (no "remove" chip rendered).
+      refute has_element?(live, "button[phx-click=undeny-user]")
     end
 
     test "locks the audience while reposts exist", %{conn: conn} do

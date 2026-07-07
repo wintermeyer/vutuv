@@ -16,7 +16,7 @@ Related documents: [README](../README.md) (overview) ·
 
 vutuv is a [Phoenix Framework](https://www.phoenixframework.org/) 1.8 application. Prerequisites:
 
-- Erlang 28.5.0.1 and Elixir 1.20.0-otp-28 — install via [mise](https://mise.jdx.dev/) (pinned in `.tool-versions`)
+- Erlang 28.5.0.1, Elixir 1.20.0-otp-28 and Node.js 24 — install via [mise](https://mise.jdx.dev/) (pinned in `.tool-versions`)
 - [PostgreSQL](https://www.postgresql.org/) 17 — installed separately (not covered by `.tool-versions`)
 
 Two system libraries are also required (not managed by mise):
@@ -24,7 +24,12 @@ Two system libraries are also required (not managed by mise):
 - **libvips** — all image processing (avatars, cover photos, post images, URL screenshots) goes through the [`image`](https://hex.pm/packages/image) package, which needs libvips. Install with `brew install vips` (macOS) or `apt-get install libvips-dev` (Debian/Ubuntu).
 - **Chromium** (optional) — only needed for URL screenshots and moderation evidence screenshots; set `CHROMIUM_PATH` if the binary is not on `$PATH`.
 
-No Node.js is required: esbuild and Tailwind are installed as Elixir deps via `mix assets.setup`.
+esbuild and Tailwind themselves are Elixir deps (no global install). Node.js is
+needed only to fetch the JS libraries bundled into `app.js` — currently
+[Milkdown](https://milkdown.dev/), the WYSIWYG Markdown editor behind the post and
+message composers (`assets/package.json`). `mix assets.setup` runs `npm ci` in
+`assets/`, so a plain `mix setup` pulls everything; `assets/node_modules` is
+gitignored and the lockfile is committed, so the build stays reproducible.
 
 ### Secret config
 
@@ -39,7 +44,7 @@ config :vutuv, VutuvWeb.Endpoint,
 ### Start the application
 
 ```bash
-mix setup           # deps.get + ecto.create/migrate/seeds + esbuild/tailwind install
+mix setup           # deps.get + npm ci + ecto.create/migrate/seeds + esbuild/tailwind install
 mix phx.server
 ```
 

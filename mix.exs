@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.71.0",
+      version: "7.72.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -126,7 +126,16 @@ defmodule Vutuv.MixProject do
         "credo --strict",
         "test"
       ],
-      "assets.setup": ["tailwind.install --if-missing", "esbuild.install --if-missing"],
+      # `npm ci` fetches the bundled JS deps (Milkdown) into assets/node_modules
+      # so esbuild can bundle them; runs on `mix setup` and in the blue/green
+      # deploy (scripts/deploy.sh calls `mix assets.setup`). node/npm come from
+      # mise (.tool-versions); assets/node_modules is gitignored, the lockfile is
+      # committed, so the build is reproducible.
+      "assets.setup": [
+        "cmd --cd assets npm ci",
+        "tailwind.install --if-missing",
+        "esbuild.install --if-missing"
+      ],
       "assets.build": ["tailwind vutuv", "esbuild vutuv"],
       "assets.deploy": [
         "tailwind vutuv --minify",

@@ -997,7 +997,7 @@ the resulting ~200px rail width. --%>
               <%!-- The member-post pipeline's output (Markdown, autolinked
               URLs, #hashtags to our tag pages; sanitized like member posts,
               so raw/1 is safe here). --%>
-              <div class="markdown mt-2 line-clamp-5 text-slate-800 dark:text-slate-200">
+              <div class="markdown markdown--post mt-2 line-clamp-5 text-slate-800 dark:text-slate-200">
                 {Phoenix.HTML.raw(entry.post.html)}
               </div>
             </div>

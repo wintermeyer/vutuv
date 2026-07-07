@@ -1,8 +1,8 @@
 defmodule VutuvWeb.PostFeedLiveTest do
   @moduledoc """
-  The /feed LiveView: composer round trips (body, tags, audience presets and
-  the custom sheet), live prepend of own posts, the "Show N new posts" pill
-  for followed authors (visibility-checked), and cursor pagination.
+  The /feed LiveView: composer round trips (body, tags, public-by-default posts
+  and the deny "Hide from…" sheet), live prepend of own posts, the "Show N new
+  posts" pill for followed authors (visibility-checked), and cursor pagination.
   """
   use VutuvWeb.ConnCase
 
@@ -233,92 +233,22 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute live |> element("#composer-body") |> render() =~ "Hello"
     end
 
-    test "the audience preset becomes the matching denial", %{conn: conn} do
+    test "a new post from the composer is public", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
 
+      # No audience picker: a plain compose-and-post publishes public.
       live
-      |> form("#composer-form", %{
-        "post" => %{"body" => "inner circle", "preset" => "followers"}
-      })
+      |> form("#composer-form", %{"post" => %{"body" => "inner circle"}})
       |> render_submit()
 
       [%{post: post}] = Posts.profile_posts(user, user)
-      assert [%{wildcard: "non_followers"}] = post.denials
-
-      # The preset sticks for the next post (last-used default).
-      assert live |> element("#composer-preset") |> render() =~
-               ~s(option value="followers" selected)
+      assert post.denials == []
     end
 
-    test "the custom sheet collects wildcards and people", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-      target = other_user(first_name: "Maxima", last_name: "Musterfrau")
-
-      {:ok, live, _html} = live(conn, ~p"/feed")
-
-      # Switching to custom opens the sheet.
-      html =
-        live
-        |> form("#composer-form", %{"post" => %{"preset" => "custom"}})
-        |> render_change()
-
-      assert html =~ "Hide this post from"
-
-      # Typeahead: search, then deny the person.
-      html =
-        live
-        |> form("#composer-form", %{
-          "post" => %{"preset" => "custom", "user_search" => "Maxima"}
-        })
-        |> render_change()
-
-      assert html =~ "Maxima Musterfrau"
-
-      live
-      |> element("#composer-user-results button", "Maxima")
-      |> render_click()
-
-      # Submit with a wildcard on.
-      live
-      |> form("#composer-form", %{
-        "post" => %{
-          "body" => "not for everyone",
-          "preset" => "custom",
-          "deny_wildcards" => %{"logged_out" => "true"}
-        }
-      })
-      |> render_submit()
-
-      [%{post: post}] = Posts.profile_posts(user, user)
-      assert length(post.denials) == 2
-      assert Enum.any?(post.denials, &(&1.wildcard == "logged_out"))
-      assert Enum.any?(post.denials, &(&1.denied_user_id == target.id))
-    end
-
-    test "deny-user with a tampered non-UUID id is a no-op, not a crash", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      _target = other_user(first_name: "Maxima", last_name: "Musterfrau")
-      {:ok, live, _html} = live(conn, ~p"/feed")
-
-      # Open the custom sheet, then search to surface a real deny-user control.
-      live |> form("#composer-form", %{"post" => %{"preset" => "custom"}}) |> render_change()
-
-      live
-      |> form("#composer-form", %{"post" => %{"preset" => "custom", "user_search" => "Maxima"}})
-      |> render_change()
-
-      # Tamper the id the client sends: a non-UUID must not reach Repo.get as a
-      # raw cast (which would raise Ecto.Query.CastError and kill the composer).
-      live
-      |> element("#composer-user-results button", "Maxima")
-      |> render_click(%{"id" => "not-a-uuid"})
-
-      assert Process.alive?(live.pid)
-      assert render(live) =~ "Hide this post from"
-      # The tampered id denied nobody (no "remove" chip rendered).
-      refute has_element?(live, "button[phx-click=undeny-user]")
-    end
+    # The custom "Hide from…" sheet is only reachable when editing a pre-existing
+    # custom post now (new posts publish public), so its coverage lives in
+    # post_edit_live_test.exs.
 
     test "publishes a photo-only post (upload, no text)", %{conn: conn} do
       # Real files land on disk: isolate the uploads root per test.
@@ -435,14 +365,33 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#open-composer")
     end
 
-    test "Cancel collapses the composer again", %{conn: conn} do
+    test "the composer drops the audience picker and its summary line", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      live |> element("#open-composer") |> render_click()
+
+      # The compose row was simplified: no per-post audience picker (posts
+      # publish public) and no one-line audience summary. The full-width tags
+      # field and the Post submit stay.
+      refute has_element?(live, "#composer-preset")
+      refute has_element?(live, "#composer-audience-summary")
+      assert has_element?(live, ~s(#composer-form input[name="post[tags]"]))
+      assert has_element?(live, ~s(#composer-form button[type="submit"]))
+    end
+
+    test "the corner ✕ collapses the composer again", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, live, _html} = live(conn, ~p"/feed")
 
       live |> element("#open-composer") |> render_click()
       refute has_element?(live, "#open-composer")
 
-      live |> element(~s(button[phx-click="close-composer"])) |> render_click()
+      # The composer's corner ✕ (feed compose only) bubbles up to the feed and
+      # collapses the panel again.
+      assert has_element?(live, ~s(#composer-form button[phx-click="close-composer"]))
+
+      live |> element(~s(#composer-form button[phx-click="close-composer"])) |> render_click()
 
       assert has_element?(live, "#open-composer")
       assert has_element?(live, "#composer-panel.hidden")

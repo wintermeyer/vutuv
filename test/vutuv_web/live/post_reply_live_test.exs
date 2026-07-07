@@ -62,7 +62,7 @@ defmodule VutuvWeb.PostReplyLiveTest do
       {:ok, live, _html} = live(conn, ~p"/posts/#{parent.id}/reply")
 
       live
-      |> form("#composer-form", %{"post" => %{"body" => "let me in", "preset" => "public"}})
+      |> form("#composer-form", %{"post" => %{"body" => "let me in"}})
       |> render_submit()
 
       assert live |> element("#composer-error") |> render() =~ "can no longer reply"
@@ -76,7 +76,7 @@ defmodule VutuvWeb.PostReplyLiveTest do
       {:ok, live, _html} = live(conn, ~p"/posts/#{parent.id}/reply")
 
       live
-      |> form("#composer-form", %{"post" => %{"body" => "the answer", "preset" => "public"}})
+      |> form("#composer-form", %{"post" => %{"body" => "the answer"}})
       |> render_submit()
 
       assert_redirect(live, Posts.path(parent))

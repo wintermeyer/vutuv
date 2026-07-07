@@ -693,7 +693,7 @@ defmodule VutuvWeb.PostComponents do
           <%!-- Full mode: the whole body, no clamp. --%>
           <div
             :if={@mode == :full and @post.body != ""}
-            class="markdown mt-2 text-slate-800 dark:text-slate-200"
+            class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
           >
             {@body_html}
           </div>
@@ -719,21 +719,32 @@ defmodule VutuvWeb.PostComponents do
             phx-hook="PostPreviewClamp"
             data-post-preview
             data-server-truncated={to_string(@truncated?)}
-            class="mt-2"
+            class={["post-preview mt-2", @truncated? && "is-clamped"]}
           >
-            <div class="markdown line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
-              {@body_html}
+            <div class="relative">
+              <div class="markdown markdown--post line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
+                {@body_html}
+              </div>
+              <%!-- Fades the six-line cut into the card so it reads as
+              intentional; only visible once `is-clamped` is set (server
+              @truncated? + the PostPreviewClamp hook). --%>
+              <div class="post-preview__fade" aria-hidden="true"></div>
+              <%!-- "Read more" rides the last (faded) line at the bottom-right,
+              crisp on its own card-bg blend so it stays legible over the fade —
+              a natural inline spot, not an orphaned CTA line. Keeps the mutually
+              exclusive inline-block/hidden display pair (issue #880): the hook
+              flips both when a longer body overflows the clamp. --%>
+              <.link
+                href={@permalink}
+                data-read-more
+                class={[
+                  "post-preview__more absolute bottom-0 right-0 text-sm font-medium text-brand-600 hover:text-brand-700",
+                  if(@truncated?, do: "inline-block", else: "hidden")
+                ]}
+              >
+                {gettext("Read more")}
+              </.link>
             </div>
-            <.link
-              href={@permalink}
-              data-read-more
-              class={[
-                "mt-1 text-sm font-semibold text-brand-600 hover:text-brand-700",
-                if(@truncated?, do: "inline-block", else: "hidden")
-              ]}
-            >
-              {gettext("Read more")}
-            </.link>
           </div>
 
           <%= if @mode == :preview do %>

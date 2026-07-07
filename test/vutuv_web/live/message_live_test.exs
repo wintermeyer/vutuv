@@ -115,13 +115,41 @@ defmodule VutuvWeb.MessageLiveTest do
 
       {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
 
-      # The composer opens at two rows so a reply has room to breathe (it still
-      # autogrows past that as you type).
-      assert has_element?(view, "#message-body[rows='2']")
+      # The composer is the shared Milkdown editor (VutuvWeb.UI.markdown_editor/1);
+      # its no-JS / source fallback textarea opens at two rows.
+      assert has_element?(view, "#message-body[phx-hook='MarkdownEditor']")
+      assert has_element?(view, "#message-body-source[rows='2']")
 
       # The Markdown / Ctrl+Enter helper line was removed to keep the composer
       # compact; both features still work, they are just no longer spelled out.
       refute has_element?(view, "#send-shortcut-key")
+    end
+
+    test "the composer tracks the draft so the editor clears after a send", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # Typing feeds the draft back to the field's rendered value (data-mde-value),
+      # which is what the Milkdown editor re-seeds from. When the typing handler
+      # dropped the body, the server never saw the draft, the value never changed
+      # on send, and the composer kept the just-sent text.
+      html =
+        view
+        |> element("#message-form")
+        |> render_change(%{message: %{body: "draft in progress"}})
+
+      assert html =~ ~s(data-mde-value="draft in progress")
+
+      # After a send the form resets, so the rendered value empties again and the
+      # hook clears the editor (updated/1 sees the changed value).
+      view
+      |> form("#message-form", message: %{body: "the real message"})
+      |> render_submit()
+
+      refute render(view) =~ "draft in progress"
+      assert has_element?(view, "#message-body[data-mde-value='']")
     end
 
     test "a deleted message disappears live from open threads", %{conn: conn} do
@@ -450,6 +478,18 @@ defmodule VutuvWeb.MessageLiveTest do
       assert has_element?(view, "#message-thread.flex-1.overflow-y-auto")
       assert has_element?(view, "#message-form")
       refute has_element?(view, "#composer-dock")
+    end
+
+    test "the Send button sits below the editor as a full-width bar", %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      conversation = insert_conversation_between(me, insert_activated_user())
+
+      {:ok, view, _} = live(conn, ~p"/messages/#{conversation.id}")
+
+      # The composer stacks vertically at every width: the editor on top, the
+      # Send button below it as a full-width horizontal bar (never beside it).
+      assert has_element?(view, "#message-form.flex-col")
+      assert has_element?(view, "#message-form button[type='submit'].w-full")
     end
   end
 

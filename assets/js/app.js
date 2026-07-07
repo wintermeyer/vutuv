@@ -14,6 +14,9 @@ import "./image_crop"
 // Shared plumbing (CSRF token, page lifecycle, "wire once" guard, CSRF fetch,
 // reduced-motion) reused by every classic-page enhancement below.
 import { csrfToken, onReady, once, request, reducedMotion } from "./util"
+// The Milkdown WYSIWYG Markdown editor shared by the post + message composers
+// (VutuvWeb.UI.markdown_editor/1); registered as the MarkdownEditor hook below.
+import { MarkdownEditor } from "./markdown_editor"
 
 // LiveSocket drives the incremental LiveView shell (live unread badges, the
 // notifications/messages pages, presence). The CSRF token is rendered into the
@@ -61,6 +64,9 @@ function revealPreviewClamp(el) {
     body.scrollHeight > body.clientHeight + 1
   link.classList.toggle("hidden", !clipped)
   link.classList.toggle("inline-block", clipped)
+  // Drive the bottom fade too (see .post-preview__fade): show it only when the
+  // body is really clamped, so short posts don't get a phantom fade.
+  el.classList.toggle("is-clamped", clipped)
 }
 
 // Sweep every preview on the page (classic pages, and the initial static render
@@ -86,51 +92,11 @@ window.addEventListener("resize", () => {
   previewClampResizeTimer = setTimeout(sweepPreviewClamps, 150)
 })
 
-// Hooks. ClearOnSubmit resets a form right after it is submitted (used by the
-// message composer so the input empties once a message is sent). LocalTime
-// localizes timestamps (see above). ScrollBottom keeps a chat thread pinned
-// to its newest message.
+// Hooks. MarkdownEditor is the Milkdown WYSIWYG composer (posts + messages).
+// LocalTime localizes timestamps (see above). ScrollBottom keeps a chat thread
+// pinned to its newest message.
 const Hooks = {
-  ClearOnSubmit: {
-    mounted() {
-      this.el.addEventListener("submit", () => {
-        window.requestAnimationFrame(() => this.el.reset())
-      })
-    },
-  },
-  // The message composer textarea (issue #903). Starts at two rows and grows
-  // with its content up to the CSS max-height, then scrolls, so long/multi-line
-  // messages are easy to write. Cmd+Enter (Mac) / Ctrl+Enter (elsewhere) sends;
-  // plain Enter inserts a newline.
-  MessageComposer: {
-    mounted() {
-      this.autogrow = () => {
-        this.el.style.height = "auto"
-        this.el.style.height = `${this.el.scrollHeight}px`
-      }
-      this.autogrow()
-      this.el.addEventListener("input", this.autogrow)
-
-      this.el.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-          e.preventDefault()
-          if (this.el.form) this.el.form.requestSubmit()
-        }
-      })
-
-      // After a send the form is reset (ClearOnSubmit); shrink back to two rows.
-      if (this.el.form) {
-        this.el.form.addEventListener("submit", () => {
-          window.requestAnimationFrame(() => this.autogrow())
-        })
-      }
-    },
-    // A server-driven re-render (e.g. the value cleared after send) can change
-    // the content; re-measure so the height tracks it.
-    updated() {
-      this.autogrow()
-    },
-  },
+  MarkdownEditor,
   LocalTime: {
     mounted() {
       localizeTime(this.el)

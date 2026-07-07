@@ -12,6 +12,13 @@ new requests is rate-limited.
 The shell badge counts conversations with unread messages, and a debounced email
 quotes the message and points the recipient back at the thread.
 
+The composer is the shared **Milkdown WYSIWYG Markdown editor**
+(`VutuvWeb.UI.markdown_editor/1`, its compact variant — the same one the post
+composer uses); Cmd/Ctrl+Enter sends. Messages are stored and rendered as
+Markdown (`VutuvWeb.Markdown.render/1`), unchanged by the editor. The `typing`
+handler keeps the draft body in the form so the editor clears after a send; see
+`.claude/rules/design.md` for the component.
+
 Each member controls this on the notifications settings page: whether they are
 emailed about **every** unread message or only the **first** of a burst (the
 default), and how long a message may sit unread before the email goes out (0 to

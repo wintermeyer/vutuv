@@ -68,6 +68,197 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The shared **Milkdown WYSIWYG Markdown editor** — one component for the post
+  composer and the message composer (DRY). It is a rich-text surface over a
+  plain-Markdown store: the real form field is the `<textarea name={@name}>`
+  holding Markdown *source*, and the `MarkdownEditor` JS hook renders/edits that
+  source with Milkdown. Nothing on the server changes — `VutuvWeb.Markdown`
+  still renders the stored source and the agent-format siblings are untouched.
+
+  Everyone gets the WYSIWYG view by default; the "MD" toolbar button toggles to
+  a raw-Markdown source view for power users, and "⤢" expands to a near
+  full-page editor. With JS off the plain textarea shows through as the fallback.
+
+  The offered features are exactly the subset `VutuvWeb.Markdown` renders: bold,
+  italic, strikethrough (durchgestrichen), links, bullet / ordered / nested
+  lists, headings, blockquote, inline + fenced code, tables and horizontal
+  rules. Task-list checkboxes are deliberately absent (Earmark renders them as
+  literal text).
+
+  `@value` is the current Markdown source; it must be mirrored into
+  `data-mde-value` so a server-driven change (an inline image insert, the
+  post-save reset, the message-send clear) re-seeds the editor. Pass
+  `submit_on="cmd-enter"` on the message composer so Cmd/Ctrl+Enter sends.
+  """
+  attr(:id, :string, required: true)
+  attr(:name, :string, required: true, doc: "the form field name, e.g. post[body]")
+  attr(:value, :string, default: "")
+  attr(:label, :string, required: true, doc: "sr-only label for the field")
+  attr(:placeholder, :string, default: "")
+  attr(:rows, :integer, default: 6, doc: "rows of the source/fallback textarea")
+  attr(:submit_on, :string, default: nil, values: [nil, "cmd-enter"])
+  attr(:compact, :boolean, default: false, doc: "tighter min-height (messages)")
+  attr(:class, :string, default: nil)
+  attr(:rest, :global)
+
+  def markdown_editor(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="MarkdownEditor"
+      data-mde-value={@value}
+      data-mde-placeholder={@placeholder}
+      data-mde-submit={@submit_on}
+      data-mde-link-prompt={gettext("Link URL")}
+      class={["mde", @compact && "mde--compact", @class]}
+      {@rest}
+    >
+      <div id={"#{@id}-frame"} data-mde-frame phx-update="ignore" class="mde__frame">
+        <div data-mde-toolbar class="mde__toolbar" role="toolbar" aria-label={gettext("Formatting")}>
+          <div class="mde__group">
+            <.mde_button cmd="strong" title={gettext("Bold")}>
+              <span class="font-bold">B</span>
+            </.mde_button>
+            <.mde_button cmd="em" title={gettext("Italic")}>
+              <span class="font-serif italic">I</span>
+            </.mde_button>
+            <.mde_button cmd="strike" title={gettext("Strikethrough")}>
+              <span class="line-through">S</span>
+            </.mde_button>
+            <.mde_button cmd="code" title={gettext("Inline code")}>
+              <.mde_icon d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25" />
+            </.mde_button>
+            <.mde_button cmd="link" title={gettext("Link")}>
+              <.mde_icon d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </.mde_button>
+          </div>
+
+          <%!-- Mobile only: collapses the toolbar to one row (the inline group +
+          controls); tapping it reveals the `--more` groups below. Hidden on sm+,
+          where the whole toolbar fits on one line. The chevron flips when open. --%>
+          <button
+            type="button"
+            data-mde-cmd="toggle-toolbar"
+            class="mde__btn mde__more-toggle"
+            title={gettext("More formatting")}
+            aria-label={gettext("More formatting")}
+            aria-expanded="false"
+            tabindex="-1"
+          >
+            <.mde_icon d="M6 9l6 6 6-6" />
+          </button>
+
+          <div class="mde__more-row">
+            <span class="mde__sep" aria-hidden="true"></span>
+
+            <div class="mde__group">
+            <.mde_button cmd="h1" title={gettext("Heading 1")}>
+              <span class="text-xs font-bold">H1</span>
+            </.mde_button>
+            <.mde_button cmd="h2" title={gettext("Heading 2")}>
+              <span class="text-xs font-bold">H2</span>
+            </.mde_button>
+            <.mde_button cmd="h3" title={gettext("Heading 3")}>
+              <span class="text-xs font-bold">H3</span>
+            </.mde_button>
+            <.mde_button cmd="blockquote" title={gettext("Quote")}>
+              <.mde_icon d="M6 5v14M10 8h8M10 12h8M10 16h5" />
+            </.mde_button>
+            <.mde_button cmd="code_block" title={gettext("Code block")}>
+              <.mde_icon d="M14.25 9.75 16.5 12l-2.25 2.25m-4.5 0L7.5 12l2.25-2.25M5.25 4.5h13.5A.75.75 0 0 1 19.5 5.25v13.5a.75.75 0 0 1-.75.75H5.25a.75.75 0 0 1-.75-.75V5.25a.75.75 0 0 1 .75-.75Z" />
+            </.mde_button>
+          </div>
+
+          <span class="mde__sep" aria-hidden="true"></span>
+
+          <div class="mde__group">
+            <.mde_button cmd="bullet_list" title={gettext("Bullet list")}>
+              <.mde_icon d="M8.25 6.75h12M8.25 12h12M8.25 17.25h12M3.9 6.75h.008v.008H3.9zM3.9 12h.008v.008H3.9zM3.9 17.25h.008v.008H3.9z" />
+            </.mde_button>
+            <.mde_button cmd="ordered_list" title={gettext("Numbered list")}>
+              <span class="font-mono text-xs font-bold">1.</span>
+            </.mde_button>
+          </div>
+
+          <span class="mde__sep" aria-hidden="true"></span>
+
+          <div class="mde__group">
+            <.mde_button cmd="table" title={gettext("Table")}>
+              <.mde_icon d="M3.75 6.75h16.5v10.5H3.75zM3.75 10.5h16.5M3.75 14.25h16.5M9.75 6.75v10.5" />
+            </.mde_button>
+            <.mde_button cmd="hr" title={gettext("Divider")}>
+              <.mde_icon d="M4 12h16" />
+            </.mde_button>
+          </div>
+          </div>
+
+          <span class="mde__spacer"></span>
+
+          <div class="mde__controls">
+            <.mde_button cmd="mode" title={gettext("Toggle Markdown source")}>
+              <span class="text-xs font-bold tracking-tight">MD</span>
+            </.mde_button>
+            <.mde_button cmd="fullscreen" title={gettext("Full screen")}>
+              <.mde_icon d="M3.75 8.25v-4.5h4.5M20.25 8.25v-4.5h-4.5M3.75 15.75v4.5h4.5M20.25 15.75v4.5h-4.5" />
+            </.mde_button>
+          </div>
+        </div>
+
+        <div data-mde-mount class="mde__mount"></div>
+      </div>
+
+      <label for={"#{@id}-source"} class="sr-only">{@label}</label>
+      <textarea
+        id={"#{@id}-source"}
+        name={@name}
+        data-mde-source
+        rows={@rows}
+        placeholder={@placeholder}
+        class="mde__source"
+      >{@value}</textarea>
+    </div>
+    """
+  end
+
+  attr(:cmd, :string, required: true)
+  attr(:title, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp mde_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      data-mde-cmd={@cmd}
+      class="mde__btn"
+      title={@title}
+      aria-label={@title}
+      tabindex="-1"
+    >
+      {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  attr(:d, :string, required: true)
+
+  defp mde_icon(assigns) do
+    ~H"""
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      class="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path d={@d} />
+    </svg>
+    """
+  end
+
+  @doc """
   Wraps every case-insensitive occurrence of `needles` (a string or a list of
   strings) in `text` in a brand-tinted `<mark>` — the search result match
   marker. Returns safe HTML built from escaped parts; `nil`/empty needles

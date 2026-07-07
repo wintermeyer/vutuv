@@ -48,7 +48,7 @@ via [GitHub issues](https://github.com/wintermeyer/vutuv/issues/new).
 ## Development
 
 ```bash
-mise install          # Erlang + Elixir (pinned in .tool-versions)
+mise install          # Erlang + Elixir + Node (pinned in .tool-versions)
 mix setup             # deps, database, assets
 mix phx.server        # http://localhost:4000
 ```

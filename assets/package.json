@@ -1,0 +1,10 @@
+{
+  "name": "vutuv-assets",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Client-side dependencies bundled into app.js by esbuild.",
+  "license": "MIT",
+  "dependencies": {
+    "@milkdown/kit": "^7.6.0"
+  }
+}

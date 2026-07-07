@@ -163,6 +163,20 @@ defmodule VutuvWeb.MessageLive.Index do
     end
   end
 
+  def handle_event("typing", %{"message" => %{"body" => body}}, socket) do
+    if socket.assigns.conversation do
+      Chat.broadcast_typing(socket.assigns.conversation.id, socket.assigns.user_name)
+    end
+
+    # Keep the form's body in step with what is typed (like the post composer's
+    # validate). The Milkdown editor is re-seeded from the field's rendered value
+    # (data-mde-value), so this is what lets it clear after a send: assign_form/1
+    # resets the body to "", the rendered value changes, and the MarkdownEditor
+    # hook re-seeds itself empty. Without it the server never sees the draft, the
+    # value never changes, and the composer would keep the just-sent text.
+    {:noreply, assign(socket, :form, to_form(%{"body" => body}, as: :message))}
+  end
+
   def handle_event("typing", _params, socket) do
     if socket.assigns.conversation do
       Chat.broadcast_typing(socket.assigns.conversation.id, socket.assigns.user_name)
@@ -579,7 +593,7 @@ defmodule VutuvWeb.MessageLive.Index do
               "max-w-[75%] break-words rounded-2xl px-3 py-2 text-sm",
               "[&_a]:underline [&_a]:break-all [&_blockquote]:border-l-2 [&_blockquote]:pl-2",
               "[&_code]:rounded [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.85em]",
-              "[&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4",
+              "[&_ol]:list-decimal [&_ol]:pl-[2.25em] [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-[2.25em]",
               m.frozen_at && "opacity-60",
               if(mine?(m, @current_user.id),
                 do: "bg-brand-600 text-white [&_a]:text-white [&_code]:bg-white/20",
@@ -641,30 +655,36 @@ defmodule VutuvWeb.MessageLive.Index do
           <.request_actions id={@conversation.id} />
         </div>
 
-        <%!-- Issue #903: a textarea (not a single-line input) so long, multi-line
-        messages are possible. It starts at two rows for breathing room and grows
-        with its content, then scrolls (MessageComposer hook); Cmd/Ctrl+Enter sends
-        while plain Enter inserts a newline. The row is items-end so the Send button
-        stays anchored to the bottom-right corner as the textarea grows. --%>
+        <%!-- The message composer is the shared Milkdown WYSIWYG editor
+        (VutuvWeb.UI.markdown_editor/1), the same one the post composer uses, in
+        its compact variant. Cmd/Ctrl+Enter sends (submit_on); plain Enter is a
+        newline. It clears after send because assign_form/1 resets the body to ""
+        and the hook re-seeds from data-mde-value. The composer stacks vertically
+        (flex-col): the editor takes the full width on top and the Send button sits
+        below it as a full-width horizontal bar, rather than riding beside it. --%>
         <.form
           :if={Chat.can_send?(@conversation, @current_user.id)}
           for={@form}
           id="message-form"
-          phx-hook="ClearOnSubmit"
           phx-submit="send"
           phx-change="typing"
-          class="flex items-end gap-2 border-t border-slate-200 p-3 dark:border-slate-800"
+          class="flex flex-col gap-2 border-t border-slate-200 p-3 dark:border-slate-800"
         >
-          <textarea
+          <.markdown_editor
             id="message-body"
             name="message[body]"
-            rows="2"
-            phx-hook="MessageComposer"
-            autocomplete="off"
+            value={@form[:body].value || ""}
+            label={gettext("Write a message…")}
             placeholder={gettext("Write a message…")}
-            class="max-h-40 min-h-0 min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm text-slate-800 focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-          >{@form[:body].value}</textarea>
-          <button type="submit" class="rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+            rows={2}
+            submit_on="cmd-enter"
+            compact
+            class="w-full min-w-0"
+          />
+          <button
+            type="submit"
+            class="w-full rounded-full bg-brand-600 px-5 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
             {gettext("Send")}
           </button>
         </.form>

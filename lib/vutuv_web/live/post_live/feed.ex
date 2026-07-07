@@ -216,6 +216,7 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, assign(socket, :composer_open?, true)}
   end
 
+  # The composer's corner ✕ (feed compose only) bubbles up here to collapse it.
   def handle_event("close-composer", _params, socket) do
     {:noreply, assign(socket, :composer_open?, false)}
   end
@@ -488,7 +489,7 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- Collapsed by default: the shared avatar-card trigger (see
           <.composer_trigger>), revealed via phx-click. The composer stays
           mounted (just hidden) so a half-typed draft survives a background
-          feed re-render; posting or Cancel collapses it again. --%>
+          feed re-render; posting or the composer's corner ✕ collapses it. --%>
           <.composer_trigger
             :if={!@composer_open?}
             viewer={@current_user}
@@ -498,6 +499,9 @@ defmodule VutuvWeb.PostLive.Feed do
             {gettext("Write a post")}
           </.composer_trigger>
 
+          <%!-- The panel is just the composer component; its corner ✕ bubbles a
+          `close-composer` up to this LiveView, and it also collapses on its own
+          after the viewer posts (see the {:new_post, …} handler). --%>
           <div id="composer-panel" class={[!@composer_open? && "hidden"]}>
             <.live_component
               module={VutuvWeb.PostLive.Composer}
@@ -505,15 +509,6 @@ defmodule VutuvWeb.PostLive.Feed do
               current_user={@current_user}
               post={nil}
             />
-            <div class="mt-1 text-right">
-              <button
-                type="button"
-                phx-click="close-composer"
-                class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              >
-                {gettext("Cancel")}
-              </button>
-            </div>
           </div>
 
           <div :if={@pending_posts != []} class="text-center">

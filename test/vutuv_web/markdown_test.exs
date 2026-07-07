@@ -71,6 +71,36 @@ defmodule VutuvWeb.MarkdownTest do
     assert render("line one\nline two") =~ "<br"
   end
 
+  test "drops the editor's empty-paragraph <br /> artifacts instead of showing them" do
+    # The Milkdown editor serializes each blank line the writer adds as a
+    # standalone `<br />` block. Because the pipeline escapes `<`, those would
+    # otherwise render as literal "<br />" text (seen on a real post). They
+    # collapse to a normal paragraph break.
+    html = render("above\n\n<br />\n\n<br />\n\n<br />\n\nbelow")
+
+    refute html =~ "br /&gt;"
+    refute html =~ "&lt;br"
+    assert html =~ "above"
+    assert html =~ "below"
+  end
+
+  test "drops the editor's empty-table-cell <br /> artifacts, keeping the table" do
+    # Milkdown fills empty table cells with `<br />`; those must not render as
+    # literal "<br />" text inside every cell (seen on a real post).
+    md = "| a | b |\n| :-- | :-- |\n| <br /> | <br /> |"
+    html = render(md)
+
+    refute html =~ "&lt;br"
+    assert html =~ "<table"
+    assert html =~ "<td"
+  end
+
+  test "keeps a literal <br> inside a fenced code block (a code sample, not an artifact)" do
+    html = render("```\n<br />\n```")
+    assert html =~ "br"
+    assert html =~ "<code"
+  end
+
   describe "render_preview/3 truncation" do
     defp preview(text, opts \\ []) do
       {html, truncated?} = Markdown.render_preview(text, [], opts)

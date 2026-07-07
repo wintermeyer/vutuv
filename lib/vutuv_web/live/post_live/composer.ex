@@ -10,12 +10,14 @@ defmodule VutuvWeb.PostLive.Composer do
   the post exists. Submit attaches the pending rows; abandoned ones are
   swept after a day. Each image carries an alt-text input (stored on save).
 
-  **Audience** is a preset select (public / followers / connections / only me)
-  backed by the deny model; "Custom…" opens the *Hide from…* sheet with the
-  wildcards and a person typeahead for per-user denials. Any restriction also closes anonymous
-  access — the sheet says so, and `Vutuv.Posts` enforces it. The last-used
-  preset stays selected after posting (people who post followers-only post
-  followers-only).
+  **Audience:** new posts publish **public** — there is no audience picker on
+  the composer. The deny model still stands behind it: an existing restricted
+  post keeps its audience when edited (`validate`/`save` fall back to the post's
+  derived preset when the form carries none, so a followers-only post is never
+  silently widened to public), and an already-custom post still shows the *Hide
+  from…* sheet (wildcards + a person typeahead) so its per-user denials stay
+  editable. Any restriction also closes anonymous access, and `Vutuv.Posts`
+  enforces it.
   """
 
   use VutuvWeb, :live_component
@@ -108,7 +110,10 @@ defmodule VutuvWeb.PostLive.Composer do
 
   @impl true
   def handle_event("validate", %{"post" => params}, socket) do
-    preset = if params["preset"] in @presets, do: params["preset"], else: "public"
+    # New posts publish public (there is no audience picker); the fallback to the
+    # current preset keeps an edited restricted post from silently downgrading to
+    # public as the author types.
+    preset = if params["preset"] in @presets, do: params["preset"], else: socket.assigns.preset
 
     socket =
       socket
@@ -196,7 +201,10 @@ defmodule VutuvWeb.PostLive.Composer do
     # fired first. Only the person denials are event-driven state.
     socket =
       socket
-      |> assign(:preset, if(params["preset"] in @presets, do: params["preset"], else: "public"))
+      |> assign(
+        :preset,
+        if(params["preset"] in @presets, do: params["preset"], else: socket.assigns.preset)
+      )
       |> assign(:deny_wildcards, checked_keys(params["deny_wildcards"]))
 
     attrs = %{
@@ -390,47 +398,6 @@ defmodule VutuvWeb.PostLive.Composer do
     end)
   end
 
-  # The one-line audience summary under the chip — set algebra as a sentence.
-  defp audience_summary(assigns) do
-    case assigns.preset do
-      "public" ->
-        gettext("Visible to everyone.")
-
-      "followers" ->
-        gettext("Visible only to people who follow you.")
-
-      "connections" ->
-        gettext("Visible only to your connections.")
-
-      "only_me" ->
-        gettext("Visible only to you.")
-
-      "custom" ->
-        labels = custom_denial_labels(assigns)
-
-        if labels == [] do
-          gettext("Visible to everyone.")
-        else
-          gettext("Hidden from: %{list}. Also hidden from logged-out visitors.",
-            list: Enum.join(labels, ", ")
-          )
-        end
-    end
-  end
-
-  defp custom_denial_labels(assigns) do
-    wildcard_labels =
-      for wildcard <- MapSet.to_list(assigns.deny_wildcards) do
-        wildcard_label(wildcard)
-      end
-
-    user_labels = Enum.map(assigns.denied_users, &full_name/1)
-
-    wildcard_labels ++ user_labels
-  end
-
-  defp wildcard_label(wildcard), do: VutuvWeb.PostComponents.wildcard_label(wildcard)
-
   defp full_name(user), do: VutuvWeb.UserHelpers.full_name(user)
 
   # `input_class/0` is the shared Direction A field recipe, imported from
@@ -448,14 +415,31 @@ defmodule VutuvWeb.PostLive.Composer do
           phx-change="validate"
           phx-target={@myself}
         >
-          <label for={"#{@id}-body"} class="sr-only">{gettext("What's new?")}</label>
-          <textarea
+          <%!-- Feed compose only: a corner ✕ collapses the composer. It carries
+          no phx-target, so the event bubbles up to the feed LiveView that owns
+          the reveal (`close-composer`). The edit and reply pages navigate away
+          instead, so they never render it. It sits in its own row above the
+          editor rather than the card corner, which the editor toolbar owns. --%>
+          <div :if={@post == nil and @parent == nil} class="mb-1 flex justify-end">
+            <button
+              type="button"
+              phx-click="close-composer"
+              aria-label={gettext("Close")}
+              title={gettext("Close")}
+              class="-mr-2 -mt-2 rounded-lg px-2 py-1 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+            >
+              ✕
+            </button>
+          </div>
+
+          <.markdown_editor
             id={"#{@id}-body"}
             name="post[body]"
-            rows={if(@post, do: 10, else: 3)}
+            value={@body}
+            label={gettext("What's new?")}
             placeholder={gettext("What's new? Markdown is supported.")}
-            class={[input_class(), "resize-y"]}
-          >{@body}</textarea>
+            rows={if(@post, do: 10, else: 3)}
+          />
 
           <p :if={String.length(@body) > Post.max_body_length() - 2000} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
             {delimited_count(String.length(@body))} / {delimited_count(Post.max_body_length())}
@@ -519,63 +503,52 @@ defmodule VutuvWeb.PostLive.Composer do
             </p>
           </div>
 
-          <div class="mt-3 flex flex-wrap items-center gap-3">
-            <label class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
+          <%!-- Tags get their own full-width row. --%>
+          <input
+            type="text"
+            name="post[tags]"
+            value={@tags_value}
+            placeholder={
+              gettext("Tags, comma- or space-separated (max. %{max})",
+                max: Posts.max_tags_per_post()
+              )
+            }
+            class={[input_class(), "mt-3"]}
+          />
+
+          <%!-- Bottom row: the image picker on the left, the (slightly wider)
+          submit button on the right. New posts publish public, so there is no
+          audience picker here; a post pinned public by reposts/replies still
+          shows the read-only lock chip beside the button. --%>
+          <div class="mt-3 flex items-center gap-3">
+            <%!-- h-9 pins this to the Post button's height (both 36px, the
+            standard control height): the 📷 emoji would otherwise inflate the
+            line box, and mb-0 drops the global `label` margin (components.css)
+            that would offset it in this row. --%>
+            <label class="inline-flex h-9 mb-0 cursor-pointer items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700">
               📷 {gettext("Add images")}
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
 
-            <input
-              type="text"
-              name="post[tags]"
-              value={@tags_value}
-              placeholder={
-                gettext("Tags, comma- or space-separated (max. %{max})",
-                  max: Posts.max_tags_per_post()
-                )
-              }
-              class={[input_class(), "min-w-56 flex-1"]}
-            />
-
-            <%= if @audience_locked? do %>
+            <div class="ml-auto flex items-center gap-3">
               <span
+                :if={@audience_locked?}
                 id={"#{@id}-audience-locked"}
                 title={gettext("The audience cannot be restricted while reposts or replies exist.")}
                 class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400"
               >
                 🌐 {gettext("Public")}
               </span>
-            <% else %>
-              <label for={"#{@id}-preset"} class="sr-only">{gettext("Audience")}</label>
-              <%!-- Not input_class(): its w-full would stretch the chip-like
-              select across the whole row. --%>
-              <select
-                id={"#{@id}-preset"}
-                name="post[preset]"
-                class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-brand-500 focus:outline-none dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100"
-              >
-                <option value="public" selected={@preset == "public"}>🌐 {gettext("Public")}</option>
-                <option value="followers" selected={@preset == "followers"}>
-                  👥 {gettext("Followers only")}
-                </option>
-                <option value="connections" selected={@preset == "connections"}>
-                  🤝 {gettext("Connections only")}
-                </option>
-                <option value="only_me" selected={@preset == "only_me"}>
-                  🔒 {gettext("Only me")}
-                </option>
-                <option value="custom" selected={@preset == "custom"}>⚙️ {gettext("Custom…")}</option>
-              </select>
-            <% end %>
 
-            <.button
-              type="submit"
-              class="ml-auto"
-              disabled={@uploads.images.entries != []}
-              phx-disable-with={gettext("Saving…")}
-            >
-              {if @post, do: gettext("Save"), else: gettext("Post")}
-            </.button>
+              <.button
+                type="submit"
+                class="h-9 px-6"
+                disabled={@uploads.images.entries != []}
+                phx-disable-with={gettext("Saving…")}
+              >
+                {if @post, do: gettext("Save"), else: gettext("Post")}
+              </.button>
+            </div>
           </div>
 
           <%!-- The "Hide from…" sheet (custom audience) --%>
@@ -686,10 +659,6 @@ defmodule VutuvWeb.PostLive.Composer do
               )}
             </p>
           </div>
-
-          <p class="mt-2 text-sm text-slate-600 dark:text-slate-400" id={"#{@id}-audience-summary"}>
-            {audience_summary(assigns)}
-          </p>
 
           <p :if={@audience_locked?} class="mt-1 text-xs text-slate-600 dark:text-slate-400" id={"#{@id}-audience-lock-hint"}>
             {gettext(

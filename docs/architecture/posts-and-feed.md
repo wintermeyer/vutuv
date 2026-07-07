@@ -37,6 +37,13 @@ line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 (most-followed members you do not yet follow,
 `Vutuv.Social.most_followed_users/1`, live follow).
 
+The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
+(`VutuvWeb.UI.markdown_editor/1` + the `MarkdownEditor` hook, also used by the
+message composer). It edits Markdown *source* in place — the field stays a
+`<textarea>` and the body is still stored and rendered as Markdown — so nothing
+downstream (`VutuvWeb.Markdown`, the `.md`/`.txt`/`.json`/`.xml` siblings)
+changes. See `.claude/rules/design.md` for the component and its gotchas.
+
 **A post appears at most once.** When several followed members repost the same
 post — or the viewer already follows its author, so it would also show as its
 own original — the entries collapse onto the newest event
@@ -74,9 +81,11 @@ The profile page and the archive show the author's timeline (posts + reposts).
 
 Audiences are **deny-based** (`Vutuv.Posts`): a post with no denials is public;
 denials exclude groups of the author's followees, single users, or wildcards
-(`non_connections`, `non_followers`, `non_followees`, `logged_out`, `everyone`)
-— the composer offers presets (public / followers / connections / only me) plus
-a custom "Hide from…" sheet with a person typeahead.
+(`non_connections`, `non_followers`, `non_followees`, `logged_out`, `everyone`).
+New posts publish **public** — the composer no longer offers an audience picker.
+The deny model still stands behind it: an already-restricted post keeps its
+audience when edited, and a custom one still shows the "Hide from…" sheet (a
+person typeahead) so its per-user denials stay editable.
 
 The search page (`/search`) also finds words in **fully public** posts (Postgres
 FTS over a generated `search_tsv` column, `websearch_to_tsquery`, 'simple'

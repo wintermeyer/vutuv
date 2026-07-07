@@ -120,12 +120,48 @@ defmodule VutuvWeb.Markdown do
   # render the Markdown, undo the double-escape, sanitize.
   defp render_pipeline(text) do
     text
+    |> strip_break_artifacts()
     |> String.replace("<", "&lt;")
     |> autolink_bare_urls()
     |> Earmark.as_html!(breaks: true, pure_links: false)
     # Earmark escapes the ampersand of our pre-escaped `&lt;` — undo the double.
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
+  end
+
+  # The Milkdown editor emits a literal `<br />` for content it has no plain
+  # Markdown for: an **empty paragraph** (a blank line the writer adds with
+  # Enter, serialized as a standalone `<br />` block) and an **empty table cell**
+  # (`| <br /> |`). Since the pipeline escapes `<` a step below (typed HTML must
+  # show as literal text), those would otherwise render as literal "<br />" text
+  # in the body. Drop every `<br />` tag — an empty paragraph collapses to a
+  # normal break, an empty cell stays empty — while leaving **fenced code
+  # blocks** verbatim so a real `<br>` in a code sample survives. Real hard
+  # breaks serialize as a trailing backslash, not `<br>`, so they are untouched.
+  # The editor also normalizes this away at write time
+  # (`assets/js/markdown_editor.js`); this is the rendering-side guard for
+  # anything already stored or typed in source mode.
+  defp strip_break_artifacts(text) do
+    # Fast path: almost every body has neither a `<br>` nor a run of 3+ newlines
+    # (the editor already normalizes both away at write time), so skip the fence
+    # tokenization + regex passes entirely — the same cheap substring guard the
+    # `linkify_entities/1` hot path uses one function over.
+    if String.contains?(text, ["<br", "\n\n\n"]) do
+      ~r/(```[\s\S]*?```|~~~[\s\S]*?~~~)/
+      |> Regex.split(text, include_captures: true)
+      |> Enum.with_index()
+      |> Enum.map_join("", fn
+        {chunk, index} when rem(index, 2) == 0 ->
+          chunk
+          |> String.replace(~r/<br\s*\/?>/i, "")
+          |> String.replace(~r/\n{3,}/, "\n\n")
+
+        {fenced_chunk, _index} ->
+          fenced_chunk
+      end)
+    else
+      text
+    end
   end
 
   @doc """
