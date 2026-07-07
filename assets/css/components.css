@@ -1059,6 +1059,27 @@ ul.thumbs li .text .url a {
   margin: 0.6em 0 0.2em;
 }
 
+/* On a phone the post column is narrow (~360px), so long German compound words
+   (Digitalisierung, unternehmenseigene) wrap with big ragged gaps or force a
+   hard mid-word break. Let the browser hyphenate the post body at proper
+   syllable points instead — it uses the document `lang` (de/en on <html>) for
+   the dictionary. `-webkit-hyphens` is required for iOS/Safari, the main mobile
+   target. Prose only: code/pre keep their exact characters (a soft hyphen in a
+   token would mislead) and `pre` already scrolls (white-space:pre). Desktop
+   columns are wide enough not to need it, so it is scoped to mobile. */
+@media (width < 48rem) {
+  .markdown--post {
+    -webkit-hyphens: auto;
+    hyphens: auto;
+  }
+
+  .markdown--post code,
+  .markdown--post pre {
+    -webkit-hyphens: manual;
+    hyphens: manual;
+  }
+}
+
 /* Truncated feed/profile post preview: fade the six-line clamp into the card so
    the cut reads as intentional, then a quiet muted "Read more" sits under it
    (see VutuvWeb.PostComponents). The fade shows only when the body is really
