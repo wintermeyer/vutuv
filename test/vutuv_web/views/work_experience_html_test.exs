@@ -184,6 +184,46 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
       assert Enum.map(blocks, & &1.multi?) == [false, false, false]
     end
 
+    test "roles that become adjacent inside their category still cluster" do
+      [{"employment", [swisscom]}, {"volunteer", [_taskwarrior]}] =
+        WorkExperienceHTML.grouped_clusters([
+          job(
+            title: "Epic Owner",
+            organization: "Swisscom",
+            kind: "employment",
+            start_year: 2025
+          ),
+          job(
+            title: "Teammember",
+            organization: "Taskwarrior",
+            kind: "volunteer",
+            start_year: 2026
+          ),
+          job(
+            title: "Product Owner",
+            organization: "Swisscom",
+            kind: "employment",
+            start_year: 2024,
+            end_year: 2024
+          ),
+          job(
+            title: "Lead Cloud",
+            organization: "Swisscom",
+            kind: "employment",
+            start_year: 2023,
+            end_year: 2023
+          )
+        ])
+
+      assert swisscom.multi?
+
+      assert Enum.map(swisscom.roles, & &1.job.title) == [
+               "Epic Owner",
+               "Product Owner",
+               "Lead Cloud"
+             ]
+    end
+
     test "roles of different categories never merge, even at the same employer" do
       assert [{"employment", [emp]}, {"internship", [intern]}] =
                WorkExperienceHTML.grouped_clusters([

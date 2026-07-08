@@ -42,9 +42,11 @@ defmodule VutuvWeb.WorkExperienceHTML do
   categories dropped).
 
   Within a category, a run of **consecutive** roles that share an organization
-  collapses into one company block. "Consecutive" is the point: two separate
-  stints at the same employer with another job between them stay two blocks, the
-  way a CV reads. Roles without an organization never cluster.
+  collapses into one company block. "Consecutive" is the point after the CV
+  categories have split the list: volunteer or freelance rows must not break an
+  employment run at the same employer, but a different employment job between
+  two stints still keeps them as two blocks. Roles without an organization never
+  cluster.
 
   A block is a map:
 
@@ -72,20 +74,27 @@ defmodule VutuvWeb.WorkExperienceHTML do
   over 9 years at one employer keeps "9 years" even when the cut shows only 2).
   """
   def grouped_clusters(work_experiences, label_style \\ :years, limit \\ nil) do
-    blocks =
+    indexed_circles =
       work_experiences
       |> circle_durations(label_style)
       |> Enum.with_index()
-      |> Enum.chunk_by(fn {circle, index} -> chunk_key(circle.job, index) end)
-      |> Enum.map(fn chunk -> Enum.map(chunk, &elem(&1, 0)) end)
 
-    totals = Enum.map(blocks, &block_months/1)
+    indexed_blocks =
+      indexed_circles
+      |> grouped_indexed_circles()
+      |> Enum.flat_map(&chunk_indexed_circles/1)
+
+    totals = Enum.map(indexed_blocks, fn {_index, roles} -> block_months(roles) end)
     max_months = [0 | Enum.reject(totals, &is_nil/1)] |> Enum.max()
 
     built =
-      blocks
+      indexed_blocks
       |> Enum.zip(totals)
-      |> Enum.map(fn {roles, months} -> build_block(roles, months, max_months, label_style) end)
+      |> Enum.map(fn {{index, roles}, months} ->
+        {index, build_block(roles, months, max_months, label_style)}
+      end)
+      |> Enum.sort_by(&elem(&1, 0))
+      |> Enum.map(&elem(&1, 1))
       |> take_roles(limit)
 
     groups = Enum.group_by(built, & &1.kind)
@@ -122,13 +131,27 @@ defmodule VutuvWeb.WorkExperienceHTML do
     kept
   end
 
-  # Adjacent circles cluster only when they share a category *and* a normalised
-  # organization. A blank organization gets a per-row unique key so undated /
-  # employer-less roles never merge into one another.
+  defp grouped_indexed_circles(indexed_circles) do
+    groups = Enum.group_by(indexed_circles, fn {circle, _index} -> circle.job.kind end)
+
+    for kind <- WorkExperience.kinds(), entries = groups[kind], do: entries
+  end
+
+  defp chunk_indexed_circles(indexed_circles) do
+    indexed_circles
+    |> Enum.chunk_by(fn {circle, index} -> chunk_key(circle.job, index) end)
+    |> Enum.map(fn chunk ->
+      {chunk |> Enum.map(&elem(&1, 1)) |> Enum.min(), Enum.map(chunk, &elem(&1, 0))}
+    end)
+  end
+
+  # Adjacent circles inside the same CV category cluster only when they share a
+  # normalised organization. A blank organization gets a per-row unique key so
+  # undated / employer-less roles never merge into one another.
   defp chunk_key(job, index) do
     case normalize_org(job.organization) do
       "" -> {:solo, index}
-      org -> {job.kind, org}
+      org -> org
     end
   end
 
