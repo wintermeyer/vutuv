@@ -251,11 +251,23 @@ export const MarkdownEditor = {
     return md
       .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g)
       .map((part, i) =>
-        i % 2 === 1 ? part : part.replace(/<br\s*\/?>/gi, "").replace(/\n{3,}/g, "\n\n")
+        i % 2 === 1
+          ? part
+          : this.repairEscapedUrls(part)
+              .replace(/<br\s*\/?>/gi, "")
+              .replace(/\n{3,}/g, "\n\n")
       )
       .join("")
       .replace(/^\n+/, "")
       .replace(/\n+$/, "\n")
+  },
+
+  // Milkdown can serialize a plain URL as `https\://…\&…`; vutuv stores plain
+  // Markdown, and the server autolinker expects a real `https://` URL.
+  repairEscapedUrls(md) {
+    return md.replace(/(?<![\w/])https?\\:\/\/[^\s<>]+/g, (url) =>
+      url.replace(/\\([:&])/g, "$1")
+    )
   },
 
   setEditorMarkdown(markdown) {

@@ -39,6 +39,18 @@ defmodule VutuvWeb.MarkdownTest do
     refute html =~ ">https://en.wikipedia.org"
   end
 
+  test "repairs editor-escaped bare URLs before autolinking" do
+    url = "https://www.tagworx.net/ynews.php?cid=1&nid=39010"
+    escaped_url = "https\\://www.tagworx.net/ynews.php?cid=1\\&nid=39010"
+    html = render("look at #{escaped_url} now")
+
+    assert html =~ ~s(href="https://www.tagworx.net/ynews.php?cid=1&amp;nid=39010")
+    assert html =~ ">tagworx.net/ynews.php?cid=1&amp;nid=39010</a>"
+    refute html =~ "https\\://"
+    refute html =~ "\\&amp;"
+    refute html =~ url
+  end
+
   describe "bare URL display" do
     # The visible text of the first autolinked anchor.
     defp link_text(text) do

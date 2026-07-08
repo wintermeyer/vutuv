@@ -124,6 +124,75 @@ const Hooks = {
       this.el.scrollTop = this.el.scrollHeight
     },
   },
+  // Browser-tab title indicator, so a backgrounded tab still shows new activity.
+  // ShellLive pushes the state; this hook prefixes document.title:
+  //   "(3) vutuv"   unread messages + notifications (exact; shown always)
+  //   "•(3) vutuv"  plus new feed posts that arrived while the tab was hidden
+  //   "• vutuv"     only new feed posts, nothing unread
+  // The feed dot is intentionally gated on document.hidden (feed posts have no
+  // read state) and cleared the moment the member returns to the tab. LiveView's
+  // <.live_title> rewrites the title on navigation, which would drop our prefix,
+  // so a MutationObserver on <title> re-applies it after any external change; the
+  // re-apply is idempotent (strip-then-prepend + a no-op guard), so it settles in
+  // one extra cycle and never loops.
+  TabBadge: {
+    mounted() {
+      this.unread = 0
+      this.feedPending = false
+
+      this.handleEvent("tab:badge", ({ unread }) => {
+        this.unread = unread || 0
+        this.apply()
+      })
+
+      // A new feed post only earns the dot when the member isn't looking here.
+      this.handleEvent("tab:new_post", () => {
+        if (document.hidden && !this.feedPending) {
+          this.feedPending = true
+          this.apply()
+        }
+      })
+
+      // Returning to the tab clears the feed dot.
+      this.onVisibility = () => {
+        if (!document.hidden && this.feedPending) {
+          this.feedPending = false
+          this.apply()
+        }
+      }
+      document.addEventListener("visibilitychange", this.onVisibility)
+
+      const titleEl = document.querySelector("title")
+      if (titleEl) {
+        this.observer = new MutationObserver(() => this.apply())
+        this.observer.observe(titleEl, {
+          childList: true,
+          characterData: true,
+          subtree: true,
+        })
+      }
+
+      this.apply()
+    },
+    // The indicator string: "•(3) ", "(3) ", "• " or "" when nothing is new.
+    prefix() {
+      const dot = this.feedPending ? "•" : ""
+      const num = this.unread > 0 ? `(${this.unread})` : ""
+      const marker = dot + num
+      return marker ? `${marker} ` : ""
+    },
+    apply() {
+      // Strip a prefix we added before, then prepend the current one, so the
+      // count/dot can rise, fall or vanish without leaving a stale marker.
+      const base = document.title.replace(/^\s*•?\s*(\(\d+\)\s*)?/, "")
+      const next = this.prefix() + base
+      if (next !== document.title) document.title = next
+    },
+    destroyed() {
+      document.removeEventListener("visibilitychange", this.onVisibility)
+      if (this.observer) this.observer.disconnect()
+    },
+  },
   // The admin member browser (VutuvWeb.Admin.UserLive) pages in place over the
   // socket; without this you stay parked at the pager (bottom) after clicking
   // Next/Prev. Scroll the browser card back to the top whenever its page number

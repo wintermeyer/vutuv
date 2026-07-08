@@ -74,6 +74,7 @@ defmodule VutuvWeb.ShellLive do
       |> assign(:brand_path, brand_path(user_param, path))
       |> maybe_start_counts(user_id, path)
       |> maybe_start_presence(user_id, session["show_online"] == true)
+      |> push_badge()
 
     {:ok, socket}
   end
@@ -163,7 +164,7 @@ defmodule VutuvWeb.ShellLive do
     do: {:noreply, recount_notifications(socket)}
 
   def handle_info(:notifications_read, socket),
-    do: {:noreply, assign(socket, :notifications_count, 0)}
+    do: {:noreply, socket |> assign(:notifications_count, 0) |> push_badge()}
 
   # Vutuv.Chat broadcasts :new_message on every delivered message and
   # MessageLive's mark_read broadcasts :messages_read when the member opens a
@@ -176,6 +177,22 @@ defmodule VutuvWeb.ShellLive do
 
   def handle_info(:messages_read, socket),
     do: {:noreply, recount_messages(socket)}
+
+  # A new post reached this member's feed (Vutuv.Posts.create_post broadcasts
+  # {:new_post, …} to the author *and* every follower). They may be reading
+  # another page or another tab, so nudge the TabBadge hook to mark the browser
+  # tab. Skip a post the member wrote themselves — their own post must not badge
+  # their own tab. The hook only shows the "new posts" dot while the tab is
+  # backgrounded and clears it the moment they return, so feed posts (which have
+  # no read state) need no server-side unread tally.
+  def handle_info({:new_post, %{author_id: author_id}}, socket) do
+    socket =
+      if author_id == socket.assigns.user_id,
+        do: socket,
+        else: push_event(socket, "tab:new_post", %{})
+
+    {:noreply, socket}
+  end
 
   # A member joined or left site-wide presence: re-push this viewer's (block-
   # filtered) online set so the JS hook updates every avatar's dot live.
@@ -205,19 +222,31 @@ defmodule VutuvWeb.ShellLive do
   def handle_info(_other, socket), do: {:noreply, socket}
 
   defp recount_messages(socket) do
-    assign(
-      socket,
-      :messages_count,
-      Vutuv.Chat.unread_conversations_count(socket.assigns.user_id)
-    )
+    socket
+    |> assign(:messages_count, Vutuv.Chat.unread_conversations_count(socket.assigns.user_id))
+    |> push_badge()
   end
 
   defp recount_notifications(socket) do
-    assign(
-      socket,
-      :notifications_count,
-      Activity.unread_notification_count(socket.assigns.user_id)
-    )
+    socket
+    |> assign(:notifications_count, Activity.unread_notification_count(socket.assigns.user_id))
+    |> push_badge()
+  end
+
+  # Push the current attention total (unread messages + notifications) to the
+  # TabBadge JS hook, which prefixes the browser-tab <title> with "(N)" so a
+  # backgrounded tab shows there is something to read. Sent on connect and
+  # whenever either count changes; no-op for a logged-out shell (no hook) and on
+  # the throwaway dead render.
+  defp push_badge(%{assigns: %{user_id: nil}} = socket), do: socket
+
+  defp push_badge(socket) do
+    if connected?(socket) do
+      unread = socket.assigns.messages_count + socket.assigns.notifications_count
+      push_event(socket, "tab:badge", %{unread: unread})
+    else
+      socket
+    end
   end
 
   # The initials tile shares VutuvWeb.UI.name_initials/1 with <.avatar>.
@@ -232,6 +261,12 @@ defmodule VutuvWeb.ShellLive do
       [data-presence-user-id] dot, across classic controller pages too. Empty +
       phx-update="ignore": it manages a document-wide stylesheet, not children. --%>
       <div :if={@user_id} id="presence-hook" phx-hook="Presence" phx-update="ignore" class="hidden"></div>
+      <%!-- Drives the browser-tab title indicator: prefixes document.title with
+      "(N)" for unread messages + notifications and a "•" for new feed posts that
+      arrived while the tab was backgrounded (see the TabBadge hook in app.js).
+      Fed by push_badge/1 + the {:new_post} handler; phx-update="ignore" because
+      the hook owns document.title, not this node. --%>
+      <div :if={@user_id} id="tab-badge" phx-hook="TabBadge" phx-update="ignore" class="hidden"></div>
       <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90">
         <div class="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4">
           <%!-- The logo is "home": for a logged-in member "/" redirects to their

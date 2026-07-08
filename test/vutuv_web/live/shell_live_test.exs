@@ -346,4 +346,69 @@ defmodule VutuvWeb.ShellLiveTest do
     # the messages badge is untouched
     assert has_element?(view, @mail_badge, "1")
   end
+
+  # The shell feeds a browser-tab title indicator (the TabBadge JS hook) so a
+  # backgrounded tab shows new activity: an exact "(N)" for unread messages +
+  # notifications, and a "new posts" nudge for feed posts. It pushes the total
+  # on connect and re-pushes it whenever either count changes.
+  describe "browser-tab title badge" do
+    test "carries the tab-badge hook only for a logged-in member", %{conn: conn} do
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      assert has_element?(view, "#tab-badge[phx-hook='TabBadge']")
+
+      {:ok, anon, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+      refute has_element?(anon, "#tab-badge")
+    end
+
+    test "pushes the unread total to the hook on connect", %{conn: conn} do
+      user = with_unread_message(user_with_unread_notification())
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      # one unread notification + one unread conversation
+      assert_push_event(view, "tab:badge", %{unread: 2})
+    end
+
+    test "re-pushes a raised total when a message arrives", %{conn: conn} do
+      user = user_with_unread_notification()
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      assert_push_event(view, "tab:badge", %{unread: 1})
+
+      with_unread_message(user)
+      send(view.pid, {:new_message, %{conversation_id: "y"}})
+      assert_push_event(view, "tab:badge", %{unread: 2})
+    end
+
+    test "re-pushes a lowered total when notifications are read", %{conn: conn} do
+      user = with_unread_message(user_with_unread_notification())
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+      assert_push_event(view, "tab:badge", %{unread: 2})
+
+      send(view.pid, :notifications_read)
+      # only the unread conversation remains
+      assert_push_event(view, "tab:badge", %{unread: 1})
+    end
+
+    test "a new feed post from someone else nudges the tab title", %{conn: conn} do
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      send(
+        view.pid,
+        {:new_post, %{post_id: Vutuv.UUIDv7.generate(), author_id: insert(:user).id}}
+      )
+
+      assert_push_event(view, "tab:new_post", %{})
+    end
+
+    test "your own new post does not badge your own tab", %{conn: conn} do
+      # broadcast_to_followers/2 also delivers {:new_post} to the author, so the
+      # shell must ignore a post it wrote itself.
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      send(view.pid, {:new_post, %{post_id: Vutuv.UUIDv7.generate(), author_id: user.id}})
+      refute_push_event(view, "tab:new_post", %{})
+    end
+  end
 end
