@@ -58,3 +58,6 @@ vutuv.sublime-workspace
 
 assets/node_modules
 .vscode/*
+
+# Codex
+.codex/AGENTS.md
