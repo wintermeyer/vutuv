@@ -904,8 +904,6 @@ msgstr "Diese E-Mail-Adresse soll auf meinem Profil öffentlich sichtbar sein."
 #, elixir-autogen, elixir-format
 msgid "By creating an account you accept our {nutzungsbedingungen} and confirm that you have read our {datenschutz}."
 msgstr "Mit der Registrierung akzeptieren Sie unsere {nutzungsbedingungen} und bestätigen, dass Sie unsere {datenschutz} gelesen haben."
-"Mit der Registrierung akzeptieren Sie unsere {nutzungsbedingungen} und "
-"bestätigen, unsere {datenschutz} gelesen zu haben."
 
 #: web/templates/session/user_login.html.eex:16
 msgid "An email has been sent with your login link. Once you login, you'll be logged in for the next 90 days on this device, or until you log out."

@@ -157,14 +157,14 @@
           surface (GDPR Art. 13), not a consent. The sentence is one gettext
           string with two ordered placeholders we split on, so both links sit
           in their natural place in German and English alike. --%>
-    <% [nb_pre, nb_rest] =
-      String.split(
+    <% {nb_pre, nb_rest} =
+      split_marker(
         gettext(
           "By creating an account you accept our {nutzungsbedingungen} and confirm that you have read our {datenschutz}."
         ),
         "{nutzungsbedingungen}"
       ) %>
-    <% [ds_mid, ds_post] = String.split(nb_rest, "{datenschutz}") %>
+    <% {ds_mid, ds_post} = split_marker(nb_rest, "{datenschutz}") %>
     <p class="text-center text-xs text-slate-600 dark:text-slate-400">
       {nb_pre}<a href={~p"/nutzungsbedingungen"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Nutzungsbedingungen")}</a>{ds_mid}<a href={~p"/datenschutzerklaerung"} class="font-semibold text-brand-600 hover:text-brand-700">{gettext("Datenschutzerklärung")}</a>{ds_post}
     </p>
