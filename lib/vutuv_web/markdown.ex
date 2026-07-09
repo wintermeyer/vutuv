@@ -5,9 +5,10 @@ defmodule VutuvWeb.Markdown do
   Pipeline: `<` is escaped first, so raw HTML a user types shows up as literal
   text instead of becoming markup (and Earmark never enters its HTML-block mode,
   which would swallow the Markdown around it). Bare `http(s)://` URLs become
-  Markdown links whose display text is shortened to the host and first path
-  directory (long URLs would wreck chat bubbles); trailing sentence punctuation
-  and unbalanced `)` stay outside the
+  Markdown links whose display text is shortened to the host and its first path
+  directory — two directories for GitHub and this installation's own host, whose
+  meaningful unit is two segments deep (long URLs would wreck chat bubbles);
+  trailing sentence punctuation and unbalanced `)` stay outside the
   link. Earmark renders the Markdown (bold, italics, links, inline code, lists,
   quotes; newlines become `<br>`), HtmlSanitizeEx strips anything dangerous as a
   second line of defence (`javascript:` hrefs etc.), and links open in a new tab.
@@ -217,9 +218,9 @@ defmodule VutuvWeb.Markdown do
   end
 
   # Scheme-less, www-less display text for a bare URL, shortened to the host
-  # plus its **first** path directory — any deeper path is collapsed into a
-  # trailing `…`. So a long
-  # "https://www.hostsharing.net/downloads/hostsharing-manual.pdf" reads as
+  # plus its leading path directory (or **two** directories for the hosts in
+  # `keep_two_dirs?/1`) — any deeper path is collapsed into a trailing `…`. So a
+  # long "https://www.hostsharing.net/downloads/hostsharing-manual.pdf" reads as
   # "hostsharing.net/downloads/…" instead of a mid-word character cut.
   # `@url_display_max` stays a final safety cap for a pathologically long host
   # or first segment (or a query string on a single-segment path).
@@ -237,17 +238,40 @@ defmodule VutuvWeb.Markdown do
     |> String.replace_prefix("http://", "")
   end
 
-  # host + first path directory, eliding a deeper path. A bare host — or a host
-  # with only a trailing slash or a single directory — keeps its full text; the
-  # `…` appears only when there is a second path segment to hide.
+  # host + its leading path directory (two for `keep_two_dirs?/1` hosts),
+  # eliding anything deeper. A bare host — or one with only a trailing slash or
+  # fewer directories than the kept count — keeps its full text; the `…` appears
+  # only when there is a further path segment to hide.
   defp shorten_url_display(display) do
-    case String.split(display, "/", parts: 3) do
-      [host] -> host
-      [host, ""] -> host
-      [host, dir] -> host <> "/" <> dir
-      [host, dir, ""] -> host <> "/" <> dir
-      [host, dir, _rest] -> host <> "/" <> dir <> "/…"
-    end
+    host = display |> String.split("/", parts: 2) |> hd()
+    elide_path(display, if(keep_two_dirs?(host), do: 2, else: 1))
+  end
+
+  # Hosts whose display keeps TWO leading path directories, because their
+  # meaningful unit is two segments deep: GitHub (`/:owner/:repo`) and this
+  # installation's own host (a vutuv profile section is `/:slug/<section>`, so
+  # the section — `/tags`, `/work_experiences` — is worth showing). Every other
+  # host still collapses after the first directory. `www.` is stripped from both
+  # the display host (in `truncate_url/1`) and the endpoint host so the two
+  # forms compare equal, and the own host is derived from the endpoint rather
+  # than a literal `vutuv.de`, so it is correct on any third-party installation.
+  @two_dir_hosts ~w(github.com)
+
+  defp keep_two_dirs?(host) do
+    host in @two_dir_hosts or host == own_host()
+  end
+
+  defp own_host, do: String.replace_prefix(VutuvWeb.Endpoint.host(), "www.", "")
+
+  # Keep the host plus up to `keep` leading path directories; a deeper, non-empty
+  # segment collapses into a trailing `/…`. A lone trailing slash (or any empty
+  # deeper segment) is ignored, so it never adds a spurious `…`.
+  defp elide_path(display, keep) do
+    [host | rest] = String.split(display, "/")
+    {shown, deeper} = Enum.split(rest, keep)
+    path = Enum.join([host | Enum.reject(shown, &(&1 == ""))], "/")
+
+    if Enum.any?(deeper, &(&1 != "")), do: path <> "/…", else: path
   end
 
   defp cap_url_display(display) do

@@ -88,6 +88,32 @@ defmodule VutuvWeb.MarkdownTest do
       assert String.length(text) <= 40
       assert String.ends_with?(text, "…")
     end
+
+    # GitHub and the installation's own host keep TWO path directories before
+    # eliding, because their meaningful unit is two segments deep: GitHub is
+    # `/:owner/:repo`, a vutuv profile section is `/:slug/<section>`.
+    test "keeps two path directories for github.com, eliding deeper" do
+      assert link_text("see https://github.com/wintermeyer/vutuv now") ==
+               "github.com/wintermeyer/vutuv"
+
+      assert link_text("see https://github.com/wintermeyer/vutuv/issues/5 now") ==
+               "github.com/wintermeyer/vutuv/…"
+    end
+
+    test "keeps two path directories for the installation's own host, eliding deeper" do
+      host = VutuvWeb.Endpoint.host()
+
+      assert link_text("see https://#{host}/wintermeyer/tags now") ==
+               "#{host}/wintermeyer/tags"
+
+      assert link_text("see https://#{host}/wintermeyer/tags/elixir now") ==
+               "#{host}/wintermeyer/tags/…"
+    end
+
+    test "still elides after the first directory for other hosts" do
+      assert link_text("see https://en.wikipedia.org/wiki/Elixir/foo now") ==
+               "en.wikipedia.org/wiki/…"
+    end
   end
 
   test "newlines become line breaks" do
