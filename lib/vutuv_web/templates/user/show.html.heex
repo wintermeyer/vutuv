@@ -912,8 +912,17 @@ the resulting ~200px rail width. --%>
     either way. --%>
     <.card :if={@code_stats_accounts != []} id="profile-code-stats">
       <.section_header title={gettext("Code")} />
-      <div class="space-y-6">
-        <.code_stats_account :for={account <- @code_stats_accounts} account={account} />
+      <%!-- One divider-separated row per forge account, so it is obvious at a
+      glance that e.g. a GitHub and a Codeberg account are distinct and do not
+      belong together. --%>
+      <div class="divide-y divide-slate-200 dark:divide-slate-800">
+        <div
+          :for={account <- @code_stats_accounts}
+          data-code-account
+          class="py-6 first:pt-0 last:pb-0"
+        >
+          <.code_stats_account account={account} />
+        </div>
       </div>
     </.card>
 

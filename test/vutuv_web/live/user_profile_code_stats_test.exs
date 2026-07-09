@@ -88,6 +88,25 @@ defmodule VutuvWeb.UserProfileCodeStatsTest do
       refute render(view) =~ "Last active"
     end
 
+    test "two forge accounts are separated by a divider line", %{conn: conn} do
+      enable_code_stats()
+      user = insert_activated_user()
+      insert_snapshot_account(user, provider: "GitHub", value: unique_handle())
+      insert_snapshot_account(user, provider: "Codeberg", value: unique_handle())
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+
+      # Both accounts render, each in its own divider-separated row so it is
+      # obvious the GitHub and Codeberg accounts do not belong together.
+      assert has_element?(view, "#{@card} [data-code-stats='GitHub']")
+      assert has_element?(view, "#{@card} [data-code-stats='Codeberg']")
+      assert has_element?(view, "#{@card} .divide-y [data-code-account]")
+
+      # One divider-separated row per account.
+      account_rows = view |> render() |> String.split("data-code-account") |> length()
+      assert account_rows - 1 == 2
+    end
+
     test "an account quiet for over four weeks gets the Last active line", %{conn: conn} do
       enable_code_stats()
       user = insert_activated_user()
