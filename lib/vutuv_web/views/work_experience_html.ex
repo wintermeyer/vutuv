@@ -373,8 +373,11 @@ defmodule VutuvWeb.WorkExperienceHTML do
   end
 
   defp duration_label(nil, _style), do: ""
-  defp duration_label(months, :compact) when months < 12, do: "#{max(months, 1)}m"
-  defp duration_label(months, :compact), do: "#{round(months / 12)}y"
+  # The compact circle label is localized: the "y"/"m" unit is not universal, so
+  # German reads "8 J." / "3 M." (Jahre / Monate). `%{n}`, not `%{count}`, keeps
+  # gettext from treating it as a plural count binding.
+  defp duration_label(months, :compact) when months < 12, do: gettext("%{n}m", n: max(months, 1))
+  defp duration_label(months, :compact), do: gettext("%{n}y", n: round(months / 12))
   defp duration_label(months, _years) when months < 12, do: "<1"
   defp duration_label(months, _years), do: Integer.to_string(round(months / 12))
 
@@ -461,20 +464,27 @@ defmodule VutuvWeb.WorkExperienceHTML do
       narrow every role under it. `flow-root` establishes a block-formatting
       context that contains the float, so the column stays at least as tall as
       the circle and a short single-role block can't let it overhang the next
-      block. --%>
+      block.
+
+      The circle sits inside a fixed `w-16` (4rem, the `circle_rem/2` cap) box and
+      is centred in it, so every circle — whatever its diameter — shares the same
+      centre line down the timeline. Floating the *box* (not the circle) keeps
+      the centres on one vertical axis; floating the differently-sized circles
+      directly would only align their right edges and stagger their centres. --%>
       <div class="flow-root">
-        <div
-          :if={!@as_owner?}
-          class="float-right ml-3 flex items-center justify-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
-          style={"width: #{@block.size}rem; height: #{@block.size}rem"}
-          title={
-            if(@block.multi?,
-              do: gettext("Total time at this employer"),
-              else: gettext("Time in this role")
-            )
-          }
-        >
-          <span class="text-[11px]">{@block.label}</span>
+        <div :if={!@as_owner?} class="float-right ml-3 flex w-16 justify-center">
+          <div
+            class="flex items-center justify-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
+            style={"width: #{@block.size}rem; height: #{@block.size}rem"}
+            title={
+              if(@block.multi?,
+                do: gettext("Total time at this employer"),
+                else: gettext("Time in this role")
+              )
+            }
+          >
+            <span class="text-[11px]">{@block.label}</span>
+          </div>
         </div>
         <%= if @block.multi? do %>
           <%!-- Git-graph layout: the employer is a node on the

@@ -137,7 +137,7 @@ msgstr ""
 msgid "Couldn't follow back to %{name}."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:708
+#: lib/vutuv_web/components/post_components.ex:721
 #: lib/vutuv_web/components/ui.ex:2337
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:622
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:662
@@ -176,7 +176,7 @@ msgstr ""
 msgid "Download"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:701
+#: lib/vutuv_web/components/post_components.ex:714
 #: lib/vutuv_web/components/ui.ex:2328
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:613
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:653
@@ -1939,12 +1939,12 @@ msgid_plural "%{count} years"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/views/work_experience_html.ex:557
+#: lib/vutuv_web/views/work_experience_html.ex:482
 #, elixir-autogen, elixir-format
 msgid "Time in this role"
 msgstr ""
 
-#: lib/vutuv_web/views/work_experience_html.ex:556
+#: lib/vutuv_web/views/work_experience_html.ex:481
 #, elixir-autogen, elixir-format
 msgid "Total time at this employer"
 msgstr ""
@@ -2082,7 +2082,7 @@ msgstr ""
 msgid "Delete post"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:705
+#: lib/vutuv_web/components/post_components.ex:718
 #: lib/vutuv_web/live/post_live/edit.ex:61
 #, elixir-autogen, elixir-format
 msgid "Delete this post permanently?"
@@ -2128,8 +2128,8 @@ msgstr ""
 msgid "Hide this post from…"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:690
-#: lib/vutuv_web/components/post_components.ex:692
+#: lib/vutuv_web/components/post_components.ex:703
+#: lib/vutuv_web/components/post_components.ex:705
 #, elixir-autogen, elixir-format
 msgid "Limited audience"
 msgstr ""
@@ -2189,7 +2189,7 @@ msgstr ""
 msgid "Posts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:787
+#: lib/vutuv_web/components/post_components.ex:934
 #, elixir-autogen, elixir-format
 msgid "Read more"
 msgstr ""
@@ -2273,27 +2273,27 @@ msgstr ""
 msgid "What's new? Markdown is supported."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:687
+#: lib/vutuv_web/components/post_components.ex:700
 #, elixir-autogen, elixir-format
 msgid "edited"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:978
+#: lib/vutuv_web/components/post_components.ex:1076
 #, elixir-autogen, elixir-format
 msgid "everyone else"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:982
+#: lib/vutuv_web/components/post_components.ex:1080
 #, elixir-autogen, elixir-format
 msgid "logged-out visitors"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:980
+#: lib/vutuv_web/components/post_components.ex:1078
 #, elixir-autogen, elixir-format
 msgid "people who don't follow you"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:981
+#: lib/vutuv_web/components/post_components.ex:1079
 #, elixir-autogen, elixir-format
 msgid "people you don't follow"
 msgstr ""
@@ -2334,7 +2334,7 @@ msgstr ""
 msgid "All posts"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1050
+#: lib/vutuv_web/components/post_components.ex:1148
 #: lib/vutuv_web/components/ui.ex:1468
 #: lib/vutuv_web/components/ui.ex:1468
 #: lib/vutuv_web/templates/user/show.html.heex:154
@@ -2352,7 +2352,7 @@ msgstr ""
 msgid "Bookmarks"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1017
+#: lib/vutuv_web/components/post_components.ex:1115
 #: lib/vutuv_web/components/ui.ex:1497
 #: lib/vutuv_web/components/ui.ex:1497
 #: lib/vutuv_web/live/notification_live/index.ex:282
@@ -2380,12 +2380,12 @@ msgstr ""
 msgid "Nothing here yet. Posts you like show up here."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1039
+#: lib/vutuv_web/components/post_components.ex:1137
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be reposted."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1050
+#: lib/vutuv_web/components/post_components.ex:1148
 #: lib/vutuv_web/components/ui.ex:1458
 #: lib/vutuv_web/components/ui.ex:1458
 #: lib/vutuv_web/live/post_live/saved.ex:478
@@ -2394,22 +2394,22 @@ msgstr ""
 msgid "Remove bookmark"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1036
+#: lib/vutuv_web/components/post_components.ex:1134
 #, elixir-autogen, elixir-format
 msgid "Repost"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:935
+#: lib/vutuv_web/components/post_components.ex:1011
 #, elixir-autogen, elixir-format
 msgid "Reposted by %{name}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1036
+#: lib/vutuv_web/components/post_components.ex:1134
 #, elixir-autogen, elixir-format
 msgid "Undo repost"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1017
+#: lib/vutuv_web/components/post_components.ex:1115
 #: lib/vutuv_web/components/ui.ex:1487
 #: lib/vutuv_web/components/ui.ex:1487
 #: lib/vutuv_web/live/post_live/saved.ex:477
@@ -2430,7 +2430,7 @@ msgstr ""
 msgid "Welcome to vutuv!"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1090
+#: lib/vutuv_web/components/post_components.ex:1188
 #, elixir-autogen, elixir-format
 msgid "Only public posts can be answered."
 msgstr ""
@@ -2442,8 +2442,8 @@ msgstr ""
 msgid "Replies"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:1073
-#: lib/vutuv_web/components/post_components.ex:1074
+#: lib/vutuv_web/components/post_components.ex:1171
+#: lib/vutuv_web/components/post_components.ex:1172
 #: lib/vutuv_web/live/notification_live/index.ex:211
 #: lib/vutuv_web/live/notification_live/index.ex:281
 #: lib/vutuv_web/live/post_live/reply.ex:25
@@ -2451,7 +2451,7 @@ msgstr ""
 msgid "Reply"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:658
+#: lib/vutuv_web/components/post_components.ex:671
 #, elixir-autogen, elixir-format
 msgid "Reply to a deleted post"
 msgstr ""
@@ -2477,12 +2477,12 @@ msgstr ""
 msgid "Reply to %{handle}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:649
+#: lib/vutuv_web/components/post_components.ex:662
 #, elixir-autogen, elixir-format
 msgid "Reply to a now-deleted post by %{handle}"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:639
+#: lib/vutuv_web/components/post_components.ex:652
 #, elixir-autogen, elixir-format
 msgid "Replying to %{handle}"
 msgstr ""
@@ -2802,7 +2802,7 @@ msgid_plural "connections"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/components/post_components.ex:979
+#: lib/vutuv_web/components/post_components.ex:1077
 #, elixir-autogen, elixir-format
 msgid "people who aren't your connections"
 msgstr ""
@@ -3054,7 +3054,7 @@ msgstr ""
 msgid "Nudity, violence or other content that does not belong on vutuv."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:623
+#: lib/vutuv_web/components/post_components.ex:636
 #, elixir-autogen, elixir-format
 msgid "Only you can see this post while a report about it is handled."
 msgstr ""
@@ -3125,7 +3125,7 @@ msgstr ""
 msgid "Remove it. That settles the report, no questions asked."
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:729
+#: lib/vutuv_web/components/post_components.ex:742
 #: lib/vutuv_web/templates/user/show.html.heex:159
 #, elixir-autogen, elixir-format
 msgid "Report"
@@ -5339,8 +5339,9 @@ msgstr ""
 msgid "Footer navigation"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:799
-#: lib/vutuv_web/components/post_components.ex:812
+#: lib/vutuv_web/components/post_components.ex:781
+#: lib/vutuv_web/components/post_components.ex:810
+#: lib/vutuv_web/components/post_components.ex:823
 #, elixir-autogen, elixir-format
 msgid "View post"
 msgstr ""
@@ -6536,7 +6537,7 @@ msgstr ""
 msgid "Go to profile to follow"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:726
+#: lib/vutuv_web/components/post_components.ex:739
 #, elixir-autogen, elixir-format
 msgid "Mute @%{handle}"
 msgstr ""
@@ -6546,7 +6547,7 @@ msgstr ""
 msgid "Professional"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:725
+#: lib/vutuv_web/components/post_components.ex:738
 #, elixir-autogen, elixir-format
 msgid "Unmute @%{handle}"
 msgstr ""
@@ -8685,7 +8686,7 @@ msgstr ""
 msgid "CV download"
 msgstr ""
 
-#: lib/vutuv_web/components/post_components.ex:938
+#: lib/vutuv_web/components/post_components.ex:1014
 #, elixir-autogen, elixir-format
 msgid "Reposted by %{name} and %{formatted} other"
 msgid_plural "Reposted by %{name} and %{formatted} others"
@@ -8804,12 +8805,12 @@ msgstr ""
 msgid "Choose automatically instead"
 msgstr ""
 
-#: lib/vutuv_web/views/work_experience_html.ex:592
+#: lib/vutuv_web/views/work_experience_html.ex:606
 #, elixir-autogen, elixir-format
 msgid "Show at top of profile"
 msgstr ""
 
-#: lib/vutuv_web/views/work_experience_html.ex:583
+#: lib/vutuv_web/views/work_experience_html.ex:597
 #, elixir-autogen, elixir-format
 msgid "Shown at the top of your profile"
 msgstr ""
@@ -10525,4 +10526,14 @@ msgstr ""
 #: lib/vutuv_web/live/tag_new_live.ex:56
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Separate tags with a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+msgstr ""
+
+#: lib/vutuv_web/views/work_experience_html.ex:379
+#, elixir-autogen, elixir-format
+msgid "%{n}m"
+msgstr ""
+
+#: lib/vutuv_web/views/work_experience_html.ex:380
+#, elixir-autogen, elixir-format
+msgid "%{n}y"
 msgstr ""

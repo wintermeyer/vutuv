@@ -80,6 +80,8 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
     end
 
     test "compact style labels whole years as Ny and sub-year spans as Nm" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+
       [long, short] =
         WorkExperienceHTML.circle_durations(
           [
@@ -91,6 +93,24 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
 
       assert long.label == "5y"
       assert short.label == "3m"
+    end
+
+    # The compact unit is localized (the "y"/"m" abbreviation is not universal),
+    # so a German viewer reads "5 J." / "3 M." (Jahre / Monate) in the circles.
+    test "compact style localizes the unit for German" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      [long, short] =
+        WorkExperienceHTML.circle_durations(
+          [
+            job(start_year: 2000, start_month: 1, end_year: 2005, end_month: 1),
+            job(start_year: 2003, start_month: 1, end_year: 2003, end_month: 4)
+          ],
+          :compact
+        )
+
+      assert long.label == "5 J."
+      assert short.label == "3 M."
     end
   end
 

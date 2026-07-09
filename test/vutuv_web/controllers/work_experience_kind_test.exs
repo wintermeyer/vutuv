@@ -120,7 +120,10 @@ defmodule VutuvWeb.WorkExperienceKindTest do
     # *whole* block height. On a phone that squeezed every role below the circle
     # into a narrow column while the space beside them sat empty. The circle now
     # floats into the top-right of the content column, so text wraps around it at
-    # the top and reclaims the full card width below it.
+    # the top and reclaims the full card width below it. It floats inside a fixed
+    # `w-16` box that centres it, so circles of every size share one vertical
+    # centre line (floating the differently-sized circles directly only aligns
+    # their right edges and staggers their centres).
     test "floats the duration circle so roles reclaim the width beside it (mobile)",
          %{conn: conn, user: user} do
       # Two roles at one employer make a block that runs several lines below the
@@ -144,6 +147,8 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       html = conn |> get(~p"/#{user}/work_experiences") |> html_response(200)
 
       assert html =~ "float-right"
+      # The fixed-width centring box that keeps every circle on one vertical axis.
+      assert html =~ "w-16 justify-center"
       refute html =~ "grid-cols-[6.5rem_1fr_4rem]"
     end
   end
