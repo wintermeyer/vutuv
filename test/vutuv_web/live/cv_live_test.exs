@@ -17,6 +17,7 @@ defmodule VutuvWeb.CVLiveTest do
       title: "Senior Developer",
       organization: "ACME GmbH",
       kind: "employment",
+      description: "**Led** the team\n\n- shipped things",
       start_year: 2020
     )
 
@@ -64,6 +65,17 @@ defmodule VutuvWeb.CVLiveTest do
       assert has_element?(view, "#cv-download-json")
       # The full CV downloads carry no ?hide= until something is unticked.
       assert has_element?(view, "#cv-download-docx[href='/#{owner.username}/cv/download/docx']")
+    end
+
+    test "the entry hint shows the description without Markdown markers", %{
+      conn: conn,
+      owner: owner
+    } do
+      {:ok, _view, html} = live(conn, ~p"/#{owner}/cv")
+
+      # The checklist hint is one truncated line of plain text (issue #920).
+      assert html =~ "Led the team"
+      refute html =~ "**Led**"
     end
 
     test "unticking a section encodes it into every download link", %{conn: conn, owner: owner} do

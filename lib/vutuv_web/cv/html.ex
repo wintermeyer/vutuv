@@ -7,10 +7,17 @@ defmodule VutuvWeb.CV.Html do
   the `.html` download.
 
   Deliberately a light **document**, not an app page: no shell, no dark
-  mode (paper is white), every user value escaped through `esc/1`.
+  mode (paper is white), every user value escaped through `esc/1`. The one
+  exception is the entry description, which is Markdown (issue #905) and
+  renders through the same sanitizing `VutuvWeb.Markdown` pipeline the
+  profile uses (issue #920) — its relative `@handle`/`#hashtag` links are
+  made absolute so they still work in a downloaded standalone file.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
+
+  alias VutuvWeb.Endpoint
+  alias VutuvWeb.Markdown
 
   @doc """
   Options:
@@ -122,7 +129,9 @@ defmodule VutuvWeb.CV.Html do
     period = if entry.period, do: ~s(<span class="period">#{esc(entry.period)}</span>), else: ""
 
     description =
-      if entry.description, do: ~s(<p class="desc">#{esc(entry.description)}</p>), else: ""
+      if entry.description,
+        do: ~s(<div class="desc">#{description_html(entry.description)}</div>),
+        else: ""
 
     """
     <article class="entry">
@@ -130,6 +139,17 @@ defmodule VutuvWeb.CV.Html do
     #{description}
     </article>
     """
+  end
+
+  # The description Markdown through the profile's sanitizing pipeline
+  # (escaped raw HTML, stripped images, safe links). Its @handle/#hashtag
+  # links come out relative; a downloaded file has no host to resolve them
+  # against, so they are absolutized against this installation's URL.
+  defp description_html(markdown) do
+    markdown
+    |> Markdown.render()
+    |> Phoenix.HTML.safe_to_string()
+    |> String.replace(~s(href="/), ~s(href="#{Endpoint.url()}/))
   end
 
   defp skills([]), do: ""
@@ -230,7 +250,20 @@ defmodule VutuvWeb.CV.Html do
     .entry-head { display: flex; justify-content: space-between; gap: 16px; }
     .role { font-size: 14px; }
     .period { color: #64748b; font-size: 13px; white-space: nowrap; }
-    .desc { margin: 4px 0 0; color: #334155; white-space: pre-line; overflow-wrap: anywhere; }
+    .desc { margin: 4px 0 0; color: #334155; overflow-wrap: anywhere; }
+    .desc p, .desc ul, .desc ol, .desc blockquote, .desc pre { margin: 6px 0 0; }
+    .desc > :first-child { margin-top: 0; }
+    .desc ul, .desc ol { padding-left: 20px; }
+    .desc li { margin: 0 0 2px; }
+    .desc a { color: #1d4ed8; }
+    .desc h1, .desc h2, .desc h3, .desc h4, .desc h5, .desc h6 {
+      font-size: inherit; color: inherit; letter-spacing: normal; text-transform: none;
+      border: 0; padding: 0; margin: 6px 0 0; font-weight: 600; }
+    .desc code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+                 font-size: 12px; background: #f1f5f9; padding: 1px 4px; border-radius: 4px; }
+    .desc pre { background: #f1f5f9; padding: 8px 10px; border-radius: 6px; overflow-x: auto; }
+    .desc pre code { background: none; padding: 0; }
+    .desc blockquote { border-left: 3px solid #e2e8f0; padding: 0 0 0 10px; color: #475569; }
     .skills { margin: 0; }
     .links { margin: 0; padding-left: 18px; }
     .links li { margin: 0 0 4px; overflow-wrap: anywhere; }
@@ -243,7 +276,7 @@ defmodule VutuvWeb.CV.Html do
       body { background: #fff; }
       .sheet { max-width: none; padding: 0; min-height: 0; }
       .noprint { display: none; }
-      .links a { color: inherit; text-decoration: none; }
+      .links a, .desc a { color: inherit; text-decoration: none; }
     }
     """
   end

@@ -97,9 +97,20 @@ pages; the edit forms carry a "Markdown is supported" hint. The stored value is
 unchanged plain Markdown source, so the agent-format siblings (`.md` is the
 source verbatim, `.txt`/`.json`/`.xml` carry it too) need no change. Both
 `description` columns are `text` with a `max: 10_000` validation (they legitimately
-run long — see the LinkedIn-import note). The CV document exports
-(`VutuvWeb.CV.*`) still render the description as plain text; full Markdown in the
-PDF / Word / ODT / LaTeX outputs is a separate cross-format concern.
+run long — see the LinkedIn-import note).
+
+The CV document exports render the description per format (issue #920). The
+HTML/print CV (`VutuvWeb.CV.Html`, what "Save as PDF" prints) runs the full
+`VutuvWeb.Markdown` pipeline, with the relative `@handle`/`#hashtag` links
+absolutized against `Endpoint.url()` so they work in a downloaded standalone
+file. Word, OpenDocument and LaTeX share `VutuvWeb.CV.MarkdownBlocks`, which
+reduces the Markdown to plain blocks — paragraphs with line breaks, bullet /
+numbered lists (LaTeX gets real itemize/enumerate; docx/odt get "•"/"1."
+prefixed paragraphs, since real Word lists would need a numbering part),
+inline markers stripped to their text, a `[label](url)` link kept as
+"label (url)" so the URL survives on paper. The JSON Resume `summary` keeps
+the raw source (CommonMark by spec), and the CV builder's one-line entry
+hints use `MarkdownBlocks.plain/1` so no literal `**markers**` show there.
 
 ## Languages profile section
 

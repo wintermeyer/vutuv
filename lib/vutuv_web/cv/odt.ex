@@ -7,9 +7,16 @@ defmodule VutuvWeb.CV.Odt do
   `:zip`: per the ODF spec the uncompressed `mimetype` file leads the
   archive (only the `.xml` parts are deflated), which is what lets file
   managers sniff the type from the first bytes.
+
+  The entry description is Markdown (issue #905), rendered through the
+  shared `VutuvWeb.CV.MarkdownBlocks` floor like the Docx (issue #920):
+  one paragraph per block, list items as "•"/"1."-prefixed paragraphs,
+  inline markers stripped to their text.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
+
+  alias VutuvWeb.CV.MarkdownBlocks
 
   @mimetype "application/vnd.oasis.opendocument.text"
 
@@ -124,9 +131,21 @@ defmodule VutuvWeb.CV.Odt do
     [
       role_p,
       entry.period && p(entry.period, "CVMuted"),
-      entry.description && p(entry.description)
+      entry.description && description_paragraphs(entry.description)
     ]
   end
+
+  defp description_paragraphs(markdown) do
+    markdown
+    |> MarkdownBlocks.blocks()
+    |> Enum.map(fn
+      {:p, text} -> p(text)
+      {:ul, items} -> Enum.map(items, &p("• " <> &1))
+      {:ol, items} -> items |> Enum.with_index(1) |> Enum.map(&numbered_paragraph/1)
+    end)
+  end
+
+  defp numbered_paragraph({item, index}), do: p("#{index}. #{item}")
 
   defp skills([]), do: nil
   defp skills(skills), do: [heading(gettext("Tags")), p(Enum.map_join(skills, " | ", & &1.name))]

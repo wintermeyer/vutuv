@@ -8,9 +8,17 @@ defmodule VutuvWeb.CV.Docx do
   minimal, valid OOXML package with Erlang's `:zip` — no external binary,
   no library, nothing for an air-gapped install to configure. Word,
   LibreOffice and Pages all open it.
+
+  The entry description is Markdown (issue #905), rendered through the
+  shared `VutuvWeb.CV.MarkdownBlocks` floor (issue #920): one `<w:p>` per
+  paragraph (line breaks as `<w:br/>`), list items as "•"/"1."-prefixed
+  paragraphs (real Word lists would need a numbering part — not worth it
+  for a description), inline markers stripped to their text.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
+
+  alias VutuvWeb.CV.MarkdownBlocks
 
   @word_ns "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
@@ -148,9 +156,21 @@ defmodule VutuvWeb.CV.Docx do
     [
       paragraph(role, bold: true, after: 20),
       entry.period && paragraph(entry.period, muted: true),
-      entry.description && paragraph(entry.description)
+      entry.description && description_paragraphs(entry.description)
     ]
   end
+
+  defp description_paragraphs(markdown) do
+    markdown
+    |> MarkdownBlocks.blocks()
+    |> Enum.map(fn
+      {:p, text} -> paragraph(text)
+      {:ul, items} -> Enum.map(items, &paragraph("• " <> &1, after: 40))
+      {:ol, items} -> items |> Enum.with_index(1) |> Enum.map(&numbered_paragraph/1)
+    end)
+  end
+
+  defp numbered_paragraph({item, index}), do: paragraph("#{index}. #{item}", after: 40)
 
   defp skills([]), do: nil
 

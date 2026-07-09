@@ -21,6 +21,7 @@ defmodule VutuvWeb.CVLive do
 
   alias Vutuv.Accounts
   alias VutuvWeb.CV
+  alias VutuvWeb.CV.MarkdownBlocks
   alias VutuvWeb.Live.InitAssigns
 
   @impl true
@@ -267,7 +268,7 @@ defmodule VutuvWeb.CVLive do
                     :if={entry.description}
                     class="mt-0.5 block truncate text-xs text-slate-600 dark:text-slate-400"
                   >
-                    {entry.description}
+                    {MarkdownBlocks.plain(entry.description)}
                   </span>
                 </span>
               </label>

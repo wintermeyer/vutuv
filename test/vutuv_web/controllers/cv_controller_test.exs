@@ -24,14 +24,17 @@ defmodule VutuvWeb.CVControllerTest do
   # categories from issue #840, two education categories (#849), a link, a
   # spoken language (#865), a certificate (#859), a social media account and
   # personal details. The employment description carries the characters each
-  # format must escape.
+  # format must escape plus Markdown (issue #905) each format must render
+  # per its own vocabulary (issue #920).
   defp seed_profile(user) do
     insert(:work_experience,
       user: user,
       title: "Senior Developer",
       organization: "ACME GmbH",
       kind: "employment",
-      description: "Shipping <fast> & 100% maintainable code_bases",
+      description:
+        "Shipping <fast> & 100% maintainable code_bases\n\n" <>
+          "- **Led** the [platform](https://acme.example/docs) team\n- Cut deploy times",
       start_month: 3,
       start_year: 2020,
       end_month: nil,
@@ -153,6 +156,13 @@ defmodule VutuvWeb.CVControllerTest do
       # The user-written description is escaped, never raw HTML.
       assert body =~ "Shipping &lt;fast&gt; &amp; 100% maintainable code_bases"
       refute body =~ "<fast>"
+
+      # Its Markdown renders like on the profile (issue #920): bold, a real
+      # bullet list, a clickable link — no literal markers.
+      assert body =~ "<strong>Led</strong>"
+      assert body =~ ~r{<li>.*platform.*</li>}s
+      assert body =~ ~s(href="https://acme.example/docs")
+      refute body =~ "**Led**"
     end
 
     test "carries the newer sections and honors hiding them", %{conn: conn} do
@@ -234,6 +244,12 @@ defmodule VutuvWeb.CVControllerTest do
       assert body =~ "Universität Bremen"
       assert body =~ "\\& 100\\% maintainable code\\_bases"
       refute body =~ "& 100% maintainable"
+
+      # The description's Markdown list becomes a real itemize; inline
+      # markers are stripped, the link's URL survives as text (issue #920).
+      assert body =~ "\\begin{itemize}"
+      assert body =~ "\\item Led the platform (https://acme.example/docs) team"
+      refute body =~ "**Led**"
     end
 
     test "the .docx is a valid OOXML package, honoring ?hide", %{conn: conn} do
@@ -253,6 +269,11 @@ defmodule VutuvWeb.CVControllerTest do
       assert document =~ "Senior Developer"
       assert document =~ "Shipping &lt;fast&gt; &amp; 100% maintainable"
       refute document =~ "<fast>"
+      # The description's Markdown list becomes bulleted paragraphs with the
+      # markers stripped and the link URL kept (issue #920).
+      assert document =~ "• Led the platform (https://acme.example/docs) team"
+      assert document =~ "• Cut deploy times"
+      refute document =~ "**Led**"
       # tags were hidden.
       refute document =~ "alpha-tag"
     end
@@ -270,7 +291,12 @@ defmodule VutuvWeb.CVControllerTest do
       {:ok, files} = :zip.unzip(conn.resp_body, [:memory])
       files = Map.new(files, fn {name, data} -> {List.to_string(name), data} end)
       assert files["mimetype"] == "application/vnd.oasis.opendocument.text"
-      assert Map.fetch!(files, "content.xml") =~ "SV Musterstadt"
+      content = Map.fetch!(files, "content.xml")
+      assert content =~ "SV Musterstadt"
+      # The description's Markdown renders as stripped bulleted paragraphs
+      # here too (issue #920).
+      assert content =~ "• Cut deploy times"
+      refute content =~ "**Led**"
     end
 
     test "the JSON Resume maps the categories onto the schema", %{conn: conn} do
@@ -308,6 +334,11 @@ defmodule VutuvWeb.CVControllerTest do
       # Spoken languages and certificates map onto their own schema sections.
       assert Enum.any?(resume["languages"], &(&1["language"] == "English"))
       assert Enum.any?(resume["certificates"], &(&1["name"] =~ "AWS Certified"))
+
+      # A JSON Resume summary is CommonMark by spec, so the raw Markdown
+      # source rides along untouched (issue #920).
+      senior = Enum.find(resume["work"], &(&1["position"] == "Senior Developer"))
+      assert senior["summary"] =~ "- **Led** the [platform](https://acme.example/docs) team"
     end
 
     test "an unknown format is a 404", %{conn: conn} do

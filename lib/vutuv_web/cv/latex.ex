@@ -6,10 +6,15 @@ defmodule VutuvWeb.CV.Latex do
   distribution without extra installs.
 
   Every user value goes through `esc/1` (all ten TeX specials); URLs are
-  percent-encoded where a raw character would break `\\url{}`.
+  percent-encoded where a raw character would break `\\url{}`. The entry
+  description is Markdown (issue #905), rendered through the shared
+  `VutuvWeb.CV.MarkdownBlocks` floor (issue #920): paragraphs with line
+  breaks, real itemize/enumerate lists, inline markers stripped to text.
   """
 
   use Gettext, backend: VutuvWeb.Gettext
+
+  alias VutuvWeb.CV.MarkdownBlocks
 
   def render(cv) do
     name = if cv.name, do: "{\\LARGE\\bfseries #{esc(cv.name)}}\n", else: ""
@@ -95,10 +100,32 @@ defmodule VutuvWeb.CV.Latex do
         ""
       end
 
-    description = if entry.description, do: "\n\n#{esc(entry.description)}", else: ""
+    description =
+      if entry.description, do: "\n\n#{description_blocks(entry.description)}", else: ""
 
     "\\textbf{#{role}}#{period}#{description}\n"
   end
+
+  # The description Markdown as LaTeX blocks: paragraphs keep their line
+  # breaks (`\\`), lists become itemize/enumerate. The extracted plain text
+  # goes through the same `esc/1` as every other user value.
+  defp description_blocks(markdown) do
+    markdown
+    |> MarkdownBlocks.blocks()
+    |> Enum.map_join("\n\n", &latex_block/1)
+  end
+
+  defp latex_block({:p, text}), do: multiline(text)
+
+  defp latex_block({:ul, items}) do
+    "\\begin{itemize}\n#{Enum.map_join(items, "\n", &"\\item #{multiline(&1)}")}\n\\end{itemize}"
+  end
+
+  defp latex_block({:ol, items}) do
+    "\\begin{enumerate}\n#{Enum.map_join(items, "\n", &"\\item #{multiline(&1)}")}\n\\end{enumerate}"
+  end
+
+  defp multiline(text), do: text |> esc() |> String.replace("\n", " \\\\\n")
 
   defp skills([]), do: ""
 
