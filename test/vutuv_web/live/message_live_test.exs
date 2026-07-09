@@ -57,6 +57,26 @@ defmodule VutuvWeb.MessageLiveTest do
 
       assert html =~ "No conversations yet"
     end
+
+    test "opening a conversation lists it in the sidebar and zeroes its unread badge",
+         %{conn: conn} do
+      {conn, me} = create_and_login_user(conn)
+      other = insert_activated_user(first_name: "Berta", last_name: "Beispiel")
+      conversation = insert_conversation_between(me, other)
+      {:ok, _} = Chat.send_message(other, conversation.id, "Unread hello")
+
+      badge = ~s|a[href="/messages/#{conversation.id}"] .bg-accent|
+
+      # On the list the unread message shows a coral badge on the conversation row.
+      {:ok, index_view, _} = live(conn, ~p"/messages")
+      assert has_element?(index_view, badge)
+
+      # Opening the thread marks it read: the sidebar still lists the
+      # conversation (the single sidebar load survives) but its badge is gone.
+      {:ok, show_view, _} = live(conn, ~p"/messages/#{conversation.id}")
+      assert has_element?(show_view, ~s|a[href="/messages/#{conversation.id}"]|)
+      refute has_element?(show_view, badge)
+    end
   end
 
   describe "sending" do

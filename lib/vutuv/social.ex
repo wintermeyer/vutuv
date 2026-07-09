@@ -362,7 +362,14 @@ defmodule Vutuv.Social do
           end
       end
 
-    if match?({:ok, _}, result), do: broadcast_presence_blocks([blocker.id, blocked.id])
+    if match?({:ok, _}, result) do
+      broadcast_presence_blocks([blocker.id, blocked.id])
+      # A block severs both follow edges (sever_between/2 is quiet by design), so
+      # both members' open profiles must recompute their follower / following /
+      # connection counts and the viewer's pill just like do_follow/unfollow! do.
+      broadcast_social_graph_changed([blocker.id, blocked.id])
+    end
+
     result
   end
 
@@ -420,6 +427,9 @@ defmodule Vutuv.Social do
           end)
 
         broadcast_presence_blocks([blocker.id, blocked.id])
+        # Lifting the block changes the follow-state pill (the pair can interact
+        # again), so refresh both open profiles the same way a block does.
+        broadcast_social_graph_changed([blocker.id, blocked.id])
         :ok
     end
   end

@@ -88,7 +88,7 @@ defmodule VutuvWeb.LanguageController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Language updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/languages" end,
+      redirect_to: ~p"/settings/languages",
       render: "edit.html",
       assigns: [language: language]
     )

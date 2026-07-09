@@ -982,7 +982,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
                 @{u.username} ✕
               </button>
               <span :if={@excluded_extra > 0} class="text-xs text-slate-600 dark:text-slate-400">
-                {gettext("+%{count} more", count: @excluded_extra)}
+                {gettext("+%{count} more", count: compact_count(@excluded_extra))}
               </span>
             </div>
 
@@ -1168,7 +1168,7 @@ defmodule VutuvWeb.Admin.NewsletterGroupLive do
           ({gettext("page %{page} of %{pages}, %{total} total",
             page: @page,
             pages: list_pages(@total),
-            total: @total
+            total: delimited_count(@total)
           )})
         </span>
       </p>

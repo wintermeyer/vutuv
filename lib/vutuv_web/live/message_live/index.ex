@@ -99,8 +99,8 @@ defmodule VutuvWeb.MessageLive.Index do
         |> assign(:more?, page.more?)
         |> assign(:cursor, page.next_cursor)
         |> stream(:messages, Enum.reverse(page.entries), reset: true)
-        # Re-list so this conversation's unread badge zeroes right away.
-        |> assign_lists()
+        # Zero the just-opened conversation's unread badge in the sidebar.
+        |> reflect_opened_read(conversation.id)
     end
   end
 
@@ -352,6 +352,29 @@ defmodule VutuvWeb.MessageLive.Index do
     |> assign(:conversations, Chat.list_conversations(user))
     |> assign(:requests, Chat.list_requests(user))
   end
+
+  # Reflect the just-marked-read state in the sidebar: drop the opened
+  # conversation's unread badge to zero.
+  #
+  # `handle_params` always fires right after `mount`, so on a *connected* open
+  # the sidebar list was already built once in mount (`assign_sidebar/1 ->
+  # assign_lists/1`, `loaded?` is true). Running the 8-query `assign_lists/1`
+  # again here just to zero one badge would fire the whole sidebar load twice
+  # per open, so patch that one conversation's unread in memory instead
+  # (opening sends no message, so the list order and previews don't change).
+  # On the *static* first paint the list wasn't loaded yet (`loaded?` is false),
+  # so fall back to the full `assign_lists/1` to populate it for that render.
+  defp reflect_opened_read(socket, conversation_id) do
+    if socket.assigns.loaded? do
+      conversations = Enum.map(socket.assigns.conversations, &zero_unread_if(&1, conversation_id))
+      assign(socket, :conversations, conversations)
+    else
+      assign_lists(socket)
+    end
+  end
+
+  defp zero_unread_if(%{conversation: %{id: id}} = entry, id), do: %{entry | unread: 0}
+  defp zero_unread_if(entry, _id), do: entry
 
   # A new message landed in the *open* conversation, which the member is reading,
   # so the only sidebar change is that conversation's preview/time (the arriving

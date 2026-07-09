@@ -291,7 +291,7 @@ defmodule VutuvWeb.UI do
       text
     else
       downcased = Enum.map(needles, &String.downcase/1)
-      pattern = Regex.compile!(Enum.map_join(needles, "|", &Regex.escape/1), "iu")
+      pattern = compiled_needle_pattern(Enum.map_join(needles, "|", &Regex.escape/1))
 
       marked =
         text
@@ -299,6 +299,24 @@ defmodule VutuvWeb.UI do
         |> Enum.map(&mark_part(&1, downcased))
 
       {:safe, marked}
+    end
+  end
+
+  # `highlight/2` is called once per row on /search and the follower/following/
+  # tag listings, always with the *same* needle within a render, so compiling
+  # the identical pattern per row is wasted work. Memoize the last needle
+  # source -> %Regex{} in the process dictionary: a render loop shares one
+  # compile, and the single-entry cache stays O(1) memory even as the search
+  # term changes between requests on a long-lived LiveView process.
+  defp compiled_needle_pattern(source) do
+    case Process.get(:ui_highlight_pattern) do
+      {^source, regex} ->
+        regex
+
+      _ ->
+        regex = Regex.compile!(source, "iu")
+        Process.put(:ui_highlight_pattern, {source, regex})
+        regex
     end
   end
 

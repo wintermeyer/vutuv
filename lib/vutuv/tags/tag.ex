@@ -197,10 +197,17 @@ defmodule Vutuv.Tags.Tag do
       from(u in source,
         left_join: us in assoc(u, :user_tags),
         left_join: e in assoc(us, :endorsements),
+        # Count only endorsers who are currently publicly visible, the same gate
+        # `Vutuv.Tags.UserTag.ordered_by_endorsements/1` and every visible count
+        # apply. The test rides in the left-join ON clause, so a hidden or
+        # unconfirmed endorser leaves `endorser` NULL and drops out of
+        # count(endorser.id) — the ranking then agrees with the counts shown.
+        left_join: endorser in assoc(e, :user),
+        on: account_confirmed_row(endorser) and not account_hidden(endorser.id),
         where: us.tag_id == ^tag.id,
         where: account_confirmed_row(u) and not account_hidden(u.id),
-        # most endorsed
-        order_by: fragment("count(?) DESC", e.id),
+        # most endorsed (by visible endorsers only)
+        order_by: fragment("count(?) DESC", endorser.id),
         group_by: u.id,
         limit: 10,
         select: struct(u, ^User.listing_fields())

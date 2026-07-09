@@ -8,6 +8,7 @@ defmodule VutuvWeb.SessionController do
   alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.Home
   alias VutuvWeb.RateLimit
+  alias VutuvWeb.UI
 
   # The login page is logged-out-only, like registration. An already-logged-in
   # visitor is redirected to their home (the feed or, with no follows yet, their
@@ -440,10 +441,15 @@ defmodule VutuvWeb.SessionController do
         nil
 
       count ->
+        # `count` stays the plural selector, but the rendered number rides a
+        # separate `%{formatted}` placeholder so it goes through the count
+        # formatter — ngettext auto-binds `%{count}` to the raw integer, which a
+        # member with >999 unread conversations would otherwise see run together.
         ngettext(
-          "You have %{count} new message.",
-          "You have %{count} new messages.",
-          count
+          "You have %{formatted} new message.",
+          "You have %{formatted} new messages.",
+          count,
+          formatted: UI.delimited_count(count)
         )
     end
   end

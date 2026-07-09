@@ -118,14 +118,26 @@ defmodule Vutuv.Phone do
   regions return `nil`.
   """
   def country_flag(value, locale) when is_binary(value) do
-    if String.starts_with?(national(value, locale), "+") do
-      with {:ok, number} <- parse(value),
-           region when is_binary(region) <- Metadata.get_region_code_for_number(number),
-           {:ok, flag} <- Territory.to_unicode_flag(region) do
-        {flag, region, number.country_code}
-      else
-        _ -> nil
-      end
+    with {:ok, number} <- parse(value),
+         true <- shown_with_plus?(number, locale, value),
+         region when is_binary(region) <- Metadata.get_region_code_for_number(number),
+         {:ok, flag} <- Territory.to_unicode_flag(region) do
+      {flag, region, number.country_code}
+    else
+      _ -> nil
+    end
+  end
+
+  # Whether `national/2` would still display this number with its international
+  # `+` prefix (so it warrants a flag), decided from the single parse above:
+  # a valid number reads in international form ("+…") unless it is a German
+  # number shown to a German viewer (national "0…"); anything not valid falls
+  # back to the stored text, so the gate follows that text's leading `+`.
+  defp shown_with_plus?(number, locale, value) do
+    if ExPhoneNumber.is_valid_number?(number) do
+      not (locale == "de" and number.country_code == @german_country_code)
+    else
+      String.starts_with?(value, "+")
     end
   end
 

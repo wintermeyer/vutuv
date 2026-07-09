@@ -2,6 +2,8 @@ defmodule VutuvWeb.Admin.LegalPageHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  import VutuvWeb.Admin.AdminViewHelpers, only: [fmt: 1]
+
   embed_templates("../../templates/admin/legal_page/*")
 
   @doc "The human name of a legal page (fixed set, keyed by slug)."
@@ -13,7 +15,4 @@ defmodule VutuvWeb.Admin.LegalPageHTML do
   def page_path("impressum"), do: ~p"/impressum"
   def page_path("datenschutzerklaerung"), do: ~p"/datenschutzerklaerung"
   def page_path("nutzungsbedingungen"), do: ~p"/nutzungsbedingungen"
-
-  @doc "Short timestamp for the listing."
-  def fmt(%NaiveDateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M")
 end

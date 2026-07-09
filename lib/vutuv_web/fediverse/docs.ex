@@ -140,8 +140,12 @@ defmodule VutuvWeb.Fediverse.Docs do
     if Ecto.assoc_loaded?(post.images), do: post.images, else: []
   end
 
+  # Root-relative src/href (post images, in-app links) must be absolute for a
+  # remote server. A protocol-relative (`//host`) URL already resolves on its
+  # own, so the negative lookahead leaves it alone instead of corrupting it
+  # into `#{base()}//host` (the same guard as `VutuvWeb.Feeds.absolutize_urls/1`).
   defp absolutize(html) do
-    String.replace(html, ~r/(href|src)="\//, "\\1=\"#{base()}/")
+    String.replace(html, ~r{(href|src)="/(?!/)}, "\\1=\"#{base()}/")
   end
 
   # inReplyTo only when the parent's author federates too — otherwise the id

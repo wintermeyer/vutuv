@@ -426,7 +426,7 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
-  defp validate_backup(str, job, org, len) when len <= 3 do
+  defp validate_backup(str, job, org, len) when len < 3 do
     validate_backup(str, job, org, 3)
   end
 
@@ -569,7 +569,7 @@ defmodule VutuvWeb.UserHelpers do
   def email_greeting(_), do: "Hi"
 
   defp greeting("de") do
-    {{_, _, _}, {hour, _, _}} = :calendar.local_time()
+    %{hour: hour} = Vutuv.BerlinTime.now()
 
     cond do
       hour in 1..10 -> "Guten Morgen"

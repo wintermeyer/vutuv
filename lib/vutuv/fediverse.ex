@@ -307,6 +307,7 @@ defmodule Vutuv.Fediverse do
           body: body,
           headers: headers,
           receive_timeout: 10_000,
+          connect_options: [timeout: 2_000],
           retry: false,
           redirect: false
         ],
@@ -409,6 +410,7 @@ defmodule Vutuv.Fediverse do
             signature_headers ++
               [{"accept", "application/activity+json"}, {"user-agent", Http.user_agent()}],
           receive_timeout: 8_000,
+          connect_options: [timeout: 2_000],
           retry: false,
           redirect: false,
           decode_body: false

@@ -55,14 +55,21 @@ defmodule Vutuv.ApiAuth.App do
   defp validate_redirect_uris(changeset) do
     case get_field(changeset, :redirect_uris) do
       [_at_least_one | _] = uris ->
-        if Enum.all?(uris, &valid_redirect_uri?/1) do
-          changeset
-        else
-          add_error(
-            changeset,
-            :redirect_uris,
-            "must be exact https:// URLs (http://localhost is allowed for development)"
-          )
+        cond do
+          # The column is varchar(255)[]: an over-length element must fail as a
+          # changeset error, never as a raised Postgres 22001 on insert.
+          Enum.any?(uris, &(String.length(&1) > 255)) ->
+            add_error(changeset, :redirect_uris, "must each be at most 255 characters")
+
+          Enum.all?(uris, &valid_redirect_uri?/1) ->
+            changeset
+
+          true ->
+            add_error(
+              changeset,
+              :redirect_uris,
+              "must be exact https:// URLs (http://localhost is allowed for development)"
+            )
         end
 
       _empty ->

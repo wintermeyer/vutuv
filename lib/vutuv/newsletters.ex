@@ -211,14 +211,7 @@ defmodule Vutuv.Newsletters do
   # Runs the (idempotent) broadcast in the background - inline in tests, where
   # :async_email is false.
   defp launch_broadcast(%Newsletter{} = locked) do
-    run = fn -> run_broadcast(locked) end
-
-    if Application.get_env(:vutuv, :async_email, true) do
-      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, run)
-    else
-      run.()
-    end
-
+    Emailer.deliver_async(fn -> run_broadcast(locked) end)
     {:ok, :started}
   end
 
@@ -416,12 +409,7 @@ defmodule Vutuv.Newsletters do
 
     now
     |> eligible_users()
-    |> where(
-      [u],
-      exists(
-        from(e in Email, where: e.user_id == parent_as(:u).id and is_nil(e.undeliverable_at))
-      )
-    )
+    |> with_deliverable_email()
     |> where([u], ilike(u.username, ^username_like(pattern)))
   end
 
@@ -467,17 +455,14 @@ defmodule Vutuv.Newsletters do
   def group_reach_count(group_id) do
     now = NaiveDateTime.utc_now(:second)
 
-    Repo.one(
-      from(u in eligible_users(now),
-        join: m in NewsletterGroupMember,
-        on: m.user_id == u.id and m.group_id == ^group_id,
-        where:
-          exists(
-            from(e in Email, where: e.user_id == parent_as(:u).id and is_nil(e.undeliverable_at))
-          ),
-        select: count(u.id)
-      )
+    now
+    |> eligible_users()
+    |> with_deliverable_email()
+    |> join(:inner, [u], m in NewsletterGroupMember,
+      on: m.user_id == u.id and m.group_id == ^group_id
     )
+    |> select([u], count(u.id))
+    |> Repo.one()
   end
 
   @doc """
@@ -552,12 +537,7 @@ defmodule Vutuv.Newsletters do
     base =
       now
       |> eligible_users()
-      |> where(
-        [u],
-        exists(
-          from(e in Email, where: e.user_id == parent_as(:u).id and is_nil(e.undeliverable_at))
-        )
-      )
+      |> with_deliverable_email()
 
     base
     |> where(^membership(criteria, today))
@@ -1022,6 +1002,19 @@ defmodule Vutuv.Newsletters do
       where: is_nil(u.deactivated_at),
       where: is_nil(u.unreachable_at),
       where: is_nil(u.suspended_until) or u.suspended_until < ^now
+    )
+  end
+
+  # Narrows an :u-bound query (from eligible_users/1) to members with at least
+  # one deliverable address. Shared by the live count/preview, the member search
+  # and the group reach so the EXISTS lives in one place.
+  defp with_deliverable_email(query) do
+    where(
+      query,
+      [u],
+      exists(
+        from(e in Email, where: e.user_id == parent_as(:u).id and is_nil(e.undeliverable_at))
+      )
     )
   end
 

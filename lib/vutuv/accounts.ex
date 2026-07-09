@@ -244,7 +244,10 @@ defmodule Vutuv.Accounts do
     {:ok, put_pin_cookie(reset_login_session(conn), email)}
   end
 
-  # The account owning `email` (case-insensitive), or nil.
+  # The account owning `email` (case-insensitive), or nil. The one email->user
+  # lookup, shared by the login/registration step-1 flow, the alternate-code
+  # redemption and `get_user_by_handle_or_email/1`; it downcases once here so
+  # callers need not.
   defp user_by_email(email) do
     email = String.downcase(email)
 
@@ -285,16 +288,7 @@ defmodule Vutuv.Accounts do
   # detached. Tests deliver inline (`config :vutuv, :async_email, false`) so the
   # Swoosh test adapter's message reaches the calling process.
   defp deliver_off_request_path(mail, address) do
-    if Application.get_env(:vutuv, :async_email, true) do
-      {:ok, _pid} =
-        Task.Supervisor.start_child(Vutuv.TaskSupervisor, fn ->
-          deliver_and_log(mail, address)
-        end)
-    else
-      deliver_and_log(mail, address)
-    end
-
-    :ok
+    Emailer.deliver_async(fn -> deliver_and_log(mail, address) end)
   end
 
   # Deliver an off-request-path email and never let a failure pass silently:
@@ -727,7 +721,8 @@ defmodule Vutuv.Accounts do
   after too many wrong attempts.
   """
   def check_pin(%User{} = user, pin, type) do
-    Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^type))
+    user
+    |> login_pin(type)
     |> verify_pin(pin)
   end
 
@@ -751,6 +746,13 @@ defmodule Vutuv.Accounts do
     end
 
     result
+  end
+
+  # The single outstanding `(user, type)` PIN row, or nil. Shared by check_pin/3
+  # (verification) and consume_outstanding_login_pin/1 (alternate-code login),
+  # which used to inline the same lookup with the type hardcoded.
+  defp login_pin(%User{id: user_id}, type) do
+    Repo.one(from(m in LoginPin, where: m.user_id == ^user_id and m.type == ^type))
   end
 
   @doc """
@@ -789,7 +791,7 @@ defmodule Vutuv.Accounts do
   end
 
   defp consume_outstanding_login_pin(user) do
-    case Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^"login")) do
+    case login_pin(user, "login") do
       %LoginPin{consumed_at: nil} = pin -> mark_consumed(pin)
       _ -> :ok
     end
@@ -979,17 +981,7 @@ defmodule Vutuv.Accounts do
     identifier =
       identifier |> String.trim() |> String.trim_leading("@") |> String.downcase()
 
-    get_user_by_username(identifier) || get_user_by_email_value(identifier)
-  end
-
-  defp get_user_by_email_value(value) do
-    Repo.one(
-      from(u in User,
-        join: e in assoc(u, :emails),
-        where: e.value == ^value,
-        limit: 1
-      )
-    )
+    get_user_by_username(identifier) || user_by_email(identifier)
   end
 
   @doc """
@@ -1440,10 +1432,13 @@ defmodule Vutuv.Accounts do
 
   @doc """
   The user's first email address value (public or not) — the address the
-  account-level mails (deletion PIN, verification notice) go to.
+  account-level mails (deletion PIN, verification notice) go to. Ordered by the
+  owner's display order (`Email.ordered/1`: position nulls last, then id), so a
+  member with several addresses gets a deterministic primary recipient rather
+  than whichever row Postgres happened to return.
   """
   def first_email_value(%User{id: id}) do
-    Repo.one(from(e in Email, where: e.user_id == ^id, limit: 1, select: e.value))
+    Repo.one(from(e in Email.ordered(), where: e.user_id == ^id, limit: 1, select: e.value))
   end
 
   @doc """

@@ -151,7 +151,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> String.replace(~r/^(http:\/\/)?(www\.)?\w*\.[a-z]*\/$/u, "")
     |> String.replace(~r/^@?/, "")
     |> String.split(~r/\//, trim: true)
-    |> List.last()
+    |> List.last() || ""
   end
 
   # Mastodon is federated: the handle is user@instance, the profile lives at

@@ -24,6 +24,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.CV
   alias VutuvWeb.LanguageHTML
   alias VutuvWeb.UserHelpers
 
@@ -145,8 +146,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       # The CV category (issue #840): employment | self_employed | internship |
       # volunteer | other.
       kind: work.kind,
-      start: year_month(work.start_year, work.start_month),
-      end: year_month(work.end_year, work.end_month)
+      start: CV.year_month(work.start_year, work.start_month),
+      end: CV.year_month(work.end_year, work.end_month)
     }
   end
 
@@ -160,8 +161,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       description: edu.description,
       # The CV category (issue #849): university | apprenticeship | school.
       kind: edu.kind,
-      start: year_month(edu.start_year, edu.start_month),
-      end: year_month(edu.end_year, edu.end_month)
+      start: CV.year_month(edu.start_year, edu.start_month),
+      end: CV.year_month(edu.end_year, edu.end_month)
     }
   end
 
@@ -175,8 +176,8 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       issuer: qualification.issuer,
       credential_id: qualification.credential_id,
       url: qualification.url,
-      awarded: year_month(qualification.awarded_year, qualification.awarded_month),
-      expires: year_month(qualification.expires_year, qualification.expires_month)
+      awarded: CV.year_month(qualification.awarded_year, qualification.awarded_month),
+      expires: CV.year_month(qualification.expires_year, qualification.expires_month)
     }
   end
 
@@ -207,12 +208,6 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       level: LanguageHTML.proficiency_badge(language.proficiency)
     }
   end
-
-  defp year_month(nil, _month), do: nil
-  defp year_month(year, nil), do: Integer.to_string(year)
-
-  defp year_month(year, month),
-    do: "#{year}-#{String.pad_leading(Integer.to_string(month), 2, "0")}"
 
   @doc false
   def link_entry(url), do: %{id: url.id, url: url.value, description: url.description}

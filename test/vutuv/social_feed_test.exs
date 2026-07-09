@@ -147,6 +147,22 @@ defmodule Vutuv.SocialFeedTest do
       assert SocialFeed.request_posts(bluesky_account()) == :ignored
     end
 
+    test "request_posts/1 ignores a non-feed provider instead of raising" do
+      # A code-forge (or any non-feed) account has no feed flag: enabled?/1 must
+      # fall back to false rather than FunctionClauseError, so request_posts/1
+      # degrades to :ignored (regression: enabled?/1 had no fallback clause).
+      refute SocialFeed.enabled?("GitHub")
+
+      github =
+        insert(:social_media_account,
+          provider: "GitHub",
+          value: "octo",
+          user: insert_activated_user()
+        )
+
+      assert SocialFeed.request_posts(github) == :ignored
+    end
+
     test "editing the handle resets the fetch state" do
       account = mastodon_account()
 

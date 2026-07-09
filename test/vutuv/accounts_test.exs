@@ -365,6 +365,17 @@ defmodule Vutuv.AccountsTest do
     end
   end
 
+  describe "first_email_value/1" do
+    test "returns the lowest-position address deterministically, whatever the insert order" do
+      user = insert(:user)
+      insert(:email, user: user, value: "third@example.com", position: 3)
+      insert(:email, user: user, value: "first@example.com", position: 1)
+      insert(:email, user: user, value: "second@example.com", position: 2)
+
+      assert Accounts.first_email_value(user) == "first@example.com"
+    end
+  end
+
   describe "count_users/0" do
     test "counts confirmed members (activated, or legacy nil-activated)" do
       base = Accounts.count_users()

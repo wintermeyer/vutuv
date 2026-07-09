@@ -99,6 +99,27 @@ defmodule Vutuv.Notifications.Emailer do
     end
   end
 
+  @doc """
+  Runs `fun` (a 0-arity function that builds and delivers mail) off the calling
+  process: as a supervised `Vutuv.TaskSupervisor` task in production, or inline
+  in tests (`config :vutuv, :async_email, false`, so the Swoosh test adapter's
+  message reaches the asserting process). Returns `:ok`.
+
+  The single owner of the async-email gate, so its shape (the env flag + the
+  supervised spawn) lives in one place instead of being copied into every
+  context that mails off the request path. Callers keep their own per-site
+  logging / return value around this core — this only decides where `fun` runs.
+  """
+  def deliver_async(fun) when is_function(fun, 0) do
+    if Application.get_env(:vutuv, :async_email, true) do
+      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, fun)
+    else
+      fun.()
+    end
+
+    :ok
+  end
+
   # gen_smtp's puny-encoding raises on whitespace in a recipient address (one
   # legacy address took down a whole newsletter broadcast that way), so the
   # chokepoint drops such mail with an error tuple instead of letting every
@@ -203,16 +224,10 @@ defmodule Vutuv.Notifications.Emailer do
 
   def verification_notice(user) do
     email = Vutuv.Accounts.first_email_value(user)
-    locale = get_locale(user.locale)
 
-    base_email()
-    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
-    |> subject(
-      recipient_subject(locale, fn ->
-        gettext("vutuv Account verified")
-      end)
-    )
-    |> render_bodies("verification_confirmation", locale, %{user: user, url: public_url()})
+    build_email(user, email, "verification_confirmation", %{}, fn ->
+      gettext("vutuv Account verified")
+    end)
   end
 
   # Longest message excerpt quoted in the unread-notification email. A DM may

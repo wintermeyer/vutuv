@@ -150,5 +150,5 @@ defmodule Vutuv.ChangesetHelpers do
 
   # The upper bound on a period year, matching the form's year <select>
   # (@current_year..1920): a period can't start or end in a future year.
-  defp current_year, do: Date.utc_today().year
+  defp current_year, do: Vutuv.BerlinTime.today().year
 end

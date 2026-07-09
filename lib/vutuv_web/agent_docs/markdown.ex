@@ -112,7 +112,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       # doc.title already carries the period (PostDoc's period_suffix/1).
       "# #{doc.title}",
       gettext("%{count} posts by %{name}", count: doc.total, name: author_link) <>
-        page_hint(doc.total, doc.posts),
+        page_hint(doc.total, doc.posts, &paren_hint/1),
       Enum.map_join(doc.posts, "\n", &post_line/1)
     ]
     |> join_blocks()
@@ -124,7 +124,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       frontmatter(doc),
       "# #{doc.title}",
-      feed_summary(doc),
+      feed_summary(doc, &paren_hint/1),
       Enum.map_join(doc.posts, "\n", &post_line/1)
     ]
     |> join_blocks()
@@ -134,7 +134,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       frontmatter(doc),
       "# #{doc.title}",
-      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      gettext("%{count} total", count: doc.total) <>
+        page_hint(doc.total, doc.people, &paren_hint/1),
       Enum.map_join(doc.people, "\n", &person_line/1)
     ]
     |> join_blocks()
@@ -146,7 +147,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     [
       frontmatter(doc),
       "# #{doc.title}",
-      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      gettext("%{count} total", count: doc.total) <>
+        page_hint(doc.total, doc.people, &paren_hint/1),
       Enum.map_join(doc.people, "\n", &endorser_line/1)
     ]
     |> join_blocks()
@@ -194,6 +196,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       doc.description,
       Enum.map_join(doc.rules, "\n", &("- " <> &1)),
+      "- #{gettext("Community guidelines")}: #{doc.community_guidelines_url}",
       "- #{gettext("Price")}: #{doc.price.display}",
       "- #{gettext("Booking window")}: #{doc.booking_window.from} – #{doc.booking_window.to}",
       doc.next_available_day &&
@@ -563,25 +566,33 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
   end
 
-  defp page_hint(total, listed) when total > length(listed) do
-    " (" <> gettext("%{count} on this page, use ?page=N", count: length(listed)) <> ")"
-  end
+  # The pager / feed-summary / cursor hints are shared with the plain-text
+  # renderer (VutuvWeb.AgentDocs.Text) like the other helpers above; only the
+  # separator wrapping differs per format, so it is passed in as `wrap` (like
+  # endorsed_suffix/1's fixed form): Markdown parenthesizes " (…)", plain text
+  # dash-prefixes " — …". Keep both outputs byte-identical (a drift test guards them).
+  defp paren_hint(inner), do: " (" <> inner <> ")"
 
-  defp page_hint(_total, _listed), do: ""
+  @doc false
+  def page_hint(total, listed, wrap) when total > length(listed),
+    do: wrap.(gettext("%{count} on this page, use ?page=N", count: length(listed)))
 
-  defp feed_summary(%{posts: []}), do: gettext("Your feed is empty.")
+  def page_hint(_total, _listed, _wrap), do: ""
 
-  defp feed_summary(doc) do
-    gettext("%{count} posts on this page", count: length(doc.posts)) <> cursor_hint(doc)
+  @doc false
+  def feed_summary(%{posts: []}, _wrap), do: gettext("Your feed is empty.")
+
+  def feed_summary(doc, wrap) do
+    gettext("%{count} posts on this page", count: length(doc.posts)) <> cursor_hint(doc, wrap)
   end
 
   # The feed is cursor-paginated: when older posts remain, point at the next
   # page via the signed, opaque `?cursor=` token (FeedDoc carries next_cursor).
-  defp cursor_hint(%{more: true, next_cursor: cursor}) when is_binary(cursor) do
-    " (" <> gettext("more posts available, append ?cursor=%{cursor}", cursor: cursor) <> ")"
-  end
+  @doc false
+  def cursor_hint(%{more: true, next_cursor: cursor}, wrap) when is_binary(cursor),
+    do: wrap.(gettext("more posts available, append ?cursor=%{cursor}", cursor: cursor))
 
-  defp cursor_hint(_doc), do: ""
+  def cursor_hint(_doc, _wrap), do: ""
 
   defp image_line(image) do
     alt = image.alt || "image"

@@ -9,6 +9,7 @@ defmodule Vutuv.NewsletterGroupsTest do
 
   alias Vutuv.BerlinTime
   alias Vutuv.Newsletters
+  alias Vutuv.Newsletters.NewsletterGroup
   alias Vutuv.Newsletters.NewsletterGroupMember
 
   defp member(value, attrs \\ []) do
@@ -112,6 +113,30 @@ defmodule Vutuv.NewsletterGroupsTest do
       insert(:activated_user)
 
       assert Newsletters.audience_count(%{}) == 1
+    end
+  end
+
+  describe "changeset/2 length caps (varchar(255) columns)" do
+    test "rejects an over-long country" do
+      changeset =
+        NewsletterGroup.changeset(%NewsletterGroup{}, %{
+          "name" => "G",
+          "country" => String.duplicate("a", 300)
+        })
+
+      refute changeset.valid?
+      assert %{country: _} = errors_on(changeset)
+    end
+
+    test "rejects an over-long username pattern" do
+      changeset =
+        NewsletterGroup.changeset(%NewsletterGroup{}, %{
+          "name" => "G",
+          "username" => String.duplicate("a", 300)
+        })
+
+      refute changeset.valid?
+      assert %{username: _} = errors_on(changeset)
     end
   end
 
@@ -330,6 +355,24 @@ defmodule Vutuv.NewsletterGroupsTest do
 
       assert MapSet.disjoint?(test_ids, rest_ids)
       assert MapSet.union(test_ids, rest_ids) == MapSet.new([m1.id, m2.id, m3.id])
+    end
+  end
+
+  describe "group_reach_count / broadcast_reach" do
+    test "counts the group's snapshot members who still have a deliverable address" do
+      member("a@x.com", locale: "de")
+      reachable = member("b@x.com", locale: "de")
+      {:ok, group} = Newsletters.create_group(%{"name" => "DE", "locales" => ["de"]})
+
+      assert Newsletters.broadcast_reach(group.id) == 2
+
+      # A bounced sole address drops that member out of the reachable count.
+      Repo.update_all(
+        from(e in Vutuv.Accounts.Email, where: e.user_id == ^reachable.id),
+        set: [undeliverable_at: NaiveDateTime.utc_now(:second)]
+      )
+
+      assert Newsletters.broadcast_reach(group.id) == 1
     end
   end
 

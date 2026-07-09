@@ -109,7 +109,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     [
       heading(doc.title),
       gettext("%{count} posts by %{name}", count: doc.total, name: doc.author.name) <>
-        " (#{doc.author.url})" <> page_hint(doc.total, doc.posts),
+        " (#{doc.author.url})" <> Markdown.page_hint(doc.total, doc.posts, &dash_hint/1),
       Enum.map(doc.posts, &post_lines/1),
       footer(doc)
     ]
@@ -121,7 +121,7 @@ defmodule VutuvWeb.AgentDocs.Text do
   def render(%{type: "feed"} = doc) do
     [
       heading(doc.title),
-      feed_summary(doc),
+      Markdown.feed_summary(doc, &dash_hint/1),
       Enum.map(doc.posts, &post_lines/1),
       footer(doc)
     ]
@@ -131,7 +131,8 @@ defmodule VutuvWeb.AgentDocs.Text do
   def render(%{type: type} = doc) when type in @people_lists do
     [
       heading(doc.title),
-      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      gettext("%{count} total", count: doc.total) <>
+        Markdown.page_hint(doc.total, doc.people, &dash_hint/1),
       Enum.map(doc.people, &person_line/1),
       footer(doc)
     ]
@@ -143,7 +144,8 @@ defmodule VutuvWeb.AgentDocs.Text do
   def render(%{type: "tag_endorsers"} = doc) do
     [
       heading(doc.title),
-      gettext("%{count} total", count: doc.total) <> page_hint(doc.total, doc.people),
+      gettext("%{count} total", count: doc.total) <>
+        Markdown.page_hint(doc.total, doc.people, &dash_hint/1),
       Enum.map(doc.people, &endorser_lines/1),
       footer(doc)
     ]
@@ -192,6 +194,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       heading(doc.title),
       doc.description,
       Enum.map(doc.rules, &("- " <> &1)),
+      "- #{gettext("Community guidelines")}: #{doc.community_guidelines_url}",
       "- #{gettext("Price")}: #{doc.price.display}",
       "- #{gettext("Booking window")}: #{doc.booking_window.from} – #{doc.booking_window.to}",
       doc.next_available_day &&
@@ -389,25 +392,10 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp tags_line([]), do: nil
   defp tags_line(tags), do: "Tags: " <> Enum.join(tags, ", ")
 
-  defp page_hint(total, listed) when total > length(listed) do
-    " — " <> gettext("%{count} on this page, use ?page=N", count: length(listed))
-  end
-
-  defp page_hint(_total, _listed), do: ""
-
-  defp feed_summary(%{posts: []}), do: gettext("Your feed is empty.")
-
-  defp feed_summary(doc) do
-    gettext("%{count} posts on this page", count: length(doc.posts)) <> cursor_hint(doc)
-  end
-
-  # The feed is cursor-paginated: when older posts remain, point at the next
-  # page via the signed, opaque `?cursor=` token (FeedDoc carries next_cursor).
-  defp cursor_hint(%{more: true, next_cursor: cursor}) when is_binary(cursor) do
-    " — " <> gettext("more posts available, append ?cursor=%{cursor}", cursor: cursor)
-  end
-
-  defp cursor_hint(_doc), do: ""
+  # The pager / feed-summary / cursor hints live once in the Markdown renderer
+  # (shared like work_period/1 etc.); plain text differs only in the separator,
+  # a leading " — " with no closing bracket, passed in as `wrap`.
+  defp dash_hint(inner), do: " — " <> inner
 
   defp image_lines(image) do
     alt = image.alt || "image"

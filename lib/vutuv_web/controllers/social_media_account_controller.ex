@@ -119,7 +119,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     ControllerHelpers.save(conn, result,
       flash: gettext("Social media account updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/social_media_accounts" end,
+      redirect_to: ~p"/settings/social_media_accounts",
       render: "edit.html",
       assigns: [social_media_account: social_media_account]
     )

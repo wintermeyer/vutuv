@@ -72,6 +72,10 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
     |> update_change(:name, fn name -> name && String.trim(name) end)
     |> validate_required([:name])
     |> validate_length(:name, max: @max_name)
+    # country and username are cast :string fields over varchar(255) columns, so
+    # cap them too or an oversized value raises Postgres 22001 on save.
+    |> validate_length(:country, max: @max_name)
+    |> validate_length(:username, max: @max_name)
     |> clean_locales()
     |> clean_blank_to_nil(:country)
     |> clean_blank_to_nil(:username)

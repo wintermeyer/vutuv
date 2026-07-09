@@ -229,7 +229,10 @@ defmodule VutuvWeb.Admin.NewsletterBroadcastLive do
     ~H"""
     <div class="mt-3">
       <p class="text-sm text-slate-700 dark:text-slate-200">
-        {gettext("%{sent} of %{total} emails sent", sent: @sent_so_far, total: @total)}
+        {gettext("%{sent} of %{total} emails sent",
+          sent: delimited_count(@sent_so_far),
+          total: delimited_count(@total)
+        )}
       </p>
       <div class="mt-2 h-3 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
         <div class="h-full rounded-full bg-brand-600 transition-all" style={"width:#{@percent}%"}></div>

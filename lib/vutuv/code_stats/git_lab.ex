@@ -28,7 +28,7 @@ defmodule Vutuv.CodeStats.GitLab do
   `{:ok, stats_map}` or a classified `{:error, :gone | :transient}`.
   """
   def fetch_stats(handle) do
-    with {:ok, handle} <- validate_handle(handle),
+    with {:ok, handle} <- Snapshot.validate_handle(handle, @handle_format),
          {:ok, user} when is_map(user) <- lookup_user(handle),
          {:ok, projects, total} when is_list(projects) <- fetch_projects(user["id"]) do
       profile = %{
@@ -49,19 +49,13 @@ defmodule Vutuv.CodeStats.GitLab do
       {:error, :transient}
   end
 
-  defp validate_handle(handle) when is_binary(handle) do
-    if Regex.match?(@handle_format, handle), do: {:ok, handle}, else: {:error, :gone}
-  end
-
-  defp validate_handle(_handle), do: {:error, :gone}
-
   # The users endpoint answers 200 with an empty list for an unknown
   # username — the account is not coming back on its own, exactly like a
   # GitHub 404.
   defp lookup_user(handle) do
     case Http.get(@api <> "/users?username=#{handle}", @req_options) do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        case decode(body) do
+        case Snapshot.decode_or_transient(body) do
           {:ok, [user | _]} when is_map(user) -> {:ok, user}
           {:ok, []} -> {:error, :gone}
           _ -> {:error, :transient}
@@ -77,8 +71,8 @@ defmodule Vutuv.CodeStats.GitLab do
 
     case Http.get(url, @req_options) do
       {:ok, %Req.Response{status: 200, body: body} = resp} ->
-        with {:ok, projects} when is_list(projects) <- decode(body) do
-          {:ok, projects, total_count(resp) || length(projects)}
+        with {:ok, projects} when is_list(projects) <- Snapshot.decode_or_transient(body) do
+          {:ok, projects, Snapshot.total_count(resp, "x-total") || length(projects)}
         end
 
       {:ok, %Req.Response{status: 404}} ->
@@ -90,26 +84,6 @@ defmodule Vutuv.CodeStats.GitLab do
   end
 
   defp fetch_projects(_id), do: {:error, :transient}
-
-  defp total_count(resp) do
-    case Req.Response.get_header(resp, "x-total") do
-      [value | _] ->
-        case Integer.parse(value) do
-          {total, ""} when total >= 0 -> total
-          _ -> nil
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp decode(body) do
-    case Http.decode(body) do
-      {:ok, decoded} -> {:ok, decoded}
-      _ -> {:error, :transient}
-    end
-  end
 
   defp normalize_projects(projects) do
     for project when is_map(project) <- projects do

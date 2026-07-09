@@ -275,7 +275,7 @@ defmodule Vutuv.Sessions do
   # is logged, never raised — a login must not fail because an alert could not
   # be mailed.
   defp deliver_off_request_path(user, email, session, reasons) do
-    send = fn ->
+    Emailer.deliver_async(fn ->
       try do
         user
         |> Emailer.security_alert_email(email, session, reasons)
@@ -283,15 +283,7 @@ defmodule Vutuv.Sessions do
       rescue
         error -> Logger.error("security alert email to #{email} failed: #{inspect(error)}")
       end
-    end
-
-    if Application.get_env(:vutuv, :async_email, true) do
-      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, send)
-    else
-      send.()
-    end
-
-    :ok
+    end)
   end
 
   # ── Device fingerprint formatting (shared by the list and the email) ──

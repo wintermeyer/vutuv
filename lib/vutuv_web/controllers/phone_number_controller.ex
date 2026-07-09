@@ -80,7 +80,7 @@ defmodule VutuvWeb.PhoneNumberController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Phone number updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/phone_numbers" end,
+      redirect_to: ~p"/settings/phone_numbers",
       render: "edit.html",
       assigns: [phone_number: phone_number]
     )

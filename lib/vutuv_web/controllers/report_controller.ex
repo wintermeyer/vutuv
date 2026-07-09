@@ -119,6 +119,16 @@ defmodule VutuvWeb.ReportController do
     do: "@#{user.username} - #{VutuvWeb.UserHelpers.full_name(user)}"
 
   defp clip(nil), do: ""
-  defp clip(body) when byte_size(body) <= 280, do: body
-  defp clip(body), do: String.slice(body, 0, 280) <> "…"
+
+  # Measure the cap in graphemes, consistent with the grapheme-based slice:
+  # a `byte_size` guard let an umlaut/emoji-heavy body under 280 graphemes but
+  # over 280 bytes skip the short-circuit, get sliced to its full length and
+  # still gain a spurious trailing "…".
+  defp clip(body) do
+    if String.length(body) <= 280 do
+      body
+    else
+      String.slice(body, 0, 280) <> "…"
+    end
+  end
 end

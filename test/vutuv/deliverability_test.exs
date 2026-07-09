@@ -53,6 +53,15 @@ defmodule Vutuv.DeliverabilityTest do
       assert Repo.all(Event) == []
     end
 
+    test "an oversized bounced address is sliced to fit the varchar(255) column, never a 22001" do
+      long = String.duplicate("a", 300) <> "@example.com"
+
+      assert :ok = Deliverability.record_hard_bounce(long, "5.1.1", "raw")
+
+      assert [%EmailBounce{email_value: stored}] = Repo.all(EmailBounce)
+      assert String.length(stored) <= 255
+    end
+
     test "a second hard bounce on the sole address freezes the account" do
       user = confirmed_user_with_emails(["dead@example.com"])
 

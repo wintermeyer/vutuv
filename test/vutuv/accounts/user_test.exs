@@ -25,6 +25,17 @@ defmodule Vutuv.Accounts.UserTest do
     refute changeset.valid?
   end
 
+  test "rejects a locale longer than its varchar(255) column" do
+    changeset =
+      User.changeset(%User{}, %{
+        "first_name" => "first_name",
+        "locale" => String.duplicate("a", 300)
+      })
+
+    refute changeset.valid?
+    assert %{locale: [_]} = errors_on(changeset)
+  end
+
   describe "birthdate" do
     defp birthdate_changeset(birthdate) do
       User.changeset(%User{}, %{"first_name" => "first_name", "birthdate" => birthdate})

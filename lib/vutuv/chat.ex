@@ -647,7 +647,12 @@ defmodule Vutuv.Chat do
       end)
 
     others =
-      from(u in User, where: u.id in ^Enum.map(rows, &elem(&1, 3)))
+      from(u in User,
+        where: u.id in ^Enum.map(rows, &elem(&1, 3)),
+        # The email only names this counterpart by @handle, so select the listing
+        # columns (as hydrate/2 does) rather than the whole wide user row.
+        select: struct(u, ^User.listing_fields())
+      )
       |> Repo.all()
       |> Map.new(&{&1.id, &1})
 

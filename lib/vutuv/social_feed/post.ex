@@ -37,9 +37,16 @@ defmodule Vutuv.SocialFeed.Post do
   def presence(_value), do: nil
 
   @doc "Clamps remote post text to #{@max_text_length} characters with a trailing ellipsis."
-  def truncate(text) do
-    if String.length(text) > @max_text_length do
-      String.slice(text, 0, @max_text_length - 1) <> "…"
+  def truncate(text), do: truncate(text, @max_text_length)
+
+  @doc """
+  Clamps `text` to `max` characters, replacing the tail with a trailing ellipsis
+  when it runs over (the shared clamp `Vutuv.CodeStats.Snapshot` reuses for its
+  own, shorter description cap).
+  """
+  def truncate(text, max) do
+    if String.length(text) > max do
+      String.slice(text, 0, max - 1) <> "…"
     else
       text
     end

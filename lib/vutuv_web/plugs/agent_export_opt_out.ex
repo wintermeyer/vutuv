@@ -23,6 +23,7 @@ defmodule VutuvWeb.Plug.AgentExportOptOut do
   import Plug.Conn
 
   alias Vutuv.Accounts.User
+  alias VutuvWeb.Plug.AgentFormat
 
   # Every agent format except :vcf.
   @blocked_formats [:md, :txt, :json, :xml]
@@ -46,7 +47,7 @@ defmodule VutuvWeb.Plug.AgentExportOptOut do
   defp refuse_or_mark(conn) do
     conn = put_private(conn, :vutuv_agent_docs_blocked, true)
 
-    format = conn.private[:vutuv_agent_format] || conn.private[:vutuv_agent_accept]
+    format = AgentFormat.requested_format(conn)
 
     if format in @blocked_formats do
       VutuvWeb.ControllerHelpers.render_error(conn, 404)

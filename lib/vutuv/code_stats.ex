@@ -15,13 +15,13 @@ defmodule Vutuv.CodeStats do
   of the fresh snapshot over `Vutuv.Activity` PubSub
   (`{:code_stats_updated, account_id}` on the owner's topic).
 
-  Failure handling mirrors `Vutuv.SocialFeed` and reuses the same persisted
-  fetch-state columns on the row (the two provider sets are disjoint):
-  consecutive failures walk the escalating backoff ladder via
-  `fetch_retry_at`; a hard error (the account no longer exists, a malformed
-  handle) or an exhausted ladder sets `fetch_disabled_at` and the account is
-  never asked again — editing the handle resets the state and drops the stale
-  snapshot.
+  Failure handling shares the `Vutuv.RemoteFetch.Backoff` ladder with
+  `Vutuv.SocialFeed` and reuses the same persisted fetch-state columns on the
+  row (the two provider sets are disjoint): consecutive failures walk the
+  escalating backoff ladder via `fetch_retry_at`; a hard error (the account no
+  longer exists, a malformed handle) or an exhausted ladder sets
+  `fetch_disabled_at` and the account is never asked again — editing the handle
+  resets the state and drops the stale snapshot.
 
   Everything is gated on the `:fetch_code_stats` flag (off in tests, and the
   switch for air-gapped installations — accounts then stay plain links; see
@@ -30,12 +30,10 @@ defmodule Vutuv.CodeStats do
   `fetch_stats/1`.
   """
 
-  import Ecto.Query
-
   alias Vutuv.Activity
   alias Vutuv.CodeStats.Fetcher
   alias Vutuv.Profiles.SocialMediaAccount
-  alias Vutuv.Repo
+  alias Vutuv.RemoteFetch.Backoff
 
   # provider value on the account row => the client module whose fetch_stats/1
   # the fetcher's task runs.
@@ -50,9 +48,6 @@ defmodule Vutuv.CodeStats do
   # days card costs nothing while sparing the forges (and GitHub's 60
   # unauthenticated requests/hour) a lot of traffic.
   @max_age_days 7
-
-  # Consecutive-failure waits: 15 min, 30 min, 1 h, 6 h, 12 h, 24 h, 48 h.
-  @backoff_minutes [15, 30, 60, 360, 720, 1440, 2880]
 
   # Activity within this window is the normal case and stays quiet; only an
   # account quiet for longer gets a "Last active" line on the card/docs.
@@ -117,12 +112,7 @@ defmodule Vutuv.CodeStats do
   Whether this account may be fetched right now: not permanently deactivated,
   and not inside a backoff window (`fetch_retry_at` still in the future).
   """
-  def fetchable?(%SocialMediaAccount{} = account) do
-    is_nil(account.fetch_disabled_at) and retry_due?(account.fetch_retry_at)
-  end
-
-  defp retry_due?(nil), do: true
-  defp retry_due?(at), do: DateTime.compare(at, DateTime.utc_now()) != :gt
+  defdelegate fetchable?(account), to: Backoff
 
   @doc """
   Requests a background refresh when this account's snapshot is missing or
@@ -157,14 +147,14 @@ defmodule Vutuv.CodeStats do
   guarantee means there is exactly one writer per account.
   """
   def record_result(provider, handle, {:ok, stats}) when is_map(stats) do
-    case get_account(provider, handle) do
+    case Backoff.get_account(provider, handle) do
       nil ->
         :ok
 
       account ->
-        set_state(account,
+        Backoff.set_state(account,
           code_stats: stats,
-          code_stats_fetched_at: now(),
+          code_stats_fetched_at: Backoff.now(),
           fetch_failures: 0,
           fetch_retry_at: nil,
           fetch_disabled_at: nil
@@ -174,43 +164,12 @@ defmodule Vutuv.CodeStats do
     end
   end
 
-  def record_result(provider, handle, {:error, :gone}), do: disable(provider, handle)
+  def record_result(provider, handle, {:error, :gone}), do: Backoff.disable(provider, handle)
 
   def record_result(provider, handle, {:error, _transient}) do
-    account = get_account(provider, handle)
-    failures = ((account && account.fetch_failures) || 0) + 1
-
-    case Enum.at(@backoff_minutes, failures - 1) do
-      nil ->
-        disable(provider, handle)
-
-      minutes ->
-        if account do
-          set_state(account,
-            fetch_failures: failures,
-            fetch_retry_at: DateTime.add(now(), minutes * 60)
-          )
-        end
-
-        :ok
-    end
-  end
-
-  # The unique index on (value, provider) makes the handle → row mapping 1:1.
-  defp get_account(provider, handle),
-    do: Repo.get_by(SocialMediaAccount, provider: provider, value: handle)
-
-  defp disable(provider, handle) do
-    case get_account(provider, handle) do
-      nil -> :ok
-      account -> set_state(account, fetch_disabled_at: now())
-    end
-  end
-
-  defp set_state(account, set) do
-    Repo.update_all(from(a in SocialMediaAccount, where: a.id == ^account.id), set: set)
+    # The transient ladder walks in the shared backoff; the fetcher ignores the
+    # return, so `:ok` keeps the context's own success/gone paths returning `:ok`.
+    Backoff.record_transient(provider, handle)
     :ok
   end
-
-  defp now, do: DateTime.utc_now(:second)
 end

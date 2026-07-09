@@ -49,25 +49,37 @@ defmodule VutuvWeb.Plug.ContentSecurityPolicy do
   # (content_security_policy_test.exs) keeps eval out of the non-dev policy.
   @allow_eval Application.compile_env(:vutuv, [:csp, :allow_eval], false)
 
+  # The static directives never vary, so they are pre-joined once at compile time
+  # into the two halves that bracket the per-request `connect-src` (which keeps
+  # its historical 4th position, so the emitted header stays byte-identical to
+  # the old per-request `Enum.join/2` of all nine directives).
+  @prefix_directives [
+    "default-src 'self'",
+    "img-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'"
+  ]
+
+  @suffix_directives [
+    "font-src 'self' data:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'"
+  ]
+
+  @static_prefix Enum.join(@prefix_directives, "; ")
+  @static_suffix Enum.join(@suffix_directives, "; ")
+
   defp policy(conn) do
-    [
-      "default-src 'self'",
-      "img-src 'self' data:",
-      "style-src 'self' 'unsafe-inline'",
-      "connect-src 'self' #{ws_origin(conn)}",
-      "font-src 'self' data:",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'self'"
-    ]
-    |> maybe_allow_eval()
-    |> Enum.join("; ")
+    directives =
+      @static_prefix <> "; connect-src 'self' " <> ws_origin(conn) <> "; " <> @static_suffix
+
+    maybe_allow_eval(directives)
   end
 
   defp maybe_allow_eval(directives) do
     if @allow_eval do
-      ["script-src 'self' 'unsafe-eval'" | directives]
+      "script-src 'self' 'unsafe-eval'; " <> directives
     else
       directives
     end

@@ -28,7 +28,7 @@ defmodule Vutuv.CodeStats.Codeberg do
   `{:ok, stats_map}` or a classified `{:error, :gone | :transient}`.
   """
   def fetch_stats(handle) do
-    with {:ok, handle} <- validate_handle(handle),
+    with {:ok, handle} <- Snapshot.validate_handle(handle, @handle_format),
          {:ok, user} when is_map(user) <- fetch_user(handle),
          {:ok, repos, total} when is_list(repos) <- fetch_repos(handle) do
       profile = %{
@@ -48,15 +48,9 @@ defmodule Vutuv.CodeStats.Codeberg do
       {:error, :transient}
   end
 
-  defp validate_handle(handle) when is_binary(handle) do
-    if Regex.match?(@handle_format, handle), do: {:ok, handle}, else: {:error, :gone}
-  end
-
-  defp validate_handle(_handle), do: {:error, :gone}
-
   defp fetch_user(handle) do
     case Http.get(@api <> "/users/#{handle}", @req_options) do
-      {:ok, %Req.Response{status: 200, body: body}} -> decode(body)
+      {:ok, %Req.Response{status: 200, body: body}} -> Snapshot.decode_or_transient(body)
       {:ok, %Req.Response{status: 404}} -> {:error, :gone}
       _other -> {:error, :transient}
     end
@@ -67,8 +61,8 @@ defmodule Vutuv.CodeStats.Codeberg do
   defp fetch_repos(handle) do
     case Http.get(@api <> "/users/#{handle}/repos?limit=50", @req_options) do
       {:ok, %Req.Response{status: 200, body: body} = resp} ->
-        with {:ok, repos} when is_list(repos) <- decode(body) do
-          {:ok, repos, total_count(resp) || length(repos)}
+        with {:ok, repos} when is_list(repos) <- Snapshot.decode_or_transient(body) do
+          {:ok, repos, Snapshot.total_count(resp, "x-total-count") || length(repos)}
         end
 
       {:ok, %Req.Response{status: 404}} ->
@@ -76,26 +70,6 @@ defmodule Vutuv.CodeStats.Codeberg do
 
       _other ->
         {:error, :transient}
-    end
-  end
-
-  defp total_count(resp) do
-    case Req.Response.get_header(resp, "x-total-count") do
-      [value | _] ->
-        case Integer.parse(value) do
-          {total, ""} when total >= 0 -> total
-          _ -> nil
-        end
-
-      _ ->
-        nil
-    end
-  end
-
-  defp decode(body) do
-    case Http.decode(body) do
-      {:ok, decoded} -> {:ok, decoded}
-      _ -> {:error, :transient}
     end
   end
 

@@ -166,9 +166,10 @@ defmodule Vutuv.Posts do
     end
   end
 
-  defp parent_restricted_now?(%Post{id: id}) do
-    Repo.exists?(from(d in PostDenial, where: d.post_id == ^id))
-  end
+  # A bare %Post{id: id} carries denials: %NotLoaded{}, so it falls through to
+  # restricted?/1's forced-fresh query clause rather than reading a (possibly
+  # stale) preloaded association.
+  defp parent_restricted_now?(%Post{id: id}), do: restricted?(%Post{id: id})
 
   @doc """
   Updates a post: body, denials, tags and the attached-image set are replaced
@@ -334,12 +335,16 @@ defmodule Vutuv.Posts do
   ## Denials
 
   # Validates and normalizes the denial list into attr maps for PostDenial
-  # structs. Groups must belong to the author; you cannot deny yourself;
-  # wildcards must be known. Duplicates collapse.
+  # structs. You cannot deny yourself; a denied user must exist; wildcards must
+  # be known. Duplicates collapse. Every denied-user id is checked in one query
+  # (existing_denied_user_ids/1), never one Repo.exists? per denial.
   defp normalize_denials(author_id, denials) when is_list(denials) do
-    denials
-    |> Enum.reduce_while({:ok, []}, fn denial, {:ok, acc} ->
-      case normalize_denial(author_id, denial) do
+    targets = Enum.map(denials, &parse_denial_target/1)
+    known_ids = existing_denied_user_ids(targets)
+
+    targets
+    |> Enum.reduce_while({:ok, []}, fn target, {:ok, acc} ->
+      case validate_denial_target(author_id, target, known_ids) do
         {:ok, attrs} -> {:cont, {:ok, [attrs | acc]}}
         :error -> {:halt, {:error, :invalid_denials}}
       end
@@ -352,31 +357,44 @@ defmodule Vutuv.Posts do
 
   defp normalize_denials(_author_id, _other), do: {:error, :invalid_denials}
 
-  defp normalize_denial(author_id, denial) when is_map(denial) do
+  # Parses a denial map into its single target — `{:denied_user_id, id}` or
+  # `{:wildcard, w}` — or `:error` when it does not carry exactly one target
+  # (mirrors the DB check constraint).
+  defp parse_denial_target(denial) when is_map(denial) do
     targets = [
       denied_user_id: denial |> fetch(:denied_user_id) |> parse_id(),
       wildcard: fetch(denial, :wildcard)
     ]
 
-    # Exactly one target per denial (mirrors the DB check constraint).
     case Enum.reject(targets, fn {_key, value} -> is_nil(value) end) do
-      [target] -> validate_denial_target(author_id, target)
+      [target] -> target
       _ -> :error
     end
   end
 
-  defp normalize_denial(_author_id, _other), do: :error
+  defp parse_denial_target(_other), do: :error
 
-  defp validate_denial_target(author_id, {:denied_user_id, denied_user_id}) do
-    if denied_user_id != author_id &&
-         Repo.exists?(from(u in User, where: u.id == ^denied_user_id)) do
-      {:ok, %{denied_user_id: denied_user_id}}
+  # The denials' denied-user ids that actually exist, as a MapSet, in one query
+  # (no per-denial Repo.exists?). Empty when no denial names a user.
+  defp existing_denied_user_ids(targets) do
+    ids = for {:denied_user_id, id} <- targets, do: id
+
+    if ids == [] do
+      MapSet.new()
     else
-      :error
+      from(u in User, where: u.id in ^ids, select: u.id) |> Repo.all() |> MapSet.new()
     end
   end
 
-  defp validate_denial_target(_author_id, {:wildcard, wildcard}) do
+  defp validate_denial_target(_author_id, :error, _known_ids), do: :error
+
+  defp validate_denial_target(author_id, {:denied_user_id, denied_user_id}, known_ids) do
+    if denied_user_id != author_id and MapSet.member?(known_ids, denied_user_id),
+      do: {:ok, %{denied_user_id: denied_user_id}},
+      else: :error
+  end
+
+  defp validate_denial_target(_author_id, {:wildcard, wildcard}, _known_ids) do
     if wildcard in PostDenial.wildcards(), do: {:ok, %{wildcard: wildcard}}, else: :error
   end
 
@@ -850,14 +868,14 @@ defmodule Vutuv.Posts do
   def search_public(value, opts \\ []) when is_binary(value) do
     limit = Keyword.get(opts, :limit, 25)
 
+    # scope_visible(nil) supplies the three anonymous-visibility conditions
+    # (no denials, unfrozen, non-hidden author); only the search-specific
+    # filters stay here. Search keeps the stricter `email_confirmed? == true`
+    # (not the confirmed-or-legacy-NULL gate) deliberately.
     from(p in Post,
-      as: :post,
       join: u in assoc(p, :user),
       where: fragment("? @@ websearch_to_tsquery('simple', ?)", p.search_tsv, ^value),
-      where: is_nil(p.frozen_at),
       where: u.email_confirmed? == true,
-      where: not account_hidden(u.id),
-      where: not exists(from(d in PostDenial, where: d.post_id == parent_as(:post).id)),
       order_by: [
         desc: fragment("ts_rank(?, websearch_to_tsquery('simple', ?))", p.search_tsv, ^value),
         desc: p.id
@@ -865,6 +883,7 @@ defmodule Vutuv.Posts do
       limit: ^limit,
       preload: [user: u]
     )
+    |> scope_visible(nil)
     |> Repo.all()
   end
 
@@ -1316,10 +1335,8 @@ defmodule Vutuv.Posts do
   end
 
   # The author's timeline rows — own posts (dated by publication) and own
-  # reposts (dated by the repost) — as one subquery the callers count,
-  # period-scope and page like a plain table.
-  defp scope_timeline(query, viewer), do: scope_visible(query, viewer)
-
+  # reposts (dated by the repost), each visibility-scoped to `viewer` — as one
+  # subquery the callers count, period-scope and page like a plain table.
   defp author_timeline_query(%User{id: author_id}, viewer) do
     originals =
       from(p in Post,
@@ -1332,7 +1349,7 @@ defmodule Vutuv.Posts do
           on_date: p.published_on
         }
       )
-      |> scope_timeline(viewer)
+      |> scope_visible(viewer)
 
     reposts =
       from(p in Post,
@@ -1348,7 +1365,7 @@ defmodule Vutuv.Posts do
             fragment("((? AT TIME ZONE 'UTC') AT TIME ZONE 'Europe/Berlin')::date", r.inserted_at)
         }
       )
-      |> scope_timeline(viewer)
+      |> scope_visible(viewer)
 
     from(t in subquery(union_all(originals, ^reposts)))
   end

@@ -288,6 +288,36 @@ defmodule Vutuv.TagsTest do
       refute unactivated.id in ids
       refute frozen.id in ids
     end
+
+    test "ranks by VISIBLE endorsers only, so a hidden endorser can't inflate the ranking" do
+      # The ranking must agree with the endorsement counts shown elsewhere
+      # (which already exclude hidden/unconfirmed endorsers). Otherwise a member
+      # endorsed only by moderation-hidden accounts would outrank a member with a
+      # single genuine, visible endorsement.
+      tag = insert(:tag)
+
+      # A: one visible endorsement.
+      a = insert(:user, email_confirmed?: true)
+      a_tag = insert(:user_tag, user: a, tag: tag)
+      insert(:user_tag_endorsement, user_tag: a_tag, user: insert(:user, email_confirmed?: true))
+
+      # B: three endorsements, every endorser hidden or unconfirmed (count 0).
+      b = insert(:user, email_confirmed?: true)
+      b_tag = insert(:user_tag, user: b, tag: tag)
+
+      for endorser <- [
+            insert(:user),
+            insert(:user, email_confirmed?: true, frozen_at: ~N[2026-01-01 00:00:00]),
+            insert(:user, email_confirmed?: true, deactivated_at: ~N[2026-01-01 00:00:00])
+          ] do
+        insert(:user_tag_endorsement, user_tag: b_tag, user: endorser)
+      end
+
+      ids = Tag.recommended_users(tag) |> Enum.map(& &1.id)
+
+      assert a.id in ids and b.id in ids
+      assert Enum.find_index(ids, &(&1 == a.id)) < Enum.find_index(ids, &(&1 == b.id))
+    end
   end
 
   describe "endorsement count visibility" do

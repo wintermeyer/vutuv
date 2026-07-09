@@ -106,24 +106,15 @@ defmodule Vutuv.Moderation.Notifier do
   end
 
   # The single send chokepoint: address lookup + SMTP delivery leave the
-  # caller's process (see the moduledoc).
+  # caller's process off the request path (see the moduledoc), via the shared
+  # async-email gate in the Emailer.
   defp deliver_to(%User{} = user, build) do
-    async(fn ->
+    Emailer.deliver_async(fn ->
       case Accounts.first_email_value(user) do
         nil -> :ok
         address -> user |> build.(address) |> Emailer.deliver()
       end
     end)
-  end
-
-  defp async(fun) do
-    if Application.get_env(:vutuv, :async_email, true) do
-      {:ok, _pid} = Task.Supervisor.start_child(Vutuv.TaskSupervisor, fun)
-    else
-      fun.()
-    end
-
-    :ok
   end
 
   defp list_admins do

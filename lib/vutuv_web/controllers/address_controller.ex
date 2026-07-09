@@ -87,7 +87,7 @@ defmodule VutuvWeb.AddressController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Address updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/addresses" end,
+      redirect_to: ~p"/settings/addresses",
       render: "edit.html",
       assigns: [address: address, country: get_template(conn)]
     )

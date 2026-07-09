@@ -27,6 +27,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   alias Vutuv.Activity
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
+  alias VutuvWeb.Live.DayClockRestream
 
   @page_size 50
 
@@ -119,15 +120,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   end
 
   # The Berlin day rolled over at midnight (Vutuv.DayClock): re-render each shown
-  # item so its quoted-post stamp moves "today" -> "Gestern". update_only
-  # refreshes rows in place and skips any already gone (see PostLive.Feed).
+  # item so its quoted-post stamp moves "today" -> "Gestern". Shared with the
+  # feed + the saved hub; see VutuvWeb.Live.DayClockRestream.
   def handle_info(:day_changed, socket) do
-    socket =
-      Enum.reduce(socket.assigns.items, socket, fn item, socket ->
-        stream_insert(socket, :notifications, item, update_only: true)
-      end)
-
-    {:noreply, socket}
+    {:noreply, DayClockRestream.restream(socket, :items, :notifications)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}
@@ -244,10 +240,6 @@ defmodule VutuvWeb.NotificationLive.Index do
     )
   end
 
-  # "connection" is the vernetzt (mutual-follow) event; it shares the follower
-  # badge colour and gets the handshake glyph.
-  @connection_kinds ~w(connection)
-
   # Event kinds that share the brand badge colour (follower/reply/connection/
   # the report-protection notice), so the class string lives in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
@@ -269,7 +261,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("endorsement"), do: "★"
   defp kind_glyph("reply"), do: "↩"
   defp kind_glyph("like"), do: "♥"
-  defp kind_glyph(kind) when kind in @connection_kinds, do: "🤝"
+  # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
+  defp kind_glyph("connection"), do: "🤝"
   defp kind_glyph("moderation"), do: "⚑"
   defp kind_glyph("report_protection"), do: "🛡"
   defp kind_glyph(_), do: "•"

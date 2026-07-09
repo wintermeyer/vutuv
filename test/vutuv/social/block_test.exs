@@ -65,6 +65,34 @@ defmodule Vutuv.Social.BlockTest do
     end
   end
 
+  describe "social-graph broadcast" do
+    test "block_user refreshes both members' live profile counts/pill", %{blocker: a, blocked: b} do
+      # A block severs both follow edges, changing follower / following /
+      # connection counts on both open profiles; without this an open profile's
+      # counts and follow pill go stale until reload (do_follow/unfollow! already
+      # broadcast :social_graph_changed).
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+
+      {:ok, _} = Social.block_user(a, b)
+
+      # One :social_graph_changed lands on each member's topic.
+      assert_receive {:social_graph_changed, _}
+      assert_receive {:social_graph_changed, _}
+    end
+
+    test "unblock_user refreshes both members too", %{blocker: a, blocked: b} do
+      block!(a, b)
+      Vutuv.Activity.subscribe(a.id)
+      Vutuv.Activity.subscribe(b.id)
+
+      :ok = Social.unblock_user(a, b)
+
+      assert_receive {:social_graph_changed, _}
+      assert_receive {:social_graph_changed, _}
+    end
+  end
+
   describe "block_user/2" do
     test "concurrent double-block is idempotent, not a crash", %{blocker: a, blocked: b} do
       results = Task.await_many(for _ <- 1..2, do: Task.async(fn -> Social.block_user(a, b) end))

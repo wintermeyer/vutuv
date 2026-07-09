@@ -63,6 +63,7 @@ defmodule VutuvWeb.AgentDocs do
   alias VutuvWeb.AgentDocs.Text
   alias VutuvWeb.AgentDocs.VCard
   alias VutuvWeb.AgentDocs.Xml
+  alias VutuvWeb.Plug.AgentFormat
 
   # v2 (2026-06): email entries gained a `type` and changed shape from a bare
   # address string to a `{id, type, value}` map, matching phone_numbers.
@@ -103,7 +104,7 @@ defmodule VutuvWeb.AgentDocs do
   into a 404, so an unsupported extension never serves HTML.
   """
   def negotiate(conn, allowed \\ @default_formats) do
-    format = conn.private[:vutuv_agent_format] || conn.private[:vutuv_agent_accept]
+    format = AgentFormat.requested_format(conn)
 
     if format in allowed do
       # Agent documents default to English (the canonical, cache-safe

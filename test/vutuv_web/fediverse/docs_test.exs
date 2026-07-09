@@ -62,6 +62,18 @@ defmodule VutuvWeb.Fediverse.DocsTest do
       assert note["content"] =~ ~s(href="#{base()}/#{mentioned.username}")
       refute note["content"] =~ ~s(href="/#{mentioned.username}")
     end
+
+    test "a protocol-relative //host link is left alone, not prefixed with base" do
+      author = insert(:activated_user)
+      post = insert(:post, user: author, body: "See [this](//evil.com)")
+
+      note = Docs.create_activity(post, author)["object"]
+
+      # The negative lookahead must skip `//`: prefixing it would corrupt the
+      # link into `#{base()}//evil.com`.
+      assert note["content"] =~ ~s(href="//evil.com")
+      refute note["content"] =~ ~s(href="#{base()}//evil.com")
+    end
   end
 
   describe "update_activity/2 and delete_activity/2" do

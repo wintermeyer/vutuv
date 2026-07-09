@@ -2,8 +2,8 @@ defmodule Vutuv.Profiles.Education do
   @moduledoc false
 
   use VutuvWeb, :model
-  import Ecto.Query
   alias Vutuv.ChangesetHelpers
+  alias Vutuv.Profiles.CvSection
 
   # The CV categories (issue #849, mirroring WorkExperience's #840 kinds):
   # a degree, a Berufsausbildung, general schooling. Display order everywhere
@@ -38,11 +38,7 @@ defmodule Vutuv.Profiles.Education do
   kept within each — the same contract as `WorkExperience.group_by_kind/1`,
   so all list renderings of this section group identically.
   """
-  def group_by_kind(educations) do
-    groups = Enum.group_by(educations, & &1.kind)
-
-    for kind <- @kinds, entries = groups[kind], do: {kind, entries}
-  end
+  def group_by_kind(educations), do: CvSection.group_by_kind(educations, @kinds)
 
   @doc """
   Creates a changeset based on the `model` and `params`.
@@ -88,19 +84,11 @@ defmodule Vutuv.Profiles.Education do
   end
 
   @doc """
-  Newest first, the way a CV reads: ongoing studies (no end date) lead, then
-  by end date, then by start date. Plain `DESC` does this in Postgres (DESC
-  puts NULLs first), matching `WorkExperience.order_by_date/1`.
+  Newest first, the way a CV reads: ongoing studies (no end date) lead, then by
+  end date, then by start date. Delegates to the shared `CvSection.order_by_date/1`,
+  matching `WorkExperience.order_by_date/1`.
   """
-  def order_by_date(query) do
-    query
-    |> order_by([e],
-      desc: e.end_year,
-      desc: e.end_month,
-      desc: e.start_year,
-      desc: e.start_month
-    )
-  end
+  def order_by_date(query), do: CvSection.order_by_date(query)
 
   # Imported entries can carry a NULL slug; falling back to the id keeps their
   # URLs (and the whole profile page) working instead of raising.

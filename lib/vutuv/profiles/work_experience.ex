@@ -2,8 +2,8 @@ defmodule Vutuv.Profiles.WorkExperience do
   @moduledoc false
 
   use VutuvWeb, :model
-  import Ecto.Query
   alias Vutuv.ChangesetHelpers
+  alias Vutuv.Profiles.CvSection
 
   # The CV categories (issue #840): a paid job, self-employment/freelance,
   # a Praktikum, volunteering (Ehrenamt, hobby or Freiwilligenarbeit, issue
@@ -77,29 +77,13 @@ defmodule Vutuv.Profiles.WorkExperience do
   grouping for every list rendering, so the profile card, the section page
   and the editor can never disagree on category order.
   """
-  def group_by_kind(work_experiences) do
-    groups = Enum.group_by(work_experiences, & &1.kind)
-
-    for kind <- @kinds, entries = groups[kind], do: {kind, entries}
-  end
+  def group_by_kind(work_experiences), do: CvSection.group_by_kind(work_experiences, @kinds)
 
   @doc """
-  Newest first, the way a CV reads: ongoing roles (no end date) lead, then
-  by end date, then by start date.
-
-  Plain `DESC` does this in Postgres (DESC puts NULLs first). The previous
-  `-? ASC` negation trick inverted the NULL placement and sorted the
-  current, open-ended role **last**.
+  Newest first, the way a CV reads: ongoing roles (no end date) lead, then by
+  end date, then by start date. Delegates to the shared `CvSection.order_by_date/1`.
   """
-  def order_by_date(query) do
-    query
-    |> order_by([u],
-      desc: u.end_year,
-      desc: u.end_month,
-      desc: u.start_year,
-      desc: u.start_month
-    )
-  end
+  def order_by_date(query), do: CvSection.order_by_date(query)
 
   # Imported legacy entries can carry a NULL slug; falling back to the id
   # keeps their URLs (and the whole profile page) working instead of raising.

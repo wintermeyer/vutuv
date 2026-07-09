@@ -150,13 +150,12 @@ defmodule Vutuv.Moderation do
         _reporter,
         content
       ) do
-    reports = Repo.preload(open, reports: :reporter).reports
+    reports = Repo.preload(open, :reports).reports
 
-    trusted =
-      Enum.reduce_while(reports, 0, fn report, count ->
-        count = if trusted_reporter?(report.reporter), do: count + 1, else: count
-        if count >= @profile_freeze_reporters, do: {:halt, count}, else: {:cont, count}
-      end)
+    # Trust for every reporter of this case in ONE grouped windowed query, then
+    # tally in memory — never one trusted_reporter?/1 aggregate per report (N+1).
+    trusted_ids = trusted_reporter_ids(Enum.map(reports, & &1.reporter_id))
+    trusted = Enum.count(reports, &MapSet.member?(trusted_ids, &1.reporter_id))
 
     # The spam auto-defense: enough distinct spam reports freeze the profile even
     # from untrusted reporters. Counting is a plain in-memory tally over the
@@ -293,6 +292,36 @@ defmodule Vutuv.Moderation do
       |> Repo.one()
 
     trusted?(abusive, rejected)
+  end
+
+  # The subset of `reporter_ids` whose reports are trusted (`trusted?/2`),
+  # computed in one grouped windowed query (the COUNT(*) FILTER shape
+  # `list_reporter_stats/0` uses) so a profile-freeze check never runs a
+  # per-reporter aggregate (N+1). A reporter with no resolved-in-window report
+  # has no row and defaults to {0, 0} — trusted, exactly like
+  # `trusted_reporter?/1` returns for an empty aggregate.
+  defp trusted_reporter_ids(reporter_ids) do
+    stats =
+      from(r in Report,
+        join: c in assoc(r, :case),
+        where: r.reporter_id in ^reporter_ids,
+        where: c.resolved_at > ^trust_window_start(),
+        group_by: r.reporter_id,
+        select: {
+          r.reporter_id,
+          fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
+          fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status)
+        }
+      )
+      |> Repo.all()
+      |> Map.new(fn {id, abusive, rejected} -> {id, {abusive, rejected}} end)
+
+    reporter_ids
+    |> Enum.filter(fn id ->
+      {abusive, rejected} = Map.get(stats, id, {0, 0})
+      trusted?(abusive, rejected)
+    end)
+    |> MapSet.new()
   end
 
   defp trusted?(abusive, rejected),

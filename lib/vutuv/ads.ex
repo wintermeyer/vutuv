@@ -52,21 +52,23 @@ defmodule Vutuv.Ads do
   def enabled?, do: Application.get_env(:vutuv, :ads_enabled, false)
 
   @doc "The earliest day a new booking may pick (today + #{@approval_lead_days}, Berlin)."
-  def first_bookable_day, do: Date.add(today(), @approval_lead_days)
+  def first_bookable_day, do: first_bookable_day(today())
+
+  defp first_bookable_day(today), do: Date.add(today, @approval_lead_days)
 
   @doc """
   The last bookable day: the end of the month #{@booking_window_months} month(s)
   out - the last grid of the availability calendar on the booking page.
   """
-  def last_bookable_day do
-    today() |> Date.shift(month: @booking_window_months) |> Date.end_of_month()
-  end
+  def last_bookable_day, do: last_bookable_day(today())
+
+  defp last_bookable_day(today),
+    do: today |> Date.shift(month: @booking_window_months) |> Date.end_of_month()
 
   @doc "Every taken day inside the booking window, as a MapSet (the calendar)."
-  def booked_days do
-    first = first_bookable_day()
-    last = last_bookable_day()
+  def booked_days, do: booked_days_in(first_bookable_day(), last_bookable_day())
 
+  defp booked_days_in(first, last) do
     from(a in Ad, where: a.day >= ^first and a.day <= ^last, select: a.day)
     |> Repo.all()
     |> MapSet.new()
@@ -151,7 +153,7 @@ defmodule Vutuv.Ads do
   def approve_ad(%Ad{approved_at: nil} = ad, admin) do
     ad
     |> Ecto.Changeset.change(
-      approved_at: DateTime.truncate(DateTime.utc_now(), :second),
+      approved_at: DateTime.utc_now(:second),
       approved_by_id: admin.id
     )
     |> Repo.update()
@@ -197,12 +199,12 @@ defmodule Vutuv.Ads do
   (`first_bookable_day/0`..`last_bookable_day/0`), nil when it is sold out.
   """
   def next_available_day do
-    booked = booked_days()
+    today = today()
+    first = first_bookable_day(today)
+    last = last_bookable_day(today)
+    booked = booked_days_in(first, last)
 
-    Enum.find(
-      Date.range(first_bookable_day(), last_bookable_day()),
-      &(not MapSet.member?(booked, &1))
-    )
+    Enum.find(Date.range(first, last), &(not MapSet.member?(booked, &1)))
   end
 
   @doc "Today as a German calendar day (Europe/Berlin)."

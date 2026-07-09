@@ -97,13 +97,13 @@ defmodule VutuvWeb.EducationController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Education updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/educations" end,
+      redirect_to: ~p"/settings/educations",
       render: "edit.html",
       assigns: [education: education, current_year: current_year()]
     )
   end
 
-  defp current_year, do: Date.utc_today().year
+  defp current_year, do: Vutuv.BerlinTime.today().year
 
   def delete(conn, _params) do
     ControllerHelpers.delete(conn, conn.assigns[:education],

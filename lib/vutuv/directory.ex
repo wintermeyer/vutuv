@@ -106,8 +106,12 @@ defmodule Vutuv.Directory do
   sitemap's member/post entries (`Vutuv.Sitemap`).
   """
   def indexable_users do
+    # account_confirmed_row/1 is the shared confirmed-member gate every other
+    # listing query uses: it treats a legacy NULL flag as confirmed, so the
+    # crawlable set matches the rest of the app rather than hand-rolling a
+    # stricter `u.email_confirmed?` test here.
     from(u in User,
-      where: u.email_confirmed? and not u.noindex? and not account_hidden_row(u)
+      where: account_confirmed_row(u) and not u.noindex? and not account_hidden_row(u)
     )
   end
 

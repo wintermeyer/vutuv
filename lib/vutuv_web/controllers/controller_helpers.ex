@@ -54,11 +54,18 @@ defmodule VutuvWeb.ControllerHelpers do
   @doc """
   Loads an owned member resource: `Repo.get!` scoped to the path user's
   `assoc` collection, so a caller can only fetch a resource that hangs off the
-  user already resolved into `conn.assigns[:user]`. Raises (404) on a miss, the
-  same as the inline `Repo.get!(assoc(...), id)` it replaces.
+  user already resolved into `conn.assigns[:user]`. Raises `Ecto.NoResultsError`
+  (a clean 404) on a miss — including a malformed (non-UUID) id, which is cast
+  first so it 404s instead of raising an `Ecto.CastError` 500 (these ids come
+  from crawlable public URLs like `/slug/emails/notauuid`).
   """
   def get_owned!(%Conn{} = conn, assoc, id) when is_atom(assoc) do
-    Repo.get!(Ecto.assoc(conn.assigns[:user], assoc), id)
+    queryable = Ecto.assoc(conn.assigns[:user], assoc)
+
+    case Vutuv.UUIDv7.cast_or_nil(id) do
+      nil -> raise Ecto.NoResultsError, queryable: queryable
+      uuid -> Repo.get!(queryable, uuid)
+    end
   end
 
   @doc """

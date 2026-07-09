@@ -351,7 +351,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   # Month axis index for "now" (year * 12 + month-1), the anchor an ongoing role
   # or an open-ended block runs to.
   defp current_month_index do
-    today = Date.utc_today()
+    today = Vutuv.BerlinTime.today()
     today.year * 12 + (today.month - 1)
   end
 

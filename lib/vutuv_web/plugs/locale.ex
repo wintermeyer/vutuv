@@ -100,10 +100,14 @@ defmodule VutuvWeb.Plug.Locale do
 
   def locale_supported?(nil), do: false
 
-  # Checks locale provided against app config for supported locales
+  # Checks locale provided against app config for supported locales. Must be
+  # exact equality, not a substring match: callers (address_controller, the
+  # emailer) pass arbitrary strings, and a 3-letter subtag that is a superstring
+  # of a supported 2-letter code ("deu" contains "de", "eng" contains "en")
+  # would false-match under `String.contains?/2`.
   def locale_supported?(locale) do
     {:ok, config} = Application.fetch_env(:vutuv, VutuvWeb.Endpoint)
     supported_locales = config[:locales]
-    Enum.any?(supported_locales, fn f -> String.contains?(locale, f) end)
+    locale in supported_locales
   end
 end

@@ -54,6 +54,26 @@ defmodule VutuvWeb.ReportControllerTest do
       assert redirected_to(conn) == "/"
     end
 
+    test "does not append an ellipsis to an umlaut-heavy body within the grapheme cap", %{
+      conn: conn,
+      author: author
+    } do
+      # 200 graphemes but 400 bytes: comfortably under the 280-grapheme preview
+      # cap, yet over 280 bytes. The old `byte_size <= 280` guard mis-classified
+      # it as too long, sliced it (a no-op, since it is already shorter) and
+      # tacked on a spurious "…". A grapheme-based cap must leave it whole.
+      body = String.duplicate("ä", 200)
+      post = insert(:post, user: author, body: body)
+
+      {conn, _me} = create_and_login_user(conn)
+
+      response =
+        conn |> get(~p"/reports/new?type=post&id=#{post.id}") |> html_response(200)
+
+      assert response =~ body
+      refute response =~ body <> "…"
+    end
+
     test "404s for unknown content", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       conn = get(conn, ~p"/reports/new?type=post&id=#{Vutuv.UUIDv7.generate()}")

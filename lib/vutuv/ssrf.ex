@@ -33,18 +33,15 @@ defmodule Vutuv.Ssrf do
   (e.g. a URL with no host) is not a target.
   """
   def internal_host?(host) when is_binary(host) do
-    bare = bare_host(host)
-
-    cond do
-      bare in ~w(localhost ip6-localhost ip6-loopback) ->
+    case bare_host(host) do
+      bare when bare in ~w(localhost ip6-localhost ip6-loopback) ->
         true
 
-      match?({:ok, _}, :inet.parse_address(to_charlist(bare))) ->
-        {:ok, addr} = :inet.parse_address(to_charlist(bare))
-        internal_ip?(addr)
-
-      true ->
-        false
+      bare ->
+        case :inet.parse_address(to_charlist(bare)) do
+          {:ok, addr} -> internal_ip?(addr)
+          _ -> false
+        end
     end
   end
 

@@ -74,6 +74,17 @@ defmodule Vutuv.ApiAuth.OAuthTest do
                })
     end
 
+    test "a redirect URI longer than the varchar(255) column is rejected", %{
+      developer: developer
+    } do
+      long = "https://example.org/" <> String.duplicate("a", 260)
+
+      assert {:error, changeset} =
+               ApiAuth.create_app(developer, %{"name" => "Long", "redirect_uris" => [long]})
+
+      assert %{redirect_uris: _} = errors_on(changeset)
+    end
+
     test "regenerating the secret invalidates the old one", %{
       member: member,
       app: app,

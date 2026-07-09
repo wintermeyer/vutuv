@@ -31,13 +31,7 @@ defmodule Vutuv.BerlinTime do
   end
 
   @doc "The German calendar date of a UTC instant."
-  def date(%DateTime{} = utc) do
-    offset_hours = if summer_time?(utc), do: 2, else: 1
-
-    utc
-    |> DateTime.add(offset_hours * 3600, :second)
-    |> DateTime.to_date()
-  end
+  def date(%DateTime{} = utc), do: utc |> naive() |> NaiveDateTime.to_date()
 
   @doc """
   The UTC half-open instant range `[start, finish)` that spans a whole German

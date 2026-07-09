@@ -36,8 +36,11 @@ defmodule VutuvWeb.AdControllerTest do
         json: get(build_conn(), "/ads.json").resp_body
       }
 
+      # The community-guidelines link the HTML page shows and JSON/XML carry
+      # (community_guidelines_url) must also reach Markdown and text — those two
+      # used to silently drop it.
       for {format, body} <- rendered,
-          fact <- ["1,250", "2048", "family-friendly", next_day, window_end] do
+          fact <- ["1,250", "2048", "family-friendly", "/community", next_day, window_end] do
         assert body =~ fact,
                "#{inspect(fact)} is missing from the #{format} version — " <>
                  "HTML page and agent doc have drifted apart (see VutuvWeb.AgentDocs)"

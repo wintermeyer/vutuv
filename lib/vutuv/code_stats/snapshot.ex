@@ -8,7 +8,14 @@ defmodule Vutuv.CodeStats.Snapshot do
   reading code sees string keys either way. Every profile field is optional
   (`nil` when a forge doesn't expose it — GitLab has no public follower count
   or repo language) and the card simply omits the line.
+
+  It also carries the small request helpers the three forge clients share
+  (handle validation, JSON decoding, the `x-total*` count header), so a client
+  is only its provider-specific paths, regexes and header names.
   """
+
+  alias Vutuv.SocialFeed.Http
+  alias Vutuv.SocialFeed.Post
 
   @top_repos 3
   @top_languages 3
@@ -65,6 +72,44 @@ defmodule Vutuv.CodeStats.Snapshot do
   defp iso_date(%Date{} = date), do: Date.to_iso8601(date)
   defp iso_date(_), do: nil
 
+  # ── Request helpers shared by the three forge clients ──
+
+  @doc """
+  Validates a forge handle against the provider's `regex` before it is embedded
+  in an API path/query: `{:ok, handle}`, or `{:error, :gone}` for a non-binary
+  or a handle that does not match (a malformed handle is not coming back).
+  """
+  def validate_handle(handle, regex) when is_binary(handle) do
+    if Regex.match?(regex, handle), do: {:ok, handle}, else: {:error, :gone}
+  end
+
+  def validate_handle(_handle, _regex), do: {:error, :gone}
+
+  @doc "Decodes a JSON body, folding any failure (incl. oversize) to `{:error, :transient}`."
+  def decode_or_transient(body) do
+    case Http.decode(body) do
+      {:ok, decoded} -> {:ok, decoded}
+      _ -> {:error, :transient}
+    end
+  end
+
+  @doc """
+  The non-negative integer in a paging total header (`header`, e.g. `\"x-total\"`
+  or `\"x-total-count\"`) of `resp`, or nil when absent or unparseable.
+  """
+  def total_count(resp, header) do
+    case Req.Response.get_header(resp, header) do
+      [value | _] ->
+        case Integer.parse(value) do
+          {total, ""} when total >= 0 -> total
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   # The languages the member's own repositories use most, by repo count.
   defp languages(repos) do
     repos
@@ -120,13 +165,8 @@ defmodule Vutuv.CodeStats.Snapshot do
   defp invert_datetime(%DateTime{} = dt), do: -DateTime.to_unix(dt)
   defp invert_datetime(_), do: 0
 
-  defp truncate(description) when is_binary(description) do
-    if String.length(description) > @description_max do
-      String.slice(description, 0, @description_max - 1) <> "…"
-    else
-      description
-    end
-  end
+  defp truncate(description) when is_binary(description),
+    do: Post.truncate(description, @description_max)
 
   defp truncate(_), do: nil
 end

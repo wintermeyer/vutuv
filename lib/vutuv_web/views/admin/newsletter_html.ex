@@ -2,13 +2,11 @@ defmodule VutuvWeb.Admin.NewsletterHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  import VutuvWeb.Admin.AdminViewHelpers, only: [fmt: 1]
+
   alias Vutuv.Newsletters
 
   embed_templates("../../templates/admin/newsletter/*")
-
-  @doc "Short timestamp for the listing and delivery-log tables."
-  def fmt(nil), do: ""
-  def fmt(%NaiveDateTime{} = at), do: Calendar.strftime(at, "%Y-%m-%d %H:%M")
 
   @doc "Human label for a newsletter status."
   def status_label("draft"), do: gettext("Draft")

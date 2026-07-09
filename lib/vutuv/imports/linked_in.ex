@@ -555,11 +555,10 @@ defmodule Vutuv.Imports.LinkedIn do
 
   defp phone_type(type) do
     case downcase(type) do
-      "mobile" -> "Cell"
-      "cell" -> "Cell"
       "home" -> "Home"
       "work" -> "Work"
       "fax" -> "Fax"
+      # mobile / cell / unknown all map to the default.
       _ -> "Cell"
     end
   end
@@ -974,9 +973,8 @@ defmodule Vutuv.Imports.LinkedIn do
   defp digits(nil), do: nil
   defp digits(value), do: value |> to_string() |> String.replace(~r/\D/, "")
 
-  defp titleize(label) do
-    label |> String.downcase() |> String.capitalize()
-  end
+  # String.capitalize/1 already downcases the tail, so no separate downcase.
+  defp titleize(label), do: String.capitalize(label)
 
   # A stable id for a candidate: a hash of its semantic key. Deterministic for
   # the same term across nodes (:erlang.phash2), so the preview → confirm round

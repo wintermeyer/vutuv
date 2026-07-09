@@ -33,7 +33,7 @@ defmodule Vutuv.CodeStats.GitHub do
   `{:ok, stats_map}` or a classified `{:error, :gone | :transient}`.
   """
   def fetch_stats(handle) do
-    with {:ok, handle} <- validate_handle(handle),
+    with {:ok, handle} <- Snapshot.validate_handle(handle, @handle_format),
          {:ok, user} when is_map(user) <- get_json("/users/#{handle}"),
          {:ok, repos} when is_list(repos) <-
            get_json("/users/#{handle}/repos?per_page=100&sort=pushed") do
@@ -54,19 +54,10 @@ defmodule Vutuv.CodeStats.GitHub do
       {:error, :transient}
   end
 
-  defp validate_handle(handle) when is_binary(handle) do
-    if Regex.match?(@handle_format, handle), do: {:ok, handle}, else: {:error, :gone}
-  end
-
-  defp validate_handle(_handle), do: {:error, :gone}
-
   defp get_json(path) do
     case Http.get(@api <> path, @req_options, headers: headers()) do
       {:ok, %Req.Response{status: 200, body: body}} ->
-        case Http.decode(body) do
-          {:ok, decoded} -> {:ok, decoded}
-          _ -> {:error, :transient}
-        end
+        Snapshot.decode_or_transient(body)
 
       # An unknown user is not coming back on its own; everything else
       # (rate limit 403/429, 5xx, network) retries via the backoff ladder.

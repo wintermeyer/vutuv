@@ -35,13 +35,9 @@ defmodule Vutuv.Ordering do
 
   @doc "`user_id`'s row ids of `schema`, in the current display order."
   def ordered_ids(schema, user_id) do
-    Repo.all(
-      from(x in schema,
-        where: x.user_id == ^user_id,
-        order_by: [asc_nulls_last: x.position, asc: x.id],
-        select: x.id
-      )
-    )
+    from(x in schema, where: x.user_id == ^user_id, select: x.id)
+    |> by_position()
+    |> Repo.all()
   end
 
   @doc """

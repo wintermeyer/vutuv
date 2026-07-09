@@ -118,6 +118,19 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert render(live) =~ "is now connected with you"
     end
 
+    test "a connection event shows the handshake kind glyph", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      # A picture-less actor renders the colored kind glyph instead of an
+      # avatar; for a connection (vernetzt) event that glyph is the handshake.
+      other = insert(:user, first_name: "Wojtek", last_name: "Mach")
+      connect!(user, other)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      assert render(live) =~ "🤝"
+    end
+
     test "a reply notification links to the parent post's thread", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

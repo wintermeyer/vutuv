@@ -168,7 +168,7 @@ defmodule VutuvWeb.EmailController do
            conn.assigns[:user],
            conn.assigns[:current_user]
          ) do
-        Repo.get(assoc(conn.assigns[:user], :emails), id)
+        Vutuv.UUIDv7.with_cast(id, &Repo.get(assoc(conn.assigns[:user], :emails), &1))
       else
         public_email(conn, id)
       end
@@ -204,7 +204,9 @@ defmodule VutuvWeb.EmailController do
   end
 
   defp public_email(conn, id) do
-    Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^id))
+    Vutuv.UUIDv7.with_cast(id, fn uuid ->
+      Repo.one(from(e in assoc(conn.assigns[:user], :emails), where: e.public? and e.id == ^uuid))
+    end)
   end
 
   # Editing is limited to the public? flag: changing the address itself would
@@ -221,7 +223,7 @@ defmodule VutuvWeb.EmailController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Email updated successfully."),
-      redirect_to: fn _email -> ~p"/settings/emails" end,
+      redirect_to: ~p"/settings/emails",
       render: "edit.html",
       assigns: [email: email]
     )

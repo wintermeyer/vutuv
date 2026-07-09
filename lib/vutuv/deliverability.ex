@@ -62,7 +62,10 @@ defmodule Vutuv.Deliverability do
   watcher: re-marking an already-dead address keeps its original timestamp.
   """
   def record_hard_bounce(address, dsn, raw) when is_binary(address) do
-    address = String.downcase(address)
+    # email_bounces.email_value and deliverability_events.email_value are both
+    # varchar(255); a malformed/oversized parsed recipient must be sliced (like
+    # `raw` below) so it stores cleanly instead of raising Postgres 22001.
+    address = address |> String.downcase() |> String.slice(0, 255)
     now = NaiveDateTime.utc_now(:second)
 
     Repo.insert!(%EmailBounce{

@@ -143,13 +143,13 @@ defmodule VutuvWeb.WorkExperienceController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Work experience updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/work_experiences" end,
+      redirect_to: ~p"/settings/work_experiences",
       render: "edit.html",
       assigns: [work_experience: work_experience, current_year: current_year()]
     )
   end
 
-  defp current_year, do: Date.utc_today().year
+  defp current_year, do: Vutuv.BerlinTime.today().year
 
   def delete(conn, _params) do
     ControllerHelpers.delete(conn, conn.assigns[:job],

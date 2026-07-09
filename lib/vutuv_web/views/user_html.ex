@@ -78,7 +78,7 @@ defmodule VutuvWeb.UserHTML do
   def member_since(%Vutuv.Accounts.User{inserted_at: %NaiveDateTime{} = inserted_at}) do
     joined = NaiveDateTime.to_date(inserted_at)
 
-    if joined.year == Date.utc_today().year do
+    if joined.year == Vutuv.BerlinTime.today().year do
       gettext("Member since %{month} %{year}",
         month: month_name(joined.month),
         year: joined.year

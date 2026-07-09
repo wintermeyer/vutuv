@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostLive.Saved do
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias VutuvWeb.Live.DayClockRestream
 
   @page_size 20
 
@@ -203,14 +204,10 @@ defmodule VutuvWeb.PostLive.Saved do
 
   # The Berlin day rolled over at midnight (Vutuv.DayClock): re-render each shown
   # post's stamp ("today" -> "Gestern"). No-op on the People tab (@saved_posts is
-  # empty there). update_only refreshes rows in place and skips any already gone.
+  # empty there). Shared with the feed + notifications; see
+  # VutuvWeb.Live.DayClockRestream.
   def handle_info(:day_changed, socket) do
-    socket =
-      Enum.reduce(socket.assigns.saved_posts, socket, fn post, socket ->
-        stream_insert(socket, :posts, post, update_only: true)
-      end)
-
-    {:noreply, socket}
+    {:noreply, DayClockRestream.restream(socket, :saved_posts, :posts)}
   end
 
   def handle_info(_other, socket), do: {:noreply, socket}

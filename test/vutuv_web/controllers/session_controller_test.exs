@@ -3,6 +3,11 @@ defmodule VutuvWeb.SessionControllerTest do
   import Swoosh.TestAssertions
 
   alias Vutuv.Accounts
+  alias Vutuv.Chat
+  alias Vutuv.Chat.Conversation
+  alias Vutuv.Chat.Message
+  alias Vutuv.Chat.Participant
+  alias Vutuv.UUIDv7
 
   # The login page is a logged-out-only entry point, like registration
   # (UserController :new/:create) and the landing page (PageController :index).
@@ -81,6 +86,100 @@ defmodule VutuvWeb.SessionControllerTest do
       assert redirected_to(conn) == ~p"/"
       refute get_session(conn, :user_id)
     end
+  end
+
+  describe "welcome flash" do
+    # A member with >999 unread conversations must not see a run-together
+    # integer in the sign-in greeting: the count goes through the formatter, so
+    # it is thousands-grouped (issue: unread_note/1 rendered the raw integer).
+    test "formats a large unread count as a grouped number, not a run-together integer", %{
+      conn: conn
+    } do
+      attrs = %{
+        "emails" => %{"0" => %{"value" => "busy@example.com"}},
+        "first_name" => "Busy",
+        "tag_list" => "Elixir Cooking Origami"
+      }
+
+      {:ok, me} = Accounts.register_user(conn, attrs)
+
+      seed_unread_conversations(me, 1234)
+      assert Chat.unread_conversations_count(me) == 1234
+
+      conn = login_via_pin(conn, "busy@example.com")
+
+      flash = Phoenix.Flash.get(conn.assigns.flash, :info)
+      # ConnTest defaults to the English locale, so delimited_count/1 groups on
+      # commas.
+      assert flash =~ "1,234"
+      # Never the un-grouped integer.
+      refute flash =~ "1234"
+    end
+  end
+
+  # Seeds `n` accepted conversations in which `me` is an unread participant, so
+  # `Chat.unread_conversations_count/1` returns `n`. Reaching a four-digit count
+  # without minting a thousand counterparties: the count keys off the
+  # participant + unread-message rows, not the conversation's stored pair
+  # columns, so those pair columns are drawn from a small pool of filler users
+  # (each pair distinct, sorted, to satisfy the unique/sorted-pair constraints).
+  defp seed_unread_conversations(me, n) do
+    now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+    usec = NaiveDateTime.utc_now()
+
+    # A pool of m users yields m*(m-1)/2 distinct pairs; 51 covers > 1200.
+    pool = insert_list(51, :activated_user)
+    sender = hd(pool)
+    ids = Enum.map(pool, & &1.id)
+
+    all_pairs =
+      for {a, i} <- Enum.with_index(ids), b <- Enum.drop(ids, i + 1) do
+        UUIDv7.sorted_pair(a, b)
+      end
+
+    pairs = Enum.take(all_pairs, n)
+
+    conversations =
+      Enum.map(pairs, fn {lo, hi} ->
+        %{
+          id: UUIDv7.generate(),
+          user_a_id: lo,
+          user_b_id: hi,
+          initiator_id: sender.id,
+          status: "accepted",
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(Conversation, conversations)
+
+    participants =
+      Enum.map(conversations, fn c ->
+        %{
+          id: UUIDv7.generate(),
+          conversation_id: c.id,
+          user_id: me.id,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    Repo.insert_all(Participant, participants)
+
+    messages =
+      Enum.map(conversations, fn c ->
+        %{
+          id: UUIDv7.generate(),
+          conversation_id: c.id,
+          sender_id: sender.id,
+          body: "hi",
+          inserted_at: usec,
+          updated_at: usec
+        }
+      end)
+
+    Repo.insert_all(Message, messages)
   end
 
   describe "POST /login" do

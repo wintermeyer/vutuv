@@ -260,6 +260,9 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:honorific_suffix, max: 50)
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
+    # locale is user-writable (profile form + PATCH /api/2.0/me) over a
+    # varchar(255) column, so cap it or an oversized value raises Postgres 22001.
+    |> validate_length(:locale, max: 255)
     # The literal mirrors the canonical service list in `Vutuv.Maps`; it is kept
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.

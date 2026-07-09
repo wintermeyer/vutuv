@@ -88,7 +88,7 @@ defmodule VutuvWeb.QualificationController do
 
     ControllerHelpers.save(conn, Repo.update(changeset),
       flash: gettext("Certificate or license updated successfully."),
-      redirect_to: fn _entry -> ~p"/settings/qualifications" end,
+      redirect_to: ~p"/settings/qualifications",
       render: "edit.html",
       assigns: [qualification: qualification]
     )
