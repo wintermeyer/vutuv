@@ -6,6 +6,7 @@ defmodule VutuvWeb.InvitationControllerTest do
   alias Vutuv.Accounts.Email
   alias Vutuv.Invitations
   alias Vutuv.Invitations.Invitation
+  alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Social
 
   defp form_params(overrides \\ %{}) do
@@ -89,7 +90,35 @@ defmodule VutuvWeb.InvitationControllerTest do
   end
 
   describe "the invite link on the landing page" do
-    test "prefills the sign-up form and stamps the first visit", %{conn: conn} do
+    test "a compact token link prefills the sign-up form and stamps the first visit", %{
+      conn: conn
+    } do
+      inviter = insert(:user)
+
+      Repo.insert!(%Invitation{
+        user_id: inviter.id,
+        email_hash: Invitations.hash_email("jane@example.com"),
+        locale: "en"
+      })
+
+      token =
+        PrefillToken.encode(%{
+          "first_name" => "Jane",
+          "last_name" => "Doe",
+          "email" => "jane@example.com",
+          "gender" => "female"
+        })
+
+      conn = get(conn, ~p"/?#{[i: token]}")
+
+      response = html_response(conn, 200)
+      assert response =~ ~s(value="Jane")
+      assert response =~ ~s(value="jane@example.com")
+
+      assert Repo.one(Invitation).visited_at
+    end
+
+    test "a legacy spelled-out link still prefills (older links in inboxes)", %{conn: conn} do
       inviter = insert(:user)
 
       Repo.insert!(%Invitation{

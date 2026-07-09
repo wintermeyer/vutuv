@@ -5,8 +5,15 @@ defmodule Vutuv.InvitationsTest do
 
   alias Vutuv.Invitations
   alias Vutuv.Invitations.Invitation
+  alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Repo
   alias Vutuv.Social
+
+  # Pull the invitation token out of the `i=` parameter of the link in an email.
+  defp invite_token(body) do
+    [_, token] = Regex.run(~r/[?&]i=([A-Za-z0-9_-]+)/, body)
+    token
+  end
 
   defp valid_attrs(overrides \\ %{}) do
     Map.merge(
@@ -162,7 +169,7 @@ defmodule Vutuv.InvitationsTest do
       end)
     end
 
-    test "the invite link carries the prefill data", %{inviter: inviter} do
+    test "the invite link carries the prefill data as a compact token", %{inviter: inviter} do
       assert {:ok, :sent, _} =
                Invitations.deliver_invitation(
                  inviter,
@@ -170,12 +177,20 @@ defmodule Vutuv.InvitationsTest do
                )
 
       assert_email_sent(fn email ->
-        assert email.text_body =~ "first_name=Jane"
-        assert email.text_body =~ "last_name=Doe"
-        assert email.text_body =~ "email=jane%40example.com"
-        # The form field is `tag_list`; it rides the link as the `tags` param
-        # the sign-up page prefills from.
-        assert email.text_body =~ "tags=Elixir"
+        # The point of the compression (issue #913): the link no longer spells
+        # the fields out, so it is shorter and keeps the invitee's name and
+        # address out of the URL in the clear.
+        refute email.text_body =~ "first_name=Jane"
+        refute email.text_body =~ "jane%40example.com"
+
+        prefill = email.text_body |> invite_token() |> PrefillToken.decode()
+
+        assert prefill["first_name"] == "Jane"
+        assert prefill["last_name"] == "Doe"
+        assert prefill["email"] == "jane@example.com"
+        # The form field is `tag_list`; it rides the link (and the sign-up page
+        # reads it back) as `tags`.
+        assert prefill["tags"] == "Elixir, Cooking"
       end)
     end
   end

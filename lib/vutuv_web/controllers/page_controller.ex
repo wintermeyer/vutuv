@@ -8,11 +8,14 @@ defmodule VutuvWeb.PageController do
   alias VutuvWeb.AgentDocs.ListDocs
 
   def index(conn, params) do
-    # An invitation link lands here with the invited person's data in the query
-    # (first_name, last_name, gender, tags, email — see Vutuv.Invitations). Stamp
-    # the invitation's first visit (a no-op for a plain visitor or an unknown
-    # address) and prefill the sign-up form with whatever the inviter entered.
-    Vutuv.Invitations.record_visit(params["email"])
+    # An invitation link lands here with the invited person's data in the query:
+    # either the compact `i=` token or, for older links still in inboxes, the
+    # spelled-out first_name/last_name/gender/tags/email params (see
+    # Vutuv.Invitations.prefill_from_params/1). Stamp the invitation's first visit
+    # (a no-op for a plain visitor or an unknown address) and prefill the sign-up
+    # form with whatever the inviter entered.
+    prefill = Vutuv.Invitations.prefill_from_params(params)
+    Vutuv.Invitations.record_visit(prefill["email"])
 
     # Sign-up form defaults: preselect "männlich" (gender), pre-check "show on
     # profile" (public?: true) and preselect the "Work" email type. These prime
@@ -21,14 +24,14 @@ defmodule VutuvWeb.PageController do
     # choice still stays private.
     changeset =
       %User{
-        gender: prefill_gender(params["gender"]),
-        first_name: presence(params["first_name"]),
-        last_name: presence(params["last_name"]),
-        tag_list: presence(params["tags"])
+        gender: prefill_gender(prefill["gender"]),
+        first_name: presence(prefill["first_name"]),
+        last_name: presence(prefill["last_name"]),
+        tag_list: presence(prefill["tags"])
       }
       |> User.changeset()
       |> Ecto.Changeset.put_assoc(:emails, [
-        %Email{public?: true, email_type: "Work", value: presence(params["email"])}
+        %Email{public?: true, email_type: "Work", value: presence(prefill["email"])}
       ])
 
     prefetch = "/listings/most_followed_users"

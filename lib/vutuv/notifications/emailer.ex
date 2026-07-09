@@ -23,6 +23,7 @@ defmodule Vutuv.Notifications.Emailer do
 
   require Logger
 
+  alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Reports.DailyReport
   alias VutuvWeb.EmailComponents
@@ -431,16 +432,15 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   # The invite link: the landing page prefilled from the sign-up fields the
-  # inviter entered. VutuvWeb.PageController.index reads these query keys. Pairs
-  # are sorted so the URL is stable (assertable in tests).
+  # inviter entered. Vutuv.Invitations.PrefillToken packs them into one compact
+  # `i=` token (shorter than spelling the fields out, and it keeps the invitee's
+  # name and address out of the URL in the clear); VutuvWeb.PageController.index
+  # reads it back.
   defp invitation_signup_url(prefill) do
-    query =
-      prefill
-      |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-      |> Enum.sort()
-      |> URI.encode_query()
-
-    if query == "", do: public_url(), else: public_url() <> "?" <> query
+    case PrefillToken.query(prefill) do
+      "" -> public_url()
+      query -> public_url() <> "?" <> query
+    end
   end
 
   defp invitee_name(prefill, to_email) do

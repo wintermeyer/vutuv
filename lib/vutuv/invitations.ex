@@ -26,6 +26,7 @@ defmodule Vutuv.Invitations do
   alias Vutuv.BerlinTime
   alias Vutuv.Invitations.Invitation
   alias Vutuv.Invitations.InvitationRequest
+  alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
   alias Vutuv.Token
@@ -124,8 +125,9 @@ defmodule Vutuv.Invitations do
     %{html_body: email.html_body, subject: email.subject, to_name: to_name, to_email: to_email}
   end
 
-  # The sign-up fields we carry in the invite link's query string. The landing
-  # page (VutuvWeb.PageController.index) reads these keys to prefill the form.
+  # The sign-up fields we carry in the invite link. Packed into a single compact
+  # `i=` token by Vutuv.Invitations.PrefillToken (the emailer builds the URL);
+  # the landing page reads it back with prefill_from_params/1 below.
   defp prefill_params(%InvitationRequest{} = request) do
     %{
       "gender" => request.gender,
@@ -134,6 +136,25 @@ defmodule Vutuv.Invitations do
       "tags" => request.tag_list,
       "email" => request.email
     }
+  end
+
+  @doc """
+  The sign-up prefill for the landing page, from the request's query params.
+
+  Reads the compact `i=` invitation token (`Vutuv.Invitations.PrefillToken`)
+  when present, and otherwise falls back to the spelled-out
+  `first_name` / `last_name` / `gender` / `tags` / `email` params — the layout
+  older invitation links still sitting in inboxes use. Returns a map with those
+  string keys; missing fields are simply absent.
+  """
+  def prefill_from_params(params) when is_map(params) do
+    case params[PrefillToken.param()] do
+      token when is_binary(token) and token != "" ->
+        PrefillToken.decode(token)
+
+      _ ->
+        Map.take(params, ~w(gender first_name last_name email tags))
+    end
   end
 
   @doc """

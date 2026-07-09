@@ -46,12 +46,30 @@ that `email` plus at least one of `first_name` / `last_name` are present.
 
 ## The link and the sign-up prefill
 
-The email's call-to-action is
-`https://<host>/?first_name=…&last_name=…&gender=…&tags=…&email=…` (the host
-comes from `PHX_HOST` via `Endpoint`'s `public_url`, never a literal domain).
-`VutuvWeb.PageController.index` reads those query params and prefills the sign-up
-changeset (the consent checkboxes are deliberately **left to the invited
-person** — prefilling a consent choice would be wrong). The same request stamps
+The email's call-to-action is `https://<host>/?i=<token>` (the host comes from
+`PHX_HOST` via `Endpoint`'s `public_url`, never a literal domain). The `i` token
+is a **compact, URL-safe packing** of the prefill fields — the values in a fixed
+order, DEFLATE-compressed and base64url-encoded by
+`Vutuv.Invitations.PrefillToken`. It replaces the old spelled-out
+`?first_name=…&last_name=…&gender=…&tags=…&email=…` query, which repeated the
+parameter names on every link, percent-encoded the values (`@` → `%40`) and
+exposed the invitee's name and address in cleartext in mail logs and browser
+history. For a real invite (which always has a name — the form requires it) the
+token is ~30 % shorter and leaks no PII. Note that compression pays off only
+*after* packing: DEFLATE-ing the spelled-out query on its own makes it longer
+(header + base64 overhead beat the win on such short text), so the saving is
+really from dropping the repeated keys, with DEFLATE trimming a further bit on
+longer payloads. The token is **unsigned** on purpose — the fields are only form
+defaults the invited person edits before submitting, and a signature would add
+~50 characters and undo the saving. `PrefillToken.query/1` even picks the shorter
+of the token and the spelled-out form, so a link is never made longer.
+
+`VutuvWeb.PageController.index` reads the prefill with
+`Vutuv.Invitations.prefill_from_params/1` (which decodes the `i=` token, or falls
+back to the spelled-out params — older invitation links still in inboxes — when
+there is none; a malformed token degrades to an empty form) and prefills the
+sign-up changeset. The consent checkboxes are deliberately **left to the invited
+person** — prefilling a consent choice would be wrong. The same request stamps
 `visited_at` once (`Vutuv.Invitations.record_visit/1`, scoped to
 `is_nil(visited_at)`), so a later visit never moves it.
 
