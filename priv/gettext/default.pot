@@ -8689,14 +8689,10 @@ msgid "Professional Experience"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:312
-#: lib/vutuv_web/views/work_experience_html.ex:24
+#: lib/vutuv_web/views/work_experience_html.ex:27
+#: lib/vutuv_web/views/work_experience_html.ex:34
 #, elixir-autogen, elixir-format
-msgid "Volunteer position"
-msgstr ""
-
-#: lib/vutuv_web/views/work_experience_html.ex:31
-#, elixir-autogen, elixir-format
-msgid "Volunteering"
+msgid "Volunteering & hobbies"
 msgstr ""
 
 #: lib/vutuv_web/live/search_live.ex:220

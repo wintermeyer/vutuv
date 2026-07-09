@@ -21,14 +21,17 @@ defmodule VutuvWeb.WorkExperienceHTML do
   def kind_name("employment"), do: gettext("Employment")
   def kind_name("self_employed"), do: gettext("Freelance / Self-employed")
   def kind_name("internship"), do: gettext("Internship")
-  def kind_name("volunteer"), do: gettext("Volunteer position")
+  # Issue #916: the volunteer category also welcomes hobbies and general
+  # volunteer work (in IT especially, those are often not recognized as an
+  # Ehrenamt), so the label names all three.
+  def kind_name("volunteer"), do: gettext("Volunteering & hobbies")
   def kind_name("other"), do: gettext("Other activities")
 
   @doc "A category's group heading on the list renderings."
   def kind_label("employment"), do: gettext("Professional Experience")
   def kind_label("self_employed"), do: gettext("Freelance / Self-employed")
   def kind_label("internship"), do: gettext("Internships")
-  def kind_label("volunteer"), do: gettext("Volunteering")
+  def kind_label("volunteer"), do: gettext("Volunteering & hobbies")
   def kind_label("other"), do: gettext("Other activities")
 
   @doc "The `{label, value}` options for the form's category select."

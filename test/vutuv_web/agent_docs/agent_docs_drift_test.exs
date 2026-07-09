@@ -132,8 +132,9 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "Bridge Engineer",
       "Span AG",
       # the volunteer entry and its category (issue #840): HTML shows the
-      # "Volunteering" heading, md/txt the "[Volunteering]" note, json/xml
-      # the kind field — "volunteer" is the common substring of all of them
+      # "Volunteering & hobbies" heading, md/txt the "[Volunteering & hobbies]"
+      # note, json/xml the kind field — the case-insensitive "volunteer" is the
+      # common substring of all of them
       "River Guardian",
       "Water Watch",
       "volunteer",

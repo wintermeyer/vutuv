@@ -2,10 +2,11 @@ defmodule VutuvWeb.WorkExperienceKindTest do
   @moduledoc """
   The CV categories on work experiences (issue #840): a member files each
   entry as employment, self-employment (Freiberuflich / Selbstständig),
-  internship (Praktikum), volunteer position (Ehrenamt) or other activity
-  (Sonstige Tätigkeit), and every list rendering groups the entries under
-  distinctly labeled headings — but only once a non-employment entry exists,
-  so the common jobs-only profile keeps its familiar single timeline.
+  internship (Praktikum), volunteering (Ehrenamt, Hobby & Freiwilligenarbeit,
+  issue #916) or other activity (Sonstige Tätigkeit), and every list rendering
+  groups the entries under distinctly labeled headings — but only once a
+  non-employment entry exists, so the common jobs-only profile keeps its
+  familiar single timeline.
   """
   use VutuvWeb.ConnCase, async: true
 
@@ -79,7 +80,7 @@ defmodule VutuvWeb.WorkExperienceKindTest do
 
       assert html =~ "Professional Experience"
       assert html =~ "Internships"
-      assert html =~ "Volunteering"
+      assert html =~ "Volunteering &amp; hobbies"
     end
 
     test "groups self-employment and other activities under their own headings",
@@ -111,7 +112,7 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       html = conn |> get(~p"/settings/work_experiences") |> html_response(200)
 
       assert html =~ "Professional Experience"
-      assert html =~ "Volunteering"
+      assert html =~ "Volunteering &amp; hobbies"
     end
   end
 
@@ -123,7 +124,7 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       html = conn |> get(~p"/#{user}/work_experiences/#{job}") |> html_response(200)
 
       assert html =~ "Category"
-      assert html =~ "Volunteer position"
+      assert html =~ "Volunteering &amp; hobbies"
     end
 
     test "names the self-employment category", %{conn: conn, user: user} do
@@ -146,7 +147,7 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
       assert html =~ "Professional Experience"
-      assert html =~ "Volunteering"
+      assert html =~ "Volunteering &amp; hobbies"
     end
 
     test "a jobs-only profile card shows no category headings", %{conn: conn, user: user} do
@@ -156,6 +157,34 @@ defmodule VutuvWeb.WorkExperienceKindTest do
 
       refute html =~ "Professional Experience"
       refute html =~ "Volunteering"
+    end
+  end
+
+  # Issue #916 (thanks to Dirk Deimeke): the volunteer category is where hobbies
+  # and general volunteer work belong too, so its label says so in both
+  # languages. Hobbies, especially in IT, are often not recognized as volunteer
+  # work; naming them in the label invites members to file them here.
+  describe "the volunteer category welcomes hobbies and volunteer work (issue #916)" do
+    alias VutuvWeb.WorkExperienceHTML
+
+    test "the English label names volunteering and hobbies" do
+      Gettext.put_locale(VutuvWeb.Gettext, "en")
+
+      assert WorkExperienceHTML.kind_name("volunteer") =~ "hobbies"
+      assert WorkExperienceHTML.kind_label("volunteer") =~ "hobbies"
+    end
+
+    test "the German label names Ehrenamt, Hobby and Freiwilligenarbeit" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+
+      for label <- [
+            WorkExperienceHTML.kind_name("volunteer"),
+            WorkExperienceHTML.kind_label("volunteer")
+          ] do
+        assert label =~ "Ehrenamt"
+        assert label =~ "Hobby"
+        assert label =~ "Freiwilligenarbeit"
+      end
     end
   end
 end

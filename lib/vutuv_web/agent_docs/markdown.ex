@@ -309,7 +309,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     case Map.get(work, :kind) do
       "self_employed" -> gettext("Freelance / Self-employed")
       "internship" -> gettext("Internship")
-      "volunteer" -> gettext("Volunteer position")
+      "volunteer" -> gettext("Volunteering & hobbies")
       "other" -> gettext("Other activities")
       _employment -> nil
     end

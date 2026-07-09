@@ -6,8 +6,9 @@ defmodule Vutuv.Profiles.WorkExperience do
   alias Vutuv.ChangesetHelpers
 
   # The CV categories (issue #840): a paid job, self-employment/freelance,
-  # a Praktikum, an Ehrenamt, and a catch-all for anything else. Display order
-  # everywhere is this list's order.
+  # a Praktikum, volunteering (Ehrenamt, hobby or Freiwilligenarbeit, issue
+  # #916), and a catch-all for anything else. Display order everywhere is this
+  # list's order.
   @kinds ~w(employment self_employed internship volunteer other)
 
   schema "work_experiences" do

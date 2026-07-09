@@ -42,15 +42,20 @@ reader can tell a paid job from a Praktikum or an Ehrenamt. The member picks
 it in a select on the entry form; every list rendering — the profile's
 Experience card, the public `/:slug/work_experiences` page and the
 `/settings/work_experiences` editor — splits into labeled groups
-(Berufserfahrung, Praktika, Ehrenämter) via the shared
-`WorkExperience.group_by_kind/1`, **but only once a non-employment entry
+(Berufserfahrung, Praktika, "Ehrenamt, Hobby & Freiwilligenarbeit") via the
+shared `WorkExperience.group_by_kind/1`, **but only once a non-employment entry
 exists**: a jobs-only member keeps the familiar single unlabeled timeline.
 The duration circles stay sized over the whole list, so a short internship
-never rivals a decade-long job optically.
+never rivals a decade-long job optically. The `volunteer` category is
+deliberately broad (issue #916): its label names hobbies and Freiwilligenarbeit
+alongside Ehrenamt, because unpaid community and hobby work (common in IT) is
+often not recognized as volunteering. The labels live once in
+`WorkExperienceHTML.kind_name/1` and `kind_label/1`.
 
 The agent formats carry the category too (`kind` in the entry maps, a
-`[Volunteering]` / `[Internship]` note on the md/txt lines), as does the GDPR
-export; the LinkedIn import maps `Volunteering.csv` into volunteer entries.
+`[Volunteering & hobbies]` / `[Internship]` note on the md/txt lines), as does
+the GDPR export; the LinkedIn import maps `Volunteering.csv` into volunteer
+entries.
 The profile-job-title chooser is category-agnostic: the pin (and the automatic
 heuristic) can select any entry, whatever its kind.
 
