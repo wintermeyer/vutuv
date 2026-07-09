@@ -114,6 +114,38 @@ defmodule VutuvWeb.WorkExperienceKindTest do
       assert html =~ "Professional Experience"
       assert html =~ "Volunteering &amp; hobbies"
     end
+
+    # The duration circle used to sit in a fixed third grid column
+    # (`grid-cols-[6.5rem_1fr_4rem]`), which reserved ~4rem of width down the
+    # *whole* block height. On a phone that squeezed every role below the circle
+    # into a narrow column while the space beside them sat empty. The circle now
+    # floats into the top-right of the content column, so text wraps around it at
+    # the top and reclaims the full card width below it.
+    test "floats the duration circle so roles reclaim the width beside it (mobile)",
+         %{conn: conn, user: user} do
+      # Two roles at one employer make a block that runs several lines below the
+      # circle — exactly where the wasted space showed.
+      insert_job(user,
+        title: "Staff Engineer",
+        organization: "Acme Corp",
+        start_month: 1,
+        start_year: 2022
+      )
+
+      insert_job(user,
+        title: "Senior Engineer",
+        organization: "Acme Corp",
+        start_month: 1,
+        start_year: 2020,
+        end_month: 12,
+        end_year: 2021
+      )
+
+      html = conn |> get(~p"/#{user}/work_experiences") |> html_response(200)
+
+      assert html =~ "float-right"
+      refute html =~ "grid-cols-[6.5rem_1fr_4rem]"
+    end
   end
 
   describe "the entry show page" do

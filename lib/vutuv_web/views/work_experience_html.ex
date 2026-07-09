@@ -446,10 +446,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
 
   def experience_block(assigns) do
     ~H"""
-    <div class={[
-      "grid items-start gap-3",
-      if(@as_owner?, do: "grid-cols-[6.5rem_1fr]", else: "grid-cols-[6.5rem_1fr_4rem]")
-    ]}>
+    <div class="grid grid-cols-[6.5rem_1fr] items-start gap-3">
       <div
         class="pt-0.5 text-right text-xs font-semibold leading-tight tabular-nums text-slate-600 dark:text-slate-400"
         title={@block.span.detail}
@@ -457,7 +454,28 @@ defmodule VutuvWeb.WorkExperienceHTML do
         {@block.span.label}
       </div>
 
-      <div>
+      <%!-- The duration circle floats into the top-right corner of the content
+      column (visitor showcase only). Floating instead of holding a fixed grid
+      column lets the roles below the circle reclaim the full card width — a grid
+      column would reserve those ~4rem down the whole block height and needlessly
+      narrow every role under it. `flow-root` establishes a block-formatting
+      context that contains the float, so the column stays at least as tall as
+      the circle and a short single-role block can't let it overhang the next
+      block. --%>
+      <div class="flow-root">
+        <div
+          :if={!@as_owner?}
+          class="float-right ml-3 flex items-center justify-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
+          style={"width: #{@block.size}rem; height: #{@block.size}rem"}
+          title={
+            if(@block.multi?,
+              do: gettext("Total time at this employer"),
+              else: gettext("Time in this role")
+            )
+          }
+        >
+          <span class="text-[11px]">{@block.label}</span>
+        </div>
         <%= if @block.multi? do %>
           <%!-- Git-graph layout: the employer is a node on the
           trunk (the outer rail, continuous down the whole timeline); its roles
@@ -545,20 +563,6 @@ defmodule VutuvWeb.WorkExperienceHTML do
             />
           </div>
         <% end %>
-      </div>
-
-      <div
-        :if={!@as_owner?}
-        class="flex shrink-0 items-center justify-center justify-self-center rounded-full bg-brand-600 font-semibold leading-none tabular-nums text-white"
-        style={"width: #{@block.size}rem; height: #{@block.size}rem"}
-        title={
-          if(@block.multi?,
-            do: gettext("Total time at this employer"),
-            else: gettext("Time in this role")
-          )
-        }
-      >
-        <span class="text-[11px]">{@block.label}</span>
       </div>
     </div>
     """
