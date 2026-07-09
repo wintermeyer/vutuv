@@ -50,7 +50,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       section(gettext("Links"), Enum.map(doc.links, &entry_line("links", &1))),
       section(gettext("Contact"), Enum.map(doc.emails, &entry_line("emails", &1))),
       section(
-        gettext("Social Media"),
+        gettext("Profiles"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
       section(gettext("Code"), Enum.flat_map(doc.code_stats, &code_stats_lines/1)),

@@ -670,6 +670,23 @@ msgstr "Slug"
 msgid "Social Media"
 msgstr "Social Media"
 
+#: lib/vutuv_web/templates/user/show.html.heex:852
+#: lib/vutuv_web/agent_docs/markdown.ex:53
+#: lib/vutuv_web/agent_docs/text.ex:52
+#, elixir-autogen, elixir-format
+msgid "Profiles"
+msgstr "Profile"
+
+#: lib/vutuv_web/views/user_html.ex:372
+#, elixir-autogen, elixir-format
+msgid "Social networks"
+msgstr "Soziale Netzwerke"
+
+#: lib/vutuv_web/views/user_html.ex:378
+#, elixir-autogen, elixir-format
+msgid "Code & repositories"
+msgstr "Code & Repositorys"
+
 #: lib/vutuv_web/templates/social_media_account/edit.html.heex:3
 #: lib/vutuv_web/templates/social_media_account/new.html.heex:3
 #, elixir-autogen

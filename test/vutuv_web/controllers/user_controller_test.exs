@@ -276,6 +276,50 @@ defmodule VutuvWeb.UserControllerTest do
     assert source_pos(html, "profile-social-media") < source_pos(html, "profile-addresses")
   end
 
+  describe "Profiles card groups social networks and code forges" do
+    # The old flat "Social Media" card lumped real networks together with code
+    # forges (GitHub etc., which also drive the "Code" stats card). The card is
+    # now titled "Profiles" and splits into two labeled buckets so a forge
+    # stops reading as social media. CodeStats.code_provider?/1 is the split.
+
+    test "labels both buckets when the member has each kind", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:social_media_account, user: user, provider: "Facebook", value: "janedoe")
+      insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      # "&" is HTML-escaped in the rendered heading.
+      assert html =~ "Social networks"
+      assert html =~ "Code &amp; repositories"
+
+      # Social networks bucket first, code forges second. Slice strictly
+      # between the two headings so the <head> rel="me" links (which repeat
+      # every handle up top) can't muddy the placement check.
+      sn = source_pos(html, "Social networks")
+      cr = source_pos(html, "Code &amp; repositories")
+      assert sn < cr
+
+      social_bucket = :binary.part(html, sn, cr - sn)
+      assert social_bucket =~ "janedoe"
+      refute social_bucket =~ "octocat"
+
+      code_bucket = :binary.part(html, cr, byte_size(html) - cr)
+      assert code_bucket =~ "octocat"
+    end
+
+    test "a member with only social networks gets no subgroup labels", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:social_media_account, user: user, provider: "Facebook", value: "janedoe")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ "janedoe"
+      refute html =~ "Social networks"
+      refute html =~ "Code &amp; repositories"
+    end
+  end
+
   describe "contact card splits into Beruflich/Privat" do
     # E-mails are work unless typed "Personal"; phone numbers are private only
     # when typed "Home". When both buckets hold something the card grows two

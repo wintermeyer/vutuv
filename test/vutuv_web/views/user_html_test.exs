@@ -44,4 +44,24 @@ defmodule VutuvWeb.UserHTMLTest do
       assert VutuvWeb.UserHTML.member_since(user) == "Mitglied seit #{de_month} #{today.year}"
     end
   end
+
+  describe "compact_activity_date/2 (Code card last-active date)" do
+    test "shows only the year for a date in an earlier year" do
+      assert VutuvWeb.UserHTML.compact_activity_date(~D[2025-05-28], ~D[2026-07-09]) == "2025"
+    end
+
+    test "drops the year for a date in the current year (English day/month)" do
+      assert VutuvWeb.UserHTML.compact_activity_date(~D[2026-05-28], ~D[2026-07-09]) == "5/28"
+    end
+
+    test "German current year shows day.month. with a trailing dot" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      assert VutuvWeb.UserHTML.compact_activity_date(~D[2026-05-28], ~D[2026-07-09]) == "28.05."
+    end
+
+    test "German earlier year shows only the year" do
+      Gettext.put_locale(VutuvWeb.Gettext, "de")
+      assert VutuvWeb.UserHTML.compact_activity_date(~D[2025-12-31], ~D[2026-01-05]) == "2025"
+    end
+  end
 end

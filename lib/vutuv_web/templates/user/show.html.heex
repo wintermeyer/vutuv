@@ -849,49 +849,20 @@ the resulting ~200px rail width. --%>
       :if={Enum.count(@user.social_media_accounts) > 0 or @as_owner?}
       id="profile-social-media"
     >
-      <.section_header title={gettext("Social Media")} />
+      <.section_header title={gettext("Profiles")} />
       <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/settings/social_media_accounts/new"}>
         {gettext("Add a social media account")}
       </.empty_add>
 
-      <%!-- One line per account: brand glyph + handle. The provider name is
-      dropped (the icon carries it), so this is half the height of the old
-      two-line-per-account stack. --%>
-      <ul class="-my-1.5 text-sm">
-        <li :for={account <- @user.social_media_accounts}>
-          <.social_link
-            account={account}
-            class="group flex items-center gap-2.5 py-1.5 text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
-          >
-            <.social_icon
-              provider={account.provider}
-              class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
-            />
-            <span class="truncate font-medium">{social_handle(account)}</span>
-            <%!-- The social feed for this account (Mastodon, Bluesky) is
-            being fetched in the background (Vutuv.SocialFeed); the spinner
-            disappears when the result lands (or the 15 s give-up timer
-            fires). Only requested accounts ever enter the loading set, so no
-            provider check is needed here. --%>
-            <span
-              :if={MapSet.member?(@social_feed_loading, {account.provider, account.value})}
-              data-feed-loading
-              title={gettext("Loading posts")}
-              class="shrink-0"
-            >
-              <svg
-                class="h-3.5 w-3.5 animate-spin text-slate-400 dark:text-slate-500"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden="true"
-              >
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
-              </svg>
-            </span>
-          </.social_link>
-        </li>
-      </ul>
+      <%!-- Two labeled buckets — real social networks vs code forges (GitHub,
+      GitLab, Codeberg, which also drive the enriched "Code" card below) — so
+      the forges stop reading as "social media". One line per account: brand
+      glyph + handle (the icon carries the provider name). --%>
+      <.social_media_accounts
+        :if={Enum.count(@user.social_media_accounts) > 0}
+        accounts={@user.social_media_accounts}
+        social_feed_loading={@social_feed_loading}
+      />
 
       <.manage_footer
         href={~p"/#{@user}/social_media_accounts"}

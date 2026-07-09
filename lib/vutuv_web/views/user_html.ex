@@ -318,24 +318,122 @@ defmodule VutuvWeb.UserHTML do
 
   defp code_stats_year(_), do: nil
 
-  # The dormancy date to show (CodeStats.dormant_since/1) as a locale-shaped
-  # date (German "02.05.2026", otherwise "5/2/2026"); nil while the account
-  # is recently active.
+  # The dormancy date to show (CodeStats.dormant_since/1), trimmed to save
+  # real estate on the compact card; nil while the account is recently active.
   defp code_stats_dormant(stats) do
     case CodeStats.dormant_since(stats["last_active_at"]) do
-      %Date{} = date ->
-        case Gettext.get_locale(VutuvWeb.Gettext) do
-          "de" -> Calendar.strftime(date, "%d.%m.%Y")
-          _ -> Calendar.strftime(date, "%-m/%-d/%Y")
-        end
+      %Date{} = date -> compact_activity_date(date, Vutuv.BerlinTime.today())
+      _ -> nil
+    end
+  end
 
-      _ ->
-        nil
+  @doc """
+  A last-activity date trimmed for the compact Code card. A date in `today`'s
+  (Berlin) year drops the redundant year and shows only day + month (German
+  "28.05.", otherwise "5/28"); any earlier year shows just the year ("2025"),
+  since the exact day of a long-dormant account no longer matters. Public for
+  a locale-specific unit test.
+  """
+  def compact_activity_date(%Date{} = date, %Date{} = today) do
+    if date.year == today.year do
+      case Gettext.get_locale(VutuvWeb.Gettext) do
+        "de" -> Calendar.strftime(date, "%d.%m.")
+        _ -> Calendar.strftime(date, "%-m/%-d")
+      end
+    else
+      Integer.to_string(date.year)
     end
   end
 
   # A snapshot URL came from remote JSON; only https may render as a link.
   defp https_url?(url), do: is_binary(url) and String.starts_with?(url, "https://")
+
+  @doc """
+  The profile's "Social Media" card body. Splits the member's accounts into
+  two buckets so real social networks (Facebook, Mastodon, LinkedIn …) and
+  code forges (GitHub, GitLab, Codeberg — which also drive the enriched "Code"
+  card) read as distinct kinds instead of one confusing "Social Media" list.
+  `CodeStats.code_provider?/1` is the split chokepoint. The subgroup headings
+  only appear when **both** kinds are present; a member with just one kind
+  gets a plain list under the card title, no redundant single label.
+  """
+  attr(:accounts, :list, required: true)
+  attr(:social_feed_loading, :any, required: true)
+
+  def social_media_accounts(assigns) do
+    social = Enum.reject(assigns.accounts, &CodeStats.code_provider?(&1.provider))
+    code = Enum.filter(assigns.accounts, &CodeStats.code_provider?(&1.provider))
+    assigns = assign(assigns, social: social, code: code, split?: social != [] and code != [])
+
+    ~H"""
+    <div class="space-y-4">
+      <.social_media_group
+        :if={@social != []}
+        label={@split? && gettext("Social networks")}
+        accounts={@social}
+        social_feed_loading={@social_feed_loading}
+      />
+      <.social_media_group
+        :if={@code != []}
+        label={@split? && gettext("Code & repositories")}
+        accounts={@code}
+        social_feed_loading={@social_feed_loading}
+      />
+    </div>
+    """
+  end
+
+  # One labeled bucket of social-media accounts: an optional uppercase
+  # subheading (`false` = no heading, a lone bucket) above one compact line
+  # per account (brand glyph + handle; the provider name is dropped since the
+  # icon carries it). The loading spinner rides accounts whose inline social
+  # feed (Mastodon, Bluesky) is still being fetched in the background.
+  attr(:label, :any, default: false)
+  attr(:accounts, :list, required: true)
+  attr(:social_feed_loading, :any, required: true)
+
+  defp social_media_group(assigns) do
+    ~H"""
+    <div>
+      <h3
+        :if={@label}
+        class="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400"
+      >
+        {@label}
+      </h3>
+      <ul class="-my-1.5 text-sm">
+        <li :for={account <- @accounts}>
+          <.social_link
+            account={account}
+            class="group flex items-center gap-2.5 py-1.5 text-slate-700 transition hover:text-brand-700 dark:text-slate-200"
+          >
+            <.social_icon
+              provider={account.provider}
+              class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500 dark:group-hover:text-brand-300"
+            />
+            <span class="truncate font-medium">{social_handle(account)}</span>
+            <span
+              :if={MapSet.member?(@social_feed_loading, {account.provider, account.value})}
+              data-feed-loading
+              title={gettext("Loading posts")}
+              class="shrink-0"
+            >
+              <svg
+                class="h-3.5 w-3.5 animate-spin text-slate-400 dark:text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4z" />
+              </svg>
+            </span>
+          </.social_link>
+        </li>
+      </ul>
+    </div>
+    """
+  end
 
   @doc """
   Wraps a social-media entry in an outbound link (`target=_blank`, `rel="me
