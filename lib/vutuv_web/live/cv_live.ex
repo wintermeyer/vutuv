@@ -371,7 +371,7 @@ defmodule VutuvWeb.CVLive do
           </.card>
 
           <.card :if={@cv.social_media != []}>
-            <.heading_toggle hide={@hide} key="social_media">{gettext("Social Media")}</.heading_toggle>
+            <.heading_toggle hide={@hide} key="social_media">{gettext("Profiles")}</.heading_toggle>
             <div class={["mt-3 space-y-1", shown?(@hide, "social_media") || "opacity-40"]}>
               <label
                 :for={account <- @cv.social_media}

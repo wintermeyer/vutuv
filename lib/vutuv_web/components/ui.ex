@@ -2591,7 +2591,7 @@ defmodule VutuvWeb.UI do
          {gettext("Certificates & licenses"), ~p"/settings/qualifications", :qualifications},
          {gettext("Languages"), ~p"/settings/languages", :languages},
          {gettext("Links"), ~p"/settings/links", :links},
-         {gettext("Social Media"), ~p"/settings/social_media_accounts", :social},
+         {gettext("Profiles"), ~p"/settings/social_media_accounts", :social},
          {gettext("Email addresses"), ~p"/settings/emails", :emails},
          {gettext("Phone numbers"), ~p"/settings/phone_numbers", :phones},
          {gettext("Addresses"), ~p"/settings/addresses", :addresses},

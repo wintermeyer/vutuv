@@ -179,7 +179,7 @@ defmodule VutuvWeb.CV.Latex do
       end)
 
     """
-    \\section*{#{esc(gettext("Social Media"))}}
+    \\section*{#{esc(gettext("Profiles"))}}
     #{items}
     """
   end

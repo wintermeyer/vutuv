@@ -90,7 +90,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp index_title(:links, name), do: gettext("Links of %{name}", name: name)
 
   defp index_title(:social_media_accounts, name),
-    do: gettext("Social media accounts of %{name}", name: name)
+    do: gettext("Profiles of %{name}", name: name)
 
   defp index_title(:addresses, name), do: gettext("Addresses of %{name}", name: name)
   defp index_title(:phone_numbers, name), do: gettext("Phone numbers of %{name}", name: name)

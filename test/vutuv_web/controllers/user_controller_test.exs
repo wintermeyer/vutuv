@@ -718,7 +718,7 @@ defmodule VutuvWeb.UserControllerTest do
           "Add a link",
           "Add a phone number",
           "Add an address",
-          "Add a social media account"
+          "Add a profile"
         ] do
       assert html =~ label
     end

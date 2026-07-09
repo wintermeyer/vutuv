@@ -219,7 +219,7 @@ defmodule VutuvWeb.CV.Docx do
         paragraph("#{account.provider}: #{account.url || account.handle}")
       end
 
-    [paragraph(gettext("Social Media"), style: "Heading1") | lines]
+    [paragraph(gettext("Profiles"), style: "Heading1") | lines]
   end
 
   # One paragraph; newlines in the text become soft line breaks.

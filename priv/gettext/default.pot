@@ -678,6 +678,37 @@ msgstr ""
 msgid "Profiles"
 msgstr ""
 
+#: lib/vutuv_web/templates/social_media_account/manage.html.heex:8
+#: lib/vutuv_web/templates/user/show.html.heex:854
+#, elixir-autogen, elixir-format
+msgid "Add a profile"
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/section_docs.ex:93
+#, elixir-autogen, elixir-format
+msgid "Profiles of %{name}"
+msgstr ""
+
+#: lib/vutuv_web/controllers/social_media_account_controller.ex:78
+#, elixir-autogen, elixir-format
+msgid "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+msgstr ""
+
+#: lib/vutuv_web/controllers/social_media_account_controller.ex:82
+#, elixir-autogen, elixir-format
+msgid "Profile created successfully."
+msgstr ""
+
+#: lib/vutuv_web/controllers/social_media_account_controller.ex:121
+#, elixir-autogen, elixir-format
+msgid "Profile updated successfully."
+msgstr ""
+
+#: lib/vutuv_web/controllers/social_media_account_controller.ex:132
+#, elixir-autogen, elixir-format
+msgid "Profile deleted successfully."
+msgstr ""
+
 #: lib/vutuv_web/views/user_html.ex:372
 #, elixir-autogen, elixir-format
 msgid "Social networks"

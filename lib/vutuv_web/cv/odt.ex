@@ -185,7 +185,7 @@ defmodule VutuvWeb.CV.Odt do
     lines =
       for account <- accounts, do: p("#{account.provider}: #{account.url || account.handle}")
 
-    [heading(gettext("Social Media")) | lines]
+    [heading(gettext("Profiles")) | lines]
   end
 
   defp heading(text) do

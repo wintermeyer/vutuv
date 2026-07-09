@@ -39,7 +39,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
       user: user,
       social_media_accounts: user.social_media_accounts,
       as_owner?: true,
-      page_title: gettext("Social Media")
+      page_title: gettext("Profiles")
     )
   end
 
@@ -75,11 +75,11 @@ defmodule VutuvWeb.SocialMediaAccountController do
           case social_media_account.provider do
             "GitHub" ->
               gettext(
-                "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+                "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
               )
 
             _ ->
-              gettext("Social media account created successfully.")
+              gettext("Profile created successfully.")
           end
 
         conn
@@ -118,7 +118,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
     with {:ok, updated} <- result, do: CodeStats.refresh_if_stale(updated)
 
     ControllerHelpers.save(conn, result,
-      flash: gettext("Social media account updated successfully."),
+      flash: gettext("Profile updated successfully."),
       redirect_to: ~p"/settings/social_media_accounts",
       render: "edit.html",
       assigns: [social_media_account: social_media_account]
@@ -129,7 +129,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
 
     ControllerHelpers.delete(conn, social_media_account,
-      flash: gettext("Social media account deleted successfully."),
+      flash: gettext("Profile deleted successfully."),
       redirect_to: ~p"/settings/social_media_accounts"
     )
   end

@@ -227,7 +227,7 @@ defmodule VutuvWeb.CV.Html do
 
     """
     <section>
-    <h2>#{esc(gettext("Social Media"))}</h2>
+    <h2>#{esc(gettext("Profiles"))}</h2>
     <ul class="links">#{items}</ul>
     </section>
     """

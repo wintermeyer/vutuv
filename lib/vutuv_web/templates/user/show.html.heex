@@ -851,7 +851,7 @@ the resulting ~200px rail width. --%>
     >
       <.section_header title={gettext("Profiles")} />
       <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/settings/social_media_accounts/new"}>
-        {gettext("Add a social media account")}
+        {gettext("Add a profile")}
       </.empty_add>
 
       <%!-- Two labeled buckets — real social networks vs code forges (GitHub,

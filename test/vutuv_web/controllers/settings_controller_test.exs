@@ -135,6 +135,7 @@ defmodule VutuvWeb.SettingsControllerTest do
 
       for {path, title} <- [
             {~p"/settings/profile", "Edit profile"},
+            {~p"/settings/social_media_accounts", "Profiles"},
             {~p"/settings/privacy", "Privacy settings"},
             {~p"/settings/notifications", "Notification settings"},
             {~p"/settings/apps", "Apps &amp; API"},

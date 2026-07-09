@@ -31,7 +31,7 @@ defmodule VutuvWeb.SocialMediaFormI18nTest do
 
     flash =
       de(
-        "Social media account created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
+        "Profile created successfully. BTW: Did you know that the vutuv repo is hosted on GitHub? https://github.com/wintermeyer/vutuv"
       )
 
     assert flash =~ "Wussten Sie, dass der"
