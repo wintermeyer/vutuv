@@ -90,6 +90,20 @@ inviter's chosen language, quoting the personal note only when present. It is
 **not** flagged user-initiated, so bounce suppression still applies (a
 previously-undeliverable address is not mailed again).
 
+The personal note is **Markdown**. In the HTML body it is rendered by
+`VutuvWeb.EmailMarkdown` (the `<.email_markdown>` component in
+`VutuvWeb.EmailComponents`), the fuller sibling of the post/chat renderer
+`VutuvWeb.Markdown`: bare URLs autolink and keep their **full** text (so a
+pasted link is clickable and shown in full — the post renderer's host-only
+truncation and heading-flattening are exactly the "limitations" an invitation
+should not have), and the whole standard Markdown set renders (headings, lists,
+blockquotes, tables, code, bold/italic, links). Safety is unchanged: raw HTML
+the writer types is escaped to literal text, the output is run through
+`HtmlSanitizeEx`, links open in a new tab, and images are dropped (an invitation
+must not embed a remote tracking pixel). The plain-text alternative carries the
+raw Markdown source, which reads fine as-is. The same rendered HTML is shown
+back to the inviter on the "sent" page, inside a sandboxed preview iframe.
+
 ## Configuration
 
 `config :vutuv, :invitation_daily_cap` (default `50`) — the per-member daily cap.

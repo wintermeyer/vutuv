@@ -9792,8 +9792,9 @@ msgstr "Nachname"
 
 #: lib/vutuv_web/templates/invitation/new.html.heex:85
 #, elixir-autogen, elixir-format
-msgid "Optional. Shown inside the invitation email."
-msgstr "Optional. Wird in der Einladungs-E-Mail angezeigt."
+msgid "Optional. Shown inside the invitation email. Markdown is supported."
+msgstr ""
+"Optional. Wird in der Einladungs-E-Mail angezeigt. Markdown wird unterstützt."
 
 #: lib/vutuv_web/templates/invitation/new.html.heex:71
 #, elixir-autogen, elixir-format

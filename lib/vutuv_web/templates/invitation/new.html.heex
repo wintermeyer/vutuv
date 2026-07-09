@@ -82,7 +82,7 @@
             "aria-invalid": f.errors[:message] && "true"
           )}
           <p :if={!f.errors[:message]} class={hint_class}>
-            {gettext("Optional. Shown inside the invitation email.")}
+            {gettext("Optional. Shown inside the invitation email. Markdown is supported.")}
           </p>
           {error_tag(f, :message)}
         </div>

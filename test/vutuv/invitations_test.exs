@@ -84,6 +84,27 @@ defmodule Vutuv.InvitationsTest do
       end)
     end
 
+    test "renders the message as Markdown in the HTML email — a link becomes clickable", %{
+      inviter: inviter
+    } do
+      url = "https://vutuv.de/oliverandrich/posts/019f480d-db7f-77a1-8841-fc517455f42f"
+
+      assert {:ok, :sent, _} =
+               Invitations.deliver_invitation(
+                 inviter,
+                 valid_attrs(%{"message" => "Jump into **this**: #{url}"})
+               )
+
+      assert_email_sent(fn email ->
+        # The HTML body turns the bare URL into a real anchor and renders the
+        # Markdown emphasis.
+        assert email.html_body =~ ~s(href="#{url}")
+        assert email.html_body =~ "<strong>this</strong>"
+        # The plain-text alternative keeps the raw Markdown source (readable as-is).
+        assert email.text_body =~ url
+      end)
+    end
+
     test "greets a known gender with a personal salutation", %{inviter: inviter} do
       assert {:ok, :sent, _} =
                Invitations.deliver_invitation(

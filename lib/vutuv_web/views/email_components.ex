@@ -25,6 +25,7 @@ defmodule VutuvWeb.EmailComponents do
   import VutuvWeb.UserHelpers
 
   alias Phoenix.HTML.Safe
+  alias VutuvWeb.EmailMarkdown
 
   # Brand/slate palette, mirrored from assets/css/app.css @theme so HTML mail
   # looks like the product. Dark-mode counterparts live in the <style> block.
@@ -77,6 +78,18 @@ defmodule VutuvWeb.EmailComponents do
           a { color: #1d4ed8; }
           .preheader { display: none !important; }
 
+          /* Rendered-Markdown message body (the invitation's personal note). Trim
+             the first/last block margins so the panel padding stays even, cap
+             heading size, and keep links blue. */
+          .email-msg > :first-child { margin-top: 0 !important; }
+          .email-msg > :last-child { margin-bottom: 0 !important; }
+          .email-msg p { margin: 0 0 12px; }
+          .email-msg h1, .email-msg h2, .email-msg h3, .email-msg h4 { margin: 16px 0 8px; font-size: 17px; line-height: 1.35; font-weight: 700; }
+          .email-msg ul, .email-msg ol { margin: 0 0 12px; padding-left: 22px; }
+          .email-msg blockquote { margin: 0 0 12px; padding: 0 0 0 12px; border-left: 3px solid #cbd5e1; color: #475569; }
+          .email-msg pre { overflow-x: auto; }
+          .email-msg a { color: #1d4ed8; }
+
           @media only screen and (max-width: 620px) {
             .email-container { width: 100% !important; max-width: 100% !important; }
             .email-card { padding: 24px !important; border-radius: 12px !important; }
@@ -92,6 +105,8 @@ defmodule VutuvWeb.EmailComponents do
             .email-a { color: #93c5fd !important; }
             .email-pin { background: #172554 !important; border-color: #1e3a8a !important; color: #dbeafe !important; }
             .email-panel { background: #0b1220 !important; border-color: #1e293b !important; }
+            .email-msg a { color: #93c5fd !important; }
+            .email-msg blockquote { border-color: #334155 !important; color: #94a3b8 !important; }
             .email-divider td { border-color: #1e293b !important; }
             .email-footer, .email-footer a { color: #94a3b8 !important; }
           }
@@ -219,6 +234,30 @@ defmodule VutuvWeb.EmailComponents do
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1d4ed8;border-radius:8px;">
       <tr>
         <td class="email-text" style={quote_style()}>{@body}</td>
+      </tr>
+    </table>
+    """
+  end
+
+  @doc """
+  A **Markdown** message body — the personal note a member writes in an
+  invitation (`Vutuv.Invitations`). Same branded left-rule panel as
+  `email_quote/1`, but its body is rendered from Markdown to HTML by
+  `VutuvWeb.EmailMarkdown`, so links are clickable and formatting shows. Use
+  `email_quote/1` (literal, pre-wrapped text) for a quoted DM; use this for text
+  the writer means as Markdown.
+  """
+  attr(:body, :string, required: true)
+
+  def email_markdown(assigns) do
+    assigns = assign(assigns, :html, EmailMarkdown.render(assigns.body))
+
+    ~H"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 20px;background:#f8fafc;border:1px solid #e2e8f0;border-left:4px solid #1d4ed8;border-radius:8px;">
+      <tr>
+        <td class="email-text" style={markdown_quote_style()}>
+          <div class="email-msg">{@html}</div>
+        </td>
       </tr>
     </table>
     """
@@ -352,6 +391,12 @@ defmodule VutuvWeb.EmailComponents do
   defp quote_style,
     do:
       "padding:14px 18px;font-family:#{@font};font-size:15px;line-height:1.6;color:#334155;white-space:pre-wrap;word-break:break-word;"
+
+  # Like quote_style/0 but without white-space:pre-wrap — the rendered Markdown
+  # is block HTML that manages its own line breaks and spacing.
+  defp markdown_quote_style,
+    do:
+      "padding:14px 18px;font-family:#{@font};font-size:15px;line-height:1.6;color:#334155;word-break:break-word;"
 
   defp list_style,
     do:

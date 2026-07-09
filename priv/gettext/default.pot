@@ -9753,7 +9753,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/invitation/new.html.heex:85
 #, elixir-autogen, elixir-format
-msgid "Optional. Shown inside the invitation email."
+msgid "Optional. Shown inside the invitation email. Markdown is supported."
 msgstr ""
 
 #: lib/vutuv_web/templates/invitation/new.html.heex:71

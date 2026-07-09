@@ -6,7 +6,7 @@
   </.email_p>
   <%= if @message do %>
     <.email_p>Along with a personal message:</.email_p>
-    <.email_quote body={@message} />
+    <.email_markdown body={@message} />
   <% end %>
   <.email_p>
     vutuv accounts are free. Creating your profile takes about a minute. We have already
