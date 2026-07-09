@@ -295,8 +295,11 @@ defmodule VutuvWeb.SessionController do
     end
   end
 
+  # The typed code is checked as the emailed PIN first and then, for members
+  # who set one up (issue #912), as an authenticator-app or one-time-list code
+  # — same field, same failure handling (Accounts.check_login_code/2).
   defp verify_login_pin(conn, email, pin, context) do
-    case Accounts.check_pin(email, pin, "login") do
+    case Accounts.check_login_code(email, pin) do
       # correct, drop cookie, log the user in (unless moderation blocks it)
       {:ok, user} ->
         handle_login(conn, user, context)

@@ -694,6 +694,15 @@ defmodule VutuvWeb.Router do
     post("/passkeys/challenge", PasskeyController, :challenge)
     post("/passkeys", PasskeyController, :create)
     delete("/passkeys/:id", PasskeyController, :delete)
+    # The power-user login codes (issue #912): set up / turn off the
+    # authenticator app (TOTP), and view / (re)generate / delete the printed
+    # one-time code list. Both work in the login PIN field.
+    get("/totp/new", TotpController, :new)
+    post("/totp", TotpController, :create)
+    delete("/totp", TotpController, :delete)
+    get("/login_codes", LoginCodeController, :index)
+    post("/login_codes", LoginCodeController, :create)
+    delete("/login_codes", LoginCodeController, :delete)
     # The export area moved to the profile (/:slug/export, where issue #841
     # put the formatted CV beside the GDPR download); the settings-era URLs
     # redirect so bookmarks keep working.

@@ -4,7 +4,7 @@ defmodule Vutuv.MixProject do
   def project do
     [
       app: :vutuv,
-      version: "7.75.1",
+      version: "7.76.0",
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -91,6 +91,12 @@ defmodule Vutuv.MixProject do
       # registration and authentication ceremonies (see Vutuv.Credentials). The
       # browser ceremony is plain JS in assets/js/webauthn.js. Pulls cbor/x509.
       {:wax_, "~> 0.7"},
+
+      # Authenticator-app login codes (issue #912): RFC 6238 TOTP generation and
+      # verification (see Vutuv.LoginCodes), plus the QR code the member scans
+      # at enrolment, rendered server-side as SVG (works air-gapped).
+      {:nimble_totp, "~> 1.0"},
+      {:eqrcode, "~> 0.2"},
 
       # File uploads / image processing (libvips via vix)
       {:image, "~> 0.67"},

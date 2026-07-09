@@ -27,9 +27,10 @@ defmodule VutuvWeb.ConnectionVocabularyTest do
   test "the connection entity and state use the vernetzen family" do
     # Vernetzt is a mutual follow now (no request/accept), so the request-flow
     # strings are gone; the relationship noun and state stay on this family.
+    # "Connections only" left this list when the composer's audience selector
+    # was removed and a gettext extract pruned the dead msgid from the catalog.
     assert de("Connections") == "Vernetzungen"
     assert de("Connection") == "Vernetzung"
-    assert de("Connections only") == "Nur Vernetzungen"
     assert de("No connections yet.") == "Noch keine Vernetzungen."
     assert Gettext.ngettext(@backend, "connection", "connections", 2) == "Vernetzungen"
 
@@ -48,7 +49,6 @@ defmodule VutuvWeb.ConnectionVocabularyTest do
     connection_strings = [
       de("Connections"),
       de("Connection"),
-      de("Connections only"),
       de("No connections yet."),
       de("Connections of %{name}", name: "Erika"),
       de("This post is for the connections of %{name}", name: "Erika"),

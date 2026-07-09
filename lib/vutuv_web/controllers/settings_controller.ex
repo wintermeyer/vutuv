@@ -31,6 +31,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Credentials
+  alias Vutuv.LoginCodes
   alias Vutuv.Sessions
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
@@ -71,12 +72,16 @@ defmodule VutuvWeb.SettingsController do
   # passkeys — the credential cluster, on one focused page.
   def security(conn, _params) do
     user = conn.assigns[:user]
+    login_codes = LoginCodes.list_codes(user)
 
     render(conn, "security.html",
       user: user,
       sessions: Sessions.list_active(user),
       current_session_id: conn.assigns[:current_session_id],
       passkeys: Credentials.list_for_user(user),
+      totp_enabled?: LoginCodes.totp_enabled?(user),
+      list_codes_total: length(login_codes),
+      list_codes_unused: Enum.count(login_codes, &is_nil(&1.used_at)),
       page_title: gettext("Sign-in & security")
     )
   end

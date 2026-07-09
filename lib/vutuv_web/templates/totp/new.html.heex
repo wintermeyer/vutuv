@@ -1,0 +1,60 @@
+<.page_header
+  title={gettext("Authenticator app")}
+  crumbs={[
+    {gettext("Settings"), ~p"/settings"},
+    {gettext("Sign-in & security"), ~p"/settings/security"},
+    gettext("Authenticator app")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext(
+        "Scan this QR code with an authenticator app (for example FreeOTP, Google Authenticator or 1Password). The app then shows a fresh 6-digit code every 30 seconds."
+      )}
+      {gettext(
+        "When you log in, that code works in the PIN field, so you don't have to wait for the emailed PIN. The emailed PIN keeps working as before."
+      )}
+    </p>
+
+    <%!-- Always white, also in dark mode: camera scanners need the contrast. --%>
+    <div id="totp-qr" class="mt-4 w-56 rounded-lg bg-white p-3 ring-1 ring-slate-200 dark:ring-slate-700">
+      {qr_svg(@otpauth_uri)}
+    </div>
+
+    <p class="editform__hint mt-3">
+      {gettext("Can't scan the code? Enter this key in your app instead:")}
+      <code class="select-all break-all">{@manual_secret}</code>
+    </p>
+
+    <.form
+      :let={f}
+      for={%{}}
+      as={:totp}
+      action={~p"/settings/totp"}
+      method="post"
+      id="totp-confirm-form"
+      class="mt-6 space-y-4"
+    >
+      <div>
+        <label
+          for={f[:code].id}
+          class="block text-sm font-medium text-slate-900 dark:text-white"
+        >
+          {gettext("To finish, enter the code your app shows now")}
+        </label>
+        <div class="mt-1 sm:max-w-xs">
+          <%= text_input(f, :code,
+            class: input_class(),
+            autofocus: true,
+            autocomplete: "one-time-code",
+            inputmode: "numeric",
+            placeholder: "123456"
+          ) %>
+        </div>
+      </div>
+      <.button type="submit">{gettext("Turn on")}</.button>
+    </.form>
+  </section>
+</div>

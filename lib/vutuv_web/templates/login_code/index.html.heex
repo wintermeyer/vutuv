@@ -1,0 +1,69 @@
+<.page_header
+  title={gettext("One-time code list")}
+  crumbs={[
+    {gettext("Settings"), ~p"/settings"},
+    {gettext("Sign-in & security"), ~p"/settings/security"},
+    gettext("One-time code list")
+  ]}
+/>
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext(
+        "A one-time code list is a printed backup for logging in: each code signs you in exactly once, typed into the PIN field at login instead of the emailed PIN."
+      )}
+      {gettext(
+        "Keep it somewhere safe, like your wallet. If you lose it, nothing is lost: the emailed PIN always keeps working, and you can generate a new list here at any time."
+      )}
+    </p>
+
+    <%= if @codes == [] do %>
+      <p class="card__empty">{gettext("You don't have a code list yet.")}</p>
+
+      <.form for={%{}} action={~p"/settings/login_codes"} method="post" id="generate-codes-form" class="mt-4">
+        <.button type="submit">{gettext("Generate code list")}</.button>
+      </.form>
+    <% else %>
+      <ol id="login-code-list" class="mt-5 grid max-w-md grid-cols-2 gap-x-8 gap-y-2">
+        <li :for={code <- @codes} class="tabular-nums">
+          <code class={[
+            "text-base",
+            if(code.used_at,
+              do: "text-slate-600 line-through opacity-60 dark:text-slate-400",
+              else: "text-slate-900 dark:text-slate-100"
+            )
+          ]}>{code.code}</code>
+          <span :if={code.used_at} class="ml-1 text-xs text-slate-600 dark:text-slate-400">
+            {gettext("used")}
+          </span>
+        </li>
+      </ol>
+
+      <p class="editform__hint mt-4">
+        {gettext("Print this page or write the codes down. Crossed-out codes have been used.")}
+      </p>
+
+      <div class="mt-4 flex flex-wrap items-center gap-4">
+        <.form for={%{}} action={~p"/settings/login_codes"} method="post" id="regenerate-codes-form">
+          <.button
+            type="submit"
+            variant="secondary"
+            data-confirm={gettext("Replace your list? All current codes stop working immediately.")}
+          >
+            {gettext("Generate a new list")}
+          </.button>
+        </.form>
+        <.link
+          href={~p"/settings/login_codes"}
+          method="delete"
+          data-confirm={gettext("Delete your code list? All its codes stop working immediately.")}
+          class="text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+          id="delete-codes-link"
+        >
+          {gettext("Delete the list")}
+        </.link>
+      </div>
+    <% end %>
+  </section>
+</div>

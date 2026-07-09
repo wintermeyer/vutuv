@@ -116,6 +116,67 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
       </p>
     </.card>
 
+    <%!-- Login codes (issue #912): the power-user alternatives to the emailed
+          PIN — a code from an authenticator app (TOTP) or from a printed
+          one-time code list, typed into the normal PIN field at login. Both
+          are optional extras: the emailed PIN always keeps working, so there
+          is nothing here a member can lock themselves out with. --%>
+    <.card>
+      <.section_title>{gettext("Login codes")}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {gettext(
+          "Sign in with a code from an authenticator app or from a printed one-time code list, typed into the normal PIN field. Your emailed PIN always keeps working."
+        )}
+      </p>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <li class="flex items-center justify-between gap-4 py-3" id="totp-row">
+          <span class="min-w-0">
+            <span class="block font-medium text-slate-900 dark:text-white">
+              {gettext("Authenticator app")}
+            </span>
+            <span class="block text-sm text-slate-600 dark:text-slate-400">
+              {if @totp_enabled?, do: gettext("Turned on."), else: gettext("Not set up.")}
+            </span>
+          </span>
+          <%= if @totp_enabled? do %>
+            <.link
+              href={~p"/settings/totp"}
+              method="delete"
+              data-confirm={
+                gettext(
+                  "Turn off the authenticator app? Its codes stop working at login; the emailed PIN is unaffected."
+                )
+              }
+              class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            >
+              {gettext("Turn off")}
+            </.link>
+          <% else %>
+            <.link
+              navigate={~p"/settings/totp/new"}
+              class="shrink-0 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+            >
+              {gettext("Set up")}
+            </.link>
+          <% end %>
+        </li>
+        <.account_row
+          title={gettext("One-time code list")}
+          subtitle={
+            if @list_codes_total > 0,
+              do:
+                gettext("%{unused} of %{total} codes unused.",
+                  unused: compact_count(@list_codes_unused),
+                  total: compact_count(@list_codes_total)
+                ),
+              else: gettext("Not set up.")
+          }
+          href={~p"/settings/login_codes"}
+          label={if @list_codes_total > 0, do: gettext("Manage"), else: gettext("Set up")}
+        />
+      </ul>
+    </.card>
+
     <%!-- Permanent profile link (issue #904): a username-independent URL that
           redirects to this member's current profile, so a link built from it
           survives a future username change. Read-only, nothing to configure.

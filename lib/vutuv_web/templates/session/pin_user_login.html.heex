@@ -15,6 +15,14 @@
     {gettext("Please check your spam folder in case you don't find the email in your inbox.")}
   </p>
 
+  <%!-- Issue #912: shown only to members who set up an authenticator app or a
+        one-time code list (see SessionHTML.alternative_codes?/1). --%>
+  <p :if={alternative_codes?(@conn)} id="alternative-codes-hint" class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+    {gettext(
+      "A code from your authenticator app or your one-time code list also works here, instead of the emailed PIN."
+    )}
+  </p>
+
   <.pin_actions />
 
   <%= if dev_mailbox?() do %>

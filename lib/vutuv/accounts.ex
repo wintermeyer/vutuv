@@ -18,6 +18,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.User
   alias Vutuv.Accounts.UsernameChange
   alias Vutuv.Deliverability
+  alias Vutuv.LoginCodes
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
@@ -238,15 +239,19 @@ defmodule Vutuv.Accounts do
   defp advance_to_pin_screen(conn, email, notify) do
     email = String.downcase(email)
 
-    user =
-      User
-      |> join(:inner, [u], e in assoc(u, :emails))
-      |> where([u, e], e.value == ^email)
-      |> Repo.one()
-
-    if user, do: notify.(user, email)
+    if user = user_by_email(email), do: notify.(user, email)
 
     {:ok, put_pin_cookie(reset_login_session(conn), email)}
+  end
+
+  # The account owning `email` (case-insensitive), or nil.
+  defp user_by_email(email) do
+    email = String.downcase(email)
+
+    User
+    |> join(:inner, [u], e in assoc(u, :emails))
+    |> where([u, e], e.value == ^email)
+    |> Repo.one()
   end
 
   # Reset the session at the start of a login attempt **without dropping it**.
@@ -746,6 +751,48 @@ defmodule Vutuv.Accounts do
     end
 
     result
+  end
+
+  @doc """
+  Step 2 of the login, the code the visitor typed into the PIN field: first
+  checked as the emailed PIN, then (issue #912) as one of the member's
+  alternative login codes — a code from their authenticator app or an unused
+  code from their one-time code list (`Vutuv.LoginCodes`).
+
+  Alternate codes only ever *add* a success path: on any alternate failure
+  this returns exactly what the PIN check returned, so the error messages,
+  the attempt counters, the lockout and the enumeration-safety of the PIN
+  flow are unchanged (an unknown address still reads as a plain wrong PIN).
+  A valid alternate code even after the emailed PIN expired or locked out is
+  deliberate — it proves a strong enrolled credential, not a lucky guess
+  (~39-bit codes / a replay-proof TOTP vs the 6-digit PIN the lockout guards).
+  """
+  def check_login_code(email, code) when is_binary(email) do
+    case check_pin(email, code, "login") do
+      {:ok, _user} = ok -> ok
+      fallback -> redeem_alternate_code(email, code, fallback)
+    end
+  end
+
+  defp redeem_alternate_code(email, code, fallback) do
+    with %User{} = user <- user_by_email(email),
+         :ok <- LoginCodes.redeem_login_code(user, code) do
+      # An alternate-code login ends the outstanding emailed PIN: the member
+      # is in, so the PIN still sitting in their inbox must not stay live.
+      # (No Bounces.clear/1 here — unlike a typed-back PIN, an alternate code
+      # proves nothing about email deliverability.)
+      consume_outstanding_login_pin(user)
+      {:ok, user}
+    else
+      _ -> fallback
+    end
+  end
+
+  defp consume_outstanding_login_pin(user) do
+    case Repo.one(from(m in LoginPin, where: m.user_id == ^user.id and m.type == ^"login")) do
+      %LoginPin{consumed_at: nil} = pin -> mark_consumed(pin)
+      _ -> :ok
+    end
   end
 
   @doc """
