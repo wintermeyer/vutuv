@@ -9994,3 +9994,87 @@ msgstr "Tags durchsuchen"
 #, elixir-autogen, elixir-format
 msgid "name or slug"
 msgstr "Name oder Slug"
+
+#, elixir-autogen, elixir-format
+msgid "%{action} (%{reason})"
+msgstr "%{action} (%{reason})"
+
+#, elixir-autogen, elixir-format
+msgid "Account deactivated and marked as spam."
+msgstr "Konto deaktiviert und als Spam markiert."
+
+#, elixir-autogen, elixir-format
+msgid "Account deactivated and marked as spam. Restore it from the member browser if this was wrong."
+msgstr "Konto deaktiviert und als Spam markiert. Über die Mitgliederliste wiederherstellen, falls das falsch war."
+
+#, elixir-autogen, elixir-format
+msgid "Account deleted."
+msgstr "Konto gelöscht."
+
+#, elixir-autogen, elixir-format
+msgid "Account removed"
+msgstr "Konto entfernt"
+
+#, elixir-autogen, elixir-format
+msgid "Account restored. The member can sign in again."
+msgstr "Konto wiederhergestellt. Das Mitglied kann sich wieder anmelden."
+
+#, elixir-autogen, elixir-format
+msgid "Accounts removed as spam"
+msgstr "Als Spam entfernte Konten"
+
+#, elixir-autogen, elixir-format
+msgid "Clear-cut spam or abuse?"
+msgstr "Eindeutiger Spam oder Missbrauch?"
+
+#, elixir-autogen, elixir-format
+msgid "Could not restore this member."
+msgstr "Dieses Mitglied konnte nicht wiederhergestellt werden."
+
+#, elixir-autogen, elixir-format
+msgid "Deactivate @%{slug} and mark the account as spam?"
+msgstr "@%{slug} deaktivieren und das Konto als Spam markieren?"
+
+#, elixir-autogen, elixir-format
+msgid "Deactivate account"
+msgstr "Konto deaktivieren"
+
+#, elixir-autogen, elixir-format
+msgid "Permanently DELETE @%{slug} and everything they posted? This cannot be undone."
+msgstr "@%{slug} und alle Beiträge dauerhaft LÖSCHEN? Das kann nicht rückgängig gemacht werden."
+
+#, elixir-autogen, elixir-format
+msgid "Remove the account outright, skipping the warning ladder. Deactivating marks it as spam and is reversible from the member browser; deleting is permanent."
+msgstr "Das Konto direkt entfernen, ohne die Verwarnungsstufen. Das Deaktivieren markiert es als Spam und ist über die Mitgliederliste umkehrbar; das Löschen ist endgültig."
+
+#, elixir-autogen, elixir-format
+msgid "Removed as spam"
+msgstr "Als Spam entfernt"
+
+#, elixir-autogen, elixir-format
+msgid "Restore"
+msgstr "Wiederherstellen"
+
+#, elixir-autogen, elixir-format
+msgid "Restore this account so the member can sign in again?"
+msgstr "Dieses Konto wiederherstellen, damit sich das Mitglied wieder anmelden kann?"
+
+#, elixir-autogen, elixir-format
+msgid "Spam"
+msgstr "Spam"
+
+#, elixir-autogen, elixir-format
+msgid "Thank you for your report. Our moderators have been notified and will review this account."
+msgstr "Danke für Ihre Meldung. Unsere Moderatoren wurden benachrichtigt und prüfen dieses Konto."
+
+#, elixir-autogen, elixir-format
+msgid "deactivated"
+msgstr "deaktiviert"
+
+#, elixir-autogen, elixir-format
+msgid "deleted"
+msgstr "gelöscht"
+
+#, elixir-autogen, elixir-format
+msgid "To protect you, the connection between you and the reported member is paused - no contact in either direction, including messages. If our admins find the report unfounded, this is undone."
+msgstr "Zu Ihrem Schutz ist die Vernetzung zwischen Ihnen und dem gemeldeten Mitglied pausiert - kein Kontakt in beide Richtungen, einschließlich Nachrichten. Stufen unsere Admins die Meldung als unbegründet ein, wird das rückgängig gemacht."

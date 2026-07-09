@@ -46,8 +46,22 @@ defmodule Vutuv.Reports do
       bounces: deliverability.bounces,
       deactivations: deliverability.deactivations,
       freezes: deliverability.freezes,
-      thaws: deliverability.thaws
+      thaws: deliverability.thaws,
+      spam_removals: count_spam_removals(day_start, day_end)
     }
+  end
+
+  # Accounts an admin removed as spam from a moderation case that day. Counts the
+  # surviving `owner_removed` audit events: a deactivation leaves one behind (the
+  # reversible removals worth a glance), while a deletion cascade-erases its case
+  # and event, so those are surfaced individually by the operator delete email
+  # (`Vutuv.Accounts.admin_delete_user/1`) instead.
+  defp count_spam_removals(day_start, day_end) do
+    from(e in Vutuv.Moderation.Event,
+      where: e.action == "owner_removed",
+      where: e.inserted_at >= ^day_start and e.inserted_at < ^day_end
+    )
+    |> Repo.aggregate(:count)
   end
 
   @doc """

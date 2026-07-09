@@ -30,6 +30,7 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def event_label("escalated_deadline"), do: gettext("Escalated - the 72h deadline passed")
   def event_label("upheld"), do: gettext("Report upheld")
   def event_label("rejected"), do: gettext("Report rejected")
+  def event_label("owner_removed"), do: gettext("Account removed")
   def event_label("strike_issued"), do: gettext("Strike issued")
   def event_label("evidence_captured"), do: gettext("Evidence screenshot captured")
   def event_label(other), do: other
@@ -47,6 +48,21 @@ defmodule VutuvWeb.Admin.ModerationHTML do
       end
 
     gettext("level %{level}, %{role}", level: level, role: role_label)
+  end
+
+  def event_detail("owner_removed", %{"action" => action} = detail) do
+    reason = detail["reason"]
+
+    action_label =
+      case action do
+        "deactivate" -> gettext("deactivated")
+        "delete" -> gettext("deleted")
+        other -> other
+      end
+
+    if reason in [nil, ""],
+      do: action_label,
+      else: gettext("%{action} (%{reason})", action: action_label, reason: reason)
   end
 
   def event_detail("relationship_severed", detail) do

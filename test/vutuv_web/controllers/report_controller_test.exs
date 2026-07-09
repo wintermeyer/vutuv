@@ -139,5 +139,19 @@ defmodule VutuvWeb.ReportControllerTest do
       assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "Thank you"
       assert %Case{content_type: "user", status: "flagged"} = Repo.one(Case)
     end
+
+    test "reporting a profile reassures the reporter that moderators will review it", %{
+      conn: conn,
+      author: author
+    } do
+      {conn, _me} = create_and_login_user(conn)
+
+      conn =
+        post(conn, ~p"/reports", %{
+          "report" => %{"type" => "user", "id" => author.id, "category" => "spam"}
+        })
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "moderators"
+    end
   end
 end

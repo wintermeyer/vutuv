@@ -11,6 +11,7 @@ defmodule VutuvWeb.Admin.ModerationLiveTest do
 
   import Phoenix.LiveViewTest
 
+  alias Vutuv.Accounts.User
   alias Vutuv.Moderation
   alias Vutuv.Moderation.{Case, Report, Strike}
 
@@ -102,6 +103,29 @@ defmodule VutuvWeb.Admin.ModerationLiveTest do
       assert_redirect(lv, ~p"/admin/moderation")
       assert Repo.get!(Report, report.id).abusive?
       assert [%Strike{role: "reporter"}] = Repo.all(Strike.where_user(reporter.id))
+    end
+
+    test "deactivate removes the owner outright, marks spam, no strike, no reload", %{conn: conn} do
+      {case_record, _post, owner, _reporter} = escalated_case()
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/moderation/#{case_record.id}")
+      lv |> element("#remove-deactivate") |> render_click()
+
+      assert_redirect(lv, ~p"/admin/moderation")
+      user = Repo.get!(User, owner.id)
+      assert user.deactivated_at
+      assert user.moderation_reason == "spam"
+      assert Repo.all(Strike.where_user(owner.id)) == []
+    end
+
+    test "delete erases the account and drops back to the queue", %{conn: conn} do
+      {case_record, _post, owner, _reporter} = escalated_case()
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/moderation/#{case_record.id}")
+      lv |> element("#remove-delete") |> render_click()
+
+      assert_redirect(lv, ~p"/admin/moderation")
+      refute Repo.get(User, owner.id)
     end
   end
 end

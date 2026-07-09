@@ -15,6 +15,10 @@
     <.email_row label="Eingefrorene Konten">{@report.freezes}</.email_row>
     <.email_row label="Aufgetaute Konten">{@report.thaws}</.email_row>
   </.email_panel>
+  <.email_p><strong>Moderation</strong></.email_p>
+  <.email_panel>
+    <.email_row label="Als Spam entfernte Konten">{@report.spam_removals}</.email_row>
+  </.email_panel>
   <.email_p>Vollständiger Bericht (mit Zeitreise zu anderen Tagen):</.email_p>
   <.email_button href={"#{@url}admin/reports?date=#{Date.to_iso8601(@report.date)}"}>
     Vollständiger Bericht

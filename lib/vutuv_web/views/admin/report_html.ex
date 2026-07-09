@@ -19,7 +19,8 @@ defmodule VutuvWeb.Admin.ReportHTML do
       {gettext("Bounces"), report.bounces},
       {gettext("Deactivated addresses"), report.deactivations},
       {gettext("Frozen accounts"), report.freezes},
-      {gettext("Thawed accounts"), report.thaws}
+      {gettext("Thawed accounts"), report.thaws},
+      {gettext("Accounts removed as spam"), report.spam_removals}
     ]
   end
 end

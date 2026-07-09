@@ -157,6 +157,49 @@ defmodule VutuvWeb.Admin.UserLiveTest do
     end
   end
 
+  describe "moderation removal" do
+    setup %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      %{conn: conn}
+    end
+
+    test "the spam filter lists removed accounts with a restore button", %{conn: conn} do
+      spammer =
+        insert(:activated_user,
+          username: "spambot",
+          deactivated_at: NaiveDateTime.utc_now(:second),
+          moderation_reason: "spam"
+        )
+
+      insert(:activated_user, username: "cleanmember")
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/users?flag=spam")
+
+      assert render(lv) =~ "spambot"
+      refute render(lv) =~ "cleanmember"
+      assert has_element?(lv, "#restore-#{spammer.id}")
+    end
+
+    test "clicking restore clears the removal in place, no reload", %{conn: conn} do
+      spammer =
+        insert(:activated_user,
+          username: "spambot",
+          deactivated_at: NaiveDateTime.utc_now(:second),
+          moderation_reason: "spam"
+        )
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/users?flag=deactivated")
+
+      lv |> element("#restore-#{spammer.id}") |> render_click()
+
+      refute has_element?(lv, "#restore-#{spammer.id}")
+
+      user = Repo.get!(User, spammer.id)
+      refute user.deactivated_at
+      refute user.moderation_reason
+    end
+  end
+
   describe "pagination" do
     test "pages through when there are more than one page of members", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)

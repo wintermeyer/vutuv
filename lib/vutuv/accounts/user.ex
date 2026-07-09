@@ -129,6 +129,12 @@ defmodule Vutuv.Accounts.User do
     field(:frozen_at, :naive_datetime)
     field(:suspended_until, :naive_datetime)
     field(:deactivated_at, :naive_datetime)
+    # Why the account carries a moderation state, when set by an admin ruling
+    # (e.g. "spam"). Internal only — never rendered publicly, never cast from
+    # params; set alongside deactivated_at by Vutuv.Moderation.remove_owner and
+    # cleared by Vutuv.Accounts.admin_restore_user. Drives the /admin/users
+    # "spam" filter and the daily-report tally.
+    field(:moderation_reason, :string)
     # Deliverability state, managed by Vutuv.Deliverability, never cast from
     # params. unreachable_at: the account has no deliverable email left (every
     # address bounced), so it can never receive a login PIN. The profile is

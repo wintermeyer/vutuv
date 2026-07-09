@@ -102,6 +102,41 @@ defmodule VutuvWeb.Admin.ModerationControllerTest do
     end
   end
 
+  describe "remove (decisive spam ruling)" do
+    test "deactivate marks the account as spam without a strike", %{conn: conn} do
+      {case_record, _post, owner, _reporter} = escalated_case()
+      {conn, _admin} = create_and_login_admin(conn)
+
+      conn =
+        post(conn, ~p"/admin/moderation/#{case_record.id}/remove", %{"action" => "deactivate"})
+
+      assert redirected_to(conn) == ~p"/admin/moderation"
+      user = Repo.get!(Vutuv.Accounts.User, owner.id)
+      assert user.deactivated_at
+      assert user.moderation_reason == "spam"
+      assert Repo.all(Strike.where_user(owner.id)) == []
+    end
+
+    test "delete erases the account", %{conn: conn} do
+      {case_record, _post, owner, _reporter} = escalated_case()
+      {conn, _admin} = create_and_login_admin(conn)
+
+      conn = post(conn, ~p"/admin/moderation/#{case_record.id}/remove", %{"action" => "delete"})
+
+      assert redirected_to(conn) == ~p"/admin/moderation"
+      refute Repo.get(Vutuv.Accounts.User, owner.id)
+    end
+
+    test "an unknown action is a 404", %{conn: conn} do
+      {case_record, _post, _owner, _reporter} = escalated_case()
+      {conn, _admin} = create_and_login_admin(conn)
+
+      assert conn
+             |> post(~p"/admin/moderation/#{case_record.id}/remove", %{"action" => "bogus"})
+             |> html_response(404)
+    end
+  end
+
   describe "reporters dashboard" do
     test "lists reporters with their track record", %{conn: conn} do
       {case_record, _post, _owner, reporter} = escalated_case()

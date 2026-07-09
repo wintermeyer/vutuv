@@ -61,12 +61,35 @@ defmodule VutuvWeb.Admin.ModerationController do
     end)
   end
 
+  def remove(conn, %{"id" => id, "action" => action}) when action in ["deactivate", "delete"] do
+    with_case(conn, id, fn case_record ->
+      atom = if action == "delete", do: :delete, else: :deactivate
+
+      case Moderation.remove_owner(case_record, conn.assigns[:current_user], atom) do
+        {:ok, _} ->
+          conn
+          |> put_flash(:info, removal_flash(atom))
+          |> redirect(to: ~p"/admin/moderation")
+
+        {:error, :not_open} ->
+          already_resolved(conn)
+      end
+    end)
+  end
+
+  def remove(conn, _params), do: ControllerHelpers.render_error(conn, 404)
+
   def reporters(conn, _params) do
     render(conn, "reporters.html",
       page_title: gettext("Reporter track records"),
       stats: Moderation.list_reporter_stats()
     )
   end
+
+  defp removal_flash(:delete), do: gettext("Account deleted.")
+
+  defp removal_flash(:deactivate),
+    do: gettext("Account deactivated and marked as spam.")
 
   # Load the case-with-details or render the shared 404 — the load-or-404 guard
   # the uphold/reject actions share.

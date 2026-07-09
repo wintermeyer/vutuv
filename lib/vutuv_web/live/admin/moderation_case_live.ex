@@ -58,6 +58,24 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
     )
   end
 
+  # The decisive spam/abuse rulings: remove the account outright, skipping the
+  # warn-first strike ladder. Deactivate is reversible from the member browser;
+  # delete is permanent (and erases the case, so we just drop back to the queue).
+  def handle_event("remove", %{"action" => "deactivate"}, socket) do
+    rule(socket, &Moderation.remove_owner(&1, socket.assigns.current_user, :deactivate),
+      ok:
+        gettext(
+          "Account deactivated and marked as spam. Restore it from the member browser if this was wrong."
+        )
+    )
+  end
+
+  def handle_event("remove", %{"action" => "delete"}, socket) do
+    rule(socket, &Moderation.remove_owner(&1, socket.assigns.current_user, :delete),
+      ok: gettext("Account deleted.")
+    )
+  end
+
   # The two rulings share the same shape: apply, flash, drop back to the queue.
   # A ruling on a case someone else already settled flashes the conflict instead.
   defp rule(socket, ruling, ok: message) do
@@ -354,6 +372,49 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               {gettext("Reject the report")}
             </button>
           </.form>
+        </div>
+
+        <%!-- The decisive spam/abuse path: remove the account outright, no
+        warn-first ladder. Acts on the case owner, so it is offered on every open
+        case (a spammy post has a spammer behind it), not just profile cases. --%>
+        <div class="mt-4 rounded-lg border border-red-300 bg-red-50/40 p-4 dark:border-red-900 dark:bg-red-950/20">
+          <p class="text-sm font-semibold text-red-700 dark:text-red-300">
+            {gettext("Clear-cut spam or abuse?")}
+          </p>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "Remove the account outright, skipping the warning ladder. Deactivating marks it as spam and is reversible from the member browser; deleting is permanent."
+            )}
+          </p>
+          <div class="mt-3 flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="button button--danger"
+              id="remove-deactivate"
+              phx-click="remove"
+              phx-value-action="deactivate"
+              data-confirm={
+                gettext("Deactivate @%{slug} and mark the account as spam?", slug: @case.owner.username)
+              }
+            >
+              {gettext("Deactivate account")}
+            </button>
+            <button
+              type="button"
+              class="button button--danger"
+              id="remove-delete"
+              phx-click="remove"
+              phx-value-action="delete"
+              data-confirm={
+                gettext(
+                  "Permanently DELETE @%{slug} and everything they posted? This cannot be undone.",
+                  slug: @case.owner.username
+                )
+              }
+            >
+              {gettext("Delete account")}
+            </button>
+          </div>
         </div>
       </section>
     </div>

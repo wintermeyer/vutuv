@@ -309,3 +309,26 @@ The badge shows on the member's profile (and its `.md`/`.json`/… siblings) wit
 small "honor tag" marker. Reserve honor for **new** tag names: flipping a
 tag that members already hold makes them keep it but blocks them from removing it
 themselves.
+
+## Moderation & spam
+
+Members report posts, messages and whole profiles from the quiet "Report"
+affordance (category: not family-friendly, bullying, **spam**, other). Reports
+land in the admin queue at **`/admin` → Moderation** (`/admin/moderation`); each
+new one also emails every admin, and the dashboard tile shows the open count.
+
+On a case you **uphold** (owner gets a strike: warning → suspension →
+deactivation), **reject** (unfreezes; can mark a report abusive), or, for
+clear-cut spam, use the decisive **remove** buttons:
+
+- **Deactivate account** — hides it site-wide, marks it internally as spam, and
+  is **reversible**. Find such accounts later with the **"Removed as spam"**
+  filter in the member browser (`/admin/users`) and press **Restore** to bring
+  one back if the call was wrong.
+- **Delete account** — permanent; erases the account and everything it posted
+  (you get the usual deletion record email).
+
+You don't have to catch every spammer by hand: once enough different members
+independently report the same profile as **spam**, it is automatically frozen
+pending your review. The nightly operator report lists the day's spam
+deactivations. A spam mark is never shown publicly.

@@ -83,17 +83,30 @@ defmodule VutuvWeb.ReportController do
 
   def create(conn, _params), do: ControllerHelpers.render_error(conn, 404)
 
-  # When the report severed a standing relationship, the reporter must
-  # understand why things just disappeared: paused both ways, undone if the
-  # report turns out unfounded. (The same explanation lands in their
+  # The reporter's confirmation. A whole-profile report (the spam case) says the
+  # moderators have been notified and will review the account, so reporting no
+  # longer feels inert. When the report also severed a standing relationship, the
+  # reporter must understand why things just disappeared: paused both ways, undone
+  # if the report turns out unfounded. (The same explanation lands in their
   # notifications feed, which outlives the flash.)
   defp report_received_flash(case_record, reporter) do
+    base =
+      if case_record.content_type == "user" do
+        gettext(
+          "Thank you for your report. Our moderators have been notified and will review this account."
+        )
+      else
+        gettext("Thank you for your report. We take it from here.")
+      end
+
     if Moderation.severed_for?(case_record.id, reporter.id) do
-      gettext(
-        "Thank you for your report. To protect you, the connection between you and the reported member is paused - no contact in either direction, including messages. If our admins find the report unfounded, this is undone."
-      )
+      base <>
+        " " <>
+        gettext(
+          "To protect you, the connection between you and the reported member is paused - no contact in either direction, including messages. If our admins find the report unfounded, this is undone."
+        )
     else
-      gettext("Thank you for your report. We take it from here.")
+      base
     end
   end
 

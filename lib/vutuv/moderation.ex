@@ -28,6 +28,7 @@ defmodule Vutuv.Moderation do
 
   import Ecto.Query
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
   alias Vutuv.Moderation.{Case, Event, EvidenceScreenshot, Notifier, Report, Severance, Strike}
@@ -41,6 +42,14 @@ defmodule Vutuv.Moderation do
   @trust_window_days 365
   @rejected_reports_to_lose_trust 3
   @profile_freeze_reporters 2
+  # Spam auto-defense: this many *distinct* spam-category reports freeze a whole
+  # profile pending admin review even when no single reporter is trusted (unlike
+  # @profile_freeze_reporters, which needs two reporters in good standing). Kept
+  # deliberately higher than the trusted bar so a small collusion ring can't
+  # cheaply hide a rival — a wrongful freeze is low-harm (owner still sees their
+  # own profile, admins are notified, reject_case restores everything and can
+  # strike the brigaders' reports as abusive).
+  @spam_freeze_reporters 5
 
   # The statuses an admin ruling may still act on; once a case is resolved
   # (upheld/rejected/resolved_*) a second ruling must be a no-op so it cannot
@@ -149,7 +158,13 @@ defmodule Vutuv.Moderation do
         if count >= @profile_freeze_reporters, do: {:halt, count}, else: {:cont, count}
       end)
 
-    if trusted >= @profile_freeze_reporters do
+    # The spam auto-defense: enough distinct spam reports freeze the profile even
+    # from untrusted reporters. Counting is a plain in-memory tally over the
+    # already-loaded reports (the (case_id, reporter_id) unique index guarantees
+    # distinct reporters).
+    spam = Enum.count(reports, &(&1.category == "spam"))
+
+    if trusted >= @profile_freeze_reporters or spam >= @spam_freeze_reporters do
       case claim_flagged_upgrade(open, "escalated") do
         {:ok, updated} ->
           freeze_content(content)
@@ -575,6 +590,52 @@ defmodule Vutuv.Moderation do
         restore_severed(updated, admin)
 
         {:ok, updated}
+    end
+  end
+
+  @doc """
+  Admin ruling for a clear-cut abusive account (spam being the common case):
+  remove the owner outright, **skipping the warn-first strike ladder**.
+
+    * `:deactivate` — resolve the case and permanently deactivate the account
+      (`deactivated_at`), stamping the internal `moderation_reason` (default
+      `"spam"`) so admins can filter and later restore it
+      (`Vutuv.Accounts.admin_restore_user/1`). Reported posts/messages stay
+      frozen as evidence. The owner is **not** emailed.
+    * `:delete` — resolve the case and delete the account and everything it owns
+      through `Vutuv.Accounts.admin_delete_user/1` (the operator gets a record;
+      the member gets nothing). The case row is erased with the account.
+
+  Returns `{:ok, case}` (deactivate), `{:ok, :deleted}` (delete) or
+  `{:error, :not_open}` when the case was already resolved.
+  """
+  def remove_owner(case_record, admin, action, reason \\ "spam")
+
+  def remove_owner(%Case{} = case_record, %User{admin?: true} = admin, :deactivate, reason) do
+    case claim_case_resolution(case_record, "upheld", admin) do
+      :already_resolved ->
+        {:error, :not_open}
+
+      {:ok, updated} ->
+        now = NaiveDateTime.utc_now(:second)
+        set_user_moderation!(case_record.owner_id, deactivated_at: now, moderation_reason: reason)
+        log(updated, admin, "owner_removed", %{"action" => "deactivate", "reason" => reason})
+        {:ok, updated}
+    end
+  end
+
+  def remove_owner(%Case{} = case_record, %User{admin?: true} = admin, :delete, _reason) do
+    case claim_case_resolution(case_record, "upheld", admin) do
+      :already_resolved ->
+        {:error, :not_open}
+
+      {:ok, _updated} ->
+        # No case-side audit line: admin_delete_user erases the account and, with
+        # it, this case and its events (owner FK on_delete: :delete_all), so any
+        # event would be deleted the same instant. The operator record email from
+        # admin_delete_user is the surviving audit for a deletion.
+        {:ok, _} = Accounts.admin_delete_user(Repo.get!(User, case_record.owner_id))
+        {:ok, :deleted}
     end
   end
 

@@ -24,9 +24,29 @@ suspension → permanent deactivation; strikes expire after 12 months) or
 *abusive* strike the **reporter** on the same ladder — reporting-as-a-weapon is
 treated as bullying).
 
+For a clear-cut spam or abuse account the case page also offers a decisive
+**remove** ruling (`Vutuv.Moderation.remove_owner/4`) that skips the warn-first
+ladder: **deactivate** stamps an internal `users.moderation_reason` (`"spam"`),
+hides the account site-wide and is **reversible** (`Accounts.admin_restore_user/1`,
+the green "Restore" button in the member browser), or **delete** erases the
+account outright through `Accounts.admin_delete_user/1` (the operator gets the
+usual delete record email; the case is erased with it). The member browser
+`/admin/users` has a **"Removed as spam"** filter, spam-removed rows carry a
+**Spam** badge, and the nightly operator report counts the day's spam
+deactivations ("Als Spam entfernte Konten"). The mark is internal only — never
+shown publicly.
+
 Reporters with a bad track record lose the instant freeze (their reports only
 flag for review), whole profiles freeze only on a **second** independent trusted
 report, and `/admin/moderation/reporters` shows every reporter's track record.
+
+**Spam auto-defense:** distinct **spam-category** reports also freeze a whole
+profile pending admin review once enough pile up (`@spam_freeze_reporters`, 5),
+**even from untrusted reporters** — so a bot blasting the network is hidden in
+minutes instead of waiting on an admin. The bar is kept higher than the two
+trusted reporters so a small collusion ring cannot cheaply hide a rival; the
+freeze is reversible (a rejected case restores everything and can mark the
+brigaders' reports abusive).
 
 Suspended/deactivated accounts cannot log in and disappear from feeds, profiles
 and search.
@@ -50,6 +70,6 @@ token-guarded `/moderation/evidence/:token` page), stored under the private
 `/admin/moderation/:id/evidence` route.
 
 Every case carries an **audit log** (`moderation_events`: reports, freezes,
-severances, owner self-service, escalations, rulings, strikes) rendered as the
-History timeline on the admin case page, and the urgent admin email names the
-profile, category and reporter's note instead of just a link.
+severances, owner self-service, escalations, rulings, strikes, `owner_removed`)
+rendered as the History timeline on the admin case page, and the urgent admin
+email names the profile, category and reporter's note instead of just a link.

@@ -627,6 +627,24 @@ defmodule Vutuv.Accounts do
     {:ok, user}
   end
 
+  @doc """
+  Reverses a moderation removal (the counterpart of
+  `Vutuv.Moderation.remove_owner/4` and the report auto-freeze): clears
+  `deactivated_at`, `frozen_at` and the internal `moderation_reason`, so a
+  wrongly-removed member (e.g. a false spam call) becomes visible and can log in
+  again. The strike ladder's `suspended_until` is deliberately left untouched —
+  that is a separate consequence with its own expiry. Returns `{:ok, user}`.
+  """
+  def admin_restore_user(%User{} = user) do
+    {_count, _} =
+      Repo.update_all(
+        from(u in User, where: u.id == ^user.id),
+        set: [deactivated_at: nil, frozen_at: nil, moderation_reason: nil]
+      )
+
+    {:ok, Repo.get!(User, user.id)}
+  end
+
   # The account details the operator email records, read while the account still
   # exists (the cascade in delete_user/1 removes these rows moments later).
   defp deletion_snapshot(%User{} = user) do
@@ -1421,7 +1439,8 @@ defmodule Vutuv.Accounts do
   # parts, slug) plus the timestamps and the status flags the table renders.
   @admin_listing_fields ~w(id first_name last_name honorific_prefix honorific_suffix username
     avatar avatar_fingerprint updated_at inserted_at email_confirmed? admin?
-    identity_verified? frozen_at suspended_until deactivated_at unreachable_at)a
+    identity_verified? frozen_at suspended_until deactivated_at unreachable_at
+    moderation_reason)a
 
   @doc "The member-browser page size, shared by the query and the pager."
   def admin_users_per_page, do: @admin_users_per_page
@@ -1433,7 +1452,8 @@ defmodule Vutuv.Accounts do
   Normalizes raw request params into a validated filter map for the member
   browser: `reg` (registration: "pin" PIN-confirmed — the default — / "unconfirmed"
   / "all"), `flag` (account flag: "all" — the default — / "admin" / "verified" /
-  "unverified" identity-verification queue), `q` (search term, trimmed), `sort`
+  "unverified" identity-verification queue / "frozen" / "suspended" / "deactivated"
+  / "unreachable" / "spam" moderation-removed), `q` (search term, trimmed), `sort`
   (a known column, default "joined") and `dir` ("asc"/"desc", default "desc", so
   the default landing shows the newest members first). Anything invalid falls
   back to a safe default, so the params can never inject into the query.
@@ -1444,7 +1464,7 @@ defmodule Vutuv.Accounts do
       flag:
         validated_param(
           params["flag"],
-          ~w(all admin verified unverified frozen suspended deactivated unreachable)
+          ~w(all admin verified unverified frozen suspended deactivated unreachable spam)
         ) || "all",
       q: normalize_search(params["q"]),
       sort: validated_param(params["sort"], admin_user_sort_columns()) || "joined",
@@ -1496,6 +1516,7 @@ defmodule Vutuv.Accounts do
   defp filter_flag(query, "suspended"), do: where(query, [u], not is_nil(u.suspended_until))
   defp filter_flag(query, "deactivated"), do: where(query, [u], not is_nil(u.deactivated_at))
   defp filter_flag(query, "unreachable"), do: where(query, [u], not is_nil(u.unreachable_at))
+  defp filter_flag(query, "spam"), do: where(query, [u], u.moderation_reason == "spam")
   defp filter_flag(query, _all), do: query
 
   defp search_members(query, nil), do: query

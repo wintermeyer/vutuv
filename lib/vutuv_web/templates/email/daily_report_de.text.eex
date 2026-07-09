@@ -15,5 +15,9 @@ Deaktivierte Adressen:                      <%= @report.deactivations %>
 Eingefrorene Konten:                        <%= @report.freezes %>
 Aufgetaute Konten:                          <%= @report.thaws %>
 
+Moderation
+----------
+Als Spam entfernte Konten:                  <%= @report.spam_removals %>
+
 Vollständiger Bericht (mit Zeitreise zu anderen Tagen):
 <%= @url %>admin/reports?date=<%= Date.to_iso8601(@report.date) %>

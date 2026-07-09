@@ -87,10 +87,35 @@ defmodule VutuvWeb.Admin.UserLive do
     end
   end
 
+  def handle_event("restore", %{"id" => id}, socket) do
+    user = Enum.find(socket.assigns.users, &(&1.id == id))
+
+    case user && Accounts.admin_restore_user(user) do
+      {:ok, _restored} ->
+        {:noreply,
+         socket
+         |> assign(:users, mark_restored(socket.assigns.users, id))
+         |> put_flash(:info, gettext("Account restored. The member can sign in again."))}
+
+      _other ->
+        {:noreply, put_flash(socket, :error, gettext("Could not restore this member."))}
+    end
+  end
+
   # Flip just the verified row in place, so the GUI updates without a reload.
   defp mark_verified(users, id) do
     Enum.map(users, fn user ->
       if user.id == id, do: %{user | identity_verified?: true}, else: user
+    end)
+  end
+
+  # Clear the moderation-removal flags on just the restored row, so the badges
+  # and the Restore button drop without a reload.
+  defp mark_restored(users, id) do
+    Enum.map(users, fn user ->
+      if user.id == id,
+        do: %{user | deactivated_at: nil, frozen_at: nil, moderation_reason: nil},
+        else: user
     end)
   end
 
@@ -157,6 +182,7 @@ defmodule VutuvWeb.Admin.UserLive do
       user.identity_verified? && {gettext("Verified"), :verified},
       user.frozen_at && {gettext("Frozen"), :warn},
       user.suspended_until && {gettext("Suspended"), :warn},
+      user.moderation_reason == "spam" && {gettext("Spam"), :danger},
       user.deactivated_at && {gettext("Deactivated"), :danger},
       user.unreachable_at && {gettext("Unreachable"), :danger}
     ]
@@ -290,6 +316,9 @@ defmodule VutuvWeb.Admin.UserLive do
               <option value="unreachable" selected={@filters.flag == "unreachable"}>
                 {gettext("Unreachable")}
               </option>
+              <option value="spam" selected={@filters.flag == "spam"}>
+                {gettext("Removed as spam")}
+              </option>
             </select>
           </div>
         </form>
@@ -359,16 +388,29 @@ defmodule VutuvWeb.Admin.UserLive do
                   </div>
                 </td>
                 <td class="text-right">
-                  <button
-                    :if={not user.identity_verified?}
-                    type="button"
-                    phx-click="verify"
-                    phx-value-id={user.id}
-                    data-confirm={gettext("Mark this member's identity as verified? They will be emailed.")}
-                    class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                  >
-                    {gettext("Verify")}
-                  </button>
+                  <div class="flex flex-wrap justify-end gap-1">
+                    <button
+                      :if={not user.identity_verified?}
+                      type="button"
+                      phx-click="verify"
+                      phx-value-id={user.id}
+                      data-confirm={gettext("Mark this member's identity as verified? They will be emailed.")}
+                      class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      {gettext("Verify")}
+                    </button>
+                    <button
+                      :if={user.deactivated_at || user.moderation_reason}
+                      type="button"
+                      phx-click="restore"
+                      phx-value-id={user.id}
+                      id={"restore-#{user.id}"}
+                      data-confirm={gettext("Restore this account so the member can sign in again?")}
+                      class="rounded-lg bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-200 dark:hover:bg-emerald-900/60"
+                    >
+                      {gettext("Restore")}
+                    </button>
+                  </div>
                 </td>
               </tr>
             </tbody>

@@ -426,4 +426,48 @@ defmodule Vutuv.AccountsTest do
       assert Repo.get(User, user.id)
     end
   end
+
+  describe "moderation removal filter + restore" do
+    test "the spam flag lists only accounts marked as spam" do
+      spammer = insert(:activated_user, deactivated_at: naive_now(), moderation_reason: "spam")
+      _other_deactivated = insert(:activated_user, deactivated_at: naive_now())
+      _plain = insert(:activated_user)
+
+      filters = Accounts.admin_user_filters(%{"flag" => "spam", "reg" => "all"})
+      ids = Accounts.list_admin_users(filters) |> Enum.map(& &1.id)
+
+      assert spammer.id in ids
+      assert length(ids) == 1
+    end
+
+    test "admin_user_filters accepts the spam flag" do
+      assert %{flag: "spam"} = Accounts.admin_user_filters(%{"flag" => "spam"})
+      assert %{flag: "all"} = Accounts.admin_user_filters(%{"flag" => "bogus"})
+    end
+
+    test "admin_restore_user clears the removal fields" do
+      user =
+        insert(:activated_user,
+          deactivated_at: naive_now(),
+          frozen_at: naive_now(),
+          moderation_reason: "spam"
+        )
+
+      assert {:ok, restored} = Accounts.admin_restore_user(user)
+      refute restored.deactivated_at
+      refute restored.frozen_at
+      refute restored.moderation_reason
+    end
+
+    test "admin_restore_user leaves a strike suspension in place" do
+      until = NaiveDateTime.add(naive_now(), 86_400)
+      user = insert(:activated_user, deactivated_at: naive_now(), suspended_until: until)
+
+      assert {:ok, restored} = Accounts.admin_restore_user(user)
+      refute restored.deactivated_at
+      assert restored.suspended_until
+    end
+  end
+
+  defp naive_now, do: NaiveDateTime.utc_now(:second)
 end

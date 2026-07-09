@@ -150,6 +150,35 @@ defmodule Vutuv.ReportsTest do
     end
   end
 
+  describe "moderation removals" do
+    test "counts accounts removed as spam that Berlin day, ignoring other days" do
+      owner = insert(:user)
+
+      case_record =
+        Repo.insert!(%Vutuv.Moderation.Case{
+          content_type: "user",
+          content_id: owner.id,
+          owner_id: owner.id,
+          status: "upheld"
+        })
+
+      for naive <- [@on_day, @other_day] do
+        Repo.insert!(
+          struct(Vutuv.Moderation.Event,
+            case_id: case_record.id,
+            action: "owner_removed",
+            detail: %{"action" => "deactivate", "reason" => "spam"},
+            inserted_at: naive
+          )
+        )
+      end
+
+      report = Reports.daily(@date)
+      assert report.spam_removals == 1
+      refute DailyReport.all_zero?(report)
+    end
+  end
+
   describe "email_subject/1" do
     test "lists only the non-zero metrics, with singular/plural German labels" do
       report = %DailyReport{date: @date, registrations: 1, posts: 3, freezes: 1}

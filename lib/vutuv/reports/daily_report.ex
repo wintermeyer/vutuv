@@ -2,9 +2,10 @@ defmodule Vutuv.Reports.DailyReport do
   @moduledoc """
   A single day's tally for the operator: confirmed-by-PIN new registrations,
   how many posts, reposts, likes and bookmarks were created, how many new
-  Fediverse followers were gained, and the day's email-deliverability events
-  (hard bounces, address deactivations, account freezes and thaws) on one
-  German calendar day (`Vutuv.BerlinTime`).
+  Fediverse followers were gained, the day's email-deliverability events
+  (hard bounces, address deactivations, account freezes and thaws) and the
+  accounts an admin removed as spam from a moderation case, on one German
+  calendar day (`Vutuv.BerlinTime`).
 
   Built by `Vutuv.Reports.daily/1`, rendered on the admin reports page
   (`VutuvWeb.Admin.ReportController`) and mailed each night by
@@ -23,7 +24,8 @@ defmodule Vutuv.Reports.DailyReport do
     bounces: 0,
     deactivations: 0,
     freezes: 0,
-    thaws: 0
+    thaws: 0,
+    spam_removals: 0
   ]
 
   @type t :: %__MODULE__{
@@ -37,7 +39,8 @@ defmodule Vutuv.Reports.DailyReport do
           bounces: non_neg_integer(),
           deactivations: non_neg_integer(),
           freezes: non_neg_integer(),
-          thaws: non_neg_integer()
+          thaws: non_neg_integer(),
+          spam_removals: non_neg_integer()
         }
 
   # Each metric with its German singular/plural label, in subject order. The
@@ -54,7 +57,8 @@ defmodule Vutuv.Reports.DailyReport do
     {:bounces, "Bounce", "Bounces"},
     {:deactivations, "deaktivierte Adresse", "deaktivierte Adressen"},
     {:freezes, "eingefrorenes Konto", "eingefrorene Konten"},
-    {:thaws, "aufgetautes Konto", "aufgetaute Konten"}
+    {:thaws, "aufgetautes Konto", "aufgetaute Konten"},
+    {:spam_removals, "als Spam entferntes Konto", "als Spam entfernte Konten"}
   ]
 
   @doc "Every tallied metric, summed."

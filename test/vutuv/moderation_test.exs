@@ -268,6 +268,50 @@ defmodule Vutuv.ModerationTest do
       assert case_record.status == "flagged"
       refute Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
     end
+
+    test "enough independent spam reports freeze the profile even from untrusted reporters",
+         %{owner: owner} do
+      # The spam auto-defense: distinct spam-category reports pile up and freeze
+      # a bot-blasted profile pending admin review, even when no single reporter
+      # is trusted (unlike the bullying path, which needs two trusted reporters).
+      # The freeze is fully reversible by reject_case.
+      bad_reporters = for _ <- 1..5, do: make_untrusted!(insert(:activated_user))
+
+      # Capture the case status and the profile's frozen state after each report,
+      # since the freeze only trips on the last one.
+      steps =
+        bad_reporters
+        |> Enum.with_index(1)
+        |> Enum.map(fn {reporter, n} ->
+          case_record = report!(reporter, owner, %{"category" => "spam"})
+          frozen? = Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at != nil
+          {n, case_record.status, frozen?}
+        end)
+
+      # Four untrusted spam reports are not enough; the fifth crosses the bar.
+      assert {4, "flagged", false} in steps
+      assert {5, "escalated", true} in steps
+    end
+
+    test "a rejected spam auto-freeze restores the profile", %{owner: owner} do
+      # Each reporter files exactly once (the (case_id, reporter_id) unique index
+      # enforces it); report! returns the up-to-date case each time, so the last
+      # one is the escalated (frozen) case.
+      reporters = for _ <- 1..5, do: make_untrusted!(insert(:activated_user))
+
+      case_record =
+        Enum.reduce(reporters, nil, fn reporter, _acc ->
+          report!(reporter, owner, %{"category" => "spam"})
+        end)
+
+      assert case_record.status == "escalated"
+      assert Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
+
+      admin = insert(:activated_user, admin?: true)
+      {:ok, _} = Moderation.reject_case(case_record, admin)
+
+      refute Repo.get!(Vutuv.Accounts.User, owner.id).frozen_at
+    end
   end
 
   describe "trusted_reporter?/1" do
@@ -581,6 +625,68 @@ defmodule Vutuv.ModerationTest do
       [strike] = Repo.all(from(s in Strike, where: s.user_id == ^reporter.id))
       assert strike.role == "reporter"
       assert strike.level == 1
+    end
+  end
+
+  describe "remove_owner/4 (decisive spam ruling)" do
+    setup do
+      {:ok, %{admin: insert(:activated_user, admin?: true)}}
+    end
+
+    test "deactivate resolves the case and hides the account without a strike", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      case_record = report!(reporter, owner, %{"category" => "spam"})
+
+      assert {:ok, resolved} = Moderation.remove_owner(case_record, admin, :deactivate)
+      assert resolved.resolved_by_id == admin.id
+
+      user = Repo.get!(Vutuv.Accounts.User, owner.id)
+      assert user.deactivated_at
+      assert user.moderation_reason == "spam"
+
+      # No warn-first ladder: the spammer is removed outright.
+      assert Repo.all(from(s in Strike, where: s.user_id == ^owner.id)) == []
+
+      # The decisive ruling is recorded in the case audit log.
+      assert Repo.exists?(
+               from(e in Event,
+                 where: e.case_id == ^case_record.id and e.action == "owner_removed"
+               )
+             )
+    end
+
+    test "deactivate on an already-resolved case is a no-op", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      case_record = report!(reporter, owner, %{"category" => "spam"})
+      assert {:ok, _} = Moderation.remove_owner(case_record, admin, :deactivate)
+      assert {:error, :not_open} = Moderation.remove_owner(case_record, admin, :deactivate)
+    end
+
+    test "a custom reason is stamped on the account", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      case_record = report!(reporter, owner, %{"category" => "spam"})
+      {:ok, _} = Moderation.remove_owner(case_record, admin, :deactivate, "abuse")
+      assert Repo.get!(Vutuv.Accounts.User, owner.id).moderation_reason == "abuse"
+    end
+
+    test "delete removes the account entirely", %{
+      owner: owner,
+      reporter: reporter,
+      admin: admin
+    } do
+      case_record = report!(reporter, owner, %{"category" => "spam"})
+
+      assert {:ok, :deleted} = Moderation.remove_owner(case_record, admin, :delete)
+      refute Repo.get(Vutuv.Accounts.User, owner.id)
     end
   end
 
