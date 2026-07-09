@@ -80,7 +80,7 @@ defmodule VutuvWeb.TotpController do
     render(conn, "new.html",
       otpauth_uri: LoginCodes.otpauth_uri(user, totp),
       manual_secret: LoginCodes.manual_entry_secret(totp),
-      page_title: gettext("Authenticator app")
+      page_title: gettext("Authenticator app (TOTP)")
     )
   end
 end

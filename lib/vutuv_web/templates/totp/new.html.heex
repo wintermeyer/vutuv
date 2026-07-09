@@ -1,9 +1,9 @@
 <.page_header
-  title={gettext("Authenticator app")}
+  title={gettext("Authenticator app (TOTP)")}
   crumbs={[
     {gettext("Settings"), ~p"/settings"},
     {gettext("Sign-in & security"), ~p"/settings/security"},
-    gettext("Authenticator app")
+    gettext("Authenticator app (TOTP)")
   ]}
 />
 
@@ -23,7 +23,20 @@
       {qr_svg(@otpauth_uri)}
     </div>
 
+    <%!-- Same-device enrolment (the common phone case): you can't scan your
+          own screen, so offer the otpauth:// URI as a tappable link — iOS
+          opens Apple Passwords with the code pre-filled, Android whichever
+          authenticator app owns the scheme. --%>
     <p class="editform__hint mt-3">
+      {gettext("Reading this on the phone that should generate the codes? You can't scan your own screen. Instead:")}
+      <a
+        href={@otpauth_uri}
+        id="totp-same-device"
+        class="font-semibold text-brand-600 hover:text-brand-700"
+      >{gettext("set it up on this device")}</a>.
+    </p>
+
+    <p class="editform__hint mt-2">
       {gettext("Can't scan the code? Enter this key in your app instead:")}
       <code class="select-all break-all">{@manual_secret}</code>
     </p>

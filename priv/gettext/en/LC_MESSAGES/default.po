@@ -10007,22 +10007,9 @@ msgstr ""
 msgid "%{unused} of %{total} codes unused."
 msgstr ""
 
-#: lib/vutuv_web/templates/session/pin_user_login.html.heex:21
-#, elixir-autogen, elixir-format
-msgid "A code from your authenticator app or your one-time code list also works here, instead of the emailed PIN."
-msgstr ""
-
 #: lib/vutuv_web/templates/login_code/index.html.heex:13
 #, elixir-autogen, elixir-format
 msgid "A one-time code list is a printed backup for logging in: each code signs you in exactly once, typed into the PIN field at login instead of the emailed PIN."
-msgstr ""
-
-#: lib/vutuv_web/controllers/totp_controller.ex:83
-#: lib/vutuv_web/templates/settings/security.html.heex:135
-#: lib/vutuv_web/templates/totp/new.html.heex:2
-#: lib/vutuv_web/templates/totp/new.html.heex:6
-#, elixir-autogen, elixir-format
-msgid "Authenticator app"
 msgstr ""
 
 #: lib/vutuv_web/controllers/totp_controller.ex:48
@@ -10045,7 +10032,7 @@ msgstr ""
 msgid "Bullet list"
 msgstr ""
 
-#: lib/vutuv_web/templates/totp/new.html.heex:27
+#: lib/vutuv_web/templates/totp/new.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Can't scan the code? Enter this key in your app instead:"
 msgstr ""
@@ -10147,14 +10134,6 @@ msgstr ""
 msgid "Numbered list"
 msgstr ""
 
-#: lib/vutuv_web/controllers/login_code_controller.ex:25
-#: lib/vutuv_web/templates/login_code/index.html.heex:2
-#: lib/vutuv_web/templates/login_code/index.html.heex:6
-#: lib/vutuv_web/templates/settings/security.html.heex:164
-#, elixir-autogen, elixir-format
-msgid "One-time code list"
-msgstr ""
-
 #: lib/vutuv_web/controllers/login_code_controller.ex:44
 #, elixir-autogen, elixir-format
 msgid "One-time code list deleted."
@@ -10186,11 +10165,6 @@ msgstr ""
 msgid "Set up"
 msgstr ""
 
-#: lib/vutuv_web/templates/settings/security.html.heex:127
-#, elixir-autogen, elixir-format
-msgid "Sign in with a code from an authenticator app or from a printed one-time code list, typed into the normal PIN field. Your emailed PIN always keeps working."
-msgstr ""
-
 #: lib/vutuv_web/components/ui.ex:145
 #, elixir-autogen, elixir-format
 msgid "Strikethrough"
@@ -10206,7 +10180,7 @@ msgstr ""
 msgid "That code didn't match. Please try again with the code your app shows now."
 msgstr ""
 
-#: lib/vutuv_web/templates/totp/new.html.heex:45
+#: lib/vutuv_web/templates/totp/new.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "To finish, enter the code your app shows now"
 msgstr ""
@@ -10226,7 +10200,7 @@ msgstr ""
 msgid "Turn off the authenticator app? Its codes stop working at login; the emailed PIN is unaffected."
 msgstr ""
 
-#: lib/vutuv_web/templates/totp/new.html.heex:57
+#: lib/vutuv_web/templates/totp/new.html.heex:70
 #, elixir-autogen, elixir-format
 msgid "Turn on"
 msgstr ""
@@ -10259,4 +10233,40 @@ msgstr ""
 #: lib/vutuv_web/templates/login_code/index.html.heex:38
 #, elixir-autogen, elixir-format
 msgid "used"
+msgstr ""
+
+#: lib/vutuv_web/templates/session/pin_user_login.html.heex:21
+#, elixir-autogen, elixir-format
+msgid "A one-time code (OTP) from your authenticator app or your code list also works here, instead of the emailed PIN."
+msgstr ""
+
+#: lib/vutuv_web/controllers/totp_controller.ex:83
+#: lib/vutuv_web/templates/settings/security.html.heex:135
+#: lib/vutuv_web/templates/totp/new.html.heex:2
+#: lib/vutuv_web/templates/totp/new.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "Authenticator app (TOTP)"
+msgstr ""
+
+#: lib/vutuv_web/controllers/login_code_controller.ex:25
+#: lib/vutuv_web/templates/login_code/index.html.heex:2
+#: lib/vutuv_web/templates/login_code/index.html.heex:6
+#: lib/vutuv_web/templates/settings/security.html.heex:164
+#, elixir-autogen, elixir-format
+msgid "One-time code list (OTP)"
+msgstr ""
+
+#: lib/vutuv_web/templates/totp/new.html.heex:31
+#, elixir-autogen, elixir-format
+msgid "Reading this on the phone that should generate the codes? You can't scan your own screen. Instead:"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/security.html.heex:127
+#, elixir-autogen, elixir-format
+msgid "Sign in with a one-time code (OTP) from an authenticator app or from a printed code list, typed into the normal PIN field. Your emailed PIN always keeps working."
+msgstr ""
+
+#: lib/vutuv_web/templates/totp/new.html.heex:36
+#, elixir-autogen, elixir-format
+msgid "set it up on this device"
 msgstr ""

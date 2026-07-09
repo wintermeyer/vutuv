@@ -125,14 +125,14 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
       <.section_title>{gettext("Login codes")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
         {gettext(
-          "Sign in with a code from an authenticator app or from a printed one-time code list, typed into the normal PIN field. Your emailed PIN always keeps working."
+          "Sign in with a one-time code (OTP) from an authenticator app or from a printed code list, typed into the normal PIN field. Your emailed PIN always keeps working."
         )}
       </p>
       <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
         <li class="flex items-center justify-between gap-4 py-3" id="totp-row">
           <span class="min-w-0">
             <span class="block font-medium text-slate-900 dark:text-white">
-              {gettext("Authenticator app")}
+              {gettext("Authenticator app (TOTP)")}
             </span>
             <span class="block text-sm text-slate-600 dark:text-slate-400">
               {if @totp_enabled?, do: gettext("Turned on."), else: gettext("Not set up.")}
@@ -161,7 +161,7 @@ each remotely revocable, issue #794), and the phishing-resistant passkeys
           <% end %>
         </li>
         <.account_row
-          title={gettext("One-time code list")}
+          title={gettext("One-time code list (OTP)")}
           subtitle={
             if @list_codes_total > 0,
               do:

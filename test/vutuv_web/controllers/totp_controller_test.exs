@@ -26,6 +26,12 @@ defmodule VutuvWeb.TotpControllerTest do
       assert html =~ "totp-confirm-form"
       assert html =~ "<svg"
 
+      # The same-device enrolment link (you can't scan your own screen): the
+      # otpauth:// scheme must survive HEEx attribute escaping, or iOS/Android
+      # can't hand the secret to the authenticator app.
+      assert html =~ ~s(id="totp-same-device")
+      assert html =~ ~s(href="otpauth://totp/)
+
       totp = LoginCodes.get_totp(user)
       assert html =~ totp.secret |> Base.encode32(padding: false) |> String.slice(0, 4)
       refute LoginCodes.totp_enabled?(user)

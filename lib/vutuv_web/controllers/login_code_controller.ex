@@ -22,7 +22,7 @@ defmodule VutuvWeb.LoginCodeController do
   def index(conn, _params) do
     render(conn, "index.html",
       codes: LoginCodes.list_codes(conn.assigns[:user]),
-      page_title: gettext("One-time code list")
+      page_title: gettext("One-time code list (OTP)")
     )
   end
 

@@ -19,7 +19,7 @@
         one-time code list (see SessionHTML.alternative_codes?/1). --%>
   <p :if={alternative_codes?(@conn)} id="alternative-codes-hint" class="mt-2 text-sm text-slate-600 dark:text-slate-400">
     {gettext(
-      "A code from your authenticator app or your one-time code list also works here, instead of the emailed PIN."
+      "A one-time code (OTP) from your authenticator app or your code list also works here, instead of the emailed PIN."
     )}
   </p>
 
