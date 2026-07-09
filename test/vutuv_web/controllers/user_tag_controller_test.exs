@@ -79,6 +79,28 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert tag_count(user) == base
     end
 
+    # Issue #847: the tag page's button submits a legacy multi-word tag by its
+    # spaceless slug, so it links that one existing tag whole instead of being
+    # split on the space into "Ruby", "on", "Rails".
+    test "posting a legacy multi-word tag's slug links the one existing tag", %{
+      conn: conn,
+      user: user,
+      base: base
+    } do
+      tag = insert(:tag, name: "Ruby on Rails", slug: "ruby_on_rails")
+
+      conn = post(conn, ~p"/settings/tags", tag_param: %{value: tag.slug})
+
+      assert redirected_to(conn) == ~p"/settings/tags"
+      # Exactly one tag was added, and it is the existing tag (linked, not a
+      # freshly created "Ruby"/"on"/"Rails").
+      assert tag_count(user) == base + 1
+
+      assert Repo.exists?(
+               from(ut in UserTag, where: ut.user_id == ^user.id and ut.tag_id == ^tag.id)
+             )
+    end
+
     test "refuses a reserved (honor) tag name", %{conn: conn, user: user, base: base} do
       insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
 

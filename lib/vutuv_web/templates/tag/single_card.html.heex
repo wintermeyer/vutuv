@@ -16,7 +16,11 @@
 		{VutuvWeb.UserHTML.card_list(Map.put(assigns, :users, @recommended_users))}
 	<% end %>
   <%= if @conn.assigns[:current_user] && !(has_tag?(assigns[:current_user], assigns[:tag])) do %>
-  <%= button to: ~p"/settings/tags?#{[tag_param: [value: @tag.name]]}", method: :post, class: "button" do %>
+  <%!-- Submit the slug, never the display name: the slug is always spaceless,
+        so the controller's space-splitting parser attaches this exact tag
+        instead of shredding a multi-word name like "Ruby on Rails" into
+        separate one-word tags (issue #847). find_by_value/1 matches on slug. --%>
+  <%= button to: ~p"/settings/tags?#{[tag_param: [value: @tag.slug]]}", method: :post, class: "button" do %>
   <i class="icon icon--plus"></i> <%= gettext("Add this tag") %>
   <% end %>
   <% end %>

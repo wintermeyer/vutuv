@@ -532,4 +532,102 @@ defmodule Vutuv.TagsTest do
       refute_receive {:new_notification, _}
     end
   end
+
+  # Issue #847: the one-time cleanup that reconciles legacy spaced tag names
+  # with the no-space rule without underscoring legitimate multi-word names.
+  describe "normalize_legacy_tag_whitespace/0" do
+    defp holds?(user, tag_id) do
+      Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id and ut.tag_id == ^tag_id))
+    end
+
+    test "merges a whitespace-junk duplicate into the clean tag, moving holders" do
+      clean = insert(:tag, name: "Datacenter", slug: "datacenter")
+      junk = insert(:tag, name: " Datacenter", slug: "datacenter_2")
+      keep_user = insert(:user)
+      move_user = insert(:user)
+      insert(:user_tag, user: keep_user, tag: clean)
+      insert(:user_tag, user: move_user, tag: junk)
+
+      assert {1, _} = Tags.normalize_legacy_tag_whitespace()
+
+      # The junk tag is gone and everyone who held it now holds the clean one.
+      refute Repo.get(Tag, junk.id)
+      assert Repo.get(Tag, clean.id).name == "Datacenter"
+      assert holds?(keep_user, clean.id)
+      assert holds?(move_user, clean.id)
+    end
+
+    test "keeps the more-held pretty name even when the sibling is spaceless" do
+      # "Phoenix Framework" (53 holders in prod) must win over a stray
+      # "phoenix_framework" (1 holder), so the survivor keeps the readable name.
+      pretty = insert(:tag, name: "Phoenix Framework", slug: "phoenix_framework")
+      spaceless = insert(:tag, name: "phoenix_framework", slug: "phoenix_framework_2")
+      for _ <- 1..3, do: insert(:user_tag, user: insert(:user), tag: pretty)
+      insert(:user_tag, user: insert(:user), tag: spaceless)
+
+      assert {1, _} = Tags.normalize_legacy_tag_whitespace()
+
+      assert Repo.get(Tag, pretty.id).name == "Phoenix Framework"
+      refute Repo.get(Tag, spaceless.id)
+    end
+
+    test "dedupes a member who holds both sides and moves their endorsements" do
+      clean = insert(:tag, name: "Docker", slug: "docker")
+      junk = insert(:tag, name: " Docker", slug: "docker_2")
+
+      both = insert(:user)
+      clean_ut = insert(:user_tag, user: both, tag: clean)
+      junk_ut = insert(:user_tag, user: both, tag: junk)
+
+      # An endorser who only endorses the junk side must survive the merge.
+      endorser = insert(:user)
+      insert(:user_tag_endorsement, user_tag: junk_ut, user: endorser)
+
+      assert {1, _} = Tags.normalize_legacy_tag_whitespace()
+
+      refute Repo.get(Tag, junk.id)
+      # The member keeps exactly one user_tag for the survivor (no unique-index
+      # violation), and the endorsement rode across onto it.
+      assert holds?(both, clean.id)
+      refute Repo.get(UserTag, junk_ut.id)
+
+      assert Repo.exists?(
+               from(e in UserTagEndorsement,
+                 where: e.user_tag_id == ^clean_ut.id and e.user_id == ^endorser.id
+               )
+             )
+    end
+
+    test "trims stray whitespace from a non-colliding name, keeping the words" do
+      tag = insert(:tag, name: " performance testing ", slug: "performance_testing")
+
+      assert {0, 1} = Tags.normalize_legacy_tag_whitespace()
+
+      assert Repo.get(Tag, tag.id).name == "performance testing"
+    end
+
+    test "leaves a clean multi-word name untouched and is idempotent" do
+      tag = insert(:tag, name: "Ruby on Rails", slug: "ruby_on_rails")
+
+      assert {0, 0} = Tags.normalize_legacy_tag_whitespace()
+      assert Repo.get(Tag, tag.id).name == "Ruby on Rails"
+
+      # A second pass finds nothing to do.
+      assert {0, 0} = Tags.normalize_legacy_tag_whitespace()
+    end
+
+    test "merges a sibling pair that has no pre-existing clean tag" do
+      # "sap basis" (7 holders) + " sap basis" (1) with no clean "sap_basis":
+      # keep the better-held one, drop the twin.
+      keep = insert(:tag, name: "sap basis", slug: "sap_basis")
+      twin = insert(:tag, name: " sap basis", slug: "sap_basis_2")
+      insert(:user_tag, user: insert(:user), tag: keep)
+      insert(:user_tag, user: insert(:user), tag: twin)
+
+      assert {1, _} = Tags.normalize_legacy_tag_whitespace()
+
+      assert Repo.get(Tag, keep.id).name == "sap basis"
+      refute Repo.get(Tag, twin.id)
+    end
+  end
 end

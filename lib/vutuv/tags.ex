@@ -429,4 +429,149 @@ defmodule Vutuv.Tags do
   defp broadcast_endorsement_changed(owner_id, user_tag_id) do
     Vutuv.Activity.broadcast(owner_id, {:endorsement_changed, user_tag_id})
   end
+
+  @doc """
+  One-time cleanup of legacy whitespace in tag names (issue #847).
+
+  vutuv's "a tag is a single token, no spaces" rule postdates the original 2017
+  data, so thousands of tags still carry spaces in their display `name`. This
+  reconciles that legacy data with the rule **without underscoring a legitimate
+  multi-word name** — "Ruby on Rails" stays "Ruby on Rails" (its already
+  spaceless slug `ruby_on_rails` is what makes it addable, see the tag page's
+  "Add this tag" button). It does two things:
+
+    * **Merges** the whitespace-only duplicate groups — two tags that differ
+      only in spacing / underscores / case (" Datacenter" vs "Datacenter",
+      "Phoenix Framework" vs "phoenix_framework") — into one survivor, moving
+      every `user_tag` and endorsement across and deleting the duplicate. The
+      survivor is the tag with the most holders (ties: the cleaner name, then
+      the oldest), and its own name is trimmed too.
+    * **Trims** stray leading/trailing and doubled whitespace from every other
+      name ("performance testing " → "performance testing").
+
+  Slugs are already spaceless and unique, so they are never touched. Returns
+  `{merged_tags_deleted, names_trimmed}`. Idempotent — a second run is a no-op —
+  and empty on a fresh / test database, so the real work happens only against
+  production data.
+  """
+  def normalize_legacy_tag_whitespace do
+    merged = merge_whitespace_duplicate_tags()
+    trimmed = trim_tag_name_whitespace()
+    {merged, trimmed}
+  end
+
+  # Group every tag by a whitespace/underscore/case-insensitive identity key and
+  # act only on groups with more than one member where at least one name carries
+  # whitespace (so pure-underscore duplicates stay out of scope). Returns the
+  # number of duplicate tags deleted.
+  defp merge_whitespace_duplicate_tags do
+    from(t in Tag, select: {t.id, t.name})
+    |> Repo.all()
+    |> Enum.group_by(fn {_id, name} -> collision_key(name) end)
+    |> Enum.filter(fn {_key, members} ->
+      length(members) > 1 and Enum.any?(members, fn {_id, name} -> whitespace?(name) end)
+    end)
+    |> Enum.reduce(0, fn {_key, members}, deleted -> deleted + merge_group(members) end)
+  end
+
+  defp merge_group(members) do
+    ranked =
+      Enum.map(members, fn {id, name} ->
+        %{id: id, name: name, holders: holder_count(id), clean?: clean_name?(name)}
+      end)
+
+    # Smallest tuple wins: -holders => most holders first; a clean name beats a
+    # whitespace-marred one; then the oldest id (UUID v7 sorts by creation time).
+    survivor =
+      Enum.min_by(ranked, fn m -> {-m.holders, if(m.clean?, do: 0, else: 1), m.id} end)
+
+    duplicates = Enum.reject(ranked, &(&1.id == survivor.id))
+    Enum.each(duplicates, &merge_tag_into(&1.id, survivor.id))
+    normalize_tag_name(survivor.id, survivor.name)
+    length(duplicates)
+  end
+
+  # Move a duplicate tag's members (and their endorsements) onto the survivor,
+  # then delete the now-orphaned duplicate. Repointing happens *before* the
+  # delete: `user_tags.tag_id` cascades on delete, so deleting first would wipe
+  # the very rows we are trying to preserve.
+  defp merge_tag_into(dup_id, survivor_id) do
+    for ut <- Repo.all(from(ut in UserTag, where: ut.tag_id == ^dup_id)) do
+      target =
+        Repo.one(
+          from(s in UserTag,
+            where: s.user_id == ^ut.user_id and s.tag_id == ^survivor_id,
+            select: s.id
+          )
+        )
+
+      if target do
+        # The member already holds the survivor tag, so this row would violate
+        # the (user_id, tag_id) unique index. Move its endorsements onto the
+        # surviving user_tag and drop the duplicate (leftover endorsements from
+        # endorsers who already endorse the survivor cascade away with it).
+        move_endorsements(ut.id, target)
+        Repo.delete_all(from(d in UserTag, where: d.id == ^ut.id))
+      else
+        Repo.update_all(from(d in UserTag, where: d.id == ^ut.id),
+          set: [tag_id: survivor_id]
+        )
+      end
+    end
+
+    Repo.delete_all(from(t in Tag, where: t.id == ^dup_id))
+  end
+
+  defp move_endorsements(from_user_tag_id, to_user_tag_id) do
+    already =
+      Repo.all(
+        from(e in UserTagEndorsement, where: e.user_tag_id == ^to_user_tag_id, select: e.user_id)
+      )
+
+    Repo.update_all(
+      from(e in UserTagEndorsement,
+        where: e.user_tag_id == ^from_user_tag_id and e.user_id not in ^already
+      ),
+      set: [user_tag_id: to_user_tag_id]
+    )
+  end
+
+  # Trim stray whitespace from every tag name the merge pass did not already
+  # rewrite. Returns the number of names changed.
+  defp trim_tag_name_whitespace do
+    from(t in Tag, select: {t.id, t.name})
+    |> Repo.all()
+    |> Enum.reduce(0, fn {id, name}, trimmed ->
+      trimmed + normalize_tag_name(id, name)
+    end)
+  end
+
+  # Rewrite the tag's name to its trimmed, single-spaced form when it differs;
+  # returns 1 if a row was changed, 0 otherwise.
+  defp normalize_tag_name(id, name) do
+    normalized = normalize_whitespace(name)
+
+    if normalized == name do
+      0
+    else
+      Repo.update_all(from(t in Tag, where: t.id == ^id), set: [name: normalized])
+      1
+    end
+  end
+
+  # Trim and collapse internal whitespace runs to a single space — keeps the
+  # words, never underscores.
+  defp normalize_whitespace(name), do: name |> String.trim() |> String.replace(~r/\s+/u, " ")
+
+  # The identity key duplicate detection groups by: trim, fold every run of
+  # whitespace *or* underscore to one underscore, downcase. So "Phoenix
+  # Framework", "phoenix_framework" and " phoenix framework " all collide.
+  defp collision_key(name),
+    do: name |> String.trim() |> String.replace(~r/[\s_]+/u, "_") |> String.downcase()
+
+  defp whitespace?(name), do: Regex.match?(~r/\s/u, name)
+  defp clean_name?(name), do: normalize_whitespace(name) == name
+
+  defp holder_count(tag_id),
+    do: Repo.aggregate(from(ut in UserTag, where: ut.tag_id == ^tag_id), :count)
 end
