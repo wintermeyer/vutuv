@@ -25,6 +25,26 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.Markdown
+
+  @doc """
+  Render a user-written Markdown prose field — a work-experience or education
+  `description` (issue #905) — as sanitized HTML in the Direction A `.markdown`
+  body recipe. It runs through `VutuvWeb.Markdown.render/1`, so a description
+  gets the same treatment a post and the profile tagline do: paragraphs and
+  line breaks, bold / italic, bullet and numbered lists, links, `@handle` /
+  `#hashtag` linking, raw HTML escaped and images stripped. Headings flatten to
+  bold body text (`markdown--post`) so a stray heading can't blow up a compact
+  timeline card. `class` carries the surrounding text size / colour utilities.
+  """
+  attr(:text, :string, required: true)
+  attr(:class, :any, default: nil)
+
+  def markdown_prose(assigns) do
+    ~H"""
+    <div class={["markdown markdown--post", @class]}>{Markdown.render(@text)}</div>
+    """
+  end
 
   @doc """
   Shared input class for hand-written (kit-page) form fields — the Direction A

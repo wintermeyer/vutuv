@@ -22,6 +22,7 @@
   <.editform_field form={f} field={:description}>
     <%= label f, :description, gettext("Description") %>
     <%= textarea f, :description, rows: 3 %>
+    <p class="editform__hint">{gettext("Markdown is supported: bold, italics, links and lists.")}</p>
     <%= error_tag f, :description %>
   </.editform_field>
 

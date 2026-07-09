@@ -33,9 +33,11 @@ member keeps the single unlabeled list. --%>
       <p :if={edu.field_of_study} class="text-sm text-slate-600 dark:text-slate-400">
         {edu.field_of_study}
       </p>
-      <p :if={edu.description} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {edu.description}
-      </p>
+      <.markdown_prose
+        :if={edu.description}
+        text={edu.description}
+        class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+      />
       <.row_actions
         :if={@as_owner?}
         align={:start}

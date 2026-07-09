@@ -505,12 +505,11 @@ defmodule VutuvWeb.WorkExperienceHTML do
                 <p class="text-sm text-slate-600 dark:text-slate-400">
                   {role.dates.label}<%= if role.length do %> · {role.length}<% end %>
                 </p>
-                <p
+                <.markdown_prose
                   :if={@show_description? and role.job.description}
+                  text={role.job.description}
                   class="mt-1 text-sm text-slate-600 dark:text-slate-400"
-                >
-                  {role.job.description}
-                </p>
+                />
                 <.role_owner_controls
                   :if={@as_owner?}
                   user={@user}
@@ -533,12 +532,11 @@ defmodule VutuvWeb.WorkExperienceHTML do
             <p class="text-sm text-slate-600 dark:text-slate-400">
               {role.job.organization}<%= if role.length do %> · {role.length}<% end %>
             </p>
-            <p
+            <.markdown_prose
               :if={@show_description? and role.job.description}
+              text={role.job.description}
               class="mt-1 text-sm text-slate-600 dark:text-slate-400"
-            >
-              {role.job.description}
-            </p>
+            />
             <.role_owner_controls
               :if={@as_owner?}
               user={@user}

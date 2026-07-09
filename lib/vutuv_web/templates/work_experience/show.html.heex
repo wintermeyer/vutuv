@@ -25,6 +25,6 @@
   </p>
   <%= if @work_experience.description do %>
     <h2 class="card__label"><%= gettext("Description") %></h2>
-    <p><%= @work_experience.description %></p>
+    <.markdown_prose text={@work_experience.description} class="mt-1" />
   <% end %>
 </.card_section>

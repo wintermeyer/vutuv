@@ -82,6 +82,25 @@ work-study program (duales Studium) or an apprenticeship's Berufsschule is
 deliberately **not** a linked entity — members file an entry in each section;
 revisit linking only if members ask.
 
+## Formatted descriptions (Markdown, issue #905)
+
+A work-experience and an education `description` are **Markdown**, not a single
+line of plain text: paragraphs and line breaks, bold / italic, bullet and
+numbered lists, links, `@handle` / `#hashtag`. They render through the shared
+`<.markdown_prose>` component (`VutuvWeb.UI`), which wraps
+`VutuvWeb.Markdown.render/1` in the `.markdown markdown--post` body recipe — the
+same sanitizing pipeline a post and the profile tagline use (raw HTML escaped,
+images stripped, headings flattened to bold so a stray heading can't blow up a
+compact timeline card). It renders on the public section pages
+(`/:slug/work_experiences`, `/:slug/educations`) and the single-entry show
+pages; the edit forms carry a "Markdown is supported" hint. The stored value is
+unchanged plain Markdown source, so the agent-format siblings (`.md` is the
+source verbatim, `.txt`/`.json`/`.xml` carry it too) need no change. Both
+`description` columns are `text` with a `max: 10_000` validation (they legitimately
+run long — see the LinkedIn-import note). The CV document exports
+(`VutuvWeb.CV.*`) still render the description as plain text; full Markdown in the
+PDF / Word / ODT / LaTeX outputs is a separate cross-format concern.
+
 ## Languages profile section
 
 Members list the **languages they speak** with a proficiency level (issue #865,
