@@ -131,13 +131,20 @@ defmodule Vutuv.PostsTest do
     test "creates tags from a comma- or space-separated list, reusing tags case-insensitively" do
       existing = insert(:tag, name: "Elixir", slug: "elixir")
 
-      # The comma and the space both split, so "Phoenix Ecto" is two tags, not
-      # one spaced tag (tags never contain spaces).
+      # An unquoted comma and space both still split, so "Phoenix Ecto" is two
+      # tags; a quoted phrase stays one multi-word tag.
       post = create_post!(user(), %{body: "tagged", tags: "elixir, Phoenix Ecto"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
       assert tag_names == ["Ecto", "Elixir", "Phoenix"]
       assert Enum.any?(post.tags, &(&1.id == existing.id))
+    end
+
+    test "keeps a quoted phrase as one multi-word post tag" do
+      post = create_post!(user(), %{body: "tagged", tags: ~s(Elixir, "Ruby on Rails")})
+
+      tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
+      assert tag_names == ["Elixir", "Ruby on Rails"]
     end
 
     test "strips a leading # from post tags and reuses the bare tag" do

@@ -41,15 +41,22 @@ defmodule Vutuv.TagsTest do
       assert tag.slug == "webassembly"
     end
 
-    test "a value with whitespace is never linked to a legacy multi-word tag" do
-      # A legacy tag from before the no-space rule still exists; a spaced value
-      # must not attach it. It builds a fresh (invalid) tag instead, so the
-      # changeset fails validation rather than quietly linking the old tag.
-      insert(:tag, name: "Ruby on Rails", slug: "ruby-on-rails")
+    test "a multi-word value links to an existing spaced tag case-insensitively" do
+      # Multi-word tags are first-class again: a spaced value attaches the
+      # existing spaced tag (matched case-insensitively by name), it does not
+      # mint a duplicate.
+      tag = insert(:tag, name: "Ruby on Rails", slug: "ruby-on-rails")
 
+      changeset = link("ruby on rails")
+      assert get_change(changeset, :tag_id) == tag.id
+    end
+
+    test "a multi-word value with no match builds one spaced tag" do
       changeset = link("Ruby on Rails")
       refute get_change(changeset, :tag_id)
-      assert get_change(changeset, :tag)
+      built = get_change(changeset, :tag)
+      assert get_change(built, :name) == "Ruby on Rails"
+      assert get_change(built, :slug) =~ "ruby"
     end
   end
 
@@ -102,12 +109,34 @@ defmodule Vutuv.TagsTest do
   end
 
   describe "parse_tag_names/1" do
-    test "splits on both commas and spaces" do
+    test "an unquoted comma or space still separates tags" do
       assert Tags.parse_tag_names("Elixir, Phoenix Go") == ["Elixir", "Phoenix", "Go"]
     end
 
-    test "splits what used to be one multi-word tag into one tag per word" do
+    test "an unquoted run of words is one tag per word" do
       assert Tags.parse_tag_names("Ruby on Rails") == ["Ruby", "on", "Rails"]
+    end
+
+    test "a quoted phrase is kept as one multi-word tag" do
+      assert Tags.parse_tag_names(~s("Ruby on Rails")) == ["Ruby on Rails"]
+    end
+
+    test "quoted phrases mix with bare tags in typed order" do
+      assert Tags.parse_tag_names(~s(Elixir, "Ruby on Rails", "Node JS" Go)) ==
+               ["Elixir", "Ruby on Rails", "Node JS", "Go"]
+    end
+
+    test "typographic quotes from mobile keyboards group too" do
+      assert Tags.parse_tag_names("“Ruby on Rails”, „Node JS“") ==
+               ["Ruby on Rails", "Node JS"]
+    end
+
+    test "an unbalanced quote degrades to word splitting" do
+      assert Tags.parse_tag_names(~s("Ruby on Rails)) == ["Ruby", "on", "Rails"]
+    end
+
+    test "collapses runs of whitespace inside a quoted tag" do
+      assert Tags.parse_tag_names(~s("Ruby   on  Rails")) == ["Ruby on Rails"]
     end
 
     test "trims padding and drops empty segments" do
@@ -194,12 +223,26 @@ defmodule Vutuv.TagsTest do
     end
   end
 
-  describe "add_user_tag/2 rejects spaces" do
-    test "a spaced name that is not an existing tag fails validation" do
+  describe "add_user_tag/2 stores multi-word tags" do
+    test "a multi-word name is stored as one spaced tag" do
       user = insert(:user)
 
-      assert {:error, changeset} = Tags.add_user_tag(user, "Ruby on Rails")
-      assert %{tag: %{name: ["must not contain spaces"]}} = errors_on(changeset)
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "Ruby on Rails")
+      tag = Repo.preload(user_tag, :tag).tag
+      assert tag.name == "Ruby on Rails"
+      assert tag.slug =~ "ruby"
+    end
+
+    test "a later member linking a spaced tag keeps the first spelling" do
+      first = insert(:user)
+      later = insert(:user)
+
+      assert {:ok, ut1} = Tags.add_user_tag(first, "Ruby on Rails")
+      tag = Repo.preload(ut1, :tag).tag
+
+      assert {:ok, ut2} = Tags.add_user_tag(later, "ruby on rails")
+      assert Repo.preload(ut2, :tag).tag.id == tag.id
+      assert Repo.aggregate(Tag, :count) == 1
     end
 
     test "a single-word name is stored" do
@@ -207,6 +250,13 @@ defmodule Vutuv.TagsTest do
 
       assert {:ok, user_tag} = Tags.add_user_tag(user, "Elixir")
       assert Repo.preload(user_tag, :tag).tag.name == "Elixir"
+    end
+
+    test "collapses stray whitespace runs into single spaces" do
+      user = insert(:user)
+
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "Ruby\non   Rails")
+      assert Repo.preload(user_tag, :tag).tag.name == "Ruby on Rails"
     end
   end
 

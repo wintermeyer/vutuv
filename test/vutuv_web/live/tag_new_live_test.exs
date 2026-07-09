@@ -1,11 +1,12 @@
 defmodule VutuvWeb.TagNewLiveTest do
   @moduledoc """
   The add-tag form (/settings/tags/new) is a LiveView: while the member types
-  it previews exactly which tags a submit will attach (issue #848) — split on
-  commas and spaces, leading `#` stripped, and matched case-insensitively
-  against the existing global tags, whose stored display name wins. Submitting
-  goes over the socket (the dead new/create controller actions are gone), so
-  these tests also cover what user_tag_controller_test's create tests used to.
+  it previews exactly which tags a submit will attach (issue #848). An unquoted
+  comma or space separates, a quoted phrase is one multi-word tag, a leading `#`
+  is stripped, and each name is matched case-insensitively against the existing
+  global tags, whose stored display name wins. Submitting goes over the socket
+  (the dead new/create controller actions are gone), so these tests also cover
+  what user_tag_controller_test's create tests used to.
   """
   use VutuvWeb.ConnCase
 
@@ -66,6 +67,10 @@ defmodule VutuvWeb.TagNewLiveTest do
     test "splits the input on commas and spaces into one chip per tag", %{live: live} do
       assert preview(live, "lorem ipsum, dolor-sit") == ["lorem", "ipsum", "dolor-sit"]
       assert render(live) =~ "This will create the following tags:"
+    end
+
+    test "previews a quoted phrase as one multi-word chip", %{live: live} do
+      assert preview(live, ~s(Elixir, "Ruby on Rails")) == ["Elixir", "Ruby on Rails"]
     end
 
     test "a brand-new tag previews exactly as typed", %{live: live} do

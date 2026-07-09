@@ -142,14 +142,16 @@ defmodule Vutuv.Imports.LinkedInTest do
   end
 
   describe "Skills.csv" do
-    test "splits multi-word skills into single-token tag candidates and dedups" do
+    test "keeps a multi-word skill whole as one tag candidate and dedups" do
       csv = "Name\nElixir\nRuby on Rails\nElixir\n"
       {:ok, result} = LinkedIn.parse(zip([{"Skills.csv", csv}]))
 
       labels = Enum.map(result.skills, & &1.label)
+      # One CSV row is one skill: "Ruby on Rails" stays one candidate now that
+      # tags may contain spaces, it is not exploded into "Ruby"/"on"/"Rails".
       assert "Elixir" in labels
-      assert "Ruby" in labels
-      assert "Rails" in labels
+      assert "Ruby on Rails" in labels
+      refute "Ruby" in labels
       # Elixir appears twice in the file but once in the candidates.
       assert Enum.count(labels, &(&1 == "Elixir")) == 1
     end

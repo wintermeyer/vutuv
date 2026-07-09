@@ -1,13 +1,14 @@
 defmodule VutuvWeb.TagNewLive do
   @moduledoc """
-  The add-tag form (GET /settings/tags/new) — a LiveView so the member sees,
+  The add-tag form (GET /settings/tags/new) is a LiveView so the member sees,
   while typing, exactly which tags a submit will attach (issue #848, variant
-  one): the input splits on commas and spaces, a leading `#` is stripped, and
-  each name is matched case-insensitively against the existing global tags,
-  whose stored display name wins (`Vutuv.Tags.preview_tag_names/1`). That
-  makes the non-obvious tag rules visible before the submit — a camel-case
-  variant of an existing lowercase tag previews as the lowercase chip the
-  profile will actually show.
+  one): the input separates on commas and spaces, a quoted phrase stays one
+  multi-word tag, a leading `#` is stripped, and each name is matched
+  case-insensitively against the existing global tags, whose stored display
+  name wins (`Vutuv.Tags.preview_tag_names/1`). That makes the non-obvious tag
+  rules visible before the submit: a camel-case variant of an existing
+  lowercase tag previews as the lowercase chip the profile will actually show,
+  and `"Ruby on Rails"` previews as one chip.
 
   Submitting saves over the socket through the same `Vutuv.Tags.add_user_tag/2`
   chokepoint the retired controller create action used: a single tag keeps the
@@ -53,7 +54,7 @@ defmodule VutuvWeb.TagNewLive do
           <label for={@form[:value].id}>{gettext("Tags")}</label>
           <p class="editform__hint">
             💡 <strong>{gettext("Tip:")}</strong> {gettext(
-              "Separate tags with a comma or a space."
+              "Separate tags with a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
             )}
           </p>
           <input
@@ -61,7 +62,7 @@ defmodule VutuvWeb.TagNewLive do
             id={@form[:value].id}
             name={@form[:value].name}
             value={@form[:value].value}
-            placeholder={gettext("PHP, JavaScript, Origami, Recruiting")}
+            placeholder={gettext("PHP, JavaScript, \"Ruby on Rails\"")}
             autocomplete="off"
             phx-debounce="150"
           />

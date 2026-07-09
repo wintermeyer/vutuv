@@ -501,9 +501,9 @@ defmodule VutuvWeb.PageControllerTest do
       refute user_by_email("duplicated@example.com")
     end
 
-    # Tags never contain spaces, so a run of words is not an error: each word
-    # (and each comma-separated segment) becomes its own tag. See
-    # Vutuv.Tags.parse_tag_names/1.
+    # An unquoted run of words is not an error: each word (and each
+    # comma-separated segment) becomes its own tag. A quoted phrase is kept
+    # whole (see the next test and Vutuv.Tags.parse_tag_names/1).
     test "splits a space-separated tag list into one tag per word", %{conn: conn} do
       attrs =
         Map.merge(@valid_attrs, %{
@@ -518,6 +518,22 @@ defmodule VutuvWeb.PageControllerTest do
       assert user.user_tags
              |> Enum.map(& &1.tag.name)
              |> Enum.sort() == ["Go", "Hunde", "JavaScript"]
+    end
+
+    test "keeps a quoted multi-word tag whole at sign-up", %{conn: conn} do
+      attrs =
+        Map.merge(@valid_attrs, %{
+          "emails" => %{"0" => %{"value" => "quoted@example.com"}},
+          "tag_list" => ~s("Ruby on Rails", Elixir, Go)
+        })
+
+      post(conn, ~p"/new_registration", user: attrs)
+
+      user = user_by_email("quoted@example.com") |> Vutuv.Repo.preload(user_tags: :tag)
+
+      assert user.user_tags
+             |> Enum.map(& &1.tag.name)
+             |> Enum.sort() == ["Elixir", "Go", "Ruby on Rails"]
     end
 
     # The PIN-entry confirmation page shown right after sign-up used to point at

@@ -56,6 +56,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostTag
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.UUIDv7
 
@@ -1670,10 +1671,12 @@ defmodule Vutuv.Posts do
 
   defp parse_tag_values(nil), do: []
 
-  # Tags never contain spaces, so the composer field splits on both the comma
-  # and any whitespace: "elixir Phoenix, Ecto" becomes three tags.
+  # The composer field shares the tags-page tokenizer: an unquoted comma or
+  # space separates ("elixir Phoenix, Ecto" is three tags) while a quoted
+  # phrase stays one multi-word tag ("Ruby on Rails"). Delegates to the list
+  # head below for the dedupe + cap.
   defp parse_tag_values(values) when is_binary(values),
-    do: parse_tag_values(String.split(values, ~r/[\s,]+/, trim: true))
+    do: values |> Tags.parse_tag_names() |> parse_tag_values()
 
   # Tag.normalize_value strips a leading `#` (the hashtag form), so "#Elixir"
   # becomes "Elixir" and dedupes/links against the bare tag; a bare "#" drops.

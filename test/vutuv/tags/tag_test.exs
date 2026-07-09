@@ -16,6 +16,17 @@ defmodule Vutuv.Tags.TagTest do
       changeset = Tag.changeset(%Tag{}, %{"value" => "C#"})
       assert get_change(changeset, :name) == "C#"
     end
+
+    test "keeps a multi-word name and slugifies it" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "Ruby on Rails"})
+      assert get_change(changeset, :name) == "Ruby on Rails"
+      assert get_change(changeset, :slug) == "ruby-on-rails"
+    end
+
+    test "collapses internal whitespace runs to a single space" do
+      changeset = Tag.changeset(%Tag{}, %{"value" => "Ruby   on  Rails"})
+      assert get_change(changeset, :name) == "Ruby on Rails"
+    end
   end
 
   describe "related_users/2" do

@@ -459,7 +459,7 @@ msgstr "Mehr"
 msgid "Name"
 msgstr "Name"
 
-#: lib/vutuv_web/live/tag_new_live.ex:45
+#: lib/vutuv_web/live/tag_new_live.ex:46
 #: lib/vutuv_web/templates/access_token/new.html.heex:1
 #: lib/vutuv_web/templates/ad/new.html.heex:3
 #: lib/vutuv_web/templates/address/new.html.heex:4
@@ -1410,9 +1410,9 @@ msgstr "Tag-URLs"
 #: lib/vutuv_web/live/cv_live.ex:279
 #: lib/vutuv_web/live/search_live.ex:147
 #: lib/vutuv_web/live/search_live.ex:321
-#: lib/vutuv_web/live/tag_new_live.ex:34
-#: lib/vutuv_web/live/tag_new_live.ex:44
-#: lib/vutuv_web/live/tag_new_live.ex:53
+#: lib/vutuv_web/live/tag_new_live.ex:35
+#: lib/vutuv_web/live/tag_new_live.ex:45
+#: lib/vutuv_web/live/tag_new_live.ex:54
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:138
 #: lib/vutuv_web/templates/admin/tag/edit.html.heex:5
 #: lib/vutuv_web/templates/admin/tag/index.html.heex:5
@@ -1548,7 +1548,7 @@ msgstr "Die am häufigsten empfohlenen Mitglieder mit diesem Tag"
 msgid "Unendorsed tag successfully."
 msgstr "Empfehlung zurückgenommen."
 
-#: lib/vutuv_web/live/tag_new_live.ex:108
+#: lib/vutuv_web/live/tag_new_live.ex:109
 #, elixir-autogen
 msgid "User tag created successfully."
 msgstr "Tag erfolgreich hinzugefügt."
@@ -2746,16 +2746,6 @@ msgstr[1] "%{count} Tags hinzugefügt."
 #, elixir-autogen, elixir-format
 msgid "Added %{successes} of %{total} tags (the rest were duplicates or invalid)."
 msgstr "%{successes} von %{total} Tags hinzugefügt (der Rest war doppelt oder ungültig)."
-
-#: lib/vutuv_web/live/tag_new_live.ex:64
-#, elixir-autogen, elixir-format
-msgid "PHP, JavaScript, Origami, Recruiting"
-msgstr "PHP, JavaScript, Origami, Recruiting"
-
-#: lib/vutuv_web/live/tag_new_live.ex:55
-#, elixir-autogen, elixir-format
-msgid "Separate tags with a comma or a space."
-msgstr "Tags mit Komma oder Leerzeichen trennen."
 
 #: lib/vutuv_web/templates/connection/index.html.heex:13
 #, elixir-autogen, elixir-format
@@ -4382,7 +4372,7 @@ msgid "Edit the ad"
 msgstr "Anzeige bearbeiten"
 
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1004
-#: lib/vutuv_web/live/tag_new_live.ex:72
+#: lib/vutuv_web/live/tag_new_live.ex:73
 #: lib/vutuv_web/templates/ad/preview.html.heex:3
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:122
 #, elixir-autogen, elixir-format
@@ -5273,7 +5263,7 @@ msgstr "Navigation"
 #: lib/vutuv_web/components/ui.ex:2728
 #: lib/vutuv_web/controllers/settings_controller.ex:47
 #: lib/vutuv_web/live/shell_live.ex:394
-#: lib/vutuv_web/live/tag_new_live.ex:43
+#: lib/vutuv_web/live/tag_new_live.ex:44
 #: lib/vutuv_web/templates/address/edit.html.heex:2
 #: lib/vutuv_web/templates/address/new.html.heex:2
 #: lib/vutuv_web/templates/education/edit.html.heex:2
@@ -8219,11 +8209,6 @@ msgstr "Zu viele Importe. Bitte versuchen Sie es in Kürze erneut."
 msgid "A photo and a short tagline make your profile complete."
 msgstr "Ein Foto und eine Kurzbeschreibung machen Ihr Profil komplett."
 
-#: lib/vutuv_web/templates/page/index.html.heex:93
-#, elixir-autogen, elixir-format
-msgid "At least three tags, separated by a comma or a space."
-msgstr "Mindestens drei Tags, mit Komma oder Leerzeichen getrennt."
-
 #: lib/vutuv_web/live/user_profile_live.ex:860
 #, elixir-autogen, elixir-format
 msgid "For example, a thought on %{tag}."
@@ -8720,12 +8705,12 @@ msgstr "Berufsausbildung"
 msgid "Please enter a tag."
 msgstr "Bitte geben Sie ein Tag ein."
 
-#: lib/vutuv_web/live/tag_new_live.ex:73
+#: lib/vutuv_web/live/tag_new_live.ex:74
 #, elixir-autogen, elixir-format
 msgid "This will create the following tags:"
 msgstr "Die folgenden Tags werden erstellt:"
 
-#: lib/vutuv_web/live/tag_new_live.ex:55
+#: lib/vutuv_web/live/tag_new_live.ex:56
 #, elixir-autogen, elixir-format
 msgid "Tip:"
 msgstr "Tipp:"
@@ -10567,3 +10552,18 @@ msgstr "Ihr persönlicher vutuv-Newsfeed."
 #, elixir-autogen, elixir-format
 msgid "vutuv is the open business network where professionals connect, share, and get found. Free to join."
 msgstr "vutuv ist das offene Business-Netzwerk. Fachleute vernetzen sich, tauschen sich aus und werden gefunden. Kostenlos dabei."
+
+#: lib/vutuv_web/templates/page/index.html.heex:93
+#, elixir-autogen, elixir-format
+msgid "At least three tags, separated by a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+msgstr "Mindestens drei Tags, mit Komma oder Leerzeichen getrennt. Tags aus mehreren Wörtern in Anführungszeichen: \"Ruby on Rails\"."
+
+#: lib/vutuv_web/live/tag_new_live.ex:65
+#, elixir-autogen, elixir-format
+msgid "PHP, JavaScript, \"Ruby on Rails\""
+msgstr "PHP, JavaScript, \"Ruby on Rails\""
+
+#: lib/vutuv_web/live/tag_new_live.ex:56
+#, elixir-autogen, elixir-format
+msgid "Separate tags with a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\"."
+msgstr "Tags mit Komma oder Leerzeichen trennen. Tags aus mehreren Wörtern in Anführungszeichen: \"Ruby on Rails\"."

@@ -1,13 +1,12 @@
 defmodule Vutuv.Tags do
   @moduledoc """
-  The Tags context: adding tags to users (one name or a comma- or
-  space-separated batch — registration and the tags page share this path)
-  and user tag endorsements.
+  The Tags context: adding tags to users (one name or a batch of them, the path
+  registration and the tags page share) and user tag endorsements.
 
-  Tags never contain whitespace: a single tag is one run of non-space
-  characters. Both the comma and the space act as separators, so a member can
-  type `"Elixir, Phoenix Go"` and get three tags. The no-space rule is enforced
-  at the schema (`Vutuv.Tags.Tag`), so a spaced name can never be stored.
+  Tags may contain spaces ("Ruby on Rails"). When a member types a batch, an
+  unquoted comma or space still separates tags, so `"Elixir, Phoenix Go"` is
+  three tags; a multi-word tag is grouped with quotes, so `"Elixir "Ruby on
+  Rails""` is two. `parse_tag_names/1` is the single tokenizer for that rule.
   """
 
   import Ecto.Query
@@ -23,23 +22,49 @@ defmodule Vutuv.Tags do
   @endorser_sorts ~w(name username date)
   @endorsers_per_page 25
 
+  # Matches one token: either a `"…"` quoted phrase (capturing its inside, which
+  # may hold spaces) or a run of non-space, non-comma characters. Tried
+  # left-to-right at each position, so a well-formed `"…"` is always taken whole
+  # before the bare alternative can nibble at it.
+  @token_regex ~r/"([^"]*)"|[^\s,]+/
+  # Curly/German/guillemet quotes a phone keyboard autocorrects to, folded to a
+  # straight `"` so grouping works no matter which quote the member typed.
+  @fancy_quotes ~r/[\x{201C}\x{201D}\x{201E}\x{201F}\x{00AB}\x{00BB}]/u
+
   @doc """
-  Splits a tag string into clean names, treating both the comma and any run of
-  whitespace as separators: `" PHP, , Ruby on Rails "` →
-  `["PHP", "Ruby", "on", "Rails"]`. Tags never contain spaces, so what used to
-  be one merged multi-word tag now becomes one tag per word. A leading `#` (the
-  hashtag form) is stripped from each token, so `"#Elixir #Phoenix"` becomes
+  Tokenizes a tag string into clean names. An unquoted comma or run of
+  whitespace separates tags, and a `"…"` quoted phrase is kept as one
+  multi-word tag: `~s(PHP, "Ruby on Rails" Go)` → `["PHP", "Ruby on Rails",
+  "Go"]`, while the same words unquoted (`"Ruby on Rails"`) stay one tag per
+  word. Curly and German quotes are accepted too; an unbalanced quote degrades
+  to word splitting rather than swallowing the rest of the line. A leading `#`
+  (the hashtag form) is stripped from each token and interior whitespace is
+  collapsed (`Tag.normalize_value/1`), so `"#Elixir #Phoenix"` →
   `["Elixir", "Phoenix"]` and a bare `"#"` drops out. Safe to call with `nil`
   (returns `[]`).
   """
   def parse_tag_names(value) when is_binary(value) do
     value
-    |> String.split(~r/[\s,]+/, trim: true)
+    |> String.replace(@fancy_quotes, "\"")
+    |> then(&Regex.scan(@token_regex, &1))
+    |> Enum.map(&token_from_match/1)
     |> Enum.map(&Tag.normalize_value/1)
     |> Enum.reject(&(&1 == ""))
   end
 
   def parse_tag_names(_), do: []
+
+  # A quoted match arrives as `["\"phrase\"", "phrase"]` (full then the inner
+  # capture); a bare match as `["token", ""]`. Use the capture only for a real
+  # `"…"` pair (starts and ends with a quote), and strip any stray quote from a
+  # bare token so an unbalanced `"` can never end up in a stored name.
+  defp token_from_match([full | rest]) do
+    token = if quoted?(full), do: List.first(rest) || "", else: full
+    String.replace(token, "\"", "")
+  end
+
+  defp quoted?(full),
+    do: String.starts_with?(full, "\"") and String.ends_with?(full, "\"") and byte_size(full) >= 2
 
   @doc """
   The display names a submit of `value` on the add-tag form will actually
@@ -202,11 +227,29 @@ defmodule Vutuv.Tags do
     * it exists, is not honor, and **members already hold it** →
       `{:error, :has_holders, tag}` so the caller can route the admin to the
       edit form's retroactive-lock warning instead of silently locking holders
-    * an invalid name (blank / contains spaces) → `{:error, changeset}`
+    * a blank or multi-word name → `{:error, changeset}`
+
+  Ordinary member tags may contain spaces ("Ruby on Rails"), but an honor tag is
+  a single-token reserved badge (the admin form promises "a single word with no
+  spaces"), so a multi-word name is refused here even though the schema no longer
+  forbids one.
   """
   def declare_honor_tag(name) when is_binary(name) do
     value = Tag.normalize_value(name)
 
+    if String.contains?(value, " ") do
+      changeset =
+        %Tag{}
+        |> Tag.changeset(%{"value" => value})
+        |> Ecto.Changeset.add_error(:name, "must be a single word")
+
+      {:error, changeset}
+    else
+      create_or_flip_honor_tag(value)
+    end
+  end
+
+  defp create_or_flip_honor_tag(value) do
     case Tag.find_by_value(value) do
       nil ->
         %Tag{}

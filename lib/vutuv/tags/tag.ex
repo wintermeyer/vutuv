@@ -48,12 +48,12 @@ defmodule Vutuv.Tags.Tag do
   defp shared_validations(changeset) do
     changeset
     |> validate_required([:slug, :name])
-    # A tag is a single token: no spaces (or any other whitespace). Both the
-    # sign-up field and the tags page split their input on spaces before this
-    # runs, so this is the backstop for the paths that hand a raw name straight
-    # through (the JSON API, a post's tag list) — a spaced name is rejected, not
-    # silently merged into one giant tag.
-    |> validate_format(:name, ~r/^\S+$/, message: "must not contain spaces")
+    # A tag name is a single line that may contain spaces ("Ruby on Rails"):
+    # multi-word tags are first-class again. `normalize_value/1` already
+    # collapses any interior whitespace run to a single space on every member
+    # entry point, so this only backstops the raw name/slug head (the admin
+    # edit form) against a stray line break or tab sneaking in.
+    |> validate_format(:name, ~r/^[^\r\n\t]+$/, message: "must be a single line")
     |> validate_length(:slug, max: 60)
     |> validate_length(:name, max: 255)
     |> unique_constraint(:slug)
@@ -81,11 +81,12 @@ defmodule Vutuv.Tags.Tag do
   Links the changeset to an existing tag whose name (case-insensitive) or slug
   matches the typed value, or builds a new tag when none exists.
 
-  A value that contains whitespace is never linked, not even to a legacy
-  multi-word tag that predates the no-space rule: it is built as a fresh tag so
-  the changeset carries the validation error instead of quietly attaching a
-  spaced tag. Callers that split their input first (sign-up, the tags page)
-  never reach this branch; the JSON API does.
+  The value is one tag name and may contain spaces ("Ruby on Rails"): a
+  multi-word value links to the existing spaced tag (case-insensitively) or
+  builds it fresh, exactly like a single-word one. Callers that accept a batch
+  (sign-up, the tags page, the post composer) tokenize their input first with
+  `Vutuv.Tags.parse_tag_names/1`, which honours quotes; the JSON API reaches
+  here with a single already-whole name.
   """
   def create_or_link_tag(changeset, %{"value" => value} = params) do
     # Strip the hashtag form before both the existing-tag lookup and the build,
@@ -93,30 +94,32 @@ defmodule Vutuv.Tags.Tag do
     # the bare name. The rewritten params carry the normalized value downstream.
     value = normalize_value(value)
     params = Map.put(params, "value", value)
-
-    if String.match?(value, ~r/\s/) do
-      tag = __MODULE__.changeset(%__MODULE__{}, params)
-      put_assoc(changeset, :tag, tag)
-    else
-      link_or_build_tag(changeset, value, params)
-    end
+    link_or_build_tag(changeset, value, params)
   end
 
   @leading_hash ~r/^#+\s*/
 
   @doc """
-  Normalizes a typed tag value: trims it and strips a leading `#` — the hashtag
-  form members naturally type, since posts render `#hashtag` links — so
+  Normalizes a typed tag value: trims it, strips a leading `#` (the hashtag
+  form members naturally type, since posts render `#hashtag` links, so
   `"#elixir"` is stored as the tag `elixir` and links to the same global tag as
-  `"elixir"` rather than a `#`-prefixed duplicate. Only a *leading* run of `#`
-  (and any space right after it) is removed, so `"C#"` / `"F#"` keep their
-  trailing `#`. A bare `"#"` normalizes to `""` (dropped as blank by the split
-  paths, rejected by the changeset). Applied at every tag-value boundary:
-  `Vutuv.Tags.parse_tag_names/1`, `Vutuv.Posts` post tags, `create_or_link_tag/2`
-  and `changeset/2`, so no entry point can store a leading `#`.
+  `"elixir"` rather than a `#`-prefixed duplicate; only a *leading* run of `#`
+  and any space right after it is removed, so `"C#"` / `"F#"` keep their
+  trailing `#`), and collapses every interior run of whitespace to a single
+  space so a multi-word tag is stored cleanly (`"Ruby   on  Rails"` and a
+  pasted `"Ruby\\non Rails"` both become `"Ruby on Rails"`). A bare `"#"`
+  normalizes to `""` (dropped as blank by the tokenizer, rejected by the
+  changeset). Applied at every tag-value boundary: `Vutuv.Tags.parse_tag_names/1`,
+  `Vutuv.Posts` post tags, `create_or_link_tag/2` and `changeset/2`, so no entry
+  point can store a leading `#` or ragged whitespace.
   """
-  def normalize_value(value) when is_binary(value),
-    do: value |> String.trim() |> String.replace(@leading_hash, "")
+  def normalize_value(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> String.replace(@leading_hash, "")
+    |> String.replace(~r/\s+/u, " ")
+    |> String.trim()
+  end
 
   def normalize_value(value), do: value
 

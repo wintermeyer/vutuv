@@ -33,6 +33,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Tags
+  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
   @empty %{
@@ -519,13 +520,15 @@ defmodule Vutuv.Imports.LinkedIn do
     end
   end
 
-  # ── Skills.csv → tag tokens ──
+  # ── Skills.csv → tag candidates ──
   #
-  # vutuv tags are single tokens (no spaces), so a multi-word LinkedIn skill
-  # ("Ruby on Rails") splits into several candidates the member can prune.
+  # One CSV row is one skill, and tags may contain spaces now, so a multi-word
+  # LinkedIn skill ("Ruby on Rails") stays a single candidate the member can
+  # accept or prune whole (it is not exploded into "Ruby"/"on"/"Rails").
   defp parse_skills(rows) do
     rows
-    |> Enum.flat_map(fn row -> Tags.parse_tag_names(row["Name"] || "") end)
+    |> Enum.map(fn row -> Tag.normalize_value(row["Name"] || "") end)
+    |> Enum.reject(&(&1 == ""))
     |> Enum.uniq_by(&String.downcase/1)
     |> Enum.map(fn name ->
       %{id: cid("skill", String.downcase(name)), label: name, name: name}

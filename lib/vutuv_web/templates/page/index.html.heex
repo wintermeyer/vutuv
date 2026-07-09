@@ -90,7 +90,7 @@
               nearly the same thing, and one clear line beats a red-on-grey
               stack. The input itself turns red via input_class/2. --%>
         <%= error_tag f, :tag_list %>
-        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space.")}</p>
+        <p :if={!f.errors[:tag_list]} class="mt-1 text-sm text-slate-600 dark:text-slate-400">{gettext("At least three tags, separated by a comma or a space. Multi-word tags go in quotes: \"Ruby on Rails\".")}</p>
       </div>
     </div>
 
