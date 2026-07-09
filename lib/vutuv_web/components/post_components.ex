@@ -32,6 +32,16 @@ defmodule VutuvWeb.PostComponents do
   # on a phone (5 × 20px avatars, overlapped, plus the chip and the sentence).
   @repost_stack_cap 5
 
+  # A single preview image counts as "roughly square" when its aspect ratio sits
+  # inside a 5:4 / 4:5 envelope (a factor of 1.25 either side of 1:1). Such an
+  # image, shown full-width, overruns the max-h cap and object-cover crops it to a
+  # middle band — so it is laid out beside the text (2/3 text, 1/3 image) instead,
+  # where it shows in full. The window is deliberately narrow: a clearly landscape
+  # photo (4:3 = 1.33 and wider) reads fine full-width and stays there. The 736×678
+  # GitHub code card that prompted this (~1.09) sits comfortably inside it.
+  @square_ratio_min 0.8
+  @square_ratio_max 1.25
+
   attr(:post, :any, required: true, doc: "preloaded %Vutuv.Posts.Post{}")
   attr(:viewer, :any, default: nil)
 
@@ -116,6 +126,7 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:restricted?, Posts.restricted?(assigns.post))
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
+      |> assign(:square_layout?, square_layout?(assigns.post, assigns.mode))
       |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
@@ -149,6 +160,7 @@ defmodule VutuvWeb.PostComponents do
       restricted?={@restricted?}
       permalink={@permalink}
       gallery={@gallery}
+      square_layout?={@square_layout?}
       edited?={@edited?}
       author?={@author?}
       reporter?={@reporter?}
@@ -587,6 +599,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:restricted?, :boolean, required: true)
   attr(:permalink, :string, required: true)
   attr(:gallery, :list, required: true)
+  attr(:square_layout?, :boolean, required: true)
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
   attr(:reporter?, :boolean, required: true)
@@ -740,113 +753,112 @@ defmodule VutuvWeb.PostComponents do
             {@body_html}
           </div>
 
-          <%!-- Preview mode: the body is clamped to six lines and paired with a
-          plain "Read more" link to the permalink. The link's display is set by
-          mutually exclusive classes — `inline-block` when the source was
-          truncated server-side (@truncated?, shown with no JS), else `hidden`.
-          They must never coexist: both set `display` and Tailwind emits
-          `.inline-block` after `.hidden`, so a link carrying both shows
-          regardless of `hidden` (the real #880 bug — "Read more" on every post,
-          every browser). The PostPreviewClamp hook (live pages) / data-post-preview
-          sweep (dead pages) flips the pair when a longer body overflows the CSS
-          clamp, which the server can't know because wrapping is width- and
-          font-dependent; it decides with the standard clamp test (body scrollHeight
-          exceeds clientHeight). With JS off a css-only clamp keeps the native
-          ellipsis and no link. No length metric (issue #880): a word count was
-          meaningless once the reader had the preview, and slipped onto
-          fully-visible posts. --%>
-          <div
-            :if={@mode == :preview and @post.body != ""}
-            id={@body_id}
-            phx-hook="PostPreviewClamp"
-            data-post-preview
-            data-server-truncated={to_string(@truncated?)}
-            class={["post-preview mt-2", @truncated? && "is-clamped"]}
-          >
-            <div class="relative">
-              <div class="markdown markdown--post line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
-                {@body_html}
+          <%= cond do %>
+            <% @square_layout? -> %>
+              <%!-- A single roughly-square image (see @square_ratio_*) laid out
+              beside the body — 2/3 text, 1/3 image — so it shows in full instead
+              of being cropped to a middle band by the full-width max-h cap. It
+              stacks (text, then image below) on a phone, where the narrow column
+              would not trigger the crop anyway. The image drops the max-h /
+              object-cover of the full-width variant: at a third of the column a
+              squarish image is never tall enough to need capping, so it renders
+              at its natural aspect, whole. --%>
+              <div class="mt-2 sm:flex sm:items-start sm:gap-4">
+                <div class="min-w-0 sm:w-2/3">
+                  <.preview_body
+                    body_id={@body_id}
+                    body_html={@body_html}
+                    truncated?={@truncated?}
+                    permalink={@permalink}
+                  />
+                  <%!-- Tags ride directly under the text inside the 2/3 column,
+                  filling the space beside the image, rather than dropping to a
+                  full-width row below the whole side-by-side block. --%>
+                  <.post_tags tags={@post.tags} />
+                </div>
+                <.link
+                  href={@permalink}
+                  aria-label={gettext("View post")}
+                  class="mt-3 block shrink-0 sm:mt-0 sm:w-1/3"
+                >
+                  <img
+                    src={PostImage.url(hd(@post.images), "feed")}
+                    alt={hd(@post.images).alt}
+                    width={hd(@post.images).width}
+                    height={hd(@post.images).height}
+                    loading="lazy"
+                    class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+                  />
+                </.link>
               </div>
-              <%!-- Fades the six-line cut into the card so it reads as
-              intentional; only visible once `is-clamped` is set (server
-              @truncated? + the PostPreviewClamp hook). --%>
-              <div class="post-preview__fade" aria-hidden="true"></div>
-              <%!-- "Read more" rides the last (faded) line at the bottom-right,
-              crisp on its own card-bg blend so it stays legible over the fade —
-              a natural inline spot, not an orphaned CTA line. Keeps the mutually
-              exclusive inline-block/hidden display pair (issue #880): the hook
-              flips both when a longer body overflows the clamp. --%>
-              <.link
-                href={@permalink}
-                data-read-more
-                class={[
-                  "post-preview__more absolute bottom-0 right-0 text-sm font-medium text-brand-600 hover:text-brand-700",
-                  if(@truncated?, do: "inline-block", else: "hidden")
-                ]}
-              >
-                {gettext("Read more")}
-              </.link>
-            </div>
-          </div>
-
-          <%= if @mode == :preview do %>
-            <%!-- A single image keeps its aspect ratio at column width
-            (height-capped) — square micro-thumbs would crop a panorama down
-            to its middle sliver. Multiple images tile in a 2-up grid. --%>
-            <.link
-              :if={length(@post.images) == 1}
-              href={@permalink}
-              aria-label={gettext("View post")}
-              class="mt-3 block"
-            >
-              <img
-                src={PostImage.url(hd(@post.images), "feed")}
-                alt={hd(@post.images).alt}
-                width={hd(@post.images).width}
-                height={hd(@post.images).height}
-                loading="lazy"
-                class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+            <% @mode == :preview -> %>
+              <.preview_body
+                :if={@post.body != ""}
+                body_id={@body_id}
+                body_html={@body_html}
+                truncated?={@truncated?}
+                permalink={@permalink}
+                class="mt-2"
               />
-            </.link>
-            <div :if={length(@post.images) > 1} class="mt-3 grid grid-cols-2 gap-2">
-              <.link :for={image <- @post.images} href={@permalink} aria-label={gettext("View post")} class="block">
-                <img
-                  src={PostImage.url(image, "feed")}
-                  alt={image.alt}
-                  width={image.width}
-                  height={image.height}
-                  loading="lazy"
-                  class="aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-                />
-              </.link>
-            </div>
-          <% else %>
-            <div
-              :if={@gallery != []}
-              class={["mt-4 grid gap-2", length(@gallery) > 1 && "sm:grid-cols-2"]}
-            >
-              <a
-                :for={image <- @gallery}
-                href={PostImage.url(image, "large")}
-                target="_blank"
-                rel="noopener"
-                class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+
+              <%!-- A single image keeps its aspect ratio at column width
+              (height-capped) — square micro-thumbs would crop a panorama down
+              to its middle sliver. Multiple images tile in a 2-up grid. --%>
+              <.link
+                :if={length(@post.images) == 1}
+                href={@permalink}
+                aria-label={gettext("View post")}
+                class="mt-3 block"
               >
                 <img
-                  src={PostImage.url(image, "feed")}
-                  alt={image.alt}
-                  width={image.width}
-                  height={image.height}
+                  src={PostImage.url(hd(@post.images), "feed")}
+                  alt={hd(@post.images).alt}
+                  width={hd(@post.images).width}
+                  height={hd(@post.images).height}
                   loading="lazy"
-                  class="w-full object-cover"
+                  class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
                 />
-              </a>
-            </div>
+              </.link>
+              <div :if={length(@post.images) > 1} class="mt-3 grid grid-cols-2 gap-2">
+                <.link :for={image <- @post.images} href={@permalink} aria-label={gettext("View post")} class="block">
+                  <img
+                    src={PostImage.url(image, "feed")}
+                    alt={image.alt}
+                    width={image.width}
+                    height={image.height}
+                    loading="lazy"
+                    class="aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+                  />
+                </.link>
+              </div>
+            <% true -> %>
+              <div
+                :if={@gallery != []}
+                class={["mt-4 grid gap-2", length(@gallery) > 1 && "sm:grid-cols-2"]}
+              >
+                <a
+                  :for={image <- @gallery}
+                  href={PostImage.url(image, "large")}
+                  target="_blank"
+                  rel="noopener"
+                  class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+                >
+                  <img
+                    src={PostImage.url(image, "feed")}
+                    alt={image.alt}
+                    width={image.width}
+                    height={image.height}
+                    loading="lazy"
+                    class="w-full object-cover"
+                  />
+                </a>
+              </div>
           <% end %>
 
-          <div :if={@post.tags != []} class="mt-3 flex flex-wrap gap-2">
-            <.chip :for={tag <- @post.tags} navigate={~p"/tags/#{tag}"}>{tag.name}</.chip>
-          </div>
+          <%!-- Every non-square layout puts the tags in their own full-width row
+          below the body/images; the square layout already rendered them inside
+          the 2/3 text column above. --%>
+          <.post_tags :if={not @square_layout?} tags={@post.tags} />
 
           <%!-- The action bar (like / repost / bookmark + counters). On a
           LiveView host it is an in-process LiveComponent that re-renders in
@@ -871,6 +883,70 @@ defmodule VutuvWeb.PostComponents do
           <% end %>
         </div>
       </div>
+    </div>
+    """
+  end
+
+  # The clamped preview body: the Markdown cut to six lines, faded at the bottom,
+  # with a "Read more" link riding the last line. Its display is set by mutually
+  # exclusive classes — `inline-block` when the source was truncated server-side
+  # (@truncated?, shown with no JS), else `hidden`. They must never coexist: both
+  # set `display` and Tailwind emits `.inline-block` after `.hidden`, so a link
+  # carrying both shows regardless of `hidden` (the real #880 bug — "Read more" on
+  # every post, every browser). The PostPreviewClamp hook (live pages) /
+  # data-post-preview sweep (dead pages) flips the pair when a longer body overflows
+  # the CSS clamp, which the server can't know because wrapping is width- and
+  # font-dependent; it decides with the standard clamp test (body scrollHeight
+  # exceeds clientHeight). With JS off a css-only clamp keeps the native ellipsis
+  # and no link. Shared by the full-width preview and the 2/3 side-by-side layout,
+  # so the clamp behaves identically whichever column width it lands in; `class`
+  # carries the caller's top margin (mt-2 standalone, none inside the flex row).
+  attr(:body_id, :string, required: true)
+  attr(:body_html, :any, required: true)
+  attr(:truncated?, :boolean, required: true)
+  attr(:permalink, :string, required: true)
+  attr(:class, :string, default: nil)
+
+  defp preview_body(assigns) do
+    ~H"""
+    <div
+      id={@body_id}
+      phx-hook="PostPreviewClamp"
+      data-post-preview
+      data-server-truncated={to_string(@truncated?)}
+      class={["post-preview", @class, @truncated? && "is-clamped"]}
+    >
+      <div class="relative">
+        <div class="markdown markdown--post line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
+          {@body_html}
+        </div>
+        <%!-- Fades the six-line cut into the card so it reads as intentional;
+        only visible once `is-clamped` is set (server @truncated? + the hook). --%>
+        <div class="post-preview__fade" aria-hidden="true"></div>
+        <.link
+          href={@permalink}
+          data-read-more
+          class={[
+            "post-preview__more absolute bottom-0 right-0 text-sm font-medium text-brand-600 hover:text-brand-700",
+            if(@truncated?, do: "inline-block", else: "hidden")
+          ]}
+        >
+          {gettext("Read more")}
+        </.link>
+      </div>
+    </div>
+    """
+  end
+
+  # The post's tag chips row. Renders nothing when there are no tags, so callers
+  # drop it in unconditionally. Shared by the full-width layouts (a row below the
+  # body/images) and the square layout (under the text, inside the 2/3 column).
+  attr(:tags, :list, required: true)
+
+  defp post_tags(assigns) do
+    ~H"""
+    <div :if={@tags != []} class="mt-3 flex flex-wrap gap-2">
+      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"}>{tag.name}</.chip>
     </div>
     """
   end
@@ -969,6 +1045,28 @@ defmodule VutuvWeb.PostComponents do
   # Every attachment shows in the gallery (full mode) or the thumbnail row
   # (preview) — post bodies never embed images inline.
   defp gallery(post, _mode), do: post.images
+
+  # Whether to lay a post's body and its single image out side by side (2/3 text,
+  # 1/3 image) rather than stacking a full-width image below the text. True only
+  # in preview mode, with body text to fill the left column, exactly one image,
+  # and that image roughly square (see square_image?/1). Anything else keeps the
+  # existing full-width single / multi-image treatment.
+  defp square_layout?(post, :preview) do
+    post.body != "" and match?([_], post.images) and square_image?(hd(post.images))
+  end
+
+  defp square_layout?(_post, _mode), do: false
+
+  # A "roughly square" image: aspect ratio inside the @square_ratio_min/max
+  # envelope. Guards missing dimensions (nil width/height on very old rows) — an
+  # image we can't measure is treated as not-square and keeps the full-width path.
+  defp square_image?(%PostImage{width: w, height: h})
+       when is_integer(w) and is_integer(h) and w > 0 and h > 0 do
+    ratio = w / h
+    ratio >= @square_ratio_min and ratio <= @square_ratio_max
+  end
+
+  defp square_image?(_), do: false
 
   @doc """
   Author-facing label for a post-denial wildcard — the one wording for "who

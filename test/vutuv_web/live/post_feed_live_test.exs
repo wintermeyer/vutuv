@@ -957,4 +957,87 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute render(live) =~ "words total"
     end
   end
+
+  describe "single-image layout" do
+    # A pending image (post: nil) owned by the author, attached to a fresh post
+    # via create_post/2's image_ids — the real upload path stores dimensions the
+    # same way. Dimensions are the whole point here, so each test picks its own.
+    defp post_with_image(user, body, width, height, token) do
+      image =
+        insert(:post_image, user: user, post: nil, width: width, height: height, token: token)
+
+      {:ok, post} = Posts.create_post(user, %{body: body, image_ids: [image.id]})
+      post
+    end
+
+    test "a roughly square image sits beside the text (2/3 / 1/3), not a full-width crop", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      # 736×678 ≈ 1.09 — the near-square GitHub code card that prompted this. At
+      # full column width its natural height overruns the max-h cap and object-cover
+      # crops it to a middle band; beside the text in a third it shows in full.
+      post_with_image(user, "A near-square screenshot", 736, 678, "sqtok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      assert html =~ "sm:w-2/3"
+      assert html =~ "sm:w-1/3"
+      assert html =~ "/post_images/sqtok/feed.avif"
+      # It must NOT also render the cropping full-width single-image variant.
+      refute html =~ "max-h-96"
+    end
+
+    test "tags ride under the text (before the image), not in a full-width row below", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      image = insert(:post_image, user: user, post: nil, width: 736, height: 678, token: "sqtag")
+
+      {:ok, _post} =
+        Posts.create_post(user, %{
+          body: "square with a tag",
+          image_ids: [image.id],
+          tags: "elixir"
+        })
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      # In the side-by-side layout the tag chip sits under the text inside the
+      # 2/3 column, which is DOM-ordered *before* the image — not in the
+      # full-width row that follows the image in every other layout.
+      {tag_pos, _} = :binary.match(html, "/tags/elixir")
+      {img_pos, _} = :binary.match(html, "/post_images/sqtag/feed.avif")
+
+      assert tag_pos < img_pos,
+             "expected the tag chip to render before (under the text of) the image"
+    end
+
+    test "a clearly landscape image keeps the full-width layout", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      # 1200×600 = 2.0 — a wide banner reads fine full-width (short, uncropped),
+      # so it must not be squeezed into a third beside the text.
+      post_with_image(user, "A wide banner", 1200, 600, "widetok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      refute html =~ "sm:w-2/3"
+      assert html =~ "max-h-96"
+      assert html =~ "/post_images/widetok/feed.avif"
+    end
+
+    test "a squarish image with no body text stays full-width (no empty text column)", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      # Photo-only post (blank body is allowed with an attached image): there is
+      # no text to place beside it, so the side-by-side split makes no sense.
+      post_with_image(user, "", 700, 680, "notxttok")
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      refute html =~ "sm:w-2/3"
+      assert html =~ "/post_images/notxttok/feed.avif"
+    end
+  end
 end
