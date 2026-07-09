@@ -39,16 +39,18 @@ defmodule VutuvWeb.MarkdownTest do
     refute html =~ ">https://en.wikipedia.org"
   end
 
-  test "repairs editor-escaped bare URLs before autolinking" do
+  # Issue #918: a bare URL with a query string must render as one clean anchor
+  # with nothing dangling after it. The store holds bare, unescaped URLs (the
+  # editor canonicalizes them — see assets/js/markdown_editor.js), so the
+  # renderer just autolinks them; it carries no escaped-URL repair of its own.
+  test "autolinks a bare URL with a query string cleanly (no stray characters)" do
     url = "https://www.tagworx.net/ynews.php?cid=1&nid=39010"
-    escaped_url = "https\\://www.tagworx.net/ynews.php?cid=1\\&nid=39010"
-    html = render("look at #{escaped_url} now")
+    html = render("Weiterlesen unter #{url}")
 
     assert html =~ ~s(href="https://www.tagworx.net/ynews.php?cid=1&amp;nid=39010")
-    assert html =~ ">tagworx.net/ynews.php?cid=1&amp;nid=39010</a>"
-    refute html =~ "https\\://"
-    refute html =~ "\\&amp;"
-    refute html =~ url
+    # the anchor is the whole match — no leftover ")" or backslash after it
+    refute html =~ "</a>)"
+    refute html =~ "\\"
   end
 
   describe "bare URL display" do

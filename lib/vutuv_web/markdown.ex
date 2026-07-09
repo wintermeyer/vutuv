@@ -122,7 +122,6 @@ defmodule VutuvWeb.Markdown do
   defp render_pipeline(text) do
     text
     |> strip_break_artifacts()
-    |> repair_editor_escaped_urls()
     |> String.replace("<", "&lt;")
     |> autolink_bare_urls()
     |> Earmark.as_html!(breaks: true, pure_links: false)
@@ -165,16 +164,6 @@ defmodule VutuvWeb.Markdown do
     else
       text
     end
-  end
-
-  # Milkdown's Markdown serializer can escape punctuation inside plain autolink
-  # text (`https\://example.test/a\&b`). That is valid Markdown prose, but it
-  # hides the URL from our bare-URL autolinker and leaves a broken-looking string
-  # on the page. Undo only the escapes known to appear inside a URL prefix/query.
-  defp repair_editor_escaped_urls(text) do
-    Regex.replace(~r{(?<![\w/])(https?\\://[^\s<>]+)}, text, fn escaped ->
-      String.replace(escaped, ~r/\\([:&])/, "\\1")
-    end)
   end
 
   @doc """

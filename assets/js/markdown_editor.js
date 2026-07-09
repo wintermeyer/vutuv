@@ -253,7 +253,7 @@ export const MarkdownEditor = {
       .map((part, i) =>
         i % 2 === 1
           ? part
-          : this.repairEscapedUrls(part)
+          : this.canonicalizeUrls(part)
               .replace(/<br\s*\/?>/gi, "")
               .replace(/\n{3,}/g, "\n\n")
       )
@@ -262,12 +262,31 @@ export const MarkdownEditor = {
       .replace(/\n+$/, "\n")
   },
 
-  // Milkdown can serialize a plain URL as `https\://…\&…`; vutuv stores plain
-  // Markdown, and the server autolinker expects a real `https://` URL.
-  repairEscapedUrls(md) {
-    return md.replace(/(?<![\w/])https?\\:\/\/[^\s<>]+/g, (url) =>
-      url.replace(/\\([:&])/g, "$1")
-    )
+  // vutuv stores plain Markdown with **bare, unescaped** URLs — the server
+  // autolinks them and shortens the display (see VutuvWeb.Markdown). But
+  // Milkdown serializes a URL in the two forms remark produces, neither of which
+  // vutuv can render:
+  //
+  //   * a recognized link whose text is the URL becomes an autolink
+  //     `<https://ex.com>` — and vutuv escapes `<` at render time (typed HTML
+  //     must show as text), so `<…>` never becomes a link; and
+  //   * a bare URL sitting in plain text is escaped to stay literal —
+  //     `https\://ex\.com/a\&b` — by mdast-util-gfm-autolink-literal's "unsafe"
+  //     rules, so it will not re-parse as an autolink.
+  //
+  // Left as-is the stored source keeps the brackets/backslashes and the rendered
+  // link breaks (a literal "<…>", or a stray ")" once a leftover backslash
+  // confuses Earmark's link parser — issue #918). Canonicalize both back to the
+  // bare form: drop the autolink brackets, then drop every backslash inside a
+  // `scheme://…` run (a real URL never contains one, so each `\` is a Markdown
+  // escape we undo). Runs on the non-fenced text only, so a URL shown verbatim
+  // in a code block keeps its exact characters.
+  canonicalizeUrls(md) {
+    return md
+      .replace(/<(https?:\/\/[^>\s]+)>/gi, "$1")
+      .replace(/[a-z][a-z0-9+.-]*\\?:\/\/[^\s<>]*/gi, (url) =>
+        url.replace(/\\(.)/g, "$1")
+      )
   },
 
   setEditorMarkdown(markdown) {
