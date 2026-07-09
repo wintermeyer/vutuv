@@ -173,6 +173,20 @@ defmodule VutuvWeb.LayoutHTML do
     end
   end
 
+  @doc """
+  The `<title>` for the self-contained `error.html.heex` layout (the
+  exception-rescued render path). `render_errors` passes the numeric `:status`
+  in the assigns, so a 500 tab reads "500 - vutuv"; without it (e.g. rendered
+  directly) it falls back to the bare site name. Kept defensive on purpose -
+  the error layout must never raise on a missing assign.
+  """
+  def error_title(assigns) do
+    case Map.get(assigns, :status) do
+      status when is_integer(status) -> "#{status} - vutuv"
+      _ -> "vutuv"
+    end
+  end
+
   # The current path lets the shell zero the matching unread badge at mount —
   # relying only on the page's read-broadcast races the shell's subscribe on
   # full page loads. Dead pages have @conn; live pages get `:shell_path`

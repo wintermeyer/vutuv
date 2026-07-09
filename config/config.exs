@@ -6,7 +6,20 @@ config :vutuv, VutuvWeb.Endpoint,
   # option on `use Phoenix.Endpoint` does not feed runtime resolution. This
   # app runs on Bandit, so select it here.
   adapter: Bandit.PhoenixAdapter,
-  render_errors: [formats: [html: VutuvWeb.ErrorHTML, json: VutuvWeb.ErrorJSON], layout: false],
+  # The exception-rescued error path wraps the ErrorHTML card in a
+  # **self-contained** layout (VutuvWeb.LayoutHTML.error/1, templates/layout/
+  # error.html.heex): a full HTML document with inline critical CSS, so a
+  # rescued 500 looks like vutuv.de even when the DB or the /assets pipeline is
+  # the thing that broke. It must NOT be `false` (that shipped a bare, unstyled
+  # serif error page); error_layout_test.exs fails the build if it regresses.
+  render_errors: [
+    formats: [html: VutuvWeb.ErrorHTML, json: VutuvWeb.ErrorJSON],
+    # Format-qualified (`html: {...}`), not the bare 2-tuple: RenderErrors
+    # passes this straight to put_layout/2, and the bare form conflicts with
+    # the pipeline's `html: {LayoutHTML, :app}` and logs a soft-deprecation
+    # warning on every rescued 500.
+    layout: [html: {VutuvWeb.LayoutHTML, :error}]
+  ],
   pubsub_server: Vutuv.PubSub,
   # Signs the LiveView session token exchanged over the /live socket. Distinct
   # from secret_key_base and from the Plug.Session signing_salt.

@@ -1,10 +1,23 @@
 defmodule VutuvWeb.ErrorHTML do
   @moduledoc """
-  Styled error pages. Rendered inside the app layout when a plug halts a
-  request (`Plug.All404`, `EnsureActivated`, authorization checks), and bare
-  (config `render_errors` has `layout: false`) when Phoenix itself rescues an
-  exception — the markup must read fine either way, so it leans on the
-  `.error-page` classes from `components.css` and stays sensible without them.
+  Styled error pages. Each `render/2` returns the `.error-page` **card**
+  (code, message, "Back to the start page"); a layout wraps it into a full
+  document. Two wrappers, both styled:
+
+    * a plug halts a request (`Plug.All404`, `EnsureActivated`, authorization
+      checks) → the controller renders the card inside the normal **app
+      layout**, styled by the loaded `/assets/app.css`.
+    * Phoenix itself rescues an exception (a real 500, a 413 upload, an
+      unmatched route) → `render_errors` wraps the card in the **self-contained
+      `VutuvWeb.LayoutHTML.error/1` layout** (`layout/error.html.heex`): a full
+      HTML document with inline critical CSS, so the page looks like vutuv.de
+      even when the database or the asset pipeline is what broke. It used to
+      render bare (`layout: false`) and reached production as unstyled serif
+      text; see `error_layout_test.exs`.
+
+  The card leans on the `.error-page` classes, defined both in `components.css`
+  (for the app-layout path) and inline in the error layout (for the rescued
+  path), so it reads correctly in either wrapper.
   """
 
   use Phoenix.Component
