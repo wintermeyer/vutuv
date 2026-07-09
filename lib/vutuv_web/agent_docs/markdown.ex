@@ -52,6 +52,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Social Media"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
+      section(gettext("Code"), Enum.flat_map(doc.code_stats, &code_stats_lines/1)),
       section(
         gettext("Phone Numbers"),
         Enum.map(doc.phone_numbers, &entry_line("phone_numbers", &1))
@@ -269,6 +270,52 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("social_media_accounts", account), do: social_line(account)
   defp entry_line("phone_numbers", phone), do: "- #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "- " <> address_line(address)
+
+  # One code-forge account of the profile's "Code" section (Vutuv.CodeStats):
+  # the account line with its glanceable facts, then one indented line per
+  # top repository.
+  defp code_stats_lines(account) do
+    ["- #{account.provider}: #{account.url} (#{code_stats_facts(account)})"] ++
+      Enum.map(account.top_repos, &code_repo_line/1)
+  end
+
+  defp code_repo_line(repo) do
+    name = md_text(repo.name || "")
+    linked = if repo.url, do: "[#{name}](#{repo.url})", else: name
+
+    details =
+      [
+        repo.stars && "★ #{repo.stars}",
+        repo.language,
+        repo.description && md_text(repo.description)
+      ]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.join(" · ")
+
+    if details == "", do: "  - #{linked}", else: "  - #{linked}: #{details}"
+  end
+
+  @doc """
+  The facts inside a code-forge account line's parentheses — every fact the
+  forge exposed, dot-separated. Shared with the text renderer so the two
+  human-readable formats read the same.
+  """
+  def code_stats_facts(account) do
+    [
+      account.total_stars &&
+        ngettext("%{count} star", "%{count} stars", account.total_stars),
+      account.public_repos &&
+        ngettext("%{count} repository", "%{count} repositories", account.public_repos),
+      account.followers &&
+        ngettext("%{count} follower", "%{count} followers", account.followers),
+      account.member_since && gettext("since %{date}", date: account.member_since),
+      account.last_active_at &&
+        gettext("last active %{date}", date: String.slice(account.last_active_at, 0, 10)),
+      account.languages != [] && Enum.join(account.languages, ", ")
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join(" · ")
+  end
 
   # Format-independent line content, shared with the text renderer (like
   # work_period/1 below).

@@ -23,6 +23,12 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     field(:fetch_failures, :integer, default: 0)
     field(:fetch_retry_at, :utc_datetime)
     field(:fetch_disabled_at, :utc_datetime)
+    # The cached public code-forge statistics (Vutuv.CodeStats); only
+    # meaningful for the code providers (GitHub, GitLab, Codeberg). Written by
+    # CodeStats.record_result/3 after each fetch, never cast from user params;
+    # refreshed when a profile view finds the snapshot older than 7 days.
+    field(:code_stats, :map)
+    field(:code_stats_fetched_at, :utc_datetime)
 
     belongs_to(:user, Vutuv.Accounts.User)
     timestamps()
@@ -104,10 +110,18 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   # A changed handle is a different remote account, so any accumulated fetch
   # backoff or permanent deactivation no longer applies — the member fixing a
-  # typo (or re-saving the row) re-enables the Mastodon feed.
+  # typo (or re-saving the row) re-enables the Mastodon feed. The code-stats
+  # snapshot belongs to the old account, so it is dropped too (Vutuv.CodeStats
+  # fetches the new handle's snapshot in the background after save).
   defp reset_fetch_state(changeset) do
     if get_change(changeset, :value) do
-      change(changeset, fetch_failures: 0, fetch_retry_at: nil, fetch_disabled_at: nil)
+      change(changeset,
+        fetch_failures: 0,
+        fetch_retry_at: nil,
+        fetch_disabled_at: nil,
+        code_stats: nil,
+        code_stats_fetched_at: nil
+      )
     else
       changeset
     end

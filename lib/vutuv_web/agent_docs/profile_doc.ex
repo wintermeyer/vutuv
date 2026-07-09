@@ -10,6 +10,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
+  alias Vutuv.CodeStats
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -108,6 +109,12 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # disconnected HTML nor these documents include them — the formats stay
       # consistent.
       social_media: Enum.map(user.social_media_accounts, &SectionDocs.social_entry/1),
+      # The "Code" card's cached forge statistics (Vutuv.CodeStats). Unlike
+      # the inline social posts these are stored snapshots rendered into the
+      # crawler-visible HTML, so the docs carry them too. Empty when the
+      # :fetch_code_stats flag is off or the member opted out — consistent
+      # with the page.
+      code_stats: Enum.map(CodeStats.visible_accounts(user), &code_stats_entry/1),
       posts: Enum.map(posts, &post_entry/1)
     })
     |> maybe_include_photo(user, opts)
@@ -156,6 +163,37 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       "/" <> _ = path -> AgentDocs.abs_url(path)
       url -> url
     end
+  end
+
+  # One code-forge account's snapshot, straight off the stored map (string
+  # keys → the doc's atom vocabulary). Facts a forge doesn't expose (GitLab:
+  # followers, languages) stay nil/empty.
+  defp code_stats_entry(account) do
+    stats = account.code_stats
+
+    %{
+      id: account.id,
+      provider: account.provider,
+      url: SocialMediaAccount.url(account),
+      total_stars: stats["total_stars"],
+      public_repos: stats["public_repos"],
+      followers: stats["followers"],
+      member_since: stats["member_since"],
+      last_active_at: stats["last_active_at"],
+      recent_repos: stats["recent_repos"],
+      languages: List.wrap(stats["languages"]),
+      top_repos:
+        for repo <- List.wrap(stats["top_repos"]) do
+          %{
+            name: repo["name"],
+            url: repo["url"],
+            description: repo["description"],
+            language: repo["language"],
+            stars: repo["stars"]
+          }
+        end,
+      fetched_at: account.code_stats_fetched_at
+    }
   end
 
   defp post_entry(entry) do

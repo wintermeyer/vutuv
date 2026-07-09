@@ -162,6 +162,13 @@ if config_env() == :prod do
   # handling is simply off; nothing else breaks.
   config :vutuv, :bounce_webhook_token, System.get_env("BOUNCE_WEBHOOK_TOKEN")
 
+  # Optional GitHub API token for the profile code-stats fetches
+  # (Vutuv.CodeStats.GitHub, see docs/ADMINS.md). Unset => unauthenticated
+  # requests (60/hour per IP), which the 7-day snapshot cache is sized for;
+  # set a fine-grained PAT with no scopes to raise the limit to 5,000/hour.
+  # Can be added to a running installation at any time — nothing else changes.
+  config :vutuv, :github_api_token, System.get_env("GITHUB_API_TOKEN")
+
   # The Postfix delivery log the bounce watcher tails (see
   # docs/production-email-and-bounces.md). The watcher needs read access to it
   # (add the app user to the `adm` group). Set MAIL_LOG_PATH="" to turn the

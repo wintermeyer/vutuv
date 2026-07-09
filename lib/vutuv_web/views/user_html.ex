@@ -179,6 +179,153 @@ defmodule VutuvWeb.UserHTML do
       "M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"
 
   @doc """
+  One account block on the profile's "Code" card (`Vutuv.CodeStats`): the
+  linked handle, a glanceable facts line and the account's top repositories,
+  all read from the stored snapshot map (string keys — it round-trips the
+  jsonb column). Every fact is optional: a forge that doesn't expose it
+  (GitLab has no public follower count or repo language) simply drops the
+  span. Repo names/URLs came from remote JSON, so a URL renders as a link
+  only when it is https.
+  """
+  attr(:account, :any, required: true)
+
+  def code_stats_account(assigns) do
+    stats = assigns.account.code_stats
+
+    assigns =
+      assigns
+      |> assign(:stats, stats)
+      |> assign(:top_repos, List.wrap(stats["top_repos"]))
+      |> assign(:languages, List.wrap(stats["languages"]))
+
+    ~H"""
+    <div data-code-stats={@account.provider} class="min-w-0">
+      <div class="flex items-center gap-2.5">
+        <.social_icon
+          provider={@account.provider}
+          class="h-4 w-4 shrink-0 text-slate-600 dark:text-slate-400"
+        />
+        <.social_link
+          account={@account}
+          class="truncate text-sm font-semibold text-slate-800 transition hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
+        >
+          {social_handle(@account)}
+        </.social_link>
+      </div>
+
+      <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
+        <span :if={is_integer(@stats["total_stars"])} data-code-stars>
+          ★ {ngettext(
+            "%{formatted} star",
+            "%{formatted} stars",
+            @stats["total_stars"],
+            formatted: compact_count(@stats["total_stars"])
+          )}
+        </span>
+        <span :if={is_integer(@stats["public_repos"])}>
+          {ngettext(
+            "%{formatted} repository",
+            "%{formatted} repositories",
+            @stats["public_repos"],
+            formatted: compact_count(@stats["public_repos"])
+          )}
+        </span>
+        <span :if={is_integer(@stats["followers"])}>
+          {ngettext(
+            "%{formatted} follower",
+            "%{formatted} followers",
+            @stats["followers"],
+            formatted: compact_count(@stats["followers"])
+          )}
+        </span>
+        <span :if={code_stats_year(@stats["member_since"])}>
+          {gettext("since %{year}", year: code_stats_year(@stats["member_since"]))}
+        </span>
+      </div>
+
+      <div
+        :if={code_stats_date(@stats["last_active_at"]) || @languages != []}
+        class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-slate-400"
+      >
+        <span :if={code_stats_date(@stats["last_active_at"])}>
+          {gettext("Last active %{date}", date: code_stats_date(@stats["last_active_at"]))}
+        </span>
+        <span :if={@languages != []}>{Enum.join(@languages, " · ")}</span>
+      </div>
+
+      <ul :if={@top_repos != []} class="mt-3 space-y-2">
+        <li :for={repo <- @top_repos} class="min-w-0 text-sm">
+          <div class="flex items-baseline gap-2">
+            <%= if https_url?(repo["url"]) do %>
+              <a
+                href={repo["url"]}
+                target="_blank"
+                rel="noopener nofollow ugc"
+                class="truncate font-medium text-brand-700 hover:text-brand-800 dark:text-brand-300"
+              >
+                {repo["name"]}
+              </a>
+            <% else %>
+              <span class="truncate font-medium text-slate-800 dark:text-slate-100">
+                {repo["name"]}
+              </span>
+            <% end %>
+            <span
+              :if={is_integer(repo["stars"]) and repo["stars"] > 0}
+              class="shrink-0 text-xs text-slate-600 dark:text-slate-400"
+            >
+              ★ {compact_count(repo["stars"])}
+            </span>
+            <span
+              :if={is_binary(repo["language"]) and repo["language"] != ""}
+              class="shrink-0 text-xs text-slate-600 dark:text-slate-400"
+            >
+              {repo["language"]}
+            </span>
+          </div>
+          <p
+            :if={is_binary(repo["description"]) and repo["description"] != ""}
+            class="truncate text-xs text-slate-600 dark:text-slate-400"
+          >
+            {repo["description"]}
+          </p>
+        </li>
+      </ul>
+    </div>
+    """
+  end
+
+  # "2010-05-01" -> "2010"; nil/garbage -> nil (the span is dropped).
+  defp code_stats_year(value) when is_binary(value) do
+    case Date.from_iso8601(value) do
+      {:ok, date} -> Integer.to_string(date.year)
+      _ -> nil
+    end
+  end
+
+  defp code_stats_year(_), do: nil
+
+  # The snapshot's ISO-8601 "last active" timestamp as a locale-shaped date
+  # (German "02.07.2026", otherwise "7/2/2026"); nil/garbage -> nil.
+  defp code_stats_date(value) when is_binary(value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, dt, _offset} ->
+        case Gettext.get_locale(VutuvWeb.Gettext) do
+          "de" -> Calendar.strftime(dt, "%d.%m.%Y")
+          _ -> Calendar.strftime(dt, "%-m/%-d/%Y")
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp code_stats_date(_), do: nil
+
+  # A snapshot URL came from remote JSON; only https may render as a link.
+  defp https_url?(url), do: is_binary(url) and String.starts_with?(url, "https://")
+
+  @doc """
   Wraps a social-media entry in an outbound link (`target=_blank`, `rel="me
   noopener"`) when the provider has a canonical URL, or a plain `<span>` for a
   provider that only has a bare handle (e.g. Snapchat). The `class` styles the

@@ -1,5 +1,6 @@
 defmodule VutuvWeb.SocialMediaAccountController do
   use VutuvWeb, :controller
+  alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialMediaAccount
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -61,6 +62,11 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
     case Repo.insert(changeset) do
       {:ok, social_media_account} ->
+        # A code-forge account gets its first stats snapshot fetched in the
+        # background right away (Vutuv.CodeStats), so the profile's "Code"
+        # card fills without waiting for the next stale-triggered refresh.
+        CodeStats.refresh_if_stale(social_media_account)
+
         # The GitHub wink is product-level (the vutuv source repo), so it fits
         # every installation; operator-specific plugs (the old @vutuv Twitter /
         # @wintermeyer Instagram lines) were dropped when vutuv became
@@ -105,8 +111,13 @@ defmodule VutuvWeb.SocialMediaAccountController do
   def update(conn, %{"id" => id, "social_media_account" => social_media_account_params}) do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
     changeset = SocialMediaAccount.changeset(social_media_account, social_media_account_params)
+    result = Repo.update(changeset)
 
-    ControllerHelpers.save(conn, Repo.update(changeset),
+    # A changed handle dropped the old snapshot (see the changeset); fetch the
+    # new account's stats in the background like on create.
+    with {:ok, updated} <- result, do: CodeStats.refresh_if_stale(updated)
+
+    ControllerHelpers.save(conn, result,
       flash: gettext("Social media account updated successfully."),
       redirect_to: fn _entry -> ~p"/settings/social_media_accounts" end,
       render: "edit.html",

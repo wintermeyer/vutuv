@@ -108,6 +108,7 @@ Everything else has a default (the vutuv.de production value):
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
+| `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 | `INVITATION_DAILY_CAP` | `50` | Most invitations a single member may send per day (abuse guard on outbound invite email) |
 
@@ -120,7 +121,8 @@ A few rarely-changed switches are compile-time settings in
 `:ads_enabled` (the daily text-ad system, off by default),
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
-`:fetch_bluesky_posts`, `:generate_screenshots`, and
+`:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
+GitHub/GitLab/Codeberg statistics), `:generate_screenshots`, and
 `:serve_uploads_locally` (see nginx below).
 
 ## systemd
@@ -239,8 +241,10 @@ vutuv runs fine without internet access:
 - Turn off the features that call out to the internet (compile-time flags in
   `config/config.exs`): `:fetch_gravatar` (avatar lookup at registration),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on
-  profiles), and `:generate_screenshots` (link preview screenshots — these
-  fetch the linked page).
+  profiles), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
+  Codeberg statistics — off, the accounts stay plain links), and
+  `:generate_screenshots` (link preview screenshots — these fetch the linked
+  page).
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
 - Search engines and AI crawlers are irrelevant on an intranet; the

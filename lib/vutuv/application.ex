@@ -27,6 +27,12 @@ defmodule Vutuv.Application do
         # it); does no work until a profile visit asks, and the per-provider
         # feature flags gate that in tests.
         Vutuv.SocialFeed.Cache,
+        # Single-flights the background code-forge stats fetches (GitHub,
+        # GitLab, Codeberg — Vutuv.CodeStats). Starts after the TaskSupervisor
+        # (its fetch tasks run under it); does no work until an account save
+        # or a stale profile view asks, and :fetch_code_stats gates that in
+        # tests.
+        Vutuv.CodeStats.Fetcher,
         Vutuv.RateLimiter,
         VutuvWeb.Endpoint
       ] ++

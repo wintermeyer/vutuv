@@ -17,6 +17,8 @@ We use the [MIT License](LICENSE).
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details) with follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
+  Developer profiles can show cached public stats of their GitHub, GitLab and
+  Codeberg accounts (stars, repositories, languages, activity).
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an
   authenticator app (TOTP) or a printed one-time code list.
 - Invite non-members by email: the link opens the sign-up form prefilled, with

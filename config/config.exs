@@ -97,6 +97,16 @@ config :vutuv, :refresh_popular_users, true
 config :vutuv, :fetch_mastodon_posts, true
 config :vutuv, :fetch_bluesky_posts, true
 
+# The cached public code-forge statistics on profiles (Vutuv.CodeStats:
+# GitHub, GitLab, Codeberg — the profile's "Code" card). Off = the accounts
+# stay plain links and nothing is ever fetched — the switch for installations
+# that must not call out (intranets). Tests turn it off and stub HTTP per
+# provider via :github_req_options / :gitlab_req_options /
+# :codeberg_req_options. The optional GITHUB_API_TOKEN env var
+# (config/runtime.exs) raises GitHub's unauthenticated 60 requests/hour to
+# 5,000/hour; see docs/ADMINS.md.
+config :vutuv, :fetch_code_stats, true
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

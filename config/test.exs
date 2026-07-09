@@ -49,6 +49,7 @@ config :vutuv, :refresh_popular_users, false
 # :bluesky_req_options.
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
+config :vutuv, :fetch_code_stats, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

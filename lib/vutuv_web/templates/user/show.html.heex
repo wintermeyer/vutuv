@@ -902,6 +902,21 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- The code-forge statistics (Vutuv.CodeStats): cached public facts
+    about the listed GitHub / GitLab / Codeberg accounts — stars,
+    repositories, followers, languages, last activity, top repositories.
+    Renders from the stored snapshot only (never the network on a render
+    path); background refreshes arrive over PubSub and re-render the card
+    live. No snapshot yet, the :fetch_code_stats flag off, or the member's
+    privacy opt-out mean no card — the accounts stay plain links above
+    either way. --%>
+    <.card :if={@code_stats_accounts != []} id="profile-code-stats">
+      <.section_header title={gettext("Code")} />
+      <div class="space-y-6">
+        <.code_stats_account :for={account <- @code_stats_accounts} account={account} />
+      </div>
+    </.card>
+
     <%!-- The mixed social-network feed (Vutuv.SocialFeed): the latest public
     posts of every Mastodon and Bluesky account listed above, merged
     newest-first into one card, fetched after connect and cached. Renders

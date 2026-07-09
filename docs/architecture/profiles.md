@@ -310,3 +310,34 @@ persisted across deploys) and a dead account (or an exhausted ladder) is
 deactivated for good until the member re-saves the handle; members switch the
 whole card off on the Privacy settings page (`show_mastodon_feed?`, which
 predates Bluesky and gates both networks).
+
+## Code-forge statistics ("Code" card, issue #922)
+
+A profile that lists a **GitHub, GitLab or Codeberg** account gets a **"Code"
+card** (`Vutuv.CodeStats`, per-forge clients `Vutuv.CodeStats.GitHub` /
+`GitLab` / `Codeberg`): neutral public facts per account — total stars,
+repository count, followers, "member since", most-used languages, last
+activity and the top three repositories — no score, no rating.
+
+Unlike the social feed the **database is the cache**: each fetch (2–3 API
+requests) writes a provider-neutral snapshot map onto the account's
+`social_media_accounts` row (`code_stats` + `code_stats_fetched_at`,
+aggregated by `Vutuv.CodeStats.Snapshot`), so rendering never touches the
+network and the card appears in the crawler-visible disconnected HTML **and
+the agent formats** (the profile's md/txt/json/xml carry a `code_stats`
+section — kept in sync by the drift tests). A snapshot serves for **7 days**;
+the first fetch runs in the background right after the account is created
+(or its handle edited), later refreshes are triggered by profile views that
+find the snapshot stale. `Vutuv.CodeStats.Fetcher` single-flights the
+background fetches, and an open profile LiveView re-renders the card when
+the fresh snapshot lands (`{:code_stats_updated, account_id}` on the owner's
+Activity topic).
+
+Failures reuse the social feed's persisted backoff ladder / deactivation
+columns (the provider sets are disjoint). The whole feature sits behind the
+`:fetch_code_stats` flag (off = plain links, for intranet installations);
+members opt out per profile on the Privacy settings page
+(`show_code_stats?`). GitHub's unauthenticated rate limit (60 requests/hour
+per IP) is enough at the 7-day cadence; the optional `GITHUB_API_TOKEN` env
+var raises it to 5,000/hour and can be added to a running installation at
+any time (see `docs/ADMINS.md`).

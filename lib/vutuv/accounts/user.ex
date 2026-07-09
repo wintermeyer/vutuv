@@ -96,6 +96,11 @@ defmodule Vutuv.Accounts.User do
     # Bluesky — the column name predates Bluesky and gates the whole card).
     # Default on; the opt-out lives on the Privacy settings page.
     field(:show_mastodon_feed?, :boolean, default: true)
+    # Whether the profile's "Code" card shows the cached public statistics of
+    # the listed code-forge accounts (Vutuv.CodeStats: GitHub, GitLab,
+    # Codeberg). Default on; the opt-out lives on the Privacy settings page.
+    # Off, the accounts still render as plain links on the Social Media card.
+    field(:show_code_stats?, :boolean, default: true)
     # The Fediverse opt-in (Privacy settings, default off). Federation is not
     # built yet: the flag ships ahead of the feature to measure demand and to
     # collect the per-member consent any future ActivityPub federation must be
@@ -205,7 +210,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service headline employment_status first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service headline employment_status first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source

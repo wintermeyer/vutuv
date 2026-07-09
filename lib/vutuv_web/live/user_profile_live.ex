@@ -28,6 +28,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Activity
+  alias Vutuv.CodeStats
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
@@ -316,6 +317,21 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, assign(socket, :social_feed_loading, loading)}
   end
 
+  # A background code-stats fetch finished (this mount's stale-refresh, or an
+  # account just saved on the settings page): re-read the accounts so the
+  # "Code" card fills or updates without a reload.
+  def handle_info({:code_stats_updated, _account_id}, socket) do
+    user =
+      Repo.preload(socket.assigns.user, [social_media_accounts: SocialMediaAccount.ordered()],
+        force: true
+      )
+
+    {:noreply,
+     socket
+     |> assign(:user, user)
+     |> assign(:code_stats_accounts, CodeStats.visible_accounts(user))}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # The remote posts' <.post_time> wording ("09:50 Uhr" -> "Gestern, ...")
@@ -492,6 +508,20 @@ defmodule VutuvWeb.UserProfileLive do
     # :current_user / :recommended_users set above, so it goes last.
     |> put_social_assigns(user)
     |> put_social_feed_assigns(user)
+    |> put_code_stats_assigns(user)
+  end
+
+  # The code-forge statistics (Vutuv.CodeStats): the "Code" card renders each
+  # account's stored snapshot — a DB read, never the network. A connected
+  # (real-visitor) mount additionally asks for a background refresh of stale
+  # snapshots; the fresh data arrives as {:code_stats_updated, _} on the
+  # owner's topic, handled above.
+  defp put_code_stats_assigns(socket, user) do
+    if connected?(socket) and CodeStats.enabled?() and user.show_code_stats? do
+      Enum.each(CodeStats.accounts_of(user), &CodeStats.refresh_if_stale/1)
+    end
+
+    assign(socket, :code_stats_accounts, CodeStats.visible_accounts(user))
   end
 
   # The inline social feeds (Vutuv.SocialFeed): every feed-capable account

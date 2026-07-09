@@ -52,6 +52,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Social Media"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
+      section(gettext("Code"), Enum.flat_map(doc.code_stats, &code_stats_lines/1)),
       section(
         gettext("Phone Numbers"),
         Enum.map(doc.phone_numbers, &entry_line("phone_numbers", &1))
@@ -288,6 +289,28 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("social_media_accounts", account), do: "* #{account.provider}: #{account.url}"
   defp entry_line("phone_numbers", phone), do: "* #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "* " <> Markdown.address_line(address)
+
+  # One code-forge account of the profile's "Code" section (Vutuv.CodeStats):
+  # the account line with its facts (shared wording with the Markdown
+  # renderer), then one indented line per top repository.
+  defp code_stats_lines(account) do
+    ["* #{account.provider}: #{account.url} (#{Markdown.code_stats_facts(account)})"] ++
+      Enum.map(account.top_repos, &code_repo_line/1)
+  end
+
+  defp code_repo_line(repo) do
+    details =
+      [
+        repo.url,
+        repo.stars && "★ #{repo.stars}",
+        repo.language,
+        repo.description
+      ]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.join(" · ")
+
+    if details == "", do: "  * #{repo.name}", else: "  * #{repo.name}: #{details}"
+  end
 
   defp work_line(work) do
     period = Markdown.work_period(work)

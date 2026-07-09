@@ -1,13 +1,14 @@
 defmodule Vutuv.SocialFeed.Http do
   @moduledoc """
-  The one HTTP surface of the inline social feeds (`Vutuv.SocialFeed`): hard
-  timeouts, capped bodies, and the guarded server-side avatar fetch, shared by
-  the provider clients (`Vutuv.Mastodon`, `Vutuv.Bluesky`).
+  The one HTTP surface of the profile's remote-account fetches: hard
+  timeouts, capped bodies, and the guarded server-side avatar fetch, shared
+  by the social-feed clients (`Vutuv.Mastodon`, `Vutuv.Bluesky`) and the
+  code-forge stats clients (`Vutuv.CodeStats.*`).
 
   Every function takes the provider's req-options key (`:mastodon_req_options`
-  / `:bluesky_req_options`), the application-env seam the tests stub a `plug:`
-  through — per provider, so a test never intercepts the other network's
-  requests by accident.
+  / `:bluesky_req_options` / `:github_req_options` / …), the application-env
+  seam the tests stub a `plug:` through — per provider, so a test never
+  intercepts the other network's requests by accident.
   """
 
   # A response larger than this is discarded unparsed (untrusted server).
@@ -19,11 +20,14 @@ defmodule Vutuv.SocialFeed.Http do
   @avatar_types ~w(image/png image/jpeg image/webp image/gif image/avif)
 
   @doc """
-  A plain GET with the feed clients' shared guard rails: ~2 s to connect, 4 s
-  to respond, no retries, no redirects, undecoded body. A slower server is a
-  failure that backs off, not one we hang on or hammer.
+  A plain GET with the clients' shared guard rails: ~2 s to connect, 4 s to
+  respond, no retries, no redirects, undecoded body. A slower server is a
+  failure that backs off, not one we hang on or hammer. `extra` lets a client
+  override single options (the GitHub client swaps the headers for its
+  API-versioned, optionally token-carrying set); the env seam still wins, so
+  tests always intercept.
   """
-  def get(url, options_key) do
+  def get(url, options_key, extra \\ []) do
     [
       url: url,
       receive_timeout: 4_000,
@@ -33,6 +37,7 @@ defmodule Vutuv.SocialFeed.Http do
       decode_body: false,
       headers: [{"user-agent", user_agent()}, {"accept", "application/json"}]
     ]
+    |> Keyword.merge(extra)
     |> Keyword.merge(Application.get_env(:vutuv, options_key, []))
     |> Req.get()
   end
