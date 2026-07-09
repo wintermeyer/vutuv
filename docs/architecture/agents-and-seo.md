@@ -105,6 +105,21 @@ Public posts preview as articles with their first line, date and first image
 audience changes keep guarding it); restricted posts and teasers never leak the
 body or an image.
 
+The **description** falls through a chain (`OpenGraph.description/1`): a page's
+own `:meta_description` assign (a controller render assign or a LiveView socket
+assign — the CV builder and the tag page set one), else a public post's first
+line, else a member's work info, else a **per-page description** keyed on the
+request path (`page_copy/1`: the settings sections, the `/system` directory, and
+the public info pages — login, community, legal, developers, the tags and
+most-followed listings), else the generic site pitch (a business network, free
+to join). The path lookup reads `conn.request_path`, which is present in both a
+dead controller render and the disconnected LiveView render, so it works
+everywhere the tags render. The `/settings/*` pages redirect a logged-out
+link-preview bot to the landing page (`RequireLogin`), so their copy is really
+for signed-in shares; the description they carry is still honest per page. New
+strings are gettext-translated (German included), so a German share previews in
+German.
+
 Everything else falls back to `/og-card.png` (`VutuvWeb.OgCard`): the white
 wordmark (shipped pre-rasterized as a PNG) composed onto the brand gradient,
 generated once per node (no font or SVG-loader dependency, so it renders

@@ -31,7 +31,11 @@ defmodule VutuvWeb.TagController do
     tag = conn.assigns[:tag]
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", tag: tag),
+      html:
+        &render(&1, "show.html",
+          tag: tag,
+          meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
+        ),
       doc: fn ->
         recommended = Tag.recommended_users(tag)
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)

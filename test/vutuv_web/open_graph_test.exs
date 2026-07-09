@@ -28,7 +28,12 @@ defmodule VutuvWeb.OpenGraphTest do
       assert og(html, "og:site_name") == "vutuv"
       assert og(html, "og:type") == "website"
       assert og(html, "og:title") == "vutuv"
-      assert og(html, "og:description") =~ "Career Network"
+      # The landing page has no page-specific description, so it shows the
+      # generic site pitch: a business network, no old "career network / no
+      # premium accounts" line.
+      assert og(html, "og:description") =~ "business network"
+      refute og(html, "og:description") =~ "Career Network"
+      refute og(html, "og:description") =~ "premium"
       assert og(html, "og:url") == @base <> "/"
       assert og(html, "og:image") == @base <> "/og-card.png"
       assert og(html, "og:image:width") == "1200"
@@ -41,6 +46,48 @@ defmodule VutuvWeb.OpenGraphTest do
 
       [_, description] = Regex.run(~r/<meta name="description" content="([^"]*)"/, html)
       assert og(html, "og:description") == description
+    end
+  end
+
+  describe "per-page descriptions" do
+    test "public info pages carry their own description, not the site pitch", %{conn: conn} do
+      cases = [
+        {~p"/login", "Sign in to your vutuv account"},
+        {~p"/community", "community guidelines"},
+        {~p"/system/members", "member directory"},
+        {~p"/nutzungsbedingungen", "terms of use"}
+      ]
+
+      for {path, fragment} <- cases do
+        description = conn |> get(path) |> html_response(200) |> og("og:description")
+        assert description =~ fragment, "expected #{path} description to mention #{fragment}"
+        refute description =~ "business network"
+      end
+    end
+
+    test "a tag page names the tag in its description", %{conn: conn} do
+      insert(:tag, name: "Elixir", slug: "elixir")
+
+      description = conn |> get(~p"/tags/elixir") |> html_response(200) |> og("og:description")
+
+      assert description == "Members on vutuv tagged Elixir."
+    end
+
+    test "each settings page describes what it manages", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      cases = [
+        {~p"/settings", "Manage your vutuv account"},
+        {~p"/settings/security", "Manage how you sign in"},
+        {~p"/settings/emails", "email addresses on your vutuv profile"},
+        {~p"/settings/links", "links on your vutuv profile"},
+        {~p"/settings/notifications", "which vutuv activity"}
+      ]
+
+      for {path, fragment} <- cases do
+        description = conn |> get(path) |> html_response(200) |> og("og:description")
+        assert description =~ fragment, "expected #{path} description to mention #{fragment}"
+      end
     end
   end
 
@@ -83,7 +130,7 @@ defmodule VutuvWeb.OpenGraphTest do
 
       description = og(html, "og:description")
       assert description != ""
-      assert description =~ "Career Network"
+      assert description =~ "business network"
     end
 
     test "a member's preview shows the follower count and never the tag list", %{conn: conn} do
