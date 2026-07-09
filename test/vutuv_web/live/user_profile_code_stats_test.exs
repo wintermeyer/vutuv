@@ -72,8 +72,13 @@ defmodule VutuvWeb.UserProfileCodeStatsTest do
 
       assert has_element?(view, @card)
       assert has_element?(view, "#{@card} [data-code-stats='GitHub']")
-      # 2312 stars compact to "2K"; the repo row keeps its exact-ish count.
-      assert has_element?(view, "#{@card} [data-code-stars]", "2K")
+      # One dot-separated facts line: stars (2312 compacts to "2K") and
+      # followers. The repository count is deliberately NOT on the card
+      # (layout noise; the machine formats keep it), and the member-since
+      # year sits right-aligned in the handle row instead.
+      assert has_element?(view, "#{@card} [data-code-facts]", "2K stars · 412 followers")
+      assert has_element?(view, "#{@card} [data-code-since]", "since 2009")
+      refute render(view) =~ "repositories"
       assert has_element?(view, "#{@card} a[href='https://github.com/dev/generator']")
       # The languages render as calm slate pills, one per language.
       assert has_element?(view, "#{@card} [data-code-language]", "Elixir")

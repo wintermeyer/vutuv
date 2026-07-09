@@ -196,6 +196,7 @@ defmodule VutuvWeb.UserHTML do
     assigns =
       assigns
       |> assign(:stats, stats)
+      |> assign(:facts, code_stats_facts_line(stats))
       |> assign(:top_repos, List.wrap(stats["top_repos"]))
       |> assign(:languages, List.wrap(stats["languages"]))
 
@@ -212,43 +213,18 @@ defmodule VutuvWeb.UserHTML do
         >
           {social_handle(@account)}
         </.social_link>
-      </div>
-
-      <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-slate-400">
-        <span :if={is_integer(@stats["total_stars"])} data-code-stars>
-          ★ {ngettext(
-            "%{formatted} star",
-            "%{formatted} stars",
-            @stats["total_stars"],
-            formatted: compact_count(@stats["total_stars"])
-          )}
-        </span>
-        <span :if={is_integer(@stats["public_repos"])}>
-          {ngettext(
-            "%{formatted} repository",
-            "%{formatted} repositories",
-            @stats["public_repos"],
-            formatted: compact_count(@stats["public_repos"])
-          )}
-        </span>
-        <span :if={is_integer(@stats["followers"])}>
-          {ngettext(
-            "%{formatted} follower",
-            "%{formatted} followers",
-            @stats["followers"],
-            formatted: compact_count(@stats["followers"])
-          )}
-        </span>
-        <span :if={code_stats_year(@stats["member_since"])}>
+        <span
+          :if={code_stats_year(@stats["member_since"])}
+          data-code-since
+          class="ml-auto shrink-0 text-xs text-slate-600 dark:text-slate-400"
+        >
           {gettext("since %{year}", year: code_stats_year(@stats["member_since"]))}
         </span>
-        <%!-- A dormancy signal, not a live ticker: the line appears only
-        once the account has been quiet for over four weeks
-        (CodeStats.dormant_since/1); a recently active account stays calm. --%>
-        <span :if={code_stats_dormant(@stats)}>
-          {gettext("Last active %{date}", date: code_stats_dormant(@stats))}
-        </span>
       </div>
+
+      <p :if={@facts != ""} data-code-facts class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+        {@facts}
+      </p>
 
       <div :if={@languages != []} class="mt-2 flex flex-wrap gap-1.5">
         <span
@@ -300,6 +276,36 @@ defmodule VutuvWeb.UserHTML do
       </ul>
     </div>
     """
+  end
+
+  # The dot-separated facts line under the handle: stars, followers, and —
+  # only once the account has been quiet for over four weeks
+  # (CodeStats.dormant_since/1, a dormancy signal, not a live ticker) — the
+  # last-activity date. The repository count is deliberately absent
+  # (interesting in principle, but layout noise on the card — the agent
+  # formats keep it), and the member-since year sits in the handle row.
+  defp code_stats_facts_line(stats) do
+    [
+      is_integer(stats["total_stars"]) &&
+        "★ " <>
+          ngettext(
+            "%{formatted} star",
+            "%{formatted} stars",
+            stats["total_stars"],
+            formatted: compact_count(stats["total_stars"])
+          ),
+      is_integer(stats["followers"]) &&
+        ngettext(
+          "%{formatted} follower",
+          "%{formatted} followers",
+          stats["followers"],
+          formatted: compact_count(stats["followers"])
+        ),
+      code_stats_dormant(stats) &&
+        gettext("Last active %{date}", date: code_stats_dormant(stats))
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join(" · ")
   end
 
   # "2010-05-01" -> "2010"; nil/garbage -> nil (the span is dropped).
