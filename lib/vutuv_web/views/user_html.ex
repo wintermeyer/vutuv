@@ -366,7 +366,10 @@ defmodule VutuvWeb.UserHTML do
     assigns = assign(assigns, social: social, code: code, split?: social != [] and code != [])
 
     ~H"""
-    <div class="space-y-4">
+    <%!-- space-y-6 (not -4) so the second group's heading gets clear air above
+    it: the list's -my-1.5 pulls the groups together, and at -4 the gap over
+    "Code & repositories" read the same as the gap between entries. --%>
+    <div class="space-y-6">
       <.social_media_group
         :if={@social != []}
         label={@split? && gettext("Social networks")}
