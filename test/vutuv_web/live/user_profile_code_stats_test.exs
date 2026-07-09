@@ -12,24 +12,32 @@ defmodule VutuvWeb.UserProfileCodeStatsTest do
 
   @card "#profile-code-stats"
 
-  @snapshot %{
-    "followers" => 412,
-    "public_repos" => 87,
-    "member_since" => "2009-03-01",
-    "total_stars" => 2312,
-    "languages" => ["Elixir", "Ruby"],
-    "last_active_at" => "2026-07-01T10:00:00Z",
-    "recent_repos" => 12,
-    "top_repos" => [
+  # last_active_at is built relative to now: 3 days ago = a recently active
+  # account, whose card deliberately shows NO "Last active" line (it only
+  # appears as a dormancy signal past four weeks).
+  defp snapshot(attrs \\ %{}) do
+    Map.merge(
       %{
-        "name" => "generator",
-        "url" => "https://github.com/dev/generator",
-        "description" => "Static site generator",
-        "language" => "Elixir",
-        "stars" => 1200
-      }
-    ]
-  }
+        "followers" => 412,
+        "public_repos" => 87,
+        "member_since" => "2009-03-01",
+        "total_stars" => 2312,
+        "languages" => ["Elixir", "Ruby"],
+        "last_active_at" => DateTime.utc_now() |> DateTime.add(-3, :day) |> DateTime.to_iso8601(),
+        "recent_repos" => 12,
+        "top_repos" => [
+          %{
+            "name" => "generator",
+            "url" => "https://github.com/dev/generator",
+            "description" => "Static site generator",
+            "language" => "Elixir",
+            "stars" => 1200
+          }
+        ]
+      },
+      attrs
+    )
+  end
 
   defp enable_code_stats do
     Application.put_env(:vutuv, :fetch_code_stats, true)
@@ -46,7 +54,7 @@ defmodule VutuvWeb.UserProfileCodeStatsTest do
           provider: "GitHub",
           value: unique_handle(),
           user: user,
-          code_stats: @snapshot,
+          code_stats: snapshot(),
           code_stats_fetched_at: DateTime.utc_now(:second)
         ],
         attrs
@@ -67,7 +75,23 @@ defmodule VutuvWeb.UserProfileCodeStatsTest do
       # 2312 stars compact to "2K"; the repo row keeps its exact-ish count.
       assert has_element?(view, "#{@card} [data-code-stars]", "2K")
       assert has_element?(view, "#{@card} a[href='https://github.com/dev/generator']")
-      assert render(view) =~ "Elixir · Ruby"
+      # The languages render as calm slate pills, one per language.
+      assert has_element?(view, "#{@card} [data-code-language]", "Elixir")
+      assert has_element?(view, "#{@card} [data-code-language]", "Ruby")
+      # Recently active (3 days ago): no "Last active" line — it is a
+      # dormancy signal, not a live ticker.
+      refute render(view) =~ "Last active"
+    end
+
+    test "an account quiet for over four weeks gets the Last active line", %{conn: conn} do
+      enable_code_stats()
+      user = insert_activated_user()
+
+      dormant = DateTime.utc_now() |> DateTime.add(-60, :day) |> DateTime.to_iso8601()
+      insert_snapshot_account(user, code_stats: snapshot(%{"last_active_at" => dormant}))
+
+      {:ok, view, _html} = live(conn, ~p"/#{user}")
+      assert render(view) =~ "Last active"
     end
 
     test "no card without any snapshot", %{conn: conn} do

@@ -54,6 +54,10 @@ defmodule Vutuv.CodeStats do
   # Consecutive-failure waits: 15 min, 30 min, 1 h, 6 h, 12 h, 24 h, 48 h.
   @backoff_minutes [15, 30, 60, 360, 720, 1440, 2880]
 
+  # Activity within this window is the normal case and stays quiet; only an
+  # account quiet for longer gets a "Last active" line on the card/docs.
+  @dormant_after_days 28
+
   @doc "Whether fetching code-forge statistics is on at all (off in tests)."
   def enabled?, do: Application.get_env(:vutuv, :fetch_code_stats, true)
 
@@ -80,6 +84,27 @@ defmodule Vutuv.CodeStats do
       []
     end
   end
+
+  @doc """
+  The "last active" date to surface for a snapshot's `last_active_at`
+  ISO-8601 string, or nil while the account is recently active. The line is
+  a **dormancy signal, not a live ticker**: pushes within the last
+  #{@dormant_after_days} days are the normal case and stay quiet; only an
+  account that has been quiet for longer gets its last-activity date shown
+  (on the card and in the human-readable agent formats — JSON/XML always
+  carry the raw timestamp).
+  """
+  def dormant_since(last_active_at) when is_binary(last_active_at) do
+    with {:ok, dt, _offset} <- DateTime.from_iso8601(last_active_at),
+         :lt <-
+           DateTime.compare(dt, DateTime.add(DateTime.utc_now(), -@dormant_after_days, :day)) do
+      DateTime.to_date(dt)
+    else
+      _ -> nil
+    end
+  end
+
+  def dormant_since(_), do: nil
 
   @doc "Whether the snapshot is missing or older than #{@max_age_days} days."
   def stale?(%SocialMediaAccount{code_stats_fetched_at: nil}), do: true

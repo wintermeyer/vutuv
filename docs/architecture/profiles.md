@@ -316,8 +316,13 @@ predates Bluesky and gates both networks).
 A profile that lists a **GitHub, GitLab or Codeberg** account gets a **"Code"
 card** (`Vutuv.CodeStats`, per-forge clients `Vutuv.CodeStats.GitHub` /
 `GitLab` / `Codeberg`): neutral public facts per account — total stars,
-repository count, followers, "member since", most-used languages, last
-activity and the top three repositories — no score, no rating.
+repository count, followers, "member since", most-used languages (rendered
+as calm slate pills, deliberately not the brand tag chips — they are not
+endorsable) and the top three repositories — no score, no rating. A "Last
+active" date appears only once the account has been quiet for over four
+weeks (`CodeStats.dormant_since/1`, mirrored in the md/txt formats): it is
+a dormancy signal, not a live ticker — JSON/XML always carry the raw
+`last_active_at`.
 
 Unlike the social feed the **database is the cache**: each fetch (2–3 API
 requests) writes a provider-neutral snapshot map onto the account's

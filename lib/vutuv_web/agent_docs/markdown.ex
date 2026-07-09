@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Accounts.User
+  alias Vutuv.CodeStats
 
   # The per-user people lists (followers/following/connections) share one
   # clause; the set lives in ListDocs.
@@ -309,12 +310,21 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       account.followers &&
         ngettext("%{count} follower", "%{count} followers", account.followers),
       account.member_since && gettext("since %{date}", date: account.member_since),
-      account.last_active_at &&
-        gettext("last active %{date}", date: String.slice(account.last_active_at, 0, 10)),
+      code_dormant_fact(account),
       account.languages != [] && Enum.join(account.languages, ", ")
     ]
     |> Enum.filter(&is_binary/1)
     |> Enum.join(" · ")
+  end
+
+  # Mirrors the card: the last-activity date only appears once the account
+  # has been quiet for over four weeks (a dormancy signal); JSON/XML always
+  # carry the raw last_active_at.
+  defp code_dormant_fact(account) do
+    case CodeStats.dormant_since(account.last_active_at) do
+      %Date{} = date -> gettext("last active %{date}", date: date)
+      _ -> nil
+    end
   end
 
   # Format-independent line content, shared with the text renderer (like

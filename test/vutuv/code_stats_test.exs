@@ -56,6 +56,19 @@ defmodule Vutuv.CodeStatsTest do
     end
   end
 
+  describe "dormant_since/1" do
+    test "recent activity stays quiet; dormancy past four weeks surfaces the date" do
+      recent = DateTime.utc_now() |> DateTime.add(-7, :day) |> DateTime.to_iso8601()
+      assert CodeStats.dormant_since(recent) == nil
+
+      old_dt = DateTime.add(DateTime.utc_now(), -60, :day)
+      assert CodeStats.dormant_since(DateTime.to_iso8601(old_dt)) == DateTime.to_date(old_dt)
+
+      assert CodeStats.dormant_since(nil) == nil
+      assert CodeStats.dormant_since("garbage") == nil
+    end
+  end
+
   describe "stale?/1" do
     test "true without a snapshot, true past 7 days, false when fresh" do
       assert CodeStats.stale?(%SocialMediaAccount{code_stats_fetched_at: nil})

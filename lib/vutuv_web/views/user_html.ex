@@ -7,6 +7,7 @@ defmodule VutuvWeb.UserHTML do
 
   import VutuvWeb.UserHelpers
 
+  alias Vutuv.CodeStats
   alias Vutuv.Profiles.SocialMediaAccount
 
   embed_templates("../templates/user/*")
@@ -241,16 +242,22 @@ defmodule VutuvWeb.UserHTML do
         <span :if={code_stats_year(@stats["member_since"])}>
           {gettext("since %{year}", year: code_stats_year(@stats["member_since"]))}
         </span>
+        <%!-- A dormancy signal, not a live ticker: the line appears only
+        once the account has been quiet for over four weeks
+        (CodeStats.dormant_since/1); a recently active account stays calm. --%>
+        <span :if={code_stats_dormant(@stats)}>
+          {gettext("Last active %{date}", date: code_stats_dormant(@stats))}
+        </span>
       </div>
 
-      <div
-        :if={code_stats_date(@stats["last_active_at"]) || @languages != []}
-        class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-slate-600 dark:text-slate-400"
-      >
-        <span :if={code_stats_date(@stats["last_active_at"])}>
-          {gettext("Last active %{date}", date: code_stats_date(@stats["last_active_at"]))}
+      <div :if={@languages != []} class="mt-2 flex flex-wrap gap-1.5">
+        <span
+          :for={language <- @languages}
+          data-code-language
+          class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+        >
+          {language}
         </span>
-        <span :if={@languages != []}>{Enum.join(@languages, " · ")}</span>
       </div>
 
       <ul :if={@top_repos != []} class="mt-3 space-y-2">
@@ -305,22 +312,21 @@ defmodule VutuvWeb.UserHTML do
 
   defp code_stats_year(_), do: nil
 
-  # The snapshot's ISO-8601 "last active" timestamp as a locale-shaped date
-  # (German "02.07.2026", otherwise "7/2/2026"); nil/garbage -> nil.
-  defp code_stats_date(value) when is_binary(value) do
-    case DateTime.from_iso8601(value) do
-      {:ok, dt, _offset} ->
+  # The dormancy date to show (CodeStats.dormant_since/1) as a locale-shaped
+  # date (German "02.05.2026", otherwise "5/2/2026"); nil while the account
+  # is recently active.
+  defp code_stats_dormant(stats) do
+    case CodeStats.dormant_since(stats["last_active_at"]) do
+      %Date{} = date ->
         case Gettext.get_locale(VutuvWeb.Gettext) do
-          "de" -> Calendar.strftime(dt, "%d.%m.%Y")
-          _ -> Calendar.strftime(dt, "%-m/%-d/%Y")
+          "de" -> Calendar.strftime(date, "%d.%m.%Y")
+          _ -> Calendar.strftime(date, "%-m/%-d/%Y")
         end
 
       _ ->
         nil
     end
   end
-
-  defp code_stats_date(_), do: nil
 
   # A snapshot URL came from remote JSON; only https may render as a link.
   defp https_url?(url), do: is_binary(url) and String.starts_with?(url, "https://")
