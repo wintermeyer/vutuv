@@ -40,6 +40,18 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
       assert changeset.valid?
     end
 
+    test "accepts the code forges GitHub, GitLab and Codeberg (#921)" do
+      for provider <- ~w(GitHub GitLab Codeberg) do
+        changeset =
+          SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+            provider: provider,
+            value: "wintermeyer"
+          })
+
+        assert changeset.valid?, "expected #{provider} to be an accepted provider"
+      end
+    end
+
     test "rejects Google+ as a provider" do
       changeset =
         SocialMediaAccount.changeset(%SocialMediaAccount{}, %{provider: "Google+", value: "vutuv"})
@@ -174,7 +186,33 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     end
   end
 
+  describe "code-forge value parsing (#921)" do
+    test "extracts the handle from a pasted GitLab profile URL" do
+      assert value_for(%{provider: "GitLab", value: "https://gitlab.com/wintermeyer"}) ==
+               "wintermeyer"
+    end
+
+    test "extracts the handle from a pasted Codeberg profile URL with trailing slash" do
+      assert value_for(%{provider: "Codeberg", value: "https://codeberg.org/alice/"}) ==
+               "alice"
+    end
+
+    test "strips a leading @ from a typed handle" do
+      assert value_for(%{provider: "GitLab", value: "@wintermeyer"}) == "wintermeyer"
+    end
+  end
+
   describe "url/1" do
+    test "builds the profile URL for GitLab" do
+      account = %SocialMediaAccount{provider: "GitLab", value: "wintermeyer"}
+      assert SocialMediaAccount.url(account) == "https://gitlab.com/wintermeyer"
+    end
+
+    test "builds the profile URL for Codeberg" do
+      account = %SocialMediaAccount{provider: "Codeberg", value: "wintermeyer"}
+      assert SocialMediaAccount.url(account) == "https://codeberg.org/wintermeyer"
+    end
+
     test "builds the federated profile URL for Mastodon" do
       account = %SocialMediaAccount{provider: "Mastodon", value: "Gargron@mastodon.social"}
       assert SocialMediaAccount.url(account) == "https://mastodon.social/@Gargron"

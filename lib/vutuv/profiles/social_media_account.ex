@@ -34,7 +34,7 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
   @required_fields ~w(provider value)a
   @optional_fields ~w()a
 
-  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub)
+  @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg)
 
   @doc """
   The providers `changeset/2` accepts. The form's provider dropdown renders
@@ -54,7 +54,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Snapchat", nil},
     {"LinkedIn", "https://www.linkedin.com/in/"},
     {"XING", "https://www.xing.com/profile/"},
-    {"GitHub", "https://github.com/"}
+    {"GitHub", "https://github.com/"},
+    {"GitLab", "https://gitlab.com/"},
+    {"Codeberg", "https://codeberg.org/"}
   ]
 
   display_rules = [
@@ -67,7 +69,9 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     {"Snapchat", ""},
     {"LinkedIn", ""},
     {"XING", ""},
-    {"GitHub", ""}
+    {"GitHub", ""},
+    {"GitLab", ""},
+    {"Codeberg", ""}
   ]
 
   # A federated Mastodon handle: user@instance.tld.
