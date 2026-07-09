@@ -4,6 +4,26 @@ defmodule VutuvWeb.NotificationLiveTest do
   import Phoenix.LiveViewTest
 
   describe "GET /notifications" do
+    test "renders the first page in the static HTTP response (issue #919 snappy first paint)", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      follower = insert(:user, first_name: "Grace", last_name: "Hopper")
+      connection = insert(:follow, follower: follower, followee: user)
+
+      # A plain HTTP GET is what the browser paints *before* the LiveView socket
+      # connects. The notifications must already be in that first render, not
+      # arrive a websocket round trip later (issue #919: the page felt sluggish
+      # because the whole list only appeared after the socket handshake, unlike
+      # the newsfeed which renders its first page on the static mount).
+      conn = get(conn, ~p"/notifications")
+      body = html_response(conn, 200)
+
+      assert body =~ "Grace Hopper"
+      assert body =~ "started following you"
+      assert body =~ "notification-follower-#{connection.id}"
+    end
+
     test "lists real events derived from the database", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 

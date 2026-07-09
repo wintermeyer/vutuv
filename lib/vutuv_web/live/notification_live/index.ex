@@ -3,13 +3,16 @@ defmodule VutuvWeb.NotificationLive.Index do
   Notifications page. The feed is real data derived at mount time by
   `Vutuv.Activity.notifications_page/2` from the event tables that already
   exist (followers, endorsements, mutual connections), so it reaches back to
-  events from before this page existed. Older pages load on demand via the
-  "Load more" button (cursor pagination, appended to the stream). On top of
-  that it updates live: new events arrive over `Vutuv.Activity` (PubSub
-  `"user:<id>"`) and are prepended in real time. Visiting the page persists
-  the read marker and clears the unread bell badge in the shell. Items are a
-  LiveView stream, so a long-lived session doesn't accumulate them in process
-  memory.
+  events from before this page existed. The first page renders on the **static**
+  mount too (like the newsfeed), so the list is in the first HTTP paint instead
+  of arriving a websocket round trip later (issue #919 - the page felt sluggish
+  because the whole list only appeared after the socket connected). Older pages
+  load on demand via the "Load more" button (cursor pagination, appended to the
+  stream). On top of that it updates live: new events arrive over
+  `Vutuv.Activity` (PubSub `"user:<id>"`) and are prepended in real time.
+  Visiting the page persists the read marker and clears the unread bell badge in
+  the shell. Items are a LiveView stream, so a long-lived session doesn't
+  accumulate them in process memory.
   """
   use VutuvWeb, :live_view
 
@@ -38,31 +41,32 @@ defmodule VutuvWeb.NotificationLive.Index do
       Vutuv.DayClock.subscribe()
     end
 
-    # The feed load runs only on the connected mount: the page is
-    # login-required (no SEO / no-JS value), so the static render the socket
-    # replaces a moment later would just double the 8-source merge and count.
-    {page, items, total} =
-      if connected?(socket) do
-        page = Activity.notifications_page(user.id, limit: @page_size)
-        items = with_post_previews(page.entries, user)
+    # Load the first page on *both* the static and the connected mount (like the
+    # newsfeed, VutuvWeb.PostLive.Feed) so the notifications are in the first
+    # HTTP paint, not a websocket round trip late. The page is login-required, so
+    # this static render carries no SEO / no-JS value on its own - it exists only
+    # to make the load feel instant (issue #919).
+    page = Activity.notifications_page(user.id, limit: @page_size)
+    items = with_post_previews(page.entries, user)
 
-        # What the "Load more" label counts down: feed events not on screen
-        # yet. Live-pushed events show up immediately, so they never touch
-        # this number.
-        {page, items, Activity.notifications_count(user.id)}
-      else
-        {%{entries: [], more?: false, next_cursor: nil}, [], 0}
-      end
+    # The exact feed size backs the "Load N of M more" countdown, but a full
+    # count across every source is the heaviest query on this page. Skip it on
+    # the static first paint (where the label falls back to a plain "Load more")
+    # and compute it only once the socket is connected, so the initial HTTP
+    # render stays lean. Live-pushed events show up immediately, so they never
+    # touch this number.
+    remaining =
+      if connected?(socket),
+        do: max(Activity.notifications_count(user.id) - length(page.entries), 0),
+        else: 0
 
     {:ok,
      socket
      |> assign(:page_title, gettext("Notifications"))
-     # Never true on the static render, so "Nothing new yet." cannot flash
-     # before the connected mount fills the list in.
-     |> assign(:empty?, connected?(socket) and Enum.empty?(page.entries))
+     |> assign(:empty?, Enum.empty?(page.entries))
      |> assign(:more?, page.more?)
      |> assign(:cursor, page.next_cursor)
-     |> assign(:remaining, max(total - length(page.entries), 0))
+     |> assign(:remaining, remaining)
      # The shown items, kept so the midnight :day_changed tick can re-render each
      # quoted-post stamp in place (streams don't retain their data).
      |> assign(:items, items)
