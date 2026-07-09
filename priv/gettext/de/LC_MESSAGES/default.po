@@ -3101,6 +3101,11 @@ msgstr "Nichts zu sehen, keiner Ihrer Inhalte ist derzeit gemeldet."
 msgid "Nudity, violence or other content that does not belong on vutuv."
 msgstr "Nacktheit, Gewalt oder andere Inhalte, die nicht auf vutuv gehören."
 
+#: lib/vutuv_web/templates/user/show.html.heex:789
+#, elixir-autogen, elixir-format
+msgid "Only visible to you"
+msgstr "Nur für Sie sichtbar"
+
 #: lib/vutuv_web/components/post_components.ex:636
 #, elixir-autogen, elixir-format
 msgid "Only you can see this post while a report about it is handled."

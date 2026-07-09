@@ -779,13 +779,30 @@ the resulting ~200px rail width. --%>
             {contact_group_label(label)}
           </h3>
           <ul class="-my-1 text-sm">
+            <%!-- The owner is the only viewer who ever sees a private
+            (public?: false) address — a visitor's @emails is public-only — so
+            fade those rows and tag them with a lock: the owner reads every
+            address yet sees at a glance which are public and which only they
+            can see. --%>
             <li :for={email <- group_emails}>
               <a
                 href={"mailto:#{email.value}"}
-                class="group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700"
+                data-email-visibility={if(email.public?, do: "public", else: "private")}
+                class={[
+                  "group flex items-center gap-2.5 py-1.5 text-brand-600 hover:text-brand-700",
+                  not email.public? && "opacity-55 transition-opacity hover:opacity-100"
+                ]}
               >
                 <.detail_icon name="envelope" class="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-brand-600 dark:text-slate-500" />
                 <span class="min-w-0 break-all font-medium">{email.value}</span>
+                <span
+                  :if={not email.public?}
+                  class="shrink-0 text-slate-400 dark:text-slate-500"
+                  title={gettext("Only visible to you")}
+                  aria-label={gettext("Only visible to you")}
+                >
+                  <.detail_icon name="lock" class="h-3.5 w-3.5" />
+                </span>
               </a>
             </li>
             <li :for={number <- group_phones}>

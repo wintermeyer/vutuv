@@ -3049,6 +3049,11 @@ msgstr ""
 msgid "Nudity, violence or other content that does not belong on vutuv."
 msgstr ""
 
+#: lib/vutuv_web/templates/user/show.html.heex:789
+#, elixir-autogen, elixir-format
+msgid "Only visible to you"
+msgstr ""
+
 #: lib/vutuv_web/components/post_components.ex:636
 #, elixir-autogen, elixir-format
 msgid "Only you can see this post while a report about it is handled."

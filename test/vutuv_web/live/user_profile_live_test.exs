@@ -298,6 +298,63 @@ defmodule VutuvWeb.UserProfileLiveTest do
     end
   end
 
+  describe "contact card fades private email addresses" do
+    test "the owner reads every address, but private ones are faded and lock-tagged",
+         %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      insert(:email, user: owner, value: "shown@example.com", public?: true)
+      insert(:email, user: owner, value: "hidden@example.com", public?: false)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      # The owner sees both addresses.
+      assert render(view) =~ "shown@example.com"
+      assert render(view) =~ "hidden@example.com"
+
+      # The private row is tagged private, faded (opacity), and carries the
+      # "only visible to you" lock label; the public row is neither.
+      assert has_element?(
+               view,
+               ~s(#profile-contact a[data-email-visibility="private"][href="mailto:hidden@example.com"])
+             )
+
+      private_row =
+        element(
+          view,
+          ~s(#profile-contact a[data-email-visibility="private"][href="mailto:hidden@example.com"])
+        )
+
+      private_html = render(private_row)
+      assert private_html =~ "opacity-55"
+      assert private_html =~ "Only visible to you"
+
+      public_html =
+        render(
+          element(
+            view,
+            ~s(#profile-contact a[data-email-visibility="public"][href="mailto:shown@example.com"])
+          )
+        )
+
+      refute public_html =~ "opacity-55"
+      refute public_html =~ "Only visible to you"
+    end
+
+    test "a visitor never sees the private address or its marker", %{conn: conn} do
+      {_conn, owner} = create_and_login_user(conn)
+      insert(:email, user: owner, value: "shown@example.com", public?: true)
+      insert(:email, user: owner, value: "hidden@example.com", public?: false)
+
+      # A logged-out visitor gets the public-only email list.
+      {:ok, view, _html} = live(build_conn(), ~p"/#{owner}")
+
+      html = render(view)
+      assert html =~ "shown@example.com"
+      refute html =~ "hidden@example.com"
+      refute has_element?(view, ~s(#profile-contact a[data-email-visibility="private"]))
+    end
+  end
+
   describe "the owner's 'Write a post' composer trigger" do
     test "links to the feed with the composer pre-opened", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)
