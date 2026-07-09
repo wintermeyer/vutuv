@@ -33,7 +33,13 @@ defmodule VutuvWeb.TotpControllerTest do
       assert html =~ ~s(href="otpauth://totp/)
 
       totp = LoginCodes.get_totp(user)
-      assert html =~ totp.secret |> Base.encode32(padding: false) |> String.slice(0, 4)
+      key = Base.encode32(totp.secret, padding: false)
+      assert html =~ String.slice(key, 0, 4)
+
+      # The key sits on its own line with a one-click copy whose clipboard
+      # payload is the ungrouped Base32 (display spaces stripped).
+      assert html =~ ~s(id="totp-manual-key")
+      assert html =~ ~s(data-copy-text="#{key}")
       refute LoginCodes.totp_enabled?(user)
     end
 

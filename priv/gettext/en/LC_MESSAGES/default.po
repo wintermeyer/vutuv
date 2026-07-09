@@ -9818,6 +9818,7 @@ msgstr ""
 
 #: lib/vutuv_web/templates/settings/security.html.heex:202
 #: lib/vutuv_web/templates/settings/security.html.heex:219
+#: lib/vutuv_web/templates/totp/new.html.heex:58
 #, elixir-autogen, elixir-format
 msgid "Copied"
 msgstr ""
@@ -9826,6 +9827,8 @@ msgstr ""
 #: lib/vutuv_web/templates/settings/security.html.heex:205
 #: lib/vutuv_web/templates/settings/security.html.heex:218
 #: lib/vutuv_web/templates/settings/security.html.heex:222
+#: lib/vutuv_web/templates/totp/new.html.heex:57
+#: lib/vutuv_web/templates/totp/new.html.heex:61
 #, elixir-autogen, elixir-format
 msgid "Copy"
 msgstr ""
@@ -10103,11 +10106,6 @@ msgstr ""
 msgid "Italic"
 msgstr ""
 
-#: lib/vutuv_web/templates/login_code/index.html.heex:16
-#, elixir-autogen, elixir-format
-msgid "Keep it somewhere safe, like your wallet. If you lose it, nothing is lost: the emailed PIN always keeps working, and you can generate a new list here at any time."
-msgstr ""
-
 #: lib/vutuv_web/components/ui.ex:132
 #, elixir-autogen, elixir-format
 msgid "Link URL"
@@ -10181,7 +10179,7 @@ msgstr ""
 msgid "That code didn't match. Please try again with the code your app shows now."
 msgstr ""
 
-#: lib/vutuv_web/templates/totp/new.html.heex:58
+#: lib/vutuv_web/templates/totp/new.html.heex:79
 #, elixir-autogen, elixir-format
 msgid "To finish, enter the code your app shows now"
 msgstr ""
@@ -10201,7 +10199,7 @@ msgstr ""
 msgid "Turn off the authenticator app? Its codes stop working at login; the emailed PIN is unaffected."
 msgstr ""
 
-#: lib/vutuv_web/templates/totp/new.html.heex:70
+#: lib/vutuv_web/templates/totp/new.html.heex:91
 #, elixir-autogen, elixir-format
 msgid "Turn on"
 msgstr ""
@@ -10359,4 +10357,9 @@ msgstr ""
 #: lib/vutuv_web/views/user_html.ex:242
 #, elixir-autogen, elixir-format
 msgid "since %{year}"
+msgstr ""
+
+#: lib/vutuv_web/templates/login_code/index.html.heex:16
+#, elixir-autogen, elixir-format
+msgid "Keep it somewhere safe, like your wallet. If you lose it, or it falls into the wrong hands, replace or delete it here: a new list makes every old code stop working immediately. The emailed PIN always keeps working."
 msgstr ""
