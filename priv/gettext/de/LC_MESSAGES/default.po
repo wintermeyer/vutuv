@@ -994,46 +994,46 @@ msgstr "Frau"
 msgid "Male"
 msgstr "Mann"
 
-#: lib/vutuv_web/views/error_html.ex:16
+#: lib/vutuv_web/views/error_html.ex:29
 #, elixir-autogen
 msgid "Page not found"
 msgstr "Seite nicht verfügbar"
 
-#: lib/vutuv_web/views/error_html.ex:83
+#: lib/vutuv_web/views/error_html.ex:96
 #, elixir-autogen
 msgid "This page does not exist"
 msgstr "Diese Seite gibt es nicht"
 
-#: lib/vutuv_web/views/error_html.ex:85
+#: lib/vutuv_web/views/error_html.ex:98
 #, elixir-autogen
 msgid "Mea culpa: we once sent this exact broken link in a newsletter. We are sorry!"
 msgstr "Mea culpa: Genau diesen kaputten Link haben wir einmal selbst in einem Rundbrief verschickt. Das tut uns leid!"
 "Mea Culpa: Genau diesen fehlerhaften Link hatten wir tatsächlich einmal in "
 "einem Newsletter. Wir bitten um Entschuldigung!"
 
-#: lib/vutuv_web/views/error_html.ex:90
+#: lib/vutuv_web/views/error_html.ex:103
 #, elixir-autogen
 msgid "The word"
 msgstr "Das Wort"
 
-#: lib/vutuv_web/views/error_html.ex:91
+#: lib/vutuv_web/views/error_html.ex:104
 #, elixir-autogen
 msgid "in this address is only a placeholder. Replace it with the actual username of the person whose profile you want to visit."
 msgstr "in dieser Adresse ist nur ein Platzhalter. Ersetzen Sie ihn durch den tatsächlichen Benutzernamen der Person, deren Profil Sie besuchen möchten."
 "in dieser Adresse ist nur ein Platzhalter. Ersetzen Sie es durch den "
 "tatsächlichen Benutzernamen der Person, deren Profil Sie besuchen möchten."
 
-#: lib/vutuv_web/views/error_html.ex:99
+#: lib/vutuv_web/views/error_html.ex:112
 #, elixir-autogen
 msgid "For example, this profile really exists:"
 msgstr "Dieses Profil gibt es zum Beispiel wirklich:"
 
-#: lib/vutuv_web/views/error_html.ex:103
+#: lib/vutuv_web/views/error_html.ex:116
 #, elixir-autogen
 msgid "Do not know the username? Try the"
 msgstr "Sie kennen den Benutzernamen nicht? Probieren Sie die"
 
-#: lib/vutuv_web/views/error_html.ex:104
+#: lib/vutuv_web/views/error_html.ex:117
 #, elixir-autogen
 msgid "search page"
 msgstr "Suchseite"
@@ -1042,7 +1042,7 @@ msgstr "Suchseite"
 msgid "Pardon us! Something went wrong. If you think this is a bug, please %{link_open}submit a bug report."
 msgstr "Fehler! Irgendwas stimmt hier nicht. Wir würden uns über einen Bugreport unter %{link_open}freuen."
 
-#: lib/vutuv_web/views/error_html.ex:23
+#: lib/vutuv_web/views/error_html.ex:36
 #, elixir-autogen
 msgid "You are not allowed to view this page."
 msgstr "Diese Seite ist für Sie gesperrt."
@@ -1116,11 +1116,6 @@ msgstr "100 Usern mit den meisten Followern"
 #: web/templates/page/index.html.eex:16
 msgid "Curious? Have a look at the "
 msgstr "Neugierig? Hier ist die Liste "
-
-#: lib/vutuv_web/open_graph.ex:69
-#, elixir-autogen
-msgid "Your Fast and Free Career Network. No expensive premium accounts! Get a free account in 30 seconds."
-msgstr "Kontaktnetzwerk. Schnell und gratis! Keine teuren Premium-Accounts. Ihr gratis Account ist in 30 Sekunden fertig."
 
 #: lib/vutuv_web/views/work_experience_html.ex:251
 #: lib/vutuv_web/views/work_experience_html.ex:304
@@ -1626,9 +1621,9 @@ msgstr "Admin-Bereich"
 msgid "Alerts"
 msgstr "Mitteilungen"
 
-#: lib/vutuv_web/views/error_html.ex:65
-#: lib/vutuv_web/views/error_html.ex:107
-#: lib/vutuv_web/views/error_html.ex:129
+#: lib/vutuv_web/views/error_html.ex:78
+#: lib/vutuv_web/views/error_html.ex:120
+#: lib/vutuv_web/views/error_html.ex:142
 #, elixir-autogen, elixir-format
 msgid "Back to the start page"
 msgstr "Zur Startseite"
@@ -1705,7 +1700,7 @@ msgstr "Empfehlen"
 msgid "Follow"
 msgstr "Folgen"
 
-#: lib/vutuv_web/views/error_html.ex:125
+#: lib/vutuv_web/views/error_html.ex:138
 #, elixir-autogen, elixir-format
 msgid "If you think this is a bug, please"
 msgstr "Falls das ein Fehler ist, bitte"
@@ -1784,7 +1779,7 @@ msgstr "Mitgliederzahl"
 msgid "PIN"
 msgstr "PIN"
 
-#: lib/vutuv_web/views/error_html.ex:30
+#: lib/vutuv_web/views/error_html.ex:43
 #, elixir-autogen, elixir-format
 msgid "Pardon us! Something went wrong."
 msgstr "Entschuldigung! Etwas ist schiefgelaufen."
@@ -1868,7 +1863,7 @@ msgstr "Nachricht schreiben…"
 msgid "Your login session expired. Please try again."
 msgstr "Ihre Anmeldung ist abgelaufen. Bitte versuchen Sie es erneut."
 
-#: lib/vutuv_web/open_graph.ex:105
+#: lib/vutuv_web/open_graph.ex:237
 #: lib/vutuv_web/templates/user/show.html.heex:195
 #, elixir-autogen, elixir-format
 msgid "follower"
@@ -1881,7 +1876,7 @@ msgstr[1] "Follower"
 msgid "following"
 msgstr "folgt"
 
-#: lib/vutuv_web/views/error_html.ex:126
+#: lib/vutuv_web/views/error_html.ex:139
 #, elixir-autogen, elixir-format
 msgid "submit a bug report"
 msgstr "einen Fehlerbericht erstellen"
@@ -4502,12 +4497,12 @@ msgstr "Mitglieder finden"
 msgid "Follows"
 msgstr "Folgt"
 
-#: lib/vutuv_web/views/error_html.ex:61
+#: lib/vutuv_web/views/error_html.ex:74
 #, elixir-autogen, elixir-format
 msgid "If you do not run this instance yourself, please contact the operator."
 msgstr "Wenn Sie diese Instanz nicht selbst betreiben, wenden Sie sich bitte an den Betreiber."
 
-#: lib/vutuv_web/views/error_html.ex:62
+#: lib/vutuv_web/views/error_html.ex:75
 #, elixir-autogen, elixir-format
 msgid "Legal notice"
 msgstr "Impressum"
@@ -4522,7 +4517,7 @@ msgstr "Noch keine Follower."
 msgid "Not following anyone yet."
 msgstr "Folgt noch niemandem."
 
-#: lib/vutuv_web/views/error_html.ex:53
+#: lib/vutuv_web/views/error_html.ex:66
 #, elixir-autogen, elixir-format
 msgid "This area is reserved for administrators."
 msgstr "Dieser Bereich ist Administratoren vorbehalten."
@@ -8394,7 +8389,7 @@ msgstr "Wenn deaktiviert, zeigt die Social-Media-Karte Ihre Konten ohne Beiträg
 msgid "That file is too large. Please upload a ZIP of at most 50 MB."
 msgstr "Diese Datei ist zu groß. Bitte laden Sie eine ZIP-Datei mit höchstens 50 MB hoch."
 
-#: lib/vutuv_web/views/error_html.ex:41
+#: lib/vutuv_web/views/error_html.ex:54
 #, elixir-autogen, elixir-format
 msgid "The file you sent is too large."
 msgstr "Die gesendete Datei ist zu groß."
@@ -8474,7 +8469,7 @@ msgstr "Die Seite %{letter} des Mitgliederverzeichnisses, sortiert nach Nachname
 msgid "This profile is not offered as a Markdown, text, JSON or XML export."
 msgstr "Dieses Profil wird nicht als Markdown-, Text-, JSON- oder XML-Export angeboten."
 
-#: lib/vutuv_web/views/error_html.ex:55
+#: lib/vutuv_web/views/error_html.ex:68
 #, elixir-autogen, elixir-format
 msgid "Admin rights are granted by the operator of this vutuv instance, from the server's command line:"
 msgstr "Admin-Rechte vergibt der Betreiber dieser vutuv-Instanz, über die Kommandozeile des Servers:"
@@ -10397,3 +10392,178 @@ msgstr "seit %{year}"
 #, elixir-autogen, elixir-format
 msgid "Keep it somewhere safe, like your wallet. If you lose it, or it falls into the wrong hands, replace or delete it here: a new list makes every old code stop working immediately. The emailed PIN always keeps working."
 msgstr "Bewahren Sie sie an einem sicheren Ort auf, zum Beispiel im Portemonnaie. Geht sie verloren oder in falsche Hände, ersetzen oder löschen Sie sie hier: Eine neue Liste macht jeden alten Code sofort unbrauchbar. Die PIN per E-Mail funktioniert immer weiter."
+
+#: lib/vutuv_web/open_graph.ex:124
+#, elixir-autogen, elixir-format
+msgid "Browse tags on vutuv and discover the members behind them."
+msgstr "Tags auf vutuv durchstöbern und die Mitglieder dahinter entdecken."
+
+#: lib/vutuv_web/open_graph.ex:101
+#, elixir-autogen, elixir-format
+msgid "Browse the vutuv member directory."
+msgstr "Durchstöbern Sie das vutuv-Mitgliederverzeichnis."
+
+#: lib/vutuv_web/open_graph.ex:145
+#, elixir-autogen, elixir-format
+msgid "Change your vutuv username."
+msgstr "Ändern Sie Ihren vutuv-Benutzernamen."
+
+#: lib/vutuv_web/open_graph.ex:158
+#, elixir-autogen, elixir-format
+msgid "Choose which vutuv activity you get emails about."
+msgstr "Wählen Sie, worüber vutuv Sie per E-Mail benachrichtigt."
+
+#: lib/vutuv_web/open_graph.ex:148
+#, elixir-autogen, elixir-format
+msgid "Choose your language and map preferences on vutuv."
+msgstr "Wählen Sie Ihre Sprache und Karteneinstellungen auf vutuv."
+
+#: lib/vutuv_web/open_graph.ex:155
+#, elixir-autogen, elixir-format
+msgid "Connect your vutuv profile to the Fediverse."
+msgstr "Verbinden Sie Ihr vutuv-Profil mit dem Fediverse."
+
+#: lib/vutuv_web/open_graph.ex:152
+#, elixir-autogen, elixir-format
+msgid "Control who can find you on vutuv and what search engines and AI agents may use."
+msgstr "Legen Sie fest, wer Sie auf vutuv findet und was Suchmaschinen und KI-Agenten nutzen dürfen."
+
+#: lib/vutuv_web/open_graph.ex:163
+#, elixir-autogen, elixir-format
+msgid "Delete your vutuv account."
+msgstr "Löschen Sie Ihr vutuv-Konto."
+
+#: lib/vutuv_web/open_graph.ex:118
+#, elixir-autogen, elixir-format
+msgid "Developer documentation for the vutuv API."
+msgstr "Entwicklerdokumentation für die vutuv-API."
+
+#: lib/vutuv_web/open_graph.ex:169
+#, elixir-autogen, elixir-format
+msgid "Edit your vutuv profile basics: name, photo, tagline and about."
+msgstr "Bearbeiten Sie die Basisdaten Ihres vutuv-Profils: Name, Foto, Kurzbeschreibung und Infos über Sie."
+
+#: lib/vutuv_web/open_graph.ex:143
+#, elixir-autogen, elixir-format
+msgid "Generate printable one-time login codes for vutuv."
+msgstr "Erzeugen Sie druckbare Einmal-Login-Codes für vutuv."
+
+#: lib/vutuv_web/open_graph.ex:113
+#, elixir-autogen, elixir-format
+msgid "How vutuv handles your personal data."
+msgstr "Wie vutuv mit Ihren personenbezogenen Daten umgeht."
+
+#: lib/vutuv_web/open_graph.ex:166
+#, elixir-autogen, elixir-format
+msgid "Import your profile from a LinkedIn data export."
+msgstr "Importieren Sie Ihr Profil aus einem LinkedIn-Datenexport."
+
+#: lib/vutuv_web/open_graph.ex:135
+#, elixir-autogen, elixir-format
+msgid "Manage how you sign in to vutuv: username, email addresses, devices, passkeys and login codes."
+msgstr "Verwalten Sie Ihre Anmeldung bei vutuv: Benutzername, E-Mail-Adressen, Geräte, Passkeys und Login-Codes."
+
+#: lib/vutuv_web/open_graph.ex:196
+#, elixir-autogen, elixir-format
+msgid "Manage the addresses on your vutuv profile."
+msgstr "Verwalten Sie die Adressen auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:161
+#, elixir-autogen, elixir-format
+msgid "Manage the apps and API tokens connected to your vutuv account."
+msgstr "Verwalten Sie die Apps und API-Tokens, die mit Ihrem vutuv-Konto verbunden sind."
+
+#: lib/vutuv_web/open_graph.ex:178
+#, elixir-autogen, elixir-format
+msgid "Manage the certificates and licenses on your vutuv profile."
+msgstr "Verwalten Sie die Zertifikate und Lizenzen auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:175
+#, elixir-autogen, elixir-format
+msgid "Manage the education on your vutuv profile."
+msgstr "Verwalten Sie die Ausbildung auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:190
+#, elixir-autogen, elixir-format
+msgid "Manage the email addresses on your vutuv profile."
+msgstr "Verwalten Sie die E-Mail-Adressen auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:181
+#, elixir-autogen, elixir-format
+msgid "Manage the languages on your vutuv profile."
+msgstr "Verwalten Sie die Sprachen auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:184
+#, elixir-autogen, elixir-format
+msgid "Manage the links on your vutuv profile."
+msgstr "Verwalten Sie die Links auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:193
+#, elixir-autogen, elixir-format
+msgid "Manage the phone numbers on your vutuv profile."
+msgstr "Verwalten Sie die Telefonnummern auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:187
+#, elixir-autogen, elixir-format
+msgid "Manage the social media accounts on your vutuv profile."
+msgstr "Verwalten Sie die Social-Media-Konten auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:199
+#, elixir-autogen, elixir-format
+msgid "Manage the tags on your vutuv profile."
+msgstr "Verwalten Sie die Tags auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:172
+#, elixir-autogen, elixir-format
+msgid "Manage the work experience on your vutuv profile."
+msgstr "Verwalten Sie die Berufserfahrung auf Ihrem vutuv-Profil."
+
+#: lib/vutuv_web/open_graph.ex:204
+#, elixir-autogen, elixir-format
+msgid "Manage your vutuv account: profile, privacy, notifications and sign-in."
+msgstr "Verwalten Sie Ihr vutuv-Konto: Profil, Privatsphäre, Benachrichtigungen und Anmeldung."
+
+#: lib/vutuv_web/controllers/tag_controller.ex:37
+#, elixir-autogen, elixir-format
+msgid "Members on vutuv tagged %{tag}."
+msgstr "Mitglieder auf vutuv mit dem Tag %{tag}."
+
+#: lib/vutuv_web/open_graph.ex:140
+#, elixir-autogen, elixir-format
+msgid "Set up an authenticator app (TOTP) for your vutuv login."
+msgstr "Richten Sie eine Authenticator-App (TOTP) für Ihren vutuv-Login ein."
+
+#: lib/vutuv_web/open_graph.ex:103
+#, elixir-autogen, elixir-format
+msgid "Sign in to your vutuv account."
+msgstr "Melden Sie sich bei Ihrem vutuv-Konto an."
+
+#: lib/vutuv_web/open_graph.ex:107
+#, elixir-autogen, elixir-format
+msgid "The community guidelines that keep vutuv friendly and fair."
+msgstr "Die Community-Richtlinien, die vutuv freundlich und fair halten."
+
+#: lib/vutuv_web/open_graph.ex:121
+#, elixir-autogen, elixir-format
+msgid "The most followed members on vutuv."
+msgstr "Die Mitglieder mit den meisten Followern auf vutuv."
+
+#: lib/vutuv_web/open_graph.ex:115
+#, elixir-autogen, elixir-format
+msgid "The terms of use for vutuv."
+msgstr "Die Nutzungsbedingungen von vutuv."
+
+#: lib/vutuv_web/open_graph.ex:110
+#, elixir-autogen, elixir-format
+msgid "Who runs vutuv: the legal notice and operator details."
+msgstr "Wer vutuv betreibt: Impressum und Anbieterangaben."
+
+#: lib/vutuv_web/open_graph.ex:104
+#, elixir-autogen, elixir-format
+msgid "Your personal vutuv newsfeed."
+msgstr "Ihr persönlicher vutuv-Newsfeed."
+
+#: lib/vutuv_web/open_graph.ex:82
+#, elixir-autogen, elixir-format
+msgid "vutuv is the open business network where professionals connect, share, and get found. Free to join."
+msgstr "vutuv ist das offene Business-Netzwerk. Fachleute vernetzen sich, tauschen sich aus und werden gefunden. Kostenlos dabei."
