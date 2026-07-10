@@ -602,24 +602,37 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#discover-posts")
     end
 
-    test "the excerpt spans line breaks and clamps at four lines, not one", %{conn: conn} do
+    test "renders the body as formatted Markdown, clamped at six lines", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       author = other_user(first_name: "Long", last_name: "Winded")
 
       {:ok, post} =
         Posts.create_post(author, %{
-          body: "First line of thought.\n\nA second paragraph that must stay visible."
+          body: "# **Zwischenüberschrift**\n\nA second paragraph that must stay visible."
         })
 
       {:ok, live, _html} = live(conn, ~p"/feed")
+      html = render(live)
 
-      excerpt = ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+      body = ~s(#discover-posts .markdown--post)
 
-      # The excerpt is no longer cut at the first line break …
-      assert has_element?(live, excerpt, "A second paragraph that must stay visible.")
-      # … and the visual cut is the four-line CSS clamp instead of one-line truncate.
-      assert has_element?(live, "#{excerpt}.line-clamp-4")
-      refute has_element?(live, "#{excerpt}.truncate")
+      # The body runs through the same Markdown formatter as a normal post, so the
+      # raw Markdown source (the leading `#`, the `**`) never reaches the DOM …
+      assert has_element?(live, body)
+      refute html =~ "# **Zwischenüberschrift**"
+      # … the heading flattens to bold text, later paragraphs stay visible …
+      assert has_element?(live, "#{body} strong", "Zwischenüberschrift")
+      assert has_element?(live, body, "A second paragraph that must stay visible.")
+      # … the visible cut is the six-line CSS clamp, not the old four-line/one-line …
+      assert has_element?(live, "#{body}.line-clamp-6")
+      refute has_element?(live, "#discover-posts .line-clamp-4")
+      refute has_element?(live, "#discover-posts .truncate")
+
+      # … and the permalink to the post is still reachable (on the timestamp).
+      assert has_element?(
+               live,
+               ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+             )
     end
 
     test "the reload control draws a fresh random handful without a reload", %{conn: conn} do

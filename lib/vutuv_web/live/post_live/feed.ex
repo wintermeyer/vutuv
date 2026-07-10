@@ -146,14 +146,16 @@ defmodule VutuvWeb.PostLive.Feed do
     assign(socket, :discover_posts, posts)
   end
 
-  # The card's post excerpt. `AgentDocs.excerpt/1` cuts at the first line break
-  # (right for the one-line agent lists), but this card clamps at four lines
-  # (`line-clamp-4`), so keep enough of the body to fill them: line breaks fold
-  # into spaces and the CSS clamp does the visible truncation.
-  defp discover_excerpt(body) do
-    body
-    |> String.replace(~r/\s+/, " ")
-    |> String.slice(0, 400)
+  # The card's post body. Rendered through the exact same Markdown formatter as
+  # a normal post preview (`VutuvWeb.Markdown.render_preview/2` → `render_post/2`)
+  # so the rail shows formatted text — headings flattened to bold via
+  # `.markdown--post`, @mentions and #hashtags linked — instead of the raw
+  # Markdown source. The source is block-cut at the preview limit to keep the
+  # rail DOM light; the visible cut is the six-line CSS clamp (`line-clamp-6`)
+  # on the wrapper, so we drop the truncation flag here.
+  defp discover_body(body) do
+    {html, _truncated?} = VutuvWeb.Markdown.render_preview(body, [])
+    html
   end
 
   # Pre-load the action-bar engagement AND the viewer's follow edge to each
@@ -619,9 +621,9 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- "Suggested posts": a random handful of recent public posts by
           same-language members the viewer doesn't follow — discovery beyond
           the follow graph, like "Who to follow" but for content. Compact rows
-          (avatar + name + an excerpt clamped at four lines), not full post
-          cards — an action bar and gallery don't fit a rail. The reload button
-          draws 5 fresh ones with no page reload. --%>
+          (avatar + name + the Markdown-formatted body clamped at six lines),
+          not full post cards — an action bar and gallery don't fit a rail. The
+          reload button draws 5 fresh ones with no page reload. --%>
           <.card :if={@discover_posts != []} id="discover-posts">
             <div class="mb-4 flex items-center justify-between gap-3">
               <.section_title>{gettext("Suggested posts")}</.section_title>
@@ -664,16 +666,20 @@ defmodule VutuvWeb.PostLive.Feed do
                     >
                       {UserHelpers.full_name(post.user)}
                     </.link>
-                    <span class="text-slate-600 dark:text-slate-400">
+                    <.link
+                      href={~p"/#{post.user}/posts/#{post.id}"}
+                      class="text-slate-600 hover:text-brand-700 dark:text-slate-400"
+                    >
                       · <.post_time at={post.inserted_at} />
-                    </span>
+                    </.link>
                   </p>
-                  <.link
-                    href={~p"/#{post.user}/posts/#{post.id}"}
-                    class="mt-1 line-clamp-4 text-sm text-slate-700 hover:text-brand-700 dark:text-slate-300"
-                  >
-                    {discover_excerpt(post.body)}
-                  </.link>
+                  <%!-- The body is formatted Markdown (links, mentions, bold),
+                  so it must be a plain block, not wrapped in a nav link — the
+                  permalink lives on the timestamp above, as on a real post
+                  card. The six-line CSS clamp does the visible truncation. --%>
+                  <div class="markdown markdown--post mt-1 line-clamp-6 text-sm text-slate-700 dark:text-slate-300">
+                    {discover_body(post.body)}
+                  </div>
                 </div>
               </li>
             </ul>
