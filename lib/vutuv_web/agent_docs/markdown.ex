@@ -245,22 +245,29 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp profile_facts(doc) do
-    counts = doc.counts
-
     [
       doc.verified && "- " <> gettext("Verified profile: yes"),
       doc.employment_status &&
         "- #{gettext("Employment status")}: #{User.employment_status_label(doc.employment_status)}",
+      doc.desired_salary && "- " <> User.desired_salary_agent_line(doc.desired_salary),
       "- #{gettext("Member since")}: #{doc.member_since}",
-      counts.followers > 0 && "- #{gettext("Followers")}: #{counts.followers}",
-      counts.following > 0 && "- #{gettext("Following")}: #{counts.following}",
-      counts.connections > 0 && "- #{gettext("Connections")}: #{counts.connections}",
+      count_facts(doc.counts),
       doc.gender && "- #{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
       doc.birthdate && "- #{gettext("Birthday")}: #{doc.birthdate}",
       doc.age && "- #{gettext("Age")}: #{doc.age}"
     ]
+    |> List.flatten()
     |> Enum.filter(& &1)
     |> Enum.join("\n\n")
+  end
+
+  # The follower / following / connection counts, each shown only when non-zero.
+  defp count_facts(counts) do
+    [
+      counts.followers > 0 && "- #{gettext("Followers")}: #{counts.followers}",
+      counts.following > 0 && "- #{gettext("Following")}: #{counts.following}",
+      counts.connections > 0 && "- #{gettext("Connections")}: #{counts.connections}"
+    ]
   end
 
   # One entry of a profile section — the same line on the profile page and

@@ -43,20 +43,49 @@ never disagree.
 - `"hidden"` — nobody, not even the owner on their own profile; the status stays
   stored and can be re-shared later.
 
-The rule lives in one seam, `User.employment_status_visible?/2` (returns false
-when no status is set, so a call site gates the whole badge row on it). The
-profile template passes the viewer (`@current_user`); `ProfileDoc` passes its
-`:viewer` — `nil` for the anonymous extension URLs (so `"members"`/`"hidden"`
-drop out), the token's member for an authenticated `/api/2.0` read (so a
-`"members"` status shows there). Because the profile is a LiveView, changing the
-setting in `/settings/profile` reflects on an open profile without a reload.
+The three visibility values and their labels are shared (`User.visibilities/0`,
+`User.visibility_label/1`) with the salary expectation below. The rule itself is
+one seam, `User.employment_status_visible?/2` (returns false when no status is
+set, so a call site gates the whole badge row on it); it delegates to a private
+`visibility_allows?/2` that the salary predicate reuses. The profile template
+passes the viewer (`@current_user`); `ProfileDoc` passes its `:viewer` — `nil`
+for the anonymous extension URLs (so `"members"`/`"hidden"` drop out), the
+token's member for an authenticated `/api/2.0` read (so a `"members"` status
+shows there). Because the profile is a LiveView, changing the setting in
+`/settings/profile` reflects on an open profile without a reload.
 
-The Basics form reveals the visibility select only once a status is chosen (the
-`EmploymentVisibility` enhancement in `app.js` toggles a server-rendered
-`hidden` on the sub-field), so a member who stays "Not open to work" sees one
-clean control. Deliberately no notice-period / Kündigungsfrist field (#893):
-when someone becomes available is a bilateral matter, not something the platform
-models.
+## Salary expectation / Gehaltsvorstellung (issue #928)
+
+A member may state a **minimum** salary expectation, stored as
+`users.desired_salary_min` (a whole-currency-unit **integer**, `nil` = not
+stated — the codebase models money as integers, never `:decimal`, and the
+display uses the integer-only `delimited_count/1`), plus
+`desired_salary_currency` (whitelist `EUR`/`USD`/`GBP`/`CHF`, default `EUR`),
+`desired_salary_period` (`hour`/`day`/`week`/`month`/`year`, default `year`) and
+its own `desired_salary_visibility` (the shared three-way enum, default
+**`hidden`**). There is deliberately **no** current- or past-salary field: the
+EU pay-transparency directive bans that employer question, so we don't collect
+it either.
+
+The field's real job is **matching, not display**: even at `hidden` it will feed
+the member's own job-board filter and skip alert postings below the minimum
+(milestone issues 6/9 and 8/9). `desired_salary_visibility` only governs who
+*else* sees it, through `User.desired_salary_visible?/2` (the same viewer rule as
+the status): `members` renders a quiet line under the status pill for signed-in
+members (amount via `delimited_count`, currency **symbol**, translated period);
+`everyone` also shows it logged-out and in the agent formats; `hidden` keeps it
+off every rendering. The agent docs carry the same fact — the md/txt line via
+`User.desired_salary_agent_line/1` (raw amount + currency **code** + period, so
+it stays parseable), JSON/XML as a structured `{min, currency, period}` map — all
+gated by the same predicate.
+
+Both extras (availability visibility + the salary group) live in one
+`[data-jobsearch-details]` panel on the Basics form that the `app.js` reveal
+shows only once an employment status is chosen, so a member who stays "Not open
+to work" sees one clean control. The salary amount is cleared by emptying the
+field (validated `> 0`, so an empty value simply stores "no expectation").
+Deliberately no notice-period / Kündigungsfrist field (#893): when someone
+becomes available is a bilateral matter, not something the platform models.
 
 ## Profile job title chooser (issue #833)
 

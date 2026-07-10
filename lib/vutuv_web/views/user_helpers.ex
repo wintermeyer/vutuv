@@ -43,21 +43,40 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
-  The `{label, value}` options for the Basics form's employment-status
-  *visibility* select (issue #928): the three choices derived from the schema's
-  single source (`User.employment_status_visibilities/0` through
-  `User.employment_status_visibility_label/1`), in the everyone → members →
-  hidden order, so the form can never offer a value the changeset would reject.
+  The `{label, value}` options for a Basics-form *visibility* select (issue
+  #928): the three choices (everyone → members → hidden) from the schema's
+  single source (`User.visibilities/0` through `User.visibility_label/1`),
+  shared by both the employment-status and salary-expectation visibility
+  selects so the form can never offer a value the changeset would reject.
   """
-  def employment_status_visibility_options do
+  def visibility_options do
+    Enum.map(User.visibilities(), &{User.visibility_label(&1), &1})
+  end
+
+  @doc """
+  The `{label, value}` options for the salary-expectation currency select
+  (issue #928): the whitelisted codes shown with their symbol (e.g. `€ EUR`).
+  """
+  def desired_salary_currency_options do
     Enum.map(
-      User.employment_status_visibilities(),
-      &{User.employment_status_visibility_label(&1), &1}
+      User.desired_salary_currencies(),
+      &{"#{User.desired_salary_currency_symbol(&1)} #{&1}", &1}
     )
+  end
+
+  @doc """
+  The `{label, value}` options for the salary-expectation period select (issue
+  #928), each the translated period noun (`User.desired_salary_period_label/1`).
+  """
+  def desired_salary_period_options do
+    Enum.map(User.desired_salary_periods(), &{User.desired_salary_period_label(&1), &1})
   end
 
   @doc "Whether `user`'s employment-status badge should render for `viewer` (issue #928)."
   defdelegate employment_status_visible?(user, viewer), to: User
+
+  @doc "Whether `user`'s salary expectation should render for `viewer` (issue #928)."
+  defdelegate desired_salary_visible?(user, viewer), to: User
 
   @doc """
   A member's display name for admin lists: their full name, or `@handle` when

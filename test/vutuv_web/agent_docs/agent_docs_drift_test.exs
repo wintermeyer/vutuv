@@ -23,9 +23,14 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         gender: "female",
         birthdate: ~D[1991-04-23],
         employment_status: "looking",
-        # Opt the availability badge public so it stays in the anonymous agent
-        # docs the drift test checks (issue #928: only an "everyone" status does).
-        employment_status_visibility: "everyone"
+        # Opt the availability badge + salary expectation public so they stay in
+        # the anonymous agent docs the drift test checks (issue #928: only an
+        # "everyone" visibility does).
+        employment_status_visibility: "everyone",
+        desired_salary_min: 60_000,
+        desired_salary_currency: "EUR",
+        desired_salary_period: "year",
+        desired_salary_visibility: "everyone"
       )
 
     insert(:email,
@@ -193,6 +198,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert rendered.txt =~ "Employment status: Looking for a job"
     assert Jason.decode!(rendered.json)["employment_status"] == "looking"
     assert rendered.xml =~ "<employment_status>looking</employment_status>"
+
+    # The salary expectation (issue #928): the HTML profile line and the md/txt
+    # fact line show the "… per period" summary, JSON/XML carry the structured
+    # {min, currency, period}.
+    assert rendered.html =~ "Salary expectation"
+    assert rendered.md =~ "Salary expectation"
+    assert rendered.txt =~ "Salary expectation"
+    salary = Jason.decode!(rendered.json)["desired_salary"]
+    assert salary["min"] == 60_000
+    assert salary["currency"] == "EUR"
+    assert salary["period"] == "year"
+    assert rendered.xml =~ "<desired_salary>"
+    assert rendered.xml =~ "<min>60000</min>"
 
     # The counters: HTML renders "1 follower", the docs carry the number.
     assert rendered.html =~ "follower"

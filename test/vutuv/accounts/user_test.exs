@@ -330,11 +330,102 @@ defmodule Vutuv.Accounts.UserTest do
       assert User.employment_status_visible?(user, %User{})
     end
 
-    test "employment_status_visibility_label/1 translates each choice and nils the rest" do
-      assert User.employment_status_visibility_label("everyone") =~ "Everyone"
-      assert User.employment_status_visibility_label("members") =~ "members"
-      assert User.employment_status_visibility_label("hidden") =~ "No one"
-      assert User.employment_status_visibility_label("bogus") == nil
+    test "visibility_label/1 translates each choice and nils the rest" do
+      assert User.visibility_label("everyone") =~ "Everyone"
+      assert User.visibility_label("members") =~ "members"
+      assert User.visibility_label("hidden") =~ "No one"
+      assert User.visibility_label("bogus") == nil
+    end
+  end
+
+  describe "salary expectation (issue #928)" do
+    defp salary_changeset(attrs) do
+      User.changeset(%User{}, Map.merge(%{"first_name" => "first_name"}, attrs))
+    end
+
+    test "defaults: currency EUR, period year, visibility hidden, amount nil" do
+      user = %User{}
+      assert user.desired_salary_min == nil
+      assert user.desired_salary_currency == "EUR"
+      assert user.desired_salary_period == "year"
+      assert user.desired_salary_visibility == "hidden"
+    end
+
+    test "accepts a positive amount with a whitelisted currency, period and visibility" do
+      changeset =
+        salary_changeset(%{
+          "desired_salary_min" => "60000",
+          "desired_salary_currency" => "CHF",
+          "desired_salary_period" => "month",
+          "desired_salary_visibility" => "members"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :desired_salary_min) == 60_000
+    end
+
+    test "rejects a zero or negative amount" do
+      refute salary_changeset(%{"desired_salary_min" => "0"}).valid?
+      refute salary_changeset(%{"desired_salary_min" => "-100"}).valid?
+
+      assert %{desired_salary_min: [_]} =
+               errors_on(salary_changeset(%{"desired_salary_min" => "0"}))
+    end
+
+    test "an empty amount clears it (stores nil), still valid" do
+      user = %User{first_name: "first_name", desired_salary_min: 50_000}
+      changeset = User.changeset(user, %{"desired_salary_min" => ""})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :desired_salary_min) == nil
+    end
+
+    test "rejects a non-whitelisted currency or period" do
+      refute salary_changeset(%{"desired_salary_currency" => "BTC"}).valid?
+      refute salary_changeset(%{"desired_salary_period" => "fortnight"}).valid?
+    end
+
+    test "rejects an unknown visibility value" do
+      refute salary_changeset(%{"desired_salary_visibility" => "recruiters"}).valid?
+    end
+
+    test "desired_salary_visible?/2 follows the shared visibility rule and needs an amount" do
+      # No amount set: never visible, whatever the visibility.
+      refute User.desired_salary_visible?(
+               %User{desired_salary_min: nil, desired_salary_visibility: "everyone"},
+               %User{}
+             )
+
+      everyone = %User{desired_salary_min: 60_000, desired_salary_visibility: "everyone"}
+      assert User.desired_salary_visible?(everyone, nil)
+      assert User.desired_salary_visible?(everyone, %User{})
+
+      members = %User{desired_salary_min: 60_000, desired_salary_visibility: "members"}
+      refute User.desired_salary_visible?(members, nil)
+      assert User.desired_salary_visible?(members, %User{})
+
+      hidden = %User{desired_salary_min: 60_000, desired_salary_visibility: "hidden"}
+      refute User.desired_salary_visible?(hidden, nil)
+      refute User.desired_salary_visible?(hidden, %User{})
+    end
+
+    test "desired_salary_period_label/1 and currency_symbol/1 map known values" do
+      assert User.desired_salary_period_label("year") == "year"
+      assert User.desired_salary_period_label("month") == "month"
+      assert User.desired_salary_currency_symbol("EUR") == "€"
+      assert User.desired_salary_currency_symbol("USD") == "$"
+      # Unknown values fall back to the raw code / string.
+      assert User.desired_salary_currency_symbol("SEK") == "SEK"
+      assert User.desired_salary_period_label("decade") == "decade"
+    end
+
+    test "desired_salary_agent_line/1 builds the one-line summary with the code and raw amount" do
+      line =
+        User.desired_salary_agent_line(%{min: 60_000, currency: "EUR", period: "year"})
+
+      assert line =~ "60000"
+      assert line =~ "EUR"
+      assert line =~ "year"
     end
   end
 

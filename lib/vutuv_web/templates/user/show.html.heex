@@ -174,6 +174,20 @@ the resulting ~200px rail width. --%>
         <div :if={employment_status_visible?(@user, @current_user)} class="mt-2">
           <.employment_status_badge status={@user.employment_status} />
         </div>
+        <%!-- Salary-expectation line (issue #928): a quiet muted line under the
+        pill, viewer-scoped by desired_salary_visibility (default "hidden", so
+        it usually stays off). Amount grouped via delimited_count; the same
+        sentence renders in the agent docs. --%>
+        <p
+          :if={desired_salary_visible?(@user, @current_user)}
+          class="mt-1 text-sm text-slate-600 dark:text-slate-400"
+        >
+          {gettext("Salary expectation from %{amount} %{currency} per %{period}",
+            amount: delimited_count(@user.desired_salary_min),
+            currency: Vutuv.Accounts.User.desired_salary_currency_symbol(@user.desired_salary_currency),
+            period: Vutuv.Accounts.User.desired_salary_period_label(@user.desired_salary_period)
+          )}
+        </p>
         <%!-- Tagline row: the member's headline, user-written Markdown through
         the safe VutuvWeb.Markdown pipeline; the arbitrary-variant classes
         flatten Earmark's <p>, restore the list markers Preflight strips (the

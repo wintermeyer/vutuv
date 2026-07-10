@@ -15,9 +15,11 @@ defmodule VutuvWeb.GettextExtractionAnchors do
     * `Male` / `Female` / `Diverse` — `Vutuv.Accounts.User.gender_gettext/1`
     * `Open to offers` / `Looking for a job` — the employment-status labels
       `Vutuv.Accounts.User.employment_status_label/1` returns (issue #870)
-    * The employment-status visibility labels (`Everyone, including logged-out
-      visitors` / `Signed-in members only` / `No one`) that
-      `Vutuv.Accounts.User.employment_status_visibility_label/1` returns (#928)
+    * The visibility labels (`Everyone, including logged-out visitors` /
+      `Signed-in members only` / `No one`) that
+      `Vutuv.Accounts.User.visibility_label/1` returns, and the salary-period
+      nouns (`hour` / `day` / `week` / `month` / `year`) that
+      `Vutuv.Accounts.User.desired_salary_period_label/1` returns (issue #928)
     * `Incorrect PIN` / `PIN expired` / `This PIN has already been used.` — the
       PIN check messages in `Vutuv.Accounts`
     * `Connected` — the connection relationship word guarded by
@@ -44,11 +46,18 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Connected"),
       gettext("Open to offers"),
       gettext("Looking for a job"),
-      # The employment-status visibility labels (issue #928),
-      # Vutuv.Accounts.User.employment_status_visibility_label/1
+      # The shared visibility labels (issue #928),
+      # Vutuv.Accounts.User.visibility_label/1
       gettext("Everyone, including logged-out visitors"),
       gettext("Signed-in members only"),
       gettext("No one"),
+      # The salary-expectation period nouns (issue #928),
+      # Vutuv.Accounts.User.desired_salary_period_label/1
+      gettext("hour"),
+      gettext("day"),
+      gettext("week"),
+      gettext("month"),
+      gettext("year"),
       gettext("Lines on desktop"),
       gettext("Lines on mobile"),
       gettext("Hyphenate on desktop"),

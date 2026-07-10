@@ -28,6 +28,19 @@ defmodule Vutuv.Accounts.User do
     # employment_status_visible?/2, the single seam the profile pill and the
     # agent docs both read. NOT NULL with a "members" default in the DB.
     field(:employment_status_visibility, :string, default: "members")
+    # The member's minimum salary expectation / Gehaltsvorstellung (issue #928):
+    # a whole-currency-unit integer (nil = not stated — the codebase models
+    # money as integers, never :decimal, and the display uses the integer-only
+    # delimited_count/1). Its real job is matching, not display — even at
+    # "hidden" it will feed the member's own job-board filter and alerts
+    # (milestone issues 6/9, 8/9); desired_salary_visibility (default "hidden")
+    # only governs who else sees it, resolved per viewer by
+    # desired_salary_visible?/2. There is deliberately no current/past-salary
+    # field (the EU pay-transparency directive bans that employer question).
+    field(:desired_salary_min, :integer)
+    field(:desired_salary_currency, :string, default: "EUR")
+    field(:desired_salary_period, :string, default: "year")
+    field(:desired_salary_visibility, :string, default: "hidden")
     field(:birthdate, :date)
     field(:locale, :string)
     # An admin checked this person's physical ID against their name: this IS that
@@ -236,7 +249,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -248,14 +261,29 @@ defmodule Vutuv.Accounts.User do
 
   def employment_statuses, do: @employment_statuses
 
-  # Who may see the employment-status badge (issue #928). The single source of
-  # truth for the changeset's validate_inclusion and, via
-  # employment_status_visibility_options/0, the Basics form's select, so the
-  # form can never offer a value the changeset would reject. "members" is the
-  # default (see the schema/migration).
-  @employment_status_visibilities ~w(everyone members hidden)
+  # The shared three-way visibility set (issue #928), used by BOTH
+  # employment_status_visibility (default "members") and
+  # desired_salary_visibility (default "hidden"): "everyone" (all visitors,
+  # incl. logged-out + crawlers/agent formats), "members" (only a signed-in
+  # member) or "hidden" (nobody). The single source of truth for the
+  # changeset's validate_inclusion on either column and, via
+  # visibility_options/0, both Basics-form selects, so the form can never offer
+  # a value the changeset would reject.
+  @visibilities ~w(everyone members hidden)
 
-  def employment_status_visibilities, do: @employment_status_visibilities
+  def visibilities, do: @visibilities
+
+  # The currencies and periods the salary expectation may use (issue #928).
+  # Whitelisted single sources for the changeset's validate_inclusion and the
+  # Basics-form selects (via desired_salary_currency_options/0 /
+  # desired_salary_period_options/0). Defaults "EUR" / "year".
+  @desired_salary_currencies ~w(EUR USD GBP CHF)
+
+  def desired_salary_currencies, do: @desired_salary_currencies
+
+  @desired_salary_periods ~w(hour day week month year)
+
+  def desired_salary_periods, do: @desired_salary_periods
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
@@ -359,7 +387,15 @@ defmodule Vutuv.Accounts.User do
     )
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> validate_inclusion(:employment_status, @employment_statuses)
-    |> validate_inclusion(:employment_status_visibility, @employment_status_visibilities)
+    |> validate_inclusion(:employment_status_visibility, @visibilities)
+    # Salary expectation (issue #928): a positive whole-unit amount, a
+    # whitelisted currency + period, and the shared three-way visibility.
+    # validate_number only fires on a present, non-nil change, so clearing the
+    # amount (empty field → nil) is valid and simply stores "no expectation".
+    |> validate_number(:desired_salary_min, greater_than: 0)
+    |> validate_inclusion(:desired_salary_currency, @desired_salary_currencies)
+    |> validate_inclusion(:desired_salary_period, @desired_salary_periods)
+    |> validate_inclusion(:desired_salary_visibility, @visibilities)
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> revoke_verification_on_identity_change()
@@ -520,43 +556,91 @@ defmodule Vutuv.Accounts.User do
   def employment_status_label(_), do: nil
 
   @doc """
-  The translated label for a visibility choice (issue #928), for the Basics
-  form's select. "everyone" / "members" / "hidden" — the "members" copy is
-  deliberately honest that it reduces but cannot guarantee who sees the badge
-  (a member's employer can create an account too).
+  The translated label for a visibility choice (issue #928), shared by both
+  Basics-form visibility selects (employment status + salary expectation).
+  "everyone" / "members" / "hidden" — the "members" copy is deliberately honest
+  that it reduces but cannot guarantee who sees the value (a member's employer
+  can create an account too).
   """
-  def employment_status_visibility_label("everyone"),
+  def visibility_label("everyone"),
     do: Gettext.gettext(VutuvWeb.Gettext, "Everyone, including logged-out visitors")
 
-  def employment_status_visibility_label("members"),
+  def visibility_label("members"),
     do: Gettext.gettext(VutuvWeb.Gettext, "Signed-in members only")
 
-  def employment_status_visibility_label("hidden"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "No one")
+  def visibility_label("hidden"), do: Gettext.gettext(VutuvWeb.Gettext, "No one")
 
-  def employment_status_visibility_label(_), do: nil
+  def visibility_label(_), do: nil
+
+  # The shared three-way visibility gate (issue #928): "everyone" shows to all
+  # (incl. the anonymous public view crawlers/extension URLs get, `viewer`
+  # nil); "members" shows only to a signed-in member (any non-nil `viewer`, the
+  # owner included); "hidden" shows to nobody. A nil/legacy value falls back to
+  # the "members" rule. The two public predicates below add the "is the value
+  # set at all" guard so a call site can gate the whole row on one call.
+  defp visibility_allows?("everyone", _viewer), do: true
+  defp visibility_allows?("hidden", _viewer), do: false
+  defp visibility_allows?(_members_or_nil, viewer), do: not is_nil(viewer)
 
   @doc """
   Whether `user`'s employment-status badge is visible to `viewer` (issue #928),
   the single seam the profile pill and the agent-format `ProfileDoc` both read.
-
-  Returns false when no status is set (so a call site can gate the badge row on
-  this alone). Otherwise the visibility rule decides: "everyone" shows to all
-  (incl. the anonymous public view the extension URLs / crawlers get, `viewer`
-  nil); "members" shows only to a signed-in member (any non-nil `viewer`,
-  the owner included); "hidden" shows to nobody. A nil/legacy visibility falls
-  back to the "members" default.
+  False when no status is set, else the shared visibility rule decides.
   """
-  def employment_status_visible?(user, viewer)
   def employment_status_visible?(%__MODULE__{employment_status: nil}, _viewer), do: false
 
-  def employment_status_visible?(%__MODULE__{employment_status_visibility: "everyone"}, _),
-    do: true
+  def employment_status_visible?(%__MODULE__{} = user, viewer),
+    do: visibility_allows?(user.employment_status_visibility, viewer)
 
-  def employment_status_visible?(%__MODULE__{employment_status_visibility: "hidden"}, _),
-    do: false
+  @doc """
+  Whether `user`'s salary expectation is visible to `viewer` (issue #928), the
+  single seam the profile line and `ProfileDoc` both read. False when no amount
+  is set, else the shared visibility rule decides (default "hidden", so the
+  value stays a private matching signal unless the member opens it up).
+  """
+  def desired_salary_visible?(%__MODULE__{desired_salary_min: nil}, _viewer), do: false
 
-  def employment_status_visible?(%__MODULE__{}, viewer), do: not is_nil(viewer)
+  def desired_salary_visible?(%__MODULE__{} = user, viewer),
+    do: visibility_allows?(user.desired_salary_visibility, viewer)
+
+  @doc """
+  The translated period noun for a salary expectation (issue #928): "year",
+  "month", "week", "day", "hour" — used both in the Basics-form period select
+  and the rendered "… per <period>" line on the profile and in the agent docs.
+  """
+  def desired_salary_period_label("hour"), do: Gettext.gettext(VutuvWeb.Gettext, "hour")
+  def desired_salary_period_label("day"), do: Gettext.gettext(VutuvWeb.Gettext, "day")
+  def desired_salary_period_label("week"), do: Gettext.gettext(VutuvWeb.Gettext, "week")
+  def desired_salary_period_label("month"), do: Gettext.gettext(VutuvWeb.Gettext, "month")
+  def desired_salary_period_label("year"), do: Gettext.gettext(VutuvWeb.Gettext, "year")
+  def desired_salary_period_label(other), do: other
+
+  @doc """
+  The display symbol for a whitelisted salary currency (issue #928); falls back
+  to the code itself for anything unknown. Not translated — currency symbols
+  are locale-independent.
+  """
+  def desired_salary_currency_symbol("EUR"), do: "€"
+  def desired_salary_currency_symbol("USD"), do: "$"
+  def desired_salary_currency_symbol("GBP"), do: "£"
+  def desired_salary_currency_symbol(code), do: code
+
+  @doc """
+  The one-line salary-expectation summary the md/txt agent docs render (issue
+  #928): the raw amount, the currency code (parseable for agents) and the
+  translated period. Shares the msgid with the profile line (which instead
+  shows the grouped amount + currency symbol), so the wording stays in one
+  place. Takes the `%{min, currency, period}` map `ProfileDoc` builds.
+  """
+  def desired_salary_agent_line(%{min: min, currency: currency, period: period}) do
+    Gettext.gettext(
+      VutuvWeb.Gettext,
+      "Salary expectation from %{amount} %{currency} per %{period}",
+      amount: min,
+      currency: currency,
+      period: desired_salary_period_label(period)
+    )
+  end
 
   def gender_gettext("male"), do: Gettext.gettext(VutuvWeb.Gettext, "Male")
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")

@@ -86,6 +86,19 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # `viewer`, so a "members" status shows there too. nil when not visible.
       employment_status:
         if(User.employment_status_visible?(user, viewer), do: user.employment_status),
+      # The salary expectation (issue #928), same viewer-scoping as the status
+      # via its own visibility (default "hidden"). A structured map {min,
+      # currency, period} so JSON/XML stay machine-readable; the md/txt
+      # renderers format the same "… per <period>" line the profile shows. nil
+      # (absent) when not visible to this viewer.
+      desired_salary:
+        if User.desired_salary_visible?(user, viewer) do
+          %{
+            min: user.desired_salary_min,
+            currency: user.desired_salary_currency,
+            period: user.desired_salary_period
+          }
+        end,
       headline_markdown: user.headline,
       work_info: work_info,
       current_position: current_position(job),

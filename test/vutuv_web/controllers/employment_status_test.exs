@@ -176,21 +176,27 @@ defmodule VutuvWeb.EmploymentStatusTest do
       assert html =~ "Looking for a job"
     end
 
-    test "the visibility select is present but hidden until a status is set", %{conn: conn} do
+    test "the job-search details panel is present but hidden until a status is set", %{conn: conn} do
       html = conn |> get(~p"/settings/profile") |> html_response(200)
 
+      # Panel holds availability visibility + the salary group.
       assert html =~ ~s(name="user[employment_status_visibility]")
-      # No status yet, so the sub-field ships hidden (no clutter).
-      assert html =~ ~r/data-employment-visibility[^>]*class="[^"]*hidden/
+      assert html =~ ~s(name="user[desired_salary_min]")
+      # No status yet, so the whole panel ships hidden (no clutter).
+      assert html =~ ~r/data-jobsearch-details[^>]*class="[^"]*hidden/
     end
 
-    test "the visibility select is revealed once a status is set", %{conn: conn, user: user} do
+    test "the job-search details panel is revealed once a status is set", %{
+      conn: conn,
+      user: user
+    } do
       {:ok, _} = Accounts.update_user(user, %{"employment_status" => "open"})
 
       html = conn |> get(~p"/settings/profile") |> html_response(200)
 
       assert html =~ ~s(name="user[employment_status_visibility]")
-      refute html =~ ~r/data-employment-visibility[^>]*class="[^"]*hidden/
+      assert html =~ ~s(name="user[desired_salary_min]")
+      refute html =~ ~r/data-jobsearch-details[^>]*class="[^"]*hidden/
     end
 
     test "saving 'looking' persists the status", %{conn: conn, user: user} do
@@ -224,6 +230,96 @@ defmodule VutuvWeb.EmploymentStatusTest do
       put(conn, ~p"/settings/profile", user: %{"employment_status" => ""})
 
       assert Repo.get!(User, user.id).employment_status == nil
+    end
+
+    test "saving a salary expectation persists all four fields", %{conn: conn, user: user} do
+      put(conn, ~p"/settings/profile",
+        user: %{
+          "employment_status" => "looking",
+          "desired_salary_min" => "72000",
+          "desired_salary_currency" => "CHF",
+          "desired_salary_period" => "month",
+          "desired_salary_visibility" => "members"
+        }
+      )
+
+      reloaded = Repo.get!(User, user.id)
+      assert reloaded.desired_salary_min == 72_000
+      assert reloaded.desired_salary_currency == "CHF"
+      assert reloaded.desired_salary_period == "month"
+      assert reloaded.desired_salary_visibility == "members"
+    end
+
+    test "emptying the amount clears the salary expectation", %{conn: conn, user: user} do
+      {:ok, _} = Accounts.update_user(user, %{"desired_salary_min" => 60_000})
+
+      put(conn, ~p"/settings/profile", user: %{"desired_salary_min" => ""})
+
+      assert Repo.get!(User, user.id).desired_salary_min == nil
+    end
+  end
+
+  describe "salary-expectation display + scoping (issue #928)" do
+    test "hidden (the default) keeps the salary off the profile for everyone", %{conn: conn} do
+      user = insert_activated_user(desired_salary_min: 60_000)
+      assert user.desired_salary_visibility == "hidden"
+
+      logged_out = conn |> get(~p"/#{user}") |> html_response(200)
+      refute logged_out =~ "Salary expectation"
+
+      {member_conn, _viewer} = create_and_login_user(conn)
+      member_view = member_conn |> get(~p"/#{user}") |> html_response(200)
+      refute member_view =~ "Salary expectation"
+    end
+
+    test "members shows the salary line to a signed-in member but not logged-out", %{conn: conn} do
+      user =
+        insert_activated_user(desired_salary_min: 60_000, desired_salary_visibility: "members")
+
+      logged_out = conn |> get(~p"/#{user}") |> html_response(200)
+      refute logged_out =~ "Salary expectation"
+
+      {member_conn, _viewer} = create_and_login_user(conn)
+      member_view = member_conn |> get(~p"/#{user}") |> html_response(200)
+      assert member_view =~ "Salary expectation"
+      # Amount is grouped (delimited_count): 60000 -> 60,000 / 60.000.
+      assert member_view =~ "60,000" or member_view =~ "60.000"
+    end
+
+    test "everyone shows the salary line in the logged-out HTML and the agent formats", %{
+      conn: conn
+    } do
+      user =
+        insert_activated_user(
+          desired_salary_min: 60_000,
+          desired_salary_currency: "EUR",
+          desired_salary_period: "year",
+          desired_salary_visibility: "everyone"
+        )
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+      assert html =~ "Salary expectation"
+
+      md = conn |> get("/#{user.username}.md") |> response(200)
+      assert md =~ "Salary expectation"
+      assert md =~ "EUR"
+
+      json = conn |> get("/#{user.username}.json") |> response(200)
+      salary = Jason.decode!(json)["desired_salary"]
+      assert salary["min"] == 60_000
+      assert salary["currency"] == "EUR"
+      assert salary["period"] == "year"
+    end
+
+    test "a members/hidden salary is absent from the anonymous agent formats", %{conn: conn} do
+      user =
+        insert_activated_user(desired_salary_min: 60_000, desired_salary_visibility: "members")
+
+      json = conn |> get("/#{user.username}.json") |> response(200)
+      assert Jason.decode!(json)["desired_salary"] == nil
+
+      md = conn |> get("/#{user.username}.md") |> response(200)
+      refute md =~ "Salary expectation"
     end
   end
 end

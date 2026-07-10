@@ -880,19 +880,19 @@ function setupCharCounters() {
 }
 onReady(setupCharCounters)
 
-// Reveal the employment-status *visibility* sub-field only once a status is
-// chosen (issue #928, see user/edit.html.heex). A member who leaves the status
-// at "Not open to work" should see one clean control; the sub-field
-// ([data-employment-visibility], server-rendered hidden when no status is set)
-// appears as soon as they pick "Open to offers" / "Looking for a job" and hides
-// again when they clear it. Plain <div> wrappers, so toggling `hidden` alone
-// governs display (no competing display utility). With JS off the server-side
-// state stands and the field surfaces after the first save.
+// Reveal the "Jobsuche" details panel only once an employment status is chosen
+// (issue #928, see user/edit.html.heex). A member who leaves the status at "Not
+// open to work" should see one clean control; the panel ([data-jobsearch-details]
+// -- availability visibility + salary expectation, server-rendered hidden when
+// no status is set) appears as soon as they pick "Open to offers" / "Looking for
+// a job" and hides again when they clear it. Plain <div> wrappers, so toggling
+// `hidden` alone governs display (no competing display utility). With JS off the
+// server-side state stands and the panel surfaces after the first save.
 function wireEmploymentVisibility(select) {
   if (!once(select, "employmentVisibility")) return
   const wrap = select
     .closest("[data-employment-status-field]")
-    ?.querySelector("[data-employment-visibility]")
+    ?.querySelector("[data-jobsearch-details]")
   if (!wrap) return
 
   const sync = () => wrap.classList.toggle("hidden", select.value === "")

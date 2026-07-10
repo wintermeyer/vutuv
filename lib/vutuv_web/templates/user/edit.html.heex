@@ -170,16 +170,14 @@ lands here). --%>
           </div>
           <%= error_tag f, :headline %>
         </div>
-        <%!-- Employment status (issue #870): a job-availability signal shown as
-        a badge next to the tagline. Options come from the schema's single
-        source (employment_status_options/0); the blank first option is the
-        default "not open to work" state (stored as nil, no badge). The
-        visibility sub-field (issue #928) is revealed only once a status is
-        chosen, so a member who leaves this at "Not open to work" sees exactly
-        one control (no clutter): the server renders the sub-field hidden when
-        no status is set, and the EmploymentVisibility enhancement in app.js
-        toggles it as the status select changes. With JS off it appears after
-        the first save (the safe "members" default applies until then). --%>
+        <%!-- Employment status (issue #870) + the "Jobsuche" details (issue
+        #928: availability visibility + salary expectation). The details panel
+        is revealed only once a status is chosen, so a member who leaves this at
+        "Not open to work" sees exactly one control (no clutter): the server
+        renders the panel hidden when no status is set, and the
+        EmploymentVisibility enhancement in app.js toggles it as the status
+        select changes. With JS off the panel appears after the first save (the
+        safe "members"/"hidden" defaults apply until then). --%>
         <% status_set? = Phoenix.HTML.Form.input_value(f, :employment_status) not in [nil, ""] %>
         <div data-employment-status-field>
           <%= label f, :employment_status, gettext("Employment status"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
@@ -189,15 +187,58 @@ lands here). --%>
           </p>
           <%= error_tag f, :employment_status %>
 
-          <div data-employment-visibility class={["mt-4", !status_set? && "hidden"]}>
-            <%= label f, :employment_status_visibility, gettext("Who can see your availability?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-            <%= select f, :employment_status_visibility, employment_status_visibility_options(), class: input_class() %>
-            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-              {gettext(
-                "\"Signed-in members only\" is the default. It reduces who sees your availability but cannot guarantee it, since anyone can create an account. Choose \"No one\" to keep the status saved without showing it."
-              )}
-            </p>
-            <%= error_tag f, :employment_status_visibility %>
+          <div data-jobsearch-details class={["mt-4 space-y-5", !status_set? && "hidden"]}>
+            <div>
+              <%= label f, :employment_status_visibility, gettext("Who can see your availability?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+              <%= select f, :employment_status_visibility, visibility_options(), class: input_class() %>
+              <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "\"Signed-in members only\" is the default. It reduces who sees your availability but cannot guarantee it, since anyone can create an account. Choose \"No one\" to keep the status saved without showing it."
+                )}
+              </p>
+              <%= error_tag f, :employment_status_visibility %>
+            </div>
+
+            <%!-- Minimum salary expectation (issue #928). Optional; clear it by
+            emptying the amount. Its real job is matching: even hidden it will
+            feed the member's own board filter and alerts, so the hint says so.
+            No current/past-salary field (EU pay-transparency directive). --%>
+            <div class="border-t border-slate-200 pt-5 dark:border-slate-700">
+              <p class="text-sm font-medium text-slate-900 dark:text-white">
+                {gettext("Minimum salary expectation")}
+              </p>
+              <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                {gettext(
+                  "Optional. Even when hidden, it sharpens your own job search and alerts by filtering out postings below it. Leave the amount empty to remove it."
+                )}
+              </p>
+              <div class="mt-2 grid gap-3 sm:grid-cols-3">
+                <div>
+                  <%= label f, :desired_salary_min, gettext("Amount"), class: "block text-xs font-medium text-slate-600 dark:text-slate-400" %>
+                  <%= number_input f, :desired_salary_min, min: "1", step: "1", placeholder: "60000", class: input_class(f, :desired_salary_min), "aria-invalid": f.errors[:desired_salary_min] && "true" %>
+                </div>
+                <div>
+                  <%= label f, :desired_salary_period, gettext("Per"), class: "block text-xs font-medium text-slate-600 dark:text-slate-400" %>
+                  <%= select f, :desired_salary_period, desired_salary_period_options(), class: input_class() %>
+                </div>
+                <div>
+                  <%= label f, :desired_salary_currency, gettext("Currency"), class: "block text-xs font-medium text-slate-600 dark:text-slate-400" %>
+                  <%= select f, :desired_salary_currency, desired_salary_currency_options(), class: input_class() %>
+                </div>
+              </div>
+              <%= error_tag f, :desired_salary_min %>
+
+              <div class="mt-4">
+                <%= label f, :desired_salary_visibility, gettext("Who can see your salary expectation?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+                <%= select f, :desired_salary_visibility, visibility_options(), class: input_class() %>
+                <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                  {gettext(
+                    "Hidden by default, and it still does its job while hidden. \"Signed-in members only\" adds a quiet line to your profile for members; \"Everyone\" also shows it to logged-out visitors."
+                  )}
+                </p>
+                <%= error_tag f, :desired_salary_visibility %>
+              </div>
+            </div>
           </div>
         </div>
         <div class="grid gap-5 sm:grid-cols-2">
