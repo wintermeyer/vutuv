@@ -61,14 +61,21 @@ the `.post-clamp` CSS class and, when there is more, shows a plain "Read more"
 control (no length metric — issue #880 dropped the word count as meaningless once
 the reader has the preview). The line budget is a **per-reader, per-breakpoint
 preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the language & maps
-settings page): desktop and mobile independently, default 6 lines on desktop / 8
-on a phone. The reader's values ride onto the post body as the
+settings page): desktop and mobile independently, shipped default 6 lines on
+desktop / 8 on a phone. Since the `Vutuv.Prefs` system (see
+`settings-and-account.md`) the resolution is member value → the admin-set
+**installation default** (`/admin/preferences`) → that shipped default; a nil
+column means "inherit", and a logged-out reader gets the installation defaults
+too. The reader's values ride onto the post body as the
 `--post-clamp-desktop` / `--post-clamp-mobile` custom properties
-(`VutuvWeb.PostComponents.post_body_style/1`, which stays `nil` for a
-default/logged-out reader so their DOM carries no inline style and the CSS
-fallbacks apply); `.post-clamp`'s `@media (width < 48rem)` rule swaps the mobile
-value in. A `0` (or a cleared, nil) count means **no truncation** on that
-breakpoint (`-webkit-line-clamp: none`); when the reader disabled truncation on
+(`VutuvWeb.PostComponents.post_body_style/1`, which stays `nil` only while the
+resolved prefs equal the **shipped** defaults — the values the CSS fallbacks
+mirror — so a default reader's DOM carries no inline style; under a changed
+installation default every reader gets the inline override, which is what
+makes the admin's choice take effect); `.post-clamp`'s `@media (width < 48rem)`
+rule swaps the mobile value in. An explicit `0` count means **no truncation**
+on that breakpoint (`-webkit-line-clamp: none`); when the reader disabled
+truncation on
 **both** breakpoints the card renders the whole body uncut like `:full` (no
 character cap, no clamp, no "Read more"). Hyphenation of the post body is the same
 kind of per-reader, per-breakpoint preference (`--post-hyphens-*`; the CSS

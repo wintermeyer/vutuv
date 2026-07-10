@@ -426,6 +426,19 @@ defmodule VutuvWeb.Router do
     get("/usernames", UsernameController, :index)
     post("/usernames", UsernameController, :update)
 
+    # The installation's preference defaults (Vutuv.Prefs): what every member
+    # who has not customized — and every logged-out visitor — gets. The form
+    # is generated from the registry; saving reloads every node's cache.
+    get("/preferences", PrefController, :index)
+    put("/preferences", PrefController, :update)
+
+    # Per-member preference overrides for support: set or clear (back to
+    # "inherit the installation default") any registry pref of one member.
+    # Defined before the live `/users` routes match nothing here — the extra
+    # /preferences segment keeps it distinct from /users/delete and /users.
+    get("/users/:id/preferences", UserPrefController, :show)
+    put("/users/:id/preferences", UserPrefController, :update)
+
     # The member browser is a LiveView (`UserLive`, in the live_session below) so
     # search/filter/sort update with no reload. :update is the identity-
     # verification write action the browser's inline Verify button and this
@@ -688,6 +701,10 @@ defmodule VutuvWeb.Router do
     patch("/maps", SettingsController, :update_maps)
     put("/post_display", SettingsController, :update_post_display)
     patch("/post_display", SettingsController, :update_post_display)
+    # Clear a whole preference group back to nil = "inherit the installation
+    # default" (Vutuv.Prefs) — the quiet reset links under the two cards.
+    post("/post_display/reset", SettingsController, :reset_post_display)
+    post("/maps/reset", SettingsController, :reset_maps)
     # Signed-in devices: DELETE one by id, or all-but-this-one (issue #794).
     delete("/devices/:id", SettingsController, :revoke_session)
     delete("/devices", SettingsController, :revoke_other_sessions)

@@ -296,6 +296,30 @@ Run on the server, against the release:
 Note: `bin/vutuv eval` is the supported console entry point; `rpc`/`remote`
 need distribution, which the reference setup disables.
 
+## Preference defaults
+
+Some behaviour is a **member preference** with an installation-wide default:
+how many lines a post shows in the feed before "Read more" (desktop and
+mobile separately), whether post text hyphenates, which map services appear
+on addresses and which one opens first. Members tune these on their own
+settings pages; you decide what everyone gets **until** they do.
+
+- **`/admin` → Preference defaults** (`/admin/preferences`): change the
+  default for the whole installation at any time. It applies immediately to
+  every member who has not set an own value — and to logged-out visitors.
+  Each field notes the shipped default and how many members have customized
+  it (those members are unaffected). Saving a value equal to the shipped
+  default simply removes your override.
+- **Per-member overrides** (member browser `/admin/users` → the row's
+  **Preferences** button): set or clear one member's values for support, e.g.
+  to reproduce a display complaint. Blanking a field puts the member back on
+  the installation default. You are editing the member's own settings — they
+  see and can change the same values on their settings pages, where a "Reset
+  to the site defaults" link does the same clearing.
+
+No configuration file or restart is involved; the defaults live in the
+database and every node picks changes up immediately.
+
 ## Honor tags
 
 Besides the tags members give themselves, an admin can define **honor**

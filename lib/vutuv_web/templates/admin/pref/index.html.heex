@@ -1,0 +1,76 @@
+<%!-- The installation's preference defaults (Vutuv.Prefs), one card per
+registry group. Every control is generated from the registry, so a new pref
+appears here by itself. Saving a value equal to the shipped default removes
+the override; a member's own explicit choice always wins over these. --%>
+<.page_header
+  title={gettext("Preference defaults")}
+  crumbs={[{gettext("Admin"), ~p"/admin"}, gettext("Preference defaults")]}
+/>
+
+<p class="-mt-2 mb-8 max-w-2xl text-sm text-slate-600 dark:text-slate-400">
+  {gettext(
+    "What every member gets until they choose for themselves on their settings pages, and what logged-out visitors see. Changes apply immediately; members who set their own value are not affected."
+  )}
+</p>
+
+<div class="max-w-3xl space-y-6">
+  <%= for group <- Vutuv.Prefs.groups() do %>
+    <.card>
+      <.section_title>{Vutuv.Prefs.group_label(group)}</.section_title>
+
+      <.form
+        for={%{}}
+        action={~p"/admin/preferences"}
+        method="put"
+        id={"prefs-form-#{group}"}
+        class="mt-4 space-y-6"
+      >
+        <%= for pref <- Vutuv.Prefs.group_registry(group) do %>
+          <div>
+            <label
+              for={"pref_#{pref.key}"}
+              class="block text-sm font-medium text-slate-900 dark:text-white"
+            >
+              {Vutuv.Prefs.label(pref.key)}
+            </label>
+            <p :if={Vutuv.Prefs.hint(pref.key)} class="mt-0.5 text-sm text-slate-600 dark:text-slate-400">
+              {Vutuv.Prefs.hint(pref.key)}
+            </p>
+            <div class="mt-1.5">
+              <.pref_control pref={pref} value={@values[pref.key]} invalid={pref.key in @invalid} />
+              <.pref_error invalid={pref.key in @invalid} />
+            </div>
+            <p class="mt-1.5 text-xs text-slate-600 dark:text-slate-400" data-pref-meta={pref.key}>
+              <%= if pref.key in @overridden do %>
+                <span class="font-semibold text-brand-700 dark:text-brand-300">
+                  {gettext("Changed for this installation.")}
+                </span>
+                {gettext("Shipped default: %{value}.",
+                  value: Vutuv.Prefs.value_label(pref, pref.default)
+                )}
+              <% else %>
+                {gettext("Shipped default: %{value}.",
+                  value: Vutuv.Prefs.value_label(pref, pref.default)
+                )}
+              <% end %>
+              <%= if @counts[pref.key] == 0 do %>
+                {gettext("No member has set an own value yet, so a change here reaches everyone.")}
+              <% else %>
+                {ngettext(
+                  "%{formatted} member keeps an own value and is not affected.",
+                  "%{formatted} members keep their own value and are not affected.",
+                  @counts[pref.key],
+                  formatted: compact_count(@counts[pref.key])
+                )}
+              <% end %>
+            </p>
+          </div>
+        <% end %>
+
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+  <% end %>
+</div>

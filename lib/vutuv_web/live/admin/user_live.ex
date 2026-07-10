@@ -389,6 +389,13 @@ defmodule VutuvWeb.Admin.UserLive do
                 </td>
                 <td class="text-right">
                   <div class="flex flex-wrap justify-end gap-1">
+                    <.link
+                      href={~p"/admin/users/#{user.id}/preferences"}
+                      id={"prefs-#{user.id}"}
+                      class="rounded-lg bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    >
+                      {gettext("Preferences")}
+                    </.link>
                     <button
                       :if={not user.identity_verified?}
                       type="button"

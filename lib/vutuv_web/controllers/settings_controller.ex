@@ -32,6 +32,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Accounts.User
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
+  alias Vutuv.Prefs
   alias Vutuv.Sessions
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
@@ -86,14 +87,19 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  # Language & maps: the interface-language and map-preference forms, so they
-  # need a changeset like the privacy/notifications pages.
+  # Language & maps: the interface-language, map-preference and post-display
+  # forms, so they need a changeset like the privacy/notifications pages. The
+  # changeset is built over the member's *effective* preferences
+  # (Vutuv.Prefs.with_effective/1): an inherited (nil) field renders the
+  # installation default it actually resolves to, so the form always shows
+  # what applies. Saving stores the submitted values as the member's own;
+  # the reset links below each card go back to inheriting.
   def preferences(conn, _params) do
     user = conn.assigns[:user]
 
     render(conn, "preferences.html",
       user: user,
-      changeset: User.changeset(user),
+      changeset: User.changeset(Prefs.with_effective(user)),
       page_title: gettext("Language & maps")
     )
   end
@@ -250,10 +256,30 @@ defmodule VutuvWeb.SettingsController do
   # A blank line field means "no truncation" (0). Ecto's cast reads "" as "no
   # value given" and would keep the previous count, so map a blank to "0" — the
   # other way a reader expresses no-truncation — before the changeset sees it.
+  # (Going back to the installation default is the explicit reset link, not a
+  # blank field.)
   defp normalize_post_lines(params) do
     Enum.reduce(~w(post_lines_desktop post_lines_mobile), params, fn field, acc ->
       if Map.get(acc, field) == "", do: Map.put(acc, field, "0"), else: acc
     end)
+  end
+
+  # The per-group reset links: clear every pref of the group back to nil =
+  # "inherit the installation default" (Vutuv.Prefs), current and future.
+  def reset_post_display(conn, _params) do
+    reset_prefs(conn, :post_display, gettext("Post display settings reset to the site defaults."))
+  end
+
+  def reset_maps(conn, _params) do
+    reset_prefs(conn, :maps, gettext("Map preferences reset to the site defaults."))
+  end
+
+  defp reset_prefs(conn, group, flash) do
+    {:ok, _user} = Prefs.reset_group(conn.assigns[:user], group)
+
+    conn
+    |> put_flash(:info, flash)
+    |> redirect(to: ~p"/settings/preferences")
   end
 
   # ── Signed-in devices (issue #794) ──

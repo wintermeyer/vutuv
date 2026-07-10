@@ -5,6 +5,9 @@ defmodule Vutuv.Application do
 
   @impl true
   def start(_type, _args) do
+    # The optional children below are gated per config flag (off in tests, see
+    # config/test.exs): mostly periodic jobs, plus the Vutuv.Prefs.Cache,
+    # whose DB reloads would likewise touch the SQL sandbox from outside.
     children =
       [
         Vutuv.Repo,
@@ -36,6 +39,7 @@ defmodule Vutuv.Application do
         Vutuv.RateLimiter,
         VutuvWeb.Endpoint
       ] ++
+        optional_child(:prefs_defaults_cache, Vutuv.Prefs.Cache) ++
         optional_child(:sweep_pending_images, Vutuv.Posts.PendingImageSweeper) ++
         optional_child(
           :sweep_unconfirmed_registrations,

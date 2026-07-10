@@ -38,6 +38,41 @@ desktop and mobile independently — 0/empty means no truncation; posted to
 `/settings/post_display`, read back by `Vutuv.Accounts.User.post_prefs/1`, see
 `docs/architecture/posts-and-feed.md`).
 
+### Member preferences with installation defaults (`Vutuv.Prefs`)
+
+The map and post-display settings are the first citizens of the generic
+**preferences system**. Every such knob is declared once in the
+`Vutuv.Prefs.registry/0` (key, type, shipped default, constraints, group) and
+resolves in three layers: the member's **explicit value** (a non-nil `users`
+column; an explicit `0`/`false` is a choice) → the **installation default**
+(admin-set at `/admin/preferences`, stored in `pref_defaults`, cached in
+`Vutuv.Prefs.Cache` via `persistent_term` + a PubSub reload on every node) →
+the **shipped default** from the registry. The pref columns are nullable with
+no DB or schema default — nil means "inherit", so an admin's default change
+reaches exactly the members who never chose for themselves (and every
+logged-out visitor). Render sites never read the raw columns; they resolve
+through `Vutuv.Prefs.get/2` (or its seams `User.post_prefs/1`, `Vutuv.Maps`).
+
+The three GUIs are registry-generated, so a new pref only needs an additive
+migration (nullable column), a registry entry (+ `label/1`; anchor the msgids
+in `VutuvWeb.GettextExtractionAnchors`) and a home on a /settings page:
+`/admin/preferences` edits the installation defaults (rows equal to the
+shipped default are deleted, per-pref counts show how many members customized),
+`/admin/users/:id/preferences` sets or clears one member's values for support
+(blank = back to inherit; same columns as the member's own save, so nothing is
+hidden from them), and the member's own forms on `/settings/preferences`
+render the **effective** values (`Prefs.with_effective/1`) with a quiet
+per-group "Reset to the site defaults" link (POST `/settings/<group>/reset`)
+that nils the group. Saving a form stores explicit values, after which the
+member no longer follows future default changes for those fields — the reset
+link is the way back. `test/vutuv/prefs_test.exs` guards the registry
+invariants (every key a nullable schema field with its default only in the
+registry). In tests the cache process is off (`config :vutuv,
+:prefs_defaults_cache, false` — its reloads would touch the SQL sandbox from
+outside), so resolution falls back to shipped defaults; tests inject
+installation defaults with `Vutuv.Prefs.Cache.store/1` + `clear/0`
+(async: false).
+
 The **add-tag form** (`/settings/tags/new`) is a LiveView
 (`VutuvWeb.TagNewLive`, issue #848): while the member types it previews the
 tags a submit will attach — split on commas and spaces, leading `#` stripped,

@@ -85,6 +85,23 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
           <.button type="submit">{gettext("Save")}</.button>
         </div>
       </.form>
+
+      <%!-- Back to inheriting the installation defaults (nil fields), so a
+            future change of the site defaults reaches this member again.
+            Only shown while any map field holds an own value. --%>
+      <div
+        :if={Vutuv.Prefs.customized_in_group?(@user, :maps)}
+        class="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800"
+      >
+        <.link
+          href={~p"/settings/maps/reset"}
+          method="post"
+          id="reset-maps"
+          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Reset to the site defaults")}
+        </.link>
+      </div>
     </.card>
 
     <%!-- Post display: how posts you read are shortened in the feed and on
@@ -163,6 +180,21 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
           <.button type="submit">{gettext("Save")}</.button>
         </div>
       </.form>
+
+      <%!-- Back to inheriting the installation defaults — see the maps card. --%>
+      <div
+        :if={Vutuv.Prefs.customized_in_group?(@user, :post_display)}
+        class="mt-5 border-t border-slate-100 pt-4 dark:border-slate-800"
+      >
+        <.link
+          href={~p"/settings/post_display/reset"}
+          method="post"
+          id="reset-post-display"
+          class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        >
+          {gettext("Reset to the site defaults")}
+        </.link>
+      </div>
     </.card>
   </div>
 </.settings_shell>

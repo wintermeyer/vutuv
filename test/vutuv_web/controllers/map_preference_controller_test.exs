@@ -10,7 +10,10 @@ defmodule VutuvWeb.MapPreferenceControllerTest do
 
   test "POST promotes the service to the viewer's default and returns 204", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    assert Repo.get(User, user.id).default_map_service == "google"
+    # A fresh account stores nil = "inherit the installation default" and
+    # still resolves to Google (Vutuv.Maps via Vutuv.Prefs).
+    assert Repo.get(User, user.id).default_map_service == nil
+    assert Vutuv.Maps.default_service(user) == :google
 
     conn = post(conn, ~p"/maps/default", service: "apple")
 
@@ -24,9 +27,9 @@ defmodule VutuvWeb.MapPreferenceControllerTest do
     conn = post(conn, ~p"/maps/default", service: "bing")
 
     # The endpoint is fire-and-forget (the link still opened), so it still 204s;
-    # the invalid value is simply never written.
+    # the invalid value is simply never written (still nil = inherit).
     assert response(conn, 204)
-    assert Repo.get(User, user.id).default_map_service == "google"
+    assert Repo.get(User, user.id).default_map_service == nil
   end
 
   test "a logged-out visitor cannot promote a default (404)", %{conn: conn} do

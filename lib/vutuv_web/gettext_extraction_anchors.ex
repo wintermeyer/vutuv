@@ -20,6 +20,11 @@ defmodule VutuvWeb.GettextExtractionAnchors do
     * `Connected` — the connection relationship word guarded by
       `VutuvWeb.ConnectionVocabularyTest` (issue #797), asserted via the runtime
       API so the test file itself does not inject a msgid.
+    * The `Vutuv.Prefs` registry labels/hints/value words (`label/1`, `hint/1`,
+      `group_label/1`, `value_label/2`) — resolved at render time through the
+      runtime API so the registry stays a plain data module. Some also appear
+      in the /settings templates today; anchoring them all keeps the catalog
+      stable even if a template stops using one.
   """
   use Gettext, backend: VutuvWeb.Gettext
 
@@ -35,7 +40,21 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("This PIN has already been used."),
       gettext("Connected"),
       gettext("Open to offers"),
-      gettext("Looking for a job")
+      gettext("Looking for a job"),
+      gettext("Lines on desktop"),
+      gettext("Lines on mobile"),
+      gettext("Hyphenate on desktop"),
+      gettext("Hyphenate on mobile"),
+      gettext("Show Google Maps"),
+      gettext("Show OpenStreetMap"),
+      gettext("Show Apple Maps"),
+      gettext("Default map"),
+      gettext("0 means posts are never shortened."),
+      gettext("Opens first, as the main button. The others appear as alternatives."),
+      gettext("Posts"),
+      gettext("Maps"),
+      gettext("On"),
+      gettext("Off")
     ]
   end
 end

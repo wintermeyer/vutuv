@@ -179,6 +179,16 @@ defmodule VutuvWeb.Admin.AdminHTML do
           <path d="m7 7-3 7a3 3 0 0 0 6 0L7 7Z" />
           <path d="m17 7-3 7a3 3 0 0 0 6 0l-3-7Z" />
           <path d="M8 21h8" />
+        <% "sliders" -> %>
+          <path d="M4 7h10" />
+          <path d="M18 7h2" />
+          <circle cx="16" cy="7" r="2" />
+          <path d="M4 12h4" />
+          <path d="M12 12h8" />
+          <circle cx="10" cy="12" r="2" />
+          <path d="M4 17h10" />
+          <path d="M18 17h2" />
+          <circle cx="16" cy="17" r="2" />
         <% "trash" -> %>
           <path d="M4 6.5h16" />
           <path d="M9 6.5V4.8a1.3 1.3 0 0 1 1.3-1.3h3.4A1.3 1.3 0 0 1 15 4.8v1.7" />

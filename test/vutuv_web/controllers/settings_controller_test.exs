@@ -557,7 +557,9 @@ defmodule VutuvWeb.SettingsControllerTest do
       conn = put(conn, ~p"/settings/maps", user: %{"default_map_service" => "bing"})
 
       assert html_response(conn, 422)
-      assert Repo.get(User, user.id).default_map_service == "google"
+      # Still nil = "inherit the installation default" (Vutuv.Prefs); the
+      # rejected value must not have been stored.
+      assert Repo.get(User, user.id).default_map_service == nil
     end
   end
 end

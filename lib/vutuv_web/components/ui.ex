@@ -69,8 +69,15 @@ defmodule VutuvWeb.UI do
   The two strings are the same recipe except for the border colours — keep
   them in step when the input recipe changes (see .claude/rules/design.md).
   """
-  def input_class(form, field) do
-    if form.errors[field] do
+  def input_class(form, field), do: input_class(form.errors[field] != nil)
+
+  @doc """
+  The same recipe keyed on a bare validity flag, for hand-built forms that
+  carry no changeset (the admin preference forms): `input_class(true)` is the
+  error-red variant, `input_class(false)` is exactly `input_class/0`.
+  """
+  def input_class(invalid?) when is_boolean(invalid?) do
+    if invalid? do
       "w-full rounded-lg border border-red-400 bg-white px-3 py-2 text-sm focus:border-red-500 focus:outline-none dark:border-red-500/70 dark:bg-slate-800 dark:text-slate-100"
     else
       input_class()

@@ -23,6 +23,7 @@ defmodule VutuvWeb.Admin.AdminController do
       api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count),
       tags_count: Repo.aggregate(Tag, :count),
       honor_tags_count: Vutuv.Tags.honor_tags_count(),
+      pref_overrides_count: map_size(Vutuv.Prefs.list_default_rows()),
       frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
       fediverse_enabled: Vutuv.Fediverse.enabled?(),
       # Only the four COUNTs when the card will actually show them; an

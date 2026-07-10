@@ -1,0 +1,88 @@
+<%!-- Per-member preference overrides (support): every registry pref of one
+member, each with a leading "installation default" choice. Blank = the member
+inherits; a set value lands in the same columns their own /settings save uses,
+so the member can change or reset it themselves afterwards. --%>
+<.page_header
+  title={gettext("Preferences of %{name}", name: full_name(@member))}
+  crumbs={[
+    {gettext("Admin"), ~p"/admin"},
+    {gettext("Members"), ~p"/admin/users"},
+    gettext("Preferences")
+  ]}
+/>
+
+<div class="max-w-3xl space-y-6">
+  <.card class="flex items-center gap-4">
+    <.avatar user={@member} size="sm" shape="circle" />
+    <div class="min-w-0">
+      <p class="truncate font-semibold text-slate-900 dark:text-white">{full_name(@member)}</p>
+      <p class="truncate text-sm text-slate-600 dark:text-slate-400">
+        <.link href={~p"/#{@member}"} class="hover:text-brand-700 dark:hover:text-brand-300">
+          @{@member.username}
+        </.link>
+      </p>
+    </div>
+  </.card>
+
+  <.card>
+    <p class="text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "These are the member's own settings: change them here only for support. A field on \"installation default\" follows whatever the defaults page says, now and in the future; a set value stays until the member (or an admin) changes it again."
+      )}
+    </p>
+
+    <.form
+      for={%{}}
+      action={~p"/admin/users/#{@member.id}/preferences"}
+      method="put"
+      id="member-prefs-form"
+      class="mt-6 space-y-8"
+    >
+      <%= for group <- Vutuv.Prefs.groups() do %>
+        <fieldset class="space-y-6">
+          <legend class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+            {Vutuv.Prefs.group_label(group)}
+          </legend>
+
+          <%= for pref <- Vutuv.Prefs.group_registry(group) do %>
+            <div>
+              <label
+                for={"pref_#{pref.key}"}
+                class="block text-sm font-medium text-slate-900 dark:text-white"
+              >
+                {Vutuv.Prefs.label(pref.key)}
+              </label>
+              <div class="mt-1.5">
+                <.pref_control
+                  pref={pref}
+                  value={@values[pref.key]}
+                  invalid={pref.key in @invalid}
+                  blank_option={
+                    gettext("Installation default (%{value})",
+                      value: Vutuv.Prefs.value_label(pref, @defaults[pref.key])
+                    )
+                  }
+                />
+                <.pref_error invalid={pref.key in @invalid} />
+              </div>
+              <p
+                class="mt-1.5 text-xs text-slate-600 dark:text-slate-400"
+                data-pref-source={if(@values[pref.key] == "", do: "default", else: "own")}
+              >
+                <%= if @values[pref.key] == "" do %>
+                  {gettext("Follows the installation default.")}
+                <% else %>
+                  {gettext("Own value; blank the field to go back to the installation default.")}
+                <% end %>
+              </p>
+            </div>
+          <% end %>
+        </fieldset>
+      <% end %>
+
+      <div class="pt-1">
+        <.button type="submit">{gettext("Save")}</.button>
+      </div>
+    </.form>
+  </.card>
+</div>

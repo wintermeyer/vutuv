@@ -8,8 +8,10 @@ defmodule Vutuv.Maps do
   someone's profile you see their addresses through your own map choices,
   stored on `Vutuv.Accounts.User` (`map_google?` / `map_openstreetmap?` /
   `map_apple?` and `default_map_service`). A logged-out visitor (or any member
-  who never touched the setting) gets the canonical default: all three services
-  on, Google the default — exactly the behaviour before the feature.
+  who never touched the setting — a `nil` field) gets the **installation
+  default** from `Vutuv.Prefs` (admin-set at /admin/preferences); the shipped
+  default is all three services on, Google first — exactly the behaviour
+  before the feature.
 
   This module is the single source of truth for the canonical service list,
   their labels and the resolution rules, and it never trusts the stored fields
@@ -19,6 +21,7 @@ defmodule Vutuv.Maps do
   """
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Prefs
   alias Vutuv.Profiles.Address
 
   # Canonical order. The head is the default-of-defaults (Google), and the order
@@ -42,18 +45,22 @@ defmodule Vutuv.Maps do
   def label(:apple), do: "Apple Maps"
 
   @doc """
-  The viewer's enabled services, in canonical order. A `nil` viewer (logged out)
-  or a legacy row with `nil` flags reads as "all on".
+  The viewer's enabled services, in canonical order. A `nil` viewer (logged
+  out) or a `nil` flag resolves to the installation default.
   """
   def enabled_services(viewer), do: Enum.filter(@services, &enabled?(viewer, &1))
 
-  defp enabled?(nil, _service), do: true
-  defp enabled?(%User{map_google?: flag}, :google), do: on?(flag)
-  defp enabled?(%User{map_openstreetmap?: flag}, :openstreetmap), do: on?(flag)
-  defp enabled?(%User{map_apple?: flag}, :apple), do: on?(flag)
+  defp enabled?(nil, service), do: Prefs.default(flag_key(service))
+  defp enabled?(%User{map_google?: flag}, :google), do: on?(flag, :google)
+  defp enabled?(%User{map_openstreetmap?: flag}, :openstreetmap), do: on?(flag, :openstreetmap)
+  defp enabled?(%User{map_apple?: flag}, :apple), do: on?(flag, :apple)
 
-  defp on?(nil), do: true
-  defp on?(flag) when is_boolean(flag), do: flag
+  defp on?(nil, service), do: Prefs.default(flag_key(service))
+  defp on?(flag, _service) when is_boolean(flag), do: flag
+
+  defp flag_key(:google), do: :map_google?
+  defp flag_key(:openstreetmap), do: :map_openstreetmap?
+  defp flag_key(:apple), do: :map_apple?
 
   @doc """
   The viewer's effective default service, resolved to one that is actually
@@ -70,10 +77,16 @@ defmodule Vutuv.Maps do
     end
   end
 
-  # The stored preference, mapped explicitly (never String.to_atom on a column).
+  # The stored preference, mapped explicitly (never String.to_atom on a
+  # column); an unset one falls back to the installation default.
+  defp preferred_default(%User{default_map_service: "google"}), do: :google
   defp preferred_default(%User{default_map_service: "openstreetmap"}), do: :openstreetmap
   defp preferred_default(%User{default_map_service: "apple"}), do: :apple
-  defp preferred_default(_viewer), do: :google
+  defp preferred_default(_viewer), do: service_atom(Prefs.default(:default_map_service))
+
+  defp service_atom("openstreetmap"), do: :openstreetmap
+  defp service_atom("apple"), do: :apple
+  defp service_atom(_), do: :google
 
   @doc """
   The map links for an address as the viewer should see them:

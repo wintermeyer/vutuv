@@ -219,6 +219,28 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="sliders"
+      title={gettext("Preference defaults")}
+      count={@pref_overrides_count}
+      href={~p"/admin/preferences"}
+      id="admin-preferences-link"
+      cta={gettext("Edit the defaults")}
+    >
+      <%= if @pref_overrides_count == 0 do %>
+        {gettext(
+          "How posts and maps behave for everyone who has not chosen for themselves. This installation runs on the shipped defaults."
+        )}
+      <% else %>
+        {ngettext(
+          "How posts and maps behave for everyone who has not chosen for themselves. %{formatted} default differs from the shipped value.",
+          "How posts and maps behave for everyone who has not chosen for themselves. %{formatted} defaults differ from the shipped values.",
+          @pref_overrides_count,
+          formatted: compact_count(@pref_overrides_count)
+        )}
+      <% end %>
+    </.admin_card>
+
+    <.admin_card
       icon="key"
       title={gettext("API applications")}
       count={@api_apps_count}

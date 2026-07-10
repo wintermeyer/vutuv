@@ -3,6 +3,7 @@ defmodule Vutuv.Accounts.User do
 
   use VutuvWeb, :model
   alias Vutuv.Accounts.ReservedSlugs
+  alias Vutuv.Prefs
   @derive {Phoenix.Param, key: :username}
 
   schema "users" do
@@ -107,28 +108,33 @@ defmodule Vutuv.Accounts.User do
     # gated on (remote deletion is unenforceable, so opt-in is the only lawful
     # default). Until federation ships, nothing reads this flag.
     field(:fediverse_followers?, :boolean, default: false)
-    # The viewer's map preferences (set on the account settings hub, applied to
+    # The member-preference fields (the Vutuv.Prefs registry): deliberately
+    # WITHOUT schema or DB defaults — nil means "inherit the installation
+    # default" (admin-set at /admin/preferences, else the shipped default from
+    # the registry). Never read these raw at a render site; resolve through
+    # Vutuv.Prefs.get/2 (or the post_prefs/1 / Vutuv.Maps seams below).
+    #
+    # The viewer's map preferences (language & maps settings page, applied to
     # every address this member looks at): which map services to show and which
-    # one is the default rendered as the primary "Open in …" button. Defaults
-    # mean "all three on, Google the default" — the behaviour before the feature.
-    # `Vutuv.Maps` owns the resolution and never trusts these to be consistent.
-    field(:map_google?, :boolean, default: true)
-    field(:map_openstreetmap?, :boolean, default: true)
-    field(:map_apple?, :boolean, default: true)
-    field(:default_map_service, :string, default: "google")
-    # The reader's post-display preferences (set on the language & maps settings
-    # page, applied to every post this member reads: feed, profile Beiträge,
-    # permalink). The line counts drive the CSS line-clamp on the preview body,
-    # desktop and mobile independently; a `nil` or `0` means "no truncation at
-    # all". The hyphenation booleans drive `hyphens:` on the post body. The
+    # one is the default rendered as the primary "Open in …" button. Shipped
+    # defaults mean "all three on, Google the default". `Vutuv.Maps` owns the
+    # resolution and never trusts these to be consistent.
+    field(:map_google?, :boolean)
+    field(:map_openstreetmap?, :boolean)
+    field(:map_apple?, :boolean)
+    field(:default_map_service, :string)
+    # The reader's post-display preferences (same settings page, applied to
+    # every post this member reads: feed, profile Beiträge, permalink). The
+    # line counts drive the CSS line-clamp on the preview body, desktop and
+    # mobile independently; an explicit `0` means "no truncation at all". The
+    # hyphenation booleans drive `hyphens:` on the post body. The shipped
     # defaults reproduce the previous fixed behaviour: clamp at 6 lines on
     # desktop / 8 on a phone, hyphenate only the narrow phone column. Read
-    # through `post_prefs/1` (which folds nil down to the "no truncation" 0 and
-    # supplies the logged-out defaults), never straight off the struct.
-    field(:post_lines_desktop, :integer, default: 6)
-    field(:post_lines_mobile, :integer, default: 8)
-    field(:post_hyphenate_desktop, :boolean, default: false)
-    field(:post_hyphenate_mobile, :boolean, default: true)
+    # through `post_prefs/1`, never straight off the struct.
+    field(:post_lines_desktop, :integer)
+    field(:post_lines_mobile, :integer)
+    field(:post_hyphenate_desktop, :boolean)
+    field(:post_hyphenate_mobile, :boolean)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -245,18 +251,19 @@ defmodule Vutuv.Accounts.User do
   def dm_email_delay_values, do: @dm_email_delay_values
 
   # Upper bound for a post-display line clamp. A generous cap so nobody sets an
-  # absurd value, while still comfortably above any real preference; 0 (and nil)
-  # mean "no truncation". Shared by the changeset's validate_number and the
-  # settings form's number input.
-  @post_lines_max 50
+  # absurd value, while still comfortably above any real preference; 0 means
+  # "no truncation". The bound itself lives in the Vutuv.Prefs registry (the
+  # single source all three GUIs validate against); this is the schema-side
+  # accessor the changeset's validate_number and the settings form's number
+  # input share.
+  def post_lines_max, do: Prefs.pref!(:post_lines_desktop).max
 
-  def post_lines_max, do: @post_lines_max
-
-  # The logged-out / not-set defaults for the reader's post-display preferences,
-  # mirrored by the CSS custom-property fallbacks in `.post-clamp` /
-  # `.markdown--post` (components.css). `post_prefs/1` returns exactly this map
-  # for an anonymous viewer, so an unauthenticated feed and a default account
-  # render identically and carry no inline style override.
+  # The SHIPPED defaults for the reader's post-display preferences, mirrored by
+  # the CSS custom-property fallbacks in `.post-clamp` / `.markdown--post`
+  # (components.css). Deliberately NOT the installation defaults: this map is
+  # what `VutuvWeb.PostComponents.post_body_style/1` compares against to decide
+  # whether a reader's DOM can stay clean and lean on the CSS fallbacks — that
+  # comparison must track what the stylesheet says, not what the admin chose.
   @post_prefs_defaults %{
     lines_desktop: 6,
     lines_mobile: 8,
@@ -269,22 +276,21 @@ defmodule Vutuv.Accounts.User do
   @doc """
   The reader's post-display preferences as a plain map, resolved for rendering.
 
-  Folds a `nil` line count down to `0` ("no truncation"), so the two possible
-  "off" values collapse to one, and returns the logged-out `post_prefs_defaults/0`
-  for an anonymous viewer (`nil`). This is the single seam
-  `VutuvWeb.PostComponents` reads; never touch the raw struct fields at a call
-  site.
+  Resolves through `Vutuv.Prefs`: the member's explicit value (an explicit `0`
+  line count means "no truncation"), else the installation default, else the
+  shipped default — and the installation defaults for an anonymous viewer
+  (`nil`), so a logged-out feed follows the admin's choice too. This is the
+  single seam `VutuvWeb.PostComponents` reads; never touch the raw struct
+  fields at a call site.
   """
-  def post_prefs(%__MODULE__{} = user) do
+  def post_prefs(user) when is_nil(user) or is_struct(user, __MODULE__) do
     %{
-      lines_desktop: user.post_lines_desktop || 0,
-      lines_mobile: user.post_lines_mobile || 0,
-      hyphenate_desktop: user.post_hyphenate_desktop == true,
-      hyphenate_mobile: user.post_hyphenate_mobile == true
+      lines_desktop: Prefs.get(user, :post_lines_desktop),
+      lines_mobile: Prefs.get(user, :post_lines_mobile),
+      hyphenate_desktop: Prefs.get(user, :post_hyphenate_desktop),
+      hyphenate_mobile: Prefs.get(user, :post_hyphenate_mobile)
     }
   end
-
-  def post_prefs(_), do: @post_prefs_defaults
 
   @doc """
   The notification-email preference fields, by the param/column name a
@@ -322,17 +328,18 @@ defmodule Vutuv.Accounts.User do
     # inline (not `Maps.service_strings/0`) to avoid a compile cycle, since Maps
     # pattern-matches the `User` struct.
     |> validate_inclusion(:default_map_service, ~w(google openstreetmap apple))
-    # Post-display line clamp: 0 (or a cleared, nil field) means "no truncation";
-    # anything above is a line count, capped so nobody stores an absurd value.
-    # validate_number only fires on a present, non-nil change, so a cleared field
-    # stays nil and reads as "no truncation" in post_prefs/1.
+    # Post-display line clamp: 0 means "no truncation"; anything above is a
+    # line count, capped so nobody stores an absurd value (the bound comes from
+    # the Vutuv.Prefs registry via post_lines_max/0). validate_number only
+    # fires on a present, non-nil change, so a cleared field stays nil and
+    # reads as "inherit the installation default" in post_prefs/1.
     |> validate_number(:post_lines_desktop,
       greater_than_or_equal_to: 0,
-      less_than_or_equal_to: @post_lines_max
+      less_than_or_equal_to: post_lines_max()
     )
     |> validate_number(:post_lines_mobile,
       greater_than_or_equal_to: 0,
-      less_than_or_equal_to: @post_lines_max
+      less_than_or_equal_to: post_lines_max()
     )
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> validate_inclusion(:employment_status, @employment_statuses)

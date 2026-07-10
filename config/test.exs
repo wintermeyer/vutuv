@@ -13,6 +13,11 @@ config :vutuv, :fetch_gravatar, false
 config :vutuv, :ads_enabled, true
 config :vutuv, :sweep_pending_images, false
 config :vutuv, :sweep_unconfirmed_registrations, false
+# The installation-defaults cache (Vutuv.Prefs.Cache) reloads from the DB on
+# PubSub messages, which would touch the sandbox from outside; with it off,
+# pref resolution falls back to the shipped defaults and tests inject
+# installation defaults via Vutuv.Prefs.Cache.store/1 (see prefs_test.exs).
+config :vutuv, :prefs_defaults_cache, false
 config :vutuv, :send_unread_message_emails, false
 config :vutuv, :moderation_sweeper, false
 config :vutuv, :prune_search_history, false

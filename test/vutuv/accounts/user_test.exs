@@ -46,14 +46,14 @@ defmodule Vutuv.Accounts.UserTest do
              }
     end
 
-    test "post_prefs/1 defaults match the schema field defaults for a fresh account" do
+    test "post_prefs/1 resolves a fresh (all-nil) account to the shipped defaults" do
       assert User.post_prefs(%User{}) == User.post_prefs_defaults()
     end
 
-    test "post_prefs/1 folds a nil line count down to 0 (no truncation)" do
-      prefs = User.post_prefs(%User{post_lines_desktop: nil, post_lines_mobile: nil})
+    test "post_prefs/1 keeps an explicit 0 as no-truncation while nil inherits" do
+      prefs = User.post_prefs(%User{post_lines_desktop: 0, post_lines_mobile: nil})
       assert prefs.lines_desktop == 0
-      assert prefs.lines_mobile == 0
+      assert prefs.lines_mobile == 8
     end
 
     test "post_prefs/1 reads the stored per-breakpoint values" do
