@@ -55,7 +55,12 @@ defmodule VutuvWeb.JsonLd do
       "@context" => "https://schema.org",
       "@type" => "WebSite",
       "name" => "vutuv",
-      "alternateName" => "www." <> VutuvWeb.Endpoint.host(),
+      # No `www.` alternate name: the site has one canonical host (the bare
+      # PHX_HOST, e.g. vutuv.de) and `www.` 301-redirects to it. Advertising
+      # `www.<host>` as a schema.org alias was the one spot in the whole app that
+      # told crawlers the www form is a real name for the site, which kept it
+      # surfacing in search results against the canonical signal — and it is wrong
+      # for an installation whose host has no `www.` sibling (an intranet host).
       "url" => VutuvWeb.Endpoint.url(),
       "potentialAction" => %{
         "@type" => "SearchAction",

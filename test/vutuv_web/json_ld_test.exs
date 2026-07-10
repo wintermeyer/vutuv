@@ -126,6 +126,11 @@ defmodule VutuvWeb.JsonLdTest do
       site = find_type(blocks, "WebSite")
       assert site["url"] == "http://localhost:4001"
 
+      # The site has one canonical host: it must not advertise a `www.` alternate
+      # name (that schema alias kept the www form alive in search results against
+      # every canonical signal, and is wrong for a host with no www sibling).
+      refute site["alternateName"]
+
       action = site["potentialAction"]
       assert action["@type"] == "SearchAction"
       assert action["target"]["urlTemplate"] =~ "/search?q={search_term_string}"
