@@ -686,6 +686,8 @@ defmodule VutuvWeb.Router do
     patch("/language", SettingsController, :update_language)
     put("/maps", SettingsController, :update_maps)
     patch("/maps", SettingsController, :update_maps)
+    put("/post_display", SettingsController, :update_post_display)
+    patch("/post_display", SettingsController, :update_post_display)
     # Signed-in devices: DELETE one by id, or all-but-this-one (issue #794).
     delete("/devices/:id", SettingsController, :revoke_session)
     delete("/devices", SettingsController, :revoke_other_sessions)

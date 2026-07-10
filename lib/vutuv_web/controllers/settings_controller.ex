@@ -234,6 +234,28 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # Post-display preferences (how many lines a post is clamped to and whether the
+  # body hyphenates, desktop and mobile independently). A reading preference like
+  # the maps, so it lives on the same language & maps page and posts back to it.
+  def update_post_display(conn, %{"user" => params}) do
+    save(
+      conn,
+      normalize_post_lines(params),
+      "preferences.html",
+      ~p"/settings/preferences",
+      gettext("Post display settings saved.")
+    )
+  end
+
+  # A blank line field means "no truncation" (0). Ecto's cast reads "" as "no
+  # value given" and would keep the previous count, so map a blank to "0" — the
+  # other way a reader expresses no-truncation — before the changeset sees it.
+  defp normalize_post_lines(params) do
+    Enum.reduce(~w(post_lines_desktop post_lines_mobile), params, fn field, acc ->
+      if Map.get(acc, field) == "", do: Map.put(acc, field, "0"), else: acc
+    end)
+  end
+
   # ── Signed-in devices (issue #794) ──
 
   # Log out one device. Only the owner's own sessions are reachable

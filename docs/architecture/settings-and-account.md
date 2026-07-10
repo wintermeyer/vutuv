@@ -31,7 +31,12 @@ The account areas are focused subpages: Sign-in & security
 (`/settings/delete`). "Profil bearbeiten" jumps to the basics form
 (`/settings/profile`), which ends in links to the sibling sections; the old
 owner URLs (`/:slug/edit`, `/:slug/settings/*`) redirect to their `/settings`
-twins.
+twins. The Language & maps page carries the member's own **reading
+preferences**: interface language, map services, and **post display** (how many
+lines a post is clamped to before "Read more" and whether the body hyphenates,
+desktop and mobile independently — 0/empty means no truncation; posted to
+`/settings/post_display`, read back by `Vutuv.Accounts.User.post_prefs/1`, see
+`docs/architecture/posts-and-feed.md`).
 
 The **add-tag form** (`/settings/tags/new`) is a LiveView
 (`VutuvWeb.TagNewLive`, issue #848): while the member types it previews the

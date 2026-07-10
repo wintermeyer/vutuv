@@ -889,9 +889,11 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      # One more line than before: line-clamp-6, not line-clamp-5.
-      assert has_element?(live, "#feed-posts [data-clamp-body].line-clamp-6")
-      refute has_element?(live, "#feed-posts [data-clamp-body].line-clamp-5")
+      # The clamp is the `.post-clamp` class; the per-breakpoint line budget
+      # (default 6 desktop / 8 mobile) lives in CSS custom properties, so a
+      # default reader carries no inline `style` override on the body.
+      assert has_element?(live, "#feed-posts [data-clamp-body].post-clamp")
+      refute has_element?(live, "#feed-posts [data-clamp-body][style]")
 
       # The Read more link points at the permalink and ships hidden (a css-only
       # clamp) for the JS to reveal only when the body is really cut.

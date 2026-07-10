@@ -1059,24 +1059,52 @@ ul.thumbs li .text .url a {
   margin: 0.6em 0 0.2em;
 }
 
-/* On a phone the post column is narrow (~360px), so long German compound words
-   (Digitalisierung, unternehmenseigene) wrap with big ragged gaps or force a
-   hard mid-word break. Let the browser hyphenate the post body at proper
-   syllable points instead — it uses the document `lang` (de/en on <html>) for
-   the dictionary. `-webkit-hyphens` is required for iOS/Safari, the main mobile
-   target. Prose only: code/pre keep their exact characters (a soft hyphen in a
-   token would mislead) and `pre` already scrolls (white-space:pre). Desktop
-   columns are wide enough not to need it, so it is scoped to mobile. */
+/* Post-body hyphenation is a per-reader, per-breakpoint preference (see the
+   language & maps settings page + Vutuv.Accounts.User.post_prefs/1). The post
+   body sets the `--post-hyphens-*` custom properties inline from the reader's
+   choice; the fallbacks below reproduce the previous fixed behaviour and also
+   govern every OTHER `.markdown--post` (the work-experience / education
+   descriptions), which carry no inline override: no hyphenation on desktop,
+   browser hyphenation on the narrow phone column, where long German compound
+   words (Digitalisierung, unternehmenseigene) otherwise wrap with big ragged
+   gaps. It uses the document `lang` (de/en on <html>) for the dictionary;
+   `-webkit-hyphens` is required for iOS/Safari, the main mobile target. */
+.markdown--post {
+  -webkit-hyphens: var(--post-hyphens-desktop, manual);
+  hyphens: var(--post-hyphens-desktop, manual);
+}
 @media (width < 48rem) {
   .markdown--post {
-    -webkit-hyphens: auto;
-    hyphens: auto;
+    -webkit-hyphens: var(--post-hyphens-mobile, auto);
+    hyphens: var(--post-hyphens-mobile, auto);
   }
+}
+/* code/pre keep their exact characters at every width (a soft hyphen in a token
+   would mislead); the higher specificity wins over the rules above regardless
+   of the reader's setting, and `pre` already scrolls (white-space:pre). */
+.markdown--post code,
+.markdown--post pre {
+  -webkit-hyphens: manual;
+  hyphens: manual;
+}
 
-  .markdown--post code,
-  .markdown--post pre {
-    -webkit-hyphens: manual;
-    hyphens: manual;
+/* The clamped preview body (feed / profile Beiträge). Replaces a fixed
+   `line-clamp-6`: the line budget is a per-reader, per-breakpoint preference,
+   fed in through the `--post-clamp-*` custom properties the post body sets
+   inline (Vutuv.Accounts.User.post_prefs/1). The fallbacks — 6 lines on
+   desktop, 8 on a phone — are what a logged-out reader and a default account
+   get (they carry no inline override). A value of `none` (the reader set 0 =
+   no truncation) unclamps that breakpoint; the server also renders the full,
+   uncut body when both breakpoints are off, so no "Read more" appears. */
+.post-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-line-clamp: var(--post-clamp-desktop, 6);
+}
+@media (width < 48rem) {
+  .post-clamp {
+    -webkit-line-clamp: var(--post-clamp-mobile, 8);
   }
 }
 

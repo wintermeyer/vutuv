@@ -36,6 +36,83 @@ defmodule Vutuv.Accounts.UserTest do
     assert %{locale: [_]} = errors_on(changeset)
   end
 
+  describe "post-display preferences" do
+    test "post_prefs/1 returns the logged-out defaults for a nil viewer" do
+      assert User.post_prefs(nil) == %{
+               lines_desktop: 6,
+               lines_mobile: 8,
+               hyphenate_desktop: false,
+               hyphenate_mobile: true
+             }
+    end
+
+    test "post_prefs/1 defaults match the schema field defaults for a fresh account" do
+      assert User.post_prefs(%User{}) == User.post_prefs_defaults()
+    end
+
+    test "post_prefs/1 folds a nil line count down to 0 (no truncation)" do
+      prefs = User.post_prefs(%User{post_lines_desktop: nil, post_lines_mobile: nil})
+      assert prefs.lines_desktop == 0
+      assert prefs.lines_mobile == 0
+    end
+
+    test "post_prefs/1 reads the stored per-breakpoint values" do
+      user = %User{
+        post_lines_desktop: 4,
+        post_lines_mobile: 0,
+        post_hyphenate_desktop: true,
+        post_hyphenate_mobile: false
+      }
+
+      assert User.post_prefs(user) == %{
+               lines_desktop: 4,
+               lines_mobile: 0,
+               hyphenate_desktop: true,
+               hyphenate_mobile: false
+             }
+    end
+
+    test "changeset accepts a valid line count and the hyphenation switches" do
+      changeset =
+        User.changeset(%User{}, %{
+          "first_name" => "first_name",
+          "post_lines_desktop" => "10",
+          "post_lines_mobile" => "0",
+          "post_hyphenate_desktop" => "true",
+          "post_hyphenate_mobile" => "false"
+        })
+
+      assert changeset.valid?
+    end
+
+    test "changeset rejects a negative line count" do
+      changeset =
+        User.changeset(%User{}, %{"first_name" => "first_name", "post_lines_desktop" => "-1"})
+
+      refute changeset.valid?
+      assert %{post_lines_desktop: [_]} = errors_on(changeset)
+    end
+
+    test "changeset rejects a line count above the cap" do
+      changeset =
+        User.changeset(%User{}, %{
+          "first_name" => "first_name",
+          "post_lines_mobile" => Integer.to_string(User.post_lines_max() + 1)
+        })
+
+      refute changeset.valid?
+      assert %{post_lines_mobile: [_]} = errors_on(changeset)
+    end
+
+    test "changeset accepts 0 as a valid line count (no truncation)" do
+      changeset =
+        User.changeset(%User{first_name: "first_name"}, %{"post_lines_desktop" => "0"})
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :post_lines_desktop) == 0
+    end
+  end
+
   describe "birthdate" do
     defp birthdate_changeset(birthdate) do
       User.changeset(%User{}, %{"first_name" => "first_name", "birthdate" => birthdate})

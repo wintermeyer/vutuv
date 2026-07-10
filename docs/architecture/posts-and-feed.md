@@ -56,12 +56,26 @@ post already on screen, and a live `{:new_repost}` for a shown post grows that
 card's stack **in place** (no reshuffle — it only climbs to the repost's
 position on the next reload).
 
-**Preview truncation.** A timeline card (`mode={:preview}`) clamps the body to
-six lines (`line-clamp-6`) and, when there is more, shows a plain "Read more"
+**Preview truncation.** A timeline card (`mode={:preview}`) clamps the body with
+the `.post-clamp` CSS class and, when there is more, shows a plain "Read more"
 link to the permalink (no length metric — issue #880 dropped the word count as
-meaningless once the reader has the preview). Very long bodies are additionally
-cut server-side at a block boundary (`VutuvWeb.Markdown.render_preview/2`, ~1000
-chars) — that case reveals the link with no JS. A longer body that merely
+meaningless once the reader has the preview). The line budget is a **per-reader,
+per-breakpoint preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the
+language & maps settings page): desktop and mobile independently, default 6 lines
+on desktop / 8 on a phone. The reader's values ride onto the post body as the
+`--post-clamp-desktop` / `--post-clamp-mobile` custom properties
+(`VutuvWeb.PostComponents.post_body_style/1`, which stays `nil` for a
+default/logged-out reader so their DOM carries no inline style and the CSS
+fallbacks apply); `.post-clamp`'s `@media (width < 48rem)` rule swaps the mobile
+value in. A `0` (or a cleared, nil) count means **no truncation** on that
+breakpoint (`-webkit-line-clamp: none`); when the reader disabled truncation on
+**both** breakpoints the card renders the whole body uncut like `:full` (no
+character cap, no clamp, no "Read more"). Hyphenation of the post body is the same
+kind of per-reader, per-breakpoint preference (`--post-hyphens-*`; the CSS
+fallbacks reproduce the historical default of off on desktop, on for the narrow
+phone column). Very long bodies are otherwise cut server-side at a block boundary
+(`VutuvWeb.Markdown.render_preview/2`, ~1000 chars) — that case reveals the link
+with no JS. A longer body that merely
 overflows the CSS clamp can't be detected on the server (wrapping is
 width/font-dependent), so the link ships hidden and the `PostPreviewClamp` JS
 hook (a `[data-post-preview]` sweep on classic pages, re-run on resize and
@@ -69,7 +83,7 @@ hook (a `[data-post-preview]` sweep on classic pages, re-run on resize and
 than ~one line. It measures that by reading the clamped `clientHeight` (the
 painted height), then dropping the node to `display: block` for one synchronous
 read of its natural `scrollHeight`; the difference is the amount hidden. It does
-**not** read `scrollHeight` off the clamped node, because `line-clamp-6` renders
+**not** read `scrollHeight` off the clamped node, because `.post-clamp` renders
 as `display: -webkit-box`, whose `scrollHeight` WebKit/Safari over-reports on a
 fully-visible post — that over-report sprouted the false "Read more" of issue
 #880, and it clears any pixel threshold, so the earlier threshold-only fix did

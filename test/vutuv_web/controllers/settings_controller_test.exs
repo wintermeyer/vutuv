@@ -408,6 +408,60 @@ defmodule VutuvWeb.SettingsControllerTest do
       assert html =~ "map_apple?"
       assert html =~ "default_map_service"
     end
+
+    test "carries the post-display form with the line and hyphenation fields", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      html = conn |> get(~p"/settings/preferences") |> html_response(200)
+
+      # Assert the rendered action= so the button is not posting to a dead URL.
+      assert html =~ ~s(action="#{~p"/settings/post_display"}")
+      assert html =~ "post_lines_desktop"
+      assert html =~ "post_lines_mobile"
+      assert html =~ "post_hyphenate_desktop"
+      assert html =~ "post_hyphenate_mobile"
+    end
+  end
+
+  describe "post-display preferences" do
+    test "saving persists the line counts and hyphenation, and stays on the page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn =
+        put(conn, ~p"/settings/post_display",
+          user: %{
+            "post_lines_desktop" => "4",
+            "post_lines_mobile" => "0",
+            "post_hyphenate_desktop" => "true",
+            "post_hyphenate_mobile" => "false"
+          }
+        )
+
+      assert redirected_to(conn) == ~p"/settings/preferences"
+
+      assert %User{
+               post_lines_desktop: 4,
+               post_lines_mobile: 0,
+               post_hyphenate_desktop: true,
+               post_hyphenate_mobile: false
+             } = Repo.get(User, user.id)
+    end
+
+    test "a blank line field saves as 0 (no truncation)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/post_display", user: %{"post_lines_desktop" => ""})
+
+      assert redirected_to(conn) == ~p"/settings/preferences"
+      assert Repo.get(User, user.id).post_lines_desktop == 0
+    end
+
+    test "an out-of-range line count re-renders the page with an error", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/post_display", user: %{"post_lines_desktop" => "999"})
+
+      assert html_response(conn, 422) =~ ~s(action="#{~p"/settings/post_display"}")
+    end
   end
 
   describe "export redirects" do

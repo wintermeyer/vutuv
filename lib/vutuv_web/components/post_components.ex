@@ -102,10 +102,23 @@ defmodule VutuvWeb.PostComponents do
   )
 
   def post_card(assigns) do
+    # The reader's post-display preferences (per-breakpoint line clamp +
+    # hyphenation). When the reader turned truncation off on BOTH breakpoints
+    # (lines 0 / nil), render the whole body uncut like :full — no character
+    # cap, no clamp, no "Read more" — so "no truncation at all" holds end to end.
+    prefs = User.post_prefs(assigns.viewer)
+    no_clamp? = prefs.lines_desktop == 0 and prefs.lines_mobile == 0
+
     {body_html, truncated?} =
       case assigns.mode do
-        :full -> {VutuvWeb.Markdown.render_post(assigns.post.body, assigns.post.images), false}
-        :preview -> VutuvWeb.Markdown.render_preview(assigns.post.body, [])
+        :full ->
+          {VutuvWeb.Markdown.render_post(assigns.post.body, assigns.post.images), false}
+
+        :preview when no_clamp? ->
+          {VutuvWeb.Markdown.render_post(assigns.post.body, []), false}
+
+        :preview ->
+          VutuvWeb.Markdown.render_preview(assigns.post.body, [])
       end
 
     # A logged-in viewer (vs anonymous / a "View as public" preview, both nil),
@@ -123,6 +136,10 @@ defmodule VutuvWeb.PostComponents do
       assigns
       |> assign(:body_html, body_html)
       |> assign(:truncated?, truncated?)
+      # The inline CSS custom properties (`--post-clamp-*` / `--post-hyphens-*`)
+      # that carry the reader's preference onto the post body; nil for a default
+      # / logged-out reader, so their DOM stays clean and the CSS fallbacks apply.
+      |> assign(:body_style, post_body_style(prefs))
       |> assign(:restricted?, Posts.restricted?(assigns.post))
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
@@ -156,6 +173,7 @@ defmodule VutuvWeb.PostComponents do
       mode={@mode}
       body_html={@body_html}
       body_id={@body_id}
+      body_style={@body_style}
       truncated?={@truncated?}
       restricted?={@restricted?}
       permalink={@permalink}
@@ -595,6 +613,7 @@ defmodule VutuvWeb.PostComponents do
   attr(:mode, :atom, required: true)
   attr(:body_html, :any, required: true)
   attr(:body_id, :string, required: true)
+  attr(:body_style, :string, default: nil)
   attr(:truncated?, :boolean, required: true)
   attr(:restricted?, :boolean, required: true)
   attr(:permalink, :string, required: true)
@@ -745,10 +764,13 @@ defmodule VutuvWeb.PostComponents do
             </div>
           </div>
 
-          <%!-- Full mode: the whole body, no clamp. --%>
+          <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
+          preference still rides along via @body_style (the clamp vars in it are
+          simply unused here). --%>
           <div
             :if={@mode == :full and @post.body != ""}
             class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
+            {style_attrs(@body_style)}
           >
             {@body_html}
           </div>
@@ -768,6 +790,7 @@ defmodule VutuvWeb.PostComponents do
                   <.preview_body
                     body_id={@body_id}
                     body_html={@body_html}
+                    body_style={@body_style}
                     truncated?={@truncated?}
                     permalink={@permalink}
                   />
@@ -796,6 +819,7 @@ defmodule VutuvWeb.PostComponents do
                 :if={@post.body != ""}
                 body_id={@body_id}
                 body_html={@body_html}
+                body_style={@body_style}
                 truncated?={@truncated?}
                 permalink={@permalink}
                 class="mt-2"
@@ -887,8 +911,50 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  # The clamped preview body: the Markdown cut to six lines, faded at the bottom,
-  # with a "Read more" link riding the last line. Its display is set by mutually
+  @doc """
+  The inline `style` string carrying a reader's post-display preferences onto a
+  post body as CSS custom properties, or `nil` when the preferences are the
+  defaults (so a logged-out reader and a default account emit no inline style
+  and fall through to the `.post-clamp` / `.markdown--post` fallbacks).
+
+  Takes the map from `Vutuv.Accounts.User.post_prefs/1`. A `0` line count maps to
+  the CSS keyword `none` (unclamp that breakpoint); a `true`/`false` hyphenation
+  flag maps to `auto`/`manual`.
+  """
+  def post_body_style(prefs) do
+    if prefs == User.post_prefs_defaults() do
+      nil
+    else
+      IO.iodata_to_binary([
+        "--post-clamp-desktop:",
+        clamp_value(prefs.lines_desktop),
+        ";--post-clamp-mobile:",
+        clamp_value(prefs.lines_mobile),
+        ";--post-hyphens-desktop:",
+        hyphens_value(prefs.hyphenate_desktop),
+        ";--post-hyphens-mobile:",
+        hyphens_value(prefs.hyphenate_mobile)
+      ])
+    end
+  end
+
+  defp clamp_value(0), do: "none"
+  defp clamp_value(n) when is_integer(n), do: Integer.to_string(n)
+
+  defp hyphens_value(true), do: "auto"
+  defp hyphens_value(false), do: "manual"
+
+  # `style` is a HEEx special attribute that is always emitted — `style={nil}`
+  # renders a stray `style=""` — so a default reader would carry an empty style
+  # on every post body. Splat this instead (`{style_attrs(@body_style)}`): an
+  # empty list adds nothing, a value adds the one attribute.
+  defp style_attrs(nil), do: []
+  defp style_attrs(style), do: [style: style]
+
+  # The clamped preview body: the Markdown cut by the `.post-clamp` line clamp
+  # (the reader's per-breakpoint line budget, default 6 desktop / 8 mobile, fed
+  # in via @body_style), faded at the bottom, with a "Read more" link riding the
+  # last line. Its display is set by mutually
   # exclusive classes — `inline-block` when the source was truncated server-side
   # (@truncated?, shown with no JS), else `hidden`. They must never coexist: both
   # set `display` and Tailwind emits `.inline-block` after `.hidden`, so a link
@@ -903,6 +969,7 @@ defmodule VutuvWeb.PostComponents do
   # carries the caller's top margin (mt-2 standalone, none inside the flex row).
   attr(:body_id, :string, required: true)
   attr(:body_html, :any, required: true)
+  attr(:body_style, :string, default: nil)
   attr(:truncated?, :boolean, required: true)
   attr(:permalink, :string, required: true)
   attr(:class, :string, default: nil)
@@ -917,7 +984,11 @@ defmodule VutuvWeb.PostComponents do
       class={["post-preview", @class, @truncated? && "is-clamped"]}
     >
       <div class="relative">
-        <div class="markdown markdown--post line-clamp-6 text-slate-800 dark:text-slate-200" data-clamp-body>
+        <div
+          class="markdown markdown--post post-clamp text-slate-800 dark:text-slate-200"
+          data-clamp-body
+          {style_attrs(@body_style)}
+        >
           {@body_html}
         </div>
         <%!-- Fades the six-line cut into the card so it reads as intentional;
