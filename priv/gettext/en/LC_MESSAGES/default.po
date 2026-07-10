@@ -8290,7 +8290,7 @@ msgstr ""
 #: lib/vutuv_web/controllers/settings_controller.ex:103
 #: lib/vutuv_web/templates/settings/preferences.html.heex:5
 #, elixir-autogen, elixir-format
-msgid "Language & maps"
+msgid "Language & display"
 msgstr ""
 
 #: lib/vutuv_web/templates/user/edit.html.heex:282

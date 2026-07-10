@@ -141,7 +141,7 @@ defmodule VutuvWeb.SettingsControllerTest do
             {~p"/settings/apps", "Apps &amp; API"},
             {~p"/settings", "Settings"},
             {~p"/settings/security", "Sign-in &amp; security"},
-            {~p"/settings/preferences", "Language &amp; maps"},
+            {~p"/settings/preferences", "Language &amp; display"},
             {~p"/settings/delete", "Delete account"}
           ] do
         html = conn |> recycle() |> get(path) |> html_response(200)
@@ -396,7 +396,7 @@ defmodule VutuvWeb.SettingsControllerTest do
     end
   end
 
-  describe "language & maps page" do
+  describe "language & display page" do
     test "carries the interface-language and map-preference forms", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       html = conn |> get(~p"/settings/preferences") |> html_response(200)

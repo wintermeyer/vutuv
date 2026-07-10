@@ -5,7 +5,7 @@ defmodule VutuvWeb.SettingsController do
   sections, the account areas, privacy, notifications, apps, and the delete
   exit). The account areas are focused subpages carved out of the old
   everything-on-one-scroll account hub: sign-in & security (username, emails,
-  devices, passkeys), language & maps, import (LinkedIn), export (GDPR),
+  devices, passkeys), language & display, import (LinkedIn), export (GDPR),
   and the delete-account danger page. The profile basics (photos, name, about)
   stay on `UserController.edit`.
 
@@ -87,7 +87,7 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
-  # Language & maps: the interface-language, map-preference and post-display
+  # Language & display: the interface-language, map-preference and post-display
   # forms, so they need a changeset like the privacy/notifications pages. The
   # changeset is built over the member's *effective* preferences
   # (Vutuv.Prefs.with_effective/1): an inherited (nil) field renders the
@@ -100,7 +100,7 @@ defmodule VutuvWeb.SettingsController do
     render(conn, "preferences.html",
       user: user,
       changeset: User.changeset(Prefs.with_effective(user)),
-      page_title: gettext("Language & maps")
+      page_title: gettext("Language & display")
     )
   end
 
@@ -212,7 +212,7 @@ defmodule VutuvWeb.SettingsController do
   end
 
   # The interface language (`locale`) is the user's own UI-language preference,
-  # not public profile content, so it lives on the language & maps page rather
+  # not public profile content, so it lives on the language & display page rather
   # than the profile editor. It posts back to that page and rerenders it on
   # error.
   def update_language(conn, %{"user" => params}) do
@@ -227,7 +227,7 @@ defmodule VutuvWeb.SettingsController do
 
   # Map preferences (which map services to show on addresses and which is the
   # default) are a viewing preference, not public profile content, so they sit
-  # on the language & maps page. The form posts the three enable checkboxes
+  # on the language & display page. The form posts the three enable checkboxes
   # plus the default select; `Vutuv.Maps` reconciles a default that points at
   # a disabled service at render time, so no extra validation here.
   def update_maps(conn, %{"user" => params}) do
@@ -242,7 +242,7 @@ defmodule VutuvWeb.SettingsController do
 
   # Post-display preferences (how many lines a post is clamped to and whether the
   # body hyphenates, desktop and mobile independently). A reading preference like
-  # the maps, so it lives on the same language & maps page and posts back to it.
+  # the maps, so it lives on the same language & display page and posts back to it.
   def update_post_display(conn, %{"user" => params}) do
     save(
       conn,

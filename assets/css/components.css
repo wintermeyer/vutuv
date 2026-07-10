@@ -1060,7 +1060,7 @@ ul.thumbs li .text .url a {
 }
 
 /* Post-body hyphenation is a per-reader, per-breakpoint preference (see the
-   language & maps settings page + Vutuv.Accounts.User.post_prefs/1). The post
+   language & display settings page + Vutuv.Accounts.User.post_prefs/1). The post
    body sets the `--post-hyphens-*` custom properties inline from the reader's
    choice; the fallbacks below reproduce the previous fixed behaviour and also
    govern every OTHER `.markdown--post` (the work-experience / education

@@ -60,7 +60,7 @@ position on the next reload).
 the `.post-clamp` CSS class and, when there is more, shows a plain "Read more"
 control (no length metric — issue #880 dropped the word count as meaningless once
 the reader has the preview). The line budget is a **per-reader, per-breakpoint
-preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the language & maps
+preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the language & display
 settings page): desktop and mobile independently, shipped default 6 lines on
 desktop / 8 on a phone. Since the `Vutuv.Prefs` system (see
 `settings-and-account.md`) the resolution is member value → the admin-set

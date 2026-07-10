@@ -683,7 +683,7 @@ defmodule VutuvWeb.Router do
     put("/profile", UserController, :update)
     patch("/profile", UserController, :update)
 
-    # The account areas: sign-in & security, language & maps, your data, and
+    # The account areas: sign-in & security, language & display, your data, and
     # the delete-account danger page. put + patch both, to match whichever
     # method <.form for={changeset} emits for a persisted record.
     get("/security", SettingsController, :security)

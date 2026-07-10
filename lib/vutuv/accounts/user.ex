@@ -114,7 +114,7 @@ defmodule Vutuv.Accounts.User do
     # the registry). Never read these raw at a render site; resolve through
     # Vutuv.Prefs.get/2 (or the post_prefs/1 / Vutuv.Maps seams below).
     #
-    # The viewer's map preferences (language & maps settings page, applied to
+    # The viewer's map preferences (language & display settings page, applied to
     # every address this member looks at): which map services to show and which
     # one is the default rendered as the primary "Open in …" button. Shipped
     # defaults mean "all three on, Google the default". `Vutuv.Maps` owns the

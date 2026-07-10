@@ -1,8 +1,8 @@
-<%!-- Language & maps: the member's own viewing preferences — the interface
+<%!-- Language & display: the member's own viewing preferences — the interface
 language (it overrides Accept-Language for the whole site, not the public
 profile), which map services show on addresses, and how the posts they read are
 shortened and hyphenated. Each form posts its own subset and lands back here. --%>
-<.settings_shell user={@user} active={:preferences} title={gettext("Language & maps")}>
+<.settings_shell user={@user} active={:preferences} title={gettext("Language & display")}>
   <div class="space-y-6">
     <.card>
       <.section_title>{gettext("Language & region")}</.section_title>

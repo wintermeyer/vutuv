@@ -2607,7 +2607,7 @@ defmodule VutuvWeb.UI do
       {gettext("Account"),
        [
          {gettext("Sign-in & security"), ~p"/settings/security", :security},
-         {gettext("Language & maps"), ~p"/settings/preferences", :preferences},
+         {gettext("Language & display"), ~p"/settings/preferences", :preferences},
          {gettext("Import"), ~p"/settings/import/linkedin", :import},
          {gettext("Export"), ~p"/#{user}/export", :export}
        ]},

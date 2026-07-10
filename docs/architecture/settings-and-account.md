@@ -26,12 +26,12 @@ pages (there is nothing to preview any more) and remains only on the profile
 itself.
 
 The account areas are focused subpages: Sign-in & security
-(`/settings/security`), Language & maps (`/settings/preferences`), Import
+(`/settings/security`), Language & display (`/settings/preferences`), Import
 (`/settings/import/linkedin`), Export (`/:slug/export`, the profile-scoped export corner) and Delete account
 (`/settings/delete`). "Profil bearbeiten" jumps to the basics form
 (`/settings/profile`), which ends in links to the sibling sections; the old
 owner URLs (`/:slug/edit`, `/:slug/settings/*`) redirect to their `/settings`
-twins. The Language & maps page carries the member's own **reading
+twins. The Language & display page carries the member's own **reading
 preferences**: interface language, map services, and **post display** (how many
 lines a post is clamped to before "Read more" and whether the body hyphenates,
 desktop and mobile independently — 0/empty means no truncation; posted to
