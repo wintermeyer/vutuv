@@ -30,6 +30,16 @@ defmodule Vutuv.Factory do
     }
   end
 
+  # One entry on a member's job-search viewer-exclusion list (issue #938).
+  # Pass either `excluded_user:` (a member) or `domain:` (a lowercase host);
+  # never both. Defaults to a domain row so a bare `insert(:viewer_exclusion,
+  # user: owner)` is valid against the one-target check constraint.
+  def viewer_exclusion_factory do
+    %Vutuv.Accounts.ViewerExclusion{
+      domain: sequence(:excluded_domain, &"employer-#{&1}.example")
+    }
+  end
+
   # One row per username change: the ledger behind the 4-per-90-days quota.
   def username_change_factory do
     %Vutuv.Accounts.UsernameChange{

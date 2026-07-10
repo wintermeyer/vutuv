@@ -260,6 +260,12 @@ defmodule VutuvWeb.UserProfileLive do
   def handle_info({:endorsement_changed, _user_tag_id}, socket),
     do: {:noreply, refresh_tags(socket)}
 
+  # The owner changed their job-search availability or exclusion list (issue
+  # #938): recompute this viewer's two visibility booleans so an excluded
+  # viewer's badge / salary line drops out (or reappears) with no reload.
+  def handle_info({:job_search_visibility_changed, _payload}, socket),
+    do: {:noreply, put_job_search_assigns(socket, socket.assigns.user)}
+
   # A shown post was deleted elsewhere. The owner's posts broadcast their
   # deletion on the owner's topic (which this page already subscribes to), so
   # drop the entry rather than leave a stale card whose action-bar component no
@@ -517,6 +523,20 @@ defmodule VutuvWeb.UserProfileLive do
     |> put_social_assigns(user)
     |> put_social_feed_assigns(user)
     |> put_code_stats_assigns(user)
+    |> put_job_search_assigns(user)
+  end
+
+  # The two job-search field visibilities for this viewer (issue #928 base gate
+  # + issue #938 exclusion list), resolved together in one query. Kept as
+  # assigns so a PubSub re-render (the owner editing their availability or
+  # exclusion list) can recompute them without reload; the template reads the
+  # two booleans instead of calling the gate inline.
+  defp put_job_search_assigns(socket, user) do
+    vis = Accounts.job_search_visibility(user, socket.assigns.current_user)
+
+    socket
+    |> assign(:show_employment_status?, vis.employment_status)
+    |> assign(:show_desired_salary?, vis.salary)
   end
 
   # The code-forge statistics (Vutuv.CodeStats): the "Code" card renders each

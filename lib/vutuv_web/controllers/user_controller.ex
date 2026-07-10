@@ -138,6 +138,9 @@ defmodule VutuvWeb.UserController do
     render(conn, "edit.html",
       user: user,
       changeset: changeset,
+      # The Jobsuche panel links to the exclusion-list editor (issue #938) and
+      # shows how many entries it holds.
+      exclusion_count: Accounts.viewer_exclusion_count(user),
       page_title: gettext("Edit profile")
     )
   end
@@ -159,7 +162,11 @@ defmodule VutuvWeb.UserController do
       {:error, changeset} ->
         conn
         |> put_status(:unprocessable_entity)
-        |> render("edit.html", user: user, changeset: changeset)
+        |> render("edit.html",
+          user: user,
+          changeset: changeset,
+          exclusion_count: Accounts.viewer_exclusion_count(user)
+        )
     end
   end
 

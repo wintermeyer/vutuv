@@ -391,6 +391,12 @@ defmodule VutuvWeb.Router do
       pipe_through([:browser, :settings_pipe])
 
       live("/tags/new", TagNewLive, :new)
+
+      # The job-search viewer-exclusion list (issue #938): add/remove members
+      # and email domains that never see the member's availability or salary
+      # expectation. A LiveView so rows add/remove with no reload; it
+      # broadcasts on the owner's Activity topic so an open profile updates too.
+      live("/job_search_exclusions", JobSearchExclusionsLive, :index)
     end
   end
 

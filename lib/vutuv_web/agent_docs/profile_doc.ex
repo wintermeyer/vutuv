@@ -10,7 +10,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
-  alias Vutuv.Accounts.User
+  alias Vutuv.Accounts
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
@@ -55,6 +55,13 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     work_info = UserHelpers.work_information_string_for_job(job, 256)
     posts = Vutuv.Posts.profile_posts(user, viewer)
 
+    # The #928 base gate AND the #938 exclusion, resolved together (one query):
+    # a signed-in /api/2.0 viewer on the owner's exclusion list (by member or
+    # by confirmed-email domain) loses both fields, exactly like the profile.
+    # For the anonymous extension URLs (`viewer` nil) the exclusion never
+    # applies, so those formats stay the plain public view.
+    job_search = Accounts.job_search_visibility(user, viewer)
+
     # Without a viewer: the anonymous public view, the same addresses the
     # page shows a logged-out visitor.
     emails =
@@ -84,15 +91,14 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # view the extension URLs serve (`viewer` nil) only an "everyone" status
       # appears; the authenticated /api/2.0 read passes its token's member as
       # `viewer`, so a "members" status shows there too. nil when not visible.
-      employment_status:
-        if(User.employment_status_visible?(user, viewer), do: user.employment_status),
+      employment_status: if(job_search.employment_status, do: user.employment_status),
       # The salary expectation (issue #928), same viewer-scoping as the status
       # via its own visibility (default "hidden"). A structured map {min,
       # currency, period} so JSON/XML stay machine-readable; the md/txt
       # renderers format the same "… per <period>" line the profile shows. nil
       # (absent) when not visible to this viewer.
       desired_salary:
-        if User.desired_salary_visible?(user, viewer) do
+        if job_search.salary do
           %{
             min: user.desired_salary_min,
             currency: user.desired_salary_currency,

@@ -87,6 +87,57 @@ field (validated `> 0`, so an empty value simply stores "no expectation").
 Deliberately no notice-period / Kündigungsfrist field (#893): when someone
 becomes available is a bilateral matter, not something the platform models.
 
+## Job-search exclusion list / Ausschlussliste (issue #938)
+
+The three-way visibility above is coarse: `everyone` shows the badge to your
+own employer, `members` still shows any colleague with an account, and `hidden`
+also hides it from the recruiters you *want*. The exclusion list is the "hide
+from your employer" escape hatch — a per-member list of viewers who **never**
+see the two job-search fields, subtracted as the **last step** of the gate.
+
+**Data.** `viewer_exclusions` (schema `Vutuv.Accounts.ViewerExclusion`) is one
+row per excluded target owned by `user_id`. Each row names exactly ONE target —
+a member (`excluded_user_id`) or an email **domain** (`domain`, a bare lowercase
+host) — enforced by a DB check constraint (`(excluded_user_id IS NOT NULL) <>
+(domain IS NOT NULL)`) and the schema's two changesets; partial unique indexes
+dedupe each kind per owner. Companies (issue #929) can join later as a third
+nullable target with no new table. It is a **general** per-member
+viewer-exclusion list — currently only the job-search gate consults it, but
+other visibility-gated fields can opt in later without a migration.
+
+**The gate composes as `base AND NOT excluded`** (subtracting never adds):
+`Vutuv.Accounts.job_search_visibility/2` resolves both fields for a viewer in
+one query — it takes the #928 base predicates (`User.employment_status_visible?/2`
+/ `User.desired_salary_visible?/2`) and ANDs in
+`not viewer_excluded?/2`. `viewer_excluded?/2` (named generally, like the table
+and CRUD, so a second gated field can consult the same list later) returns true when
+the viewer is the excluded member, a **signed-in** viewer whose confirmed
+email is at an excluded domain **or any subdomain of it** (host-suffix match,
+`example.com` also matches `eu.example.com`; a signed-in member's email rows are
+all confirmed — later addresses are PIN-verified before insert, the registration
+address by the first login), **or a viewer the owner has blocked** (a full
+`Social.block_user` implies this lighter visibility-only exclusion, so the owner
+never keeps two lists for one person). A `nil` viewer (the anonymous public / crawler /
+agent-format view) is **never** excluded and the owner never excludes their own
+view, so the crawlable `.md`/`.txt`/`.json`/`.xml` formats stay exactly what the
+base visibility says; only the signed-in `/api/2.0` read and the live profile
+narrow. Both the profile LiveView (`@show_employment_status?` /
+`@show_desired_salary?`, recomputed on the `{:job_search_visibility_changed, _}`
+Activity event) and `VutuvWeb.AgentDocs.ProfileDoc` read the one
+`job_search_visibility/2`, so HTML and agent formats can never disagree
+(`agent_docs_drift_test.exs` covers the excluded-viewer case).
+
+**Editor.** `/settings/job_search_exclusions` (`VutuvWeb.JobSearchExclusionsLive`,
+linked from the Basics-form Jobsuche panel) adds a member by `@handle` or an
+email domain and removes rows over the socket, each change broadcasting on the
+owner's Activity topic so an excluded member's open profile drops the badge with
+no reload. `Vutuv.Accounts` owns the CRUD (`add_excluded_member/2`,
+`add_excluded_domain/2`, `remove_viewer_exclusion/2`, `list_viewer_exclusions/1`)
+with a per-member cap (`viewer_exclusion_cap/0`), self-exclusion and duplicate
+guards, and domain normalization (scheme/path/`@` stripped, lowercased). The
+helper text is honest: excluding **reduces but cannot guarantee** — someone can
+still look logged out, or from a private email.
+
 ## Profile job title chooser (issue #833)
 
 The `Title @ Organization` line under a member's name is auto-picked from their

@@ -72,12 +72,6 @@ defmodule VutuvWeb.UserHelpers do
     Enum.map(User.desired_salary_periods(), &{User.desired_salary_period_label(&1), &1})
   end
 
-  @doc "Whether `user`'s employment-status badge should render for `viewer` (issue #928)."
-  defdelegate employment_status_visible?(user, viewer), to: User
-
-  @doc "Whether `user`'s salary expectation should render for `viewer` (issue #928)."
-  defdelegate desired_salary_visible?(user, viewer), to: User
-
   @doc """
   A member's display name for admin lists: their full name, or `@handle` when
   they have no name set. Shared by the admin user list and the delete flow.

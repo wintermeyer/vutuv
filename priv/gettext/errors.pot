@@ -127,3 +127,17 @@ msgstr ""
 ## (Vutuv.Profiles.Language.changeset/2).
 msgid "is already listed"
 msgstr ""
+
+## Custom messages from the job-search viewer-exclusion list
+## (Vutuv.Accounts.ViewerExclusion + Vutuv.Accounts, issue #938).
+msgid "is already on your list"
+msgstr ""
+
+msgid "cannot exclude yourself"
+msgstr ""
+
+msgid "must be a domain like example.com, without http:// or a path"
+msgstr ""
+
+msgid "your exclusion list is full (max %{count})"
+msgstr ""

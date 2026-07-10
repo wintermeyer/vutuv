@@ -11,6 +11,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
   import Vutuv.PostsHelpers
 
+  alias VutuvWeb.AgentDocs.ProfileDoc
   alias VutuvWeb.AgentDocs.SectionDocs
 
   setup do
@@ -235,6 +236,33 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["username"] == "drift_tester"
     assert rendered.xml =~ "<username>drift_tester</username>"
     assert rendered.html =~ "drift_tester"
+  end
+
+  test "profile: an excluded signed-in viewer gets the reduced job-search view (issue #938)",
+       %{user: user} do
+    # The anonymous formats above render the public "everyone" view unchanged —
+    # the exclusion list only ever narrows the SIGNED-IN audience (the token
+    # /api/2.0 read passes the viewer). Prove both an excluded domain and an
+    # excluded member lose employment status + salary, while a stranger keeps
+    # them (the base "everyone" gate).
+    domain_viewer = insert_activated_user(username: "domain_spy")
+    insert(:email, user: domain_viewer, value: "spy@rival.example")
+    insert(:viewer_exclusion, user: user, domain: "rival.example")
+
+    member_viewer = insert_activated_user(username: "the_boss")
+    insert(:viewer_exclusion, user: user, excluded_user: member_viewer, domain: nil)
+
+    stranger = insert_activated_user(username: "a_stranger")
+
+    for excluded <- [domain_viewer, member_viewer] do
+      doc = ProfileDoc.build(user, viewer: excluded)
+      assert doc.employment_status == nil
+      assert doc.desired_salary == nil
+    end
+
+    seen = ProfileDoc.build(user, viewer: stranger)
+    assert seen.employment_status == "looking"
+    assert seen.desired_salary.min == 60_000
   end
 
   test "profile: an honor tag is marked as such in every format", %{user: user} do

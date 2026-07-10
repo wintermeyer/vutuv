@@ -17,6 +17,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Accounts.UsernameChange
+  alias Vutuv.Accounts.ViewerExclusion
   alias Vutuv.Deliverability
   alias Vutuv.LoginCodes
   alias Vutuv.Moderation
@@ -25,6 +26,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Pages
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias Vutuv.Social.Block
   alias Vutuv.Uploads.Crop
 
   # ── Registration ──
@@ -1187,6 +1189,194 @@ defmodule Vutuv.Accounts do
     user
     |> Ecto.Changeset.change(onboarding_dismissed?: true)
     |> Repo.update()
+  end
+
+  # ── Viewer-exclusion list (issue #938) ──
+
+  # The largest exclusion list a member may keep. Big enough for a real "hide
+  # from my company" list (a boss, a handful of colleagues, one or two
+  # domains), small enough to bound the gate query and stop abuse.
+  @viewer_exclusion_cap 200
+
+  @doc "The per-member exclusion-list cap (issue #938)."
+  def viewer_exclusion_cap, do: @viewer_exclusion_cap
+
+  @doc """
+  A member's viewer-exclusion list (issue #938), newest first, with each
+  excluded member preloaded. Both member and domain rows come back together —
+  it is one list the member manages.
+  """
+  def list_viewer_exclusions(%User{id: owner_id}) do
+    Repo.all(
+      from(x in ViewerExclusion,
+        where: x.user_id == ^owner_id,
+        order_by: [desc: x.id],
+        preload: [:excluded_user]
+      )
+    )
+  end
+
+  @doc "The number of entries on a member's exclusion list."
+  def viewer_exclusion_count(%User{id: owner_id}) do
+    Repo.aggregate(from(x in ViewerExclusion, where: x.user_id == ^owner_id), :count, :id)
+  end
+
+  @doc """
+  Adds a member to `owner`'s exclusion list by their handle (`@name` or `name`).
+  Returns `{:ok, exclusion}` or `{:error, reason}` where `reason` is one of
+  `:not_found` (no such handle), `:self` (their own handle), `:duplicate`
+  (already listed) or `:full` (cap reached) — the editor maps each to one
+  clear line.
+  """
+  def add_excluded_member(%User{} = owner, handle) when is_binary(handle) do
+    # Usernames are stored lowercase, so normalize the typed @handle the same
+    # way BlockController / get_user_by_handle_or_email do — otherwise "@JohnDoe"
+    # would fail to resolve here while resolving everywhere else.
+    slug = handle |> String.trim() |> String.trim_leading("@") |> String.downcase()
+
+    cond do
+      viewer_exclusion_count(owner) >= @viewer_exclusion_cap ->
+        {:error, :full}
+
+      slug == "" ->
+        {:error, :not_found}
+
+      true ->
+        add_found_member(owner, get_user_by_username(slug))
+    end
+  end
+
+  defp add_found_member(_owner, nil), do: {:error, :not_found}
+  defp add_found_member(%User{id: id}, %User{id: id}), do: {:error, :self}
+
+  defp add_found_member(owner, %User{} = excluded) do
+    owner
+    |> ViewerExclusion.member_changeset(excluded)
+    |> Repo.insert()
+    |> case do
+      {:ok, exclusion} -> {:ok, exclusion}
+      # Self is caught above, so the only remaining insert failure is the
+      # partial unique index: this member is already on the list.
+      {:error, _changeset} -> {:error, :duplicate}
+    end
+  end
+
+  @doc """
+  Adds an email domain to `owner`'s exclusion list. Returns `{:ok, exclusion}`
+  or `{:error, changeset}` (invalid shape, duplicate, or a full list as a base
+  error) so the editor renders the field error inline. The domain is
+  normalized and validated in `ViewerExclusion.domain_changeset/2`.
+  """
+  def add_excluded_domain(%User{} = owner, params) do
+    changeset = ViewerExclusion.domain_changeset(owner, params)
+
+    if viewer_exclusion_count(owner) >= @viewer_exclusion_cap do
+      {:error,
+       changeset
+       |> Ecto.Changeset.add_error(:domain, "your exclusion list is full (max %{count})",
+         count: @viewer_exclusion_cap
+       )
+       |> Map.put(:action, :insert)}
+    else
+      Repo.insert(changeset)
+    end
+  end
+
+  @doc """
+  Removes one entry from `owner`'s exclusion list (scoped to the owner, so a
+  member can only ever delete their own rows). Returns `:ok` whether or not the
+  row was there, so a double-submit is harmless.
+  """
+  def remove_viewer_exclusion(%User{id: owner_id}, exclusion_id) do
+    {_count, _} =
+      Repo.delete_all(
+        from(x in ViewerExclusion, where: x.id == ^exclusion_id and x.user_id == ^owner_id)
+      )
+
+    :ok
+  end
+
+  @doc """
+  Whether `owner` excludes `viewer` from their visibility-gated info (issue
+  #938) — the general per-subject predicate the visibility gate consults as its
+  LAST step (subtracting never adds). True when `viewer` is:
+
+    * the excluded member on `owner`'s list, or
+    * a signed-in viewer whose confirmed email is at an excluded domain **or any
+      subdomain of it** (`example.com` also matches `eu.example.com`), or
+    * **blocked by `owner`** via `Social.block_user` — a full block implies this
+      lighter exclusion too, so the owner never maintains two lists.
+
+  Named generally (like the table, schema and CRUD) so a future
+  visibility-gated field can consult the same list without a rename; today only
+  `job_search_visibility/2` does.
+
+  A `nil` viewer (the anonymous public / crawler / agent-format view) is never
+  excluded, so the crawlable formats stay whatever the base visibility says;
+  the owner is never excluded from their own view.
+  """
+  def viewer_excluded?(_owner, nil), do: false
+  def viewer_excluded?(%User{id: same}, %User{id: same}), do: false
+
+  def viewer_excluded?(%User{id: owner_id}, %User{id: viewer_id}) do
+    blocked_by_owner?(owner_id, viewer_id) or on_exclusion_list?(owner_id, viewer_id)
+  end
+
+  # A full block (Social.block_user) implies job-search exclusion. One indexed
+  # exists? on the (blocker_id, blocked_id) unique index; checked first so a
+  # blocked viewer short-circuits the exclusion-list query below.
+  defp blocked_by_owner?(owner_id, viewer_id) do
+    Repo.exists?(
+      from(b in Block, where: b.blocker_id == ^owner_id and b.blocked_id == ^viewer_id)
+    )
+  end
+
+  # The member OR domain(+subdomain) rows on the owner's list. A signed-in
+  # member's emails are all confirmed (later ones are PIN-verified before
+  # insert; the registration address by the first login they must have made to
+  # be signed in), so every email row's host counts as a confirmed domain. The
+  # host-suffix match uses a leading "." (`host LIKE '%.' || domain`) so a
+  # listed `example.com` matches `eu.example.com` but never `notexample.com`;
+  # validated domains carry no LIKE wildcards, so no escaping is needed.
+  defp on_exclusion_list?(owner_id, viewer_id) do
+    Repo.exists?(
+      from(x in ViewerExclusion,
+        left_join: e in Email,
+        on:
+          e.user_id == ^viewer_id and
+            fragment(
+              "(lower(split_part(?, '@', 2)) = ? OR lower(split_part(?, '@', 2)) LIKE '%.' || ?)",
+              e.value,
+              x.domain,
+              e.value,
+              x.domain
+            ),
+        where: x.user_id == ^owner_id,
+        where: x.excluded_user_id == ^viewer_id or not is_nil(e.id)
+      )
+    )
+  end
+
+  @doc """
+  The two job-search field visibilities for `viewer`, resolved together so the
+  one exclusion-list query runs once (issue #928 base gate + issue #938
+  exclusion). Returns `%{employment_status: bool, salary: bool}`. Both the
+  profile LiveView and `VutuvWeb.AgentDocs.ProfileDoc` read this, so the HTML
+  and the agent formats can never disagree.
+  """
+  def job_search_visibility(%User{} = owner, viewer) do
+    status_base = User.employment_status_visible?(owner, viewer)
+    salary_base = User.desired_salary_visible?(owner, viewer)
+
+    # Only pay for the exclusion query when a field is visible to begin with.
+    # Most members have set neither #928 field, so the pure base predicates
+    # short-circuit the DB round-trip on the hot profile-render path.
+    hidden? = (status_base or salary_base) and viewer_excluded?(owner, viewer)
+
+    %{
+      employment_status: status_base and not hidden?,
+      salary: salary_base and not hidden?
+    }
   end
 
   # Avatar/cover files are written to disk only AFTER the row commits, so a

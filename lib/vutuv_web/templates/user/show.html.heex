@@ -169,9 +169,11 @@ the resulting ~200px rail width. --%>
         rather than trailing the end of a long tagline. Viewer-scoped by the
         member's visibility setting (issue #928): "everyone" shows to all incl.
         logged-out visitors, "members" only to a signed-in viewer (@current_user),
-        "hidden" to nobody. The row only appears when a status is set and visible,
-        so it drops out cleanly otherwise. --%>
-        <div :if={employment_status_visible?(@user, @current_user)} class="mt-2">
+        "hidden" to nobody — MINUS anyone on the member's exclusion list (issue
+        #938: a listed member or a viewer at a listed email domain never sees it,
+        even at "everyone"). The @show_employment_status? assign folds all of
+        that together; the row drops out cleanly when it is false. --%>
+        <div :if={@show_employment_status?} class="mt-2">
           <.employment_status_badge status={@user.employment_status} />
         </div>
         <%!-- Salary-expectation line (issue #928): a quiet muted line under the
@@ -179,7 +181,7 @@ the resulting ~200px rail width. --%>
         it usually stays off). Amount grouped via delimited_count; the same
         sentence renders in the agent docs. --%>
         <p
-          :if={desired_salary_visible?(@user, @current_user)}
+          :if={@show_desired_salary?}
           class="mt-1 text-sm text-slate-600 dark:text-slate-400"
         >
           {gettext("Salary expectation from %{amount} %{currency} per %{period}",
