@@ -236,3 +236,36 @@ audience guards its images too — served with `send_file` everywhere (the
 X-Accel-Redirect handoff was disabled after it failed in production).
 
 Legacy `…/feed.webp` URLs in old post bodies keep resolving.
+
+## Link screenshots
+
+A post that carries **exactly one URL and no image attachment** gets an
+auto-generated screenshot of the linked page, captured off the request path so
+the save is never slowed. The subsystem is `Vutuv.Posts.Screenshots` with the
+`post_screenshots` table (one row per post, unique `post_id`), which is **both
+the durable queue and the attachment record**: a `pending`/`capturing`/`failed`
+row is work, a `ready` row carries the stored screenshot.
+
+`Vutuv.Posts.create_post/2` / `create_reply/3` / `update_post/2` call
+`Screenshots.reconcile/1`, which enqueues, refreshes (URL changed) or drops
+(no longer qualifies) the job to match the post. `Vutuv.Posts.ScreenshotWorker`
+(a GenServer poller modelled on `Vutuv.Fediverse.Deliverer`) drains due jobs:
+`nudge/0` captures a fresh post at once, a slow poll catches retries, and on boot
+`resume_stuck/0` re-queues anything a crash left mid-capture — so a restart or
+re-deploy loses nothing and a missing screenshot is re-created. Transient
+failures retry with exponential backoff up to a cap, then `failed`; an
+SSRF-refused internal host fails permanently (like a profile link's `broken?`).
+
+Capture is **DRY** with the profile-link previews: `Vutuv.PageScreenshot`
+(`capture_framed/2`, the shared Chromium + browser-frame + SSRF pipeline) and
+`Vutuv.Screenshot` storage (the row is the scope, so it is the same 400×264 AVIF
+thumb with the `/images/screenshot.png` fallback). Everything is gated by the
+`:generate_screenshots` flag (air-gapped installs queue nothing).
+
+`VutuvWeb.PostComponents` renders a ready screenshot beside the body — **3/4
+text, 1/4 screenshot** at `md+` (iPad/desktop), stacked below on phones (preview
+mode), or below the body in full mode. On capture the worker broadcasts
+`{:post_screenshot_ready, …}` to the author's + followers' activity topics, so an
+open feed/profile upgrades the card with no reload. Admins watch the queue and
+browse the gallery (each shot linked to its post, paginated) at
+`/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`).

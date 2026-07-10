@@ -348,7 +348,36 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, DayClockRestream.restream(socket, :entries, :posts)}
   end
 
+  # A post's link screenshot finished capturing (fan-out reaches the viewer over
+  # their activity topic, like :new_post): if the post is on the page, refresh
+  # its card in place so the screenshot appears with no reload.
+  def handle_info({:post_screenshot_ready, %{post_id: post_id}}, socket) do
+    {:noreply, refresh_shown_post(socket, post_id)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
+
+  # Swap in the post's now-screenshot-carrying copy and re-stream the entry in
+  # place (update_only, so an off-page id is a harmless no-op). The entry's other
+  # fields — engagement, follow edge, repost roster — are preserved.
+  defp refresh_shown_post(socket, post_id) do
+    with entry when not is_nil(entry) <-
+           Enum.find(socket.assigns.entries, &(&1.post.id == post_id)),
+         post when not is_nil(post) <- Posts.get_post(post_id) do
+      updated = %{entry | post: post}
+
+      socket
+      |> update(:entries, &replace_entry(&1, updated))
+      |> stream_insert(:posts, updated, update_only: true)
+    else
+      _ -> socket
+    end
+  end
+
+  # Swap the refreshed entry into the retained list by its stable entry id.
+  defp replace_entry(entries, updated) do
+    Enum.map(entries, fn entry -> if entry.id == updated.id, do: updated, else: entry end)
+  end
 
   # Own activity (this or another session) appears immediately; other
   # people's waits behind the pill — and only when the post is visible.

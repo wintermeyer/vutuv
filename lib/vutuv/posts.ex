@@ -54,6 +54,8 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
   alias Vutuv.Posts.PostTag
+  alias Vutuv.Posts.Screenshots
+  alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
   alias Vutuv.Tags
@@ -105,6 +107,9 @@ defmodule Vutuv.Posts do
           # Follow-only federation: a federating author's public post goes
           # out to their remote followers (no-op for everyone else).
           Vutuv.Fediverse.federate_new_post(post)
+          # A single-URL, image-less post gets a link screenshot, captured off
+          # the request path via the durable queue.
+          reconcile_screenshot(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -144,6 +149,7 @@ defmodule Vutuv.Posts do
           broadcast_new_post(post)
           broadcast_reply(parent, post)
           Vutuv.Fediverse.federate_new_post(post)
+          reconcile_screenshot(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -202,6 +208,9 @@ defmodule Vutuv.Posts do
         # Remote copies follow the edit (Update) — or, if the audience just
         # closed, leave public view (Delete, best effort).
         Vutuv.Fediverse.federate_post_update(updated)
+        # An edit can add/remove the qualifying URL or an image: enqueue, refresh
+        # or drop the link screenshot to match.
+        reconcile_screenshot(updated)
         {:ok, updated}
 
       {:error, _} = error ->
@@ -231,12 +240,15 @@ defmodule Vutuv.Posts do
   parent's fresh reply count is re-broadcast.
   """
   def delete_post(%Post{} = post) do
-    post = Repo.preload(post, :images)
+    post = Repo.preload(post, [:images, :screenshot])
     parent_id = reply_parent_id(post.id)
 
     case Repo.delete(post) do
       {:ok, deleted} ->
         Enum.each(post.images, &PostImageStore.delete(&1.token))
+        # The post_screenshots row cascades with the post; its stored files do
+        # not, so purge them explicitly (a no-op when there was no screenshot).
+        if post.screenshot, do: Screenshots.delete(post.screenshot)
         broadcast_post_deleted(post.id, post.user_id)
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
@@ -1544,11 +1556,14 @@ defmodule Vutuv.Posts do
     [
       :user,
       :images,
+      # The auto link screenshot rendered beside a single-URL post (nil for
+      # every other post); the card shows it only once `status: "ready"`.
+      :screenshot,
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
       reply_ref: [
         :parent_author,
-        parent_post: [:user, :images, tags: from(t in Tag, order_by: t.name)]
+        parent_post: [:user, :images, :screenshot, tags: from(t in Tag, order_by: t.name)]
       ]
     ]
   end
@@ -1735,6 +1750,38 @@ defmodule Vutuv.Posts do
   defp broadcast_new_post(%Post{} = post) do
     event = {:new_post, %{post_id: post.id, author_id: post.user_id}}
     broadcast_to_followers(post.user_id, event)
+  end
+
+  @doc """
+  Tells open clients a post's link screenshot is now ready to render, so an
+  already-loaded feed/profile upgrades the card with no reload. Fans out to the
+  same recipients as `{:new_post, …}` — the author's own topic (which their
+  profile page subscribes to) and every follower's feed topic — via the shared
+  `Vutuv.Posts.Screenshots` worker on capture success. A no-op for a post that
+  vanished before the capture finished.
+  """
+  def broadcast_screenshot_ready(post_id) when is_binary(post_id) do
+    case Repo.get(Post, post_id) do
+      nil ->
+        :ok
+
+      %Post{user_id: author_id} ->
+        event = {:post_screenshot_ready, %{post_id: post_id, author_id: author_id}}
+        broadcast_to_followers(author_id, event)
+    end
+  end
+
+  # Enqueue / refresh / drop the post's link screenshot to match its current
+  # body and images, then poke the worker to capture it now. Gated by
+  # `:generate_screenshots` so an air-gapped install queues nothing (and the
+  # test suite creates no rows unless it opts in).
+  defp reconcile_screenshot(%Post{} = post) do
+    if Application.get_env(:vutuv, :generate_screenshots, true) do
+      Screenshots.reconcile(post)
+      ScreenshotWorker.nudge()
+    end
+
+    :ok
   end
 
   # A fresh repost distributes like a fresh post — to the reposter's own

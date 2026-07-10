@@ -26,6 +26,7 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Accounts.User
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostScreenshot
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -144,6 +145,11 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:permalink, Posts.path(assigns.post))
       |> assign(:gallery, gallery(assigns.post, assigns.mode))
       |> assign(:square_layout?, square_layout?(assigns.post, assigns.mode))
+      # The auto link screenshot (a ready %PostScreenshot{} for an image-less
+      # single-URL post, else nil) and whether the preview lays it beside the
+      # text (3/4 body, 1/4 screenshot).
+      |> assign(:link_screenshot, link_screenshot(assigns.post))
+      |> assign(:link_screenshot_layout?, link_screenshot_layout?(assigns.post, assigns.mode))
       |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
@@ -179,6 +185,8 @@ defmodule VutuvWeb.PostComponents do
       permalink={@permalink}
       gallery={@gallery}
       square_layout?={@square_layout?}
+      link_screenshot={@link_screenshot}
+      link_screenshot_layout?={@link_screenshot_layout?}
       edited?={@edited?}
       author?={@author?}
       reporter?={@reporter?}
@@ -619,6 +627,8 @@ defmodule VutuvWeb.PostComponents do
   attr(:permalink, :string, required: true)
   attr(:gallery, :list, required: true)
   attr(:square_layout?, :boolean, required: true)
+  attr(:link_screenshot, :any, default: nil)
+  attr(:link_screenshot_layout?, :boolean, required: true)
   attr(:edited?, :boolean, required: true)
   attr(:author?, :boolean, required: true)
   attr(:reporter?, :boolean, required: true)
@@ -814,6 +824,27 @@ defmodule VutuvWeb.PostComponents do
                   />
                 </.link>
               </div>
+            <% @link_screenshot_layout? -> %>
+              <%!-- A single-URL, image-less post: the body beside a small
+              screenshot of the linked page — 3/4 text, 1/4 screenshot — on
+              iPad/desktop (md, so portrait iPads get the columns too), stacking
+              (text, then screenshot below) on phones. --%>
+              <div class="mt-2 md:flex md:items-start md:gap-4">
+                <div class="min-w-0 md:w-3/4">
+                  <.preview_body
+                    body_id={@body_id}
+                    body_html={@body_html}
+                    body_style={@body_style}
+                    truncated?={@truncated?}
+                    permalink={@permalink}
+                  />
+                  <.post_tags tags={@post.tags} />
+                </div>
+                <.link_screenshot_image
+                  screenshot={@link_screenshot}
+                  class="mt-3 block shrink-0 md:mt-0 md:w-1/4"
+                />
+              </div>
             <% @mode == :preview -> %>
               <.preview_body
                 :if={@post.body != ""}
@@ -879,10 +910,18 @@ defmodule VutuvWeb.PostComponents do
               </div>
           <% end %>
 
-          <%!-- Every non-square layout puts the tags in their own full-width row
-          below the body/images; the square layout already rendered them inside
-          the 2/3 text column above. --%>
-          <.post_tags :if={not @square_layout?} tags={@post.tags} />
+          <%!-- Full mode (permalink): the link screenshot below the body — a
+          single-URL post has no image gallery — at a modest width. --%>
+          <.link_screenshot_image
+            :if={@mode == :full and @link_screenshot}
+            screenshot={@link_screenshot}
+            class="mt-4 block max-w-md"
+          />
+
+          <%!-- Every non-square/non-screenshot layout puts the tags in their own
+          full-width row below the body/images; the side-by-side layouts already
+          rendered them inside the text column above. --%>
+          <.post_tags :if={not @square_layout? and not @link_screenshot_layout?} tags={@post.tags} />
 
           <%!-- The action bar (like / repost / bookmark + counters). On a
           LiveView host it is an in-process LiveComponent that re-renders in
@@ -1168,6 +1207,52 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp square_image?(_), do: false
+
+  # The auto link screenshot to render beside/below a post: a ready
+  # %PostScreenshot{} when the post has no image attachments, else nil. The plain
+  # map patterns guard un-preloaded associations — a bare has_one/has_many is an
+  # %Ecto.Association.NotLoaded{}, which matches neither `[]` nor `%PostScreenshot{}`.
+  defp link_screenshot(%{images: [], screenshot: %PostScreenshot{} = ps}) do
+    if PostScreenshot.ready?(ps), do: ps
+  end
+
+  defp link_screenshot(_post), do: nil
+
+  # Whether the preview lays the body out beside the link screenshot (3/4 text,
+  # 1/4 screenshot). Only in preview mode with a ready screenshot; full mode
+  # shows the screenshot below the body instead.
+  defp link_screenshot_layout?(post, :preview), do: link_screenshot(post) != nil
+  defp link_screenshot_layout?(_post, _mode), do: false
+
+  # The link screenshot image, shared by the preview (1/4 column) and full
+  # (below-body) layouts. A decorative duplicate of the body's autolinked URL —
+  # `aria-hidden` + `tabindex=-1` so assistive tech and the tab order keep the
+  # one link in the prose — opening the page in a new tab. `class` positions it.
+  attr(:screenshot, :any, required: true)
+  attr(:class, :string, default: nil)
+
+  defp link_screenshot_image(assigns) do
+    ~H"""
+    <.link
+      href={@screenshot.url}
+      target="_blank"
+      rel="noopener"
+      aria-hidden="true"
+      tabindex="-1"
+      data-link-screenshot
+      class={@class}
+    >
+      <img
+        src={Vutuv.Screenshot.url({@screenshot.screenshot, @screenshot}, :thumb)}
+        width="400"
+        height="264"
+        loading="lazy"
+        alt=""
+        class="aspect-[400/264] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+      />
+    </.link>
+    """
+  end
 
   @doc """
   Author-facing label for a post-denial wildcard — the one wording for "who

@@ -122,7 +122,9 @@ A few rarely-changed switches are compile-time settings in
 `:ai_crawler_policy` (`:permissive` or `:block_training` — drives robots.txt
 and the Content-Signal headers), `:fetch_gravatar`, `:fetch_mastodon_posts`,
 `:fetch_bluesky_posts`, `:fetch_code_stats` (the profile "Code" card's
-GitHub/GitLab/Codeberg statistics), `:generate_screenshots`, and
+GitHub/GitLab/Codeberg statistics), `:generate_screenshots` (profile link
+previews **and** the auto-screenshot for single-link posts — admins watch the
+capture queue and browse the gallery at `/admin/screenshots`), and
 `:serve_uploads_locally` (see nginx below).
 
 ## systemd
@@ -243,8 +245,9 @@ vutuv runs fine without internet access:
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on
   profiles), `:fetch_code_stats` (the profile "Code" card's GitHub/GitLab/
   Codeberg statistics — off, the accounts stay plain links), and
-  `:generate_screenshots` (link preview screenshots — these fetch the linked
-  page).
+  `:generate_screenshots` (profile link-preview screenshots **and** the
+  auto-screenshot for single-link posts — these fetch the linked page and run
+  headless Chromium).
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
 - Search engines and AI crawlers are irrelevant on an intranet; the

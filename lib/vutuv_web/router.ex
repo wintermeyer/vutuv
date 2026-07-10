@@ -524,6 +524,11 @@ defmodule VutuvWeb.Router do
       # The OAuth-application list: suspend/unsuspend act reload-free.
       live("/api_apps", ApiAppLive, :index)
 
+      # The post link-screenshot subsystem: a Queue tab (pending/capturing/failed
+      # jobs) and a Gallery tab (captured screenshots linked to their posts),
+      # both paginated. Read-only. ?tab= switches, ?page= paginates.
+      live("/screenshots", ScreenshotLive, :index)
+
       live("/newsletters/:id/send", NewsletterBroadcastLive)
 
       live("/newsletter_groups", NewsletterGroupLive, :index)

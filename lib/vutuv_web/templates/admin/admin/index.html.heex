@@ -106,6 +106,18 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         )}
       <% end %>
     </.admin_card>
+
+    <.admin_card
+      icon="image"
+      title={gettext("Link screenshots")}
+      href={~p"/admin/screenshots"}
+      id="admin-screenshots-link"
+      cta={gettext("Open the screenshot queue")}
+    >
+      {gettext(
+        "Auto-generated screenshots for single-link posts: watch the capture queue and browse the gallery of finished shots, each linked to its post."
+      )}
+    </.admin_card>
   </.admin_group>
 
   <.admin_group title={gettext("Communication")}>

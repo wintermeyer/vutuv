@@ -290,6 +290,14 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, socket |> assign(:posts, posts) |> refresh_social_feed_stamps()}
   end
 
+  # A shown post's link screenshot finished capturing (fan-out reaches this page
+  # over the profile owner's activity topic): re-fetch the posts so the card
+  # gains its screenshot with no reload. A fresh list re-renders the `:for`.
+  def handle_info({:post_screenshot_ready, _payload}, socket) do
+    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    {:noreply, assign(socket, :posts, posts)}
+  end
+
   # The social feed cache answered a mount-time request (or a concurrent
   # visitor's fetch this page joined — single-flight): drop the account's
   # loading spinner and, on success, fold the feed into the mixed posts card.

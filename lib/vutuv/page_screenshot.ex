@@ -104,22 +104,34 @@ defmodule Vutuv.PageScreenshot do
     "screenshot generation failed for url ##{url.id} (#{url.value}): #{inspect(reason)}"
   end
 
-  # `url.value` is an untrusted member-supplied profile link. The changeset
-  # already rejected literal internal hosts, but a public hostname can resolve
-  # to an internal IP (DNS rebinding, issue #777), so resolve at capture time
-  # and refuse before handing the URL to Chromium. This guards only the
-  # profile path; `Vutuv.Moderation.EvidenceScreenshot` calls `capture/3`
-  # directly to shoot the app's own host and is intentionally not gated.
-  defp capture_and_frame(url) do
-    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url.value).host) do
+  defp capture_and_frame(url), do: capture_framed(url.value, url.id)
+
+  @doc """
+  Captures `url_value`, wraps it in a browser-window frame, and returns
+  `{:ok, framed_webp_path}` (the caller stores it and must `File.rm/1` it) or
+  `{:error, reason}`. `id` only names the temp files. Never raises.
+
+  Shared by the profile-link path (`Url`) and the post link-screenshot queue
+  (`Vutuv.Posts.Screenshots`), so the SSRF guard and the capture→frame pipeline
+  live in exactly one place.
+
+  `url_value` is an untrusted member-supplied link. The changeset already
+  rejected literal internal hosts, but a public hostname can resolve to an
+  internal IP (DNS rebinding, issue #777), so resolve at capture time and refuse
+  before handing the URL to Chromium. `Vutuv.Moderation.EvidenceScreenshot`
+  calls `capture/3` directly to shoot the app's own host and is intentionally
+  not gated.
+  """
+  def capture_framed(url_value, id) when is_binary(url_value) do
+    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url_value).host) do
       {:error, :internal_target}
     else
-      page_path = tmp_path("page", url.id, "png")
-      framed_path = tmp_path("frame", url.id, "webp")
+      page_path = tmp_path("page", id, "png")
+      framed_path = tmp_path("frame", id, "webp")
 
       try do
-        with :ok <- capture(url.value, page_path),
-             {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url.value, framed_path) do
+        with :ok <- capture(url_value, page_path),
+             {:ok, ^framed_path} <- BrowserFrame.wrap(page_path, url_value, framed_path) do
           {:ok, framed_path}
         end
       after

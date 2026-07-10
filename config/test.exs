@@ -26,6 +26,10 @@ config :vutuv, :prune_search_history, false
 # outside. Vutuv.Webhooks.Deliverer.nudge/0 casts into the void then.
 config :vutuv, :webhook_deliverer, false
 config :vutuv, :fediverse_deliverer, false
+# Post link-screenshots drain via a polling GenServer that would touch the
+# sandbox from outside; tests call Vutuv.Posts.Screenshots.deliver_due/1 directly
+# with a stubbed capture. ScreenshotWorker.nudge/0 casts into the void then.
+config :vutuv, :post_screenshot_worker, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false

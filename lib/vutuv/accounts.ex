@@ -559,6 +559,19 @@ defmodule Vutuv.Accounts do
     url_ids =
       Repo.all(from(u in Vutuv.Profiles.Url, where: u.user_id == ^user.id, select: %{id: u.id}))
 
+    # The user's post link-screenshots: the post_screenshots rows cascade with
+    # the posts, but their stored files (keyed by the screenshot id) would be
+    # orphaned. Only the id is needed — Screenshot.delete/1 keys its dirs off it.
+    screenshot_ids =
+      Repo.all(
+        from(ps in Vutuv.Posts.PostScreenshot,
+          join: p in Vutuv.Posts.Post,
+          on: p.id == ps.post_id,
+          where: p.user_id == ^user.id,
+          select: %{id: ps.id}
+        )
+      )
+
     # Captured before the delete: once the account is gone so are its follow
     # edges, so the recipients of the "post gone" broadcasts can't be looked up
     # afterwards. See Vutuv.Posts.deletion_targets_for_user/1.
@@ -587,6 +600,7 @@ defmodule Vutuv.Accounts do
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
+    Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
     Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)
     Vutuv.Avatar.delete(user)
     Vutuv.Cover.delete(user)
