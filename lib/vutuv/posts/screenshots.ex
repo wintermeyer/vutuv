@@ -7,8 +7,10 @@ defmodule Vutuv.Posts.Screenshots do
   **Durable queue.** Each qualifying post gets one `post_screenshots` row (see
   `Vutuv.Posts.PostScreenshot`), which is both the job and the result: a
   `pending` row is work waiting, `capturing` is in flight, `ready` carries the
-  stored screenshot, `failed` gave up (retries exhausted, or a permanent SSRF
-  refusal). Because the queue is a table, a restart or re-deploy loses nothing —
+  stored screenshot, `failed` gave up (retries exhausted, or a permanent refusal:
+  an SSRF-blocked host, a redirecting link, or a non-200 target — only a plain
+  HTTP 200 is captured). Because the queue is a table, a restart or re-deploy
+  loses nothing —
   `Vutuv.Posts.ScreenshotWorker` drains it on a poll, `resume_stuck/0` re-queues
   a job a crash left mid-capture, and a transient failure retries with
   exponential backoff. This is the "re-create if in doubt" guarantee.
@@ -25,6 +27,7 @@ defmodule Vutuv.Posts.Screenshots do
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
+  alias Vutuv.SocialFeed.Http
 
   require Logger
 
@@ -71,20 +74,30 @@ defmodule Vutuv.Posts.Screenshots do
     end
   end
 
+  # This installation's own login-walled / internal areas: a screenshot of them
+  # would only ever be a login redirect or an admin/internal page, never useful
+  # preview content, so a single-URL post pointing at one is not screenshotted.
+  # These path roots are all reserved slugs (`Vutuv.Accounts.ReservedSlugs`).
+  @internal_path_roots ~w(/settings /admin /system)
+
   @doc """
   The single URL a post should be screenshotted for, or `:none`. Qualifies only
   with **no image attachment** and **exactly one** distinct `http(s)` URL in the
-  body (surrounding text is fine).
+  body (surrounding text is fine). A URL pointing at this installation's own
+  `/settings`, `/admin` or `/system` area does **not** qualify.
   """
-  def qualifying_url(%Post{images: images, body: body}) when is_list(images) do
-    if images == [] do
-      case extract_urls(body) do
-        [url] -> {:ok, url}
-        _ -> :none
-      end
-    else
-      :none
+  def qualifying_url(%Post{images: [], body: body}), do: sole_url_target(body)
+  def qualifying_url(%Post{images: images}) when is_list(images), do: :none
+
+  defp sole_url_target(body) do
+    case extract_urls(body) do
+      [url] -> qualify(url)
+      _ -> :none
     end
+  end
+
+  defp qualify(url) do
+    if own_internal_url?(url), do: :none, else: {:ok, url}
   end
 
   @doc "Every distinct bare `http(s)` URL in `body`, trailing punctuation trimmed."
@@ -100,6 +113,26 @@ defmodule Vutuv.Posts.Screenshots do
   # A URL at the end of a sentence catches the following `.`/`)`/`,` in the
   # greedy `[^\s<>]+`; drop those so the captured target is the real link.
   defp trim_trailing_punctuation(url), do: String.replace(url, ~r/[)\]}.,;:!?'"]+$/u, "")
+
+  # True when `url` points at this installation's own `/settings`, `/admin` or
+  # `/system` area. The host is derived from the endpoint (never a literal
+  # `vutuv.de`), so the skip is correct on any third-party installation; `www.`
+  # is stripped from both sides so the two forms compare equal.
+  defp own_internal_url?(url) do
+    uri = URI.parse(url)
+    own_host?(uri.host) and internal_path?(uri.path)
+  end
+
+  defp own_host?(nil), do: false
+  defp own_host?(host), do: strip_www(host) == strip_www(VutuvWeb.Endpoint.host())
+
+  defp strip_www(host), do: host |> String.downcase() |> String.replace_prefix("www.", "")
+
+  defp internal_path?(nil), do: false
+
+  defp internal_path?(path) do
+    Enum.any?(@internal_path_roots, &(path == &1 or String.starts_with?(path, &1 <> "/")))
+  end
 
   defp enqueue(%Post{screenshot: %PostScreenshot{url: url} = existing}, url) do
     # Same URL already queued/captured: leave it (a `ready` row stays ready).
@@ -195,22 +228,29 @@ defmodule Vutuv.Posts.Screenshots do
       {:ok, %{screenshot: file, width: width, height: height}} ->
         mark_ready(job, file, width, height)
 
-      # A permanent property of the target (SSRF-refused internal host): give up,
-      # like a profile url's `broken?` flag.
-      {:error, :internal_target} ->
-        mark_failed(job, :internal_target)
-
-      # A transient/environment failure (Chromium missing, crashed, timed out):
-      # retry with backoff until the cap.
       {:error, reason} ->
-        mark_retry(job, reason)
+        if permanent_failure?(reason),
+          do: mark_failed(job, reason),
+          else: mark_retry(job, reason)
     end
   end
 
-  # The real capture: reuse the shared pipeline, then store through the same
-  # uploader profile links use. Returns the stored filename + display size.
+  # A property of the target that won't change on retry: an SSRF-refused internal
+  # host, a link that redirects (`:redirect`), or a `4xx` non-200 answer
+  # (`{:bad_status, _}`). Everything else — a `5xx` server error, an unreachable
+  # probe, a missing/crashed/timed-out Chromium — is transient and retries with
+  # backoff until the cap.
+  defp permanent_failure?(:internal_target), do: true
+  defp permanent_failure?(:redirect), do: true
+  defp permanent_failure?({:bad_status, _status}), do: true
+  defp permanent_failure?(_reason), do: false
+
+  # The real capture: capture only a plain HTTP-200 link, then reuse the shared
+  # pipeline and store through the same uploader profile links use. Returns the
+  # stored filename + display size.
   defp capture_and_store(%PostScreenshot{} = job) do
-    with {:ok, framed_path} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
+    with :ok <- ensure_http_ok(job.url),
+         {:ok, framed_path} <- Vutuv.PageScreenshot.capture_framed(job.url, job.id) do
       upload = %Plug.Upload{
         content_type: "image/webp",
         filename: "#{job.id}.webp",
@@ -229,6 +269,58 @@ defmodule Vutuv.Posts.Screenshots do
       File.rm(framed_path)
       result
     end
+  end
+
+  # Config key for the probe's Req options; tests inject a `plug:` through it,
+  # exactly like the social-feed clients' per-provider seams.
+  @probe_req_options_key :post_screenshot_req_options
+
+  @doc """
+  `:ok` only when `url` answers a plain **HTTP 200**; otherwise `{:error, reason}`
+  and no screenshot is taken. A `redirect: false` GET probe (what a browser would
+  get) runs in the worker before Chromium, so a link that redirects, 404s or gives
+  any other non-200 answer is skipped — a bounce lands on a login/consent wall or
+  a shortener's target, a 404/5xx isn't the linked page — leaving the post to show
+  the plain link. Off the request path, so the probe never slows a save.
+
+  Reasons distinguish permanent from transient (for the retry cap): a `3xx` is
+  `:redirect` and a `4xx` `{:bad_status, status}` (both permanent — they won't
+  become a 200 for this URL), a `5xx` is `{:server_error, status}` and a transport
+  failure `:probe_failed` (both transient — the origin may recover). An internal
+  host is caught here as `:internal_target` (the same permanent outcome
+  `Vutuv.PageScreenshot.capture_framed/2` would give) and **never probed**, so this
+  is not an SSRF request.
+  """
+  def ensure_http_ok(url) do
+    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url).host) do
+      {:error, :internal_target}
+    else
+      classify(probe(url))
+    end
+  end
+
+  defp classify({:ok, %Req.Response{status: 200}}), do: :ok
+  defp classify({:ok, %Req.Response{status: s}}) when s in 300..399, do: {:error, :redirect}
+
+  defp classify({:ok, %Req.Response{status: s}}) when s in 400..499,
+    do: {:error, {:bad_status, s}}
+
+  defp classify({:ok, %Req.Response{status: s}}), do: {:error, {:server_error, s}}
+  # Couldn't reach the target to check — transient, retried like a Chromium timeout.
+  defp classify(_error), do: {:error, :probe_failed}
+
+  defp probe(url) do
+    [
+      url: url,
+      receive_timeout: 5_000,
+      connect_options: [timeout: 3_000],
+      retry: false,
+      redirect: false,
+      decode_body: false,
+      headers: [{"user-agent", Http.user_agent()}]
+    ]
+    |> Keyword.merge(Application.get_env(:vutuv, @probe_req_options_key, []))
+    |> Req.get()
   end
 
   defp mark_capturing(%PostScreenshot{} = job) do

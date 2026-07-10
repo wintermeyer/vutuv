@@ -16,12 +16,24 @@ defmodule Vutuv.Posts.ScreenshotsTest do
 
   defp user, do: insert(:activated_user)
 
+  # A URL on *this* installation's own host (derived from the endpoint, not a
+  # literal vutuv.de), used to test the own-host /settings|/admin|/system skip.
+  defp own_url(path), do: "https://#{VutuvWeb.Endpoint.host()}#{path}"
+
   defp url_post(author, body \\ "Look at this: https://example.com/page"),
     do: create_post!(author, %{body: body})
 
   # A capture stub that "succeeds" with a fixed stored filename + size.
   defp ok_capture,
     do: fn _job -> {:ok, %{screenshot: "0123456789ab.avif", width: 400, height: 264}} end
+
+  # Route the HTTP-200 probe's Req request at a stub: a bare status, or a full
+  # `plug: fn conn -> conn end` responder. Paired with the describe's on_exit.
+  defp stub_probe(status) when is_integer(status),
+    do: stub_probe(fn conn -> Plug.Conn.send_resp(conn, status, "") end)
+
+  defp stub_probe(fun) when is_function(fun),
+    do: Application.put_env(:vutuv, :post_screenshot_req_options, plug: fun)
 
   describe "extract_urls/1 + qualifying_url/1 (detection)" do
     test "one bare http(s) URL, surrounding text allowed" do
@@ -54,6 +66,63 @@ defmodule Vutuv.Posts.ScreenshotsTest do
                images: [],
                body: "https://a.test and https://b.test"
              }) == :none
+    end
+
+    test "does not qualify: this installation's own /settings, /admin or /system page" do
+      for path <-
+            ~w(/settings /settings/privacy /admin /admin/screenshots /system /system/members) do
+        body = own_url(path)
+
+        assert Screenshots.qualifying_url(%Posts.Post{images: [], body: body}) == :none,
+               "expected #{body} to be excluded from screenshotting"
+      end
+    end
+
+    test "still qualifies: another site's /admin (only the own host is excluded)" do
+      assert Screenshots.qualifying_url(%Posts.Post{
+               images: [],
+               body: "https://example.com/admin"
+             }) == {:ok, "https://example.com/admin"}
+    end
+
+    test "still qualifies: the own host on an ordinary path" do
+      url = own_url("/some-profile")
+      assert Screenshots.qualifying_url(%Posts.Post{images: [], body: url}) == {:ok, url}
+    end
+  end
+
+  describe "ensure_http_ok/1 (HTTP-200 probe)" do
+    setup do
+      on_exit(fn -> Application.delete_env(:vutuv, :post_screenshot_req_options) end)
+    end
+
+    test "a plain 200 page is allowed through to capture" do
+      stub_probe(200)
+      assert Screenshots.ensure_http_ok("https://example.com/page") == :ok
+    end
+
+    test "a link that HTTP-redirects (3xx) is refused permanently" do
+      stub_probe(fn conn ->
+        conn
+        |> Plug.Conn.put_resp_header("location", "https://example.com/login")
+        |> Plug.Conn.send_resp(302, "")
+      end)
+
+      assert Screenshots.ensure_http_ok("https://example.com/page") == {:error, :redirect}
+    end
+
+    test "a 404 (any 4xx) is refused permanently" do
+      stub_probe(404)
+
+      assert Screenshots.ensure_http_ok("https://example.com/gone") ==
+               {:error, {:bad_status, 404}}
+    end
+
+    test "a 5xx server error is refused but transient (may recover on retry)" do
+      stub_probe(503)
+
+      assert Screenshots.ensure_http_ok("https://example.com/down") ==
+               {:error, {:server_error, 503}}
     end
   end
 
@@ -151,6 +220,33 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       Screenshots.deliver_due(force: true, capture: fn _ -> {:error, :internal_target} end)
 
       assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "failed"
+    end
+
+    test "a non-200 link (redirect, 404) fails permanently at once (no retry)" do
+      for reason <- [:redirect, {:bad_status, 404}] do
+        post = url_post(user())
+        {:ok, _job} = Screenshots.reconcile(post)
+
+        Screenshots.deliver_due(force: true, capture: fn _ -> {:error, reason} end)
+
+        job = Repo.get_by!(PostScreenshot, post_id: post.id)
+        assert job.status == "failed", "expected #{inspect(reason)} to fail permanently"
+        assert job.attempts == 1
+      end
+    end
+
+    test "a 5xx / unreachable link stays pending with backoff (transient)" do
+      for reason <- [{:server_error, 503}, :probe_failed] do
+        post = url_post(user())
+        {:ok, _job} = Screenshots.reconcile(post)
+
+        Screenshots.deliver_due(force: true, capture: fn _ -> {:error, reason} end)
+
+        job = Repo.get_by!(PostScreenshot, post_id: post.id)
+        assert job.status == "pending", "expected #{inspect(reason)} to be retried"
+        assert job.attempts == 1
+        assert job.next_attempt_at
+      end
     end
 
     test "a transient failure at the attempt cap becomes failed" do

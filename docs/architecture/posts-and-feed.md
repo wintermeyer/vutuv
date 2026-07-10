@@ -246,6 +246,26 @@ the save is never slowed. The subsystem is `Vutuv.Posts.Screenshots` with the
 the durable queue and the attachment record**: a `pending`/`capturing`/`failed`
 row is work, a `ready` row carries the stored screenshot.
 
+Two kinds of link are deliberately **not** screenshotted. A link to *this*
+installation's own **`/settings`, `/admin` or `/system`** area is rejected in
+`qualifying_url/1` (a pure, no-network check on the request path, so no row is
+ever created) — the host is derived from `VutuvWeb.Endpoint.host()`, never a
+literal `vutuv.de`, so it holds on any installation, and a shot of those pages
+would only ever be a login redirect or an internal page.
+
+A link that does **not answer a plain HTTP 200** is rejected at capture time by
+`ensure_http_ok/1`, a `redirect: false` GET probe the worker runs before Chromium
+(GET, not HEAD, so a server that 405s HEAD on a real 200 page isn't wrongly
+skipped; an internal host is caught here as `:internal_target` and never probed,
+so the probe is not an SSRF request). Only a `200` is captured — a redirect, a
+404 or any other status just shows the plain link. Reasons split permanent from
+transient for the retry cap: a `3xx` (`:redirect`) and a `4xx` (`{:bad_status,
+status}`) are permanent (they won't become a 200 for this URL), while a `5xx`
+(`{:server_error, status}`) and an unreachable probe (`:probe_failed`) are
+transient and retry with backoff — the durable-queue `permanent_failure?/1`
+decides. The probe's Req options come from the `:post_screenshot_req_options`
+app-env seam (tests inject a `plug:`).
+
 `Vutuv.Posts.create_post/2` / `create_reply/3` / `update_post/2` call
 `Screenshots.reconcile/1`, which enqueues, refreshes (URL changed) or drops
 (no longer qualifies) the job to match the post. `Vutuv.Posts.ScreenshotWorker`
