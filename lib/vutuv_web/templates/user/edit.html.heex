@@ -173,14 +173,32 @@ lands here). --%>
         <%!-- Employment status (issue #870): a job-availability signal shown as
         a badge next to the tagline. Options come from the schema's single
         source (employment_status_options/0); the blank first option is the
-        default "not open to work" state (stored as nil, no badge). --%>
-        <div>
+        default "not open to work" state (stored as nil, no badge). The
+        visibility sub-field (issue #928) is revealed only once a status is
+        chosen, so a member who leaves this at "Not open to work" sees exactly
+        one control (no clutter): the server renders the sub-field hidden when
+        no status is set, and the EmploymentVisibility enhancement in app.js
+        toggles it as the status select changes. With JS off it appears after
+        the first save (the safe "members" default applies until then). --%>
+        <% status_set? = Phoenix.HTML.Form.input_value(f, :employment_status) not in [nil, ""] %>
+        <div data-employment-status-field>
           <%= label f, :employment_status, gettext("Employment status"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <%= select f, :employment_status, employment_status_options(), class: input_class() %>
+          <%= select f, :employment_status, employment_status_options(), class: input_class(), data: [employment_status_select: true] %>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
             {gettext("Shown as a badge next to your tagline so people can see whether you are open to opportunities.")}
           </p>
           <%= error_tag f, :employment_status %>
+
+          <div data-employment-visibility class={["mt-4", !status_set? && "hidden"]}>
+            <%= label f, :employment_status_visibility, gettext("Who can see your availability?"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+            <%= select f, :employment_status_visibility, employment_status_visibility_options(), class: input_class() %>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "\"Signed-in members only\" is the default. It reduces who sees your availability but cannot guarantee it, since anyone can create an account. Choose \"No one\" to keep the status saved without showing it."
+              )}
+            </p>
+            <%= error_tag f, :employment_status_visibility %>
+          </div>
         </div>
         <div class="grid gap-5 sm:grid-cols-2">
           <div>

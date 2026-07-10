@@ -265,6 +265,79 @@ defmodule Vutuv.Accounts.UserTest do
     end
   end
 
+  describe "employment-status visibility (issue #928)" do
+    test "defaults to members" do
+      assert %User{}.employment_status_visibility == "members"
+    end
+
+    test "accepts the three visibility values" do
+      for visibility <- ~w(everyone members hidden) do
+        changeset =
+          User.changeset(%User{}, %{
+            "first_name" => "first_name",
+            "employment_status_visibility" => visibility
+          })
+
+        assert changeset.valid?
+      end
+    end
+
+    test "rejects an unknown visibility value" do
+      changeset =
+        User.changeset(%User{}, %{
+          "first_name" => "first_name",
+          "employment_status_visibility" => "boss_only"
+        })
+
+      refute changeset.valid?
+      assert %{employment_status_visibility: [_]} = errors_on(changeset)
+    end
+
+    test "employment_status_visible?/2 gates on the status being set" do
+      refute User.employment_status_visible?(%User{employment_status: nil}, %User{})
+
+      refute User.employment_status_visible?(
+               %User{employment_status: nil, employment_status_visibility: "everyone"},
+               %User{}
+             )
+    end
+
+    test "\"everyone\" shows to a logged-out viewer and a member alike" do
+      user = %User{employment_status: "looking", employment_status_visibility: "everyone"}
+
+      assert User.employment_status_visible?(user, nil)
+      assert User.employment_status_visible?(user, %User{})
+    end
+
+    test "\"members\" shows only to a signed-in viewer" do
+      user = %User{employment_status: "looking", employment_status_visibility: "members"}
+
+      refute User.employment_status_visible?(user, nil)
+      assert User.employment_status_visible?(user, %User{})
+    end
+
+    test "\"hidden\" shows to nobody, viewer or not" do
+      user = %User{employment_status: "looking", employment_status_visibility: "hidden"}
+
+      refute User.employment_status_visible?(user, nil)
+      refute User.employment_status_visible?(user, %User{})
+    end
+
+    test "a nil/legacy visibility falls back to the members rule" do
+      user = %User{employment_status: "open", employment_status_visibility: nil}
+
+      refute User.employment_status_visible?(user, nil)
+      assert User.employment_status_visible?(user, %User{})
+    end
+
+    test "employment_status_visibility_label/1 translates each choice and nils the rest" do
+      assert User.employment_status_visibility_label("everyone") =~ "Everyone"
+      assert User.employment_status_visibility_label("members") =~ "members"
+      assert User.employment_status_visibility_label("hidden") =~ "No one"
+      assert User.employment_status_visibility_label("bogus") == nil
+    end
+  end
+
   describe "tag list" do
     defp tag_list_changeset(tag_list) do
       User.changeset(%User{}, %{"first_name" => "first_name", "tag_list" => tag_list})

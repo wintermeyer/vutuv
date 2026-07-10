@@ -15,6 +15,9 @@ defmodule VutuvWeb.GettextExtractionAnchors do
     * `Male` / `Female` / `Diverse` — `Vutuv.Accounts.User.gender_gettext/1`
     * `Open to offers` / `Looking for a job` — the employment-status labels
       `Vutuv.Accounts.User.employment_status_label/1` returns (issue #870)
+    * The employment-status visibility labels (`Everyone, including logged-out
+      visitors` / `Signed-in members only` / `No one`) that
+      `Vutuv.Accounts.User.employment_status_visibility_label/1` returns (#928)
     * `Incorrect PIN` / `PIN expired` / `This PIN has already been used.` — the
       PIN check messages in `Vutuv.Accounts`
     * `Connected` — the connection relationship word guarded by
@@ -41,6 +44,11 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Connected"),
       gettext("Open to offers"),
       gettext("Looking for a job"),
+      # The employment-status visibility labels (issue #928),
+      # Vutuv.Accounts.User.employment_status_visibility_label/1
+      gettext("Everyone, including logged-out visitors"),
+      gettext("Signed-in members only"),
+      gettext("No one"),
       gettext("Lines on desktop"),
       gettext("Lines on mobile"),
       gettext("Hyphenate on desktop"),

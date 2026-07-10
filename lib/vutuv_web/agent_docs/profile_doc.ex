@@ -10,6 +10,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   test (`agent_docs_drift_test.exs`) will remind you.
   """
 
+  alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
@@ -78,8 +79,13 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       verified: user.identity_verified?,
       # The job-availability signal (issue #870), the machine value nil /
       # "open" / "looking". The md/txt renderers turn it into the same human
-      # label the profile badge shows; JSON/XML keep the raw value.
-      employment_status: user.employment_status,
+      # label the profile badge shows; JSON/XML keep the raw value. Viewer-
+      # scoped by the visibility setting (issue #928): for the anonymous public
+      # view the extension URLs serve (`viewer` nil) only an "everyone" status
+      # appears; the authenticated /api/2.0 read passes its token's member as
+      # `viewer`, so a "members" status shows there too. nil when not visible.
+      employment_status:
+        if(User.employment_status_visible?(user, viewer), do: user.employment_status),
       headline_markdown: user.headline,
       work_info: work_info,
       current_position: current_position(job),

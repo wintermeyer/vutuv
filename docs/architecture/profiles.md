@@ -19,6 +19,45 @@ inert (the profile ignores it).
 The profile-section pages behave the same way: `/:slug/<section>` IS the public
 view for everyone, and editing happens at `/settings/<section>`.
 
+## Employment-status badge & visibility (issues #870, #928)
+
+Members can advertise a job-availability signal shown as a small pill in the
+profile header, right under their name: `users.employment_status` is `nil` (not
+specified, no badge), `"open"` (employed but open to offers) or `"looking"`
+(actively looking). The wording lives once in
+`Vutuv.Accounts.User.employment_status_label/1` — shared by the pill
+(`VutuvWeb.UI.employment_status_badge/1`), the Basics-form select
+(`UserHelpers.employment_status_options/0`) and the agent docs — so they can
+never disagree.
+
+**Who sees it** is a per-member choice, `users.employment_status_visibility`
+(`"everyone"` / `"members"` / `"hidden"`, NOT NULL default `"members"`):
+
+- `"everyone"` — every visitor, including logged-out ones, crawlers and the
+  agent-format siblings. This is the SEO/GEO story: only an `"everyone"` status
+  reaches the crawlable HTML and the `.md`/`.txt`/`.json`/`.xml` documents.
+- `"members"` (the default) — only a signed-in member. A safe default beats a
+  maximal one, and the Basics-form helper text is honest that it *reduces* but
+  cannot *guarantee* who sees it, since anyone (an employer included) can create
+  an account. The owner, being a signed-in member, sees their own badge.
+- `"hidden"` — nobody, not even the owner on their own profile; the status stays
+  stored and can be re-shared later.
+
+The rule lives in one seam, `User.employment_status_visible?/2` (returns false
+when no status is set, so a call site gates the whole badge row on it). The
+profile template passes the viewer (`@current_user`); `ProfileDoc` passes its
+`:viewer` — `nil` for the anonymous extension URLs (so `"members"`/`"hidden"`
+drop out), the token's member for an authenticated `/api/2.0` read (so a
+`"members"` status shows there). Because the profile is a LiveView, changing the
+setting in `/settings/profile` reflects on an open profile without a reload.
+
+The Basics form reveals the visibility select only once a status is chosen (the
+`EmploymentVisibility` enhancement in `app.js` toggles a server-rendered
+`hidden` on the sub-field), so a member who stays "Not open to work" sees one
+clean control. Deliberately no notice-period / Kündigungsfrist field (#893):
+when someone becomes available is a bilateral matter, not something the platform
+models.
+
 ## Profile job title chooser (issue #833)
 
 The `Title @ Organization` line under a member's name is auto-picked from their

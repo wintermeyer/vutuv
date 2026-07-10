@@ -166,10 +166,12 @@ the resulting ~200px rail width. --%>
         <%!-- Employment-status pill (issue #870): pulled up to sit on its own
         line right below the name, so the job-availability signal ("Looking for
         a job" / "Open to offers") reads immediately under who the member is,
-        rather than trailing the end of a long tagline. The badge renders
-        nothing for the unset default, so the row only appears when a status is
-        set. --%>
-        <div :if={@user.employment_status} class="mt-2">
+        rather than trailing the end of a long tagline. Viewer-scoped by the
+        member's visibility setting (issue #928): "everyone" shows to all incl.
+        logged-out visitors, "members" only to a signed-in viewer (@current_user),
+        "hidden" to nobody. The row only appears when a status is set and visible,
+        so it drops out cleanly otherwise. --%>
+        <div :if={employment_status_visible?(@user, @current_user)} class="mt-2">
           <.employment_status_badge status={@user.employment_status} />
         </div>
         <%!-- Tagline row: the member's headline, user-written Markdown through

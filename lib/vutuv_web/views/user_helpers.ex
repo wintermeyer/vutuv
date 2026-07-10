@@ -43,6 +43,23 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` options for the Basics form's employment-status
+  *visibility* select (issue #928): the three choices derived from the schema's
+  single source (`User.employment_status_visibilities/0` through
+  `User.employment_status_visibility_label/1`), in the everyone → members →
+  hidden order, so the form can never offer a value the changeset would reject.
+  """
+  def employment_status_visibility_options do
+    Enum.map(
+      User.employment_status_visibilities(),
+      &{User.employment_status_visibility_label(&1), &1}
+    )
+  end
+
+  @doc "Whether `user`'s employment-status badge should render for `viewer` (issue #928)."
+  defdelegate employment_status_visible?(user, viewer), to: User
+
+  @doc """
   A member's display name for admin lists: their full name, or `@handle` when
   they have no name set. Shared by the admin user list and the delete flow.
   """

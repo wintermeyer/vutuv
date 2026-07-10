@@ -22,7 +22,10 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         headline: "Builds bridges between humans and agents",
         gender: "female",
         birthdate: ~D[1991-04-23],
-        employment_status: "looking"
+        employment_status: "looking",
+        # Opt the availability badge public so it stays in the anonymous agent
+        # docs the drift test checks (issue #928: only an "everyone" status does).
+        employment_status_visibility: "everyone"
       )
 
     insert(:email,

@@ -21,6 +21,13 @@ defmodule Vutuv.Accounts.User do
     # work" choice back to nil (its default empty_values), and the changeset's
     # validate_inclusion pins it to the set.
     field(:employment_status, :string)
+    # Who may see the employment-status badge (issue #928): "everyone" (all
+    # visitors, incl. logged-out + crawlers/agent formats), "members" (only a
+    # signed-in member — the safe default) or "hidden" (nobody; the status
+    # stays stored but shows to no one). Resolved for a given viewer through
+    # employment_status_visible?/2, the single seam the profile pill and the
+    # agent docs both read. NOT NULL with a "members" default in the DB.
+    field(:employment_status_visibility, :string, default: "members")
     field(:birthdate, :date)
     field(:locale, :string)
     # An admin checked this person's physical ID against their name: this IS that
@@ -229,7 +236,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -240,6 +247,15 @@ defmodule Vutuv.Accounts.User do
   @employment_statuses ~w(open looking)
 
   def employment_statuses, do: @employment_statuses
+
+  # Who may see the employment-status badge (issue #928). The single source of
+  # truth for the changeset's validate_inclusion and, via
+  # employment_status_visibility_options/0, the Basics form's select, so the
+  # form can never offer a value the changeset would reject. "members" is the
+  # default (see the schema/migration).
+  @employment_status_visibilities ~w(everyone members hidden)
+
+  def employment_status_visibilities, do: @employment_status_visibilities
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
@@ -343,6 +359,7 @@ defmodule Vutuv.Accounts.User do
     )
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> validate_inclusion(:employment_status, @employment_statuses)
+    |> validate_inclusion(:employment_status_visibility, @employment_status_visibilities)
     |> nullify_default_birthdate()
     |> validate_birthdate()
     |> revoke_verification_on_identity_change()
@@ -501,6 +518,45 @@ defmodule Vutuv.Accounts.User do
     do: Gettext.gettext(VutuvWeb.Gettext, "Looking for a job")
 
   def employment_status_label(_), do: nil
+
+  @doc """
+  The translated label for a visibility choice (issue #928), for the Basics
+  form's select. "everyone" / "members" / "hidden" — the "members" copy is
+  deliberately honest that it reduces but cannot guarantee who sees the badge
+  (a member's employer can create an account too).
+  """
+  def employment_status_visibility_label("everyone"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Everyone, including logged-out visitors")
+
+  def employment_status_visibility_label("members"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Signed-in members only")
+
+  def employment_status_visibility_label("hidden"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "No one")
+
+  def employment_status_visibility_label(_), do: nil
+
+  @doc """
+  Whether `user`'s employment-status badge is visible to `viewer` (issue #928),
+  the single seam the profile pill and the agent-format `ProfileDoc` both read.
+
+  Returns false when no status is set (so a call site can gate the badge row on
+  this alone). Otherwise the visibility rule decides: "everyone" shows to all
+  (incl. the anonymous public view the extension URLs / crawlers get, `viewer`
+  nil); "members" shows only to a signed-in member (any non-nil `viewer`,
+  the owner included); "hidden" shows to nobody. A nil/legacy visibility falls
+  back to the "members" default.
+  """
+  def employment_status_visible?(user, viewer)
+  def employment_status_visible?(%__MODULE__{employment_status: nil}, _viewer), do: false
+
+  def employment_status_visible?(%__MODULE__{employment_status_visibility: "everyone"}, _),
+    do: true
+
+  def employment_status_visible?(%__MODULE__{employment_status_visibility: "hidden"}, _),
+    do: false
+
+  def employment_status_visible?(%__MODULE__{}, viewer), do: not is_nil(viewer)
 
   def gender_gettext("male"), do: Gettext.gettext(VutuvWeb.Gettext, "Male")
   def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")
