@@ -1108,12 +1108,13 @@ ul.thumbs li .text .url a {
   }
 }
 
-/* Truncated feed/profile post preview: fade the six-line clamp into the card so
-   the cut reads as intentional, then a quiet muted "Read more" sits under it
-   (see VutuvWeb.PostComponents). The fade shows only when the body is really
-   clamped — `.is-clamped` is set by the server (@truncated?) and toggled by the
-   PostPreviewClamp hook when a longer body overflows the clamp — so short posts
-   get no phantom fade. Fades to the card background (white / slate-900 dark). */
+/* Truncated feed/profile post preview: fade the clamp into the card so the cut
+   reads as intentional, then a quiet muted "Read more" sits under it (see
+   VutuvWeb.PostComponents). The fade shows only when the body is really clamped
+   AND not expanded — `.is-clamped` is set by the server (@truncated?) and toggled
+   by the PostPreviewClamp hook when a longer body overflows the clamp; expanding
+   drops it — so short posts get no phantom fade. Fades to the card background
+   (white / slate-900 dark). */
 .post-preview__fade {
   position: absolute;
   left: 0;
@@ -1124,14 +1125,44 @@ ul.thumbs li .text .url a {
   opacity: 0;
   background: linear-gradient(to bottom, transparent, #fff 92%);
 }
-.post-preview.is-clamped .post-preview__fade { opacity: 1; }
-/* "Read more" rides the last faded line on the right, above the fade (z-index),
-   with a short left gradient to the card background so the trailing text blends
-   into the crisp link instead of colliding with it. */
+.post-preview.is-clamped:not(.is-expanded) .post-preview__fade { opacity: 1; }
+
+/* Reader expanded a non-truncated preview: drop the line clamp and show the
+   whole body. Two-class specificity beats `.post-clamp`, so this wins. The
+   height transition itself is JS-driven (app.js measures the clamped and full
+   heights and animates between them); this rule is the resting expanded state. */
+.post-preview.is-expanded .post-clamp {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+/* The "Read more" / "Show less" control. Hidden until the body is actually cut
+   (`.is-clamped`) or the reader has expanded it (`.is-expanded`). Visibility and
+   position are driven ENTIRELY by these wrapper state classes + this component
+   rule — the control carries no `hidden`/`inline-block` display utilities, so the
+   two-competing-display-utilities cascade trap that caused #880 cannot recur. */
 .post-preview__more {
+  display: none;
   z-index: 1;
+}
+/* Collapsed + cut: rides the last faded line on the right, above the fade, with
+   a short left gradient to the card background so the trailing text blends into
+   the crisp control instead of colliding with it. */
+.post-preview.is-clamped:not(.is-expanded) .post-preview__more {
+  display: block;
+  position: absolute;
+  bottom: 0;
+  right: 0;
   padding-left: 2rem;
   background: linear-gradient(to right, transparent, #fff 1.5rem);
+}
+/* Expanded: a calm right-aligned "Show less" on its own line under the full text. */
+.post-preview.is-expanded .post-preview__more {
+  display: block;
+  width: fit-content;
+  margin-top: 0.5rem;
+  margin-left: auto;
 }
 /* Enough left padding that the markers (which sit in it, list-style outside)
    clear the paragraph margin and the list reads as an indented block — 1.4em
@@ -1599,9 +1630,13 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
   .card__empty { color: #64748b; }
-  /* Post preview fade + "Read more" blend: to the dark card background (slate-900). */
+  /* Post preview fade + collapsed "Read more" blend: to the dark card background
+     (slate-900). The control's blend only applies in the collapsed state, matching
+     the light rule, so an expanded "Show less" carries no stray gradient. */
   .post-preview__fade { background: linear-gradient(to bottom, transparent, #0f172a 92%); }
-  .post-preview__more { background: linear-gradient(to right, transparent, #0f172a 1.5rem); }
+  .post-preview.is-clamped:not(.is-expanded) .post-preview__more {
+    background: linear-gradient(to right, transparent, #0f172a 1.5rem);
+  }
   /* Markdown bodies (light values above). */
   .markdown blockquote { border-color: #334155; color: #94a3b8; }
   .markdown code { background: #1e293b; }

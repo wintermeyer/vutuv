@@ -953,20 +953,37 @@ defmodule VutuvWeb.PostComponents do
 
   # The clamped preview body: the Markdown cut by the `.post-clamp` line clamp
   # (the reader's per-breakpoint line budget, default 6 desktop / 8 mobile, fed
-  # in via @body_style), faded at the bottom, with a "Read more" link riding the
-  # last line. Its display is set by mutually
-  # exclusive classes — `inline-block` when the source was truncated server-side
-  # (@truncated?, shown with no JS), else `hidden`. They must never coexist: both
-  # set `display` and Tailwind emits `.inline-block` after `.hidden`, so a link
-  # carrying both shows regardless of `hidden` (the real #880 bug — "Read more" on
-  # every post, every browser). The PostPreviewClamp hook (live pages) /
-  # data-post-preview sweep (dead pages) flips the pair when a longer body overflows
-  # the CSS clamp, which the server can't know because wrapping is width- and
-  # font-dependent; it decides with the standard clamp test (body scrollHeight
-  # exceeds clientHeight). With JS off a css-only clamp keeps the native ellipsis
-  # and no link. Shared by the full-width preview and the 2/3 side-by-side layout,
-  # so the clamp behaves identically whichever column width it lands in; `class`
-  # carries the caller's top margin (mt-2 standalone, none inside the flex row).
+  # in via @body_style), faded at the bottom, with a "Read more" affordance
+  # riding the last line.
+  #
+  # There are two "Read more" affordances, chosen by whether the FULL body is in
+  # the DOM:
+  #
+  #   * NOT source-truncated (@truncated? == false): the whole body is present,
+  #     merely CSS-clamped, so "Read more" is an in-place **toggle button**
+  #     (`data-post-expand`). Clicking it drops the clamp and reveals the rest of
+  #     the text with a short height animation, and flips its own label to
+  #     "Show less" so the reader can fold it back — no navigation, no reload
+  #     (app.js `togglePreviewExpand`). This is the common case and the one the
+  #     screenshot in the request complains about.
+  #   * source-truncated (@truncated? == true): the body was block-cut at
+  #     ~1000 chars server-side (feed DOM stays light), so the rest of the text
+  #     is NOT loaded — you cannot expand what isn't there. "Read more" stays a
+  #     **link** to the post permalink.
+  #
+  # Visibility is driven entirely by the wrapper's `is-clamped` / `is-expanded`
+  # state (component CSS in components.css), NOT by `hidden`/`inline-block`
+  # display utilities on the control — so the #880 two-competing-display-utilities
+  # trap (a link carrying both `hidden` and `inline-block`, the later-emitted
+  # `.inline-block` silently winning) cannot recur. The server sets `is-clamped`
+  # only when it KNOWS the body is cut (@truncated?); a css-only clamp is width-
+  # and font-dependent, so the PostPreviewClamp hook (live pages) /
+  # data-post-preview sweep (dead pages) sets `is-clamped` when the body overflows
+  # (standard test: body scrollHeight exceeds clientHeight). With JS off a css-only
+  # clamp keeps the native ellipsis and no control. Shared by the full-width
+  # preview and the 2/3 side-by-side layout, so the clamp behaves identically
+  # whichever column width it lands in; `class` carries the caller's top margin
+  # (mt-2 standalone, none inside the flex row).
   attr(:body_id, :string, required: true)
   attr(:body_html, :any, required: true)
   attr(:body_style, :string, default: nil)
@@ -991,16 +1008,29 @@ defmodule VutuvWeb.PostComponents do
         >
           {@body_html}
         </div>
-        <%!-- Fades the six-line cut into the card so it reads as intentional;
-        only visible once `is-clamped` is set (server @truncated? + the hook). --%>
+        <%!-- Fades the clamp cut into the card so it reads as intentional; only
+        visible once `is-clamped` is set (server @truncated? + the hook), and
+        cleared again while `is-expanded`. --%>
         <div class="post-preview__fade" aria-hidden="true"></div>
+        <%!-- Whole body present → expand in place; body block-cut → link out. --%>
+        <button
+          :if={not @truncated?}
+          type="button"
+          data-read-more
+          data-post-expand
+          aria-expanded="false"
+          aria-controls={@body_id}
+          data-label-more={gettext("Read more")}
+          data-label-less={gettext("Show less")}
+          class="post-preview__more text-sm font-medium text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Read more")}
+        </button>
         <.link
+          :if={@truncated?}
           href={@permalink}
           data-read-more
-          class={[
-            "post-preview__more absolute bottom-0 right-0 text-sm font-medium text-brand-600 hover:text-brand-700",
-            if(@truncated?, do: "inline-block", else: "hidden")
-          ]}
+          class="post-preview__more text-sm font-medium text-brand-600 hover:text-brand-700"
         >
           {gettext("Read more")}
         </.link>

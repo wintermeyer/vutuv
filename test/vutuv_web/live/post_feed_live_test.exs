@@ -876,16 +876,17 @@ defmodule VutuvWeb.PostFeedLiveTest do
   end
 
   describe "preview truncation" do
-    test "clamps the body to six lines and ships a hidden Read more link (no word count)", %{
+    test "clamps the body and ships an in-place expand button (no word count)", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
       # 40 words, well under the 1000-char source limit, so the source is NOT
-      # cut server-side: the only clipping is the CSS line clamp, which only the
-      # browser can measure. The link is therefore present but hidden until the
-      # PostPreviewClamp JS confirms the body overflows.
+      # cut server-side: the whole body is in the DOM and the only clipping is
+      # the CSS line clamp, which only the browser can measure. "Read more" is
+      # therefore an in-place expand button (the full text is present) that ships
+      # invisible until the PostPreviewClamp JS confirms the body overflows.
       body = String.duplicate("lorem ", 40) |> String.trim()
-      {:ok, post} = Posts.create_post(user, %{body: body})
+      {:ok, _post} = Posts.create_post(user, %{body: body})
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
@@ -895,31 +896,37 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert has_element?(live, "#feed-posts [data-clamp-body].post-clamp")
       refute has_element?(live, "#feed-posts [data-clamp-body][style]")
 
-      # The Read more link points at the permalink and ships hidden (a css-only
-      # clamp) for the JS to reveal only when the body is really cut.
+      # A non-truncated preview expands in place: "Read more" is a toggle
+      # `<button data-post-expand>` (not a link to the permalink), carrying both
+      # labels so the JS can swap "Read more" ⇄ "Show less" without a round-trip.
       assert has_element?(
                live,
-               ~s(#feed-posts a[data-read-more].hidden[href="#{Posts.path(post)}"]),
+               ~s(#feed-posts button[data-read-more][data-post-expand][aria-expanded="false"]),
                "Read more"
              )
 
-      # Issue #880 (the real bug): the hidden link must NOT also carry
-      # `inline-block`. Both set `display` and Tailwind emits `.inline-block`
-      # after `.hidden`, so a link with both computes `display: inline-block` and
-      # showed "Read more" on every post in every browser, defeating `hidden`.
-      refute has_element?(live, "#feed-posts a[data-read-more].inline-block")
+      refute has_element?(live, ~s(#feed-posts a[data-read-more]))
+
+      # The control's visibility is driven entirely by the wrapper's
+      # `is-clamped` / `is-expanded` state (component CSS), not by competing
+      # `hidden`/`inline-block` display utilities on the element — so the #880
+      # two-display-utilities trap cannot recur. A css-only clamp is unknown to
+      # the server, so the wrapper is NOT `is-clamped` until the JS confirms it.
+      refute has_element?(live, "#feed-posts .post-preview.is-clamped")
 
       # Issue #880: the word-count hint is gone — it was meaningless and even
       # rendered on posts short enough to be fully visible.
       refute render(live) =~ "words total"
     end
 
-    test "a source-truncated post shows the Read more link with no JS and no word count", %{
+    test "a source-truncated post keeps a Read more LINK to the full post (no JS)", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
       # 250 words / ~1250 chars: over the source limit, so the preview is cut
-      # server-side and the link must be visible without waiting for JS.
+      # server-side — the rest of the body is NOT in the DOM, so "Read more"
+      # stays a navigation link to the permalink (you cannot expand text that
+      # was never loaded), visible from the server with no JS.
       body = String.duplicate("word ", 250) |> String.trim()
       {:ok, post} = Posts.create_post(user, %{body: body})
 
@@ -931,30 +938,26 @@ defmodule VutuvWeb.PostFeedLiveTest do
                "Read more"
              )
 
-      # Visible from the server via `inline-block`, and never `hidden` — the two
-      # are mutually exclusive so `hidden` can actually hide (issue #880).
-      assert has_element?(live, "#feed-posts a[data-read-more].inline-block")
-      refute has_element?(live, "#feed-posts a[data-read-more].hidden")
+      # Not the in-place toggle button, and the server marks the wrapper cut
+      # (`is-clamped`) so the link + fade show with no JS.
+      refute has_element?(live, "#feed-posts button[data-post-expand]")
+      assert has_element?(live, "#feed-posts .post-preview.is-clamped")
       refute render(live) =~ "words total"
     end
 
-    test "a one-line post ships a hidden Read more link (JS decides) and no word count", %{
+    test "a one-line post ships an invisible expand button (JS decides) and no word count", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
-      {:ok, post} = Posts.create_post(user, %{body: "just a line"})
+      {:ok, _post} = Posts.create_post(user, %{body: "just a line"})
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
-      # The link is present (JS decides visibility) but ships hidden, and the
-      # short body is never source-truncated.
-      assert has_element?(
-               live,
-               ~s(#feed-posts a[data-read-more].hidden[href="#{Posts.path(post)}"])
-             )
-
-      # Issue #880: hidden must win — no competing `inline-block` on the link.
-      refute has_element?(live, "#feed-posts a[data-read-more].inline-block")
+      # The expand button is present (JS decides visibility) but the short body
+      # is never source-truncated, so the wrapper is not `is-clamped` and the
+      # control stays hidden until the JS measures an overflow (it won't here).
+      assert has_element?(live, "#feed-posts button[data-read-more][data-post-expand]")
+      refute has_element?(live, "#feed-posts .post-preview.is-clamped")
 
       refute render(live) =~ "words total"
     end

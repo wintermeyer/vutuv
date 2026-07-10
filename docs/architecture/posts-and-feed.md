@@ -58,11 +58,11 @@ position on the next reload).
 
 **Preview truncation.** A timeline card (`mode={:preview}`) clamps the body with
 the `.post-clamp` CSS class and, when there is more, shows a plain "Read more"
-link to the permalink (no length metric — issue #880 dropped the word count as
-meaningless once the reader has the preview). The line budget is a **per-reader,
-per-breakpoint preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the
-language & maps settings page): desktop and mobile independently, default 6 lines
-on desktop / 8 on a phone. The reader's values ride onto the post body as the
+control (no length metric — issue #880 dropped the word count as meaningless once
+the reader has the preview). The line budget is a **per-reader, per-breakpoint
+preference** (`Vutuv.Accounts.User.post_prefs/1`, set on the language & maps
+settings page): desktop and mobile independently, default 6 lines on desktop / 8
+on a phone. The reader's values ride onto the post body as the
 `--post-clamp-desktop` / `--post-clamp-mobile` custom properties
 (`VutuvWeb.PostComponents.post_body_style/1`, which stays `nil` for a
 default/logged-out reader so their DOM carries no inline style and the CSS
@@ -73,23 +73,39 @@ breakpoint (`-webkit-line-clamp: none`); when the reader disabled truncation on
 character cap, no clamp, no "Read more"). Hyphenation of the post body is the same
 kind of per-reader, per-breakpoint preference (`--post-hyphens-*`; the CSS
 fallbacks reproduce the historical default of off on desktop, on for the narrow
-phone column). Very long bodies are otherwise cut server-side at a block boundary
-(`VutuvWeb.Markdown.render_preview/2`, ~1000 chars) — that case reveals the link
-with no JS. A longer body that merely
-overflows the CSS clamp can't be detected on the server (wrapping is
-width/font-dependent), so the link ships hidden and the `PostPreviewClamp` JS
-hook (a `[data-post-preview]` sweep on classic pages, re-run on resize and
-`document.fonts.ready`) reveals it — but only when the clamp actually hides more
-than ~one line. It measures that by reading the clamped `clientHeight` (the
-painted height), then dropping the node to `display: block` for one synchronous
-read of its natural `scrollHeight`; the difference is the amount hidden. It does
-**not** read `scrollHeight` off the clamped node, because `.post-clamp` renders
-as `display: -webkit-box`, whose `scrollHeight` WebKit/Safari over-reports on a
-fully-visible post — that over-report sprouted the false "Read more" of issue
-#880, and it clears any pixel threshold, so the earlier threshold-only fix did
-not hold on Safari; measuring the natural block height sidesteps the buggy number
-entirely. With JS off such a card keeps the native line-clamp ellipsis. The
-permalink (`mode={:full}`) never clamps.
+phone column).
+
+The "Read more" control comes in **two shapes**, chosen by whether the whole body
+is in the DOM:
+
+- **Not source-truncated** (`@truncated? == false`): the whole body is present and
+  merely CSS-clamped, so "Read more" is an in-place **toggle `<button
+  data-post-expand>`**. Clicking it drops the clamp and reveals the rest of the
+  text with a short height animation (`togglePreviewExpand` in `app.js` measures the
+  clamped and full heights around the class flip and transitions between them,
+  honoring `prefers-reduced-motion`), and flips its own label to **"Show less"**
+  (`data-label-more` / `data-label-less`) so the reader can fold it back — no
+  navigation, no reload. This is the common case.
+- **Source-truncated** (`@truncated? == true`): very long bodies are cut server-side
+  at a block boundary (`VutuvWeb.Markdown.render_preview/2`, ~1000 chars, to keep the
+  feed DOM light), so the rest of the text was never loaded — "Read more" stays a
+  plain **link** to the permalink (you cannot expand text that isn't there).
+
+Visibility and position of either control are driven **entirely by the wrapper's
+`is-clamped` / `is-expanded` state classes + the `.post-preview__more` component
+CSS** — the control carries **no** `hidden` / `inline-block` display utilities, so
+the "two competing `display` utilities, the later-emitted one silently wins"
+cascade trap that caused the false "Read more" on every post (issue #880) cannot
+recur. The server sets `is-clamped` only when it **knows** the body is cut
+(`@truncated?`), so a source-truncated link shows with no JS. A longer body that
+merely overflows the CSS clamp can't be detected on the server (wrapping is
+width/font-dependent), so the `PostPreviewClamp` JS hook (a `[data-post-preview]`
+sweep on classic pages, re-run on resize and `document.fonts.ready`) sets
+`is-clamped` when the clamped node hides content — the standard test, body
+`scrollHeight` exceeds `clientHeight` (+1 for rounding) — and it skips an
+already-`is-expanded` preview so a later resize/font sweep can't re-clamp it out
+from under the reader. With JS off such a card keeps the native line-clamp ellipsis
+and no control. The permalink (`mode={:full}`) never clamps.
 
 The profile page and the archive show the author's timeline (posts + reposts).
 

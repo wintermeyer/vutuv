@@ -40,34 +40,92 @@ onReady(() =>
   document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
 )
 
-// Feed/profile post previews clamp the body to six lines. Reveal the "Read more"
-// link only when the body is really cut: either the source was truncated
-// server-side (data-server-truncated, shown with no JS) or a longer body still
-// overflows the six-line CSS clamp — which the server can't know, since wrapping
-// is width- and font-dependent. A clamped element hides content exactly when its
-// full content height (scrollHeight) is taller than its painted box
+// Feed/profile post previews clamp the body to a few lines. Reveal the "Read
+// more" affordance only when the body is really cut: either the source was
+// truncated server-side (data-server-truncated, shown with no JS) or a longer
+// body still overflows the CSS clamp — which the server can't know, since
+// wrapping is width- and font-dependent. A clamped element hides content exactly
+// when its full content height (scrollHeight) is taller than its painted box
 // (clientHeight); the +1 absorbs sub-pixel rounding.
 //
-// The link ships hidden and this reveals it, toggling BOTH `hidden` and
-// `inline-block`. Both are `display` utilities and `.inline-block` is emitted
-// after `.hidden` in the Tailwind bundle, so a link carrying both computes
-// `display: inline-block` and shows regardless of `hidden`. That cascade
-// conflict — not any measurement quirk — is what made "Read more" appear on
-// every post, short or long, in every browser (issue #880). Keeping the two
-// classes mutually exclusive is the actual fix.
+// Both the fade and the control are shown/hidden purely by this `is-clamped`
+// class on the WRAPPER (see .post-preview__more / .post-preview__fade in
+// components.css) — the control carries no competing `hidden`/`inline-block`
+// display utilities, so the cascade conflict that made "Read more" appear on
+// every post (issue #880) is structurally gone. Once the reader has expanded a
+// preview (`is-expanded`) we leave it alone: a later resize/font sweep must not
+// re-clamp it out from under them.
 function revealPreviewClamp(el) {
+  if (el.classList.contains("is-expanded")) return
   const body = el.querySelector("[data-clamp-body]")
-  const link = el.querySelector("[data-read-more]")
-  if (!body || !link) return
+  if (!body) return
   const clipped =
     el.dataset.serverTruncated === "true" ||
     body.scrollHeight > body.clientHeight + 1
-  link.classList.toggle("hidden", !clipped)
-  link.classList.toggle("inline-block", clipped)
-  // Drive the bottom fade too (see .post-preview__fade): show it only when the
-  // body is really clamped, so short posts don't get a phantom fade.
   el.classList.toggle("is-clamped", clipped)
 }
+
+// Expand / collapse a non-truncated preview in place (the whole body is already
+// in the DOM — only source-truncated previews link out to the permalink). We
+// animate the body's height between its clamped and full heights: measure both
+// around the class flip (getBoundingClientRect forces a sync reflow), then
+// transition from start to end and clear the inline overrides once it settles.
+// prefers-reduced-motion skips the animation and just flips the state.
+function togglePreviewExpand(preview, btn) {
+  const body = preview.querySelector("[data-clamp-body]")
+  if (!body) return
+
+  const expanding = !preview.classList.contains("is-expanded")
+
+  // Retarget the button's label + aria to the state we're moving to.
+  btn.setAttribute("aria-expanded", expanding ? "true" : "false")
+  const more = btn.dataset.labelMore
+  const less = btn.dataset.labelLess
+  if (more && less) btn.textContent = expanding ? less : more
+
+  const flip = () => {
+    preview.classList.toggle("is-expanded", expanding)
+    preview.classList.toggle("is-clamped", !expanding)
+  }
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    flip()
+    return
+  }
+
+  const startHeight = body.getBoundingClientRect().height
+  flip()
+  const endHeight = body.getBoundingClientRect().height
+
+  // Nothing to animate (heights equal) — leave the resting state as flip() set it.
+  if (Math.abs(endHeight - startHeight) < 1) return
+
+  body.style.overflow = "hidden"
+  body.style.height = `${startHeight}px`
+  void body.offsetHeight // force a reflow so the start height paints first
+  body.style.transition = "height 250ms ease"
+  body.style.height = `${endHeight}px`
+
+  const cleanup = () => {
+    body.style.transition = ""
+    body.style.height = ""
+    body.style.overflow = ""
+    body.removeEventListener("transitionend", cleanup)
+  }
+  body.addEventListener("transitionend", cleanup)
+  // Backstop in case transitionend never fires (e.g. the tab was hidden).
+  setTimeout(cleanup, 400)
+}
+
+// One delegated listener drives every expand button — live or dead page, and it
+// survives LiveView stream re-renders (the button is never re-bound).
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-post-expand]")
+  if (!btn) return
+  e.preventDefault()
+  const preview = btn.closest("[data-post-preview]")
+  if (preview) togglePreviewExpand(preview, btn)
+})
 
 // Sweep every preview on the page (classic pages, and the initial static render
 // of live pages). The PostPreviewClamp hook re-checks each one on stream patches;

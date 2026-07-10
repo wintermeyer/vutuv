@@ -2209,6 +2209,11 @@ msgstr ""
 msgid "Read more"
 msgstr ""
 
+#: lib/vutuv_web/components/post_components.ex:1000
+#, elixir-autogen, elixir-format
+msgid "Show less"
+msgstr ""
+
 #: lib/vutuv_web/live/post_live/composer.ex:600
 #: lib/vutuv_web/templates/connection/index.html.heex:40
 #: lib/vutuv_web/views/settings_html.ex:193
