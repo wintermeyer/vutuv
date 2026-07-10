@@ -42,6 +42,16 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
 
   @accepted_providers ~w(Facebook Twitter Mastodon Bluesky Instagram Youtube Snapchat LinkedIn XING GitHub GitLab Codeberg)
 
+  # The code forges whose profile URL is a bare host plus a single-segment
+  # username (github.com/name), so any deeper path a member pastes is not a
+  # profile the bare-handle store can represent — see validate_code_forge_path/1
+  # and issue #923. The host is used to strip a pasted URL down to its path.
+  @code_forge_hosts %{
+    "GitHub" => "github.com",
+    "GitLab" => "gitlab.com",
+    "Codeberg" => "codeberg.org"
+  }
+
   @doc """
   The providers `changeset/2` accepts. The form's provider dropdown renders
   from this list so the two can never drift apart.
@@ -97,6 +107,10 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
     |> cast(params, @required_fields ++ @optional_fields)
     |> validate_required([:provider, :value])
     |> unique_constraint(:value_provider, message: "Someone has already claimed this account")
+    # Run on the RAW input, before normalize_value/1 collapses a pasted URL to
+    # its last path segment — that collapse is exactly what silently mangles a
+    # code forge's reserved/deep path (issue #923), so it has to be caught first.
+    |> validate_code_forge_path()
     |> normalize_value()
     # varchar(255) column: an overlong handle must fail as a changeset error,
     # never as a raised Postgres 22001 (which 500ed the LinkedIn import). Check
@@ -126,6 +140,55 @@ defmodule Vutuv.Profiles.SocialMediaAccount do
       changeset
     end
   end
+
+  # A code forge's profile URL is host + a single-segment username
+  # (gitlab.com/name). Anything deeper — GitLab's reserved numeric-ID namespace
+  # gitlab.com/-/u/7984176, or a pasted repository/sub-page URL — cannot be
+  # stored as a bare handle: normalize_value/1 would keep only the last segment
+  # and url/1 rebuild the wrong link (issue #923). Reject it here, on the raw
+  # input, and tell the member to use their plain username instead.
+  defp validate_code_forge_path(changeset) do
+    provider = get_field(changeset, :provider)
+    value = get_change(changeset, :value)
+
+    if is_map_key(@code_forge_hosts, provider) and is_binary(value) and
+         String.contains?(forge_path(value, provider), "/") do
+      add_error(changeset, :value, code_forge_message(provider))
+    else
+      changeset
+    end
+  end
+
+  # The path portion of a code-forge value: strip an optional scheme, "www.",
+  # the forge host, a leading "@" and a trailing slash. A bare username is left
+  # with no "/"; a deeper path keeps its inner slashes for the caller to reject.
+  defp forge_path(value, provider) do
+    host = Map.fetch!(@code_forge_hosts, provider)
+
+    value
+    |> String.trim()
+    |> String.trim_leading("@")
+    |> String.replace(~r{^https?://}i, "")
+    |> String.replace(~r/^www\./i, "")
+    |> strip_forge_host(host)
+    |> String.trim_trailing("/")
+  end
+
+  defp strip_forge_host(value, host) do
+    case String.split(value, "/", parts: 2) do
+      [first, rest] -> if String.downcase(first) == host, do: rest, else: value
+      _ -> value
+    end
+  end
+
+  defp code_forge_message("GitLab"),
+    do: "Enter your GitLab username, e.g. gitlab.com/username (not a /-/u/ ID link)"
+
+  defp code_forge_message("GitHub"),
+    do: "Enter your GitHub username, not a full URL with extra path segments"
+
+  defp code_forge_message("Codeberg"),
+    do: "Enter your Codeberg username, not a full URL with extra path segments"
 
   # Reduce whatever the member typed (a bare handle, a leading "@", a pasted
   # profile URL) down to the stored handle the provider's URL scheme needs.

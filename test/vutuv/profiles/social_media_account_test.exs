@@ -202,6 +202,81 @@ defmodule Vutuv.Profiles.SocialMediaAccountTest do
     end
   end
 
+  # A code-forge profile is always host + a single-segment username
+  # (gitlab.com/name). GitLab additionally serves a numeric-ID profile under its
+  # reserved "-" namespace (gitlab.com/-/u/7984176) — a form the bare-handle
+  # store cannot represent: parse_value/1 keeps only the last path segment
+  # ("7984176") and url/1 rebuilds the wrong link (gitlab.com/7984176). Rather
+  # than store a silently-broken link, reject any code-forge value whose path
+  # carries more than the single username segment. See issue #923.
+  describe "code-forge reserved / multi-segment paths (#923)" do
+    test "rejects GitLab's numeric /-/u/ ID profile URL" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitLab",
+          value: "https://gitlab.com/-/u/7984176"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+
+    test "rejects the bare -/u/<id> path a member might paste" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitLab",
+          value: "-/u/7984176"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+
+    test "rejects a GitHub URL that carries a repository path" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitHub",
+          value: "https://github.com/wintermeyer/vutuv"
+        })
+
+      refute changeset.valid?
+      assert changeset.errors[:value]
+    end
+
+    test "still accepts a plain GitLab username" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitLab",
+          value: "wintermeyer"
+        })
+
+      assert changeset.valid?
+      assert value_for(%{provider: "GitLab", value: "wintermeyer"}) == "wintermeyer"
+    end
+
+    test "still accepts a pasted GitLab profile URL" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "GitLab",
+          value: "https://gitlab.com/wintermeyer"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :value) == "wintermeyer"
+    end
+
+    test "still accepts a Codeberg profile URL with a trailing slash" do
+      changeset =
+        SocialMediaAccount.changeset(%SocialMediaAccount{}, %{
+          provider: "Codeberg",
+          value: "https://codeberg.org/alice/"
+        })
+
+      assert changeset.valid?
+      assert Ecto.Changeset.get_field(changeset, :value) == "alice"
+    end
+  end
+
   describe "url/1" do
     test "builds the profile URL for GitLab" do
       account = %SocialMediaAccount{provider: "GitLab", value: "wintermeyer"}
