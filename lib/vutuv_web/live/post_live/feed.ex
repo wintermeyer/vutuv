@@ -621,9 +621,10 @@ defmodule VutuvWeb.PostLive.Feed do
           <%!-- "Suggested posts": a random handful of recent public posts by
           same-language members the viewer doesn't follow — discovery beyond
           the follow graph, like "Who to follow" but for content. Compact rows
-          (avatar + name + the Markdown-formatted body clamped at six lines),
-          not full post cards — an action bar and gallery don't fit a rail. The
-          reload button draws 5 fresh ones with no page reload. --%>
+          (avatar + name + the Markdown-formatted, hyphenated body clamped at
+          six lines), each a stretched link to the post so a click anywhere
+          opens it — not full post cards, an action bar and gallery don't fit a
+          rail. The reload button draws 5 fresh ones with no page reload. --%>
           <.card :if={@discover_posts != []} id="discover-posts">
             <div class="mb-4 flex items-center justify-between gap-3">
               <.section_title>{gettext("Suggested posts")}</.section_title>
@@ -655,29 +656,42 @@ defmodule VutuvWeb.PostLive.Feed do
             <ul class="divide-y divide-slate-100 dark:divide-slate-800">
               <li
                 :for={post <- @discover_posts}
-                class="flex items-start gap-3 py-3 first:pt-0 last:pb-0"
+                class="relative flex items-start gap-3 py-3 first:pt-0 last:pb-0"
               >
+                <%!-- Stretched link: a click anywhere on the row that is not
+                itself a link (the body text, the avatar, the gaps) opens the
+                post. The author-name link and any inline @mention/#hashtag/URL
+                links in the body sit above it (relative + z-20) so they keep
+                their own targets. --%>
+                <.link
+                  href={~p"/#{post.user}/posts/#{post.id}"}
+                  aria-label={gettext("View post")}
+                  class="absolute inset-0 z-10"
+                >
+                </.link>
                 <.avatar user={post.user} size="sm" shape="circle" presence />
                 <div class="min-w-0">
                   <p class="mb-0 text-sm">
                     <.link
                       href={~p"/#{post.user}"}
-                      class="font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
+                      class="relative z-20 font-medium text-slate-800 hover:text-brand-700 dark:text-slate-100"
                     >
                       {UserHelpers.full_name(post.user)}
                     </.link>
-                    <.link
-                      href={~p"/#{post.user}/posts/#{post.id}"}
-                      class="text-slate-600 hover:text-brand-700 dark:text-slate-400"
-                    >
+                    <span class="text-slate-600 dark:text-slate-400">
                       · <.post_time at={post.inserted_at} />
-                    </.link>
+                    </span>
                   </p>
-                  <%!-- The body is formatted Markdown (links, mentions, bold),
-                  so it must be a plain block, not wrapped in a nav link — the
-                  permalink lives on the timestamp above, as on a real post
-                  card. The six-line CSS clamp does the visible truncation. --%>
-                  <div class="markdown markdown--post mt-1 line-clamp-6 text-sm text-slate-700 dark:text-slate-300">
+                  <%!-- Formatted like a normal post preview (Markdown, six-line
+                  clamp). The browser hyphenates the narrow rail column (long
+                  German compounds) via the `.markdown--post` hyphens seam, set
+                  to `auto` on desktop too. Inline links float above the
+                  stretched link (`[&_a]:relative` + z-20); the plain text falls
+                  through to it, so clicking it opens the post. --%>
+                  <div
+                    class="markdown markdown--post mt-1 line-clamp-6 text-sm text-slate-700 dark:text-slate-300 [&_a]:relative [&_a]:z-20"
+                    style="--post-hyphens-desktop:auto;--post-hyphens-mobile:auto"
+                  >
                     {discover_body(post.body)}
                   </div>
                 </div>

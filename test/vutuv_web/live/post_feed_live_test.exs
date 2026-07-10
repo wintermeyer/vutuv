@@ -628,10 +628,37 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute has_element?(live, "#discover-posts .line-clamp-4")
       refute has_element?(live, "#discover-posts .truncate")
 
-      # … and the permalink to the post is still reachable (on the timestamp).
+      # … and the permalink to the post is still reachable (the stretched link).
       assert has_element?(
                live,
                ~s(#discover-posts a[href="/#{author.username}/posts/#{post.id}"])
+             )
+    end
+
+    test "the rail hyphenates and a click on the body opens the post", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      author = other_user(first_name: "Lang", last_name: "Wort")
+
+      {:ok, post} =
+        Posts.create_post(author, %{
+          body: "Eine Digitalisierungsstrategie für unternehmenseigene Softwareentwicklung."
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      # Browser hyphenation is switched on for the narrow rail column via the
+      # `.markdown--post` seam (auto on desktop too, not just the phone default),
+      # so long German compounds wrap at syllables instead of leaving big gaps.
+      assert has_element?(
+               live,
+               ~s(#discover-posts .markdown--post[style*="--post-hyphens-desktop:auto"])
+             )
+
+      # The whole row is a stretched link to the post, so a click on the body
+      # text (not only the timestamp) opens the corresponding posting.
+      assert has_element?(
+               live,
+               ~s(#discover-posts a.absolute.inset-0[href="/#{author.username}/posts/#{post.id}"])
              )
     end
 
