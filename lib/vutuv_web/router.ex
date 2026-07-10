@@ -195,6 +195,18 @@ defmodule VutuvWeb.Router do
     # before the /:slug catch-all ("feed" is a ReservedSlug). Named
     # NewsfeedController so it doesn't collide with FeedController (the RSS one).
     get("/feed", NewsfeedController, :index)
+
+    # Verified company pages (issue #929). Controllers (not bare `live`) so
+    # /companies and /companies/:slug negotiate their agent-format siblings
+    # (.md/.txt/.json/.xml, VutuvWeb.AgentDocs) and live_render the LiveView for
+    # HTML — the profile/newsfeed pattern. Literal routes before the /:slug
+    # catch-all ("companies" is a ReservedSlug); /companies/new (claim wizard)
+    # precedes /companies/:slug, /companies/:slug/edit is the owner edit form.
+    get("/companies", CompanyController, :index)
+    get("/companies/new", CompanyController, :new)
+    get("/companies/:slug", CompanyController, :show)
+    get("/companies/:slug/edit", CompanyController, :edit)
+
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
 
@@ -254,6 +266,10 @@ defmodule VutuvWeb.Router do
     # the app so the post's audience guards its images too. `:version` is
     # e.g. "feed.avif"; nginx only streams what this controller approves.
     get("/post_images/:token/:version", PostImageController, :show)
+
+    # The authorizing company-image proxy (logo/cover + description images),
+    # like /post_images: a pending or frozen page's images are owner/admin-only.
+    get("/company_images/:token/:version", CompanyImageController, :show)
 
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).

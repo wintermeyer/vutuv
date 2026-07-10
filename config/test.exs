@@ -59,6 +59,13 @@ config :vutuv, :refresh_popular_users, false
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
 config :vutuv, :fetch_code_stats, false
+# Company domain re-check GenServer would touch the sandbox from outside; tests
+# call Vutuv.Companies.recheck_domain/1 directly. DNS / well-known verification
+# is off too, so the suite never hits real DNS / HTTP; the domain tests flip
+# :verify_company_domains on per-test and stub via :companies_dns_resolver /
+# :companies_req_options.
+config :vutuv, :recheck_company_domains, false
+config :vutuv, :verify_company_domains, false
 
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true

@@ -1,0 +1,128 @@
+defmodule VutuvWeb.CompanyController do
+  @moduledoc """
+  Verified company pages (issue #929). The HTML directory (`/companies`) and
+  page (`/companies/:slug`) are the LiveViews `VutuvWeb.CompanyLive.Index` /
+  `Show`, `live_render`ed here so the controller stays the entry point and can
+  negotiate the **agent-format siblings** (`.md/.txt/.json/.xml`,
+  `VutuvWeb.AgentDocs.CompanyDoc`) — the profile / newsfeed pattern. The claim
+  wizard (`/companies/new`) and the owner edit form (`/companies/:slug/edit`)
+  are the `New` / `Edit` LiveViews, gated on login / ownership here.
+
+  Only an active, non-frozen, `geo?` company serves agent formats; every other
+  state 404s them (a `.md` URL must never serve HTML), exactly like a hidden
+  profile.
+  """
+
+  use VutuvWeb, :controller
+
+  import Phoenix.LiveView.Controller, only: [live_render: 3]
+
+  alias Vutuv.Companies
+  alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.CompanyDoc
+  alias VutuvWeb.ControllerHelpers
+
+  def index(conn, _params) do
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        session =
+          base_session(conn)
+          |> Map.put("q", conn.params["q"])
+          |> Map.put("page", conn.params["page"])
+
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.CompanyLive.Index, session: session)
+
+      format ->
+        page = Companies.directory_page()
+        AgentDocs.send_doc(conn, format, CompanyDoc.build_index(page.entries, page.total))
+    end
+  end
+
+  def show(conn, %{"slug" => slug}) do
+    case Companies.fetch_visible_company(slug, conn.assigns[:current_user]) do
+      {:error, :not_found} ->
+        ControllerHelpers.render_error(conn, 404)
+
+      {:ok, company} ->
+        case AgentDocs.negotiate(conn) do
+          :html ->
+            conn
+            |> AgentDocs.put_html_alternates()
+            |> put_layout(html: false)
+            |> live_render(VutuvWeb.CompanyLive.Show,
+              session: Map.put(base_session(conn), "company_id", company.id)
+            )
+
+          format ->
+            send_company_doc(conn, format, company)
+        end
+    end
+  end
+
+  def new(conn, _params) do
+    case conn.assigns[:current_user] do
+      %{email_confirmed?: true} ->
+        conn
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.CompanyLive.New, session: base_session(conn))
+
+      %{} ->
+        conn
+        |> put_flash(
+          :error,
+          gettext("Please confirm your email address before claiming a company page.")
+        )
+        |> redirect(to: ~p"/companies")
+
+      nil ->
+        conn
+        |> put_flash(:error, gettext("Please log in to claim a company page."))
+        |> redirect(to: ~p"/login")
+    end
+  end
+
+  def edit(conn, %{"slug" => slug}) do
+    viewer = conn.assigns[:current_user]
+    company = viewer && Companies.get_company_by_slug(slug)
+
+    cond do
+      is_nil(viewer) ->
+        conn
+        |> put_flash(:error, gettext("Please log in first."))
+        |> redirect(to: ~p"/login")
+
+      company && Companies.can_manage?(company, viewer) ->
+        conn
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.CompanyLive.Edit,
+          session: Map.put(base_session(conn), "company_id", company.id)
+        )
+
+      true ->
+        ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  # The agent formats render the anonymous public view, so they 404 for any
+  # page that is not active + geo? (pending / frozen / archived / geo? off) no
+  # matter who asks — cache-safe, like a hidden profile's siblings.
+  defp send_company_doc(conn, format, company) do
+    if Companies.agent_visible?(company) do
+      domains = Companies.verified_domains(company)
+      AgentDocs.send_doc(conn, format, CompanyDoc.build_show(company, domains))
+    else
+      ControllerHelpers.render_error(conn, 404)
+    end
+  end
+
+  defp base_session(conn) do
+    %{
+      "user_id" => conn.assigns[:current_user_id],
+      "locale" => conn.assigns[:locale],
+      "request_path" => conn.request_path
+    }
+  end
+end

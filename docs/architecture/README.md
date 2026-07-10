@@ -18,6 +18,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
 | [invitations.md](invitations.md) | invite a non-member: hashed once-per-address record, prefilled sign-up link, per-inviter daily cap, auto-follow |
 | [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
+| [companies.md](companies.md) | verified company pages at `/companies`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |

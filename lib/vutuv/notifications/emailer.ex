@@ -621,6 +621,42 @@ defmodule Vutuv.Notifications.Emailer do
     })
   end
 
+  ## Company pages (see Vutuv.Companies)
+
+  @doc "Operator notice: a company page was newly verified (a human reviews each one)."
+  def company_verified_notice(company, domain) do
+    company_operator_notice(
+      :verified,
+      company,
+      domain,
+      "vutuv: Firmenseite verifiziert - #{company.name}"
+    )
+  end
+
+  @doc "Operator notice: a company lost its last verified domain and fell back to pending."
+  def company_unverified_notice(company, domain) do
+    company_operator_notice(
+      :unverified,
+      company,
+      domain,
+      "vutuv: Firmenseite nicht mehr verifiziert - #{company.name}"
+    )
+  end
+
+  # Fixed German recipient and template, like the other operator notices.
+  defp company_operator_notice(kind, company, domain, subject_line) do
+    base_email()
+    |> to(operator_recipient())
+    |> subject(subject_line)
+    |> render_bodies("company_operator_notice", "de", %{
+      kind: kind,
+      company: company,
+      domain: domain,
+      page_url: "#{public_url()}companies/#{company.slug}",
+      url: public_url()
+    })
+  end
+
   ## Moderation (see Vutuv.Moderation.Notifier, the only caller)
 
   @doc "Owner notice: content frozen, please delete / edit / dispute within 72h."

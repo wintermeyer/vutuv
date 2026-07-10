@@ -128,6 +128,14 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
+  # Company-page domain proof. VERIFY_COMPANY_DOMAINS=false disables the DNS TXT
+  # and well-known-file methods (and their periodic re-check), so no new company
+  # page can be verified — for installations that must not call out (intranets).
+  # Existing verified pages keep working.
+  if System.get_env("VERIFY_COMPANY_DOMAINS") == "false" do
+    config :vutuv, :verify_company_domains, false
+  end
+
   # The per-member daily cap on outbound invitations (see Vutuv.Invitations).
   if invitation_daily_cap = System.get_env("INVITATION_DAILY_CAP") do
     config :vutuv, :invitation_daily_cap, String.to_integer(invitation_daily_cap)

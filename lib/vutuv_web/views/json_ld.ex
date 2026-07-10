@@ -23,6 +23,7 @@ defmodule VutuvWeb.JsonLd do
 
   import Phoenix.HTML, only: [raw: 1]
 
+  alias Vutuv.Companies.CompanyImage
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.SocialMediaAccount
@@ -48,6 +49,49 @@ defmodule VutuvWeb.JsonLd do
       "name" => "vutuv",
       "url" => VutuvWeb.Endpoint.url()
     }
+  end
+
+  @doc """
+  A verified company page as schema.org Organization (issue #929), from the show
+  page's assigns. Gate at the call site: only emit for an indexable page.
+  """
+  def organization_page(company, verified_domains) do
+    url = AgentDocs.abs_url("/companies/#{company.slug}")
+
+    compact(%{
+      "@context" => "https://schema.org",
+      "@type" => "Organization",
+      "@id" => url,
+      "name" => company.name,
+      "url" => url,
+      "logo" => company_logo_url(company),
+      "sameAs" => organization_same_as(company, verified_domains),
+      "address" => postal_address(company)
+    })
+  end
+
+  defp company_logo_url(%{logo: nil}), do: nil
+
+  defp company_logo_url(%{logo: token}),
+    do: AgentDocs.abs_url(CompanyImage.token_url(token, "large"))
+
+  defp organization_same_as(company, verified_domains) do
+    domain_urls = Enum.map(verified_domains, &("https://" <> &1.domain))
+
+    [company.website_url | domain_urls]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp postal_address(company) do
+    compact(%{
+      "@type" => "PostalAddress",
+      "streetAddress" => company.street_address,
+      "postalCode" => company.zip_code,
+      "addressLocality" => company.city,
+      "addressRegion" => company.state,
+      "addressCountry" => company.country
+    })
   end
 
   def web_site do

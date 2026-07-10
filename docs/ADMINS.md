@@ -108,6 +108,7 @@ Everything else has a default (the vutuv.de production value):
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
+| `VERIFY_COMPANY_DOMAINS` | `true` | `false` disables the verified-company-page domain proof (the DNS TXT and well-known-file checks and their periodic re-check) — no new company page can be verified, existing ones keep working. Set it on installations that must not make outbound DNS/HTTP calls. A newly verified company sends an operator notice to `OPERATOR_EMAIL` |
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 | `INVITATION_DAILY_CAP` | `50` | Most invitations a single member may send per day (abuse guard on outbound invite email) |
@@ -240,6 +241,12 @@ vutuv runs fine without internet access:
 - Set `FEDIVERSE_ENABLED=false`: follow-only ActivityPub federation delivers
   posts to remote servers and fetches remote actor documents — pointless and
   noisy without internet access.
+- Consider `VERIFY_COMPANY_DOMAINS=false`: the verified-company-page domain
+  proof (DNS TXT + well-known file) needs to reach the domain being verified.
+  On an intranet the DNS TXT method still works against an internal resolver,
+  but the well-known fetch is blocked by the SSRF guard for internal hosts; set
+  the flag to `false` to hide the feature entirely if company pages are not
+  wanted.
 - Turn off the features that call out to the internet (compile-time flags in
   `config/config.exs`): `:fetch_gravatar` (avatar lookup at registration),
   `:fetch_mastodon_posts` / `:fetch_bluesky_posts` (the social-feed card on

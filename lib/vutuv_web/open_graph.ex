@@ -100,6 +100,9 @@ defmodule VutuvWeb.OpenGraph do
   defp page_copy(["system", "members" | _]),
     do: gettext("Browse the vutuv member directory.")
 
+  defp page_copy(["companies" | _]),
+    do: gettext("Verified company pages on vutuv, each with a proven web domain.")
+
   defp page_copy(["login" | _]), do: gettext("Sign in to your vutuv account.")
   defp page_copy(["feed"]), do: gettext("Your personal vutuv newsfeed.")
 

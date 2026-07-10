@@ -58,6 +58,13 @@ defmodule Vutuv.Moderation.EvidenceScreenshot do
     VutuvWeb.Endpoint.url() <> "/moderation/evidence/" <> sign_token(case_record.id)
   end
 
+  def evidence_url(%Case{content_type: "company"} = case_record) do
+    case Repo.get(Vutuv.Companies.Company, case_record.content_id) do
+      nil -> nil
+      company -> VutuvWeb.Endpoint.url() <> "/companies/#{company.slug}"
+    end
+  end
+
   def evidence_url(_case_record), do: nil
 
   @doc "Signs the short-lived token that lets Chromium see the evidence page."

@@ -33,6 +33,7 @@ defmodule Vutuv.Sitemap do
                   "/nutzungsbedingungen",
                   "/listings/most_followed_users",
                   "/system/members",
+                  "/companies",
                   "/ads",
                   "/tags",
                   "/developers"
@@ -61,7 +62,8 @@ defmodule Vutuv.Sitemap do
     %{
       users: chunks(Repo.aggregate(indexable_users(), :count)),
       posts: chunks(Repo.aggregate(indexable_posts(), :count)),
-      tags: chunks(Repo.aggregate(Tag, :count))
+      tags: chunks(Repo.aggregate(Tag, :count)),
+      companies: chunks(Repo.aggregate(indexable_companies(), :count))
     }
   end
 
@@ -98,6 +100,22 @@ defmodule Vutuv.Sitemap do
       {"/tags/" <> slug, NaiveDateTime.to_date(updated_at)}
     end)
   end
+
+  @doc "`{path, lastmod_date}` entries of one companies chunk (1-based)."
+  def company_entries(chunk) do
+    indexable_companies()
+    |> order_by([c], c.id)
+    |> window(chunk)
+    |> select([c], {c.slug, c.updated_at})
+    |> Repo.all()
+    |> Enum.map(fn {slug, updated_at} ->
+      {"/companies/" <> slug, NaiveDateTime.to_date(updated_at)}
+    end)
+  end
+
+  # The crawlable company set lives in Vutuv.Companies (the /companies directory
+  # rule), so directory and sitemap can never drift apart.
+  defp indexable_companies, do: Vutuv.Companies.indexable_query()
 
   defp window(query, chunk) when is_integer(chunk) and chunk >= 1 do
     query |> limit(^@chunk_size) |> offset(^((chunk - 1) * @chunk_size))

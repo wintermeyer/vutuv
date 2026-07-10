@@ -175,6 +175,36 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
+  # A verified company page (issue #929).
+  def render(%{type: "company"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.name}",
+      doc.description,
+      [
+        doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
+        doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
+        "- #{gettext("Address")}: #{doc.address_line}"
+      ]
+      |> Enum.filter(&is_binary/1)
+      |> Enum.join("\n")
+    ]
+    |> join_blocks()
+  end
+
+  # The verified-company directory (/companies).
+  def render(%{type: "companies"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.companies, "\n", fn company ->
+        "- #{company.name} (#{company.city}, #{company.country}): #{company.url}"
+      end)
+    ]
+    |> join_blocks()
+  end
+
   # The member directory overview (/members): the letter buckets with their
   # member counts and letter-page URLs.
   def render(%{type: "directory"} = doc) do

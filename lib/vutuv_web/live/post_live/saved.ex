@@ -19,10 +19,12 @@ defmodule VutuvWeb.PostLive.Saved do
 
   use VutuvWeb, :live_view
 
+  import VutuvWeb.CompanyComponents
   import VutuvWeb.PostComponents
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Companies
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
@@ -47,7 +49,8 @@ defmodule VutuvWeb.PostLive.Saved do
      # midnight :day_changed tick can re-render each stamp in place.
      |> assign(:saved_posts, [])
      |> stream(:posts, [])
-     |> stream(:people, [])}
+     |> stream(:people, [])
+     |> stream(:companies, [])}
   end
 
   @impl true
@@ -81,6 +84,7 @@ defmodule VutuvWeb.PostLive.Saved do
     do: Posts.post_engagement_map(Enum.map(entries, & &1.id), user)
 
   defp page_engagement(:people, _entries, _user), do: %{}
+  defp page_engagement(:companies, _entries, _user), do: %{}
 
   defp load_page(socket, offset) do
     user = socket.assigns.current_user
@@ -93,16 +97,30 @@ defmodule VutuvWeb.PostLive.Saved do
     ]
 
     case {socket.assigns.live_action, socket.assigns.type} do
-      {:likes, :posts} -> {:posts, Posts.liked_posts_page(user, opts)}
-      {:bookmarks, :posts} -> {:posts, Posts.bookmarked_posts_page(user, opts)}
-      {:likes, :people} -> {:people, Social.liked_users_page(user, opts)}
-      {:bookmarks, :people} -> {:people, Social.bookmarked_users_page(user, opts)}
+      {:likes, :posts} ->
+        {:posts, Posts.liked_posts_page(user, opts)}
+
+      {:bookmarks, :posts} ->
+        {:posts, Posts.bookmarked_posts_page(user, opts)}
+
+      {:likes, :people} ->
+        {:people, Social.liked_users_page(user, opts)}
+
+      {:bookmarks, :people} ->
+        {:people, Social.bookmarked_users_page(user, opts)}
+
+      {:likes, :companies} ->
+        {:companies, Companies.saved_companies_page(user, :like, opts)}
+
+      {:bookmarks, :companies} ->
+        {:companies, Companies.saved_companies_page(user, :bookmark, opts)}
     end
   end
 
   defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
 
   defp parse_type("people"), do: :people
+  defp parse_type("companies"), do: :companies
   defp parse_type(_), do: :posts
 
   defp parse_sort("oldest"), do: :oldest
@@ -171,6 +189,21 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  def handle_event("remove_company", %{"id" => id}, socket) do
+    case Companies.get_company(id) do
+      %Companies.Company{} = company ->
+        case socket.assigns.live_action do
+          :likes -> Companies.unlike_company(socket.assigns.current_user, company)
+          :bookmarks -> Companies.unbookmark_company(socket.assigns.current_user, company)
+        end
+
+        {:noreply, stream_delete_by_dom_id(socket, :companies, "companies-#{company.id}")}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
   # ── Live sync ──
 
   @impl true
@@ -191,6 +224,17 @@ defmodule VutuvWeb.PostLive.Saved do
       ) do
     if socket.assigns.type == :people and kind == tab_kind(socket.assigns.live_action) do
       {:noreply, apply_person_change(socket, target_id, active?)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        {:company_engagement_changed, %{kind: kind, company_id: company_id, active?: active?}},
+        socket
+      ) do
+    if socket.assigns.type == :companies and kind == tab_kind(socket.assigns.live_action) do
+      {:noreply, apply_company_change(socket, company_id, active?)}
     else
       {:noreply, socket}
     end
@@ -255,6 +299,24 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  defp apply_company_change(socket, company_id, false) do
+    stream_delete_by_dom_id(socket, :companies, "companies-#{company_id}")
+  end
+
+  defp apply_company_change(socket, company_id, true) do
+    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+      case Companies.get_company(company_id) do
+        %Companies.Company{status: "active", frozen_at: nil} = company ->
+          stream_insert(socket, :companies, company, at: 0)
+
+        _ ->
+          socket
+      end
+    else
+      socket
+    end
+  end
+
   # ── Path / labels ──
 
   # The current page's URL with the non-default filters as query params, so tab
@@ -262,7 +324,7 @@ defmodule VutuvWeb.PostLive.Saved do
   defp saved_path(action, type, q, sort) do
     query =
       []
-      |> put_param(:tab, type == :people && "people")
+      |> put_param(:tab, type_param(type))
       |> put_param(:q, q != "" && q)
       |> put_param(:sort, sort not in [nil, "", "recent"] && to_string(sort))
 
@@ -275,6 +337,10 @@ defmodule VutuvWeb.PostLive.Saved do
   defp put_param(list, _key, false), do: list
   defp put_param(list, _key, nil), do: list
   defp put_param(list, key, value), do: list ++ [{key, value}]
+
+  defp type_param(:people), do: "people"
+  defp type_param(:companies), do: "companies"
+  defp type_param(_posts), do: false
 
   defp sort_options do
     [
@@ -312,6 +378,9 @@ defmodule VutuvWeb.PostLive.Saved do
           <.subtab patch={saved_path(@live_action, :people, @q, @sort)} active?={@type == :people} id="subtab-people">
             {gettext("People")}
           </.subtab>
+          <.subtab patch={saved_path(@live_action, :companies, @q, @sort)} active?={@type == :companies} id="subtab-companies">
+            {gettext("Companies")}
+          </.subtab>
         </nav>
 
         <.form for={%{}} id="saved-filter" phx-change="filter" class="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -331,39 +400,69 @@ defmodule VutuvWeb.PostLive.Saved do
           </select>
         </.form>
 
-        <%= if @type == :posts do %>
-          <%!-- One card of flat divide-y rows via the shared
-          <.post_thread_entry> — the same treatment as the feed and the profile,
-          so a reply nests the post it answers. The empty <p> uses the only:block
-          trick (like the People tab below) so un-saving the last post reveals it
-          with no emptiness bookkeeping. --%>
-          <.post_list id="saved-posts" phx-update="stream" data-post-list>
-            <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
-              {posts_empty_text(@live_action, @q)}
-            </p>
-            <div :for={{dom_id, post} <- @streams.posts} id={dom_id} class={post_row_class()}>
-              <.post_thread_entry
-                post={post}
-                viewer={@current_user}
-                conn_or_socket={@socket}
-                engagement={Map.get(@post_engagement, post.id)}
-                surface={:flat}
+        <%= cond do %>
+          <% @type == :posts -> %>
+            <%!-- One card of flat divide-y rows via the shared
+            <.post_thread_entry> — the same treatment as the feed and the profile,
+            so a reply nests the post it answers. The empty <p> uses the only:block
+            trick (like the People tab below) so un-saving the last post reveals it
+            with no emptiness bookkeeping. --%>
+            <.post_list id="saved-posts" phx-update="stream" data-post-list>
+              <p class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-posts-empty">
+                {posts_empty_text(@live_action, @q)}
+              </p>
+              <div :for={{dom_id, post} <- @streams.posts} id={dom_id} class={post_row_class()}>
+                <.post_thread_entry
+                  post={post}
+                  viewer={@current_user}
+                  conn_or_socket={@socket}
+                  engagement={Map.get(@post_engagement, post.id)}
+                  surface={:flat}
+                />
+              </div>
+            </.post_list>
+          <% @type == :people -> %>
+            <ul id="saved-people" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-people-empty">
+                {people_empty_text(@live_action, @q)}
+              </li>
+              <.person_row
+                :for={{dom_id, person} <- @streams.people}
+                id={dom_id}
+                person={person}
+                kind={@live_action}
+                needle={@q}
               />
-            </div>
-          </.post_list>
-        <% else %>
-          <ul id="saved-people" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
-            <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-people-empty">
-              {people_empty_text(@live_action, @q)}
-            </li>
-            <.person_row
-              :for={{dom_id, person} <- @streams.people}
-              id={dom_id}
-              person={person}
-              kind={@live_action}
-              needle={@q}
-            />
-          </ul>
+            </ul>
+          <% true -> %>
+            <ul id="saved-companies" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-companies-empty">
+                {companies_empty_text(@live_action, @q)}
+              </li>
+              <li
+                :for={{dom_id, company} <- @streams.companies}
+                id={dom_id}
+                class="flex items-center gap-3 py-3"
+              >
+                <.link navigate={~p"/companies/#{company.slug}"} class="flex min-w-0 flex-1 items-center gap-3">
+                  <.company_logo company={company} class="h-10 w-10 shrink-0" />
+                  <span class="min-w-0">
+                    <span class="block truncate font-semibold text-slate-900 dark:text-slate-100">
+                      {company.name}
+                    </span>
+                    <.company_location company={company} class="block truncate text-sm text-slate-600 dark:text-slate-400" />
+                  </span>
+                </.link>
+                <button
+                  type="button"
+                  phx-click="remove_company"
+                  phx-value-id={company.id}
+                  class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
+                >
+                  {gettext("Remove")}
+                </button>
+              </li>
+            </ul>
         <% end %>
 
         <.load_more :if={@more?} />
@@ -386,6 +485,14 @@ defmodule VutuvWeb.PostLive.Saved do
     do: gettext("Nothing here yet. People you bookmark show up here.")
 
   defp people_empty_text(_action, _q), do: gettext("No saved people match your search.")
+
+  defp companies_empty_text(:likes, ""),
+    do: gettext("Nothing here yet. Companies you like show up here.")
+
+  defp companies_empty_text(:bookmarks, ""),
+    do: gettext("Nothing here yet. Companies you bookmark show up here.")
+
+  defp companies_empty_text(_action, _q), do: gettext("No saved companies match your search.")
 
   attr(:patch, :string, required: true)
   attr(:active?, :boolean, required: true)

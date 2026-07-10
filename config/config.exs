@@ -124,6 +124,17 @@ config :vutuv, :fetch_code_stats, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
+# Verified company pages (Vutuv.Companies): the domain-proof methods, a DNS TXT
+# record and a well-known file. Both prove control of the DOMAIN itself, never
+# merely an address on it (an e-mail code would let anyone with a @gmail.com
+# address claim the gmail.com page). On = the claim wizard offers both and
+# re-checks them periodically; off = company domain verification is disabled on
+# this installation (no outbound calls), so no new company page can be created
+# (existing verified pages keep working). Runtime override:
+# VERIFY_COMPANY_DOMAINS=false. Tests turn it off and stub DNS / HTTP per test
+# via :companies_dns_resolver / :companies_req_options.
+config :vutuv, :verify_company_domains, true
+
 # The most invitations a single member may send in one Berlin calendar day
 # (see Vutuv.Invitations) — the abuse guard on outbound invite email, which
 # protects the installation's sender reputation. Tune it per installation

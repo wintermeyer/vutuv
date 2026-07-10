@@ -19,6 +19,9 @@ We use the [MIT License](LICENSE).
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
   Developer profiles can show cached public stats of their GitHub, GitLab and
   Codeberg accounts (stars, repositories, languages, activity).
+- Verified company pages at `/companies`: a page can only exist once its
+  claimant proves control of the company's web domain (a DNS TXT record or a
+  well-known file), so there are no fake or typo'd company entries.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an
   authenticator app (TOTP) or a printed one-time code list.
 - Invite non-members by email: the link opens the sign-up form prefilled, with
