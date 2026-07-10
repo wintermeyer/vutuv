@@ -53,7 +53,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Profiles"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
-      section(gettext("Code"), Enum.flat_map(doc.code_stats, &code_stats_lines/1)),
+      section(gettext("Code"), Enum.map(doc.code_stats, &code_stats_block/1)),
       section(
         gettext("Phone Numbers"),
         Enum.map(doc.phone_numbers, &entry_line("phone_numbers", &1))
@@ -74,7 +74,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.title}",
       gettext("%{count} total", count: doc.total),
-      Enum.map_join(entries, "\n", &entry_line(section, &1))
+      Enum.map_join(entries, "\n\n", &entry_line(section, &1))
     ]
     |> join_blocks()
   end
@@ -113,7 +113,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       gettext("%{count} posts by %{name}", count: doc.total, name: author_link) <>
         page_hint(doc.total, doc.posts, &paren_hint/1),
-      Enum.map_join(doc.posts, "\n", &post_line/1)
+      Enum.map_join(doc.posts, "\n\n", &post_line/1)
     ]
     |> join_blocks()
   end
@@ -125,7 +125,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.title}",
       feed_summary(doc, &paren_hint/1),
-      Enum.map_join(doc.posts, "\n", &post_line/1)
+      Enum.map_join(doc.posts, "\n\n", &post_line/1)
     ]
     |> join_blocks()
   end
@@ -136,7 +136,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       gettext("%{count} total", count: doc.total) <>
         page_hint(doc.total, doc.people, &paren_hint/1),
-      Enum.map_join(doc.people, "\n", &person_line/1)
+      Enum.map_join(doc.people, "\n\n", &person_line/1)
     ]
     |> join_blocks()
   end
@@ -149,7 +149,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       gettext("%{count} total", count: doc.total) <>
         page_hint(doc.total, doc.people, &paren_hint/1),
-      Enum.map_join(doc.people, "\n", &endorser_line/1)
+      Enum.map_join(doc.people, "\n\n", &endorser_line/1)
     ]
     |> join_blocks()
   end
@@ -170,7 +170,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{doc.title}",
       doc.people
       |> Enum.with_index(1)
-      |> Enum.map_join("\n", fn {person, rank} -> "#{rank}. #{person_text(person)}" end)
+      |> Enum.map_join("\n\n", fn {person, rank} -> "#{rank}. #{person_text(person)}" end)
     ]
     |> join_blocks()
   end
@@ -182,28 +182,34 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.title}",
       doc.description,
-      Enum.map_join(doc.letters, "\n", fn entry ->
+      Enum.map_join(doc.letters, "\n\n", fn entry ->
         "- #{entry.letter} (#{entry.count}): #{entry.url}"
       end)
     ]
     |> join_blocks()
   end
 
-  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc).
+  # The /ads offer page (VutuvWeb.AgentDocs.AdsDoc). The rules and the facts
+  # form one loose bullet list (blank-line separated, like every other list),
+  # not several one-item lists.
   def render(%{type: "advertising"} = doc) do
+    bullets =
+      doc.rules ++
+        [
+          "#{gettext("Community guidelines")}: #{doc.community_guidelines_url}",
+          "#{gettext("Price")}: #{doc.price.display}",
+          "#{gettext("Booking window")}: #{doc.booking_window.from} – #{doc.booking_window.to}",
+          doc.next_available_day &&
+            "#{gettext("Next available day")}: #{doc.next_available_day}",
+          doc.booked_days != [] &&
+            "#{gettext("Already booked")}: #{Enum.join(doc.booked_days, ", ")}"
+        ]
+
     [
       frontmatter(doc),
       "# #{doc.title}",
       doc.description,
-      Enum.map_join(doc.rules, "\n", &("- " <> &1)),
-      "- #{gettext("Community guidelines")}: #{doc.community_guidelines_url}",
-      "- #{gettext("Price")}: #{doc.price.display}",
-      "- #{gettext("Booking window")}: #{doc.booking_window.from} – #{doc.booking_window.to}",
-      doc.next_available_day &&
-        "- #{gettext("Next available day")}: #{doc.next_available_day}",
-      if(doc.booked_days != [],
-        do: "- #{gettext("Already booked")}: #{Enum.join(doc.booked_days, ", ")}"
-      ),
+      bullets |> Enum.filter(&is_binary/1) |> Enum.map_join("\n\n", &("- " <> &1)),
       gettext("Book online (login required): %{url}", url: doc.booking_url)
     ]
     |> join_blocks()
@@ -231,7 +237,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.noai && "noai: true",
       "---"
     ]
-    |> Enum.reject(&is_nil/1)
+    # Keep only the emitted lines: a conditional whose flag is off is `nil`
+    # *or* `false` (`false && "noindex: true"`), and a bare `false` would
+    # otherwise stringify into the YAML as a keyless value (issue #924).
+    |> Enum.filter(&is_binary/1)
     |> Enum.join("\n")
   end
 
@@ -251,7 +260,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.age && "- #{gettext("Age")}: #{doc.age}"
     ]
     |> Enum.filter(& &1)
-    |> Enum.join("\n")
+    |> Enum.join("\n\n")
   end
 
   # One entry of a profile section — the same line on the profile page and
@@ -276,11 +285,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("addresses", address), do: "- " <> address_line(address)
 
   # One code-forge account of the profile's "Code" section (Vutuv.CodeStats):
-  # the account line with its glanceable facts, then one indented line per
-  # top repository.
-  defp code_stats_lines(account) do
-    ["- #{account.provider}: #{account.url} (#{code_stats_facts(account)})"] ++
-      Enum.map(account.top_repos, &code_repo_line/1)
+  # the account line with its glanceable facts, then one indented line per top
+  # repository. Returned as a single block (account line + tight nested repo
+  # list) so the loose section join separates accounts, not an account from its
+  # own repos.
+  defp code_stats_block(account) do
+    ["- #{account.provider}: #{account.url} (#{code_stats_facts(account)})"]
+    |> Kernel.++(Enum.map(account.top_repos, &code_repo_line/1))
+    |> Enum.join("\n")
   end
 
   defp code_repo_line(repo) do
@@ -357,6 +369,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])
     |> Enum.join()
+    |> indent_item_body()
   end
 
   # The non-default CV categories (issue #840) are called out on the entry
@@ -393,6 +406,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if detail != "", do: [": #{detail}"], else: [])
     |> Enum.join()
+    |> indent_item_body()
   end
 
   # The non-default education categories (issue #849) are called out on the
@@ -604,12 +618,36 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   end
 
   defp section(_title, []), do: nil
-  defp section(title, lines), do: "## #{title}\n\n" <> Enum.join(lines, "\n")
+  # A blank line between items (a "loose" CommonMark list) so every entry gets
+  # the same vertical rhythm — the one a multi-paragraph entry already forces
+  # anyway (issues #925/#926). Each `line` may itself be a multi-line block (a
+  # code account with its nested repos, a reply with its body); those join in
+  # tight internally and only the blocks are blank-line separated.
+  defp section(title, lines), do: "## #{title}\n\n" <> Enum.join(lines, "\n\n")
 
   @doc false
   # Shared with the plain-text renderer, like the other helpers above.
   def blank_to_nil(""), do: nil
   def blank_to_nil(value), do: value
+
+  # A `- ` list item whose content (a work/education description) runs to
+  # several paragraphs: the first line rides the marker, every later line is
+  # indented two columns (the marker width) so the whole thing stays one list
+  # item instead of the continuation paragraphs breaking out to the left margin
+  # (issue #926). Blank lines stay truly empty (no trailing spaces), and CRLF /
+  # CR line endings normalize to LF so the indent lands on real line breaks.
+  defp indent_item_body(text) do
+    case text
+         |> String.replace("\r\n", "\n")
+         |> String.replace("\r", "\n")
+         |> String.split("\n") do
+      [single] -> single
+      [first | rest] -> Enum.join([first | Enum.map(rest, &indent_line/1)], "\n")
+    end
+  end
+
+  defp indent_line(""), do: ""
+  defp indent_line(line), do: "  " <> line
 
   # A YAML double-quoted scalar: escape backslash and double-quote, fold
   # newlines/tabs to spaces. (inspect/1 was wrong here — it emits `\#{` for a
