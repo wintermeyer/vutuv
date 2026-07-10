@@ -14,7 +14,6 @@ defmodule VutuvWeb.UserHelpers do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Social.Follow
-  alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
   def full_name(%User{
@@ -55,10 +54,8 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
-  The flash for a batch tag add — shared by the two places tags are attached:
-  `VutuvWeb.TagNewLive` (the add-tag form's socket save) and
-  `VutuvWeb.UserTagController.create` (the public tag page's "Add this tag"
-  button), so the member-facing wording cannot drift between them.
+  The flash for a batch tag add, shown by `VutuvWeb.TagNewLive` (the add-tag
+  form's socket save) after attaching one or more tags to the member's profile.
   """
   def tags_added_flash(successes, 0) do
     ngettext("Added %{count} tag.", "Added %{count} tags.", successes, count: successes)
@@ -582,10 +579,4 @@ defmodule VutuvWeb.UserHelpers do
   defp greeting(_) do
     "Hi"
   end
-
-  def has_tag?(%User{id: user_id}, %Tag{id: tag_id}) do
-    !is_nil(Repo.one(from(u in UserTag, where: u.user_id == ^user_id and u.tag_id == ^tag_id)))
-  end
-
-  def has_tag?(_, _), do: false
 end

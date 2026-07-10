@@ -29,39 +29,21 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
-  # Issue #844: the "Add this tag" button on a tag page posted to the retired
-  # /:slug/tags URL, which serves only GET, so a logged-in visitor clicking it
-  # got a 404 instead of the tag landing on their profile. The button renders
-  # through Phoenix's button/2 helper (a data-to + data-method="post" element),
-  # so assert the target it actually submits to, not just the create route.
-  describe "the \"Add this tag\" button (logged-in visitor without the tag)" do
-    test "posts to /settings/tags, not /:slug/tags", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
+  # Issue #877: the "Add this tag" button was removed from the public tag page.
+  # "Add this tag" was ambiguous ("create/define this tag" vs "add it to my
+  # profile" — it misled the #844 reporter into a 404), redundant with the
+  # /settings/tags editor, and out of step with vutuv's showcase pages, which
+  # carry no profile-mutating controls. Adding a tag now lives only in
+  # /settings/tags (+ the profile Tags card), so the tag page is pure discovery.
+  describe "the tag page carries no profile-mutation control (issue #877)" do
+    test "a logged-in visitor without the tag sees no \"Add this tag\" button", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
       insert(:tag, name: "Elixir", slug: "elixir")
 
       html = conn |> get(~p"/tags/elixir") |> html_response(200)
 
-      assert html =~ "Add this tag"
-      # Submits the slug, not the display name (issue #847, see below).
-      assert html =~ ~s(data-to="/settings/tags?tag_param[value]=elixir")
-      assert html =~ ~s(data-method="post")
-      refute html =~ ~s(data-to="/#{user.username}/tags)
-    end
-
-    # Issue #847: the button used to submit the tag's *display name*, which the
-    # create controller feeds through a space-splitting parser. For a legacy
-    # multi-word tag ("Ruby on Rails") that shredded it into "Ruby", "on",
-    # "Rails" and created wrong tags. Submitting the (always spaceless) slug
-    # attaches this exact tag instead.
-    test "submits the spaceless slug for a legacy multi-word tag", %{conn: conn} do
-      {conn, _user} = create_and_login_user(conn)
-      insert(:tag, name: "Ruby on Rails", slug: "ruby_on_rails")
-
-      html = conn |> get(~p"/tags/ruby_on_rails") |> html_response(200)
-
-      assert html =~ ~s(data-to="/settings/tags?tag_param[value]=ruby_on_rails")
-      # Never the spaced display name, which the parser would split.
-      refute html =~ ~s(tag_param[value]=Ruby)
+      refute html =~ "Add this tag"
+      refute html =~ ~s(data-to="/settings/tags?tag_param)
     end
   end
 end

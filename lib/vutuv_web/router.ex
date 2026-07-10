@@ -819,9 +819,10 @@ defmodule VutuvWeb.Router do
 
     get("/tags", UserTagController, :manage)
     # The add-tag form (new) is VutuvWeb.TagNewLive (the live_session above),
-    # which also saves over its socket. The dead create stays: the public tag
-    # page's "Add this tag" button POSTs here (issue #844 pinned the URL).
-    resources("/tags", UserTagController, only: [:create, :delete], as: :settings_tag)
+    # which also saves over its socket, so there is no dead create action any
+    # more (issue #877 removed the tag page's "Add this tag" button, its only
+    # plain-HTTP caller). Delete is the sole remaining REST action here.
+    resources("/tags", UserTagController, only: [:delete], as: :settings_tag)
   end
 
   # Profiles live at the URL root: /:slug is the profile page, /:slug/... the

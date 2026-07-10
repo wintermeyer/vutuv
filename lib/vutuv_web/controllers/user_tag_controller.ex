@@ -11,7 +11,6 @@ defmodule VutuvWeb.UserTagController do
   )
 
   plug(VutuvWeb.Plug.AuthUser when action not in [:index, :show, :endorsers])
-  plug(:scrub_params, "tag_param" when action in [:create])
 
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
@@ -49,39 +48,6 @@ defmodule VutuvWeb.UserTagController do
       as_owner?: true,
       page_title: gettext("Tags")
     )
-  end
-
-  # The add-tag *form* lives in `VutuvWeb.TagNewLive` (/settings/tags/new),
-  # which previews the parsed tags while the member types and saves over its
-  # socket (issue #848). This dead create stays for plain-HTTP callers — the
-  # public tag page's "Add this tag" button POSTs here (issue #844 pinned the
-  # URL) — and always redirects; the inline-error re-render retired with the
-  # dead form template. Same parse + case-insensitive dedupe as the LiveView,
-  # so both entry points attach the same tags for the same input.
-  def create(conn, %{"tag_param" => tag_param}) do
-    user = conn.assigns[:current_user]
-
-    parsed =
-      tag_param["value"]
-      |> Vutuv.Tags.parse_tag_names()
-      |> Enum.uniq_by(&String.downcase/1)
-
-    case parsed do
-      [] ->
-        conn
-        |> put_flash(:error, gettext("Please enter a tag."))
-        |> redirect(to: ~p"/settings/tags/new")
-
-      names ->
-        results = Enum.map(names, &Vutuv.Tags.add_user_tag(user, &1))
-        failures = Enum.count(results, &match?({:error, _}, &1))
-        successes = length(results) - failures
-        kind = if successes == 0, do: :error, else: :info
-
-        conn
-        |> put_flash(kind, UserHelpers.tags_added_flash(successes, failures))
-        |> redirect(to: ~p"/settings/tags")
-    end
   end
 
   def show(conn, %{"id" => _id}) do

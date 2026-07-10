@@ -479,9 +479,9 @@ defmodule Vutuv.Tags do
   vutuv's "a tag is a single token, no spaces" rule postdates the original 2017
   data, so thousands of tags still carry spaces in their display `name`. This
   reconciles that legacy data with the rule **without underscoring a legitimate
-  multi-word name** — "Ruby on Rails" stays "Ruby on Rails" (its already
-  spaceless slug `ruby_on_rails` is what makes it addable, see the tag page's
-  "Add this tag" button). It does two things:
+  multi-word name** — "Ruby on Rails" stays "Ruby on Rails", its already
+  spaceless slug `ruby_on_rails` staying the stable link key. It does two
+  things:
 
     * **Merges** the whitespace-only duplicate groups — two tags that differ
       only in spacing / underscores / case (" Datacenter" vs "Datacenter",

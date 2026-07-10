@@ -4608,11 +4608,6 @@ msgstr ""
 msgid "Add a tag"
 msgstr ""
 
-#: lib/vutuv_web/templates/tag/single_card.html.heex:24
-#, elixir-autogen, elixir-format
-msgid "Add this tag"
-msgstr ""
-
 #: lib/vutuv_web/live/search_live.ex:205
 #, elixir-autogen, elixir-format
 msgid "Search for people, tags, or posts"
