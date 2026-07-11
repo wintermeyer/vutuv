@@ -820,6 +820,11 @@ defmodule VutuvWeb.Router do
     delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
     get("/work_experiences", WorkExperienceController, :manage)
 
+    # The editor's verified-company link suggestion (issue #931), a JSON match
+    # for the organization being typed. Before the resources so "company_suggestions"
+    # is not read as a work-experience id.
+    get("/work_experiences/company_suggestions", WorkExperienceController, :company_suggestions)
+
     resources("/work_experiences", WorkExperienceController,
       only: [:new, :create, :edit, :update, :delete],
       as: :settings_work_experience

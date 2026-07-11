@@ -178,6 +178,45 @@ entries.
 The profile-job-title chooser is category-agnostic: the pin (and the automatic
 heuristic) can select any entry, whatever its kind.
 
+## Linking a work experience to a company page (issue #931)
+
+A work experience may **optionally** link to a [verified company
+page](companies.md) via a nullable `work_experiences.company_id`
+(`ON DELETE SET NULL` — deleting a company quietly unlinks, never cascades).
+The link is a display convenience, **not** a badge: the employment claim stays
+self-asserted, and the free-text `organization` column remains authoritative
+for display whenever there is no link. vutuv never rewrites a member's own text.
+
+**Editor UX.** The `/settings/work_experiences` form watches the organization
+field: as the member types, `app.js` (`setupCompanyLink`) queries
+`GET /settings/work_experiences/company_suggestions?q=…`
+(`Companies.suggest_company_for_org/1` — an **exact**, case-insensitive match on
+a verified company's name or an alias, never a substring) and, on a hit, offers a
+quiet one-line "Mit der Seite … verknüpfen?" the member accepts with one tap or
+ignores. No match means no new UI. The choice rides in a hidden
+`work_experience[company_id]`; unlinking is one tap. It is a progressive
+enhancement — the free-text field always works with JS off, and an already-linked
+experience shows its linked state seeded from data attributes.
+
+**The guard.** `WorkExperience.changeset/2` only ever links to a **verified**
+(active, non-frozen) company; a stale target (unknown, pending, frozen,
+archived) is silently dropped back to nil rather than erroring (the member never
+types the id, so a dead link falls back to the free text instead of blocking the
+save). `Companies.canonical_path/1` is the one definition of a company's URL
+(its root `/:handle` when claimed, else `/companies/:slug`), shared by the
+profile link, the agent docs and the sitemap.
+
+**Display.** `WorkExperienceHTML.employer_name/1` renders a linked, active
+company as a small logo plus its **canonical name** linking to its page;
+everything else (unlinked, or a **frozen/archived** company — moderation must
+never break a profile) renders the member's free-text organization exactly as
+written. The block's company is taken from its newest role
+(`grouped_clusters/3` sets `:company`). The agent formats carry the link too
+(`SectionDocs.work_entry/1` adds a `company: {name, url}` ref for a linked active
+entry; the md/txt work lines show the name + URL), kept in sync by the drift
+test. The reverse side — who works at a company — is the company page's People
+section (see companies.md).
+
 ## Education profile section
 
 A member's schools sit in their own profile section (`Vutuv.Profiles.Education`,

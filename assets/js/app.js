@@ -478,6 +478,126 @@ function setupSlugAvailability() {
 
 onReady(setupSlugAvailability)
 
+// Work-experience company link (issue #931). The work-experience form marks a
+// [data-company-link] box; as the member types the organization, ask the server
+// for a matching verified company page and offer a quiet one-tap link. The
+// hidden work_experience[company_id] carries the choice. No match -> no UI.
+// Plain JS on a classic controller page (no LiveView there).
+function setupCompanyLink() {
+  document.querySelectorAll("[data-company-link]").forEach((box) => {
+    if (!once(box, "companyLink")) return
+    const form = box.closest("form")
+    if (!form) return
+    const orgInput = form.querySelector('[name$="[organization]"]')
+    const idInput = box.querySelector('[name$="[company_id]"]')
+    const status = box.querySelector("[data-company-link-status]")
+    if (!orgInput || !idInput || !status) return
+
+    const labels = {
+      suggest: box.dataset.labelSuggest || "Link to {name}?",
+      link: box.dataset.labelLink || "Link to page",
+      linked: box.dataset.labelLinked || "Linked to {name}",
+      unlink: box.dataset.labelUnlink || "Remove link",
+    }
+
+    // Seed the already-linked company (editing a linked experience), so the
+    // linked state renders with the company name even before the first fetch.
+    let linked =
+      idInput.value && box.dataset.linkedId === idInput.value
+        ? { id: box.dataset.linkedId, name: box.dataset.linkedName || "", path: box.dataset.linkedPath || "" }
+        : null
+    let suggestion = null
+    let timer = null
+
+    // A label template holding a "{name}" placeholder, rendered with the name as
+    // a real element (link/strong) so it is never HTML-injected as a string.
+    function render(template, nameEl, actionEl) {
+      const [before, after] = template.split("{name}")
+      const frag = document.createDocumentFragment()
+      frag.append(document.createTextNode(before))
+      if (nameEl) frag.append(nameEl)
+      frag.append(document.createTextNode(after !== undefined ? after : ""))
+      if (actionEl) frag.append(document.createTextNode(" "), actionEl)
+      status.replaceChildren(frag)
+      status.hidden = false
+    }
+
+    function button(text, className, onClick) {
+      const btn = document.createElement("button")
+      btn.type = "button"
+      btn.textContent = text
+      btn.className = className
+      btn.addEventListener("click", onClick)
+      return btn
+    }
+
+    function renderState() {
+      if (linked) {
+        const nameEl = linked.path
+          ? Object.assign(document.createElement("a"), {
+              href: linked.path,
+              textContent: linked.name,
+              target: "_blank",
+              rel: "noopener",
+              className: "font-semibold",
+            })
+          : Object.assign(document.createElement("strong"), { textContent: linked.name })
+        const unlink = button(labels.unlink, "font-semibold text-slate-600 underline hover:text-slate-800", () => {
+          idInput.value = ""
+          linked = null
+          renderState()
+          check()
+        })
+        render(labels.linked, nameEl, unlink)
+      } else if (suggestion && suggestion.id !== idInput.value) {
+        const nameEl = Object.assign(document.createElement("strong"), { textContent: suggestion.name })
+        const link = button(labels.link, "font-semibold text-brand-600 underline hover:text-brand-700", () => {
+          idInput.value = suggestion.id
+          linked = suggestion
+          suggestion = null
+          renderState()
+        })
+        render(labels.suggest, nameEl, link)
+      } else {
+        status.hidden = true
+        status.replaceChildren()
+      }
+    }
+
+    async function check() {
+      if (linked) return
+      const value = orgInput.value.trim()
+      if (value.length < 2) {
+        suggestion = null
+        return renderState()
+      }
+      try {
+        const url = `${box.dataset.suggestUrl}?q=${encodeURIComponent(value)}`
+        const resp = await fetch(url)
+        if (!resp.ok) return
+        const data = await resp.json()
+        // Ignore a stale response for an organization value already replaced.
+        if (orgInput.value.trim() !== value) return
+        suggestion = data.company
+        renderState()
+      } catch (_e) {
+        // Network hiccup: stay quiet, the free-text organization still works.
+      }
+    }
+
+    orgInput.addEventListener("input", () => {
+      if (linked) return // keep the accepted link; unlink first to change it
+      clearTimeout(timer)
+      timer = setTimeout(check, 300)
+    })
+
+    renderState()
+    if (!linked) check()
+  })
+}
+
+onReady(setupCompanyLink)
+
 // Make horizontally-scrollable code blocks and tables in rendered Markdown
 // keyboard-focusable, so they can be scrolled without a mouse (WCAG 2.1.1).
 function markFocusableScrollers() {

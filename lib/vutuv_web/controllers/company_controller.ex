@@ -144,7 +144,17 @@ defmodule VutuvWeb.CompanyController do
     if Companies.agent_visible?(company) do
       domains = Companies.verified_domains(company)
       aliases = Companies.list_aliases(company)
-      AgentDocs.send_doc(conn, format, CompanyDoc.build_show(company, domains, aliases))
+      # The People section under the same public-listing gate (issue #931). The
+      # crawlable set is capped generously; the HTML page's "Load more" reaches
+      # the tail, and `people_total` carries the true count.
+      people = Companies.company_people_page(company, limit: 200)
+      total = Companies.company_people_count(company)
+
+      AgentDocs.send_doc(
+        conn,
+        format,
+        CompanyDoc.build_show(company, domains, aliases, people.entries, total)
+      )
     else
       ControllerHelpers.render_error(conn, 404)
     end

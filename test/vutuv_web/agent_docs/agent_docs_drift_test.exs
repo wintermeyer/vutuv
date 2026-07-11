@@ -667,4 +667,42 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     fallback = get(build_conn(), "/drift_tester.txt?lang=xx").resp_body
     assert fallback =~ "Member since:"
   end
+
+  test "a linked work experience carries its verified company page in every format" do
+    company = insert(:company, name: "Linked Verified AG", slug: "linked-verified")
+    user = insert_activated_user(username: "link_drift", first_name: "Lena", last_name: "Linker")
+
+    insert(:work_experience,
+      user: user,
+      company: company,
+      title: "Linked Engineer",
+      organization: "free text org"
+    )
+
+    # Both the profile and the work-experiences section carry the linked
+    # company's canonical name and URL, in HTML and every agent format.
+    for path <- ["/link_drift", "/link_drift/work_experiences"] do
+      rendered = formats_for(path)
+      assert_fact_everywhere(rendered, "Linked Verified AG")
+      assert_fact_everywhere(rendered, "/companies/linked-verified")
+    end
+  end
+
+  test "a company page's People section appears in every format" do
+    company = insert(:company, name: "People Verified AG", slug: "people-verified")
+
+    member =
+      insert_activated_user(first_name: "Petra", last_name: "People", username: "petra_people")
+
+    insert(:work_experience,
+      user: member,
+      company: company,
+      title: "Staff Engineer",
+      end_year: nil
+    )
+
+    rendered = formats_for("/companies/people-verified")
+    assert_fact_everywhere(rendered, "Petra People")
+    assert_fact_everywhere(rendered, "/petra_people")
+  end
 end

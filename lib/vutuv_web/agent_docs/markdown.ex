@@ -188,7 +188,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         "- #{gettext("Address")}: #{doc.address_line}"
       ]
       |> Enum.filter(&is_binary/1)
-      |> Enum.join("\n")
+      |> Enum.join("\n"),
+      company_people(doc)
     ]
     |> join_blocks()
   end
@@ -251,6 +252,22 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: "- #{gettext("Also known as")}: #{Enum.join(names, ", ")}"
 
   defp also_known_as(_doc), do: nil
+
+  # The People section (issue #931): members whose linked work experience is at
+  # this company, current members first, a "(former)" note on past ones.
+  defp company_people(%{people: [_ | _] = people}) do
+    [
+      "## #{gettext("People")}",
+      Enum.map_join(people, "\n", fn person ->
+        "- [#{person.name}](#{person.url})" <>
+          if(person.title, do: " · #{person.title}", else: "") <>
+          if(person.current, do: "", else: " (#{gettext("former")})")
+      end)
+    ]
+    |> Enum.join("\n")
+  end
+
+  defp company_people(_doc), do: nil
 
   # The YAML frontmatter every Markdown doc starts with.
   defp frontmatter(doc) do
@@ -407,8 +424,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     period = work_period(work)
     kind_note = work_kind_note(work)
     description = Map.get(work, :description)
+    company = Map.get(work, :company)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
+    |> Kernel.++(if company, do: [" ([#{company.name}](#{company.url}))"], else: [])
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])

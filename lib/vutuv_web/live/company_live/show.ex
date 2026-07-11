@@ -20,6 +20,7 @@ defmodule VutuvWeb.CompanyLive.Show do
   alias Vutuv.Countries
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
+  alias VutuvWeb.UserHelpers
 
   @impl true
   def mount(_params, session, socket) do
@@ -36,8 +37,28 @@ defmodule VutuvWeb.CompanyLive.Show do
       |> assign(:locale, session["locale"])
       |> assign(:shell_path, session["request_path"])
       |> assign_company(company, current_user)
+      |> assign_people(company)
 
     {:ok, socket}
+  end
+
+  # The company page's "People" section (issue #931): members whose linked work
+  # experience is at this company, current members first. Loaded once at mount
+  # (state-transition events keep their own paging); "Load more" appends the next
+  # page. The list honors the member-directory privacy gate in the context.
+  defp assign_people(socket, company) do
+    total = Companies.company_people_count(company)
+
+    page =
+      if total > 0,
+        do: Companies.company_people_page(company),
+        else: %{entries: [], more?: false, next_offset: 0}
+
+    socket
+    |> assign(:people, page.entries)
+    |> assign(:people_total, total)
+    |> assign(:people_more?, page.more?)
+    |> assign(:people_offset, page.next_offset)
   end
 
   defp assign_company(socket, company, viewer) do
@@ -65,6 +86,17 @@ defmodule VutuvWeb.CompanyLive.Show do
   end
 
   @impl true
+  def handle_event("load-more", _params, socket) do
+    page =
+      Companies.company_people_page(socket.assigns.company, offset: socket.assigns.people_offset)
+
+    {:noreply,
+     socket
+     |> assign(:people, socket.assigns.people ++ page.entries)
+     |> assign(:people_more?, page.more?)
+     |> assign(:people_offset, page.next_offset)}
+  end
+
   def handle_event("toggle_like", _params, socket), do: {:noreply, toggle(socket, :like)}
 
   def handle_event("toggle_bookmark", _params, socket), do: {:noreply, toggle(socket, :bookmark)}
@@ -250,6 +282,34 @@ defmodule VutuvWeb.CompanyLive.Show do
           <.card :if={present?(@company.description)}>
             <.section_title>{gettext("About")}</.section_title>
             <.markdown_prose text={@company.description} class="mt-3 text-slate-800 dark:text-slate-200" />
+          </.card>
+
+          <%!-- People: members who list this company as an employer (issue #931).
+          Current members lead; a "Former" tag marks past ones. Plain profile
+          links make each profile crawlable from the company page. --%>
+          <.card :if={@people_total > 0}>
+            <div class="flex items-center justify-between">
+              <.section_title>{gettext("People")}</.section_title>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{compact_count(@people_total)}</span>
+            </div>
+            <ul id="company-people" class="mt-4 space-y-3">
+              <li :for={person <- @people} class="flex items-center gap-3">
+                <.avatar user={person.user} size="sm" shape="circle" />
+                <div class="min-w-0">
+                  <a
+                    href={"/" <> person.user.username}
+                    class="font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-400"
+                  >
+                    {UserHelpers.full_name(person.user)}
+                  </a>
+                  <p class="truncate text-sm text-slate-600 dark:text-slate-400">
+                    {person.title}<span :if={not person.current?} class="text-slate-500 dark:text-slate-500">
+                      · {gettext("Former")}</span>
+                  </p>
+                </div>
+              </li>
+            </ul>
+            <.load_more :if={@people_more?} class="mt-4" />
           </.card>
         </div>
 

@@ -188,6 +188,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         "- #{gettext("Address")}: #{doc.address_line}"
       ]
       |> Enum.filter(&is_binary/1),
+      company_people(doc),
       footer(doc)
     ]
     |> join_blocks()
@@ -291,6 +292,21 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp also_known_as(_doc), do: nil
 
+  # The People section (issue #931): the linked members the HTML page lists.
+  defp company_people(%{people: [_ | _] = people}) do
+    [
+      gettext("People") <> ":"
+      | Enum.map(people, fn person ->
+          "- #{person.name} (#{person.url})" <>
+            if(person.title, do: " · #{person.title}", else: "") <>
+            if(person.current, do: "", else: " (#{gettext("former")})")
+        end)
+    ]
+    |> Enum.join("\n")
+  end
+
+  defp company_people(_doc), do: nil
+
   defp profile_facts(doc) do
     [
       doc.verified && gettext("Verified profile: yes"),
@@ -363,9 +379,11 @@ defmodule VutuvWeb.AgentDocs.Text do
     kind_note = Markdown.work_kind_note(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
     description = Map.get(work, :description)
+    company = Map.get(work, :company)
 
     "* " <>
       line <>
+      if(company, do: " (#{company.name}: #{company.url})", else: "") <>
       if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
       if description, do: ": #{description}", else: ""

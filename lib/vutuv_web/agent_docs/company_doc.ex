@@ -10,11 +10,17 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
 
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Companies
   alias Vutuv.Countries
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.UserHelpers
 
-  @doc "One company page."
-  def build_show(company, domains, aliases \\ []) do
+  @doc """
+  One company page. `people` are the linked members the company's People
+  section shows (issue #931), already gated to the public-listing set;
+  `people_total` is the full count the HTML page displays.
+  """
+  def build_show(company, domains, aliases \\ [], people \\ [], people_total \\ 0) do
     AgentDocs.doc_meta("company", canonical_path(company),
       noindex: not company.seo?,
       noai: not company.geo?
@@ -32,8 +38,19 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
       city: company.city,
       country: company.country,
       country_name: Countries.name(company.country),
-      address_line: address_line(company)
+      address_line: address_line(company),
+      people_total: people_total,
+      people: Enum.map(people, &person_entry/1)
     })
+  end
+
+  defp person_entry(%{user: user, title: title, current?: current?}) do
+    %{
+      name: UserHelpers.full_name(user),
+      title: title,
+      current: current?,
+      url: AgentDocs.abs_url("/" <> user.username)
+    }
   end
 
   @doc "The directory of verified company pages."
@@ -57,9 +74,8 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
 
   # A company that claimed a root handle (issue #941) is canonical at
   # `/:handle`; the agent docs point there too, matching the HTML rel=canonical
-  # and the sitemap. A handle-less company stays at `/companies/:slug`.
-  defp canonical_path(%{username: username}) when is_binary(username), do: "/" <> username
-  defp canonical_path(company), do: "/companies/#{company.slug}"
+  # and the sitemap. Shared with the profile link + sitemap via the context.
+  defp canonical_path(company), do: Companies.canonical_path(company)
 
   defp primary_domain(domains) do
     case Enum.find(domains, & &1.primary?) || List.first(domains) do

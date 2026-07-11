@@ -14,6 +14,7 @@ defmodule Vutuv.Companies do
   """
 
   import Ecto.Query, warn: false
+  import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
@@ -28,17 +29,28 @@ defmodule Vutuv.Companies do
   alias Vutuv.Engagement
   alias Vutuv.Handles
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
 
   # Slugs that would shadow a /companies/<word> route.
   @reserved_slugs ~w(new)
   @directory_per_page 24
+  @people_per_page 24
   # Domain-ownership proofs (a DNS TXT record / a static well-known file) almost
   # never change once set, so a weekly re-check is plenty; the hourly sweeper
   # tick just spreads these checks out rather than bursting them.
   @recheck_interval_hours 24 * 7
   @grace_days 7
+
+  @doc """
+  The canonical URL path of a company page: its opt-in root handle when claimed
+  (`/:username`, issue #941), otherwise `/companies/:slug`. The one definition
+  shared by the profile's work-experience link (issue #931), the agent docs and
+  the sitemap, so a link never points at a non-canonical URL.
+  """
+  def canonical_path(%Company{username: username}) when is_binary(username), do: "/" <> username
+  def canonical_path(%Company{slug: slug}), do: "/companies/#{slug}"
 
   # --- fetch ------------------------------------------------------------------
 
@@ -967,6 +979,171 @@ defmodule Vutuv.Companies do
   @doc "Clears an alias's admin-queue flag (a human reviewed it and it is fine)."
   def clear_alias_flag(%CompanyName{} = company_name),
     do: company_name |> Ecto.Changeset.change(flagged_at: nil) |> Repo.update()
+
+  # --- work-experience linking (issue #931) -----------------------------------
+  #
+  # A member may optionally link a work experience to a verified company page.
+  # The link is a display convenience, not a badge — the employment claim stays
+  # self-asserted. Only a **verified** (active, non-frozen) company is ever a
+  # link target, so a frozen/archived page silently reverts every linked
+  # experience to plain text.
+
+  @doc "Fetches an active, non-frozen company by id (a linkable target), or nil."
+  def get_active_company(id) when is_binary(id) do
+    Repo.one(
+      from(c in Company, where: c.id == ^id and c.status == "active" and is_nil(c.frozen_at))
+    )
+  end
+
+  def get_active_company(_), do: nil
+
+  @doc """
+  The verified company a member's free-text organization would link to: an
+  active, non-frozen company whose **name or an alias equals** the trimmed text
+  case-insensitively. Exact equality, not a substring — the editor only suggests
+  a link when the whole employer name matches, so "Acme" never volunteers "Acme
+  Foundation". Returns the `%Company{}` or nil (a term under two characters, or
+  no match, yields nil). When several verified companies legitimately share a
+  name the oldest wins, so the suggestion is deterministic.
+  """
+  def suggest_company_for_org(name) do
+    down = name |> to_string() |> String.trim() |> String.downcase()
+
+    if String.length(down) < 2 do
+      nil
+    else
+      Repo.one(
+        from(c in Company,
+          where: c.status == "active" and is_nil(c.frozen_at),
+          where:
+            fragment("lower(?)", c.name) == ^down or
+              fragment(
+                "EXISTS (SELECT 1 FROM company_names cn WHERE cn.company_id = ? AND lower(cn.name) = ?)",
+                c.id,
+                ^down
+              ),
+          order_by: [asc: c.inserted_at],
+          limit: 1
+        )
+      )
+    end
+  end
+
+  @doc "The company page's per-page size for its People section."
+  def people_per_page, do: @people_per_page
+
+  @doc """
+  The number of members whose linked work experience is at `company` and who are
+  publicly listable (`Vutuv.Directory.indexable_users` semantics: confirmed, not
+  search-opted-out, not moderation-hidden). The count the People section shows.
+  """
+  def company_people_count(%Company{id: id}) do
+    people_base(id)
+    |> select([_w, u], u.id)
+    |> subquery()
+    |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  One page of `company`'s **People**: members whose linked work experience is at
+  this company. Current members (an ongoing linked role, no end date) lead, then
+  past members, each group by name; offset-paginated like the saved-items hub.
+
+  Each entry is `%{user:, title:, current?:}` where `title` is the linked role's
+  title **exactly as the member wrote it** (their most recent role at the
+  company). Privacy is the member-directory gate (`indexable_users` semantics),
+  so a member who opted out of public listing or is moderation-hidden never
+  appears — the same set the agent-format people list carries. Returns
+  `%{entries:, more?:, next_offset:}`.
+  """
+  def company_people_page(%Company{id: company_id}, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @people_per_page)
+    offset = Keyword.get(opts, :offset, 0)
+
+    rows =
+      people_base(company_id)
+      |> select([w, u], %{user_id: u.id, current?: fragment("bool_or(? IS NULL)", w.end_year)})
+      |> order_by([w, u], [
+        {:desc, fragment("bool_or(? IS NULL)", w.end_year)},
+        {:asc,
+         fragment("lower(coalesce(nullif(trim(?), ''), ?, ''))", u.last_name, u.first_name)},
+        {:asc, fragment("lower(coalesce(?, ''))", u.first_name)},
+        {:asc, u.id}
+      ])
+      |> limit(^(limit + 1))
+      |> offset(^offset)
+      |> Repo.all()
+
+    {shown, more?} =
+      if length(rows) > limit, do: {Enum.take(rows, limit), true}, else: {rows, false}
+
+    ids = Enum.map(shown, & &1.user_id)
+    users = ids |> load_people() |> Map.new(&{&1.id, &1})
+    titles = representative_titles(company_id, ids)
+
+    entries =
+      Enum.map(shown, fn row ->
+        %{
+          user: Map.fetch!(users, row.user_id),
+          title: Map.get(titles, row.user_id),
+          current?: row.current?
+        }
+      end)
+
+    %{entries: entries, more?: more?, next_offset: offset + length(shown)}
+  end
+
+  # One row per listable member with a linked experience at the company, grouped
+  # so the current?/title aggregates collapse a member's several roles into one.
+  defp people_base(company_id) do
+    from(w in WorkExperience,
+      join: u in User,
+      on: u.id == w.user_id,
+      where:
+        w.company_id == ^company_id and account_confirmed_row(u) and
+          not u.noindex? and not account_hidden_row(u),
+      group_by: u.id
+    )
+  end
+
+  defp load_people(ids), do: Repo.all(from(u in User, where: u.id in ^ids))
+
+  # The title each shown member is listed under: their most recent linked role at
+  # the company — an ongoing one wins, else the one with the latest end date.
+  defp representative_titles(_company_id, []), do: %{}
+
+  defp representative_titles(company_id, ids) do
+    from(w in WorkExperience,
+      where: w.company_id == ^company_id and w.user_id in ^ids,
+      select: %{
+        user_id: w.user_id,
+        title: w.title,
+        start_year: w.start_year,
+        start_month: w.start_month,
+        end_year: w.end_year,
+        end_month: w.end_month
+      }
+    )
+    |> Repo.all()
+    |> Enum.group_by(& &1.user_id)
+    |> Map.new(fn {user_id, roles} -> {user_id, representative_title(roles)} end)
+  end
+
+  defp representative_title(roles) do
+    chosen =
+      case Enum.filter(roles, &is_nil(&1.end_year)) do
+        [] ->
+          Enum.max_by(
+            roles,
+            &{&1.end_year || 0, &1.end_month || 0, &1.start_year || 0, &1.start_month || 0}
+          )
+
+        ongoing ->
+          Enum.max_by(ongoing, &{&1.start_year || 0, &1.start_month || 0})
+      end
+
+    chosen.title
+  end
 
   # --- directory --------------------------------------------------------------
 

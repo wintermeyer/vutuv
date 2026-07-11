@@ -1,8 +1,11 @@
 defmodule VutuvWeb.WorkExperienceHTML do
   @moduledoc false
   use VutuvWeb, :html
+  import VutuvWeb.CompanyComponents, only: [company_logo: 1]
   import VutuvWeb.UserHelpers
 
+  alias Vutuv.Companies
+  alias Vutuv.Companies.Company
   alias Vutuv.Profiles.WorkExperience
 
   @doc """
@@ -200,6 +203,12 @@ defmodule VutuvWeb.WorkExperienceHTML do
     %{
       kind: newest.kind,
       organization: newest.organization,
+      # The verified company page this block links to (issue #931), or nil for
+      # a plain free-text employer. Taken from the newest role, since the block's
+      # displayed name is the newest role's organization. Only an active,
+      # non-frozen company qualifies, so a frozen/archived page renders the block
+      # exactly as an unlinked one (plain text).
+      company: linked_company(newest),
       multi?: multi?,
       roles: circles,
       span: span,
@@ -207,6 +216,42 @@ defmodule VutuvWeb.WorkExperienceHTML do
       label: duration_label(months, label_style),
       size: circle_rem(months, max_months)
     }
+  end
+
+  # The linked, currently-verified company of a work experience, or nil. Guards
+  # on a loaded, active, non-frozen %Company{}: an unloaded association, a
+  # free-text-only role, or a frozen/archived page all fall through to nil.
+  defp linked_company(%{company: %Company{status: "active", frozen_at: nil} = company}),
+    do: company
+
+  defp linked_company(_job), do: nil
+
+  @doc """
+  The employer name on a timeline block: when the experience is linked to a
+  verified company page (issue #931), a small logo plus the company's canonical
+  name linking to its page; otherwise the member's free-text organization,
+  rendered exactly as they wrote it. One renderer so the single-role and
+  multi-role branches (and their agent-doc siblings via `SectionDocs`) never
+  disagree on when a link shows.
+  """
+  attr(:company, :any, default: nil)
+  attr(:text, :any, default: nil)
+  attr(:class, :string, default: nil)
+
+  def employer_name(assigns) do
+    ~H"""
+    <%= if @company do %>
+      <a
+        href={Companies.canonical_path(@company)}
+        class={["inline-flex items-center gap-1.5 hover:text-brand-700 dark:hover:text-brand-400", @class]}
+      >
+        <.company_logo company={@company} class="h-5 w-5 shrink-0" />
+        <span>{@company.name}</span>
+      </a>
+    <% else %>
+      {@text}
+    <% end %>
+    """
   end
 
   @doc """
@@ -497,7 +542,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
             <div class="relative pb-4 pl-5">
               <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
               <p class="mb-0.5 font-semibold text-slate-900 dark:text-white">
-                {@block.organization}
+                <.employer_name company={@block.company} text={@block.organization} />
               </p>
               <p :if={@block.length} class="mb-0 text-sm text-slate-600 dark:text-slate-400">
                 {@block.length}
@@ -558,7 +603,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
               {role.job.title}
             </.link>
             <p class="text-sm text-slate-600 dark:text-slate-400">
-              {role.job.organization}<%= if role.length do %> · {role.length}<% end %>
+              <.employer_name company={@block.company} text={role.job.organization} /><%= if role.length do %> · {role.length}<% end %>
             </p>
             <.markdown_prose
               :if={@show_description? and role.job.description}

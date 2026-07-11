@@ -15,6 +15,7 @@ paths:
       @source "../../lib/vutuv_web";
 
 - **Always use and maintain this import syntax** in the app.css file.
+- **The `once(el, key)` "wire once" guard writes `key` into `el.dataset`, so `key` MUST be a single word or camelCase — never contain a hyphen.** `once` does `el.dataset["wired_" + key]`, and a hyphen makes an invalid `DOMStringMap` property name, so `once(box, "company-link")` throws `SyntaxError: 'wired_company-link' is not a valid property name` at setup time and the **whole** enhancement silently never wires (the feature just doesn't work, no visible error unless you read the console). Every existing key is single-word/camelCase (`slug`, `tagVote`, `charCounter`, `employmentVisibility`) — match that (`companyLink`, not `company-link`). This shipped a dead work-experience→company link suggestion until a browser smoke test surfaced the console exception.
 - **Never** use `@apply` when writing raw css
 - **Always** manually write your own tailwind-based components instead of using daisyUI for a unique design
 - Out of the box **only the app.js and app.css bundles are supported**

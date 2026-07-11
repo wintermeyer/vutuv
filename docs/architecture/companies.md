@@ -199,6 +199,25 @@ pending/frozen/archived pages 404 their siblings for everyone, cache-safe like a
 hidden profile). See `VutuvWeb.AgentDocs.CompanyDoc` and
 `agents-and-seo.md`.
 
+## People (issue #931)
+
+The company page shows a **People** section: members whose work experience is
+[linked to this company](profiles.md#linking-a-work-experience-to-a-company-page-issue-931).
+Current members (an ongoing linked role, no end date) lead; past members follow,
+tagged "Ehemalig". Each row is the member's avatar + name (a crawlable
+`<a href>` to their profile) plus the linked role's title **exactly as they wrote
+it** — titles stay the member's own words, never normalized. The list is
+offset-paginated (`Companies.company_people_page/2`, a "Load more" over the
+socket); `Companies.company_people_count/1` is the formatted total.
+
+Privacy is the **member-directory gate**: only members in
+`Vutuv.Directory.indexable_users` semantics (confirmed, not search-opted-out, not
+moderation-hidden) appear, to every viewer — so a member who opted out of public
+listing is never surfaced through a company page either. The same gate feeds the
+agent-format people list (`CompanyDoc` → md/txt/json/xml), kept in sync by the
+drift test. The People section gives company pages real crawlable substance and
+internal links to profiles (both help ranking).
+
 ## Engagement
 
 Like + bookmark reuse the shared `Vutuv.Engagement` insert kernel. Like counts

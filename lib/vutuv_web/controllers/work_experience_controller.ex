@@ -2,6 +2,8 @@ defmodule VutuvWeb.WorkExperienceController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts
+  alias Vutuv.Companies
+  alias Vutuv.Companies.CompanyImage
   alias Vutuv.Profiles.WorkExperience
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -28,7 +30,7 @@ defmodule VutuvWeb.WorkExperienceController do
       conn.assigns[:user]
       |> Repo.preload(
         work_experiences:
-          from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date()
+          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(), [:company]}
       )
 
     AgentDocs.respond(conn,
@@ -53,7 +55,7 @@ defmodule VutuvWeb.WorkExperienceController do
       conn.assigns[:user]
       |> Repo.preload(
         work_experiences:
-          from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date()
+          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(), [:company]}
       )
 
     render(conn, "manage.html",
@@ -99,7 +101,12 @@ defmodule VutuvWeb.WorkExperienceController do
 
   def new(conn, _params) do
     changeset = WorkExperience.changeset(%WorkExperience{})
-    render(conn, "new.html", changeset: changeset, current_year: current_year())
+
+    render(conn, "new.html",
+      changeset: changeset,
+      current_year: current_year(),
+      linked_company: linked_company_payload(changeset)
+    )
   end
 
   def create(conn, %{"work_experience" => work_experience_params}) do
@@ -112,17 +119,17 @@ defmodule VutuvWeb.WorkExperienceController do
       flash: gettext("Work experience created successfully."),
       redirect_to: ~p"/settings/work_experiences",
       render: "new.html",
-      assigns: [current_year: current_year()]
+      assigns: [current_year: current_year(), linked_company: linked_company_payload(changeset)]
     )
   end
 
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :job to conn.assigns[:user], so no ownership re-check.
+    job = Repo.preload(conn.assigns[:job], :company)
+
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", work_experience: conn.assigns[:job]),
-      doc: fn ->
-        SectionDocs.build_show(conn.assigns[:user], :work_experiences, conn.assigns[:job])
-      end
+      html: &render(&1, "show.html", work_experience: job),
+      doc: fn -> SectionDocs.build_show(conn.assigns[:user], :work_experiences, job) end
     )
   end
 
@@ -133,7 +140,8 @@ defmodule VutuvWeb.WorkExperienceController do
     render(conn, "edit.html",
       work_experience: work_experience,
       changeset: changeset,
-      current_year: current_year()
+      current_year: current_year(),
+      linked_company: linked_company_payload(changeset)
     )
   end
 
@@ -145,8 +153,43 @@ defmodule VutuvWeb.WorkExperienceController do
       flash: gettext("Work experience updated successfully."),
       redirect_to: ~p"/settings/work_experiences",
       render: "edit.html",
-      assigns: [work_experience: work_experience, current_year: current_year()]
+      assigns: [
+        work_experience: work_experience,
+        current_year: current_year(),
+        linked_company: linked_company_payload(changeset)
+      ]
     )
+  end
+
+  # The editor's quiet "link to a verified company page" suggestion (issue #931):
+  # a JSON best-match for the free-text organization the member is typing. Lives
+  # in the login-required /settings scope, so only a member editing their own
+  # experience can query it.
+  def company_suggestions(conn, params) do
+    json(conn, %{company: link_payload(Companies.suggest_company_for_org(params["q"]))})
+  end
+
+  # The currently-linked company (if any) behind a changeset, so the edit form
+  # can render the "Verknüpft mit …" state and its unlink control on load. Only
+  # ever an active company (a stale link renders as plain text).
+  defp linked_company_payload(changeset) do
+    changeset
+    |> Ecto.Changeset.get_field(:company_id)
+    |> case do
+      nil -> nil
+      company_id -> link_payload(Companies.get_active_company(company_id))
+    end
+  end
+
+  defp link_payload(nil), do: nil
+
+  defp link_payload(company) do
+    %{
+      id: company.id,
+      name: company.name,
+      path: Companies.canonical_path(company),
+      logo_url: company.logo && CompanyImage.token_url(company.logo, "feed")
+    }
   end
 
   defp current_year, do: Vutuv.BerlinTime.today().year

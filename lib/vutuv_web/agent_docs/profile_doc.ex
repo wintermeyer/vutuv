@@ -151,7 +151,9 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
     Repo.preload(user,
       social_media_accounts: SocialMediaAccount.ordered(),
       user_tags: UserTag.ordered_by_endorsements(),
-      work_experiences: WorkExperience.order_by_date(WorkExperience),
+      # :company rides along so the doc's work entries can carry the linked
+      # verified company page (issue #931), matching the profile card.
+      work_experiences: {WorkExperience.order_by_date(WorkExperience), [:company]},
       educations: Education.order_by_date(Education),
       # The anonymous public view hides expired credentials (issue #859).
       qualifications: Qualification.visible_to(false) |> Qualification.ordered(),

@@ -23,11 +23,15 @@ defmodule Vutuv.Profiles.WorkExperience do
     field(:slug, :string)
 
     belongs_to(:user, Vutuv.Accounts.User)
+    # Optional link to a verified company page (issue #931). nil = free-text
+    # only; the `organization` column above stays authoritative for display
+    # whenever there is no link. Never required, never rewrites the member's text.
+    belongs_to(:company, Vutuv.Companies.Company)
 
     timestamps()
   end
 
-  @cast_fields ~w(title description kind start_month start_year organization end_month end_year slug)a
+  @cast_fields ~w(title description kind start_month start_year organization end_month end_year slug company_id)a
 
   @doc "The known categories, in display order."
   def kinds, do: @kinds
@@ -50,11 +54,42 @@ defmodule Vutuv.Profiles.WorkExperience do
     |> validate_length(:organization, max: 255)
     |> validate_length(:description, max: 10_000)
     |> ChangesetHelpers.validate_period()
+    |> validate_company_link()
     |> create_slug
     # The slug derives from title + organization, so two near-cap values can
     # still overrun its own varchar(255) column.
     |> validate_length(:slug, max: 255)
     |> unique_constraint(:slug)
+  end
+
+  # Issue #931: a link is a display convenience the member opts into by accepting
+  # a suggestion, so the target is only ever a **verified** (active, non-frozen)
+  # company. A company_id that is not currently linkable — unknown, pending,
+  # frozen or archived — is silently dropped back to nil rather than erroring:
+  # the member never types the id (it rides in from the suggestion), so a stale
+  # target should quietly fall back to the free-text organization, not block the
+  # save. `foreign_key_constraint/2` still guards a genuinely dangling id.
+  defp validate_company_link(changeset) do
+    changeset =
+      case get_change(changeset, :company_id) do
+        nil ->
+          changeset
+
+        company_id ->
+          if linkable_company?(company_id),
+            do: changeset,
+            else: put_change(changeset, :company_id, nil)
+      end
+
+    foreign_key_constraint(changeset, :company_id)
+  end
+
+  defp linkable_company?(company_id) do
+    Vutuv.Repo.exists?(
+      from(c in Vutuv.Companies.Company,
+        where: c.id == ^company_id and c.status == "active" and is_nil(c.frozen_at)
+      )
+    )
   end
 
   defp create_slug(changeset) do
