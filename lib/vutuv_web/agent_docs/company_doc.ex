@@ -15,7 +15,7 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
 
   @doc "One company page."
   def build_show(company, domains, aliases \\ []) do
-    AgentDocs.doc_meta("company", "/companies/#{company.slug}",
+    AgentDocs.doc_meta("company", canonical_path(company),
       noindex: not company.seo?,
       noai: not company.geo?
     )
@@ -49,11 +49,17 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
             name: company.name,
             city: company.city,
             country: Countries.name(company.country),
-            url: AgentDocs.abs_url("/companies/#{company.slug}")
+            url: AgentDocs.abs_url(canonical_path(company))
           }
         end)
     })
   end
+
+  # A company that claimed a root handle (issue #941) is canonical at
+  # `/:handle`; the agent docs point there too, matching the HTML rel=canonical
+  # and the sitemap. A handle-less company stays at `/companies/:slug`.
+  defp canonical_path(%{username: username}) when is_binary(username), do: "/" <> username
+  defp canonical_path(company), do: "/companies/#{company.slug}"
 
   defp primary_domain(domains) do
     case Enum.find(domains, & &1.primary?) || List.first(domains) do

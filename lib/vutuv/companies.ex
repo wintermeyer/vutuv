@@ -26,6 +26,7 @@ defmodule Vutuv.Companies do
   alias Vutuv.Companies.CompanyRole
   alias Vutuv.Companies.Verification
   alias Vutuv.Engagement
+  alias Vutuv.Handles
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
@@ -42,6 +43,27 @@ defmodule Vutuv.Companies do
   def get_company!(id), do: Repo.get!(Company, id)
   def get_company_by_slug(slug) when is_binary(slug), do: Repo.get_by(Company, slug: slug)
   def get_company_by_slug(_), do: nil
+
+  @doc "Fetches a company by its opt-in root handle (issue #941), or nil."
+  def get_company_by_username(username) when is_binary(username),
+    do: Repo.get_by(Company, username: username)
+
+  def get_company_by_username(_), do: nil
+
+  @doc """
+  Fetches a company by its root handle (issue #941) if `viewer` may see it, the
+  handle-namespace twin of `fetch_visible_company/2`. Returns
+  `{:error, :not_found}` for an unknown handle or a page hidden from `viewer`.
+  """
+  def fetch_visible_company_by_username(username, viewer) do
+    case get_company_by_username(username) do
+      nil ->
+        {:error, :not_found}
+
+      company ->
+        if company_visible_to?(company, viewer), do: {:ok, company}, else: {:error, :not_found}
+    end
+  end
 
   @doc """
   Fetches an active, non-frozen company by slug for a public viewer, or the
@@ -338,6 +360,37 @@ defmodule Vutuv.Companies do
       {:ok, %{company: updated}} -> {:ok, updated}
       {:error, :company, changeset, _} -> {:error, changeset}
       {:error, _step, _reason, _} -> {:error, %{changeset | action: :update}}
+    end
+  end
+
+  @doc """
+  Claims (or changes) the company's opt-in root handle (issue #941): validates
+  the grammar, then upserts the `handles` registry row in the same transaction,
+  so a handle already held by a member or another company loses on the unique
+  index and comes back as a `:username` changeset error. Owner-only — the caller
+  gates on `owner?/2`.
+  """
+  def claim_handle(%Company{} = company, attrs) do
+    changeset = Company.handle_changeset(company, attrs)
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:company, changeset)
+    |> Ecto.Multi.run(:handle, fn repo, %{company: updated} ->
+      Handles.put_company_handle(repo, updated)
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{company: updated}} ->
+        {:ok, updated}
+
+      {:error, :company, changeset, _} ->
+        {:error, changeset}
+
+      {:error, :handle, _handle_changeset, _} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:username, "has already been taken")
+         |> Map.put(:action, :update)}
     end
   end
 

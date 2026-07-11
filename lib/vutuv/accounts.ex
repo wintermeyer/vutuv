@@ -19,6 +19,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.UsernameChange
   alias Vutuv.Accounts.ViewerExclusion
   alias Vutuv.Deliverability
+  alias Vutuv.Handles
   alias Vutuv.LoginCodes
   alias Vutuv.Moderation
   alias Vutuv.Notifications.Bounces
@@ -32,12 +33,22 @@ defmodule Vutuv.Accounts do
   # ── Registration ──
 
   def register_user(conn, user_params, assocs \\ []) do
-    user_params
-    |> registration_username()
-    |> user_changeset(conn, user_params, assocs)
-    |> Repo.insert()
+    changeset =
+      user_params
+      |> registration_username()
+      |> user_changeset(conn, user_params, assocs)
+
+    # The member's registry row (issue #941) is written in the same transaction
+    # as the insert, so the shared handle namespace stays airtight: an
+    # auto-generated handle already avoids every taken handle
+    # (registration_username/1 checks the `handles` registry), and this insert is
+    # the DB backstop for the rare race.
+    Ecto.Multi.new()
+    |> Ecto.Multi.insert(:user, changeset)
+    |> Ecto.Multi.run(:handle, fn repo, %{user: user} -> Handles.put_user_handle(repo, user) end)
+    |> Repo.transaction()
     |> case do
-      {:ok, user} ->
+      {:ok, %{user: user}} ->
         # The sign-up form's "Your tags" field (the virtual `tag_list`): turn
         # it into real user tags now that the user row exists. The field is
         # split on both commas and spaces (`parse_tag_names/1`), so a member who
@@ -60,8 +71,18 @@ defmodule Vutuv.Accounts do
         # delete_unconfirmed_registrations/1 and must not inflate the total.
         {:ok, user}
 
-      error ->
-        error
+      # The insert failed on the user changeset (invalid input, email taken):
+      # return it unchanged so email_already_taken?/1 can still classify it.
+      {:error, :user, changeset, _} ->
+        {:error, changeset}
+
+      # The registry insert lost a race for the auto-generated handle (all but
+      # impossible): surface it as a username error rather than a raw exception.
+      {:error, :handle, _handle_changeset, _} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:username, "has already been taken")
+         |> Map.put(:action, :insert)}
     end
   end
 
@@ -94,6 +115,9 @@ defmodule Vutuv.Accounts do
     if user_params["first_name"] != nil or user_params["last_name"] != nil do
       struct = %User{first_name: user_params["first_name"], last_name: user_params["last_name"]}
 
+      # Collision-avoidance stays scoped to existing member handles (unchanged).
+      # The shared `handles` registry insert in register_user/3 is the DB backstop
+      # for the rare case an auto-handle equals a company handle (issue #941).
       Vutuv.SlugHelpers.gen_handle_unique(struct, User, :username, ReservedSlugs.list())
     end
   end
@@ -1536,6 +1560,12 @@ defmodule Vutuv.Accounts do
 
     Ecto.Multi.new()
     |> Ecto.Multi.update(:user, changeset)
+    # Move the member's registry row to the new handle (issue #941). A handle
+    # held by a company loses on the `handles` unique index here and rolls the
+    # whole rename back, so the shared namespace stays airtight both ways.
+    |> Ecto.Multi.run(:handle, fn repo, %{user: updated} ->
+      Handles.put_user_handle(repo, updated)
+    end)
     |> Ecto.Multi.insert(:change, fn %{user: updated} ->
       %UsernameChange{user_id: user.id, value: updated.username}
     end)
@@ -1547,6 +1577,12 @@ defmodule Vutuv.Accounts do
 
       {:error, :user, changeset, _} ->
         {:error, changeset}
+
+      {:error, :handle, _handle_changeset, _} ->
+        {:error,
+         changeset
+         |> Ecto.Changeset.add_error(:username, "has already been taken")
+         |> Map.put(:action, :update)}
     end
   end
 

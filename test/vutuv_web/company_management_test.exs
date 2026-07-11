@@ -174,6 +174,47 @@ defmodule VutuvWeb.CompanyManagementTest do
     end
   end
 
+  describe "root handle on the edit page (issue #941)" do
+    test "owner claims a handle and the company gets a root URL", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      company = active_company_for(owner)
+
+      {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}/edit")
+
+      view
+      |> element("#claim-handle-form")
+      |> render_submit(%{"username" => "acmehandle"})
+
+      assert Companies.get_company(company.id).username == "acmehandle"
+
+      # The company page is now reachable at the root, canonical there, with
+      # /companies/:slug pointing at it.
+      root = build_conn() |> get("/acmehandle") |> html_response(200)
+      assert root =~ company.name
+
+      slug_page = build_conn() |> get(~p"/companies/#{company.slug}") |> html_response(200)
+      assert slug_page =~ ~s(rel="canonical")
+      assert slug_page =~ "/acmehandle"
+    end
+
+    test "owner cannot claim a handle already held by a member", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      company = active_company_for(owner)
+      member = insert(:activated_user, username: "takenhandle")
+      {:ok, _} = Vutuv.Handles.put_user_handle(member)
+
+      {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}/edit")
+
+      html =
+        view
+        |> element("#claim-handle-form")
+        |> render_submit(%{"username" => "takenhandle"})
+
+      assert html =~ "has already been taken"
+      assert is_nil(Companies.get_company(company.id).username)
+    end
+  end
+
   describe "admin dashboard" do
     test "an admin freezes and unfreezes a company", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)

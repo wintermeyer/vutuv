@@ -36,6 +36,8 @@ defmodule VutuvWeb.CompanyLive.Edit do
       |> assign(:aliases, Companies.list_aliases(company))
       |> assign(:alias_name, "")
       |> assign(:alias_kind, "alias")
+      |> assign(:handle_value, company.username || "")
+      |> assign(:handle_error, nil)
       |> allow_upload(:logo,
         accept: Vutuv.CompanyImageStore.extension_whitelist(),
         max_entries: 1,
@@ -117,8 +119,34 @@ defmodule VutuvWeb.CompanyLive.Edit do
     end
   end
 
+  def handle_event("claim_handle", %{"username" => username}, socket) do
+    case Companies.claim_handle(socket.assigns.company, %{"username" => username}) do
+      {:ok, company} ->
+        {:noreply,
+         socket
+         |> assign(:company, company)
+         |> assign(:handle_value, company.username)
+         |> assign(:handle_error, nil)
+         |> put_flash(:info, gettext("Your company handle is set."))}
+
+      {:error, changeset} ->
+        {:noreply,
+         socket
+         |> assign(:handle_value, username)
+         |> assign(:handle_error, handle_error_message(changeset))}
+    end
+  end
+
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
+
+  # First field error on the handle changeset, translated for display.
+  defp handle_error_message(changeset) do
+    case changeset.errors[:username] do
+      {msg, opts} -> translate_error({msg, opts})
+      _ -> gettext("That handle is not available.")
+    end
+  end
 
   defp consume_logo(socket, company) do
     results =
@@ -301,6 +329,51 @@ defmodule VutuvWeb.CompanyLive.Edit do
             class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
           >
             {gettext("Add")}
+          </button>
+        </.form>
+      </.card>
+
+      <.card :if={@owner?} class="mt-8">
+        <.section_title>{gettext("Root handle")}</.section_title>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Claim a short @handle so this company has its own root URL, like a member profile. Letters, numbers and underscores, 3 to 15 characters."
+          )}
+        </p>
+
+        <p :if={@company.username} class="mt-3 text-sm text-slate-700 dark:text-slate-300">
+          {gettext("Reachable at")}
+          <a
+            href={"/" <> @company.username}
+            class="font-semibold text-brand-600 hover:text-brand-700"
+          >
+            {VutuvWeb.Endpoint.host()}/{@company.username}
+          </a>
+        </p>
+
+        <.form
+          for={%{}}
+          id="claim-handle-form"
+          phx-submit="claim_handle"
+          class="mt-4 flex flex-wrap items-start gap-3"
+        >
+          <div class="flex-1">
+            <input
+              type="text"
+              name="username"
+              value={@handle_value}
+              autocomplete="off"
+              placeholder={gettext("your_company")}
+              aria-invalid={@handle_error && "true"}
+              class={[input_class(@handle_error not in [nil, ""]), "w-full"]}
+            />
+            <p :if={@handle_error} class="mt-1 text-xs text-red-600">{@handle_error}</p>
+          </div>
+          <button
+            type="submit"
+            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            {if @company.username, do: gettext("Change"), else: gettext("Claim")}
           </button>
         </.form>
       </.card>

@@ -106,10 +106,14 @@ defmodule Vutuv.Sitemap do
     indexable_companies()
     |> order_by([c], c.id)
     |> window(chunk)
-    |> select([c], {c.slug, c.updated_at})
+    |> select([c], {c.slug, c.username, c.updated_at})
     |> Repo.all()
-    |> Enum.map(fn {slug, updated_at} ->
-      {"/companies/" <> slug, NaiveDateTime.to_date(updated_at)}
+    |> Enum.map(fn {slug, username, updated_at} ->
+      # A company that claimed a root handle (issue #941) is canonical at
+      # `/:handle`; list that, matching the page's rel=canonical, so the
+      # sitemap never advertises the `/companies/:slug` duplicate.
+      path = if username, do: "/" <> username, else: "/companies/" <> slug
+      {path, NaiveDateTime.to_date(updated_at)}
     end)
   end
 

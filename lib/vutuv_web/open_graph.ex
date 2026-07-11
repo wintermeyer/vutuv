@@ -254,7 +254,14 @@ defmodule VutuvWeb.OpenGraph do
   layout). Built from the request path only, so volatile query params
   (`?lang`, `?page`) never leak into the canonical. Returns `nil` when there
   is no conn (e.g. an error page rendered without one).
+
+  A controller may set an explicit `:canonical_url` assign to override the
+  request-path default — used by the company page (issue #941), which serves at
+  both `/companies/:slug` and its root `/:handle` and must point both at the
+  single root URL when a handle exists.
   """
+  def canonical_url(%{canonical_url: url}) when is_binary(url), do: url
+
   def canonical_url(%{conn: %Plug.Conn{} = conn}),
     do: VutuvWeb.Endpoint.url() <> canonical_path(conn.request_path)
 

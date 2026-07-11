@@ -26,6 +26,12 @@ defmodule Vutuv.Companies.Company do
   schema "companies" do
     field(:name, :string)
     field(:slug, :string)
+    # The opt-in root handle (issue #941): the company's `@name` in the shared
+    # member/company namespace, reachable at `/:username`. nil = no root URL
+    # (still reachable at `/companies/:slug`). Uniqueness across members and
+    # companies lives in the `handles` registry, not a per-table index; the
+    # grammar mirrors a member username (`Vutuv.Handles.validate_handle/2`).
+    field(:username, :string)
     field(:description, :string)
     field(:website_url, :string)
     field(:logo, :string)
@@ -91,6 +97,21 @@ defmodule Vutuv.Companies.Company do
   @doc "Moves the lifecycle status. Stamping `verified_at` lives in the context (`activate/2`)."
   def status_changeset(company, status) when status in @statuses do
     change(company, status: status)
+  end
+
+  @doc """
+  Claims (or clears) the opt-in root handle (issue #941). The grammar is the
+  member-username grammar (`Vutuv.Handles.validate_handle/2`), so a company
+  handle is indistinguishable from a member handle and can never format-collide.
+  Global uniqueness is enforced by the `handles` registry row that
+  `Vutuv.Companies.claim_handle/2` upserts in the same transaction, so no
+  uniqueness check lives here.
+  """
+  def handle_changeset(company, attrs) do
+    company
+    |> cast(attrs, [:username])
+    |> validate_required(:username)
+    |> Vutuv.Handles.validate_handle(:username)
   end
 
   defp shared_validations(changeset) do

@@ -3,10 +3,19 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   Resolves the `:slug` / `:user_slug` path segment to the member whose
   `username` it is. There is exactly one live handle per member.
 
-  A live handle always wins. Only when the slug resolves to no member do we
-  fall back to `users.legacy_username` - the original handle a member was
-  renamed away from (the dotted / over-length imports) - and 301 to that
-  member's current handle, so an old profile URL keeps working. The
+  A live member handle always wins, and the member fast-path is unchanged: one
+  indexed `users.username` lookup. Only on a miss do we consider the shared
+  handle namespace (issue #941): when the plug is used with
+  `dispatch_company: true` (the bare profile route `/:slug` only), a miss that
+  matches a **company** handle (`companies.username`) renders that company's
+  page in place and halts, so `/lufthansa` serves the Lufthansa page exactly
+  like `/companies/lufthansa`. The member sub-page pipeline (`:user_pipe`) uses
+  the plug **without** the option, so `/:company_handle/followers` and friends
+  stay member-only and 404.
+
+  Failing both, we fall back to `users.legacy_username` — the original handle a
+  member was renamed away from (the dotted / over-length imports) - and 301 to
+  that member's current handle, so an old profile URL keeps working. The
   reconstructed location swaps just the handle segment and carries the query
   string; the agent-format extension (`.md`, `.json`, ...) is re-appended by
   `VutuvWeb.Plug.AgentFormat`. Anything else is a plain 404 - retired handles
@@ -16,28 +25,62 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   import Ecto.Query, only: [from: 2]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Companies
   alias Vutuv.Repo
+  alias VutuvWeb.CompanyController
 
   def init(opts) do
     opts
   end
 
-  def call(%{params: %{"user_slug" => slug}} = conn, _opts), do: resolve(conn, slug)
-  def call(%{params: %{"slug" => slug}} = conn, _opts), do: resolve(conn, slug)
+  def call(%{params: %{"user_slug" => slug}} = conn, opts), do: resolve(conn, slug, opts)
+  def call(%{params: %{"slug" => slug}} = conn, opts), do: resolve(conn, slug, opts)
   def call(conn, _opts), do: invalid_slug(conn)
 
-  defp resolve(conn, slug) do
+  defp resolve(conn, slug, opts) do
     case Repo.get_by(User, username: slug) do
       nil ->
-        case redirect_target(slug) do
-          nil -> invalid_slug(conn)
-          current -> redirect_to_current(conn, slug, current)
-        end
+        miss(conn, slug, opts)
 
       user ->
         conn
         |> Plug.Conn.assign(:user_id, user.id)
         |> Plug.Conn.assign(:user, user)
+    end
+  end
+
+  # No member holds this handle. On the bare profile route, a company handle
+  # renders the company page in place; otherwise fall back to the retired-handle
+  # 301, else 404.
+  defp miss(conn, slug, opts) do
+    company = Keyword.get(opts, :dispatch_company, false) && visible_company(conn, slug)
+
+    cond do
+      company ->
+        conn
+        |> CompanyController.render_page(company)
+        |> Plug.Conn.halt()
+
+      current = redirect_target(slug) ->
+        redirect_to_current(conn, slug, current)
+
+      true ->
+        invalid_slug(conn)
+    end
+  end
+
+  # A company whose root handle is this slug and which `viewer` may see (an
+  # active, non-frozen page for the public; owner/admin also see it earlier), or
+  # nil.
+  defp visible_company(conn, slug) do
+    case Companies.get_company_by_username(slug) do
+      nil ->
+        nil
+
+      company ->
+        if Companies.company_visible_to?(company, conn.assigns[:current_user]),
+          do: company,
+          else: nil
     end
   end
 

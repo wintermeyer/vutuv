@@ -47,20 +47,40 @@ defmodule VutuvWeb.CompanyController do
         ControllerHelpers.render_error(conn, 404)
 
       {:ok, company} ->
-        case AgentDocs.negotiate(conn) do
-          :html ->
-            conn
-            |> AgentDocs.put_html_alternates()
-            |> put_layout(html: false)
-            |> live_render(VutuvWeb.CompanyLive.Show,
-              session: Map.put(base_session(conn), "company_id", company.id)
-            )
-
-          format ->
-            send_company_doc(conn, format, company)
-        end
+        render_page(conn, company)
     end
   end
+
+  @doc """
+  Renders an already-resolved, viewer-visible company page — the HTML LiveView
+  or an agent-format doc, per negotiation. Reused by the root-handle dispatcher
+  (issue #941, `VutuvWeb.Plug.UserResolveSlug`) so `/:handle` and
+  `/companies/:slug` serve the identical page.
+  """
+  def render_page(conn, company) do
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> put_company_canonical(company)
+        |> AgentDocs.put_html_alternates()
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.CompanyLive.Show,
+          session: Map.put(base_session(conn), "company_id", company.id)
+        )
+
+      format ->
+        send_company_doc(conn, format, company)
+    end
+  end
+
+  # When the company has claimed a root handle (issue #941) the canonical URL is
+  # the root `/:handle`, whether the page was reached at `/companies/:slug` or at
+  # `/:handle`. A handle-less company falls through to the request-path default
+  # (its `/companies/:slug`).
+  defp put_company_canonical(conn, %{username: username}) when is_binary(username),
+    do: assign(conn, :canonical_url, VutuvWeb.Endpoint.url() <> "/" <> username)
+
+  defp put_company_canonical(conn, _company), do: conn
 
   def new(conn, _params) do
     case conn.assigns[:current_user] do

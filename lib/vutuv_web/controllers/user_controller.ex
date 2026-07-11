@@ -1,6 +1,6 @@
 defmodule VutuvWeb.UserController do
   use VutuvWeb, :controller
-  plug(VutuvWeb.Plug.UserResolveSlug when action in [:show])
+  plug(VutuvWeb.Plug.UserResolveSlug, [dispatch_company: true] when action in [:show])
   plug(VutuvWeb.Plug.RequireLogin when action in [:delete, :confirm_delete])
   plug(VutuvWeb.Plug.AuthUser when action in [:edit, :update])
   plug(VutuvWeb.Plug.EnsureActivated when action not in [:delete, :confirm_delete])

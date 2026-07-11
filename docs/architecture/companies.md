@@ -8,6 +8,45 @@ foot-gun at the root.
 
 Context: `Vutuv.Companies`. Schemas under `lib/vutuv/companies/`.
 
+## Root handle (`companies.username`, #941)
+
+A company can opt in to a member-style `@handle` and become reachable at the URL
+root, `/:handle`, exactly like a personal profile (`/lufthansa` alongside
+`/wintermeyer`). The handle namespace is **shared** with members: a handle is
+unique across `users.username` **and** `companies.username`. Because Postgres
+cannot span a unique constraint over two tables, that guarantee lives in one
+registry table, `handles` (`Vutuv.Accounts.Handle`, context `Vutuv.Handles`):
+one row per taken handle, `UNIQUE(value)`, owned by a member XOR a company
+(`(user_id IS NOT NULL) <> (company_id IS NOT NULL)`, per-owner partial-unique
+indexes, both FKs `ON DELETE CASCADE`). Every handle write — a member's
+`username_changeset` (register / rename), a company's `Companies.claim_handle/2`
+— upserts its registry row **in the same transaction** as the owner write
+(`Vutuv.Handles.put_user_handle/2` / `put_company_handle/2`), so a colliding
+claim loses on the unique index instead of racing. Resolution itself reads the
+owner tables directly and never touches `handles`; the registry is purely the
+write-time uniqueness lock. `Vutuv.Handles.validate_handle/2` is the single
+grammar definition (Twitter style `^[a-z0-9_]+$`, 3-15, lowercased, never a
+`ReservedSlugs` word), shared by both owner changesets.
+
+Claiming is owner-only, on the company **edit** page (`CompanyLive.Edit`,
+"Root handle" card). It is opt-in and first-come-first-served across the shared
+namespace; a company without a handle is unchanged (reachable only at
+`/companies/:slug`).
+
+**Resolution + canonical.** The root `/:slug` resolver
+(`VutuvWeb.Plug.UserResolveSlug`, `dispatch_company: true` on the bare profile
+route only) keeps the member fast path (`users.username`), and on a miss renders
+the matching company's page in place via `CompanyController.render_page/2`. So a
+handled company serves at **both** `/:handle` and `/companies/:slug` (200), with
+the root URL as **canonical**: `render_page/2` sets the `:canonical_url` assign
+(honored by `OpenGraph.canonical_url/1`) so `/companies/:slug` carries
+`rel="canonical"` → `/:handle`; the sitemap (`Vutuv.Sitemap.company_entries/1`)
+and the agent-doc self-links (`CompanyDoc`) list the root URL too. Member-only
+sub-pages (`/:slug/followers`, ...) never dispatch to a company (the
+`:user_pipe` uses the resolver without the option), so a company handle 404s
+there. Rollout was one additive, N-1-safe deploy (new table + backfill of every
+member's handle + nullable `companies.username`).
+
 ## Trust model
 
 Edit rights over a page come **only** from proving control of the domain, never

@@ -41,8 +41,12 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
   `/search_queries/...` 301 to their new homes (`/login`, `/logout`, `/search`).
   The user scope is the **last** in the router, so static routes always win;
   `Vutuv.Accounts.ReservedSlugs` keeps users from registering a slug that equals
-  a route prefix. The old read-only `/api/1.0` JSON API was removed in favor of
-  `/api/2.0`; only the session-aware vCard survived, at `/:slug/vcard`
+  a route prefix. The URL-root namespace is **shared** with companies: a company
+  can claim a member-style `@handle` and serve at `/:handle` too, with global
+  uniqueness guaranteed by the `handles` registry table (see
+  [companies.md](companies.md), #941). The old read-only `/api/1.0` JSON API was
+  removed in favor of `/api/2.0`; only the session-aware vCard survived, at
+  `/:slug/vcard`
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms
 - **Assets**: esbuild + Tailwind CSS v4; dark mode follows the system
   (`prefers-color-scheme`, no toggle) — legacy pages get their dark styles
