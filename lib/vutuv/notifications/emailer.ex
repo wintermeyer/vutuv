@@ -643,7 +643,19 @@ defmodule Vutuv.Notifications.Emailer do
     )
   end
 
-  # Fixed German recipient and template, like the other operator notices.
+  @doc "Operator notice: one of a company's (non-last) domains was dropped in a re-check."
+  def company_domain_dropped_notice(company, domain) do
+    company_operator_notice(
+      :domain_dropped,
+      company,
+      domain,
+      "vutuv: Firmen-Domain entfernt - #{company.name}"
+    )
+  end
+
+  # Fixed German recipient and template, like the other operator notices. The
+  # notice links to the admin companies dashboard (issue #930) so the reviewer
+  # lands on the oversight page, not just the public page.
   defp company_operator_notice(kind, company, domain, subject_line) do
     base_email()
     |> to(operator_recipient())
@@ -653,6 +665,7 @@ defmodule Vutuv.Notifications.Emailer do
       company: company,
       domain: domain,
       page_url: "#{public_url()}companies/#{company.slug}",
+      admin_url: "#{public_url()}admin/companies",
       url: public_url()
     })
   end

@@ -119,6 +119,32 @@ Reserve honor for **fresh** names. Flipping an already-widely-held tag
 locks its existing holders out of self-removal (there is no per-assignment
 "granted by admin" record); the edit form warns about this.
 
+## Company pages (`/admin/companies`)
+
+`VutuvWeb.Admin.CompanyLive` (issue #930) is the oversight dashboard for the
+verified company pages (`Vutuv.Companies`, see `companies.md`). Three overview
+tiles (live / pending / frozen), a search over **name, alias and domain**, status
+filter chips (all / live / pending / frozen / archived) and a paginated list. All
+filter/status/page/selection state lives in the URL (`push_patch`), so a view is
+shareable.
+
+Opening a company reveals a **detail drawer**: its domains with verification
+state and `last_checked_at`, the team roles, the names/aliases (a flagged alias —
+one matching another verified company — carries an amber ⚑; see the collision
+guardrail in `companies.md`), the rename history (former aliases) and the
+claiming member. The actions act reload-free:
+
+- **Freeze / Unfreeze** — `Companies.admin_set_frozen/2` sets/clears `frozen_at`,
+  the exact effect of the report freeze (`moderation.md`): the page vanishes for
+  the public but stays visible to its owner behind the owner banner.
+- **Archive** — `archive_company/1` sets status `archived`.
+- **Delete** — `delete_company/1`, only for a page with no job postings
+  (`deletable?/1`; issue #932 adds the postings guard); otherwise archive.
+
+A flagged-alias count surfaces both on this page and as the coral "attention"
+badge on the `/admin` company-pages card, and the operator's new-verified /
+domain-dropped notices link here.
+
 ## Delete account (`/admin/users/delete`)
 
 A focused, admins-only **LiveView** for permanently removing an account.

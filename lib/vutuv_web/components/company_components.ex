@@ -125,6 +125,73 @@ defmodule VutuvWeb.CompanyComponents do
     """
   end
 
+  attr(:company, :map, required: true)
+  attr(:active, :atom, required: true)
+  attr(:owner?, :boolean, default: false)
+
+  @doc """
+  The header + tab bar shared by the company management pages (issue #930): a
+  back link to the public page and tabs for Page (edit), Team (roles) and
+  Domains. Team/Domains show only for an owner (admins may edit the page only).
+  """
+  def manage_header(assigns) do
+    ~H"""
+    <div class="mb-6">
+      <.link
+        navigate={"/companies/#{@company.slug}"}
+        class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+      >
+        ← {@company.name}
+      </.link>
+      <nav class="mt-3 flex flex-wrap gap-1 border-b border-slate-200 dark:border-slate-800">
+        <.manage_tab active={@active == :edit} navigate={"/companies/#{@company.slug}/edit"}>
+          {gettext("Page")}
+        </.manage_tab>
+        <.manage_tab :if={@owner?} active={@active == :roles} navigate={"/companies/#{@company.slug}/roles"}>
+          {gettext("Team")}
+        </.manage_tab>
+        <.manage_tab :if={@owner?} active={@active == :domains} navigate={"/companies/#{@company.slug}/domains"}>
+          {gettext("Domains")}
+        </.manage_tab>
+      </nav>
+    </div>
+    """
+  end
+
+  attr(:active, :boolean, default: false)
+  attr(:navigate, :string, required: true)
+  slot(:inner_block, required: true)
+
+  defp manage_tab(assigns) do
+    ~H"""
+    <.link
+      navigate={@navigate}
+      class={[
+        "-mb-px border-b-2 px-3 py-2 text-sm font-semibold",
+        if(@active,
+          do: "border-brand-600 text-brand-700 dark:text-brand-300",
+          else:
+            "border-transparent text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+        )
+      ]}
+    >
+      {render_slot(@inner_block)}
+    </.link>
+    """
+  end
+
+  @doc "The human, localized label for a company role."
+  def role_label("owner"), do: gettext("Owner")
+  def role_label("admin"), do: gettext("Admin")
+  def role_label("recruiter"), do: gettext("Recruiter")
+  def role_label(_), do: gettext("Member")
+
+  @doc "The human, localized label for an alias kind."
+  def alias_kind_label("former"), do: gettext("Former name")
+  def alias_kind_label("brand"), do: gettext("Brand")
+  def alias_kind_label("abbreviation"), do: gettext("Abbreviation")
+  def alias_kind_label(_), do: gettext("Alias")
+
   defp initial(name) do
     name
     |> String.trim()

@@ -22,6 +22,7 @@ defmodule Vutuv.Companies do
   alias Vutuv.Companies.CompanyDomain
   alias Vutuv.Companies.CompanyImage
   alias Vutuv.Companies.CompanyLike
+  alias Vutuv.Companies.CompanyName
   alias Vutuv.Companies.CompanyRole
   alias Vutuv.Companies.Verification
   alias Vutuv.Engagement
@@ -75,13 +76,159 @@ defmodule Vutuv.Companies do
   def agent_visible?(_), do: false
 
   # --- roles ------------------------------------------------------------------
+  #
+  # Powers (issue #930): owner = roles + domains + page + job postings; admin =
+  # page + job postings; recruiter = job postings only. Every role is a
+  # proof-derived power, not an employment claim.
 
-  @doc "Whether `user` may manage `company` (creator or a role holder)."
+  @doc """
+  Whether `user` is company staff (creator or any role holder). This is the
+  *visibility* predicate — a recruiter still sees a pending/frozen page — not
+  the edit predicate; use `can_edit_page?/2` / `owner?/2` for writes.
+  """
   def can_manage?(%Company{} = company, %User{} = user) do
     company.created_by_user_id == user.id or role_holder?(company.id, user.id)
   end
 
   def can_manage?(_, _), do: false
+
+  @doc ~S|The `user`'s role on `company` ("owner"/"admin"/"recruiter"), or nil.|
+  def role_of(%Company{id: id}, %User{id: user_id}) do
+    Repo.one(
+      from(r in CompanyRole, where: r.company_id == ^id and r.user_id == ^user_id, select: r.role)
+    )
+  end
+
+  def role_of(_, _), do: nil
+
+  @doc "Whether `user` is an owner of `company` (manage roles + domains)."
+  def owner?(%Company{} = company, %User{} = user), do: role_of(company, user) == "owner"
+  def owner?(_, _), do: false
+
+  @doc "Whether `user` may edit the company page + aliases (owner or admin)."
+  def can_edit_page?(%Company{} = company, %User{} = user),
+    do: role_of(company, user) in ["owner", "admin"]
+
+  def can_edit_page?(_, _), do: false
+
+  @doc "Whether `user` may manage the roster (owner only)."
+  def can_manage_roles?(company, user), do: owner?(company, user)
+
+  @doc "Whether `user` may manage domains (owner only)."
+  def can_manage_domains?(company, user), do: owner?(company, user)
+
+  @doc "A company's roles, owner → admin → recruiter, each oldest first, user preloaded."
+  def list_roles(%Company{id: id}) do
+    Repo.all(from(r in CompanyRole, where: r.company_id == ^id, preload: [:user]))
+    |> Enum.sort_by(&{role_rank(&1.role), &1.id})
+  end
+
+  defp role_rank("owner"), do: 0
+  defp role_rank("admin"), do: 1
+  defp role_rank("recruiter"), do: 2
+  defp role_rank(_), do: 3
+
+  @doc """
+  Up to six member suggestions for the roles typeahead, matched by `@handle` or
+  name, excluding the ids in `exclude` (the current role holders). Returns `[]`
+  for a term shorter than two characters.
+  """
+  def suggest_members(term, exclude \\ []) do
+    trimmed = term |> to_string() |> String.trim() |> String.trim_leading("@")
+
+    if String.length(trimmed) < 2 do
+      []
+    else
+      like = "%" <> escape_like(trimmed) <> "%"
+
+      Repo.all(
+        from(u in User,
+          where:
+            u.id not in ^exclude and
+              (ilike(u.username, ^like) or ilike(u.first_name, ^like) or ilike(u.last_name, ^like)),
+          order_by: [asc: u.username],
+          limit: 6
+        )
+      )
+    end
+  end
+
+  @doc "Fetches one role row scoped to a company (owner-management actions)."
+  def get_role(%Company{id: id}, role_id) do
+    Repo.one(
+      from(r in CompanyRole, where: r.company_id == ^id and r.id == ^role_id, preload: [:user])
+    )
+  end
+
+  @doc """
+  Grants `user` a role on `company`. Notifies the member (the derived
+  notification feed picks up the row; a live push updates the badge). Returns
+  `{:ok, role}`, `{:error, :already_member}` when they already hold a role, or
+  `{:error, changeset}`.
+  """
+  def add_role(%Company{} = company, %User{} = user, role, %User{} = granted_by)
+      when role in ~w(owner admin recruiter) do
+    %CompanyRole{}
+    |> CompanyRole.changeset(%{
+      company_id: company.id,
+      user_id: user.id,
+      role: role,
+      granted_by_user_id: granted_by.id
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, role_row} ->
+        Vutuv.Activity.notify_company_role(user.id, granted_by, company, role)
+        {:ok, role_row}
+
+      {:error, %{errors: errors} = changeset} ->
+        if Keyword.has_key?(errors, :company_id) or Keyword.has_key?(errors, :user_id),
+          do: {:error, :already_member},
+          else: {:error, changeset}
+    end
+  end
+
+  @doc """
+  Changes an existing role. Refuses to demote the last owner (keeps the
+  ≥ 1-owner invariant). Notifies the member of an upgrade/downgrade.
+  """
+  def update_role(%CompanyRole{} = role_row, new_role, %User{} = actor)
+      when new_role in ~w(owner admin recruiter) do
+    cond do
+      role_row.role == new_role ->
+        {:ok, role_row}
+
+      role_row.role == "owner" and new_role != "owner" and last_owner?(role_row) ->
+        {:error, :last_owner}
+
+      true ->
+        with {:ok, updated} <- role_row |> Ecto.Changeset.change(role: new_role) |> Repo.update() do
+          company = get_company!(updated.company_id)
+          Vutuv.Activity.notify_company_role(updated.user_id, actor, company, new_role)
+          {:ok, updated}
+        end
+    end
+  end
+
+  @doc """
+  Removes a role (an owner removing a member, or a member leaving). Refuses to
+  remove the last owner (a company always keeps ≥ 1 owner).
+  """
+  def remove_role(%CompanyRole{role: "owner"} = role_row) do
+    if last_owner?(role_row), do: {:error, :last_owner}, else: Repo.delete(role_row)
+  end
+
+  def remove_role(%CompanyRole{} = role_row), do: Repo.delete(role_row)
+
+  defp last_owner?(%CompanyRole{company_id: company_id}), do: owner_count(company_id) <= 1
+
+  defp owner_count(company_id) do
+    Repo.aggregate(
+      from(r in CompanyRole, where: r.company_id == ^company_id and r.role == "owner"),
+      :count,
+      :id
+    )
+  end
 
   defp role_holder?(company_id, user_id) do
     Repo.exists?(
@@ -172,11 +319,26 @@ defmodule Vutuv.Companies do
 
   # --- owner edit -------------------------------------------------------------
 
-  @doc "Applies the owner edit form; keeps the slug stable (renames keep the URL)."
+  @doc """
+  Applies the owner/admin edit form; keeps the slug stable (renames keep the
+  URL). A rename auto-appends the old name as a `former` alias, so the rename
+  history is data, not a log file (issue #930).
+  """
   def update_company(%Company{} = company, attrs) do
-    company
-    |> Company.edit_changeset(attrs)
-    |> Repo.update()
+    changeset = Company.edit_changeset(company, attrs)
+    old_name = company.name
+
+    Ecto.Multi.new()
+    |> Ecto.Multi.update(:company, changeset)
+    |> Ecto.Multi.run(:former_alias, fn _repo, %{company: updated} ->
+      if updated.name != old_name, do: record_former_alias(updated, old_name), else: {:ok, nil}
+    end)
+    |> Repo.transaction()
+    |> case do
+      {:ok, %{company: updated}} -> {:ok, updated}
+      {:error, :company, changeset, _} -> {:error, changeset}
+      {:error, _step, _reason, _} -> {:error, %{changeset | action: :update}}
+    end
   end
 
   # --- verification -----------------------------------------------------------
@@ -197,6 +359,111 @@ defmodule Vutuv.Companies do
   @doc "A company's currently verified domains, primary first."
   def verified_domains(%Company{} = company),
     do: Enum.filter(list_domains(company), & &1.verified_at)
+
+  @doc """
+  Adds a second (or further) domain to a company (issue #930): a non-primary,
+  not-yet-verified `CompanyDomain` derived from `url`, using `method`. The owner
+  finishes it with the #929 verification wizard on the domains page (which flips
+  it to verified without touching the company status). Returns `{:ok, domain}`,
+  `{:error, :domain_taken}` when the host already belongs to a company, or
+  `{:error, changeset}`.
+  """
+  def add_domain(%Company{} = company, url, method) when method in ~w(dns well_known) do
+    host = CompanyDomain.normalize(url)
+
+    %CompanyDomain{}
+    |> CompanyDomain.changeset(%{
+      company_id: company.id,
+      domain: host,
+      primary?: false,
+      method: method,
+      verification_token: Verification.gen_token()
+    })
+    |> Repo.insert()
+    |> case do
+      {:ok, domain} -> {:ok, domain}
+      {:error, changeset} -> {:error, domain_error(changeset)}
+    end
+  end
+
+  # A unique-constraint hit on the host means it belongs to another company; any
+  # other error is a plain validation failure (returned as the changeset).
+  defp domain_error(changeset) do
+    taken? =
+      Enum.any?(changeset.errors, fn
+        {:domain, {_msg, opts}} -> opts[:constraint] == :unique
+        _ -> false
+      end)
+
+    if taken?, do: :domain_taken, else: changeset
+  end
+
+  @doc "Fetches one domain row scoped to a company (owner-management actions)."
+  def get_domain(%Company{id: id}, domain_id) do
+    Repo.one(from(d in CompanyDomain, where: d.company_id == ^id and d.id == ^domain_id))
+  end
+
+  @doc """
+  Removes a domain. Refuses to remove the company's **last verified** domain
+  (every active company keeps ≥ 1, like the last owner). Removing the primary
+  auto-promotes the oldest remaining verified domain, so the badge follows.
+  """
+  def remove_domain(%Company{} = company, %CompanyDomain{} = domain) do
+    if domain.verified_at && verified_domain_count(company.id) <= 1 do
+      {:error, :last_domain}
+    else
+      {:ok, _} =
+        Repo.transaction(fn ->
+          Repo.delete!(domain)
+          if domain.primary?, do: promote_new_primary(company.id)
+        end)
+
+      {:ok, company}
+    end
+  end
+
+  # Makes the oldest remaining verified domain the new primary.
+  defp promote_new_primary(company_id) do
+    Repo.one(
+      from(d in CompanyDomain,
+        where: d.company_id == ^company_id and not is_nil(d.verified_at),
+        order_by: [asc: d.inserted_at],
+        limit: 1
+      )
+    )
+    |> case do
+      nil -> :ok
+      domain -> Repo.update!(Ecto.Changeset.change(domain, primary?: true))
+    end
+  end
+
+  @doc """
+  Picks the domain shown in the \"Verifiziert über …\" badge. Only a verified
+  domain can be primary. Flips atomically (old primary off, then new on) so the
+  one-primary partial unique index is never violated mid-write.
+  """
+  def set_primary_domain(%Company{} = company, %CompanyDomain{} = domain) do
+    cond do
+      is_nil(domain.verified_at) ->
+        {:error, :not_verified}
+
+      domain.primary? ->
+        {:ok, domain}
+
+      true ->
+        {:ok, updated} =
+          Repo.transaction(fn ->
+            Repo.update_all(
+              from(d in CompanyDomain, where: d.company_id == ^company.id and d.primary?),
+              set: [primary?: false]
+            )
+
+            Repo.update!(Ecto.Changeset.change(domain, primary?: true))
+          end)
+
+        {:ok, updated}
+    end
+  end
 
   defp verified_domain_count(company_id) do
     Repo.aggregate(
@@ -397,6 +664,12 @@ defmodule Vutuv.Companies do
 
       :demoted_company
     else
+      # A non-last domain was dropped: the page stays verified via its others,
+      # but the operator is still alerted (issue #930).
+      company
+      |> Emailer.company_domain_dropped_notice(domain)
+      |> Emailer.deliver()
+
       :demoted_domain
     end
   end
@@ -533,6 +806,112 @@ defmodule Vutuv.Companies do
   defp saved_order(query, :name), do: order_by(query, [c], asc: fragment("lower(?)", c.name))
   defp saved_order(query, _recent), do: order_by(query, [engagement: e], desc: e.inserted_at)
 
+  # --- aliases (company_names) ------------------------------------------------
+  #
+  # Alternative names a company is findable under (issue #930): the directory and
+  # admin search match names AND aliases. A collision with another verified
+  # company's name/alias is stored but flagged for the admin queue (no
+  # user-facing warning — identical company names are common and legitimate).
+
+  @doc "A company's alternative names, newest kind-grouped, for the edit + admin views."
+  def list_aliases(%Company{id: id}) do
+    Repo.all(from(n in CompanyName, where: n.company_id == ^id, order_by: [asc: n.inserted_at]))
+  end
+
+  @doc "Fetches one alias row scoped to a company (owner/admin edit)."
+  def get_alias(%Company{id: id}, alias_id) do
+    Repo.one(from(n in CompanyName, where: n.company_id == ^id and n.id == ^alias_id))
+  end
+
+  @doc """
+  Adds an alias (kind `alias`/`brand`/`abbreviation`; `former` is minted by a
+  rename). Stored even on a collision, but stamped `flagged_at` for the admin
+  queue when equal (case-insensitive) to another verified company's name or
+  alias. Returns `{:ok, company_name}` or `{:error, changeset}` (a duplicate on
+  this company hits the unique index).
+  """
+  def add_alias(%Company{} = company, name, kind \\ "alias") do
+    flagged_at = if alias_collision?(company.id, name), do: now()
+
+    %CompanyName{}
+    |> CompanyName.changeset(%{
+      company_id: company.id,
+      name: name,
+      kind: kind,
+      flagged_at: flagged_at
+    })
+    |> Repo.insert()
+  end
+
+  @doc "Removes an alias."
+  def remove_alias(%CompanyName{} = company_name), do: Repo.delete(company_name)
+
+  # Records the old name as a `former` alias on rename (idempotent — skips if the
+  # name is already listed), flagging collisions like any other alias.
+  defp record_former_alias(%Company{} = company, old_name) do
+    if is_binary(old_name) and String.trim(old_name) != "" and
+         not alias_exists?(company.id, old_name) do
+      add_alias(company, old_name, "former")
+    else
+      {:ok, nil}
+    end
+  end
+
+  defp alias_exists?(company_id, name) do
+    down = name |> String.trim() |> String.downcase()
+
+    Repo.exists?(
+      from(n in CompanyName,
+        where: n.company_id == ^company_id and fragment("lower(?)", n.name) == ^down
+      )
+    )
+  end
+
+  # Whether `name` equals (case-insensitive) another **verified** (active)
+  # company's name or any of its aliases.
+  defp alias_collision?(company_id, name) do
+    down = name |> to_string() |> String.trim() |> String.downcase()
+
+    name_hit? =
+      Repo.exists?(
+        from(c in Company,
+          where:
+            c.id != ^company_id and c.status == "active" and fragment("lower(?)", c.name) == ^down
+        )
+      )
+
+    name_hit? or
+      Repo.exists?(
+        from(n in CompanyName,
+          join: c in Company,
+          on: c.id == n.company_id,
+          where:
+            n.company_id != ^company_id and c.status == "active" and
+              fragment("lower(?)", n.name) == ^down
+        )
+      )
+  end
+
+  @doc "How many aliases are flagged for the admin queue (a collision guardrail hit)."
+  def flagged_aliases_count do
+    Repo.aggregate(from(n in CompanyName, where: not is_nil(n.flagged_at)), :count, :id)
+  end
+
+  @doc "All flagged aliases (newest first), each with its company, for the admin queue."
+  def list_flagged_aliases do
+    Repo.all(
+      from(n in CompanyName,
+        where: not is_nil(n.flagged_at),
+        order_by: [desc: n.flagged_at],
+        preload: [:company]
+      )
+    )
+  end
+
+  @doc "Clears an alias's admin-queue flag (a human reviewed it and it is fine)."
+  def clear_alias_flag(%CompanyName{} = company_name),
+    do: company_name |> Ecto.Changeset.change(flagged_at: nil) |> Repo.update()
+
   # --- directory --------------------------------------------------------------
 
   @doc """
@@ -568,10 +947,19 @@ defmodule Vutuv.Companies do
 
   defp directory_query(term), do: name_or_city_ilike(directory_query(nil), term)
 
-  # Case-insensitive match on name OR city, with the LIKE wildcards escaped.
+  # Case-insensitive match on name, city OR any alias, LIKE wildcards escaped.
   defp name_or_city_ilike(query, term) do
     pattern = "%" <> escape_like(term) <> "%"
-    from(c in query, where: ilike(c.name, ^pattern) or ilike(c.city, ^pattern))
+
+    from(c in query,
+      where:
+        ilike(c.name, ^pattern) or ilike(c.city, ^pattern) or
+          fragment(
+            "EXISTS (SELECT 1 FROM company_names cn WHERE cn.company_id = ? AND cn.name ILIKE ?)",
+            c.id,
+            ^pattern
+          )
+    )
   end
 
   @doc """
@@ -582,6 +970,121 @@ defmodule Vutuv.Companies do
   def indexable_query do
     from(c in Company, where: c.status == "active" and is_nil(c.frozen_at) and c.seo?)
   end
+
+  # --- admin dashboard (issue #930) -------------------------------------------
+
+  @admin_per_page 25
+
+  @doc "Overview tile counts for /admin/companies (live / pending / frozen)."
+  def admin_overview_counts do
+    %{
+      active:
+        Repo.aggregate(
+          from(c in Company, where: c.status == "active" and is_nil(c.frozen_at)),
+          :count,
+          :id
+        ),
+      pending: Repo.aggregate(from(c in Company, where: c.status == "pending"), :count, :id),
+      frozen: Repo.aggregate(from(c in Company, where: not is_nil(c.frozen_at)), :count, :id)
+    }
+  end
+
+  @doc """
+  A page of the admin company list: filtered by `:status`
+  (`active`/`pending`/`frozen`/`archived`/nil=all) and searched over name,
+  city, alias AND domain. Newest first. Returns the same shape as
+  `directory_page/1`.
+  """
+  def admin_companies_page(opts \\ []) do
+    search = normalize_search(opts[:search])
+
+    query =
+      from(c in Company)
+      |> admin_status_filter(opts[:status])
+      |> then(&if search, do: admin_search(&1, search), else: &1)
+
+    total = Repo.aggregate(query, :count, :id)
+    total_pages = max(1, ceil(total / @admin_per_page))
+    page = (opts[:page] || 1) |> max(1) |> min(total_pages)
+
+    entries =
+      query
+      |> order_by([c], desc: c.inserted_at)
+      |> limit(^@admin_per_page)
+      |> offset(^((page - 1) * @admin_per_page))
+      |> Repo.all()
+
+    %{
+      entries: entries,
+      page: page,
+      total_pages: total_pages,
+      total: total,
+      per_page: @admin_per_page
+    }
+  end
+
+  # "frozen" cuts across status (a frozen page keeps status active); the others
+  # are the status itself, excluding a frozen one so the chips don't double-count.
+  defp admin_status_filter(query, "frozen"), do: where(query, [c], not is_nil(c.frozen_at))
+
+  defp admin_status_filter(query, status) when status in ~w(active pending archived),
+    do: where(query, [c], c.status == ^status and is_nil(c.frozen_at))
+
+  defp admin_status_filter(query, _all), do: query
+
+  defp admin_search(query, term) do
+    pattern = "%" <> escape_like(term) <> "%"
+
+    from(c in query,
+      where:
+        ilike(c.name, ^pattern) or ilike(c.city, ^pattern) or
+          fragment(
+            "EXISTS (SELECT 1 FROM company_names cn WHERE cn.company_id = ? AND cn.name ILIKE ?)",
+            c.id,
+            ^pattern
+          ) or
+          fragment(
+            "EXISTS (SELECT 1 FROM company_domains cd WHERE cd.company_id = ? AND cd.domain ILIKE ?)",
+            c.id,
+            ^pattern
+          )
+    )
+  end
+
+  @doc "Everything the admin detail drawer shows for one company, or nil."
+  def admin_company_detail(id) do
+    case get_company(id) do
+      nil ->
+        nil
+
+      company ->
+        %{
+          company: company,
+          domains: list_domains(company),
+          roles: list_roles(company),
+          aliases: list_aliases(company),
+          claimed_by:
+            company.created_by_user_id && Vutuv.Accounts.get_user(company.created_by_user_id)
+        }
+    end
+  end
+
+  @doc "Admin freeze/unfreeze: sets/clears `frozen_at` (same effect as the report freeze)."
+  def admin_set_frozen(%Company{} = company, frozen?) do
+    frozen_at = if frozen?, do: now()
+    company |> Ecto.Changeset.change(frozen_at: frozen_at) |> Repo.update()
+  end
+
+  @doc "Archives a company page (hides it, keeps the record and its URL reserved)."
+  def archive_company(%Company{} = company) do
+    company |> Company.status_changeset("archived") |> Repo.update()
+  end
+
+  @doc """
+  Whether a company page may be hard-deleted. Issue #932 adds job postings; a
+  page with postings must be archived, not deleted. Until then, always true.
+  """
+  def deletable?(%Company{}), do: true
 
   # --- images -----------------------------------------------------------------
 

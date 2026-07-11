@@ -60,6 +60,70 @@ domain — the domain, not the name, is what viewers trust.
   falls back to `pending` and the operator is alerted
   (`Emailer.company_unverified_notice/2`).
 
+## Team roles (`company_roles`, #930)
+
+A page is run by a team, not just its claimant. Each `CompanyRole` grants a
+proof-derived **power**, never an employment claim:
+
+- **owner** — everything: roles, domains, the page + aliases, and (from issue 5)
+  job postings.
+- **admin** — the page + aliases and job postings, but not roles or domains.
+- **recruiter** — job postings only.
+
+The predicates live in `Vutuv.Companies`: `owner?/2`, `can_edit_page?/2`
+(owner ∪ admin), `can_manage_roles?/2` and `can_manage_domains?/2` (owner). The
+older `can_manage?/2` is the *staff* predicate (creator ∪ any role holder) used
+for **visibility** — a recruiter still sees a pending/frozen page — not for
+writes.
+
+Invariant: **every company keeps ≥ 1 owner.** `remove_role/1` and `update_role/3`
+refuse to remove or demote the last owner (`{:error, :last_owner}`), exactly like
+the last-domain rule. A grant is a notification: the `company_roles` row is a
+source of the derived notification feed (`Vutuv.Activity.company_role_items/3`,
+self-grants excluded so the claim wizard's owner row is not "news"), and
+`Activity.notify_company_role/4` pushes the live badge/toast at grant time. The
+owner-only roster lives at `/companies/:slug/roles`
+(`VutuvWeb.CompanyLive.Roles`, add by `@handle`/email with a live typeahead
+`Companies.suggest_members/2`).
+
+## Multi-domain management (`/companies/:slug/domains`, #930)
+
+A company may prove several domains. Exactly one is `primary?` (the partial
+unique index enforces it); it is the one shown in the "Verifiziert über …"
+badge. `Companies.add_domain/3` creates a further **non-primary, unverified**
+`CompanyDomain`; the owner finishes it with the same #929 wizard on the domains
+page, which flips it to verified without touching the (already active) company
+status. `set_primary_domain/2` only accepts a verified domain and flips
+atomically (old primary off, then new on, so the one-primary index is never
+violated mid-write). `remove_domain/2` refuses the **last verified** domain
+(`{:error, :last_domain}`) and, when it removes the primary, auto-promotes the
+oldest remaining verified domain so the badge follows. The periodic re-check
+(`DomainRecheckSweeper`) drops a failing **non-last** domain with an operator
+alert (`Emailer.company_domain_dropped_notice/2`); only losing the **last**
+verified domain sends the page back to `pending`.
+
+## Aliases (`company_names`, #930)
+
+Alternative names a company is findable under (solves #851): a company that
+trades under several names — its registered name vs. a product brand — is found
+under all of them, because the directory and admin search match names **and**
+aliases (`Companies.name_or_city_ilike/2` adds an `EXISTS` over `company_names`).
+`kind` is `alias | former | brand | abbreviation`. A **rename** auto-appends the
+old name as a `former` alias (`update_company/2` in an `Ecto.Multi`), so the
+rename history is data, not a log file; the slug never changes, so old URLs keep
+resolving. Aliases join the page's agent formats (`.md`/`.txt` "Also known as"
+line, `.json`/`.xml` `aliases` list — `CompanyDoc.build_show/3`) and the public
+page's "Also known as" card, and are edited by owner/admin on
+`/companies/:slug/edit`.
+
+**Collision guardrail:** an alias equal (case-insensitive) to another *verified*
+company's name or alias is stored but stamped `flagged_at` for the admin queue
+(`Companies.add_alias/3`) — there is deliberately **no** user-facing warning or
+confirmation. Identical company names are common and legitimate (many unrelated
+"Müller GmbH"s), so a warning would imply wrongdoing in the normal case and, in
+the abuse case, only tip off a squatter; a human reviews every flag quietly on
+`/admin/companies`.
+
 ## Machine visibility
 
 Two owner toggles, same semantics as a member's `noindex?`/`noai?`:

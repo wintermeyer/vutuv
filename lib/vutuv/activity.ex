@@ -23,6 +23,8 @@ defmodule Vutuv.Activity do
   require Logger
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Companies.Company
+  alias Vutuv.Companies.CompanyRole
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
@@ -168,6 +170,26 @@ defmodule Vutuv.Activity do
     maybe_email(followee_id, follower, :email_on_follower?, fn email, user ->
       Emailer.new_follower_email(email, user, follower)
     end)
+  end
+
+  @doc """
+  Convenience: a "made you an admin of <company>" notification for the member
+  who was granted a company role (issue #930). The derived feed already picks up
+  the `company_roles` row; this live push updates the open session's badge and
+  toast at grant time. The actor is the granting member, rendered as a linked
+  `@handle`.
+  """
+  def notify_company_role(user_id, granter, %Company{} = company, role) do
+    notify(
+      user_id,
+      Map.merge(actor_fields(granter), %{
+        kind: "company_role",
+        role: role,
+        company_name: company.name,
+        company_slug: company.slug,
+        at: DateTime.utc_now()
+      })
+    )
   end
 
   @doc ~S(Convenience: an "endorsed you for <tag>" notification for the tag's owner.)
@@ -342,6 +364,7 @@ defmodule Vutuv.Activity do
         &connection_items(user_id, &1, &2),
         &reply_items(user_id, &1, &2),
         &like_items(user_id, &1, &2),
+        &company_role_items(user_id, &1, &2),
         &moderation_items(user_id, &1, &2),
         &report_protection_items(user_id, &1, &2)
       ],
@@ -383,6 +406,7 @@ defmodule Vutuv.Activity do
             subquery(count_connections(user_id, read_at)) +
             subquery(count_replies(user_id, read_at)) +
             subquery(count_likes(user_id, read_at)) +
+            subquery(count_company_roles(user_id, read_at)) +
             subquery(count_moderation(user_id, read_at)) +
             subquery(count_severances(user_id, read_at)) +
             subquery(count_severance_restores(user_id, read_at))
@@ -508,6 +532,30 @@ defmodule Vutuv.Activity do
       "like-#{id}"
       |> actor_item("like", at, liker)
       |> Map.put(:post_id, post_id)
+    end)
+  end
+
+  # Company-role grants (issue #930): a member made owner/admin/recruiter of a
+  # verified company page. A self-grant (the claim wizard makes the creator
+  # owner) is excluded — the `granted_by != user` filter drops it (and a nil
+  # granter, keeping the count query below in lock-step).
+  defp company_role_items(user_id, limit, cursor) do
+    from(r in CompanyRole,
+      join: c in Company,
+      on: c.id == r.company_id,
+      join: granter in User,
+      on: granter.id == r.granted_by_user_id,
+      where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
+      order_by: [desc: r.inserted_at, desc: r.id],
+      limit: ^limit,
+      select: {r.id, r.inserted_at, granter, r.role, c.name, c.slug}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, granter, role, name, slug} ->
+      "company-role-#{id}"
+      |> actor_item("company_role", at, granter)
+      |> Map.merge(%{role: role, company_name: name, company_slug: slug})
     end)
   end
 
@@ -655,6 +703,14 @@ defmodule Vutuv.Activity do
     from(l in PostLike,
       join: p in assoc(l, :post),
       where: p.user_id == ^user_id and l.user_id != ^user_id,
+      select: %{count: count()}
+    )
+    |> since(read_at)
+  end
+
+  defp count_company_roles(user_id, read_at) do
+    from(r in CompanyRole,
+      where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
       select: %{count: count()}
     )
     |> since(read_at)

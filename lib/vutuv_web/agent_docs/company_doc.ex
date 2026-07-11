@@ -14,7 +14,7 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
   alias VutuvWeb.AgentDocs
 
   @doc "One company page."
-  def build_show(company, domains) do
+  def build_show(company, domains, aliases \\ []) do
     AgentDocs.doc_meta("company", "/companies/#{company.slug}",
       noindex: not company.seo?,
       noai: not company.geo?
@@ -27,6 +27,8 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
       website_url: company.website_url,
       verified_domains: Enum.map(domains, & &1.domain),
       primary_domain: primary_domain(domains),
+      aliases: Enum.map(aliases, &%{name: &1.name, kind: &1.kind}),
+      also_known_as: Enum.map(aliases, & &1.name),
       city: company.city,
       country: company.country,
       country_name: Countries.name(company.country),

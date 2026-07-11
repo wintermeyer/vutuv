@@ -178,6 +178,26 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     >
       {gettext("Take an unwanted username away from a member by force-renaming the account.")}
     </.admin_card>
+
+    <.admin_card
+      icon="building"
+      title={gettext("Company pages")}
+      count={@companies_count}
+      attention={@flagged_aliases_count > 0}
+      href={~p"/admin/companies"}
+      id="admin-companies-link"
+      cta={gettext("Open company oversight")}
+    >
+      <%= if @flagged_aliases_count == 0 do %>
+        {gettext("Verified company pages: domains, team roles, aliases and rename history. Freeze, archive or delete a page.")}
+      <% else %>
+        {ngettext(
+          "%{count} alias matches another verified company and is flagged for review.",
+          "%{count} aliases match another verified company and are flagged for review.",
+          @flagged_aliases_count
+        )}
+      <% end %>
+    </.admin_card>
   </.admin_group>
 
   <.admin_group title={gettext("System & insights")}>

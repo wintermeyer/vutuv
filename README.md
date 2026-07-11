@@ -21,7 +21,9 @@ We use the [MIT License](LICENSE).
   Codeberg accounts (stars, repositories, languages, activity).
 - Verified company pages at `/companies`: a page can only exist once its
   claimant proves control of the company's web domain (a DNS TXT record or a
-  well-known file), so there are no fake or typo'd company entries.
+  well-known file), so there are no fake or typo'd company entries. Each page is
+  run by a team (owner / admin / recruiter roles), can prove several domains, and
+  is findable under alternative names and brands.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an
   authenticator app (TOTP) or a printed one-time code list.
 - Invite non-members by email: the link opens the sign-up form prefilled, with

@@ -44,6 +44,7 @@ defmodule Vutuv.Companies.Company do
     belongs_to(:created_by, Vutuv.Accounts.User, foreign_key: :created_by_user_id)
     has_many(:domains, Vutuv.Companies.CompanyDomain)
     has_many(:roles, Vutuv.Companies.CompanyRole)
+    has_many(:names, Vutuv.Companies.CompanyName)
     has_many(:images, Vutuv.Companies.CompanyImage)
 
     timestamps()

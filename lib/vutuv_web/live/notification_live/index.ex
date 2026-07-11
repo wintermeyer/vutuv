@@ -243,7 +243,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour (follower/reply/connection/
   # the report-protection notice), so the class string lives in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply connection report_protection)
+  @brand_kinds ~w(follower reply connection report_protection company_role)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -265,6 +265,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("connection"), do: "🤝"
   defp kind_glyph("moderation"), do: "⚑"
   defp kind_glyph("report_protection"), do: "🛡"
+  defp kind_glyph("company_role"), do: "🏢"
   defp kind_glyph(_), do: "•"
 
   # The small uppercase tag under the event text. Translated like the text
@@ -276,6 +277,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
   defp kind_label("report_protection"), do: gettext("Report protection")
+  defp kind_label("company_role"), do: gettext("Company role")
   defp kind_label(_), do: gettext("Activity")
 
   # Where clicking the event text leads. Events about one of the viewer's
@@ -285,6 +287,11 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Moderation events lead to the owner's case page (and carry no actor).
   defp notification_target(%{kind: "moderation"} = n, viewer) do
     if is_binary(n[:case_id]) and viewer != nil, do: ~p"/moderation/cases/#{n.case_id}"
+  end
+
+  # A company-role grant opens the company page it was granted on.
+  defp notification_target(%{kind: "company_role"} = n, _viewer) do
+    if is_binary(n[:company_slug]), do: ~p"/companies/#{n.company_slug}"
   end
 
   defp notification_target(n, viewer) do
@@ -315,6 +322,15 @@ defmodule VutuvWeb.NotificationLive.Index do
 
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
   defp notification_text(%{kind: "like"}), do: gettext("liked your post.")
+
+  defp notification_text(%{kind: "company_role"} = n) do
+    case n[:role] do
+      "owner" -> gettext("made you an owner of %{company}.", company: n.company_name)
+      "admin" -> gettext("made you an admin of %{company}.", company: n.company_name)
+      "recruiter" -> gettext("made you a recruiter for %{company}.", company: n.company_name)
+      _ -> gettext("gave you a role at %{company}.", company: n.company_name)
+    end
+  end
 
   # Moderation items carry no actor (reports are anonymous); the text alone
   # tells the owner what happened and links to the case page.

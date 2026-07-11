@@ -199,6 +199,11 @@ defmodule VutuvWeb.Admin.AdminHTML do
           <rect x="3.5" y="5" width="17" height="14" rx="2" />
           <circle cx="9" cy="10" r="1.6" />
           <path d="m5 18 4.5-4.5 3 3L16 12l3.5 3.5" />
+        <% "building" -> %>
+          <path d="M5 21V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v16" />
+          <path d="M15 9h2a2 2 0 0 1 2 2v10" />
+          <path d="M3 21h18" />
+          <path d="M8 7h2M8 11h2M8 15h2" />
       <% end %>
     </svg>
     """

@@ -30,8 +30,12 @@ defmodule VutuvWeb.CompanyLive.Edit do
       |> assign(:locale, locale)
       |> assign(:shell_path, session["request_path"])
       |> assign(:company, company)
+      |> assign(:owner?, Companies.owner?(company, current_user))
       |> assign(:page_title, gettext("Edit %{name}", name: company.name))
       |> assign(:countries, Countries.select_options(locale))
+      |> assign(:aliases, Companies.list_aliases(company))
+      |> assign(:alias_name, "")
+      |> assign(:alias_kind, "alias")
       |> allow_upload(:logo,
         accept: Vutuv.CompanyImageStore.extension_whitelist(),
         max_entries: 1,
@@ -68,6 +72,51 @@ defmodule VutuvWeb.CompanyLive.Edit do
     end
   end
 
+  def handle_event("update_alias", params, socket) do
+    {:noreply,
+     socket
+     |> assign(:alias_name, params["name"] || socket.assigns.alias_name)
+     |> assign(:alias_kind, params["kind"] || socket.assigns.alias_kind)}
+  end
+
+  def handle_event("add_alias", %{"name" => name} = params, socket) do
+    kind = params["kind"] || "alias"
+
+    case String.trim(name) do
+      "" ->
+        {:noreply, socket}
+
+      trimmed ->
+        case Companies.add_alias(socket.assigns.company, trimmed, kind) do
+          {:ok, _} ->
+            {:noreply,
+             socket
+             |> assign(:alias_name, "")
+             |> assign(:aliases, Companies.list_aliases(socket.assigns.company))
+             |> put_flash(:info, gettext("Alias added."))}
+
+          {:error, _changeset} ->
+            {:noreply,
+             put_flash(socket, :error, gettext("That name is already listed for this company."))}
+        end
+    end
+  end
+
+  def handle_event("remove_alias", %{"id" => id}, socket) do
+    case Companies.get_alias(socket.assigns.company, id) do
+      nil ->
+        {:noreply, socket}
+
+      company_name ->
+        {:ok, _} = Companies.remove_alias(company_name)
+
+        {:noreply,
+         socket
+         |> assign(:aliases, Companies.list_aliases(socket.assigns.company))
+         |> put_flash(:info, gettext("Alias removed."))}
+    end
+  end
+
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
@@ -95,6 +144,8 @@ defmodule VutuvWeb.CompanyLive.Edit do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
+      <.manage_header company={@company} active={:edit} owner?={@owner?} />
+
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
         {gettext("Edit %{name}", name: @company.name)}
       </h1>
@@ -204,6 +255,55 @@ defmodule VutuvWeb.CompanyLive.Edit do
           </.link>
         </div>
       </.form>
+
+      <.card class="mt-8">
+        <.section_title>{gettext("Also known as")}</.section_title>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext("Alternative names, brands or abbreviations this company is findable under. A rename keeps the old name here automatically.")}
+        </p>
+
+        <ul :if={@aliases != []} class="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+          <li :for={company_name <- @aliases} id={"alias-#{company_name.id}"} class="flex items-center gap-3 py-2">
+            <span class="min-w-0 flex-1">
+              <span class="truncate font-medium text-slate-900 dark:text-slate-100">{company_name.name}</span>
+              <span class="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {alias_kind_label(company_name.kind)}
+              </span>
+            </span>
+            <button
+              type="button"
+              phx-click="remove_alias"
+              phx-value-id={company_name.id}
+              data-confirm={gettext("Remove this name?")}
+              class="shrink-0 text-sm font-semibold text-red-600 hover:text-red-700"
+            >
+              {gettext("Remove")}
+            </button>
+          </li>
+        </ul>
+
+        <.form for={%{}} id="add-alias-form" phx-submit="add_alias" phx-change="update_alias" class="mt-4 flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            name="name"
+            value={@alias_name}
+            autocomplete="off"
+            placeholder={gettext("Alternative name")}
+            class={[input_class(), "flex-1"]}
+          />
+          <select name="kind" class={[input_class(), "w-auto"]}>
+            <option value="alias" selected={@alias_kind == "alias"}>{gettext("Alias")}</option>
+            <option value="brand" selected={@alias_kind == "brand"}>{gettext("Brand")}</option>
+            <option value="abbreviation" selected={@alias_kind == "abbreviation"}>{gettext("Abbreviation")}</option>
+          </select>
+          <button
+            type="submit"
+            class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+          >
+            {gettext("Add")}
+          </button>
+        </.form>
+      </.card>
     </div>
     """
   end

@@ -50,8 +50,11 @@ defmodule VutuvWeb.CompanyLive.Show do
     |> assign(:page_title, company.name)
     |> assign(:verified_domains, Enum.filter(domains, & &1.verified_at))
     |> assign(:primary_domain, primary)
+    |> assign(:aliases, Companies.list_aliases(company))
     |> assign(:country_name, Countries.name(company.country))
     |> assign(:can_manage?, Companies.can_manage?(company, viewer))
+    |> assign(:can_edit?, Companies.can_edit_page?(company, viewer))
+    |> assign(:owner?, Companies.owner?(company, viewer))
     |> assign(:pending?, company.status == "pending")
     |> assign(:frozen?, not is_nil(company.frozen_at))
     |> assign(:engagement, Companies.company_engagement(company, viewer))
@@ -68,7 +71,7 @@ defmodule VutuvWeb.CompanyLive.Show do
 
   def handle_event("set_method", %{"method" => method}, socket)
       when method in ~w(dns well_known) do
-    if socket.assigns.can_manage? and socket.assigns.pending? do
+    if socket.assigns.can_edit? and socket.assigns.pending? do
       {:ok, _domain} = Companies.set_domain_method(socket.assigns.primary_domain, method)
       {:noreply, assign_company(socket, socket.assigns.company, socket.assigns.current_user)}
     else
@@ -77,7 +80,7 @@ defmodule VutuvWeb.CompanyLive.Show do
   end
 
   def handle_event("verify", _params, socket) do
-    if socket.assigns.can_manage? and socket.assigns.pending? do
+    if socket.assigns.can_edit? and socket.assigns.pending? do
       company = socket.assigns.company
       domain = socket.assigns.primary_domain
 
@@ -146,7 +149,7 @@ defmodule VutuvWeb.CompanyLive.Show do
         {gettext("This company page was reported and is hidden while it is reviewed. Only you and the moderators can see it.")}
       </.frozen_banner>
 
-      <%= if @can_manage? and @pending? do %>
+      <%= if @can_edit? and @pending? do %>
         {verify_panel(assigns)}
       <% else %>
         {public_page(assigns)}
@@ -211,13 +214,27 @@ defmodule VutuvWeb.CompanyLive.Show do
                 <span class="sr-only">{gettext("Bookmark")}</span>
               </button>
 
-              <div class="ml-auto flex items-center gap-4 text-sm">
+              <div class="ml-auto flex flex-wrap items-center gap-4 text-sm">
                 <.link
-                  :if={@can_manage?}
+                  :if={@can_edit?}
                   navigate={~p"/companies/#{@company.slug}/edit"}
                   class="font-semibold text-brand-600 hover:text-brand-700"
                 >
                   {gettext("Edit")}
+                </.link>
+                <.link
+                  :if={@owner?}
+                  navigate={~p"/companies/#{@company.slug}/roles"}
+                  class="font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  {gettext("Team")}
+                </.link>
+                <.link
+                  :if={@owner?}
+                  navigate={~p"/companies/#{@company.slug}/domains"}
+                  class="font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  {gettext("Domains")}
                 </.link>
                 <.link
                   :if={@current_user && !@can_manage?}
@@ -245,6 +262,18 @@ defmodule VutuvWeb.CompanyLive.Show do
               <div :if={present?(@company.state)}>{@company.state}</div>
               <div>{@country_name}</div>
             </address>
+          </.card>
+
+          <.card :if={@aliases != []}>
+            <.section_title>{gettext("Also known as")}</.section_title>
+            <ul class="mt-3 flex flex-wrap gap-2">
+              <li
+                :for={company_name <- @aliases}
+                class="rounded-lg bg-slate-100 px-2.5 py-1 text-sm font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                {company_name.name}
+              </li>
+            </ul>
           </.card>
 
           <.card :if={length(@verified_domains) > 1}>
@@ -315,7 +344,7 @@ defmodule VutuvWeb.CompanyLive.Show do
               <code
                 phx-no-curly-interpolation
                 class="mt-2 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-              >{@dns_value}</code>
+              ><%= @dns_value %></code>
             <% else %>
               <p class="text-slate-700 dark:text-slate-300">
                 {gettext("Serve this file at:")}
@@ -323,12 +352,12 @@ defmodule VutuvWeb.CompanyLive.Show do
               <code
                 phx-no-curly-interpolation
                 class="mt-2 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-              >{@well_known_url}</code>
+              ><%= @well_known_url %></code>
               <p class="mt-3 text-slate-700 dark:text-slate-300">{gettext("with this exact content:")}</p>
               <code
                 phx-no-curly-interpolation
                 class="mt-2 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-              >{@well_known_content}</code>
+              ><%= @well_known_content %></code>
             <% end %>
           </div>
 

@@ -183,6 +183,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.description,
       [
         doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
+        also_known_as(doc),
         doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
         "- #{gettext("Address")}: #{doc.address_line}"
       ]
@@ -283,6 +284,12 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp heading(text) do
     text <> "\n" <> String.duplicate("=", min(String.length(text), @width))
   end
+
+  # A company's alternative names (issue #930), or nil when it has none.
+  defp also_known_as(%{also_known_as: [_ | _] = names}),
+    do: "- #{gettext("Also known as")}: #{Enum.join(names, ", ")}"
+
+  defp also_known_as(_doc), do: nil
 
   defp profile_facts(doc) do
     [

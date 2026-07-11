@@ -1,8 +1,9 @@
-<%= if @kind == :verified do %>Eine Firmenseite wurde soeben über die Domain <%= @domain.domain %> verifiziert und ist jetzt öffentlich.<% else %>Eine Firmenseite hat ihre letzte verifizierte Domain (<%= @domain.domain %>) verloren und steht wieder auf "pending". Sie ist nicht mehr öffentlich sichtbar.<% end %>
+<%= cond do %><% @kind == :verified -> %>Eine Firmenseite wurde soeben über die Domain <%= @domain.domain %> verifiziert und ist jetzt öffentlich.<% @kind == :domain_dropped -> %>Eine Firmenseite hat die Domain <%= @domain.domain %> verloren (sie war nach der Prüfung nicht mehr nachweisbar). Die Seite bleibt über ihre übrigen Domains verifiziert und öffentlich.<% true -> %>Eine Firmenseite hat ihre letzte verifizierte Domain (<%= @domain.domain %>) verloren und steht wieder auf "pending". Sie ist nicht mehr öffentlich sichtbar.<% end %>
 
-Firma:  <%= @company.name %>
-Seite:  <%= @page_url %>
-Domain: <%= @domain.domain %> (<%= @domain.method %>)
+Firma:      <%= @company.name %>
+Seite:      <%= @page_url %>
+Domain:     <%= @domain.domain %> (<%= @domain.method %>)
+Verwaltung: <%= @admin_url %>
 
 Diese Nachricht dient der Kontrolle neuer bzw. auffälliger Firmenseiten,
 solange das Volumen gering ist.

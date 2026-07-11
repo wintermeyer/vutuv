@@ -206,6 +206,11 @@ defmodule VutuvWeb.Router do
     get("/companies/new", CompanyController, :new)
     get("/companies/:slug", CompanyController, :show)
     get("/companies/:slug/edit", CompanyController, :edit)
+    # The owner-only team roster and multi-domain management pages (issue #930),
+    # live_render like edit. The fixed second segment keeps them out of the
+    # /:slug agent-format catch-all.
+    get("/companies/:slug/roles", CompanyController, :roles)
+    get("/companies/:slug/domains", CompanyController, :domains)
 
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
@@ -557,6 +562,10 @@ defmodule VutuvWeb.Router do
       live("/newsletter_groups/new", NewsletterGroupLive, :new)
       live("/newsletter_groups/:id", NewsletterGroupLive, :show)
       live("/newsletter_groups/:id/edit", NewsletterGroupLive, :edit)
+
+      # The verified-company oversight dashboard (issue #930): freeze/unfreeze/
+      # archive/delete act reload-free over the socket.
+      live("/companies", CompanyLive, :index)
     end
   end
 

@@ -183,6 +183,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.description,
       [
         doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
+        also_known_as(doc),
         doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
         "- #{gettext("Address")}: #{doc.address_line}"
       ]
@@ -244,6 +245,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     ]
     |> join_blocks()
   end
+
+  # A company's alternative names (issue #930), or nil when it has none.
+  defp also_known_as(%{also_known_as: [_ | _] = names}),
+    do: "- #{gettext("Also known as")}: #{Enum.join(names, ", ")}"
+
+  defp also_known_as(_doc), do: nil
 
   # The YAML frontmatter every Markdown doc starts with.
   defp frontmatter(doc) do

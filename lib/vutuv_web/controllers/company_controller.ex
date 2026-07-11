@@ -84,7 +84,18 @@ defmodule VutuvWeb.CompanyController do
     end
   end
 
-  def edit(conn, %{"slug" => slug}) do
+  def edit(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.CompanyLive.Edit, &Companies.can_edit_page?/2)
+
+  def roles(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.CompanyLive.Roles, &Companies.can_manage_roles?/2)
+
+  def domains(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.CompanyLive.Domains, &Companies.can_manage_domains?/2)
+
+  # Shared gate for the owner/admin management pages: log-in required, then the
+  # per-page permission (`can?`); otherwise a 404 (never reveal the page exists).
+  defp manage(conn, slug, live_view, can?) do
     viewer = conn.assigns[:current_user]
     company = viewer && Companies.get_company_by_slug(slug)
 
@@ -94,10 +105,10 @@ defmodule VutuvWeb.CompanyController do
         |> put_flash(:error, gettext("Please log in first."))
         |> redirect(to: ~p"/login")
 
-      company && Companies.can_manage?(company, viewer) ->
+      company && can?.(company, viewer) ->
         conn
         |> put_layout(html: false)
-        |> live_render(VutuvWeb.CompanyLive.Edit,
+        |> live_render(live_view,
           session: Map.put(base_session(conn), "company_id", company.id)
         )
 
@@ -112,7 +123,8 @@ defmodule VutuvWeb.CompanyController do
   defp send_company_doc(conn, format, company) do
     if Companies.agent_visible?(company) do
       domains = Companies.verified_domains(company)
-      AgentDocs.send_doc(conn, format, CompanyDoc.build_show(company, domains))
+      aliases = Companies.list_aliases(company)
+      AgentDocs.send_doc(conn, format, CompanyDoc.build_show(company, domains, aliases))
     else
       ControllerHelpers.render_error(conn, 404)
     end
