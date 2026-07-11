@@ -34,7 +34,7 @@ defmodule VutuvWeb.CompanyManagementTest do
 
   defp stub_dns(token) do
     Application.put_env(:vutuv, :companies_dns_resolver, fn _host ->
-      [[~c"vutuv-verify=#{token}"]]
+      [[~c"vutuv-company-verify=#{token}"]]
     end)
   end
 
@@ -105,7 +105,7 @@ defmodule VutuvWeb.CompanyManagementTest do
       # The inline verification panel shows the REAL TXT record, not the literal
       # `{@dns_value}` (a phx-no-curly-interpolation interpolation trap).
       html = render(view)
-      assert html =~ "vutuv-verify=#{second.verification_token}"
+      assert html =~ "vutuv-company-verify=#{second.verification_token}"
       refute html =~ "@dns_value"
 
       stub_dns(second.verification_token)
@@ -142,7 +142,7 @@ defmodule VutuvWeb.CompanyManagementTest do
       {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}")
       html = render(view)
 
-      assert html =~ "vutuv-verify=#{domain.verification_token}"
+      assert html =~ "vutuv-company-verify=#{domain.verification_token}"
       refute html =~ "@dns_value"
     end
   end

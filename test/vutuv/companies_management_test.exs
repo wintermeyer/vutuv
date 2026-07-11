@@ -33,7 +33,7 @@ defmodule Vutuv.CompaniesManagementTest do
 
   defp stub_dns(token) do
     Application.put_env(:vutuv, :companies_dns_resolver, fn _host ->
-      [[~c"vutuv-verify=#{token}"]]
+      [[~c"vutuv-company-verify=#{token}"]]
     end)
   end
 

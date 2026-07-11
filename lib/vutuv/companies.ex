@@ -34,7 +34,10 @@ defmodule Vutuv.Companies do
   # Slugs that would shadow a /companies/<word> route.
   @reserved_slugs ~w(new)
   @directory_per_page 24
-  @recheck_interval_hours 24
+  # Domain-ownership proofs (a DNS TXT record / a static well-known file) almost
+  # never change once set, so a weekly re-check is plenty; the hourly sweeper
+  # tick just spreads these checks out rather than bursting them.
+  @recheck_interval_hours 24 * 7
   @grace_days 7
 
   # --- fetch ------------------------------------------------------------------

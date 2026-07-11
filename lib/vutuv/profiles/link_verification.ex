@@ -26,8 +26,17 @@ defmodule Vutuv.Profiles.LinkVerification do
   alias Vutuv.Repo
   alias Vutuv.WebVerification
 
+  # The personal-webpage verification scheme, deliberately distinct from the
+  # `vutuv-company-verify=` scheme companies use (see
+  # `Vutuv.Companies.Verification`), so a link proof never doubles as a company
+  # proof on the same host.
+  @dns_prefix "vutuv-verify="
+  @well_known_path "/.well-known/vutuv-verify.txt"
+
   @grace_days 7
-  @recheck_interval_hours 24
+  # A verified webpage proof rarely changes, so re-check weekly; the hourly
+  # sweeper tick just spreads the checks out rather than bursting them.
+  @recheck_interval_hours 24 * 7
 
   @doc "Whether link verification is enabled for this installation."
   def enabled?, do: Application.get_env(:vutuv, :verify_user_links, true)
@@ -58,10 +67,11 @@ defmodule Vutuv.Profiles.LinkVerification do
 
   @doc "The exact DNS TXT record value the member must publish."
   def dns_txt_value(%Url{verification_token: token}) when is_binary(token),
-    do: WebVerification.dns_txt_value(token)
+    do: WebVerification.dns_txt_value(@dns_prefix, token)
 
   @doc "The well-known URL fetched for the `well_known` method."
-  def well_known_url(%Url{value: value}), do: WebVerification.well_known_url(host(value))
+  def well_known_url(%Url{value: value}),
+    do: WebVerification.well_known_url(host(value), @well_known_path)
 
   @doc "The exact content the well-known file must serve (the token)."
   def well_known_content(%Url{verification_token: token}), do: token
@@ -85,11 +95,12 @@ defmodule Vutuv.Profiles.LinkVerification do
 
   defp proof_present?(%Url{verification_token: token, value: value}, _user, "dns")
        when is_binary(token),
-       do: WebVerification.dns_verified?(host(value), token, dns_resolver())
+       do: WebVerification.dns_verified?(host(value), @dns_prefix, token, dns_resolver())
 
   defp proof_present?(%Url{verification_token: token, value: value}, _user, "well_known")
        when is_binary(token),
-       do: WebVerification.well_known_verified?(host(value), token, req_options())
+       do:
+         WebVerification.well_known_verified?(host(value), @well_known_path, token, req_options())
 
   defp proof_present?(_url, _user, _method), do: false
 

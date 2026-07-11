@@ -134,6 +134,25 @@ defmodule Vutuv.Profiles.LinkVerificationTest do
     end
   end
 
+  describe "links_due_for_recheck/1 (weekly cutoff)" do
+    test "a link checked within the past week is not due; older than a week is" do
+      user = insert(:activated_user)
+      # verified_link/2 stamps last_checked_at two days ago — inside the weekly
+      # window, so it must NOT be due (it would have been under the old 24h one).
+      url = verified_link(user, "dns")
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      refute url.id in Enum.map(LinkVerification.links_due_for_recheck(now), & &1.id)
+
+      older =
+        url
+        |> Url.verification_changeset(%{last_checked_at: NaiveDateTime.add(now, -8 * 86_400)})
+        |> Repo.update!()
+
+      assert older.id in Enum.map(LinkVerification.links_due_for_recheck(now), & &1.id)
+    end
+  end
+
   # A link already verified via `method`, with a token and a recent check.
   defp verified_link(user, method) do
     now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)

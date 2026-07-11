@@ -30,7 +30,7 @@ defmodule Vutuv.CompaniesTest do
   end
 
   defp stub_dns(token) do
-    expected = ~c"vutuv-verify=#{token}"
+    expected = ~c"vutuv-company-verify=#{token}"
     Application.put_env(:vutuv, :companies_dns_resolver, fn _host -> [[expected]] end)
     on_exit(fn -> Application.delete_env(:vutuv, :companies_dns_resolver) end)
   end
@@ -213,6 +213,32 @@ defmodule Vutuv.CompaniesTest do
       assert Repo.get!(CompanyDomain, domain.id).verified_at == nil
       assert Repo.get!(Company, company.id).status == "pending"
       assert_email_sent(fn email -> assert email.subject =~ "nicht mehr verifiziert" end)
+    end
+  end
+
+  describe "domains_due_for_recheck/1 (weekly cutoff)" do
+    test "a domain checked within the past week is not due; older than a week is" do
+      user = insert(:activated_user)
+      {:ok, %{domain: domain}} = Companies.create_pending_company(user, @valid, "dns")
+
+      now = NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+
+      mark = fn days_ago ->
+        domain
+        |> CompanyDomain.check_changeset(%{
+          verified_at: now,
+          last_checked_at: NaiveDateTime.add(now, -days_ago * 86_400)
+        })
+        |> Repo.update!()
+      end
+
+      # Two days ago: inside the weekly window → not due (was due under 24h).
+      mark.(2)
+      refute domain.id in Enum.map(Companies.domains_due_for_recheck(now), & &1.id)
+
+      # Eight days ago: past the 7-day interval → due.
+      mark.(8)
+      assert domain.id in Enum.map(Companies.domains_due_for_recheck(now), & &1.id)
     end
   end
 

@@ -40,7 +40,7 @@ defmodule VutuvWeb.RootHandleTest do
       Companies.create_pending_company(owner, @valid, "dns")
 
     Application.put_env(:vutuv, :companies_dns_resolver, fn _host ->
-      [[~c"vutuv-verify=#{domain.verification_token}"]]
+      [[~c"vutuv-company-verify=#{domain.verification_token}"]]
     end)
 
     {:ok, company} = Companies.verify_dns(company, domain)

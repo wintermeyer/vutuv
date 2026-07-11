@@ -361,8 +361,11 @@ Three methods, the member's choice on the owner-only page at
   hosting (a blog, a `github.io` page, a hosted portfolio); it is the IndieWeb /
   Mastodon standard, completing the loop vutuv already half-emits (`rel="me"` in
   the profile head and on social chips).
-- **DNS / well-known** — the same domain proofs companies use, for a member who
-  controls the whole host, using a per-link `verification_token`.
+- **DNS / well-known** — the same proof mechanism companies use, for a member
+  who controls the whole host, using a per-link `verification_token`. Links use
+  their own scheme (`vutuv-verify=` TXT / `/.well-known/vutuv-verify.txt`),
+  distinct from the company `vutuv-company-verify=` scheme, so a link proof
+  never doubles as a company proof on the same host.
 
 State lives on the `urls` row (`verification_method`, `verification_token`,
 `verified_at`, `last_checked_at`, `grace_deadline_at`) — per-link and independent,

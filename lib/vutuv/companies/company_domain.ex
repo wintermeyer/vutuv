@@ -9,9 +9,9 @@ defmodule Vutuv.Companies.CompanyDomain do
   an address on it, which is why there is no e-mail method: anyone with a
   `@gmail.com` address could otherwise claim the gmail.com page):
 
-    * `dns` — a `vutuv-verify=<token>` TXT record on the domain.
+    * `dns` — a `vutuv-company-verify=<token>` TXT record on the domain.
     * `well_known` — the token served at
-      `https://domain/.well-known/vutuv-verify.txt`.
+      `https://domain/.well-known/vutuv-company-verify.txt`.
 
   Both are re-checked periodically; a failure starts a `grace_deadline_at`
   window before the domain loses verified status.

@@ -66,10 +66,16 @@ of the domain itself. The proof mechanics live in the shared
 `profiles.md`); `Vutuv.Companies.Verification` is the company-flavoured wrapper
 that owns the company gate and test seams:
 
-- **DNS** — a `vutuv-verify=<token>` TXT record on the domain.
+- **DNS** — a `vutuv-company-verify=<token>` TXT record on the domain.
 - **Website file** — the token served at
-  `https://<domain>/.well-known/vutuv-verify.txt`, fetched with `Req` behind the
-  SSRF guard (`Vutuv.Ssrf`), never following redirects.
+  `https://<domain>/.well-known/vutuv-company-verify.txt`, fetched with `Req`
+  behind the SSRF guard (`Vutuv.Ssrf`), never following redirects.
+
+The company scheme (`vutuv-company-verify=` / `/.well-known/vutuv-company-verify.txt`)
+is deliberately distinct from the `vutuv-verify=` scheme personal-webpage links
+use (see `profiles.md`), so proving a link never doubles as proving a company on
+the same host, and a domain owner can hold both proofs at once via one DNS zone
+or two separate well-known files.
 
 There is deliberately **no e-mail method**. An address like `…@gmail.com` proves
 control of a *mailbox*, not of the *domain*, so anyone with a Gmail account
@@ -104,9 +110,11 @@ domain — the domain, not the name, is what viewers trust.
   now**. A successful proof stamps `verified_at`, flips the page to `active`, and
   sends an operator notice (`Emailer.company_verified_notice/2`) so a human
   reviews every new page while volume is low.
-- DNS / well-known domains are **re-checked periodically**
+- DNS / well-known domains are **re-checked weekly**
   (`Vutuv.Companies.DomainRecheckSweeper`, gated by
-  `:recheck_company_domains`). A domain whose record/file has vanished enters a
+  `:recheck_company_domains`; the sweeper ticks hourly but only re-checks
+  domains whose last check is older than the weekly interval, spreading the load
+  rather than bursting it). A domain whose record/file has vanished enters a
   grace window (`grace_deadline_at`, 7 days); once it passes, the domain loses
   verified status, and if it was the company's last verified domain the page
   falls back to `pending` and the operator is alerted

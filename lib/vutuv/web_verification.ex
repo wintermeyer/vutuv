@@ -5,16 +5,19 @@ defmodule Vutuv.WebVerification do
   links (`Vutuv.Profiles.LinkVerification`). Each primitive proves control of a
   web resource without any assumption about who owns it:
 
-    * `dns` — a `vutuv-verify=<token>` TXT record on a host.
-    * `well_known` — the token served at
-      `https://host/.well-known/vutuv-verify.txt`.
+    * `dns` — a `<prefix><token>` TXT record on a host.
+    * `well_known` — the token served at a `.well-known` path on the host.
     * `rel_me` — the page links back to a given URL with `rel="me"` (the
       IndieWeb / Mastodon standard, which needs no token: the back-link target
       is itself the proof).
 
-  The primitives are **config-agnostic**: the DNS resolver and the `Req` options
-  are passed in by the caller, so each context keeps its own test seam and its
-  own outbound-call gate (`:verify_company_domains` / `:verify_user_links`). The
+  The primitives are **config-agnostic**: the DNS prefix, the `.well-known`
+  path, the DNS resolver and the `Req` options are all passed in by the caller,
+  so each context keeps its own verification scheme, its own test seam and its
+  own outbound-call gate (`:verify_company_domains` / `:verify_user_links`).
+  Companies use `vutuv-company-verify=` / `/.well-known/vutuv-company-verify.txt`
+  and personal-webpage links use `vutuv-verify=` / `/.well-known/vutuv-verify.txt`,
+  so a proof for one context never doubles as a proof for the other. The
   `well_known` and `rel_me` fetches run behind the `Vutuv.Ssrf` guard and never
   follow redirects.
   """
@@ -23,8 +26,6 @@ defmodule Vutuv.WebVerification do
 
   alias Vutuv.Ssrf
 
-  @dns_prefix "vutuv-verify="
-  @well_known_path "/.well-known/vutuv-verify.txt"
   @max_well_known_bytes 4_096
   # rel=me links can sit anywhere in the page (a footer, an "about" sidebar), so
   # more of the body must be scanned than for the tiny well-known file, but a
@@ -38,17 +39,19 @@ defmodule Vutuv.WebVerification do
 
   # --- DNS TXT ----------------------------------------------------------------
 
-  @doc "The exact TXT record value that must be published for the `dns` method."
-  def dns_txt_value(token), do: @dns_prefix <> token
+  @doc "The exact TXT record value (`<prefix><token>`) to publish for the `dns` method."
+  def dns_txt_value(prefix, token) when is_binary(prefix) and is_binary(token),
+    do: prefix <> token
 
   @doc """
-  Whether `host` publishes a `vutuv-verify=<token>` TXT record. `resolver` is a
+  Whether `host` publishes a `<prefix><token>` TXT record. `resolver` is a
   `fun(host) -> [txt_record]` where each record is a list of charlist chunks
   (the shape `:inet_res.lookup/3` returns).
   """
-  def dns_verified?(host, token, resolver)
-      when is_binary(host) and is_binary(token) and is_function(resolver, 1) do
-    expected = dns_txt_value(token)
+  def dns_verified?(host, prefix, token, resolver)
+      when is_binary(host) and is_binary(prefix) and is_binary(token) and
+             is_function(resolver, 1) do
+    expected = dns_txt_value(prefix, token)
     Enum.any?(txt_records(host, resolver), &(&1 == expected))
   end
 
@@ -67,17 +70,18 @@ defmodule Vutuv.WebVerification do
 
   # --- well-known file --------------------------------------------------------
 
-  @doc "The URL fetched for the `well_known` method."
-  def well_known_url(host), do: "https://" <> host <> @well_known_path
+  @doc "The URL fetched for the `well_known` method (host + the given `.well-known` path)."
+  def well_known_url(host, path) when is_binary(host) and is_binary(path),
+    do: "https://" <> host <> path
 
   @doc """
-  Whether `https://host/.well-known/vutuv-verify.txt` serves exactly `token`.
-  SSRF-guarded and never follows redirects. `req_options` is merged into the
-  `Req.get/1` options (the test seam).
+  Whether `https://host<path>` serves exactly `token`. SSRF-guarded and never
+  follows redirects. `req_options` is merged into the `Req.get/1` options (the
+  test seam).
   """
-  def well_known_verified?(host, token, req_options)
-      when is_binary(host) and is_binary(token) do
-    case fetch(well_known_url(host), host, req_options, @max_well_known_bytes, "text/plain") do
+  def well_known_verified?(host, path, token, req_options)
+      when is_binary(host) and is_binary(path) and is_binary(token) do
+    case fetch(well_known_url(host, path), host, req_options, @max_well_known_bytes, "text/plain") do
       {:ok, body} -> String.trim(body) == token
       {:error, _} -> false
     end

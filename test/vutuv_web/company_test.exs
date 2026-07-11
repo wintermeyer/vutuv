@@ -42,7 +42,7 @@ defmodule VutuvWeb.CompanyTest do
       Companies.create_pending_company(owner, merged, "dns")
 
     Application.put_env(:vutuv, :companies_dns_resolver, fn _host ->
-      [[~c"vutuv-verify=#{domain.verification_token}"]]
+      [[~c"vutuv-company-verify=#{domain.verification_token}"]]
     end)
 
     {:ok, company} = Companies.verify_dns(company, domain)
@@ -154,7 +154,7 @@ defmodule VutuvWeb.CompanyTest do
         Companies.create_pending_company(user, @valid, "dns")
 
       Application.put_env(:vutuv, :companies_dns_resolver, fn _host ->
-        [[~c"vutuv-verify=#{domain.verification_token}"]]
+        [[~c"vutuv-company-verify=#{domain.verification_token}"]]
       end)
 
       {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}")
