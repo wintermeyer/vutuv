@@ -28,12 +28,12 @@ defmodule Vutuv.Handles do
   alias Vutuv.Repo
 
   @format ~r/^[a-z0-9_]+$/
-  @min_length 3
-  # The single source of truth for the handle length ceiling. Everything else
-  # derives from `max_length/0` / `min_length/0`: the member (`User`) and
+  # The single source of truth for the handle length bounds. Everything else
+  # derives from `min_length/0` / `max_length/0`: the member (`User`) and
   # company changesets (via `validate_handle/2`), the auto-generated handles
-  # (`Vutuv.SlugHelpers`), the username form's `maxlength` + hint, and the
-  # reserved-slug router guard. Change it here and nowhere else.
+  # (`Vutuv.SlugHelpers`), the username form's `minlength`/`maxlength` + hint,
+  # and the reserved-slug router guard. Change them here and nowhere else.
+  @min_length 3
   @max_length 23
 
   def format, do: @format

@@ -37,9 +37,10 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   )
 
   # Personal / brand handles held back from public registration. These are not
-  # routes. `sw`, `aw` and `jw` sit below the 3-character handle minimum, so for
-  # usernames they are belt-and-suspenders; reserving them still steers
-  # auto-generated handles and slug resolution away from these names.
+  # routes. `sw`, `aw` and `jw` sit below the `Vutuv.Handles.min_length/0`
+  # handle minimum, so for usernames they are belt-and-suspenders; reserving
+  # them still steers auto-generated handles and slug resolution away from these
+  # names.
   @handle_slugs ~w(stefan aurelius juna sw aw jw)
 
   @reserved @route_slugs ++ @handle_slugs

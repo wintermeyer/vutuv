@@ -7,6 +7,7 @@
     <%= label(f, :username, gettext("New username")) %>
     <%= text_input(f, :username,
       autofocus: true,
+      minlength: Vutuv.Handles.min_length(),
       maxlength: Vutuv.Handles.max_length(),
       autocomplete: "off",
       autocapitalize: "none",

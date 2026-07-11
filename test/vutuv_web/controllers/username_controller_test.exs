@@ -38,8 +38,9 @@ defmodule VutuvWeb.UsernameControllerTest do
 
       assert html =~ "@#{user.username}"
       assert html =~ ~s(id="slug-form")
-      # The input's maxlength and the length hint both derive from the single
-      # source Vutuv.Handles.max_length/0 (no hardcoded number in the template).
+      # The input's minlength/maxlength and the length hint all derive from the
+      # single source Vutuv.Handles (no hardcoded numbers in the template).
+      assert html =~ ~s(minlength="#{Vutuv.Handles.min_length()}")
       assert html =~ ~s(maxlength="#{Vutuv.Handles.max_length()}")
 
       assert html =~

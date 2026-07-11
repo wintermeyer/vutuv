@@ -1075,9 +1075,9 @@ defmodule Vutuv.Accounts do
   finds nothing left to rename. Referenced by the `NormalizeLegacyUsernames`
   data migration; this is a system correction, not a member action, so it
   deliberately bypasses the username-change quota ledger. (A member whose name
-  is a single letter regenerates to a 1-2 char handle: charset-valid and
-  resolvable, just shy of the 3-char editor minimum, exactly as registration
-  would mint it today.)
+  is a single letter regenerates to a short handle: charset-valid and
+  resolvable, possibly shy of the `Vutuv.Handles.min_length/0` editor minimum,
+  exactly as registration would mint it today.)
   """
   def normalize_legacy_usernames do
     reserved = MapSet.new(ReservedSlugs.list())

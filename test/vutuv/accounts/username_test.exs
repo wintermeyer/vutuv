@@ -43,7 +43,8 @@ defmodule Vutuv.Accounts.SlugTest do
     end
 
     test "rejects too short, too long, and blank values" do
-      refute username_changeset("ab").valid?
+      refute username_changeset(String.duplicate("a", Handles.min_length() - 1)).valid?
+      assert username_changeset(String.duplicate("a", Handles.min_length())).valid?
       refute username_changeset(String.duplicate("a", Handles.max_length() + 1)).valid?
 
       changeset = username_changeset("")
