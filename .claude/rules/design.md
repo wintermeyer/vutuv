@@ -147,7 +147,7 @@ LiveView can sit on either style.
 ### Shell & layout facts (don't re-implement)
 
 - The chrome — sticky top bar + mobile bottom tab bar with the live unread badges — is `VutuvWeb.ShellLive`, embedded in `app.html.heex`. Pages render **inside** it; never add their own nav.
-- **Flash = top-right toasts** (`#toast-tray` in `app.html.heex`). Never add inline flash banners; `VutuvWeb.LayoutHTML.flash/1` and its empty partial were deleted along with the last inline calls.
+- **Flash = top-right toasts** (`#toast-tray` in `app.html.heex`). Never add inline flash banners; `VutuvWeb.LayoutHTML.flash/1` and its empty partial were deleted along with the last inline calls. **Every** toast (info and error alike) auto-dismisses on one uniform timer — `TOAST_DISMISS_MS` in `app.js` (3s) — and the × closes it early; there is no per-toast auto-dismiss flag. Don't re-introduce a "sticky" toast variant.
 - In-app real-time events go through `Vutuv.Activity` (PubSub on `"user:<id>"`) and `VutuvWeb.Presence`.
 - **Gettext locale must be set per process.** `VutuvWeb.Plug.Locale` resolves it per
   request and stores it in the session; LiveViews re-apply it on mount via

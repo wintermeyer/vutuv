@@ -9,9 +9,9 @@ LiveViews fall through to `@socket`. --%>
   {live_render(@socket, VutuvWeb.ShellLive, id: "app-shell-lv", sticky: true, session: shell_session(assigns))}
 <% end %>
 
-<%!-- Flash as top-right toasts. Auto-dismiss + close are wired in app.js
-(`#toast-tray`); on LiveView pages `phx-click="lv:clear-flash"` also clears the
-server-side flash. --%>
+<%!-- Flash as top-right toasts. Every toast auto-dismisses after a few seconds
+(one knob, app.js `TOAST_DISMISS_MS`) and the × closes it early; on LiveView
+pages `phx-click="lv:clear-flash"` also clears the server-side flash. --%>
 <div
   id="toast-tray"
   class="pointer-events-none fixed right-4 top-20 z-50 flex w-80 max-w-[90vw] flex-col gap-2"
@@ -24,7 +24,6 @@ server-side flash. --%>
       role="status"
       class="toast pointer-events-auto flex items-start gap-3 rounded-xl bg-white p-4 shadow-lg ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
       badge_class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"
-      autodismiss
     >
       <:icon>
         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">

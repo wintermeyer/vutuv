@@ -394,21 +394,21 @@ liveSocket.connect()
 window.liveSocket = liveSocket
 
 // Flash toasts. Lives outside LiveView so it also works on classic controller
-// pages: auto-dismiss info/success after a few seconds, wire the × button, and
-// watch the tray so toasts pushed by a LiveView (added to the DOM later) get the
-// same treatment. Errors stay until dismissed.
+// pages: EVERY toast (info and error alike) auto-dismisses after a few seconds,
+// the × button closes it early, and a MutationObserver gives the same treatment
+// to toasts a LiveView pushes into the tray later. One knob for the whole app.
+const TOAST_DISMISS_MS = 3000
+
 function wireToast(el) {
   if (!once(el, "toast")) return
 
   const closeBtn = el.querySelector("[data-toast-close]")
   if (closeBtn) closeBtn.addEventListener("click", () => el.remove())
 
-  if (el.hasAttribute("data-toast-autodismiss")) {
-    // Click the close button instead of removing the node directly: on LiveView
-    // pages the button's phx-click="lv:clear-flash" clears the server-side flash
-    // too, so a later LiveView patch can't resurrect the dismissed toast.
-    setTimeout(() => (closeBtn ? closeBtn.click() : el.remove()), 4500)
-  }
+  // Click the close button instead of removing the node directly: on LiveView
+  // pages the button's phx-click="lv:clear-flash" clears the server-side flash
+  // too, so a later LiveView patch can't resurrect the dismissed toast.
+  setTimeout(() => (closeBtn ? closeBtn.click() : el.remove()), TOAST_DISMISS_MS)
 }
 
 function setupToasts() {

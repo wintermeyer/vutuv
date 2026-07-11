@@ -9,24 +9,24 @@ defmodule VutuvWeb.LayoutHTML do
   @doc """
   One flash toast (the `#toast-tray` entry in `app.html.heex`). The info and
   error toasts are the same shell differing only in the outer ring colour, the
-  ARIA role, the auto-dismiss flag, the icon-badge tint and the icon glyph, so
-  they share this component. The full `class` strings are passed verbatim by
-  the call site (the differing colour tokens are interleaved with shared ones,
-  so splitting them out would reorder tokens); `kind` is the flash key that
-  drives `phx-value-key`, `autodismiss` toggles `data-toast-autodismiss`, and
-  the `:icon` slot carries the badge glyph.
+  ARIA role, the icon-badge tint and the icon glyph, so they share this
+  component. The full `class` strings are passed verbatim by the call site (the
+  differing colour tokens are interleaved with shared ones, so splitting them
+  out would reorder tokens); `kind` is the flash key that drives
+  `phx-value-key`, and the `:icon` slot carries the badge glyph. Auto-dismiss is
+  uniform for every toast and lives in app.js (`TOAST_DISMISS_MS`), so there is
+  no per-toast flag here.
   """
   attr(:kind, :string, required: true)
   attr(:msg, :string, required: true)
   attr(:role, :string, required: true)
   attr(:class, :string, required: true)
   attr(:badge_class, :string, required: true)
-  attr(:autodismiss, :boolean, default: false)
   slot(:icon, required: true)
 
   def toast(assigns) do
     ~H"""
-    <div class={@class} role={@role} data-toast-autodismiss={@autodismiss}>
+    <div class={@class} role={@role}>
       <span class={@badge_class}>
         {render_slot(@icon)}
       </span>
