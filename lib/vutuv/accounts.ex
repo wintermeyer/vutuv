@@ -579,6 +579,10 @@ defmodule Vutuv.Accounts do
     image_tokens =
       Repo.all(from(i in Vutuv.Posts.PostImage, where: i.user_id == ^user.id, select: i.token))
 
+    # The user's job-posting images (issue #932): the rows cascade with the
+    # postings/account, but their on-disk files would be orphaned otherwise.
+    job_image_tokens = Vutuv.Jobs.image_tokens_for_user(user.id)
+
     # The user's link previews: the urls rows cascade with the account, but
     # their screenshot files (keyed by url id) would be orphaned otherwise.
     # Only the id is needed — Screenshot.delete/1 keys its dirs off it.
@@ -625,6 +629,7 @@ defmodule Vutuv.Accounts do
       end)
 
     Enum.each(image_tokens, &Vutuv.PostImageStore.delete/1)
+    Enum.each(job_image_tokens, &Vutuv.JobPostingImageStore.delete/1)
     Enum.each(url_ids, &Vutuv.Screenshot.delete/1)
     Enum.each(screenshot_ids, &Vutuv.Screenshot.delete/1)
     Moderation.EvidenceScreenshot.delete_for_cases(evidence_case_ids)

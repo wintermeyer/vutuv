@@ -136,6 +136,36 @@ if config_env() == :prod do
     config :vutuv, :verify_organization_domains, false
   end
 
+  # Job postings (Vutuv.Jobs). Per-installation tuning of the 90-day lifecycle
+  # and the anti-abuse concurrency caps. Defaults (config.exs) are the vutuv.de
+  # values, so our production needs no entries here.
+  jobs_env =
+    [
+      default_runtime_days: System.get_env("JOB_RUNTIME_DAYS"),
+      max_published_per_member: System.get_env("JOBS_MAX_PER_MEMBER"),
+      max_published_per_organization: System.get_env("JOBS_MAX_PER_ORG")
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.map(fn {key, value} -> {key, String.to_integer(value)} end)
+
+  if jobs_env != [] do
+    config :vutuv, :jobs, Keyword.merge(Application.get_env(:vutuv, :jobs, []), jobs_env)
+  end
+
+  # Offline structured location (Vutuv.Geo). GEO_COUNTRIES (comma-separated ISO
+  # 3166-1 alpha-2 codes) picks which bundled priv/geo/<CC>.txt[.gz] postal
+  # datasets to load; DEFAULT_COUNTRY preselects country inputs. No outbound
+  # calls. An installation that adds a country drops its GeoNames file in and
+  # lists it here — see docs/ADMINS.md.
+  if geo_countries = System.get_env("GEO_COUNTRIES") do
+    codes = geo_countries |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+    config :vutuv, :geo_countries, codes
+  end
+
+  if default_country = System.get_env("DEFAULT_COUNTRY") do
+    config :vutuv, :default_country, String.upcase(default_country)
+  end
+
   # Verified personal-webpage links. VERIFY_USER_LINKS=false disables the rel=me,
   # DNS and well-known link proofs (and their periodic re-check), so no new link
   # can be verified — for installations that must not call out (intranets).

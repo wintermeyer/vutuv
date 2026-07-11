@@ -168,6 +168,24 @@ defmodule Vutuv.Organizations do
   @doc "Whether `user` may manage domains (owner only)."
   def can_manage_domains?(organization, user), do: owner?(organization, user)
 
+  @doc """
+  The active, non-frozen organizations `user` may post a job for (holds any role
+  or created the page). Powers the job-posting editor's attribution select.
+  """
+  def postable_organizations(%User{id: user_id}) do
+    Repo.all(
+      from(o in Organization,
+        left_join: r in OrganizationRole,
+        on: r.organization_id == o.id and r.user_id == ^user_id,
+        where:
+          o.status == "active" and is_nil(o.frozen_at) and
+            (o.created_by_user_id == ^user_id or not is_nil(r.id)),
+        distinct: true,
+        order_by: [asc: o.name]
+      )
+    )
+  end
+
   @doc "An organization's roles, owner → admin → recruiter, each oldest first, user preloaded."
   def list_roles(%Organization{id: id}) do
     Repo.all(from(r in OrganizationRole, where: r.organization_id == ^id, preload: [:user]))

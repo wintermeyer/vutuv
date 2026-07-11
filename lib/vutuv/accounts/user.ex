@@ -273,17 +273,12 @@ defmodule Vutuv.Accounts.User do
 
   def visibilities, do: @visibilities
 
-  # The currencies and periods the salary expectation may use (issue #928).
-  # Whitelisted single sources for the changeset's validate_inclusion and the
-  # Basics-form selects (via desired_salary_currency_options/0 /
-  # desired_salary_period_options/0). Defaults "EUR" / "year".
-  @desired_salary_currencies ~w(EUR USD GBP CHF)
+  # The currencies and periods the salary expectation may use (issue #928): the
+  # shared `Vutuv.Salary` model is the single source, so this and the job-posting
+  # pay range can never drift. Defaults "EUR" / "year".
+  def desired_salary_currencies, do: Vutuv.Salary.currencies()
 
-  def desired_salary_currencies, do: @desired_salary_currencies
-
-  @desired_salary_periods ~w(hour day week month year)
-
-  def desired_salary_periods, do: @desired_salary_periods
+  def desired_salary_periods, do: Vutuv.Salary.periods()
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
@@ -393,8 +388,8 @@ defmodule Vutuv.Accounts.User do
     # validate_number only fires on a present, non-nil change, so clearing the
     # amount (empty field → nil) is valid and simply stores "no expectation".
     |> validate_number(:desired_salary_min, greater_than: 0)
-    |> validate_inclusion(:desired_salary_currency, @desired_salary_currencies)
-    |> validate_inclusion(:desired_salary_period, @desired_salary_periods)
+    |> validate_inclusion(:desired_salary_currency, Vutuv.Salary.currencies())
+    |> validate_inclusion(:desired_salary_period, Vutuv.Salary.periods())
     |> validate_inclusion(:desired_salary_visibility, @visibilities)
     |> nullify_default_birthdate()
     |> validate_birthdate()
@@ -603,23 +598,16 @@ defmodule Vutuv.Accounts.User do
   The translated period noun for a salary expectation (issue #928): "year",
   "month", "week", "day", "hour" — used both in the Basics-form period select
   and the rendered "… per <period>" line on the profile and in the agent docs.
+  Delegates to the shared `Vutuv.Salary` model.
   """
-  def desired_salary_period_label("hour"), do: Gettext.gettext(VutuvWeb.Gettext, "hour")
-  def desired_salary_period_label("day"), do: Gettext.gettext(VutuvWeb.Gettext, "day")
-  def desired_salary_period_label("week"), do: Gettext.gettext(VutuvWeb.Gettext, "week")
-  def desired_salary_period_label("month"), do: Gettext.gettext(VutuvWeb.Gettext, "month")
-  def desired_salary_period_label("year"), do: Gettext.gettext(VutuvWeb.Gettext, "year")
-  def desired_salary_period_label(other), do: other
+  defdelegate desired_salary_period_label(period), to: Vutuv.Salary, as: :period_label
 
   @doc """
   The display symbol for a whitelisted salary currency (issue #928); falls back
   to the code itself for anything unknown. Not translated — currency symbols
-  are locale-independent.
+  are locale-independent. Delegates to the shared `Vutuv.Salary` model.
   """
-  def desired_salary_currency_symbol("EUR"), do: "€"
-  def desired_salary_currency_symbol("USD"), do: "$"
-  def desired_salary_currency_symbol("GBP"), do: "£"
-  def desired_salary_currency_symbol(code), do: code
+  defdelegate desired_salary_currency_symbol(code), to: Vutuv.Salary, as: :currency_symbol
 
   @doc """
   The one-line salary-expectation summary the md/txt agent docs render (issue

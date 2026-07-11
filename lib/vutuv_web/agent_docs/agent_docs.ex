@@ -297,6 +297,12 @@ defmodule VutuvWeb.AgentDocs do
   @doc "Absolute URL for an app path."
   def abs_url(path), do: VutuvWeb.Endpoint.url() <> path
 
+  @doc "An ISO-8601 date string from a NaiveDateTime (or nil), for doc/JSON-LD dates."
+  def iso_date(nil), do: nil
+
+  def iso_date(%NaiveDateTime{} = naive),
+    do: naive |> NaiveDateTime.to_date() |> Date.to_iso8601()
+
   @doc "The doc representation of a person: name, slug, profile URL."
   def person_ref(user) do
     %{

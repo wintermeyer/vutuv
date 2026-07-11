@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+Your job posting "<%= @posting_title %>" expires on <%= Calendar.strftime(@expires_on, "%Y-%m-%d") %>.
+Postings run out after 90 days automatically; there is no renewal.
+
+Filled the role? Close the posting. Still open? Repost it in one tap once it expires, with an
+honest publication date.
+
+See the posting:
+
+<%= @url %>jobs/<%= @posting_slug %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

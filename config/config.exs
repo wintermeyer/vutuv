@@ -124,6 +124,26 @@ config :vutuv, :fetch_code_stats, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
+# Job-posting images: same pattern and limits as post images.
+config :vutuv, :job_posting_images, max_filesize: 6_000_000, max_per_post: 10
+
+# Job postings (Vutuv.Jobs, milestone 11).
+#   * default_runtime_days — how long a published posting stays live before it
+#     auto-expires. Flat, no renewals: a still-open role gets a fresh posting.
+#   * max_published_per_member / _organization — anti-abuse concurrency caps.
+# Runtime overrides: JOB_RUNTIME_DAYS, JOBS_MAX_PER_MEMBER, JOBS_MAX_PER_ORG.
+config :vutuv, :jobs,
+  default_runtime_days: 90,
+  max_published_per_member: 3,
+  max_published_per_organization: 10
+
+# Offline structured location (Vutuv.Geo). :geo_countries lists which bundled
+# GeoNames postal datasets (priv/geo/<CC>.txt[.gz]) to load for zip → lat/lon
+# resolution; :default_country preselects country inputs. No outbound calls —
+# intranet-safe. Runtime overrides: GEO_COUNTRIES (comma list), DEFAULT_COUNTRY.
+config :vutuv, :geo_countries, ~w(DE AT CH)
+config :vutuv, :default_country, "DE"
+
 # Verified organization pages (Vutuv.Organizations): the domain-proof methods, a DNS TXT
 # record and a well-known file. Both prove control of the DOMAIN itself, never
 # merely an address on it (an e-mail code would let anyone with a @gmail.com

@@ -715,6 +715,21 @@ defmodule Vutuv.Notifications.Emailer do
     |> with_appeal_reply_to()
   end
 
+  @doc """
+  Reminds a poster their job posting expires in 7 days (issue #932).
+  Transactional (about their own content), so no opt-out: still open? Close it
+  as filled, or repost it once it expires.
+  """
+  def job_posting_expiry_reminder_email(user, email, posting) do
+    build_email(
+      user,
+      email,
+      "job_expiry_reminder",
+      %{posting_title: posting.title, posting_slug: posting.slug, expires_on: posting.expires_on},
+      fn -> gettext("Your job posting on vutuv expires soon") end
+    )
+  end
+
   # The From (no-reply@) is not read. The deactivation mail is the one message
   # whose copy invites a reply ("appeal by replying to this email"), so route
   # that reply to the monitored legal contact. No other mail sets a Reply-To,

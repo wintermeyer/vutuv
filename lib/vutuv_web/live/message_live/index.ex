@@ -76,7 +76,7 @@ defmodule VutuvWeb.MessageLive.Index do
     socket |> assign(:conversation, nil) |> assign(:other, nil)
   end
 
-  defp apply_action(socket, :show, %{"id" => id}) do
+  defp apply_action(socket, :show, %{"id" => id} = params) do
     user = socket.assigns.current_user
 
     case Chat.get_conversation(user, id) do
@@ -101,12 +101,14 @@ defmodule VutuvWeb.MessageLive.Index do
         |> stream(:messages, Enum.reverse(page.entries), reset: true)
         # Zero the just-opened conversation's unread badge in the sidebar.
         |> reflect_opened_read(conversation.id)
+        # A prefilled draft (e.g. "easy apply" on a job posting) seeds the composer.
+        |> seed_draft(params["body"])
     end
   end
 
   # Entry point for the profile "Message" button: find or create the
   # conversation with that member, then land in its thread.
-  defp apply_action(socket, :new, %{"slug" => slug}) do
+  defp apply_action(socket, :new, %{"slug" => slug} = params) do
     case Vutuv.Accounts.get_user_by_username(slug) do
       nil ->
         socket
@@ -116,7 +118,7 @@ defmodule VutuvWeb.MessageLive.Index do
       other ->
         case Chat.find_or_create_conversation(socket.assigns.current_user, other) do
           {:ok, conversation} ->
-            push_navigate(socket, to: ~p"/messages/#{conversation.id}")
+            push_navigate(socket, to: new_conversation_path(conversation.id, params["body"]))
 
           {:error, :rate_limited} ->
             socket
@@ -130,6 +132,17 @@ defmodule VutuvWeb.MessageLive.Index do
         end
     end
   end
+
+  # A `?body=` param prefills the composer once, on open.
+  defp seed_draft(socket, body) when is_binary(body) and body != "",
+    do: assign(socket, :form, to_form(%{"body" => body}, as: :message))
+
+  defp seed_draft(socket, _body), do: socket
+
+  defp new_conversation_path(id, body) when is_binary(body) and body != "",
+    do: ~p"/messages/#{id}?#{[body: body]}"
+
+  defp new_conversation_path(id, _body), do: ~p"/messages/#{id}"
 
   ## Events
 

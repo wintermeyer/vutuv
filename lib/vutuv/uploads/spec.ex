@@ -63,6 +63,12 @@ defmodule Vutuv.Uploads.Spec do
       %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
       %{name: :feed, fit: {:box_down, 1200}, quality: 58},
       %{name: :large, fit: {:box_down, 1600}, quality: 58}
+    ],
+    # Job-posting gallery images: same sizes as post images.
+    job_posting_image: [
+      %{name: :thumb, fit: {:crop, 320, 320, :center}, quality: 58},
+      %{name: :feed, fit: {:box_down, 1200}, quality: 58},
+      %{name: :large, fit: {:box_down, 1600}, quality: 58}
     ]
   }
 

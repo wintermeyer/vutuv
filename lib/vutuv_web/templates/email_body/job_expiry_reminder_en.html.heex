@@ -1,0 +1,13 @@
+<.email_layout preheader="Your job posting on vutuv expires soon" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Your job posting "{@posting_title}" expires on {Calendar.strftime(@expires_on, "%Y-%m-%d")}.
+    Postings run out after 90 days automatically; there is no renewal.
+  </.email_p>
+  <.email_p>
+    Filled the role? Close the posting. Still open? Repost it in one tap once it expires, with an
+    honest publication date.
+  </.email_p>
+  <.email_button href={"#{@url}jobs/#{@posting_slug}"}>View the posting</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

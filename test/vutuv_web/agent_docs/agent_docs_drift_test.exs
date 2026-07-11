@@ -717,4 +717,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     # A Behörde is not a company: the kind label rides HTML + every agent format.
     assert_fact_everywhere(rendered, "Public authority")
   end
+
+  test "a job posting appears in every format" do
+    posting =
+      Vutuv.JobsHelpers.publish_job!(nil, %{
+        "title" => "Elixir Engineer (m/w/d)",
+        "required_tags" => "Elixir, Phoenix"
+      })
+
+    rendered = formats_for("/jobs/#{posting.slug}")
+    assert_fact_everywhere(rendered, "Elixir Engineer")
+    assert_fact_everywhere(rendered, "Köln")
+    assert_fact_everywhere(rendered, "Phoenix")
+  end
 end

@@ -50,8 +50,8 @@ defmodule VutuvWeb.Plug.AgentFormat do
   # "package.json" must not be read as a `.json` format request — and
   # `.well-known`, whose literal routes end in real .json/.md filenames.
   @skip_prefixes ~w(api admin assets css fonts images js favicon.ico avatars covers
-                    screenshots post_images live phoenix tidewave sent_emails dev search
-                    sitemaps .well-known)
+                    screenshots post_images organization_images job_posting_images live
+                    phoenix tidewave sent_emails dev search sitemaps .well-known)
 
   # Literal routes whose name ends in a known extension.
   @skip_paths ["/robots.txt", "/llms.txt", "/security.txt", "/sitemap.xml"]

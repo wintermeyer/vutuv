@@ -23,6 +23,9 @@ defmodule VutuvWeb.JsonLd do
 
   import Phoenix.HTML, only: [raw: 1]
 
+  alias Vutuv.Jobs
+  alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
@@ -165,6 +168,104 @@ defmodule VutuvWeb.JsonLd do
       "image" => Enum.map(post.images, &image_url/1),
       "mainEntityOfPage" => permalink
     })
+  end
+
+  @doc """
+  A published job posting as schema.org JobPosting (issue #932), from the detail
+  page's assigns. Gate at the call site: only emit for an indexable posting.
+  """
+  def job_posting(%JobPosting{} = posting) do
+    url = AgentDocs.abs_url("/jobs/#{posting.slug}")
+
+    compact(
+      %{
+        "@context" => "https://schema.org",
+        "@type" => "JobPosting",
+        "@id" => url,
+        "url" => url,
+        "title" => posting.title,
+        "description" => posting.description,
+        "datePosted" => AgentDocs.iso_date(posting.first_published_at),
+        "validThrough" => posting.expires_on && Date.to_iso8601(posting.expires_on),
+        "employmentType" => JobPosting.schema_org_employment_type(posting.employment_type),
+        "hiringOrganization" => hiring_organization(posting),
+        "identifier" => %{"@type" => "PropertyValue", "name" => "vutuv", "value" => posting.id},
+        "skills" => job_skills(posting),
+        "directApply" => posting.apply_kind == :message
+      }
+      |> Map.merge(job_location_fields(posting))
+      |> Map.merge(base_salary(posting))
+    )
+  end
+
+  # Search engines require applicantLocationRequirements (and no jobLocation) for
+  # a fully-remote posting; a Place/PostalAddress for onsite and hybrid.
+  defp job_location_fields(%JobPosting{workplace_type: :remote} = posting) do
+    %{
+      "jobLocationType" => "TELECOMMUTE",
+      "applicantLocationRequirements" =>
+        Enum.map(posting.remote_countries, &%{"@type" => "Country", "name" => &1})
+    }
+  end
+
+  defp job_location_fields(%JobPosting{} = posting) do
+    %{
+      "jobLocation" => %{
+        "@type" => "Place",
+        "address" =>
+          compact(%{
+            "@type" => "PostalAddress",
+            "streetAddress" => posting.street_address,
+            "postalCode" => posting.zip_code,
+            "addressLocality" => posting.city,
+            "addressCountry" => posting.country
+          })
+      }
+    }
+  end
+
+  defp base_salary(%JobPosting{employment_type: :volunteer}), do: %{}
+  defp base_salary(%JobPosting{salary_min: nil}), do: %{}
+
+  defp base_salary(%JobPosting{} = posting) do
+    %{
+      "baseSalary" => %{
+        "@type" => "MonetaryAmount",
+        "currency" => posting.salary_currency,
+        "value" =>
+          compact(%{
+            "@type" => "QuantitativeValue",
+            "minValue" => posting.salary_min,
+            "maxValue" => posting.salary_max,
+            "unitText" => String.upcase(posting.salary_period)
+          })
+      }
+    }
+  end
+
+  defp hiring_organization(%JobPosting{organization: %Organization{} = org}) do
+    url = AgentDocs.abs_url(Organizations.canonical_path(org))
+
+    compact(%{
+      "@type" => Organization.schema_org_type(org.kind),
+      "name" => org.name,
+      "url" => url,
+      "logo" => organization_logo_url(org)
+    })
+  end
+
+  defp hiring_organization(%JobPosting{hiring_org_name: name}) when is_binary(name),
+    do: %{"@type" => "Organization", "name" => name}
+
+  defp hiring_organization(%JobPosting{user: user}) do
+    url = AgentDocs.abs_url("/" <> user.username)
+    %{"@type" => "Person", "name" => UserHelpers.full_name(user), "url" => url}
+  end
+
+  # Required tags first (they weigh more in matching), then nice-to-have.
+  defp job_skills(%JobPosting{} = posting) do
+    (Jobs.tags_of(posting, :required) ++ Jobs.tags_of(posting, :nice_to_have))
+    |> Enum.map(& &1.name)
   end
 
   def breadcrumbs(user) do

@@ -63,7 +63,8 @@ defmodule Vutuv.Sitemap do
       users: chunks(Repo.aggregate(indexable_users(), :count)),
       posts: chunks(Repo.aggregate(indexable_posts(), :count)),
       tags: chunks(Repo.aggregate(Tag, :count)),
-      organizations: chunks(Repo.aggregate(indexable_organizations(), :count))
+      organizations: chunks(Repo.aggregate(indexable_organizations(), :count)),
+      jobs: chunks(Repo.aggregate(indexable_jobs(), :count))
     }
   end
 
@@ -117,9 +118,24 @@ defmodule Vutuv.Sitemap do
     end)
   end
 
+  @doc "`{path, lastmod_date}` entries of one job-postings chunk (1-based)."
+  def job_entries(chunk) do
+    indexable_jobs()
+    |> order_by([p], p.id)
+    |> window(chunk)
+    |> select([p], {p.slug, p.updated_at})
+    |> Repo.all()
+    |> Enum.map(fn {slug, updated_at} ->
+      {"/jobs/" <> slug, NaiveDateTime.to_date(updated_at)}
+    end)
+  end
+
   # The crawlable organization set lives in Vutuv.Organizations (the /organizations directory
   # rule), so directory and sitemap can never drift apart.
   defp indexable_organizations, do: Vutuv.Organizations.indexable_query()
+
+  # Likewise the crawlable job-posting set lives in Vutuv.Jobs.
+  defp indexable_jobs, do: Vutuv.Jobs.indexable_query()
 
   defp window(query, chunk) when is_integer(chunk) and chunk >= 1 do
     query |> limit(^@chunk_size) |> offset(^((chunk - 1) * @chunk_size))

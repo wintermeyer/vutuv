@@ -195,6 +195,28 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
+  # A job posting (/jobs/:slug).
+  def render(%{type: "job_posting"} = doc) do
+    [
+      heading(doc.title),
+      [
+        "- #{gettext("Employer")}: #{job_employer(doc.employer)}",
+        "- #{gettext("Employment type")}: #{doc.employment_type}",
+        "- #{gettext("Workplace")}: #{doc.workplace_type}",
+        job_location(doc),
+        doc.salary_line && "- #{gettext("Salary")}: #{doc.salary_line}",
+        doc.posted_on && "- #{gettext("Posted")}: #{doc.posted_on}",
+        doc.expires_on && "- #{gettext("Expires")}: #{doc.expires_on}"
+      ]
+      |> Enum.filter(&is_binary/1),
+      doc.description,
+      job_tags(gettext("Required"), doc.required_tags),
+      job_tags(gettext("Nice to have"), doc.nice_to_have_tags),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
   # The verified-organization directory (/organizations).
   def render(%{type: "organizations"} = doc) do
     [
@@ -307,6 +329,27 @@ defmodule VutuvWeb.AgentDocs.Text do
   end
 
   defp organization_people(_doc), do: nil
+
+  defp job_employer(%{name: name, verified: verified, url: url}) do
+    verified_mark = if verified, do: " (#{gettext("verified")})", else: ""
+    if url, do: "#{name}#{verified_mark} — #{url}", else: "#{name}#{verified_mark}"
+  end
+
+  defp job_location(%{location: %{city: city, country_name: country}}),
+    do:
+      "- #{gettext("Location")}: #{[city, country] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(", ")}"
+
+  defp job_location(%{remote_countries: [_ | _] = countries}),
+    do:
+      "- #{gettext("Location")}: #{gettext("Remote")} (#{Enum.map_join(countries, ", ", & &1.name)})"
+
+  defp job_location(_doc), do: "- #{gettext("Location")}: #{gettext("Remote")}"
+
+  defp job_tags(_label, []), do: nil
+
+  defp job_tags(label, tags) do
+    ["#{label}:", Enum.map(tags, &"- #{&1.name} (#{&1.url})")]
+  end
 
   defp profile_facts(doc) do
     [

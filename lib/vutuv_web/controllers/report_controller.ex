@@ -121,6 +121,8 @@ defmodule VutuvWeb.ReportController do
   defp preview(%Vutuv.Organizations.Organization{} = organization),
     do: "#{organization.name} - #{organization.city}"
 
+  defp preview(%Vutuv.Jobs.JobPosting{} = posting), do: clip(posting.title)
+
   defp clip(nil), do: ""
 
   # Measure the cap in graphemes, consistent with the grapheme-based slice:

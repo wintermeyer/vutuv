@@ -19,6 +19,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [invitations.md](invitations.md) | invite a non-member: hashed once-per-address record, prefilled sign-up link, per-inviter daily cap, auto-follow |
 | [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
 | [organizations.md](organizations.md) | verified organization pages at `/organizations`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
+| [jobs.md](jobs.md) | job postings at `/jobs/:slug`: the 90-day lifecycle & sweeper, structured location (offline GeoNames), the salary model, visibility gates, the AGG hint, easy apply, JSON-LD & agent formats |
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |

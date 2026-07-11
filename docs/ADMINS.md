@@ -113,6 +113,11 @@ Everything else has a default (the vutuv.de production value):
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
 | `MAIL_LOG_POLL_MS` | `5000` | Bounce watcher poll interval |
 | `INVITATION_DAILY_CAP` | `50` | Most invitations a single member may send per day (abuse guard on outbound invite email) |
+| `JOB_RUNTIME_DAYS` | `90` | How long a published job posting stays live before it auto-expires. Flat, no renewals — a still-open role gets a fresh posting |
+| `JOBS_MAX_PER_MEMBER` | `3` | Most concurrently-published job postings for one member (anti-abuse) |
+| `JOBS_MAX_PER_ORG` | `10` | Most concurrently-published job postings for one organization |
+| `GEO_COUNTRIES` | `DE,AT,CH` | Comma-separated ISO 3166-1 alpha-2 codes whose bundled GeoNames postal data is loaded for offline zip → coordinate resolution on job postings. To add a country, drop its GeoNames zip export (`download.geonames.org/export/zip/<CC>.zip` → extracted `<CC>.txt`, optionally gzipped to `<CC>.txt.gz`) into `priv/geo/` and add the code here. Fully offline — no outbound calls |
+| `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages) |
 
 The defaults marked **Set this** are vutuv.de's operator identity — a fresh
 installation should override all of them on day one, or your daily reports
@@ -262,6 +267,10 @@ vutuv runs fine without internet access:
   headless Chromium).
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
+- Job postings need no configuration to work offline: their zip → coordinate
+  resolution uses a bundled GeoNames postal dataset (`priv/geo/`), entirely
+  offline with no outbound call. Add your intranet's country with
+  `GEO_COUNTRIES` if it is not one of the shipped `DE`/`AT`/`CH`.
 - Search engines and AI crawlers are irrelevant on an intranet; the
   robots.txt / Content-Signal machinery does no outbound calls either way.
 

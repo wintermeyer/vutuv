@@ -54,7 +54,7 @@
       <fieldset class="space-y-2">
         <legend class="sr-only">{gettext("Why are you reporting this?")}</legend>
         <label
-          :for={category <- Vutuv.Moderation.Report.categories()}
+          :for={category <- Vutuv.Moderation.Report.categories_for(@content_type)}
           class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-3 transition hover:border-brand-400 has-checked:border-brand-500 has-checked:bg-brand-50 dark:border-slate-700 dark:hover:border-brand-500 dark:has-checked:bg-brand-900/30"
         >
           <input

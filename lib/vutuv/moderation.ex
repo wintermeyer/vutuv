@@ -31,6 +31,7 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
+  alias Vutuv.Jobs.JobPosting
   alias Vutuv.Moderation.{Case, Event, EvidenceScreenshot, Notifier, Report, Severance, Strike}
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
@@ -1088,6 +1089,7 @@ defmodule Vutuv.Moderation do
   defp content_type(%Message{}), do: "message"
   defp content_type(%User{}), do: "user"
   defp content_type(%Organization{}), do: "organization"
+  defp content_type(%JobPosting{}), do: "job_posting"
 
   defp content_id(%{id: id}), do: id
 
@@ -1099,9 +1101,16 @@ defmodule Vutuv.Moderation do
   # so report_content/3 refuses it (owner_id == nil), leaving the report path
   # only for admin freeze.
   defp owner_id(%Organization{created_by_user_id: user_id}), do: user_id
+  defp owner_id(%JobPosting{user_id: user_id}), do: user_id
 
   defp snapshot(%Post{body: body}), do: body
   defp snapshot(%Message{body: body}), do: body
+
+  defp snapshot(%JobPosting{} = posting) do
+    [posting.title, posting.description]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join("\n")
+  end
 
   defp snapshot(%User{} = user) do
     [VutuvWeb.UserHelpers.full_name(user), user.headline]
@@ -1130,6 +1139,9 @@ defmodule Vutuv.Moderation do
   defp reportable_by?(_reporter, %User{}), do: true
   defp reportable_by?(_reporter, %Organization{}), do: true
 
+  defp reportable_by?(reporter, %JobPosting{} = posting),
+    do: Vutuv.Jobs.visible_to?(posting, reporter)
+
   defp freeze_content(content) do
     set_frozen_at(content, NaiveDateTime.utc_now(:second))
 
@@ -1155,6 +1167,10 @@ defmodule Vutuv.Moderation do
 
   defp set_frozen_at(%Organization{id: id}, value) do
     Repo.update_all(from(c in Organization, where: c.id == ^id), set: [frozen_at: value])
+  end
+
+  defp set_frozen_at(%JobPosting{id: id}, value) do
+    Repo.update_all(from(p in JobPosting, where: p.id == ^id), set: [frozen_at: value])
   end
 
   defp set_user_moderation!(user_id, fields) do
@@ -1189,5 +1205,6 @@ defmodule Vutuv.Moderation do
   defp content_schema("message"), do: Message
   defp content_schema("user"), do: User
   defp content_schema("organization"), do: Organization
+  defp content_schema("job_posting"), do: JobPosting
   defp content_schema(_), do: nil
 end

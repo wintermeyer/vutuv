@@ -24,6 +24,7 @@ defmodule VutuvWeb.PostLive.Saved do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Repo
@@ -50,7 +51,8 @@ defmodule VutuvWeb.PostLive.Saved do
      |> assign(:saved_posts, [])
      |> stream(:posts, [])
      |> stream(:people, [])
-     |> stream(:organizations, [])}
+     |> stream(:organizations, [])
+     |> stream(:jobs, [])}
   end
 
   @impl true
@@ -85,6 +87,7 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp page_engagement(:people, _entries, _user), do: %{}
   defp page_engagement(:organizations, _entries, _user), do: %{}
+  defp page_engagement(:jobs, _entries, _user), do: %{}
 
   defp load_page(socket, offset) do
     user = socket.assigns.current_user
@@ -114,6 +117,12 @@ defmodule VutuvWeb.PostLive.Saved do
 
       {:bookmarks, :organizations} ->
         {:organizations, Organizations.saved_organizations_page(user, :bookmark, opts)}
+
+      {:likes, :jobs} ->
+        {:jobs, Jobs.saved_job_postings_page(user, :like, opts)}
+
+      {:bookmarks, :jobs} ->
+        {:jobs, Jobs.saved_job_postings_page(user, :bookmark, opts)}
     end
   end
 
@@ -121,6 +130,7 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp parse_type("people"), do: :people
   defp parse_type("organizations"), do: :organizations
+  defp parse_type("jobs"), do: :jobs
   defp parse_type(_), do: :posts
 
   defp parse_sort("oldest"), do: :oldest
@@ -208,6 +218,21 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  def handle_event("remove_job", %{"id" => id}, socket) do
+    case Jobs.get_job_posting(id) do
+      %Jobs.JobPosting{} = posting ->
+        case socket.assigns.live_action do
+          :likes -> Jobs.unlike_job_posting(socket.assigns.current_user, posting)
+          :bookmarks -> Jobs.unbookmark_job_posting(socket.assigns.current_user, posting)
+        end
+
+        {:noreply, stream_delete_by_dom_id(socket, :jobs, "jobs-#{posting.id}")}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
   # ── Live sync ──
 
   @impl true
@@ -240,6 +265,18 @@ defmodule VutuvWeb.PostLive.Saved do
       ) do
     if socket.assigns.type == :organizations and kind == tab_kind(socket.assigns.live_action) do
       {:noreply, apply_organization_change(socket, organization_id, active?)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        {:job_posting_engagement_changed,
+         %{kind: kind, job_posting_id: job_posting_id, active?: active?}},
+        socket
+      ) do
+    if socket.assigns.type == :jobs and kind == tab_kind(socket.assigns.live_action) do
+      {:noreply, apply_job_change(socket, job_posting_id, active?)}
     else
       {:noreply, socket}
     end
@@ -322,6 +359,24 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
+  defp apply_job_change(socket, job_posting_id, false) do
+    stream_delete_by_dom_id(socket, :jobs, "jobs-#{job_posting_id}")
+  end
+
+  defp apply_job_change(socket, job_posting_id, true) do
+    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+      case Jobs.get_job_posting(job_posting_id) do
+        %Jobs.JobPosting{frozen_at: nil} = posting ->
+          stream_insert(socket, :jobs, Vutuv.Repo.preload(posting, :organization), at: 0)
+
+        _ ->
+          socket
+      end
+    else
+      socket
+    end
+  end
+
   # ── Path / labels ──
 
   # The current page's URL with the non-default filters as query params, so tab
@@ -345,6 +400,7 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp type_param(:people), do: "people"
   defp type_param(:organizations), do: "organizations"
+  defp type_param(:jobs), do: "jobs"
   defp type_param(_posts), do: false
 
   defp sort_options do
@@ -385,6 +441,9 @@ defmodule VutuvWeb.PostLive.Saved do
           </.subtab>
           <.subtab patch={saved_path(@live_action, :organizations, @q, @sort)} active?={@type == :organizations} id="subtab-organizations">
             {gettext("Organizations")}
+          </.subtab>
+          <.subtab patch={saved_path(@live_action, :jobs, @q, @sort)} active?={@type == :jobs} id="subtab-jobs">
+            {gettext("Jobs")}
           </.subtab>
         </nav>
 
@@ -439,7 +498,7 @@ defmodule VutuvWeb.PostLive.Saved do
                 needle={@q}
               />
             </ul>
-          <% true -> %>
+          <% @type == :organizations -> %>
             <ul id="saved-organizations" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
               <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-organizations-empty">
                 {organizations_empty_text(@live_action, @q)}
@@ -462,6 +521,34 @@ defmodule VutuvWeb.PostLive.Saved do
                   type="button"
                   phx-click="remove_organization"
                   phx-value-id={organization.id}
+                  class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
+                >
+                  {gettext("Remove")}
+                </button>
+              </li>
+            </ul>
+          <% true -> %>
+            <ul id="saved-jobs" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-jobs-empty">
+                {jobs_empty_text(@live_action, @q)}
+              </li>
+              <li
+                :for={{dom_id, posting} <- @streams.jobs}
+                id={dom_id}
+                class="flex items-center gap-3 py-3"
+              >
+                <.link navigate={~p"/jobs/#{posting.slug}"} class="min-w-0 flex-1">
+                  <span class="block truncate font-semibold text-slate-900 dark:text-slate-100">
+                    {posting.title}
+                  </span>
+                  <span :if={posting.organization} class="block truncate text-sm text-slate-600 dark:text-slate-400">
+                    {posting.organization.name}
+                  </span>
+                </.link>
+                <button
+                  type="button"
+                  phx-click="remove_job"
+                  phx-value-id={posting.id}
                   class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
                 >
                   {gettext("Remove")}
@@ -499,6 +586,13 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp organizations_empty_text(_action, _q),
     do: gettext("No saved organizations match your search.")
+
+  defp jobs_empty_text(:likes, ""), do: gettext("Nothing here yet. Jobs you like show up here.")
+
+  defp jobs_empty_text(:bookmarks, ""),
+    do: gettext("Nothing here yet. Jobs you bookmark show up here.")
+
+  defp jobs_empty_text(_action, _q), do: gettext("No saved jobs match your search.")
 
   attr(:patch, :string, required: true)
   attr(:active?, :boolean, required: true)

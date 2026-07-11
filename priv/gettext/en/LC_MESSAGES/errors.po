@@ -138,3 +138,9 @@ msgstr ""
 
 msgid "your exclusion list is full (max %{count})"
 msgstr ""
+
+msgid "must be greater than or equal to the minimum"
+msgstr ""
+
+msgid "contains an invalid country"
+msgstr ""

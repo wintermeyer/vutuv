@@ -83,4 +83,30 @@ defmodule Vutuv.Geo do
   defp apply_provider(fun, ip) when is_function(fun, 1), do: fun.(ip)
   defp apply_provider({module, fun}, ip), do: apply(module, fun, [ip])
   defp apply_provider(module, ip) when is_atom(module), do: module.locate(ip)
+
+  # --- offline postal-code geocoding (job postings, milestone 11) ----------
+  #
+  # A wholly separate concern from the IP lookup above: resolving a postal code
+  # to coordinates from a bundled GeoNames dataset, entirely offline. Delegated
+  # to `Vutuv.Geo.Postal`; exposed here so callers say `Vutuv.Geo.coordinates/2`.
+
+  @default_geo_countries ~w(DE AT CH)
+  @default_country "DE"
+
+  @doc "The ISO 3166-1 alpha-2 country codes whose postal data is loaded."
+  def geo_countries, do: Application.get_env(:vutuv, :geo_countries, @default_geo_countries)
+
+  @doc """
+  The default country (ISO 3166-1 alpha-2) used to preselect country inputs.
+  """
+  def default_country, do: Application.get_env(:vutuv, :default_country, @default_country)
+
+  @doc """
+  Coordinates `{lat, lon}` for `zip` in `country`, or `nil` when unresolvable.
+  Offline, from the bundled GeoNames dataset — see `Vutuv.Geo.Postal`.
+  """
+  defdelegate coordinates(country, zip), to: Vutuv.Geo.Postal
+
+  @doc "Coordinates `{lat, lon}` for a place name in `country`, or `nil`."
+  defdelegate place_coordinates(country, place), to: Vutuv.Geo.Postal
 end

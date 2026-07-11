@@ -1,0 +1,13 @@
+<.email_layout preheader="Ihre Stellenanzeige auf vutuv läuft bald ab" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    Ihre Stellenanzeige „{@posting_title}" läuft am {Calendar.strftime(@expires_on, "%d.%m.%Y")} ab.
+    Anzeigen laufen nach 90 Tagen automatisch aus, es gibt keine Verlängerung.
+  </.email_p>
+  <.email_p>
+    Ist die Stelle besetzt? Schließen Sie die Anzeige. Ist sie noch offen? Stellen Sie sie nach
+    dem Ablauf mit einem Klick neu ein, mit einem ehrlichen Veröffentlichungsdatum.
+  </.email_p>
+  <.email_button href={"#{@url}jobs/#{@posting_slug}"}>Anzeige ansehen</.email_button>
+  <.email_signature locale={@locale} />
+</.email_layout>

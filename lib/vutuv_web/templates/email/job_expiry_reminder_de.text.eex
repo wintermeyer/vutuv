@@ -1,0 +1,15 @@
+<%= email_greeting(@user) %>,
+
+Ihre Stellenanzeige "<%= @posting_title %>" läuft am <%= Calendar.strftime(@expires_on, "%d.%m.%Y") %> ab.
+Anzeigen laufen nach 90 Tagen automatisch aus, es gibt keine Verlängerung.
+
+Ist die Stelle besetzt? Schließen Sie die Anzeige. Ist sie noch offen? Stellen Sie sie nach dem
+Ablauf mit einem Klick neu ein, mit einem ehrlichen Veröffentlichungsdatum.
+
+Hier geht es zur Anzeige:
+
+<%= @url %>jobs/<%= @posting_slug %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

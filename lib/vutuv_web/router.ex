@@ -276,6 +276,9 @@ defmodule VutuvWeb.Router do
     # like /post_images: a pending or frozen page's images are owner/admin-only.
     get("/organization_images/:token/:version", OrganizationImageController, :show)
 
+    # The authorizing job-posting-image proxy, like /post_images.
+    get("/job_posting_images/:token/:version", JobPostingImageController, :show)
+
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)
@@ -402,6 +405,18 @@ defmodule VutuvWeb.Router do
       # The private likes / bookmarks lists (reserved slugs too).
       live("/likes", PostLive.Saved, :likes)
       live("/bookmarks", PostLive.Saved, :bookmarks)
+
+      # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.
+      # The two-segment owner routes (/jobs/mine, /jobs/new) are defined before
+      # the /jobs/:slug detail route so they are never captured as a slug. The
+      # public /jobs board itself is issue #933. The detail page is a controller
+      # (like the profile / organization pages) so it can negotiate the
+      # agent-format siblings (/jobs/:slug.md/.txt/.json/.xml).
+      live("/jobs/mine", JobPostingLive.Dashboard, :index)
+      live("/jobs/new", JobPostingLive.Form, :new)
+      live("/jobs/:slug/edit", JobPostingLive.Form, :edit)
+      get("/jobs/:slug", JobPostingController, :show)
+      post("/jobs/:slug/apply", JobPostingController, :apply)
     end
 
     # The add-tag form previews, as the member types, exactly which tags a

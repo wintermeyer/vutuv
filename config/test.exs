@@ -33,6 +33,10 @@ config :vutuv, :post_screenshot_worker, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false
+# The nightly job-posting lifecycle sweeper is off in tests (a background
+# process must not touch the SQL Sandbox it doesn't own); call
+# Vutuv.Jobs.Sweeper.sweep/0 directly in the test that exercises it.
+config :vutuv, :jobs_sweeper, false
 # Bounce detection: the log watcher must not touch the filesystem and the
 # unreachable-account sweep would touch the sandbox from outside. Both the
 # Deliverability context and parser are called directly in their tests.
