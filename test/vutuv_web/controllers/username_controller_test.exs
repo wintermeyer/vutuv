@@ -38,6 +38,13 @@ defmodule VutuvWeb.UsernameControllerTest do
 
       assert html =~ "@#{user.username}"
       assert html =~ ~s(id="slug-form")
+      # The input's maxlength and the length hint both derive from the single
+      # source Vutuv.Handles.max_length/0 (no hardcoded number in the template).
+      assert html =~ ~s(maxlength="#{Vutuv.Handles.max_length()}")
+
+      assert html =~
+               "#{Vutuv.Handles.min_length()} to #{Vutuv.Handles.max_length()} characters: letters"
+
       # The changeset wraps the persisted user, so the form would infer PUT
       # (a hidden _method override) - but the route is a plain POST create.
       refute html =~ ~s(name="_method")

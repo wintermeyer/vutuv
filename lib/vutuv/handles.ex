@@ -8,9 +8,9 @@ defmodule Vutuv.Handles do
   Two responsibilities:
 
     * **Grammar** — `validate_handle/2` is the single definition of what a
-      handle may look like (Twitter style, `^[a-z0-9_]+$`, #{3}-#{15} chars,
-      never a reserved word), shared by the member and company owner changesets
-      so they cannot drift apart.
+      handle may look like (Twitter style, `^[a-z0-9_]+$`, `min_length/0` to
+      `max_length/0` chars, never a reserved word), shared by the member and
+      company owner changesets so they cannot drift apart.
     * **Uniqueness sync** — `put_user_handle/2` / `put_company_handle/2` upsert
       the owner's registry row inside the caller's transaction, so a claim that
       collides with any other member or company loses on the unique index. This
@@ -29,7 +29,12 @@ defmodule Vutuv.Handles do
 
   @format ~r/^[a-z0-9_]+$/
   @min_length 3
-  @max_length 15
+  # The single source of truth for the handle length ceiling. Everything else
+  # derives from `max_length/0` / `min_length/0`: the member (`User`) and
+  # company changesets (via `validate_handle/2`), the auto-generated handles
+  # (`Vutuv.SlugHelpers`), the username form's `maxlength` + hint, and the
+  # reserved-slug router guard. Change it here and nowhere else.
+  @max_length 23
 
   def format, do: @format
   def min_length, do: @min_length

@@ -7,7 +7,7 @@
     <%= label(f, :username, gettext("New username")) %>
     <%= text_input(f, :username,
       autofocus: true,
-      maxlength: "15",
+      maxlength: Vutuv.Handles.max_length(),
       autocomplete: "off",
       autocapitalize: "none",
       spellcheck: "false",
@@ -17,7 +17,10 @@
     <%!-- Filled in live by the availability checker in app.js. --%>
     <p class="editform__hint" id="username-availability" aria-live="polite"></p>
     <p class="editform__hint">
-      <%= gettext("3 to 15 characters: letters (a-z), numbers (0-9) and underscores.") %>
+      <%= gettext("%{min} to %{max} characters: letters (a-z), numbers (0-9) and underscores.",
+        min: Vutuv.Handles.min_length(),
+        max: Vutuv.Handles.max_length()
+      ) %>
     </p>
   </.editform_field>
 

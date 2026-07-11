@@ -1,8 +1,8 @@
 defmodule Vutuv.Accounts.SlugTest do
   @moduledoc """
   The username (@handle) rules. A handle follows the Twitter username
-  mechanism: letters, digits and underscores only, at most 15 characters
-  (minimum 3), stored lowercase, unique (one live handle per member), and
+  mechanism: letters, digits and underscores only, within the `Vutuv.Handles`
+  length bounds, stored lowercase, unique (one live handle per member), and
   never a reserved route word. There is no slugs table anymore: changing the
   handle simply renames the account - the old name is freed for anyone else
   and does not redirect. Changes are rate-limited via the `username_changes`
@@ -14,6 +14,7 @@ defmodule Vutuv.Accounts.SlugTest do
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User
   alias Vutuv.Accounts.UsernameChange
+  alias Vutuv.Handles
 
   defp username_changeset(value) do
     User.username_changeset(%User{}, %{"username" => value})
@@ -26,8 +27,8 @@ defmodule Vutuv.Accounts.SlugTest do
   end
 
   describe "Twitter-style validation (User.username_changeset/2)" do
-    test "accepts letters, digits and underscores, 3 to 15 characters" do
-      for value <- ["abc", "stefan_w99", "_x_", "a23456789012345"] do
+    test "accepts letters, digits and underscores, up to the max handle length" do
+      for value <- ["abc", "stefan_w99", "_x_", String.duplicate("a", Handles.max_length())] do
         assert username_changeset(value).valid?, "expected #{value} to be accepted"
       end
     end
@@ -43,7 +44,7 @@ defmodule Vutuv.Accounts.SlugTest do
 
     test "rejects too short, too long, and blank values" do
       refute username_changeset("ab").valid?
-      refute username_changeset(String.duplicate("a", 16)).valid?
+      refute username_changeset(String.duplicate("a", Handles.max_length() + 1)).valid?
 
       changeset = username_changeset("")
       refute changeset.valid?
@@ -60,7 +61,8 @@ defmodule Vutuv.Accounts.SlugTest do
       # Profiles live at the URL root, so a handle equal to a route prefix
       # would shadow that route forever. The underscore words are real route
       # prefixes too: handles allow underscores (^[a-z0-9_]+$), so any route
-      # word of 3-15 characters must be reserved regardless of underscores.
+      # word within the handle length bounds must be reserved regardless of
+      # underscores.
       for value <- [
             "tags",
             "login",
@@ -107,11 +109,11 @@ defmodule Vutuv.Accounts.SlugTest do
       Vutuv.SlugHelpers.gen_handle_unique(user, User, :username)
     end
 
-    test "generated handles never exceed 15 characters" do
+    test "generated handles never exceed the max handle length" do
       user = %User{first_name: "Maximiliane", last_name: "Wintermeyer"}
 
       handle = Vutuv.SlugHelpers.gen_handle_unique(user, User, :username)
-      assert String.length(handle) <= 15
+      assert String.length(handle) <= Handles.max_length()
       assert username_changeset(handle).valid?
     end
 

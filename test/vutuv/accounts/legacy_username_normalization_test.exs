@@ -10,9 +10,10 @@ defmodule Vutuv.Accounts.LegacyUsernameNormalizationTest do
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Handles
 
   defp valid_handle?(handle) do
-    Regex.match?(~r/\A[a-z0-9_]+\z/, handle) and String.length(handle) <= 15
+    Regex.match?(~r/\A[a-z0-9_]+\z/, handle) and String.length(handle) <= Handles.max_length()
   end
 
   test "regenerates a valid handle from the member's name and preserves the old one" do

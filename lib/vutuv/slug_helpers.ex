@@ -2,14 +2,16 @@ defmodule Vutuv.SlugHelpers do
   @moduledoc false
 
   import Ecto.Query
+  alias Vutuv.Handles
   alias Vutuv.Repo
 
   @short_sha_length 8
 
-  # User handles follow the Twitter username mechanism (see
-  # Vutuv.Accounts.User.username_changeset/2): 15 characters max, so a suffixed
-  # handle is 6 (base) + 1 ("_") + 8 (short sha) characters.
-  @handle_max_length 15
+  # User handles follow the Twitter username mechanism. The length ceiling is
+  # the single source `Vutuv.Handles.max_length/0`, so generation can never
+  # produce a handle the validation would reject. A suffixed handle stays short
+  # regardless: 6 (base) + 1 ("_") + 8 (short sha) characters.
+  @handle_max_length Handles.max_length()
   @handle_base_with_suffix 6
 
   @doc """

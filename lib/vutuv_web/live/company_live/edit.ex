@@ -355,7 +355,9 @@ defmodule VutuvWeb.CompanyLive.Edit do
         <.section_title>{gettext("Root handle")}</.section_title>
         <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext(
-            "Claim a short @handle so this company has its own root URL, like a member profile. Letters, numbers and underscores, 3 to 15 characters."
+            "Claim a short @handle so this company has its own root URL, like a member profile. Letters, numbers and underscores, %{min} to %{max} characters.",
+            min: Vutuv.Handles.min_length(),
+            max: Vutuv.Handles.max_length()
           )}
         </p>
 

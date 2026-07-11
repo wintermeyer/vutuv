@@ -2,7 +2,7 @@ defmodule Vutuv.Accounts.User do
   @moduledoc false
 
   use VutuvWeb, :model
-  alias Vutuv.Accounts.ReservedSlugs
+  alias Vutuv.Handles
   alias Vutuv.Prefs
   @derive {Phoenix.Param, key: :username}
 
@@ -428,23 +428,19 @@ defmodule Vutuv.Accounts.User do
   end
 
   @doc """
-  The one changeset that may touch the username. The Twitter username
-  mechanism: letters, digits and underscores, at most 15 characters (we keep
-  the historical minimum of 3). Handles are case-insensitive, so they are
-  stored lowercase. Unique across all members, and never a reserved route
-  word (profiles live at the URL root, so a handle equal to a route prefix
-  would shadow that route forever).
+  The one changeset that may touch the username. The grammar (letters, digits
+  and underscores, `Vutuv.Handles` length bounds, never a reserved route word)
+  is the shared `Vutuv.Handles.validate_handle/2` — the same definition the
+  company handle uses, so the member and company namespaces cannot drift apart.
+  Handles are case-insensitive, so they are stored lowercase. Uniqueness across
+  members is the `unique_constraint`; profiles live at the URL root, so a handle
+  equal to a route prefix would shadow that route forever (hence "reserved").
   """
   def username_changeset(model, params \\ %{}) do
     model
     |> cast(params, [:username])
     |> validate_required(:username)
-    |> downcase_username()
-    |> validate_format(:username, ~r/^[a-z0-9_]+$/,
-      message: "may only contain letters, numbers, and underscores"
-    )
-    |> validate_length(:username, min: 3, max: 15)
-    |> validate_exclusion(:username, ReservedSlugs.list(), message: "is reserved")
+    |> Handles.validate_handle(:username)
     |> unique_constraint(:username)
   end
 
@@ -647,10 +643,6 @@ defmodule Vutuv.Accounts.User do
   # The third gender ("other") displays as "divers" - its own label, decoupled
   # from the email-type "Other"/"Andere" string they used to share.
   def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Diverse")
-
-  defp downcase_username(changeset) do
-    update_change(changeset, :username, &String.downcase/1)
-  end
 
   defp nullify_default_birthdate(changeset) do
     case get_field(changeset, :birthdate) do

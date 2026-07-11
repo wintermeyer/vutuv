@@ -8,10 +8,12 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   segments in `VutuvWeb.Router` and the `Plug.Static` mounts in
   `VutuvWeb.Endpoint`.
 
-  Handles allow underscores (`^[a-z0-9_]+$`, 3-15 characters), so route
-  words *with* underscores must be listed too — only those longer than 15
-  characters (new_registration, account_deletion) are ruled out by the
-  length limit alone.
+  Handles allow underscores (`^[a-z0-9_]+$`) and run up to
+  `Vutuv.Handles.max_length/0` characters, so every route word within those
+  bounds must be listed too — including the longer underscore/compound words
+  (account_deletion, new_registration, nutzungsbedingungen). Widening the
+  handle ceiling can expose more of them; `reserved_slugs_router_test.exs`
+  fails the build on the next such drift.
 
   A second group reserves a handful of **personal / brand handles** that are
   not routes but should never be claimed by an arbitrary member.
@@ -23,12 +25,12 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   # of claiming another root word — see CLAUDE.md; the member directory
   # (/system/members) set the pattern, freeing "members" as a handle again.
   @route_slugs ~w(
-    about access_tokens admin ads api assets avatars benutzername blocks blog bookmarks
+    about access_tokens account_deletion admin ads api assets avatars benutzername blocks blog bookmarks
     companies company_images community connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
     follows fonts groups health help images impressum jobs js legal likes listings live
-    llms.txt login logout mail maps memberships messages moderation new news
-    notifications oauth phoenix post_images posts press privacy reports robots.txt
+    llms.txt login logout mail maps memberships messages moderation new new_registration news
+    notifications nutzungsbedingungen oauth phoenix post_images posts press privacy reports robots.txt
     screenshots search search_queries security.txt sent_emails sessions settings
     sitemap.xml sitemaps socket status support system tags team terms tidewave unsubscribe
     user_bookmarks user_likes username users webhooks www

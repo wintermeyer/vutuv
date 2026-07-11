@@ -10,8 +10,10 @@ defmodule VutuvWeb.ReservedSlugsRouterTest do
 
   alias Vutuv.Accounts.ReservedSlugs
 
-  # The handle grammar: ^[a-z0-9_]+$, 3-15 chars (Vutuv.Accounts.User.username_changeset).
-  @handle_shape ~r/^[a-z0-9_]{3,15}$/
+  # The handle grammar: ^[a-z0-9_]+$, within the Vutuv.Handles length bounds.
+  # Derived from the single source so widening the ceiling automatically widens
+  # the set of router prefixes that must be reserved.
+  @handle_shape ~r/^[a-z0-9_]{#{Vutuv.Handles.min_length()},#{Vutuv.Handles.max_length()}}$/
 
   test "every router prefix that is a valid handle shape is reserved" do
     reserved = MapSet.new(ReservedSlugs.list())
