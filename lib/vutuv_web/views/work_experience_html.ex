@@ -1,11 +1,11 @@
 defmodule VutuvWeb.WorkExperienceHTML do
   @moduledoc false
   use VutuvWeb, :html
-  import VutuvWeb.CompanyComponents, only: [company_logo: 1]
+  import VutuvWeb.OrganizationComponents, only: [organization_logo: 1]
   import VutuvWeb.UserHelpers
 
-  alias Vutuv.Companies
-  alias Vutuv.Companies.Company
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Profiles.WorkExperience
 
   @doc """
@@ -48,7 +48,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   categories dropped).
 
   Within a category, a run of **consecutive** roles that share an organization
-  collapses into one company block. "Consecutive" is the point after the CV
+  collapses into one organization block. "Consecutive" is the point after the CV
   categories have split the list: volunteer or freelance rows must not break an
   employment run at the same employer, but a different employment job between
   two stints still keeps them as two blocks. Roles without an organization never
@@ -67,7 +67,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
     * `:label` — the compact centre text for the block's duration circle (`"9y"`)
     * `:size` — the block circle's diameter in rem
 
-  The block circles are ranked over the **block totals** (a company's whole
+  The block circles are ranked over the **block totals** (an organization's whole
   tenure), so the longest *employer*, not the longest single role, fills the
   largest circle; and short internships still can't inflate past a decade-long
   job because the whole list is measured before any grouping.
@@ -76,7 +76,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   the profile preview passes `profile_preview_limit/0`). Always pass the member's
   **whole** work history and let `limit` do the trimming — the block aggregates
   (tenure, span, circle) are built from every role at an employer *before* the
-  cut, so a truncated company still reports its true total (a member with 3 roles
+  cut, so a truncated organization still reports its true total (a member with 3 roles
   over 9 years at one employer keeps "9 years" even when the cut shows only 2).
   """
   def grouped_clusters(work_experiences, label_style \\ :years, limit \\ nil) do
@@ -120,7 +120,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
   # Cap the number of *displayed* roles at `limit` (nil = no cap), truncating the
   # block that straddles the cap and dropping the blocks past it. A truncated
   # block keeps its full aggregates — those are built from every role at the
-  # employer before this cut, so a company's tenure/circle stays right even when
+  # employer before this cut, so an organization's tenure/circle stays right even when
   # only some of its roles are shown.
   defp take_roles(blocks, nil), do: blocks
 
@@ -203,12 +203,13 @@ defmodule VutuvWeb.WorkExperienceHTML do
     %{
       kind: newest.kind,
       organization: newest.organization,
-      # The verified company page this block links to (issue #931), or nil for
+      # The verified organization page this block links to (issue #931), or nil for
       # a plain free-text employer. Taken from the newest role, since the block's
       # displayed name is the newest role's organization. Only an active,
-      # non-frozen company qualifies, so a frozen/archived page renders the block
-      # exactly as an unlinked one (plain text).
-      company: linked_company(newest),
+      # non-frozen organization qualifies, so a frozen/archived page renders the block
+      # exactly as an unlinked one (plain text). Kept under a distinct key from the
+      # free-text `organization` string above so the two never collide.
+      organization_page: linked_organization(newest),
       multi?: multi?,
       roles: circles,
       span: span,
@@ -218,35 +219,37 @@ defmodule VutuvWeb.WorkExperienceHTML do
     }
   end
 
-  # The linked, currently-verified company of a work experience, or nil. Guards
-  # on a loaded, active, non-frozen %Company{}: an unloaded association, a
+  # The linked, currently-verified organization of a work experience, or nil. Guards
+  # on a loaded, active, non-frozen %Organization{}: an unloaded association, a
   # free-text-only role, or a frozen/archived page all fall through to nil.
-  defp linked_company(%{company: %Company{status: "active", frozen_at: nil} = company}),
-    do: company
+  defp linked_organization(%{
+         organization_page: %Organization{status: "active", frozen_at: nil} = organization
+       }),
+       do: organization
 
-  defp linked_company(_job), do: nil
+  defp linked_organization(_job), do: nil
 
   @doc """
   The employer name on a timeline block: when the experience is linked to a
-  verified company page (issue #931), a small logo plus the company's canonical
+  verified organization page (issue #931), a small logo plus the organization's canonical
   name linking to its page; otherwise the member's free-text organization,
   rendered exactly as they wrote it. One renderer so the single-role and
   multi-role branches (and their agent-doc siblings via `SectionDocs`) never
   disagree on when a link shows.
   """
-  attr(:company, :any, default: nil)
+  attr(:organization, :any, default: nil)
   attr(:text, :any, default: nil)
   attr(:class, :string, default: nil)
 
   def employer_name(assigns) do
     ~H"""
-    <%= if @company do %>
+    <%= if @organization do %>
       <a
-        href={Companies.canonical_path(@company)}
+        href={Organizations.canonical_path(@organization)}
         class={["inline-flex items-center gap-1.5 hover:text-brand-700 dark:hover:text-brand-400", @class]}
       >
-        <.company_logo company={@company} class="h-5 w-5 shrink-0" />
-        <span>{@company.name}</span>
+        <.organization_logo organization={@organization} class="h-5 w-5 shrink-0" />
+        <span>{@organization.name}</span>
       </a>
     <% else %>
       {@text}
@@ -542,7 +545,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
             <div class="relative pb-4 pl-5">
               <span class="absolute -left-[0.3125rem] top-1.5 h-2.5 w-2.5 rounded-full bg-brand-600 ring-4 ring-white dark:ring-slate-900"></span>
               <p class="mb-0.5 font-semibold text-slate-900 dark:text-white">
-                <.employer_name company={@block.company} text={@block.organization} />
+                <.employer_name organization={@block.organization_page} text={@block.organization} />
               </p>
               <p :if={@block.length} class="mb-0 text-sm text-slate-600 dark:text-slate-400">
                 {@block.length}
@@ -603,7 +606,7 @@ defmodule VutuvWeb.WorkExperienceHTML do
               {role.job.title}
             </.link>
             <p class="text-sm text-slate-600 dark:text-slate-400">
-              <.employer_name company={@block.company} text={role.job.organization} /><%= if role.length do %> · {role.length}<% end %>
+              <.employer_name organization={@block.organization_page} text={role.job.organization} /><%= if role.length do %> · {role.length}<% end %>
             </p>
             <.markdown_prose
               :if={@show_description? and role.job.description}

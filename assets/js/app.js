@@ -478,19 +478,19 @@ function setupSlugAvailability() {
 
 onReady(setupSlugAvailability)
 
-// Work-experience company link (issue #931). The work-experience form marks a
-// [data-company-link] box; as the member types the organization, ask the server
-// for a matching verified company page and offer a quiet one-tap link. The
-// hidden work_experience[company_id] carries the choice. No match -> no UI.
+// Work-experience organization link (issue #931). The work-experience form marks a
+// [data-organization-link] box; as the member types the organization, ask the server
+// for a matching verified organization page and offer a quiet one-tap link. The
+// hidden work_experience[organization_id] carries the choice. No match -> no UI.
 // Plain JS on a classic controller page (no LiveView there).
-function setupCompanyLink() {
-  document.querySelectorAll("[data-company-link]").forEach((box) => {
-    if (!once(box, "companyLink")) return
+function setupOrganizationLink() {
+  document.querySelectorAll("[data-organization-link]").forEach((box) => {
+    if (!once(box, "organizationLink")) return
     const form = box.closest("form")
     if (!form) return
     const orgInput = form.querySelector('[name$="[organization]"]')
-    const idInput = box.querySelector('[name$="[company_id]"]')
-    const status = box.querySelector("[data-company-link-status]")
+    const idInput = box.querySelector('[name$="[organization_id]"]')
+    const status = box.querySelector("[data-organization-link-status]")
     if (!orgInput || !idInput || !status) return
 
     const labels = {
@@ -500,8 +500,8 @@ function setupCompanyLink() {
       unlink: box.dataset.labelUnlink || "Remove link",
     }
 
-    // Seed the already-linked company (editing a linked experience), so the
-    // linked state renders with the company name even before the first fetch.
+    // Seed the already-linked organization (editing a linked experience), so the
+    // linked state renders with the organization name even before the first fetch.
     let linked =
       idInput.value && box.dataset.linkedId === idInput.value
         ? { id: box.dataset.linkedId, name: box.dataset.linkedName || "", path: box.dataset.linkedPath || "" }
@@ -578,7 +578,7 @@ function setupCompanyLink() {
         const data = await resp.json()
         // Ignore a stale response for an organization value already replaced.
         if (orgInput.value.trim() !== value) return
-        suggestion = data.company
+        suggestion = data.organization
         renderState()
       } catch (_e) {
         // Network hiccup: stay quiet, the free-text organization still works.
@@ -596,7 +596,7 @@ function setupCompanyLink() {
   })
 }
 
-onReady(setupCompanyLink)
+onReady(setupOrganizationLink)
 
 // Make horizontally-scrollable code blocks and tables in rendered Markdown
 // keyboard-focusable, so they can be scrolled without a mouse (WCAG 2.1.1).

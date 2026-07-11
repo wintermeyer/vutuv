@@ -19,12 +19,12 @@ defmodule VutuvWeb.PostLive.Saved do
 
   use VutuvWeb, :live_view
 
-  import VutuvWeb.CompanyComponents
+  import VutuvWeb.OrganizationComponents
   import VutuvWeb.PostComponents
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Companies
+  alias Vutuv.Organizations
   alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Social
@@ -50,7 +50,7 @@ defmodule VutuvWeb.PostLive.Saved do
      |> assign(:saved_posts, [])
      |> stream(:posts, [])
      |> stream(:people, [])
-     |> stream(:companies, [])}
+     |> stream(:organizations, [])}
   end
 
   @impl true
@@ -84,7 +84,7 @@ defmodule VutuvWeb.PostLive.Saved do
     do: Posts.post_engagement_map(Enum.map(entries, & &1.id), user)
 
   defp page_engagement(:people, _entries, _user), do: %{}
-  defp page_engagement(:companies, _entries, _user), do: %{}
+  defp page_engagement(:organizations, _entries, _user), do: %{}
 
   defp load_page(socket, offset) do
     user = socket.assigns.current_user
@@ -109,18 +109,18 @@ defmodule VutuvWeb.PostLive.Saved do
       {:bookmarks, :people} ->
         {:people, Social.bookmarked_users_page(user, opts)}
 
-      {:likes, :companies} ->
-        {:companies, Companies.saved_companies_page(user, :like, opts)}
+      {:likes, :organizations} ->
+        {:organizations, Organizations.saved_organizations_page(user, :like, opts)}
 
-      {:bookmarks, :companies} ->
-        {:companies, Companies.saved_companies_page(user, :bookmark, opts)}
+      {:bookmarks, :organizations} ->
+        {:organizations, Organizations.saved_organizations_page(user, :bookmark, opts)}
     end
   end
 
   defp subscribe_posts(entries), do: Enum.each(entries, &Posts.subscribe_post(&1.id))
 
   defp parse_type("people"), do: :people
-  defp parse_type("companies"), do: :companies
+  defp parse_type("organizations"), do: :organizations
   defp parse_type(_), do: :posts
 
   defp parse_sort("oldest"), do: :oldest
@@ -189,15 +189,19 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
-  def handle_event("remove_company", %{"id" => id}, socket) do
-    case Companies.get_company(id) do
-      %Companies.Company{} = company ->
+  def handle_event("remove_organization", %{"id" => id}, socket) do
+    case Organizations.get_organization(id) do
+      %Organizations.Organization{} = organization ->
         case socket.assigns.live_action do
-          :likes -> Companies.unlike_company(socket.assigns.current_user, company)
-          :bookmarks -> Companies.unbookmark_company(socket.assigns.current_user, company)
+          :likes ->
+            Organizations.unlike_organization(socket.assigns.current_user, organization)
+
+          :bookmarks ->
+            Organizations.unbookmark_organization(socket.assigns.current_user, organization)
         end
 
-        {:noreply, stream_delete_by_dom_id(socket, :companies, "companies-#{company.id}")}
+        {:noreply,
+         stream_delete_by_dom_id(socket, :organizations, "organizations-#{organization.id}")}
 
       nil ->
         {:noreply, socket}
@@ -230,11 +234,12 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   def handle_info(
-        {:company_engagement_changed, %{kind: kind, company_id: company_id, active?: active?}},
+        {:organization_engagement_changed,
+         %{kind: kind, organization_id: organization_id, active?: active?}},
         socket
       ) do
-    if socket.assigns.type == :companies and kind == tab_kind(socket.assigns.live_action) do
-      {:noreply, apply_company_change(socket, company_id, active?)}
+    if socket.assigns.type == :organizations and kind == tab_kind(socket.assigns.live_action) do
+      {:noreply, apply_organization_change(socket, organization_id, active?)}
     else
       {:noreply, socket}
     end
@@ -299,15 +304,15 @@ defmodule VutuvWeb.PostLive.Saved do
     end
   end
 
-  defp apply_company_change(socket, company_id, false) do
-    stream_delete_by_dom_id(socket, :companies, "companies-#{company_id}")
+  defp apply_organization_change(socket, organization_id, false) do
+    stream_delete_by_dom_id(socket, :organizations, "organizations-#{organization_id}")
   end
 
-  defp apply_company_change(socket, company_id, true) do
+  defp apply_organization_change(socket, organization_id, true) do
     if socket.assigns.q == "" and socket.assigns.sort == :recent do
-      case Companies.get_company(company_id) do
-        %Companies.Company{status: "active", frozen_at: nil} = company ->
-          stream_insert(socket, :companies, company, at: 0)
+      case Organizations.get_organization(organization_id) do
+        %Organizations.Organization{status: "active", frozen_at: nil} = organization ->
+          stream_insert(socket, :organizations, organization, at: 0)
 
         _ ->
           socket
@@ -339,7 +344,7 @@ defmodule VutuvWeb.PostLive.Saved do
   defp put_param(list, key, value), do: list ++ [{key, value}]
 
   defp type_param(:people), do: "people"
-  defp type_param(:companies), do: "companies"
+  defp type_param(:organizations), do: "organizations"
   defp type_param(_posts), do: false
 
   defp sort_options do
@@ -378,8 +383,8 @@ defmodule VutuvWeb.PostLive.Saved do
           <.subtab patch={saved_path(@live_action, :people, @q, @sort)} active?={@type == :people} id="subtab-people">
             {gettext("People")}
           </.subtab>
-          <.subtab patch={saved_path(@live_action, :companies, @q, @sort)} active?={@type == :companies} id="subtab-companies">
-            {gettext("Companies")}
+          <.subtab patch={saved_path(@live_action, :organizations, @q, @sort)} active?={@type == :organizations} id="subtab-organizations">
+            {gettext("Organizations")}
           </.subtab>
         </nav>
 
@@ -435,28 +440,28 @@ defmodule VutuvWeb.PostLive.Saved do
               />
             </ul>
           <% true -> %>
-            <ul id="saved-companies" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
-              <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-companies-empty">
-                {companies_empty_text(@live_action, @q)}
+            <ul id="saved-organizations" phx-update="stream" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <li class="hidden py-4 text-slate-600 dark:text-slate-400 only:block" id="saved-organizations-empty">
+                {organizations_empty_text(@live_action, @q)}
               </li>
               <li
-                :for={{dom_id, company} <- @streams.companies}
+                :for={{dom_id, organization} <- @streams.organizations}
                 id={dom_id}
                 class="flex items-center gap-3 py-3"
               >
-                <.link navigate={~p"/companies/#{company.slug}"} class="flex min-w-0 flex-1 items-center gap-3">
-                  <.company_logo company={company} class="h-10 w-10 shrink-0" />
+                <.link navigate={~p"/organizations/#{organization.slug}"} class="flex min-w-0 flex-1 items-center gap-3">
+                  <.organization_logo organization={organization} class="h-10 w-10 shrink-0" />
                   <span class="min-w-0">
                     <span class="block truncate font-semibold text-slate-900 dark:text-slate-100">
-                      {company.name}
+                      {organization.name}
                     </span>
-                    <.company_location company={company} class="block truncate text-sm text-slate-600 dark:text-slate-400" />
+                    <.organization_location organization={organization} class="block truncate text-sm text-slate-600 dark:text-slate-400" />
                   </span>
                 </.link>
                 <button
                   type="button"
-                  phx-click="remove_company"
-                  phx-value-id={company.id}
+                  phx-click="remove_organization"
+                  phx-value-id={organization.id}
                   class="shrink-0 text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
                 >
                   {gettext("Remove")}
@@ -486,13 +491,14 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp people_empty_text(_action, _q), do: gettext("No saved people match your search.")
 
-  defp companies_empty_text(:likes, ""),
-    do: gettext("Nothing here yet. Companies you like show up here.")
+  defp organizations_empty_text(:likes, ""),
+    do: gettext("Nothing here yet. Organizations you like show up here.")
 
-  defp companies_empty_text(:bookmarks, ""),
-    do: gettext("Nothing here yet. Companies you bookmark show up here.")
+  defp organizations_empty_text(:bookmarks, ""),
+    do: gettext("Nothing here yet. Organizations you bookmark show up here.")
 
-  defp companies_empty_text(_action, _q), do: gettext("No saved companies match your search.")
+  defp organizations_empty_text(_action, _q),
+    do: gettext("No saved organizations match your search.")
 
   attr(:patch, :string, required: true)
   attr(:active?, :boolean, required: true)

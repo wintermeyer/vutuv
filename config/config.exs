@@ -124,20 +124,20 @@ config :vutuv, :fetch_code_stats, true
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 
-# Verified company pages (Vutuv.Companies): the domain-proof methods, a DNS TXT
+# Verified organization pages (Vutuv.Organizations): the domain-proof methods, a DNS TXT
 # record and a well-known file. Both prove control of the DOMAIN itself, never
 # merely an address on it (an e-mail code would let anyone with a @gmail.com
 # address claim the gmail.com page). On = the claim wizard offers both and
-# re-checks them periodically; off = company domain verification is disabled on
-# this installation (no outbound calls), so no new company page can be created
+# re-checks them periodically; off = organization domain verification is disabled on
+# this installation (no outbound calls), so no new organization page can be created
 # (existing verified pages keep working). Runtime override:
-# VERIFY_COMPANY_DOMAINS=false. Tests turn it off and stub DNS / HTTP per test
-# via :companies_dns_resolver / :companies_req_options.
-config :vutuv, :verify_company_domains, true
+# VERIFY_ORGANIZATION_DOMAINS=false. Tests turn it off and stub DNS / HTTP per test
+# via :organizations_dns_resolver / :organizations_req_options.
+config :vutuv, :verify_organization_domains, true
 
 # Verified personal-webpage links: whether a member may prove a profile link is
 # their own webpage (a rel=me back-link, or the same DNS / well-known domain
-# proof companies use) and earn a small verified mark. On = the /settings/links
+# proof organizations use) and earn a small verified mark. On = the /settings/links
 # verify page offers the methods and re-checks them periodically; off = link
 # verification is disabled on this installation (no outbound calls), so no new
 # link can be verified (existing marks keep working). Runtime override:
@@ -160,7 +160,7 @@ config :vutuv, :invitation_daily_cap, 50
 
 # --- Operator identity ------------------------------------------------------
 # Everything naming the party who runs THIS installation lives behind these
-# keys, so another company can run vutuv without editing source. The defaults
+# keys, so another organization can run vutuv without editing source. The defaults
 # are the vutuv.de values; config/runtime.exs overrides each from an
 # environment variable at boot (names in parentheses). The legal pages
 # (Impressum etc.) are per-installation data too — see Vutuv.Legal.

@@ -26,7 +26,7 @@ defmodule Vutuv.Accounts.ReservedSlugs do
   # (/system/members) set the pattern, freeing "members" as a handle again.
   @route_slugs ~w(
     about access_tokens account_deletion admin ads api assets avatars benutzername blocks blog bookmarks
-    companies company_images community connected_apps connections contact covers css datenschutzerklaerung dev developers
+    organizations organization_images community connected_apps connections contact covers css datenschutzerklaerung dev developers
     edit emails favicon.ico feed follow_back
     follows fonts groups health help images impressum jobs js legal likes listings live
     llms.txt login logout mail maps memberships messages moderation new new_registration news

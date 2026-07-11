@@ -100,7 +100,7 @@ row per excluded target owned by `user_id`. Each row names exactly ONE target �
 a member (`excluded_user_id`) or an email **domain** (`domain`, a bare lowercase
 host) — enforced by a DB check constraint (`(excluded_user_id IS NOT NULL) <>
 (domain IS NOT NULL)`) and the schema's two changesets; partial unique indexes
-dedupe each kind per owner. Companies (issue #929) can join later as a third
+dedupe each kind per owner. Organizations (issue #929) can join later as a third
 nullable target with no new table. It is a **general** per-member
 viewer-exclusion list — currently only the job-search gate consults it, but
 other visibility-gated fields can opt in later without a migration.
@@ -178,44 +178,44 @@ entries.
 The profile-job-title chooser is category-agnostic: the pin (and the automatic
 heuristic) can select any entry, whatever its kind.
 
-## Linking a work experience to a company page (issue #931)
+## Linking a work experience to an organization page (issue #931)
 
-A work experience may **optionally** link to a [verified company
-page](companies.md) via a nullable `work_experiences.company_id`
-(`ON DELETE SET NULL` — deleting a company quietly unlinks, never cascades).
+A work experience may **optionally** link to a [verified organization
+page](organizations.md) via a nullable `work_experiences.organization_id`
+(`ON DELETE SET NULL` — deleting an organization quietly unlinks, never cascades).
 The link is a display convenience, **not** a badge: the employment claim stays
 self-asserted, and the free-text `organization` column remains authoritative
 for display whenever there is no link. vutuv never rewrites a member's own text.
 
 **Editor UX.** The `/settings/work_experiences` form watches the organization
-field: as the member types, `app.js` (`setupCompanyLink`) queries
-`GET /settings/work_experiences/company_suggestions?q=…`
-(`Companies.suggest_company_for_org/1` — an **exact**, case-insensitive match on
-a verified company's name or an alias, never a substring) and, on a hit, offers a
+field: as the member types, `app.js` (`setupOrganizationLink`) queries
+`GET /settings/work_experiences/organization_suggestions?q=…`
+(`Organizations.suggest_organization_for_org/1` — an **exact**, case-insensitive match on
+a verified organization's name or an alias, never a substring) and, on a hit, offers a
 quiet one-line "Mit der Seite … verknüpfen?" the member accepts with one tap or
 ignores. No match means no new UI. The choice rides in a hidden
-`work_experience[company_id]`; unlinking is one tap. It is a progressive
+`work_experience[organization_id]`; unlinking is one tap. It is a progressive
 enhancement — the free-text field always works with JS off, and an already-linked
 experience shows its linked state seeded from data attributes.
 
 **The guard.** `WorkExperience.changeset/2` only ever links to a **verified**
-(active, non-frozen) company; a stale target (unknown, pending, frozen,
+(active, non-frozen) organization; a stale target (unknown, pending, frozen,
 archived) is silently dropped back to nil rather than erroring (the member never
 types the id, so a dead link falls back to the free text instead of blocking the
-save). `Companies.canonical_path/1` is the one definition of a company's URL
-(its root `/:handle` when claimed, else `/companies/:slug`), shared by the
+save). `Organizations.canonical_path/1` is the one definition of an organization's URL
+(its root `/:handle` when claimed, else `/organizations/:slug`), shared by the
 profile link, the agent docs and the sitemap.
 
 **Display.** `WorkExperienceHTML.employer_name/1` renders a linked, active
-company as a small logo plus its **canonical name** linking to its page;
-everything else (unlinked, or a **frozen/archived** company — moderation must
+organization as a small logo plus its **canonical name** linking to its page;
+everything else (unlinked, or a **frozen/archived** organization — moderation must
 never break a profile) renders the member's free-text organization exactly as
-written. The block's company is taken from its newest role
-(`grouped_clusters/3` sets `:company`). The agent formats carry the link too
-(`SectionDocs.work_entry/1` adds a `company: {name, url}` ref for a linked active
+written. The block's organization is taken from its newest role
+(`grouped_clusters/3` sets `:organization`). The agent formats carry the link too
+(`SectionDocs.work_entry/1` adds a `organization: {name, url}` ref for a linked active
 entry; the md/txt work lines show the name + URL), kept in sync by the drift
-test. The reverse side — who works at a company — is the company page's People
-section (see companies.md).
+test. The reverse side — who works at an organization — is the organization page's People
+section (see organizations.md).
 
 ## Education profile section
 
@@ -385,8 +385,8 @@ A member can prove a profile **Link** is really their own webpage; it then earns
 a small emerald ✓ (`<.verified_mark>`) next to it on the profile Links card, the
 `/:slug/links` pages and the agent-format siblings (`SectionDocs.link_entry/1`
 carries `verified`; md/text render "(verified webpage)"). This is the people-side
-twin of verified company pages, and shares the same proof mechanics
-(`Vutuv.WebVerification`; see `companies.md`).
+twin of verified organization pages, and shares the same proof mechanics
+(`Vutuv.WebVerification`; see `organizations.md`).
 
 Three methods, the member's choice on the owner-only page at
 `/settings/links/:id/verify` (each a small `<.verify_form>` posting its method):
@@ -400,20 +400,20 @@ Three methods, the member's choice on the owner-only page at
   hosting (a blog, a `github.io` page, a hosted portfolio); it is the IndieWeb /
   Mastodon standard, completing the loop vutuv already half-emits (`rel="me"` in
   the profile head and on social chips).
-- **DNS / well-known** — the same proof mechanism companies use, for a member
+- **DNS / well-known** — the same proof mechanism organizations use, for a member
   who controls the whole host, using a per-link `verification_token`. Links use
   their own scheme (`vutuv-verify=` TXT / `/.well-known/vutuv-verify.txt`),
-  distinct from the company `vutuv-company-verify=` scheme, so a link proof
-  never doubles as a company proof on the same host.
+  distinct from the organization `vutuv-organization-verify=` scheme, so a link proof
+  never doubles as an organization proof on the same host.
 
 State lives on the `urls` row (`verification_method`, `verification_token`,
 `verified_at`, `last_checked_at`, `grace_deadline_at`) — per-link and independent,
-with **no** uniqueness constraint (unlike company domains: two members may each
+with **no** uniqueness constraint (unlike organization domains: two members may each
 prove the same shared host by their own proof, and rel=me is member-specific).
 Editing a link to a different URL clears its mark (`Url.changeset/2`). Verified
 links are re-checked hourly (`Vutuv.Profiles.LinkRecheckSweeper` →
 `recheck_due_links/0`) with a 7-day grace window before the mark drops, mirroring
-the company domain re-check.
+the organization domain re-check.
 
 Gated by `config :vutuv, :verify_user_links` (env `VERIFY_USER_LINKS`, default
 on). Off = disabled on the installation (no outbound calls); existing marks keep

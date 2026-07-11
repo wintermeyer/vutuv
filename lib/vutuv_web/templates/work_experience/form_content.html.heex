@@ -6,27 +6,27 @@
     <%= text_input f, :organization, autofocus: true %>
     <%= error_tag f, :organization %>
 
-    <%!-- Optional link to a verified company page (issue #931). Progressive
-    enhancement: `app.js` (setupCompanyLink) watches the organization field and,
-    when it matches a verified company's name or alias, offers a quiet one-tap
-    link here; the hidden field carries the chosen company_id. No match, no UI.
+    <%!-- Optional link to a verified organization page (issue #931). Progressive
+    enhancement: `app.js` (setupOrganizationLink) watches the organization field and,
+    when it matches a verified organization's name or alias, offers a quiet one-tap
+    link here; the hidden field carries the chosen organization_id. No match, no UI.
     When editing an already-linked experience the linked state is seeded from
     the data attributes so it shows even with JS off. --%>
     <div
-      data-company-link
-      data-suggest-url={~p"/settings/work_experiences/company_suggestions"}
+      data-organization-link
+      data-suggest-url={~p"/settings/work_experiences/organization_suggestions"}
       data-label-suggest={gettext("Link this experience to the verified page for {name}?")}
       data-label-link={gettext("Link to page")}
       data-label-linked={gettext("Linked to {name}")}
       data-label-unlink={gettext("Remove link")}
-      data-linked-id={@linked_company[:id]}
-      data-linked-name={@linked_company[:name]}
-      data-linked-path={@linked_company[:path]}
+      data-linked-id={@linked_organization[:id]}
+      data-linked-name={@linked_organization[:name]}
+      data-linked-path={@linked_organization[:path]}
     >
-      <%= hidden_input f, :company_id %>
-      <p class="editform__hint" data-company-link-status hidden={is_nil(@linked_company)}>
-        <%= if @linked_company do %>
-          {String.replace(gettext("Linked to {name}"), "{name}", @linked_company[:name])}
+      <%= hidden_input f, :organization_id %>
+      <p class="editform__hint" data-organization-link-status hidden={is_nil(@linked_organization)}>
+        <%= if @linked_organization do %>
+          {String.replace(gettext("Linked to {name}"), "{name}", @linked_organization[:name])}
         <% end %>
       </p>
     </div>

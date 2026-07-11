@@ -23,7 +23,8 @@ defmodule VutuvWeb.JsonLd do
 
   import Phoenix.HTML, only: [raw: 1]
 
-  alias Vutuv.Companies.CompanyImage
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Profiles.SocialMediaAccount
@@ -52,45 +53,45 @@ defmodule VutuvWeb.JsonLd do
   end
 
   @doc """
-  A verified company page as schema.org Organization (issue #929), from the show
+  A verified organization page as schema.org Organization (issue #929), from the show
   page's assigns. Gate at the call site: only emit for an indexable page.
   """
-  def organization_page(company, verified_domains) do
-    url = AgentDocs.abs_url("/companies/#{company.slug}")
+  def organization_page(organization, verified_domains) do
+    url = AgentDocs.abs_url("/organizations/#{organization.slug}")
 
     compact(%{
       "@context" => "https://schema.org",
-      "@type" => "Organization",
+      "@type" => Organization.schema_org_type(organization.kind),
       "@id" => url,
-      "name" => company.name,
+      "name" => organization.name,
       "url" => url,
-      "logo" => company_logo_url(company),
-      "sameAs" => organization_same_as(company, verified_domains),
-      "address" => postal_address(company)
+      "logo" => organization_logo_url(organization),
+      "sameAs" => organization_same_as(organization, verified_domains),
+      "address" => postal_address(organization)
     })
   end
 
-  defp company_logo_url(%{logo: nil}), do: nil
+  defp organization_logo_url(%{logo: nil}), do: nil
 
-  defp company_logo_url(%{logo: token}),
-    do: AgentDocs.abs_url(CompanyImage.token_url(token, "large"))
+  defp organization_logo_url(%{logo: token}),
+    do: AgentDocs.abs_url(OrganizationImage.token_url(token, "large"))
 
-  defp organization_same_as(company, verified_domains) do
+  defp organization_same_as(organization, verified_domains) do
     domain_urls = Enum.map(verified_domains, &("https://" <> &1.domain))
 
-    [company.website_url | domain_urls]
+    [organization.website_url | domain_urls]
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
   end
 
-  defp postal_address(company) do
+  defp postal_address(organization) do
     compact(%{
       "@type" => "PostalAddress",
-      "streetAddress" => company.street_address,
-      "postalCode" => company.zip_code,
-      "addressLocality" => company.city,
-      "addressRegion" => company.state,
-      "addressCountry" => company.country
+      "streetAddress" => organization.street_address,
+      "postalCode" => organization.zip_code,
+      "addressLocality" => organization.city,
+      "addressRegion" => organization.state,
+      "addressCountry" => organization.country
     })
   end
 

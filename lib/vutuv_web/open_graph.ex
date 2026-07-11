@@ -100,8 +100,8 @@ defmodule VutuvWeb.OpenGraph do
   defp page_copy(["system", "members" | _]),
     do: gettext("Browse the vutuv member directory.")
 
-  defp page_copy(["companies" | _]),
-    do: gettext("Verified company pages on vutuv, each with a proven web domain.")
+  defp page_copy(["organizations" | _]),
+    do: gettext("Verified organization pages on vutuv, each with a proven web domain.")
 
   defp page_copy(["login" | _]), do: gettext("Sign in to your vutuv account.")
   defp page_copy(["feed"]), do: gettext("Your personal vutuv newsfeed.")
@@ -256,8 +256,8 @@ defmodule VutuvWeb.OpenGraph do
   is no conn (e.g. an error page rendered without one).
 
   A controller may set an explicit `:canonical_url` assign to override the
-  request-path default — used by the company page (issue #941), which serves at
-  both `/companies/:slug` and its root `/:handle` and must point both at the
+  request-path default — used by the organization page (issue #941), which serves at
+  both `/organizations/:slug` and its root `/:handle` and must point both at the
   single root URL when a handle exists.
   """
   def canonical_url(%{canonical_url: url}) when is_binary(url), do: url

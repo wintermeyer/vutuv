@@ -18,7 +18,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [messages.md](messages.md) | 1:1 direct messages, message requests, unread-email nudges |
 | [invitations.md](invitations.md) | invite a non-member: hashed once-per-address record, prefilled sign-up link, per-inviter daily cap, auto-follow |
 | [profiles.md](profiles.md) | what a profile shows: owner vs. public view, the job-title line, education, section ordering, contact details & maps, the Mastodon/Bluesky card |
-| [companies.md](companies.md) | verified company pages at `/companies`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
+| [organizations.md](organizations.md) | verified organization pages at `/organizations`: the domain-proof trust model (DNS TXT / well-known file), lifecycle states, engagement, moderation, agent formats |
 | [settings-and-account.md](settings-and-account.md) | the settings hub, onboarding, username changes, LinkedIn import, GDPR export, the CV (Lebenslauf) download |
 | [authentication.md](authentication.md) | passwordless PIN login, passkeys, server-side sessions |
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |
@@ -41,10 +41,10 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
   `/search_queries/...` 301 to their new homes (`/login`, `/logout`, `/search`).
   The user scope is the **last** in the router, so static routes always win;
   `Vutuv.Accounts.ReservedSlugs` keeps users from registering a slug that equals
-  a route prefix. The URL-root namespace is **shared** with companies: a company
+  a route prefix. The URL-root namespace is **shared** with organizations: an organization
   can claim a member-style `@handle` and serve at `/:handle` too, with global
   uniqueness guaranteed by the `handles` registry table (see
-  [companies.md](companies.md), #941). The old read-only `/api/1.0` JSON API was
+  [organizations.md](organizations.md), #941). The old read-only `/api/1.0` JSON API was
   removed in favor of `/api/2.0`; only the session-aware vCard survived, at
   `/:slug/vcard`
 - **Forms**: `<.form>` component with `<.inputs_for>` for nested forms

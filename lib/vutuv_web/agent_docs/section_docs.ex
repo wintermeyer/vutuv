@@ -19,9 +19,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   use Gettext, backend: VutuvWeb.Gettext
 
-  alias Vutuv.Companies
-  alias Vutuv.Companies.Company
   alias Vutuv.Languages
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Phone
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
@@ -148,20 +148,26 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       # The CV category (issue #840): employment | self_employed | internship |
       # volunteer | other.
       kind: work.kind,
-      # The verified company page this experience is linked to (issue #931), or
+      # The verified organization page this experience is linked to (issue #931), or
       # nil for free-text-only. Mirrors the profile card, which shows the
-      # company's canonical name + logo for a linked entry. Only an active,
-      # non-frozen company qualifies, so a frozen/archived page reads as unlinked.
-      company: company_ref(work),
+      # organization's canonical name + logo for a linked entry. Only an active,
+      # non-frozen organization qualifies, so a frozen/archived page reads as unlinked.
+      # Distinct key from the free-text `organization` string above.
+      organization_page: organization_ref(work),
       start: CV.year_month(work.start_year, work.start_month),
       end: CV.year_month(work.end_year, work.end_month)
     }
   end
 
-  defp company_ref(%{company: %Company{status: "active", frozen_at: nil} = company}),
-    do: %{name: company.name, url: AgentDocs.abs_url(Companies.canonical_path(company))}
+  defp organization_ref(%{
+         organization_page: %Organization{status: "active", frozen_at: nil} = organization
+       }),
+       do: %{
+         name: organization.name,
+         url: AgentDocs.abs_url(Organizations.canonical_path(organization))
+       }
 
-  defp company_ref(_work), do: nil
+  defp organization_ref(_work), do: nil
 
   @doc false
   def education_entry(edu) do

@@ -2,12 +2,12 @@ defmodule Vutuv.Accounts.Handle do
   @moduledoc """
   One row in the shared handle registry (issue #941): a single `@name` claimed
   in the URL-root namespace (`/:handle`), owned by exactly one member
-  (`user_id`) XOR one company (`company_id`).
+  (`user_id`) XOR one organization (`organization_id`).
 
   The registry exists for **one** reason: its `UNIQUE(value)` index is the one
   place cross-table uniqueness is enforced, because Postgres cannot span a
-  unique constraint across `users` and `companies`. Resolution does **not** read
-  this table (the resolver reads `users.username` / `companies.username`
+  unique constraint across `users` and `organizations`. Resolution does **not** read
+  this table (the resolver reads `users.username` / `organizations.username`
   directly); every handle write syncs its row here in the same transaction as
   the owner write, so a colliding claim loses on the unique index instead of
   racing. `Vutuv.Handles` owns the sync + a drift test keeps the owner columns
@@ -17,12 +17,12 @@ defmodule Vutuv.Accounts.Handle do
   use VutuvWeb, :model
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Companies.Company
+  alias Vutuv.Organizations.Organization
 
   schema "handles" do
     field(:value, :string)
     belongs_to(:user, User)
-    belongs_to(:company, Company)
+    belongs_to(:organization, Organization)
 
     timestamps()
   end
@@ -42,7 +42,7 @@ defmodule Vutuv.Accounts.Handle do
       message: "has already been taken"
     )
     |> unique_constraint(:user_id, name: :handles_user_id_index)
-    |> unique_constraint(:company_id, name: :handles_company_id_index)
+    |> unique_constraint(:organization_id, name: :handles_organization_id_index)
     |> check_constraint(:value,
       name: :handles_one_owner,
       message: "must belong to exactly one owner"

@@ -1,18 +1,18 @@
 defmodule Vutuv.HandlesTest do
   @moduledoc """
-  The shared `@handle` namespace (issue #941): members and companies live in one
+  The shared `@handle` namespace (issue #941): members and organizations live in one
   root namespace whose global uniqueness is guaranteed by the `handles` registry
   table. These tests pin the two things that must never break: the registry
   stays in lock-step with the owner columns (`users.username` /
-  `companies.username`), and no member and company can hold the same handle — in
+  `organizations.username`), and no member and organization can hold the same handle — in
   either direction, at the database.
   """
   use Vutuv.DataCase, async: true
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.Handle
-  alias Vutuv.Companies
   alias Vutuv.Handles
+  alias Vutuv.Organizations
   alias Vutuv.Repo
 
   defp build_conn do
@@ -31,16 +31,19 @@ defmodule Vutuv.HandlesTest do
     user
   end
 
-  defp pending_company(user, host) do
+  defp pending_organization(user, host) do
     attrs = %{
       "name" => "Acme #{host}",
+      "kind" => "company",
       "website_url" => "https://#{host}",
       "city" => "Köln",
       "country" => "DE"
     }
 
-    {:ok, %{company: company}} = Companies.create_pending_company(user, attrs, "dns")
-    company
+    {:ok, %{organization: organization}} =
+      Organizations.create_pending_organization(user, attrs, "dns")
+
+    organization
   end
 
   describe "registry sync (the chokepoints keep handles in lock-step)" do
@@ -70,47 +73,54 @@ defmodule Vutuv.HandlesTest do
       assert Repo.aggregate(from(h in Handle, where: h.user_id == ^user.id), :count) == 1
     end
 
-    test "claim_handle writes the company's handle row" do
+    test "claim_handle writes the organization's handle row" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      assert {:ok, updated} = Companies.claim_handle(company, %{"username" => "acme"})
+      assert {:ok, updated} = Organizations.claim_handle(organization, %{"username" => "acme"})
       assert updated.username == "acme"
 
-      handle = Repo.get_by(Handle, company_id: company.id)
+      handle = Repo.get_by(Handle, organization_id: organization.id)
       assert handle.value == "acme"
       assert is_nil(handle.user_id)
     end
 
-    test "claim_handle changes an existing company handle in place" do
+    test "claim_handle changes an existing organization handle in place" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      {:ok, company} = Companies.claim_handle(company, %{"username" => "acme"})
-      {:ok, company} = Companies.claim_handle(company, %{"username" => "acmecorp"})
+      {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "acme"})
+      {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "acmecorp"})
 
-      assert company.username == "acmecorp"
-      assert Repo.aggregate(from(h in Handle, where: h.company_id == ^company.id), :count) == 1
-      assert Repo.get_by(Handle, company_id: company.id).value == "acmecorp"
+      assert organization.username == "acmecorp"
+
+      assert Repo.aggregate(
+               from(h in Handle, where: h.organization_id == ^organization.id),
+               :count
+             ) == 1
+
+      assert Repo.get_by(Handle, organization_id: organization.id).value == "acmecorp"
     end
   end
 
   describe "cross-table uniqueness (the whole point)" do
-    test "a company cannot claim a member's handle" do
+    test "an organization cannot claim a member's handle" do
       _member = member_with_handle("lufthansa")
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      assert {:error, changeset} = Companies.claim_handle(company, %{"username" => "lufthansa"})
+      assert {:error, changeset} =
+               Organizations.claim_handle(organization, %{"username" => "lufthansa"})
+
       assert "has already been taken" in errors_on(changeset).username
-      # The company row is unchanged (the transaction rolled back).
-      assert is_nil(Repo.reload(company).username)
+      # The organization row is unchanged (the transaction rolled back).
+      assert is_nil(Repo.reload(organization).username)
     end
 
-    test "a member cannot rename onto a company's handle" do
+    test "a member cannot rename onto an organization's handle" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
-      {:ok, _company} = Companies.claim_handle(company, %{"username" => "acme"})
+      organization = pending_organization(owner, "acme.example")
+      {:ok, _organization} = Organizations.claim_handle(organization, %{"username" => "acme"})
 
       member = member_with_handle("someone")
 
@@ -121,42 +131,46 @@ defmodule Vutuv.HandlesTest do
       assert Repo.get_by(Handle, user_id: member.id).value == "someone"
     end
 
-    test "two companies cannot hold the same handle" do
+    test "two organizations cannot hold the same handle" do
       owner = insert(:activated_user)
-      a = pending_company(owner, "a.example")
-      b = pending_company(owner, "b.example")
+      a = pending_organization(owner, "a.example")
+      b = pending_organization(owner, "b.example")
 
-      {:ok, _a} = Companies.claim_handle(a, %{"username" => "shared"})
+      {:ok, _a} = Organizations.claim_handle(a, %{"username" => "shared"})
 
-      assert {:error, changeset} = Companies.claim_handle(b, %{"username" => "shared"})
+      assert {:error, changeset} = Organizations.claim_handle(b, %{"username" => "shared"})
       assert "has already been taken" in errors_on(changeset).username
     end
   end
 
   describe "handle grammar + reserved words (both account types)" do
-    test "company handle rejects invalid grammar" do
+    test "organization handle rejects invalid grammar" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      assert {:error, changeset} = Companies.claim_handle(company, %{"username" => "no spaces"})
+      assert {:error, changeset} =
+               Organizations.claim_handle(organization, %{"username" => "no spaces"})
+
       refute changeset.valid?
       assert changeset.errors[:username]
     end
 
-    test "company handle rejects a reserved route word" do
+    test "organization handle rejects a reserved route word" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      assert {:error, changeset} = Companies.claim_handle(company, %{"username" => "admin"})
+      assert {:error, changeset} =
+               Organizations.claim_handle(organization, %{"username" => "admin"})
+
       assert "is reserved" in errors_on(changeset).username
     end
 
-    test "company handle is lowercased" do
+    test "organization handle is lowercased" do
       owner = insert(:activated_user)
-      company = pending_company(owner, "acme.example")
+      organization = pending_organization(owner, "acme.example")
 
-      {:ok, company} = Companies.claim_handle(company, %{"username" => "AcmeCorp"})
-      assert company.username == "acmecorp"
+      {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "AcmeCorp"})
+      assert organization.username == "acmecorp"
     end
   end
 

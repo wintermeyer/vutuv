@@ -504,7 +504,7 @@ defmodule VutuvWeb.UserProfileLive do
     # The whole history: the Experience card clusters it and previews up to
     # WorkExperienceHTML.profile_preview_limit/0 roles. Clustering must see every
     # role so a truncated employer still shows its true total tenure (a preview
-    # cut inside a company must not report only the shown roles' years).
+    # cut inside an organization must not report only the shown roles' years).
     |> assign(:work_experience, user.work_experiences)
     |> assign(:education, user.educations)
     |> assign(:languages, user.languages)
@@ -789,9 +789,9 @@ defmodule VutuvWeb.UserProfileLive do
       # Deliberately unlimited: the header-job pick must see every role (a
       # pinned one can sit outside the newest three; see load_profile). The
       # Experience card takes its top 3 in memory; rows per member are few.
-      # :company rides along so a linked role shows the verified page's logo +
+      # :organization rides along so a linked role shows the verified page's logo +
       # canonical name (issue #931).
-      work_experiences: {WorkExperience.order_by_date(WorkExperience), [:company]},
+      work_experiences: {WorkExperience.order_by_date(WorkExperience), [:organization_page]},
       educations:
         from(e in Education, limit: 3)
         |> Education.order_by_date(),

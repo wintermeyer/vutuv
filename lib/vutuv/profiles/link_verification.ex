@@ -7,13 +7,13 @@ defmodule Vutuv.Profiles.LinkVerification do
     * `rel_me` (default) — the page links back to the member's profile with
       `rel="me"`. Works on any page the member can edit (a blog, a `github.io`
       page, a hosted portfolio), even shared hosting.
-    * `dns` / `well_known` — the company-style domain proofs, for a member who
+    * `dns` / `well_known` — the organization-style domain proofs, for a member who
       controls the whole host.
 
   Verification is per-link and independent (no uniqueness / anti-squatting
   constraint: two members may each prove the same shared host by their own
   proof). Verified links are re-checked periodically with a grace window before
-  the mark drops, mirroring `Vutuv.Companies` domain re-checks.
+  the mark drops, mirroring `Vutuv.Organizations` domain re-checks.
 
   Gated by `:verify_user_links` (default on). Off = disabled on this
   installation (no outbound calls); intranet-safe.
@@ -27,8 +27,8 @@ defmodule Vutuv.Profiles.LinkVerification do
   alias Vutuv.WebVerification
 
   # The personal-webpage verification scheme, deliberately distinct from the
-  # `vutuv-company-verify=` scheme companies use (see
-  # `Vutuv.Companies.Verification`), so a link proof never doubles as a company
+  # `vutuv-organization-verify=` scheme organizations use (see
+  # `Vutuv.Organizations.Verification`), so a link proof never doubles as an organization
   # proof on the same host.
   @dns_prefix "vutuv-verify="
   @well_known_path "/.well-known/vutuv-verify.txt"

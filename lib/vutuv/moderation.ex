@@ -31,8 +31,8 @@ defmodule Vutuv.Moderation do
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Chat.{Message, Participant}
-  alias Vutuv.Companies.Company
   alias Vutuv.Moderation.{Case, Event, EvidenceScreenshot, Notifier, Report, Severance, Strike}
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
@@ -151,7 +151,7 @@ defmodule Vutuv.Moderation do
         _reporter,
         content
       )
-      when type in ["user", "company"] do
+      when type in ["user", "organization"] do
     reports = Repo.preload(open, :reports).reports
 
     # Trust for every reporter of this case in ONE grouped windowed query, then
@@ -228,10 +228,10 @@ defmodule Vutuv.Moderation do
     {"flagged", [:notify_admins_urgent]}
   end
 
-  # A company page is profile-style: a first report never freezes a verified
+  # An organization page is profile-style: a first report never freezes a verified
   # business page, it goes to the admin queue; a second trusted reporter (or the
   # spam threshold) freezes it in maybe_upgrade_case/3.
-  defp initial_status(_reporter, %Company{}) do
+  defp initial_status(_reporter, %Organization{}) do
     {"flagged", [:notify_admins_urgent]}
   end
 
@@ -428,7 +428,7 @@ defmodule Vutuv.Moderation do
       case_record.owner_id != user.id ->
         {:error, :not_allowed}
 
-      case_record.content_type in ["user", "company"] ->
+      case_record.content_type in ["user", "organization"] ->
         {:error, :not_deletable}
 
       true ->
@@ -556,7 +556,7 @@ defmodule Vutuv.Moderation do
         # For a profile case the consequence is the strike itself: a warning
         # leaves the profile visible again, a suspension/deactivation hides
         # everything anyway. Frozen posts/messages stay frozen as evidence. A
-        # company case unfreezes the page (the strike lands on its owner member).
+        # organization case unfreezes the page (the strike lands on its owner member).
         unfreeze_on_uphold(case_record)
 
         owner =
@@ -576,9 +576,9 @@ defmodule Vutuv.Moderation do
     set_user_moderation!(owner_id, frozen_at: nil)
   end
 
-  defp unfreeze_on_uphold(%Case{content_type: "company"} = case_record) do
+  defp unfreeze_on_uphold(%Case{content_type: "organization"} = case_record) do
     case case_content(case_record) do
-      %Company{} = company -> unfreeze_content(company)
+      %Organization{} = organization -> unfreeze_content(organization)
       _ -> :ok
     end
   end
@@ -743,10 +743,10 @@ defmodule Vutuv.Moderation do
   # case can put it back (`restore_severed/2`); an upheld case leaves the
   # separation in place. The reporter is told (flash via `severed_for?/2`,
   # plus the in-app feed `Vutuv.Activity` derives from the severance rows).
-  # Reporting a company page must not cut the reporter's personal ties to the
+  # Reporting an organization page must not cut the reporter's personal ties to the
   # member who happens to have claimed it: severance is a between-people
   # protection, meaningless for a business page.
-  defp sever_relationship(%Case{content_type: "company"}, %User{}), do: :ok
+  defp sever_relationship(%Case{content_type: "organization"}, %User{}), do: :ok
 
   defp sever_relationship(%Case{} = case_record, %User{} = reporter) do
     owner_id = case_record.owner_id
@@ -870,7 +870,7 @@ defmodule Vutuv.Moderation do
   the de-facto loss of anonymity towards a member they are tied to) BEFORE
   sending, not after.
   """
-  def would_sever_relationship?(%User{}, %Company{}), do: false
+  def would_sever_relationship?(%User{}, %Organization{}), do: false
 
   def would_sever_relationship?(%User{} = reporter, content) do
     owner = owner_id(content)
@@ -1087,18 +1087,18 @@ defmodule Vutuv.Moderation do
   defp content_type(%Post{}), do: "post"
   defp content_type(%Message{}), do: "message"
   defp content_type(%User{}), do: "user"
-  defp content_type(%Company{}), do: "company"
+  defp content_type(%Organization{}), do: "organization"
 
   defp content_id(%{id: id}), do: id
 
   defp owner_id(%Post{user_id: user_id}), do: user_id
   defp owner_id(%Message{sender_id: sender_id}), do: sender_id
   defp owner_id(%User{id: id}), do: id
-  # The member who claimed the page carries the strike ladder; a company whose
+  # The member who claimed the page carries the strike ladder; an organization whose
   # creator has since deleted their account (nilify_all) has no owner to strike,
   # so report_content/3 refuses it (owner_id == nil), leaving the report path
   # only for admin freeze.
-  defp owner_id(%Company{created_by_user_id: user_id}), do: user_id
+  defp owner_id(%Organization{created_by_user_id: user_id}), do: user_id
 
   defp snapshot(%Post{body: body}), do: body
   defp snapshot(%Message{body: body}), do: body
@@ -1109,8 +1109,8 @@ defmodule Vutuv.Moderation do
     |> Enum.join("\n")
   end
 
-  defp snapshot(%Company{} = company) do
-    [company.name, company.city]
+  defp snapshot(%Organization{} = organization) do
+    [organization.name, organization.city]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join("\n")
   end
@@ -1128,7 +1128,7 @@ defmodule Vutuv.Moderation do
   end
 
   defp reportable_by?(_reporter, %User{}), do: true
-  defp reportable_by?(_reporter, %Company{}), do: true
+  defp reportable_by?(_reporter, %Organization{}), do: true
 
   defp freeze_content(content) do
     set_frozen_at(content, NaiveDateTime.utc_now(:second))
@@ -1153,8 +1153,8 @@ defmodule Vutuv.Moderation do
     set_user_moderation!(id, frozen_at: value)
   end
 
-  defp set_frozen_at(%Company{id: id}, value) do
-    Repo.update_all(from(c in Company, where: c.id == ^id), set: [frozen_at: value])
+  defp set_frozen_at(%Organization{id: id}, value) do
+    Repo.update_all(from(c in Organization, where: c.id == ^id), set: [frozen_at: value])
   end
 
   defp set_user_moderation!(user_id, fields) do
@@ -1188,6 +1188,6 @@ defmodule Vutuv.Moderation do
   defp content_schema("post"), do: Post
   defp content_schema("message"), do: Message
   defp content_schema("user"), do: User
-  defp content_schema("company"), do: Company
+  defp content_schema("organization"), do: Organization
   defp content_schema(_), do: nil
 end

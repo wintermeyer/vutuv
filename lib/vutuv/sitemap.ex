@@ -33,7 +33,7 @@ defmodule Vutuv.Sitemap do
                   "/nutzungsbedingungen",
                   "/listings/most_followed_users",
                   "/system/members",
-                  "/companies",
+                  "/organizations",
                   "/ads",
                   "/tags",
                   "/developers"
@@ -63,7 +63,7 @@ defmodule Vutuv.Sitemap do
       users: chunks(Repo.aggregate(indexable_users(), :count)),
       posts: chunks(Repo.aggregate(indexable_posts(), :count)),
       tags: chunks(Repo.aggregate(Tag, :count)),
-      companies: chunks(Repo.aggregate(indexable_companies(), :count))
+      organizations: chunks(Repo.aggregate(indexable_organizations(), :count))
     }
   end
 
@@ -101,25 +101,25 @@ defmodule Vutuv.Sitemap do
     end)
   end
 
-  @doc "`{path, lastmod_date}` entries of one companies chunk (1-based)."
-  def company_entries(chunk) do
-    indexable_companies()
+  @doc "`{path, lastmod_date}` entries of one organizations chunk (1-based)."
+  def organization_entries(chunk) do
+    indexable_organizations()
     |> order_by([c], c.id)
     |> window(chunk)
     |> select([c], {c.slug, c.username, c.updated_at})
     |> Repo.all()
     |> Enum.map(fn {slug, username, updated_at} ->
-      # A company that claimed a root handle (issue #941) is canonical at
+      # An organization that claimed a root handle (issue #941) is canonical at
       # `/:handle`; list that, matching the page's rel=canonical, so the
-      # sitemap never advertises the `/companies/:slug` duplicate.
-      path = if username, do: "/" <> username, else: "/companies/" <> slug
+      # sitemap never advertises the `/organizations/:slug` duplicate.
+      path = if username, do: "/" <> username, else: "/organizations/" <> slug
       {path, NaiveDateTime.to_date(updated_at)}
     end)
   end
 
-  # The crawlable company set lives in Vutuv.Companies (the /companies directory
+  # The crawlable organization set lives in Vutuv.Organizations (the /organizations directory
   # rule), so directory and sitemap can never drift apart.
-  defp indexable_companies, do: Vutuv.Companies.indexable_query()
+  defp indexable_organizations, do: Vutuv.Organizations.indexable_query()
 
   defp window(query, chunk) when is_integer(chunk) and chunk >= 1 do
     query |> limit(^@chunk_size) |> offset(^((chunk - 1) * @chunk_size))

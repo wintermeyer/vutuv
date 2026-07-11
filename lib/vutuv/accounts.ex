@@ -117,7 +117,7 @@ defmodule Vutuv.Accounts do
 
       # Collision-avoidance stays scoped to existing member handles (unchanged).
       # The shared `handles` registry insert in register_user/3 is the DB backstop
-      # for the rare case an auto-handle equals a company handle (issue #941).
+      # for the rare case an auto-handle equals an organization handle (issue #941).
       Vutuv.SlugHelpers.gen_handle_unique(struct, User, :username, ReservedSlugs.list())
     end
   end
@@ -1218,7 +1218,7 @@ defmodule Vutuv.Accounts do
   # ── Viewer-exclusion list (issue #938) ──
 
   # The largest exclusion list a member may keep. Big enough for a real "hide
-  # from my company" list (a boss, a handful of colleagues, one or two
+  # from my organization" list (a boss, a handful of colleagues, one or two
   # domains), small enough to bound the gate query and stop abuse.
   @viewer_exclusion_cap 200
 
@@ -1561,7 +1561,7 @@ defmodule Vutuv.Accounts do
     Ecto.Multi.new()
     |> Ecto.Multi.update(:user, changeset)
     # Move the member's registry row to the new handle (issue #941). A handle
-    # held by a company loses on the `handles` unique index here and rolls the
+    # held by an organization loses on the `handles` unique index here and rolls the
     # whole rename back, so the shared namespace stays airtight both ways.
     |> Ecto.Multi.run(:handle, fn repo, %{user: updated} ->
       Handles.put_user_handle(repo, updated)

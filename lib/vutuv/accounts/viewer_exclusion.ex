@@ -17,7 +17,7 @@ defmodule Vutuv.Accounts.ViewerExclusion do
 
   Beyond the list, a full **block** (`Vutuv.Social.block_user`) implies the same
   exclusion, resolved in `Vutuv.Accounts.viewer_excluded?/2` — so the owner
-  never keeps two lists for one person. Companies (issue #929, verified company
+  never keeps two lists for one person. Organizations (issue #929, verified organization
   pages) can join later as a third nullable target. Rows are built through
   `Vutuv.Accounts` (never from raw user params for the member target, whose id
   is set programmatically); the domain is the only user-written field.

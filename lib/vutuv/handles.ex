@@ -1,7 +1,7 @@
 defmodule Vutuv.Handles do
   @moduledoc """
   The shared `@handle` namespace (issue #941): members (`users.username`) and
-  companies (`companies.username`) live at the URL root (`/:handle`) in one
+  organizations (`organizations.username`) live at the URL root (`/:handle`) in one
   namespace whose global uniqueness is guaranteed by the `handles` registry
   table's `UNIQUE(value)` index.
 
@@ -10,10 +10,10 @@ defmodule Vutuv.Handles do
     * **Grammar** — `validate_handle/2` is the single definition of what a
       handle may look like (Twitter style, `^[a-z0-9_]+$`, `min_length/0` to
       `max_length/0` chars, never a reserved word), shared by the member and
-      company owner changesets so they cannot drift apart.
-    * **Uniqueness sync** — `put_user_handle/2` / `put_company_handle/2` upsert
+      organization owner changesets so they cannot drift apart.
+    * **Uniqueness sync** — `put_user_handle/2` / `put_organization_handle/2` upsert
       the owner's registry row inside the caller's transaction, so a claim that
-      collides with any other member or company loses on the unique index. This
+      collides with any other member or organization loses on the unique index. This
       is the only place the cross-table lock is written; resolution reads the
       owner tables directly and never touches this module.
   """
@@ -24,13 +24,13 @@ defmodule Vutuv.Handles do
   alias Vutuv.Accounts.Handle
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User
-  alias Vutuv.Companies.Company
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
   @format ~r/^[a-z0-9_]+$/
   # The single source of truth for the handle length bounds. Everything else
   # derives from `min_length/0` / `max_length/0`: the member (`User`) and
-  # company changesets (via `validate_handle/2`), the auto-generated handles
+  # organization changesets (via `validate_handle/2`), the auto-generated handles
   # (`Vutuv.SlugHelpers`), the username form's `minlength`/`maxlength` + hint,
   # and the reserved-slug router guard. Change them here and nowhere else.
   @min_length 3
@@ -44,7 +44,7 @@ defmodule Vutuv.Handles do
   Validates the handle `field` (`:username`) on an owner changeset: lowercased,
   `^[a-z0-9_]+$`, #{@min_length}-#{@max_length} chars, never a `ReservedSlugs`
   word. Uniqueness is not checked here — that is the registry row's job — so
-  this is safe to run on both the member and the company path.
+  this is safe to run on both the member and the organization path.
   """
   def validate_handle(changeset, field) do
     changeset
@@ -72,17 +72,18 @@ defmodule Vutuv.Handles do
   end
 
   @doc """
-  Upserts the company's registry row to its current `username`. Same contract as
+  Upserts the organization's registry row to its current `username`. Same contract as
   `put_user_handle/2`.
   """
-  def put_company_handle(repo \\ Repo, %Company{} = company) do
-    (repo.get_by(Handle, company_id: company.id) || %Handle{company_id: company.id})
-    |> Handle.changeset(company.username)
+  def put_organization_handle(repo \\ Repo, %Organization{} = organization) do
+    (repo.get_by(Handle, organization_id: organization.id) ||
+       %Handle{organization_id: organization.id})
+    |> Handle.changeset(organization.username)
     |> repo.insert_or_update()
   end
 
   @doc """
-  Whether `value` is free to claim (not already owned by a member or company,
+  Whether `value` is free to claim (not already owned by a member or organization,
   and not reserved). A convenience for pre-flight UI checks; the registry's
   unique index is still the authority at write time.
   """

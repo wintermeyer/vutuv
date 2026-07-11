@@ -176,31 +176,32 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> join_blocks()
   end
 
-  # A verified company page (issue #929).
-  def render(%{type: "company"} = doc) do
+  # A verified organization page (issue #929).
+  def render(%{type: "organization"} = doc) do
     [
       heading(doc.name),
       doc.description,
       [
+        doc.kind && "- #{gettext("Kind")}: #{doc.kind}",
         doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
         also_known_as(doc),
         doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
         "- #{gettext("Address")}: #{doc.address_line}"
       ]
       |> Enum.filter(&is_binary/1),
-      company_people(doc),
+      organization_people(doc),
       footer(doc)
     ]
     |> join_blocks()
   end
 
-  # The verified-company directory (/companies).
-  def render(%{type: "companies"} = doc) do
+  # The verified-organization directory (/organizations).
+  def render(%{type: "organizations"} = doc) do
     [
       heading(doc.title),
       doc.description,
-      Enum.map(doc.companies, fn company ->
-        "- #{company.name} (#{company.city}, #{company.country}): #{company.url}"
+      Enum.map(doc.organizations, fn organization ->
+        "- #{organization.name} (#{organization.kind}, #{organization.city}, #{organization.country}): #{organization.url}"
       end),
       footer(doc)
     ]
@@ -286,14 +287,14 @@ defmodule VutuvWeb.AgentDocs.Text do
     text <> "\n" <> String.duplicate("=", min(String.length(text), @width))
   end
 
-  # A company's alternative names (issue #930), or nil when it has none.
+  # An organization's alternative names (issue #930), or nil when it has none.
   defp also_known_as(%{also_known_as: [_ | _] = names}),
     do: "- #{gettext("Also known as")}: #{Enum.join(names, ", ")}"
 
   defp also_known_as(_doc), do: nil
 
   # The People section (issue #931): the linked members the HTML page lists.
-  defp company_people(%{people: [_ | _] = people}) do
+  defp organization_people(%{people: [_ | _] = people}) do
     [
       gettext("People") <> ":"
       | Enum.map(people, fn person ->
@@ -305,7 +306,7 @@ defmodule VutuvWeb.AgentDocs.Text do
     |> Enum.join("\n")
   end
 
-  defp company_people(_doc), do: nil
+  defp organization_people(_doc), do: nil
 
   defp profile_facts(doc) do
     [
@@ -379,11 +380,11 @@ defmodule VutuvWeb.AgentDocs.Text do
     kind_note = Markdown.work_kind_note(work)
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
     description = Map.get(work, :description)
-    company = Map.get(work, :company)
+    page = Map.get(work, :organization_page)
 
     "* " <>
       line <>
-      if(company, do: " (#{company.name}: #{company.url})", else: "") <>
+      if(page, do: " (#{page.name}: #{page.url})", else: "") <>
       if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
       if description, do: ": #{description}", else: ""

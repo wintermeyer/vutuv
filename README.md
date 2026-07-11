@@ -8,7 +8,7 @@ And it federates, so members can be followed from Mastodon and the rest of
 the Fediverse (ActivityPub, opt-in per member). The reference installation
 runs at
 [vutuv.de](https://vutuv.de); **anyone can run their own** — on the public
-internet or inside a company intranet.
+internet or inside a company or organization intranet.
 
 We use the [MIT License](LICENSE).
 
@@ -19,9 +19,11 @@ We use the [MIT License](LICENSE).
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
   Developer profiles can show cached public stats of their GitHub, GitLab and
   Codeberg accounts (stars, repositories, languages, activity).
-- Verified company pages at `/companies`: a page can only exist once its
-  claimant proves control of the company's web domain (a DNS TXT record or a
-  well-known file), so there are no fake or typo'd company entries. Each page is
+- Verified organization pages at `/organizations` (a company, a Verein, a public
+  body, a university, an NGO — not only companies, each tagged with its kind): a
+  page can only exist once its claimant proves control of the organization's web
+  domain (a DNS TXT record or a well-known file), so there are no fake or typo'd
+  organization entries. Each page is
   run by a team (owner / admin / recruiter roles), can prove several domains, and
   is findable under alternative names and brands.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an

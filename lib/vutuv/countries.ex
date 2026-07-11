@@ -20,7 +20,7 @@ defmodule Vutuv.Countries do
   config). An unknown locale falls back to English; an unknown code falls back
   to the uppercased code itself, so callers never have to guard against a raise.
 
-  Used by the verified company pages and, later, by job postings.
+  Used by the verified organization pages and, later, by job postings.
   """
 
   # ISO 3166-1 alpha-2: {uppercase code, English short name, German short name}.

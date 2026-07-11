@@ -170,7 +170,7 @@ defmodule VutuvWeb.JobSearchExclusionsLive do
           </.form>
           <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
             {gettext(
-              "Any signed-in member whose confirmed email is at this domain, or a subdomain of it, is excluded. This is the reliable way to hide from your whole company."
+              "Any signed-in member whose confirmed email is at this domain, or a subdomain of it, is excluded. This is the reliable way to hide from your whole organization."
             )}
           </p>
         </.card>

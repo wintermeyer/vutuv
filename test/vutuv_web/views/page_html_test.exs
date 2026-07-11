@@ -5,7 +5,7 @@ defmodule VutuvWeb.PageHTMLTest do
     body = conn |> get(~p"/impressum") |> html_response(200)
 
     assert body =~ "not published this page yet"
-    # The company name itself stays in the shared footer, so probe the street.
+    # The organization name itself stays in the shared footer, so probe the street.
     refute body =~ "Johannes-Müller-Str."
   end
 

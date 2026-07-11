@@ -128,12 +128,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
-  # Company-page domain proof. VERIFY_COMPANY_DOMAINS=false disables the DNS TXT
-  # and well-known-file methods (and their periodic re-check), so no new company
+  # Organization-page domain proof. VERIFY_ORGANIZATION_DOMAINS=false disables the DNS TXT
+  # and well-known-file methods (and their periodic re-check), so no new organization
   # page can be verified — for installations that must not call out (intranets).
   # Existing verified pages keep working.
-  if System.get_env("VERIFY_COMPANY_DOMAINS") == "false" do
-    config :vutuv, :verify_company_domains, false
+  if System.get_env("VERIFY_ORGANIZATION_DOMAINS") == "false" do
+    config :vutuv, :verify_organization_domains, false
   end
 
   # Verified personal-webpage links. VERIFY_USER_LINKS=false disables the rel=me,

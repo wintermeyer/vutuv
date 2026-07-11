@@ -6,11 +6,11 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   A live member handle always wins, and the member fast-path is unchanged: one
   indexed `users.username` lookup. Only on a miss do we consider the shared
   handle namespace (issue #941): when the plug is used with
-  `dispatch_company: true` (the bare profile route `/:slug` only), a miss that
-  matches a **company** handle (`companies.username`) renders that company's
+  `dispatch_organization: true` (the bare profile route `/:slug` only), a miss that
+  matches a **organization** handle (`organizations.username`) renders that organization's
   page in place and halts, so `/lufthansa` serves the Lufthansa page exactly
-  like `/companies/lufthansa`. The member sub-page pipeline (`:user_pipe`) uses
-  the plug **without** the option, so `/:company_handle/followers` and friends
+  like `/organizations/lufthansa`. The member sub-page pipeline (`:user_pipe`) uses
+  the plug **without** the option, so `/:organization_handle/followers` and friends
   stay member-only and 404.
 
   Failing both, we fall back to `users.legacy_username` — the original handle a
@@ -25,9 +25,9 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
   import Ecto.Query, only: [from: 2]
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Companies
+  alias Vutuv.Organizations
   alias Vutuv.Repo
-  alias VutuvWeb.CompanyController
+  alias VutuvWeb.OrganizationController
 
   def init(opts) do
     opts
@@ -49,16 +49,17 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
     end
   end
 
-  # No member holds this handle. On the bare profile route, a company handle
-  # renders the company page in place; otherwise fall back to the retired-handle
+  # No member holds this handle. On the bare profile route, an organization handle
+  # renders the organization page in place; otherwise fall back to the retired-handle
   # 301, else 404.
   defp miss(conn, slug, opts) do
-    company = Keyword.get(opts, :dispatch_company, false) && visible_company(conn, slug)
+    organization =
+      Keyword.get(opts, :dispatch_organization, false) && visible_organization(conn, slug)
 
     cond do
-      company ->
+      organization ->
         conn
-        |> CompanyController.render_page(company)
+        |> OrganizationController.render_page(organization)
         |> Plug.Conn.halt()
 
       current = redirect_target(slug) ->
@@ -69,17 +70,17 @@ defmodule VutuvWeb.Plug.UserResolveSlug do
     end
   end
 
-  # A company whose root handle is this slug and which `viewer` may see (an
+  # An organization whose root handle is this slug and which `viewer` may see (an
   # active, non-frozen page for the public; owner/admin also see it earlier), or
   # nil.
-  defp visible_company(conn, slug) do
-    case Companies.get_company_by_username(slug) do
+  defp visible_organization(conn, slug) do
+    case Organizations.get_organization_by_username(slug) do
       nil ->
         nil
 
-      company ->
-        if Companies.company_visible_to?(company, conn.assigns[:current_user]),
-          do: company,
+      organization ->
+        if Organizations.organization_visible_to?(organization, conn.assigns[:current_user]),
+          do: organization,
           else: nil
     end
   end

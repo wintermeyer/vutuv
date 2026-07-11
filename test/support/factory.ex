@@ -172,13 +172,14 @@ defmodule Vutuv.Factory do
     }
   end
 
-  # A verified company page (issue #929). Defaults to `active` + `verified_at`
-  # so `insert(:company)` is immediately a linkable target (issue #931);
+  # A verified organization page (issue #929). Defaults to `active` + `verified_at`
+  # so `insert(:organization)` is immediately a linkable target (issue #931);
   # override `status:`/`frozen_at:` for the pending/frozen cases.
-  def company_factory do
-    %Vutuv.Companies.Company{
-      name: sequence(:company_name, &"Company #{&1}"),
-      slug: sequence(:company_slug, &"company-#{&1}"),
+  def organization_factory do
+    %Vutuv.Organizations.Organization{
+      name: sequence(:organization_name, &"Organization #{&1}"),
+      slug: sequence(:organization_slug, &"organization-#{&1}"),
+      kind: :company,
       city: "Berlin",
       country: "DE",
       status: "active",

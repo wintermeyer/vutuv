@@ -13,28 +13,28 @@ defmodule Vutuv.WebVerificationTest do
       token = WebVerification.gen_token()
       assert token =~ ~r/\A[A-Za-z0-9_-]+\z/
 
-      # The prefix is caller-supplied: personal links and companies use their
+      # The prefix is caller-supplied: personal links and organizations use their
       # own scheme, so a proof for one never doubles as a proof for the other.
       assert WebVerification.dns_txt_value("vutuv-verify=", token) == "vutuv-verify=" <> token
 
-      assert WebVerification.dns_txt_value("vutuv-company-verify=", token) ==
-               "vutuv-company-verify=" <> token
+      assert WebVerification.dns_txt_value("vutuv-organization-verify=", token) ==
+               "vutuv-organization-verify=" <> token
     end
   end
 
   describe "dns_verified?/4" do
     test "true only when the resolver returns a record with the given prefix" do
       token = "abc123"
-      resolver = fn _host -> [[~c"vutuv-company-verify=#{token}"]] end
+      resolver = fn _host -> [[~c"vutuv-organization-verify=#{token}"]] end
 
       assert WebVerification.dns_verified?(
                "example.org",
-               "vutuv-company-verify=",
+               "vutuv-organization-verify=",
                token,
                resolver
              )
 
-      # The personal-link prefix must not match a company record (and vice versa).
+      # The personal-link prefix must not match an organization record (and vice versa).
       refute WebVerification.dns_verified?("example.org", "vutuv-verify=", token, resolver)
     end
 
@@ -57,7 +57,7 @@ defmodule Vutuv.WebVerificationTest do
     end
 
     test "false on a mismatch or a non-200" do
-      path = "/.well-known/vutuv-company-verify.txt"
+      path = "/.well-known/vutuv-organization-verify.txt"
 
       refute WebVerification.well_known_verified?(
                "example.org",
@@ -80,9 +80,9 @@ defmodule Vutuv.WebVerificationTest do
 
       assert WebVerification.well_known_url(
                "example.org",
-               "/.well-known/vutuv-company-verify.txt"
+               "/.well-known/vutuv-organization-verify.txt"
              ) ==
-               "https://example.org/.well-known/vutuv-company-verify.txt"
+               "https://example.org/.well-known/vutuv-organization-verify.txt"
     end
   end
 

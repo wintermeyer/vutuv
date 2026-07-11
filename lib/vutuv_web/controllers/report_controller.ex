@@ -118,8 +118,8 @@ defmodule VutuvWeb.ReportController do
   defp preview(%User{} = user),
     do: "@#{user.username} - #{VutuvWeb.UserHelpers.full_name(user)}"
 
-  defp preview(%Vutuv.Companies.Company{} = company),
-    do: "#{company.name} - #{company.city}"
+  defp preview(%Vutuv.Organizations.Organization{} = organization),
+    do: "#{organization.name} - #{organization.city}"
 
   defp clip(nil), do: ""
 

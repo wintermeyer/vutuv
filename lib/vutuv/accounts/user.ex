@@ -431,7 +431,7 @@ defmodule Vutuv.Accounts.User do
   The one changeset that may touch the username. The grammar (letters, digits
   and underscores, `Vutuv.Handles` length bounds, never a reserved route word)
   is the shared `Vutuv.Handles.validate_handle/2` — the same definition the
-  company handle uses, so the member and company namespaces cannot drift apart.
+  organization handle uses, so the member and organization namespaces cannot drift apart.
   Handles are case-insensitive, so they are stored lowercase. Uniqueness across
   members is the `unique_constraint`; profiles live at the URL root, so a handle
   equal to a route prefix would shadow that route forever (hence "reserved").

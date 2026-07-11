@@ -115,7 +115,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
   end
 
   describe "grouped_clusters/2" do
-    test "consecutive roles at the same employer collapse into one company block" do
+    test "consecutive roles at the same employer collapse into one organization block" do
       [{"employment", [block]}] =
         WorkExperienceHTML.grouped_clusters([
           job(
@@ -324,7 +324,7 @@ defmodule VutuvWeb.WorkExperienceHTMLTest do
       # x-ion (1 role) + 2 of Open-Xchange's 3 roles fit under a 3-role cap; the
       # third OX role is cut, but the block must still report the whole 9-year,
       # 2016-2025 tenure — not just the two shown roles' span. Regression guard:
-      # a company cut mid-cluster on the profile preview reported too few years.
+      # an organization cut mid-cluster on the profile preview reported too few years.
       [{"employment", [x_ion, ox]}] =
         WorkExperienceHTML.grouped_clusters(
           [

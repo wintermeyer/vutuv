@@ -23,9 +23,9 @@ defmodule Vutuv.Activity do
   require Logger
 
   alias Vutuv.Accounts.User
-  alias Vutuv.Companies.Company
-  alias Vutuv.Companies.CompanyRole
   alias Vutuv.Notifications.Emailer
+  alias Vutuv.Organizations.Organization
+  alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Repo
@@ -173,20 +173,20 @@ defmodule Vutuv.Activity do
   end
 
   @doc """
-  Convenience: a "made you an admin of <company>" notification for the member
-  who was granted a company role (issue #930). The derived feed already picks up
-  the `company_roles` row; this live push updates the open session's badge and
+  Convenience: a "made you an admin of <organization>" notification for the member
+  who was granted an organization role (issue #930). The derived feed already picks up
+  the `organization_roles` row; this live push updates the open session's badge and
   toast at grant time. The actor is the granting member, rendered as a linked
   `@handle`.
   """
-  def notify_company_role(user_id, granter, %Company{} = company, role) do
+  def notify_organization_role(user_id, granter, %Organization{} = organization, role) do
     notify(
       user_id,
       Map.merge(actor_fields(granter), %{
-        kind: "company_role",
+        kind: "organization_role",
         role: role,
-        company_name: company.name,
-        company_slug: company.slug,
+        organization_name: organization.name,
+        organization_slug: organization.slug,
         at: DateTime.utc_now()
       })
     )
@@ -364,7 +364,7 @@ defmodule Vutuv.Activity do
         &connection_items(user_id, &1, &2),
         &reply_items(user_id, &1, &2),
         &like_items(user_id, &1, &2),
-        &company_role_items(user_id, &1, &2),
+        &organization_role_items(user_id, &1, &2),
         &moderation_items(user_id, &1, &2),
         &report_protection_items(user_id, &1, &2)
       ],
@@ -406,7 +406,7 @@ defmodule Vutuv.Activity do
             subquery(count_connections(user_id, read_at)) +
             subquery(count_replies(user_id, read_at)) +
             subquery(count_likes(user_id, read_at)) +
-            subquery(count_company_roles(user_id, read_at)) +
+            subquery(count_organization_roles(user_id, read_at)) +
             subquery(count_moderation(user_id, read_at)) +
             subquery(count_severances(user_id, read_at)) +
             subquery(count_severance_restores(user_id, read_at))
@@ -535,14 +535,14 @@ defmodule Vutuv.Activity do
     end)
   end
 
-  # Company-role grants (issue #930): a member made owner/admin/recruiter of a
-  # verified company page. A self-grant (the claim wizard makes the creator
+  # Organization-role grants (issue #930): a member made owner/admin/recruiter of a
+  # verified organization page. A self-grant (the claim wizard makes the creator
   # owner) is excluded — the `granted_by != user` filter drops it (and a nil
   # granter, keeping the count query below in lock-step).
-  defp company_role_items(user_id, limit, cursor) do
-    from(r in CompanyRole,
-      join: c in Company,
-      on: c.id == r.company_id,
+  defp organization_role_items(user_id, limit, cursor) do
+    from(r in OrganizationRole,
+      join: c in Organization,
+      on: c.id == r.organization_id,
       join: granter in User,
       on: granter.id == r.granted_by_user_id,
       where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
@@ -553,9 +553,9 @@ defmodule Vutuv.Activity do
     |> at_or_before(cursor)
     |> Repo.all()
     |> Enum.map(fn {id, at, granter, role, name, slug} ->
-      "company-role-#{id}"
-      |> actor_item("company_role", at, granter)
-      |> Map.merge(%{role: role, company_name: name, company_slug: slug})
+      "organization-role-#{id}"
+      |> actor_item("organization_role", at, granter)
+      |> Map.merge(%{role: role, organization_name: name, organization_slug: slug})
     end)
   end
 
@@ -708,8 +708,8 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
-  defp count_company_roles(user_id, read_at) do
-    from(r in CompanyRole,
+  defp count_organization_roles(user_id, read_at) do
+    from(r in OrganizationRole,
       where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
       select: %{count: count()}
     )

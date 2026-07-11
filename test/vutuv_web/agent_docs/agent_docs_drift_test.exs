@@ -668,41 +668,53 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert fallback =~ "Member since:"
   end
 
-  test "a linked work experience carries its verified company page in every format" do
-    company = insert(:company, name: "Linked Verified AG", slug: "linked-verified")
+  test "a linked work experience carries its verified organization page in every format" do
+    organization = insert(:organization, name: "Linked Verified AG", slug: "linked-verified")
     user = insert_activated_user(username: "link_drift", first_name: "Lena", last_name: "Linker")
 
     insert(:work_experience,
       user: user,
-      company: company,
+      organization_page: organization,
       title: "Linked Engineer",
       organization: "free text org"
     )
 
     # Both the profile and the work-experiences section carry the linked
-    # company's canonical name and URL, in HTML and every agent format.
+    # organization's canonical name and URL, in HTML and every agent format.
     for path <- ["/link_drift", "/link_drift/work_experiences"] do
       rendered = formats_for(path)
       assert_fact_everywhere(rendered, "Linked Verified AG")
-      assert_fact_everywhere(rendered, "/companies/linked-verified")
+      assert_fact_everywhere(rendered, "/organizations/linked-verified")
     end
   end
 
-  test "a company page's People section appears in every format" do
-    company = insert(:company, name: "People Verified AG", slug: "people-verified")
+  test "an organization page's People section appears in every format" do
+    organization = insert(:organization, name: "People Verified AG", slug: "people-verified")
 
     member =
       insert_activated_user(first_name: "Petra", last_name: "People", username: "petra_people")
 
     insert(:work_experience,
       user: member,
-      company: company,
+      organization_page: organization,
       title: "Staff Engineer",
       end_year: nil
     )
 
-    rendered = formats_for("/companies/people-verified")
+    rendered = formats_for("/organizations/people-verified")
     assert_fact_everywhere(rendered, "Petra People")
     assert_fact_everywhere(rendered, "/petra_people")
+  end
+
+  test "an organization's kind (Art) appears in every format" do
+    insert(:organization,
+      name: "City Hall",
+      slug: "city-hall",
+      kind: :government
+    )
+
+    rendered = formats_for("/organizations/city-hall")
+    # A Behörde is not a company: the kind label rides HTML + every agent format.
+    assert_fact_everywhere(rendered, "Public authority")
   end
 end

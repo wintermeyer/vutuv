@@ -59,15 +59,15 @@ config :vutuv, :refresh_popular_users, false
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
 config :vutuv, :fetch_code_stats, false
-# Company domain re-check GenServer would touch the sandbox from outside; tests
-# call Vutuv.Companies.recheck_domain/1 directly. DNS / well-known verification
+# Organization domain re-check GenServer would touch the sandbox from outside; tests
+# call Vutuv.Organizations.recheck_domain/1 directly. DNS / well-known verification
 # is off too, so the suite never hits real DNS / HTTP; the domain tests flip
-# :verify_company_domains on per-test and stub via :companies_dns_resolver /
-# :companies_req_options.
-config :vutuv, :recheck_company_domains, false
-config :vutuv, :verify_company_domains, false
+# :verify_organization_domains on per-test and stub via :organizations_dns_resolver /
+# :organizations_req_options.
+config :vutuv, :recheck_organization_domains, false
+config :vutuv, :verify_organization_domains, false
 
-# Personal-webpage link verification: same story as the company flags above. The
+# Personal-webpage link verification: same story as the organization flags above. The
 # hourly re-check GenServer stays off (tests call
 # Vutuv.Profiles.LinkVerification.recheck/1 directly); verification is off so the
 # suite never hits real DNS / HTTP, and the link tests flip :verify_user_links on

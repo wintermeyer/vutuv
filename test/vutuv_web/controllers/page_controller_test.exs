@@ -97,7 +97,7 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Nutzungsbedingungen"
       assert body =~ "not published this page yet"
       # No operator identity leaks from the old hardcoded template (the
-      # company name itself stays in the shared footer, so probe the street).
+      # organization name itself stays in the shared footer, so probe the street).
       refute body =~ "Johannes-Müller-Str."
     end
 

@@ -545,7 +545,7 @@ defmodule Vutuv.Notifications.Emailer do
     })
   end
 
-  # The invoice address block, optional lines (company, VAT id) folded away.
+  # The invoice address block, optional lines (organization, VAT id) folded away.
   defp billing_address(ad) do
     [
       ad.billing_name,
@@ -621,51 +621,51 @@ defmodule Vutuv.Notifications.Emailer do
     })
   end
 
-  ## Company pages (see Vutuv.Companies)
+  ## Organization pages (see Vutuv.Organizations)
 
-  @doc "Operator notice: a company page was newly verified (a human reviews each one)."
-  def company_verified_notice(company, domain) do
-    company_operator_notice(
+  @doc "Operator notice: an organization page was newly verified (a human reviews each one)."
+  def organization_verified_notice(organization, domain) do
+    organization_operator_notice(
       :verified,
-      company,
+      organization,
       domain,
-      "vutuv: Firmenseite verifiziert - #{company.name}"
+      "vutuv: Firmenseite verifiziert - #{organization.name}"
     )
   end
 
-  @doc "Operator notice: a company lost its last verified domain and fell back to pending."
-  def company_unverified_notice(company, domain) do
-    company_operator_notice(
+  @doc "Operator notice: an organization lost its last verified domain and fell back to pending."
+  def organization_unverified_notice(organization, domain) do
+    organization_operator_notice(
       :unverified,
-      company,
+      organization,
       domain,
-      "vutuv: Firmenseite nicht mehr verifiziert - #{company.name}"
+      "vutuv: Firmenseite nicht mehr verifiziert - #{organization.name}"
     )
   end
 
-  @doc "Operator notice: one of a company's (non-last) domains was dropped in a re-check."
-  def company_domain_dropped_notice(company, domain) do
-    company_operator_notice(
+  @doc "Operator notice: one of an organization's (non-last) domains was dropped in a re-check."
+  def organization_domain_dropped_notice(organization, domain) do
+    organization_operator_notice(
       :domain_dropped,
-      company,
+      organization,
       domain,
-      "vutuv: Firmen-Domain entfernt - #{company.name}"
+      "vutuv: Firmen-Domain entfernt - #{organization.name}"
     )
   end
 
   # Fixed German recipient and template, like the other operator notices. The
-  # notice links to the admin companies dashboard (issue #930) so the reviewer
+  # notice links to the admin organizations dashboard (issue #930) so the reviewer
   # lands on the oversight page, not just the public page.
-  defp company_operator_notice(kind, company, domain, subject_line) do
+  defp organization_operator_notice(kind, organization, domain, subject_line) do
     base_email()
     |> to(operator_recipient())
     |> subject(subject_line)
-    |> render_bodies("company_operator_notice", "de", %{
+    |> render_bodies("organization_operator_notice", "de", %{
       kind: kind,
-      company: company,
+      organization: organization,
       domain: domain,
-      page_url: "#{public_url()}companies/#{company.slug}",
-      admin_url: "#{public_url()}admin/companies",
+      page_url: "#{public_url()}organizations/#{organization.slug}",
+      admin_url: "#{public_url()}admin/organizations",
       url: public_url()
     })
   end

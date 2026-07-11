@@ -196,21 +196,21 @@ defmodule VutuvWeb.Router do
     # NewsfeedController so it doesn't collide with FeedController (the RSS one).
     get("/feed", NewsfeedController, :index)
 
-    # Verified company pages (issue #929). Controllers (not bare `live`) so
-    # /companies and /companies/:slug negotiate their agent-format siblings
+    # Verified organization pages (issue #929). Controllers (not bare `live`) so
+    # /organizations and /organizations/:slug negotiate their agent-format siblings
     # (.md/.txt/.json/.xml, VutuvWeb.AgentDocs) and live_render the LiveView for
     # HTML — the profile/newsfeed pattern. Literal routes before the /:slug
-    # catch-all ("companies" is a ReservedSlug); /companies/new (claim wizard)
-    # precedes /companies/:slug, /companies/:slug/edit is the owner edit form.
-    get("/companies", CompanyController, :index)
-    get("/companies/new", CompanyController, :new)
-    get("/companies/:slug", CompanyController, :show)
-    get("/companies/:slug/edit", CompanyController, :edit)
+    # catch-all ("organizations" is a ReservedSlug); /organizations/new (claim wizard)
+    # precedes /organizations/:slug, /organizations/:slug/edit is the owner edit form.
+    get("/organizations", OrganizationController, :index)
+    get("/organizations/new", OrganizationController, :new)
+    get("/organizations/:slug", OrganizationController, :show)
+    get("/organizations/:slug/edit", OrganizationController, :edit)
     # The owner-only team roster and multi-domain management pages (issue #930),
     # live_render like edit. The fixed second segment keeps them out of the
     # /:slug agent-format catch-all.
-    get("/companies/:slug/roles", CompanyController, :roles)
-    get("/companies/:slug/domains", CompanyController, :domains)
+    get("/organizations/:slug/roles", OrganizationController, :roles)
+    get("/organizations/:slug/domains", OrganizationController, :domains)
 
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
@@ -272,9 +272,9 @@ defmodule VutuvWeb.Router do
     # e.g. "feed.avif"; nginx only streams what this controller approves.
     get("/post_images/:token/:version", PostImageController, :show)
 
-    # The authorizing company-image proxy (logo/cover + description images),
+    # The authorizing organization-image proxy (logo/cover + description images),
     # like /post_images: a pending or frozen page's images are owner/admin-only.
-    get("/company_images/:token/:version", CompanyImageController, :show)
+    get("/organization_images/:token/:version", OrganizationImageController, :show)
 
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
@@ -563,9 +563,9 @@ defmodule VutuvWeb.Router do
       live("/newsletter_groups/:id", NewsletterGroupLive, :show)
       live("/newsletter_groups/:id/edit", NewsletterGroupLive, :edit)
 
-      # The verified-company oversight dashboard (issue #930): freeze/unfreeze/
+      # The verified-organization oversight dashboard (issue #930): freeze/unfreeze/
       # archive/delete act reload-free over the socket.
-      live("/companies", CompanyLive, :index)
+      live("/organizations", OrganizationLive, :index)
     end
   end
 
@@ -820,10 +820,14 @@ defmodule VutuvWeb.Router do
     delete("/work_experiences/:id/pin", WorkExperienceController, :unpin)
     get("/work_experiences", WorkExperienceController, :manage)
 
-    # The editor's verified-company link suggestion (issue #931), a JSON match
-    # for the organization being typed. Before the resources so "company_suggestions"
+    # The editor's verified-organization link suggestion (issue #931), a JSON match
+    # for the organization being typed. Before the resources so "organization_suggestions"
     # is not read as a work-experience id.
-    get("/work_experiences/company_suggestions", WorkExperienceController, :company_suggestions)
+    get(
+      "/work_experiences/organization_suggestions",
+      WorkExperienceController,
+      :organization_suggestions
+    )
 
     resources("/work_experiences", WorkExperienceController,
       only: [:new, :create, :edit, :update, :delete],

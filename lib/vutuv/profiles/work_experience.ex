@@ -23,15 +23,19 @@ defmodule Vutuv.Profiles.WorkExperience do
     field(:slug, :string)
 
     belongs_to(:user, Vutuv.Accounts.User)
-    # Optional link to a verified company page (issue #931). nil = free-text
-    # only; the `organization` column above stays authoritative for display
+    # Optional link to a verified organization page (issue #931). nil = free-text
+    # only; the `organization` string column above stays authoritative for display
     # whenever there is no link. Never required, never rewrites the member's text.
-    belongs_to(:company, Vutuv.Companies.Company)
+    # Named `organization_page` (not `organization`) so it can't collide with the
+    # free-text `organization` field; the FK column is `organization_id`.
+    belongs_to(:organization_page, Vutuv.Organizations.Organization,
+      foreign_key: :organization_id
+    )
 
     timestamps()
   end
 
-  @cast_fields ~w(title description kind start_month start_year organization end_month end_year slug company_id)a
+  @cast_fields ~w(title description kind start_month start_year organization end_month end_year slug organization_id)a
 
   @doc "The known categories, in display order."
   def kinds, do: @kinds
@@ -54,7 +58,7 @@ defmodule Vutuv.Profiles.WorkExperience do
     |> validate_length(:organization, max: 255)
     |> validate_length(:description, max: 10_000)
     |> ChangesetHelpers.validate_period()
-    |> validate_company_link()
+    |> validate_organization_link()
     |> create_slug
     # The slug derives from title + organization, so two near-cap values can
     # still overrun its own varchar(255) column.
@@ -64,30 +68,30 @@ defmodule Vutuv.Profiles.WorkExperience do
 
   # Issue #931: a link is a display convenience the member opts into by accepting
   # a suggestion, so the target is only ever a **verified** (active, non-frozen)
-  # company. A company_id that is not currently linkable — unknown, pending,
+  # organization. A organization_id that is not currently linkable — unknown, pending,
   # frozen or archived — is silently dropped back to nil rather than erroring:
   # the member never types the id (it rides in from the suggestion), so a stale
   # target should quietly fall back to the free-text organization, not block the
   # save. `foreign_key_constraint/2` still guards a genuinely dangling id.
-  defp validate_company_link(changeset) do
+  defp validate_organization_link(changeset) do
     changeset =
-      case get_change(changeset, :company_id) do
+      case get_change(changeset, :organization_id) do
         nil ->
           changeset
 
-        company_id ->
-          if linkable_company?(company_id),
+        organization_id ->
+          if linkable_organization?(organization_id),
             do: changeset,
-            else: put_change(changeset, :company_id, nil)
+            else: put_change(changeset, :organization_id, nil)
       end
 
-    foreign_key_constraint(changeset, :company_id)
+    foreign_key_constraint(changeset, :organization_id)
   end
 
-  defp linkable_company?(company_id) do
+  defp linkable_organization?(organization_id) do
     Vutuv.Repo.exists?(
-      from(c in Vutuv.Companies.Company,
-        where: c.id == ^company_id and c.status == "active" and is_nil(c.frozen_at)
+      from(c in Vutuv.Organizations.Organization,
+        where: c.id == ^organization_id and c.status == "active" and is_nil(c.frozen_at)
       )
     )
   end

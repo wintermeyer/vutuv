@@ -1,7 +1,7 @@
 defmodule Vutuv.WebVerification do
   @moduledoc """
-  The web-proof primitives shared by verified company pages
-  (`Vutuv.Companies.Verification`, issue #929) and verified personal-webpage
+  The web-proof primitives shared by verified organization pages
+  (`Vutuv.Organizations.Verification`, issue #929) and verified personal-webpage
   links (`Vutuv.Profiles.LinkVerification`). Each primitive proves control of a
   web resource without any assumption about who owns it:
 
@@ -14,8 +14,8 @@ defmodule Vutuv.WebVerification do
   The primitives are **config-agnostic**: the DNS prefix, the `.well-known`
   path, the DNS resolver and the `Req` options are all passed in by the caller,
   so each context keeps its own verification scheme, its own test seam and its
-  own outbound-call gate (`:verify_company_domains` / `:verify_user_links`).
-  Companies use `vutuv-company-verify=` / `/.well-known/vutuv-company-verify.txt`
+  own outbound-call gate (`:verify_organization_domains` / `:verify_user_links`).
+  Organizations use `vutuv-organization-verify=` / `/.well-known/vutuv-organization-verify.txt`
   and personal-webpage links use `vutuv-verify=` / `/.well-known/vutuv-verify.txt`,
   so a proof for one context never doubles as a proof for the other. The
   `well_known` and `rel_me` fetches run behind the `Vutuv.Ssrf` guard and never

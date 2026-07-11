@@ -226,7 +226,7 @@ defmodule VutuvWeb.PageController do
   - `/listings/most_followed_users` — the most followed members
   - `/system/members` — the member directory: everyone open to search engines,
     filed by last-name initial at `/system/members/<a-z|other>`
-  - `/companies` — the verified company directory; one company at `/companies/<slug>`
+  - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
   - `/ads` — the daily text ad: price, conditions, next available day
     (booking happens online and requires a login)
 

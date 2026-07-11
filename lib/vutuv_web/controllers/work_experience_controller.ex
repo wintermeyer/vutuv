@@ -2,8 +2,8 @@ defmodule VutuvWeb.WorkExperienceController do
   use VutuvWeb, :controller
 
   alias Vutuv.Accounts
-  alias Vutuv.Companies
-  alias Vutuv.Companies.CompanyImage
+  alias Vutuv.Organizations
+  alias Vutuv.Organizations.OrganizationImage
   alias Vutuv.Profiles.WorkExperience
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -30,7 +30,8 @@ defmodule VutuvWeb.WorkExperienceController do
       conn.assigns[:user]
       |> Repo.preload(
         work_experiences:
-          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(), [:company]}
+          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
+           [:organization_page]}
       )
 
     AgentDocs.respond(conn,
@@ -55,7 +56,8 @@ defmodule VutuvWeb.WorkExperienceController do
       conn.assigns[:user]
       |> Repo.preload(
         work_experiences:
-          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(), [:company]}
+          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
+           [:organization_page]}
       )
 
     render(conn, "manage.html",
@@ -105,7 +107,7 @@ defmodule VutuvWeb.WorkExperienceController do
     render(conn, "new.html",
       changeset: changeset,
       current_year: current_year(),
-      linked_company: linked_company_payload(changeset)
+      linked_organization: linked_organization_payload(changeset)
     )
   end
 
@@ -119,13 +121,16 @@ defmodule VutuvWeb.WorkExperienceController do
       flash: gettext("Work experience created successfully."),
       redirect_to: ~p"/settings/work_experiences",
       render: "new.html",
-      assigns: [current_year: current_year(), linked_company: linked_company_payload(changeset)]
+      assigns: [
+        current_year: current_year(),
+        linked_organization: linked_organization_payload(changeset)
+      ]
     )
   end
 
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :job to conn.assigns[:user], so no ownership re-check.
-    job = Repo.preload(conn.assigns[:job], :company)
+    job = Repo.preload(conn.assigns[:job], :organization_page)
 
     AgentDocs.respond(conn,
       html: &render(&1, "show.html", work_experience: job),
@@ -141,7 +146,7 @@ defmodule VutuvWeb.WorkExperienceController do
       work_experience: work_experience,
       changeset: changeset,
       current_year: current_year(),
-      linked_company: linked_company_payload(changeset)
+      linked_organization: linked_organization_payload(changeset)
     )
   end
 
@@ -156,39 +161,41 @@ defmodule VutuvWeb.WorkExperienceController do
       assigns: [
         work_experience: work_experience,
         current_year: current_year(),
-        linked_company: linked_company_payload(changeset)
+        linked_organization: linked_organization_payload(changeset)
       ]
     )
   end
 
-  # The editor's quiet "link to a verified company page" suggestion (issue #931):
+  # The editor's quiet "link to a verified organization page" suggestion (issue #931):
   # a JSON best-match for the free-text organization the member is typing. Lives
   # in the login-required /settings scope, so only a member editing their own
   # experience can query it.
-  def company_suggestions(conn, params) do
-    json(conn, %{company: link_payload(Companies.suggest_company_for_org(params["q"]))})
+  def organization_suggestions(conn, params) do
+    json(conn, %{
+      organization: link_payload(Organizations.suggest_organization_for_org(params["q"]))
+    })
   end
 
-  # The currently-linked company (if any) behind a changeset, so the edit form
+  # The currently-linked organization (if any) behind a changeset, so the edit form
   # can render the "Verknüpft mit …" state and its unlink control on load. Only
-  # ever an active company (a stale link renders as plain text).
-  defp linked_company_payload(changeset) do
+  # ever an active organization (a stale link renders as plain text).
+  defp linked_organization_payload(changeset) do
     changeset
-    |> Ecto.Changeset.get_field(:company_id)
+    |> Ecto.Changeset.get_field(:organization_id)
     |> case do
       nil -> nil
-      company_id -> link_payload(Companies.get_active_company(company_id))
+      organization_id -> link_payload(Organizations.get_active_organization(organization_id))
     end
   end
 
   defp link_payload(nil), do: nil
 
-  defp link_payload(company) do
+  defp link_payload(organization) do
     %{
-      id: company.id,
-      name: company.name,
-      path: Companies.canonical_path(company),
-      logo_url: company.logo && CompanyImage.token_url(company.logo, "feed")
+      id: organization.id,
+      name: organization.name,
+      path: Organizations.canonical_path(organization),
+      logo_url: organization.logo && OrganizationImage.token_url(organization.logo, "feed")
     }
   end
 

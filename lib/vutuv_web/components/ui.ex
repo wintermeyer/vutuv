@@ -471,7 +471,7 @@ defmodule VutuvWeb.UI do
 
   @doc """
   The small emerald ✓ shown next to a member's **verified webpage** link
-  (`Vutuv.Profiles.LinkVerification`) — the people-side twin of the company
+  (`Vutuv.Profiles.LinkVerification`) — the people-side twin of the organization
   `<.verified_badge>`. Icon-only, so it carries a `title` / `aria-label`.
   """
   attr(:title, :string, default: nil)

@@ -175,13 +175,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  # A verified company page (issue #929).
-  def render(%{type: "company"} = doc) do
+  # A verified organization page (issue #929).
+  def render(%{type: "organization"} = doc) do
     [
       frontmatter(doc),
       "# #{doc.name}",
       doc.description,
       [
+        doc.kind && "- #{gettext("Kind")}: #{doc.kind}",
         doc.primary_domain && "- #{gettext("Verified via")}: #{doc.primary_domain}",
         also_known_as(doc),
         doc.website_url && "- #{gettext("Website")}: #{doc.website_url}",
@@ -189,19 +190,19 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       ]
       |> Enum.filter(&is_binary/1)
       |> Enum.join("\n"),
-      company_people(doc)
+      organization_people(doc)
     ]
     |> join_blocks()
   end
 
-  # The verified-company directory (/companies).
-  def render(%{type: "companies"} = doc) do
+  # The verified-organization directory (/organizations).
+  def render(%{type: "organizations"} = doc) do
     [
       frontmatter(doc),
       "# #{doc.title}",
       doc.description,
-      Enum.map_join(doc.companies, "\n", fn company ->
-        "- #{company.name} (#{company.city}, #{company.country}): #{company.url}"
+      Enum.map_join(doc.organizations, "\n", fn organization ->
+        "- #{organization.name} (#{organization.kind}, #{organization.city}, #{organization.country}): #{organization.url}"
       end)
     ]
     |> join_blocks()
@@ -247,15 +248,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> join_blocks()
   end
 
-  # A company's alternative names (issue #930), or nil when it has none.
+  # An organization's alternative names (issue #930), or nil when it has none.
   defp also_known_as(%{also_known_as: [_ | _] = names}),
     do: "- #{gettext("Also known as")}: #{Enum.join(names, ", ")}"
 
   defp also_known_as(_doc), do: nil
 
   # The People section (issue #931): members whose linked work experience is at
-  # this company, current members first, a "(former)" note on past ones.
-  defp company_people(%{people: [_ | _] = people}) do
+  # this organization, current members first, a "(former)" note on past ones.
+  defp organization_people(%{people: [_ | _] = people}) do
     [
       "## #{gettext("People")}",
       Enum.map_join(people, "\n", fn person ->
@@ -267,7 +268,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Enum.join("\n")
   end
 
-  defp company_people(_doc), do: nil
+  defp organization_people(_doc), do: nil
 
   # The YAML frontmatter every Markdown doc starts with.
   defp frontmatter(doc) do
@@ -424,10 +425,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     period = work_period(work)
     kind_note = work_kind_note(work)
     description = Map.get(work, :description)
-    company = Map.get(work, :company)
+    page = Map.get(work, :organization_page)
 
     ["- ", Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")]
-    |> Kernel.++(if company, do: [" ([#{company.name}](#{company.url}))"], else: [])
+    |> Kernel.++(if page, do: [" ([#{page.name}](#{page.url}))"], else: [])
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
     |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])
