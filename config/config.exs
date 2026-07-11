@@ -135,6 +135,22 @@ config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10
 # via :companies_dns_resolver / :companies_req_options.
 config :vutuv, :verify_company_domains, true
 
+# Verified personal-webpage links: whether a member may prove a profile link is
+# their own webpage (a rel=me back-link, or the same DNS / well-known domain
+# proof companies use) and earn a small verified mark. On = the /settings/links
+# verify page offers the methods and re-checks them periodically; off = link
+# verification is disabled on this installation (no outbound calls), so no new
+# link can be verified (existing marks keep working). Runtime override:
+# VERIFY_USER_LINKS=false. Tests turn it off and stub DNS / HTTP per test via
+# :user_links_dns_resolver / :user_links_req_options.
+config :vutuv, :verify_user_links, true
+
+# Whether the hourly GenServer that re-checks verified links runs (off in tests,
+# where it would touch the SQL sandbox from outside; tests call
+# Vutuv.Profiles.LinkVerification.recheck/1 directly). The re-check itself is
+# also a no-op when :verify_user_links is off.
+config :vutuv, :recheck_user_links, true
+
 # The most invitations a single member may send in one Berlin calendar day
 # (see Vutuv.Invitations) — the abuse guard on outbound invite email, which
 # protects the installation's sender reputation. Tune it per installation

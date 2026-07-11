@@ -32,7 +32,7 @@ defmodule VutuvWeb.SectionReorderLive do
   use Gettext, backend: VutuvWeb.Gettext
 
   import Ecto.Query, only: [from: 2]
-  import VutuvWeb.UI, only: [row_actions: 1]
+  import VutuvWeb.UI, only: [row_actions: 1, verified_mark: 1]
   import VutuvWeb.UrlHTML, only: [linkable_url: 1, display_url: 1]
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
   import VutuvWeb.PhoneNumberHTML, only: [phone_type_label: 1]
@@ -173,6 +173,18 @@ defmodule VutuvWeb.SectionReorderLive do
       <div :if={@entry.description} class="reorder__title">{@entry.description}</div>
       <div class="reorder__sub">
         <a href={linkable_url(@entry.value)}>{display_url(@entry.value)}</a>
+      </div>
+      <div class="reorder__sub">
+        <span :if={@entry.verified_at} class="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-300">
+          <.verified_mark class="h-3.5 w-3.5" /> {gettext("Verified webpage")}
+        </span>
+        <.link
+          :if={is_nil(@entry.verified_at)}
+          navigate={~p"/settings/links/#{@entry}/verify"}
+          class="font-semibold text-brand-600 hover:text-brand-700"
+        >
+          {gettext("Verify this is your page")} →
+        </.link>
       </div>
     </div>
     """

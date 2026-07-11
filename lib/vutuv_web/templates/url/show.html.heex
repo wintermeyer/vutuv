@@ -17,7 +17,18 @@
   />
 
   <h2 class="card__label"><%= gettext("URL") %></h2>
-  <p><%= link @url.value, to: VutuvWeb.UrlHTML.linkable_url(@url.value) %></p>
+  <p>
+    <%= link @url.value, to: VutuvWeb.UrlHTML.linkable_url(@url.value) %>
+    <.verified_mark :if={@url.verified_at} class="h-4 w-4 align-text-bottom" />
+  </p>
+  <p :if={same_user?(@user, @current_user) and is_nil(@url.verified_at)} class="mt-1">
+    <.link
+      navigate={~p"/settings/links/#{@url}/verify"}
+      class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+    >
+      <%= gettext("Verify this is your page") %> →
+    </.link>
+  </p>
   <%= if @url.description do %>
     <h2 class="card__label"><%= gettext("Description") %></h2>
     <p><%= @url.description %></p>

@@ -1,5 +1,6 @@
 defmodule VutuvWeb.UrlController do
   use VutuvWeb, :controller
+  alias Vutuv.Profiles.LinkVerification
   alias Vutuv.Profiles.Url
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.SectionDocs
@@ -104,5 +105,61 @@ defmodule VutuvWeb.UrlController do
       flash: gettext("Link deleted successfully."),
       redirect_to: ~p"/settings/links"
     )
+  end
+
+  # The owner-only "prove this link is your webpage" page: mint the token needed
+  # for the DNS / well-known instructions, then show the three methods.
+  def verify(conn, %{"id" => id}) do
+    url =
+      conn
+      |> ControllerHelpers.get_owned!(:urls, id)
+      |> LinkVerification.ensure_token()
+
+    render(conn, "verify.html",
+      url: url,
+      enabled?: LinkVerification.enabled?(),
+      profile_url: LinkVerification.profile_urls(conn.assigns[:user]) |> List.first(),
+      host: URI.parse(url.value).host,
+      dns_value: LinkVerification.dns_txt_value(url),
+      well_known_url: LinkVerification.well_known_url(url),
+      well_known_content: LinkVerification.well_known_content(url),
+      page_title: gettext("Verify link")
+    )
+  end
+
+  def run_verify(conn, %{"id" => id} = params) do
+    url = ControllerHelpers.get_owned!(conn, :urls, id)
+    method = params["method"]
+    user = conn.assigns[:user]
+
+    if method in Url.methods() do
+      handle_verify(conn, url, user, method)
+    else
+      redirect(conn, to: ~p"/settings/links/#{url}/verify")
+    end
+  end
+
+  defp handle_verify(conn, url, user, method) do
+    case LinkVerification.verify(url, user, method) do
+      {:ok, _url} ->
+        conn
+        |> put_flash(:info, gettext("Link verified. It now shows a verified mark."))
+        |> redirect(to: ~p"/settings/links")
+
+      {:error, :disabled} ->
+        conn
+        |> put_flash(:error, gettext("Link verification is disabled on this installation."))
+        |> redirect(to: ~p"/settings/links/#{url}/verify")
+
+      {:error, :not_found} ->
+        conn
+        |> put_flash(
+          :error,
+          gettext(
+            "We could not find the proof yet. It can take a while to propagate. Please try again."
+          )
+        )
+        |> redirect(to: ~p"/settings/links/#{url}/verify")
+    end
   end
 end

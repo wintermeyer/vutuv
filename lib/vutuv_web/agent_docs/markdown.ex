@@ -509,10 +509,16 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     end
   end
 
-  defp link_line(%{description: nil, url: url}), do: "- <#{md_url(url)}>"
+  defp link_line(%{description: nil, url: url} = link),
+    do: "- <#{md_url(url)}>" <> verified_suffix(link)
 
-  defp link_line(%{description: description, url: url}),
-    do: "- [#{md_text(description)}](#{md_url(url)})"
+  defp link_line(%{description: description, url: url} = link),
+    do: "- [#{md_text(description)}](#{md_url(url)})" <> verified_suffix(link)
+
+  # A verified link (proved to be the member's own webpage) carries the same
+  # marker the profile's verified mark shows.
+  defp verified_suffix(%{verified: true}), do: " (#{gettext("verified webpage")})"
+  defp verified_suffix(_link), do: ""
 
   # The provider labels the link — the same [label](url) form as the Links
   # section. A provider without a canonical URL scheme (Snapchat) carries

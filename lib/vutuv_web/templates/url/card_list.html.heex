@@ -18,10 +18,21 @@
       />
       <div class="title">
         <%= url.description %>
+        <.verified_mark :if={url.verified_at} class="h-4 w-4 align-text-bottom" />
       </div>
       <div class="url">
         <%= link linkable_url(url.value), to: linkable_url(url.value) %>
       </div>
+      <%= if @as_owner? and is_nil(url.verified_at) do %>
+        <div class="mt-1">
+          <.link
+            navigate={~p"/settings/links/#{url}/verify"}
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            <%= gettext("Verify this is your page") %> →
+          </.link>
+        </div>
+      <% end %>
     </div>
   </li>
   <% end %>

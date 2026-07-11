@@ -470,6 +470,35 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The small emerald ✓ shown next to a member's **verified webpage** link
+  (`Vutuv.Profiles.LinkVerification`) — the people-side twin of the company
+  `<.verified_badge>`. Icon-only, so it carries a `title` / `aria-label`.
+  """
+  attr(:title, :string, default: nil)
+  attr(:class, :string, default: "h-4 w-4")
+
+  def verified_mark(assigns) do
+    assigns = assign_new(assigns, :label, fn -> assigns.title || gettext("Verified webpage") end)
+
+    ~H"""
+    <svg
+      class={["inline-block shrink-0 text-emerald-600 dark:text-emerald-400", @class]}
+      viewBox="0 0 20 20"
+      fill="currentColor"
+      role="img"
+      aria-label={@label}
+    >
+      <title>{@label}</title>
+      <path
+        fill-rule="evenodd"
+        d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z"
+        clip-rule="evenodd"
+      />
+    </svg>
+    """
+  end
+
+  @doc """
   The "Other formats" rail card: links to a page's `VutuvWeb.AgentDocs` agent
   siblings (Markdown / plain text / JSON / XML, and the profile additionally
   vCard) under the same URL plus an extension. Shared by the **profile** aside

@@ -210,7 +210,18 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   end
 
   @doc false
-  def link_entry(url), do: %{id: url.id, url: url.value, description: url.description}
+  def link_entry(url) do
+    %{
+      id: url.id,
+      url: url.value,
+      description: url.description,
+      # Whether the member proved this link is their own webpage
+      # (Vutuv.Profiles.LinkVerification) — the same fact the profile's verified
+      # mark shows, and the method that proved it.
+      verified: not is_nil(url.verified_at),
+      verified_method: url.verification_method
+    }
+  end
 
   @doc false
   def social_entry(account),

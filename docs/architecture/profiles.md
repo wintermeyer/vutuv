@@ -340,6 +340,44 @@ Every change renumbers positions 1..n server-side, scoped to the owner.
 The chosen order drives the profile preview, the section page and every
 agent-format sibling; new entries append to the end.
 
+## Verified webpage links (`Vutuv.Profiles.LinkVerification`)
+
+A member can prove a profile **Link** is really their own webpage; it then earns
+a small emerald ✓ (`<.verified_mark>`) next to it on the profile Links card, the
+`/:slug/links` pages and the agent-format siblings (`SectionDocs.link_entry/1`
+carries `verified`; md/text render "(verified webpage)"). This is the people-side
+twin of verified company pages, and shares the same proof mechanics
+(`Vutuv.WebVerification`; see `companies.md`).
+
+Three methods, the member's choice on the owner-only page at
+`/settings/links/:id/verify` (each a small `<.verify_form>` posting its method):
+
+- **Back-link (rel=me)** — the default. The member adds a link back to their
+  profile marked `rel="me"` on the page; the verifier fetches the page (SSRF-
+  guarded, no redirects, size-capped) and scans for an `<a>`/`<link>` whose `rel`
+  contains `me` and whose `href` resolves to the member's canonical profile URL
+  (derived from `Endpoint.url()`, installability-safe). No token — the back-link
+  target is the proof. Works on any page the member can edit, including shared
+  hosting (a blog, a `github.io` page, a hosted portfolio); it is the IndieWeb /
+  Mastodon standard, completing the loop vutuv already half-emits (`rel="me"` in
+  the profile head and on social chips).
+- **DNS / well-known** — the same domain proofs companies use, for a member who
+  controls the whole host, using a per-link `verification_token`.
+
+State lives on the `urls` row (`verification_method`, `verification_token`,
+`verified_at`, `last_checked_at`, `grace_deadline_at`) — per-link and independent,
+with **no** uniqueness constraint (unlike company domains: two members may each
+prove the same shared host by their own proof, and rel=me is member-specific).
+Editing a link to a different URL clears its mark (`Url.changeset/2`). Verified
+links are re-checked hourly (`Vutuv.Profiles.LinkRecheckSweeper` →
+`recheck_due_links/0`) with a 7-day grace window before the mark drops, mirroring
+the company domain re-check.
+
+Gated by `config :vutuv, :verify_user_links` (env `VERIFY_USER_LINKS`, default
+on). Off = disabled on the installation (no outbound calls); existing marks keep
+working, no new link can be verified. Tests stub DNS / HTTP via
+`:user_links_dns_resolver` / `:user_links_req_options`.
+
 ## Email & phone number types, addresses and maps
 
 Every email address and phone number carries an owner-editable type label.

@@ -797,6 +797,11 @@ defmodule VutuvWeb.Router do
 
     get("/links", UrlController, :manage)
 
+    # "This link is my webpage" verification: the owner-only page that shows the
+    # rel=me / DNS / well-known instructions, and the POST that runs the check.
+    get("/links/:id/verify", UrlController, :verify)
+    post("/links/:id/verify", UrlController, :run_verify)
+
     resources("/links", UrlController,
       only: [:new, :create, :edit, :update, :delete],
       as: :settings_link

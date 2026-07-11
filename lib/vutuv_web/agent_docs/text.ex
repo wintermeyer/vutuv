@@ -393,8 +393,13 @@ defmodule VutuvWeb.AgentDocs.Text do
       if(qualification.url, do: " #{qualification.url}", else: "")
   end
 
-  defp link_line(%{description: nil, url: url}), do: "* #{url}"
-  defp link_line(%{description: description, url: url}), do: "* #{description}: #{url}"
+  defp link_line(%{description: nil, url: url} = link), do: "* #{url}" <> verified_suffix(link)
+
+  defp link_line(%{description: description, url: url} = link),
+    do: "* #{description}: #{url}" <> verified_suffix(link)
+
+  defp verified_suffix(%{verified: true}), do: " (#{gettext("verified webpage")})"
+  defp verified_suffix(_link), do: ""
 
   defp post_lines(post) do
     "* #{post.published_on}#{Markdown.repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"

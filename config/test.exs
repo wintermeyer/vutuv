@@ -67,6 +67,14 @@ config :vutuv, :fetch_code_stats, false
 config :vutuv, :recheck_company_domains, false
 config :vutuv, :verify_company_domains, false
 
+# Personal-webpage link verification: same story as the company flags above. The
+# hourly re-check GenServer stays off (tests call
+# Vutuv.Profiles.LinkVerification.recheck/1 directly); verification is off so the
+# suite never hits real DNS / HTTP, and the link tests flip :verify_user_links on
+# per-test and stub via :user_links_dns_resolver / :user_links_req_options.
+config :vutuv, :recheck_user_links, false
+config :vutuv, :verify_user_links, false
+
 # Keep the Regenerator's stdout progress lines out of the test output.
 config :vutuv, :regenerator_quiet, true
 

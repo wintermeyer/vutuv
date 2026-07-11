@@ -136,6 +136,14 @@ if config_env() == :prod do
     config :vutuv, :verify_company_domains, false
   end
 
+  # Verified personal-webpage links. VERIFY_USER_LINKS=false disables the rel=me,
+  # DNS and well-known link proofs (and their periodic re-check), so no new link
+  # can be verified — for installations that must not call out (intranets).
+  # Existing verified marks keep working.
+  if System.get_env("VERIFY_USER_LINKS") == "false" do
+    config :vutuv, :verify_user_links, false
+  end
+
   # The per-member daily cap on outbound invitations (see Vutuv.Invitations).
   if invitation_daily_cap = System.get_env("INVITATION_DAILY_CAP") do
     config :vutuv, :invitation_daily_cap, String.to_integer(invitation_daily_cap)

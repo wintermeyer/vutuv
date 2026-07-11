@@ -61,7 +61,10 @@ member's handle + nullable `companies.username`).
 
 Edit rights over a page come **only** from proving control of the domain, never
 from a self-asserted employment claim. Two proof methods, both proving control
-of the domain itself (`Vutuv.Companies.Verification`):
+of the domain itself. The proof mechanics live in the shared
+`Vutuv.WebVerification` (also used by verified personal-webpage links — see
+`profiles.md`); `Vutuv.Companies.Verification` is the company-flavoured wrapper
+that owns the company gate and test seams:
 
 - **DNS** — a `vutuv-verify=<token>` TXT record on the domain.
 - **Website file** — the token served at

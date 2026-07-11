@@ -39,4 +39,26 @@ defmodule VutuvWeb.UrlHTML do
   end
 
   embed_templates("../templates/url/*")
+
+  attr(:url, :map, required: true)
+  attr(:method, :string, required: true)
+  attr(:label, :string, required: true)
+
+  # One proof method's "Verify now" button: a CSRF form POSTing the chosen
+  # method to the verify action. Distinct submit id per method so tests and
+  # the browser can target it (verify-rel_me / verify-dns / verify-well_known).
+  def verify_form(assigns) do
+    ~H"""
+    <.form for={%{}} action={~p"/settings/links/#{@url}/verify"} method="post">
+      <input type="hidden" name="method" value={@method} />
+      <button
+        type="submit"
+        id={"verify-#{@method}"}
+        class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+      >
+        {@label}
+      </button>
+    </.form>
+    """
+  end
 end

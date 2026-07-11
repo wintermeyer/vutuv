@@ -1,0 +1,81 @@
+<%!-- Owner-only "prove this link is your webpage" page (classic settings page).
+Three proof methods, each its own small form posting the chosen method. On
+success the link earns the verified mark shown on the profile + section pages. --%>
+<.settings_shell user={@user} active={:links} title={gettext("Verify link")}>
+  <.card class="space-y-4">
+    <div class="flex flex-wrap items-center gap-2">
+      <span class="font-mono text-sm font-semibold text-slate-900 dark:text-slate-100">
+        {display_url(@url.value)}
+      </span>
+      <.verified_mark :if={@url.verified_at} />
+    </div>
+
+    <p :if={@url.verified_at} class="text-sm text-emerald-700 dark:text-emerald-300">
+      {gettext("Verified. Re-run any method below to refresh it.")}
+    </p>
+    <p :if={!@url.verified_at} class="text-sm text-slate-600 dark:text-slate-400">
+      {gettext("Prove this link is your own webpage with one of the methods below. It then shows a verified mark.")}
+    </p>
+  </.card>
+
+  <div
+    :if={!@enabled?}
+    class="mt-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+  >
+    {gettext("Link verification is disabled on this installation.")}
+  </div>
+
+  <%!-- rel=me back-link (the default, works on any page you can edit) --%>
+  <.card :if={@enabled?} class="mt-4 space-y-3">
+    <.section_title>{gettext("Back-link (rel=me)")}</.section_title>
+    <p class="text-sm text-slate-700 dark:text-slate-300">
+      {gettext("Add a link back to your profile on your page, marked rel=\"me\":")}
+    </p>
+    <code
+      phx-no-curly-interpolation
+      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+    ><%= ~s(<a rel="me" href="#{@profile_url}">vutuv</a>) %></code>
+    <p class="text-xs text-slate-600 dark:text-slate-400">
+      {gettext("The link text can be anything. A hidden <link rel=\"me\"> in the page head works too.")}
+    </p>
+    <.verify_form url={@url} method="rel_me" label={gettext("Verify via back-link")} />
+  </.card>
+
+  <%!-- DNS TXT record (for a member who controls the whole domain) --%>
+  <.card :if={@enabled?} class="mt-4 space-y-3">
+    <.section_title>{gettext("DNS TXT record")}</.section_title>
+    <p class="text-sm text-slate-700 dark:text-slate-300">
+      {gettext("Add this TXT record to %{host}:", host: @host)}
+    </p>
+    <code
+      phx-no-curly-interpolation
+      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+    ><%= @dns_value %></code>
+    <.verify_form url={@url} method="dns" label={gettext("Verify via DNS")} />
+  </.card>
+
+  <%!-- Well-known file (for a member who controls the whole domain) --%>
+  <.card :if={@enabled?} class="mt-4 space-y-3">
+    <.section_title>{gettext("Website file")}</.section_title>
+    <p class="text-sm text-slate-700 dark:text-slate-300">{gettext("Serve this file:")}</p>
+    <code
+      phx-no-curly-interpolation
+      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+    ><%= @well_known_url %></code>
+    <p class="text-sm text-slate-700 dark:text-slate-300">{gettext("with this exact content:")}</p>
+    <code
+      phx-no-curly-interpolation
+      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+    ><%= @well_known_content %></code>
+    <.verify_form url={@url} method="well_known" label={gettext("Verify via file")} />
+  </.card>
+
+  <div class="mt-6">
+    <.link
+      navigate={~p"/settings/links"}
+      class="text-sm font-semibold text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+    >
+      ← {gettext("Back to Links")}
+    </.link>
+  </div>
+</.settings_shell>
