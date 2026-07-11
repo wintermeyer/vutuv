@@ -194,8 +194,8 @@ defmodule VutuvWeb.CompanyLive.Edit do
         <.text_field form={@form} field={:website_url} label={gettext("Website")} type="url" />
 
         <fieldset class="grid gap-4 sm:grid-cols-2">
-          <.text_field form={@form} field={:street_address} label={gettext("Street address")} />
-          <.text_field form={@form} field={:zip_code} label={gettext("ZIP / postal code")} />
+          <.text_field form={@form} field={:street_address} label={gettext("Street address (optional)")} />
+          <.text_field form={@form} field={:zip_code} label={gettext("ZIP / postal code (optional)")} />
           <.text_field form={@form} field={:city} label={gettext("City")} />
           <.text_field form={@form} field={:state} label={gettext("State / region (optional)")} />
         </fieldset>

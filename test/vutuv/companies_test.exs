@@ -70,12 +70,29 @@ defmodule Vutuv.CompaniesTest do
       assert changeset.errors[:website_url]
     end
 
-    test "requires the full postal address" do
+    test "requires the city and country" do
       user = insert(:activated_user)
-      attrs = Map.delete(@valid, "city")
 
-      assert {:error, changeset} = Companies.create_pending_company(user, attrs, "dns")
-      assert changeset.errors[:city]
+      assert {:error, city_cs} =
+               Companies.create_pending_company(user, Map.delete(@valid, "city"), "dns")
+
+      assert city_cs.errors[:city]
+
+      assert {:error, country_cs} =
+               Companies.create_pending_company(user, Map.delete(@valid, "country"), "dns")
+
+      assert country_cs.errors[:country]
+    end
+
+    test "street address and postal code are optional (countries without them)" do
+      user = insert(:activated_user)
+      attrs = @valid |> Map.delete("street_address") |> Map.delete("zip_code")
+
+      assert {:ok, %{company: company}} = Companies.create_pending_company(user, attrs, "dns")
+      assert company.status == "pending"
+      assert is_nil(company.street_address)
+      assert is_nil(company.zip_code)
+      assert company.city == "Köln"
     end
 
     test "rejects an invalid country code" do

@@ -53,13 +53,16 @@ defmodule Vutuv.Companies.Company do
   def statuses, do: @statuses
 
   @doc """
-  Claim wizard: identity plus the required full postal address. Description and
-  the visibility toggles are set later on the edit form.
+  Claim wizard: identity plus a structured location. City and country are
+  required (they are filter keys + JSON-LD values); street and postal code are
+  optional, because some countries have no postal-code system at all (Ireland
+  pre-Eircode, the UAE, Hong Kong, …) and a small office may not want to publish
+  a street. Description and the visibility toggles are set later on the edit form.
   """
   def create_changeset(company, attrs) do
     company
     |> cast(attrs, [:name, :website_url, :street_address, :zip_code, :city, :state, :country])
-    |> validate_required([:name, :street_address, :zip_code, :city, :country])
+    |> validate_required([:name, :city, :country])
     |> shared_validations()
   end
 
@@ -79,7 +82,7 @@ defmodule Vutuv.Companies.Company do
       :geo?,
       :logo
     ])
-    |> validate_required([:name, :street_address, :zip_code, :city, :country])
+    |> validate_required([:name, :city, :country])
     |> validate_length(:description, max: 10_000)
     |> MarkdownContent.validate_no_images(:description)
     |> shared_validations()

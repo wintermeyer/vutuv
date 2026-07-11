@@ -257,8 +257,8 @@ defmodule VutuvWeb.CompanyLive.Show do
           <.card>
             <.section_title>{gettext("Address")}</.section_title>
             <address class="mt-3 space-y-0.5 text-sm not-italic text-slate-700 dark:text-slate-300">
-              <div>{@company.street_address}</div>
-              <div>{@company.zip_code} {@company.city}</div>
+              <div :if={present?(@company.street_address)}>{@company.street_address}</div>
+              <div>{[@company.zip_code, @company.city] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.join(" ")}</div>
               <div :if={present?(@company.state)}>{@company.state}</div>
               <div>{@country_name}</div>
             </address>

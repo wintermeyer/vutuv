@@ -62,15 +62,18 @@ defmodule VutuvWeb.AgentDocs.CompanyDoc do
     end
   end
 
-  # "Street, 50667 City, State, Country" — nil parts folded away.
+  # "Street, 50667 City, State, Country" — nil parts folded away (street and
+  # postal code are optional, so the "zip city" segment drops a missing zip too).
   defp address_line(company) do
     [
       company.street_address,
-      "#{company.zip_code} #{company.city}",
+      [company.zip_code, company.city] |> Enum.reject(&blank?/1) |> Enum.join(" "),
       company.state,
       Countries.name(company.country)
     ]
-    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.reject(&blank?/1)
     |> Enum.join(", ")
   end
+
+  defp blank?(value), do: value in [nil, ""]
 end

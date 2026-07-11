@@ -19,9 +19,9 @@ msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:2460
 #: lib/vutuv_web/components/ui.ex:2465
-#: lib/vutuv_web/live/company_live/domains.ex:232
+#: lib/vutuv_web/live/company_live/domains.ex:234
 #: lib/vutuv_web/live/company_live/edit.ex:303
-#: lib/vutuv_web/live/company_live/roles.ex:200
+#: lib/vutuv_web/live/company_live/roles.ex:204
 #, elixir-autogen
 msgid "Add"
 msgstr ""
@@ -148,7 +148,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:750
 #: lib/vutuv_web/components/ui.ex:2362
-#: lib/vutuv_web/live/admin/company_live.ex:399
+#: lib/vutuv_web/live/admin/company_live.ex:414
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:622
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:662
 #: lib/vutuv_web/live/admin/user_delete_live.ex:172
@@ -1213,7 +1213,7 @@ msgstr ""
 
 #: lib/vutuv_web/components/company_components.ex:185
 #: lib/vutuv_web/live/admin/api_app_live.ex:58
-#: lib/vutuv_web/live/admin/company_live.ex:162
+#: lib/vutuv_web/live/admin/company_live.ex:177
 #: lib/vutuv_web/live/admin/deliverability_live.ex:96
 #: lib/vutuv_web/live/admin/moderation_case_live.ex:134
 #: lib/vutuv_web/live/admin/moderation_live.ex:30
@@ -1668,7 +1668,7 @@ msgstr ""
 msgid "Check your inbox"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:307
+#: lib/vutuv_web/live/admin/company_live.ex:322
 #: lib/vutuv_web/live/post_live/composer.ex:418
 #: lib/vutuv_web/live/post_live/composer.ex:419
 #: lib/vutuv_web/templates/layout/app.html.heex:151
@@ -1934,7 +1934,7 @@ msgid "started following you."
 msgstr ""
 
 #: lib/vutuv_web/components/ui.ex:2040
-#: lib/vutuv_web/live/admin/company_live.ex:249
+#: lib/vutuv_web/live/admin/company_live.ex:264
 #: lib/vutuv_web/live/admin/user_live.ex:430
 #: lib/vutuv_web/live/company_live/index.ex:142
 #, elixir-autogen, elixir-format
@@ -2247,9 +2247,9 @@ msgstr ""
 msgid "Show less"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:206
+#: lib/vutuv_web/live/company_live/domains.ex:208
 #: lib/vutuv_web/live/company_live/edit.ex:280
-#: lib/vutuv_web/live/company_live/roles.ex:240
+#: lib/vutuv_web/live/company_live/roles.ex:244
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/post_live/composer.ex:600
 #: lib/vutuv_web/live/post_live/saved.ex:462
@@ -3307,7 +3307,7 @@ msgid "Stand by it. It stays hidden until one of our admins has ruled."
 msgstr ""
 
 #: lib/vutuv_web/live/admin/api_app_live.ex:74
-#: lib/vutuv_web/live/admin/company_live.ex:219
+#: lib/vutuv_web/live/admin/company_live.ex:234
 #: lib/vutuv_web/live/admin/deliverability_live.ex:252
 #: lib/vutuv_web/live/admin/moderation_live.ex:53
 #: lib/vutuv_web/live/admin/screenshot_live.ex:119
@@ -4054,7 +4054,7 @@ msgstr ""
 msgid "Booking requires a vutuv login."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:218
+#: lib/vutuv_web/live/admin/company_live.ex:233
 #: lib/vutuv_web/live/company_live/edit.ex:199
 #: lib/vutuv_web/live/company_live/new.ex:104
 #: lib/vutuv_web/templates/ad/new.html.heex:105
@@ -4389,7 +4389,7 @@ msgstr ""
 msgid "Approved on"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:238
+#: lib/vutuv_web/live/admin/company_live.ex:253
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:40
 #, elixir-autogen, elixir-format
 msgid "Details"
@@ -4593,7 +4593,7 @@ msgstr ""
 msgid "Similar names"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:139
+#: lib/vutuv_web/live/admin/company_live.ex:151
 #: lib/vutuv_web/live/search_live.ex:145
 #: lib/vutuv_web/views/qualification_html.ex:73
 #, elixir-autogen, elixir-format
@@ -7190,14 +7190,14 @@ msgstr ""
 msgid "page %{page} of %{pages}, %{total} total"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:258
+#: lib/vutuv_web/live/admin/company_live.ex:273
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1183
 #: lib/vutuv_web/live/admin/user_live.ex:440
 #, elixir-autogen, elixir-format
 msgid "Previous"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:270
+#: lib/vutuv_web/live/admin/company_live.ex:285
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1192
 #: lib/vutuv_web/live/admin/user_live.ex:453
 #, elixir-autogen, elixir-format
@@ -7867,9 +7867,9 @@ msgstr ""
 msgid "Find an account by name, @handle or email and delete it, with everything it owns, behind a confirmation."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:142
-#: lib/vutuv_web/live/admin/company_live.ex:146
-#: lib/vutuv_web/live/admin/company_live.ex:168
+#: lib/vutuv_web/live/admin/company_live.ex:154
+#: lib/vutuv_web/live/admin/company_live.ex:159
+#: lib/vutuv_web/live/admin/company_live.ex:183
 #: lib/vutuv_web/live/admin/user_live.ex:183
 #: lib/vutuv_web/live/admin/user_live.ex:309
 #, elixir-autogen, elixir-format
@@ -7932,7 +7932,7 @@ msgstr ""
 msgid "PIN registered"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:261
+#: lib/vutuv_web/live/admin/company_live.ex:276
 #: lib/vutuv_web/live/admin/user_live.ex:443
 #, elixir-autogen, elixir-format
 msgid "Page %{page} of %{pages}"
@@ -7975,7 +7975,7 @@ msgid "Unreachable"
 msgstr ""
 
 #: lib/vutuv_web/live/admin/user_live.ex:182
-#: lib/vutuv_web/live/company_live/domains.ex:175
+#: lib/vutuv_web/live/company_live/domains.ex:177
 #, elixir-autogen, elixir-format
 msgid "Verified"
 msgstr ""
@@ -10865,11 +10865,11 @@ msgstr ""
 msgid "Open the screenshot queue"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:141
-#: lib/vutuv_web/live/admin/company_live.ex:152
+#: lib/vutuv_web/live/admin/company_live.ex:153
 #: lib/vutuv_web/live/admin/company_live.ex:167
+#: lib/vutuv_web/live/admin/company_live.ex:182
 #: lib/vutuv_web/live/admin/screenshot_live.ex:196
-#: lib/vutuv_web/live/company_live/domains.ex:178
+#: lib/vutuv_web/live/company_live/domains.ex:180
 #, elixir-autogen, elixir-format
 msgid "Pending"
 msgstr ""
@@ -11100,7 +11100,7 @@ msgstr ""
 msgid "About"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:276
+#: lib/vutuv_web/live/company_live/domains.ex:278
 #: lib/vutuv_web/live/company_live/show.ex:342
 #, elixir-autogen, elixir-format
 msgid "Add this TXT record to %{domain}:"
@@ -11143,16 +11143,16 @@ msgstr ""
 msgid "Continue to verification"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:225
-#: lib/vutuv_web/live/company_live/domains.ex:261
+#: lib/vutuv_web/live/company_live/domains.ex:227
+#: lib/vutuv_web/live/company_live/domains.ex:263
 #: lib/vutuv_web/live/company_live/new.ex:127
 #: lib/vutuv_web/live/company_live/show.ex:323
 #, elixir-autogen, elixir-format
 msgid "DNS TXT record"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:150
-#: lib/vutuv_web/live/company_live/domains.ex:164
+#: lib/vutuv_web/live/company_live/domains.ex:152
+#: lib/vutuv_web/live/company_live/domains.ex:166
 #: lib/vutuv_web/live/company_live/show.ex:142
 #: lib/vutuv_web/live/company_live/show.ex:374
 #, elixir-autogen, elixir-format
@@ -11255,7 +11255,7 @@ msgstr ""
 msgid "Select a country"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:279
+#: lib/vutuv_web/live/company_live/domains.ex:281
 #: lib/vutuv_web/live/company_live/show.ex:350
 #, elixir-autogen, elixir-format
 msgid "Serve this file at:"
@@ -11265,12 +11265,6 @@ msgstr ""
 #: lib/vutuv_web/live/company_live/new.ex:105
 #, elixir-autogen, elixir-format
 msgid "State / region (optional)"
-msgstr ""
-
-#: lib/vutuv_web/live/company_live/edit.ex:197
-#: lib/vutuv_web/live/company_live/new.ex:102
-#, elixir-autogen, elixir-format
-msgid "Street address"
 msgstr ""
 
 #: lib/vutuv_web/live/company_live/new.ex:63
@@ -11340,13 +11334,13 @@ msgstr ""
 msgid "Verify %{name}"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:292
+#: lib/vutuv_web/live/company_live/domains.ex:294
 #: lib/vutuv_web/live/company_live/show.ex:370
 #, elixir-autogen, elixir-format
 msgid "Verify now"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:146
+#: lib/vutuv_web/live/company_live/domains.ex:148
 #: lib/vutuv_web/live/company_live/show.ex:137
 #, elixir-autogen, elixir-format
 msgid "We could not find the record or file yet. It can take a while to propagate. Please try again."
@@ -11360,8 +11354,8 @@ msgstr ""
 msgid "Website"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:226
-#: lib/vutuv_web/live/company_live/domains.ex:271
+#: lib/vutuv_web/live/company_live/domains.ex:228
+#: lib/vutuv_web/live/company_live/domains.ex:273
 #: lib/vutuv_web/live/company_live/show.ex:334
 #, elixir-autogen, elixir-format
 msgid "Website file"
@@ -11392,13 +11386,7 @@ msgstr ""
 msgid "Your company page was updated."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/edit.ex:198
-#: lib/vutuv_web/live/company_live/new.ex:103
-#, elixir-autogen, elixir-format
-msgid "ZIP / postal code"
-msgstr ""
-
-#: lib/vutuv_web/live/company_live/domains.ex:281
+#: lib/vutuv_web/live/company_live/domains.ex:283
 #: lib/vutuv_web/live/company_live/show.ex:356
 #, elixir-autogen, elixir-format
 msgid "with this exact content:"
@@ -11411,24 +11399,24 @@ msgid_plural "%{count} aliases match another verified company and are flagged fo
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:172
+#: lib/vutuv_web/live/admin/company_live.ex:187
 #, elixir-autogen, elixir-format
 msgid "%{count} alias matches another verified company and is flagged for review. Open a company below to see it."
 msgid_plural "%{count} aliases match another verified company and are flagged for review. Open a company below to see them."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:132
+#: lib/vutuv_web/live/company_live/roles.ex:135
 #, elixir-autogen, elixir-format
 msgid "@%{handle} is already on the team."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:166
+#: lib/vutuv_web/live/company_live/roles.ex:170
 #, elixir-autogen, elixir-format
 msgid "@handle or email"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:160
+#: lib/vutuv_web/live/company_live/domains.ex:162
 #, elixir-autogen, elixir-format
 msgid "A company can prove several domains. The primary one shows in the “Verified via …” badge."
 msgstr ""
@@ -11438,7 +11426,7 @@ msgstr ""
 msgid "A company keeps at least one verified domain, so this one cannot be removed."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:140
+#: lib/vutuv_web/live/company_live/roles.ex:144
 #, elixir-autogen, elixir-format
 msgid "A company must keep at least one owner, so the last owner cannot be changed."
 msgstr ""
@@ -11449,12 +11437,12 @@ msgstr ""
 msgid "Abbreviation"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:213
+#: lib/vutuv_web/live/company_live/domains.ex:215
 #, elixir-autogen, elixir-format
 msgid "Add a domain"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:157
+#: lib/vutuv_web/live/company_live/roles.ex:161
 #, elixir-autogen, elixir-format
 msgid "Add a member"
 msgstr ""
@@ -11498,18 +11486,18 @@ msgstr ""
 msgid "Alternative names, brands or abbreviations this company is findable under. A rename keeps the old name here automatically."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:390
+#: lib/vutuv_web/live/admin/company_live.ex:405
 #, elixir-autogen, elixir-format
 msgid "Archive"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:387
+#: lib/vutuv_web/live/admin/company_live.ex:402
 #, elixir-autogen, elixir-format
 msgid "Archive this page?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:143
 #: lib/vutuv_web/live/admin/company_live.ex:155
+#: lib/vutuv_web/live/admin/company_live.ex:170
 #, elixir-autogen, elixir-format
 msgid "Archived"
 msgstr ""
@@ -11520,34 +11508,34 @@ msgstr ""
 msgid "Brand"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:336
+#: lib/vutuv_web/live/admin/company_live.ex:351
 #, elixir-autogen, elixir-format
 msgid "Claimed by"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:217
+#: lib/vutuv_web/live/admin/company_live.ex:232
 #, elixir-autogen, elixir-format
 msgid "Company"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:82
+#: lib/vutuv_web/live/admin/company_live.ex:88
 #, elixir-autogen, elixir-format
 msgid "Company archived."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:94
+#: lib/vutuv_web/live/admin/company_live.ex:100
 #, elixir-autogen, elixir-format
 msgid "Company deleted."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:78
+#: lib/vutuv_web/live/admin/company_live.ex:82
 #, elixir-autogen, elixir-format
 msgid "Company frozen."
 msgstr ""
 
 #: lib/vutuv_web/live/admin/company_live.ex:24
-#: lib/vutuv_web/live/admin/company_live.ex:161
-#: lib/vutuv_web/live/admin/company_live.ex:162
+#: lib/vutuv_web/live/admin/company_live.ex:176
+#: lib/vutuv_web/live/admin/company_live.ex:177
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:184
 #, elixir-autogen, elixir-format
 msgid "Company pages"
@@ -11558,17 +11546,17 @@ msgstr ""
 msgid "Company role"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:80
+#: lib/vutuv_web/live/admin/company_live.ex:85
 #, elixir-autogen, elixir-format
 msgid "Company unfrozen."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:207
+#: lib/vutuv_web/live/company_live/roles.ex:211
 #, elixir-autogen, elixir-format
 msgid "Current team"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:396
+#: lib/vutuv_web/live/admin/company_live.ex:411
 #, elixir-autogen, elixir-format
 msgid "Delete this page and everything it owns? This cannot be undone."
 msgstr ""
@@ -11589,8 +11577,8 @@ msgid "Domain verified."
 msgstr ""
 
 #: lib/vutuv_web/components/company_components.ex:154
-#: lib/vutuv_web/live/admin/company_live.ex:313
-#: lib/vutuv_web/live/company_live/domains.ex:158
+#: lib/vutuv_web/live/admin/company_live.ex:328
+#: lib/vutuv_web/live/company_live/domains.ex:160
 #: lib/vutuv_web/live/company_live/show.ex:237
 #, elixir-autogen, elixir-format
 msgid "Domains"
@@ -11606,49 +11594,49 @@ msgstr ""
 msgid "Former name"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:371
+#: lib/vutuv_web/live/admin/company_live.ex:386
 #, elixir-autogen, elixir-format
 msgid "Freeze"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:368
+#: lib/vutuv_web/live/admin/company_live.ex:383
 #, elixir-autogen, elixir-format
 msgid "Freeze this page? It disappears for the public but stays visible to its owner."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:153
+#: lib/vutuv_web/live/company_live/roles.ex:157
 #, elixir-autogen, elixir-format
 msgid "Give members a role on this page. Owners manage the team and domains, admins edit the page, recruiters post jobs."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:183
+#: lib/vutuv_web/live/company_live/domains.ex:185
 #, elixir-autogen, elixir-format
 msgid "Last checked"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:240
+#: lib/vutuv_web/live/company_live/roles.ex:244
 #, elixir-autogen, elixir-format
 msgid "Leave"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:234
+#: lib/vutuv_web/live/company_live/roles.ex:238
 #, elixir-autogen, elixir-format
 msgid "Leave this company team?"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:140
-#: lib/vutuv_web/live/admin/company_live.ex:149
-#: lib/vutuv_web/live/admin/company_live.ex:166
+#: lib/vutuv_web/live/admin/company_live.ex:152
+#: lib/vutuv_web/live/admin/company_live.ex:163
+#: lib/vutuv_web/live/admin/company_live.ex:181
 #, elixir-autogen, elixir-format
 msgid "Live"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:197
+#: lib/vutuv_web/live/company_live/domains.ex:199
 #, elixir-autogen, elixir-format
 msgid "Make primary"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:356
+#: lib/vutuv_web/live/admin/company_live.ex:371
 #, elixir-autogen, elixir-format
 msgid "Matches another verified company"
 msgstr ""
@@ -11658,17 +11646,17 @@ msgstr ""
 msgid "Member removed."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:183
+#: lib/vutuv_web/live/company_live/domains.ex:185
 #, elixir-autogen, elixir-format
 msgid "Method"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:342
+#: lib/vutuv_web/live/admin/company_live.ex:357
 #, elixir-autogen, elixir-format
 msgid "Names & aliases"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:211
+#: lib/vutuv_web/live/admin/company_live.ex:226
 #, elixir-autogen, elixir-format
 msgid "No company pages match."
 msgstr ""
@@ -11688,7 +11676,7 @@ msgstr ""
 msgid "Open company oversight"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:172
+#: lib/vutuv_web/live/company_live/domains.ex:174
 #, elixir-autogen, elixir-format
 msgid "Primary"
 msgstr ""
@@ -11703,12 +11691,12 @@ msgstr ""
 msgid "Recruiter"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/domains.ex:203
+#: lib/vutuv_web/live/company_live/domains.ex:205
 #, elixir-autogen, elixir-format
 msgid "Remove this domain?"
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:235
+#: lib/vutuv_web/live/company_live/roles.ex:239
 #, elixir-autogen, elixir-format
 msgid "Remove this member from the team?"
 msgstr ""
@@ -11723,14 +11711,14 @@ msgstr ""
 msgid "Role updated."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:206
+#: lib/vutuv_web/live/admin/company_live.ex:221
 #, elixir-autogen, elixir-format
 msgid "Search name, alias or domain"
 msgstr ""
 
 #: lib/vutuv_web/components/company_components.ex:151
-#: lib/vutuv_web/live/admin/company_live.ex:329
-#: lib/vutuv_web/live/company_live/roles.ex:151
+#: lib/vutuv_web/live/admin/company_live.ex:344
+#: lib/vutuv_web/live/company_live/roles.ex:155
 #: lib/vutuv_web/live/company_live/show.ex:230
 #, elixir-autogen, elixir-format
 msgid "Team"
@@ -11756,7 +11744,7 @@ msgstr ""
 msgid "That is not a valid domain."
 msgstr ""
 
-#: lib/vutuv_web/live/company_live/roles.ex:135
+#: lib/vutuv_web/live/company_live/roles.ex:139
 #, elixir-autogen, elixir-format
 msgid "That member could not be added."
 msgstr ""
@@ -11766,7 +11754,7 @@ msgstr ""
 msgid "That name is already listed for this company."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:380
+#: lib/vutuv_web/live/admin/company_live.ex:395
 #, elixir-autogen, elixir-format
 msgid "Unfreeze"
 msgstr ""
@@ -11796,17 +11784,29 @@ msgstr ""
 msgid "made you an owner of %{company}."
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:319
+#: lib/vutuv_web/live/admin/company_live.ex:334
 #, elixir-autogen, elixir-format
 msgid "pending"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:317
+#: lib/vutuv_web/live/admin/company_live.ex:332
 #, elixir-autogen, elixir-format
 msgid "primary"
 msgstr ""
 
-#: lib/vutuv_web/live/admin/company_live.ex:319
+#: lib/vutuv_web/live/admin/company_live.ex:334
 #, elixir-autogen, elixir-format
 msgid "verified"
+msgstr ""
+
+#: lib/vutuv_web/live/company_live/edit.ex:197
+#: lib/vutuv_web/live/company_live/new.ex:102
+#, elixir-autogen, elixir-format
+msgid "Street address (optional)"
+msgstr ""
+
+#: lib/vutuv_web/live/company_live/edit.ex:198
+#: lib/vutuv_web/live/company_live/new.ex:103
+#, elixir-autogen, elixir-format
+msgid "ZIP / postal code (optional)"
 msgstr ""

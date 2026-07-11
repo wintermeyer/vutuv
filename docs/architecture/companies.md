@@ -171,5 +171,10 @@ logo never breaks. The description is untrusted Markdown, rendered like posts
 `country` is stored as an ISO 3166-1 alpha-2 code (`Vutuv.Countries`, the shared
 controlled-vocabulary helper) and rendered localized (German/English), because
 it is a filter key and a JSON-LD value — unlike the legacy `addresses` table,
-which stores display names. The full postal address is required at claim time
-and feeds the `Organization` JSON-LD as a `PostalAddress`.
+which stores display names. **City and country are required** at claim time (they
+are the filter keys and the `addressLocality`/`addressCountry` of the
+`Organization` JSON-LD `PostalAddress`); **street address and postal code are
+optional**, because some countries have no postal-code system at all (Ireland
+pre-Eircode, the UAE, Hong Kong, …) and not every operator wants to publish a
+street. The address rendering (page + agent docs) and the JSON-LD both fold away
+whichever parts are missing, so a city-and-country-only address renders cleanly.
