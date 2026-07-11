@@ -137,6 +137,24 @@ defmodule VutuvWeb.CompanyLive.Edit do
     end
   end
 
+  def handle_event("delete_company", _params, socket) do
+    company = socket.assigns.company
+
+    if socket.assigns.owner? and Companies.deletable?(company) do
+      {:ok, _} = Companies.delete_company(company)
+
+      {:noreply,
+       socket
+       |> put_flash(:info, gettext("The company page was deleted."))
+       |> push_navigate(to: ~p"/companies")}
+    else
+      # The button is owner-gated, but re-check here: a company admin (not an
+      # owner) can reach the edit page, and deletion is owner-only.
+      {:noreply,
+       put_flash(socket, :error, gettext("You are not allowed to delete this company."))}
+    end
+  end
+
   @impl true
   def handle_info(_message, socket), do: {:noreply, socket}
 
@@ -376,6 +394,26 @@ defmodule VutuvWeb.CompanyLive.Edit do
             {if @company.username, do: gettext("Change"), else: gettext("Claim")}
           </button>
         </.form>
+      </.card>
+
+      <.card :if={@owner?} class="mt-8 ring-red-200 dark:ring-red-900/50">
+        <.section_title>{gettext("Danger zone")}</.section_title>
+        <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          {gettext(
+            "Deleting this company page is permanent. Its verified domains and its @handle are freed and can be claimed again."
+          )}
+        </p>
+        <button
+          id="delete-company"
+          type="button"
+          phx-click="delete_company"
+          data-confirm={
+            gettext("Really delete %{name}? This cannot be undone.", name: @company.name)
+          }
+          class="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700"
+        >
+          {gettext("Delete this company")}
+        </button>
       </.card>
     </div>
     """

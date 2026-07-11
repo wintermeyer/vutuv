@@ -215,6 +215,39 @@ defmodule VutuvWeb.CompanyManagementTest do
     end
   end
 
+  describe "danger zone: owner deletes the company (issue #941)" do
+    test "an owner permanently deletes the page; domain + handle are freed", %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      company = active_company_for(owner)
+      {:ok, _} = Companies.claim_handle(company, %{"username" => "acmegone"})
+
+      {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}/edit")
+
+      view |> element("#delete-company") |> render_click()
+
+      assert_redirect(view, ~p"/companies")
+      assert is_nil(Companies.get_company(company.id))
+      assert build_conn() |> get(~p"/companies/#{company.slug}") |> response(404)
+      # The freed handle and verified domain can be claimed again.
+      assert Vutuv.Handles.available?("acmegone")
+      assert is_nil(Vutuv.Repo.get_by(Vutuv.Companies.CompanyDomain, domain: "acme.example"))
+    end
+
+    test "a company admin (not an owner) sees no delete control and is refused", %{conn: conn} do
+      {conn, admin} = create_and_login_user(conn)
+      owner = insert(:activated_user)
+      company = active_company_for(owner)
+      {:ok, _} = Companies.add_role(company, admin, "admin", owner)
+
+      {:ok, view, _html} = live(conn, ~p"/companies/#{company.slug}/edit")
+
+      refute has_element?(view, "#delete-company")
+      # Even a forged event is refused: the page still exists.
+      render_click(view, "delete_company", %{})
+      assert Companies.get_company(company.id)
+    end
+  end
+
   describe "admin dashboard" do
     test "an admin freezes and unfreezes a company", %{conn: conn} do
       {conn, _admin} = create_and_login_admin(conn)

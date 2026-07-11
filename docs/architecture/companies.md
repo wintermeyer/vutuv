@@ -33,6 +33,16 @@ Claiming is owner-only, on the company **edit** page (`CompanyLive.Edit`,
 namespace; a company without a handle is unchanged (reachable only at
 `/companies/:slug`).
 
+The same edit page has an owner-only **Danger zone** with a permanent
+**Delete this company** action (confirm-gated, `owner?`-only, re-checked in the
+handler because a non-owner admin can also reach the edit page): it runs the
+`delete_company/1` chokepoint (cascades domains / roles / aliases / images /
+likes / bookmarks / the `handles` row, settles any moderation case, purges the
+on-disk image files) and so frees the company's verified domains **and** its
+`@handle` for re-claim. Site admins keep delete plus the reversible
+`archive_company/1` (soft "archived" status) in `/admin/companies`; owners have
+only the hard delete.
+
 **Resolution + canonical.** The root `/:slug` resolver
 (`VutuvWeb.Plug.UserResolveSlug`, `dispatch_company: true` on the bare profile
 route only) keeps the member fast path (`users.username`), and on a miss renders
