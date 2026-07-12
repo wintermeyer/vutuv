@@ -111,31 +111,58 @@ defmodule Vutuv.Moderation do
       }
       |> Case.changeset(case_params(status))
 
-    result =
-      Repo.transaction(fn ->
-        case_record = Repo.insert!(case_changeset)
+    case insert_case_with_report(case_changeset, report_changeset) do
+      {:ok, case_record} ->
+        finish_new_case(case_record, reporter, content, attrs, effects)
 
-        case Repo.insert(Ecto.Changeset.put_change(report_changeset, :case_id, case_record.id)) do
-          {:ok, _report} -> case_record
-          {:error, changeset} -> Repo.rollback(changeset)
+      # Lost the race: a concurrent first-report already opened the case, so join
+      # it instead of 500ing the losing reporter (the conflict means the winner
+      # committed, so open_case_for finds it).
+      {:error, :open_conflict} ->
+        case open_case_for(content) do
+          nil -> {:error, :not_allowed}
+          open -> join_case(open, reporter, content, attrs)
         end
-      end)
 
-    with {:ok, case_record} <- result do
-      log(case_record, reporter, "report_filed", %{"category" => attrs["category"]})
-
-      if :freeze in effects do
-        freeze_content(content)
-        log(case_record, nil, "content_frozen")
-      end
-
-      sever_relationship(case_record, reporter)
-      # Evidence before cleanup: shoot the profile / conversation as it looks
-      # right now (async; posts keep their text snapshot).
-      EvidenceScreenshot.async_capture(case_record)
-      run_notifications(case_record, effects)
-      {:ok, case_record}
+      {:error, changeset} ->
+        {:error, changeset}
     end
+  end
+
+  # The case + its first report in one transaction. A case insert can only fail
+  # on the partial-unique open-case index (all its other fields are set
+  # programmatically), so any case-insert error is the concurrent-first-report
+  # conflict.
+  defp insert_case_with_report(case_changeset, report_changeset) do
+    Repo.transaction(fn ->
+      case Repo.insert(case_changeset) do
+        {:ok, case_record} -> insert_first_report(case_record, report_changeset)
+        {:error, _changeset} -> Repo.rollback(:open_conflict)
+      end
+    end)
+  end
+
+  defp insert_first_report(case_record, report_changeset) do
+    case Repo.insert(Ecto.Changeset.put_change(report_changeset, :case_id, case_record.id)) do
+      {:ok, _report} -> case_record
+      {:error, changeset} -> Repo.rollback(changeset)
+    end
+  end
+
+  defp finish_new_case(case_record, reporter, content, attrs, effects) do
+    log(case_record, reporter, "report_filed", %{"category" => attrs["category"]})
+
+    if :freeze in effects do
+      freeze_content(content)
+      log(case_record, nil, "content_frozen")
+    end
+
+    sever_relationship(case_record, reporter)
+    # Evidence before cleanup: shoot the profile / conversation as it looks right
+    # now (async; posts keep their text snapshot).
+    EvidenceScreenshot.async_capture(case_record)
+    run_notifications(case_record, effects)
+    {:ok, case_record}
   end
 
   defp join_case(%Case{} = open, reporter, content, attrs) do

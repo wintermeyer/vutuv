@@ -414,7 +414,10 @@ defmodule Vutuv.Chat do
         where: is_nil(m.frozen_at) or m.sender_id == ^me_id,
         distinct: m.conversation_id,
         order_by: [asc: m.conversation_id, desc: m.inserted_at, desc: m.id],
-        select: {m.conversation_id, {m.body, m.inserted_at}}
+        # Only a short prefix leaves Postgres: the sidebar CSS-truncates to one
+        # line and AgentDocs.excerpt/1 caps at the first line + 200 chars, so the
+        # full 10k-char body never needs to travel just to be truncated.
+        select: {m.conversation_id, {fragment("left(?, 500)", m.body), m.inserted_at}}
       )
       |> Repo.all()
       |> Map.new()
@@ -560,21 +563,27 @@ defmodule Vutuv.Chat do
   def unread_conversations_count(%User{id: me_id}), do: unread_conversations_count(me_id)
 
   def unread_conversations_count(me_id) do
+    # An EXISTS test per conversation instead of joining messages: it stops at the
+    # first unread message per thread (via the messages(conversation_id,
+    # inserted_at, id) index) rather than fanning out to one row per unread
+    # message and de-duplicating. Frozen messages are invisible to the recipient
+    # (see hydrate/2), so they must not light the shell badge either.
     from(c in Conversation,
       join: p in Participant,
       on: p.conversation_id == c.id and p.user_id == ^me_id,
-      join: m in Message,
-      on: m.conversation_id == c.id,
       where: is_nil(c.frozen_at),
       where:
         c.status == "accepted" or
           (c.status == "pending" and c.initiator_id != ^me_id),
-      where: m.sender_id != ^me_id,
-      # Frozen messages are invisible to the recipient (see hydrate/2), so
-      # they must not light the shell badge either.
-      where: is_nil(m.frozen_at),
-      where: is_nil(p.last_read_at) or m.inserted_at > p.last_read_at,
-      select: count(c.id, :distinct)
+      where:
+        fragment(
+          "EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = ? AND m.sender_id <> ? AND m.frozen_at IS NULL AND (? IS NULL OR m.inserted_at > ?))",
+          c.id,
+          type(^me_id, Vutuv.UUIDv7),
+          p.last_read_at,
+          p.last_read_at
+        ),
+      select: count(c.id)
     )
     |> Repo.one()
   end

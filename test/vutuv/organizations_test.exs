@@ -260,6 +260,49 @@ defmodule Vutuv.OrganizationsTest do
       assert Repo.get!(Organization, organization.id).status == "pending"
       assert_email_sent(fn email -> assert email.subject =~ "nicht mehr verifiziert" end)
     end
+
+    test "demoting the primary domain of a still-verified org moves the badge to another domain" do
+      user = insert(:activated_user)
+
+      {:ok, %{organization: organization, domain: primary}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      stub_dns(primary.verification_token)
+      {:ok, _} = Organizations.verify_dns(organization, primary)
+      primary = Repo.get!(OrganizationDomain, primary.id)
+      assert primary.primary?
+
+      # A second, independently verified domain, so the org stays active when the
+      # primary later fails.
+      {:ok, second} = Organizations.add_domain(organization, "second.example.org", "dns")
+      stub_dns(second.verification_token)
+      {:ok, _} = Organizations.verify_dns(organization, second)
+
+      # The primary's record vanishes; force past grace and re-check it.
+      Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [] end)
+
+      assert :grace_started =
+               Organizations.recheck_domain(Repo.get!(OrganizationDomain, primary.id))
+
+      past = NaiveDateTime.add(NaiveDateTime.utc_now(), -3600) |> NaiveDateTime.truncate(:second)
+
+      {:ok, primary} =
+        Repo.get!(OrganizationDomain, primary.id)
+        |> OrganizationDomain.check_changeset(%{grace_deadline_at: past})
+        |> Repo.update()
+
+      assert :demoted_domain = Organizations.recheck_domain(primary)
+
+      # The demoted primary loses BOTH its verification and its primary flag, and
+      # a still-verified domain takes over the badge (no false "verified via …").
+      primary = Repo.get!(OrganizationDomain, primary.id)
+      refute primary.primary?
+      assert primary.verified_at == nil
+
+      organization = Repo.get!(Organization, organization.id)
+      assert organization.status == "active"
+      assert Organizations.primary_domain(organization).id == second.id
+    end
   end
 
   describe "domains_due_for_recheck/1 (weekly cutoff)" do

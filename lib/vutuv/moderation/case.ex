@@ -54,5 +54,12 @@ defmodule Vutuv.Moderation.Case do
     ])
     |> validate_required([:status])
     |> validate_inclusion(:status, @statuses)
+    # The partial unique index (content_type, content_id) WHERE status is open:
+    # lets a concurrent first-report on the same content lose gracefully (join
+    # the now-open case) instead of raising Ecto.ConstraintError -> a 500.
+    |> unique_constraint([:content_type, :content_id],
+      name: :moderation_cases_open_content_index,
+      message: "already has an open case"
+    )
   end
 end

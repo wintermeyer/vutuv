@@ -15,6 +15,7 @@ defmodule Vutuv.Social do
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Social.Block
   alias Vutuv.Social.Follow
@@ -178,7 +179,7 @@ defmodule Vutuv.Social do
         :followees -> {followee_count(user), :outbound_follows, :followee}
       end
 
-    query = Follow.latest(100, person) |> Vutuv.Pages.paginate(params, total)
+    query = Follow.latest(100, person) |> Pages.paginate(params, total)
     user = Repo.preload(user, [{assoc, {query, [person]}}])
 
     %{
@@ -752,6 +753,24 @@ defmodule Vutuv.Social do
     |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
     |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
     |> Repo.all()
+  end
+
+  @doc """
+  One page of `user`'s vernetzt list for the public `/:slug/connections` page,
+  bounding the query on a crawlable URL the way `follows_page/3` bounds the
+  follower/following lists. Returns `%{user:, connections:, total:}`.
+  """
+  def connections_page(%User{id: user_id} = user, params) do
+    total = connection_count(user)
+
+    connections =
+      mutual_follows_query(user_id)
+      |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
+      |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
+      |> Pages.paginate(params, total)
+      |> Repo.all()
+
+    %{user: user, connections: connections, total: total}
   end
 
   @doc """

@@ -114,6 +114,13 @@ defmodule VutuvWeb.UserController do
   # The canonical URLs of the member's listed social accounts (position
   # order), skipping handle-only providers that have no linkable URL — the
   # <head> rel="me" set the root layout renders for show_html above.
+  #
+  # This re-queries social_media_accounts, which the embedded UserProfileLive
+  # also preloads for its body chips — a deliberate, unavoidable duplication:
+  # the <head> is rendered by the controller BEFORE the socket mounts, and the
+  # session can only carry the profile id, not a preloaded association. Keeping
+  # the rel="me" in <head> makes the member's identity verification robust for
+  # tools that read the head, which is worth one extra small query on load.
   defp rel_me_urls(user) do
     user
     |> Ecto.assoc(:social_media_accounts)

@@ -21,11 +21,10 @@ defmodule VutuvWeb.ConnectionController do
     current = conn.assigns[:current_user]
     owner? = current != nil and current.id == profile.id
 
-    connections = Social.list_connections(profile)
+    # Paginate like the follower / following lists (this is a public, crawlable
+    # URL); the doc builder gets the same page, so the agent formats agree.
+    %{connections: connections, total: total} = Social.connections_page(profile, conn.params)
     users = Enum.map(connections, & &1.user)
-    # list_connections/1 is unpaginated, so the loaded list is the full set —
-    # no separate count query needed.
-    total = length(connections)
 
     AgentDocs.respond(conn,
       html: fn conn ->

@@ -19,6 +19,8 @@ defmodule Vutuv.PageScreenshot do
   alias Vutuv.BrowserFrame
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
+  alias Vutuv.SocialFeed.Http
+  alias Vutuv.Ssrf
 
   @candidate_binaries ~w(chromium chromium-browser google-chrome google-chrome-stable chrome)
   @macos_paths [
@@ -26,6 +28,13 @@ defmodule Vutuv.PageScreenshot do
     "/Applications/Chromium.app/Contents/MacOS/Chromium"
   ]
   @default_window {1280, 800}
+  # Redirect hops we follow while resolving a member link to its final public
+  # URL (enough for the common http->https + apex->www chains).
+  @max_redirect_hops 5
+  # Test seam: options merged into the redirect-resolution probe (a Req `plug`
+  # stub in tests). Empty in prod. An atom key (like the post path's) — a tuple
+  # key is deprecated in Elixir 1.20.
+  @probe_req_options_key :page_screenshot_probe_req_options
   # Hard ceiling for one Chromium run. `timeout` enforces it at the OS level
   # (and kills Chromium, so it can't be orphaned); the BEAM-side Task adds a
   # slightly looser backstop.
@@ -104,7 +113,14 @@ defmodule Vutuv.PageScreenshot do
     "screenshot generation failed for url ##{url.id} (#{url.value}): #{inspect(reason)}"
   end
 
-  defp capture_and_frame(url), do: capture_framed(url.value, url.id)
+  # The profile path's own preflight (the post path has its own, ensure_http_ok):
+  # resolve the member link's redirect chain, validating every hop, so Chromium
+  # only ever receives a public URL. Frames the resolved target.
+  defp capture_and_frame(url) do
+    with {:ok, target} <- resolve_public_target(url.value) do
+      capture_framed(target, url.id)
+    end
+  end
 
   @doc """
   Captures `url_value`, wraps it in a browser-window frame, and returns
@@ -123,7 +139,7 @@ defmodule Vutuv.PageScreenshot do
   not gated.
   """
   def capture_framed(url_value, id) when is_binary(url_value) do
-    if Vutuv.Ssrf.resolves_to_internal?(URI.parse(url_value).host) do
+    if Ssrf.resolves_to_internal?(URI.parse(url_value).host) do
       {:error, :internal_target}
     else
       page_path = tmp_path("page", id, "png")
@@ -138,6 +154,63 @@ defmodule Vutuv.PageScreenshot do
         File.rm(page_path)
       end
     end
+  end
+
+  # Resolve a member link to the final PUBLIC URL Chromium should shoot,
+  # following HTTP redirects but validating EVERY hop's host against the SSRF
+  # guard. This closes the redirect bypass: a public host that 3xx-redirects to
+  # 169.254.169.254 / a LAN address would otherwise be followed by Chromium and
+  # screenshotted into the member's public profile image. A legit apex->www or
+  # http->https redirect still resolves. Only a redirecting URL is probed; a
+  # direct (or unreachable) URL is handed to Chromium unchanged, exactly as
+  # before, so a 404 / down link keeps its old behaviour.
+  defp resolve_public_target(url, hops \\ @max_redirect_hops) do
+    cond do
+      Ssrf.resolves_to_internal?(URI.parse(url).host) -> {:error, :internal_target}
+      hops <= 0 -> {:error, :too_many_redirects}
+      true -> follow_or_accept(url, hops)
+    end
+  end
+
+  defp follow_or_accept(url, hops) do
+    case probe(url) do
+      {:ok, %Req.Response{status: status} = resp} when status in 300..399 ->
+        case redirect_target(url, resp) do
+          nil -> {:error, :bad_redirect}
+          next -> resolve_public_target(next, hops - 1)
+        end
+
+      # A direct (non-redirect) or unreachable response: hand this URL to Chromium
+      # unchanged, exactly as before.
+      _direct_or_unreachable ->
+        {:ok, url}
+    end
+  rescue
+    # The module contract is "never raises"; a probe blowing up degrades to the
+    # pre-existing behaviour of letting Chromium try the URL.
+    _ -> {:ok, url}
+  end
+
+  defp redirect_target(from_url, resp) do
+    case Req.Response.get_header(resp, "location") do
+      [location | _] -> from_url |> URI.merge(location) |> URI.to_string()
+      _ -> nil
+    end
+  end
+
+  # A `redirect: false` GET so we see (and validate) each 3xx hop ourselves.
+  defp probe(url) do
+    [
+      url: url,
+      receive_timeout: 5_000,
+      connect_options: [timeout: 3_000],
+      retry: false,
+      redirect: false,
+      decode_body: false,
+      headers: [{"user-agent", Http.user_agent()}]
+    ]
+    |> Keyword.merge(Application.get_env(:vutuv, @probe_req_options_key, []))
+    |> Req.get()
   end
 
   defp store(url, framed_path) do

@@ -43,5 +43,7 @@
     </ul>
 
     <p :if={@connections == []} class="card__empty mt-3">{gettext("No connections yet.")}</p>
+
+    <.pager params={@conn.params} total={@total} />
   </.card>
 </div>

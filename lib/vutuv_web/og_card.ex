@@ -48,9 +48,18 @@ defmodule VutuvWeb.OgCard do
   def png do
     case :persistent_term.get({__MODULE__, :png}, nil) do
       nil ->
-        result = generate()
-        :persistent_term.put({__MODULE__, :png}, result)
-        result
+        case generate() do
+          {:ok, _png} = ok ->
+            :persistent_term.put({__MODULE__, :png}, ok)
+            ok
+
+          error ->
+            # Don't cache a transient failure (a libvips hiccup, or a boot-time
+            # race before the wordmark asset is in place): leaving the key unset
+            # lets the next request retry, instead of breaking og:image
+            # node-wide until a restart.
+            error
+        end
 
       result ->
         result

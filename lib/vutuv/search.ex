@@ -447,7 +447,10 @@ defmodule Vutuv.Search do
       if is_email do
         value |> search(true) |> Enum.map(&%SearchQueryResult{user_id: &1.id})
       else
-        search(value, false)
+        # The history tables feed no user-facing feature, so a popular/ambiguous
+        # query must not delete-and-reinsert thousands of result rows: keep only
+        # the top matches (search/2 already returns them score-sorted).
+        value |> search(false) |> Enum.take(@people_limit)
       end
 
     params = %{"value" => value, "email?" => is_email}

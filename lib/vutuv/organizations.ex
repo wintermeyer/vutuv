@@ -270,15 +270,24 @@ defmodule Vutuv.Organizations do
       role_row.role == new_role ->
         {:ok, role_row}
 
-      role_row.role == "owner" and new_role != "owner" and last_owner?(role_row) ->
-        {:error, :last_owner}
+      role_row.role == "owner" and new_role != "owner" ->
+        # Demoting an owner races with a concurrent demotion of a DIFFERENT owner:
+        # both could read owner_count > 1 and commit, orphaning the org with zero
+        # owners (write skew). Serialize the check and the write under a row lock.
+        guard_last_owner(role_row.organization_id, fn ->
+          apply_role_change(role_row, new_role, actor)
+        end)
 
       true ->
-        with {:ok, updated} <- role_row |> Ecto.Changeset.change(role: new_role) |> Repo.update() do
-          organization = get_organization!(updated.organization_id)
-          Vutuv.Activity.notify_organization_role(updated.user_id, actor, organization, new_role)
-          {:ok, updated}
-        end
+        apply_role_change(role_row, new_role, actor)
+    end
+  end
+
+  defp apply_role_change(role_row, new_role, actor) do
+    with {:ok, updated} <- role_row |> Ecto.Changeset.change(role: new_role) |> Repo.update() do
+      organization = get_organization!(updated.organization_id)
+      Vutuv.Activity.notify_organization_role(updated.user_id, actor, organization, new_role)
+      {:ok, updated}
     end
   end
 
@@ -287,22 +296,42 @@ defmodule Vutuv.Organizations do
   remove the last owner (an organization always keeps ≥ 1 owner).
   """
   def remove_role(%OrganizationRole{role: "owner"} = role_row) do
-    if last_owner?(role_row), do: {:error, :last_owner}, else: Repo.delete(role_row)
+    guard_last_owner(role_row.organization_id, fn -> Repo.delete(role_row) end)
   end
 
   def remove_role(%OrganizationRole{} = role_row), do: Repo.delete(role_row)
 
-  defp last_owner?(%OrganizationRole{organization_id: organization_id}),
-    do: owner_count(organization_id) <= 1
+  # Runs `fun` (an owner demotion / removal) only if the org would keep >= 1
+  # owner, with the owner rows locked FOR UPDATE for the whole transaction so two
+  # concurrent last-owner checks can't both pass. Returns `{:ok, result}`,
+  # `{:error, :last_owner}`, or `fun`'s own `{:error, _}`.
+  defp guard_last_owner(organization_id, fun) do
+    Repo.transaction(fn ->
+      if last_owner_locked?(organization_id),
+        do: Repo.rollback(:last_owner),
+        else: run_or_rollback(fun)
+    end)
+  end
 
-  defp owner_count(organization_id) do
-    Repo.aggregate(
-      from(r in OrganizationRole,
-        where: r.organization_id == ^organization_id and r.role == "owner"
-      ),
-      :count,
-      :id
-    )
+  # Locks the org's owner rows FOR UPDATE (so a concurrent demotion blocks and
+  # re-reads) and reports whether removing one would drop below one owner.
+  defp last_owner_locked?(organization_id) do
+    owners =
+      Repo.all(
+        from(r in OrganizationRole,
+          where: r.organization_id == ^organization_id and r.role == "owner",
+          lock: "FOR UPDATE"
+        )
+      )
+
+    length(owners) <= 1
+  end
+
+  defp run_or_rollback(fun) do
+    case fun.() do
+      {:ok, result} -> result
+      {:error, reason} -> Repo.rollback(reason)
+    end
   end
 
   defp role_holder?(organization_id, user_id) do
@@ -776,14 +805,24 @@ defmodule Vutuv.Organizations do
   end
 
   defp demote_domain(domain, now) do
-    {:ok, domain} =
+    was_primary = domain.primary?
+
+    changeset =
       domain
       |> OrganizationDomain.check_changeset(%{
         verified_at: nil,
         last_checked_at: now,
         grace_deadline_at: nil
       })
-      |> Repo.update()
+
+    # check_changeset can't cast primary?, so clear it here (put_change bypasses
+    # cast): a demoted primary must not keep a false "verified via <domain>"
+    # badge. Clearing it in the same write also frees the one-primary partial
+    # unique index before we promote a replacement below.
+    changeset =
+      if was_primary, do: Ecto.Changeset.put_change(changeset, :primary?, false), else: changeset
+
+    {:ok, domain} = Repo.update(changeset)
 
     organization = get_organization!(domain.organization_id)
 
@@ -798,7 +837,10 @@ defmodule Vutuv.Organizations do
       :demoted_organization
     else
       # A non-last domain was dropped: the page stays verified via its others,
-      # but the operator is still alerted (issue #930).
+      # but the operator is still alerted (issue #930). If the demoted domain was
+      # the primary, move the badge to a still-verified one.
+      if was_primary, do: promote_new_primary(organization.id)
+
       organization
       |> Emailer.organization_domain_dropped_notice(domain)
       |> Emailer.deliver()

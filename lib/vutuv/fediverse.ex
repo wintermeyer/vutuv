@@ -273,15 +273,31 @@ defmodule Vutuv.Fediverse do
         )
       )
 
+    # Load each user's actor once — a burst of deliveries for one member all
+    # share the same actor row — instead of re-querying it per delivery.
+    actors = actors_by_user_id(due)
+
     due
-    |> Task.async_stream(&attempt/1, max_concurrency: 5, timeout: 30_000, on_timeout: :kill_task)
+    |> Task.async_stream(&attempt(&1, actors[&1.user_id]),
+      max_concurrency: 5,
+      timeout: 30_000,
+      on_timeout: :kill_task
+    )
     |> Stream.run()
 
     length(due)
   end
 
-  defp attempt(%Delivery{user: %User{} = user} = delivery) do
-    with %Actor{} = actor <- get_actor(user),
+  defp actors_by_user_id(deliveries) do
+    user_ids = deliveries |> Enum.map(& &1.user_id) |> Enum.uniq()
+
+    from(a in Actor, where: a.user_id in ^user_ids)
+    |> Repo.all()
+    |> Map.new(&{&1.user_id, &1})
+  end
+
+  defp attempt(%Delivery{user: %User{} = user} = delivery, actor) do
+    with %Actor{} = actor <- actor,
          %URI{scheme: "https", host: host} <- URI.parse(delivery.inbox_uri),
          false <- Vutuv.Ssrf.resolves_to_internal?(host) do
       post_activity(delivery, user, actor)
@@ -292,7 +308,7 @@ defmodule Vutuv.Fediverse do
     end
   end
 
-  defp attempt(%Delivery{} = delivery), do: Repo.delete(delivery)
+  defp attempt(%Delivery{} = delivery, _actor), do: Repo.delete(delivery)
 
   defp post_activity(delivery, user, actor) do
     body = delivery.activity_json
