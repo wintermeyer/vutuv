@@ -87,7 +87,10 @@ defmodule Vutuv.Invitations.PrefillToken do
   for anything that is not a token we produced, so a tampered or truncated link
   degrades to an empty form rather than crashing.
   """
-  def decode(token) when is_binary(token) and token != "" do
+  # A real token packs only gender/name/email/tags, so it is well under 1 KB.
+  # The size guard rejects a decompression-bomb `i=` param before inflating it
+  # (raw DEFLATE reaches ~1000:1, so a few KB would inflate to megabytes).
+  def decode(token) when is_binary(token) and token != "" and byte_size(token) <= 1024 do
     with {:ok, deflated} <- Base.url_decode64(token, padding: false),
          {:ok, <<@version, payload::binary>>} <- inflate(deflated) do
       @fields

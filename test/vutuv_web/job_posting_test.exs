@@ -11,6 +11,7 @@ defmodule VutuvWeb.JobPostingTest do
   import Vutuv.JobsHelpers
 
   alias Vutuv.Jobs
+  alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Repo
 
   # Age the logged-in account past the 3-day publish gate.
@@ -85,6 +86,28 @@ defmodule VutuvWeb.JobPostingTest do
       assert posting.lat && posting.lon
       assert Enum.map(Jobs.tags_of(posting, :required), & &1.name) == ["Elixir"]
     end
+
+    test "removing an already-attached image does not crash the editor", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, posting} = Jobs.create_draft(user, %{"title" => "Draft"})
+
+      image =
+        Repo.insert!(%JobPostingImage{
+          job_posting_id: posting.id,
+          user_id: user.id,
+          token: JobPostingImage.gen_token(),
+          width: 800,
+          height: 600,
+          content_type: "image/avif",
+          size_bytes: 1234
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/jobs/#{posting.slug}/edit")
+      # Pre-fix this raised FunctionClauseError (delete_pending_image only
+      # matched pending images) and crashed the editor socket.
+      assert render_click(view, "remove-image", %{"id" => image.id})
+      refute render(view) =~ image.token
+    end
   end
 
   describe "detail page + gating" do
@@ -141,6 +164,36 @@ defmodule VutuvWeb.JobPostingTest do
 
       # Frozen: a logged-out visitor now gets a 404, not the page.
       assert build_conn() |> get(~p"/jobs/#{posting.slug}") |> response(404)
+    end
+
+    test "the owner can delete a frozen reported posting, settling the case" do
+      owner = poster_fixture()
+      posting = publish_job!(owner)
+      reporter = insert(:activated_user)
+
+      {:ok, case_record} =
+        Vutuv.Moderation.report_content(reporter, posting, %{"category" => "misleading_job"})
+
+      # Pre-fix delete_reported_content had no %JobPosting{} branch -> CaseClauseError 500.
+      assert :ok = Vutuv.Moderation.delete_reported_content(case_record, owner)
+      refute Jobs.get_job_posting(posting.id)
+      assert Repo.reload!(case_record).status == "resolved_deleted"
+    end
+
+    test "the owner editing a frozen reported posting lifts the freeze and settles the case" do
+      owner = poster_fixture()
+      posting = publish_job!(owner)
+      reporter = insert(:activated_user)
+
+      {:ok, case_record} =
+        Vutuv.Moderation.report_content(reporter, posting, %{"category" => "misleading_job"})
+
+      assert Repo.reload!(posting).frozen_at
+
+      {:ok, _} = Jobs.update_posting(Repo.reload!(posting), owner, %{"title" => "Revised title"})
+
+      refute Repo.reload!(posting).frozen_at
+      assert Repo.reload!(case_record).status == "resolved_edited"
     end
   end
 

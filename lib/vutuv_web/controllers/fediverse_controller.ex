@@ -95,6 +95,7 @@ defmodule VutuvWeb.FediverseController do
 
     with {:ok, key_id} <- signature_key_id(conn),
          {:ok, remote} <- Fediverse.fetch_remote_actor(key_id, signer(user)),
+         true <- same_authority?(key_id, remote.id),
          :ok <- verify_signature(conn, remote),
          true <- activity["actor"] == remote.id do
       perform(conn, user, activity, remote)
@@ -103,18 +104,30 @@ defmodule VutuvWeb.FediverseController do
     end
   end
 
+  # The signing keyId must be served by the same host as the actor id it names.
+  # Without this an attacker-controlled host can serve a key document claiming
+  # `id: "https://good.example/alice"`, spoofing Follow/Undo as any actor.
+  defp same_authority?(key_id, actor_id) when is_binary(key_id) and is_binary(actor_id) do
+    key_host = URI.parse(key_id).host
+    not is_nil(key_host) and key_host == URI.parse(actor_id).host
+  end
+
+  defp same_authority?(_key_id, _actor_id), do: false
+
   defp perform(conn, user, %{"type" => "Follow"} = activity, remote) do
     if activity["object"] == Docs.actor_url(user) do
-      {:ok, _} =
-        Fediverse.add_follower(user, %{
-          actor_uri: remote.id,
-          inbox_uri: remote.inbox,
-          shared_inbox_uri: remote.shared_inbox,
-          handle: remote.preferred_username,
-          name: remote.name
-        })
-
-      Fediverse.accept_follow(user, activity, remote.inbox)
+      # A remote actor doc with an over-long / malformed inbox or id yields an
+      # invalid changeset; accept only a successful insert, never crash the inbox.
+      case Fediverse.add_follower(user, %{
+             actor_uri: remote.id,
+             inbox_uri: remote.inbox,
+             shared_inbox_uri: remote.shared_inbox,
+             handle: remote.preferred_username,
+             name: remote.name
+           }) do
+        {:ok, _} -> Fediverse.accept_follow(user, activity, remote.inbox)
+        {:error, _} -> :ok
+      end
     end
 
     send_resp(conn, 202, "")

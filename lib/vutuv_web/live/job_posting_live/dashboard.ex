@@ -10,12 +10,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
 
   alias Vutuv.Jobs
 
-  @tabs [
-    {:published, "Active"},
-    {:draft, "Drafts"},
-    {:expired, "Expired"},
-    {:closed, "Closed"}
-  ]
+  @tabs [:published, :draft, :expired, :closed]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -50,9 +45,12 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
 
   def handle_event("close", %{"id" => id, "reason" => reason}, socket) do
     posting = own_posting(socket, id)
+    # Map the client string explicitly (never to_existing_atom on user input);
+    # an unknown reason is ignored rather than crashing the dashboard socket.
+    reason = %{"filled" => :filled, "withdrawn" => :withdrawn}[reason]
 
-    if posting do
-      {:ok, _} = Jobs.close(posting, String.to_existing_atom(reason))
+    if posting && reason do
+      {:ok, _} = Jobs.close(posting, reason)
     end
 
     {:noreply, refresh(socket)}
@@ -89,11 +87,9 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
     |> assign(:offset, page.next_offset)
   end
 
-  # Match known values only (never `to_existing_atom` arbitrary input).
-  defp parse_tab(value) when value in ~w(published draft expired closed),
-    do: String.to_existing_atom(value)
-
-  defp parse_tab(_value), do: :published
+  # Match the request string against the known tab atoms (never
+  # `to_existing_atom` on arbitrary input); unknown/absent falls back to Active.
+  defp parse_tab(value), do: Enum.find(@tabs, :published, &(to_string(&1) == value))
 
   @impl true
   def render(assigns) do
@@ -110,7 +106,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
 
       <nav class="mb-4 flex flex-wrap gap-2 border-b border-slate-200 pb-2 dark:border-slate-800">
         <.link
-          :for={{status, label} <- @tabs}
+          :for={status <- @tabs}
           patch={~p"/jobs/mine?#{[tab: status]}"}
           class={[
             "rounded-lg px-3 py-1.5 text-sm font-medium",
@@ -120,7 +116,7 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
             )
           ]}
         >
-          {tab_label(label)} <span class="tabular-nums">{compact_count(Map.get(@counts, status, 0))}</span>
+          {tab_label(status)} <span class="tabular-nums">{compact_count(Map.get(@counts, status, 0))}</span>
         </.link>
       </nav>
 
@@ -182,9 +178,8 @@ defmodule VutuvWeb.JobPostingLive.Dashboard do
     """
   end
 
-  # Tab labels come from the module attribute (English source), translated here.
-  defp tab_label("Active"), do: gettext("Active")
-  defp tab_label("Drafts"), do: gettext("Drafts")
-  defp tab_label("Expired"), do: gettext("Expired")
-  defp tab_label("Closed"), do: gettext("Closed")
+  defp tab_label(:published), do: gettext("Active")
+  defp tab_label(:draft), do: gettext("Drafts")
+  defp tab_label(:expired), do: gettext("Expired")
+  defp tab_label(:closed), do: gettext("Closed")
 end

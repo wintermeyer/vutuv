@@ -123,7 +123,6 @@ defmodule Vutuv.Jobs do
       |> limit(^(limit + 1))
       |> offset(^offset)
       |> Repo.all()
-      |> Repo.preload(:organization)
 
     {shown, more?} =
       if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
@@ -185,7 +184,7 @@ defmodule Vutuv.Jobs do
       owner?(posting, viewer) or admin?(viewer) -> true
       posting.frozen_at != nil -> false
       stale?(posting) -> false
-      posting.visibility == :members -> viewer != nil
+      posting.visibility == :members -> viewer != nil and effective_status(posting) != :draft
       posting.visibility == :everyone -> effective_status(posting) != :draft
       true -> false
     end
@@ -239,22 +238,27 @@ defmodule Vutuv.Jobs do
 
   # The posting itself doesn't count until it is published, so re-publishing an
   # already-published posting (an edit) never trips its own cap.
-  defp over_member_cap?(%User{id: user_id}, %JobPosting{id: posting_id}) do
-    JobPosting
-    |> where([p], p.user_id == ^user_id and p.status == :published)
-    |> exclude_self(posting_id)
-    |> Repo.aggregate(:count, :id)
-    |> Kernel.>=(max_published_per_member())
-  end
+  defp over_member_cap?(%User{id: user_id}, %JobPosting{id: posting_id}),
+    do: over_cap?(:user_id, user_id, posting_id, max_published_per_member())
 
   defp over_organization_cap?(%JobPosting{organization_id: nil}), do: false
 
-  defp over_organization_cap?(%JobPosting{organization_id: org_id, id: posting_id}) do
+  defp over_organization_cap?(%JobPosting{organization_id: org_id, id: posting_id}),
+    do: over_cap?(:organization_id, org_id, posting_id, max_published_per_organization())
+
+  # Whether the count of the owner's other *live* postings (member or
+  # organization, keyed by `field`) has reached `cap`. A published posting past
+  # its expiry but not yet swept reads as expired (effective_status) and must
+  # not occupy a slot.
+  defp over_cap?(field, value, posting_id, cap) do
+    today = BerlinTime.today()
+
     JobPosting
-    |> where([p], p.organization_id == ^org_id and p.status == :published)
+    |> where([p], p.status == :published and field(p, ^field) == ^value)
+    |> where([p], is_nil(p.expires_on) or p.expires_on >= ^today)
     |> exclude_self(posting_id)
     |> Repo.aggregate(:count, :id)
-    |> Kernel.>=(max_published_per_organization())
+    |> Kernel.>=(cap)
   end
 
   # A not-yet-created posting (nil id) excludes nothing (Ecto forbids `id != nil`).
@@ -288,7 +292,17 @@ defmodule Vutuv.Jobs do
     |> put_tags(attrs)
     |> Repo.update()
     |> after_save(user, attrs)
+    |> settle_case_on_edit()
   end
+
+  # An edit lifts a pending_owner moderation freeze and settles the case, exactly
+  # like Posts.update_post (a no-op when the posting has no such open case).
+  defp settle_case_on_edit({:ok, %JobPosting{} = posting} = result) do
+    Vutuv.Moderation.content_edited(posting)
+    result
+  end
+
+  defp settle_case_on_edit(other), do: other
 
   @doc """
   Publishes `posting` with the latest `attrs`, running the publish-time
@@ -566,20 +580,16 @@ defmodule Vutuv.Jobs do
     )
     |> Repo.update_all(set: [job_posting_id: posting.id])
 
-    removed =
+    # RETURNING the tokens in the same DELETE, so the predicate is written once
+    # and there is no separate SELECT (Enum.each over [] is a no-op).
+    {_count, tokens} =
       from(i in JobPostingImage,
         where: i.job_posting_id == ^posting.id and i.id not in ^keep_ids,
         select: i.token
       )
-      |> Repo.all()
-
-    if removed != [] do
-      from(i in JobPostingImage, where: i.job_posting_id == ^posting.id and i.id not in ^keep_ids)
       |> Repo.delete_all()
 
-      Enum.each(removed, &Vutuv.JobPostingImageStore.delete/1)
-    end
-
+    Enum.each(tokens, &Vutuv.JobPostingImageStore.delete/1)
     :ok
   end
 
@@ -587,18 +597,15 @@ defmodule Vutuv.Jobs do
   def sweep_pending_images(max_age_hours \\ 24) do
     cutoff = NaiveDateTime.add(NaiveDateTime.utc_now(), -max_age_hours * 3600, :second)
 
-    tokens =
+    {count, tokens} =
       from(i in JobPostingImage,
         where: is_nil(i.job_posting_id) and i.inserted_at < ^cutoff,
         select: i.token
       )
-      |> Repo.all()
-
-    from(i in JobPostingImage, where: is_nil(i.job_posting_id) and i.inserted_at < ^cutoff)
-    |> Repo.delete_all()
+      |> Repo.delete_all()
 
     Enum.each(tokens, &Vutuv.JobPostingImageStore.delete/1)
-    length(tokens)
+    count
   end
 
   # --- engagement (like + bookmark) -----------------------------------------

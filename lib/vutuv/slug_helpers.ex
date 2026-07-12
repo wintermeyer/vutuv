@@ -105,11 +105,14 @@ defmodule Vutuv.SlugHelpers do
     ensure_slug(taken, slug, resource)
   end
 
-  defp ensure_slug(nil, "", resource), do: to_string(resource)
+  # When the name slugifies to nothing (pure symbols / non-latin), fall back to a
+  # guaranteed-valid `[a-z0-9]` slug rather than the raw resource string, which
+  # would put spaces/uppercase/symbols into a public URL and the sitemap.
+  defp ensure_slug(nil, "", _resource), do: short_sha()
 
   defp ensure_slug(nil, slug, _), do: slug
 
-  defp ensure_slug(_, "", resource), do: "#{to_string(resource)}.#{short_sha()}"
+  defp ensure_slug(_, "", _resource), do: short_sha()
 
   defp ensure_slug(_, slug, _), do: "#{slug}.#{short_sha()}"
 

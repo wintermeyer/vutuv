@@ -74,6 +74,20 @@ defmodule VutuvWeb.ReportControllerTest do
       refute response =~ body <> "…"
     end
 
+    test "does not preview a private message the reporter is not party to", %{conn: conn} do
+      alice = insert_activated_user()
+      bob = insert_activated_user()
+      conversation = insert_conversation_between(alice, bob)
+      message = insert(:message, conversation: conversation, sender: alice)
+
+      {conn, _reporter} = create_and_login_user(conn)
+      conn = get(conn, ~p"/reports/new?type=message&id=#{message.id}")
+
+      # A non-participant must not see the message body previewed — the same
+      # authorization the create path enforces now gates the form too.
+      assert conn.status == 404
+    end
+
     test "404s for unknown content", %{conn: conn} do
       {conn, _me} = create_and_login_user(conn)
       conn = get(conn, ~p"/reports/new?type=post&id=#{Vutuv.UUIDv7.generate()}")

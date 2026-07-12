@@ -575,8 +575,11 @@ defmodule Vutuv.Search do
   end
 
   defp phoneticize_search_value(value, algorithm) do
-    # Split the value by non words
-    for(section <- Regex.split(~r/[^a-z]+/, value, include_captures: true)) do
+    # Split on non-letter runs (Unicode-aware, so umlauts/ß stay INSIDE the word).
+    # Each letter run is then encoded whole — the way the stored terms encode each
+    # name part — so "müller" → "657" matches, instead of the old [^a-z] split
+    # that treated ü as a separator and left it literal ("6ü57").
+    for(section <- Regex.split(~r/[^\p{L}]+/u, value, include_captures: true)) do
       phoneticize_section(section, algorithm)
     end
     # Recombine the search value with phoneticized words
@@ -584,8 +587,9 @@ defmodule Vutuv.Search do
   end
 
   defp phoneticize_section(section, algorithm) do
-    if Regex.match?(~r/^[a-z]+$/, section) do
-      # Phoneticize the words based on the algorithm parameter
+    if Regex.match?(~r/^\p{L}+$/u, section) do
+      # Phoneticize the words based on the algorithm parameter (the encoders
+      # NFD-normalize umlauts internally, exactly like the stored terms).
       case algorithm do
         :cologne -> Vutuv.ColognePhonetics.to_cologne(section)
         :soundex -> Vutuv.Soundex.to_soundex(section)

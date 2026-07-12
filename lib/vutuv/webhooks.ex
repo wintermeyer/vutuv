@@ -21,6 +21,8 @@ defmodule Vutuv.Webhooks do
 
   import Ecto.Query
 
+  require Logger
+
   alias Vutuv.Accounts.User
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.{App, Grant}
@@ -198,19 +200,37 @@ defmodule Vutuv.Webhooks do
       Repo.all(
         from(d in Delivery,
           join: s in assoc(d, :subscription),
+          join: a in assoc(s, :app),
           where: is_nil(d.delivered_at) and d.attempts < @max_attempts,
           where: d.next_attempt_at <= ^now,
           where: s.active?,
+          # A suspended app's in-flight (retrying) deliveries stop too, not just
+          # new ones — the "bad player" kill switch must cut the leak immediately.
+          where: is_nil(a.suspended_at),
           preload: [subscription: s],
           limit: 100
         )
       )
 
     due
-    |> Task.async_stream(&attempt/1, max_concurrency: 5, timeout: 30_000, on_timeout: :kill_task)
+    |> Task.async_stream(&safe_attempt/1,
+      max_concurrency: 5,
+      timeout: 30_000,
+      on_timeout: :kill_task
+    )
     |> Stream.run()
 
     length(due)
+  end
+
+  # One delivery raising must not take down the whole batch (and the Deliverer
+  # GenServer with it): async_stream propagates a task crash to the caller.
+  defp safe_attempt(%Delivery{} = delivery) do
+    attempt(delivery)
+  rescue
+    error ->
+      Logger.error("webhook delivery #{delivery.id} raised: #{inspect(error)}")
+      :error
   end
 
   @doc false

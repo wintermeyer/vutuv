@@ -198,9 +198,26 @@ defmodule Vutuv.ApiAuth.OAuth do
           {:error, :invalid_grant}
 
         true ->
-          ApiAuth.revoke_token!(token)
-          mint_pair(token.grant_id, token.user_id, app.id, token.scopes)
+          rotate_refresh(token, app)
       end
+    end
+  end
+
+  # Atomic rotation: the `is_nil(revoked_at)` guard lets exactly one of two
+  # concurrent refreshes win. The loser saw zero rows, so its token was already
+  # rotated — treat it as reuse and revoke the grant.
+  defp rotate_refresh(token, app) do
+    {n, _} =
+      Repo.update_all(
+        from(t in Token, where: t.id == ^token.id and is_nil(t.revoked_at)),
+        set: [revoked_at: DateTime.utc_now(:second)]
+      )
+
+    if n == 1 do
+      mint_pair(token.grant_id, token.user_id, app.id, token.scopes)
+    else
+      ApiAuth.revoke_grant_tokens!(token.grant_id)
+      {:error, :invalid_grant}
     end
   end
 
@@ -251,8 +268,21 @@ defmodule Vutuv.ApiAuth.OAuth do
   end
 
   defp consume_code(%AuthCode{} = code) do
-    code |> Ecto.Changeset.change(used_at: DateTime.utc_now(:second)) |> Repo.update!()
-    :ok
+    # Atomic one-time consumption: the `is_nil(used_at)` guard makes exactly one
+    # of two concurrent exchanges win. The loser matched zero rows, so it is a
+    # second redemption — fire the theft signal like the used_at branch above.
+    {count, _} =
+      Repo.update_all(
+        from(c in AuthCode, where: c.id == ^code.id and is_nil(c.used_at)),
+        set: [used_at: DateTime.utc_now(:second)]
+      )
+
+    if count == 1 do
+      :ok
+    else
+      ApiAuth.revoke_grant_tokens!(code.grant_id)
+      {:error, :invalid_grant}
+    end
   end
 
   defp check_code_params(code, params) do

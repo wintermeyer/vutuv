@@ -129,7 +129,10 @@ defmodule VutuvWeb.JobPostingLive.Form do
         {:noreply, socket}
 
       image ->
-        Jobs.delete_pending_image(image)
+        # Only pending (unattached) uploads are purged immediately; an
+        # already-attached image is just dropped from the list and pruned by
+        # attach_images/3 on save (matching the post composer's guard).
+        if is_nil(image.job_posting_id), do: Jobs.delete_pending_image(image)
         {:noreply, assign(socket, :images, images -- [image])}
     end
   end

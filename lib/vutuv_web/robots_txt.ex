@@ -51,9 +51,10 @@ defmodule VutuvWeb.RobotsTxt do
   Disallow: /*/emails
   Disallow: /*/followers
   Disallow: /*/following
+  Disallow: /*/languages
   Disallow: /*/links
   Disallow: /*/phone_numbers
-  Disallow: /*/usernames
+  Disallow: /*/qualifications
   Disallow: /*/social_media_accounts
   Disallow: /*/tags
   Disallow: /*/work_experiences

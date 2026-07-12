@@ -741,7 +741,12 @@ defmodule Vutuv.Posts do
                JOIN posts rp ON rp.id = r.post_id
               WHERE r.parent_post_id = ?
                 AND rp.frozen_at IS NULL
-                AND NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = rp.id))
+                AND NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = rp.id)
+                AND NOT EXISTS (SELECT 1 FROM users mu WHERE mu.id = rp.user_id
+                                  AND (mu.frozen_at IS NOT NULL
+                                    OR mu.deactivated_at IS NOT NULL
+                                    OR mu.unreachable_at IS NOT NULL
+                                    OR mu.suspended_until > (NOW() AT TIME ZONE 'utc'))))
             """,
             unquote(post).id
           )
@@ -771,6 +776,9 @@ defmodule Vutuv.Posts do
         on: rp.id == r.post_id,
         where: r.parent_post_id == ^post_id and is_nil(rp.frozen_at),
         where: fragment("NOT EXISTS (SELECT 1 FROM post_denials d WHERE d.post_id = ?)", rp.id),
+        # A reply whose author's account is hidden is excluded by list_replies /
+        # scope_visible, so it must not inflate the public count either.
+        where: not account_hidden(rp.user_id),
         select: count(r.id)
       )
     )
@@ -1636,8 +1644,10 @@ defmodule Vutuv.Posts do
     |> case do
       nil -> nil
       # :user lets the proxy name the download after the owner's handle
-      # (Content-Disposition); :post drives the visibility check.
-      image -> Repo.preload(image, [:post, :user])
+      # (Content-Disposition); :post drives the visibility check, and its :user
+      # (the author) lets the moderation-hidden check read the loaded struct
+      # instead of re-fetching the author on every image request.
+      image -> Repo.preload(image, [:user, post: :user])
     end
   end
 

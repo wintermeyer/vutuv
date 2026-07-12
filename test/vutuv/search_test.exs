@@ -47,6 +47,17 @@ defmodule Vutuv.SearchTest do
       assert Enum.map(results.exact_people, & &1.id) == [mueller.id]
     end
 
+    test "a typo'd umlaut name still matches phonetically, not only in ASCII" do
+      mueller = searchable_user("Hans", "Müller")
+
+      # "müler" is not a substring of "Müller", so only the Cologne/Soundex path
+      # can match. Before the fix the search side left the ü literal ("6ü57")
+      # while the stored term is "657", so umlaut names never fuzzy-matched.
+      results = Search.instant("müler")
+
+      assert mueller.id in Enum.map(results.similar_people, & &1.id)
+    end
+
     test "narrows as the query grows" do
       searchable_user("Maria", "Meier")
       searchable_user("Martin", "Meixner")

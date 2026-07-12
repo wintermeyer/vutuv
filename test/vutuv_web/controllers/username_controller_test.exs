@@ -96,7 +96,8 @@ defmodule VutuvWeb.UsernameControllerTest do
 
       conn = post(conn, "/settings/usernames", user: %{"username" => "not valid!"})
 
-      assert html_response(conn, 200) =~ "may only contain letters, numbers, and underscores"
+      # A failed changeset answers 422 like every other section create action.
+      assert html_response(conn, 422) =~ "may only contain letters, numbers, and underscores"
       assert Repo.get(User, user.id).username == user.username
     end
 
@@ -106,7 +107,7 @@ defmodule VutuvWeb.UsernameControllerTest do
 
       conn = post(conn, "/settings/usernames", user: %{"username" => "wanted_handle"})
 
-      assert html_response(conn, 200) =~ "has already been taken"
+      assert html_response(conn, 422) =~ "has already been taken"
     end
 
     test "an exhausted quota refuses the change", %{conn: conn} do
@@ -119,7 +120,7 @@ defmodule VutuvWeb.UsernameControllerTest do
 
       conn = post(conn, "/settings/usernames", user: %{"username" => "one_too_many"})
 
-      assert conn.status == 200
+      assert conn.status == 422
       assert Repo.get(User, user.id).username == "spent_4"
     end
   end

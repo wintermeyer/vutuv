@@ -35,6 +35,12 @@ defmodule Vutuv.Social.Follow do
     |> unique_constraint(:follower_id_followee_id,
       message: "You're already following this person."
     )
+    # A valid-but-nonexistent followee id returns a changeset error instead of
+    # raising Ecto.ConstraintError on insert. The FK names are still
+    # `connections_*` — the table was renamed from `connections` to `follows`
+    # and Postgres keeps constraint names across a table rename.
+    |> foreign_key_constraint(:followee_id, name: "connections_followee_id_fkey")
+    |> foreign_key_constraint(:follower_id, name: "connections_follower_id_fkey")
   end
 
   defp validate_not_following_self(

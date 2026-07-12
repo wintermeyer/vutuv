@@ -103,6 +103,12 @@ defmodule Vutuv.Geo.Postal do
       path ->
         {:ok, path |> read_file() |> parse(country)}
     end
+  rescue
+    error ->
+      # A corrupt / truncated / unreadable .gz must not take down a job save:
+      # coordinates are an optimisation, never a gate. Degrade to unresolvable.
+      Logger.warning("Vutuv.Geo: could not read postal dataset for #{country}: #{inspect(error)}")
+      :error
   end
 
   # Prefer an uncompressed drop-in, fall back to the shipped gzip.

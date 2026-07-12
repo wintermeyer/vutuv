@@ -19,6 +19,16 @@ defmodule Vutuv.SocialTest do
       assert changeset.errors[:follower_id]
     end
 
+    test "a non-UUID followee id returns an error instead of raising" do
+      follower = insert(:user)
+      assert {:error, :invalid} = Social.follow(follower, "not-a-uuid")
+    end
+
+    test "a valid but nonexistent followee id returns a changeset error, not a raise" do
+      follower = insert(:user)
+      assert {:error, %Ecto.Changeset{}} = Social.follow(follower, Vutuv.UUIDv7.generate())
+    end
+
     test "accepts an already-loaded follower struct" do
       # Controllers hold the session user struct; passing it avoids the
       # redundant Repo.get that the id-based variant needs for the notification.
@@ -61,6 +71,22 @@ defmodule Vutuv.SocialTest do
       # "started following you".
       assert_receive {:new_notification, %{kind: "connection", actor_name: "Ben B"}}
       refute_receive {:new_notification, %{kind: "follower"}}
+    end
+  end
+
+  describe "unfollow!/2" do
+    test "is idempotent: a second unfollow (edge already gone) is a no-op, not a crash" do
+      follower = insert(:user)
+      followee = insert(:user)
+      {:ok, follow} = Social.follow(follower.id, followee.id)
+
+      assert %Vutuv.Social.Follow{} = Social.unfollow!(follower.id, follow.id)
+      assert :ok = Social.unfollow!(follower.id, follow.id)
+    end
+
+    test "a tampered non-UUID follow id is a no-op, not a crash" do
+      follower = insert(:user)
+      assert :ok = Social.unfollow!(follower.id, "not-a-uuid")
     end
   end
 

@@ -65,14 +65,18 @@ defmodule VutuvWeb.Plug.Locale do
   # Else return the user's most preferred locale
   defp process_possible_locale(_, locales), do: get_first_locale(locales)
 
-  defp assign_locale(nil, conn), do: assign_locale("en", conn)
-
   # Give locale data to all modules that require it. The locale also goes into
   # the session so LiveViews — which run in their own process, where this plug
   # never ran — can pick it up on mount (see `VutuvWeb.Live.InitAssigns` and
   # `VutuvWeb.ShellLive`). Without that, /messages and /notifications flipped
   # the whole chrome back to English for German users.
+  #
+  # An unsupported result (nil, or a browser subtag like "fr" that no config
+  # locale matches) falls back to "en" rather than being put into Gettext, the
+  # `<html lang>` and the session as a dead value that renders English content
+  # under a foreign lang tag.
   defp assign_locale(locale, conn) do
+    locale = if locale_supported?(locale), do: locale, else: "en"
     Gettext.put_locale(VutuvWeb.Gettext, locale)
 
     conn

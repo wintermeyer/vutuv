@@ -372,6 +372,13 @@ defmodule Vutuv.Accounts.UserTest do
                errors_on(salary_changeset(%{"desired_salary_min" => "0"}))
     end
 
+    test "rejects an amount that would overflow the int4 column (22003) as a field error" do
+      refute salary_changeset(%{"desired_salary_min" => "9999999999"}).valid?
+
+      assert %{desired_salary_min: [_]} =
+               errors_on(salary_changeset(%{"desired_salary_min" => "9999999999"}))
+    end
+
     test "an empty amount clears it (stores nil), still valid" do
       user = %User{first_name: "first_name", desired_salary_min: 50_000}
       changeset = User.changeset(user, %{"desired_salary_min" => ""})

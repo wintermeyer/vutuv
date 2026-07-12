@@ -47,7 +47,7 @@ defmodule VutuvWeb.SitemapController do
   def show(conn, %{"name" => name}) do
     with %{"type" => type, "chunk" => chunk} <-
            Regex.named_captures(
-             ~r/^(?<type>users|posts|tags|organizations)-(?<chunk>[1-9]\d*)\.xml$/,
+             ~r/^(?<type>users|posts|tags|organizations|jobs)-(?<chunk>[1-9]\d*)\.xml$/,
              name
            ),
          [_ | _] = entries <- Map.fetch!(@entry_funs, type).(String.to_integer(chunk)) do

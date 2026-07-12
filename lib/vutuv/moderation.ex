@@ -84,8 +84,22 @@ defmodule Vutuv.Moderation do
     end
   end
 
+  @doc """
+  Whether `reporter` may open the report flow for `content` — the gate the
+  report form's `new` action shares with `report_content/3`, so the form never
+  previews content (a private message, a restricted post) the reporter has no
+  right to see. The owner must exist, and the reporter must currently be able to
+  report it (visibility) or already be tied to it by an open case.
+  """
+  def can_report?(%User{} = reporter, content) do
+    owner_id(content) != nil and
+      (open_case_for(content) != nil or reportable_by?(reporter, content))
+  end
+
   defp open_new_case(reporter, content, attrs) do
-    report_changeset = Report.changeset(%Report{reporter_id: reporter.id}, attrs)
+    report_changeset =
+      Report.changeset(%Report{reporter_id: reporter.id}, attrs, content_type(content))
+
     {status, effects} = initial_status(reporter, content)
 
     case_changeset =
@@ -126,7 +140,11 @@ defmodule Vutuv.Moderation do
 
   defp join_case(%Case{} = open, reporter, content, attrs) do
     report_changeset =
-      Report.changeset(%Report{reporter_id: reporter.id, case_id: open.id}, attrs)
+      Report.changeset(
+        %Report{reporter_id: reporter.id, case_id: open.id},
+        attrs,
+        content_type(content)
+      )
 
     case Repo.insert(report_changeset) do
       {:ok, _report} ->
@@ -446,6 +464,12 @@ defmodule Vutuv.Moderation do
           %Message{} = message ->
             {:ok, _} = Vutuv.Chat.delete_message(user, message)
             content_deleted(message)
+
+          %JobPosting{} = posting ->
+            # delete_job_posting settles the case via the content_deleted hook,
+            # the same path an organic delete takes.
+            {:ok, _} = Vutuv.Jobs.delete_job_posting(posting)
+            :ok
         end
     end
   end

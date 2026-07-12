@@ -1,45 +1,15 @@
 defmodule Vutuv.JobsTest do
   use Vutuv.DataCase, async: true
 
+  import Vutuv.JobsHelpers
+
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Repo
 
-  # A confirmed account old enough to publish (the anti-abuse gate needs both).
-  defp poster do
-    user = insert(:activated_user)
-    old = NaiveDateTime.add(NaiveDateTime.utc_now(), -5 * 86_400, :second)
-
-    {1, _} =
-      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
-        set: [inserted_at: old]
-      )
-
-    Repo.reload!(user)
-  end
-
-  defp onsite_attrs(extra \\ %{}) do
-    Map.merge(
-      %{
-        "title" => "Elixir Developer (m/w/d)",
-        "employment_type" => "full_time",
-        "workplace_type" => "onsite",
-        "zip_code" => "50667",
-        "city" => "Köln",
-        "country" => "DE",
-        "salary_min" => "50000",
-        "salary_max" => "65000",
-        "salary_currency" => "EUR",
-        "salary_period" => "year",
-        "apply_kind" => "message"
-      },
-      extra
-    )
-  end
-
   describe "create_draft/3" do
     test "a minimal draft needs only a title" do
-      user = poster()
+      user = poster_fixture()
       assert {:ok, %JobPosting{} = posting} = Jobs.create_draft(user, %{"title" => "Anything"})
       assert posting.status == :draft
       assert posting.user_id == user.id
@@ -47,7 +17,7 @@ defmodule Vutuv.JobsTest do
     end
 
     test "a blank title is rejected" do
-      user = poster()
+      user = poster_fixture()
       assert {:error, changeset} = Jobs.create_draft(user, %{"title" => "  "})
       assert "can't be blank" in errors_on(changeset).title
     end
@@ -55,9 +25,9 @@ defmodule Vutuv.JobsTest do
 
   describe "publish/3" do
     test "a full on-site posting publishes, resolves coordinates and sets a 90-day expiry" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      assert {:ok, posting} = Jobs.publish(draft, user, onsite_attrs())
+      assert {:ok, posting} = Jobs.publish(draft, user, job_attrs())
 
       assert posting.status == :published
       assert posting.expires_on == Date.add(Vutuv.BerlinTime.today(), 90)
@@ -67,19 +37,19 @@ defmodule Vutuv.JobsTest do
     end
 
     test "publishing without a salary range is rejected inline" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      attrs = onsite_attrs(%{"salary_min" => "", "salary_max" => ""})
+      attrs = job_attrs(%{"salary_min" => "", "salary_max" => ""})
       assert {:error, changeset} = Jobs.publish(draft, user, attrs)
       assert "can't be blank" in errors_on(changeset).salary_min
     end
 
     test "a volunteer posting publishes without a salary and clears the range" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
 
       attrs =
-        onsite_attrs(%{
+        job_attrs(%{
           "employment_type" => "volunteer",
           "salary_min" => "",
           "salary_max" => ""
@@ -90,19 +60,19 @@ defmodule Vutuv.JobsTest do
     end
 
     test "publishing without a location for an on-site posting is rejected" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      attrs = onsite_attrs(%{"zip_code" => "", "city" => "", "country" => ""})
+      attrs = job_attrs(%{"zip_code" => "", "city" => "", "country" => ""})
       assert {:error, changeset} = Jobs.publish(draft, user, attrs)
       assert errors_on(changeset).city
     end
 
     test "a remote posting requires applicant countries and clears the address" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
 
       no_countries =
-        onsite_attrs(%{"workplace_type" => "remote", "remote_countries" => []})
+        job_attrs(%{"workplace_type" => "remote", "remote_countries" => []})
 
       assert {:error, changeset} = Jobs.publish(draft, user, no_countries)
       assert errors_on(changeset).remote_countries
@@ -111,7 +81,7 @@ defmodule Vutuv.JobsTest do
         Jobs.publish(
           draft,
           user,
-          onsite_attrs(%{
+          job_attrs(%{
             "workplace_type" => "remote",
             "remote_countries" => ["DE", "AT"]
           })
@@ -123,9 +93,9 @@ defmodule Vutuv.JobsTest do
     end
 
     test "an unresolvable zip still publishes, just without coordinates" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      {:ok, posting} = Jobs.publish(draft, user, onsite_attrs(%{"zip_code" => "00000"}))
+      {:ok, posting} = Jobs.publish(draft, user, job_attrs(%{"zip_code" => "00000"}))
       assert posting.status == :published
       assert posting.lat == nil
     end
@@ -135,25 +105,46 @@ defmodule Vutuv.JobsTest do
     test "an unconfirmed account may not publish" do
       user = insert(:user, email_confirmed?: false)
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      assert {:error, :email_unconfirmed} = Jobs.publish(draft, user, onsite_attrs())
+      assert {:error, :email_unconfirmed} = Jobs.publish(draft, user, job_attrs())
     end
 
     test "a brand-new account may not publish" do
       user = insert(:activated_user)
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      assert {:error, :account_too_new} = Jobs.publish(draft, user, onsite_attrs())
+      assert {:error, :account_too_new} = Jobs.publish(draft, user, job_attrs())
     end
 
     test "the concurrent-publish cap blocks a fourth posting" do
-      user = poster()
+      user = poster_fixture()
 
       for _ <- 1..Jobs.max_published_per_member() do
         {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-        {:ok, _} = Jobs.publish(draft, user, onsite_attrs())
+        {:ok, _} = Jobs.publish(draft, user, job_attrs())
       end
 
       {:ok, over} = Jobs.create_draft(user, %{"title" => "One too many"})
-      assert {:error, :member_quota} = Jobs.publish(over, user, onsite_attrs())
+      assert {:error, :member_quota} = Jobs.publish(over, user, job_attrs())
+    end
+
+    test "postings past their expiry (not yet swept) do not occupy a cap slot" do
+      user = poster_fixture()
+
+      for _ <- 1..Jobs.max_published_per_member() do
+        {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
+        {:ok, _} = Jobs.publish(draft, user, job_attrs())
+      end
+
+      # Backdate every published posting past expiry without running the sweeper,
+      # so status is still :published but effective_status is :expired.
+      yesterday = Date.add(Vutuv.BerlinTime.today(), -1)
+
+      Repo.update_all(
+        from(p in JobPosting, where: p.user_id == ^user.id and p.status == :published),
+        set: [expires_on: yesterday]
+      )
+
+      {:ok, fresh} = Jobs.create_draft(user, %{"title" => "New role"})
+      assert {:ok, _} = Jobs.publish(fresh, user, job_attrs())
     end
   end
 
@@ -175,10 +166,10 @@ defmodule Vutuv.JobsTest do
 
   describe "engagement" do
     test "like is idempotent and counted; unlike removes it" do
-      user = poster()
+      user = poster_fixture()
       liker = insert(:activated_user)
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      {:ok, posting} = Jobs.publish(draft, user, onsite_attrs())
+      {:ok, posting} = Jobs.publish(draft, user, job_attrs())
 
       {:ok, _} = Jobs.like_job_posting(liker, posting)
       {:ok, :noop} = Jobs.like_job_posting(liker, posting)
@@ -192,7 +183,7 @@ defmodule Vutuv.JobsTest do
 
   describe "tags" do
     test "required and nice-to-have tags attach with priority; honor tags are excluded" do
-      user = poster()
+      user = poster_fixture()
       honor = insert(:tag, name: "CEO", honor?: true)
 
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
@@ -201,7 +192,7 @@ defmodule Vutuv.JobsTest do
         Jobs.publish(
           draft,
           user,
-          onsite_attrs(%{
+          job_attrs(%{
             "required_tags" => "Elixir, Phoenix",
             "nice_to_have_tags" => "Kubernetes, CEO"
           })
@@ -222,9 +213,9 @@ defmodule Vutuv.JobsTest do
 
   describe "repost/2" do
     test "clones an expired posting as a fresh draft with a new slug" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      {:ok, posting} = Jobs.publish(draft, user, onsite_attrs(%{"required_tags" => "Elixir"}))
+      {:ok, posting} = Jobs.publish(draft, user, job_attrs(%{"required_tags" => "Elixir"}))
 
       assert {:ok, clone} = Jobs.repost(posting, user)
       assert clone.status == :draft
@@ -237,9 +228,9 @@ defmodule Vutuv.JobsTest do
 
   describe "visibility" do
     setup do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      {:ok, posting} = Jobs.publish(draft, user, onsite_attrs())
+      {:ok, posting} = Jobs.publish(draft, user, job_attrs())
       %{user: user, posting: posting, draft: draft}
     end
 
@@ -247,6 +238,17 @@ defmodule Vutuv.JobsTest do
       assert Jobs.visible_to?(draft, user)
       refute Jobs.visible_to?(draft, insert(:activated_user))
       refute Jobs.visible_to?(draft, nil)
+    end
+
+    test "a members-only draft is still owner-only, not shown to signed-in members",
+         %{user: user, draft: draft} do
+      {:ok, members_draft} =
+        draft
+        |> Ecto.Changeset.change(visibility: :members)
+        |> Repo.update()
+
+      assert Jobs.visible_to?(members_draft, user)
+      refute Jobs.visible_to?(members_draft, insert(:activated_user))
     end
 
     test "a published everyone posting is visible to anyone", %{posting: posting} do
@@ -270,9 +272,9 @@ defmodule Vutuv.JobsTest do
 
   describe "expire_overdue/1" do
     test "flips a posting whose expiry has passed to expired" do
-      user = poster()
+      user = poster_fixture()
       {:ok, draft} = Jobs.create_draft(user, %{"title" => "Draft"})
-      {:ok, posting} = Jobs.publish(draft, user, onsite_attrs())
+      {:ok, posting} = Jobs.publish(draft, user, job_attrs())
 
       yesterday = Date.add(Vutuv.BerlinTime.today(), -1)
 

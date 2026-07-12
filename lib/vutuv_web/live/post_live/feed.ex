@@ -114,10 +114,13 @@ defmodule VutuvWeb.PostLive.Feed do
   # fills the slot.
   defp assign_who_to_follow(socket) do
     user = socket.assigns.current_user
+    # Never suggest a member the viewer blocked (or who blocked them): the follow
+    # would be refused as :blocked and the suggestion would just reappear.
+    blocked = Social.blocked_user_ids(user.id)
 
     candidates =
       Social.most_followed_users(@suggestion_pool)
-      |> Enum.reject(&(&1.id == user.id))
+      |> Enum.reject(&(&1.id == user.id or MapSet.member?(blocked, &1.id)))
 
     following = UserHelpers.following_map(user, candidates)
 

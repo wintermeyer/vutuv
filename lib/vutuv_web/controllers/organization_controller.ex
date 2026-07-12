@@ -36,10 +36,26 @@ defmodule VutuvWeb.OrganizationController do
         |> live_render(VutuvWeb.OrganizationLive.Index, session: session)
 
       format ->
-        page = Organizations.directory_page()
+        # Honor ?page= and ?q= like the HTML branch, so agent/crawler consumers
+        # can page past the first 24 and filter (llms.txt promises ?page=N).
+        page =
+          Organizations.directory_page(
+            page: parse_page(conn.params["page"]),
+            search: conn.params["q"]
+          )
+
         AgentDocs.send_doc(conn, format, OrganizationDoc.build_index(page.entries, page.total))
     end
   end
+
+  defp parse_page(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {n, _} when n >= 1 -> n
+      _ -> 1
+    end
+  end
+
+  defp parse_page(_value), do: 1
 
   def show(conn, %{"slug" => slug}) do
     case Organizations.fetch_visible_organization(slug, conn.assigns[:current_user]) do

@@ -7455,8 +7455,8 @@ msgstr[1] ""
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:34
 #, elixir-autogen
-msgid "Sent on %{when} to %{count} member."
-msgid_plural "Sent on %{when} to %{count} members."
+msgid "Sent on %{when} to %{formatted} member."
+msgid_plural "Sent on %{when} to %{formatted} members."
 msgstr[0] ""
 msgstr[1] ""
 

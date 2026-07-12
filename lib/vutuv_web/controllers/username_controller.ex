@@ -26,7 +26,9 @@ defmodule VutuvWeb.UsernameController do
         |> redirect(to: ~p"/#{user}")
 
       {:error, changeset} ->
-        render_new(conn, user, changeset)
+        conn
+        |> put_status(:unprocessable_entity)
+        |> render_new(user, changeset)
     end
   end
 

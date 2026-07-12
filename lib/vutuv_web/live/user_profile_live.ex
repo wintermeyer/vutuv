@@ -943,16 +943,20 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   # Keep only members the rail may suggest: not the profile owner, not the viewer,
-  # and not anyone the viewer already follows (one batched lookup via `following_map`).
+  # not anyone the viewer already follows (one batched lookup via `following_map`),
+  # and not a member the viewer blocked / who blocked them (the follow would be
+  # refused as :blocked and the suggestion would just reappear).
   defp suggestable(candidates, user, viewer) do
     following = following_map(viewer, candidates)
     # `viewer` is nil for a logged-out visitor; a nil id never equals a real UUID,
     # so the comparison stays a plain boolean (a bare `viewer && …` would yield nil
     # and blow up the strict `or`).
     viewer_id = viewer && viewer.id
+    blocked = if viewer, do: Social.blocked_user_ids(viewer.id), else: MapSet.new()
 
     Enum.reject(candidates, fn u ->
-      u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id)
+      u.id == user.id or u.id == viewer_id or Map.has_key?(following, u.id) or
+        MapSet.member?(blocked, u.id)
     end)
   end
 

@@ -32,11 +32,11 @@
 
     <p :if={@newsletter.status == "sent"} class="mt-2 text-sm text-slate-600 dark:text-slate-400">
       {ngettext(
-        "Sent on %{when} to %{count} member.",
-        "Sent on %{when} to %{count} members.",
+        "Sent on %{when} to %{formatted} member.",
+        "Sent on %{when} to %{formatted} members.",
         @newsletter.recipient_count,
         when: fmt(@newsletter.sent_at),
-        count: @newsletter.recipient_count
+        formatted: delimited_count(@newsletter.recipient_count)
       )}
     </p>
   </section>

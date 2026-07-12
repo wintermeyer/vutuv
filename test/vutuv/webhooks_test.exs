@@ -211,6 +211,21 @@ defmodule Vutuv.WebhooksTest do
       assert Webhooks.deliver_due() == 0
     end
 
+    test "a suspended app's already-queued delivery is not sent (kill switch cuts in-flight)", %{
+      member: member,
+      app: app
+    } do
+      subscribe!(app, ["follower.created"])
+      grant!(member, app, ["social:read"])
+      Webhooks.emit(member.id, "follower.created", %{"follower" => "anna"})
+
+      # Queued while active; an admin then flips the "bad player" kill switch.
+      ApiAuth.suspend_app!(app)
+
+      # The suspended app's due delivery is filtered out — nothing is POSTed.
+      assert Webhooks.deliver_due() == 0
+    end
+
     test "failures back off and eventually disable the subscription", %{member: member, app: app} do
       {subscription, _secret} = subscribe!(app, ["follower.created"])
       grant!(member, app, ["social:read"])

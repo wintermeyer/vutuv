@@ -255,6 +255,13 @@ defmodule Vutuv.Fediverse do
 
   @doc "Sends every due delivery (called by the Deliverer; returns how many)."
   def deliver_due do
+    if enabled?(), do: do_deliver_due(), else: 0
+  end
+
+  # Never drain the queue while the installation-wide switch is off (the
+  # Deliverer child can still be running): an air-gapped / disabled install must
+  # make no outbound POSTs, even for deliveries queued before it was turned off.
+  defp do_deliver_due do
     now = DateTime.utc_now(:second)
 
     due =

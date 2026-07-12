@@ -7794,10 +7794,10 @@ msgstr[1] ""
 
 #: lib/vutuv_web/templates/admin/newsletter/show.html.heex:34
 #, elixir-autogen
-msgid "Sent on %{when} to %{count} member."
-msgid_plural "Sent on %{when} to %{count} members."
-msgstr[0] "Gesendet am %{when} an %{count} Mitglied."
-msgstr[1] "Gesendet am %{when} an %{count} Mitglieder."
+msgid "Sent on %{when} to %{formatted} member."
+msgid_plural "Sent on %{when} to %{formatted} members."
+msgstr[0] "Gesendet am %{when} an %{formatted} Mitglied."
+msgstr[1] "Gesendet am %{when} an %{formatted} Mitglieder."
 
 #: lib/vutuv_web/agent_docs/feed_doc.ex:41
 #, elixir-autogen, elixir-format

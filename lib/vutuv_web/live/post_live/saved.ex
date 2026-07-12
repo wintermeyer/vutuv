@@ -200,36 +200,36 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   def handle_event("remove_organization", %{"id" => id}, socket) do
-    case Organizations.get_organization(id) do
-      %Organizations.Organization{} = organization ->
-        case socket.assigns.live_action do
-          :likes ->
-            Organizations.unlike_organization(socket.assigns.current_user, organization)
+    # Cast first (like unsave-person above): a tampered non-UUID id would raise
+    # Ecto.Query.CastError in the binary_id lookup and crash the LiveView.
+    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(id),
+         %Organizations.Organization{} = organization <- Organizations.get_organization(uuid) do
+      case socket.assigns.live_action do
+        :likes ->
+          Organizations.unlike_organization(socket.assigns.current_user, organization)
 
-          :bookmarks ->
-            Organizations.unbookmark_organization(socket.assigns.current_user, organization)
-        end
+        :bookmarks ->
+          Organizations.unbookmark_organization(socket.assigns.current_user, organization)
+      end
 
-        {:noreply,
-         stream_delete_by_dom_id(socket, :organizations, "organizations-#{organization.id}")}
-
-      nil ->
-        {:noreply, socket}
+      {:noreply,
+       stream_delete_by_dom_id(socket, :organizations, "organizations-#{organization.id}")}
+    else
+      _ -> {:noreply, socket}
     end
   end
 
   def handle_event("remove_job", %{"id" => id}, socket) do
-    case Jobs.get_job_posting(id) do
-      %Jobs.JobPosting{} = posting ->
-        case socket.assigns.live_action do
-          :likes -> Jobs.unlike_job_posting(socket.assigns.current_user, posting)
-          :bookmarks -> Jobs.unbookmark_job_posting(socket.assigns.current_user, posting)
-        end
+    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(id),
+         %Jobs.JobPosting{} = posting <- Jobs.get_job_posting(uuid) do
+      case socket.assigns.live_action do
+        :likes -> Jobs.unlike_job_posting(socket.assigns.current_user, posting)
+        :bookmarks -> Jobs.unbookmark_job_posting(socket.assigns.current_user, posting)
+      end
 
-        {:noreply, stream_delete_by_dom_id(socket, :jobs, "jobs-#{posting.id}")}
-
-      nil ->
-        {:noreply, socket}
+      {:noreply, stream_delete_by_dom_id(socket, :jobs, "jobs-#{posting.id}")}
+    else
+      _ -> {:noreply, socket}
     end
   end
 
@@ -303,23 +303,30 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   defp apply_post_change(socket, post_id, true) do
-    case Posts.get_post(post_id) do
-      nil ->
-        socket
+    # Only prepend on the default, unfiltered recent view (like the person / org
+    # / job handlers); under a search or non-recency sort a fresh save's position
+    # is ambiguous, so leave it for the next reload.
+    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+      case Posts.get_post(post_id) do
+        nil ->
+          socket
 
-      post ->
-        Posts.subscribe_post(post.id)
+        post ->
+          Posts.subscribe_post(post.id)
 
-        # Hand the inserted card its engagement, like the initial page does, so
-        # the action-bar component renders straight from it instead of querying
-        # during this broadcast-triggered render.
-        socket
-        |> update(
-          :post_engagement,
-          &Map.put(&1, post.id, Posts.post_engagement(post.id, socket.assigns.current_user.id))
-        )
-        |> update(:saved_posts, &[post | &1])
-        |> stream_insert(:posts, post, at: 0)
+          # Hand the inserted card its engagement, like the initial page does, so
+          # the action-bar component renders straight from it instead of querying
+          # during this broadcast-triggered render.
+          socket
+          |> update(
+            :post_engagement,
+            &Map.put(&1, post.id, Posts.post_engagement(post.id, socket.assigns.current_user.id))
+          )
+          |> update(:saved_posts, &[post | &1])
+          |> stream_insert(:posts, post, at: 0)
+      end
+    else
+      socket
     end
   end
 

@@ -117,6 +117,14 @@ defmodule Vutuv.Activity do
     severance_max = select(severances, [s], %{ts: max(s.inserted_at)})
     severance_restore_max = select(severances, [s], %{ts: max(s.restored_at)})
 
+    # Mirror count_organization_roles/2 (issue #930): without this arm the read
+    # marker ignores an org-role grant, so its unread badge never clears.
+    organization_role_max =
+      from(r in OrganizationRole,
+        where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
+        select: %{ts: max(r.inserted_at)}
+      )
+
     union =
       follower_max
       |> union_all(^endorsement_max)
@@ -126,6 +134,7 @@ defmodule Vutuv.Activity do
       |> union_all(^moderation_max)
       |> union_all(^severance_max)
       |> union_all(^severance_restore_max)
+      |> union_all(^organization_role_max)
 
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()

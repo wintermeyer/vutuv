@@ -11,7 +11,7 @@
         <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
           {gettext(
             "Compose a newsletter, save it as a draft, test it, then send it to all members. Right now a broadcast would reach %{count} members.",
-            count: @eligible_count
+            count: delimited_count(@eligible_count)
           )}
         </p>
       </div>

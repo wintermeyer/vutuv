@@ -31,10 +31,18 @@ defmodule Vutuv.Social do
   `Repo.get` otherwise needed to build the live new-follower notification.
   """
   def follow(follower, followee_id) do
-    if blocked_between?(follower_id(follower), followee_id) do
-      {:error, :blocked}
-    else
-      do_follow(follower, followee_id)
+    # Cast the (possibly client-supplied) target id up front: a non-UUID string
+    # would otherwise raise Ecto.Query.CastError deep in blocked_between?.
+    case Vutuv.UUIDv7.cast_or_nil(followee_id) do
+      nil ->
+        {:error, :invalid}
+
+      followee_id ->
+        if blocked_between?(follower_id(follower), followee_id) do
+          {:error, :blocked}
+        else
+          do_follow(follower, followee_id)
+        end
     end
   end
 
@@ -76,12 +84,19 @@ defmodule Vutuv.Social do
   only remove their own follows, never an arbitrary one by id.
   """
   def unfollow!(follower_id, follow_id) do
-    follow = Repo.get_by!(Follow, id: follow_id, follower_id: follower_id)
-    deleted = Repo.delete!(follow)
-    # The followee loses a follower and the pair may stop being mutual, so both
-    # profiles recompute their counts live.
-    broadcast_social_graph_changed([follower_id, follow.followee_id])
-    deleted
+    # Idempotent: a double-click / double-DELETE (the edge already gone) or a
+    # tampered non-UUID `follow_id` is a no-op, not a crash. The lookup stays
+    # scoped to `follower_id`, so a caller can still only drop their own edge.
+    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(follow_id),
+         %Follow{} = follow <- Repo.get_by(Follow, id: uuid, follower_id: follower_id) do
+      deleted = Repo.delete!(follow)
+      # The followee loses a follower and the pair may stop being mutual, so both
+      # profiles recompute their counts live.
+      broadcast_social_graph_changed([follower_id, follow.followee_id])
+      deleted
+    else
+      _ -> :ok
+    end
   end
 
   @doc """

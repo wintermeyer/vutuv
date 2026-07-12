@@ -387,7 +387,9 @@ defmodule Vutuv.Accounts.User do
     # whitelisted currency + period, and the shared three-way visibility.
     # validate_number only fires on a present, non-nil change, so clearing the
     # amount (empty field → nil) is valid and simply stores "no expectation".
-    |> validate_number(:desired_salary_min, greater_than: 0)
+    # Cap at the int4 column max so an oversized amount fails as a field error
+    # rather than raising Postgres 22003 (the integer analog of the varchar 22001 class).
+    |> validate_number(:desired_salary_min, greater_than: 0, less_than_or_equal_to: 2_147_483_647)
     |> validate_inclusion(:desired_salary_currency, Vutuv.Salary.currencies())
     |> validate_inclusion(:desired_salary_period, Vutuv.Salary.periods())
     |> validate_inclusion(:desired_salary_visibility, @visibilities)

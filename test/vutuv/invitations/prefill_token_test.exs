@@ -50,6 +50,13 @@ defmodule Vutuv.Invitations.PrefillTokenTest do
     test "valid base64 that is not valid DEFLATE yields an empty prefill" do
       assert "plain text" |> Base.url_encode64(padding: false) |> PrefillToken.decode() == %{}
     end
+
+    test "an oversized token is rejected before inflating (decompression-bomb guard)" do
+      # A real token is well under 1 KB; a larger `i=` param is refused up front
+      # rather than inflated (raw DEFLATE reaches ~1000:1).
+      bomb = String.duplicate("A", 2000)
+      assert PrefillToken.decode(bomb) == %{}
+    end
   end
 
   describe "query/1 picks the shorter encoding" do

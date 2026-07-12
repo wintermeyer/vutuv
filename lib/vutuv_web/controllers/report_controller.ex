@@ -24,23 +24,33 @@ defmodule VutuvWeb.ReportController do
       content ->
         reporter = conn.assigns[:current_user]
 
-        # A reporter tied to the owner must understand BEFORE sending that
-        # the report separates the two of them (and thereby de-facto reveals
-        # who reported). Strangers keep the plain anonymity promise.
-        severs = Moderation.would_sever_relationship?(reporter, content)
-
-        render(conn, "new.html",
-          page_title: gettext("Report content"),
-          content_type: type,
-          content_id: id,
-          preview: preview(content),
-          severed_owner: if(severs, do: Moderation.content_owner(content)),
-          return_to: ControllerHelpers.safe_return_to(params["return_to"])
-        )
+        if Moderation.can_report?(reporter, content) do
+          render_report_form(conn, reporter, content, type, id, params)
+        else
+          # Mirror create's authorization: never preview content the reporter
+          # has no right to see (a private DM, a restricted post).
+          ControllerHelpers.render_error(conn, 404)
+        end
     end
   end
 
   def new(conn, _params), do: ControllerHelpers.render_error(conn, 404)
+
+  defp render_report_form(conn, reporter, content, type, id, params) do
+    # A reporter tied to the owner must understand BEFORE sending that
+    # the report separates the two of them (and thereby de-facto reveals
+    # who reported). Strangers keep the plain anonymity promise.
+    severs = Moderation.would_sever_relationship?(reporter, content)
+
+    render(conn, "new.html",
+      page_title: gettext("Report content"),
+      content_type: type,
+      content_id: id,
+      preview: preview(content),
+      severed_owner: if(severs, do: Moderation.content_owner(content)),
+      return_to: ControllerHelpers.safe_return_to(params["return_to"])
+    )
+  end
 
   def create(conn, %{"report" => %{"type" => type, "id" => id} = report_params}) do
     reporter = conn.assigns[:current_user]
