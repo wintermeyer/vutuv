@@ -82,31 +82,29 @@ kind of per-reader, per-breakpoint preference (`--post-hyphens-*`; the CSS
 fallbacks reproduce the historical default of off on desktop, on for the narrow
 phone column).
 
-The "Read more" control comes in **two shapes**, chosen by whether the whole body
-is in the DOM:
+The **whole body is always shipped** to the DOM (no server-side cut) — a preview
+renders the same Markdown as `mode={:full}`, just without the post's inline
+images (those show in the gallery), and the `.post-clamp` CSS does the visual
+cut. So "Read more" is a **single in-place toggle `<button data-post-expand>`**,
+identical on the feed and the profile and for a post of any length: clicking it
+drops the clamp and reveals the rest of the text with a short height animation
+(`togglePreviewExpand` in `app.js` measures the clamped and full heights around
+the class flip and transitions between them, honoring `prefers-reduced-motion`),
+and flips its own label to **"Show less"** (`data-label-more` / `data-label-less`)
+so the reader can fold it back — no navigation, no reload. A long post expands in
+place just like a short one; nothing links out to the permalink. (The feed's
+discover-rail teaser is separate — it still cuts its body via
+`VutuvWeb.Markdown.render_preview/2` because a rail row links straight to the
+post.)
 
-- **Not source-truncated** (`@truncated? == false`): the whole body is present and
-  merely CSS-clamped, so "Read more" is an in-place **toggle `<button
-  data-post-expand>`**. Clicking it drops the clamp and reveals the rest of the
-  text with a short height animation (`togglePreviewExpand` in `app.js` measures the
-  clamped and full heights around the class flip and transitions between them,
-  honoring `prefers-reduced-motion`), and flips its own label to **"Show less"**
-  (`data-label-more` / `data-label-less`) so the reader can fold it back — no
-  navigation, no reload. This is the common case.
-- **Source-truncated** (`@truncated? == true`): very long bodies are cut server-side
-  at a block boundary (`VutuvWeb.Markdown.render_preview/2`, ~1000 chars, to keep the
-  feed DOM light), so the rest of the text was never loaded — "Read more" stays a
-  plain **link** to the permalink (you cannot expand text that isn't there).
-
-Visibility and position of either control are driven **entirely by the wrapper's
+Visibility and position of the control are driven **entirely by the wrapper's
 `is-clamped` / `is-expanded` state classes + the `.post-preview__more` component
 CSS** — the control carries **no** `hidden` / `inline-block` display utilities, so
 the "two competing `display` utilities, the later-emitted one silently wins"
 cascade trap that caused the false "Read more" on every post (issue #880) cannot
-recur. The server sets `is-clamped` only when it **knows** the body is cut
-(`@truncated?`), so a source-truncated link shows with no JS. A longer body that
-merely overflows the CSS clamp can't be detected on the server (wrapping is
-width/font-dependent), so the `PostPreviewClamp` JS hook (a `[data-post-preview]`
+recur. Because the body is only ever CSS-clamped (never cut), the server can't
+know whether it overflows — wrapping is width/font-dependent — so `is-clamped` is
+set purely on the client: the `PostPreviewClamp` JS hook (a `[data-post-preview]`
 sweep on classic pages, re-run on resize and `document.fonts.ready`) sets
 `is-clamped` when the clamped node hides content — the standard test, body
 `scrollHeight` exceeds `clientHeight` (+1 for rounding) — and it skips an

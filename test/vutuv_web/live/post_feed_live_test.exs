@@ -959,29 +959,39 @@ defmodule VutuvWeb.PostFeedLiveTest do
       refute render(live) =~ "words total"
     end
 
-    test "a source-truncated post keeps a Read more LINK to the full post (no JS)", %{
+    test "a long post also expands in place (whole body shipped, no link-out)", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
-      # 250 words / ~1250 chars: over the source limit, so the preview is cut
-      # server-side — the rest of the body is NOT in the DOM, so "Read more"
-      # stays a navigation link to the permalink (you cannot expand text that
-      # was never loaded), visible from the server with no JS.
-      body = String.duplicate("word ", 250) |> String.trim()
+      # ~1500 chars, well past the old ~1000-char source cut. The whole body is
+      # now shipped to the DOM (the `.post-clamp` CSS does the visual cut and the
+      # in-place expand reveals the rest), so a long post behaves exactly like a
+      # short one: "Read more" is the toggle button, never a link that navigates
+      # away. A distinctive tail proves the full body — past the old cut — is
+      # present.
+      tail = "distinctivetailmarker"
+      body = (String.duplicate("lorem ", 250) |> String.trim()) <> " " <> tail
       {:ok, post} = Posts.create_post(user, %{body: body})
 
       {:ok, live, _html} = live(conn, ~p"/feed")
 
+      # The whole body is in the DOM — the source is no longer truncated.
+      assert render(live) =~ tail
+      assert has_element?(live, "#feed-posts [data-clamp-body].post-clamp")
+
+      # In-place expand button, and NO link-out affordance anywhere.
       assert has_element?(
                live,
-               ~s(#feed-posts a[data-read-more][href="#{Posts.path(post)}"]),
+               ~s(#feed-posts button[data-read-more][data-post-expand][aria-expanded="false"]),
                "Read more"
              )
 
-      # Not the in-place toggle button, and the server marks the wrapper cut
-      # (`is-clamped`) so the link + fade show with no JS.
-      refute has_element?(live, "#feed-posts button[data-post-expand]")
-      assert has_element?(live, "#feed-posts .post-preview.is-clamped")
+      refute has_element?(live, ~s(#feed-posts a[data-read-more]))
+      refute has_element?(live, ~s(#feed-posts a[href="#{Posts.path(post)}"][data-read-more]))
+
+      # A css-only clamp is unknown to the server, so the wrapper is NOT
+      # `is-clamped` until the JS confirms the overflow (same as a short post).
+      refute has_element?(live, "#feed-posts .post-preview.is-clamped")
       refute render(live) =~ "words total"
     end
 

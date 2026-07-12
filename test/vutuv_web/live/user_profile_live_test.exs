@@ -425,6 +425,34 @@ defmodule VutuvWeb.UserProfileLiveTest do
              |> has_element?()
     end
 
+    test "a long post expands in place on the profile (whole body, no link-out)", %{conn: conn} do
+      {conn, _viewer} = create_and_login_user(conn)
+      owner = insert_activated_user()
+      # ~1500 chars, past the old ~1000-char server cut. The profile shares the
+      # feed's post card, so a long post here expands in place too — the whole
+      # body is shipped (CSS clamps it) and "Read more" is the in-place toggle
+      # button, never a link that jumps to the post page.
+      tail = "distinctivetailmarker"
+      body = (String.duplicate("lorem ", 250) |> String.trim()) <> " " <> tail
+      {:ok, post} = Posts.create_post(owner, %{body: body})
+
+      {:ok, view, html} = live(conn, ~p"/#{owner}")
+
+      # The whole body is in the DOM — the source is no longer truncated.
+      assert html =~ tail
+      assert has_element?(view, "#profile-posts [data-clamp-body].post-clamp")
+
+      # In-place expand button, and no link-out to the permalink.
+      assert has_element?(
+               view,
+               ~s(#profile-posts button[data-read-more][data-post-expand][aria-expanded="false"]),
+               "Read more"
+             )
+
+      refute has_element?(view, ~s(#profile-posts a[data-read-more]))
+      refute has_element?(view, ~s(#profile-posts a[href="#{Posts.path(post)}"][data-read-more]))
+    end
+
     test "a reply shows the real parent post as context, linking to it", %{conn: conn} do
       {conn, _viewer} = create_and_login_user(conn)
       owner = insert_activated_user()

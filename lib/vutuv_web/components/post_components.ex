@@ -3,11 +3,12 @@ defmodule VutuvWeb.PostComponents do
   The post card, shared by every place a post renders: the permalink page
   (`mode={:full}`), the feed and the profile section (`mode={:preview}`).
 
-  Preview mode cuts the Markdown server-side at a block boundary
-  (`VutuvWeb.Markdown.render_preview/2`), clamps to a few lines via CSS for
-  visual consistency, and shows every attachment as a thumbnail row. Full
-  mode shows every attachment as a gallery below the body. Post bodies never
-  embed images inline — uploaded pictures are always attachments, shown here.
+  Preview mode ships the whole body and clamps it to a few lines via CSS
+  (`.post-clamp`); a "Read more" button expands it in place, so a long post
+  reads the same on the feed and the profile. Attachments show as a thumbnail
+  row. Full mode shows every attachment as a gallery below the body. Post
+  bodies never embed images inline — uploaded pictures are always attachments,
+  shown here.
 
   Not imported globally — `import VutuvWeb.PostComponents` where needed.
   """
@@ -104,23 +105,16 @@ defmodule VutuvWeb.PostComponents do
 
   def post_card(assigns) do
     # The reader's post-display preferences (per-breakpoint line clamp +
-    # hyphenation). When the reader turned truncation off on BOTH breakpoints
-    # (lines 0 / nil), render the whole body uncut like :full — no character
-    # cap, no clamp, no "Read more" — so "no truncation at all" holds end to end.
+    # hyphenation), fed onto the body as CSS custom properties below.
     prefs = User.post_prefs(assigns.viewer)
-    no_clamp? = prefs.lines_desktop == 0 and prefs.lines_mobile == 0
 
-    {body_html, truncated?} =
-      case assigns.mode do
-        :full ->
-          {VutuvWeb.Markdown.render_post(assigns.post.body, assigns.post.images), false}
-
-        :preview when no_clamp? ->
-          {VutuvWeb.Markdown.render_post(assigns.post.body, []), false}
-
-        :preview ->
-          VutuvWeb.Markdown.render_preview(assigns.post.body, [])
-      end
+    # The whole body is always shipped to the DOM. In :preview the `.post-clamp`
+    # CSS line clamp does the visual cut and the in-place expand button reveals
+    # the rest, so "Read more" expands in place instead of navigating to the
+    # permalink — feed and profile alike. A preview never carries the post's
+    # inline images (those show in the gallery below), so it renders with `[]`.
+    images = if assigns.mode == :full, do: assigns.post.images, else: []
+    body_html = VutuvWeb.Markdown.render_post(assigns.post.body, images)
 
     # A logged-in viewer (vs anonymous / a "View as public" preview, both nil),
     # bound once and reused for the acting-viewer id and the reporter test.
@@ -136,7 +130,6 @@ defmodule VutuvWeb.PostComponents do
     assigns =
       assigns
       |> assign(:body_html, body_html)
-      |> assign(:truncated?, truncated?)
       # The inline CSS custom properties (`--post-clamp-*` / `--post-hyphens-*`)
       # that carry the reader's preference onto the post body; nil for a default
       # / logged-out reader, so their DOM stays clean and the CSS fallbacks apply.
@@ -180,7 +173,6 @@ defmodule VutuvWeb.PostComponents do
       body_html={@body_html}
       body_id={@body_id}
       body_style={@body_style}
-      truncated?={@truncated?}
       restricted?={@restricted?}
       permalink={@permalink}
       gallery={@gallery}
@@ -622,7 +614,6 @@ defmodule VutuvWeb.PostComponents do
   attr(:body_html, :any, required: true)
   attr(:body_id, :string, required: true)
   attr(:body_style, :string, default: nil)
-  attr(:truncated?, :boolean, required: true)
   attr(:restricted?, :boolean, required: true)
   attr(:permalink, :string, required: true)
   attr(:gallery, :list, required: true)
@@ -801,8 +792,6 @@ defmodule VutuvWeb.PostComponents do
                     body_id={@body_id}
                     body_html={@body_html}
                     body_style={@body_style}
-                    truncated?={@truncated?}
-                    permalink={@permalink}
                   />
                   <%!-- Tags ride directly under the text inside the 2/3 column,
                   filling the space beside the image, rather than dropping to a
@@ -835,8 +824,6 @@ defmodule VutuvWeb.PostComponents do
                     body_id={@body_id}
                     body_html={@body_html}
                     body_style={@body_style}
-                    truncated?={@truncated?}
-                    permalink={@permalink}
                   />
                   <.post_tags tags={@post.tags} />
                 </div>
@@ -851,8 +838,6 @@ defmodule VutuvWeb.PostComponents do
                 body_id={@body_id}
                 body_html={@body_html}
                 body_style={@body_style}
-                truncated?={@truncated?}
-                permalink={@permalink}
                 class="mt-2"
               />
 
@@ -995,39 +980,29 @@ defmodule VutuvWeb.PostComponents do
   # in via @body_style), faded at the bottom, with a "Read more" affordance
   # riding the last line.
   #
-  # There are two "Read more" affordances, chosen by whether the FULL body is in
-  # the DOM:
-  #
-  #   * NOT source-truncated (@truncated? == false): the whole body is present,
-  #     merely CSS-clamped, so "Read more" is an in-place **toggle button**
-  #     (`data-post-expand`). Clicking it drops the clamp and reveals the rest of
-  #     the text with a short height animation, and flips its own label to
-  #     "Show less" so the reader can fold it back — no navigation, no reload
-  #     (app.js `togglePreviewExpand`). This is the common case and the one the
-  #     screenshot in the request complains about.
-  #   * source-truncated (@truncated? == true): the body was block-cut at
-  #     ~1000 chars server-side (feed DOM stays light), so the rest of the text
-  #     is NOT loaded — you cannot expand what isn't there. "Read more" stays a
-  #     **link** to the post permalink.
+  # The WHOLE body is always in the DOM (post_card renders it uncut for every
+  # preview) and is merely CSS-clamped, so "Read more" is a single in-place
+  # **toggle button** (`data-post-expand`): clicking it drops the clamp and
+  # reveals the rest of the text with a short height animation, then flips its
+  # own label to "Show less" so the reader can fold it back — no navigation, no
+  # reload (app.js `togglePreviewExpand`). Feed and profile behave identically;
+  # a long post expands in place just like a short one.
   #
   # Visibility is driven entirely by the wrapper's `is-clamped` / `is-expanded`
   # state (component CSS in components.css), NOT by `hidden`/`inline-block`
   # display utilities on the control — so the #880 two-competing-display-utilities
-  # trap (a link carrying both `hidden` and `inline-block`, the later-emitted
-  # `.inline-block` silently winning) cannot recur. The server sets `is-clamped`
-  # only when it KNOWS the body is cut (@truncated?); a css-only clamp is width-
-  # and font-dependent, so the PostPreviewClamp hook (live pages) /
-  # data-post-preview sweep (dead pages) sets `is-clamped` when the body overflows
-  # (standard test: body scrollHeight exceeds clientHeight). With JS off a css-only
-  # clamp keeps the native ellipsis and no control. Shared by the full-width
-  # preview and the 2/3 side-by-side layout, so the clamp behaves identically
-  # whichever column width it lands in; `class` carries the caller's top margin
-  # (mt-2 standalone, none inside the flex row).
+  # trap (a control carrying both `hidden` and `inline-block`, the later-emitted
+  # `.inline-block` silently winning) cannot recur. A css-only clamp is width-
+  # and font-dependent, so the server never marks the body cut: the
+  # PostPreviewClamp hook (live pages) / data-post-preview sweep (dead pages)
+  # sets `is-clamped` when the body overflows (standard test: body scrollHeight
+  # exceeds clientHeight). With JS off a css-only clamp keeps the native ellipsis
+  # and no control. Shared by the full-width preview and the 2/3 side-by-side
+  # layout, so the clamp behaves identically whichever column width it lands in;
+  # `class` carries the caller's top margin (mt-2 standalone, none in the flex row).
   attr(:body_id, :string, required: true)
   attr(:body_html, :any, required: true)
   attr(:body_style, :string, default: nil)
-  attr(:truncated?, :boolean, required: true)
-  attr(:permalink, :string, required: true)
   attr(:class, :string, default: nil)
 
   defp preview_body(assigns) do
@@ -1036,8 +1011,7 @@ defmodule VutuvWeb.PostComponents do
       id={@body_id}
       phx-hook="PostPreviewClamp"
       data-post-preview
-      data-server-truncated={to_string(@truncated?)}
-      class={["post-preview", @class, @truncated? && "is-clamped"]}
+      class={["post-preview", @class]}
     >
       <div class="relative">
         <div
@@ -1048,12 +1022,11 @@ defmodule VutuvWeb.PostComponents do
           {@body_html}
         </div>
         <%!-- Fades the clamp cut into the card so it reads as intentional; only
-        visible once `is-clamped` is set (server @truncated? + the hook), and
-        cleared again while `is-expanded`. --%>
+        visible once the hook sets `is-clamped`, and cleared again while
+        `is-expanded`. --%>
         <div class="post-preview__fade" aria-hidden="true"></div>
-        <%!-- Whole body present → expand in place; body block-cut → link out. --%>
+        <%!-- The whole body is present, so "Read more" expands it in place. --%>
         <button
-          :if={not @truncated?}
           type="button"
           data-read-more
           data-post-expand
@@ -1065,14 +1038,6 @@ defmodule VutuvWeb.PostComponents do
         >
           {gettext("Read more")}
         </button>
-        <.link
-          :if={@truncated?}
-          href={@permalink}
-          data-read-more
-          class="post-preview__more text-sm font-medium text-brand-600 hover:text-brand-700"
-        >
-          {gettext("Read more")}
-        </.link>
       </div>
     </div>
     """

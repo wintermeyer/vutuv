@@ -40,12 +40,11 @@ onReady(() =>
   document.querySelectorAll("time[data-localtime]").forEach(localizeTime)
 )
 
-// Feed/profile post previews clamp the body to a few lines. Reveal the "Read
-// more" affordance only when the body is really cut: either the source was
-// truncated server-side (data-server-truncated, shown with no JS) or a longer
-// body still overflows the CSS clamp — which the server can't know, since
-// wrapping is width- and font-dependent. A clamped element hides content exactly
-// when its full content height (scrollHeight) is taller than its painted box
+// Feed/profile post previews ship the whole body and clamp it to a few lines
+// via CSS. Reveal the "Read more" affordance only when the body is really cut —
+// i.e. the clamped body overflows, which the server can't know since wrapping is
+// width- and font-dependent. A clamped element hides content exactly when its
+// full content height (scrollHeight) is taller than its painted box
 // (clientHeight); the +1 absorbs sub-pixel rounding.
 //
 // Both the fade and the control are shown/hidden purely by this `is-clamped`
@@ -59,15 +58,12 @@ function revealPreviewClamp(el) {
   if (el.classList.contains("is-expanded")) return
   const body = el.querySelector("[data-clamp-body]")
   if (!body) return
-  const clipped =
-    el.dataset.serverTruncated === "true" ||
-    body.scrollHeight > body.clientHeight + 1
+  const clipped = body.scrollHeight > body.clientHeight + 1
   el.classList.toggle("is-clamped", clipped)
 }
 
-// Expand / collapse a non-truncated preview in place (the whole body is already
-// in the DOM — only source-truncated previews link out to the permalink). We
-// animate the body's height between its clamped and full heights: measure both
+// Expand / collapse a clamped preview in place (the whole body is always in the
+// DOM). We animate the body's height between its clamped and full heights: measure both
 // around the class flip (getBoundingClientRect forces a sync reflow), then
 // transition from start to end and clear the inline overrides once it settles.
 // prefers-reduced-motion skips the animation and just flips the state.
