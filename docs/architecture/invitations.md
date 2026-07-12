@@ -19,7 +19,7 @@ all the logic is in the **`Vutuv.Invitations`** context.
 | column | meaning |
 |---|---|
 | `user_id` | the inviter |
-| `email_hash` | SHA-256 of the normalized (trimmed + downcased) address — the only trace of who was invited |
+| `email_hash` | keyed **HMAC-SHA256** of the normalized (trimmed + downcased) address — the only trace of who was invited |
 | `locale` | `en` / `de`, the language the inviter chose |
 | `auto_follow` | whether the inviter follows the newcomer on registration |
 | `visited_at` | when the invited person first opened the link (nullable) |
@@ -41,8 +41,18 @@ that `email` plus at least one of `first_name` / `last_name` are present.
 - **A per-inviter daily cap** (`Vutuv.Invitations.daily_cap/0`, default 50,
   configurable — see below) protects the installation's sender reputation. The
   count is per member per Europe/Berlin calendar day.
-- **Privacy.** Only the hash is stored, so a database leak cannot reveal who was
-  invited.
+- **Privacy.** Only a **keyed** hash is stored:
+  `hash_email/1` is an HMAC-SHA256 of the normalized address under a pepper
+  derived from `secret_key_base` (`Vutuv.Invitations`), never a bare SHA-256. A
+  bare SHA-256 of a low-entropy email is trivially brute-forceable, so a DB or
+  backup leak would let an attacker confirm a guessed address was invited; the
+  keyed HMAC needs the server secret, so the leak alone can't (issue #942). Note
+  the hash only protects the **database** — the mail server still logs recipient
+  addresses in plaintext, so treat mail-log access as equally sensitive.
+  Switching schemes reset the dedup table once: the old SHA-256 rows were dropped
+  (migration `drop_legacy_sha256_invitation_hashes`) and can't be converted, so
+  known recent invitees were re-seeded with the new HMAC after deploy via
+  `Vutuv.Release.reseed_invitations/2`.
 
 ## The link and the sign-up prefill
 

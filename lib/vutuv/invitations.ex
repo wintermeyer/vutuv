@@ -9,8 +9,12 @@ defmodule Vutuv.Invitations do
 
   Privacy and abuse guards:
 
-    * We store **only a SHA-256 hash** of the normalized (trimmed + downcased)
-      address, never the plaintext — a DB leak can't reveal who was invited.
+    * We store **only a keyed HMAC-SHA256** of the normalized (trimmed +
+      downcased) address, never the plaintext. The key is a server secret
+      derived from `secret_key_base` and held outside the database, so a DB or
+      backup leak **alone** can't confirm whether a guessed address was invited
+      (a bare SHA-256 of a low-entropy email is trivially brute-forceable — see
+      issue #942). The hash stays deterministic, so the dedup below still works.
     * A `unique_index` on the hash enforces **one invitation per address,
       site-wide**; a repeat is silently a no-op and returns the *same* outcome as
       a fresh send, so the caller can never learn an address was already invited.
@@ -29,7 +33,6 @@ defmodule Vutuv.Invitations do
   alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Repo
-  alias Vutuv.Token
 
   # Default most-a-single-member-may-send in one Berlin calendar day. The live
   # value comes from config (:invitation_daily_cap), env-overridable per
@@ -222,8 +225,75 @@ defmodule Vutuv.Invitations do
 
   defp maybe_follow(_, _), do: :ok
 
-  @doc "The stored hash of an address: SHA-256 of its normalized form."
-  def hash_email(email), do: email |> normalize_email() |> Token.hash_token()
+  @doc """
+  The stored hash of an address: a keyed **HMAC-SHA256** of its normalized form,
+  lowercase-hex. The key is a dedicated pepper derived from `secret_key_base`
+  (see `invitation_pepper/0`), so a DB/backup leak alone can't recompute the
+  hash of a guessed address and confirm it was invited (issue #942), while the
+  hash stays deterministic so the `email_hash` unique-index dedup keeps working.
+  """
+  def hash_email(email) do
+    :hmac
+    |> :crypto.mac(:sha256, invitation_pepper(), normalize_email(email))
+    |> Base.encode16(case: :lower)
+  end
+
+  # Dedicated pepper derived from `secret_key_base` with domain separation, so it
+  # never equals the raw secret and lives outside the database. Mirrors the login
+  # PIN pepper in Vutuv.Accounts (issue #759 C.2).
+  defp invitation_pepper do
+    secret = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+    :crypto.hash(:sha256, "vutuv/invitation_email/pepper/v1" <> secret)
+  end
+
+  @doc """
+  Bulk-inserts **dedup-only** invitation rows for a list of already-recovered
+  plaintext addresses, so the "invite once, site-wide" guard survives the issue
+  #942 SHA-256 → HMAC cutover: the old SHA-256 rows can't be re-hashed (no
+  plaintext is stored) and were dropped, so without this a previously-invited
+  address could receive a second invite.
+
+  Each address is normalized (trimmed + downcased) and hashed with
+  `hash_email/1`; blanks and duplicates collapse, and an address already present
+  is a no-op (`ON CONFLICT DO NOTHING` on the `email_hash` unique index). The
+  rows carry no recovered inviter/locale/note metadata — `inviter` owns them and
+  the locale defaults to the installation's primary language. Returns
+  `%{inserted: n, total: n}` (`total` = distinct non-blank addresses).
+
+  Driven once after deploy by `Vutuv.Release.reseed_invitations/2` from a
+  never-committed plaintext file; not part of the normal invite flow.
+  """
+  def reseed_dedup(emails, %User{} = inviter) when is_list(emails) do
+    now = NaiveDateTime.utc_now(:second)
+
+    locale =
+      case Application.get_env(:vutuv, VutuvWeb.Endpoint)[:locales] do
+        [primary | _] -> primary
+        _ -> "en"
+      end
+
+    rows =
+      emails
+      |> Enum.map(&normalize_email/1)
+      |> Enum.reject(&(&1 == ""))
+      |> Enum.uniq()
+      |> Enum.map(fn normalized ->
+        %{
+          id: Vutuv.UUIDv7.generate(),
+          user_id: inviter.id,
+          email_hash: hash_email(normalized),
+          locale: locale,
+          auto_follow: false,
+          inserted_at: now,
+          updated_at: now
+        }
+      end)
+
+    {inserted, _} =
+      Repo.insert_all(Invitation, rows, on_conflict: :nothing, conflict_target: :email_hash)
+
+    %{inserted: inserted, total: length(rows)}
+  end
 
   @doc "Trim and downcase an address, the form we hash and compare."
   def normalize_email(email) when is_binary(email),

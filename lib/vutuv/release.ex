@@ -121,6 +121,53 @@ defmodule Vutuv.Release do
     result
   end
 
+  @doc """
+  Restores the invitation "invite once, site-wide" dedup guard after the issue
+  #942 SHA-256 → HMAC cutover. Reads a newline-separated file of **plaintext**
+  email addresses (one per line, blanks ignored) and inserts one dedup-only
+  invitation row per distinct normalized (trimmed + downcased) address, hashed
+  with the current keyed `Vutuv.Invitations.hash_email/1` — using this node's
+  own `secret_key_base`, so no secret ever leaves the box. The rows are owned by
+  `inviter` (a member handle or email, resolved like `promote_admin/1`); they
+  carry no recovered metadata. Already-present addresses are no-ops.
+
+      bin/vutuv eval 'Vutuv.Release.reseed_invitations("/var/www/vutuv3/shared/invited_emails.txt", "stefan.wintermeyer")'
+
+  The plaintext file is never committed to git and should be deleted from the
+  server once this has run. Prints and returns a `%{inserted:, total:}` summary
+  (or `{:error, :inviter_not_found}`).
+  """
+  def reseed_invitations(path, inviter_identifier)
+      when is_binary(path) and is_binary(inviter_identifier) do
+    load_app()
+    [repo] = repos()
+
+    {:ok, result, _apps} =
+      Ecto.Migrator.with_repo(repo, fn _repo ->
+        emails = path |> File.read!() |> String.split(["\r\n", "\n"], trim: true)
+
+        case Vutuv.Accounts.get_user_by_handle_or_email(inviter_identifier) do
+          nil ->
+            {:error, :inviter_not_found}
+
+          inviter ->
+            Vutuv.Invitations.reseed_dedup(emails, inviter)
+        end
+      end)
+
+    case result do
+      {:error, :inviter_not_found} ->
+        IO.puts("reseed_invitations: no member found for #{inspect(inviter_identifier)}.")
+
+      %{inserted: inserted, total: total} ->
+        IO.puts(
+          "reseed_invitations: #{inserted} inserted, #{total - inserted} already present (#{total} distinct addresses)."
+        )
+    end
+
+    result
+  end
+
   defp repos do
     Application.fetch_env!(@app, :ecto_repos)
   end

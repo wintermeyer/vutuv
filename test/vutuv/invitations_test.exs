@@ -382,5 +382,62 @@ defmodule Vutuv.InvitationsTest do
       assert Invitations.normalize_email("  Foo@Bar.COM ") == "foo@bar.com"
       assert Invitations.hash_email("  Foo@Bar.COM ") == Invitations.hash_email("foo@bar.com")
     end
+
+    test "is a keyed HMAC, not the brute-forceable bare SHA-256 (issue #942)" do
+      normalized = "jane@example.com"
+      bare_sha256 = :sha256 |> :crypto.hash(normalized) |> Base.encode16(case: :lower)
+
+      # An attacker who reads the invitations table must NOT be able to confirm a
+      # guessed address by computing its plain SHA-256 — the hash is keyed by a
+      # server secret held outside the database.
+      refute Invitations.hash_email(normalized) == bare_sha256
+
+      # Still deterministic (so the unique-index dedup keeps working) and still
+      # shaped like a SHA-256 digest (64 lowercase hex chars).
+      assert Invitations.hash_email(normalized) == Invitations.hash_email(" Jane@Example.com ")
+      assert Invitations.hash_email(normalized) =~ ~r/\A[0-9a-f]{64}\z/
+    end
+  end
+
+  describe "reseed_dedup/2 (issue #942 post-cutover restore)" do
+    setup do
+      %{inviter: insert(:user)}
+    end
+
+    test "inserts one dedup row per normalized address, trimming and downcasing",
+         %{inviter: inviter} do
+      emails = [
+        "  Jane@Example.com ",
+        "bob@example.com",
+        "jane@example.com",
+        "  ",
+        "bob@EXAMPLE.com"
+      ]
+
+      summary = Invitations.reseed_dedup(emails, inviter)
+
+      # Five entries collapse to two distinct normalized addresses.
+      assert summary.inserted == 2
+      assert summary.total == 2
+
+      assert Repo.get_by(Invitation, email_hash: Invitations.hash_email("jane@example.com"))
+      assert Repo.get_by(Invitation, email_hash: Invitations.hash_email("bob@example.com"))
+    end
+
+    test "is idempotent — re-running inserts nothing", %{inviter: inviter} do
+      emails = ["jane@example.com", "bob@example.com"]
+      assert Invitations.reseed_dedup(emails, inviter).inserted == 2
+      assert Invitations.reseed_dedup(emails, inviter).inserted == 0
+    end
+
+    test "a reseeded address is then treated as already invited (no second email)",
+         %{inviter: inviter} do
+      Invitations.reseed_dedup(["jane@example.com"], inviter)
+
+      assert {:ok, :already_invited, _preview} =
+               Invitations.deliver_invitation(inviter, valid_attrs())
+
+      assert_no_email_sent()
+    end
   end
 end

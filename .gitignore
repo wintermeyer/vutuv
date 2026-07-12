@@ -61,3 +61,9 @@ assets/node_modules
 
 # Codex (at least for now)
 .codex/*
+
+# Recovered invitation recipient addresses (issue #942 reseed). Contains PII —
+# NEVER commit. Fed once to Vutuv.Release.reseed_invitations/2, then deleted
+# from the working tree and the server.
+/invited_emails.local.txt
+*.local.txt
