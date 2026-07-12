@@ -34,7 +34,10 @@ defmodule Vutuv.SocialFeed.Http do
       connect_options: [timeout: 2_000],
       retry: false,
       redirect: false,
-      decode_body: false,
+      # Stream with a hard ceiling so a hostile large body is dropped during
+      # receipt; the per-use post-checks (decode/1, fetch_avatar/2) still enforce
+      # their exact JSON / avatar limits.
+      into: Vutuv.Http.capped_collector(@max_body_bytes),
       headers: [{"user-agent", user_agent()}, {"accept", "application/json"}]
     ]
     |> Keyword.merge(extra)

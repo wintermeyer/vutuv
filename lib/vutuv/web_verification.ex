@@ -176,7 +176,10 @@ defmodule Vutuv.WebVerification do
         connect_options: [timeout: 2_000],
         retry: false,
         redirect: false,
-        decode_body: false,
+        # Stream with a hard byte ceiling so a hostile large body is dropped
+        # during receipt instead of being buffered whole and truncated after the
+        # fact (the @max_*_bytes cap then bounds memory for real).
+        into: Vutuv.Http.capped_collector(max_bytes),
         headers: [{"user-agent", user_agent()}, {"accept", accept}]
       ]
       |> Keyword.merge(req_options)

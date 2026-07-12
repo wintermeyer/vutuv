@@ -436,7 +436,11 @@ defmodule Vutuv.Fediverse do
           connect_options: [timeout: 2_000],
           retry: false,
           redirect: false,
-          decode_body: false
+          # Stream with a hard ceiling: fetch_remote_actor runs synchronously in
+          # the inbox web request against an attacker-controlled host BEFORE the
+          # signature check, so a multi-GB body must be dropped during receipt,
+          # not buffered whole and size-checked after.
+          into: Vutuv.Http.capped_collector(@max_body_bytes)
         ],
         Application.get_env(:vutuv, :fediverse_req_options, [])
       )
