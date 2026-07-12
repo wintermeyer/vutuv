@@ -12586,3 +12586,73 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "up to"
 msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "What is an organization page?"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:54
+#, elixir-autogen, elixir-format
+msgid "An organization page is a verified profile for a company, association, school, public authority or any other group, not for a single person. Every page has a proven web domain, so visitors can trust that it is really run by that organization."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:59
+#, elixir-autogen, elixir-format
+msgid "How it works"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:65
+#, elixir-autogen, elixir-format
+msgid "Whoever creates a page becomes its owner."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:69
+#, elixir-autogen, elixir-format
+msgid "The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:73
+#, elixir-autogen, elixir-format
+msgid "A page can claim a short @handle, so it lives at a memorable address like %{example}."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Your organizations"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:104
+#, elixir-autogen, elixir-format
+msgid "Your role"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:117
+#, elixir-autogen, elixir-format
+msgid "Add an organization"
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Represent a company, association or other group? Add its page and verify the domain to become its owner."
+msgstr ""
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:128
+#, elixir-autogen, elixir-format
+msgid "Browse all organizations"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex:24
+#, elixir-autogen, elixir-format
+msgid "Under review"
+msgstr ""
+
+#: lib/vutuv_web/views/settings_html.ex:27
+#, elixir-autogen, elixir-format
+msgid "Verification pending"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/index.ex:84
+#, elixir-autogen, elixir-format
+msgid "Verified pages for companies, associations, schools, public authorities and other groups, not for single people. Every page has a proven web domain, so you know it is really them."
+msgstr ""

@@ -13319,3 +13319,73 @@ msgstr "Sie selbst (persönliche Anzeige)"
 #, elixir-autogen, elixir-format
 msgid "up to"
 msgstr "bis"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:52
+#, elixir-autogen, elixir-format
+msgid "What is an organization page?"
+msgstr "Was ist eine Organisationsseite?"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:54
+#, elixir-autogen, elixir-format
+msgid "An organization page is a verified profile for a company, association, school, public authority or any other group, not for a single person. Every page has a proven web domain, so visitors can trust that it is really run by that organization."
+msgstr "Eine Organisationsseite ist ein verifiziertes Profil für ein Unternehmen, einen Verein, eine Schule, eine Behörde oder eine andere Gruppe, nicht für eine einzelne Person. Jede Seite hat eine nachgewiesene Web-Domain, sodass Besucher darauf vertrauen können, dass sie wirklich von dieser Organisation betrieben wird."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:59
+#, elixir-autogen, elixir-format
+msgid "How it works"
+msgstr "So funktioniert es"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:65
+#, elixir-autogen, elixir-format
+msgid "Whoever creates a page becomes its owner."
+msgstr "Wer eine Seite erstellt, wird ihr Besitzer."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:69
+#, elixir-autogen, elixir-format
+msgid "The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time."
+msgstr "Der Besitzer kann weitere Mitglieder als Admins oder Recruiter auf die Seite einladen und die Besitzerrolle jederzeit an eine andere Person übergeben."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:73
+#, elixir-autogen, elixir-format
+msgid "A page can claim a short @handle, so it lives at a memorable address like %{example}."
+msgstr "Eine Seite kann sich ein kurzes @handle sichern, sodass sie unter einer einprägsamen Adresse wie %{example} erreichbar ist."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:82
+#, elixir-autogen, elixir-format
+msgid "Your organizations"
+msgstr "Ihre Organisationen"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:104
+#, elixir-autogen, elixir-format
+msgid "Your role"
+msgstr "Ihre Rolle"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:117
+#, elixir-autogen, elixir-format
+msgid "Add an organization"
+msgstr "Organisation hinzufügen"
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:119
+#, elixir-autogen, elixir-format
+msgid "Represent a company, association or other group? Add its page and verify the domain to become its owner."
+msgstr "Vertreten Sie ein Unternehmen, einen Verein oder eine andere Gruppe? Fügen Sie die Seite hinzu und verifizieren Sie die Domain, um ihr Besitzer zu werden."
+
+#: lib/vutuv_web/templates/settings/organizations.html.heex:128
+#, elixir-autogen, elixir-format
+msgid "Browse all organizations"
+msgstr "Alle Organisationen ansehen"
+
+#: lib/vutuv_web/views/settings_html.ex:24
+#, elixir-autogen, elixir-format
+msgid "Under review"
+msgstr "In Prüfung"
+
+#: lib/vutuv_web/views/settings_html.ex:27
+#, elixir-autogen, elixir-format
+msgid "Verification pending"
+msgstr "Verifizierung ausstehend"
+
+#: lib/vutuv_web/live/organization_live/index.ex:84
+#, elixir-autogen, elixir-format
+msgid "Verified pages for companies, associations, schools, public authorities and other groups, not for single people. Every page has a proven web domain, so you know it is really them."
+msgstr "Verifizierte Seiten für Unternehmen, Vereine, Schulen, Behörden und andere Gruppen, nicht für einzelne Personen. Jede Seite hat eine nachgewiesene Web-Domain, sodass Sie wissen, dass es wirklich sie sind."

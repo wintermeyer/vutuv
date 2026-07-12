@@ -744,6 +744,10 @@ defmodule VutuvWeb.Router do
     get("/notifications", SettingsController, :notifications)
     put("/notifications", SettingsController, :update_notifications)
     patch("/notifications", SettingsController, :update_notifications)
+    # The member's "Your organizations" hub: the organization pages they own or
+    # help run, the explainer of how organizations work, and the add call to
+    # action. The public browse directory stays at /organizations.
+    get("/organizations", SettingsController, :organizations)
     # Read-only developer hub: connected apps + personal API tokens.
     get("/apps", SettingsController, :apps)
     put("/language", SettingsController, :update_language)

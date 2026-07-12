@@ -2,9 +2,37 @@ defmodule VutuvWeb.SettingsHTML do
   @moduledoc false
   use VutuvWeb, :html
 
+  # The "Your organizations" page reuses the organization logo / location / kind
+  # badge / role label pieces so a member's own pages read exactly like the
+  # public directory rows.
+  import VutuvWeb.OrganizationComponents,
+    only: [organization_logo: 1, organization_location: 1, kind_badge: 1, role_label: 1]
+
   alias Vutuv.Accounts.User
 
   embed_templates("../templates/settings/*")
+
+  @doc """
+  The human, localized status of one of the member's organization pages, derived
+  the same way the public site decides visibility: a page under moderation
+  review reads "Under review", one still proving its domain "Verification
+  pending", and a live one "Active".
+  """
+  def organization_status_label(%{frozen_at: frozen_at}) when not is_nil(frozen_at),
+    do: gettext("Under review")
+
+  def organization_status_label(%{status: "pending"}), do: gettext("Verification pending")
+  def organization_status_label(_organization), do: gettext("Active")
+
+  @doc "The Tailwind chip classes matching `organization_status_label/1`."
+  def organization_status_class(%{frozen_at: frozen_at}) when not is_nil(frozen_at),
+    do: "bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+
+  def organization_status_class(%{status: "pending"}),
+    do: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200"
+
+  def organization_status_class(_organization),
+    do: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-200"
 
   @doc """
   The two choices for how often the unread-message email is sent, as

@@ -1,0 +1,99 @@
+<%!-- "Your organizations": the member-facing hub for the verified organization
+pages they own or help run. The public browse directory lives at /organizations;
+this page explains what an organization is, how ownership works, and lists the
+member's own pages. Read-only — creating, editing, inviting and transferring all
+happen on the organization's own pages. --%>
+<.settings_shell user={@user} active={:organizations} title={gettext("Organizations")}>
+  <div class="space-y-6">
+    <%!-- The plain-language explainer, written for a member who has never heard
+    of an "organization page" before. --%>
+    <.card id="organizations-explainer">
+      <.section_title>{gettext("What is an organization page?")}</.section_title>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        {gettext("An organization page is a verified profile for a company, association, school, public authority or any other group, not for a single person. Every page has a proven web domain, so visitors can trust that it is really run by that organization.")}
+      </p>
+
+      <h3 class="mt-5 text-sm font-semibold text-slate-900 dark:text-slate-100">
+        {gettext("How it works")}
+      </h3>
+      <ul class="mt-2 space-y-2 text-sm text-slate-700 dark:text-slate-300">
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          <span>{gettext("Whoever creates a page becomes its owner.")}</span>
+        </li>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          <span>{gettext("The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time.")}</span>
+        </li>
+        <li class="flex gap-2">
+          <span aria-hidden="true" class="text-brand-600 dark:text-brand-300">•</span>
+          <span>{gettext("A page can claim a short @handle, so it lives at a memorable address like %{example}.", example: "#{VutuvWeb.Endpoint.host()}/acme")}</span>
+        </li>
+      </ul>
+    </.card>
+
+    <%!-- The member's own pages, each linking to its page and (for owners /
+    admins) its management area. Only rendered when there is at least one. --%>
+    <.card :if={@organizations != []} id="your-organizations">
+      <.section_title>{gettext("Your organizations")}</.section_title>
+      <ul class="mt-2 divide-y divide-slate-100 dark:divide-slate-800">
+        <li :for={{organization, role} <- @organizations} class="flex items-center gap-4 py-4">
+          <.link navigate={~p"/organizations/#{organization.slug}"} class="shrink-0">
+            <.organization_logo organization={organization} class="h-12 w-12" />
+          </.link>
+          <div class="min-w-0 flex-1">
+            <.link
+              navigate={~p"/organizations/#{organization.slug}"}
+              class="block truncate font-semibold text-slate-900 hover:text-brand-700 dark:text-slate-100 dark:hover:text-brand-300"
+            >
+              {organization.name}
+            </.link>
+            <.organization_location
+              organization={organization}
+              class="truncate text-sm text-slate-600 dark:text-slate-400"
+            />
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <.kind_badge kind={organization.kind} />
+              <span class={[
+                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium",
+                organization_status_class(organization)
+              ]}>
+                {organization_status_label(organization)}
+              </span>
+              <span class="text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Your role")}: {role_label(role)}
+              </span>
+            </div>
+          </div>
+          <.link
+            :if={role in ["owner", "admin"]}
+            navigate={~p"/organizations/#{organization.slug}/edit"}
+            class="shrink-0 text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+          >
+            {gettext("Manage")} ›
+          </.link>
+        </li>
+      </ul>
+    </.card>
+
+    <%!-- The add call to action + a quiet link out to the public browse
+    directory (every organization on the site, not just the member's own). --%>
+    <.card>
+      <.section_title>{gettext("Add an organization")}</.section_title>
+      <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">
+        {gettext("Represent a company, association or other group? Add its page and verify the domain to become its owner.")}
+      </p>
+      <.empty_add href={~p"/organizations/new"} class="mt-3">
+        {gettext("Add your organization")}
+      </.empty_add>
+      <p class="mt-4">
+        <.link
+          navigate={~p"/organizations"}
+          class="text-sm font-semibold text-brand-600 hover:text-brand-700 dark:text-brand-400 dark:hover:text-brand-300"
+        >
+          {gettext("Browse all organizations")} ›
+        </.link>
+      </p>
+    </.card>
+  </div>
+</.settings_shell>

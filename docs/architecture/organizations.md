@@ -8,6 +8,30 @@ foot-gun at the root.
 
 Context: `Vutuv.Organizations`. Schemas under `lib/vutuv/organizations/`.
 
+## Entry points & discoverability
+
+Two member-facing surfaces, split by audience:
+
+- **Public directory** (`/organizations`, `VutuvWeb.OrganizationLive.Index`): the
+  crawlable browse-and-search list of every `active` + non-frozen page, with the
+  agent-format siblings and a sitemap entry. Linked from the footer. Its header
+  says in one line what an organization page is (a verified page for a company,
+  association, school, public authority or other group, not a person); the
+  "Add your organization" button opens the claim wizard.
+- **The member's "Your organizations" hub** (`/settings/organizations`,
+  `SettingsController.organizations` + `templates/settings/organizations.html.heex`):
+  a login-required settings page listing the pages the member owns or helps run
+  (`Organizations.member_organizations/1` → `{organization, role}` pairs,
+  **including pending** pages still finishing verification and frozen ones,
+  archived dropped), each with its status chip, the member's role, and (for an
+  owner/admin) a "Manage" link into `/organizations/:slug/edit`. It carries the
+  plain-language explainer of *what* an organization is and *how ownership works*
+  (whoever creates a page becomes its owner, can invite admins/recruiters, can
+  hand ownership over, can claim an @handle), written for a member who has never
+  heard the term. The **account menu** "Organizations" item and the settings
+  sidebar both point here; the public directory stays one click away via the
+  footer and the page's "Browse all organizations" link.
+
 ## Kind (`organizations.kind`, Art)
 
 An organization is **not** necessarily a company: a Verein, a Behörde, the UN or

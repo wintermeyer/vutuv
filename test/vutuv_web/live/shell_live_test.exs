@@ -211,9 +211,9 @@ defmodule VutuvWeb.ShellLiveTest do
     assert has_element?(view, ~s(#{menu} a[href="/stefan"]))
     assert has_element?(view, ~s(#{menu} a[href="/bookmarks"]))
     assert has_element?(view, ~s(#{menu} a[href="/likes"]))
-    # The organizations directory: a member has no way to discover verified
-    # organization pages otherwise, so the menu is its entry point.
-    assert has_element?(view, ~s(#{menu} a[href="/organizations"]))
+    # The member's "Your organizations" hub: their own pages, the explainer and
+    # the add call to action (the public browse directory stays in the footer).
+    assert has_element?(view, ~s(#{menu} a[href="/settings/organizations"]))
     # "Settings" opens the user-agnostic settings hub (the one map of
     # everything editable), not the profile-basics form it used to alias.
     assert has_element?(view, ~s(#{menu} a[href="/settings"]))

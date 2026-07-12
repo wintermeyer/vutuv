@@ -59,4 +59,21 @@ defmodule VutuvWeb.OrganizationVocabularyTest do
     assert prove =~ "acme.example"
     refute prove =~ "Prove you control", "the German msgstr must not fall back to English"
   end
+
+  test "the 'Your organizations' settings hub explains ownership in German" do
+    assert de("Your organizations") == "Ihre Organisationen"
+
+    # The creator-becomes-owner rule.
+    assert de("Whoever creates a page becomes its owner.") =~ "Besitzer"
+
+    # Invite others + transfer ownership, fully translated.
+    invite =
+      de(
+        "The owner can invite other members onto the page as admins or recruiters, and can hand ownership over to someone else at any time."
+      )
+
+    assert invite =~ "einladen"
+    assert invite =~ "übergeben"
+    refute invite =~ "invite other members", "the German msgstr must not fall back to English"
+  end
 end

@@ -186,6 +186,28 @@ defmodule Vutuv.Organizations do
     )
   end
 
+  @doc """
+  Every organization the member helps run, as `{organization, role}` pairs
+  ordered by name. Covers each page the member holds any role on (owner / admin
+  / recruiter) — the claim wizard always makes the creator an `owner`, so a
+  member's own pages are included too. **Pending** pages (still finishing domain
+  verification) and **frozen** ones are kept so the member can act on them;
+  **archived** pages are dropped. Powers the member's "Your organizations" page
+  at `/settings/organizations` (distinct from `postable_organizations/1`, which
+  is the active-only job-posting attribution set).
+  """
+  def member_organizations(%User{id: user_id}) do
+    Repo.all(
+      from(r in OrganizationRole,
+        join: o in Organization,
+        on: o.id == r.organization_id,
+        where: r.user_id == ^user_id and o.status != "archived",
+        order_by: [asc: fragment("lower(?)", o.name)],
+        select: {o, r.role}
+      )
+    )
+  end
+
   @doc "An organization's roles, owner → admin → recruiter, each oldest first, user preloaded."
   def list_roles(%Organization{id: id}) do
     Repo.all(from(r in OrganizationRole, where: r.organization_id == ^id, preload: [:user]))

@@ -32,6 +32,7 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.Accounts.User
   alias Vutuv.Credentials
   alias Vutuv.LoginCodes
+  alias Vutuv.Organizations
   alias Vutuv.Prefs
   alias Vutuv.Sessions
 
@@ -139,6 +140,20 @@ defmodule VutuvWeb.SettingsController do
   def apps(conn, _params) do
     user = conn.assigns[:user]
     render(conn, "apps.html", user: user, page_title: gettext("Apps & API"))
+  end
+
+  # "Your organizations": the organization pages the member owns or helps run
+  # (each a {organization, role} pair, pending ones included), plus the explainer
+  # and the add call to action. Read-only here — creating, editing, inviting and
+  # transferring happen on the organization's own pages.
+  def organizations(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "organizations.html",
+      user: user,
+      organizations: Organizations.member_organizations(user),
+      page_title: gettext("Organizations")
+    )
   end
 
   def update_privacy(conn, %{"user" => params}) do

@@ -81,7 +81,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
         <div>
           <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Organizations")}</h1>
           <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-            {gettext("Verified organization pages. Every page has a proven domain.")}
+            {gettext("Verified pages for companies, associations, schools, public authorities and other groups, not for single people. Every page has a proven web domain, so you know it is really them.")}
           </p>
         </div>
         <.link
