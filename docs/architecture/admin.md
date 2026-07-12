@@ -202,6 +202,16 @@ addresses with spaces in them, which make the SMTP adapter's puny-encoding
 raise) is trimmed, validated and logged as `invalid` instead of killing the
 loop, and any per-recipient exception becomes an `error` row.
 
+Each send is also **time-bounded** (`deliver_bounded/1`): it runs on a
+supervised task the loop waits at most `NEWSLETTER_SEND_TIMEOUT_SECONDS` (60s
+default) for, and a send that overruns is killed and logged `error`. This is
+what keeps the auto-resume below honest — gen_smtp's `:timeout` option covers
+only the socket connect, while each per-response read uses a hardcoded 20-minute
+timeout, so without the bound a black-holing relay (socket open, no reply) could
+freeze one send far past the 5-minute stuck window, so the broadcast looks dead
+and gets a second run that double-mails the un-logged tail (#943). Bounding the
+send keeps a delivery row landing well inside that window.
+
 A broadcast whose task still dies mid-send (e.g. a blue/green deploy stopping
 the slot) is **auto-resumed**: `Vutuv.Newsletters.BroadcastResumer` sweeps every
 minute for newsletters stuck in `sending` with ≥5 minutes of no delivery

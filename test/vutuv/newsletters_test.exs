@@ -11,6 +11,7 @@ defmodule Vutuv.NewslettersTest do
   alias Vutuv.Accounts.Email
   alias Vutuv.Newsletters
   alias Vutuv.Newsletters.{Markdown, Newsletter, NewsletterDelivery}
+  alias Vutuv.Notifications.Emailer
   alias VutuvWeb.NewsletterToken
 
   defp admin, do: insert(:activated_user, first_name: "Erika", admin?: true)
@@ -408,6 +409,64 @@ defmodule Vutuv.NewslettersTest do
                Newsletters.list_deliveries(newsletter)
 
       assert [%{to: [{_, "tim@example.com"}]}] = flush_emails()
+    end
+  end
+
+  describe "per-send timeout (#943)" do
+    # A relay that keeps the socket open but never replies (gen_smtp's read
+    # timeout is a hardcoded 20 minutes) must not freeze the broadcast loop: the
+    # frozen send would starve the delivery-row heartbeat that keeps a broadcast
+    # from looking stuck, letting BroadcastResumer start a second run that
+    # double-mails the tail. The bounded send caps one recipient at the timeout.
+    test "a send that hangs past the timeout is logged error and the broadcast still finishes" do
+      admin = admin()
+      ann = member_with_email("ann@example.com", first_name: "Ann")
+      slow = member_with_email("slow@example.com", first_name: "Slow")
+
+      Application.put_env(:vutuv, :newsletter_send_timeout_ms, 40)
+
+      Application.put_env(:vutuv, :newsletter_deliver_fun, fn %Swoosh.Email{to: [{_, addr}]} =
+                                                                email ->
+        # Black-hole the "slow" recipient's socket; deliver everyone else.
+        if addr == "slow@example.com", do: Process.sleep(:infinity)
+        Emailer.deliver(email)
+      end)
+
+      on_exit(fn ->
+        Application.delete_env(:vutuv, :newsletter_send_timeout_ms)
+        Application.delete_env(:vutuv, :newsletter_deliver_fun)
+      end)
+
+      newsletter = draft(admin)
+      assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
+
+      # The hung recipient did not halt the loop: the broadcast still completes.
+      newsletter = Newsletters.get_newsletter!(newsletter.id)
+      assert newsletter.status == "sent"
+
+      by_user = Map.new(Newsletters.list_deliveries(newsletter), &{&1.user_id, &1})
+      assert by_user[ann.id].status == "sent"
+      assert by_user[slow.id].status == "error"
+
+      # The healthy recipient still got mail; the hung one produced none. Its
+      # "error" row also excludes it from a resume, so it is never double-mailed.
+      assert [%{to: [{_, "ann@example.com"}]}] = flush_emails()
+    end
+
+    test "a fast send within the timeout delivers and logs sent" do
+      admin = admin()
+      member_with_email("quick@example.com", first_name: "Quick")
+
+      Application.put_env(:vutuv, :newsletter_send_timeout_ms, 40)
+      on_exit(fn -> Application.delete_env(:vutuv, :newsletter_send_timeout_ms) end)
+
+      newsletter = draft(admin)
+      assert {:ok, :started} = Newsletters.start_broadcast(newsletter)
+
+      assert [%{status: "sent", email: "quick@example.com"}] =
+               Newsletters.list_deliveries(Newsletters.get_newsletter!(newsletter.id))
+
+      assert [%{to: [{_, "quick@example.com"}]}] = flush_emails()
     end
   end
 

@@ -89,6 +89,14 @@ if config_env() == :prod do
     ssl: System.get_env("SMTP_SSL") == "true",
     retries: 3
 
+  # Per-send wall-clock ceiling for the newsletter broadcast loop (default 60s;
+  # see config/config.exs). A remote smarthost that is legitimately slow can
+  # raise it; it must stay well under five minutes, or a genuinely stuck send
+  # can no longer be told apart from a live one.
+  if seconds = System.get_env("NEWSLETTER_SEND_TIMEOUT_SECONDS") do
+    config :vutuv, :newsletter_send_timeout_ms, String.to_integer(seconds) * 1000
+  end
+
   # Operator identity overrides (defaults in config/config.exs are the
   # vutuv.de values; see the "Operator identity" block there).
   if from_address = System.get_env("MAILER_FROM_ADDRESS") do

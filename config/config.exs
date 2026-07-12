@@ -110,6 +110,18 @@ config :vutuv, :refresh_popular_users, true
 config :vutuv, :fetch_mastodon_posts, true
 config :vutuv, :fetch_bluesky_posts, true
 
+# Wall-clock ceiling for a single newsletter send (test or broadcast). gen_smtp
+# bounds only its *connect* with the :timeout option; each per-response read
+# uses a hardcoded, non-configurable 20-minute timeout, so a black-holing relay
+# that keeps the socket open can otherwise freeze a broadcast far past the
+# 5-minute stuck-detection window (Vutuv.Newsletters.stuck_newsletters/1) and
+# trip a false resume that double-mails the un-logged tail (#943). Bounding each
+# send keeps a delivery row landing well within that window, so a live-but-slow
+# broadcast never looks stuck. A timed-out send is logged "error" and the loop
+# moves on. Override per installation with NEWSLETTER_SEND_TIMEOUT_SECONDS
+# (runtime.exs) - relevant mainly for remote-smarthost setups.
+config :vutuv, :newsletter_send_timeout_ms, :timer.seconds(60)
+
 # The cached public code-forge statistics on profiles (Vutuv.CodeStats:
 # GitHub, GitLab, Codeberg — the profile's "Code" card). Off = the accounts
 # stay plain links and nothing is ever fetched — the switch for installations

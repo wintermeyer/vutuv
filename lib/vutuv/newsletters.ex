@@ -964,7 +964,7 @@ defmodule Vutuv.Newsletters do
       unsubscribe_url: unsubscribe_url
     }
     |> Emailer.newsletter_email()
-    |> Emailer.deliver()
+    |> deliver_bounded()
     |> delivery_status()
   rescue
     exception ->
@@ -986,6 +986,45 @@ defmodule Vutuv.Newsletters do
   defp delivery_status({:ok, _email}), do: "sent"
   defp delivery_status(:suppressed), do: "suppressed"
   defp delivery_status(_other), do: "error"
+
+  # Bounds a single send to send_timeout_ms so a hanging relay can't freeze the
+  # broadcast loop. gen_smtp's :timeout option covers only the socket *connect*;
+  # each per-response read uses a hardcoded, non-configurable 20-minute timeout,
+  # so a black-holing relay (socket open, no reply) could otherwise stall one
+  # send far past the 5-minute stuck-detection window and trip a false resume
+  # that double-mails the un-logged tail (#943). The send runs on a supervised
+  # task we wait at most send_timeout_ms for; a timed-out send is killed and
+  # reported "error", and the loop advances to the next recipient. Task spawning
+  # propagates `$callers`, so the Swoosh test adapter still routes mail back to
+  # the asserting process. `:newsletter_deliver_fun` overrides the delivery
+  # function in tests to stand in for a hanging relay.
+  defp deliver_bounded(%Swoosh.Email{} = email) do
+    fun = Application.get_env(:vutuv, :newsletter_deliver_fun, &Emailer.deliver/1)
+    timeout = send_timeout_ms()
+    task = Task.Supervisor.async_nolink(Vutuv.TaskSupervisor, fn -> fun.(email) end)
+
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} ->
+        result
+
+      {:exit, reason} ->
+        Logger.error("Newsletter send to #{recipient_address(email)} crashed: #{inspect(reason)}")
+
+        {:error, reason}
+
+      nil ->
+        Logger.warning(
+          "Newsletter send to #{recipient_address(email)} exceeded #{timeout}ms; logged as error"
+        )
+
+        {:error, :timeout}
+    end
+  end
+
+  defp send_timeout_ms, do: Application.get_env(:vutuv, :newsletter_send_timeout_ms, 60_000)
+
+  defp recipient_address(%Swoosh.Email{to: [{_name, address} | _]}), do: address
+  defp recipient_address(_email), do: "unknown"
 
   # Only en/de newsletter templates exist, so collapse every other locale to en.
   defp email_locale(%{locale: "de"}), do: "de"

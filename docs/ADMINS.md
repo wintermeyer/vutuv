@@ -97,6 +97,7 @@ Everything else has a default (the vutuv.de production value):
 | `SMTP_PASSWORD` | – | SMTP auth |
 | `SMTP_TLS` | `never` | STARTTLS: `never` / `if_available` / `always` |
 | `SMTP_SSL` | `false` | `true` for implicit TLS (usually port 465) |
+| `NEWSLETTER_SEND_TIMEOUT_SECONDS` | `60` | Wall-clock ceiling on a single newsletter send. gen_smtp's per-response read timeout is a fixed 20 minutes, so a black-holing relay could otherwise freeze a broadcast long enough to look stuck and be double-sent; a timed-out send is logged as an error and the loop moves on. Raise it only for a legitimately slow smarthost, and keep it well under five minutes |
 | `MAILER_FROM_NAME` | `vutuv` | Display name of the From on every email |
 | `MAILER_FROM_ADDRESS` | `no-reply@vutuv.de` | **Set this.** From address on every email |
 | `BOUNCE_ADDRESS` | `bounces@vutuv.de` | **Set this.** SMTP envelope sender (where bounces return) |
