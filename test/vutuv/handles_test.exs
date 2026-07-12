@@ -13,6 +13,7 @@ defmodule Vutuv.HandlesTest do
   alias Vutuv.Accounts.Handle
   alias Vutuv.Handles
   alias Vutuv.Organizations
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
   defp build_conn do
@@ -31,7 +32,7 @@ defmodule Vutuv.HandlesTest do
     user
   end
 
-  defp pending_organization(user, host) do
+  defp verified_organization(user, host) do
     attrs = %{
       "name" => "Acme #{host}",
       "kind" => "company",
@@ -43,7 +44,10 @@ defmodule Vutuv.HandlesTest do
     {:ok, %{organization: organization}} =
       Organizations.create_pending_organization(user, attrs, "dns")
 
+    # A root handle can only be claimed by a verified (active) page.
     organization
+    |> Organization.status_changeset("active")
+    |> Repo.update!()
   end
 
   describe "registry sync (the chokepoints keep handles in lock-step)" do
@@ -75,7 +79,7 @@ defmodule Vutuv.HandlesTest do
 
     test "claim_handle writes the organization's handle row" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       assert {:ok, updated} = Organizations.claim_handle(organization, %{"username" => "acme"})
       assert updated.username == "acme"
@@ -87,7 +91,7 @@ defmodule Vutuv.HandlesTest do
 
     test "claim_handle changes an existing organization handle in place" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "acme"})
       {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "acmecorp"})
@@ -107,7 +111,7 @@ defmodule Vutuv.HandlesTest do
     test "an organization cannot claim a member's handle" do
       _member = member_with_handle("lufthansa")
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       assert {:error, changeset} =
                Organizations.claim_handle(organization, %{"username" => "lufthansa"})
@@ -119,7 +123,7 @@ defmodule Vutuv.HandlesTest do
 
     test "a member cannot rename onto an organization's handle" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
       {:ok, _organization} = Organizations.claim_handle(organization, %{"username" => "acme"})
 
       member = member_with_handle("someone")
@@ -133,8 +137,8 @@ defmodule Vutuv.HandlesTest do
 
     test "two organizations cannot hold the same handle" do
       owner = insert(:activated_user)
-      a = pending_organization(owner, "a.example")
-      b = pending_organization(owner, "b.example")
+      a = verified_organization(owner, "a.example")
+      b = verified_organization(owner, "b.example")
 
       {:ok, _a} = Organizations.claim_handle(a, %{"username" => "shared"})
 
@@ -146,7 +150,7 @@ defmodule Vutuv.HandlesTest do
   describe "handle grammar + reserved words (both account types)" do
     test "organization handle rejects invalid grammar" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       assert {:error, changeset} =
                Organizations.claim_handle(organization, %{"username" => "no spaces"})
@@ -157,7 +161,7 @@ defmodule Vutuv.HandlesTest do
 
     test "organization handle rejects a reserved route word" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       assert {:error, changeset} =
                Organizations.claim_handle(organization, %{"username" => "admin"})
@@ -167,7 +171,7 @@ defmodule Vutuv.HandlesTest do
 
     test "organization handle is lowercased" do
       owner = insert(:activated_user)
-      organization = pending_organization(owner, "acme.example")
+      organization = verified_organization(owner, "acme.example")
 
       {:ok, organization} = Organizations.claim_handle(organization, %{"username" => "AcmeCorp"})
       assert organization.username == "acmecorp"

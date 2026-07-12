@@ -14,14 +14,18 @@ defmodule Vutuv.Export do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Chat.{Conversation, Participant}
+  alias Vutuv.Jobs.{JobPostingBookmark, JobPostingLike}
+  alias Vutuv.Organizations.{OrganizationBookmark, OrganizationLike}
   alias Vutuv.Posts.{Post, PostBookmark, PostLike, PostRepost}
   alias Vutuv.Repo
-  alias Vutuv.Social.Follow
+  alias Vutuv.Social.{Block, Follow, UserBookmark, UserLike}
   alias Vutuv.Tags.UserTagEndorsement
 
-  # Bumped to 2 when "connections" stopped being a stored table and became a
-  # derived mutual follow, and the connection-request email opt-in was removed.
-  @schema_version 2
+  # 2: "connections" became a derived mutual follow (not a stored table) and the
+  #    connection-request email opt-in was removed.
+  # 3: added the member/organization/job saves (bookmarks + likes) and the block
+  #    list — per-user data that delete_user/1 removes but the export had missed.
+  @schema_version 3
 
   def build(%User{} = user) do
     user =
@@ -127,8 +131,59 @@ defmodule Vutuv.Export do
       bookmarks: engagement(user, PostBookmark),
       reposts: engagement(user, PostRepost),
       conversations: conversations(user),
-      ad_bookings: ad_bookings(user)
+      ad_bookings: ad_bookings(user),
+      blocked_members: blocks(user),
+      saved_members: %{
+        bookmarked: saved_users(user, UserBookmark),
+        liked: saved_users(user, UserLike)
+      },
+      saved_organizations: %{
+        bookmarked: saved_organizations(user, OrganizationBookmark),
+        liked: saved_organizations(user, OrganizationLike)
+      },
+      saved_jobs: %{
+        bookmarked: saved_jobs(user, JobPostingBookmark),
+        liked: saved_jobs(user, JobPostingLike)
+      }
     }
+  end
+
+  defp blocks(user) do
+    from(b in Block,
+      where: b.blocker_id == ^user.id,
+      join: u in assoc(b, :blocked),
+      select: %{member: u.username, at: b.inserted_at}
+    )
+    |> Repo.all()
+  end
+
+  # The members / organizations / job postings this member privately saved
+  # (bookmarked or liked). Each is a plain `user_id`-scoped read.
+  defp saved_users(user, schema) do
+    from(s in schema,
+      where: s.user_id == ^user.id,
+      join: u in assoc(s, :target_user),
+      select: %{member: u.username, at: s.inserted_at}
+    )
+    |> Repo.all()
+  end
+
+  defp saved_organizations(user, schema) do
+    from(s in schema,
+      where: s.user_id == ^user.id,
+      join: o in assoc(s, :organization),
+      select: %{organization: o.name, slug: o.slug, at: s.inserted_at}
+    )
+    |> Repo.all()
+  end
+
+  defp saved_jobs(user, schema) do
+    from(s in schema,
+      where: s.user_id == ^user.id,
+      join: j in assoc(s, :job_posting),
+      select: %{job: j.title, slug: j.slug, at: s.inserted_at}
+    )
+    |> Repo.all()
   end
 
   defp profile(user) do

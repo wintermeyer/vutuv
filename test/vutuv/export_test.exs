@@ -27,6 +27,24 @@ defmodule Vutuv.ExportTest do
     refute Enum.any?(data.connections, &(&1.with == one_way.username))
   end
 
+  test "a member's blocks and private saves are included in the export (schema v3)" do
+    user = insert(:activated_user)
+    blocked = insert(:activated_user)
+    saved_member = insert(:activated_user)
+
+    Vutuv.Social.block_user(user, blocked)
+    Vutuv.Social.bookmark_user(user, saved_member)
+
+    data = Export.build(user)
+
+    assert data.schema_version == 3
+    assert Enum.any?(data.blocked_members, &(&1.member == blocked.username))
+    assert Enum.any?(data.saved_members.bookmarked, &(&1.member == saved_member.username))
+    # The keys exist even when empty, so the export shape stays stable.
+    assert Map.has_key?(data.saved_organizations, :liked)
+    assert Map.has_key?(data.saved_jobs, :bookmarked)
+  end
+
   test "the profile keeps the live email opt-ins but not the dropped connection-request one" do
     profile = Export.build(insert(:activated_user)).profile
 

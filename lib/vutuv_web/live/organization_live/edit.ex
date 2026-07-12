@@ -137,6 +137,15 @@ defmodule VutuvWeb.OrganizationLive.Edit do
          |> assign(:handle_error, nil)
          |> put_flash(:info, gettext("Your organization handle is set."))}
 
+      {:error, :not_verified} ->
+        {:noreply,
+         socket
+         |> assign(:handle_value, username)
+         |> assign(
+           :handle_error,
+           gettext("Only a verified organization page can claim a handle.")
+         )}
+
       {:error, changeset} ->
         {:noreply,
          socket
@@ -366,7 +375,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
         </.form>
       </.card>
 
-      <.card :if={@owner?} class="mt-8">
+      <.card :if={@owner? and @organization.status == "active"} class="mt-8">
         <.section_title>{gettext("Root handle")}</.section_title>
         <p class="mt-1 text-xs text-slate-600 dark:text-slate-400">
           {gettext(

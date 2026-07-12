@@ -461,6 +461,12 @@ defmodule Vutuv.Organizations do
   index and comes back as a `:username` changeset error. Owner-only — the caller
   gates on `owner?/2`.
   """
+  # Only a verified, live page earns a global root handle. A pending (never
+  # domain-proven) org must not lock a handle it can't prove it controls — that
+  # is cheap, repeatable namespace squatting against the registry's UNIQUE(value).
+  def claim_handle(%Organization{status: status}, _attrs) when status != "active",
+    do: {:error, :not_verified}
+
   def claim_handle(%Organization{} = organization, attrs) do
     changeset = Organization.handle_changeset(organization, attrs)
 

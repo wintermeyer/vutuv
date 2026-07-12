@@ -432,4 +432,18 @@ defmodule Vutuv.OrganizationsTest do
       refute Organizations.agent_visible?(%{active | geo?: false})
     end
   end
+
+  describe "claim_handle/2" do
+    test "a pending (unverified) organization cannot claim a root handle" do
+      user = insert(:activated_user)
+
+      {:ok, %{organization: pending}} =
+        Organizations.create_pending_organization(user, @valid, "dns")
+
+      assert pending.status == "pending"
+      # Otherwise anyone could register a pending "Lufthansa" and squat @lufthansa.
+      assert {:error, :not_verified} =
+               Organizations.claim_handle(pending, %{"username" => "squatco"})
+    end
+  end
 end
