@@ -11854,7 +11854,7 @@ msgstr "Bitte loggen Sie sich zuerst ein."
 #: lib/vutuv_web/live/organization_live/show.ex:371
 #, elixir-autogen, elixir-format
 msgid "Prove you control %{domain} to publish this page."
-msgstr ""
+msgstr "Weisen Sie nach, dass Ihnen %{domain} gehört, um diese Seite zu veröffentlichen."
 "Weisen Sie die Kontrolle über %{domain} nach, um diese Seite zu "
 "veröffentlichen."
 
@@ -12513,8 +12513,8 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/new.ex:86
 #, elixir-autogen, elixir-format
-msgid "An organization page can only exist once you prove control of its web domain."
-msgstr "Eine Organisationsseite kann erst existieren, wenn Sie die Kontrolle über ihre Web-Domain nachweisen."
+msgid "Create a verified page for your company, association, school or public authority."
+msgstr "Erstellen Sie eine verifizierte Seite für Ihr Unternehmen, Ihren Verein, Ihre Schule oder Behörde."
 
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:172
 #, elixir-autogen, elixir-format
@@ -12529,17 +12529,38 @@ msgstr ""
 msgid "Claim a short @handle so this organization has its own root URL, like a member profile. Letters, numbers and underscores, %{min} to %{max} characters."
 msgstr "Reservieren Sie ein kurzes @handle, damit diese Organisation wie ein Mitgliedsprofil eine eigene Root-URL bekommt. Buchstaben, Zahlen und Unterstriche, %{min} bis %{max} Zeichen."
 
-#: lib/vutuv_web/live/organization_live/new.ex:30
-#: lib/vutuv_web/live/organization_live/new.ex:84
-#, elixir-autogen, elixir-format
-msgid "Claim an organization"
-msgstr "Organisation beanspruchen"
-
 #: lib/vutuv_web/live/organization_live/index.ex:91
 #: lib/vutuv_web/live/organization_live/index.ex:122
+#: lib/vutuv_web/live/organization_live/new.ex:30
+#: lib/vutuv_web/live/organization_live/new.ex:88
 #, elixir-autogen, elixir-format
-msgid "Claim your organization"
-msgstr "Ihre Organisation beanspruchen"
+msgid "Add your organization"
+msgstr "Ihre Organisation hinzufügen"
+
+#: lib/vutuv_web/live/organization_live/new.ex:91
+#, elixir-autogen, elixir-format
+msgid "Why we ask you to verify"
+msgstr "Warum wir eine Verifizierung verlangen"
+
+#: lib/vutuv_web/live/organization_live/new.ex:94
+#, elixir-autogen, elixir-format
+msgid "So visitors can trust the page. We only publish it once you prove that you control the organization's web domain, so nobody can put up a page that pretends to be your organization."
+msgstr "Damit Besucher der Seite vertrauen können. Wir veröffentlichen sie erst, wenn Sie nachweisen, dass Ihnen die Web-Domain der Organisation gehört. So kann niemand eine Seite erstellen, die sich für Ihre Organisation ausgibt."
+
+#: lib/vutuv_web/live/organization_live/new.ex:99
+#, elixir-autogen, elixir-format
+msgid "You might need help from your admin"
+msgstr "Vielleicht brauchen Sie Hilfe von Ihrer IT"
+
+#: lib/vutuv_web/live/organization_live/new.ex:102
+#, elixir-autogen, elixir-format
+msgid "The proof is a small technical change to your domain: a DNS entry or a file on your website. If you don't manage the website yourself, ask the person or team who does. That is usually your IT department or the company that runs your website. We show the exact instructions on the next step, so you can simply pass them on."
+msgstr "Der Nachweis ist eine kleine technische Änderung an Ihrer Domain: ein DNS-Eintrag oder eine Datei auf Ihrer Website. Wenn Sie die Website nicht selbst verwalten, fragen Sie die Person oder das Team, das dies tut. Das ist meist Ihre IT-Abteilung oder die Firma, die Ihre Website betreut. Die genaue Anleitung zeigen wir Ihnen im nächsten Schritt, Sie können sie einfach weitergeben."
+
+#: lib/vutuv_web/live/organization_live/show.ex:377
+#, elixir-autogen, elixir-format
+msgid "These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now."
+msgstr "Diese Schritte sind technisch. Wenn Sie %{domain} nicht selbst verwalten, kopieren Sie den unten gezeigten Eintrag oder die Datei und senden Sie ihn an Ihre IT-Abteilung oder die Firma, die Ihre Website betreut. Sobald sie ihn hinzugefügt hat, kommen Sie hierher zurück und klicken auf „Jetzt verifizieren“."
 
 #: lib/vutuv_web/live/organization_live/edit.ex:432
 #, elixir-autogen, elixir-format
@@ -12574,8 +12595,8 @@ msgstr "Keine passenden Organisationsseiten."
 
 #: lib/vutuv_web/live/organization_live/index.ex:113
 #, elixir-autogen, elixir-format
-msgid "No organization pages yet. Be the first to claim yours."
-msgstr "Noch keine Organisationsseiten. Beanspruchen Sie als Erste Ihre."
+msgid "No organization pages yet. Be the first to add yours."
+msgstr "Noch keine Organisationsseiten. Fügen Sie die erste hinzu."
 
 #: lib/vutuv_web/live/organization_live/index.ex:115
 #, elixir-autogen, elixir-format
@@ -12653,7 +12674,7 @@ msgstr "Organisation"
 #: lib/vutuv_web/templates/layout/app.html.heex:77
 #, elixir-autogen, elixir-format
 msgid "Organizations"
-msgstr "Organisation"
+msgstr "Organisationen"
 
 #: lib/vutuv_web/components/organization_components.ex:146
 #, elixir-autogen, elixir-format

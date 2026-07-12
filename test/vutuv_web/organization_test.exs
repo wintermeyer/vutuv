@@ -128,6 +128,20 @@ defmodule VutuvWeb.OrganizationTest do
   end
 
   describe "claim wizard" do
+    test "the page explains why we verify and points non-technical members at their admin",
+         %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, _view, html} = live(conn, ~p"/organizations/new")
+
+      # The friendly heading, not the old "Claim an organization" jargon.
+      assert html =~ "Add your organization"
+      refute html =~ "Claim an organization"
+      # Why verification exists at all, and who to ask for the technical step.
+      assert html =~ "trust the page"
+      assert html =~ "IT department"
+      assert html =~ "the next step"
+    end
+
     test "creates a pending organization and lands on the verification panel", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       {:ok, view, _html} = live(conn, ~p"/organizations/new")

@@ -11800,7 +11800,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/new.ex:86
 #, elixir-autogen, elixir-format
-msgid "An organization page can only exist once you prove control of its web domain."
+msgid "Create a verified page for your company, association, school or public authority."
 msgstr ""
 
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:172
@@ -11813,16 +11813,37 @@ msgstr ""
 msgid "Claim a short @handle so this organization has its own root URL, like a member profile. Letters, numbers and underscores, %{min} to %{max} characters."
 msgstr ""
 
-#: lib/vutuv_web/live/organization_live/new.ex:30
-#: lib/vutuv_web/live/organization_live/new.ex:84
-#, elixir-autogen, elixir-format
-msgid "Claim an organization"
-msgstr ""
-
 #: lib/vutuv_web/live/organization_live/index.ex:91
 #: lib/vutuv_web/live/organization_live/index.ex:122
+#: lib/vutuv_web/live/organization_live/new.ex:30
+#: lib/vutuv_web/live/organization_live/new.ex:88
 #, elixir-autogen, elixir-format
-msgid "Claim your organization"
+msgid "Add your organization"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/new.ex:91
+#, elixir-autogen, elixir-format
+msgid "Why we ask you to verify"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/new.ex:94
+#, elixir-autogen, elixir-format
+msgid "So visitors can trust the page. We only publish it once you prove that you control the organization's web domain, so nobody can put up a page that pretends to be your organization."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/new.ex:99
+#, elixir-autogen, elixir-format
+msgid "You might need help from your admin"
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/new.ex:102
+#, elixir-autogen, elixir-format
+msgid "The proof is a small technical change to your domain: a DNS entry or a file on your website. If you don't manage the website yourself, ask the person or team who does. That is usually your IT department or the company that runs your website. We show the exact instructions on the next step, so you can simply pass them on."
+msgstr ""
+
+#: lib/vutuv_web/live/organization_live/show.ex:377
+#, elixir-autogen, elixir-format
+msgid "These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now."
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/edit.ex:432
@@ -11858,7 +11879,7 @@ msgstr ""
 
 #: lib/vutuv_web/live/organization_live/index.ex:113
 #, elixir-autogen, elixir-format
-msgid "No organization pages yet. Be the first to claim yours."
+msgid "No organization pages yet. Be the first to add yours."
 msgstr ""
 
 #: lib/vutuv_web/live/organization_live/index.ex:115

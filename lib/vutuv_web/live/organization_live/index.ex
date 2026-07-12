@@ -88,7 +88,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
           navigate={~p"/organizations/new"}
           class="rounded-lg bg-brand-600 px-4 py-2 text-center text-sm font-semibold text-white hover:bg-brand-700"
         >
-          {gettext("Claim your organization")}
+          {gettext("Add your organization")}
         </.link>
       </div>
 
@@ -110,7 +110,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
         <.card class="text-center">
           <p class="text-slate-600 dark:text-slate-400">
             <%= if @search in [nil, ""] do %>
-              {gettext("No organization pages yet. Be the first to claim yours.")}
+              {gettext("No organization pages yet. Be the first to add yours.")}
             <% else %>
               {gettext("No organizations found for %{term}.", term: @search)}
             <% end %>
@@ -119,7 +119,7 @@ defmodule VutuvWeb.OrganizationLive.Index do
             navigate={~p"/organizations/new"}
             class="mt-4 inline-block text-sm font-semibold text-brand-600 hover:text-brand-700"
           >
-            {gettext("Claim your organization")}
+            {gettext("Add your organization")}
           </.link>
         </.card>
       <% else %>

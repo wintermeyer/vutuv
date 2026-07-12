@@ -381,6 +381,13 @@ defmodule VutuvWeb.ShellLive do
                     {gettext("Likes")}
                   </.link>
 
+                  <%!-- The verified organization directory. Members have no other
+                  entry point to it, so the account menu is where they discover
+                  (and add) organization pages. --%>
+                  <.link href={~p"/organizations"} class={[menu_item_class(), "block"]}>
+                    {gettext("Organizations")}
+                  </.link>
+
                   <.link href={~p"/system/invitations/new"} class={[menu_item_class(), "block"]}>
                     {gettext("Invite a friend")}
                   </.link>

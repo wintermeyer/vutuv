@@ -27,7 +27,7 @@ defmodule VutuvWeb.OrganizationLive.New do
       |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:locale, locale)
       |> assign(:shell_path, session["request_path"])
-      |> assign(:page_title, gettext("Claim an organization"))
+      |> assign(:page_title, gettext("Add your organization"))
       |> assign(:method, "dns")
       |> assign(:countries, Countries.select_options(locale))
       |> assign_form(Organizations.change_new_organization())
@@ -81,10 +81,32 @@ defmodule VutuvWeb.OrganizationLive.New do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Claim an organization")}</h1>
+      <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Add your organization")}</h1>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
-        {gettext("An organization page can only exist once you prove control of its web domain.")}
+        {gettext("Create a verified page for your company, association, school or public authority.")}
       </p>
+
+      <%!-- Non-technical members were lost by the bare "prove control of the
+      domain" line: they did not know why verification exists or that it is a
+      job for whoever runs their website. This box answers both before the form. --%>
+      <div class="mt-4 space-y-4 rounded-2xl bg-brand-50 p-5 text-sm ring-1 ring-brand-100 dark:bg-brand-900/30 dark:ring-brand-900/50">
+        <div>
+          <h2 class="font-semibold text-slate-900 dark:text-slate-100">
+            {gettext("Why we ask you to verify")}
+          </h2>
+          <p class="mt-1 text-slate-700 dark:text-slate-300">
+            {gettext("So visitors can trust the page. We only publish it once you prove that you control the organization's web domain, so nobody can put up a page that pretends to be your organization.")}
+          </p>
+        </div>
+        <div>
+          <h2 class="font-semibold text-slate-900 dark:text-slate-100">
+            {gettext("You might need help from your admin")}
+          </h2>
+          <p class="mt-1 text-slate-700 dark:text-slate-300">
+            {gettext("The proof is a small technical change to your domain: a DNS entry or a file on your website. If you don't manage the website yourself, ask the person or team who does. That is usually your IT department or the company that runs your website. We show the exact instructions on the next step, so you can simply pass them on.")}
+          </p>
+        </div>
+      </div>
 
       <.form for={@form} id="organization-form" phx-change="validate" phx-submit="save" class="mt-6 space-y-5">
         <.form_error :if={@changeset} changeset={@changeset} />

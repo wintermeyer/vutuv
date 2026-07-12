@@ -371,6 +371,15 @@ defmodule VutuvWeb.OrganizationLive.Show do
           {gettext("Prove you control %{domain} to publish this page.", domain: @primary_domain.domain)}
         </p>
 
+        <%!-- Reassure the member who cannot touch DNS themselves: they can hand
+        the record below to whoever runs their website and finish here later. --%>
+        <p
+          :if={@verification_enabled?}
+          class="mt-4 rounded-lg bg-brand-50 p-4 text-sm text-slate-700 ring-1 ring-brand-100 dark:bg-brand-900/30 dark:text-slate-300 dark:ring-brand-900/50"
+        >
+          {gettext("These steps are technical. If you don't manage %{domain} yourself, copy the record or file shown below and send it to your IT team or whoever runs your website. Once they have added it, come back here and press Verify now.", domain: @primary_domain.domain)}
+        </p>
+
         <%= if @verification_enabled? do %>
           <fieldset class="mt-6">
             <legend class="text-sm font-semibold text-slate-700 dark:text-slate-200">
