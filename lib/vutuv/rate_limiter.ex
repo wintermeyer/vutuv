@@ -53,6 +53,23 @@ defmodule Vutuv.RateLimiter do
     if count <= limit, do: {:ok, limit - count}, else: {:error, :rate_limited}
   end
 
+  @doc """
+  Reads the current hit count for `key` in the active `window_ms` window
+  **without** recording a hit (0 when the window holds none). Lets a caller
+  surface how much of a budget has been spent — e.g. an admin viewing a
+  member's cold-outreach counter — without moving the counter.
+  """
+  def peek(key, window_ms) when is_integer(window_ms) and window_ms > 0 do
+    ensure_table()
+    now = System.system_time(:millisecond)
+    window = div(now, window_ms)
+
+    case :ets.lookup(@table, {key, window}) do
+      [{_bucket, count, _window_end}] -> count
+      [] -> 0
+    end
+  end
+
   @doc false
   # Test helper: forget every recorded hit.
   def reset do

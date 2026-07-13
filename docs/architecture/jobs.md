@@ -194,7 +194,37 @@ Job postings plug into the existing report → freeze → case machinery as the
 content type `job_posting`, with a specific report category "Irreführende
 Stellenanzeige" (`misleading_job`). A report from a member in good standing
 freezes the posting for the public instantly (owner + admins keep it) and alarms
-the admin queue.
+the admin queue. A freeze (`frozen_at`) is the compliance-critical gate: it pulls
+the posting off the public board, the sitemap, JSON-LD and every agent format at
+once (all keyed on `frozen_at` through `visible_to?`/`indexable?`/`agent_visible?`),
+and the public detail 404s for anyone but the owner/admin, so there is no noindex
+page left carrying JSON-LD — `jobs_freeze_compliance_test.exs` guards this.
+
+### Admin oversight (`/admin/jobs`, issue #934)
+
+`VutuvWeb.Admin.JobLive` is the oversight dashboard (see `admin.md` for the full
+UI): tiles (live / expiring / frozen / open cases), a title/poster/organization
+search, status + "open reports" filter chips, and a per-posting detail drawer
+(poster, employer attribution, counters, report history, poster footprint) with
+reload-free **freeze/unfreeze** (`Jobs.admin_set_frozen/2` — the same `frozen_at`
+gate, pinging the board), **close** (`Jobs.admin_close/1`, `:moderation` reason)
+and **delete** (`Jobs.delete_job_posting/1`). The context helpers
+(`admin_overview_counts/0`, `admin_jobs_page/1`, `admin_job_detail/1`,
+`member_job_footprint/1`) live in the `# admin dashboard (#934)` section of
+`Vutuv.Jobs`. Repeat offenders lose the account through the standard strike ladder
+(`moderation.md`), which the report path already feeds.
+
+### Anti-spam recruiting: the cold-outreach cap
+
+`Vutuv.Chat` caps **cold outreach** — new message *requests* one member opens to
+strangers (members who don't already follow them). Only a new *pending*
+conversation counts; replying to an accepted thread never does. The cap
+(count + window) is a per-installation knob (`config :vutuv, :cold_outreach`,
+`COLD_OUTREACH_LIMIT` / `COLD_OUTREACH_WINDOW_HOURS`, default 20 / 24h), enforced
+through `Vutuv.RateLimiter`; over the cap the member gets a friendly "try again
+later". `Chat.cold_outreach_count/1` reads the current spend without moving it
+(`RateLimiter.peek/2`), so the `/admin/jobs` poster footprint can show it when a
+recruiter's messaging is questioned.
 
 ## Agent formats & JSON-LD
 

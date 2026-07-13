@@ -27,11 +27,37 @@ defmodule Vutuv.Chat do
 
   @pubsub Vutuv.PubSub
 
-  # Opening new message requests is the spam vector; replying never is.
-  @new_conversation_limit 10
-  @new_conversation_window :timer.hours(1)
+  # Cold outreach — opening new message *requests* to members who don't already
+  # follow you — is the DM spam vector; replying to an accepted thread never is.
+  # So only a new *pending* conversation counts against the cap. The cap (count +
+  # window) is a per-installation knob, defaulting to a generous 20 a day, so a
+  # pushy recruiter is throttled long before a legitimate one notices. See
+  # `config :vutuv, :cold_outreach` and docs/ADMINS.md.
+  @default_cold_outreach_limit 20
+  @default_cold_outreach_window_ms :timer.hours(24)
 
-  def new_conversation_limit, do: @new_conversation_limit
+  defp cold_outreach_config, do: Application.get_env(:vutuv, :cold_outreach, [])
+
+  @doc "The most cold-outreach (new stranger) conversations a member may start per window."
+  def new_conversation_limit,
+    do: Keyword.get(cold_outreach_config(), :limit, @default_cold_outreach_limit)
+
+  @doc "The cold-outreach counting window, in milliseconds."
+  def cold_outreach_window_ms,
+    do: Keyword.get(cold_outreach_config(), :window_ms, @default_cold_outreach_window_ms)
+
+  @doc """
+  How many cold-outreach (new stranger) conversations `user` has opened in the
+  current window — the figure admins see when a recruiter's messaging is
+  questioned. Reads the rate-limiter budget without spending it, so it never
+  moves the counter it reports.
+  """
+  def cold_outreach_count(%User{id: user_id}), do: cold_outreach_count(user_id)
+
+  def cold_outreach_count(user_id) when is_binary(user_id),
+    do: Vutuv.RateLimiter.peek(cold_outreach_key(user_id), cold_outreach_window_ms())
+
+  defp cold_outreach_key(user_id), do: {:new_conversation, user_id}
 
   ## Conversations
 
@@ -129,9 +155,9 @@ defmodule Vutuv.Chat do
 
   defp check_request_limit(me, "pending") do
     Vutuv.RateLimiter.hit(
-      {:new_conversation, me.id},
-      @new_conversation_limit,
-      @new_conversation_window
+      cold_outreach_key(me.id),
+      new_conversation_limit(),
+      cold_outreach_window_ms()
     )
   end
 

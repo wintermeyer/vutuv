@@ -108,6 +108,26 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
     </.admin_card>
 
     <.admin_card
+      icon="briefcase"
+      title={gettext("Job postings")}
+      count={@jobs_published_count}
+      attention={@jobs_open_cases_count > 0}
+      href={~p"/admin/jobs"}
+      id="admin-jobs-link"
+      cta={gettext("Open job oversight")}
+    >
+      <%= if @jobs_open_cases_count == 0 do %>
+        {gettext("Every job posting: search, freeze/unfreeze, close or delete, with the poster's report history and cold-outreach counter.")}
+      <% else %>
+        {ngettext(
+          "%{count} job posting has an open moderation case.",
+          "%{count} job postings have an open moderation case.",
+          @jobs_open_cases_count
+        )}
+      <% end %>
+    </.admin_card>
+
+    <.admin_card
       icon="image"
       title={gettext("Link screenshots")}
       href={~p"/admin/screenshots"}

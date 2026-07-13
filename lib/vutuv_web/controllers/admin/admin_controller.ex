@@ -11,6 +11,8 @@ defmodule VutuvWeb.Admin.AdminController do
     # rate limiter and the security email work (issues #799, #837).
     client_ip = conn.remote_ip |> :inet.ntoa() |> to_string()
 
+    jobs_counts = Vutuv.Jobs.admin_overview_counts()
+
     # The full member browser lives at /admin/users; the dashboard just links to
     # it and surfaces the one actionable slice — the identity-verification queue.
     render(conn, "index.html",
@@ -25,6 +27,8 @@ defmodule VutuvWeb.Admin.AdminController do
       honor_tags_count: Vutuv.Tags.honor_tags_count(),
       organizations_count: Vutuv.Organizations.admin_overview_counts().active,
       flagged_aliases_count: Vutuv.Organizations.flagged_aliases_count(),
+      jobs_published_count: jobs_counts.published,
+      jobs_open_cases_count: jobs_counts.open_cases,
       pref_overrides_count: map_size(Vutuv.Prefs.list_default_rows()),
       frozen_accounts_count: Vutuv.Deliverability.frozen_count(),
       fediverse_enabled: Vutuv.Fediverse.enabled?(),

@@ -7,7 +7,11 @@ Anyone validated can write to anyone, but the conversation lands directly only
 when the **recipient already follows the sender** — otherwise it is a **message
 request** the recipient accepts (explicitly or by replying) or declines;
 declining is silent (the sender cannot tell it from being ignored) and opening
-new requests is rate-limited.
+new requests is rate-limited — the **cold-outreach cap** (`config :vutuv,
+:cold_outreach`, `COLD_OUTREACH_LIMIT` / `COLD_OUTREACH_WINDOW_HOURS`, default
+20 / 24h): the anti-spam ceiling on new requests to strangers, over which the
+sender gets a friendly "try again later". `Chat.cold_outreach_count/1` exposes
+the current spend to admins (issue #934; the `/admin/jobs` poster footprint).
 
 The shell badge counts conversations with unread messages, and a debounced email
 quotes the message and points the recipient back at the thread.

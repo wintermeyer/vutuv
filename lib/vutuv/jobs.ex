@@ -1214,6 +1214,212 @@ defmodule Vutuv.Jobs do
   defp presence_trimmed(""), do: nil
   defp presence_trimmed(value), do: value
 
+  # --- admin dashboard (#934) -----------------------------------------------
+
+  @admin_per_page 25
+
+  @doc """
+  Overview tile counts for `/admin/jobs`: currently-live public postings,
+  those expiring within 7 days, frozen ones, and open job-related moderation
+  cases (delegated to `Vutuv.Moderation`, so the figure can't drift).
+  """
+  def admin_overview_counts do
+    today = BerlinTime.today()
+    soon = Date.add(today, 7)
+
+    %{
+      published:
+        count_where(
+          dynamic([p], p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today)
+        ),
+      expiring:
+        count_where(
+          dynamic(
+            [p],
+            p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today and
+              p.expires_on <= ^soon
+          )
+        ),
+      frozen: count_where(dynamic([p], not is_nil(p.frozen_at))),
+      open_cases: Vutuv.Moderation.open_case_count("job_posting")
+    }
+  end
+
+  defp count_where(condition) do
+    Repo.aggregate(from(p in JobPosting, where: ^condition), :count, :id)
+  end
+
+  @doc """
+  A page of the admin job list: filtered by `:status`
+  (`published`/`expiring`/`frozen`/`closed`/`expired`/`draft`/nil=all), narrowed
+  to postings with an open moderation case (`:report == "open"`), and searched
+  over title, poster (name / @handle) and organization name. Newest first, same
+  shape as `Organizations.admin_organizations_page/1`.
+  """
+  def admin_jobs_page(opts \\ []) do
+    today = BerlinTime.today()
+    search = presence(opts[:search])
+
+    query =
+      from(p in JobPosting)
+      |> admin_status_filter(opts[:status], today)
+      |> admin_report_filter(opts[:report])
+      |> then(&if(search, do: admin_search(&1, search), else: &1))
+
+    total = Repo.aggregate(query, :count, :id)
+    total_pages = max(1, ceil(total / @admin_per_page))
+    page = (opts[:page] || 1) |> max(1) |> min(total_pages)
+
+    entries =
+      query
+      |> order_by([p], desc: p.inserted_at)
+      |> limit(^@admin_per_page)
+      |> offset(^((page - 1) * @admin_per_page))
+      |> preload([:organization, :user])
+      |> Repo.all()
+
+    %{
+      entries: entries,
+      page: page,
+      total_pages: total_pages,
+      total: total,
+      per_page: @admin_per_page
+    }
+  end
+
+  defp admin_status_filter(query, "published", today),
+    do:
+      where(query, [p], p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today)
+
+  defp admin_status_filter(query, "expiring", today) do
+    soon = Date.add(today, 7)
+
+    where(
+      query,
+      [p],
+      p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today and
+        p.expires_on <= ^soon
+    )
+  end
+
+  defp admin_status_filter(query, "frozen", _today),
+    do: where(query, [p], not is_nil(p.frozen_at))
+
+  defp admin_status_filter(query, "closed", _today),
+    do: where(query, [p], p.status == :closed and is_nil(p.frozen_at))
+
+  # A published posting past its expiry reads as expired before the sweeper flips
+  # it, so include both here and exclude both from "published".
+  defp admin_status_filter(query, "expired", today),
+    do:
+      where(
+        query,
+        [p],
+        is_nil(p.frozen_at) and
+          (p.status == :expired or (p.status == :published and p.expires_on < ^today))
+      )
+
+  defp admin_status_filter(query, "draft", _today),
+    do: where(query, [p], p.status == :draft)
+
+  defp admin_status_filter(query, _all, _today), do: query
+
+  defp admin_report_filter(query, "open") do
+    where(
+      query,
+      [p],
+      fragment(
+        "EXISTS (SELECT 1 FROM moderation_cases mc WHERE mc.content_type = 'job_posting' AND mc.content_id = ? AND mc.status IN ('pending_owner','flagged','escalated'))",
+        p.id
+      )
+    )
+  end
+
+  defp admin_report_filter(query, _), do: query
+
+  defp admin_search(query, term) do
+    pattern = "%" <> escape_like(term) <> "%"
+
+    from(p in query,
+      where:
+        ilike(p.title, ^pattern) or ilike(p.hiring_org_name, ^pattern) or
+          fragment(
+            "EXISTS (SELECT 1 FROM users u WHERE u.id = ? AND (u.username ILIKE ? OR u.first_name ILIKE ? OR u.last_name ILIKE ?))",
+            p.user_id,
+            ^pattern,
+            ^pattern,
+            ^pattern
+          ) or
+          fragment(
+            "EXISTS (SELECT 1 FROM organizations o WHERE o.id = ? AND o.name ILIKE ?)",
+            p.organization_id,
+            ^pattern
+          )
+    )
+  end
+
+  @doc "Everything the admin detail drawer shows for one posting, or nil."
+  def admin_job_detail(id) do
+    with uuid when not is_nil(uuid) <- Vutuv.UUIDv7.cast_or_nil(id),
+         %JobPosting{} = posting <- get_job_posting(uuid) do
+      posting = preload_for_show(posting)
+
+      %{
+        posting: posting,
+        cases: Vutuv.Moderation.cases_for_content("job_posting", posting.id),
+        footprint: posting.user && member_job_footprint(posting.user)
+      }
+    else
+      _ -> nil
+    end
+  end
+
+  @doc """
+  A member's jobs footprint for the admin drawer (#934): their live and total
+  postings, open job-related cases, and the current cold-outreach counter (the
+  new-stranger message requests they've opened this window, read without
+  spending the budget).
+  """
+  def member_job_footprint(%User{id: user_id} = user) do
+    today = BerlinTime.today()
+
+    %{
+      active:
+        count_where(
+          dynamic(
+            [p],
+            p.user_id == ^user_id and p.status == :published and is_nil(p.frozen_at) and
+              p.expires_on >= ^today
+          )
+        ),
+      total: count_where(dynamic([p], p.user_id == ^user_id)),
+      open_cases: Vutuv.Moderation.owner_open_case_count(user_id, "job_posting"),
+      cold_outreach: Vutuv.Chat.cold_outreach_count(user)
+    }
+  end
+
+  @doc "Admin freeze/unfreeze: sets/clears `frozen_at`, pulling the posting off the public board and its indexing/agent channels."
+  def admin_set_frozen(%JobPosting{} = posting, frozen?) do
+    frozen_at = if frozen?, do: now()
+
+    posting
+    |> Ecto.Changeset.change(frozen_at: frozen_at)
+    |> Repo.update()
+    |> broadcast_updated()
+    |> board_ping()
+  end
+
+  @doc "Admin ends a live posting (a moderation close), keeping the lifecycle honest."
+  def admin_close(%JobPosting{} = posting) do
+    posting
+    |> JobPosting.status_changeset(:closed)
+    |> Ecto.Changeset.put_change(:closed_at, now())
+    |> Ecto.Changeset.put_change(:close_reason, :moderation)
+    |> Repo.update()
+    |> broadcast_updated()
+    |> board_ping()
+  end
+
   # --- salary ---------------------------------------------------------------
 
   @doc "The yearly-equivalent of a pay figure, for cross-period comparison (#933/#935)."

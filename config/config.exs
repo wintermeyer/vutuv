@@ -149,6 +149,15 @@ config :vutuv, :jobs,
   max_published_per_member: 3,
   max_published_per_organization: 10
 
+# Cold-outreach cap (Vutuv.Chat): the anti-spam ceiling on how many new message
+# *requests* one member may open to strangers (members who don't already follow
+# them) within :window_ms. Replying to an accepted thread never counts. A
+# generous default so a pushy recruiter is throttled long before a legitimate
+# one is. Runtime overrides: COLD_OUTREACH_LIMIT, COLD_OUTREACH_WINDOW_HOURS.
+config :vutuv, :cold_outreach,
+  limit: 20,
+  window_ms: 24 * 60 * 60 * 1000
+
 # Offline structured location (Vutuv.Geo). :geo_countries lists which bundled
 # GeoNames postal datasets (priv/geo/<CC>.txt[.gz]) to load for zip → lat/lon
 # resolution; :default_country preselects country inputs. No outbound calls —

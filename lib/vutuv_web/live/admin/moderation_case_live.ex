@@ -214,6 +214,15 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
           </p>
         <% end %>
 
+        <p :if={@case.content_type == "job_posting" && @content} class="mt-3">
+          <a
+            href={~p"/jobs/#{@content.slug}"}
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            {gettext("Open the job posting")} ›
+          </a>
+        </p>
+
         <blockquote class="mt-3 rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700">
           {@case.content_snapshot || gettext("(no text)")}
         </blockquote>

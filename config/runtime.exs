@@ -160,6 +160,30 @@ if config_env() == :prod do
     config :vutuv, :jobs, Keyword.merge(Application.get_env(:vutuv, :jobs, []), jobs_env)
   end
 
+  # Cold-outreach cap (Vutuv.Chat): the anti-spam ceiling on new message requests
+  # to strangers. COLD_OUTREACH_LIMIT sets the count, COLD_OUTREACH_WINDOW_HOURS
+  # the window. Defaults (config.exs) are the vutuv.de values.
+  cold_outreach_env =
+    [
+      limit: System.get_env("COLD_OUTREACH_LIMIT"),
+      window_ms:
+        case System.get_env("COLD_OUTREACH_WINDOW_HOURS") do
+          nil -> nil
+          hours -> String.to_integer(hours) * 60 * 60 * 1000
+        end
+    ]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.map(fn
+      {:limit, value} -> {:limit, String.to_integer(value)}
+      other -> other
+    end)
+
+  if cold_outreach_env != [] do
+    config :vutuv,
+           :cold_outreach,
+           Keyword.merge(Application.get_env(:vutuv, :cold_outreach, []), cold_outreach_env)
+  end
+
   # Offline structured location (Vutuv.Geo). GEO_COUNTRIES (comma-separated ISO
   # 3166-1 alpha-2 codes) picks which bundled priv/geo/<CC>.txt[.gz] postal
   # datasets to load; DEFAULT_COUNTRY preselects country inputs. No outbound

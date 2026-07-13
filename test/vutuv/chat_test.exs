@@ -170,6 +170,30 @@ defmodule Vutuv.ChatTest do
     end
   end
 
+  describe "cold_outreach_count/1 (the admin-visible counter, #934)" do
+    test "counts new stranger requests without moving the counter" do
+      me = user()
+      assert Chat.cold_outreach_count(me) == 0
+
+      {:ok, _} = Chat.find_or_create_conversation(me, user())
+      {:ok, _} = Chat.find_or_create_conversation(me, user())
+      assert Chat.cold_outreach_count(me) == 2
+
+      # Peeking is read-only: reading it again does not spend the budget.
+      assert Chat.cold_outreach_count(me) == 2
+
+      # An accepted (opt-in) conversation is not cold outreach and doesn't count.
+      follower = user()
+      follow!(follower, me)
+      {:ok, %Conversation{status: "accepted"}} = Chat.find_or_create_conversation(me, follower)
+      assert Chat.cold_outreach_count(me) == 2
+    end
+
+    test "the cap defaults to a generous 20 and is config-driven" do
+      assert Chat.new_conversation_limit() == 20
+    end
+  end
+
   describe "get_conversation/2" do
     test "returns the conversation for a participant, nil for outsiders" do
       [a, b, outsider] = [user(), user(), user()]

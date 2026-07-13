@@ -594,6 +594,46 @@ defmodule Vutuv.Moderation do
   end
 
   @doc """
+  How many open cases (any open status: frozen-pending-owner, flagged or
+  escalated) exist for a content type — the per-area tile figure (e.g. the
+  `/admin/jobs` "open job-related moderation cases" count for `"job_posting"`).
+  """
+  def open_case_count(content_type) when is_binary(content_type) do
+    Repo.aggregate(
+      from(c in Case,
+        where: c.content_type == ^content_type and c.status in ^Case.open_statuses()
+      ),
+      :count
+    )
+  end
+
+  @doc "How many open cases of `content_type` are owned by `owner_id` (the member footprint)."
+  def owner_open_case_count(owner_id, content_type) do
+    Repo.aggregate(
+      from(c in Case,
+        where:
+          c.owner_id == ^owner_id and c.content_type == ^content_type and
+            c.status in ^Case.open_statuses()
+      ),
+      :count
+    )
+  end
+
+  @doc """
+  Every case ever opened against one content item (open and resolved), newest
+  first, with reports preloaded — the report history the admin detail drawers
+  show. Takes the content's wire type + id.
+  """
+  def cases_for_content(content_type, content_id) do
+    from(c in Case,
+      where: c.content_type == ^content_type and c.content_id == ^content_id,
+      order_by: [desc: c.inserted_at],
+      preload: [:reports]
+    )
+    |> Repo.all()
+  end
+
+  @doc """
   Admin ruling: the report was justified. The content stays frozen (a profile
   case unfreezes the profile — the strike ladder takes over there) and the
   owner gets a strike: warning, then a week's suspension, then permanent

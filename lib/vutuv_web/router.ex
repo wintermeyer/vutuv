@@ -582,6 +582,10 @@ defmodule VutuvWeb.Router do
       # The verified-organization oversight dashboard (issue #930): freeze/unfreeze/
       # archive/delete act reload-free over the socket.
       live("/organizations", OrganizationLive, :index)
+
+      # The job-posting oversight dashboard (issue #934): freeze/unfreeze/close/
+      # delete act reload-free, and a freeze pings the public board.
+      live("/jobs", JobLive, :index)
     end
   end
 

@@ -1,8 +1,18 @@
 # Moderation (family-friendly by design)
 
-Any member can report a post, a private message or a whole profile (quiet
-"Report" affordances on every post card, message bubble and profile footer;
-categories: not family-friendly, bullying/harassment, spam, other).
+Any member can report a post, a private message, a whole profile, a verified
+organization page or a job posting (quiet "Report" affordances on every post
+card, message bubble, profile footer, organization page and job posting;
+categories: not family-friendly, bullying/harassment, spam, other — a job
+posting instead offers *misleading job ad* / spam / other, gated per content
+type in `Report.categories_for/1`).
+
+The same freeze → case → strike machinery covers every content type; `frozen_at`
+lives on the reported row and its context's visibility chokepoint reads it. For
+a **job posting** a report in good standing freezes it off the public board and
+every machine channel (issue #932/#934), and the oversight lives at `/admin/jobs`
+(see `admin.md` + `jobs.md`) alongside the shared `/admin/moderation` queue —
+a job-posting case shows a "Job posting" label and links straight to the posting.
 
 A report from a reporter in good standing **freezes the content instantly**
 (`frozen_at`) — it vanishes for everyone but the owner and admins, with no

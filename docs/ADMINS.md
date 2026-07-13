@@ -117,6 +117,8 @@ Everything else has a default (the vutuv.de production value):
 | `JOB_RUNTIME_DAYS` | `90` | How long a published job posting stays live before it auto-expires. Flat, no renewals — a still-open role gets a fresh posting |
 | `JOBS_MAX_PER_MEMBER` | `3` | Most concurrently-published job postings for one member (anti-abuse) |
 | `JOBS_MAX_PER_ORG` | `10` | Most concurrently-published job postings for one organization |
+| `COLD_OUTREACH_LIMIT` | `20` | Anti-spam cap on how many new message *requests* one member may open to strangers (members who don't already follow them) within the window. Replying to an accepted thread never counts. A member over the cap gets a friendly "try again later"; admins see the counter on a poster in the `/admin/jobs` detail drawer |
+| `COLD_OUTREACH_WINDOW_HOURS` | `24` | The window, in hours, over which `COLD_OUTREACH_LIMIT` is measured |
 | `GEO_COUNTRIES` | `DE,AT,CH` | Comma-separated ISO 3166-1 alpha-2 codes whose bundled GeoNames postal data is loaded for offline zip → coordinate resolution on job postings. To add a country, drop its GeoNames zip export (`download.geonames.org/export/zip/<CC>.zip` → extracted `<CC>.txt`, optionally gzipped to `<CC>.txt.gz`) into `priv/geo/` and add the code here. Fully offline — no outbound calls |
 | `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages) |
 

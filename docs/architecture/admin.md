@@ -145,6 +145,52 @@ A flagged-alias count surfaces both on this page and as the coral "attention"
 badge on the `/admin` organization-pages card, and the operator's new-verified /
 domain-dropped notices link here.
 
+## Job postings (`/admin/jobs`)
+
+`VutuvWeb.Admin.JobLive` (issue #934) is the oversight dashboard for job postings
+(`Vutuv.Jobs`, see `jobs.md`), sharing the `OrganizationLive` scaffold. Four
+overview tiles (live / expiring within 7 days / frozen / open job-related
+moderation cases), a search over **title, poster (name / @handle) and
+organization name**, status filter chips (all / live / expiring / frozen /
+closed / expired / draft) and a separate **"⚑ Open reports"** toggle chip that
+narrows to postings with an open moderation case. Filter/status/report/page/
+selection state lives in the URL (`push_patch`), so a view is shareable. The
+counts come from `Jobs.admin_overview_counts/0` (the open-case figure is
+delegated to `Moderation.open_case_count("job_posting")`, so it can't drift), the
+list from `Jobs.admin_jobs_page/1`.
+
+Opening a posting reveals a **detail drawer** (`Jobs.admin_job_detail/1`): the
+poster (linked), the employer attribution (a verified organization page vs a
+free-text, unverified name), status, the view/apply counters, the published /
+expiry dates, the **poster footprint** (live + total postings, open job-related
+cases, and the cold-outreach counter — see below), and the **report history**
+(every case for the posting, each linking to `/admin/moderation/:id`). The
+actions act reload-free:
+
+- **Freeze / Unfreeze** — `Jobs.admin_set_frozen/2` sets/clears `frozen_at`, the
+  exact effect of a report freeze (`moderation.md`): the posting vanishes from the
+  public board and every machine channel (sitemap, JSON-LD, agent formats — the
+  `visible_to?`/`indexable?`/`agent_visible?` gates all key on `frozen_at`) but
+  stays visible to its poster and admins. The freeze pings the public board topic,
+  so an open `/jobs` re-queries with no reload. `jobs_freeze_compliance_test.exs`
+  is the standing guard that a freeze really strips every channel.
+- **Close** — `Jobs.admin_close/1` ends a live posting with the `:moderation` close
+  reason (a regular ending, so the lifecycle stays honest), rather than deleting.
+- **Delete** — `Jobs.delete_job_posting/1`, for clear abuse; purges the image files
+  and settles any open case.
+
+The **cold-outreach counter** is the anti-spam lever on pushy recruiting: `Vutuv.Chat`
+caps how many new message *requests* one member may open to strangers (members who
+don't already follow them) within a window (`COLD_OUTREACH_LIMIT` / `_WINDOW_HOURS`,
+default 20 / 24h; see `ADMINS.md` and `messages.md`). A member over the cap gets a
+friendly "try again later"; `Chat.cold_outreach_count/1` reads the current spend
+(without moving it, via `RateLimiter.peek/2`) so admins see it in the drawer. Report
+rulings on a job posting reuse the standard strike ladder (`moderation.md`), which
+ends in account deactivation — the "freeze the HR account" lever.
+
+An open-case count surfaces both on this page and as the coral "attention" badge on
+the `/admin` job-postings card.
+
 ## Delete account (`/admin/users/delete`)
 
 A focused, admins-only **LiveView** for permanently removing an account.

@@ -204,6 +204,10 @@ defmodule VutuvWeb.Admin.AdminHTML do
           <path d="M15 9h2a2 2 0 0 1 2 2v10" />
           <path d="M3 21h18" />
           <path d="M8 7h2M8 11h2M8 15h2" />
+        <% "briefcase" -> %>
+          <rect x="3" y="7.5" width="18" height="12" rx="2" />
+          <path d="M8.5 7.5V6a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v1.5" />
+          <path d="M3 12.5h18" />
       <% end %>
     </svg>
     """
