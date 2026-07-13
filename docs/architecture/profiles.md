@@ -404,7 +404,13 @@ Three methods, the member's choice on the owner-only page at
   who controls the whole host, using a per-link `verification_token`. Links use
   their own scheme (`vutuv-verify=` TXT / `/.well-known/vutuv-verify.txt`),
   distinct from the organization `vutuv-organization-verify=` scheme, so a link proof
-  never doubles as an organization proof on the same host.
+  never doubles as an organization proof on the same host. The DNS TXT record is
+  accepted on either the host itself **or** the CNAME-safe `_vutuv.<host>`
+  alternate name (`WebVerification.dns_challenge_name/1`): a host that is itself a
+  CNAME (a hosted changelog, a redirect) cannot carry a bare-host TXT record — a
+  CNAME and a TXT cannot coexist on one name (RFC 1034) — so the underscore label
+  (the `_dmarc` / `_acme-challenge` convention, RFC 8552, never a CNAME target)
+  gives such a member a place to publish it (issue #947).
 
 State lives on the `urls` row (`verification_method`, `verification_token`,
 `verified_at`, `last_checked_at`, `grace_deadline_at`) — per-link and independent,

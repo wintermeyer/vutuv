@@ -41,16 +41,56 @@ success the link earns the verified mark shown on the profile + section pages. -
     <.verify_form url={@url} method="rel_me" label={gettext("Verify via back-link")} />
   </.card>
 
-  <%!-- DNS TXT record (for a member who controls the whole domain) --%>
+  <%!-- DNS TXT record (for a member who controls the domain's DNS) --%>
   <.card :if={@enabled?} class="mt-4 space-y-3">
     <.section_title>{gettext("DNS TXT record")}</.section_title>
     <p class="text-sm text-slate-700 dark:text-slate-300">
-      {gettext("Add this TXT record to %{host}:", host: @host)}
+      {gettext("In your DNS settings, create a new TXT record with this name and value:")}
     </p>
-    <code
-      phx-no-curly-interpolation
-      class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
-    ><%= @dns_value %></code>
+    <dl class="space-y-3">
+      <div class="space-y-1">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Name (host)")}
+        </dt>
+        <dd>
+          <code
+            phx-no-curly-interpolation
+            class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+          ><%= @host %></code>
+        </dd>
+      </div>
+      <div class="space-y-1">
+        <dt class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {gettext("Value")}
+        </dt>
+        <dd>
+          <code
+            phx-no-curly-interpolation
+            class="block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+          ><%= @dns_value %></code>
+        </dd>
+      </div>
+    </dl>
+
+    <%!-- CNAME fallback: a TXT record cannot share a name with a CNAME (RFC 1034),
+    so a host pointed at another domain by a CNAME/alias has no place for the
+    bare-host record. The _vutuv.<host> name is never a CNAME target. --%>
+    <div class="rounded-lg bg-slate-50 px-3 py-3 text-xs text-slate-600 dark:bg-slate-800/60 dark:text-slate-400">
+      <p>
+        {gettext(
+          "Getting an error, or is %{host} a CNAME / alias to another address? A TXT record cannot share a name with a CNAME. Use this name instead, with the exact same value as above:",
+          host: @host
+        )}
+      </p>
+      <code
+        phx-no-curly-interpolation
+        class="mt-2 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
+      ><%= @dns_challenge_name %></code>
+    </div>
+
+    <p class="text-xs text-slate-600 dark:text-slate-400">
+      {gettext("DNS changes can take a while to spread. If it does not verify right away, wait a few minutes and try again.")}
+    </p>
     <.verify_form url={@url} method="dns" label={gettext("Verify via DNS")} />
   </.card>
 

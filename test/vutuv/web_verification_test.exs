@@ -47,6 +47,32 @@ defmodule Vutuv.WebVerificationTest do
                raise "boom"
              end)
     end
+
+    test "also accepts the record at the CNAME-safe _vutuv.<host> alternate name" do
+      token = "abc123"
+      expected = ~c"vutuv-verify=#{token}"
+
+      # A host that is itself a CNAME (a hosted page, a redirect) cannot carry a
+      # bare-host TXT record — a CNAME and a TXT cannot coexist on one name
+      # (RFC 1034). The member publishes the record at `_vutuv.<host>` instead,
+      # a name that is never a CNAME target, and it must still verify.
+      resolver = fn
+        "_vutuv.changelog.example.org" -> [[expected]]
+        _ -> []
+      end
+
+      assert WebVerification.dns_verified?(
+               "changelog.example.org",
+               "vutuv-verify=",
+               token,
+               resolver
+             )
+    end
+
+    test "dns_challenge_name/1 prefixes the host with the _vutuv label" do
+      assert WebVerification.dns_challenge_name("changelog.example.org") ==
+               "_vutuv.changelog.example.org"
+    end
   end
 
   describe "well_known_verified?/4" do

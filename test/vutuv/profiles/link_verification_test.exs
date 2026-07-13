@@ -67,6 +67,27 @@ defmodule Vutuv.Profiles.LinkVerificationTest do
       assert url.verification_method == "dns"
     end
 
+    test "dns verifies via the CNAME-safe _vutuv.<host> name when the host is a CNAME" do
+      user = insert(:activated_user)
+      # A host that is itself a CNAME cannot carry a bare-host TXT record, so the
+      # member publishes it at _vutuv.<host> instead (issue #947).
+      url =
+        link(user, %{value: "https://changelog.alice.example/"})
+        |> LinkVerification.ensure_token()
+
+      expected = ~c"vutuv-verify=#{url.verification_token}"
+
+      Application.put_env(:vutuv, :user_links_dns_resolver, fn
+        "_vutuv.changelog.alice.example" -> [[expected]]
+        _ -> []
+      end)
+
+      on_exit(fn -> Application.delete_env(:vutuv, :user_links_dns_resolver) end)
+
+      assert {:ok, url} = LinkVerification.verify(url, user, "dns")
+      assert url.verification_method == "dns"
+    end
+
     test "well_known marks the link verified when the file serves the token" do
       user = insert(:activated_user)
       url = link(user) |> LinkVerification.ensure_token()

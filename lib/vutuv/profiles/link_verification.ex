@@ -69,6 +69,13 @@ defmodule Vutuv.Profiles.LinkVerification do
   def dns_txt_value(%Url{verification_token: token}) when is_binary(token),
     do: WebVerification.dns_txt_value(@dns_prefix, token)
 
+  @doc """
+  The CNAME-safe alternate name (`_vutuv.<host>`) the DNS TXT record may also
+  live at, for a link whose host is itself a CNAME.
+  """
+  def dns_challenge_name(%Url{value: value}),
+    do: WebVerification.dns_challenge_name(host(value))
+
   @doc "The well-known URL fetched for the `well_known` method."
   def well_known_url(%Url{value: value}),
     do: WebVerification.well_known_url(host(value), @well_known_path)

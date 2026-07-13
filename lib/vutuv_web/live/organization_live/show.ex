@@ -80,6 +80,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
     |> assign(:frozen?, not is_nil(organization.frozen_at))
     |> assign(:engagement, Organizations.organization_engagement(organization, viewer))
     |> assign(:dns_value, primary && Organizations.dns_txt_value(primary))
+    |> assign(:dns_challenge_name, primary && Organizations.dns_challenge_name(primary))
     |> assign(:well_known_url, primary && Organizations.well_known_url(primary))
     |> assign(:well_known_content, primary && Organizations.well_known_content(primary))
     |> assign(:verification_enabled?, Organizations.verification_enabled?())
@@ -414,12 +415,20 @@ defmodule VutuvWeb.OrganizationLive.Show do
           <div class="mt-4 rounded-lg bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
             <%= if @primary_domain.method == "dns" do %>
               <p class="text-slate-700 dark:text-slate-300">
-                {gettext("Add this TXT record to %{domain}:", domain: @primary_domain.domain)}
+                {gettext("In your DNS settings, create a TXT record on the name %{domain} with this value:",
+                  domain: @primary_domain.domain
+                )}
               </p>
               <code
                 phx-no-curly-interpolation
                 class="mt-2 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"
               ><%= @dns_value %></code>
+              <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+                {gettext("If %{domain} is a CNAME / alias (a TXT record cannot share a name with a CNAME), put the record on %{name} instead, with the same value.",
+                  domain: @primary_domain.domain,
+                  name: @dns_challenge_name
+                )}
+              </p>
             <% else %>
               <p class="text-slate-700 dark:text-slate-300">
                 {gettext("Serve this file at:")}

@@ -105,7 +105,9 @@ of the domain itself. The proof mechanics live in the shared
 `profiles.md`); `Vutuv.Organizations.Verification` is the organization-flavoured wrapper
 that owns the organization gate and test seams:
 
-- **DNS** — a `vutuv-organization-verify=<token>` TXT record on the domain.
+- **DNS** — a `vutuv-organization-verify=<token>` TXT record on the domain, or on
+  the CNAME-safe `_vutuv.<domain>` alternate name for a domain that is itself a
+  CNAME (see `profiles.md` and `WebVerification.dns_challenge_name/1`, issue #947).
 - **Website file** — the token served at
   `https://<domain>/.well-known/vutuv-organization-verify.txt`, fetched with `Req`
   behind the SSRF guard (`Vutuv.Ssrf`), never following redirects.

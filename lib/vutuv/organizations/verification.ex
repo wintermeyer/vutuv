@@ -37,6 +37,9 @@ defmodule Vutuv.Organizations.Verification do
   @doc "The exact TXT record value a member must publish for the `dns` method."
   def dns_txt_value(token), do: WebVerification.dns_txt_value(@dns_prefix, token)
 
+  @doc "The CNAME-safe alternate name (`_vutuv.<host>`) the `dns` TXT record may also live at."
+  def dns_challenge_name(host), do: WebVerification.dns_challenge_name(host)
+
   @doc "Whether `host` publishes a `vutuv-organization-verify=<token>` TXT record."
   def dns_verified?(host, token) when is_binary(host) and is_binary(token) do
     WebVerification.dns_verified?(host, @dns_prefix, token, dns_resolver())

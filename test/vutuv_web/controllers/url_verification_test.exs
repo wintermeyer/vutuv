@@ -42,6 +42,11 @@ defmodule VutuvWeb.UrlVerificationTest do
       assert html =~ "rel=&quot;me&quot;"
       assert html =~ "#{VutuvWeb.Endpoint.url()}/#{user.username}"
 
+      # The DNS instructions name the host and the CNAME-safe alternate name, so
+      # a member whose host is a CNAME knows where to publish the record (#947).
+      assert html =~ "alice.example"
+      assert html =~ "_vutuv.alice.example"
+
       # A token was minted for the DNS / well-known instructions.
       assert Repo.get!(Url, url.id).verification_token
     end

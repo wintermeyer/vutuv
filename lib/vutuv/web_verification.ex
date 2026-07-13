@@ -5,7 +5,9 @@ defmodule Vutuv.WebVerification do
   links (`Vutuv.Profiles.LinkVerification`). Each primitive proves control of a
   web resource without any assumption about who owns it:
 
-    * `dns` — a `<prefix><token>` TXT record on a host.
+    * `dns` — a `<prefix><token>` TXT record, published either on the host
+      itself or on the CNAME-safe `_vutuv.<host>` alternate name (see
+      `dns_challenge_name/1`).
     * `well_known` — the token served at a `.well-known` path on the host.
     * `rel_me` — the page links back to a given URL with `rel="me"` (the
       IndieWeb / Mastodon standard, which needs no token: the back-link target
@@ -39,12 +41,29 @@ defmodule Vutuv.WebVerification do
 
   # --- DNS TXT ----------------------------------------------------------------
 
+  # A CNAME and a TXT record cannot coexist on the same DNS name (RFC 1034), so a
+  # host that is itself a CNAME (a hosted page such as `changelog.example.org` →
+  # `tharg.host.example`, a redirect) has no place for a bare-host TXT record —
+  # the provider rejects it and a TXT query just follows the CNAME to the target.
+  # We therefore also accept the record at an underscore-prefixed alternate name,
+  # the `_dmarc` / `_acme-challenge` convention (RFC 8552): an underscore label is
+  # never a CNAME target, so a member can always publish the record there.
+  @dns_challenge_label "_vutuv"
+
   @doc "The exact TXT record value (`<prefix><token>`) to publish for the `dns` method."
   def dns_txt_value(prefix, token) when is_binary(prefix) and is_binary(token),
     do: prefix <> token
 
   @doc """
-  Whether `host` publishes a `<prefix><token>` TXT record. `resolver` is a
+  The CNAME-safe alternate name (`_vutuv.<host>`) a `dns` TXT record may also
+  live at, for a host that is itself a CNAME and so cannot carry a bare-host TXT
+  record.
+  """
+  def dns_challenge_name(host) when is_binary(host), do: @dns_challenge_label <> "." <> host
+
+  @doc """
+  Whether a `<prefix><token>` TXT record is published for `host` — on the host
+  itself or on its CNAME-safe `_vutuv.<host>` alternate name. `resolver` is a
   `fun(host) -> [txt_record]` where each record is a list of charlist chunks
   (the shape `:inet_res.lookup/3` returns).
   """
@@ -52,7 +71,11 @@ defmodule Vutuv.WebVerification do
       when is_binary(host) and is_binary(prefix) and is_binary(token) and
              is_function(resolver, 1) do
     expected = dns_txt_value(prefix, token)
-    Enum.any?(txt_records(host, resolver), &(&1 == expected))
+
+    # The bare host is checked first, so the common (non-CNAME) case verifies in
+    # a single lookup and only a miss pays for the second, alternate-name query.
+    [host, dns_challenge_name(host)]
+    |> Enum.any?(fn name -> Enum.any?(txt_records(name, resolver), &(&1 == expected)) end)
   end
 
   defp txt_records(host, resolver) do

@@ -252,6 +252,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
     assigns =
       assign(assigns, :domain, domain)
       |> assign(:dns_value, Organizations.dns_txt_value(domain))
+      |> assign(:dns_challenge_name, Organizations.dns_challenge_name(domain))
       |> assign(:well_known_url, Organizations.well_known_url(domain))
       |> assign(:well_known_content, Organizations.well_known_content(domain))
 
@@ -281,8 +282,9 @@ defmodule VutuvWeb.OrganizationLive.Domains do
       </div>
 
       <%= if @domain.method == "dns" do %>
-        <p class="mt-3 text-slate-700 dark:text-slate-300">{gettext("Add this TXT record to %{domain}:", domain: @domain.domain)}</p>
+        <p class="mt-3 text-slate-700 dark:text-slate-300">{gettext("In your DNS settings, create a TXT record on the name %{domain} with this value:", domain: @domain.domain)}</p>
         <code phx-no-curly-interpolation class="mt-1 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"><%= @dns_value %></code>
+        <p class="mt-2 text-xs text-slate-600 dark:text-slate-400">{gettext("If %{domain} is a CNAME / alias (a TXT record cannot share a name with a CNAME), put the record on %{name} instead, with the same value.", domain: @domain.domain, name: @dns_challenge_name)}</p>
       <% else %>
         <p class="mt-3 text-slate-700 dark:text-slate-300">{gettext("Serve this file at:")}</p>
         <code phx-no-curly-interpolation class="mt-1 block overflow-x-auto rounded bg-white px-3 py-2 font-mono text-xs text-slate-900 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700"><%= @well_known_url %></code>

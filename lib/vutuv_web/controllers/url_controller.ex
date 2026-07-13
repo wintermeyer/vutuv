@@ -121,6 +121,7 @@ defmodule VutuvWeb.UrlController do
       profile_url: LinkVerification.profile_urls(conn.assigns[:user]) |> List.first(),
       host: URI.parse(url.value).host,
       dns_value: LinkVerification.dns_txt_value(url),
+      dns_challenge_name: LinkVerification.dns_challenge_name(url),
       well_known_url: LinkVerification.well_known_url(url),
       well_known_content: LinkVerification.well_known_content(url),
       page_title: gettext("Verify link")

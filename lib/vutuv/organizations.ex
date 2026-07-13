@@ -656,6 +656,13 @@ defmodule Vutuv.Organizations do
   def dns_txt_value(%OrganizationDomain{verification_token: token}),
     do: Verification.dns_txt_value(token)
 
+  @doc """
+  The CNAME-safe alternate name (`_vutuv.<domain>`) the DNS TXT record may also
+  live at, for a domain that is itself a CNAME.
+  """
+  def dns_challenge_name(%OrganizationDomain{domain: host}),
+    do: Verification.dns_challenge_name(host)
+
   @doc "The well-known file URL and content for the `well_known` method."
   def well_known_url(%OrganizationDomain{domain: host}), do: Verification.well_known_url(host)
   def well_known_content(%OrganizationDomain{verification_token: token}), do: token
