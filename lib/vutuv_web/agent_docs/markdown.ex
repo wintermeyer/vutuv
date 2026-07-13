@@ -159,7 +159,11 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       frontmatter(doc),
       "# #{doc.name}",
       doc.description,
-      section(gettext("Most endorsed members"), Enum.map(doc.most_endorsed_users, &person_line/1))
+      section(
+        gettext("Most endorsed members"),
+        Enum.map(doc.most_endorsed_users, &person_line/1)
+      ),
+      tag_open_positions(doc)
     ]
     |> join_blocks()
   end
@@ -190,7 +194,8 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       ]
       |> Enum.filter(&is_binary/1)
       |> Enum.join("\n"),
-      organization_people(doc)
+      organization_people(doc),
+      organization_open_positions(doc)
     ]
     |> join_blocks()
   end
@@ -214,6 +219,18 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       doc.description,
       job_tags(gettext("Required"), doc.required_tags),
       job_tags(gettext("Nice to have"), doc.nice_to_have_tags)
+    ]
+    |> join_blocks()
+  end
+
+  # The public job board (/jobs) — a listing of posting summaries.
+  def render(%{type: "job_board"} = doc) do
+    [
+      frontmatter(doc),
+      "# #{doc.title}",
+      doc.description,
+      Enum.map_join(doc.postings, "\n\n", &job_summary/1),
+      doc.next && "[#{gettext("Next page")}](#{doc.next})"
     ]
     |> join_blocks()
   end
@@ -313,6 +330,48 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp job_tags(label, tags) do
     "## #{label}\n" <> Enum.map_join(tags, "\n", &"- [#{&1.name}](#{&1.url})")
   end
+
+  # One posting summary block on the board (/jobs) or an "Offene Stellen" section.
+  defp job_summary(entry) do
+    [
+      "## [#{md_text(entry.title)}](#{entry.url})",
+      "- #{gettext("Employer")}: #{job_employer(entry.employer)}",
+      "- #{gettext("Employment type")}: #{entry.employment_type}",
+      "- #{gettext("Workplace")}: #{entry.workplace_type}",
+      job_location(entry),
+      entry.salary_line && "- #{gettext("Salary")}: #{entry.salary_line}",
+      entry.posted_on && "- #{gettext("Posted")}: #{entry.posted_on}",
+      job_summary_tags(entry.tags)
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join("\n")
+  end
+
+  defp job_summary_tags([]), do: nil
+
+  defp job_summary_tags(tags),
+    do: "- #{gettext("Tags")}: " <> Enum.map_join(tags, ", ", &"[#{&1.name}](#{&1.url})")
+
+  # The tag page's "Offene Stellen" section (#933): the postings carrying the
+  # tag, then a link into the pre-filtered board.
+  defp tag_open_positions(%{open_positions: [_ | _] = postings} = doc) do
+    [
+      "## #{gettext("Open positions")}",
+      Enum.map_join(postings, "\n\n", &job_summary/1),
+      doc[:jobs_url] && "[#{gettext("All jobs with this tag")}](#{doc.jobs_url})"
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join("\n\n")
+  end
+
+  defp tag_open_positions(_doc), do: nil
+
+  # An organization's "Offene Stellen" section (#933), or nil when it has none.
+  defp organization_open_positions(%{open_positions: [_ | _] = postings}) do
+    "## #{gettext("Open positions")}\n\n" <> Enum.map_join(postings, "\n\n", &job_summary/1)
+  end
+
+  defp organization_open_positions(_doc), do: nil
 
   # The YAML frontmatter every Markdown doc starts with.
   defp frontmatter(doc) do

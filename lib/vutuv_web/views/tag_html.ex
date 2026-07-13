@@ -2,6 +2,7 @@ defmodule VutuvWeb.TagHTML do
   @moduledoc false
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
+  import VutuvWeb.JobComponents, only: [job_card: 1]
   alias Vutuv.Tags.Tag
 
   defp update_assigns(assigns) do

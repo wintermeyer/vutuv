@@ -160,6 +160,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Most endorsed members"),
         Enum.map(doc.most_endorsed_users, &person_line/1)
       ),
+      tag_open_positions(doc),
       footer(doc)
     ]
     |> join_blocks()
@@ -190,6 +191,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       ]
       |> Enum.filter(&is_binary/1),
       organization_people(doc),
+      organization_open_positions(doc),
       footer(doc)
     ]
     |> join_blocks()
@@ -212,6 +214,18 @@ defmodule VutuvWeb.AgentDocs.Text do
       doc.description,
       job_tags(gettext("Required"), doc.required_tags),
       job_tags(gettext("Nice to have"), doc.nice_to_have_tags),
+      footer(doc)
+    ]
+    |> join_blocks()
+  end
+
+  # The public job board (/jobs) — a listing of posting summaries.
+  def render(%{type: "job_board"} = doc) do
+    [
+      heading(doc.title),
+      doc.description,
+      Enum.map_join(doc.postings, "\n\n", &job_summary/1),
+      doc.next && gettext("Next page: %{url}", url: doc.next),
       footer(doc)
     ]
     |> join_blocks()
@@ -350,6 +364,48 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp job_tags(label, tags) do
     ["#{label}:", Enum.map(tags, &"- #{&1.name} (#{&1.url})")]
   end
+
+  # One posting summary block on the board (/jobs) or an "Offene Stellen" section.
+  defp job_summary(entry) do
+    [
+      "#{entry.title} (#{entry.url})",
+      "- #{gettext("Employer")}: #{job_employer(entry.employer)}",
+      "- #{gettext("Employment type")}: #{entry.employment_type}",
+      "- #{gettext("Workplace")}: #{entry.workplace_type}",
+      job_location(entry),
+      entry.salary_line && "- #{gettext("Salary")}: #{entry.salary_line}",
+      entry.posted_on && "- #{gettext("Posted")}: #{entry.posted_on}",
+      job_summary_tags(entry.tags)
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join("\n")
+  end
+
+  defp job_summary_tags([]), do: nil
+
+  defp job_summary_tags(tags),
+    do: "- #{gettext("Tags")}: " <> Enum.map_join(tags, ", ", &"#{&1.name} (#{&1.url})")
+
+  # The tag page's "Offene Stellen" section (#933).
+  defp tag_open_positions(%{open_positions: [_ | _] = postings} = doc) do
+    [
+      String.upcase(gettext("Open positions")),
+      Enum.map_join(postings, "\n\n", &job_summary/1),
+      doc[:jobs_url] && gettext("All jobs with this tag: %{url}", url: doc.jobs_url)
+    ]
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join("\n\n")
+  end
+
+  defp tag_open_positions(_doc), do: nil
+
+  # An organization's "Offene Stellen" section (#933), or nil when it has none.
+  defp organization_open_positions(%{open_positions: [_ | _] = postings}) do
+    String.upcase(gettext("Open positions")) <>
+      "\n\n" <> Enum.map_join(postings, "\n\n", &job_summary/1)
+  end
+
+  defp organization_open_positions(_doc), do: nil
 
   defp profile_facts(doc) do
     [

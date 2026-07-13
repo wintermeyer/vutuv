@@ -295,6 +295,12 @@ defmodule VutuvWeb.ShellLive do
             >
               {gettext("Network")}
             </.link>
+            <.link
+              href={~p"/jobs"}
+              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {gettext("Jobs")}
+            </.link>
           </nav>
 
           <div class="ml-auto flex items-center gap-1">

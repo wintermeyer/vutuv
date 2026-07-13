@@ -409,9 +409,10 @@ defmodule VutuvWeb.Router do
       # Job postings ("jobs" is a ReservedSlug). Auth is checked in the mounts.
       # The two-segment owner routes (/jobs/mine, /jobs/new) are defined before
       # the /jobs/:slug detail route so they are never captured as a slug. The
-      # public /jobs board itself is issue #933. The detail page is a controller
-      # (like the profile / organization pages) so it can negotiate the
-      # agent-format siblings (/jobs/:slug.md/.txt/.json/.xml).
+      # public /jobs board (#933) is a controller in front of the embedded
+      # `JobBoardLive` so it can negotiate its agent-format siblings
+      # (/jobs.md/.txt/.json/.xml), like the detail page below.
+      get("/jobs", JobPostingController, :index)
       live("/jobs/mine", JobPostingLive.Dashboard, :index)
       live("/jobs/new", JobPostingLive.Form, :new)
       live("/jobs/:slug/edit", JobPostingLive.Form, :edit)

@@ -17,6 +17,7 @@ defmodule VutuvWeb.OrganizationController do
 
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 
+  alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
@@ -166,11 +167,20 @@ defmodule VutuvWeb.OrganizationController do
       # the tail, and `people_total` carries the true count.
       people = Organizations.organization_people_page(organization, limit: 200)
       total = Organizations.organization_people_count(organization)
+      # The "Offene Stellen" section (#933): the organization's live public postings.
+      open_positions = Jobs.list_organization_postings(organization, limit: 200).entries
 
       AgentDocs.send_doc(
         conn,
         format,
-        OrganizationDoc.build_show(organization, domains, aliases, people.entries, total)
+        OrganizationDoc.build_show(
+          organization,
+          domains,
+          aliases,
+          people.entries,
+          total,
+          open_positions
+        )
       )
     else
       ControllerHelpers.render_error(conn, 404)

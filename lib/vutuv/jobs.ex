@@ -29,10 +29,12 @@ defmodule Vutuv.Jobs do
   """
 
   import Ecto.Query
+  import Vutuv.SearchText, only: [escape_like: 1]
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Engagement
+  alias Vutuv.Geo
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Jobs.JobPostingBookmark
   alias Vutuv.Jobs.JobPostingImage
@@ -41,7 +43,9 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Organizations
   alias Vutuv.Repo
   alias Vutuv.Salary
+  alias Vutuv.Social
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.UserTag
 
   # A posting stays publicly reachable (with an "unavailable" banner, noindex,
   # no JSON-LD) for this many days after it expires or is closed, then drops to
@@ -335,6 +339,7 @@ defmodule Vutuv.Jobs do
       |> Repo.update()
       |> after_save(user, attrs)
       |> broadcast_updated()
+      |> board_ping()
     end
   end
 
@@ -346,6 +351,7 @@ defmodule Vutuv.Jobs do
     |> Ecto.Changeset.put_change(:close_reason, reason)
     |> Repo.update()
     |> broadcast_updated()
+    |> board_ping()
   end
 
   @doc """
@@ -698,6 +704,14 @@ defmodule Vutuv.Jobs do
 
   defp broadcast_updated(other), do: other
 
+  # Ping the board topic on a state change that adds or removes a live posting.
+  defp board_ping({:ok, %JobPosting{}} = result) do
+    notify_board_changed()
+    result
+  end
+
+  defp board_ping(other), do: other
+
   @doc """
   One page of the member's liked / bookmarked postings for the `/bookmarks` hub.
   Returns `%{entries:, more?:, next_offset:}`.
@@ -774,8 +788,431 @@ defmodule Vutuv.Jobs do
       from(p in JobPosting, where: p.status == :published and p.expires_on < ^today)
       |> Repo.update_all(set: [status: :expired, updated_at: now()])
 
+    if count > 0, do: notify_board_changed()
     count
   end
+
+  # --- public board (#933) --------------------------------------------------
+
+  @board_limit 20
+  @board_topic "jobs"
+
+  @doc "The board's default page size."
+  def board_limit, do: @board_limit
+
+  @doc "Subscribes to the board's live topic (a posting published/expired/frozen pings it)."
+  def subscribe_board, do: Phoenix.PubSub.subscribe(Vutuv.PubSub, @board_topic)
+
+  @doc """
+  Pings every open board that the visible set changed (a posting was published,
+  expired or frozen). Called from `Vutuv.Moderation` on a job-posting freeze.
+  """
+  def notify_board_changed do
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, @board_topic, :jobs_board_changed)
+    :ok
+  end
+
+  @doc """
+  One page of the public `/jobs` board for `viewer`, honouring the posting
+  visibility gate and the block / exclusion seam, then the `filters`. Newest
+  first (`first_published_at`, UUID v7 `id` tiebreaker), keyset-paginated.
+  Returns `%{entries:, more?:, cursor:}` — `cursor` is the `{first_published_at,
+  id}` keyset for the next page, or `nil` when this is the last page.
+  """
+  def board_page(viewer, filters, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @board_limit)
+
+    viewer
+    |> board_scope()
+    |> apply_board_filters(filters, viewer)
+    |> after_board_cursor(Keyword.get(opts, :cursor))
+    |> order_by([p], desc: p.first_published_at, desc: p.id)
+    |> limit(^(limit + 1))
+    |> preload([:organization, :user, job_posting_tags: :tag])
+    |> Repo.all()
+    |> board_result(limit)
+  end
+
+  @doc """
+  One page of the board as the **anonymous public view** for the agent formats:
+  only `everyone`, `geo?` postings (never a `members` posting, never a hidden
+  one), newest first, keyset-paginated. `filters` are not applied — the agent
+  documents list the plain board so agents filter client-side on the structured
+  fields.
+  """
+  def agent_board_page(opts \\ []) do
+    limit = Keyword.get(opts, :limit, @board_limit)
+    today = BerlinTime.today()
+
+    from(p in JobPosting,
+      where:
+        p.status == :published and is_nil(p.frozen_at) and p.visibility == :everyone and
+          p.geo? and p.expires_on >= ^today
+    )
+    |> after_board_cursor(Keyword.get(opts, :cursor))
+    |> order_by([p], desc: p.first_published_at, desc: p.id)
+    |> limit(^(limit + 1))
+    |> preload([:organization, :user, job_posting_tags: :tag])
+    |> Repo.all()
+    |> board_result(limit)
+  end
+
+  # The viewer-visible published set: the base every board filter narrows.
+  # Folds visibility (everyone/members) and the exclusion seam (a bidirectional
+  # block, and the #939 per-posting poster-exclusion list once it exists) into
+  # ONE query, so no downstream filter can surface a posting the viewer may not
+  # see.
+  defp board_scope(viewer) do
+    today = BerlinTime.today()
+
+    from(p in JobPosting,
+      where: p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today
+    )
+    |> board_visibility(viewer)
+    |> board_exclude(viewer)
+  end
+
+  defp board_visibility(query, nil), do: where(query, [p], p.visibility == :everyone)
+
+  defp board_visibility(query, %User{}),
+    do: where(query, [p], p.visibility in [:everyone, :members])
+
+  # A block hides the posting both ways (either party blocked the other). The
+  # #939 per-posting poster-exclusion list will subtract here too when it lands.
+  defp board_exclude(query, nil), do: query
+
+  defp board_exclude(query, %User{id: viewer_id}) do
+    case MapSet.to_list(Social.blocked_user_ids(viewer_id)) do
+      [] -> query
+      ids -> where(query, [p], p.user_id not in ^ids)
+    end
+  end
+
+  defp after_board_cursor(query, nil), do: query
+
+  defp after_board_cursor(query, {%NaiveDateTime{} = fp, id}) do
+    where(query, [p], p.first_published_at < ^fp or (p.first_published_at == ^fp and p.id < ^id))
+  end
+
+  defp board_result(rows, limit) do
+    {shown, more?} =
+      if length(rows) > limit, do: {Enum.take(rows, limit), true}, else: {rows, false}
+
+    cursor =
+      if more? do
+        last = List.last(shown)
+        {last.first_published_at, last.id}
+      end
+
+    %{entries: shown, more?: more?, cursor: cursor}
+  end
+
+  # --- board filters --------------------------------------------------------
+
+  defp apply_board_filters(query, filters, viewer) do
+    query
+    |> filter_q(filters[:q])
+    |> filter_tag(filters[:tag])
+    |> filter_workplace(filters[:workplace])
+    |> filter_employment(filters[:employment])
+    |> filter_location(filters[:near], filters[:radius], filters[:country])
+    |> filter_salary(filters[:salary_min], filters[:salary_currency])
+    |> filter_my_tags(filters[:my_tags?], viewer)
+  end
+
+  # Postgres full-text over title + description (websearch grammar, like post
+  # search). An empty query is a no-op.
+  defp filter_q(query, q) when is_binary(q) and q != "" do
+    where(
+      query,
+      [p],
+      fragment(
+        "to_tsvector('simple', coalesce(?,'') || ' ' || coalesce(?,'')) @@ websearch_to_tsquery('simple', ?)",
+        p.title,
+        p.description,
+        ^q
+      )
+    )
+  end
+
+  defp filter_q(query, _q), do: query
+
+  defp filter_tag(query, slug) when is_binary(slug) and slug != "" do
+    tagged =
+      from(jpt in JobPostingTag,
+        join: t in assoc(jpt, :tag),
+        where: t.slug == ^slug,
+        select: jpt.job_posting_id
+      )
+
+    where(query, [p], p.id in subquery(tagged))
+  end
+
+  defp filter_tag(query, _slug), do: query
+
+  defp filter_workplace(query, type) when type in [:onsite, :hybrid, :remote],
+    do: where(query, [p], p.workplace_type == ^type)
+
+  defp filter_workplace(query, _type), do: query
+
+  defp filter_employment(query, type) when is_atom(type) and not is_nil(type) do
+    if type in JobPosting.employment_types(),
+      do: where(query, [p], p.employment_type == ^type),
+      else: query
+  end
+
+  defp filter_employment(query, _type), do: query
+
+  # Same-currency only (#932 rule): the posting's yearly-normalised `salary_max`
+  # must reach the (yearly) floor. Volunteer / salary-less postings never match.
+  # The CASE factors mirror `Vutuv.Salary.yearly_equivalent/2`; a functional
+  # test (`board salary filter`) guards them against drift.
+  defp filter_salary(query, min, currency) when is_integer(min) and is_binary(currency) do
+    where(
+      query,
+      [p],
+      not is_nil(p.salary_max) and p.salary_currency == ^currency and
+        fragment(
+          "? * (CASE ? WHEN 'hour' THEN 1720 WHEN 'day' THEN 220 WHEN 'week' THEN 52 WHEN 'month' THEN 12 ELSE 1 END) >= ?",
+          p.salary_max,
+          p.salary_period,
+          ^min
+        )
+    )
+  end
+
+  defp filter_salary(query, _min, _currency), do: query
+
+  defp filter_my_tags(query, true, %User{id: viewer_id}) do
+    case my_tag_ids(viewer_id) do
+      [] ->
+        # A member with no profile tags matches nothing under this filter.
+        where(query, [p], false)
+
+      tag_ids ->
+        matched =
+          from(jpt in JobPostingTag, where: jpt.tag_id in ^tag_ids, select: jpt.job_posting_id)
+
+        where(query, [p], p.id in subquery(matched))
+    end
+  end
+
+  defp filter_my_tags(query, _flag, _viewer), do: query
+
+  # Location: a "near" (city or zip) + radius, and/or a country. Onsite/hybrid
+  # postings match on their address (radius around resolved coordinates, or a
+  # case-insensitive city / exact-zip text match when coordinates are unknown);
+  # a remote posting stays in whenever its applicant countries include the
+  # searched country, so "near me OR remote for me" is answered in one pass.
+  defp filter_location(query, near, radius, country) do
+    near = presence(near)
+    country = presence(country)
+
+    cond do
+      is_nil(near) and is_nil(country) ->
+        query
+
+      is_nil(near) ->
+        where(
+          query,
+          [p],
+          (p.workplace_type != :remote and p.country == ^country) or
+            (p.workplace_type == :remote and ^country in p.remote_countries)
+        )
+
+      true ->
+        search_country = country || Geo.default_country()
+        center = Geo.resolve_point(search_country, near)
+        where(query, ^location_dynamic(near, radius, center, search_country))
+    end
+  end
+
+  defp location_dynamic(near, radius, center, search_country) do
+    text = text_location_dynamic(near)
+    remote = dynamic([p], p.workplace_type == :remote and ^search_country in p.remote_countries)
+
+    onsite =
+      case {radius, center} do
+        {r, {lat, lon}} when is_integer(r) and r > 0 ->
+          within = radius_dynamic(lat, lon, r)
+          dynamic([p], p.workplace_type != :remote and (^within or ^text))
+
+        _ ->
+          dynamic([p], p.workplace_type != :remote and ^text)
+      end
+
+    dynamic([p], ^onsite or ^remote)
+  end
+
+  defp text_location_dynamic(near) do
+    # No wildcards → `ILIKE` is an exact, case-insensitive city match; the zip
+    # is compared verbatim. `escape_like/1` neutralises any `%`/`_` in the term.
+    exact = escape_like(near)
+    dynamic([p], ilike(p.city, ^exact) or p.zip_code == ^near)
+  end
+
+  # Great-circle (haversine) distance in km <= radius, in SQL so it composes
+  # with the keyset order. Postings without coordinates fall to the text match.
+  defp radius_dynamic(lat, lon, radius_km) do
+    dynamic(
+      [p],
+      not is_nil(p.lat) and
+        fragment(
+          "6371 * acos(LEAST(1.0, GREATEST(-1.0, cos(radians(?)) * cos(radians(?)) * cos(radians(? - ?)) + sin(radians(?)) * sin(radians(?))))) <= ?",
+          ^lat,
+          p.lat,
+          p.lon,
+          ^lon,
+          ^lat,
+          p.lat,
+          ^radius_km
+        )
+    )
+  end
+
+  # --- board helpers (tags, salary floor, engagement) -----------------------
+
+  @doc "The tag ids on `user_id`'s profile — the 'Passend zu meinen Tags' set."
+  def my_tag_ids(user_id) when is_binary(user_id) do
+    Repo.all(from(ut in UserTag, where: ut.user_id == ^user_id, select: ut.tag_id))
+  end
+
+  def my_tag_ids(_user_id), do: []
+
+  @doc "The set of tag slugs on `viewer`'s profile (empty for anon) — for card highlighting."
+  def viewer_tag_slugs(nil), do: MapSet.new()
+
+  def viewer_tag_slugs(%User{id: user_id}) do
+    from(ut in UserTag, join: t in assoc(ut, :tag), where: ut.user_id == ^user_id, select: t.slug)
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  @doc """
+  A member's own minimum-salary expectation (#928) as a `{yearly_amount,
+  currency}` floor for the board's "ab meiner Gehaltsvorstellung" filter, or
+  `nil` when they set none. The stored figure is never rendered — it only
+  parameterizes the member's own filter.
+  """
+  def desired_salary_floor(%User{desired_salary_min: nil}), do: nil
+
+  def desired_salary_floor(%User{
+        desired_salary_min: min,
+        desired_salary_currency: currency,
+        desired_salary_period: period
+      }) do
+    {Salary.yearly_equivalent(min, period), currency}
+  end
+
+  def desired_salary_floor(_user), do: nil
+
+  @doc "Batched like counts + the viewer's like/bookmark flags for a set of postings."
+  def board_engagement_map(postings, viewer) do
+    ids = Enum.map(postings, & &1.id)
+    counts = like_counts(ids)
+    {liked, bookmarked} = viewer_engagements(ids, viewer)
+
+    Map.new(postings, fn %JobPosting{id: id} ->
+      {id,
+       %{
+         likes: Map.get(counts, id, 0),
+         liked?: MapSet.member?(liked, id),
+         bookmarked?: MapSet.member?(bookmarked, id)
+       }}
+    end)
+  end
+
+  defp like_counts([]), do: %{}
+
+  defp like_counts(ids) do
+    from(l in JobPostingLike,
+      where: l.job_posting_id in ^ids,
+      group_by: l.job_posting_id,
+      select: {l.job_posting_id, count(l.id)}
+    )
+    |> Repo.all()
+    |> Map.new()
+  end
+
+  defp viewer_engagements([], _viewer), do: {MapSet.new(), MapSet.new()}
+  defp viewer_engagements(_ids, nil), do: {MapSet.new(), MapSet.new()}
+
+  defp viewer_engagements(ids, %User{id: user_id}) do
+    liked = engaged_ids(JobPostingLike, ids, user_id)
+    bookmarked = engaged_ids(JobPostingBookmark, ids, user_id)
+    {liked, bookmarked}
+  end
+
+  defp engaged_ids(schema, ids, user_id) do
+    from(e in schema,
+      where: e.job_posting_id in ^ids and e.user_id == ^user_id,
+      select: e.job_posting_id
+    )
+    |> Repo.all()
+    |> MapSet.new()
+  end
+
+  # --- scoped listings (organization + tag pages) ---------------------------
+
+  @doc "One page of an organization's live public postings (its 'Offene Stellen' section)."
+  def list_organization_postings(%Organizations.Organization{id: org_id}, opts \\ []) do
+    limit = Keyword.get(opts, :limit, @board_limit)
+    offset = Keyword.get(opts, :offset, 0)
+
+    entries =
+      org_id
+      |> organization_live_postings()
+      |> order_by([p], desc: p.first_published_at, desc: p.id)
+      |> limit(^(limit + 1))
+      |> offset(^offset)
+      |> preload([:organization, :user, job_posting_tags: :tag])
+      |> Repo.all()
+
+    {shown, more?} =
+      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
+
+    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+  end
+
+  @doc "Count of an organization's live public postings."
+  def organization_postings_count(%Organizations.Organization{id: org_id}) do
+    Repo.aggregate(organization_live_postings(org_id), :count, :id)
+  end
+
+  defp organization_live_postings(org_id) do
+    today = BerlinTime.today()
+
+    from(p in JobPosting,
+      where:
+        p.organization_id == ^org_id and p.status == :published and is_nil(p.frozen_at) and
+          p.visibility == :everyone and p.expires_on >= ^today
+    )
+  end
+
+  @doc "Live public postings carrying `tag` (the tag page's 'Offene Stellen' section)."
+  def list_tag_postings(%Tag{id: tag_id}, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 10)
+    today = BerlinTime.today()
+
+    from(p in JobPosting,
+      join: jpt in JobPostingTag,
+      on: jpt.job_posting_id == p.id and jpt.tag_id == ^tag_id,
+      where:
+        p.status == :published and is_nil(p.frozen_at) and p.visibility == :everyone and
+          p.expires_on >= ^today,
+      order_by: [desc: p.first_published_at, desc: p.id],
+      limit: ^limit,
+      preload: [:organization, :user, job_posting_tags: :tag]
+    )
+    |> Repo.all()
+  end
+
+  defp presence(value) when value in [nil, ""], do: nil
+  defp presence(value) when is_binary(value), do: String.trim(value) |> presence_trimmed()
+  defp presence(value), do: value
+
+  defp presence_trimmed(""), do: nil
+  defp presence_trimmed(value), do: value
 
   # --- salary ---------------------------------------------------------------
 

@@ -41,6 +41,28 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
     })
   end
 
+  @doc """
+  The compact card entry of a posting for a **listing** doc — the board
+  (`/jobs`) and the organization / tag "Offene Stellen" sections. Carries the
+  same structured location, salary and tag fields as the detail doc so agents
+  can filter client-side, minus the description / apply target.
+  """
+  def summary(%JobPosting{} = posting) do
+    %{
+      title: posting.title,
+      url: AgentDocs.abs_url("/jobs/#{posting.slug}"),
+      employer: employer(posting),
+      employment_type: JobPosting.employment_type_label(posting.employment_type),
+      workplace_type: JobPosting.workplace_type_label(posting.workplace_type),
+      location: location(posting),
+      remote_countries: remote_countries(posting),
+      salary_line: salary_line(posting),
+      salary: salary(posting),
+      posted_on: AgentDocs.iso_date(posting.first_published_at),
+      tags: tag_entries(posting, :required) ++ tag_entries(posting, :nice_to_have)
+    }
+  end
+
   defp employer(%JobPosting{organization: %Organizations.Organization{} = org}) do
     %{
       name: org.name,

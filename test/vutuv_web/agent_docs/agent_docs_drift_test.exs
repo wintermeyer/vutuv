@@ -412,14 +412,21 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "following"
   end
 
-  test "tag page: description and most endorsed members in every format", %{tag: tag} do
+  test "tag page: description, endorsed members and open positions in every format", %{tag: tag} do
     tag
     |> Ecto.Changeset.change(description: "The art of connecting shores")
     |> Repo.update!()
 
+    # The tag page's "Offene Stellen" section (#933): a live posting carrying the
+    # tag must surface in the HTML page and every agent format.
+    Vutuv.JobsHelpers.publish_job!(nil, %{
+      "title" => "Bridge Architect (m/w/d)",
+      "required_tags" => "Bridgebuilding"
+    })
+
     rendered = formats_for("/tags/bridgebuilding")
 
-    for fact <- ["Bridgebuilding", "connecting shores", "Greta Gradient"],
+    for fact <- ["Bridgebuilding", "connecting shores", "Greta Gradient", "Bridge Architect"],
         do: assert_fact_everywhere(rendered, fact)
   end
 
@@ -729,5 +736,16 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert_fact_everywhere(rendered, "Elixir Engineer")
     assert_fact_everywhere(rendered, "Köln")
     assert_fact_everywhere(rendered, "Phoenix")
+  end
+
+  test "the job board appears in every format" do
+    Vutuv.JobsHelpers.publish_job!(nil, %{
+      "title" => "Board Tester Role",
+      "required_tags" => "Elixir"
+    })
+
+    rendered = formats_for("/jobs")
+    assert_fact_everywhere(rendered, "Board Tester Role")
+    assert_fact_everywhere(rendered, "Köln")
   end
 end

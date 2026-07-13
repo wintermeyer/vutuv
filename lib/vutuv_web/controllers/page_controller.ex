@@ -227,6 +227,7 @@ defmodule VutuvWeb.PageController do
   - `/system/members` — the member directory: everyone open to search engines,
     filed by last-name initial at `/system/members/<a-z|other>`
   - `/organizations` — the verified organization directory; one organization at `/organizations/<slug>`
+  - `/jobs` — the public job board: open positions, filterable, newest first
   - `/jobs/<slug>` — a job posting: role, location, pay range, tags and how to apply
   - `/ads` — the daily text ad: price, conditions, next available day
     (booking happens online and requires a login)

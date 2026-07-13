@@ -14,6 +14,7 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.UserHelpers
 
   @doc """
@@ -21,7 +22,14 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   section shows (issue #931), already gated to the public-listing set;
   `people_total` is the full count the HTML page displays.
   """
-  def build_show(organization, domains, aliases \\ [], people \\ [], people_total \\ 0) do
+  def build_show(
+        organization,
+        domains,
+        aliases \\ [],
+        people \\ [],
+        people_total \\ 0,
+        open_positions \\ []
+      ) do
     AgentDocs.doc_meta("organization", canonical_path(organization),
       noindex: not organization.seo?,
       noai: not organization.geo?
@@ -42,7 +50,8 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       country_name: Countries.name(organization.country),
       address_line: address_line(organization),
       people_total: people_total,
-      people: Enum.map(people, &person_entry/1)
+      people: Enum.map(people, &person_entry/1),
+      open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1)
     })
   end
 

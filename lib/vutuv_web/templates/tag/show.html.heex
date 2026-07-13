@@ -9,3 +9,20 @@
 <div class="card-list">
     <%= render "single_card.html", assigns %>
 </div>
+
+<section :if={@open_positions != []} class="mt-6">
+  <div class="flex items-center justify-between gap-2">
+    <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+      {gettext("Open positions")}
+    </h2>
+    <.link
+      navigate={~p"/jobs?#{[tag: @tag.slug]}"}
+      class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+    >
+      {gettext("All jobs with this tag")} →
+    </.link>
+  </div>
+  <div class="mt-3 grid gap-4 sm:grid-cols-2">
+    <.job_card :for={posting <- @open_positions} posting={posting} />
+  </div>
+</section>

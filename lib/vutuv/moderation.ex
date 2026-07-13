@@ -1222,6 +1222,9 @@ defmodule Vutuv.Moderation do
 
   defp set_frozen_at(%JobPosting{id: id}, value) do
     Repo.update_all(from(p in JobPosting, where: p.id == ^id), set: [frozen_at: value])
+    # A freeze pulls the posting off the public board (and an unfreeze puts it
+    # back), so ping any open board to re-query (#933).
+    Vutuv.Jobs.notify_board_changed()
   end
 
   defp set_user_moderation!(user_id, fields) do

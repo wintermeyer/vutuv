@@ -10,6 +10,8 @@ defmodule VutuvWeb.OrganizationTest do
   import Phoenix.LiveViewTest
   import Swoosh.TestAssertions
 
+  alias Vutuv.Jobs
+  alias Vutuv.JobsHelpers
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
@@ -201,6 +203,34 @@ defmodule VutuvWeb.OrganizationTest do
       assert [saved] = Organizations.bookmarked_organizations(user)
       assert saved.id == organization.id
     end
+  end
+
+  describe "open positions (#933)" do
+    test "the organization page lists its live public postings", %{conn: conn} do
+      {organization, owner} = active_organization()
+      owner = backdate(owner)
+
+      {:ok, draft} =
+        Jobs.create_draft(owner, %{"title" => "Open role at org"}, organization: organization)
+
+      {:ok, _posting} =
+        Jobs.publish(draft, owner, JobsHelpers.job_attrs(%{"title" => "Open role at org"}),
+          organization: organization
+        )
+
+      {:ok, _view, html} = live(conn, ~p"/organizations/#{organization.slug}")
+
+      assert html =~ "Open positions"
+      assert html =~ "Open role at org"
+    end
+  end
+
+  # Age the account past the publish gate (a confirmed account >= 3 days old).
+  defp backdate(user) do
+    old = NaiveDateTime.add(NaiveDateTime.utc_now(), -5 * 86_400, :second)
+    query = from(u in Vutuv.Accounts.User, where: u.id == ^user.id)
+    Repo.update_all(query, set: [inserted_at: old])
+    Repo.reload!(user)
   end
 
   describe "moderation" do

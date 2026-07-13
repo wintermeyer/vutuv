@@ -17,8 +17,42 @@ defmodule VutuvWeb.JobPostingController do
 
   alias Vutuv.Jobs
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.JobBoardDoc
   alias VutuvWeb.AgentDocs.JobPostingDoc
+  alias VutuvWeb.ApiV2
   alias VutuvWeb.ControllerHelpers
+
+  @doc """
+  The public board (`/jobs`, issue #933): the HTML page is the embedded
+  `VutuvWeb.JobBoardLive` (filter state lives in the URL, passed through the
+  session); the agent siblings (`/jobs.md` …) list the anonymous public board.
+  """
+  def index(conn, _params) do
+    case AgentDocs.negotiate(conn) do
+      :html ->
+        conn
+        |> AgentDocs.put_html_alternates()
+        |> put_layout(html: false)
+        |> live_render(VutuvWeb.JobBoardLive,
+          session: Map.put(base_session(conn), "params", conn.params)
+        )
+
+      format ->
+        send_board_doc(conn, format)
+    end
+  end
+
+  defp send_board_doc(conn, format) do
+    cursor =
+      case ApiV2.decode_cursor(conn.params["cursor"]) do
+        {:ok, cursor} -> cursor
+        :error -> nil
+      end
+
+    page = Jobs.agent_board_page(cursor: cursor)
+    next = if page.more?, do: ApiV2.encode_cursor(page.cursor)
+    AgentDocs.send_doc(conn, format, JobBoardDoc.build(page.entries, next))
+  end
 
   def show(conn, %{"slug" => slug}) do
     case Jobs.fetch_visible_job_posting(slug, conn.assigns[:current_user]) do

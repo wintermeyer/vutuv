@@ -17,6 +17,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias VutuvWeb.AgentDocs
+  alias VutuvWeb.AgentDocs.JobPostingDoc
   alias VutuvWeb.UserHelpers
 
   alias Vutuv.Tags.UserTag
@@ -68,15 +69,17 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
     })
   end
 
-  @doc "The tag page: description plus the most endorsed members."
-  def build_tag(tag, recommended_users, work_info_by_id) do
+  @doc "The tag page: description, the most endorsed members and the open positions (#933)."
+  def build_tag(tag, recommended_users, work_info_by_id, open_positions \\ []) do
     AgentDocs.doc_meta("tag", "/tags/#{tag.slug}")
     |> Map.merge(%{
       title: tag.name,
       description: tag.description,
       name: tag.name,
       slug: tag.slug,
-      most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id))
+      most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id)),
+      open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1),
+      jobs_url: AgentDocs.abs_url("/jobs?" <> URI.encode_query(%{"tag" => tag.slug}))
     })
   end
 

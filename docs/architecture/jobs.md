@@ -77,6 +77,62 @@ require a *live* posting (`published`, not frozen, `visibility = everyone`, not
 past expiry). `indexable_query/0` is the one crawlable-set definition, delegated
 to by `Vutuv.Sitemap`.
 
+## The public board (`/jobs`, issue #933)
+
+`VutuvWeb.JobBoardLive` is the board, embedded via `live_render` from
+`VutuvWeb.JobPostingController.index` (off-router, like the profile / feed /
+organization pages) so the controller negotiates the agent-format siblings
+(`/jobs.md/.txt/.json/.xml`). Being off-router it has no `handle_params` /
+`push_patch`, so **filter state lives entirely in the URL**: the search form is a
+plain GET, every chip and the "More jobs" link is a real `<a href>` (shareable,
+and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
+(topic `"jobs"`) keeps an open page live.
+
+- **Base scope.** `Jobs.board_page(viewer, filters, opts)` starts from
+  `board_scope/1`, which folds the visibility gate (`everyone` for anyone,
+  `members` additionally for a signed-in viewer) and the exclusion seam into one
+  query, so no downstream filter can leak a hidden posting. The exclusion seam is
+  a **bidirectional block** today (`Vutuv.Social.blocked_user_ids/1`); the #939
+  per-posting poster-exclusion list plugs into the same `board_exclude/2` step
+  when it lands. Newest first (`first_published_at`, UUID v7 `id` tiebreaker),
+  keyset-paginated (`%{entries:, more?:, cursor:}`; the web layer signs the
+  `{first_published_at, id}` cursor with `VutuvWeb.ApiV2`).
+- **Filters** (all URL params): `q` (Postgres full-text over title +
+  description, `websearch_to_tsquery`), `tag` (slug), `workplace`, `employment`,
+  `salary_min` (+ currency — same-currency only, the posting's yearly-normalised
+  `salary_max` must reach the floor), `near` + `radius` + `country` (location),
+  and the signed-in-member chips `my_tags` ("Passend zu meinen Tags") and
+  `salary_min=mine` ("ab meiner Gehaltsvorstellung", resolved server-side from
+  the member's #928 expectation — the stored figure is never rendered).
+- **Location.** `near` (a city or zip) resolves to a point offline via
+  `Vutuv.Geo.resolve_point/2` (zip first, then city); onsite/hybrid postings
+  match within `radius` km by a great-circle (haversine) predicate in SQL, or by
+  a case-insensitive city / exact-zip text fallback when coordinates are unknown
+  (so nothing silently disappears). A **remote** posting stays in whenever its
+  applicant countries include the searched country ("near me *or* remote for
+  me"); the workplace chips narrow from there.
+- **Cards** (`VutuvWeb.JobComponents.job_card/1`, shared with the organization
+  and tag sections): title, the employer trust block, chips, salary (or
+  "Ehrenamtlich"), the posting's tags with a signed-in viewer's own tags
+  highlighted, and the age ("vor 3 Tagen"). On the board each card carries the
+  in-process like / bookmark bar (`phx-click`, no per-card nested LiveView); the
+  organization and tag sections render the card statically (their pages own other
+  `toggle_like`/`toggle_bookmark` handlers, or are dead pages).
+- **Live updates.** Publishing, closing, freezing and the nightly sweeper's
+  bulk-expire each `Jobs.notify_board_changed/0` on the `"jobs"` topic; an open
+  board re-queries its current page so a matching posting appears or a hidden one
+  disappears without a reload.
+- **Agent formats.** `Jobs.agent_board_page/1` + `VutuvWeb.AgentDocs.JobBoardDoc`
+  are the anonymous public view — only `everyone`, `geo?` postings, each entry
+  carrying the structured location / salary / tag fields
+  (`JobPostingDoc.summary/1`) so agents filter client-side, cursor-paginated with
+  a `next` link. **No `JobPosting` JSON-LD on the list** (leaf pages only).
+- **Scoped sections.** `Jobs.list_organization_postings/2` and
+  `Jobs.list_tag_postings/2` power the "Offene Stellen" sections on
+  `/organizations/:slug` and `/tags/:slug` (the tag section links into the
+  pre-filtered board, `/jobs?tag=…`); both sections join their pages' agent-doc
+  builders and the drift test.
+
 ## Trust UI & compliance
 
 - **Employer block** — a verified organization shows its name linked to the page

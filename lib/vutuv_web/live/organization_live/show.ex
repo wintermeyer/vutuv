@@ -15,8 +15,10 @@ defmodule VutuvWeb.OrganizationLive.Show do
   use VutuvWeb, :live_view
 
   import VutuvWeb.OrganizationComponents
+  import VutuvWeb.JobComponents, only: [job_card: 1]
 
   alias Vutuv.Countries
+  alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
@@ -38,8 +40,29 @@ defmodule VutuvWeb.OrganizationLive.Show do
       |> assign(:shell_path, session["request_path"])
       |> assign_organization(organization, current_user)
       |> assign_people(organization)
+      |> assign_org_jobs(organization)
 
     {:ok, socket}
+  end
+
+  # The organization page's "Offene Stellen" section (#933): the organization's
+  # own live public postings, newest first, paginated (its own "Load more" event
+  # so it never collides with the People list's). Static cards — the board is
+  # where the like / bookmark actions live (they would clash with the page's own
+  # organization-level toggle_like/toggle_bookmark here).
+  defp assign_org_jobs(socket, organization) do
+    total = Jobs.organization_postings_count(organization)
+
+    page =
+      if total > 0,
+        do: Jobs.list_organization_postings(organization),
+        else: %{entries: [], more?: false, next_offset: 0}
+
+    socket
+    |> assign(:org_jobs, page.entries)
+    |> assign(:org_jobs_total, total)
+    |> assign(:org_jobs_more?, page.more?)
+    |> assign(:org_jobs_offset, page.next_offset)
   end
 
   # The organization page's "People" section (issue #931): members whose linked work
@@ -98,6 +121,19 @@ defmodule VutuvWeb.OrganizationLive.Show do
      |> assign(:people, socket.assigns.people ++ page.entries)
      |> assign(:people_more?, page.more?)
      |> assign(:people_offset, page.next_offset)}
+  end
+
+  def handle_event("load-more-jobs", _params, socket) do
+    page =
+      Jobs.list_organization_postings(socket.assigns.organization,
+        offset: socket.assigns.org_jobs_offset
+      )
+
+    {:noreply,
+     socket
+     |> assign(:org_jobs, socket.assigns.org_jobs ++ page.entries)
+     |> assign(:org_jobs_more?, page.more?)
+     |> assign(:org_jobs_offset, page.next_offset)}
   end
 
   def handle_event("toggle_like", _params, socket), do: {:noreply, toggle(socket, :like)}
@@ -318,6 +354,30 @@ defmodule VutuvWeb.OrganizationLive.Show do
             </ul>
             <.load_more :if={@people_more?} class="mt-4" />
           </.card>
+
+          <%!-- Open positions (#933): this organization's live public postings.
+          Plain profile-style cards linking each detail page, so every posting is
+          crawlable from the organization page; the board is where the filters and
+          the like / bookmark actions live. --%>
+          <section :if={@org_jobs_total > 0} class="space-y-4">
+            <div class="flex items-center justify-between">
+              <.section_title>{gettext("Open positions")}</.section_title>
+              <span class="text-sm text-slate-600 dark:text-slate-400">{compact_count(@org_jobs_total)}</span>
+            </div>
+            <div id="organization-jobs" class="grid gap-4 sm:grid-cols-2">
+              <.job_card :for={posting <- @org_jobs} posting={posting} />
+            </div>
+            <div :if={@org_jobs_more?} class="text-center">
+              <button
+                type="button"
+                id="load-more-jobs"
+                phx-click="load-more-jobs"
+                class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {gettext("More jobs")}
+              </button>
+            </div>
+          </section>
         </div>
 
         <aside class="space-y-6">

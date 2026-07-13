@@ -109,4 +109,13 @@ defmodule Vutuv.Geo do
 
   @doc "Coordinates `{lat, lon}` for a place name in `country`, or `nil`."
   defdelegate place_coordinates(country, place), to: Vutuv.Geo.Postal
+
+  @doc """
+  Coordinates for a zip *or* city `term` in `country` (zip tried first), or
+  `nil`. The board's "near" filter resolves one input to a point through this.
+  """
+  defdelegate resolve_point(country, term), to: Vutuv.Geo.Postal
+
+  @doc "Great-circle distance in km between two `{lat, lon}` points (decimal degrees)."
+  defdelegate distance_km(lat1, lon1, lat2, lon2), to: Vutuv.Geo.Postal
 end

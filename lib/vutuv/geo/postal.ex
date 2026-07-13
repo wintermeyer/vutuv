@@ -57,6 +57,43 @@ defmodule Vutuv.Geo.Postal do
 
   def place_coordinates(_country, _place), do: nil
 
+  @doc """
+  Coordinates for a free-text location `term` in `country`: a postal code first
+  (exact), then a place (city) name, or `nil` when neither resolves. The one
+  entry point the board's "near" filter uses so a zip or a city both work.
+  """
+  @spec resolve_point(String.t(), String.t()) :: {float(), float()} | nil
+  def resolve_point(country, term) when is_binary(country) and is_binary(term) do
+    coordinates(country, term) || place_coordinates(country, term)
+  end
+
+  def resolve_point(_country, _term), do: nil
+
+  @earth_radius_km 6371.0
+
+  @doc """
+  Great-circle (haversine) distance in kilometres between two `{lat, lon}`
+  points in decimal degrees. Used for radius matching and its regression tests;
+  the board itself filters in SQL with the same formula so it composes with the
+  keyset order.
+  """
+  @spec distance_km(number(), number(), number(), number()) :: float()
+  def distance_km(lat1, lon1, lat2, lon2)
+      when is_number(lat1) and is_number(lon1) and is_number(lat2) and is_number(lon2) do
+    dlat = deg2rad(lat2 - lat1)
+    dlon = deg2rad(lon2 - lon1)
+    sin_lat = :math.sin(dlat / 2)
+    sin_lon = :math.sin(dlon / 2)
+
+    a =
+      sin_lat * sin_lat +
+        :math.cos(deg2rad(lat1)) * :math.cos(deg2rad(lat2)) * sin_lon * sin_lon
+
+    @earth_radius_km * 2 * :math.atan2(:math.sqrt(a), :math.sqrt(1 - a))
+  end
+
+  defp deg2rad(deg), do: deg * :math.pi() / 180.0
+
   # --- loading -------------------------------------------------------------
 
   defp index do

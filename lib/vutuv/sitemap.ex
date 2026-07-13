@@ -34,6 +34,7 @@ defmodule Vutuv.Sitemap do
                   "/listings/most_followed_users",
                   "/system/members",
                   "/organizations",
+                  "/jobs",
                   "/ads",
                   "/tags",
                   "/developers"
