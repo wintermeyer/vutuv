@@ -1,0 +1,12 @@
+<.page_header title={gettext("Turn off this alert")} />
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext("Done. Your saved search \"%{label}\" will no longer e-mail you.",
+        label: search_label(@saved_search)
+      )}
+    </p>
+    <p>{gettext("You can turn its alerts back on, or delete the search, in your settings at any time.")}</p>
+  </section>
+</div>

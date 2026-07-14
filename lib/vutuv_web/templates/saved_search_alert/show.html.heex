@@ -1,0 +1,17 @@
+<.page_header title={gettext("Turn off this alert")} />
+
+<div class="card-list">
+  <section class="card">
+    <p>
+      {gettext("Stop e-mail alerts for your saved search \"%{label}\"?",
+        label: search_label(@saved_search)
+      )}
+    </p>
+    <p>{gettext("The search itself is kept. Only its e-mails stop, and you can turn them back on in your settings.")}</p>
+    <.form for={%{}} action={~p"/unsubscribe/search/#{@token}"} id="saved-search-disable-form">
+      <div class="editform__actions">
+        <%= submit gettext("Turn off alerts"), class: "button" %>
+      </div>
+    </.form>
+  </section>
+</div>

@@ -17,17 +17,15 @@ defmodule VutuvWeb.JobBoardLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.JobComponents
+  import VutuvWeb.SavedSearchComponents
 
-  alias Vutuv.Accounts.User
   alias Vutuv.Countries
   alias Vutuv.Geo
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
-  alias Vutuv.Salary
+  alias Vutuv.SavedSearches
   alias VutuvWeb.ApiV2
   alias VutuvWeb.Live.InitAssigns
-
-  @radii [0, 10, 25, 50, 100]
 
   @impl true
   def mount(_params, session, socket) do
@@ -46,10 +44,12 @@ defmodule VutuvWeb.JobBoardLive do
      |> assign(:locale, session["locale"])
      |> assign(:page_title, gettext("Jobs"))
      |> assign(:params, link_params(raw))
-     |> assign(:filters, normalize_filters(raw, user))
+     |> assign(:filters, Jobs.board_filters(raw, user))
      |> assign(:cursor, decode_cursor(raw["cursor"]))
      |> assign(:has_salary_expectation?, Jobs.desired_salary_floor(user) != nil)
      |> assign(:viewer_tags, Jobs.viewer_tag_slugs(user))
+     |> assign(:show_save?, false)
+     |> assign(:saved?, false)
      |> load_board()}
   end
 
@@ -72,6 +72,12 @@ defmodule VutuvWeb.JobBoardLive do
 
   def handle_event("toggle_bookmark", %{"id" => id}, socket),
     do: {:noreply, toggle(socket, id, :bookmark)}
+
+  def handle_event("toggle_save_search", _params, socket),
+    do: {:noreply, update(socket, :show_save?, &(not &1))}
+
+  def handle_event("save_search", %{"notify" => notify}, socket),
+    do: {:noreply, save_current_search(socket, notify)}
 
   defp toggle(%{assigns: %{current_user: nil}} = socket, _id, _kind),
     do: push_navigate(socket, to: ~p"/login")
@@ -99,81 +105,48 @@ defmodule VutuvWeb.JobBoardLive do
 
   defp apply_engagement(:bookmark, user, posting, _), do: Jobs.bookmark_job_posting(user, posting)
 
+  # Store the board's current filter set (the shareable link params, which
+  # already drop the page cursor and blanks) as a saved jobs search. A
+  # `salary_min=mine` filter is kept verbatim, so it resolves against the
+  # member's live expectation at sweep time and the private figure is never
+  # written into the query column (issue #935).
+  defp save_current_search(%{assigns: %{current_user: nil}} = socket, _notify),
+    do: push_navigate(socket, to: ~p"/login")
+
+  defp save_current_search(socket, notify) do
+    query = URI.encode_query(socket.assigns.params)
+
+    case SavedSearches.create(socket.assigns.current_user, %{
+           kind: :jobs,
+           query: query,
+           notify: notify
+         }) do
+      {:ok, _} ->
+        socket
+        |> assign(saved?: true, show_save?: false)
+        |> put_flash(:info, gettext("Search saved."))
+
+      {:error, :quota} ->
+        put_flash(
+          socket,
+          :error,
+          gettext("You already have the maximum number of saved searches.")
+        )
+
+      {:error, _} ->
+        put_flash(socket, :error, gettext("That did not work."))
+    end
+  end
+
   @impl true
   def handle_info(:jobs_board_changed, socket), do: {:noreply, load_board(socket)}
   def handle_info(_msg, socket), do: {:noreply, socket}
 
   # --- filter parsing -------------------------------------------------------
 
-  defp normalize_filters(raw, user) do
-    %{
-      q: presence(raw["q"]),
-      tag: presence(raw["tag"]),
-      workplace: parse_workplace(raw["workplace"]),
-      employment: parse_employment(raw["employment"]),
-      near: presence(raw["near"]),
-      radius: parse_radius(raw["radius"]),
-      country: parse_country(raw["country"]),
-      my_tags?: raw["my_tags"] in ["1", "true", "on"]
-    }
-    |> put_salary(raw["salary_min"], user)
-  end
-
-  defp put_salary(filters, "mine", %User{} = user) do
-    case Jobs.desired_salary_floor(user) do
-      {min, currency} -> Map.merge(filters, %{salary_min: min, salary_currency: currency})
-      nil -> filters
-    end
-  end
-
-  defp put_salary(filters, value, _user) when is_binary(value) do
-    case Integer.parse(value) do
-      {min, _} when min > 0 ->
-        Map.merge(filters, %{salary_min: min, salary_currency: default_currency()})
-
-      _ ->
-        filters
-    end
-  end
-
-  defp put_salary(filters, _value, _user), do: filters
-
-  defp parse_workplace(value) when value in ["onsite", "hybrid", "remote"],
-    do: String.to_existing_atom(value)
-
-  defp parse_workplace(_value), do: nil
-
-  defp parse_employment(value) when is_binary(value),
-    do: Enum.find(JobPosting.employment_types(), &(Atom.to_string(&1) == value))
-
-  defp parse_employment(_value), do: nil
-
-  defp parse_radius(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {km, _} when km in @radii -> km
-      _ -> nil
-    end
-  end
-
-  defp parse_radius(_value), do: nil
-
-  defp parse_country(value) when is_binary(value) and value != "" do
-    code = value |> String.trim() |> String.upcase()
-    if Countries.valid?(code), do: code, else: nil
-  end
-
-  defp parse_country(_value), do: nil
-
-  defp presence(value) when is_binary(value) do
-    case String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
-  end
-
-  defp presence(_value), do: nil
-
-  defp default_currency, do: hd(Salary.currencies())
+  # Raw params → the atom-keyed filter map lives in `Vutuv.Jobs.board_filters/2`
+  # (shared verbatim with the saved-search sweeper). The board only builds the
+  # shareable link params and decodes the keyset cursor.
 
   # The URL params that build the shareable filter links: everything present
   # except the page cursor (a filter change resets to page one) and blanks.
@@ -258,6 +231,14 @@ defmodule VutuvWeb.JobBoardLive do
           {gettext("Clear filters")}
         </.link>
       </div>
+
+      <.save_search_control
+        :if={@current_user && any_filters?(@params)}
+        id="jobs-save-search"
+        show?={@show_save?}
+        saved?={@saved?}
+        class="mt-3"
+      />
 
       <p :if={@params["tag"]} class="mt-3 text-sm text-slate-600 dark:text-slate-400">
         {gettext("Tag")}:

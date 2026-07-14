@@ -13,5 +13,6 @@ defmodule VutuvWeb.UnsubscribeHTML do
   def pref_label(:notification_emails?), do: gettext("unread-message emails")
   def pref_label(:email_on_endorsement?), do: gettext("endorsement emails")
   def pref_label(:email_on_follower?), do: gettext("new-follower emails")
+  def pref_label(:saved_search_emails?), do: gettext("saved-search alert emails")
   def pref_label(_field), do: gettext("these emails")
 end

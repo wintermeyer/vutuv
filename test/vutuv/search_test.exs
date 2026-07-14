@@ -201,6 +201,71 @@ defmodule Vutuv.SearchTest do
     test "an unknown operator stays ordinary text" do
       assert %{text: "foo:bar", tag: nil} = Search.parse("foo:bar")
     end
+
+    test "the status operator parses open/looking and pins the scope" do
+      assert %{status: "looking", scope: :people, scope_pinned?: true} =
+               Search.parse("status:looking")
+
+      assert %{status: "open", scope: :people} = Search.parse("status:open")
+    end
+
+    test "an unknown status value degrades to plain text" do
+      assert %{status: nil, text: "status:employed"} = Search.parse("status:employed")
+    end
+  end
+
+  describe "status operator matching" do
+    setup do
+      viewer = insert(:activated_user)
+
+      looking =
+        insert(:activated_user,
+          first_name: "Lea",
+          last_name: "Looking",
+          employment_status: "looking",
+          employment_status_visibility: "members"
+        )
+
+      %{viewer: viewer, looking: looking}
+    end
+
+    test "a signed-in viewer matches members by visible status", ctx do
+      insert(:activated_user, employment_status: "open", employment_status_visibility: "members")
+
+      results = Search.instant("status:looking", viewer: ctx.viewer)
+      assert Enum.map(results.exact_people, & &1.id) == [ctx.looking.id]
+    end
+
+    test "a hidden status never matches", ctx do
+      insert(:activated_user,
+        employment_status: "looking",
+        employment_status_visibility: "hidden"
+      )
+
+      results = Search.instant("status:looking", viewer: ctx.viewer)
+      assert Enum.map(results.exact_people, & &1.id) == [ctx.looking.id]
+    end
+
+    test "logged-out search ignores the operator", ctx do
+      # No viewer → the status operator is dropped, so a bare status query has
+      # nothing to match and returns no people.
+      results = Search.instant("status:looking")
+      assert results == nil or results.exact_people == []
+      refute ctx.looking.id in Enum.map((results && results.exact_people) || [], & &1.id)
+    end
+
+    test "status combines with a tag filter", ctx do
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      insert(:user_tag, tag: tag, user: ctx.looking)
+      # A looking member without the tag must not match.
+      insert(:activated_user,
+        employment_status: "looking",
+        employment_status_visibility: "members"
+      )
+
+      results = Search.instant("status:looking tag:elixir", viewer: ctx.viewer)
+      assert Enum.map(results.exact_people, & &1.id) == [ctx.looking.id]
+    end
   end
 
   describe "instant/2 with operators and filters" do

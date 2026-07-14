@@ -8,7 +8,13 @@ defmodule VutuvWeb.SettingsHTML do
   import VutuvWeb.OrganizationComponents,
     only: [organization_logo: 1, organization_location: 1, kind_badge: 1, role_label: 1]
 
+  # Saved-search view helpers (cadence options, kind badge, filter summary) are
+  # the same ones the /jobs and /search "Save search" control uses (issue #935).
+  import VutuvWeb.SavedSearchComponents,
+    only: [cadence_options: 0, saved_search_kind_label: 1, saved_search_summary: 1]
+
   alias Vutuv.Accounts.User
+  alias Vutuv.SavedSearches
 
   embed_templates("../templates/settings/*")
 

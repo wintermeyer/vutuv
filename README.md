@@ -26,6 +26,11 @@ We use the [MIT License](LICENSE).
   organization entries. Each page is
   run by a team (owner / admin / recruiter roles), can prove several domains, and
   is findable under alternative names and brands.
+- A **job board** at `/jobs`: members and verified organizations post openings
+  (90-day lifecycle, salary ranges, on-site / hybrid / remote, offline radius
+  search by city or zip). Both sides can save a search and be e-mailed when a
+  new match appears — a candidate for jobs, a recruiter for people open to
+  offers — without a member's private salary expectation ever riding along.
 - **Passwordless**: login by emailed PIN, optionally passkeys (WebAuthn), an
   authenticator app (TOTP) or a printed one-time code list.
 - Invite non-members by email: the link opens the sign-up form prefilled, with

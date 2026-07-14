@@ -158,6 +158,12 @@ config :vutuv, :cold_outreach,
   limit: 20,
   window_ms: 24 * 60 * 60 * 1000
 
+# Saved searches with e-mail alerts (Vutuv.SavedSearches, issue #935). The
+# per-member cap on how many searches one member may store — a plain anti-abuse
+# ceiling, identical for everyone (not a member preference). Runtime override:
+# SAVED_SEARCHES_MAX_PER_MEMBER.
+config :vutuv, :saved_searches, max_per_member: 10
+
 # Offline structured location (Vutuv.Geo). :geo_countries lists which bundled
 # GeoNames postal datasets (priv/geo/<CC>.txt[.gz]) to load for zip → lat/lon
 # resolution; :default_country preselects country inputs. No outbound calls —

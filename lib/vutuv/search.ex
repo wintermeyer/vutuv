@@ -16,6 +16,7 @@ defmodule Vutuv.Search do
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
   import Vutuv.SearchText, only: [escape_like: 1]
 
+  alias Vutuv.Accounts
   alias Vutuv.Accounts.SearchTerm
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
@@ -51,8 +52,13 @@ defmodule Vutuv.Search do
     "last" => :last_name,
     "ort" => :city,
     "stadt" => :city,
-    "city" => :city
+    "city" => :city,
+    "status" => :status
   }
+
+  # The job-availability values the `status:` operator accepts (issue #935);
+  # the shared source is `Vutuv.Accounts.User.employment_statuses/0`.
+  @status_values ~w(open looking)
 
   @scopes [:all, :people, :tags, :posts]
 
@@ -68,11 +74,12 @@ defmodule Vutuv.Search do
   `first:x` and `nachname:x` / `last:x` search a single name field, `@x` the
   username, and the people filters `tag:x` / `skill:x` (has that tag) and
   `ort:x` / `stadt:x` / `city:x` (has an address in that city) - both
-  combinable with a name ("müller tag:php"). A query wrapped in double quotes
-  sets `exact?` (equality instead of substring + phonetics). Options: `:scope`
-  (`:all | :people | :tags | :posts`, the UI filter; operators override it,
-  reported back as `scope_pinned?`) and `:exact` (the UI toggle, OR-ed with
-  the quotes).
+  combinable with a name ("müller tag:php"). `status:open` / `status:looking`
+  (issue #935) filters by job-availability, honored only for a signed-in viewer.
+  A query wrapped in double quotes sets `exact?` (equality instead of substring
+  + phonetics). Options: `:scope` (`:all | :people | :tags | :posts`, the UI
+  filter; operators override it, reported back as `scope_pinned?`) and `:exact`
+  (the UI toggle, OR-ed with the quotes).
   """
   def parse(value, opts \\ []) when is_binary(value) do
     raw = value |> String.trim() |> String.downcase()
@@ -88,9 +95,15 @@ defmodule Vutuv.Search do
         end
       end)
 
+    # Only `open`/`looking` are real status filters; anything else is a plain
+    # word (so "status:foo" degrades to free text rather than matching nothing).
+    status = if fields[:status] in @status_values, do: fields[:status]
+
     # People operators pin the scope: the UI chips cannot override them, so
     # `scope_pinned?` lets the search page render them as disabled (#846).
-    scope_pinned? = Enum.any?([:tag, :first_name, :last_name, :slug, :city], &fields[&1])
+    scope_pinned? =
+      Enum.any?([:tag, :first_name, :last_name, :slug, :city], &fields[&1]) or status != nil
+
     scope = if scope_pinned?, do: :people, else: valid_scope(opts[:scope])
 
     %{
@@ -101,6 +114,7 @@ defmodule Vutuv.Search do
       last_name: fields[:last_name],
       slug: fields[:slug],
       city: fields[:city],
+      status: status,
       exact?: quoted? or opts[:exact] == true,
       scope: scope,
       scope_pinned?: scope_pinned?
@@ -121,16 +135,26 @@ defmodule Vutuv.Search do
 
   defp classify_token(token) do
     with [key, field_value] when field_value != "" <- String.split(token, ":", parts: 2),
-         field when field != nil <- @field_ops[key] do
+         field when field != nil <- @field_ops[key],
+         true <- valid_field_value?(field, field_value) do
       {:field, field, field_value}
     else
       _ -> :word
     end
   end
 
-  # An operator value is deliberate, so it may be shorter than free text.
+  # The status: operator only accepts the real availability values; anything
+  # else (status:senior) stays a plain word so it degrades to free text rather
+  # than silently matching nothing. Every other operator accepts any value.
+  defp valid_field_value?(:status, value), do: value in @status_values
+  defp valid_field_value?(_field, _value), do: true
+
+  # An operator value is deliberate, so it may be shorter than free text. A
+  # `status:` filter is runnable on its own (only for a signed-in viewer, gated
+  # in `people/1`); the raw value is always a valid short word.
   defp runnable?(parsed) do
     String.length(parsed.text) >= @min_chars or
+      (is_binary(parsed.status) and parsed.logged_in?) or
       Enum.any?(
         [parsed.tag, parsed.first_name, parsed.last_name, parsed.slug, parsed.city],
         &(is_binary(&1) and String.length(&1) >= @min_field_chars)
@@ -144,12 +168,13 @@ defmodule Vutuv.Search do
   matches) and `:similar_people` (matched only via Cologne/Soundex phonetics),
   matching
   `:tags` with `:tag_member_counts`, and public `:posts`. Accepts the same
-  options as `parse/2`.
+  options as `parse/2`, plus `:viewer` (the signed-in `%User{}` or nil) which
+  gates the `status:` operator — logged-out search ignores it (issue #935).
   """
   def instant(value, opts \\ [])
 
   def instant(value, opts) when is_binary(value) do
-    parsed = parse(value, opts)
+    parsed = Map.put(parse(value, opts), :logged_in?, opts[:viewer] != nil)
 
     if runnable?(parsed) do
       {exact, similar} = people(parsed)
@@ -168,6 +193,76 @@ defmodule Vutuv.Search do
   end
 
   def instant(_value, _opts), do: nil
+
+  @doc """
+  The people-side matcher for saved-search alerts (issue #935): confirmed,
+  non-moderated members that match the structured operators in `q`
+  (`tag:`/`ort:`/`status:`) and are **new** to the search — either registered or
+  changed their availability status in `(since, until]`. `viewer` is the alert
+  recipient (always a signed-in member); `opts` take `:since`, `:until`,
+  `:limit` (default 5) and `:blocked_ids` (a MapSet subtracted both ways).
+
+  A search with no structured people filter yields `[]` (a bare free-text alert
+  would fire on every new registration). When the search carries a `status:`
+  filter the results are additionally passed through
+  `Accounts.job_search_visibility/2`, so a member who put the recipient on their
+  job-search exclusion list (#938) — or blocked them — never rides along in the
+  mail. Free-text / name phonetics are deliberately not part of alert matching.
+  """
+  def new_matching_people(q, %User{} = viewer, opts) when is_binary(q) do
+    parsed =
+      q
+      |> parse(exact: opts[:exact] == true)
+      |> Map.put(:logged_in?, true)
+
+    since = Keyword.fetch!(opts, :since)
+    until = Keyword.fetch!(opts, :until)
+    limit = Keyword.get(opts, :limit, 5)
+    blocked = Keyword.get(opts, :blocked_ids, MapSet.new())
+
+    if parsed.tag || parsed.city || parsed.status do
+      parsed
+      |> filtered_users()
+      |> exclude_blocked(blocked)
+      |> where(
+        [user: u],
+        (u.inserted_at > ^since and u.inserted_at <= ^until) or
+          (u.employment_status_set_at > ^since and u.employment_status_set_at <= ^until)
+      )
+      |> order_by([user: u],
+        desc:
+          fragment(
+            "GREATEST(?, COALESCE(?, ?))",
+            u.inserted_at,
+            u.employment_status_set_at,
+            u.inserted_at
+          )
+      )
+      |> limit(50)
+      |> Repo.all()
+      |> honor_status_exclusion(parsed, viewer)
+      |> Enum.take(limit)
+    else
+      []
+    end
+  end
+
+  defp exclude_blocked(query, blocked) do
+    case MapSet.to_list(blocked) do
+      [] -> query
+      ids -> where(query, [user: u], u.id not in ^ids)
+    end
+  end
+
+  # For a status: search the base SQL already dropped "hidden" statuses; this
+  # applies the per-viewer job-search exclusion (#938, and any block) so the
+  # alert mail never surfaces a member who hid their availability from the
+  # recipient. Non-status searches carry no such per-viewer gate.
+  defp honor_status_exclusion(people, %{status: status}, viewer) when status in @status_values do
+    Enum.filter(people, &Accounts.job_search_visibility(&1, viewer).employment_status)
+  end
+
+  defp honor_status_exclusion(people, _parsed, _viewer), do: people
 
   defp people(%{scope: scope}) when scope not in [:all, :people], do: {[], []}
 
@@ -211,21 +306,44 @@ defmodule Vutuv.Search do
   end
 
   defp people_by_filter(parsed) do
-    if parsed.tag || parsed.city do
+    if parsed.tag || parsed.city || status_filter(parsed) do
       parsed |> filtered_users() |> list_people()
     else
       []
     end
   end
 
-  # The tag (tag:) and city (ort:) people filters, applied as EXISTS
-  # subqueries against whatever query carries a named :user binding - the
-  # users table for field searches, the search_terms join for name searches.
+  # The tag (tag:), city (ort:) and status: people filters, applied as EXISTS
+  # subqueries (tag/city) or a scalar predicate (status) against whatever query
+  # carries a named :user binding - the users table for field searches, the
+  # search_terms join for name searches.
   defp filtered_users(parsed) do
     visible_users()
     |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
+    |> filter_status(status_filter(parsed))
   end
+
+  # The status: operator only applies to a signed-in viewer (issue #935);
+  # logged-out search ignores it. Returns the status string or nil.
+  defp status_filter(%{logged_in?: true, status: status}) when status in @status_values,
+    do: status
+
+  defp status_filter(_parsed), do: nil
+
+  # A member matches `status:` when they carry that availability and it is
+  # visible to a signed-in member (never "hidden" — issue #928). The per-viewer
+  # exclusion list (#938) is honored on the profile and in the alert mail, not
+  # in this live operator (a transient interactive query).
+  defp filter_status(query, status) when status in @status_values do
+    where(
+      query,
+      [user: u],
+      u.employment_status == ^status and u.employment_status_visibility != "hidden"
+    )
+  end
+
+  defp filter_status(query, _status), do: query
 
   defp filter_tag(query, nil, _exact?), do: query
 
@@ -310,6 +428,7 @@ defmodule Vutuv.Search do
     |> exclude_moderated()
     |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
+    |> filter_status(status_filter(parsed))
     |> Repo.all()
     |> Enum.uniq_by(& &1.id)
   end
@@ -333,6 +452,7 @@ defmodule Vutuv.Search do
       |> exclude_moderated()
       |> filter_tag(parsed.tag, parsed.exact?)
       |> filter_city(parsed.city, parsed.exact?)
+      |> filter_status(status_filter(parsed))
       |> Repo.all()
 
     {exact_terms, similar_terms} =

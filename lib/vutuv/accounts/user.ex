@@ -28,6 +28,13 @@ defmodule Vutuv.Accounts.User do
     # employment_status_visible?/2, the single seam the profile pill and the
     # agent docs both read. NOT NULL with a "members" default in the DB.
     field(:employment_status_visibility, :string, default: "members")
+    # When the member last changed their availability status or its visibility
+    # (issue #935): the freshness signal a saved recruiter "people" search reads,
+    # so a member who newly becomes "open"/"looking" (or opens up a hidden
+    # status) surfaces in the next alert sweep, not only brand-new registrations.
+    # Stamped by changeset/2 whenever employment_status or its visibility
+    # changes; never cast from user input.
+    field(:employment_status_set_at, :naive_datetime)
     # The member's minimum salary expectation / Gehaltsvorstellung (issue #928):
     # a whole-currency-unit integer (nil = not stated — the codebase models
     # money as integers, never :decimal, and the display uses the integer-only
@@ -108,6 +115,12 @@ defmodule Vutuv.Accounts.User do
     # subscribed and every newsletter carries a one-click unsubscribe that flips
     # this off. Settable on the notifications settings page or that link.
     field(:newsletter_emails?, :boolean, default: true)
+    # The saved-search alert digest (issue #935, Vutuv.SavedSearches). Opt-OUT
+    # (default true): a member who never saves a search or keeps every one at
+    # cadence "none" is never mailed anyway, and the digest carries a one-click
+    # List-Unsubscribe that flips this off (killing *all* their alert mail,
+    # while the per-search links in the body switch off a single search).
+    field(:saved_search_emails?, :boolean, default: true)
     # Whether this member's avatar shows the real-time "online" green dot while
     # they have the site open. Default on; opting out (Privacy settings) means
     # VutuvWeb.Presence never tracks them, so they show as online to no one.
@@ -249,7 +262,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -338,7 +351,8 @@ defmodule Vutuv.Accounts.User do
   so the unsubscribe capability can never name a non-pref column.
   """
   def email_pref_fields,
-    do: ~w(notification_emails? email_on_endorsement? email_on_follower? newsletter_emails?)a
+    do:
+      ~w(notification_emails? email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails?)a
 
   @max_image_filesize Application.compile_env!(:vutuv, [VutuvWeb.Endpoint, :max_image_filesize])
 
@@ -383,6 +397,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> validate_inclusion(:employment_status, @employment_statuses)
     |> validate_inclusion(:employment_status_visibility, @visibilities)
+    |> stamp_employment_status_change()
     # Salary expectation (issue #928): a positive whole-unit amount, a
     # whitelisted currency + period, and the shared three-way visibility.
     # validate_number only fires on a present, non-nil change, so clearing the
@@ -638,6 +653,24 @@ defmodule Vutuv.Accounts.User do
     case get_field(changeset, :birthdate) do
       ~D[1900-01-01] -> put_change(changeset, :birthdate, nil)
       _ -> changeset
+    end
+  end
+
+  # Stamp employment_status_set_at whenever the member changes their
+  # availability status or who may see it (issue #935): both make them newly
+  # matchable (or newly hidden) to a saved recruiter search, so the alert
+  # sweeper's freshness check should fire. It is never cast from user input, so
+  # this put_change is the only writer.
+  defp stamp_employment_status_change(changeset) do
+    if changed?(changeset, :employment_status) or
+         changed?(changeset, :employment_status_visibility) do
+      put_change(
+        changeset,
+        :employment_status_set_at,
+        NaiveDateTime.truncate(NaiveDateTime.utc_now(), :second)
+      )
+    else
+      changeset
     end
   end
 

@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+Here are the newest matches for your saved searches on vutuv.
+<%= for section <- @sections do %>
+<%= if section.kind == :jobs, do: "New jobs", else: "New people" %><%= if section.heading, do: " (" <> section.heading <> ")", else: "" %>
+<%= for entry <- section.entries do %>* <%= entry.title %><%= if entry.status, do: " · " <> entry.status, else: "" %>
+<%= if entry.meta != "", do: "  " <> entry.meta <> "\n", else: "" %>  <%= entry.url %>
+<% end %>
+See all matches: <%= section.more_url %>
+Turn off alerts for this search: <%= section.disable_url %>
+<% end %>
+You can switch off all saved-search alert emails here:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_en.text" %>
+
+<%= render "_footer.text" %>

@@ -1,0 +1,30 @@
+<.email_layout preheader="New matches for your saved searches on vutuv" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>Here are the newest matches for your saved searches on vutuv.</.email_p>
+
+  <div :for={section <- @sections}>
+    <.email_divider />
+    <.email_heading>{if section.kind == :jobs, do: "New jobs", else: "New people"}</.email_heading>
+    <p :if={section.heading} class="email-muted" style="margin:-8px 0 12px;color:#475569;font-size:13px;">
+      {section.heading}
+    </p>
+
+    <div :for={entry <- section.entries} style="margin:0 0 14px;">
+      <a href={entry.url} style="color:#1d4ed8;text-decoration:none;font-weight:600;">{entry.title}</a><span
+        :if={entry.status}
+        style="color:#475569;"
+      > · {entry.status}</span>
+      <div :if={entry.meta != ""} class="email-muted" style="margin:2px 0 0;color:#475569;font-size:13px;">
+        {entry.meta}
+      </div>
+    </div>
+
+    <p style="margin:0 0 6px;"><.email_link href={section.more_url}>See all matches</.email_link></p>
+    <.email_muted>
+      <.email_link href={section.disable_url}>Turn off alerts for this search</.email_link>
+    </.email_muted>
+  </div>
+
+  <.email_signature locale={@locale} />
+  <.email_unsubscribe_note locale={@locale} unsubscribe_url={@unsubscribe_url} />
+</.email_layout>

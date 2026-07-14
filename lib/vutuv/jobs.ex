@@ -33,6 +33,7 @@ defmodule Vutuv.Jobs do
 
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
+  alias Vutuv.Countries
   alias Vutuv.Engagement
   alias Vutuv.Geo
   alias Vutuv.Jobs.JobPosting
@@ -905,6 +906,104 @@ defmodule Vutuv.Jobs do
       end
 
     %{entries: shown, more?: more?, cursor: cursor}
+  end
+
+  # --- saved-search alerts (#935) -------------------------------------------
+
+  # The radius steps the board offers (km); a stored value outside the set is
+  # dropped, exactly like the live board.
+  @board_radii [0, 10, 25, 50, 100]
+
+  @doc """
+  Turns a board URL's raw string-keyed params into the atom-keyed `filters` map
+  `board_page/3` and `new_board_postings/3` consume — the one parser the live
+  board (`VutuvWeb.JobBoardLive`) and the saved-search sweeper share, so a saved
+  jobs search behaves exactly like the live board it was captured from.
+  `salary_min=mine` resolves against `viewer`'s own expectation (#928); every
+  other value is validated (radius/country/enums) or dropped.
+  """
+  def board_filters(raw, viewer) when is_map(raw) do
+    %{
+      q: presence(raw["q"]),
+      tag: presence(raw["tag"]),
+      workplace: parse_workplace(raw["workplace"]),
+      employment: parse_employment(raw["employment"]),
+      near: presence(raw["near"]),
+      radius: parse_radius(raw["radius"]),
+      country: parse_country(raw["country"]),
+      my_tags?: raw["my_tags"] in ["1", "true", "on"]
+    }
+    |> put_filter_salary(raw["salary_min"], viewer)
+  end
+
+  defp put_filter_salary(filters, "mine", %User{} = user) do
+    case desired_salary_floor(user) do
+      {min, currency} -> Map.merge(filters, %{salary_min: min, salary_currency: currency})
+      nil -> filters
+    end
+  end
+
+  defp put_filter_salary(filters, value, _user) when is_binary(value) do
+    case Integer.parse(value) do
+      {min, _} when min > 0 ->
+        Map.merge(filters, %{salary_min: min, salary_currency: default_currency()})
+
+      _ ->
+        filters
+    end
+  end
+
+  defp put_filter_salary(filters, _value, _user), do: filters
+
+  defp parse_workplace(value) when value in ["onsite", "hybrid", "remote"],
+    do: String.to_existing_atom(value)
+
+  defp parse_workplace(_value), do: nil
+
+  defp parse_employment(value) when is_binary(value),
+    do: Enum.find(JobPosting.employment_types(), &(Atom.to_string(&1) == value))
+
+  defp parse_employment(_value), do: nil
+
+  defp parse_radius(value) when is_binary(value) do
+    case Integer.parse(value) do
+      {km, _} when km in @board_radii -> km
+      _ -> nil
+    end
+  end
+
+  defp parse_radius(_value), do: nil
+
+  defp parse_country(value) when is_binary(value) and value != "" do
+    code = value |> String.trim() |> String.upcase()
+    if Countries.valid?(code), do: code, else: nil
+  end
+
+  defp parse_country(_value), do: nil
+
+  defp default_currency, do: hd(Salary.currencies())
+
+  @doc """
+  New live board postings matching `filters` that `viewer` may see and were
+  first published in `(since, until]` — the saved-search sweeper's job matcher.
+  Reuses the exact board visibility/block gate and filter clauses, so an alert
+  can only surface a posting the live board would, then bounds it to the ones
+  that became live since the last mail. Newest first, capped at `:limit`
+  (default 5). Returns preloaded `%JobPosting{}` entries.
+  """
+  def new_board_postings(viewer, filters, opts) do
+    since = Keyword.fetch!(opts, :since)
+    until = Keyword.fetch!(opts, :until)
+    limit = Keyword.get(opts, :limit, 5)
+
+    viewer
+    |> board_scope()
+    |> apply_board_filters(filters, viewer)
+    |> where([p], p.first_published_at > ^since and p.first_published_at <= ^until)
+    |> order_by([p], desc: p.first_published_at, desc: p.id)
+    |> limit(^limit)
+    |> preload([:organization, :user, job_posting_tags: :tag])
+    |> Repo.all()
   end
 
   # --- board filters --------------------------------------------------------

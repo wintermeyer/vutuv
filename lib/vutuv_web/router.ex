@@ -362,6 +362,12 @@ defmodule VutuvWeb.Router do
   scope "/", VutuvWeb do
     pipe_through(:unsubscribe)
 
+    # The saved-search alert digest's per-search "turn this alert off" link
+    # (issue #935): same tokenless, layout-free pattern, scoped to one search.
+    # Nested under the existing /unsubscribe word so it burns no new root slug.
+    get("/unsubscribe/search/:token", SavedSearchAlertController, :show)
+    post("/unsubscribe/search/:token", SavedSearchAlertController, :create)
+
     get("/unsubscribe/:token", UnsubscribeController, :show)
     post("/unsubscribe/:token", UnsubscribeController, :create)
   end
@@ -749,6 +755,12 @@ defmodule VutuvWeb.Router do
     get("/notifications", SettingsController, :notifications)
     put("/notifications", SettingsController, :update_notifications)
     patch("/notifications", SettingsController, :update_notifications)
+
+    # Saved searches with e-mail alerts (issue #935): the management list. New
+    # searches are saved from the /jobs board and /search page themselves.
+    get("/saved_searches", SettingsController, :saved_searches)
+    patch("/saved_searches/:id", SettingsController, :update_saved_search)
+    delete("/saved_searches/:id", SettingsController, :delete_saved_search)
     # The member's "Your organizations" hub: the organization pages they own or
     # help run, the explainer of how organizations work, and the add call to
     # action. The public browse directory stays at /organizations.

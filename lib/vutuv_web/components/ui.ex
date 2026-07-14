@@ -2645,12 +2645,28 @@ defmodule VutuvWeb.UI do
        [
          {gettext("Privacy"), ~p"/settings/privacy", :privacy},
          {gettext("Fediverse"), ~p"/settings/fediverse", :fediverse},
-         {gettext("Notifications"), ~p"/settings/notifications", :notifications},
-         {gettext("Apps"), ~p"/settings/apps", :apps},
-         {gettext("Delete account"), ~p"/settings/delete", :delete}
-       ]}
+         {gettext("Notifications"), ~p"/settings/notifications", :notifications}
+       ] ++
+         saved_search_rows(user) ++
+         [
+           {gettext("Apps"), ~p"/settings/apps", :apps},
+           {gettext("Delete account"), ~p"/settings/delete", :delete}
+         ]}
     ]
   end
+
+  # The saved-searches row joins the hub only once the member has saved a search
+  # (the block is invisible until then, issue #935); a member who never uses the
+  # feature sees nothing extra.
+  defp saved_search_rows(%{} = user) do
+    if Vutuv.SavedSearches.any_for_user?(user) do
+      [{gettext("Saved searches"), ~p"/settings/saved_searches", :saved_searches}]
+    else
+      []
+    end
+  end
+
+  defp saved_search_rows(_user), do: []
 
   @doc """
   One tappable row on the settings hub (and the profile editor's mobile

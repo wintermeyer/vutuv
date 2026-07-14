@@ -34,6 +34,8 @@ defmodule VutuvWeb.SettingsController do
   alias Vutuv.LoginCodes
   alias Vutuv.Organizations
   alias Vutuv.Prefs
+  alias Vutuv.SavedSearches
+  alias Vutuv.SavedSearches.SavedSearch
   alias Vutuv.Sessions
 
   # The hub: no forms of its own, just the grouped rows with per-section entry
@@ -225,6 +227,67 @@ defmodule VutuvWeb.SettingsController do
       gettext("Notification settings saved.")
     )
   end
+
+  # --- Saved searches (issue #935) -----------------------------------------
+
+  @saved_searches_per_page 20
+
+  def saved_searches(conn, params) do
+    user = conn.assigns[:user]
+    offset = params_offset(params)
+    page = SavedSearches.list_for_user(user, limit: @saved_searches_per_page, offset: offset)
+
+    render(conn, "saved_searches.html",
+      user: user,
+      page: page,
+      offset: offset,
+      per_page: @saved_searches_per_page,
+      page_title: gettext("Saved searches")
+    )
+  end
+
+  def update_saved_search(conn, %{"id" => id, "saved_search" => %{"notify" => notify}}) do
+    user = conn.assigns[:user]
+
+    with %SavedSearch{} = search <- SavedSearches.get_for_user(user, id),
+         {:ok, _} <- SavedSearches.update_notify(search, %{notify: notify}) do
+      conn
+      |> put_flash(:info, gettext("Alert updated."))
+      |> redirect(to: ~p"/settings/saved_searches")
+    else
+      _ ->
+        conn
+        |> put_flash(:error, gettext("That did not work."))
+        |> redirect(to: ~p"/settings/saved_searches")
+    end
+  end
+
+  def delete_saved_search(conn, %{"id" => id}) do
+    user = conn.assigns[:user]
+
+    case SavedSearches.get_for_user(user, id) do
+      %SavedSearch{} = search ->
+        SavedSearches.delete(search)
+
+        conn
+        |> put_flash(:info, gettext("Saved search deleted."))
+        |> redirect(to: ~p"/settings/saved_searches")
+
+      _ ->
+        conn
+        |> put_flash(:error, gettext("That did not work."))
+        |> redirect(to: ~p"/settings/saved_searches")
+    end
+  end
+
+  defp params_offset(%{"offset" => raw}) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {n, _} when n > 0 -> n
+      _ -> 0
+    end
+  end
+
+  defp params_offset(_params), do: 0
 
   # The interface language (`locale`) is the user's own UI-language preference,
   # not public profile content, so it lives on the language & display page rather

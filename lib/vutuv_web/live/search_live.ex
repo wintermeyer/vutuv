@@ -18,6 +18,9 @@ defmodule VutuvWeb.SearchLive do
   """
   use VutuvWeb, :live_view
 
+  import VutuvWeb.SavedSearchComponents
+
+  alias Vutuv.SavedSearches
   alias Vutuv.Search
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
@@ -32,6 +35,8 @@ defmodule VutuvWeb.SearchLive do
      socket
      |> assign(:page_title, gettext("Search"))
      |> assign(:current_user_id, current_user && current_user.id)
+     |> assign(:show_save?, false)
+     |> assign(:saved?, false)
      |> assign(:record_timer, nil)}
   end
 
@@ -40,13 +45,17 @@ defmodule VutuvWeb.SearchLive do
     q = params["q"] || ""
     scope = parse_scope(params["scope"])
     exact = params["exact"] == "1"
-    results = Search.instant(q, scope: scope, exact: exact)
+    results = Search.instant(q, scope: scope, exact: exact, viewer: socket.assigns[:current_user])
 
     {:noreply,
      socket
      |> assign(:q, q)
      |> assign(:scope, scope)
      |> assign(:exact, exact)
+     # A new query invalidates any open/confirmed save panel.
+     |> assign(:show_save?, false)
+     |> assign(:saved?, false)
+     |> assign(:saveable?, saveable?(results))
      # Operators in the query override the scope chips; highlight what the
      # search actually did and disable the chips that can do nothing (#846).
      |> assign(:effective_scope, (results && results.parsed.scope) || scope)
@@ -88,6 +97,54 @@ defmodule VutuvWeb.SearchLive do
        to: search_path(q, socket.assigns.scope, socket.assigns.exact),
        replace: true
      )}
+  end
+
+  def handle_event("toggle_save_search", _params, socket),
+    do: {:noreply, update(socket, :show_save?, &(not &1))}
+
+  def handle_event("save_search", %{"notify" => notify}, socket),
+    do: {:noreply, save_current_search(socket, notify)}
+
+  # Only a people search with a structured operator (tag:/ort:/status:) is worth
+  # saving as an alert — a bare free-text or name search never triggers a
+  # people alert (issue #935), so the button stays hidden for it.
+  defp saveable?(%{parsed: parsed}), do: !!(parsed.tag || parsed.city || parsed.status)
+  defp saveable?(_results), do: false
+
+  defp save_current_search(%{assigns: %{current_user: nil}} = socket, _notify),
+    do: push_navigate(socket, to: ~p"/login")
+
+  defp save_current_search(socket, notify) do
+    query = search_query(socket.assigns.q, socket.assigns.scope, socket.assigns.exact)
+
+    case SavedSearches.create(socket.assigns.current_user, %{
+           kind: :people,
+           query: query,
+           notify: notify
+         }) do
+      {:ok, _} ->
+        socket
+        |> assign(saved?: true, show_save?: false)
+        |> put_flash(:info, gettext("Search saved."))
+
+      {:error, :quota} ->
+        put_flash(
+          socket,
+          :error,
+          gettext("You already have the maximum number of saved searches.")
+        )
+
+      {:error, _} ->
+        put_flash(socket, :error, gettext("That did not work."))
+    end
+  end
+
+  # The stored query string mirrors the /search URL (q + non-default scope +
+  # exact), so the sweeper and the "run now" link replay the same search.
+  defp search_query(q, scope, exact) do
+    [q: q, scope: scope != :all && scope, exact: exact && "1"]
+    |> Enum.reject(fn {_k, v} -> v in ["", false, nil] end)
+    |> URI.encode_query()
   end
 
   # The settle timer fired: this query stopped changing, so it counts.
@@ -264,6 +321,8 @@ defmodule VutuvWeb.SearchLive do
           <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with this tag, combinable: miller tag:php")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("city:koblenz")}</dt>
           <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
+          <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">status:looking</dt>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people open to offers (status:open) or looking (status:looking)")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">@stefan</dt>
           <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches usernames")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">"{gettext("miller")}"</dt>
@@ -272,6 +331,13 @@ defmodule VutuvWeb.SearchLive do
       </.card>
 
       <div :if={@results} class="mt-6 space-y-6">
+        <.save_search_control
+          :if={@current_user && @saveable?}
+          id="people-save-search"
+          show?={@show_save?}
+          saved?={@saved?}
+        />
+
         <.card :if={@results.exact_people != [] or @results.similar_people != []} id="search-people">
           <.section_title>
             {gettext("People")} ({compact_count(length(@results.exact_people) + length(@results.similar_people))})

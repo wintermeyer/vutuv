@@ -11,8 +11,25 @@ the URL shareable and a settled query is recorded once) with scope chips
 (all/people/tags/posts), an exact-only toggle and query operators parsed by
 `Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aka `first:`/`last:`),
 `@handle`, double quotes for exact, plus the combinable people filters
-`tag:`/`skill:` (has the tag) and `ort:`/`stadt:`/`city:` (address in that
-city), e.g. `müller tag:php` or `müller ort:koblenz`.
+`tag:`/`skill:` (has the tag), `ort:`/`stadt:`/`city:` (address in that
+city) and `status:looking` / `status:open` (job-availability, #928 — honored
+only for a signed-in viewer, logged-out search ignores it and a `hidden`
+status never matches), e.g. `müller tag:php`, `müller ort:koblenz` or
+`elixir status:open`.
+
+## Saved searches (issue #935)
+
+A signed-in member can save the current people search as a `SavedSearch`
+(kind `people`) from the quiet "Save search" control that appears once the
+query carries a structured operator (`tag:`/`ort:`/`status:`). The stored
+`query` is the same `/search` URL query string, so the "run now" link and the
+nightly alert sweeper replay the identical search. Alerts, matching and the
+digest e-mail live with the job board — see
+[jobs.md](jobs.md#saved-searches-and-alerts) — because both sides of the market
+share one `Vutuv.SavedSearches` context and one `AlertSweeper`. People matching
+(`Vutuv.Search.new_matching_people/3`) only ever surfaces members the recipient
+could see logged in (base #928 visibility plus the #938 per-viewer exclusion for
+status searches) and never leaks a member's private salary expectation.
 
 ## Post search
 

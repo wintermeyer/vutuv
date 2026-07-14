@@ -375,4 +375,34 @@ defmodule VutuvWeb.SearchLiveTest do
       assert redirected_to(conn, 303) == "/search"
     end
   end
+
+  describe "save search (#935)" do
+    test "no save control for a plain free-text search", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      searchable_user("Max", "Meier")
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "meier"]}")
+      refute has_element?(view, "#people-save-search-button")
+    end
+
+    test "a member saves a status people search as an alert", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      insert(:activated_user,
+        employment_status: "looking",
+        employment_status_visibility: "members"
+      )
+
+      {:ok, view, _html} = live(conn, ~p"/search?#{[q: "status:looking"]}")
+      assert has_element?(view, "#people-save-search-button")
+
+      view |> element("#people-save-search-button") |> render_click()
+      view |> form("#people-save-search-form", %{notify: "weekly"}) |> render_submit()
+
+      assert [search] = Vutuv.SavedSearches.list_for_user(user).entries
+      assert search.kind == :people
+      assert search.notify == :weekly
+      assert search.query =~ "status"
+    end
+  end
 end

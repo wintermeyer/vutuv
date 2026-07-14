@@ -226,6 +226,36 @@ later". `Chat.cold_outreach_count/1` reads the current spend without moving it
 (`RateLimiter.peek/2`), so the `/admin/jobs` poster footprint can show it when a
 recruiter's messaging is questioned.
 
+## Saved searches and alerts
+
+A signed-in member can save the current board filters from the quiet "Save
+search" control (shown whenever a filter is active) and pick an alert cadence
+(`none` / `daily` / `weekly`, defaulting to `none` so saving never silently
+subscribes). This is symmetric with the people side: both are rows in one
+`saved_searches` table owned by `Vutuv.SavedSearches`, capped per member
+(`config :vutuv, :saved_searches, max_per_member`, `SAVED_SEARCHES_MAX_PER_MEMBER`,
+default 10). The stored `query` is the exact `/jobs` (or `/search`) URL query
+string, so `Vutuv.Jobs.board_filters/2` — the one raw-params → filters parser
+the live board and the sweeper share — replays the identical search. A
+`salary_min=mine` filter is stored verbatim, so it resolves against the member's
+live salary expectation (#928) at sweep time and the private figure is never
+written into the query column or any mail.
+
+`Vutuv.SavedSearches.AlertSweeper` runs once per Berlin day (a few minutes after
+the lifecycle sweeper, so an expiring posting is already off the board). It
+batches **one** digest per member: each notifying search due today is re-run for
+matches created after its `last_notified_at` high-water mark (the DM-notification
+pattern), up to five per search, and the searches with new matches are listed
+with a link to the full results. Jobs use `Jobs.new_board_postings/3` (the same
+visibility + block gate as the live board); people use
+`Search.new_matching_people/3`. The high-water mark advances to the sweep cutoff
+afterwards, so a match is mailed at most once. The digest is bulk mail
+(`Emailer.saved_search_alert_email/3` + `bulk_headers/1`) with a member-level
+one-click `List-Unsubscribe` (`saved_search_emails?`) and a per-search disable
+link (`VutuvWeb.SavedSearchToken`, `/unsubscribe/search/:token`). Members manage
+their searches at `/settings/saved_searches` (the row joins the settings hub only
+once the first search is saved).
+
 ## Agent formats & JSON-LD
 
 The detail page carries `JobPosting` JSON-LD (only when `indexable?`), with

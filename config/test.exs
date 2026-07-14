@@ -37,6 +37,9 @@ config :vutuv, :daily_report_email, false
 # process must not touch the SQL Sandbox it doesn't own); call
 # Vutuv.Jobs.Sweeper.sweep/0 directly in the test that exercises it.
 config :vutuv, :jobs_sweeper, false
+# The saved-search alert digest sweeper is off in tests (same sandbox reason);
+# call Vutuv.SavedSearches.AlertSweeper.sweep/1 directly in its test.
+config :vutuv, :saved_search_alerts, false
 # Bounce detection: the log watcher must not touch the filesystem and the
 # unreachable-account sweep would touch the sandbox from outside. Both the
 # Deliverability context and parser are called directly in their tests.

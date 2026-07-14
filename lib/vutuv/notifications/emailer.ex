@@ -23,12 +23,16 @@ defmodule Vutuv.Notifications.Emailer do
 
   require Logger
 
+  alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
   alias Vutuv.Invitations.PrefillToken
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Reports.DailyReport
+  alias Vutuv.SavedSearches
   alias VutuvWeb.EmailComponents
   alias VutuvWeb.EmailText
   alias VutuvWeb.Plug.Locale
+  alias VutuvWeb.SavedSearchToken
 
   # The visible From ({name, address}) on every message. Per-installation:
   # config :vutuv, :mailer_from, overridable at boot via MAILER_FROM_NAME /
@@ -318,6 +322,111 @@ defmodule Vutuv.Notifications.Emailer do
       %{actor_username: endorser.username, tag_name: tag_name}
     )
   end
+
+  @doc """
+  The daily saved-search alert digest (issue #935): one bulk mail listing each of
+  the member's saved searches that has new matches (up to five each) with a link
+  to the full list. The member-level one-click `List-Unsubscribe` switches
+  `saved_search_emails?` off (all alert mail); each section also carries a
+  per-search disable link (`VutuvWeb.SavedSearchToken`). `sections` is the
+  `[{%SavedSearch{}, [entry, ...]}]` the sweeper builds — job postings or member
+  structs. A member's private salary expectation is never rendered.
+  """
+  def saved_search_alert_email(user, email, sections) do
+    locale = get_locale(user.locale)
+    unsubscribe_url = VutuvWeb.UnsubscribeToken.url(user, :saved_search_emails?)
+    base = public_url()
+    rendered = alert_sections(sections, user, base, locale)
+
+    base_email()
+    |> to({VutuvWeb.UserHelpers.name_for_email_to_field(user), email})
+    |> bulk_headers()
+    |> unsubscribe_headers(unsubscribe_url)
+    |> subject(recipient_subject(locale, fn -> saved_search_subject(rendered) end))
+    |> render_bodies("saved_search_alert", locale, %{
+      user: user,
+      url: base,
+      sections: rendered,
+      unsubscribe_url: unsubscribe_url
+    })
+  end
+
+  defp saved_search_subject(sections) do
+    total = Enum.reduce(sections, 0, fn section, acc -> acc + length(section.entries) end)
+
+    ngettext(
+      "%{count} new match for your saved searches",
+      "%{count} new matches for your saved searches",
+      total
+    )
+  end
+
+  # Pre-render every section (heading, entries, links) in the recipient's locale,
+  # so the gettext'd labels (status, workplace, "Remote") come out in their
+  # language, not the sweeper process's.
+  defp alert_sections(sections, recipient, base, locale) do
+    Gettext.with_locale(VutuvWeb.Gettext, locale, fn ->
+      Enum.map(sections, fn {search, entries} ->
+        %{
+          kind: search.kind,
+          heading: alert_heading(search),
+          more_url: absolute_url(base, SavedSearches.results_url(search)),
+          disable_url: SavedSearchToken.url(search),
+          entries: Enum.map(entries, &alert_entry(search.kind, &1, recipient, base))
+        }
+      end)
+    end)
+  end
+
+  defp alert_heading(search) do
+    case SavedSearches.summary_segments(search) do
+      [] -> nil
+      segments -> Enum.join(segments, " · ")
+    end
+  end
+
+  defp alert_entry(:jobs, posting, _recipient, base) do
+    %{
+      title: posting.title,
+      meta: job_meta(posting),
+      status: nil,
+      url: absolute_url(base, "/jobs/" <> posting.slug)
+    }
+  end
+
+  defp alert_entry(:people, candidate, recipient, base) do
+    %{
+      title: VutuvWeb.UserHelpers.full_name(candidate),
+      meta: people_meta(candidate),
+      status: people_status_label(candidate, recipient),
+      url: absolute_url(base, "/" <> candidate.username)
+    }
+  end
+
+  defp job_meta(posting) do
+    employer = (posting.organization && posting.organization.name) || posting.hiring_org_name
+    location = if posting.workplace_type == :remote, do: gettext("Remote"), else: posting.city
+
+    [employer, location]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+  end
+
+  defp people_meta(candidate) do
+    ["@" <> candidate.username, candidate.headline]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(" · ")
+  end
+
+  # Only ever the status the recipient could see logged in (#928/#938); nil hides
+  # the pill. A member's salary expectation is deliberately never surfaced.
+  defp people_status_label(candidate, recipient) do
+    if Accounts.job_search_visibility(candidate, recipient).employment_status do
+      User.employment_status_label(candidate.employment_status)
+    end
+  end
+
+  defp absolute_url(base, path), do: base <> String.trim_leading(path, "/")
 
   # The shared shape of the opt-in activity notices: localized subject, the
   # matching per-locale text template (always handed `user`, `url` and

@@ -23,6 +23,7 @@ defmodule Vutuv.AccountDeletionTest do
   alias Vutuv.Moderation
   alias Vutuv.Posts.{Post, PostDenial, PostImage, PostReply}
   alias Vutuv.Repo
+  alias Vutuv.SavedSearches.SavedSearch
   alias Vutuv.Social.Follow
   alias Vutuv.Tags.{UserTag, UserTagEndorsement}
   alias Vutuv.Uploads
@@ -94,6 +95,7 @@ defmodule Vutuv.AccountDeletionTest do
     insert(:social_media_account, user: user)
     insert(:login_pin, user: user)
     insert(:search_term, user: user)
+    insert(:saved_search, user: user)
 
     # --- Tags + endorsements (given by and received by the account) ---
     tag = insert(:tag)
@@ -158,6 +160,7 @@ defmodule Vutuv.AccountDeletionTest do
     assert count(from(d in PostDenial, where: d.post_id == ^post.id)) == 0
     assert count(from(t in UserTag, where: t.user_id == ^user.id)) == 0
     assert count(from(e in UserTagEndorsement, where: e.user_id == ^user.id)) == 0
+    assert count(from(s in SavedSearch, where: s.user_id == ^user.id)) == 0
     refute Repo.get(UserTagEndorsement, given_endorsement.id)
     refute Repo.get(Conversation, conversation.id)
     refute Repo.get(Message, message.id)

@@ -251,6 +251,15 @@ defmodule Vutuv.Factory do
     %Vutuv.Tags.UserTag{}
   end
 
+  def saved_search_factory do
+    %Vutuv.SavedSearches.SavedSearch{
+      user: build(:activated_user),
+      kind: :jobs,
+      query: "q=elixir",
+      notify: :daily
+    }
+  end
+
   def user_tag_endorsement_factory do
     %Vutuv.Tags.UserTagEndorsement{}
   end

@@ -184,6 +184,20 @@ if config_env() == :prod do
            Keyword.merge(Application.get_env(:vutuv, :cold_outreach, []), cold_outreach_env)
   end
 
+  # Saved-search cap (Vutuv.SavedSearches): how many searches a member may store.
+  # SAVED_SEARCHES_MAX_PER_MEMBER overrides the config.exs default (the vutuv.de
+  # value), so our production needs no entry here.
+  saved_searches_env =
+    [max_per_member: System.get_env("SAVED_SEARCHES_MAX_PER_MEMBER")]
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Enum.map(fn {key, value} -> {key, String.to_integer(value)} end)
+
+  if saved_searches_env != [] do
+    config :vutuv,
+           :saved_searches,
+           Keyword.merge(Application.get_env(:vutuv, :saved_searches, []), saved_searches_env)
+  end
+
   # Offline structured location (Vutuv.Geo). GEO_COUNTRIES (comma-separated ISO
   # 3166-1 alpha-2 codes) picks which bundled priv/geo/<CC>.txt[.gz] postal
   # datasets to load; DEFAULT_COUNTRY preselects country inputs. No outbound

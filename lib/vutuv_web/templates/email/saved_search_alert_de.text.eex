@@ -1,0 +1,18 @@
+<%= email_greeting(@user) %>,
+
+hier sind die neuesten Treffer für deine gespeicherten Suchen auf vutuv.
+<%= for section <- @sections do %>
+<%= if section.kind == :jobs, do: "Neue Stellen", else: "Neue Personen" %><%= if section.heading, do: " (" <> section.heading <> ")", else: "" %>
+<%= for entry <- section.entries do %>* <%= entry.title %><%= if entry.status, do: " · " <> entry.status, else: "" %>
+<%= if entry.meta != "", do: "  " <> entry.meta <> "\n", else: "" %>  <%= entry.url %>
+<% end %>
+Alle Treffer ansehen: <%= section.more_url %>
+Benachrichtigungen für diese Suche abschalten: <%= section.disable_url %>
+<% end %>
+Alle E-Mails zu gespeicherten Suchen kannst du hier abschalten:
+
+<%= @unsubscribe_url %>
+
+<%= render "_signature_de.text" %>
+
+<%= render "_footer.text" %>

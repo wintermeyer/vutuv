@@ -76,4 +76,27 @@ defmodule VutuvWeb.JobBoardLiveTest do
 
     assert render(view) =~ "Just appeared"
   end
+
+  describe "save search (#935)" do
+    test "no save control without active filters", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/jobs")
+      refute has_element?(view, "#jobs-save-search-button")
+    end
+
+    test "a member saves the current board filters as an alert", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, view, _html} = live(conn, ~p"/jobs?#{[q: "elixir"]}")
+
+      assert has_element?(view, "#jobs-save-search-button")
+      view |> element("#jobs-save-search-button") |> render_click()
+
+      view |> form("#jobs-save-search-form", %{notify: "daily"}) |> render_submit()
+
+      assert [search] = Vutuv.SavedSearches.list_for_user(user).entries
+      assert search.kind == :jobs
+      assert search.notify == :daily
+      assert search.query =~ "elixir"
+    end
+  end
 end
