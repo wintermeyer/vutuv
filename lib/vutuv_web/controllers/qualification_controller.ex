@@ -105,14 +105,9 @@ defmodule VutuvWeb.QualificationController do
   # of raising a cast error. Scopes through conn.assigns[:user] — the profile
   # owner for the public show, the current user for the /settings actions.
   defp resolve_qualification(conn, _opts) do
-    user = conn.assigns[:user]
-
-    with {:ok, id} <- Vutuv.UUIDv7.cast(conn.params["id"]),
-         %Qualification{} = qualification <-
-           Repo.get_by(Qualification, id: id, user_id: user.id) do
-      assign(conn, :qualification, qualification)
-    else
-      _ -> conn |> ControllerHelpers.render_error(404) |> halt()
+    case ControllerHelpers.get_owned(conn.assigns[:user], :qualifications, conn.params["id"]) do
+      %Qualification{} = qualification -> assign(conn, :qualification, qualification)
+      nil -> conn |> ControllerHelpers.render_error(404) |> halt()
     end
   end
 end

@@ -148,13 +148,8 @@ defmodule VutuvWeb.CV.Docx do
   end
 
   defp entry(entry) do
-    role =
-      [entry.title, entry.organization]
-      |> Enum.filter(& &1)
-      |> Enum.join(", ")
-
     [
-      paragraph(role, bold: true, after: 20),
+      paragraph(entry.role, bold: true, after: 20),
       entry.period && paragraph(entry.period, muted: true),
       entry.description && description_paragraphs(entry.description)
     ]

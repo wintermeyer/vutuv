@@ -136,7 +136,9 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:body_style, post_body_style(prefs))
       |> assign(:restricted?, Posts.restricted?(assigns.post))
       |> assign(:permalink, Posts.path(assigns.post))
-      |> assign(:gallery, gallery(assigns.post, assigns.mode))
+      # Every attachment shows in the gallery (full mode) or the thumbnail row
+      # (preview) — post bodies never embed images inline.
+      |> assign(:gallery, assigns.post.images)
       |> assign(:square_layout?, square_layout?(assigns.post, assigns.mode))
       # The auto link screenshot (a ready %PostScreenshot{} for an image-less
       # single-URL post, else nil) and whether the preview lays it beside the
@@ -165,36 +167,12 @@ defmodule VutuvWeb.PostComponents do
       )
 
     ~H"""
-    <.post_card_body
-      surface={@surface}
-      class={@class}
-      post={@post}
-      mode={@mode}
-      body_html={@body_html}
-      body_id={@body_id}
-      body_style={@body_style}
-      restricted?={@restricted?}
-      permalink={@permalink}
-      gallery={@gallery}
-      square_layout?={@square_layout?}
-      link_screenshot={@link_screenshot}
-      link_screenshot_layout?={@link_screenshot_layout?}
-      edited?={@edited?}
-      author?={@author?}
-      reporter?={@reporter?}
-      viewer_follow={@viewer_follow}
-      frozen?={@frozen?}
-      reposted_by={@reposted_by}
-      reposters={@reposters}
-      reply_banner={@reply_banner}
-      conn_or_socket={@conn_or_socket}
-      actions_id={@actions_id}
-      menu_id={@menu_id}
-      report_menu_id={@report_menu_id}
-      time_id={@time_id}
-      engagement={@engagement}
-      viewer_id={@viewer_id}
-    />
+    <.card :if={@surface == :card} class={@class}>
+      {render_post_card_inner(assigns)}
+    </.card>
+    <div :if={@surface == :flat} class={@class}>
+      {render_post_card_inner(assigns)}
+    </div>
     """
   end
 
@@ -607,43 +585,18 @@ defmodule VutuvWeb.PostComponents do
     """
   end
 
-  attr(:surface, :atom, required: true)
-  attr(:class, :string, default: nil)
-  attr(:post, :any, required: true)
-  attr(:mode, :atom, required: true)
-  attr(:body_html, :any, required: true)
-  attr(:body_id, :string, required: true)
-  attr(:body_style, :string, default: nil)
-  attr(:restricted?, :boolean, required: true)
-  attr(:permalink, :string, required: true)
-  attr(:gallery, :list, required: true)
-  attr(:square_layout?, :boolean, required: true)
-  attr(:link_screenshot, :any, default: nil)
-  attr(:link_screenshot_layout?, :boolean, required: true)
-  attr(:edited?, :boolean, required: true)
-  attr(:author?, :boolean, required: true)
-  attr(:reporter?, :boolean, required: true)
-  attr(:viewer_follow, :any, default: nil)
-  attr(:frozen?, :boolean, required: true)
-  attr(:reposted_by, :any, required: true)
-  attr(:reposters, :list, required: true)
-  attr(:reply_banner, :any, required: true)
-  attr(:conn_or_socket, :any, required: true)
-  attr(:actions_id, :string, required: true)
-  attr(:menu_id, :string, required: true)
-  attr(:report_menu_id, :string, required: true)
-  attr(:time_id, :string, required: true)
-  attr(:engagement, :any, default: nil)
-  attr(:viewer_id, :any, default: nil)
+  attr(:variant, :string, required: true)
+  slot(:inner_block, required: true)
 
-  defp post_card_body(assigns) do
+  defp reply_banner_line(assigns) do
     ~H"""
-    <.card :if={@surface == :card} class={@class}>
-      {render_post_card_inner(assigns)}
-    </.card>
-    <div :if={@surface == :flat} class={@class}>
-      {render_post_card_inner(assigns)}
-    </div>
+    <p
+      class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
+      data-reply-banner={@variant}
+    >
+      <.icon_reply class="h-4 w-4" />
+      {render_slot(@inner_block)}
+    </p>
     """
   end
 
@@ -663,33 +616,21 @@ defmodule VutuvWeb.PostComponents do
       nameless notice (no name retained past account deletion). --%>
       <%= case @reply_banner do %>
         <% {:parent, parent_author, parent_path} -> %>
-          <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
-            data-reply-banner="parent"
-          >
-            <.icon_reply class="h-4 w-4" />
+          <.reply_banner_line variant="parent">
             <.link href={parent_path} class="hover:text-brand-700">
               {gettext("Replying to %{handle}", handle: handle(parent_author))}
             </.link>
-          </p>
+          </.reply_banner_line>
         <% {:author_only, parent_author} -> %>
-          <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
-            data-reply-banner="author-only"
-          >
-            <.icon_reply class="h-4 w-4" />
+          <.reply_banner_line variant="author-only">
             <.link href={~p"/#{parent_author}"} class="hover:text-brand-700">
               {gettext("Reply to a now-deleted post by %{handle}", handle: handle(parent_author))}
             </.link>
-          </p>
+          </.reply_banner_line>
         <% :gone -> %>
-          <p
-            class="mb-3 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400"
-            data-reply-banner="gone"
-          >
-            <.icon_reply class="h-4 w-4" />
+          <.reply_banner_line variant="gone">
             {gettext("Reply to a deleted post")}
-          </p>
+          </.reply_banner_line>
         <% nil -> %>
       <% end %>
 
@@ -1146,10 +1087,6 @@ defmodule VutuvWeb.PostComponents do
 
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username
-
-  # Every attachment shows in the gallery (full mode) or the thumbnail row
-  # (preview) — post bodies never embed images inline.
-  defp gallery(post, _mode), do: post.images
 
   # Whether to lay a post's body and its single image out side by side (2/3 text,
   # 1/3 image) rather than stacking a full-width image below the text. True only

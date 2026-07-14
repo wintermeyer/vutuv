@@ -39,7 +39,12 @@ defmodule Vutuv.Notifications.Emailer do
   # MAILER_FROM_ADDRESS (config/runtime.exs).
   defp from_address, do: Application.fetch_env!(:vutuv, :mailer_from)
 
-  defp from_domain, do: from_address() |> elem(1) |> String.split("@") |> List.last()
+  defp from_email, do: from_address() |> elem(1)
+
+  # One-click unsubscribe fallback; follows the configured From address.
+  defp unsubscribe_mailto, do: "mailto:#{from_email()}?subject=unsubscribe"
+
+  defp from_domain, do: from_email() |> String.split("@") |> List.last()
 
   # The operator of this installation: receives the daily report, the ad
   # bookings and the account-deleted notices — never a member-facing address.
@@ -63,7 +68,7 @@ defmodule Vutuv.Notifications.Emailer do
   defp bulk_header_list do
     [
       {"Precedence", "bulk"},
-      {"List-Unsubscribe", "<mailto:#{elem(from_address(), 1)}?subject=unsubscribe>"}
+      {"List-Unsubscribe", "<#{unsubscribe_mailto()}>"}
     ]
   end
 
@@ -365,7 +370,7 @@ defmodule Vutuv.Notifications.Emailer do
   # so the gettext'd labels (status, workplace, "Remote") come out in their
   # language, not the sweeper process's.
   defp alert_sections(sections, recipient, base, locale) do
-    Gettext.with_locale(VutuvWeb.Gettext, locale, fn ->
+    in_locale(locale, fn ->
       Enum.map(sections, fn {search, entries} ->
         %{
           kind: search.kind,
@@ -407,15 +412,11 @@ defmodule Vutuv.Notifications.Emailer do
     employer = (posting.organization && posting.organization.name) || posting.hiring_org_name
     location = if posting.workplace_type == :remote, do: gettext("Remote"), else: posting.city
 
-    [employer, location]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join(" · ")
+    join_present([employer, location], " · ")
   end
 
   defp people_meta(candidate) do
-    ["@" <> candidate.username, candidate.headline]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join(" · ")
+    join_present(["@" <> candidate.username, candidate.headline], " · ")
   end
 
   # Only ever the status the recipient could see logged in (#928/#938); nil hides
@@ -427,6 +428,12 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   defp absolute_url(base, path), do: base <> String.trim_leading(path, "/")
+
+  defp join_present(parts, sep) do
+    parts
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.join(sep)
+  end
 
   # The shared shape of the opt-in activity notices: localized subject, the
   # matching per-locale text template (always handed `user`, `url` and
@@ -451,7 +458,7 @@ defmodule Vutuv.Notifications.Emailer do
   # mailto is the fallback for everything else. Transactional mail (PINs,
   # moderation notices) must NOT carry these - it cannot be opted out of.
   defp unsubscribe_headers(email, url) do
-    mailto = "mailto:#{elem(from_address(), 1)}?subject=unsubscribe"
+    mailto = unsubscribe_mailto()
 
     email
     |> header("List-Unsubscribe", "<#{url}>, <#{mailto}>")
@@ -568,10 +575,7 @@ defmodule Vutuv.Notifications.Emailer do
   end
 
   defp invitee_name(prefill, to_email) do
-    name =
-      [prefill["first_name"], prefill["last_name"]]
-      |> Enum.reject(&(&1 in [nil, ""]))
-      |> Enum.join(" ")
+    name = join_present([prefill["first_name"], prefill["last_name"]], " ")
 
     if name == "", do: to_email, else: name
   end
@@ -616,7 +620,7 @@ defmodule Vutuv.Notifications.Emailer do
   # per-language, but the reason atoms are shared, so they are localized here
   # the same way the subject is).
   defp security_reason_lines(reasons, locale) do
-    Gettext.with_locale(VutuvWeb.Gettext, locale, fn ->
+    in_locale(locale, fn ->
       Enum.map(reasons, &security_reason_text/1)
     end)
   end
@@ -656,16 +660,17 @@ defmodule Vutuv.Notifications.Emailer do
 
   # The invoice address block, optional lines (organization, VAT id) folded away.
   defp billing_address(ad) do
-    [
-      ad.billing_name,
-      ad.billing_company,
-      ad.billing_street,
-      "#{ad.billing_zip_code} #{ad.billing_city}",
-      ad.billing_country,
-      ad.vat_id && "USt-IdNr.: #{ad.vat_id}"
-    ]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join("\n")
+    join_present(
+      [
+        ad.billing_name,
+        ad.billing_company,
+        ad.billing_street,
+        "#{ad.billing_zip_code} #{ad.billing_city}",
+        ad.billing_country,
+        ad.vat_id && "USt-IdNr.: #{ad.vat_id}"
+      ],
+      "\n"
+    )
   end
 
   # 125000 -> "1.250,00" (fixed German formatting, like the recipient).
@@ -876,7 +881,7 @@ defmodule Vutuv.Notifications.Emailer do
   defp localized_category_label(nil, _user), do: nil
 
   defp localized_category_label(report, user) do
-    Gettext.with_locale(VutuvWeb.Gettext, get_locale(user.locale), fn ->
+    in_locale(get_locale(user.locale), fn ->
       VutuvWeb.ReportHTML.category_label(report.category)
     end)
   end
@@ -939,7 +944,7 @@ defmodule Vutuv.Notifications.Emailer do
   # subject in that same locale, not the ambient process locale (which is the
   # *sender's* — e.g. the admin verifying another member).
   defp recipient_subject(locale, subject_fun) do
-    Gettext.with_locale(VutuvWeb.Gettext, locale, subject_fun)
+    in_locale(locale, subject_fun)
   end
 
   defp robot_headers(email), do: put_headers(email, @robot_headers)
@@ -947,6 +952,8 @@ defmodule Vutuv.Notifications.Emailer do
   defp put_headers(email, headers) do
     Enum.reduce(headers, email, fn {name, value}, acc -> header(acc, name, value) end)
   end
+
+  defp in_locale(locale, fun), do: Gettext.with_locale(VutuvWeb.Gettext, locale, fun)
 
   defp get_locale(nil), do: "en"
 

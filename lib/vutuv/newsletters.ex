@@ -901,7 +901,7 @@ defmodule Vutuv.Newsletters do
 
     # Count the whole protocol, not this run: after a resume the tally must
     # cover the rows the original (crashed) send already wrote.
-    count = count_deliveries(newsletter, %{kind: "broadcast"})
+    count = broadcast_sent_count(newsletter)
 
     Repo.update_all(
       from(n in Newsletter, where: n.id == ^newsletter.id),

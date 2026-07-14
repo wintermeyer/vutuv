@@ -427,10 +427,7 @@ defmodule Vutuv.Chat do
     ids = Enum.map(conversations, & &1.id)
     other_ids = Enum.map(conversations, &other_user_id(&1, me_id))
 
-    others =
-      from(u in User, where: u.id in ^other_ids, select: struct(u, ^User.listing_fields()))
-      |> Repo.all()
-      |> Map.new(&{&1.id, &1})
+    others = listing_users_by_id(other_ids)
 
     previews =
       from(m in Message,
@@ -461,6 +458,14 @@ defmodule Vutuv.Chat do
         unread: Map.get(unreads, conversation.id, 0)
       }
     end)
+  end
+
+  # Load the listing columns for a set of user ids into an id->user map.
+  # The email/sidebar only needs the narrow listing_fields, not the wide row.
+  defp listing_users_by_id(ids) do
+    from(u in User, where: u.id in ^ids, select: struct(u, ^User.listing_fields()))
+    |> Repo.all()
+    |> Map.new(&{&1.id, &1})
   end
 
   defp unread_counts(conversation_ids, me_id) do
@@ -681,15 +686,9 @@ defmodule Vutuv.Chat do
         {participant, conversation, recipient, other_user_id(conversation, participant.user_id)}
       end)
 
-    others =
-      from(u in User,
-        where: u.id in ^Enum.map(rows, &elem(&1, 3)),
-        # The email only names this counterpart by @handle, so select the listing
-        # columns (as hydrate/2 does) rather than the whole wide user row.
-        select: struct(u, ^User.listing_fields())
-      )
-      |> Repo.all()
-      |> Map.new(&{&1.id, &1})
+    # The email only names this counterpart by @handle, so load just the listing
+    # columns (see listing_users_by_id/1) rather than the whole wide user row.
+    others = listing_users_by_id(Enum.map(rows, &elem(&1, 3)))
 
     Enum.reduce(rows, 0, fn {participant, conversation, recipient, other_id}, sent ->
       other = Map.fetch!(others, other_id)

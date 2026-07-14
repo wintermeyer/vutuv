@@ -45,12 +45,6 @@ defmodule Vutuv.Tags.UserTagEndorsement do
   proof on the profile Tags card — without an extra query per endorsement.
   """
   def visible_with_endorser(query \\ __MODULE__) do
-    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
-
-    from(e in query,
-      join: u in assoc(e, :user),
-      where: account_confirmed_row(u) and not account_hidden(u.id),
-      preload: [user: u]
-    )
+    from([e, u] in visible(query), preload: [user: u])
   end
 end

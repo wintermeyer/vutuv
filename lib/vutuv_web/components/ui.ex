@@ -989,12 +989,17 @@ defmodule VutuvWeb.UI do
     {Enum.take(rows, limit), length(rows)}
   end
 
-  # An endorser's display name, falling back to their @handle when nameless.
-  defp endorser_name(user) do
+  # First + last name joined, "" when nameless. Excludes honorifics (unlike
+  # full_name/1) so it feeds both the monogram and the endorser label.
+  defp first_last(user) do
     [Map.get(user, :first_name), Map.get(user, :last_name)]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" ")
-    |> case do
+  end
+
+  # An endorser's display name, falling back to their @handle when nameless.
+  defp endorser_name(user) do
+    case first_last(user) do
       "" -> "@" <> to_string(Map.get(user, :username))
       name -> name
     end
@@ -1676,7 +1681,7 @@ defmodule VutuvWeb.UI do
 
   With neither, it renders nothing (the safe default).
   """
-  attr(:size, :string, default: "sm", values: ~w(xs sm md lg))
+  attr(:size, :string, default: "sm", values: ~w(2xs xs sm md lg))
   attr(:hook, :boolean, default: false)
   attr(:online, :boolean, default: false)
 
@@ -1755,9 +1760,8 @@ defmodule VutuvWeb.UI do
   def name_initials(nil), do: "?"
 
   def name_initials(%{first_name: _, last_name: _} = user) do
-    [Map.get(user, :first_name), Map.get(user, :last_name)]
-    |> Enum.reject(&(&1 in [nil, ""]))
-    |> Enum.join(" ")
+    user
+    |> first_last()
     |> name_initials()
   end
 

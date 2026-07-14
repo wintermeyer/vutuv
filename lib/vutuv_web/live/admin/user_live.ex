@@ -30,7 +30,7 @@ defmodule VutuvWeb.Admin.UserLive do
     filters = Accounts.admin_user_filters(params)
     total = Accounts.count_admin_users(filters)
     pages = Pages.total_pages(total, Accounts.admin_users_per_page())
-    page = params |> page_param() |> min(pages)
+    page = params |> Pages.page_param() |> min(pages)
     users = Accounts.list_admin_users(filters, %{"page" => page}, total: total)
 
     {:noreply,
@@ -146,13 +146,6 @@ defmodule VutuvWeb.Admin.UserLive do
     |> Map.merge(overrides)
     |> Enum.reject(fn {key, value} -> value in [nil, ""] or @query_defaults[key] == value end)
     |> Map.new()
-  end
-
-  defp page_param(params) do
-    case Integer.parse(to_string(params["page"])) do
-      {n, _} when n >= 1 -> n
-      _ -> 1
-    end
   end
 
   # The sortable columns, by `?sort=` value → header label.

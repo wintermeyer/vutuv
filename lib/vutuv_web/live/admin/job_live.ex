@@ -21,6 +21,7 @@ defmodule VutuvWeb.Admin.JobLive do
 
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Pages
 
   @statuses ~w(all published expiring frozen closed expired draft)
 
@@ -34,7 +35,7 @@ defmodule VutuvWeb.Admin.JobLive do
     status = if params["status"] in @statuses, do: params["status"], else: "all"
     report = if params["report"] == "open", do: "open", else: nil
     q = blank_to_nil(params["q"])
-    page = page_param(params)
+    page = Pages.page_param(params)
 
     result =
       Jobs.admin_jobs_page(
@@ -155,13 +156,6 @@ defmodule VutuvWeb.Admin.JobLive do
     case value && String.trim(value) do
       "" -> nil
       trimmed -> trimmed
-    end
-  end
-
-  defp page_param(params) do
-    case Integer.parse(to_string(params["page"])) do
-      {n, _} when n >= 1 -> n
-      _ -> 1
     end
   end
 

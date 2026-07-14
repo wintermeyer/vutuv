@@ -319,6 +319,14 @@ defmodule Vutuv.Search do
   # search_terms join for name searches.
   defp filtered_users(parsed) do
     visible_users()
+    |> apply_people_filters(parsed)
+  end
+
+  # Applies the tag: / ort: / status: people filters to any query that
+  # carries a named :user binding (users table for field searches, the
+  # search_terms join for name searches).
+  defp apply_people_filters(query, parsed) do
+    query
     |> filter_tag(parsed.tag, parsed.exact?)
     |> filter_city(parsed.city, parsed.exact?)
     |> filter_status(status_filter(parsed))
@@ -426,9 +434,7 @@ defmodule Vutuv.Search do
       select: struct(u, ^people_fields())
     )
     |> exclude_moderated()
-    |> filter_tag(parsed.tag, parsed.exact?)
-    |> filter_city(parsed.city, parsed.exact?)
-    |> filter_status(status_filter(parsed))
+    |> apply_people_filters(parsed)
     |> Repo.all()
     |> Enum.uniq_by(& &1.id)
   end
@@ -450,9 +456,7 @@ defmodule Vutuv.Search do
       )
       |> phonetic_term_match(value)
       |> exclude_moderated()
-      |> filter_tag(parsed.tag, parsed.exact?)
-      |> filter_city(parsed.city, parsed.exact?)
-      |> filter_status(status_filter(parsed))
+      |> apply_people_filters(parsed)
       |> Repo.all()
 
     {exact_terms, similar_terms} =

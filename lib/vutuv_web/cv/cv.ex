@@ -29,7 +29,7 @@ defmodule VutuvWeb.CV do
     * single entries — the record's UUID
 
   The body is a list of uniform `sections` (`%{key, heading, entries}`, each
-  entry `%{id, period, title, organization, description}`): the issue #840
+  entry `%{id, period, title, organization, role, description}`): the issue #840
   work categories in fixed order, then education in its issue #849 categories
   (collapsed to one "Education" section for the common degrees-only member,
   like the profile). `work_groups`/`educations` additionally carry the raw
@@ -225,9 +225,16 @@ defmodule VutuvWeb.CV do
       period: period(work),
       title: work.title,
       organization: work.organization,
+      role: role_line(work.title, work.organization),
       description: presence(work.description)
     }
   end
+
+  # The "role" line the document renderers print: the entry's title and
+  # organization joined by ", " (dropping a nil half). Built here once so the
+  # HTML/Word/ODT/LaTeX/print renderers can't each drift their own copy.
+  defp role_line(title, organization),
+    do: [title, organization] |> Enum.filter(& &1) |> Enum.join(", ")
 
   defp education_sections([]), do: []
 
@@ -271,6 +278,7 @@ defmodule VutuvWeb.CV do
       period: period(edu),
       title: title,
       organization: organization,
+      role: role_line(title, organization),
       description: presence(edu.description)
     }
   end

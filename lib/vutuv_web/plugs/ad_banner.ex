@@ -44,7 +44,7 @@ defmodule VutuvWeb.Plug.AdBanner do
   def call(%Plug.Conn{method: "GET"} = conn, _opts) do
     conn = fetch_cookies(conn)
 
-    if not Vutuv.Ads.enabled?() or agent_format?(conn) or landing_page?(conn) or
+    if not Vutuv.Ads.enabled?() or AgentFormat.agent_format?(conn) or landing_page?(conn) or
          booking_pages?(conn) or account_pages?(conn) or dismissed_today?(conn) or
          recently_seen?(conn) do
       conn
@@ -60,8 +60,6 @@ defmodule VutuvWeb.Plug.AdBanner do
   defp dismissed_today?(conn) do
     conn.req_cookies[@dismissed_cookie] == Date.to_iso8601(Vutuv.Ads.today())
   end
-
-  defp agent_format?(conn), do: AgentFormat.agent_format?(conn)
 
   # The logged-out landing / sign-up page is the primary registration funnel:
   # keep it ad-free so the house ad doesn't compete with the sign-up hero.

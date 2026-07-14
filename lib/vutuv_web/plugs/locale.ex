@@ -37,33 +37,20 @@ defmodule VutuvWeb.Plug.Locale do
 
   defp get_supported_locale([]), do: nil
 
-  # Reduces list of locales to either a supported locale or a {nil, false} tuple
+  # Returns the first header locale whose base subtag the app supports,
+  # else the visitor's most preferred locale.
   defp get_supported_locale(locales) do
-    Enum.reduce([{nil, false} | locales], fn f, acc ->
-      case acc do
-        {_, false} -> check_locale_support(f)
-        {_, true} -> acc
-      end
+    Enum.find_value(locales, get_first_locale(locales), fn entry ->
+      base =
+        entry
+        |> String.split(";")
+        |> hd()
+        |> String.split("-")
+        |> hd()
+
+      if locale_supported?(base), do: base
     end)
-    # Check to see if supported locale was found
-    |> process_possible_locale(locales)
   end
-
-  defp check_locale_support(f) do
-    locale =
-      String.split(f, ";")
-      |> hd
-      |> String.split("-")
-      |> hd
-
-    if locale_supported?(locale), do: {locale, true}, else: {nil, false}
-  end
-
-  # If supported locale found, return it
-  defp process_possible_locale({locale, true}, _), do: locale
-
-  # Else return the user's most preferred locale
-  defp process_possible_locale(_, locales), do: get_first_locale(locales)
 
   # Give locale data to all modules that require it. The locale also goes into
   # the session so LiveViews — which run in their own process, where this plug
@@ -91,8 +78,6 @@ defmodule VutuvWeb.Plug.Locale do
       _ -> conn
     end
   end
-
-  defp get_first_locale([]), do: nil
 
   # Gets the first locale provided
   defp get_first_locale(locales) do

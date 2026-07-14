@@ -121,10 +121,7 @@ defmodule VutuvWeb.CV.Html do
   end
 
   defp entry(entry) do
-    role =
-      [entry.title, entry.organization]
-      |> Enum.filter(& &1)
-      |> Enum.map_join(", ", &esc/1)
+    role = esc(entry.role)
 
     period = if entry.period, do: ~s(<span class="period">#{esc(entry.period)}</span>), else: ""
 

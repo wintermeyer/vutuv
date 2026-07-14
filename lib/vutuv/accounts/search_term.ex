@@ -13,12 +13,9 @@ defmodule Vutuv.Accounts.SearchTerm do
   end
 
   def changeset(model, params \\ %{}) do
-    changeset =
-      model
-      |> cast(params, [:value, :score])
-      |> downcase_value
-
-    changeset
+    model
+    |> cast(params, [:value, :score])
+    |> downcase_value
   end
 
   def create_search_terms(%{"first_name" => first_name, "last_name" => last_name}) do

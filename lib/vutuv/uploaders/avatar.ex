@@ -50,10 +50,6 @@ defmodule Vutuv.Avatar do
     # and the URL needs no `?v=`; when nil the row predates the scheme and falls
     # back to the legacy URL. See Vutuv.Uploads.served_url/4.
     fingerprint_field: :avatar_fingerprint,
-    # Everything version-shaped a past pipeline may have left: old-extension
-    # versions, publicly stored originals, files named for a previous user
-    # name, and the Waffle-era `_large` (512px) the current code never serves.
-    stale_glob: "*_*.*",
     crop_field: :avatar_crop
   }
 

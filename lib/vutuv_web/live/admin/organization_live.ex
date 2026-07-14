@@ -16,6 +16,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.Organizations
+  alias Vutuv.Pages
 
   @statuses ~w(all active pending frozen archived)
 
@@ -28,7 +29,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
   def handle_params(params, _uri, socket) do
     status = if params["status"] in @statuses, do: params["status"], else: "all"
     q = blank_to_nil(params["q"])
-    page = page_param(params)
+    page = Pages.page_param(params)
 
     result =
       Organizations.admin_organizations_page(
@@ -143,13 +144,6 @@ defmodule VutuvWeb.Admin.OrganizationLive do
     case value && String.trim(value) do
       "" -> nil
       trimmed -> trimmed
-    end
-  end
-
-  defp page_param(params) do
-    case Integer.parse(to_string(params["page"])) do
-      {n, _} when n >= 1 -> n
-      _ -> 1
     end
   end
 

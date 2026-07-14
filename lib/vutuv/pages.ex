@@ -48,6 +48,14 @@ defmodule Vutuv.Pages do
     div(total - 1, per_page) + 1
   end
 
+  @doc "Parses the `?page` param (any map with a `\"page\"` key) to an integer >= 1, defaulting to 1."
+  def page_param(params) do
+    case Integer.parse(to_string(params["page"])) do
+      {n, _} when n >= 1 -> n
+      _ -> 1
+    end
+  end
+
   @doc """
   The page whose rows `paginate/4` actually returns for these params: the
   sanitized `?page`, except that an out-of-range page falls back to 1 (same

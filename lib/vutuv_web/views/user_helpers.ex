@@ -57,20 +57,13 @@ defmodule VutuvWeb.UserHelpers do
   The `{label, value}` options for the salary-expectation currency select
   (issue #928): the whitelisted codes shown with their symbol (e.g. `€ EUR`).
   """
-  def desired_salary_currency_options do
-    Enum.map(
-      User.desired_salary_currencies(),
-      &{"#{User.desired_salary_currency_symbol(&1)} #{&1}", &1}
-    )
-  end
+  defdelegate desired_salary_currency_options, to: Vutuv.Salary, as: :currency_options
 
   @doc """
   The `{label, value}` options for the salary-expectation period select (issue
-  #928), each the translated period noun (`User.desired_salary_period_label/1`).
+  #928), each the translated period noun (`Vutuv.Salary.period_label/1`).
   """
-  def desired_salary_period_options do
-    Enum.map(User.desired_salary_periods(), &{User.desired_salary_period_label(&1), &1})
-  end
+  defdelegate desired_salary_period_options, to: Vutuv.Salary, as: :period_options
 
   @doc """
   A member's display name for admin lists: their full name, or `@handle` when
@@ -241,10 +234,7 @@ defmodule VutuvWeb.UserHelpers do
     # Resolve the current job once; current_title/1 and current_organization/1
     # both accept a %WorkExperience{} or nil, so this avoids running the
     # current_job/1 query chain twice per call.
-    case build_work_information_string(current_job(user), len) do
-      "" -> headline_text(user.headline, len)
-      info -> info
-    end
+    work_or_headline(current_job(user), user.headline, len)
   end
 
   @doc """
@@ -286,9 +276,16 @@ defmodule VutuvWeb.UserHelpers do
     job = current_title(current_job)
     org = current_organization(current_job)
 
-    "#{job}#{if org && org != "", do: " @ #{org}"}"
+    "#{job}#{if org != "", do: " @ #{org}"}"
     |> validate_length(job, org, len)
     |> validate_backup(job, org, len)
+  end
+
+  defp work_or_headline(job, headline, len) do
+    case build_work_information_string(job, len) do
+      "" -> headline_text(headline, len)
+      info -> info
+    end
   end
 
   @doc """
@@ -384,11 +381,7 @@ defmodule VutuvWeb.UserHelpers do
           user.profile_work_experience_id
         )
 
-      info =
-        case work_information_string_for_job(job, len) do
-          "" -> headline_text(user.headline, len)
-          info -> info
-        end
+      info = work_or_headline(job, user.headline, len)
 
       {user.id, info}
     end)
@@ -467,15 +460,11 @@ defmodule VutuvWeb.UserHelpers do
 
   def current_organization(nil), do: ""
 
-  def current_organization(%WorkExperience{organization: nil}), do: ""
-
-  def current_organization(%WorkExperience{organization: org}), do: org
+  def current_organization(%WorkExperience{organization: org}), do: org || ""
 
   def current_title(nil), do: ""
 
-  def current_title(%WorkExperience{title: nil}), do: ""
-
-  def current_title(%WorkExperience{title: org}), do: org
+  def current_title(%WorkExperience{title: title}), do: title || ""
 
   def locale(conn, %User{locale: nil}) do
     conn.assigns[:locale]

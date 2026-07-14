@@ -32,6 +32,7 @@ defmodule VutuvWeb.CV.HtmlTest do
               period: nil,
               title: "Developer",
               organization: nil,
+              role: "Developer",
               description: body
             }
           ]

@@ -121,10 +121,7 @@ defmodule VutuvWeb.CV.Odt do
   end
 
   defp entry(entry) do
-    role =
-      [entry.title, entry.organization]
-      |> Enum.filter(& &1)
-      |> Enum.join(", ")
+    role = entry.role
 
     role_p = ~s(<text:p><text:span text:style-name="CVBold">#{esc(role)}</text:span></text:p>)
 

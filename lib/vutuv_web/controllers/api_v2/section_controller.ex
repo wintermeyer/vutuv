@@ -33,6 +33,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
   alias VutuvWeb.AgentDocs.SectionDocs
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
+  alias VutuvWeb.ControllerHelpers
   alias VutuvWeb.UserHelpers
 
   @writable %{
@@ -75,7 +76,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     %{assoc: assoc, schema: schema} = Map.fetch!(@writable, conn.assigns.section)
     user = conn.assigns.current_user
 
-    with %{} = record <- get_owned(user, assoc, id),
+    with %{} = record <- ControllerHelpers.get_owned(user, assoc, id),
          {:ok, record} <- record |> schema.changeset(params) |> Repo.update() do
       after_write(conn.assigns.section, record)
       ApiV2.send_json(conn, SectionDocs.build_show(user, conn.assigns.section, record))
@@ -88,7 +89,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
   def delete(conn, %{"id" => id}) do
     %{assoc: assoc} = Map.fetch!(@writable, conn.assigns.section)
 
-    case get_owned(conn.assigns.current_user, assoc, id) do
+    case ControllerHelpers.get_owned(conn.assigns.current_user, assoc, id) do
       nil ->
         Problem.not_found(conn)
 
@@ -124,7 +125,4 @@ defmodule VutuvWeb.ApiV2.SectionController do
   defp after_write(:links, url), do: Vutuv.PageScreenshot.generate_async(url)
 
   defp after_write(_section, _record), do: :ok
-
-  defp get_owned(user, assoc_name, id),
-    do: VutuvWeb.ControllerHelpers.get_owned(user, assoc_name, id)
 end

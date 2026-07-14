@@ -130,10 +130,7 @@ defmodule Vutuv.Jobs do
       |> offset(^offset)
       |> Repo.all()
 
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+    paginate_offset(entries, limit, offset)
   end
 
   @doc "Count of a member's postings in each status, for the dashboard tab badges."
@@ -144,6 +141,13 @@ defmodule Vutuv.Jobs do
     |> select([p], {p.status, count(p.id)})
     |> Repo.all()
     |> Map.new()
+  end
+
+  defp paginate_offset(entries, limit, offset) do
+    {shown, more?} =
+      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
+
+    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
   end
 
   def change_job_posting(%JobPosting{} = posting, attrs \\ %{}),
@@ -226,9 +230,15 @@ defmodule Vutuv.Jobs do
   def indexable_query do
     today = BerlinTime.today()
 
+    live_public_query(today) |> where([p], p.seo?)
+  end
+
+  # SQL twin of `live?/1`: published, not frozen, visible to everyone, unexpired.
+  # Callers compose their one extra clause (seo?/geo?/org-id/tag join) on top.
+  defp live_public_query(today) do
     from(p in JobPosting,
       where:
-        p.status == :published and is_nil(p.frozen_at) and p.seo? and
+        p.status == :published and is_nil(p.frozen_at) and
           p.visibility == :everyone and p.expires_on >= ^today
     )
   end
@@ -413,13 +423,7 @@ defmodule Vutuv.Jobs do
 
   @doc "Closes a live posting with a reason (`:filled`/`:withdrawn`)."
   def close(%JobPosting{} = posting, reason) when reason in [:filled, :withdrawn] do
-    posting
-    |> JobPosting.status_changeset(:closed)
-    |> Ecto.Changeset.put_change(:closed_at, now())
-    |> Ecto.Changeset.put_change(:close_reason, reason)
-    |> Repo.update()
-    |> broadcast_updated()
-    |> board_ping()
+    close_with_reason(posting, reason)
   end
 
   @doc """
@@ -805,10 +809,7 @@ defmodule Vutuv.Jobs do
       |> Exclusions.exclude_for_viewer(user)
       |> Repo.all()
 
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+    paginate_offset(entries, limit, offset)
   end
 
   # --- deletion / moderation ------------------------------------------------
@@ -915,11 +916,8 @@ defmodule Vutuv.Jobs do
     limit = Keyword.get(opts, :limit, @board_limit)
     today = BerlinTime.today()
 
-    from(p in JobPosting,
-      where:
-        p.status == :published and is_nil(p.frozen_at) and p.visibility == :everyone and
-          p.geo? and p.expires_on >= ^today
-    )
+    live_public_query(today)
+    |> where([p], p.geo?)
     |> after_board_cursor(Keyword.get(opts, :cursor))
     |> order_by([p], desc: p.first_published_at, desc: p.id)
     |> limit(^(limit + 1))
@@ -1338,10 +1336,7 @@ defmodule Vutuv.Jobs do
       |> preload([:organization, :user, job_posting_tags: :tag])
       |> Repo.all()
 
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+    paginate_offset(entries, limit, offset)
   end
 
   @doc "Count of an organization's live public postings."
@@ -1350,39 +1345,32 @@ defmodule Vutuv.Jobs do
   end
 
   defp organization_live_postings(org_id) do
-    today = BerlinTime.today()
-
-    from(p in JobPosting,
-      where:
-        p.organization_id == ^org_id and p.status == :published and is_nil(p.frozen_at) and
-          p.visibility == :everyone and p.expires_on >= ^today
-    )
+    live_public_query(BerlinTime.today())
+    |> where([p], p.organization_id == ^org_id)
   end
 
   @doc "Live public postings carrying `tag` (the tag page's 'Offene Stellen' section)."
   def list_tag_postings(%Tag{id: tag_id}, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
-    today = BerlinTime.today()
 
-    from(p in JobPosting,
-      join: jpt in JobPostingTag,
-      on: jpt.job_posting_id == p.id and jpt.tag_id == ^tag_id,
-      where:
-        p.status == :published and is_nil(p.frozen_at) and p.visibility == :everyone and
-          p.expires_on >= ^today,
-      order_by: [desc: p.first_published_at, desc: p.id],
-      limit: ^limit,
-      preload: [:organization, :user, job_posting_tags: :tag]
+    live_public_query(BerlinTime.today())
+    |> join(:inner, [p], jpt in JobPostingTag,
+      on: jpt.job_posting_id == p.id and jpt.tag_id == ^tag_id
     )
+    |> order_by([p], desc: p.first_published_at, desc: p.id)
+    |> limit(^limit)
+    |> preload([:organization, :user, job_posting_tags: :tag])
     |> Repo.all()
   end
 
-  defp presence(value) when value in [nil, ""], do: nil
-  defp presence(value) when is_binary(value), do: String.trim(value) |> presence_trimmed()
-  defp presence(value), do: value
+  defp presence(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
 
-  defp presence_trimmed(""), do: nil
-  defp presence_trimmed(value), do: value
+  defp presence(value), do: value
 
   # --- admin dashboard (#934) -----------------------------------------------
 
@@ -1395,24 +1383,27 @@ defmodule Vutuv.Jobs do
   """
   def admin_overview_counts do
     today = BerlinTime.today()
-    soon = Date.add(today, 7)
 
     %{
-      published:
-        count_where(
-          dynamic([p], p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today)
-        ),
-      expiring:
-        count_where(
-          dynamic(
-            [p],
-            p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today and
-              p.expires_on <= ^soon
-          )
-        ),
+      published: count_where(admin_published_dynamic(today)),
+      expiring: count_where(admin_expiring_dynamic(today)),
       frozen: count_where(dynamic([p], not is_nil(p.frozen_at))),
       open_cases: Vutuv.Moderation.open_case_count("job_posting")
     }
+  end
+
+  defp admin_published_dynamic(today) do
+    dynamic([p], p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today)
+  end
+
+  defp admin_expiring_dynamic(today) do
+    soon = Date.add(today, 7)
+
+    dynamic(
+      [p],
+      p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today and
+        p.expires_on <= ^soon
+    )
   end
 
   defp count_where(condition) do
@@ -1458,19 +1449,10 @@ defmodule Vutuv.Jobs do
   end
 
   defp admin_status_filter(query, "published", today),
-    do:
-      where(query, [p], p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today)
+    do: where(query, ^admin_published_dynamic(today))
 
-  defp admin_status_filter(query, "expiring", today) do
-    soon = Date.add(today, 7)
-
-    where(
-      query,
-      [p],
-      p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today and
-        p.expires_on <= ^soon
-    )
-  end
+  defp admin_status_filter(query, "expiring", today),
+    do: where(query, ^admin_expiring_dynamic(today))
 
   defp admin_status_filter(query, "frozen", _today),
     do: where(query, [p], not is_nil(p.frozen_at))
@@ -1555,13 +1537,7 @@ defmodule Vutuv.Jobs do
 
     %{
       active:
-        count_where(
-          dynamic(
-            [p],
-            p.user_id == ^user_id and p.status == :published and is_nil(p.frozen_at) and
-              p.expires_on >= ^today
-          )
-        ),
+        count_where(dynamic([p], p.user_id == ^user_id and ^admin_published_dynamic(today))),
       total: count_where(dynamic([p], p.user_id == ^user_id)),
       open_cases: Vutuv.Moderation.owner_open_case_count(user_id, "job_posting"),
       cold_outreach: Vutuv.Chat.cold_outreach_count(user)
@@ -1581,10 +1557,14 @@ defmodule Vutuv.Jobs do
 
   @doc "Admin ends a live posting (a moderation close), keeping the lifecycle honest."
   def admin_close(%JobPosting{} = posting) do
+    close_with_reason(posting, :moderation)
+  end
+
+  defp close_with_reason(%JobPosting{} = posting, reason) do
     posting
     |> JobPosting.status_changeset(:closed)
     |> Ecto.Changeset.put_change(:closed_at, now())
-    |> Ecto.Changeset.put_change(:close_reason, :moderation)
+    |> Ecto.Changeset.put_change(:close_reason, reason)
     |> Repo.update()
     |> broadcast_updated()
     |> board_ping()

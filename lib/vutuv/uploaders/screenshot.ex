@@ -27,7 +27,6 @@ defmodule Vutuv.Screenshot do
   alias Vutuv.Uploads.Spec
 
   @extension_whitelist ~w(.jpg .png .webp)
-  @hash_length 12
 
   @doc """
   Stores the screenshot versions for `{upload, url}` and returns
@@ -38,7 +37,7 @@ defmodule Vutuv.Screenshot do
     if valid_extension?(upload.filename) do
       dir = disk_dir(scope)
       File.mkdir_p!(dir)
-      hash = content_hash(upload.path)
+      hash = Vutuv.Uploads.content_hash(upload.path)
       ext = Path.extname(upload.filename)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
@@ -100,13 +99,6 @@ defmodule Vutuv.Screenshot do
     File.rm_rf(disk_dir(url))
     Originals.delete(storage_dir(url))
     :ok
-  end
-
-  defp content_hash(path) do
-    :sha256
-    |> :crypto.hash(File.read!(path))
-    |> Base.encode16(case: :lower)
-    |> binary_part(0, @hash_length)
   end
 
   # Also sweeps pre-AVIF leftovers: legacy `.webp` thumbs and the originals

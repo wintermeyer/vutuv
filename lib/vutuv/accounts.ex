@@ -423,7 +423,7 @@ defmodule Vutuv.Accounts do
   end
 
   defp pin_cookie_salt do
-    Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
+    secret_key_base()
   end
 
   # ── Login PINs ──
@@ -504,8 +504,11 @@ defmodule Vutuv.Accounts do
   # Dedicated pepper derived from `secret_key_base` with domain separation, so it
   # never equals the raw secret and lives outside the database.
   defp pepper do
-    secret = Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
-    :crypto.hash(:sha256, "vutuv/login_pin/pepper/v1" <> secret)
+    :crypto.hash(:sha256, "vutuv/login_pin/pepper/v1" <> secret_key_base())
+  end
+
+  defp secret_key_base do
+    Application.fetch_env!(:vutuv, VutuvWeb.Endpoint)[:secret_key_base]
   end
 
   defp expire_pin(login_pin) do
@@ -1023,8 +1026,7 @@ defmodule Vutuv.Accounts do
   "give @handle the tag" and "make handle an admin" accept the same input.
   """
   def get_user_by_handle_or_email(identifier) when is_binary(identifier) do
-    identifier =
-      identifier |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    identifier = Handles.normalize(identifier)
 
     get_user_by_username(identifier) || user_by_email(identifier)
   end
@@ -1261,7 +1263,7 @@ defmodule Vutuv.Accounts do
     # Usernames are stored lowercase, so normalize the typed @handle the same
     # way BlockController / get_user_by_handle_or_email do — otherwise "@JohnDoe"
     # would fail to resolve here while resolving everywhere else.
-    slug = handle |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    slug = Handles.normalize(handle)
 
     cond do
       viewer_exclusion_count(owner) >= @viewer_exclusion_cap ->
@@ -1283,7 +1285,7 @@ defmodule Vutuv.Accounts do
     |> ViewerExclusion.member_changeset(excluded)
     |> Repo.insert()
     |> case do
-      {:ok, exclusion} -> {:ok, exclusion}
+      {:ok, _} = ok -> ok
       # Self is caught above, so the only remaining insert failure is the
       # partial unique index: this member is already on the list.
       {:error, _changeset} -> {:error, :duplicate}

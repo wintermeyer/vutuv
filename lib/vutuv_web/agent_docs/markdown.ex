@@ -789,8 +789,12 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   defp image_line(image) do
     alt = image.alt || "image"
-    "- ![#{alt}](#{image.urls[:feed] || image.urls |> Map.values() |> List.first()})"
+    "- ![#{alt}](#{image_url(image)})"
   end
+
+  # Shared with the plain-text renderer: prefer the feed-size variant, else any.
+  @doc false
+  def image_url(image), do: image.urls[:feed] || image.urls |> Map.values() |> List.first()
 
   defp reply_block(reply) do
     "### [#{md_text(reply.author)}](#{reply.url}) · #{reply.published_on}\n\n#{reply.body_markdown}"

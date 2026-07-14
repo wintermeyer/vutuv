@@ -749,9 +749,8 @@ defmodule Vutuv.Social do
   "unfollow" (which ends the vernetzt status).
   """
   def list_connections(%User{id: user_id}) do
-    mutual_follows_query(user_id)
-    |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
-    |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
+    user_id
+    |> ordered_connections_query()
     |> Repo.all()
   end
 
@@ -764,9 +763,8 @@ defmodule Vutuv.Social do
     total = connection_count(user)
 
     connections =
-      mutual_follows_query(user_id)
-      |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
-      |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
+      user_id
+      |> ordered_connections_query()
       |> Pages.paginate(params, total)
       |> Repo.all()
 
@@ -782,6 +780,15 @@ defmodule Vutuv.Social do
     mutual_follows_query(user_id)
     |> select([out], count(out.id))
     |> Repo.one()
+  end
+
+  # The mutual-follow set ordered newest-pair-first and shaped into the
+  # `%{user:, follow_id:, muted?:}` rows both the full list and the paginated
+  # connections page render.
+  defp ordered_connections_query(user_id) do
+    mutual_follows_query(user_id)
+    |> order_by([out, back], desc: fragment("GREATEST(?, ?)", out.id, back.id))
+    |> select([out, _back, o], %{user: o, follow_id: out.id, muted?: out.muted})
   end
 
   # The mutual-follow set for `user_id`: their outbound follow joined to the

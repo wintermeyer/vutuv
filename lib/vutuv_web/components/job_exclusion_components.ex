@@ -28,52 +28,30 @@ defmodule VutuvWeb.JobExclusionComponents do
     <div class="space-y-6">
       <.card>
         <.section_title>{gettext("Exclude a member")}</.section_title>
-        <.form
-          for={@member_form}
+        <.exclusion_add_form
+          form={@member_form}
           id="exclude-member-form"
-          phx-submit="add_member"
-          class="mt-3 flex flex-wrap items-start gap-2"
-        >
-          <div class="min-w-0 flex-1">
-            <input
-              type="text"
-              name="member[handle]"
-              value={@member_form[:handle].value}
-              placeholder="@username"
-              autocomplete="off"
-              aria-label={gettext("Member @handle")}
-              aria-invalid={@member_error && "true"}
-              class={input_class(!!@member_error)}
-            />
-            <p :if={@member_error} class="editform__error mt-1" id="member-error">{@member_error}</p>
-          </div>
-          <.button type="submit">{gettext("Exclude")}</.button>
-        </.form>
+          event="add_member"
+          name="member[handle]"
+          placeholder="@username"
+          aria_label={gettext("Member @handle")}
+          error={@member_error}
+          error_id="member-error"
+        />
       </.card>
 
       <.card>
         <.section_title>{gettext("Exclude an organization")}</.section_title>
-        <.form
-          for={@org_form}
+        <.exclusion_add_form
+          form={@org_form}
           id="exclude-organization-form"
-          phx-submit="add_organization"
-          class="mt-3 flex flex-wrap items-start gap-2"
-        >
-          <div class="min-w-0 flex-1">
-            <input
-              type="text"
-              name="organization[handle]"
-              value={@org_form[:handle].value}
-              placeholder="@organization"
-              autocomplete="off"
-              aria-label={gettext("Organization @handle")}
-              aria-invalid={@org_error && "true"}
-              class={input_class(!!@org_error)}
-            />
-            <p :if={@org_error} class="editform__error mt-1" id="organization-error">{@org_error}</p>
-          </div>
-          <.button type="submit">{gettext("Exclude")}</.button>
-        </.form>
+          event="add_organization"
+          name="organization[handle]"
+          placeholder="@organization"
+          aria_label={gettext("Organization @handle")}
+          error={@org_error}
+          error_id="organization-error"
+        />
         <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
           {gettext(
             "Excluding an organization also hides the posting from its verified email domains, its team, and members whose current job is linked to it."
@@ -192,6 +170,38 @@ defmodule VutuvWeb.JobExclusionComponents do
         </ul>
       </.card>
     </div>
+    """
+  end
+
+  attr(:form, :any, required: true)
+  attr(:id, :string, required: true)
+  attr(:event, :string, required: true)
+  attr(:name, :string, required: true)
+  attr(:field, :atom, default: :handle)
+  attr(:placeholder, :string, required: true)
+  attr(:aria_label, :string, required: true)
+  attr(:error, :string, default: nil)
+  attr(:error_id, :string, required: true)
+
+  # One @handle add form (member / organization); DRY, so both stay identical.
+  defp exclusion_add_form(assigns) do
+    ~H"""
+    <.form for={@form} id={@id} phx-submit={@event} class="mt-3 flex flex-wrap items-start gap-2">
+      <div class="min-w-0 flex-1">
+        <input
+          type="text"
+          name={@name}
+          value={@form[@field].value}
+          placeholder={@placeholder}
+          autocomplete="off"
+          aria-label={@aria_label}
+          aria-invalid={@error && "true"}
+          class={input_class(!!@error)}
+        />
+        <p :if={@error} class="editform__error mt-1" id={@error_id}>{@error}</p>
+      </div>
+      <.button type="submit">{gettext("Exclude")}</.button>
+    </.form>
     """
   end
 end

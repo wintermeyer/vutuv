@@ -24,7 +24,7 @@ defmodule VutuvWeb.Plug.EnsureActivated do
         # The rule itself lives in Vutuv.Moderation (shared with the API).
         # The owner/admin bypass is for the HTML page only; an agent-format
         # request is the anonymous view, so it gets viewer: nil.
-        viewer = if agent_format?(conn), do: nil, else: conn.assigns[:current_user]
+        viewer = if AgentFormat.agent_format?(conn), do: nil, else: conn.assigns[:current_user]
 
         if Vutuv.Moderation.profile_visible_to?(user, viewer) do
           conn
@@ -36,6 +36,4 @@ defmodule VutuvWeb.Plug.EnsureActivated do
         VutuvWeb.ControllerHelpers.render_error(conn, 404)
     end
   end
-
-  defp agent_format?(conn), do: AgentFormat.agent_format?(conn)
 end

@@ -523,10 +523,6 @@ defmodule VutuvWeb.AgentDocs.Text do
     "* #{post.published_on}#{Markdown.repost_suffix(post)}: #{post.excerpt}\n  #{post.url}"
   end
 
-  # "(reposted by A)" for a lone reposter, "(reposted by A and 3 more)" once a
-  # post carries a whole roster (the feed's follow-scoped reposters, newest
-  # first). Falls back to the single `reposted_by` name for docs that carry
-  # only that (the profile posts section).
   defp person_line(person, prefix \\ "* ") do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
     "#{prefix}#{person.name}#{work}#{tags_suffix(Map.get(person, :tags))}\n  #{person.url}"
@@ -565,7 +561,7 @@ defmodule VutuvWeb.AgentDocs.Text do
 
   defp image_lines(image) do
     alt = image.alt || "image"
-    "* #{alt}\n  #{image.urls[:feed] || image.urls |> Map.values() |> List.first()}"
+    "* #{alt}\n  #{Markdown.image_url(image)}"
   end
 
   defp reply_lines(reply) do

@@ -37,10 +37,11 @@ defmodule Vutuv.Fediverse.HttpSignature do
     signed_names = ["(request-target)" | Enum.map(base, &elem(&1, 0))]
 
     signing_string =
-      Enum.map_join(signed_names, "\n", fn
-        "(request-target)" -> "(request-target): #{method} #{request_path(uri)}"
-        name -> "#{name}: #{:proplists.get_value(name, base)}"
-      end)
+      build_signing_string(
+        signed_names,
+        "(request-target): #{method} #{request_path(uri)}",
+        &:proplists.get_value(&1, base)
+      )
 
     {:ok, key} = Keys.decode_pem(private_key_pem)
     signature = :public_key.sign(signing_string, :sha256, key)
@@ -63,10 +64,11 @@ defmodule Vutuv.Fediverse.HttpSignature do
          :ok <- check_date(headers["date"]),
          {:ok, key} <- Keys.decode_pem(public_key_pem) do
       signing_string =
-        Enum.map_join(params.headers, "\n", fn
-          "(request-target)" -> "(request-target): #{method} #{path}"
-          name -> "#{name}: #{headers[name]}"
-        end)
+        build_signing_string(
+          params.headers,
+          "(request-target): #{method} #{path}",
+          &headers[&1]
+        )
 
       if :public_key.verify(signing_string, :sha256, params.signature, key) do
         :ok
@@ -162,6 +164,13 @@ defmodule Vutuv.Fediverse.HttpSignature do
     else
       _ -> :error
     end
+  end
+
+  defp build_signing_string(names, target_line, lookup_fun) do
+    Enum.map_join(names, "\n", fn
+      "(request-target)" -> target_line
+      name -> "#{name}: #{lookup_fun.(name)}"
+    end)
   end
 
   defp body_digest(body), do: :sha256 |> :crypto.hash(body) |> Base.encode64()

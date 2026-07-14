@@ -249,11 +249,9 @@ defmodule Vutuv.SavedSearches do
   defp segment(_key, _params), do: []
 
   defp workplace_label(value) do
-    case value do
-      "onsite" -> JobPosting.workplace_type_label(:onsite)
-      "hybrid" -> JobPosting.workplace_type_label(:hybrid)
-      "remote" -> JobPosting.workplace_type_label(:remote)
-      _ -> value
+    case Enum.find(JobPosting.workplace_types(), &(Atom.to_string(&1) == value)) do
+      nil -> value
+      type -> JobPosting.workplace_type_label(type)
     end
   end
 

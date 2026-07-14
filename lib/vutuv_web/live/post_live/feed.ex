@@ -380,9 +380,7 @@ defmodule VutuvWeb.PostLive.Feed do
   end
 
   # Swap the refreshed entry into the retained list by its stable entry id.
-  defp replace_entry(entries, updated) do
-    Enum.map(entries, fn entry -> if entry.id == updated.id, do: updated, else: entry end)
-  end
+  defp replace_entry(entries, updated), do: replace_entry(entries, updated.id, updated)
 
   # Own activity (this or another session) appears immediately; other
   # people's waits behind the pill — and only when the post is visible.
@@ -468,14 +466,14 @@ defmodule VutuvWeb.PostLive.Feed do
   # grow the roster + rename the newest reposter. A repost we already counted
   # (idempotent re-broadcast) is a no-op.
   defp restack_shown(socket, entry, reposter) do
-    if Enum.any?(entry.reposters, &(&1.id == reposter.id)) do
-      socket
-    else
-      updated = %{entry | reposters: [reposter | entry.reposters], reposted_by: reposter}
+    case restacked_entry(entry, reposter) do
+      nil ->
+        socket
 
-      socket
-      |> update(:entries, &replace_entry(&1, entry.id, updated))
-      |> stream_insert(:posts, updated, update_only: true)
+      updated ->
+        socket
+        |> update(:entries, &replace_entry(&1, entry.id, updated))
+        |> stream_insert(:posts, updated, update_only: true)
     end
   end
 
@@ -483,11 +481,17 @@ defmodule VutuvWeb.PostLive.Feed do
   # stream row yet, so only its pending map grows (it reveals with the full
   # stack when the pill is clicked).
   defp restack_pending(socket, pending, reposter) do
-    if Enum.any?(pending.reposters, &(&1.id == reposter.id)) do
-      socket
-    else
-      updated = %{pending | reposters: [reposter | pending.reposters], reposted_by: reposter}
-      update(socket, :pending_posts, &replace_entry(&1, pending.id, updated))
+    case restacked_entry(pending, reposter) do
+      nil -> socket
+      updated -> update(socket, :pending_posts, &replace_entry(&1, pending.id, updated))
+    end
+  end
+
+  # nil when this reposter is already counted (idempotent re-broadcast), else the
+  # entry with the reposter folded into its roster and named as the newest.
+  defp restacked_entry(entry, reposter) do
+    unless Enum.any?(entry.reposters, &(&1.id == reposter.id)) do
+      %{entry | reposters: [reposter | entry.reposters], reposted_by: reposter}
     end
   end
 

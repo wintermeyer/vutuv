@@ -117,18 +117,9 @@ defmodule Vutuv.SlugHelpers do
   defp ensure_slug(_, slug, _), do: "#{slug}.#{short_sha()}"
 
   defp short_sha do
-    string =
-      :calendar.universal_time()
-      |> :calendar.datetime_to_gregorian_seconds()
-      |> Integer.to_string()
-
-    rand =
-      :rand.uniform()
-      |> Float.to_string()
-
-    :crypto.hash(:sha256, string <> rand)
-    |> Base.encode16()
-    |> String.downcase()
-    |> String.slice(0, @short_sha_length)
+    @short_sha_length
+    |> div(2)
+    |> :crypto.strong_rand_bytes()
+    |> Base.encode16(case: :lower)
   end
 end

@@ -854,14 +854,18 @@ defmodule Vutuv.Posts do
 
   defp post_topic(post_id), do: "post:#{post_id}"
 
+  defp broadcast_counters(post_id, extra \\ %{}) do
+    payload = engagement_counts(post_id) |> Map.put(:post_id, post_id) |> Map.merge(extra)
+    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), {:post_counters, payload})
+  end
+
   defp broadcast_engagement(kind, user_id, post_id, active?) do
     # Absolute counts for every open action bar on this post (idempotent). The
     # `by_user_id` tag lets the actor's own bars — in their other tabs — re-sync
     # their like/bookmark/repost *flags* off this same message, so an action bar
     # no longer has to subscribe to the actor's whole activity firehose just to
     # hear about its own toggles (see VutuvWeb.PostLive.Actions).
-    payload = Map.merge(engagement_counts(post_id), %{post_id: post_id, by_user_id: user_id})
-    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(post_id), {:post_counters, payload})
+    broadcast_counters(post_id, %{by_user_id: user_id})
 
     # The Saved (likes/bookmarks) page still reacts on the actor's activity
     # topic: it may need to add or drop a card for a post it is not subscribed
@@ -1837,8 +1841,7 @@ defmodule Vutuv.Posts do
   every open action bar.
   """
   def broadcast_reply_count(parent_id) do
-    payload = Map.put(engagement_counts(parent_id), :post_id, parent_id)
-    Phoenix.PubSub.broadcast(Vutuv.PubSub, post_topic(parent_id), {:post_counters, payload})
+    broadcast_counters(parent_id)
   end
 
   @doc """

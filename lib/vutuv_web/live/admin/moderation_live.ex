@@ -10,7 +10,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
   use VutuvWeb, :live_view
 
   import VutuvWeb.Admin.ModerationHTML,
-    only: [status_badge: 1, content_type_label: 1, category_label: 1]
+    only: [status_badge: 1, status_tone: 1, content_type_label: 1, category_label: 1]
 
   alias Vutuv.Moderation
 
@@ -64,9 +64,7 @@ defmodule VutuvWeb.Admin.ModerationLive do
                 <td>
                   <span class={[
                     "rounded-full px-2 py-0.5 text-xs font-bold",
-                    case_record.status == "escalated" && "bg-accent/10 text-accent",
-                    case_record.status == "flagged" &&
-                      "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+                    status_tone(case_record)
                   ]}>
                     {status_badge(case_record)}
                   </span>

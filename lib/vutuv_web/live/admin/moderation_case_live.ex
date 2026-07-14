@@ -17,6 +17,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
   import VutuvWeb.Admin.ModerationHTML,
     only: [
       status_badge: 1,
+      status_tone: 1,
       content_type_label: 1,
       category_label: 1,
       event_label: 1,
@@ -169,11 +170,7 @@ defmodule VutuvWeb.Admin.ModerationCaseLive do
               <span class="font-semibold">{content_type_label(@case.content_type)}</span>
               <span class={[
                 "ml-1 rounded-full px-2 py-0.5 text-xs font-bold",
-                @case.status == "escalated" && "bg-accent/10 text-accent",
-                @case.status == "flagged" &&
-                  "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200",
-                @case.status not in ["escalated", "flagged"] &&
-                  "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                status_tone(@case)
               ]}>
                 {status_badge(@case)}
               </span>

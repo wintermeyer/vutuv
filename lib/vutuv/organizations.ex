@@ -687,22 +687,18 @@ defmodule Vutuv.Organizations do
   end
 
   @doc "Verifies a DNS domain; on success activates the organization."
-  def verify_dns(%Organization{} = organization, %OrganizationDomain{method: "dns"} = domain) do
-    if verification_enabled?() and
-         Verification.dns_verified?(domain.domain, domain.verification_token) do
-      activate(organization, domain)
-    else
-      {:error, :not_found}
-    end
-  end
+  def verify_dns(%Organization{} = organization, %OrganizationDomain{method: "dns"} = domain),
+    do: do_verify(organization, domain, &Verification.dns_verified?/2)
 
   @doc "Verifies a well-known-file domain; on success activates the organization."
   def verify_well_known(
         %Organization{} = organization,
         %OrganizationDomain{method: "well_known"} = domain
-      ) do
-    if verification_enabled?() and
-         Verification.well_known_verified?(domain.domain, domain.verification_token) do
+      ),
+      do: do_verify(organization, domain, &Verification.well_known_verified?/2)
+
+  defp do_verify(%Organization{} = organization, %OrganizationDomain{} = domain, check) do
+    if verification_enabled?() and check.(domain.domain, domain.verification_token) do
       activate(organization, domain)
     else
       {:error, :not_found}
@@ -1078,8 +1074,10 @@ defmodule Vutuv.Organizations do
     end
   end
 
+  defp downcase_name(name), do: name |> to_string() |> String.trim() |> String.downcase()
+
   defp alias_exists?(organization_id, name) do
-    down = name |> String.trim() |> String.downcase()
+    down = downcase_name(name)
 
     Repo.exists?(
       from(n in OrganizationName,
@@ -1091,7 +1089,7 @@ defmodule Vutuv.Organizations do
   # Whether `name` equals (case-insensitive) another **verified** (active)
   # organization's name or any of its aliases.
   defp alias_collision?(organization_id, name) do
-    down = name |> to_string() |> String.trim() |> String.downcase()
+    down = downcase_name(name)
 
     name_hit? =
       Repo.exists?(
@@ -1161,7 +1159,7 @@ defmodule Vutuv.Organizations do
   name the oldest wins, so the suggestion is deterministic.
   """
   def suggest_organization_for_org(name) do
-    down = name |> to_string() |> String.trim() |> String.downcase()
+    down = downcase_name(name)
 
     if String.length(down) < 2 do
       nil

@@ -85,9 +85,7 @@ defmodule VutuvWeb.PostLive.Saved do
   defp page_engagement(:posts, entries, user),
     do: Posts.post_engagement_map(Enum.map(entries, & &1.id), user)
 
-  defp page_engagement(:people, _entries, _user), do: %{}
-  defp page_engagement(:organizations, _entries, _user), do: %{}
-  defp page_engagement(:jobs, _entries, _user), do: %{}
+  defp page_engagement(_type, _entries, _user), do: %{}
 
   defp load_page(socket, offset) do
     user = socket.assigns.current_user
@@ -306,7 +304,7 @@ defmodule VutuvWeb.PostLive.Saved do
     # Only prepend on the default, unfiltered recent view (like the person / org
     # / job handlers); under a search or non-recency sort a fresh save's position
     # is ambiguous, so leave it for the next reload.
-    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+    if default_view?(socket) do
       case Posts.get_post(post_id) do
         nil ->
           socket
@@ -338,7 +336,7 @@ defmodule VutuvWeb.PostLive.Saved do
     # Only prepend on the default, unfiltered recent view, where a fresh save
     # belongs at the top; under a search or a non-recency sort the right
     # position is ambiguous, so leave it for the next reload.
-    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+    if default_view?(socket) do
       case Repo.get(User, target_id) do
         %User{} = user -> stream_insert(socket, :people, user, at: 0)
         nil -> socket
@@ -353,7 +351,7 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   defp apply_organization_change(socket, organization_id, true) do
-    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+    if default_view?(socket) do
       case Organizations.get_organization(organization_id) do
         %Organizations.Organization{status: "active", frozen_at: nil} = organization ->
           stream_insert(socket, :organizations, organization, at: 0)
@@ -371,7 +369,7 @@ defmodule VutuvWeb.PostLive.Saved do
   end
 
   defp apply_job_change(socket, job_posting_id, true) do
-    if socket.assigns.q == "" and socket.assigns.sort == :recent do
+    if default_view?(socket) do
       case Jobs.get_job_posting(job_posting_id) do
         %Jobs.JobPosting{frozen_at: nil} = posting ->
           stream_insert(socket, :jobs, Vutuv.Repo.preload(posting, :organization), at: 0)
@@ -382,6 +380,13 @@ defmodule VutuvWeb.PostLive.Saved do
     else
       socket
     end
+  end
+
+  # A fresh save prepends into the stream only on the default, unfiltered recent
+  # view; under a search or a non-recency sort its position is ambiguous, so we
+  # leave it for the next reload.
+  defp default_view?(socket) do
+    socket.assigns.q == "" and socket.assigns.sort == :recent
   end
 
   # ── Path / labels ──

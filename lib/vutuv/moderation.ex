@@ -212,16 +212,7 @@ defmodule Vutuv.Moderation do
     spam = Enum.count(reports, &(&1.category == "spam"))
 
     if trusted >= @profile_freeze_reporters or spam >= @spam_freeze_reporters do
-      case claim_flagged_upgrade(open, "escalated") do
-        {:ok, updated} ->
-          freeze_content(content)
-          log(updated, nil, "content_frozen")
-          run_notifications(updated, [:notify_owner_review, :notify_admins_urgent])
-          {:ok, updated}
-
-        :already_upgraded ->
-          {:ok, Repo.get!(Case, open.id)}
-      end
+      do_flagged_upgrade(open, content, "escalated", [:notify_owner_review, :notify_admins_urgent])
     else
       {:ok, open}
     end
@@ -229,22 +220,26 @@ defmodule Vutuv.Moderation do
 
   def maybe_upgrade_case(%Case{status: "flagged"} = open, reporter, content) do
     if trusted_reporter?(reporter) do
-      case claim_flagged_upgrade(open, "pending_owner") do
-        {:ok, updated} ->
-          freeze_content(content)
-          log(updated, nil, "content_frozen")
-          run_notifications(updated, [:notify_owner_frozen])
-          {:ok, updated}
-
-        :already_upgraded ->
-          {:ok, Repo.get!(Case, open.id)}
-      end
+      do_flagged_upgrade(open, content, "pending_owner", [:notify_owner_frozen])
     else
       {:ok, open}
     end
   end
 
   def maybe_upgrade_case(open, _reporter, _content), do: {:ok, open}
+
+  defp do_flagged_upgrade(open, content, new_status, effects) do
+    case claim_flagged_upgrade(open, new_status) do
+      {:ok, updated} ->
+        freeze_content(content)
+        log(updated, nil, "content_frozen")
+        run_notifications(updated, effects)
+        {:ok, updated}
+
+      :already_upgraded ->
+        {:ok, Repo.get!(Case, open.id)}
+    end
+  end
 
   # Atomically transitions a still-`flagged` case to `new_status`, claiming the
   # upgrade for exactly one caller. Two *different* reporters can race on the
@@ -334,19 +329,7 @@ defmodule Vutuv.Moderation do
   reports that admins rejected.
   """
   def trusted_reporter?(%User{id: user_id}) do
-    %{abusive: abusive, rejected: rejected} =
-      from(r in Report,
-        join: c in assoc(r, :case),
-        where: r.reporter_id == ^user_id,
-        where: c.resolved_at > ^trust_window_start(),
-        select: %{
-          abusive: fragment("COUNT(*) FILTER (WHERE ?)", r.abusive?),
-          rejected: fragment("COUNT(*) FILTER (WHERE ? = 'rejected')", c.status)
-        }
-      )
-      |> Repo.one()
-
-    trusted?(abusive, rejected)
+    MapSet.member?(trusted_reporter_ids([user_id]), user_id)
   end
 
   # The subset of `reporter_ids` whose reports are trusted (`trusted?/2`),
@@ -946,12 +929,8 @@ defmodule Vutuv.Moderation do
   end
 
   defp other_active_severance?(%Severance{} = severance) do
-    from(s in Severance,
-      where: s.id != ^severance.id and is_nil(s.restored_at),
-      where:
-        (s.reporter_id == ^severance.reporter_id and s.owner_id == ^severance.owner_id) or
-          (s.reporter_id == ^severance.owner_id and s.owner_id == ^severance.reporter_id)
-    )
+    active_severances_between(severance.reporter_id, severance.owner_id)
+    |> where([s], s.id != ^severance.id)
     |> Repo.exists?()
   end
 
@@ -987,13 +966,15 @@ defmodule Vutuv.Moderation do
   ruling owns that freeze.
   """
   def active_severance_between?(a_id, b_id) do
-    Repo.exists?(
-      from(s in Severance,
-        where: is_nil(s.restored_at),
-        where:
-          (s.reporter_id == ^a_id and s.owner_id == ^b_id) or
-            (s.reporter_id == ^b_id and s.owner_id == ^a_id)
-      )
+    active_severances_between(a_id, b_id) |> Repo.exists?()
+  end
+
+  defp active_severances_between(a_id, b_id) do
+    from(s in Severance,
+      where: is_nil(s.restored_at),
+      where:
+        (s.reporter_id == ^a_id and s.owner_id == ^b_id) or
+          (s.reporter_id == ^b_id and s.owner_id == ^a_id)
     )
   end
 

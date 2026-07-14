@@ -20,8 +20,8 @@ defmodule Vutuv.Uploads do
   @extension_whitelist ~w(.jpg .jpeg .png)
 
   # Length (hex chars) of the content fingerprint baked into served filenames.
-  # 12 hex = 48 bits, matching Vutuv.Screenshot — collision-safe within a single
-  # id-scoped directory (one image's versions), which is all that shares a dir.
+  # 12 hex = 48 bits — collision-safe within a single id-scoped directory
+  # (one image's versions), which is all that shares a dir.
   @hash_length 12
 
   @typedoc """
@@ -32,7 +32,9 @@ defmodule Vutuv.Uploads do
     * `:spec_key` — the `Vutuv.Uploads.Spec.versions/1` key (`:avatar | :cover`)
     * `:prefix` — the served-tree storage prefix (`"avatars"` / `"covers"`)
     * `:default_version` — the version `url/3` serves when none is given
-    * `:stale_glob` — the `regenerate/3` sweep glob (relative to the dir)
+    * `:fingerprint_field` — the scope field holding this image's content
+      fingerprint (`:avatar_fingerprint` / `:cover_fingerprint`); absent for
+      uploaders not on the fingerprinted scheme
     * `:crop_field` — the scope field holding the persisted crop string that
       `regenerate/3` re-applies (`:avatar_crop` / `:cover_crop`); absent for
       uploaders without a user-chosen crop
@@ -41,7 +43,7 @@ defmodule Vutuv.Uploads do
           required(:spec_key) => atom(),
           required(:prefix) => String.t(),
           required(:default_version) => atom(),
-          required(:stale_glob) => String.t(),
+          optional(:fingerprint_field) => atom(),
           optional(:crop_field) => atom()
         }
 
@@ -128,7 +130,7 @@ defmodule Vutuv.Uploads do
   # in means re-cropping the same original yields a fresh fingerprint, so the
   # immutable (`?v=`-less) URL changes and no stale crop is served from cache.
   # A nil crop appends "", leaving the no-crop hash byte-identical to before.
-  defp content_hash(path, crop) do
+  def content_hash(path, crop \\ nil) do
     :sha256
     |> :crypto.hash(File.read!(path) <> (crop || ""))
     |> Base.encode16(case: :lower)

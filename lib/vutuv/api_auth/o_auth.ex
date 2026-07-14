@@ -302,7 +302,7 @@ defmodule Vutuv.ApiAuth.OAuth do
   defp pkce_verifies?(_challenge, _missing), do: false
 
   defp fetch_refresh(app, value) when is_binary(value) do
-    case Repo.get_by(Token, token_hash: ApiAuth.hash_token(value), app_id: app.id) do
+    case lookup_app_token(app, value) do
       %Token{kind: "refresh"} = token -> {:ok, token}
       _other -> {:error, :invalid_grant}
     end

@@ -15,6 +15,14 @@ defmodule VutuvWeb.Admin.ModerationHTML do
   def status_badge(%Case{status: "resolved_deleted"}), do: gettext("Settled by deletion")
   def status_badge(%Case{status: status}), do: status
 
+  def status_tone(%Case{status: "escalated"}), do: "bg-accent/10 text-accent"
+
+  def status_tone(%Case{status: "flagged"}),
+    do: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
+
+  def status_tone(%Case{}),
+    do: "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+
   def content_type_label("post"), do: gettext("Post")
   def content_type_label("message"), do: gettext("Private message")
   def content_type_label("user"), do: gettext("Profile")

@@ -95,4 +95,14 @@ defmodule Vutuv.Handles do
   end
 
   def available?(_), do: false
+
+  @doc """
+  Normalizes a user-typed `@handle` for lookup: trims whitespace, drops a
+  leading `@`, and lowercases (usernames are stored lowercase). Shared by
+  every site that resolves a member/organization from typed input so they
+  cannot drift.
+  """
+  def normalize(value) when is_binary(value) do
+    value |> String.trim() |> String.trim_leading("@") |> String.downcase()
+  end
 end

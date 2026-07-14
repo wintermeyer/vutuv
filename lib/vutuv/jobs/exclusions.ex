@@ -30,6 +30,7 @@ defmodule Vutuv.Jobs.Exclusions do
 
   alias Vutuv.Accounts.{Email, User}
   alias Vutuv.EmailDomain
+  alias Vutuv.Handles
   alias Vutuv.Jobs.{JobExclusion, JobPosting}
   alias Vutuv.Organizations
   alias Vutuv.Organizations.{Organization, OrganizationDomain, OrganizationRole}
@@ -43,6 +44,11 @@ defmodule Vutuv.Jobs.Exclusions do
 
   @doc "The maximum number of entries on one subject's exclusion list."
   def cap, do: @cap
+
+  # The subdomain-aware host match shared by the org-domain lookup and the
+  # viewer-scope match: a confirmed host equals the domain or is a subdomain of
+  # it. Kept as one literal so the two fragment call sites can't drift apart.
+  @host_match_sql "EXISTS (SELECT 1 FROM unnest(?::text[]) AS eh(host) WHERE eh.host = ? OR eh.host LIKE '%.' || ?)"
 
   # --- reads ----------------------------------------------------------------
 
@@ -199,13 +205,7 @@ defmodule Vutuv.Jobs.Exclusions do
     Repo.all(
       from(d in OrganizationDomain,
         where: not is_nil(d.verified_at),
-        where:
-          fragment(
-            "EXISTS (SELECT 1 FROM unnest(?::text[]) AS eh(host) WHERE eh.host = ? OR eh.host LIKE '%.' || ?)",
-            ^hosts,
-            d.domain,
-            d.domain
-          ),
+        where: fragment(@host_match_sql, ^hosts, d.domain, d.domain),
         select: d.organization_id,
         distinct: true
       )
@@ -251,12 +251,7 @@ defmodule Vutuv.Jobs.Exclusions do
       [x: x],
       x.excluded_user_id == ^viewer_id or
         x.excluded_organization_id in ^org_ids or
-        fragment(
-          "EXISTS (SELECT 1 FROM unnest(?::text[]) AS eh(host) WHERE eh.host = ? OR eh.host LIKE '%.' || ?)",
-          ^hosts,
-          x.domain,
-          x.domain
-        )
+        fragment(@host_match_sql, ^hosts, x.domain, x.domain)
     )
   end
 
@@ -302,7 +297,7 @@ defmodule Vutuv.Jobs.Exclusions do
   # Usernames are stored lowercase, so normalize the typed @handle the same way
   # the rest of the app does, otherwise "@JohnDoe" would fail to resolve here.
   defp lookup_member(handle) when is_binary(handle) do
-    slug = handle |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    slug = Handles.normalize(handle)
 
     case slug != "" && Vutuv.Accounts.get_user_by_username(slug) do
       %User{} = user -> {:ok, user}
@@ -313,7 +308,7 @@ defmodule Vutuv.Jobs.Exclusions do
   defp lookup_member(_), do: {:error, :not_found}
 
   defp lookup_organization(identifier) when is_binary(identifier) do
-    slug = identifier |> String.trim() |> String.trim_leading("@") |> String.downcase()
+    slug = Handles.normalize(identifier)
 
     org =
       slug != "" &&
