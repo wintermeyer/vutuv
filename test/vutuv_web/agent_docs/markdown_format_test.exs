@@ -97,6 +97,40 @@ defmodule VutuvWeb.AgentDocs.MarkdownFormatTest do
     end
   end
 
+  describe "Markdown descriptions render unescaped (#927)" do
+    test "a work experience description keeps its CommonMark hyperlink", %{user: user} do
+      insert(:work_experience,
+        user: user,
+        title: "Ranger",
+        organization: "Parks",
+        description: "See [`example.net`](https://example.net) for details."
+      )
+
+      body = get(build_conn(), "/#{user.username}.md").resp_body
+
+      # The description is authored Markdown (#905), so its link survives whole
+      # into the Markdown document instead of being backslash-escaped into
+      # literal text.
+      assert body =~ "[`example.net`](https://example.net)"
+      refute body =~ "\\[`example.net`\\]"
+    end
+
+    test "an education description keeps its CommonMark hyperlink", %{user: user} do
+      insert(:education,
+        user: user,
+        degree: "BSc",
+        school: "Acme University",
+        field_of_study: "Computer Science",
+        description: "Thesis at [`example.net`](https://example.net)."
+      )
+
+      body = get(build_conn(), "/#{user.username}.md").resp_body
+
+      assert body =~ "[`example.net`](https://example.net)"
+      refute body =~ "\\[`example.net`\\]"
+    end
+  end
+
   describe "list items are blank-line separated (#925)" do
     test "consecutive profile tags are separated by a blank line", %{user: user} do
       for {name, slug} <- [{"alpha", "alpha"}, {"beta", "beta"}] do

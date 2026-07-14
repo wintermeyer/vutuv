@@ -534,7 +534,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     |> Kernel.++(if page, do: [" ([#{page.name}](#{page.url}))"], else: [])
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
     |> Kernel.++(if period, do: [" (#{period})"], else: [])
-    |> Kernel.++(if description, do: [": #{md_text(description)}"], else: [])
+    # The description is authored Markdown (#905), so it is emitted raw like the
+    # title/organization above and a post's body — never md_text-escaped, which
+    # would backslash a member's own `[label](url)` link into literal text (#927).
+    |> Kernel.++(if description, do: [": #{description}"], else: [])
     |> Enum.join()
     |> indent_item_body()
   end
@@ -563,10 +566,13 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     kind_note = education_kind_note(edu)
     title = Enum.join(Enum.filter([edu.degree, edu.school], & &1), ", ")
 
+    # Field of study is a plain label emitted raw (like the title above); the
+    # description is authored Markdown (#905), also raw, so a member's own
+    # `[label](url)` link is not backslash-escaped into literal text (#927).
     detail =
       [edu.field_of_study, edu.description]
       |> Enum.filter(& &1)
-      |> Enum.map_join(" — ", &md_text/1)
+      |> Enum.join(" — ")
 
     ["- ", title]
     |> Kernel.++(if kind_note, do: [" [#{kind_note}]"], else: [])
