@@ -341,7 +341,61 @@ defmodule Vutuv.Jobs do
       |> after_save(user, attrs)
       |> broadcast_updated()
       |> board_ping()
+      |> emit_published(user, posting.status)
     end
+  end
+
+  # Fire the `job.published` webhook only on the transition *into* published (a
+  # fresh draft going live), never on an edit that re-publishes an already-live
+  # posting — integrators subscribe to hear about new openings, not every save.
+  defp emit_published({:ok, %JobPosting{} = posting} = result, %User{} = user, previous_status)
+       when previous_status != :published do
+    Vutuv.Webhooks.emit(user.id, "job.published", published_webhook_data(posting))
+    result
+  end
+
+  defp emit_published(result, _user, _previous_status), do: result
+
+  # The public structured fields of a published posting (the same the board
+  # shows), so a subscriber can mirror the opening with real filter data. Thin
+  # by the webhook contract's spirit: only what already sits on the public page.
+  defp published_webhook_data(%JobPosting{} = posting) do
+    %{
+      "id" => posting.id,
+      "url" => VutuvWeb.Endpoint.url() <> "/jobs/" <> posting.slug,
+      "title" => posting.title,
+      "employer" => webhook_employer(posting),
+      "employment_type" => Atom.to_string(posting.employment_type),
+      "workplace_type" => Atom.to_string(posting.workplace_type),
+      "zip_code" => posting.zip_code,
+      "city" => posting.city,
+      "country" => posting.country,
+      "remote_countries" => posting.remote_countries,
+      "salary" => webhook_salary(posting),
+      "tags" => posting |> all_tags() |> Enum.map(& &1.name)
+    }
+  end
+
+  defp webhook_employer(%JobPosting{organization: %Organizations.Organization{name: name}}),
+    do: name
+
+  defp webhook_employer(%JobPosting{hiring_org_name: name}) when is_binary(name), do: name
+
+  defp webhook_employer(%JobPosting{user: %User{} = user}),
+    do: VutuvWeb.UserHelpers.full_name(user)
+
+  defp webhook_employer(_), do: nil
+
+  defp webhook_salary(%JobPosting{employment_type: :volunteer}), do: nil
+  defp webhook_salary(%JobPosting{salary_min: nil}), do: nil
+
+  defp webhook_salary(%JobPosting{} = posting) do
+    %{
+      "min" => posting.salary_min,
+      "max" => posting.salary_max,
+      "currency" => posting.salary_currency,
+      "period" => posting.salary_period
+    }
   end
 
   @doc "Closes a live posting with a reason (`:filled`/`:withdrawn`)."

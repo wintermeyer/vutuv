@@ -33,8 +33,18 @@ Two rules shape everything:
 | `post.liked` | `posts:read` | `by`, `post_id` |
 | `post.replied` | `posts:read` | `by`, `post_id` |
 | `message.created` | `messages:read` | `from`, `conversation_id` |
+| `job.published` | `jobs:read` | the posting's public fields (see below) |
 
 Plus `ping`, the test event you can trigger from the app page.
+
+`job.published` is the one exception to rule 2 above: because a published
+posting is public, its `data` carries the same structured fields the board
+shows (`id`, `url`, `title`, `employer`, `employment_type`, `workplace_type`,
+`zip_code`, `city`, `country`, `remote_countries`, `salary`, `tags`), so you can
+mirror a new opening without a follow-up fetch. It never carries anything that
+is not already on the public posting. It rides on the **poster's** own
+`jobs:read` grant — an app watching its own user's openings. See the
+[Jobs API](/developers/jobs) for the full payload.
 
 ## The delivery
 

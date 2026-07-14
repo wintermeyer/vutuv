@@ -42,6 +42,35 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
   end
 
   @doc """
+  The authenticated `/api/2.0/jobs/:id` detail doc: the public show doc plus the
+  fields an owner's tooling needs — the id, the effective lifecycle status and
+  its dates, the raw visibility, the street address and resolved coordinates.
+  Reuses `build_show/1` so the shared fields never drift from the public page.
+  """
+  def api_show(%JobPosting{} = posting) do
+    build_show(posting)
+    |> Map.merge(%{
+      id: posting.id,
+      status: Atom.to_string(Jobs.effective_status(posting)),
+      visibility: Atom.to_string(posting.visibility),
+      street_address: posting.street_address,
+      coordinates: coordinates(posting),
+      closed_at: AgentDocs.iso_date(posting.closed_at),
+      close_reason: posting.close_reason && Atom.to_string(posting.close_reason)
+    })
+  end
+
+  @doc "A board listing entry for the API — `summary/1` plus the posting id."
+  def api_summary(%JobPosting{} = posting) do
+    Map.put(summary(posting), :id, posting.id)
+  end
+
+  defp coordinates(%JobPosting{lat: lat, lon: lon}) when is_float(lat) and is_float(lon),
+    do: %{lat: lat, lon: lon}
+
+  defp coordinates(_), do: nil
+
+  @doc """
   The compact card entry of a posting for a **listing** doc — the board
   (`/jobs`) and the organization / tag "Offene Stellen" sections. Carries the
   same structured location, salary and tag fields as the detail doc so agents

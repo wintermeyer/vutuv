@@ -19,6 +19,7 @@ defmodule VutuvWeb.DevDocController do
     {"cookbook", "Cookbook", "Cookbook"},
     {"data-model", "The data model", "Data model"},
     {"reference", "API reference", "Reference"},
+    {"jobs", "Jobs API", "Jobs"},
     {"webhooks", "Webhooks", "Webhooks"}
   ]
 

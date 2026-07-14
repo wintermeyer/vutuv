@@ -18,6 +18,7 @@ defmodule Vutuv.ApiAuth.Scopes do
     social:read social:write
     posts:read posts:write
     messages:read messages:write
+    jobs:read jobs:write
   )
 
   def all, do: @scopes
@@ -62,4 +63,10 @@ defmodule Vutuv.ApiAuth.Scopes do
 
   def description("messages:write"),
     do: gettext("Send messages as you")
+
+  def description("jobs:read"),
+    do: gettext("Read job postings and organization pages visible to you")
+
+  def description("jobs:write"),
+    do: gettext("Post, edit and close job openings as you")
 end

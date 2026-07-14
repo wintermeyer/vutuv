@@ -716,6 +716,22 @@ defmodule VutuvWeb.Router do
       assigns: %{api_scope: "social:write"}
     )
 
+    # Jobs (issue #936): the viewer-scoped board and one posting (jobs:read),
+    # then the poster's own lifecycle — create/edit/publish, close, discard a
+    # draft (jobs:write). Every write runs the same Vutuv.Jobs changesets and
+    # policies as the /jobs forms, so an API posting is indistinguishable.
+    get("/jobs", JobController, :index, assigns: %{api_scope: "jobs:read"})
+    get("/jobs/:id", JobController, :show, assigns: %{api_scope: "jobs:read"})
+    post("/jobs", JobController, :create, assigns: %{api_scope: "jobs:write"})
+    patch("/jobs/:id", JobController, :update, assigns: %{api_scope: "jobs:write"})
+    post("/jobs/:id/closure", JobController, :close, assigns: %{api_scope: "jobs:write"})
+    delete("/jobs/:id", JobController, :delete, assigns: %{api_scope: "jobs:write"})
+
+    # Verified organization pages, read-only (the employer behind a posting).
+    get("/organizations", OrganizationController, :index, assigns: %{api_scope: "jobs:read"})
+
+    get("/organizations/:slug", OrganizationController, :show, assigns: %{api_scope: "jobs:read"})
+
     # JSON 404 for unknown API paths — without this they would fall through
     # to the HTML profile routes. Also the CORS preflight's match. The one
     # route that legitimately needs no scope.
