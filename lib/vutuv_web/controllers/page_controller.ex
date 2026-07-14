@@ -266,7 +266,8 @@ defmodule VutuvWeb.PageController do
   raw Markdown at `/developers.md`, `/developers/authentication.md`,
   `/developers/cookbook.md` (task recipes: posting, direct messages, ...),
   `/developers/data-model.md` (entities and visibility rules),
-  `/developers/reference.md` and `/developers/webhooks.md`.
+  `/developers/reference.md`, `/developers/jobs.md` (job postings and
+  organizations) and `/developers/webhooks.md`.
 
   vutuv is open source: https://github.com/wintermeyer/vutuv — bug reports
   and feature requests via GitHub issues.

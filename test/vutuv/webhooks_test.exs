@@ -48,6 +48,17 @@ defmodule Vutuv.WebhooksTest do
     on_exit(fn -> Application.delete_env(:vutuv, :webhook_req_options) end)
   end
 
+  # Age `user` past the job publish gate (a confirmed account >= 3 days old).
+  defp age_past_publish_gate(user) do
+    old = NaiveDateTime.add(NaiveDateTime.utc_now(), -5 * 86_400, :second)
+
+    Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^user.id),
+      set: [inserted_at: old]
+    )
+
+    Repo.reload!(user)
+  end
+
   describe "subscriptions" do
     test "validates url and events", %{app: app} do
       assert {:error, changeset} =
@@ -179,6 +190,51 @@ defmodule Vutuv.WebhooksTest do
       assert [delivery] = Repo.all(Delivery)
       assert delivery.event == "follower.created"
       assert delivery.payload["data"]["follower"] == follower.username
+    end
+
+    test "the real chokepoint queues it: publishing a job emits job.published", %{
+      member: member,
+      app: app
+    } do
+      subscribe!(app, ["job.published"])
+      grant!(member, app, ["jobs:read"])
+
+      poster = age_past_publish_gate(member)
+
+      posting =
+        Vutuv.JobsHelpers.publish_job!(
+          poster,
+          %{"title" => "Backend Engineer", "required_tags" => "elixir, phoenix"}
+        )
+
+      assert [delivery] = Repo.all(Delivery)
+      assert delivery.event == "job.published"
+      # The event rides on the poster's own grant.
+      assert delivery.payload["member"] == member.username
+
+      # The one event that carries public structured fields, so an integrator can
+      # mirror the opening without a follow-up fetch — never anything private.
+      data = delivery.payload["data"]
+      assert data["id"] == posting.id
+      assert data["title"] == "Backend Engineer"
+      assert data["url"] =~ "/jobs/#{posting.slug}"
+      assert data["city"] == "Köln"
+      assert data["country"] == "DE"
+      assert data["workplace_type"] == "onsite"
+      assert data["salary"]["max"] == 70_000
+      assert Enum.sort(data["tags"]) == ["elixir", "phoenix"]
+    end
+
+    test "re-publishing (an edit) does not re-emit job.published", %{member: member, app: app} do
+      subscribe!(app, ["job.published"])
+      grant!(member, app, ["jobs:read"])
+      poster = age_past_publish_gate(member)
+
+      posting = Vutuv.JobsHelpers.publish_job!(poster, %{"title" => "First"})
+      assert Repo.aggregate(Delivery, :count) == 1
+
+      {:ok, _} = Vutuv.Jobs.publish(posting, poster, Vutuv.JobsHelpers.job_attrs())
+      assert Repo.aggregate(Delivery, :count) == 1
     end
   end
 

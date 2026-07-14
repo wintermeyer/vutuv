@@ -350,6 +350,16 @@ messages answers `403`; too many new requests answer `429`.
 Scope: `messages:write`. Answer an incoming request; `/read` clears your
 unread marker (`204`).
 
+## Jobs and organizations
+
+Post, manage and read job openings and the verified organizations behind them
+with the `jobs:read` / `jobs:write` scopes: `GET /jobs` (the board),
+`GET /jobs/:id`, `POST /jobs` (create or publish), `PATCH /jobs/:id`,
+`POST /jobs/:id/closure`, `DELETE /jobs/:id`, plus `GET /organizations` and
+`GET /organizations/:slug`. The 90-day lifecycle, the anti-spam gate, salary and
+location validations and the `job.published` webhook all live in the dedicated
+[Jobs API](/developers/jobs) chapter.
+
 ## Notifications
 
 ### GET /api/2.0/notifications · POST /api/2.0/notifications/read
@@ -408,6 +418,7 @@ belong server-side or in the user's own hands.
 [Authentication & tokens](/developers/authentication) (PATs, OAuth 2,
 scopes, errors, rate limits), the [cookbook](/developers/cookbook)
 (task-by-task recipes), [the data model](/developers/data-model) (what the
-entities mean and who sees what) and [Webhooks](/developers/webhooks)
-(signed event deliveries instead of polling). This reference only ever
-documents what is actually live.
+entities mean and who sees what), the [Jobs API](/developers/jobs) (postings,
+organizations, the lifecycle and the `job.published` webhook) and
+[Webhooks](/developers/webhooks) (signed event deliveries instead of polling).
+This reference only ever documents what is actually live.

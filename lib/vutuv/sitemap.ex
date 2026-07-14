@@ -23,7 +23,7 @@ defmodule Vutuv.Sitemap do
   # Keep `@dev_doc_pages` in sync with VutuvWeb.DevDocController's registry — a
   # drift test (sitemap_dev_docs_test.exs) fails the build if a dev-doc page is
   # added there without appearing in the sitemap.
-  @dev_doc_pages ~w(authentication cookbook data-model reference webhooks)
+  @dev_doc_pages ~w(authentication cookbook data-model reference jobs webhooks)
 
   @static_paths [
                   "/",

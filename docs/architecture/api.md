@@ -30,8 +30,14 @@ identities), follow/unfollow (a mutual follow makes the pair vernetzt — no
 separate connection lifecycle) + `GET …/relationship`, posts (compose with
 deny-based audiences, replies, like/bookmark/repost switches, the
 cursor-paginated `/feed` with signed opaque cursors), direct messages (request
-model included; a declined request stays indistinguishable from silence) and the
-notification feed.
+model included; a declined request stays indistinguishable from silence), the
+notification feed, and **jobs + organizations** (issue #936, `jobs:read` /
+`jobs:write`): the viewer-scoped board `GET /jobs` (same filters as the website),
+`GET /jobs/:id`, the poster's own lifecycle `POST /jobs` (create or publish),
+`PATCH /jobs/:id`, `POST /jobs/:id/closure`, `DELETE /jobs/:id` (all through the
+same `Vutuv.Jobs` changesets, quota gate and 90-day lifecycle as the `/jobs`
+forms — an API posting is indistinguishable), plus read-only `GET /organizations`
+and `GET /organizations/:slug`. Applications and people search stay out of scope.
 
 Per-token rate limit (5,000/h, `X-RateLimit-*` headers), RFC 9457 problem+json
 errors (422 with per-field messages), additive-only within `/api/2.0` (breaking
@@ -49,13 +55,19 @@ that fails every app token on its next request), members approve scopes on the
 envelopes (HMAC-SHA256 in `X-Vutuv-Signature`, ids/usernames only, never
 content) for members who granted the matching scope; DB-backed queue with
 exponential backoff drained by `Vutuv.Webhooks.Deliverer`, auto-disable after
-sustained failure, test ping from the app page.
+sustained failure, test ping from the app page. The one exception to the
+content-free envelope is `job.published` (issue #936, needs the poster's
+`jobs:read` grant, emitted from `Vutuv.Jobs.publish/4`): because a published
+posting is public, its payload carries the posting's public structured fields
+(title, location, salary, tags) so an integrator can mirror an opening without a
+follow-up fetch.
 
 Developer docs in English with curl examples at `/developers` (Markdown files in
 `priv/dev_docs/`, also served raw under `.md`): overview with a
 development/bug-reporting section, authentication, a task-recipe cookbook ("how
 do I post / send a DM?"), the data model (entities + visibility rules), the
-endpoint reference and webhooks — linked from the footer of every page.
+endpoint reference, the Jobs API chapter (postings, organizations, lifecycle,
+`job.published`) and webhooks — linked from the footer of every page.
 
 API profile responses carry the member's `noindex?`/`noai?` consent flags
 in-band (the public `.json`/`.md` siblings signal the same via

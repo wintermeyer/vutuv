@@ -127,7 +127,7 @@ defmodule VutuvWeb.DevDocControllerTest do
   test "every docs page links every other docs page in the nav", %{conn: conn} do
     response = conn |> get(~p"/developers") |> html_response(200)
 
-    for page <- ["authentication", "cookbook", "data-model", "reference", "webhooks"] do
+    for page <- ["authentication", "cookbook", "data-model", "reference", "jobs", "webhooks"] do
       assert response =~ "/developers/#{page}", "docs nav is missing #{page}"
     end
   end

@@ -43,7 +43,13 @@ defmodule Vutuv.Webhooks do
     "endorsement.created" => "social:read",
     "post.liked" => "posts:read",
     "post.replied" => "posts:read",
-    "message.created" => "messages:read"
+    "message.created" => "messages:read",
+    # The poster's own event, so it rides on their `jobs:read` grant. Unlike
+    # every other topic this payload carries the posting's public structured
+    # fields (title, location, salary, tags), never anything private — a
+    # published posting is public, and integrators mirror new openings without
+    # a follow-up fetch. Emitted from `Vutuv.Jobs.publish/4`.
+    "job.published" => "jobs:read"
   }
 
   @max_attempts 8

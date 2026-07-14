@@ -4916,7 +4916,7 @@ msgstr "API-Token erstellen"
 msgid "Developers"
 msgstr "Entwickler"
 
-#: lib/vutuv/api_auth/scopes.ex:46
+#: lib/vutuv/api_auth/scopes.ex:47
 #, elixir-autogen, elixir-format
 msgid "Edit your profile and its sections"
 msgstr "Ihr Profil und seine Bereiche bearbeiten"
@@ -4932,7 +4932,7 @@ msgstr "Ihr Profil und seine Bereiche bearbeiten"
 msgid "Expires"
 msgstr "Gültig bis"
 
-#: lib/vutuv/api_auth/scopes.ex:52
+#: lib/vutuv/api_auth/scopes.ex:53
 #, elixir-autogen, elixir-format
 msgid "Follow people, manage connections and endorse tags for you"
 msgstr ""
@@ -4964,17 +4964,17 @@ msgstr ""
 "auswählen. Ein widerrufenes Token verliert seinen Zugriff sofort. "
 "Dokumentation: "
 
-#: lib/vutuv/api_auth/scopes.ex:55
+#: lib/vutuv/api_auth/scopes.ex:56
 #, elixir-autogen, elixir-format
 msgid "Read posts visible to you"
 msgstr "Beiträge lesen, die für Sie sichtbar sind"
 
-#: lib/vutuv/api_auth/scopes.ex:61
+#: lib/vutuv/api_auth/scopes.ex:62
 #, elixir-autogen, elixir-format
 msgid "Read your messages"
 msgstr "Ihre Nachrichten lesen"
 
-#: lib/vutuv/api_auth/scopes.ex:43
+#: lib/vutuv/api_auth/scopes.ex:44
 #, elixir-autogen, elixir-format
 msgid "Read your profile, including entries only you can see"
 msgstr "Ihr Profil lesen, einschließlich Einträgen, die nur Sie sehen können"
@@ -5003,13 +5003,13 @@ msgstr ""
 msgid "Revoke all tokens"
 msgstr "Alle Tokens widerrufen"
 
-#: lib/vutuv/api_auth/scopes.ex:49
+#: lib/vutuv/api_auth/scopes.ex:50
 #, elixir-autogen, elixir-format
 msgid "See your followers, who you follow, and your connections"
 msgstr ""
 "Ihre Follower, die Mitglieder, denen Sie folgen, und Ihre Vernetzungen sehen"
 
-#: lib/vutuv/api_auth/scopes.ex:64
+#: lib/vutuv/api_auth/scopes.ex:65
 #, elixir-autogen, elixir-format
 msgid "Send messages as you"
 msgstr "Nachrichten in Ihrem Namen senden"
@@ -5019,7 +5019,7 @@ msgstr "Nachrichten in Ihrem Namen senden"
 msgid "The token \"%{name}\" no longer works."
 msgstr "Das Token \"%{name}\" funktioniert nicht mehr."
 
-#: lib/vutuv/api_auth/scopes.ex:58
+#: lib/vutuv/api_auth/scopes.ex:59
 #, elixir-autogen, elixir-format
 msgid "Write, edit and delete your posts"
 msgstr "Ihre Beiträge schreiben, bearbeiten und löschen"
@@ -5846,7 +5846,7 @@ msgstr "Sprache der Oberfläche"
 msgid "Language & region"
 msgstr "Sprache & Region"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:294
+#: lib/vutuv_web/controllers/settings_controller.ex:302
 #, elixir-autogen, elixir-format
 msgid "Language updated."
 msgstr "Sprache aktualisiert."
@@ -6138,7 +6138,7 @@ msgid_plural "%{count} minutes ago"
 msgstr[0] "vor %{count} Minute"
 msgstr[1] "vor %{count} Minuten"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:380
+#: lib/vutuv_web/controllers/settings_controller.ex:388
 #, elixir-autogen, elixir-format
 msgid "All other devices have been logged out."
 msgstr "Alle anderen Geräte wurden abgemeldet."
@@ -6178,7 +6178,7 @@ msgstr "Neue Anmeldung bei Ihrem vutuv-Konto"
 msgid "Signed-in devices"
 msgstr "Angemeldete Geräte"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:369
+#: lib/vutuv_web/controllers/settings_controller.ex:377
 #, elixir-autogen, elixir-format
 msgid "That device has been logged out."
 msgstr "Dieses Gerät wurde abgemeldet."
@@ -6544,7 +6544,7 @@ msgstr "Empfehlung zurücknehmen"
 msgid "Default map"
 msgstr "Standardkarte"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:309
+#: lib/vutuv_web/controllers/settings_controller.ex:317
 #, elixir-autogen, elixir-format
 msgid "Map preferences saved."
 msgstr "Karteneinstellungen gespeichert."
@@ -11331,7 +11331,7 @@ msgstr ""
 "Längere Beiträge erhalten einen „Weiterlesen“-Link. Mit 0 (oder leer) wird "
 "nie gekürzt."
 
-#: lib/vutuv_web/controllers/settings_controller.ex:322
+#: lib/vutuv_web/controllers/settings_controller.ex:330
 #, elixir-autogen, elixir-format
 msgid "Post display settings saved."
 msgstr "Anzeige-Einstellungen für Beiträge gespeichert."
@@ -11390,7 +11390,7 @@ msgstr ""
 msgid "Installation default (%{value})"
 msgstr "Standard der Installation (%{value})"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:344
+#: lib/vutuv_web/controllers/settings_controller.ex:352
 #, elixir-autogen, elixir-format
 msgid "Map preferences reset to the site defaults."
 msgstr "Karten-Einstellungen auf die Standardwerte zurückgesetzt."
@@ -11409,7 +11409,7 @@ msgstr ""
 "Eigener Wert; leeren Sie das Feld, um zum Standard der Installation "
 "zurückzukehren."
 
-#: lib/vutuv_web/controllers/settings_controller.ex:340
+#: lib/vutuv_web/controllers/settings_controller.ex:348
 #, elixir-autogen, elixir-format
 msgid "Post display settings reset to the site defaults."
 msgstr ""
@@ -13318,7 +13318,7 @@ msgstr "Tipp: Ein Geschlechtszusatz wie (m/w/d) hilft Ihrer Anzeige, dem AGG zu 
 msgid "Verified organization"
 msgstr "Verifizierte Organisation"
 
-#: lib/vutuv_web/agent_docs/job_posting_doc.ex:114
+#: lib/vutuv_web/agent_docs/job_posting_doc.ex:143
 #: lib/vutuv_web/components/job_components.ex:180
 #: lib/vutuv_web/live/job_posting_live/show.ex:309
 #, elixir-autogen, elixir-format, fuzzy
@@ -13870,7 +13870,7 @@ msgstr "Speichere eine Suche in der Stellenbörse oder in der Personensuche, und
 msgid "Save search"
 msgstr "Suche speichern"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:268
+#: lib/vutuv_web/controllers/settings_controller.ex:273
 #, elixir-autogen, elixir-format
 msgid "Saved search deleted."
 msgstr "Gespeicherte Suche gelöscht."
@@ -13895,8 +13895,8 @@ msgstr "Suche gespeichert."
 msgid "Stop e-mail alerts for your saved search \"%{label}\"?"
 msgstr "E-Mail-Benachrichtigungen für deine gespeicherte Suche „%{label}“ stoppen?"
 
-#: lib/vutuv_web/controllers/settings_controller.ex:258
-#: lib/vutuv_web/controllers/settings_controller.ex:271
+#: lib/vutuv_web/controllers/settings_controller.ex:260
+#: lib/vutuv_web/controllers/settings_controller.ex:278
 #: lib/vutuv_web/live/job_board_live.ex:137
 #: lib/vutuv_web/live/search_live.ex:138
 #, elixir-autogen, elixir-format
@@ -13975,3 +13975,13 @@ msgstr "Die Suche selbst bleibt erhalten. Nur ihre E-Mails werden gestoppt, und 
 #, elixir-autogen, elixir-format
 msgid "matches my tags"
 msgstr "passt zu meinen Tags"
+
+#: lib/vutuv/api_auth/scopes.ex:71
+#, elixir-autogen, elixir-format
+msgid "Post, edit and close job openings as you"
+msgstr "Stellenanzeigen in Ihrem Namen veröffentlichen, bearbeiten und schließen"
+
+#: lib/vutuv/api_auth/scopes.ex:68
+#, elixir-autogen, elixir-format
+msgid "Read job postings and organization pages visible to you"
+msgstr "Für Sie sichtbare Stellenanzeigen und Unternehmensseiten lesen"

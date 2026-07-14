@@ -264,3 +264,19 @@ The detail page carries `JobPosting` JSON-LD (only when `indexable?`), with
 `applicantLocationRequirements` for remote, `baseSalary`, `skills` from the tags
 (required first) and `hiringOrganization`. The `.md/.txt/.json/.xml` siblings
 come from `VutuvWeb.AgentDocs.JobPostingDoc` (drift-tested against the HTML).
+
+## `/api/2.0` (issue #936)
+
+The whole lifecycle is a second door on the same room: `VutuvWeb.ApiV2.JobController`
+(`jobs:read`/`jobs:write`) reuses the exact `Vutuv.Jobs` context — `board_page/3`
++ `board_filters/2` for `GET /jobs`, `create_draft/3`/`publish/4`/`update_posting/4`/
+`close/2`/`delete_job_posting/1` for the writes — so an API posting is
+indistinguishable from a form one (same quotas, gate, validations, 90-day
+lifecycle). Responses reuse `JobPostingDoc` (`api_show/1` = the public show doc
+plus the owner-only `id`/`status`/`street_address`/`coordinates`/close fields,
+never drifting from the shared shape). `VutuvWeb.ApiV2.OrganizationController`
+serves the organization directory + page read-only from `OrganizationDoc`. A
+successful **first** publish (draft → published, never an edit) emits the
+`job.published` webhook from `Vutuv.Jobs.publish/4` — the one topic whose payload
+carries the posting's public structured fields (see the API subsystem doc). Full
+developer reference: `priv/dev_docs/jobs.md` (`/developers/jobs`).

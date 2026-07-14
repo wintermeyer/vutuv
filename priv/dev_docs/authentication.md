@@ -54,6 +54,8 @@ A token only ever does what its scopes allow. A `*:write` scope implies its
 | `posts:write`    | Write, edit and delete your posts |
 | `messages:read`  | Read your messages |
 | `messages:write` | Send messages as you |
+| `jobs:read`      | Read job postings and organization pages visible to you |
+| `jobs:write`     | Post, edit and close job openings as you |
 
 Request only the scopes you will use — members see the list when they
 create the token, and a narrow token is an easy yes.
