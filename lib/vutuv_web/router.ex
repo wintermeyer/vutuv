@@ -211,6 +211,9 @@ defmodule VutuvWeb.Router do
     # /:slug agent-format catch-all.
     get("/organizations/:slug/roles", OrganizationController, :roles)
     get("/organizations/:slug/domains", OrganizationController, :domains)
+    # The role-holder standing job-exclusion default (issue #939), live_render
+    # like roles/domains. Inherited by every posting attributed to the organization.
+    get("/organizations/:slug/exclusions", OrganizationController, :exclusions)
 
     get("/new_registration", PageController, :redirect_index)
     post("/new_registration", PageController, :new_registration)
@@ -422,6 +425,10 @@ defmodule VutuvWeb.Router do
       live("/jobs/mine", JobPostingLive.Dashboard, :index)
       live("/jobs/new", JobPostingLive.Form, :new)
       live("/jobs/:slug/edit", JobPostingLive.Form, :edit)
+      # Per-posting exclusion list (issue #939): hide a posting from members,
+      # organizations or email domains. Owner-only, gated in the mount. Before
+      # /jobs/:slug so "exclusions" is never captured as a slug segment.
+      live("/jobs/:slug/exclusions", JobPostingLive.Exclusions, :index)
       get("/jobs/:slug", JobPostingController, :show)
       post("/jobs/:slug/apply", JobPostingController, :apply)
     end

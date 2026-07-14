@@ -161,7 +161,7 @@ defmodule VutuvWeb.OrganizationLive.Domains do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <.manage_header organization={@organization} active={:domains} owner?={true} />
+      <.manage_header organization={@organization} active={:domains} owner?={true} manage?={true} />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{gettext("Domains")}</h1>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">

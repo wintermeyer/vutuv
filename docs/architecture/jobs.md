@@ -77,6 +77,55 @@ require a *live* posting (`published`, not frozen, `visibility = everyone`, not
 past expiry). `indexable_query/0` is the one crawlable-set definition, delegated
 to by `Vutuv.Sitemap`.
 
+Beyond the three gates, `visible_to?/2` subtracts the **exclusion list** (see
+[Exclusion lists](#exclusion-lists-issue-939) below) as its **last** step, so an
+excluded signed-in viewer gets the same not-found result as any non-visible
+posting; an anonymous viewer is never excluded.
+
+## Exclusion lists (issue #939)
+
+The poster-side twin of the member exclusion list (`Vutuv.Accounts.ViewerExclusion`,
+issue #938): "keep this posting on the board for everyone **except** a chosen few"
+(competitors, your own staff, a specific person). `Vutuv.Jobs.Exclusions` owns
+the whole seam; the `job_exclusions` table holds it.
+
+- **Subject** (exactly one, DB check): a single **posting**'s own list
+  (`job_posting_id`), or a verified **organization**'s standing default
+  (`organization_id`) that every posting attributed to it inherits. A posting's
+  **effective** set is `own rows ∪ owning-org default rows` (union; the per-posting
+  editor can add but not un-inherit an org default).
+- **Target dimension** (exactly one, DB check): a **member** (`excluded_user_id`),
+  an **organization** (`excluded_organization_id` — its verified domains, its role
+  holders, and members whose **current** work experience links to it), or an email
+  **domain** (`domain` — that host and any subdomain of it, host-suffix match, no
+  public-suffix list). Domain shape/normalization is shared with #938 via
+  `Vutuv.EmailDomain`.
+- **The predicate.** `Exclusions.excluded?(posting, viewer)` (single posting) and
+  `Exclusions.exclude_for_viewer(query, viewer)` (a board/list subtraction) resolve
+  the viewer's scope once (`resolve_scope/1`: account id, confirmed-email hosts, and
+  every org they belong to via role ∪ current work experience ∪ verified-domain
+  email) and share the same matching, so no surface disagrees.
+- **Never excluded:** the **poster**, the **owning organization's staff** (a role
+  holder), and an **anonymous** viewer (exclusion only narrows the signed-in
+  on-platform audience — pair `visibility: members` with the list to also hide from
+  logged-out viewers). A **block** (either direction) always excludes.
+- **Silent by design** (mirrors `Social.block_user`): an excluded viewer gets the
+  same not-found/hidden result as any non-permitted viewer, with no signal.
+- **Enforcement surfaces**, all through the two functions above: the detail page +
+  its agent-format siblings (`visible_to?/2`), the board + its filters/search
+  (`board_scope/1`), saved-search alerts (`new_board_postings/3` shares
+  `board_scope/1`), the `/api/2.0` jobs endpoints (share `board_page`/`visible_to?`),
+  and the bookmarks/likes hub (`saved_job_postings_page/3`).
+- **Editors.** Per-posting: `VutuvWeb.JobPostingLive.Exclusions` at
+  `/jobs/:slug/exclusions` (owner-only). Organization default:
+  `VutuvWeb.OrganizationLive.Exclusions` at `/organizations/:slug/exclusions`
+  (any role holder, `manage_header` "Job exclusions" tab). Both render the shared
+  `VutuvWeb.JobExclusionComponents.exclusion_panel/1`.
+- **Cleanup** is pure FK cascade: every column (`job_posting_id`, `organization_id`,
+  `excluded_user_id`, `excluded_organization_id`) is `on_delete: :delete_all`, so a
+  row disappears with its subject **or** its target — no chokepoint code. Cap: 200
+  entries per subject (`Exclusions.cap/0`).
+
 ## The public board (`/jobs`, issue #933)
 
 `VutuvWeb.JobBoardLive` is the board, embedded via `live_render` from
@@ -92,9 +141,9 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   `board_scope/1`, which folds the visibility gate (`everyone` for anyone,
   `members` additionally for a signed-in viewer) and the exclusion seam into one
   query, so no downstream filter can leak a hidden posting. The exclusion seam is
-  a **bidirectional block** today (`Vutuv.Social.blocked_user_ids/1`); the #939
-  per-posting poster-exclusion list plugs into the same `board_exclude/2` step
-  when it lands. Newest first (`first_published_at`, UUID v7 `id` tiebreaker),
+  a **bidirectional block** (`Vutuv.Social.blocked_user_ids/1`, `board_exclude/2`)
+  **plus** the #939 exclusion list (`Exclusions.exclude_for_viewer/2`, see
+  [Exclusion lists](#exclusion-lists-issue-939)). Newest first (`first_published_at`, UUID v7 `id` tiebreaker),
   keyset-paginated (`%{entries:, more?:, cursor:}`; the web layer signs the
   `{first_published_at, id}` cursor with `VutuvWeb.ApiV2`).
 - **Filters** (all URL params): `q` (Postgres full-text over title +
@@ -247,7 +296,8 @@ batches **one** digest per member: each notifying search due today is re-run for
 matches created after its `last_notified_at` high-water mark (the DM-notification
 pattern), up to five per search, and the searches with new matches are listed
 with a link to the full results. Jobs use `Jobs.new_board_postings/3` (the same
-visibility + block gate as the live board); people use
+visibility + block + #939 exclusion gate as the live board, so an excluded member
+is never alerted to a posting they cannot see); people use
 `Search.new_matching_people/3`. The high-water mark advances to the sweep cutoff
 afterwards, so a match is mailed at most once. The digest is bulk mail
 (`Emailer.saved_search_alert_email/3` + `bulk_headers/1`) with a member-level

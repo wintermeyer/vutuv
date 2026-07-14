@@ -131,6 +131,9 @@ defmodule VutuvWeb.OrganizationController do
     do:
       manage(conn, slug, VutuvWeb.OrganizationLive.Domains, &Organizations.can_manage_domains?/2)
 
+  def exclusions(conn, %{"slug" => slug}),
+    do: manage(conn, slug, VutuvWeb.OrganizationLive.Exclusions, &Organizations.can_manage?/2)
+
   # Shared gate for the owner/admin management pages: log-in required, then the
   # per-page permission (`can?`); otherwise a 404 (never reveal the page exists).
   defp manage(conn, slug, live_view, can?) do

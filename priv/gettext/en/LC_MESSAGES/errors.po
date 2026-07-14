@@ -139,6 +139,14 @@ msgstr ""
 msgid "your exclusion list is full (max %{count})"
 msgstr ""
 
+## Custom messages from the job-posting exclusion list
+## (Vutuv.Jobs.JobExclusion + Vutuv.Jobs.Exclusions, issue #939).
+msgid "is already on this list"
+msgstr ""
+
+msgid "this list is full (max %{count})"
+msgstr ""
+
 msgid "must be greater than or equal to the minimum"
 msgstr ""
 

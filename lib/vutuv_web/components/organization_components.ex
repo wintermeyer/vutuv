@@ -182,11 +182,14 @@ defmodule VutuvWeb.OrganizationComponents do
   attr(:organization, :map, required: true)
   attr(:active, :atom, required: true)
   attr(:owner?, :boolean, default: false)
+  attr(:manage?, :boolean, default: false)
 
   @doc """
   The header + tab bar shared by the organization management pages (issue #930): a
-  back link to the public page and tabs for Page (edit), Team (roles) and
-  Domains. Team/Domains show only for an owner (admins may edit the page only).
+  back link to the public page and tabs for Page (edit), Team (roles), Domains and
+  Job exclusions. Team/Domains show only for an owner (admins may edit the page
+  only); Job exclusions (issue #939) shows for any role holder (`manage?`), since
+  the standing default governs the postings they can already manage.
   """
   def manage_header(assigns) do
     ~H"""
@@ -206,6 +209,9 @@ defmodule VutuvWeb.OrganizationComponents do
         </.manage_tab>
         <.manage_tab :if={@owner?} active={@active == :domains} navigate={"/organizations/#{@organization.slug}/domains"}>
           {gettext("Domains")}
+        </.manage_tab>
+        <.manage_tab :if={@manage?} active={@active == :exclusions} navigate={"/organizations/#{@organization.slug}/exclusions"}>
+          {gettext("Job exclusions")}
         </.manage_tab>
       </nav>
     </div>

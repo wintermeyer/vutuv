@@ -213,7 +213,7 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-2xl py-6">
-      <.manage_header organization={@organization} active={:edit} owner?={@owner?} />
+      <.manage_header organization={@organization} active={:edit} owner?={@owner?} manage?={true} />
 
       <h1 class="text-2xl font-bold text-slate-900 dark:text-slate-100">
         {gettext("Edit %{name}", name: @organization.name)}

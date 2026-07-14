@@ -36,6 +36,7 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Countries
   alias Vutuv.Engagement
   alias Vutuv.Geo
+  alias Vutuv.Jobs.Exclusions
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Jobs.JobPostingBookmark
   alias Vutuv.Jobs.JobPostingImage
@@ -183,15 +184,27 @@ defmodule Vutuv.Jobs do
       Date.diff(BerlinTime.today(), reference) > @public_grace_days
   end
 
-  @doc "Whether `viewer` may see `posting`. Owner/admin see any state."
+  @doc """
+  Whether `viewer` may see `posting`. Owner/admin see any state. The per-posting
+  exclusion list (issue #939) subtracts a signed-in viewer as the LAST step —
+  after the base `everyone`/`members` audience — so an excluded viewer gets the
+  same not-found result as any non-visible posting; an anonymous viewer is never
+  excluded.
+  """
   def visible_to?(%JobPosting{} = posting, viewer) do
+    owner?(posting, viewer) or admin?(viewer) or publicly_visible?(posting, viewer)
+  end
+
+  # The non-privileged path: a live, in-audience posting the viewer is not
+  # excluded from. Exclusion is the last step, so it never widens the audience.
+  defp publicly_visible?(%JobPosting{} = posting, viewer) do
     cond do
-      owner?(posting, viewer) or admin?(viewer) -> true
       posting.frozen_at != nil -> false
       stale?(posting) -> false
-      posting.visibility == :members -> viewer != nil and effective_status(posting) != :draft
-      posting.visibility == :everyone -> effective_status(posting) != :draft
-      true -> false
+      effective_status(posting) == :draft -> false
+      posting.visibility == :members and viewer == nil -> false
+      Exclusions.excluded?(posting, viewer) -> false
+      true -> true
     end
   end
 
@@ -769,9 +782,11 @@ defmodule Vutuv.Jobs do
 
   @doc """
   One page of the member's liked / bookmarked postings for the `/bookmarks` hub.
-  Returns `%{entries:, more?:, next_offset:}`.
+  Returns `%{entries:, more?:, next_offset:}`. A posting the member has since been
+  excluded from (issue #939) drops out here too, like a removed posting.
   """
-  def saved_job_postings_page(%User{id: user_id}, kind, opts) when kind in [:like, :bookmark] do
+  def saved_job_postings_page(%User{id: user_id} = user, kind, opts)
+      when kind in [:like, :bookmark] do
     limit = Keyword.get(opts, :limit, 20)
     offset = Keyword.get(opts, :offset, 0)
     schema = if kind == :like, do: JobPostingLike, else: JobPostingBookmark
@@ -787,6 +802,7 @@ defmodule Vutuv.Jobs do
         offset: ^offset,
         preload: [:organization]
       )
+      |> Exclusions.exclude_for_viewer(user)
       |> Repo.all()
 
     {shown, more?} =
@@ -913,8 +929,8 @@ defmodule Vutuv.Jobs do
   end
 
   # The viewer-visible published set: the base every board filter narrows.
-  # Folds visibility (everyone/members) and the exclusion seam (a bidirectional
-  # block, and the #939 per-posting poster-exclusion list once it exists) into
+  # Folds visibility (everyone/members) and the exclusion seam — a bidirectional
+  # block AND the #939 per-posting / organization-default exclusion list — into
   # ONE query, so no downstream filter can surface a posting the viewer may not
   # see.
   defp board_scope(viewer) do
@@ -925,6 +941,7 @@ defmodule Vutuv.Jobs do
     )
     |> board_visibility(viewer)
     |> board_exclude(viewer)
+    |> Exclusions.exclude_for_viewer(viewer)
   end
 
   defp board_visibility(query, nil), do: where(query, [p], p.visibility == :everyone)
@@ -932,8 +949,8 @@ defmodule Vutuv.Jobs do
   defp board_visibility(query, %User{}),
     do: where(query, [p], p.visibility in [:everyone, :members])
 
-  # A block hides the posting both ways (either party blocked the other). The
-  # #939 per-posting poster-exclusion list will subtract here too when it lands.
+  # A block hides the posting both ways (either party blocked the other); the
+  # #939 exclusion list is subtracted separately by `Exclusions.exclude_for_viewer/2`.
   defp board_exclude(query, nil), do: query
 
   defp board_exclude(query, %User{id: viewer_id}) do

@@ -39,11 +39,15 @@ defmodule Vutuv.JobsHelpers do
     )
   end
 
-  @doc "Creates and publishes a posting, returning the reloaded posting."
-  def publish_job!(user \\ nil, overrides \\ %{}) do
+  @doc """
+  Creates and publishes a posting, returning the reloaded posting. `opts` is
+  threaded into `create_draft`/`publish` — pass `organization:` an `%Organization{}`
+  the `user` holds a role on to attribute the posting to it.
+  """
+  def publish_job!(user \\ nil, overrides \\ %{}, opts \\ []) do
     user = user || poster_fixture()
-    {:ok, draft} = Jobs.create_draft(user, %{"title" => job_attrs(overrides)["title"]})
-    {:ok, posting} = Jobs.publish(draft, user, job_attrs(overrides))
+    {:ok, draft} = Jobs.create_draft(user, %{"title" => job_attrs(overrides)["title"]}, opts)
+    {:ok, posting} = Jobs.publish(draft, user, job_attrs(overrides), opts)
     posting
   end
 end

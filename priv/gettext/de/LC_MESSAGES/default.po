@@ -103,7 +103,7 @@ msgstr "Geburtstag"
 #: lib/vutuv_web/live/admin/newsletter_broadcast_live.ex:215
 #: lib/vutuv_web/live/admin/newsletter_group_live.ex:1138
 #: lib/vutuv_web/live/admin/user_delete_live.ex:212
-#: lib/vutuv_web/live/job_posting_live/form.ex:585
+#: lib/vutuv_web/live/job_posting_live/form.ex:594
 #: lib/vutuv_web/live/organization_live/edit.ex:324
 #: lib/vutuv_web/live/organization_live/new.ex:177
 #: lib/vutuv_web/templates/ad/new.html.heex:133
@@ -535,6 +535,7 @@ msgstr "Typ"
 msgid "Number type"
 msgstr "Typ"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:163
 #: lib/vutuv_web/live/admin/organization_live.ex:239
 #: lib/vutuv_web/templates/work_experience/form_content.html.heex:5
 #, elixir-autogen
@@ -1247,7 +1248,7 @@ msgstr "Wählen Sie einen Social-Media-Anbieter aus"
 msgid "Add Localization"
 msgstr "Lokalisierung hinzufügen"
 
-#: lib/vutuv_web/components/organization_components.ex:239
+#: lib/vutuv_web/components/organization_components.ex:245
 #: lib/vutuv_web/live/admin/api_app_live.ex:58
 #: lib/vutuv_web/live/admin/deliverability_live.ex:96
 #: lib/vutuv_web/live/admin/job_live.ex:212
@@ -1807,7 +1808,7 @@ msgstr ""
 msgid "Log out"
 msgstr "Ausloggen"
 
-#: lib/vutuv_web/components/organization_components.ex:241
+#: lib/vutuv_web/components/organization_components.ex:247
 #: lib/vutuv_web/live/admin/deliverability_live.ex:119
 #: lib/vutuv_web/live/admin/user_delete_live.ex:143
 #: lib/vutuv_web/live/admin/user_live.ex:161
@@ -2316,6 +2317,7 @@ msgstr "Weiterlesen"
 msgid "Show less"
 msgstr "Weniger anzeigen"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:189
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:234
 #: lib/vutuv_web/live/organization_live/domains.ex:214
 #: lib/vutuv_web/live/organization_live/edit.ex:350
@@ -3246,7 +3248,7 @@ msgstr "Warteschlange öffnen"
 msgid "Opened"
 msgstr "Eröffnet"
 
-#: lib/vutuv_web/components/organization_components.ex:238
+#: lib/vutuv_web/components/organization_components.ex:244
 #: lib/vutuv_web/live/admin/api_app_live.ex:72
 #: lib/vutuv_web/live/admin/deliverability_live.ex:171
 #: lib/vutuv_web/live/admin/moderation_live.ex:56
@@ -7331,7 +7333,7 @@ msgstr "Zurücksetzen"
 msgid "Save audience"
 msgstr "Zielgruppe speichern"
 
-#: lib/vutuv_web/live/job_posting_live/form.ex:582
+#: lib/vutuv_web/live/job_posting_live/form.ex:591
 #: lib/vutuv_web/templates/admin/newsletter/edit.html.heex:16
 #: lib/vutuv_web/templates/admin/newsletter/new.html.heex:11
 #, elixir-autogen, elixir-format
@@ -9045,7 +9047,7 @@ msgstr ""
 msgid "Not written yet"
 msgstr "Noch nicht verfasst"
 
-#: lib/vutuv_web/components/organization_components.ex:202
+#: lib/vutuv_web/components/organization_components.ex:205
 #: lib/vutuv_web/templates/admin/legal_page/index.html.heex:18
 #, elixir-autogen, elixir-format
 msgid "Page"
@@ -11723,28 +11725,36 @@ msgstr "Woche"
 msgid "year"
 msgstr "Jahr"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:116
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:180
 #, elixir-autogen, elixir-format
 msgid "Currently excluded"
 msgstr "Aktuell ausgeschlossen"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:99
+#: lib/vutuv_web/components/job_exclusion_components.ex:178
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:163
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:223
 #, elixir-autogen, elixir-format
 msgid "Email domain"
 msgstr "E-Mail-Domain"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:50
+#: lib/vutuv_web/components/job_exclusion_components.ex:75
+#: lib/vutuv_web/components/job_exclusion_components.ex:105
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:144
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:169
 #, elixir-autogen, elixir-format
 msgid "Exclude"
 msgstr "Ausschließen"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:30
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:124
 #, elixir-autogen, elixir-format
 msgid "Exclude a member"
 msgstr "Ein Mitglied ausschließen"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:85
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:149
 #, elixir-autogen, elixir-format
 msgid "Exclude an email domain"
@@ -11777,12 +11787,15 @@ msgid_plural "Manage exclusion list (%{formatted} entries)"
 msgstr[0] "Ausschlussliste verwalten (1 Eintrag)"
 msgstr[1] "Ausschlussliste verwalten (%{formatted} Einträge)"
 
+#: lib/vutuv_web/components/job_exclusion_components.ex:44
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:138
 #, elixir-autogen, elixir-format
 msgid "Member @handle"
 msgstr "@Handle des Mitglieds"
 
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:117
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:100
+#: lib/vutuv_web/live/organization_live/exclusions.ex:100
 #, elixir-autogen, elixir-format
 msgid "No member has that @handle."
 msgstr "Kein Mitglied hat diesen @Handle."
@@ -11802,6 +11815,7 @@ msgstr ""
 msgid "That member is already on your list."
 msgstr "Dieses Mitglied steht bereits auf Ihrer Liste."
 
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:118
 #: lib/vutuv_web/live/job_search_exclusions_live.ex:101
 #, elixir-autogen, elixir-format
 msgid "You cannot exclude yourself."
@@ -11878,7 +11892,8 @@ msgstr ""
 "Die maschinenlesbaren Formate (.md/.txt/.json/.xml) anbieten und für KI-"
 "Agenten auflisten."
 
-#: lib/vutuv_web/controllers/organization_controller.ex:143
+#: lib/vutuv_web/controllers/organization_controller.ex:146
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:31
 #, elixir-autogen, elixir-format
 msgid "Please log in first."
 msgstr "Bitte loggen Sie sich zuerst ein."
@@ -12028,7 +12043,7 @@ msgstr "@%{handle} ist bereits im Team."
 msgid "@handle or email"
 msgstr "@handle oder E-Mail"
 
-#: lib/vutuv_web/components/organization_components.ex:246
+#: lib/vutuv_web/components/organization_components.ex:252
 #: lib/vutuv_web/live/organization_live/edit.ex:367
 #, elixir-autogen, elixir-format
 msgid "Abbreviation"
@@ -12049,7 +12064,7 @@ msgstr "Mitglied hinzufügen"
 msgid "Added @%{handle} to the team."
 msgstr "@%{handle} zum Team hinzugefügt."
 
-#: lib/vutuv_web/components/organization_components.ex:247
+#: lib/vutuv_web/components/organization_components.ex:253
 #: lib/vutuv_web/live/organization_live/edit.ex:365
 #, elixir-autogen, elixir-format
 msgid "Alias"
@@ -12094,7 +12109,7 @@ msgstr "Diese Seite archivieren?"
 msgid "Archived"
 msgstr "Archiviert"
 
-#: lib/vutuv_web/components/organization_components.ex:245
+#: lib/vutuv_web/components/organization_components.ex:251
 #: lib/vutuv_web/live/organization_live/edit.ex:366
 #, elixir-autogen, elixir-format
 msgid "Brand"
@@ -12134,7 +12149,7 @@ msgstr "Domain entfernt."
 msgid "Domain verified."
 msgstr "Domain verifiziert."
 
-#: lib/vutuv_web/components/organization_components.ex:208
+#: lib/vutuv_web/components/organization_components.ex:211
 #: lib/vutuv_web/live/admin/organization_live.ex:335
 #: lib/vutuv_web/live/organization_live/domains.ex:166
 #: lib/vutuv_web/live/organization_live/show.ex:312
@@ -12147,7 +12162,7 @@ msgstr "Domains"
 msgid "Domains – %{name}"
 msgstr "Domains – %{name}"
 
-#: lib/vutuv_web/components/organization_components.ex:244
+#: lib/vutuv_web/components/organization_components.ex:250
 #, elixir-autogen, elixir-format
 msgid "Former name"
 msgstr "Früherer Name"
@@ -12234,7 +12249,7 @@ msgstr "Primär"
 msgid "Primary domain updated."
 msgstr "Primäre Domain aktualisiert."
 
-#: lib/vutuv_web/components/organization_components.ex:240
+#: lib/vutuv_web/components/organization_components.ex:246
 #, elixir-autogen, elixir-format
 msgid "Recruiter"
 msgstr "Recruiter"
@@ -12264,7 +12279,7 @@ msgstr "Rolle aktualisiert."
 msgid "Search name, alias or domain"
 msgstr "Name, Alias oder Domain suchen"
 
-#: lib/vutuv_web/components/organization_components.ex:205
+#: lib/vutuv_web/components/organization_components.ex:208
 #: lib/vutuv_web/live/admin/organization_live.ex:351
 #: lib/vutuv_web/live/organization_live/roles.ex:158
 #: lib/vutuv_web/live/organization_live/show.ex:305
@@ -13208,12 +13223,13 @@ msgstr "Veröffentlicht"
 msgid "Posting language"
 msgstr "Sprache der Anzeige"
 
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:50
 #: lib/vutuv_web/live/job_posting_live/form.ex:74
 #, elixir-autogen, elixir-format
 msgid "Posting not found."
 msgstr "Anzeige nicht gefunden."
 
-#: lib/vutuv_web/live/job_posting_live/form.ex:578
+#: lib/vutuv_web/live/job_posting_live/form.ex:587
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Publish"
 msgstr "Veröffentlichen"
@@ -13985,3 +14001,131 @@ msgstr "Stellenanzeigen in Ihrem Namen veröffentlichen, bearbeiten und schließ
 #, elixir-autogen, elixir-format
 msgid "Read job postings and organization pages visible to you"
 msgstr "Für Sie sichtbare Stellenanzeigen und Unternehmensseiten lesen"
+
+#: lib/vutuv_web/live/organization_live/exclusions.ex:107
+#, elixir-autogen, elixir-format
+msgid "An organization cannot exclude itself."
+msgstr "Eine Organisation kann sich nicht selbst ausschließen."
+
+#: lib/vutuv_web/components/job_exclusion_components.ex:108
+#, elixir-autogen, elixir-format
+msgid "Any signed-in member whose confirmed email is at this domain, or a subdomain of it, is excluded."
+msgstr "Jedes angemeldete Mitglied mit einer bestätigten E-Mail-Adresse auf dieser Domain oder einer ihrer Subdomains wird ausgeschlossen."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:139
+#, elixir-autogen, elixir-format
+msgid "Back to the posting"
+msgstr "Zurück zur Stellenanzeige"
+
+#: lib/vutuv_web/live/organization_live/exclusions.ex:123
+#, elixir-autogen, elixir-format
+msgid "Every posting attributed to this organization inherits this standing list, on top of its own. Use it to keep vacancies away from competitors you never advertise to."
+msgstr "Jede dieser Organisation zugeordnete Stellenanzeige erbt diese dauerhafte Liste zusätzlich zu ihrer eigenen. So halten Sie Ausschreibungen von Wettbewerbern fern, denen Sie nie Stellen anzeigen möchten."
+
+#: lib/vutuv_web/components/job_exclusion_components.ex:55
+#, elixir-autogen, elixir-format
+msgid "Exclude an organization"
+msgstr "Organisation ausschließen"
+
+#: lib/vutuv_web/components/job_exclusion_components.ex:78
+#, elixir-autogen, elixir-format
+msgid "Excluding an organization also hides the posting from its verified email domains, its team, and members whose current job is linked to it."
+msgstr "Wird eine Organisation ausgeschlossen, ist die Anzeige auch für ihre bestätigten E-Mail-Domains, ihr Team und Mitglieder verborgen, deren aktuelle Stelle mit ihr verknüpft ist."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:37
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:143
+#, elixir-autogen, elixir-format
+msgid "Hide from specific viewers"
+msgstr "Vor bestimmten Personen verbergen"
+
+#: lib/vutuv_web/live/job_posting_live/form.ex:576
+#, elixir-autogen, elixir-format
+msgid "Hide from specific viewers (competitors, your own staff, a person) →"
+msgstr "Vor bestimmten Personen verbergen (Wettbewerber, eigene Belegschaft, Einzelpersonen) →"
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:174
+#, elixir-autogen, elixir-format
+msgid "Inherited from the organization"
+msgstr "Von der Organisation geerbt"
+
+#: lib/vutuv_web/components/organization_components.ex:214
+#: lib/vutuv_web/live/organization_live/exclusions.ex:120
+#, elixir-autogen, elixir-format
+msgid "Job exclusions"
+msgstr "Ausschlussliste"
+
+#: lib/vutuv_web/live/organization_live/exclusions.ex:37
+#, elixir-autogen, elixir-format
+msgid "Job exclusions – %{name}"
+msgstr "Ausschlussliste – %{name}"
+
+#: lib/vutuv_web/live/job_posting_live/form.ex:579
+#, elixir-autogen, elixir-format
+msgid "Keep this posting on the board for everyone except a chosen few."
+msgstr "Halten Sie diese Anzeige für alle im Stellenmarkt sichtbar, außer für wenige Ausgewählte."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:187
+#, elixir-autogen, elixir-format
+msgid "Manage the organization's default list"
+msgstr "Standardliste der Organisation verwalten"
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:124
+#: lib/vutuv_web/live/organization_live/exclusions.ex:106
+#, elixir-autogen, elixir-format
+msgid "No organization has that @handle."
+msgstr "Keine Organisation hat dieses @Handle."
+
+#: lib/vutuv_web/components/job_exclusion_components.ex:69
+#, elixir-autogen, elixir-format
+msgid "Organization @handle"
+msgstr "@Handle der Organisation"
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:151
+#, elixir-autogen, elixir-format
+msgid "People and organizations on this list never see this posting: it drops off their board, their search, its detail page and their job alerts, with no hint they were singled out."
+msgstr "Personen und Organisationen auf dieser Liste sehen diese Anzeige nie: Sie verschwindet aus ihrem Stellenmarkt, ihrer Suche, von der Detailseite und aus ihren Job-Benachrichtigungen, ohne Hinweis darauf, dass sie gezielt ausgeschlossen wurden."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:119
+#: lib/vutuv_web/live/organization_live/exclusions.ex:101
+#, elixir-autogen, elixir-format
+msgid "That member is already on this list."
+msgstr "Dieses Mitglied steht bereits auf dieser Liste."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:126
+#: lib/vutuv_web/live/organization_live/exclusions.ex:108
+#, elixir-autogen, elixir-format
+msgid "That organization is already on this list."
+msgstr "Diese Organisation steht bereits auf dieser Liste."
+
+#: lib/vutuv_web/components/job_exclusion_components.ex:120
+#, elixir-autogen, elixir-format
+msgid "This list is empty. Nobody is excluded yet."
+msgstr "Diese Liste ist leer. Es ist noch niemand ausgeschlossen."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:122
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:129
+#: lib/vutuv_web/live/organization_live/exclusions.ex:104
+#: lib/vutuv_web/live/organization_live/exclusions.ex:111
+#, elixir-autogen, elixir-format
+msgid "This list is full (max %{count})."
+msgstr "Diese Liste ist voll (max. %{count})."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:176
+#, elixir-autogen, elixir-format
+msgid "This posting also inherits %{count} standing exclusion(s) from %{name}, managed on its exclusions page."
+msgstr "Diese Anzeige erbt außerdem %{count} dauerhafte Ausschlüsse von %{name}, die auf deren Ausschlussseite verwaltet werden."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:156
+#, elixir-autogen, elixir-format
+msgid "This posting is public, so excluding only narrows the signed-in audience: someone can still read it while logged out. To also hide it from logged-out visitors, set its visibility to “Members only”."
+msgstr "Diese Anzeige ist öffentlich, ein Ausschluss verkleinert daher nur das angemeldete Publikum: Abgemeldet kann sie weiterhin jeder lesen. Um sie auch vor abgemeldeten Besuchern zu verbergen, stellen Sie die Sichtbarkeit auf „Nur für Mitglieder“."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:125
+#, elixir-autogen, elixir-format
+msgid "You cannot exclude the posting's own organization."
+msgstr "Sie können die eigene Organisation der Anzeige nicht ausschließen."
+
+#: lib/vutuv_web/live/job_posting_live/exclusions.ex:146
+#, elixir-autogen, elixir-format
+msgid "“%{title}”"
+msgstr "„%{title}“"

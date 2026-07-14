@@ -570,6 +570,15 @@ defmodule VutuvWeb.JobPostingLive.Form do
               <span>{gettext("Offer the machine-readable formats (.md/.txt/.json/.xml) to AI agents.")}</span>
             </label>
           </div>
+
+          <div :if={@posting.id} class="border-t border-slate-100 pt-4 dark:border-slate-800">
+            <.link navigate={~p"/jobs/#{@posting.slug}/exclusions"} class="text-sm font-semibold text-brand-600 hover:text-brand-700">
+              {gettext("Hide from specific viewers (competitors, your own staff, a person) →")}
+            </.link>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext("Keep this posting on the board for everyone except a chosen few.")}
+            </p>
+          </div>
         </.card>
 
         <div class="flex flex-wrap items-center gap-3">

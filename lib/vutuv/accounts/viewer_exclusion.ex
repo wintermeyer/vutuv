@@ -26,11 +26,7 @@ defmodule Vutuv.Accounts.ViewerExclusion do
   use VutuvWeb, :model
 
   alias Vutuv.Accounts.User
-
-  # A bare hostname: lowercase labels of letters/digits/hyphens, at least two
-  # labels (one dot), each label 1-63 chars, whole name <= 253. No scheme, no
-  # path, no `@` — those are stripped by normalize_domain/1 before validation.
-  @domain_format ~r/^(?=.{1,253}$)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
+  alias Vutuv.EmailDomain
 
   schema "viewer_exclusions" do
     field(:domain, :string)
@@ -65,12 +61,12 @@ defmodule Vutuv.Accounts.ViewerExclusion do
   def domain_changeset(%User{} = owner, params) do
     %__MODULE__{}
     |> cast(params, [:domain])
-    |> update_change(:domain, &normalize_domain/1)
+    |> update_change(:domain, &EmailDomain.normalize/1)
     |> validate_required([:domain])
     # varchar(255) column: an oversized value must fail as a changeset error,
     # never a raised Postgres 22001.
     |> validate_length(:domain, max: 255)
-    |> validate_format(:domain, @domain_format,
+    |> validate_format(:domain, EmailDomain.format(),
       message: "must be a domain like example.com, without http:// or a path"
     )
     |> change(user_id: owner.id)
@@ -86,23 +82,5 @@ defmodule Vutuv.Accounts.ViewerExclusion do
     else
       changeset
     end
-  end
-
-  # Be forgiving about what the member pastes: a full URL, a `user@host`
-  # address or a stray space should still resolve to the bare host, so the
-  # editor accepts the common shapes and the format validation only rejects
-  # what genuinely is not a domain.
-  defp normalize_domain(nil), do: nil
-
-  defp normalize_domain(value) do
-    value
-    |> String.trim()
-    |> String.downcase()
-    |> String.replace(~r{^[a-z][a-z0-9+.-]*://}, "")
-    |> String.split("/", parts: 2)
-    |> List.first()
-    |> String.split("@")
-    |> List.last()
-    |> String.trim(".")
   end
 end
