@@ -302,33 +302,7 @@ defmodule VutuvWeb.Admin.JobLive do
           </table>
         </div>
 
-        <nav
-          :if={@result.total_pages > 1}
-          class="mt-6 flex items-center justify-center gap-3 text-sm font-semibold"
-          aria-label={gettext("Pagination")}
-        >
-          <button
-            type="button"
-            phx-click="page"
-            phx-value-page={@result.page - 1}
-            disabled={@result.page <= 1}
-            class="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            ‹ {gettext("Previous")}
-          </button>
-          <span class="text-slate-600 dark:text-slate-400">
-            {gettext("Page %{page} of %{pages}", page: @result.page, pages: @result.total_pages)}
-          </span>
-          <button
-            type="button"
-            phx-click="page"
-            phx-value-page={@result.page + 1}
-            disabled={@result.page >= @result.total_pages}
-            class="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            {gettext("Next")} ›
-          </button>
-        </nav>
+        <.admin_pager page={@result.page} pages={@result.total_pages} />
       </section>
 
       {detail_card(assigns)}

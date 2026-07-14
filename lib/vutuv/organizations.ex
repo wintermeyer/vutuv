@@ -969,19 +969,6 @@ defmodule Vutuv.Organizations do
     )
   end
 
-  @doc "A member's bookmarked organizations (private saved-items hub), newest first."
-  def bookmarked_organizations(%User{id: user_id}) do
-    Repo.all(
-      from(c in Organization,
-        join: e in OrganizationBookmark,
-        on: e.organization_id == c.id,
-        where: e.user_id == ^user_id and c.status == "active" and is_nil(c.frozen_at),
-        order_by: [desc: e.inserted_at],
-        select: c
-      )
-    )
-  end
-
   @doc """
   One page of the member's liked / bookmarked organizations for the `/bookmarks`
   saved-items hub, honoring its search (`name`/`city`) and sort. Returns

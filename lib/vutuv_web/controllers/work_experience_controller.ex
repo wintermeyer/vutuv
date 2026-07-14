@@ -26,13 +26,7 @@ defmodule VutuvWeb.WorkExperienceController do
   # VutuvWeb.AgentDocs.SectionDocs (keep the templates and the doc builder
   # in sync, see agent_docs_drift_test.exs).
   def index(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(
-        work_experiences:
-          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
-           [:organization_page]}
-      )
+    user = user_with_work_experiences(conn)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -52,13 +46,7 @@ defmodule VutuvWeb.WorkExperienceController do
   # The owner's editor (GET /settings/work_experiences), including the
   # profile-job-title pin chooser (issue #833).
   def manage(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(
-        work_experiences:
-          {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
-           [:organization_page]}
-      )
+    user = user_with_work_experiences(conn)
 
     render(conn, "manage.html",
       user: user,
@@ -205,6 +193,14 @@ defmodule VutuvWeb.WorkExperienceController do
     ControllerHelpers.delete(conn, conn.assigns[:job],
       flash: gettext("Work experience deleted successfully."),
       redirect_to: ~p"/settings/work_experiences"
+    )
+  end
+
+  defp user_with_work_experiences(conn) do
+    Repo.preload(conn.assigns[:user],
+      work_experiences:
+        {from(u in Vutuv.Profiles.WorkExperience) |> WorkExperience.order_by_date(),
+         [:organization_page]}
     )
   end
 end

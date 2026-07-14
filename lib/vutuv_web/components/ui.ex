@@ -2039,6 +2039,60 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The prev / "Page N of M" / next control shared by the admin oversight
+  LiveViews (jobs, organizations, users). Distinct from `pager/1` (URL links):
+  this fires `phx-click="page"` with `phx-value-page`, so the host LiveView owns
+  the paging. `prev_id`/`next_id` add button ids (the user browser's tests key
+  on `#prev-page`/`#next-page`); a nil id omits the attribute, and a nil
+  `disabled_class` drops out of the class list. Renders nothing for a single page.
+  """
+  attr(:page, :integer, required: true)
+  attr(:pages, :integer, required: true)
+  attr(:prev_id, :string, default: nil)
+  attr(:next_id, :string, default: nil)
+  attr(:disabled_class, :string, default: nil)
+
+  def admin_pager(assigns) do
+    ~H"""
+    <nav
+      :if={@pages > 1}
+      class="mt-6 flex items-center justify-center gap-3 text-sm font-semibold"
+      aria-label={gettext("Pagination")}
+    >
+      <button
+        type="button"
+        phx-click="page"
+        phx-value-page={@page - 1}
+        disabled={@page <= 1}
+        id={@prev_id}
+        class={[
+          "rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800",
+          @disabled_class
+        ]}
+      >
+        ‹ {gettext("Previous")}
+      </button>
+      <span class="text-slate-600 dark:text-slate-400">
+        {gettext("Page %{page} of %{pages}", page: @page, pages: @pages)}
+      </span>
+      <button
+        type="button"
+        phx-click="page"
+        phx-value-page={@page + 1}
+        disabled={@page >= @pages}
+        id={@next_id}
+        class={[
+          "rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800",
+          @disabled_class
+        ]}
+      >
+        {gettext("Next")} ›
+      </button>
+    </nav>
+    """
+  end
+
+  @doc """
   Numbered pagination for offset-paginated browse pages (followers, tags,
   users). Pass the conn params (for the current `?page`) and the total row
   count; windowing comes from `Vutuv.Pages`. Renders nothing when one page

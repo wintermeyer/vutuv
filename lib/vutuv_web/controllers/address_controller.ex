@@ -12,9 +12,7 @@ defmodule VutuvWeb.AddressController do
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(addresses: Address.ordered())
+    user = user_with_addresses(conn)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -26,9 +24,7 @@ defmodule VutuvWeb.AddressController do
 
   # The owner's editor (GET /settings/addresses).
   def manage(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(addresses: Address.ordered())
+    user = user_with_addresses(conn)
 
     render(conn, "manage.html",
       user: user,
@@ -109,4 +105,7 @@ defmodule VutuvWeb.AddressController do
 
     if Locale.locale_supported?(loc), do: loc, else: "generic"
   end
+
+  defp user_with_addresses(conn),
+    do: Repo.preload(conn.assigns[:user], addresses: Address.ordered())
 end

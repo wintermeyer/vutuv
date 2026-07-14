@@ -25,9 +25,7 @@ defmodule VutuvWeb.EducationController do
   # VutuvWeb.AgentDocs.SectionDocs (keep the templates and the doc builder in
   # sync, see agent_docs_drift_test.exs).
   def index(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(educations: from(e in Education) |> Education.order_by_date())
+    user = user_with_educations(conn)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -39,9 +37,7 @@ defmodule VutuvWeb.EducationController do
 
   # The owner's editor (GET /settings/educations).
   def manage(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(educations: from(e in Education) |> Education.order_by_date())
+    user = user_with_educations(conn)
 
     render(conn, "manage.html",
       user: user,
@@ -111,4 +107,10 @@ defmodule VutuvWeb.EducationController do
       redirect_to: ~p"/settings/educations"
     )
   end
+
+  defp user_with_educations(conn),
+    do:
+      Repo.preload(conn.assigns[:user],
+        educations: from(e in Education) |> Education.order_by_date()
+      )
 end

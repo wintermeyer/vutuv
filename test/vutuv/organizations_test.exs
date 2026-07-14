@@ -354,7 +354,7 @@ defmodule Vutuv.OrganizationsTest do
       assert engagement.liked?
       assert engagement.bookmarked?
 
-      assert [c] = Organizations.bookmarked_organizations(user)
+      assert %{entries: [c]} = Organizations.saved_organizations_page(user, :bookmark, [])
       assert c.id == organization.id
 
       :ok = Organizations.unlike_organization(user, organization)

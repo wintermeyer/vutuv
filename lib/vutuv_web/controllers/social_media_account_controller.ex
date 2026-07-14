@@ -11,9 +11,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs).
   def index(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(social_media_accounts: SocialMediaAccount.ordered())
+    user = user_with_social_media_accounts(conn)
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -31,9 +29,7 @@ defmodule VutuvWeb.SocialMediaAccountController do
 
   # The owner's editor (GET /settings/social_media_accounts).
   def manage(conn, _params) do
-    user =
-      conn.assigns[:user]
-      |> Repo.preload(social_media_accounts: SocialMediaAccount.ordered())
+    user = user_with_social_media_accounts(conn)
 
     render(conn, "manage.html",
       user: user,
@@ -133,4 +129,10 @@ defmodule VutuvWeb.SocialMediaAccountController do
       redirect_to: ~p"/settings/social_media_accounts"
     )
   end
+
+  defp user_with_social_media_accounts(conn),
+    do:
+      Repo.preload(conn.assigns[:user],
+        social_media_accounts: SocialMediaAccount.ordered()
+      )
 end

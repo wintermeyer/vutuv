@@ -200,7 +200,7 @@ defmodule VutuvWeb.OrganizationTest do
       view |> element("button[phx-click='toggle_bookmark']") |> render_click()
 
       assert Organizations.organization_engagement(organization, user).likes == 1
-      assert [saved] = Organizations.bookmarked_organizations(user)
+      assert %{entries: [saved]} = Organizations.saved_organizations_page(user, :bookmark, [])
       assert saved.id == organization.id
     end
   end

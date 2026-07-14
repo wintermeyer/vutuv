@@ -417,35 +417,13 @@ defmodule VutuvWeb.Admin.UserLive do
           </table>
         </div>
 
-        <nav
-          :if={@pages > 1}
-          class="mt-6 flex items-center justify-center gap-3 text-sm font-semibold"
-          aria-label={gettext("Pagination")}
-        >
-          <button
-            type="button"
-            phx-click="page"
-            phx-value-page={@page - 1}
-            disabled={@page <= 1}
-            id="prev-page"
-            class="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            ‹ {gettext("Previous")}
-          </button>
-          <span class="text-slate-600 dark:text-slate-400">
-            {gettext("Page %{page} of %{pages}", page: @page, pages: @pages)}
-          </span>
-          <button
-            type="button"
-            phx-click="page"
-            phx-value-page={@page + 1}
-            disabled={@page >= @pages}
-            id="next-page"
-            class="rounded-lg px-3 py-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-800"
-          >
-            {gettext("Next")} ›
-          </button>
-        </nav>
+        <.admin_pager
+          page={@page}
+          pages={@pages}
+          prev_id="prev-page"
+          next_id="next-page"
+          disabled_class="disabled:cursor-not-allowed"
+        />
       </section>
     </div>
     """
