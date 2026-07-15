@@ -49,15 +49,4 @@ defmodule Vutuv.EmailDomain do
       _ -> nil
     end
   end
-
-  @doc """
-  Whether `host` is covered by the listed `domain`: an exact match or any
-  subdomain of it (`example.com` covers `eu.example.com`, never
-  `notexample.com`). Both are expected already lowercased.
-  """
-  def covers?(domain, host) when is_binary(domain) and is_binary(host) do
-    host == domain or String.ends_with?(host, "." <> domain)
-  end
-
-  def covers?(_domain, _host), do: false
 end

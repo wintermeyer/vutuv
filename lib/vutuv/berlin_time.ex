@@ -67,6 +67,32 @@ defmodule Vutuv.BerlinTime do
     |> local_midnight_as_utc()
   end
 
+  @doc """
+  Milliseconds from now until the next Berlin-local 00:`minute_offset` (a few
+  minutes past German midnight), computed in UTC off the Berlin-day midnight
+  instants so it lands on the wall-clock minute through both DST halves. The
+  one scheduling clock of the nightly workers - `Vutuv.Reports.DailyReporter`
+  (:05), `Vutuv.Jobs.Sweeper` (:10) and `Vutuv.SavedSearches.AlertSweeper`
+  (:20) - each keeping only its own minute constant.
+  """
+  def ms_until_daily_trigger(minute_offset) when is_integer(minute_offset) do
+    now = DateTime.to_naive(DateTime.utc_now())
+    today = today()
+    today_trigger = trigger_instant(today, minute_offset)
+
+    target =
+      if NaiveDateTime.compare(now, today_trigger) == :lt,
+        do: today_trigger,
+        else: trigger_instant(Date.add(today, 1), minute_offset)
+
+    max(NaiveDateTime.diff(target, now, :millisecond), 0)
+  end
+
+  # The Berlin-local 00:MM instant of `date`, as a UTC NaiveDateTime.
+  defp trigger_instant(date, minute_offset) do
+    NaiveDateTime.add(local_midnight_utc(date), minute_offset * 60, :second)
+  end
+
   # Berlin-local 00:00 of `date`, expressed as a UTC NaiveDateTime.
   defp local_midnight_utc(date), do: date |> local_midnight_as_utc() |> DateTime.to_naive()
 

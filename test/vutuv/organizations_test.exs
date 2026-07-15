@@ -413,6 +413,15 @@ defmodule Vutuv.OrganizationsTest do
 
       refute Enum.any?(Organizations.directory_page().entries, &(&1.name == "Hidden Co"))
     end
+
+    test "a frozen organization leaves the directory and stops being a link target", %{acme: acme} do
+      assert Organizations.get_active_organization(acme.id)
+
+      {:ok, acme} = Organizations.admin_set_frozen(acme, true)
+
+      refute Enum.any?(Organizations.directory_page().entries, &(&1.id == acme.id))
+      assert Organizations.get_active_organization(acme.id) == nil
+    end
   end
 
   describe "visibility" do

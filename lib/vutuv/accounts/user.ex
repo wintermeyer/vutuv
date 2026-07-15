@@ -286,13 +286,6 @@ defmodule Vutuv.Accounts.User do
 
   def visibilities, do: @visibilities
 
-  # The currencies and periods the salary expectation may use (issue #928): the
-  # shared `Vutuv.Salary` model is the single source, so this and the job-posting
-  # pay range can never drift. Defaults "EUR" / "year".
-  def desired_salary_currencies, do: Vutuv.Salary.currencies()
-
-  def desired_salary_periods, do: Vutuv.Salary.periods()
-
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
   # for both the select's options and the changeset's validation, so the form

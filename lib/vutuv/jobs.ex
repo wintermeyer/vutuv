@@ -42,7 +42,9 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Jobs.JobPostingLike
   alias Vutuv.Jobs.JobPostingTag
+  alias Vutuv.Moderation.Case
   alias Vutuv.Organizations
+  alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Salary
   alias Vutuv.Social
@@ -77,7 +79,6 @@ defmodule Vutuv.Jobs do
   # --- fetch ----------------------------------------------------------------
 
   def get_job_posting(id), do: Repo.get(JobPosting, id)
-  def get_job_posting!(id), do: Repo.get!(JobPosting, id)
 
   @doc "Fetches a posting by slug with everything a page needs preloaded, or nil."
   def get_job_posting_by_slug(slug) when is_binary(slug) do
@@ -130,7 +131,7 @@ defmodule Vutuv.Jobs do
       |> offset(^offset)
       |> Repo.all()
 
-    paginate_offset(entries, limit, offset)
+    Pages.offset_page(entries, limit, offset)
   end
 
   @doc "Count of a member's postings in each status, for the dashboard tab badges."
@@ -141,13 +142,6 @@ defmodule Vutuv.Jobs do
     |> select([p], {p.status, count(p.id)})
     |> Repo.all()
     |> Map.new()
-  end
-
-  defp paginate_offset(entries, limit, offset) do
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
   end
 
   def change_job_posting(%JobPosting{} = posting, attrs \\ %{}),
@@ -387,37 +381,15 @@ defmodule Vutuv.Jobs do
       "id" => posting.id,
       "url" => VutuvWeb.Endpoint.url() <> "/jobs/" <> posting.slug,
       "title" => posting.title,
-      "employer" => webhook_employer(posting),
+      "employer" => JobPosting.employer_name(posting),
       "employment_type" => Atom.to_string(posting.employment_type),
       "workplace_type" => Atom.to_string(posting.workplace_type),
       "zip_code" => posting.zip_code,
       "city" => posting.city,
       "country" => posting.country,
       "remote_countries" => posting.remote_countries,
-      "salary" => webhook_salary(posting),
+      "salary" => JobPosting.salary_fields(posting),
       "tags" => posting |> all_tags() |> Enum.map(& &1.name)
-    }
-  end
-
-  defp webhook_employer(%JobPosting{organization: %Organizations.Organization{name: name}}),
-    do: name
-
-  defp webhook_employer(%JobPosting{hiring_org_name: name}) when is_binary(name), do: name
-
-  defp webhook_employer(%JobPosting{user: %User{} = user}),
-    do: VutuvWeb.UserHelpers.full_name(user)
-
-  defp webhook_employer(_), do: nil
-
-  defp webhook_salary(%JobPosting{employment_type: :volunteer}), do: nil
-  defp webhook_salary(%JobPosting{salary_min: nil}), do: nil
-
-  defp webhook_salary(%JobPosting{} = posting) do
-    %{
-      "min" => posting.salary_min,
-      "max" => posting.salary_max,
-      "currency" => posting.salary_currency,
-      "period" => posting.salary_period
     }
   end
 
@@ -533,10 +505,16 @@ defmodule Vutuv.Jobs do
   defp fetch(attrs, key), do: attrs[key] || attrs[to_string(key)]
 
   # After a successful save, attach the composer's pending images and prune
-  # removed ones, then reload the full page struct.
+  # removed ones, then reload the full page struct. Only a present `image_ids`
+  # syncs the gallery: the composer always submits the full list (empty =
+  # remove all), while an API PATCH without the key (the jobs API documents no
+  # image field) must not wipe the attached images.
   defp after_save({:ok, %JobPosting{} = posting}, %User{} = user, attrs) do
-    image_ids = fetch(attrs, :image_ids) || []
-    attach_images(posting, user, image_ids)
+    case fetch(attrs, :image_ids) do
+      nil -> :ok
+      image_ids -> attach_images(posting, user, image_ids)
+    end
+
     {:ok, preload_for_show(posting)}
   end
 
@@ -700,6 +678,21 @@ defmodule Vutuv.Jobs do
   def unbookmark_job_posting(%User{} = user, %JobPosting{} = posting),
     do: disengage(JobPostingBookmark, :bookmark, user, posting)
 
+  @doc """
+  Flips one engagement `kind` off its current state (the
+  `%{liked?:, bookmarked?:}` map `job_posting_engagement/2` returns; nil reads
+  as unengaged) — the one dispatch the board and the detail page share.
+  """
+  def toggle_engagement(:like, user, posting, %{liked?: true}),
+    do: unlike_job_posting(user, posting)
+
+  def toggle_engagement(:like, user, posting, _), do: like_job_posting(user, posting)
+
+  def toggle_engagement(:bookmark, user, posting, %{bookmarked?: true}),
+    do: unbookmark_job_posting(user, posting)
+
+  def toggle_engagement(:bookmark, user, posting, _), do: bookmark_job_posting(user, posting)
+
   defp engage(schema, kind, %User{} = user, %JobPosting{} = posting) do
     case Engagement.insert_if_new(schema, %{user_id: user.id, job_posting_id: posting.id}, [
            :job_posting_id,
@@ -809,7 +802,7 @@ defmodule Vutuv.Jobs do
       |> Exclusions.exclude_for_viewer(user)
       |> Repo.all()
 
-    paginate_offset(entries, limit, offset)
+    Pages.offset_page(entries, limit, offset)
   end
 
   # --- deletion / moderation ------------------------------------------------
@@ -982,6 +975,13 @@ defmodule Vutuv.Jobs do
   # The radius steps the board offers (km); a stored value outside the set is
   # dropped, exactly like the live board.
   @board_radii [0, 10, 25, 50, 100]
+
+  @doc """
+  The radius steps (km) the board's location filter accepts; 0 means "exact".
+  The board UI derives its select options from this, so a new step is offered
+  and parsed in lockstep (a value outside the set is silently dropped).
+  """
+  def board_radii, do: @board_radii
 
   @doc """
   Turns a board URL's raw string-keyed params into the atom-keyed `filters` map
@@ -1336,7 +1336,7 @@ defmodule Vutuv.Jobs do
       |> preload([:organization, :user, job_posting_tags: :tag])
       |> Repo.all()
 
-    paginate_offset(entries, limit, offset)
+    Pages.offset_page(entries, limit, offset)
   end
 
   @doc "Count of an organization's live public postings."
@@ -1477,12 +1477,18 @@ defmodule Vutuv.Jobs do
   defp admin_status_filter(query, _all, _today), do: query
 
   defp admin_report_filter(query, "open") do
+    # The open-status set stays owned by Moderation (like the tile count via
+    # open_case_count/1), so a new/renamed status can't silently split the
+    # filter from the count on the same admin screen.
+    open_statuses = Case.open_statuses()
+
     where(
       query,
       [p],
       fragment(
-        "EXISTS (SELECT 1 FROM moderation_cases mc WHERE mc.content_type = 'job_posting' AND mc.content_id = ? AND mc.status IN ('pending_owner','flagged','escalated'))",
-        p.id
+        "EXISTS (SELECT 1 FROM moderation_cases mc WHERE mc.content_type = 'job_posting' AND mc.content_id = ? AND mc.status = ANY(?))",
+        p.id,
+        ^open_statuses
       )
     )
   end

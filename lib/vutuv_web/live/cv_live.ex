@@ -26,8 +26,8 @@ defmodule VutuvWeb.CVLive do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    current_user = socket.assigns.current_user
 
     user = Accounts.get_user(session["profile_user_id"])
 
@@ -40,11 +40,7 @@ defmodule VutuvWeb.CVLive do
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:user, user)
-      |> assign(:locale, session["locale"])
-      |> assign(:shell_path, session["request_path"])
       |> assign(:page_title, gettext("CV of %{name}", name: name))
       |> assign(
         :meta_description,

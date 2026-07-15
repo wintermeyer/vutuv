@@ -95,6 +95,24 @@ defmodule VutuvWeb.Admin.OrganizationLive do
   def handle_event("archive", %{"id" => id}, socket),
     do: act(socket, id, &Organizations.archive_organization/1, gettext("Organization archived."))
 
+  # "Reviewed, all fine" for a ⚑ collision-flagged alias: the resolution the
+  # queue was missing (before this, the flagged count could only ever grow).
+  def handle_event("clear_alias_flag", %{"id" => id}, socket) do
+    case Organizations.get_alias(id) do
+      nil ->
+        {:noreply, socket}
+
+      organization_name ->
+        {:ok, _} = Organizations.clear_alias_flag(organization_name)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Alias flag cleared."))
+         |> assign(:flagged_count, Organizations.flagged_aliases_count())
+         |> push_patch(to: patch_to(socket, %{}))}
+    end
+  end
+
   def handle_event("delete", %{"id" => id}, socket) do
     case Organizations.get_organization(id) do
       nil ->
@@ -179,9 +197,9 @@ defmodule VutuvWeb.Admin.OrganizationLive do
     />
 
     <div class="mb-6 grid grid-cols-3 gap-3">
-      <.tile label={gettext("Live")} value={@counts.active} />
-      <.tile label={gettext("Pending")} value={@counts.pending} />
-      <.tile label={gettext("Frozen")} value={@counts.frozen} />
+      <.admin_stat_tile label={gettext("Live")} value={@counts.active} />
+      <.admin_stat_tile label={gettext("Pending")} value={@counts.pending} />
+      <.admin_stat_tile label={gettext("Frozen")} value={@counts.frozen} />
     </div>
 
     <p :if={@flagged_count > 0} id="flagged-aliases-note" class="mb-6 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800">
@@ -270,15 +288,6 @@ defmodule VutuvWeb.Admin.OrganizationLive do
   attr(:label, :string, required: true)
   attr(:value, :integer, required: true)
 
-  defp tile(assigns) do
-    ~H"""
-    <div class="rounded-2xl bg-white p-4 text-center shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-slate-800">
-      <div class="text-2xl font-bold text-slate-900 dark:text-slate-100">{delimited_count(@value)}</div>
-      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{@label}</div>
-    </div>
-    """
-  end
-
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 
   defp detail_card(assigns) do
@@ -344,6 +353,16 @@ defmodule VutuvWeb.Admin.OrganizationLive do
               {organization_name.name}
               <span class="opacity-70">· {alias_kind_label(organization_name.kind)}</span>
               <span :if={organization_name.flagged_at} title={gettext("Matches another verified organization")}>⚑</span>
+              <button
+                :if={organization_name.flagged_at}
+                type="button"
+                phx-click="clear_alias_flag"
+                phx-value-id={organization_name.id}
+                title={gettext("Reviewed, all fine: clear the flag")}
+                class="font-semibold underline hover:no-underline"
+              >
+                {gettext("Clear")}
+              </button>
             </span>
           </dd>
         </div>

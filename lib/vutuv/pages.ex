@@ -48,6 +48,21 @@ defmodule Vutuv.Pages do
     div(total - 1, per_page) + 1
   end
 
+  @doc """
+  The "load more" page envelope for offset-paginated lists: hand it the rows
+  of a `limit + 1` over-fetch and it returns `%{entries:, more?:, next_offset:}`
+  — the extra row only proves there is a next page and is dropped.
+  `next_offset` feeds the next call's `offset`. One spelling for every
+  saved/engaged/people list (jobs, organizations, posts, social, saved
+  searches); cursor-paginated feeds use `Vutuv.FeedPage` instead.
+  """
+  def offset_page(entries, limit, offset) do
+    {shown, more?} =
+      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
+
+    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+  end
+
   @doc "Parses the `?page` param (any map with a `\"page\"` key) to an integer >= 1, defaulting to 1."
   def page_param(params) do
     case Integer.parse(to_string(params["page"])) do

@@ -11,6 +11,7 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   use Gettext, backend: VutuvWeb.Gettext
 
   alias Vutuv.Countries
+  alias Vutuv.Jobs
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias VutuvWeb.AgentDocs
@@ -18,17 +19,36 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
   alias VutuvWeb.UserHelpers
 
   @doc """
-  One organization page. `people` are the linked members the organization's People
-  section shows (issue #931), already gated to the public-listing set;
-  `people_total` is the full count the HTML page displays.
+  One organization page, self-loading (the `ProfileDoc.build/2` convention):
+  the verified domains, the aliases, the People section (the public-listing
+  set of issue #931, crawl-capped at 200 with the true total carried in
+  `people_total`) and the live public postings ("Offene Stellen", #933). One
+  assembly shared by the public agent formats and `/api/2.0`, so a new doc
+  section reaches both or neither.
+  """
+  def build_show(organization) do
+    build_show(
+      organization,
+      Organizations.verified_domains(organization),
+      Organizations.list_aliases(organization),
+      Organizations.organization_people_page(organization, limit: 200).entries,
+      Organizations.organization_people_count(organization),
+      Jobs.list_organization_postings(organization, limit: 200).entries
+    )
+  end
+
+  @doc """
+  The pre-loaded-pieces form of `build_show/1`. `people` are the linked members
+  the organization's People section shows (issue #931), already gated to the
+  public-listing set; `people_total` is the full count the HTML page displays.
   """
   def build_show(
         organization,
         domains,
-        aliases \\ [],
-        people \\ [],
-        people_total \\ 0,
-        open_positions \\ []
+        aliases,
+        people,
+        people_total,
+        open_positions
       ) do
     AgentDocs.doc_meta("organization", canonical_path(organization),
       noindex: not organization.seo?,

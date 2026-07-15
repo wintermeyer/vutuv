@@ -40,7 +40,7 @@ defmodule Vutuv.Uploads.Regenerator do
   alias Vutuv.Repo
   alias Vutuv.Uploads.Originals
 
-  @types ~w(avatars covers screenshots post_images)a
+  @types ~w(avatars covers screenshots post_images job_posting_images)a
 
   # Where each public tree may still hold an original-pattern file (the
   # pre-private-tree layouts). Scanned by the final orphan pass.
@@ -127,6 +127,9 @@ defmodule Vutuv.Uploads.Regenerator do
   defp do_regenerate(:screenshots, url, opts), do: Vutuv.Screenshot.regenerate(url, opts)
   defp do_regenerate(:post_images, image, opts), do: Vutuv.PostImageStore.regenerate(image, opts)
 
+  defp do_regenerate(:job_posting_images, image, opts),
+    do: Vutuv.JobPostingImageStore.regenerate(image, opts)
+
   # Originals that no DB row claims must still never stay publicly
   # downloadable: move them into the private tree. Derived files of unknown
   # rows are left alone — nothing serves them, and deleting data without a
@@ -167,8 +170,10 @@ defmodule Vutuv.Uploads.Regenerator do
   defp rows(:covers), do: Repo.all(from(u in User, where: not is_nil(u.cover_photo)))
   defp rows(:screenshots), do: Repo.all(from(u in Url, where: not is_nil(u.screenshot)))
   defp rows(:post_images), do: Repo.all(PostImage)
+  defp rows(:job_posting_images), do: Repo.all(Vutuv.Jobs.JobPostingImage)
 
   defp row_id(:post_images, image), do: image.token
+  defp row_id(:job_posting_images, image), do: image.token
   defp row_id(_type, row), do: row.id
 
   # Operator stdout progress (mix task / `bin/vutuv eval`); the quiet-flag logic

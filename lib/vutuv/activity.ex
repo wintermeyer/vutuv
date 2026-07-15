@@ -143,14 +143,6 @@ defmodule Vutuv.Activity do
   @doc "Tell a user's shell their messages were just read (clears the badge)."
   def mark_messages_read(user_id), do: broadcast(user_id, :messages_read)
 
-  @doc """
-  Tell a user's shell to recompute its notification badge after a silent change
-  to the unread set, i.e. a change with no new notification to push: a pending
-  connection request was withdrawn or declined, so the unread count dropped.
-  The shell reseeds from `unread_notification_count/1` on this event.
-  """
-  def mark_notifications_changed(user_id), do: broadcast(user_id, :notifications_changed)
-
   @doc "Push a new in-app notification to `user_id`."
   def notify(nil, _notification), do: :ok
 
@@ -429,7 +421,7 @@ defmodule Vutuv.Activity do
       join: f in assoc(c, :follower),
       order_by: [desc: c.inserted_at, desc: c.id],
       limit: ^limit,
-      select: {c.id, c.inserted_at, f}
+      select: {c.id, c.inserted_at, struct(f, ^User.listing_fields())}
     )
     |> at_or_before(cursor)
     |> Repo.all()
@@ -447,7 +439,7 @@ defmodule Vutuv.Activity do
       where: ut.user_id == ^user_id and e.user_id != ^user_id,
       order_by: [desc: e.inserted_at, desc: e.id],
       limit: ^limit,
-      select: {e.id, e.inserted_at, endorser, t.name}
+      select: {e.id, e.inserted_at, struct(endorser, ^User.listing_fields()), t.name}
     )
     |> at_or_before(cursor)
     |> Repo.all()
@@ -481,7 +473,7 @@ defmodule Vutuv.Activity do
           id: type(fragment("GREATEST(?, ?)", out.id, back.id), Vutuv.UUIDv7),
           at:
             type(fragment("GREATEST(?, ?)", out.inserted_at, back.inserted_at), :naive_datetime),
-          friend: u
+          friend: struct(u, ^User.listing_fields())
         }
       )
 
@@ -510,7 +502,9 @@ defmodule Vutuv.Activity do
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^limit,
-      select: {r.id, r.inserted_at, replier, r.parent_post_id, r.post_id}
+      select:
+        {r.id, r.inserted_at, struct(replier, ^User.listing_fields()), r.parent_post_id,
+         r.post_id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
@@ -533,7 +527,7 @@ defmodule Vutuv.Activity do
       where: p.user_id == ^user_id and l.user_id != ^user_id,
       order_by: [desc: l.inserted_at, desc: l.id],
       limit: ^limit,
-      select: {l.id, l.inserted_at, liker, p.id}
+      select: {l.id, l.inserted_at, struct(liker, ^User.listing_fields()), p.id}
     )
     |> at_or_before(cursor)
     |> Repo.all()
@@ -557,7 +551,8 @@ defmodule Vutuv.Activity do
       where: r.user_id == ^user_id and r.granted_by_user_id != ^user_id,
       order_by: [desc: r.inserted_at, desc: r.id],
       limit: ^limit,
-      select: {r.id, r.inserted_at, granter, r.role, c.name, c.slug}
+      select:
+        {r.id, r.inserted_at, struct(granter, ^User.listing_fields()), r.role, c.name, c.slug}
     )
     |> at_or_before(cursor)
     |> Repo.all()
@@ -601,7 +596,7 @@ defmodule Vutuv.Activity do
       |> order_by([s], desc: s.inserted_at, desc: s.id)
       |> limit(^limit)
       |> at_or_before(cursor)
-      |> select([s, u], {s.id, s.inserted_at, u})
+      |> select([s, u], {s.id, s.inserted_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
       |> Enum.map(fn {id, at, reported} ->
         protection_item("report-protection-#{id}", "severed", at, reported)
@@ -614,7 +609,7 @@ defmodule Vutuv.Activity do
       |> order_by([s], desc: s.restored_at, desc: s.id)
       |> limit(^limit)
       |> restored_at_or_before(cursor)
-      |> select([s, u], {s.id, s.restored_at, u})
+      |> select([s, u], {s.id, s.restored_at, struct(u, ^User.listing_fields())})
       |> Repo.all()
       |> Enum.map(fn {id, at, reported} ->
         protection_item("report-protection-restored-#{id}", "restored", at, reported)

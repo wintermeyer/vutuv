@@ -72,11 +72,33 @@ defmodule VutuvWeb.Live.InitAssigns do
   end
 
   @doc """
+  The shared `mount/3` preamble for the **off-router** LiveViews (embedded by
+  a controller via `live_render`, so no `on_mount` hook runs): loads the
+  current user from the session, applies the visitor's locale
+  (`VutuvWeb.LiveLocale`), and assigns the keys every embedded page and the
+  shared `app` layout read — `:current_user`, `:current_user_id`, `:locale`
+  (the "Other formats" `?lang=` suffix) and `:shell_path` (so the embedded
+  ShellLive can zero the page's unread badge); the controller hands the last
+  two through the session. Read the loaded user back from
+  `socket.assigns.current_user`.
+  """
+  def assign_embedded(socket, session) do
+    user = load_user(session["user_id"])
+    VutuvWeb.LiveLocale.put_locale(user, session)
+
+    socket
+    |> assign(:current_user, user)
+    |> assign(:current_user_id, user && user.id)
+    |> assign(:locale, session["locale"])
+    |> assign(:shell_path, session["request_path"])
+  end
+
+  @doc """
   Load the current user from a session `user_id`, or nil. Shared with the
-  off-router `VutuvWeb.UserProfileLive`, which can't use this module as an
-  on_mount hook but needs the same resolution. cast_or_nil: pre-UUID-cutover
-  cookies hold integer ids — anonymous, not a CastError (mirrors
-  `VutuvWeb.Plug.ConfigureSession`).
+  off-router LiveViews (via `assign_embedded/2`), which can't use this module
+  as an on_mount hook but need the same resolution. cast_or_nil:
+  pre-UUID-cutover cookies hold integer ids — anonymous, not a CastError
+  (mirrors `VutuvWeb.Plug.ConfigureSession`).
   """
   def load_user(user_id) do
     case Vutuv.UUIDv7.cast_or_nil(user_id) do

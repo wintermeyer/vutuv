@@ -228,17 +228,9 @@ defmodule Vutuv.Newsletters do
   end
 
   def get_group(id), do: NewsletterGroup |> Repo.get(id) |> preload_group()
-  def get_group!(id), do: NewsletterGroup |> Repo.get!(id) |> preload_group()
 
   defp preload_group(nil), do: nil
   defp preload_group(%NewsletterGroup{} = group), do: Repo.preload(group, :tag)
-
-  @doc "A blank changeset for the group builder (tag_name prefilled for editing)."
-  def change_group(%NewsletterGroup{} = group, params \\ %{}) do
-    group
-    |> with_tag_name()
-    |> NewsletterGroup.changeset(params)
-  end
 
   @doc "Creates a group from filter params and immediately materializes its members."
   def create_group(params) do
@@ -263,17 +255,6 @@ defmodule Vutuv.Newsletters do
   # On a successful insert/update, freeze the matching members into the snapshot.
   defp materialize_after_save({:ok, group}), do: {:ok, materialize(group)}
   defp materialize_after_save(error), do: error
-
-  # Sets the virtual tag_name from the (possibly preloaded) tag, for the edit form.
-  defp with_tag_name(%NewsletterGroup{} = group) do
-    %{group | tag_name: tag_name_of(group)}
-  end
-
-  defp tag_name_of(%NewsletterGroup{tag: %Tag{name: name}}), do: name
-  defp tag_name_of(%NewsletterGroup{tag_id: nil}), do: nil
-
-  defp tag_name_of(%NewsletterGroup{tag_id: id}),
-    do: Repo.one(from(t in Tag, where: t.id == ^id, select: t.name))
 
   # Resolves the typed tag_name to a tag_id (or an error when no tag matches).
   defp resolve_tag(changeset, params) do

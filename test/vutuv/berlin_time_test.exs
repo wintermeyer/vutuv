@@ -86,4 +86,15 @@ defmodule Vutuv.BerlinTimeTest do
       assert Date.compare(today, Date.utc_today()) in [:eq, :gt]
     end
   end
+
+  describe "ms_until_daily_trigger/1" do
+    test "is non-negative and never further out than a day plus the offset" do
+      for minute <- [5, 10, 20] do
+        ms = BerlinTime.ms_until_daily_trigger(minute)
+        assert ms >= 0
+        # Next trigger is at most ~24h away (plus the offset and a DST hour).
+        assert ms <= (24 * 60 + minute + 60) * 60 * 1000
+      end
+    end
+  end
 end

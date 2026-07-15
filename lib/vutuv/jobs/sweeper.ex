@@ -75,24 +75,6 @@ defmodule Vutuv.Jobs.Sweeper do
   end
 
   defp schedule_next do
-    Process.send_after(self(), :run, ms_until_next_trigger())
-  end
-
-  defp ms_until_next_trigger do
-    now = DateTime.to_naive(DateTime.utc_now())
-    today = BerlinTime.today()
-    today_trigger = trigger_instant(today)
-
-    target =
-      if NaiveDateTime.compare(now, today_trigger) == :lt,
-        do: today_trigger,
-        else: trigger_instant(Date.add(today, 1))
-
-    max(NaiveDateTime.diff(target, now, :millisecond), 0)
-  end
-
-  defp trigger_instant(date) do
-    {midnight_utc, _day_end} = BerlinTime.day_bounds_utc(date)
-    NaiveDateTime.add(midnight_utc, @trigger_minute * 60, :second)
+    Process.send_after(self(), :run, BerlinTime.ms_until_daily_trigger(@trigger_minute))
   end
 end

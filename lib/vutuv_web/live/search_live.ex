@@ -20,7 +20,6 @@ defmodule VutuvWeb.SearchLive do
 
   import VutuvWeb.SavedSearchComponents
 
-  alias Vutuv.SavedSearches
   alias Vutuv.Search
   alias VutuvWeb.UserHelpers
   alias VutuvWeb.UserHTML
@@ -108,35 +107,12 @@ defmodule VutuvWeb.SearchLive do
   # Only a people search with a structured operator (tag:/ort:/status:) is worth
   # saving as an alert — a bare free-text or name search never triggers a
   # people alert (issue #935), so the button stays hidden for it.
-  defp saveable?(%{parsed: parsed}), do: !!(parsed.tag || parsed.city || parsed.status)
+  defp saveable?(%{parsed: parsed}), do: Search.alertable?(parsed)
   defp saveable?(_results), do: false
-
-  defp save_current_search(%{assigns: %{current_user: nil}} = socket, _notify),
-    do: push_navigate(socket, to: ~p"/login")
 
   defp save_current_search(socket, notify) do
     query = search_query(socket.assigns.q, socket.assigns.scope, socket.assigns.exact)
-
-    case SavedSearches.create(socket.assigns.current_user, %{
-           kind: :people,
-           query: query,
-           notify: notify
-         }) do
-      {:ok, _} ->
-        socket
-        |> assign(saved?: true, show_save?: false)
-        |> put_flash(:info, gettext("Search saved."))
-
-      {:error, :quota} ->
-        put_flash(
-          socket,
-          :error,
-          gettext("You already have the maximum number of saved searches.")
-        )
-
-      {:error, _} ->
-        put_flash(socket, :error, gettext("That did not work."))
-    end
+    save_search(socket, :people, query, notify)
   end
 
   # The stored query string mirrors the /search URL (q + non-default scope +

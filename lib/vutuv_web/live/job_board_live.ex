@@ -23,14 +23,13 @@ defmodule VutuvWeb.JobBoardLive do
   alias Vutuv.Geo
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
-  alias Vutuv.SavedSearches
   alias VutuvWeb.ApiV2
   alias VutuvWeb.Live.InitAssigns
 
   @impl true
   def mount(_params, session, socket) do
-    user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    user = socket.assigns.current_user
 
     if connected?(socket), do: Jobs.subscribe_board()
 
@@ -38,10 +37,6 @@ defmodule VutuvWeb.JobBoardLive do
 
     {:ok,
      socket
-     |> assign(:current_user, user)
-     |> assign(:current_user_id, user && user.id)
-     |> assign(:shell_path, session["request_path"])
-     |> assign(:locale, session["locale"])
      |> assign(:page_title, gettext("Jobs"))
      |> assign(:params, link_params(raw))
      |> assign(:filters, Jobs.board_filters(raw, user))
@@ -89,54 +84,19 @@ defmodule VutuvWeb.JobBoardLive do
 
       posting ->
         user = socket.assigns.current_user
-        apply_engagement(kind, user, posting, socket.assigns.engagement[id])
+        Jobs.toggle_engagement(kind, user, posting, socket.assigns.engagement[id])
         fresh = Jobs.job_posting_engagement(posting, user)
         assign(socket, :engagement, Map.put(socket.assigns.engagement, id, fresh))
     end
   end
-
-  defp apply_engagement(:like, user, posting, %{liked?: true}),
-    do: Jobs.unlike_job_posting(user, posting)
-
-  defp apply_engagement(:like, user, posting, _), do: Jobs.like_job_posting(user, posting)
-
-  defp apply_engagement(:bookmark, user, posting, %{bookmarked?: true}),
-    do: Jobs.unbookmark_job_posting(user, posting)
-
-  defp apply_engagement(:bookmark, user, posting, _), do: Jobs.bookmark_job_posting(user, posting)
 
   # Store the board's current filter set (the shareable link params, which
   # already drop the page cursor and blanks) as a saved jobs search. A
   # `salary_min=mine` filter is kept verbatim, so it resolves against the
   # member's live expectation at sweep time and the private figure is never
   # written into the query column (issue #935).
-  defp save_current_search(%{assigns: %{current_user: nil}} = socket, _notify),
-    do: push_navigate(socket, to: ~p"/login")
-
-  defp save_current_search(socket, notify) do
-    query = URI.encode_query(socket.assigns.params)
-
-    case SavedSearches.create(socket.assigns.current_user, %{
-           kind: :jobs,
-           query: query,
-           notify: notify
-         }) do
-      {:ok, _} ->
-        socket
-        |> assign(saved?: true, show_save?: false)
-        |> put_flash(:info, gettext("Search saved."))
-
-      {:error, :quota} ->
-        put_flash(
-          socket,
-          :error,
-          gettext("You already have the maximum number of saved searches.")
-        )
-
-      {:error, _} ->
-        put_flash(socket, :error, gettext("That did not work."))
-    end
-  end
+  defp save_current_search(socket, notify),
+    do: save_search(socket, :jobs, URI.encode_query(socket.assigns.params), notify)
 
   @impl true
   def handle_info(:jobs_board_changed, socket), do: {:noreply, load_board(socket)}
@@ -356,8 +316,9 @@ defmodule VutuvWeb.JobBoardLive do
   end
 
   defp radius_options do
-    [{gettext("Exact"), 0}] ++
-      Enum.map([10, 25, 50, 100], &{gettext("%{km} km", km: &1), &1})
+    for km <- Jobs.board_radii() do
+      if km == 0, do: {gettext("Exact"), 0}, else: {gettext("%{km} km", km: km), km}
+    end
   end
 
   defp empty_line(params) do

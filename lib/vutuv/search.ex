@@ -121,6 +121,14 @@ defmodule Vutuv.Search do
     }
   end
 
+  @doc """
+  Whether a parsed people query can power a saved-search alert (issue #935):
+  it names at least one structured operator (tag: / ort: / status:) — a bare
+  free-text or name search never triggers a people alert. The /search save
+  button and the nightly sweeper share this one predicate.
+  """
+  def alertable?(%{tag: tag, city: city, status: status}), do: !!(tag || city || status)
+
   defp valid_scope(scope) when scope in @scopes, do: scope
   defp valid_scope(_scope), do: :all
 
@@ -220,7 +228,7 @@ defmodule Vutuv.Search do
     limit = Keyword.get(opts, :limit, 5)
     blocked = Keyword.get(opts, :blocked_ids, MapSet.new())
 
-    if parsed.tag || parsed.city || parsed.status do
+    if alertable?(parsed) do
       parsed
       |> filtered_users()
       |> exclude_blocked(blocked)
@@ -257,9 +265,12 @@ defmodule Vutuv.Search do
   # For a status: search the base SQL already dropped "hidden" statuses; this
   # applies the per-viewer job-search exclusion (#938, and any block) so the
   # alert mail never surfaces a member who hid their availability from the
-  # recipient. Non-status searches carry no such per-viewer gate.
+  # recipient. Non-status searches carry no such per-viewer gate. Lazy on
+  # purpose: each check costs 1-2 EXISTS queries, and the caller's
+  # `Enum.take(limit)` needs only the first few survivors of the 50-candidate
+  # page, not all 50 checked eagerly.
   defp honor_status_exclusion(people, %{status: status}, viewer) when status in @status_values do
-    Enum.filter(people, &Accounts.job_search_visibility(&1, viewer).employment_status)
+    Stream.filter(people, &Accounts.job_search_visibility(&1, viewer).employment_status)
   end
 
   defp honor_status_exclusion(people, _parsed, _viewer), do: people
@@ -621,9 +632,12 @@ defmodule Vutuv.Search do
     requester_changeset =
       SearchQueryRequester.changeset(requester_changeset, %{search_query_id: query.id})
 
+    # Only the results assoc is replaced via put_assoc; the requester rows are
+    # inserted separately below, so preloading them (one row per prior search
+    # of this value) would be fetched-and-discarded work on every settle.
     query_changeset =
       query
-      |> Repo.preload([:search_query_results, :search_query_requesters])
+      |> Repo.preload([:search_query_results])
       |> SearchQuery.changeset(params)
       |> Ecto.Changeset.put_assoc(:search_query_results, results)
 
@@ -652,8 +666,13 @@ defmodule Vutuv.Search do
             left_join: u in assoc(t, :user),
             as: :user,
             # Only the two columns the result rows need — the full SearchTerm
-            # row (value, timestamps) is never read here.
-            select: %{score: t.score, user_id: t.user_id}
+            # row (value, timestamps) is never read here. Bounded like the
+            # display path: common German names collide heavily in both
+            # phonetic encodings, and this history-only path used to ship
+            # thousands of rows per settled search just to keep 50.
+            select: %{score: t.score, user_id: t.user_id},
+            order_by: [desc: t.score],
+            limit: @term_limit
           )
           |> phonetic_term_match(String.downcase(value))
           |> exclude_moderated()

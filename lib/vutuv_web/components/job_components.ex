@@ -87,34 +87,7 @@ defmodule VutuvWeb.JobComponents do
       </div>
 
       <div :if={@engagement} class="mt-4 flex items-center gap-4">
-        <button
-          type="button"
-          phx-click="toggle_like"
-          phx-value-id={@posting.id}
-          aria-pressed={@engagement.liked?}
-          class={[
-            "flex items-center gap-1.5 text-sm font-medium",
-            @engagement.liked? && "text-accent"
-          ]}
-        >
-          <.icon_heart filled?={@engagement.liked?} class="h-5 w-5" />
-          <span class="tabular-nums">{compact_count(@engagement.likes)}</span>
-          <span class="sr-only">{gettext("Like")}</span>
-        </button>
-
-        <button
-          type="button"
-          phx-click="toggle_bookmark"
-          phx-value-id={@posting.id}
-          aria-pressed={@engagement.bookmarked?}
-          class={[
-            "flex items-center gap-1.5 text-sm font-medium",
-            @engagement.bookmarked? && "text-brand-600 dark:text-brand-300"
-          ]}
-        >
-          <.icon_bookmark filled?={@engagement.bookmarked?} class="h-5 w-5" />
-          <span class="sr-only">{gettext("Bookmark")}</span>
-        </button>
+        <.engagement_bar engagement={@engagement} value_id={@posting.id} />
       </div>
     </article>
     """

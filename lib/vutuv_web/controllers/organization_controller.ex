@@ -17,8 +17,8 @@ defmodule VutuvWeb.OrganizationController do
 
   import Phoenix.LiveView.Controller, only: [live_render: 3]
 
-  alias Vutuv.Jobs
   alias Vutuv.Organizations
+  alias Vutuv.Pages
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.OrganizationDoc
   alias VutuvWeb.ControllerHelpers
@@ -41,22 +41,13 @@ defmodule VutuvWeb.OrganizationController do
         # can page past the first 24 and filter (llms.txt promises ?page=N).
         page =
           Organizations.directory_page(
-            page: parse_page(conn.params["page"]),
+            page: Pages.page_param(conn.params),
             search: conn.params["q"]
           )
 
         AgentDocs.send_doc(conn, format, OrganizationDoc.build_index(page.entries, page.total))
     end
   end
-
-  defp parse_page(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {n, _} when n >= 1 -> n
-      _ -> 1
-    end
-  end
-
-  defp parse_page(_value), do: 1
 
   def show(conn, %{"slug" => slug}) do
     case Organizations.fetch_visible_organization(slug, conn.assigns[:current_user]) do
@@ -163,28 +154,7 @@ defmodule VutuvWeb.OrganizationController do
   # matter who asks — cache-safe, like a hidden profile's siblings.
   defp send_organization_doc(conn, format, organization) do
     if Organizations.agent_visible?(organization) do
-      domains = Organizations.verified_domains(organization)
-      aliases = Organizations.list_aliases(organization)
-      # The People section under the same public-listing gate (issue #931). The
-      # crawlable set is capped generously; the HTML page's "Load more" reaches
-      # the tail, and `people_total` carries the true count.
-      people = Organizations.organization_people_page(organization, limit: 200)
-      total = Organizations.organization_people_count(organization)
-      # The "Offene Stellen" section (#933): the organization's live public postings.
-      open_positions = Jobs.list_organization_postings(organization, limit: 200).entries
-
-      AgentDocs.send_doc(
-        conn,
-        format,
-        OrganizationDoc.build_show(
-          organization,
-          domains,
-          aliases,
-          people.entries,
-          total,
-          open_positions
-        )
-      )
+      AgentDocs.send_doc(conn, format, OrganizationDoc.build_show(organization))
     else
       ControllerHelpers.render_error(conn, 404)
     end

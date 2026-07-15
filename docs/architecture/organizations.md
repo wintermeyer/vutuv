@@ -78,9 +78,11 @@ handler because a non-owner admin can also reach the edit page): it runs the
 `delete_organization/1` chokepoint (cascades domains / roles / aliases / images /
 likes / bookmarks / the `handles` row, settles any moderation case, purges the
 on-disk image files) and so frees the organization's verified domains **and** its
-`@handle` for re-claim. Site admins keep delete plus the reversible
-`archive_organization/1` (soft "archived" status) in `/admin/organizations`; owners have
-only the hard delete.
+`@handle` for re-claim. A page **with job postings is archive-only for the
+owner** (`Organizations.deletable?/1`, the issue #932 rule — deleting would
+detach its postings' attribution); site admins keep the unconditional delete
+plus the reversible `archive_organization/1` (soft "archived" status) in
+`/admin/organizations`.
 
 **Resolution + canonical.** The root `/:slug` resolver
 (`VutuvWeb.Plug.UserResolveSlug`, `dispatch_organization: true` on the bare profile
@@ -223,7 +225,8 @@ organization's name or alias is stored but stamped `flagged_at` for the admin qu
 confirmation. Identical organization names are common and legitimate (many unrelated
 "Müller GmbH"s), so a warning would imply wrongdoing in the normal case and, in
 the abuse case, only tip off a squatter; a human reviews every flag quietly on
-`/admin/organizations`.
+`/admin/organizations` (the drawer's per-alias **Clear** action resolves a
+reviewed-and-fine flag via `Organizations.clear_alias_flag/1`).
 
 ## Machine visibility
 

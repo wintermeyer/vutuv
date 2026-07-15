@@ -1,6 +1,7 @@
 defmodule Vutuv.SavedSearchesTest do
   use Vutuv.DataCase, async: true
 
+  alias Vutuv.Accounts.User
   alias Vutuv.SavedSearches
   alias Vutuv.SavedSearches.SavedSearch
 
@@ -129,6 +130,21 @@ defmodule Vutuv.SavedSearchesTest do
       assert SavedSearches.results_url(jobs) == "/jobs?q=elixir&near=Köln"
       assert SavedSearches.results_url(people) == "/search?q=tag%3Aelixir"
       assert SavedSearches.results_url(build(:saved_search, kind: :jobs, query: "")) == "/jobs"
+    end
+
+    test "people summary_segments come from the operators inside the stored q" do
+      # /search stores its operators inside `q` (tag:/ort:/status:), not as
+      # their own URL params — the summary must parse them out, not look for
+      # `tag=`/`city=`/`status=` params that never exist for a people search.
+      q = URI.encode_www_form("berlin tag:elixir status:open")
+      search = build(:saved_search, kind: :people, query: "q=" <> q)
+
+      segments = SavedSearches.summary_segments(search)
+
+      assert "#elixir" in segments
+      assert "berlin" in segments
+      assert User.employment_status_label("open") in segments
+      refute Enum.any?(segments, &(&1 =~ "tag:"))
     end
 
     test "summary_segments omits the salary figure" do

@@ -22,6 +22,7 @@ defmodule Vutuv.SavedSearches do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.SavedSearches.SavedSearch
   alias Vutuv.UUIDv7
@@ -55,10 +56,7 @@ defmodule Vutuv.SavedSearches do
       |> offset(^offset)
       |> Repo.all()
 
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+    Pages.offset_page(entries, limit, offset)
   end
 
   @doc "How many saved searches a member has (for the cap and the settings hub)."
@@ -210,6 +208,26 @@ defmodule Vutuv.SavedSearches do
   (#928) must never surface in a mail, so no salary figure is ever rendered
   here, even though the sweeper still applies the filter.
   """
+  def summary_segments(%SavedSearch{kind: :people, query: query}) do
+    # /search stores its operators inside `q` (tag:/ort:/status:), not as their
+    # own URL params, so the labels come from the canonical parse of that q —
+    # the same parse the page and the alert sweeper run.
+    parsed = (query || "") |> URI.decode_query() |> Map.get("q", "") |> Vutuv.Search.parse()
+
+    Enum.filter(
+      [
+        blank_to_nil(parsed.text),
+        parsed.tag && "#" <> parsed.tag,
+        parsed.city,
+        parsed.slug && "@" <> parsed.slug,
+        parsed.first_name,
+        parsed.last_name,
+        parsed.status && User.employment_status_label(parsed.status)
+      ],
+      & &1
+    )
+  end
+
   def summary_segments(%SavedSearch{kind: kind, query: query}) do
     params = URI.decode_query(query || "")
 
@@ -218,12 +236,13 @@ defmodule Vutuv.SavedSearches do
     |> Enum.flat_map(&segment(&1, params))
   end
 
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
   defp segment_keys(:jobs), do: ~w(q tag workplace employment near country my_tags)
-  defp segment_keys(:people), do: ~w(q tag city status)
 
   defp segment("q", %{"q" => q}) when q != "", do: [q]
   defp segment("tag", %{"tag" => t}) when t != "", do: ["#" <> t]
-  defp segment("city", %{"city" => c}) when c != "", do: [c]
 
   defp segment("near", params) do
     case params["near"] do
@@ -239,9 +258,6 @@ defmodule Vutuv.SavedSearches do
   defp segment("country", %{"country" => c}) when c != "", do: [Vutuv.Countries.name(c)]
   defp segment("workplace", %{"workplace" => w}) when w != "", do: [workplace_label(w)]
   defp segment("employment", %{"employment" => e}) when e != "", do: [employment_label(e)]
-
-  defp segment("status", %{"status" => s}) when s in ["open", "looking"],
-    do: [User.employment_status_label(s)]
 
   defp segment("my_tags", %{"my_tags" => v}) when v in ["1", "true", "on"],
     do: [gettext("matches my tags")]

@@ -370,8 +370,21 @@ defmodule VutuvWeb.UserHelpers do
   def work_information_map(users, len) do
     ids = Enum.map(users, & &1.id)
 
+    # Only the columns the "Title @ Org" line and the current-job heuristic
+    # read — never the whole row: `description` is a `text` column (LinkedIn
+    # imports run to 10k chars) and this map feeds every people listing.
     experiences_by_user =
-      Repo.all(from(w in WorkExperience, where: w.user_id in ^ids, order_by: w.id))
+      Repo.all(
+        from(w in WorkExperience,
+          where: w.user_id in ^ids,
+          order_by: w.id,
+          select:
+            struct(
+              w,
+              ~w(id user_id title organization start_month start_year end_month end_year)a
+            )
+        )
+      )
       |> Enum.group_by(& &1.user_id)
 
     Map.new(users, fn user ->

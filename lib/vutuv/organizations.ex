@@ -15,6 +15,7 @@ defmodule Vutuv.Organizations do
 
   import Ecto.Query, warn: false
   import Vutuv.Moderation.Query, only: [account_confirmed_row: 1, account_hidden_row: 1]
+  import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1]
 
   alias Vutuv.Accounts.User
@@ -29,6 +30,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Organizations.OrganizationName
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Organizations.Verification
+  alias Vutuv.Pages
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.SlugHelpers
@@ -178,7 +180,7 @@ defmodule Vutuv.Organizations do
         left_join: r in OrganizationRole,
         on: r.organization_id == o.id and r.user_id == ^user_id,
         where:
-          o.status == "active" and is_nil(o.frozen_at) and
+          organization_public_row(o) and
             (o.created_by_user_id == ^user_id or not is_nil(r.id)),
         distinct: true,
         order_by: [asc: o.name]
@@ -894,6 +896,22 @@ defmodule Vutuv.Organizations do
   def unbookmark_organization(%User{} = user, %Organization{} = organization),
     do: disengage(OrganizationBookmark, :bookmark, user, organization)
 
+  @doc """
+  Flips one engagement `kind` off its current state (the
+  `%{liked?:, bookmarked?:}` map `organization_engagement/2` returns; nil
+  reads as unengaged) — the jobs twin lives in `Vutuv.Jobs.toggle_engagement/4`.
+  """
+  def toggle_engagement(:like, user, organization, %{liked?: true}),
+    do: unlike_organization(user, organization)
+
+  def toggle_engagement(:like, user, organization, _), do: like_organization(user, organization)
+
+  def toggle_engagement(:bookmark, user, organization, %{bookmarked?: true}),
+    do: unbookmark_organization(user, organization)
+
+  def toggle_engagement(:bookmark, user, organization, _),
+    do: bookmark_organization(user, organization)
+
   defp engage(schema, kind, %User{} = user, %Organization{} = organization) do
     case Engagement.insert_if_new(schema, %{user_id: user.id, organization_id: organization.id}, [
            :organization_id,
@@ -985,7 +1003,7 @@ defmodule Vutuv.Organizations do
         join: e in ^schema,
         as: :engagement,
         on: e.organization_id == c.id,
-        where: e.user_id == ^user_id and c.status == "active" and is_nil(c.frozen_at)
+        where: e.user_id == ^user_id and organization_public_row(c)
       )
 
     query = if search, do: name_or_city_ilike(query, search), else: query
@@ -998,10 +1016,7 @@ defmodule Vutuv.Organizations do
       |> select([c], c)
       |> Repo.all()
 
-    {shown, more?} =
-      if length(entries) > limit, do: {Enum.take(entries, limit), true}, else: {entries, false}
-
-    %{entries: shown, more?: more?, next_offset: offset + length(shown)}
+    Pages.offset_page(entries, limit, offset)
   end
 
   defp saved_order(query, :oldest), do: order_by(query, [engagement: e], asc: e.inserted_at)
@@ -1074,7 +1089,9 @@ defmodule Vutuv.Organizations do
   end
 
   # Whether `name` equals (case-insensitive) another **verified** (active)
-  # organization's name or any of its aliases.
+  # organization's name or any of its aliases. Deliberately NOT
+  # `organization_public_row/1`: a frozen page keeps `status: "active"` and its
+  # name stays taken while it is hidden.
   defp alias_collision?(organization_id, name) do
     down = downcase_name(name)
 
@@ -1115,6 +1132,9 @@ defmodule Vutuv.Organizations do
     )
   end
 
+  @doc "Fetches one alias row by id for the admin queue, or nil."
+  def get_alias(id), do: Vutuv.UUIDv7.with_cast(id, &Repo.get(OrganizationName, &1))
+
   @doc "Clears an alias's admin-queue flag (a human reviewed it and it is fine)."
   def clear_alias_flag(%OrganizationName{} = organization_name),
     do: organization_name |> Ecto.Changeset.change(flagged_at: nil) |> Repo.update()
@@ -1129,9 +1149,7 @@ defmodule Vutuv.Organizations do
 
   @doc "Fetches an active, non-frozen organization by id (a linkable target), or nil."
   def get_active_organization(id) when is_binary(id) do
-    Repo.one(
-      from(c in Organization, where: c.id == ^id and c.status == "active" and is_nil(c.frozen_at))
-    )
+    Repo.one(from(c in Organization, where: c.id == ^id and organization_public_row(c)))
   end
 
   def get_active_organization(_), do: nil
@@ -1153,7 +1171,7 @@ defmodule Vutuv.Organizations do
     else
       Repo.one(
         from(c in Organization,
-          where: c.status == "active" and is_nil(c.frozen_at),
+          where: organization_public_row(c),
           where:
             fragment("lower(?)", c.name) == ^down or
               fragment(
@@ -1213,15 +1231,14 @@ defmodule Vutuv.Organizations do
       |> offset(^offset)
       |> Repo.all()
 
-    {shown, more?} =
-      if length(rows) > limit, do: {Enum.take(rows, limit), true}, else: {rows, false}
+    page = Pages.offset_page(rows, limit, offset)
 
-    ids = Enum.map(shown, & &1.user_id)
+    ids = Enum.map(page.entries, & &1.user_id)
     users = ids |> load_people() |> Map.new(&{&1.id, &1})
     titles = representative_titles(organization_id, ids)
 
     entries =
-      Enum.map(shown, fn row ->
+      Enum.map(page.entries, fn row ->
         %{
           user: Map.fetch!(users, row.user_id),
           title: Map.get(titles, row.user_id),
@@ -1229,7 +1246,7 @@ defmodule Vutuv.Organizations do
         }
       end)
 
-    %{entries: entries, more?: more?, next_offset: offset + length(shown)}
+    %{page | entries: entries}
   end
 
   # One row per listable member with a linked experience at the organization, grouped
@@ -1315,7 +1332,7 @@ defmodule Vutuv.Organizations do
   end
 
   defp directory_query(nil),
-    do: from(c in Organization, where: c.status == "active" and is_nil(c.frozen_at))
+    do: from(c in Organization, where: organization_public_row(c))
 
   defp directory_query(term), do: name_or_city_ilike(directory_query(nil), term)
 
@@ -1340,7 +1357,7 @@ defmodule Vutuv.Organizations do
   `Vutuv.Directory`, so the two can never drift).
   """
   def indexable_query do
-    from(c in Organization, where: c.status == "active" and is_nil(c.frozen_at) and c.seo?)
+    from(c in Organization, where: organization_public_row(c) and c.seo?)
   end
 
   # --- admin dashboard (issue #930) -------------------------------------------
@@ -1352,7 +1369,7 @@ defmodule Vutuv.Organizations do
     %{
       active:
         Repo.aggregate(
-          from(c in Organization, where: c.status == "active" and is_nil(c.frozen_at)),
+          from(c in Organization, where: organization_public_row(c)),
           :count,
           :id
         ),
@@ -1454,10 +1471,11 @@ defmodule Vutuv.Organizations do
   end
 
   @doc """
-  Whether an organization page may be hard-deleted. Issue #932 adds job postings; a
-  page with postings must be archived, not deleted. Until then, always true.
+  Whether an organization page may be hard-deleted by its owner: a page with
+  job postings (issue #932) must be archived instead, so the postings and
+  their history survive. Admin oversight keeps its own unconditional delete.
   """
-  def deletable?(%Organization{}), do: true
+  def deletable?(%Organization{id: id}), do: not Vutuv.Jobs.any_for_organization?(id)
 
   # --- images -----------------------------------------------------------------
 

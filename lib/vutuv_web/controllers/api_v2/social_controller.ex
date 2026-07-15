@@ -39,16 +39,15 @@ defmodule VutuvWeb.ApiV2.SocialController do
     end)
   end
 
-  def connections(conn, %{"slug" => slug}) do
+  def connections(conn, %{"slug" => slug} = params) do
     ApiV2.with_visible_user(conn, slug, fn user ->
-      # Like the public page: the member's vernetzt list (people they mutually
-      # follow).
-      users = user |> Social.list_connections() |> Enum.map(& &1.user)
+      # Like the public page (and the followers/following siblings): one
+      # `?page` of the member's vernetzt list plus the true total — never the
+      # whole unbounded list with a full work-experience map per person.
+      %{connections: connections, total: total} = Social.connections_page(user, params)
+      users = Enum.map(connections, & &1.user)
 
-      ApiV2.send_json(
-        conn,
-        ListDocs.build_follow_list(user, :connections, users, length(users))
-      )
+      ApiV2.send_json(conn, ListDocs.build_follow_list(user, :connections, users, total))
     end)
   end
 

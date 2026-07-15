@@ -2093,6 +2093,84 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The like + bookmark toggle pair on job cards and the job / organization
+  pages: a heart with the visible like count and a bookmark flag, firing
+  `toggle_like` / `toggle_bookmark` on the host LiveView. `engagement` is the
+  `%{likes:, liked?:, bookmarked?:}` map the Jobs / Organizations contexts
+  return; `value_id` (optional) rides along as `phx-value-id` when one
+  LiveView hosts many cards (the board). Just the two buttons — the layout
+  wrapper stays at the call site. Guard rendering with `:if={@engagement}`.
+  """
+  attr(:engagement, :map, required: true)
+  attr(:value_id, :string, default: nil)
+
+  def engagement_bar(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="toggle_like"
+      phx-value-id={@value_id}
+      aria-pressed={@engagement.liked?}
+      class={[
+        "flex items-center gap-1.5 text-sm font-medium",
+        @engagement.liked? && "text-accent"
+      ]}
+    >
+      <.icon_heart filled?={@engagement.liked?} class="h-5 w-5" />
+      <span class="tabular-nums">{compact_count(@engagement.likes)}</span>
+      <span class="sr-only">{gettext("Like")}</span>
+    </button>
+
+    <button
+      type="button"
+      phx-click="toggle_bookmark"
+      phx-value-id={@value_id}
+      aria-pressed={@engagement.bookmarked?}
+      class={[
+        "flex items-center gap-1.5 text-sm font-medium",
+        @engagement.bookmarked? && "text-brand-600 dark:text-brand-300"
+      ]}
+    >
+      <.icon_bookmark filled?={@engagement.bookmarked?} class="h-5 w-5" />
+      <span class="sr-only">{gettext("Bookmark")}</span>
+    </button>
+    """
+  end
+
+  @doc """
+  The overview stat tile the admin oversight dashboards share (`/admin/jobs`,
+  `/admin/organizations`): a small card with a big `delimited_count/1` figure
+  over an uppercase label. `attention` (default false) switches the tile to
+  the amber "needs a look" treatment (the open-cases tile).
+  """
+  attr(:label, :string, required: true)
+  attr(:value, :integer, required: true)
+  attr(:attention, :boolean, default: false)
+
+  def admin_stat_tile(assigns) do
+    ~H"""
+    <div class={[
+      "rounded-2xl bg-white p-4 text-center shadow-sm ring-1 dark:bg-slate-900",
+      if(@attention,
+        do: "ring-amber-300 dark:ring-amber-700",
+        else: "ring-slate-200 dark:ring-slate-800"
+      )
+    ]}>
+      <div class={[
+        "text-2xl font-bold",
+        if(@attention,
+          do: "text-amber-700 dark:text-amber-300",
+          else: "text-slate-900 dark:text-slate-100"
+        )
+      ]}>
+        {delimited_count(@value)}
+      </div>
+      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{@label}</div>
+    </div>
+    """
+  end
+
+  @doc """
   Numbered pagination for offset-paginated browse pages (followers, tags,
   users). Pass the conn params (for the current `?page`) and the total row
   count; windowing comes from `Vutuv.Pages`. Renders nothing when one page

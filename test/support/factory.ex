@@ -3,6 +3,7 @@ defmodule Vutuv.Factory do
 
   use ExMachina.Ecto, repo: Vutuv.Repo
 
+  alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Posts.PostImage
 
   def user_factory do
@@ -283,6 +284,19 @@ defmodule Vutuv.Factory do
   def post_image_factory do
     %Vutuv.Posts.PostImage{
       token: PostImage.gen_token(),
+      alt: "",
+      position: 0,
+      width: 800,
+      height: 600,
+      content_type: "image/jpeg",
+      size_bytes: 123_456,
+      user: build(:user)
+    }
+  end
+
+  def job_posting_image_factory do
+    %JobPostingImage{
+      token: JobPostingImage.gen_token(),
       alt: "",
       position: 0,
       width: 800,

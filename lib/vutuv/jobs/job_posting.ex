@@ -21,10 +21,12 @@ defmodule Vutuv.Jobs.JobPosting do
   # `gettext/1` macro so the enum labels are picked up by `mix gettext.extract`.
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Accounts.User
   alias Vutuv.ChangesetHelpers
   alias Vutuv.Countries
   alias Vutuv.Geo
   alias Vutuv.MarkdownContent
+  alias Vutuv.Organizations.Organization
   alias Vutuv.Salary
 
   @derive {Phoenix.Param, key: :slug}
@@ -110,12 +112,36 @@ defmodule Vutuv.Jobs.JobPosting do
   def visibilities, do: @visibilities
   def max_description_length, do: @max_description_length
 
-  @doc "Whether this is an unpaid volunteer posting (renders 'Ehrenamtlich', no salary)."
-  def volunteer?(%__MODULE__{employment_type: :volunteer}), do: true
-  def volunteer?(_), do: false
-
   @doc "Whether a report freeze (or a hidden author) hides this from the public."
   def moderation_hidden?(%__MODULE__{frozen_at: frozen_at}), do: frozen_at != nil
+
+  @doc """
+  The display employer, resolved with one precedence everywhere (the agent
+  docs and the `job.published` webhook): the verified organization page's
+  name, else the free-text `hiring_org_name`, else the poster's full name.
+  Expects `:organization` and `:user` preloaded.
+  """
+  def employer_name(%__MODULE__{organization: %Organization{name: name}}), do: name
+  def employer_name(%__MODULE__{hiring_org_name: name}) when is_binary(name), do: name
+  def employer_name(%__MODULE__{user: %User{} = user}), do: VutuvWeb.UserHelpers.full_name(user)
+  def employer_name(_posting), do: nil
+
+  @doc """
+  The public pay-range map (`min`/`max`/`currency`/`period`), or nil — a
+  volunteer posting and "salary on request" carry no figures. Shared by the
+  agent docs and the `job.published` webhook so the two payloads can't drift.
+  """
+  def salary_fields(%__MODULE__{employment_type: :volunteer}), do: nil
+  def salary_fields(%__MODULE__{salary_min: nil}), do: nil
+
+  def salary_fields(%__MODULE__{} = posting) do
+    %{
+      min: posting.salary_min,
+      max: posting.salary_max,
+      currency: posting.salary_currency,
+      period: posting.salary_period
+    }
+  end
 
   # --- labels (single source, shared by editor / detail page / agent docs) ---
 

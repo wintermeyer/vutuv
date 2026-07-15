@@ -18,16 +18,11 @@ defmodule VutuvWeb.OrganizationLive.Domains do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
     organization = Organizations.get_organization!(session["organization_id"])
 
     {:ok,
      socket
-     |> assign(:current_user, current_user)
-     |> assign(:current_user_id, current_user && current_user.id)
-     |> assign(:locale, session["locale"])
-     |> assign(:shell_path, session["request_path"])
      |> assign(:organization, organization)
      |> assign(:page_title, gettext("Domains – %{name}", name: organization.name))
      |> assign(:new_domain, "")

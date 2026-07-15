@@ -26,18 +26,14 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    current_user = socket.assigns.current_user
 
     organization = Organizations.get_organization!(session["organization_id"])
     if connected?(socket), do: Organizations.subscribe(organization.id)
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
-      |> assign(:locale, session["locale"])
-      |> assign(:shell_path, session["request_path"])
       |> assign_organization(organization, current_user)
       |> assign_people(organization)
       |> assign_org_jobs(organization)
@@ -189,22 +185,10 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
       user ->
         organization = socket.assigns.organization
-        apply_engagement(kind, user, organization, socket.assigns.engagement)
+        Organizations.toggle_engagement(kind, user, organization, socket.assigns.engagement)
         assign(socket, :engagement, Organizations.organization_engagement(organization, user))
     end
   end
-
-  defp apply_engagement(:like, user, organization, %{liked?: true}),
-    do: Organizations.unlike_organization(user, organization)
-
-  defp apply_engagement(:like, user, organization, _),
-    do: Organizations.like_organization(user, organization)
-
-  defp apply_engagement(:bookmark, user, organization, %{bookmarked?: true}),
-    do: Organizations.unbookmark_organization(user, organization)
-
-  defp apply_engagement(:bookmark, user, organization, _),
-    do: Organizations.bookmark_organization(user, organization)
 
   defp verify_error_message(true),
     do:
@@ -265,29 +249,7 @@ defmodule VutuvWeb.OrganizationLive.Show do
             </div>
 
             <div class="mt-6 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-4 dark:border-slate-800">
-              <button
-                type="button"
-                phx-click="toggle_like"
-                aria-pressed={@engagement.liked?}
-                class={["flex items-center gap-1.5 text-sm font-medium", @engagement.liked? && "text-accent"]}
-              >
-                <.icon_heart filled?={@engagement.liked?} class="h-5 w-5" />
-                <span class="tabular-nums">{compact_count(@engagement.likes)}</span>
-                <span class="sr-only">{gettext("Like")}</span>
-              </button>
-
-              <button
-                type="button"
-                phx-click="toggle_bookmark"
-                aria-pressed={@engagement.bookmarked?}
-                class={[
-                  "flex items-center gap-1.5 text-sm font-medium",
-                  @engagement.bookmarked? && "text-brand-600 dark:text-brand-300"
-                ]}
-              >
-                <.icon_bookmark filled?={@engagement.bookmarked?} class="h-5 w-5" />
-                <span class="sr-only">{gettext("Bookmark")}</span>
-              </button>
+              <.engagement_bar engagement={@engagement} />
 
               <div class="ml-auto flex flex-wrap items-center gap-4 text-sm">
                 <.link

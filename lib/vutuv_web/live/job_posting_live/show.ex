@@ -15,15 +15,15 @@ defmodule VutuvWeb.JobPostingLive.Show do
 
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
-  alias Vutuv.Salary
+  alias VutuvWeb.JobComponents
   alias VutuvWeb.JsonLd
   alias VutuvWeb.Live.InitAssigns
   alias VutuvWeb.UserHelpers
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    current_user = socket.assigns.current_user
 
     posting = Jobs.get_job_posting_by_slug(session["slug"])
 
@@ -33,12 +33,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
       unless Jobs.owner?(posting, current_user), do: Jobs.increment_view(posting)
     end
 
-    socket =
-      socket
-      |> assign(:current_user, current_user)
-      |> assign(:locale, session["locale"])
-      |> assign(:shell_path, session["request_path"])
-      |> assign_posting(posting, current_user)
+    socket = assign_posting(socket, posting, current_user)
 
     {:ok, socket}
   end
@@ -63,19 +58,9 @@ defmodule VutuvWeb.JobPostingLive.Show do
 
   defp toggle(socket, kind) do
     %{current_user: user, posting: posting, engagement: engagement} = socket.assigns
-    apply_engagement(kind, user, posting, engagement)
+    Jobs.toggle_engagement(kind, user, posting, engagement)
     assign(socket, :engagement, Jobs.job_posting_engagement(posting, user))
   end
-
-  defp apply_engagement(:like, user, posting, %{liked?: true}),
-    do: Jobs.unlike_job_posting(user, posting)
-
-  defp apply_engagement(:like, user, posting, _), do: Jobs.like_job_posting(user, posting)
-
-  defp apply_engagement(:bookmark, user, posting, %{bookmarked?: true}),
-    do: Jobs.unbookmark_job_posting(user, posting)
-
-  defp apply_engagement(:bookmark, user, posting, _), do: Jobs.bookmark_job_posting(user, posting)
 
   @impl true
   def handle_info({:job_posting_counters, %{likes: likes}}, socket) do
@@ -122,7 +107,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
           </div>
 
           <p class="text-lg font-semibold text-slate-900 dark:text-slate-100">
-            {salary_display(@posting)}
+            {JobComponents.salary_line(@posting)}
           </p>
 
           <div class="flex flex-wrap items-center gap-3">
@@ -139,32 +124,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
               </button>
             </.form>
 
-            <button
-              type="button"
-              phx-click="toggle_like"
-              aria-pressed={@engagement.liked?}
-              class={[
-                "flex items-center gap-1.5 text-sm font-medium",
-                @engagement.liked? && "text-accent"
-              ]}
-            >
-              <.icon_heart filled?={@engagement.liked?} class="h-5 w-5" />
-              <span class="tabular-nums">{compact_count(@engagement.likes)}</span>
-              <span class="sr-only">{gettext("Like")}</span>
-            </button>
-
-            <button
-              type="button"
-              phx-click="toggle_bookmark"
-              aria-pressed={@engagement.bookmarked?}
-              class={[
-                "flex items-center gap-1.5 text-sm font-medium",
-                @engagement.bookmarked? && "text-brand-600 dark:text-brand-300"
-              ]}
-            >
-              <.icon_bookmark filled?={@engagement.bookmarked?} class="h-5 w-5" />
-              <span class="sr-only">{gettext("Bookmark")}</span>
-            </button>
+            <.engagement_bar engagement={@engagement} />
           </div>
 
           <p class="text-xs text-slate-600 dark:text-slate-400">
@@ -305,20 +265,6 @@ defmodule VutuvWeb.JobPostingLive.Show do
   end
 
   defp blank?(value), do: value in [nil, ""]
-
-  defp salary_display(%JobPosting{employment_type: :volunteer}), do: gettext("Voluntary")
-
-  defp salary_display(%JobPosting{salary_min: nil}), do: gettext("Salary on request")
-
-  defp salary_display(%JobPosting{} = posting) do
-    Salary.range_label(
-      posting.salary_min,
-      posting.salary_max,
-      posting.salary_currency,
-      posting.salary_period,
-      &delimited_count/1
-    )
-  end
 
   defp apply_label(%JobPosting{apply_kind: :url}), do: gettext("Apply on website")
   defp apply_label(%JobPosting{apply_kind: :email}), do: gettext("Apply by e-mail")

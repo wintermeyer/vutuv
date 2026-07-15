@@ -32,7 +32,7 @@ defmodule VutuvWeb.PostLive.Feed do
   @page_size 20
   # "Who to follow" rail: how many suggestions to show, the size of the popular
   # pool we shuffle them out of, and how often an open feed reshuffles. Defined
-  # here (not beside `assign_who_to_follow`) so `mount_feed/3` above reads a real
+  # here (not beside `assign_who_to_follow`) so `mount_feed/2` above reads a real
   # value — a module attribute is `nil` until the line that sets it.
   @who_to_follow 6
   @suggestion_pool 60
@@ -48,11 +48,10 @@ defmodule VutuvWeb.PostLive.Feed do
   # load the viewer + locale from the session the controller passes, and gate on
   # login here instead of the `:require_login` stage.
   def mount(_params, session, socket) do
-    user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
 
-    if user do
-      {:ok, mount_feed(socket, user, session)}
+    if user = socket.assigns.current_user do
+      {:ok, mount_feed(socket, user)}
     else
       {:ok,
        socket
@@ -61,7 +60,7 @@ defmodule VutuvWeb.PostLive.Feed do
     end
   end
 
-  defp mount_feed(socket, user, session) do
+  defp mount_feed(socket, user) do
     if connected?(socket) do
       Vutuv.Activity.subscribe(user.id)
       # Refresh the Berlin-day-relative post stamps ("09:50 Uhr" -> "Gestern,
@@ -77,14 +76,7 @@ defmodule VutuvWeb.PostLive.Feed do
     entries = with_engagement(page.entries, user)
 
     socket
-    |> assign(:current_user, user)
-    |> assign(:current_user_id, user.id)
-    # The shared app layout reads @shell_path (so ShellLive can zero the page's
-    # badge) and @locale (the rail's "Other formats" ?lang= suffix) off the
-    # socket; the controller hands both through the session.
-    |> assign(:shell_path, session["request_path"])
     |> assign(:page_title, gettext("Feed"))
-    |> assign(:locale, session["locale"])
     |> assign(:more?, page.more?)
     |> assign(:cursor, page.next_cursor)
     |> assign(:empty?, page.entries == [])

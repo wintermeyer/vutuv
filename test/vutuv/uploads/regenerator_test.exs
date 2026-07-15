@@ -204,6 +204,29 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     end
   end
 
+  describe "job posting images" do
+    test "derives all three AVIF versions from the private original, sweeps stale files", %{
+      tmp: tmp
+    } do
+      image = insert(:job_posting_image)
+      dir = Path.join(tmp, "job_posting_images/#{image.token}")
+
+      # Job images never had a public-original era: the original is private
+      # from day one; a stale .webp stands in for a superseded derived format.
+      jpeg!(Path.join(dir, "thumb.webp"))
+
+      jpeg!(Path.join(tmp, "originals/job_posting_images/#{image.token}/original.jpg"),
+        width: 800,
+        height: 600
+      )
+
+      summary = Regenerator.run(only: :job_posting_images)
+
+      assert summary.job_posting_images == %{regenerated: 1, unchanged: 0, skipped: 0, failed: 0}
+      assert dir |> File.ls!() |> Enum.sort() == ["feed.avif", "large.avif", "thumb.avif"]
+    end
+  end
+
   describe "orphaned public originals (no DB row claims them)" do
     test "are moved into the private tree by the final pass", %{tmp: tmp} do
       # A deleted user's files: no users row references them, but the original
@@ -266,7 +289,14 @@ defmodule Vutuv.Uploads.RegeneratorTest do
     assert summary.orphan_originals == %{moved: 0}
 
     assert Map.keys(summary) |> Enum.sort() ==
-             [:avatars, :covers, :orphan_originals, :post_images, :screenshots]
+             [
+               :avatars,
+               :covers,
+               :job_posting_images,
+               :orphan_originals,
+               :post_images,
+               :screenshots
+             ]
   end
 
   test "a corrupt original counts as failed, not crashed", %{tmp: tmp} do

@@ -48,7 +48,7 @@ defmodule VutuvWeb.ApiV2.MessageController do
          %Conversation{} = conversation <- Chat.get_conversation(me, uuid) do
       ApiV2.with_cursor(conn, params, fn cursor ->
         page =
-          Chat.messages_page(me, conversation.id,
+          Chat.messages_page(me, conversation,
             cursor: cursor,
             limit: ApiV2.page_limit(params, 30)
           )

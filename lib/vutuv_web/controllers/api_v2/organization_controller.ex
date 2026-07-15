@@ -11,14 +11,14 @@ defmodule VutuvWeb.ApiV2.OrganizationController do
 
   use VutuvWeb, :controller
 
-  alias Vutuv.Jobs
   alias Vutuv.Organizations
+  alias Vutuv.Pages
   alias VutuvWeb.AgentDocs.OrganizationDoc
   alias VutuvWeb.ApiV2
   alias VutuvWeb.ApiV2.Problem
 
   def index(conn, params) do
-    page = Organizations.directory_page(page: parse_page(params["page"]), search: params["q"])
+    page = Organizations.directory_page(page: Pages.page_param(params), search: params["q"])
 
     doc =
       page.entries
@@ -41,33 +41,7 @@ defmodule VutuvWeb.ApiV2.OrganizationController do
            Organizations.fetch_visible_organization_by_username(slug, viewer) do
       Problem.not_found(conn)
     else
-      {:ok, organization} -> ApiV2.send_json(conn, organization_doc(organization))
+      {:ok, organization} -> ApiV2.send_json(conn, OrganizationDoc.build_show(organization))
     end
   end
-
-  defp organization_doc(organization) do
-    domains = Organizations.verified_domains(organization)
-    aliases = Organizations.list_aliases(organization)
-    people = Organizations.organization_people_page(organization, limit: 200)
-    total = Organizations.organization_people_count(organization)
-    open_positions = Jobs.list_organization_postings(organization, limit: 200).entries
-
-    OrganizationDoc.build_show(
-      organization,
-      domains,
-      aliases,
-      people.entries,
-      total,
-      open_positions
-    )
-  end
-
-  defp parse_page(value) when is_binary(value) do
-    case Integer.parse(value) do
-      {n, _} when n >= 1 -> n
-      _invalid -> 1
-    end
-  end
-
-  defp parse_page(_value), do: 1
 end

@@ -22,16 +22,12 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    current_user = socket.assigns.current_user
     organization = Organizations.get_organization!(session["organization_id"])
 
     {:ok,
      socket
-     |> assign(:current_user, current_user)
-     |> assign(:current_user_id, current_user && current_user.id)
-     |> assign(:locale, session["locale"])
-     |> assign(:shell_path, session["request_path"])
      |> assign(:organization, organization)
      |> assign(:owner?, Organizations.owner?(organization, current_user))
      |> assign(:page_title, gettext("Job exclusions – %{name}", name: organization.name))
@@ -96,19 +92,6 @@ defmodule VutuvWeb.OrganizationLive.Exclusions do
     changeset = Exclusions.change_organization_domain(socket.assigns.organization)
     assign(socket, :domain_form, to_form(changeset, as: :domain))
   end
-
-  defp member_error_message(:not_found), do: gettext("No member has that @handle.")
-  defp member_error_message(:duplicate), do: gettext("That member is already on this list.")
-
-  defp member_error_message(:full),
-    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
-
-  defp org_error_message(:not_found), do: gettext("No organization has that @handle.")
-  defp org_error_message(:self), do: gettext("An organization cannot exclude itself.")
-  defp org_error_message(:duplicate), do: gettext("That organization is already on this list.")
-
-  defp org_error_message(:full),
-    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
 
   @impl true
   def render(assigns) do

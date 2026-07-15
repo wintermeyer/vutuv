@@ -114,23 +114,6 @@ defmodule VutuvWeb.JobPostingLive.Exclusions do
     assign(socket, :domain_form, to_form(changeset, as: :domain))
   end
 
-  defp member_error_message(:not_found), do: gettext("No member has that @handle.")
-  defp member_error_message(:poster), do: gettext("You cannot exclude yourself.")
-  defp member_error_message(:duplicate), do: gettext("That member is already on this list.")
-
-  defp member_error_message(:full),
-    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
-
-  defp org_error_message(:not_found), do: gettext("No organization has that @handle.")
-
-  defp org_error_message(:owning_org),
-    do: gettext("You cannot exclude the posting's own organization.")
-
-  defp org_error_message(:duplicate), do: gettext("That organization is already on this list.")
-
-  defp org_error_message(:full),
-    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
-
   @impl true
   def render(assigns) do
     ~H"""

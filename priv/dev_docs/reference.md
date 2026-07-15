@@ -145,7 +145,8 @@ auth -X DELETE $API/me/tags/0190abcd-…
 ### GET /users/:username/followers · /following · /connections
 
 Scope: `social:read`. The people lists (same doc shape as the public
-`.json` pages; followers/following paginate with `?page=N`).
+`.json` pages; all three paginate with `?page=N` — `total` always carries the
+full count).
 
 ### GET /users/:username/relationship
 

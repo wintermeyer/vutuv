@@ -352,11 +352,11 @@ defmodule VutuvWeb.PostLive.Saved do
 
   defp apply_organization_change(socket, organization_id, true) do
     if default_view?(socket) do
-      case Organizations.get_organization(organization_id) do
-        %Organizations.Organization{status: "active", frozen_at: nil} = organization ->
+      case Organizations.get_active_organization(organization_id) do
+        %Organizations.Organization{} = organization ->
           stream_insert(socket, :organizations, organization, at: 0)
 
-        _ ->
+        nil ->
           socket
       end
     else

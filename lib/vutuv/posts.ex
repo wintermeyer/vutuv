@@ -45,6 +45,7 @@ defmodule Vutuv.Posts do
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Pages
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostBookmark
@@ -1472,10 +1473,10 @@ defmodule Vutuv.Posts do
       |> offset(^offset)
       |> Repo.all()
 
-    taken = Enum.take(rows, limit)
-    posts = taken |> Enum.map(&elem(&1, 0)) |> Repo.preload(post_preloads())
+    page = Pages.offset_page(rows, limit, offset)
+    posts = page.entries |> Enum.map(&elem(&1, 0)) |> Repo.preload(post_preloads())
 
-    %{entries: posts, more?: length(rows) > limit, next_offset: offset + limit}
+    %{page | entries: posts}
   end
 
   defp filter_engaged_search(query, nil), do: query

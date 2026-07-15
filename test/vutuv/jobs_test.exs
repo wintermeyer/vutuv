@@ -23,6 +23,56 @@ defmodule Vutuv.JobsTest do
     end
   end
 
+  describe "update image handling" do
+    # Regression: an update whose attrs carry NO image_ids key (the jobs API
+    # documents no image field, so an integrator's PATCH of just the title
+    # never sends one) must leave the attached gallery alone — treating the
+    # missing key as [] silently deleted every image.
+    test "an update without an image_ids key leaves attached images alone" do
+      user = poster_fixture()
+      posting = publish_job!(user)
+      image = insert(:job_posting_image, user: user, job_posting: posting)
+
+      assert {:ok, _} = Jobs.update_posting(posting, user, %{"title" => "Renamed role"})
+
+      assert Repo.get(Vutuv.Jobs.JobPostingImage, image.id).job_posting_id == posting.id
+    end
+
+    test "an update with an explicit image_ids list still prunes removed images" do
+      user = poster_fixture()
+      posting = publish_job!(user)
+      keep = insert(:job_posting_image, user: user, job_posting: posting)
+      drop = insert(:job_posting_image, user: user, job_posting: posting)
+
+      assert {:ok, _} =
+               Jobs.update_posting(posting, user, %{
+                 "title" => "Renamed role",
+                 "image_ids" => [keep.id]
+               })
+
+      assert Repo.get(Vutuv.Jobs.JobPostingImage, keep.id)
+      refute Repo.get(Vutuv.Jobs.JobPostingImage, drop.id)
+    end
+  end
+
+  describe "sweep_pending_images/1" do
+    test "deletes abandoned pending uploads but keeps fresh and attached ones" do
+      user = poster_fixture()
+      posting = publish_job!(user)
+
+      old = NaiveDateTime.add(NaiveDateTime.utc_now(:second), -25 * 3600, :second)
+      abandoned = insert(:job_posting_image, user: user, inserted_at: old)
+      fresh = insert(:job_posting_image, user: user)
+      attached = insert(:job_posting_image, user: user, job_posting: posting, inserted_at: old)
+
+      assert Jobs.sweep_pending_images() == 1
+
+      refute Repo.get(Vutuv.Jobs.JobPostingImage, abandoned.id)
+      assert Repo.get(Vutuv.Jobs.JobPostingImage, fresh.id)
+      assert Repo.get(Vutuv.Jobs.JobPostingImage, attached.id)
+    end
+  end
+
   describe "publish/3" do
     test "a full on-site posting publishes, resolves coordinates and sets a 90-day expiry" do
       user = poster_fixture()

@@ -12,6 +12,38 @@ defmodule VutuvWeb.SavedSearchComponents do
   alias Vutuv.SavedSearches
   alias Vutuv.SavedSearches.SavedSearch
 
+  @doc """
+  The shared save leg behind the control's `save_search` event: persist the
+  host's current query as a `kind` saved search and flash the outcome (saved /
+  quota / error), flipping the control to its saved state. A logged-out viewer
+  is sent to /login. The host keeps building its own query string.
+  """
+  def save_search(%{assigns: %{current_user: nil}} = socket, _kind, _query, _notify),
+    do: Phoenix.LiveView.push_navigate(socket, to: ~p"/login")
+
+  def save_search(socket, kind, query, notify) do
+    case SavedSearches.create(socket.assigns.current_user, %{
+           kind: kind,
+           query: query,
+           notify: notify
+         }) do
+      {:ok, _} ->
+        socket
+        |> assign(saved?: true, show_save?: false)
+        |> Phoenix.LiveView.put_flash(:info, gettext("Search saved."))
+
+      {:error, :quota} ->
+        Phoenix.LiveView.put_flash(
+          socket,
+          :error,
+          gettext("You already have the maximum number of saved searches.")
+        )
+
+      {:error, _} ->
+        Phoenix.LiveView.put_flash(socket, :error, gettext("That did not work."))
+    end
+  end
+
   @doc "Cadence options `{label, value}` for the alert-cadence select."
   def cadence_options, do: Enum.map(SavedSearch.cadences(), &{cadence_label(&1), &1})
 

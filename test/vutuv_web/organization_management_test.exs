@@ -286,6 +286,29 @@ defmodule VutuvWeb.OrganizationManagementTest do
       assert build_conn() |> get(~p"/organizations/#{organization.slug}") |> html_response(200)
     end
 
+    test "an admin clears a ⚑ collision-flagged alias from the drawer", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+      owner = insert(:activated_user)
+      organization = active_organization_for(owner)
+
+      _rival =
+        active_organization_for(insert(:activated_user), %{
+          "name" => "Globex SE",
+          "website_url" => "https://globex.example"
+        })
+
+      # An alias equal to another verified organization's name lands flagged.
+      {:ok, flagged} = Organizations.add_alias(organization, "Globex SE", "brand")
+      assert flagged.flagged_at
+
+      {:ok, view, _html} = live(conn, ~p"/admin/organizations")
+      view |> element("#organization-row-#{organization.id} button", "Details") |> render_click()
+      view |> element("#organization-detail button", "Clear") |> render_click()
+
+      assert Organizations.get_alias(flagged.id).flagged_at == nil
+      assert Organizations.flagged_aliases_count() == 0
+    end
+
     test "a non-admin cannot reach the dashboard", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
       assert conn |> get(~p"/admin/organizations") |> response(403)

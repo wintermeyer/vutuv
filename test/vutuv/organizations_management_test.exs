@@ -50,6 +50,26 @@ defmodule Vutuv.OrganizationsManagementTest do
     {organization, owner}
   end
 
+  describe "deletable?/1" do
+    # Issue #932's documented rule: a page with job postings must be archived,
+    # not hard-deleted (deleting would orphan/destroy its postings). The guard
+    # existed but was never wired, so the owner delete button worked anyway.
+    test "an organization with postings is archive-only; one without stays deletable" do
+      {organization, owner} = active_organization()
+      assert Organizations.deletable?(organization)
+
+      old = NaiveDateTime.add(NaiveDateTime.utc_now(), -5 * 86_400, :second)
+
+      Repo.update_all(from(u in Vutuv.Accounts.User, where: u.id == ^owner.id),
+        set: [inserted_at: old]
+      )
+
+      Vutuv.JobsHelpers.publish_job!(Repo.reload!(owner), %{}, organization: organization)
+
+      refute Organizations.deletable?(organization)
+    end
+  end
+
   describe "roles" do
     test "owner powers vs admin vs recruiter" do
       {organization, owner} = active_organization()

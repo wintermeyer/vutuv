@@ -18,17 +18,14 @@ defmodule VutuvWeb.OrganizationLive.Edit do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
+    current_user = socket.assigns.current_user
     locale = session["locale"] || "en"
     organization = Organizations.get_organization!(session["organization_id"])
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:locale, locale)
-      |> assign(:shell_path, session["request_path"])
       |> assign(:organization, organization)
       |> assign(:owner?, Organizations.owner?(organization, current_user))
       |> assign(:page_title, gettext("Edit %{name}", name: organization.name))
@@ -157,18 +154,30 @@ defmodule VutuvWeb.OrganizationLive.Edit do
   def handle_event("delete_organization", _params, socket) do
     organization = socket.assigns.organization
 
-    if socket.assigns.owner? and Organizations.deletable?(organization) do
-      {:ok, _} = Organizations.delete_organization(organization)
+    cond do
+      # The button is owner-gated, but re-check here: an organization admin (not
+      # an owner) can reach the edit page, and deletion is owner-only.
+      not socket.assigns.owner? ->
+        {:noreply,
+         put_flash(socket, :error, gettext("You are not allowed to delete this organization."))}
 
-      {:noreply,
-       socket
-       |> put_flash(:info, gettext("The organization page was deleted."))
-       |> push_navigate(to: ~p"/organizations")}
-    else
-      # The button is owner-gated, but re-check here: an organization admin (not an
-      # owner) can reach the edit page, and deletion is owner-only.
-      {:noreply,
-       put_flash(socket, :error, gettext("You are not allowed to delete this organization."))}
+      not Organizations.deletable?(organization) ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext(
+             "This page has job postings, so it cannot be deleted. Ask an admin to archive it instead."
+           )
+         )}
+
+      true ->
+        {:ok, _} = Organizations.delete_organization(organization)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("The organization page was deleted."))
+         |> push_navigate(to: ~p"/organizations")}
     end
   end
 

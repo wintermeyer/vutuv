@@ -17,16 +17,12 @@ defmodule VutuvWeb.OrganizationLive.New do
 
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
     locale = session["locale"] || "en"
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
+      |> InitAssigns.assign_embedded(session)
       |> assign(:locale, locale)
-      |> assign(:shell_path, session["request_path"])
       |> assign(:page_title, gettext("Add your organization"))
       |> assign(:method, "dns")
       |> assign(:countries, Countries.select_options(locale))

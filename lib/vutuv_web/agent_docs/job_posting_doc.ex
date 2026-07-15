@@ -15,7 +15,6 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
   alias Vutuv.Organizations
   alias Vutuv.Salary
   alias VutuvWeb.AgentDocs
-  alias VutuvWeb.UserHelpers
 
   def build_show(%JobPosting{} = posting) do
     AgentDocs.doc_meta("job_posting", "/jobs/#{posting.slug}",
@@ -31,7 +30,7 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
       location: location(posting),
       remote_countries: remote_countries(posting),
       salary_line: salary_line(posting),
-      salary: salary(posting),
+      salary: JobPosting.salary_fields(posting),
       language: posting.language,
       posted_on: AgentDocs.iso_date(posting.first_published_at),
       expires_on: posting.expires_on && Date.to_iso8601(posting.expires_on),
@@ -86,7 +85,7 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
       location: location(posting),
       remote_countries: remote_countries(posting),
       salary_line: salary_line(posting),
-      salary: salary(posting),
+      salary: JobPosting.salary_fields(posting),
       posted_on: AgentDocs.iso_date(posting.first_published_at),
       tags: tag_entries(posting, :required) ++ tag_entries(posting, :nice_to_have)
     }
@@ -100,12 +99,8 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
     }
   end
 
-  defp employer(%JobPosting{hiring_org_name: name} = posting) when is_binary(name) do
-    %{name: name, verified: false, url: poster_url(posting)}
-  end
-
-  defp employer(%JobPosting{user: user} = posting) do
-    %{name: UserHelpers.full_name(user), verified: false, url: poster_url(posting)}
+  defp employer(%JobPosting{} = posting) do
+    %{name: JobPosting.employer_name(posting), verified: false, url: poster_url(posting)}
   end
 
   defp poster_url(%JobPosting{user: user}), do: AgentDocs.abs_url("/" <> user.username)
@@ -126,18 +121,6 @@ defmodule VutuvWeb.AgentDocs.JobPostingDoc do
   end
 
   defp remote_countries(_), do: []
-
-  defp salary(%JobPosting{employment_type: :volunteer}), do: nil
-  defp salary(%JobPosting{salary_min: nil}), do: nil
-
-  defp salary(%JobPosting{} = posting) do
-    %{
-      min: posting.salary_min,
-      max: posting.salary_max,
-      currency: posting.salary_currency,
-      period: posting.salary_period
-    }
-  end
 
   # A ready-to-print human line, so the md/txt renderers stay simple.
   defp salary_line(%JobPosting{employment_type: :volunteer}), do: gettext("Voluntary")

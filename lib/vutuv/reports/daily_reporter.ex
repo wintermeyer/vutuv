@@ -52,30 +52,6 @@ defmodule Vutuv.Reports.DailyReporter do
   end
 
   defp schedule_next do
-    Process.send_after(self(), :run, ms_until_next_trigger())
-  end
-
-  # Milliseconds from now until the next German-local 00:05, computed in UTC
-  # off the Berlin-day midnight instants so it lands on the wall-clock minute
-  # through both DST halves.
-  defp ms_until_next_trigger do
-    now = DateTime.to_naive(DateTime.utc_now())
-    today = BerlinTime.today()
-    today_trigger = trigger_instant(today)
-
-    target =
-      if NaiveDateTime.compare(now, today_trigger) == :lt do
-        today_trigger
-      else
-        trigger_instant(Date.add(today, 1))
-      end
-
-    max(NaiveDateTime.diff(target, now, :millisecond), 0)
-  end
-
-  # The 00:05-Berlin instant of `date`, as a UTC NaiveDateTime.
-  defp trigger_instant(date) do
-    {midnight_utc, _day_end} = BerlinTime.day_bounds_utc(date)
-    NaiveDateTime.add(midnight_utc, @trigger_minute * 60, :second)
+    Process.send_after(self(), :run, BerlinTime.ms_until_daily_trigger(@trigger_minute))
   end
 end

@@ -2,6 +2,7 @@ defmodule Vutuv.Profiles.WorkExperience do
   @moduledoc false
 
   use VutuvWeb, :model
+  import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   alias Vutuv.ChangesetHelpers
   alias Vutuv.Profiles.CvSection
 
@@ -91,7 +92,7 @@ defmodule Vutuv.Profiles.WorkExperience do
   defp linkable_organization?(organization_id) do
     Vutuv.Repo.exists?(
       from(c in Vutuv.Organizations.Organization,
-        where: c.id == ^organization_id and c.status == "active" and is_nil(c.frozen_at)
+        where: c.id == ^organization_id and organization_public_row(c)
       )
     )
   end

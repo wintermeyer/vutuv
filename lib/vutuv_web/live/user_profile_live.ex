@@ -54,8 +54,7 @@ defmodule VutuvWeb.UserProfileLive do
   # and the shell path comes straight from the session instead of that hook.
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
 
     profile_user_id = session["profile_user_id"]
 
@@ -71,14 +70,7 @@ defmodule VutuvWeb.UserProfileLive do
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
       |> assign(:profile_user_id, profile_user_id)
-      # The shared layout reads @locale (contact / address localization, the
-      # "Other formats" ?lang= suffix) and @shell_path (the embedded ShellLive)
-      # straight off the socket; the controller hands both through the session.
-      |> assign(:locale, session["locale"])
-      |> assign(:shell_path, session["request_path"])
       # The Certificates & licenses card's All / Certificates / Licenses tab
       # (issue #859), one of "all" / "certification" / "license". Set once here
       # so it survives the PubSub re-renders that rebuild the profile assigns.

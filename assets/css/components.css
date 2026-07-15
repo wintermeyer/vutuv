@@ -102,7 +102,7 @@ textarea {
   min-height: 100px;
   resize: vertical;
 }
-[type="submit"]:not(.button-link) {
+[type="submit"] {
   height: 44px;
 }
 select {
@@ -285,8 +285,7 @@ body.stretch main {
 /* Field/section labels inside legacy cards keep the small uppercase caption
    look that `.card h1` used to carry, now that those headings are <h2> for a
    valid one-<h1>-per-page hierarchy (the detail show pages, the tag card). Two
-   selectors so it beats the prominent `.card h2` rule above (which `.job__title`
-   relies on). */
+   selectors so it beats the prominent `.card h2` rule above. */
 .card .card__label {
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -499,45 +498,6 @@ body.stretch main {
 .editform__actions button {
   flex: 2;
 }
-/* Read-only value rows inside edit forms (user avatar, admin). */
-.editform__inputwrap {
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  height: 44px;
-  padding: 0 12px;
-  background: #f1f5f9;
-  border-radius: 0.5rem;
-}
-/* File pickers (avatar / cover uploads) inside the wrap: give the browser's
-   button the secondary-button look so it reads as part of the form, with the
-   chosen filename muted beside it instead of the raw native control. */
-.editform__inputwrap input[type="file"] {
-  flex: 1;
-  min-width: 0;
-  font-size: 0.875rem;
-  color: #475569;
-}
-.editform__inputwrap input[type="file"]::file-selector-button {
-  margin-right: 0.75rem;
-  padding: 0.375rem 0.875rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #ffffff;
-  color: #334155;
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-.editform__inputwrap input[type="file"]::file-selector-button:hover {
-  background: #f8fafc;
-}
-.editform__smallwrap {
-  display: flex;
-  align-items: center;
-  box-sizing: border-box;
-  height: 44px;
-}
 
 /* ---------- Buttons ---------- */
 .button,
@@ -578,15 +538,6 @@ input[type="submit"].button--secondary {
 .button--secondary:hover {
   background: #e2e8f0;
   color: #334155;
-}
-.button-link {
-  background: transparent;
-  color: var(--color-brand-600);
-  padding: 0.375rem 0.5rem;
-}
-.button-link:hover {
-  background: var(--color-brand-50);
-  color: var(--color-brand-700);
 }
 .button--small {
   padding: 0.3rem 0.6rem;
@@ -631,24 +582,6 @@ input[type="submit"].button--danger {
   background: #b91c1c;
   color: #ffffff;
 }
-.button--block {
-  width: 100%;
-  display: flex;
-}
-/* Buttons that look like links (used for in-line form submits). */
-.link_button {
-  background: none !important;
-  border: none;
-  padding: 0 !important;
-  font: inherit;
-  cursor: pointer;
-}
-.delete_link_button {
-  color: #dc2626;
-}
-.delete_link_button:hover {
-  color: #ef4444;
-}
 /* Inline SVG icons (`<i class="icon">…<svg/></i>`) inherit the text color,
    so they read white inside buttons and slate in copy — both modes. */
 i.icon {
@@ -689,7 +622,6 @@ i.icon svg {
 }
 .icon--follow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='M19 8v6M22 11h-6'/%3E%3C/svg%3E"); }
 .icon--unfollow { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2'/%3E%3Ccircle cx='9' cy='7' r='4'/%3E%3Cpath d='m16 11 2 2 4-4'/%3E%3C/svg%3E"); }
-.icon--plus { background-image: url(data:image/svg+xml,%3Csvg%20width%3D%2716%27%20height%3D%2716%27%20viewBox%3D%270%200%2016%2016%27%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%3E%3Ctitle%3E%2B%3C%2Ftitle%3E%3Cpath%20d%3D%27M9.333%206.667V0H6.667v6.667H0v2.666h6.667V16h2.666V9.333H16V6.667%27%20fill%3D%27%23FFF%27%20fill-rule%3D%27evenodd%27%2F%3E%3C%2Fsvg%3E); }
 .icon--edit { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z'/%3E%3C/svg%3E"); }
 .icon--delete { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23dc2626' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 6h18'/%3E%3Cpath d='M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6'/%3E%3Cpath d='M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M10 11v6M14 11v6'/%3E%3C/svg%3E"); }
 .icon--search { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E"); }
@@ -846,43 +778,6 @@ td.text-right {
   display: none;
 }
 
-/* ---------- Work experience rows (Lebenslauf) ---------- */
-.job {
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 0;
-  padding: 12px 0;
-}
-.job:last-child {
-  border: 0;
-}
-.job__title {
-  color: #0f172a;
-  font-size: 16px;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-.job__organization {
-  color: #475569;
-  width: 60%;
-}
-.job__date {
-  color: #64748b;
-  text-align: right;
-  width: 40%;
-}
-.job__date,
-.job__organization {
-  font-size: 12px;
-  display: inline-block;
-}
-.job__edit {
-  float: right;
-}
-.job__description {
-  color: #475569;
-  font-size: 14px;
-  margin: 4px 0 0;
-}
 
 /* ---------- Link screenshots (`ul.thumbs` on the links page) ---------- */
 /* Flex rows (the legacy 400px float + 415px text margin overflowed the 48rem
@@ -1535,7 +1430,6 @@ body.mde-fullscreen-lock { overflow: hidden; }
      dark rule above covers card links without outranking `.button`. */
   a:where(:hover) { color: #93c5fd; }
   .card__morelink,
-  .button-link { color: #60a5fa; }
   .card__morelink:hover { color: #93c5fd; }
   .editform label { color: #cbd5e1; }
   /* Mirror the light-mode selector list above: its `[type=…]` attribute
@@ -1563,14 +1457,6 @@ body.mde-fullscreen-lock { overflow: hidden; }
   dl dt, dl dd { color: #cbd5e1; }
   .card dl dt { border-color: #1e293b; }
   .editform__actions { border-color: #1e293b; }
-  .editform__inputwrap { background: #1e293b; }
-  .editform__inputwrap input[type="file"] { color: #94a3b8; }
-  .editform__inputwrap input[type="file"]::file-selector-button {
-    background: #0f172a;
-    border-color: #334155;
-    color: #e2e8f0;
-  }
-  .editform__inputwrap input[type="file"]::file-selector-button:hover { background: #1e293b; }
   .editform__hint { color: #94a3b8; }
   .editform__hint.editform__hint--ok { color: var(--color-brand-400); }
   .editform__hint.editform__hint--error { color: #f87171; }
@@ -1580,10 +1466,6 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .profile-tags a:hover { background: rgb(30 58 138 / 0.6); }
   .profile-tags .profile-tags__more { color: #94a3b8; }
   .button-list li { border-color: #1e293b; }
-  .job { border-color: #1e293b; }
-  .job__title { color: #f1f5f9; }
-  .job__description { color: #94a3b8; }
-  .job__organization { color: #cbd5e1; }
   ul.thumbs li { border-color: #1e293b; }
   ul.thumbs li .img { border-color: #334155; }
   .reorder__hint { color: #94a3b8; }
@@ -1627,7 +1509,6 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .button--cancel:hover,
   .button--secondary:hover { background: #334155; color: #f1f5f9; }
   .button--icon { color: #94a3b8; }
-  .button-link:hover { background: rgb(30 58 138 / 0.3); color: #93c5fd; }
   .tags .tag, .badges .badge { background: rgb(30 58 138 / 0.4); color: #dbeafe; }
   .card__empty { color: #64748b; }
   /* Post preview fade + collapsed "Read more" blend: to the dark card background

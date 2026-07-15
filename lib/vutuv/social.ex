@@ -693,7 +693,7 @@ defmodule Vutuv.Social do
       |> offset(^offset)
       |> Repo.all()
 
-    %{entries: Enum.take(rows, limit), more?: length(rows) > limit, next_offset: offset + limit}
+    Pages.offset_page(rows, limit, offset)
   end
 
   defp filter_saved_search(query, nil), do: query

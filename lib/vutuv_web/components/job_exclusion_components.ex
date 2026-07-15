@@ -13,7 +13,34 @@ defmodule VutuvWeb.JobExclusionComponents do
 
   import VutuvWeb.ErrorHelpers
 
+  alias Vutuv.Jobs.Exclusions
   alias VutuvWeb.UserHelpers
+
+  @doc """
+  The flash line for a refused member exclusion — all subject-specific refusals
+  (`:poster` on a posting) included, so both hosts share one wording.
+  """
+  def member_error_message(:not_found), do: gettext("No member has that @handle.")
+  def member_error_message(:poster), do: gettext("You cannot exclude yourself.")
+  def member_error_message(:duplicate), do: gettext("That member is already on this list.")
+
+  def member_error_message(:full),
+    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
+
+  @doc """
+  The flash line for a refused organization exclusion (`:owning_org` fires on a
+  posting, `:self` on an organization's standing default).
+  """
+  def org_error_message(:not_found), do: gettext("No organization has that @handle.")
+
+  def org_error_message(:owning_org),
+    do: gettext("You cannot exclude the posting's own organization.")
+
+  def org_error_message(:self), do: gettext("An organization cannot exclude itself.")
+  def org_error_message(:duplicate), do: gettext("That organization is already on this list.")
+
+  def org_error_message(:full),
+    do: gettext("This list is full (max %{count}).", count: Exclusions.cap())
 
   attr(:member_form, :any, required: true)
   attr(:member_error, :string, default: nil)

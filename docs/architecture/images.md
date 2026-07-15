@@ -7,14 +7,21 @@ share.
 
 ## The pipeline
 
-Avatars, profile cover photos, URL screenshots and post images are stored on
-local disk and processed with [`image`](https://hex.pm/packages/image)
-(libvips); see `Vutuv.Avatar` / `Vutuv.Cover` / `Vutuv.Screenshot` /
-`Vutuv.PostImageStore`.
+Avatars, profile cover photos, URL screenshots, post images and job-posting
+images are stored on local disk and processed with
+[`image`](https://hex.pm/packages/image) (libvips); see `Vutuv.Avatar` /
+`Vutuv.Cover` / `Vutuv.Screenshot` / `Vutuv.PostImageStore` /
+`Vutuv.JobPostingImageStore`.
 
 **Every served version is AVIF**; the resolution, crop and quality of every
 version live in one module, `Vutuv.Uploads.Spec`, so a future format/compression
-change is a Spec edit plus one `mix vutuv.images.regenerate` run.
+change is a Spec edit plus one `mix vutuv.images.regenerate` run — the
+regenerator (`Vutuv.Uploads.Regenerator`) covers all five types, including
+`job_posting_images`.
+
+Pending gallery uploads (a composer that was never submitted) are swept after a
+day by `Vutuv.Posts.PendingImageSweeper`, which cleans **both** the post and the
+job-posting galleries (rows and files).
 
 Every uploaded **original** is kept verbatim (format + metadata) under the
 private `<UPLOADS_DIR_PREFIX>/originals/` tree (`Vutuv.Uploads.Originals`) as

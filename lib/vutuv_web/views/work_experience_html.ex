@@ -222,10 +222,9 @@ defmodule VutuvWeb.WorkExperienceHTML do
   # The linked, currently-verified organization of a work experience, or nil. Guards
   # on a loaded, active, non-frozen %Organization{}: an unloaded association, a
   # free-text-only role, or a frozen/archived page all fall through to nil.
-  defp linked_organization(%{
-         organization_page: %Organization{status: "active", frozen_at: nil} = organization
-       }),
-       do: organization
+  defp linked_organization(%{organization_page: %Organization{} = organization}) do
+    if Organizations.public_visible?(organization), do: organization
+  end
 
   defp linked_organization(_job), do: nil
 

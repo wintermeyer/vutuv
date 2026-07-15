@@ -159,13 +159,14 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     }
   end
 
-  defp organization_ref(%{
-         organization_page: %Organization{status: "active", frozen_at: nil} = organization
-       }),
-       do: %{
-         name: organization.name,
-         url: AgentDocs.abs_url(Organizations.canonical_path(organization))
-       }
+  defp organization_ref(%{organization_page: %Organization{} = organization}) do
+    if Organizations.public_visible?(organization) do
+      %{
+        name: organization.name,
+        url: AgentDocs.abs_url(Organizations.canonical_path(organization))
+      }
+    end
+  end
 
   defp organization_ref(_work), do: nil
 

@@ -207,10 +207,10 @@ defmodule VutuvWeb.Admin.JobLive do
     />
 
     <div class="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <.tile label={gettext("Live")} value={@counts.published} />
-      <.tile label={gettext("Expiring (7 days)")} value={@counts.expiring} />
-      <.tile label={gettext("Frozen")} value={@counts.frozen} />
-      <.tile label={gettext("Open cases")} value={@counts.open_cases} attention={@counts.open_cases > 0} />
+      <.admin_stat_tile label={gettext("Live")} value={@counts.published} />
+      <.admin_stat_tile label={gettext("Expiring (7 days)")} value={@counts.expiring} />
+      <.admin_stat_tile label={gettext("Frozen")} value={@counts.frozen} />
+      <.admin_stat_tile label={gettext("Open cases")} value={@counts.open_cases} attention={@counts.open_cases > 0} />
     </div>
 
     <div class="card-list">
@@ -313,29 +313,6 @@ defmodule VutuvWeb.Admin.JobLive do
   attr(:label, :string, required: true)
   attr(:value, :integer, required: true)
   attr(:attention, :boolean, default: false)
-
-  defp tile(assigns) do
-    ~H"""
-    <div class={[
-      "rounded-2xl bg-white p-4 text-center shadow-sm ring-1 dark:bg-slate-900",
-      if(@attention,
-        do: "ring-amber-300 dark:ring-amber-700",
-        else: "ring-slate-200 dark:ring-slate-800"
-      )
-    ]}>
-      <div class={[
-        "text-2xl font-bold",
-        if(@attention,
-          do: "text-amber-700 dark:text-amber-300",
-          else: "text-slate-900 dark:text-slate-100"
-        )
-      ]}>
-        {delimited_count(@value)}
-      </div>
-      <div class="text-xs font-semibold uppercase tracking-wide text-slate-500">{@label}</div>
-    </div>
-    """
-  end
 
   defp detail_card(%{detail: nil} = assigns), do: ~H""
 

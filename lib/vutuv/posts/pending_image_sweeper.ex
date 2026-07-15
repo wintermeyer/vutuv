@@ -1,8 +1,10 @@
 defmodule Vutuv.Posts.PendingImageSweeper do
   @moduledoc """
-  Periodically removes pending post images (uploaded in a composer that was
-  never submitted) older than a day — rows and files. Without this, abandoned
-  composer sessions slowly fill the disk.
+  Periodically removes pending images (uploaded in a composer that was never
+  submitted) older than a day — rows and files, for **both** post and
+  job-posting galleries (`Vutuv.Posts.sweep_pending_images/1` +
+  `Vutuv.Jobs.sweep_pending_images/1`, the same eager-upload pattern).
+  Without this, abandoned composer sessions slowly fill the disk.
 
   Disabled in tests (`config :vutuv, :sweep_pending_images, false`): the
   sweep would use the SQL Sandbox connection from a process that does not
@@ -31,6 +33,11 @@ defmodule Vutuv.Posts.PendingImageSweeper do
     case Vutuv.Posts.sweep_pending_images() do
       0 -> :ok
       count -> Logger.info("Swept #{count} abandoned pending post image(s)")
+    end
+
+    case Vutuv.Jobs.sweep_pending_images() do
+      0 -> :ok
+      count -> Logger.info("Swept #{count} abandoned pending job-posting image(s)")
     end
 
     schedule()

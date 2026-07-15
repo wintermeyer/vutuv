@@ -13,26 +13,22 @@ defmodule VutuvWeb.OrganizationLive.Index do
   import VutuvWeb.OrganizationComponents
 
   alias Vutuv.Organizations
+  alias Vutuv.Pages
   alias VutuvWeb.Live.InitAssigns
 
   # Embedded via live_render (off-router), so the URL query is not available as
   # mount params — the controller forwards `q` / `page` through the session.
   @impl true
   def mount(_params, session, socket) do
-    current_user = InitAssigns.load_user(session["user_id"])
-    VutuvWeb.LiveLocale.put_locale(current_user, session)
+    socket = InitAssigns.assign_embedded(socket, session)
 
     search = clean(session["q"])
 
     socket =
       socket
-      |> assign(:current_user, current_user)
-      |> assign(:current_user_id, current_user && current_user.id)
-      |> assign(:locale, session["locale"])
-      |> assign(:shell_path, session["request_path"])
       |> assign(:page_title, gettext("Organizations"))
       |> assign(:search, search || "")
-      |> load(search, to_page(session["page"]))
+      |> load(search, Pages.page_param(session))
 
     {:ok, socket}
   end
@@ -55,15 +51,6 @@ defmodule VutuvWeb.OrganizationLive.Index do
     case String.trim(value) do
       "" -> nil
       trimmed -> trimmed
-    end
-  end
-
-  defp to_page(nil), do: 1
-
-  defp to_page(value) do
-    case Integer.parse(value) do
-      {page, _} when page > 0 -> page
-      _ -> 1
     end
   end
 
