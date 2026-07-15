@@ -47,11 +47,12 @@ defmodule VutuvWeb.OrganizationLive.Show do
   # where the like / bookmark actions live (they would clash with the page's own
   # organization-level toggle_like/toggle_bookmark here).
   defp assign_org_jobs(socket, organization) do
-    total = Jobs.organization_postings_count(organization)
+    viewer = socket.assigns.current_user
+    total = Jobs.organization_postings_count(organization, viewer)
 
     page =
       if total > 0,
-        do: Jobs.list_organization_postings(organization),
+        do: Jobs.list_organization_postings(organization, viewer),
         else: %{entries: [], more?: false, next_offset: 0}
 
     socket
@@ -121,7 +122,9 @@ defmodule VutuvWeb.OrganizationLive.Show do
 
   def handle_event("load-more-jobs", _params, socket) do
     page =
-      Jobs.list_organization_postings(socket.assigns.organization,
+      Jobs.list_organization_postings(
+        socket.assigns.organization,
+        socket.assigns.current_user,
         offset: socket.assigns.org_jobs_offset
       )
 

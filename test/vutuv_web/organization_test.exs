@@ -8,6 +8,7 @@ defmodule VutuvWeb.OrganizationTest do
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.OrganizationsHelpers
   import Swoosh.TestAssertions
 
   alias Vutuv.Jobs
@@ -16,15 +17,7 @@ defmodule VutuvWeb.OrganizationTest do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
-  @valid %{
-    "kind" => "company",
-    "name" => "Acme GmbH",
-    "website_url" => "https://acme.example",
-    "street_address" => "Hauptstrasse 1",
-    "zip_code" => "50667",
-    "city" => "Köln",
-    "country" => "DE"
-  }
+  @valid Vutuv.OrganizationsHelpers.valid_organization_attrs()
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -35,21 +28,6 @@ defmodule VutuvWeb.OrganizationTest do
     end)
 
     :ok
-  end
-
-  defp active_organization(attrs \\ %{}) do
-    owner = insert(:activated_user)
-    merged = Map.merge(@valid, attrs)
-
-    {:ok, %{organization: organization, domain: domain}} =
-      Organizations.create_pending_organization(owner, merged, "dns")
-
-    Application.put_env(:vutuv, :organizations_dns_resolver, fn _host ->
-      [[~c"vutuv-organization-verify=#{domain.verification_token}"]]
-    end)
-
-    {:ok, organization} = Organizations.verify_dns(organization, domain)
-    {organization, owner}
   end
 
   describe "directory" do

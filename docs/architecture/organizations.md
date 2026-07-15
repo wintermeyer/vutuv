@@ -264,7 +264,10 @@ internal links to profiles (both help ranking).
 
 ## Engagement
 
-Like + bookmark reuse the shared `Vutuv.Engagement` insert kernel. Like counts
+Like + bookmark run on the shared `Vutuv.Engagement` fabric (the config-driven
+engage/disengage + counts layer job postings use too; the org config keeps the
+`:organization_counters` / `:organization_engagement_changed` message names its
+LiveViews pattern-match). Like counts
 are public and live over PubSub (topic `"organization:<id>"`, `compact_count`);
 bookmarks are private and listed under the member's `/bookmarks` hub (a
 Organizations sub-tab). Both cascade on organization or user deletion.

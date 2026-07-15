@@ -14,15 +14,7 @@ defmodule Vutuv.OrganizationsTest do
   alias Vutuv.Organizations.OrganizationDomain
   alias Vutuv.Repo
 
-  @valid %{
-    "kind" => "company",
-    "name" => "Acme GmbH",
-    "website_url" => "https://acme.example",
-    "street_address" => "Hauptstrasse 1",
-    "zip_code" => "50667",
-    "city" => "Köln",
-    "country" => "DE"
-  }
+  @valid Vutuv.OrganizationsHelpers.valid_organization_attrs()
 
   defp enable_verification(_context) do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -30,9 +22,10 @@ defmodule Vutuv.OrganizationsTest do
     :ok
   end
 
+  # The shared resolver stub plus this file's per-test cleanup (its
+  # enable_verification setup does not clear the resolver).
   defp stub_dns(token) do
-    expected = ~c"vutuv-organization-verify=#{token}"
-    Application.put_env(:vutuv, :organizations_dns_resolver, fn _host -> [[expected]] end)
+    Vutuv.OrganizationsHelpers.stub_dns(token)
     on_exit(fn -> Application.delete_env(:vutuv, :organizations_dns_resolver) end)
   end
 

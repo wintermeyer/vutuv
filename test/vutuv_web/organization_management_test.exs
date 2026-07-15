@@ -9,18 +9,11 @@ defmodule VutuvWeb.OrganizationManagementTest do
   use VutuvWeb.ConnCase, async: false
 
   import Phoenix.LiveViewTest
+  import Vutuv.OrganizationsHelpers
 
   alias Vutuv.Organizations
 
-  @valid %{
-    "kind" => "company",
-    "name" => "Acme GmbH",
-    "website_url" => "https://acme.example",
-    "street_address" => "Hauptstrasse 1",
-    "zip_code" => "50667",
-    "city" => "Köln",
-    "country" => "DE"
-  }
+  @valid Vutuv.OrganizationsHelpers.valid_organization_attrs()
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -33,22 +26,7 @@ defmodule VutuvWeb.OrganizationManagementTest do
     :ok
   end
 
-  defp stub_dns(token) do
-    Application.put_env(:vutuv, :organizations_dns_resolver, fn _host ->
-      [[~c"vutuv-organization-verify=#{token}"]]
-    end)
-  end
-
   # An active organization owned by `owner` (an already-persisted %User{}).
-  defp active_organization_for(owner, attrs \\ %{}) do
-    {:ok, %{organization: organization, domain: domain}} =
-      Organizations.create_pending_organization(owner, Map.merge(@valid, attrs), "dns")
-
-    stub_dns(domain.verification_token)
-    {:ok, organization} = Organizations.verify_dns(organization, domain)
-    organization
-  end
-
   describe "roles page" do
     test "owner adds a member; the new admin can edit but not manage roles", %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)

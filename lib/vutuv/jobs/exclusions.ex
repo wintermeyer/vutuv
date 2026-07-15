@@ -21,9 +21,10 @@ defmodule Vutuv.Jobs.Exclusions do
   exclusion can only narrow the signed-in on-platform audience; the base
   `everyone`/`members` visibility governs the crawlable formats.
 
-  The one predicate `excluded?/2` (single posting) and `exclude_for_viewer/2`
-  (a board/list query subtraction) resolve the viewer's scope once and share the
-  same matching, so no surface can disagree on who sees a posting.
+  `excluded?/2` (single posting) is derived from the same composed subtraction
+  `exclude_for_viewer/2` applies to a board/list query — exemptions, blocks and
+  the effective-list match all live in `matching_posting_ids/1`, so no surface
+  can disagree on who sees a posting (issue #954 closed the drift).
   """
 
   import Ecto.Query
@@ -136,28 +137,52 @@ defmodule Vutuv.Jobs.Exclusions do
   Whether `viewer` is excluded from `posting`. The poster, the owning
   organization's staff and an anonymous viewer are never excluded; a block (either
   direction) always excludes; otherwise the effective exclusion set decides.
+  Answered by the same `matching_posting_ids/1` the list subtraction uses, so
+  the detail page and every list surface agree by construction.
   """
   def excluded?(_posting, nil), do: false
 
   def excluded?(%JobPosting{} = posting, %User{} = viewer) do
     cond do
-      posting.user_id == viewer.id -> false
-      Social.blocked_between?(posting.user_id, viewer.id) -> true
-      owning_org_staff?(posting, viewer) -> false
-      true -> on_effective_list?(posting, viewer)
+      # Free short-circuit; also embedded in matching_posting_ids/1.
+      posting.user_id == viewer.id ->
+        false
+
+      Social.blocked_between?(posting.user_id, viewer.id) ->
+        true
+
+      true ->
+        viewer
+        |> resolve_scope()
+        |> matching_posting_ids()
+        |> where([p], p.id == ^posting.id)
+        |> Repo.exists?()
     end
   end
 
   @doc """
-  Subtracts every posting `viewer` is excluded from (their effective list only —
-  the shared board query already subtracts blocks) from `query`. A no-op for an
+  Subtracts every posting `viewer` may not see from `query` — the full
+  `excluded?/2` semantics: a bidirectional block, and the effective exclusion
+  list minus the poster / owning-org-staff exemptions. A no-op for an
   anonymous viewer. `query`'s first binding must be the `JobPosting`.
   """
   def exclude_for_viewer(query, nil), do: query
 
   def exclude_for_viewer(query, %User{} = viewer) do
     excluded = viewer |> resolve_scope() |> matching_posting_ids()
-    where(query, [p], p.id not in subquery(excluded))
+
+    query
+    |> where([p], p.id not in subquery(excluded))
+    |> exclude_blocked(viewer)
+  end
+
+  # A block hides the posting both ways (either party blocked the other) —
+  # the query twin of the `blocked_between?/2` arm of `excluded?/2`.
+  defp exclude_blocked(query, %User{id: viewer_id}) do
+    case MapSet.to_list(Social.blocked_user_ids(viewer_id)) do
+      [] -> query
+      ids -> where(query, [p], p.user_id not in ^ids)
+    end
   end
 
   # --- viewer scope ---------------------------------------------------------
@@ -166,11 +191,20 @@ defmodule Vutuv.Jobs.Exclusions do
   Resolves the viewer's exclusion-matching scope once: their account id, the
   hosts of their confirmed emails, and the ids of every organization they belong
   to (role holder ∪ current work experience ∪ confirmed email at a verified
-  domain). Shared by `excluded?/2` and `exclude_for_viewer/2`.
+  domain). `role_org_ids` (the role-holder subset) is carried separately — it
+  powers the owning-org-staff exemption, which is deliberately narrower than
+  the belongs-to set. Shared by `excluded?/2` and `exclude_for_viewer/2`.
   """
   def resolve_scope(%User{id: viewer_id}) do
     hosts = viewer_email_hosts(viewer_id)
-    %{viewer_id: viewer_id, email_hosts: hosts, org_ids: viewer_org_ids(viewer_id, hosts)}
+    role_org_ids = viewer_role_org_ids(viewer_id)
+
+    %{
+      viewer_id: viewer_id,
+      email_hosts: hosts,
+      role_org_ids: role_org_ids,
+      org_ids: viewer_org_ids(viewer_id, hosts, role_org_ids)
+    }
   end
 
   defp viewer_email_hosts(viewer_id) do
@@ -181,12 +215,13 @@ defmodule Vutuv.Jobs.Exclusions do
     |> Enum.uniq()
   end
 
-  defp viewer_org_ids(viewer_id, hosts) do
-    role_ids =
-      Repo.all(
-        from(r in OrganizationRole, where: r.user_id == ^viewer_id, select: r.organization_id)
-      )
+  defp viewer_role_org_ids(viewer_id) do
+    Repo.all(
+      from(r in OrganizationRole, where: r.user_id == ^viewer_id, select: r.organization_id)
+    )
+  end
 
+  defp viewer_org_ids(viewer_id, hosts, role_ids) do
     # "Current" = an ongoing role (no end date), linked to a verified organization.
     workexp_ids =
       Repo.all(
@@ -213,32 +248,22 @@ defmodule Vutuv.Jobs.Exclusions do
   end
 
   # The posting ids whose effective exclusion set (own rows ∪ owning-org default
-  # rows) matches this viewer scope. `p.organization_id IS NULL` never equals a
-  # default row's non-null organization_id, so personal postings match only their
-  # own rows.
+  # rows) matches this viewer scope, minus the two exemptions: the viewer's own
+  # postings and postings of organizations they hold a role in are never in the
+  # set. `p.organization_id IS NULL` never equals a default row's non-null
+  # organization_id, so personal postings match only their own rows (the
+  # `is_nil` arm keeps them excludable — a bare `NOT IN` over NULL would
+  # silently exempt every personal posting).
   defp matching_posting_ids(scope) do
     from(p in JobPosting,
       join: x in JobExclusion,
       as: :x,
       on: x.job_posting_id == p.id or x.organization_id == p.organization_id,
+      where: p.user_id != ^scope.viewer_id,
+      where: is_nil(p.organization_id) or p.organization_id not in ^scope.role_org_ids,
       where: ^scope_match(scope),
       select: p.id
     )
-  end
-
-  defp on_effective_list?(%JobPosting{} = posting, %User{} = viewer) do
-    scope = resolve_scope(viewer)
-
-    subject =
-      case posting.organization_id do
-        nil -> dynamic([x: x], x.job_posting_id == ^posting.id)
-        org_id -> dynamic([x: x], x.job_posting_id == ^posting.id or x.organization_id == ^org_id)
-      end
-
-    from(x in JobExclusion, as: :x)
-    |> where(^subject)
-    |> where(^scope_match(scope))
-    |> Repo.exists?()
   end
 
   # The dimension match against a resolved viewer scope, as a dynamic over the
@@ -252,16 +277,6 @@ defmodule Vutuv.Jobs.Exclusions do
       x.excluded_user_id == ^viewer_id or
         x.excluded_organization_id in ^org_ids or
         fragment(@host_match_sql, ^hosts, x.domain, x.domain)
-    )
-  end
-
-  defp owning_org_staff?(%JobPosting{organization_id: nil}, _viewer), do: false
-
-  defp owning_org_staff?(%JobPosting{organization_id: org_id}, %User{id: viewer_id}) do
-    Repo.exists?(
-      from(r in OrganizationRole,
-        where: r.organization_id == ^org_id and r.user_id == ^viewer_id
-      )
     )
   end
 

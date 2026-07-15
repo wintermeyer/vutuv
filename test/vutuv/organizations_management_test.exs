@@ -7,19 +7,11 @@ defmodule Vutuv.OrganizationsManagementTest do
   """
   use Vutuv.DataCase, async: false
 
+  import Vutuv.OrganizationsHelpers
+
   alias Vutuv.Organizations
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Repo
-
-  @valid %{
-    "kind" => "company",
-    "name" => "Acme GmbH",
-    "website_url" => "https://acme.example",
-    "street_address" => "Hauptstrasse 1",
-    "zip_code" => "50667",
-    "city" => "Köln",
-    "country" => "DE"
-  }
 
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
@@ -30,24 +22,6 @@ defmodule Vutuv.OrganizationsManagementTest do
     end)
 
     :ok
-  end
-
-  defp stub_dns(token) do
-    Application.put_env(:vutuv, :organizations_dns_resolver, fn _host ->
-      [[~c"vutuv-organization-verify=#{token}"]]
-    end)
-  end
-
-  defp active_organization(attrs \\ %{}) do
-    owner = insert(:activated_user)
-    merged = Map.merge(@valid, attrs)
-
-    {:ok, %{organization: organization, domain: domain}} =
-      Organizations.create_pending_organization(owner, merged, "dns")
-
-    stub_dns(domain.verification_token)
-    {:ok, organization} = Organizations.verify_dns(organization, domain)
-    {organization, owner}
   end
 
   describe "deletable?/1" do

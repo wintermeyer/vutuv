@@ -30,21 +30,22 @@ defmodule VutuvWeb.TagController do
   # builder in sync (agent_docs_drift_test.exs).
   def show(conn, _params) do
     tag = conn.assigns[:tag]
-    # The tag page's "Offene Stellen" section (#933): live public postings that
-    # carry this tag, shown on the HTML page and in every agent format.
-    open_positions = Jobs.list_tag_postings(tag)
 
+    # The tag page's "Offene Stellen" section (#933): live public postings that
+    # carry this tag. The HTML page subtracts what the signed-in viewer may not
+    # see (#939 exclusions / blocks); the agent formats stay the anonymous
+    # public view, so the two branches load their own list (only one runs).
     AgentDocs.respond(conn,
       html:
         &render(&1, "show.html",
           tag: tag,
-          open_positions: open_positions,
+          open_positions: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
           meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
         ),
       doc: fn ->
         recommended = Tag.recommended_users(tag)
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
-        ListDocs.build_tag(tag, recommended, work_info_by_id, open_positions)
+        ListDocs.build_tag(tag, recommended, work_info_by_id, Jobs.list_tag_postings(tag, nil))
       end
     )
   end

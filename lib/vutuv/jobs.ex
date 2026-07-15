@@ -47,7 +47,6 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Pages
   alias Vutuv.Repo
   alias Vutuv.Salary
-  alias Vutuv.Social
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
 
@@ -666,17 +665,28 @@ defmodule Vutuv.Jobs do
 
   # --- engagement (like + bookmark) -----------------------------------------
 
+  # The Engagement fabric config: the fk doubles as the payload id key, and
+  # the two tuple names are pattern-matched by JobPostingLive.Show,
+  # JobBoardLive and PostLive.Saved — a rename is a breaking contract change.
+  @engagement_cfg %{
+    fk: :job_posting_id,
+    like_schema: JobPostingLike,
+    topic_prefix: "job_posting",
+    counters_msg: :job_posting_counters,
+    changed_msg: :job_posting_engagement_changed
+  }
+
   def like_job_posting(%User{} = user, %JobPosting{} = posting),
-    do: engage(JobPostingLike, :like, user, posting)
+    do: Engagement.engage(JobPostingLike, :like, user.id, posting.id, @engagement_cfg)
 
   def unlike_job_posting(%User{} = user, %JobPosting{} = posting),
-    do: disengage(JobPostingLike, :like, user, posting)
+    do: Engagement.disengage(JobPostingLike, :like, user.id, posting.id, @engagement_cfg)
 
   def bookmark_job_posting(%User{} = user, %JobPosting{} = posting),
-    do: engage(JobPostingBookmark, :bookmark, user, posting)
+    do: Engagement.engage(JobPostingBookmark, :bookmark, user.id, posting.id, @engagement_cfg)
 
   def unbookmark_job_posting(%User{} = user, %JobPosting{} = posting),
-    do: disengage(JobPostingBookmark, :bookmark, user, posting)
+    do: Engagement.disengage(JobPostingBookmark, :bookmark, user.id, posting.id, @engagement_cfg)
 
   @doc """
   Flips one engagement `kind` off its current state (the
@@ -693,74 +703,17 @@ defmodule Vutuv.Jobs do
 
   def toggle_engagement(:bookmark, user, posting, _), do: bookmark_job_posting(user, posting)
 
-  defp engage(schema, kind, %User{} = user, %JobPosting{} = posting) do
-    case Engagement.insert_if_new(schema, %{user_id: user.id, job_posting_id: posting.id}, [
-           :job_posting_id,
-           :user_id
-         ]) do
-      :exists ->
-        {:ok, :noop}
-
-      {:inserted, row} ->
-        broadcast_engagement(kind, user.id, posting.id, true)
-        {:ok, row}
-    end
-  end
-
-  defp disengage(schema, kind, %User{} = user, %JobPosting{} = posting) do
-    {count, _} =
-      Repo.delete_all(
-        from(e in schema, where: e.job_posting_id == ^posting.id and e.user_id == ^user.id)
-      )
-
-    if count > 0, do: broadcast_engagement(kind, user.id, posting.id, false)
-    :ok
-  end
-
   @doc "Public like count plus the viewer's own flags for the action bar."
-  def job_posting_engagement(%JobPosting{id: posting_id}, viewer) do
-    viewer_id = viewer && viewer.id
-
-    %{
-      likes: like_count(posting_id),
-      liked?: viewer_id != nil and engaged?(JobPostingLike, posting_id, viewer_id),
-      bookmarked?: viewer_id != nil and engaged?(JobPostingBookmark, posting_id, viewer_id)
-    }
-  end
-
-  defp like_count(posting_id) do
-    Repo.aggregate(from(l in JobPostingLike, where: l.job_posting_id == ^posting_id), :count, :id)
-  end
-
-  defp engaged?(schema, posting_id, user_id) do
-    Repo.exists?(
-      from(e in schema, where: e.job_posting_id == ^posting_id and e.user_id == ^user_id)
-    )
-  end
+  def job_posting_engagement(%JobPosting{id: posting_id}, viewer),
+    do: Engagement.subject_engagement(JobPostingBookmark, posting_id, viewer, @engagement_cfg)
 
   @doc "Subscribes to a posting's live counter topic."
-  def subscribe(posting_id), do: Phoenix.PubSub.subscribe(Vutuv.PubSub, topic(posting_id))
-
-  defp topic(posting_id), do: "job_posting:#{posting_id}"
-
-  defp broadcast_engagement(kind, user_id, posting_id, active?) do
-    Phoenix.PubSub.broadcast(
-      Vutuv.PubSub,
-      topic(posting_id),
-      {:job_posting_counters, %{job_posting_id: posting_id, likes: like_count(posting_id)}}
-    )
-
-    Vutuv.Activity.broadcast(
-      user_id,
-      {:job_posting_engagement_changed,
-       %{kind: kind, job_posting_id: posting_id, active?: active?}}
-    )
-  end
+  def subscribe(posting_id), do: Engagement.subscribe(posting_id, @engagement_cfg)
 
   defp broadcast_updated({:ok, %JobPosting{id: id}} = result) do
     Phoenix.PubSub.broadcast(
       Vutuv.PubSub,
-      topic(id),
+      Engagement.topic(id, @engagement_cfg),
       {:job_posting_updated, %{job_posting_id: id}}
     )
 
@@ -931,7 +884,6 @@ defmodule Vutuv.Jobs do
       where: p.status == :published and is_nil(p.frozen_at) and p.expires_on >= ^today
     )
     |> board_visibility(viewer)
-    |> board_exclude(viewer)
     |> Exclusions.exclude_for_viewer(viewer)
   end
 
@@ -939,17 +891,6 @@ defmodule Vutuv.Jobs do
 
   defp board_visibility(query, %User{}),
     do: where(query, [p], p.visibility in [:everyone, :members])
-
-  # A block hides the posting both ways (either party blocked the other); the
-  # #939 exclusion list is subtracted separately by `Exclusions.exclude_for_viewer/2`.
-  defp board_exclude(query, nil), do: query
-
-  defp board_exclude(query, %User{id: viewer_id}) do
-    case MapSet.to_list(Social.blocked_user_ids(viewer_id)) do
-      [] -> query
-      ids -> where(query, [p], p.user_id not in ^ids)
-    end
-  end
 
   defp after_board_cursor(query, nil), do: query
 
@@ -1322,14 +1263,18 @@ defmodule Vutuv.Jobs do
 
   # --- scoped listings (organization + tag pages) ---------------------------
 
-  @doc "One page of an organization's live public postings (its 'Offene Stellen' section)."
-  def list_organization_postings(%Organizations.Organization{id: org_id}, opts \\ []) do
+  @doc """
+  One page of an organization's live public postings (its 'Offene Stellen'
+  section), minus what `viewer` may not see (blocks + the #939 exclusion list;
+  nil = the anonymous public view the agent docs render).
+  """
+  def list_organization_postings(%Organizations.Organization{id: org_id}, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @board_limit)
     offset = Keyword.get(opts, :offset, 0)
 
     entries =
       org_id
-      |> organization_live_postings()
+      |> organization_live_postings(viewer)
       |> order_by([p], desc: p.first_published_at, desc: p.id)
       |> limit(^(limit + 1))
       |> offset(^offset)
@@ -1339,24 +1284,29 @@ defmodule Vutuv.Jobs do
     Pages.offset_page(entries, limit, offset)
   end
 
-  @doc "Count of an organization's live public postings."
-  def organization_postings_count(%Organizations.Organization{id: org_id}) do
-    Repo.aggregate(organization_live_postings(org_id), :count, :id)
+  @doc "Count of an organization's live public postings, as `viewer` sees them."
+  def organization_postings_count(%Organizations.Organization{id: org_id}, viewer) do
+    Repo.aggregate(organization_live_postings(org_id, viewer), :count, :id)
   end
 
-  defp organization_live_postings(org_id) do
+  defp organization_live_postings(org_id, viewer) do
     live_public_query(BerlinTime.today())
     |> where([p], p.organization_id == ^org_id)
+    |> Exclusions.exclude_for_viewer(viewer)
   end
 
-  @doc "Live public postings carrying `tag` (the tag page's 'Offene Stellen' section)."
-  def list_tag_postings(%Tag{id: tag_id}, opts \\ []) do
+  @doc """
+  Live public postings carrying `tag` (the tag page's 'Offene Stellen'
+  section), minus what `viewer` may not see (nil = the anonymous view).
+  """
+  def list_tag_postings(%Tag{id: tag_id}, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, 10)
 
     live_public_query(BerlinTime.today())
     |> join(:inner, [p], jpt in JobPostingTag,
       on: jpt.job_posting_id == p.id and jpt.tag_id == ^tag_id
     )
+    |> Exclusions.exclude_for_viewer(viewer)
     |> order_by([p], desc: p.first_published_at, desc: p.id)
     |> limit(^limit)
     |> preload([:organization, :user, job_posting_tags: :tag])

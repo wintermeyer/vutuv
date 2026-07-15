@@ -17,6 +17,7 @@ defmodule Vutuv.Jobs.ExclusionsTest do
   alias Vutuv.Organizations.OrganizationRole
   alias Vutuv.Repo
   alias Vutuv.Social
+  alias Vutuv.Tags.Tag
 
   defp viewer_with_email(host) do
     user = insert(:activated_user)
@@ -248,6 +249,76 @@ defmodule Vutuv.Jobs.ExclusionsTest do
       {:ok, _} = Exclusions.add_posting_domain(posting, %{"domain" => "acme.com"})
       after_ids = Jobs.saved_job_postings_page(member, :bookmark, []) |> entry_ids()
       refute posting.id in after_ids
+    end
+  end
+
+  describe "one query twin of excluded?/2 (issue #954)" do
+    # The row predicate and the query subtraction must agree on every surface:
+    # poster/staff exemptions, blocks, and the effective list.
+    test "the poster keeps seeing their own posting on the board when a rule matches them" do
+      poster = poster_fixture()
+      insert(:email, user: poster, value: "boss@own.example")
+      posting = publish_job!(poster)
+      {:ok, _} = Exclusions.add_posting_domain(posting, %{"domain" => "own.example"})
+
+      assert posting.id in (Jobs.board_page(poster, Jobs.board_filters(%{}, poster))
+                            |> entry_ids())
+    end
+
+    test "owning-org staff keep seeing the posting on the board when a rule matches them" do
+      poster = poster_fixture()
+      org = insert(:organization)
+      role!(org, poster, "owner")
+      posting = publish_job!(poster, %{}, organization: org)
+
+      staff = insert(:activated_user)
+      role!(org, staff, "recruiter")
+      insert(:email, user: staff, value: "rec@rival.example")
+      {:ok, _} = Exclusions.add_posting_domain(posting, %{"domain" => "rival.example"})
+
+      assert posting.id in (Jobs.board_page(staff, Jobs.board_filters(%{}, staff)) |> entry_ids())
+    end
+
+    test "the saved (bookmark) hub drops a posting whose poster blocked the member" do
+      poster = poster_fixture()
+      posting = publish_job!(poster)
+      member = insert(:activated_user)
+      {:ok, _} = Jobs.bookmark_job_posting(member, posting)
+
+      {:ok, _} = Social.block_user(poster, member)
+
+      refute posting.id in (Jobs.saved_job_postings_page(member, :bookmark, []) |> entry_ids())
+    end
+
+    test "the organization page subtracts an excluded viewer; the anonymous view is untouched" do
+      poster = poster_fixture()
+      org = insert(:organization)
+      role!(org, poster, "owner")
+      posting = publish_job!(poster, %{}, organization: org)
+      {:ok, _} = Exclusions.add_posting_domain(posting, %{"domain" => "acme.com"})
+      excluded = viewer_with_email("acme.com")
+
+      excluded_ids = Jobs.list_organization_postings(org, excluded).entries |> Enum.map(& &1.id)
+      anon_ids = Jobs.list_organization_postings(org, nil).entries |> Enum.map(& &1.id)
+
+      refute posting.id in excluded_ids
+      assert posting.id in anon_ids
+      assert Jobs.organization_postings_count(org, excluded) == 0
+      assert Jobs.organization_postings_count(org, nil) == 1
+    end
+
+    test "the tag page subtracts an excluded viewer; the anonymous view is untouched" do
+      poster = poster_fixture()
+      posting = publish_job!(poster, %{"required_tags" => "Rustacean"})
+      {:ok, _} = Exclusions.add_posting_domain(posting, %{"domain" => "acme.com"})
+      excluded = viewer_with_email("acme.com")
+      tag = Tag.find_by_value("Rustacean")
+
+      excluded_ids = tag |> Jobs.list_tag_postings(excluded) |> Enum.map(& &1.id)
+      anon_ids = tag |> Jobs.list_tag_postings(nil) |> Enum.map(& &1.id)
+
+      refute posting.id in excluded_ids
+      assert posting.id in anon_ids
     end
   end
 

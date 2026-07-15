@@ -884,17 +884,42 @@ defmodule Vutuv.Organizations do
 
   # --- engagement (like + bookmark) ------------------------------------------
 
+  # The Engagement fabric config: the fk doubles as the payload id key, and
+  # the two tuple names are pattern-matched by OrganizationLive.Show and
+  # PostLive.Saved — a rename is a breaking contract change.
+  @engagement_cfg %{
+    fk: :organization_id,
+    like_schema: OrganizationLike,
+    topic_prefix: "organization",
+    counters_msg: :organization_counters,
+    changed_msg: :organization_engagement_changed
+  }
+
   def like_organization(%User{} = user, %Organization{} = organization),
-    do: engage(OrganizationLike, :like, user, organization)
+    do: Engagement.engage(OrganizationLike, :like, user.id, organization.id, @engagement_cfg)
 
   def unlike_organization(%User{} = user, %Organization{} = organization),
-    do: disengage(OrganizationLike, :like, user, organization)
+    do: Engagement.disengage(OrganizationLike, :like, user.id, organization.id, @engagement_cfg)
 
   def bookmark_organization(%User{} = user, %Organization{} = organization),
-    do: engage(OrganizationBookmark, :bookmark, user, organization)
+    do:
+      Engagement.engage(
+        OrganizationBookmark,
+        :bookmark,
+        user.id,
+        organization.id,
+        @engagement_cfg
+      )
 
   def unbookmark_organization(%User{} = user, %Organization{} = organization),
-    do: disengage(OrganizationBookmark, :bookmark, user, organization)
+    do:
+      Engagement.disengage(
+        OrganizationBookmark,
+        :bookmark,
+        user.id,
+        organization.id,
+        @engagement_cfg
+      )
 
   @doc """
   Flips one engagement `kind` off its current state (the
@@ -912,80 +937,16 @@ defmodule Vutuv.Organizations do
   def toggle_engagement(:bookmark, user, organization, _),
     do: bookmark_organization(user, organization)
 
-  defp engage(schema, kind, %User{} = user, %Organization{} = organization) do
-    case Engagement.insert_if_new(schema, %{user_id: user.id, organization_id: organization.id}, [
-           :organization_id,
-           :user_id
-         ]) do
-      :exists ->
-        {:ok, :noop}
-
-      {:inserted, row} ->
-        broadcast_engagement(kind, user.id, organization.id, true)
-        {:ok, row}
-    end
-  end
-
-  defp disengage(schema, kind, %User{} = user, %Organization{} = organization) do
-    {count, _} =
-      Repo.delete_all(
-        from(e in schema, where: e.organization_id == ^organization.id and e.user_id == ^user.id)
-      )
-
-    if count > 0, do: broadcast_engagement(kind, user.id, organization.id, false)
-    :ok
-  end
-
   @doc """
   Public like count plus the viewer's own `liked?`/`bookmarked?` flags for the
   action bar. An anonymous viewer gets `false` flags.
   """
   def organization_engagement(%Organization{id: organization_id}, viewer) do
-    viewer_id = viewer && viewer.id
-
-    %{
-      likes: like_count(organization_id),
-      liked?: viewer_id != nil and engaged?(OrganizationLike, organization_id, viewer_id),
-      bookmarked?: viewer_id != nil and engaged?(OrganizationBookmark, organization_id, viewer_id)
-    }
-  end
-
-  defp like_count(organization_id) do
-    Repo.aggregate(
-      from(l in OrganizationLike, where: l.organization_id == ^organization_id),
-      :count,
-      :id
-    )
-  end
-
-  defp engaged?(schema, organization_id, user_id) do
-    Repo.exists?(
-      from(e in schema, where: e.organization_id == ^organization_id and e.user_id == ^user_id)
-    )
+    Engagement.subject_engagement(OrganizationBookmark, organization_id, viewer, @engagement_cfg)
   end
 
   @doc "Subscribes to an organization's live counter topic."
-  def subscribe(organization_id),
-    do: Phoenix.PubSub.subscribe(Vutuv.PubSub, topic(organization_id))
-
-  defp topic(organization_id), do: "organization:#{organization_id}"
-
-  defp broadcast_engagement(kind, user_id, organization_id, active?) do
-    # The per-organization topic carries the absolute like count to every open page;
-    # the actor's activity topic tells the /bookmarks hub to add or drop a card.
-    Phoenix.PubSub.broadcast(
-      Vutuv.PubSub,
-      topic(organization_id),
-      {:organization_counters,
-       %{organization_id: organization_id, likes: like_count(organization_id)}}
-    )
-
-    Vutuv.Activity.broadcast(
-      user_id,
-      {:organization_engagement_changed,
-       %{kind: kind, organization_id: organization_id, active?: active?}}
-    )
-  end
+  def subscribe(organization_id), do: Engagement.subscribe(organization_id, @engagement_cfg)
 
   @doc """
   One page of the member's liked / bookmarked organizations for the `/bookmarks`

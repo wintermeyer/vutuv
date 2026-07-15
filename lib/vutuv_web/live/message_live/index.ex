@@ -155,9 +155,11 @@ defmodule VutuvWeb.MessageLive.Index do
     else
       case Chat.send_message(socket.assigns.current_user, socket.assigns.conversation.id, body) do
         # The echo arrives via the conversation topic broadcast, so all
-        # sessions (including this one) render it the same way.
+        # sessions (including this one) render it the same way — its handler
+        # runs the one refresh_conversation, so none is needed here (this
+        # process is subscribed; local PubSub delivery is guaranteed).
         {:ok, %Message{}} ->
-          {:noreply, socket |> refresh_conversation() |> assign_form()}
+          {:noreply, assign_form(socket)}
 
         # Declined conversation: drop silently — for the sender everything
         # looks exactly like an unanswered request.

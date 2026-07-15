@@ -100,11 +100,13 @@ the whole seam; the `job_exclusions` table holds it.
   **domain** (`domain` — that host and any subdomain of it, host-suffix match, no
   public-suffix list). Domain shape/normalization is shared with #938 via
   `Vutuv.EmailDomain`.
-- **The predicate.** `Exclusions.excluded?(posting, viewer)` (single posting) and
-  `Exclusions.exclude_for_viewer(query, viewer)` (a board/list subtraction) resolve
-  the viewer's scope once (`resolve_scope/1`: account id, confirmed-email hosts, and
-  every org they belong to via role ∪ current work experience ∪ verified-domain
-  email) and share the same matching, so no surface disagrees.
+- **The predicate.** `Exclusions.exclude_for_viewer(query, viewer)` is the one
+  composed subtraction (the effective-list match minus the poster / owning-org-staff
+  exemptions, plus the bidirectional block), and `Exclusions.excluded?(posting,
+  viewer)` is answered by the same `matching_posting_ids/1`, so no surface can
+  disagree by construction (issue #954 closed the drift). Both resolve the viewer's
+  scope once (`resolve_scope/1`: account id, confirmed-email hosts, and every org
+  they belong to via role ∪ current work experience ∪ verified-domain email).
 - **Never excluded:** the **poster**, the **owning organization's staff** (a role
   holder), and an **anonymous** viewer (exclusion only narrows the signed-in
   on-platform audience — pair `visibility: members` with the list to also hide from
@@ -115,7 +117,10 @@ the whole seam; the `job_exclusions` table holds it.
   its agent-format siblings (`visible_to?/2`), the board + its filters/search
   (`board_scope/1`), saved-search alerts (`new_board_postings/3` shares
   `board_scope/1`), the `/api/2.0` jobs endpoints (share `board_page`/`visible_to?`),
-  and the bookmarks/likes hub (`saved_job_postings_page/3`).
+  the bookmarks/likes hub (`saved_job_postings_page/3`), and the organization / tag
+  pages' "Offene Stellen" sections (`list_organization_postings/3`,
+  `list_tag_postings/3` — viewer-scoped in HTML, `nil` = the anonymous view the
+  agent formats render).
 - **Editors.** Per-posting: `VutuvWeb.JobPostingLive.Exclusions` at
   `/jobs/:slug/exclusions` (owner-only). Organization default:
   `VutuvWeb.OrganizationLive.Exclusions` at `/organizations/:slug/exclusions`
@@ -141,8 +146,8 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   `board_scope/1`, which folds the visibility gate (`everyone` for anyone,
   `members` additionally for a signed-in viewer) and the exclusion seam into one
   query, so no downstream filter can leak a hidden posting. The exclusion seam is
-  a **bidirectional block** (`Vutuv.Social.blocked_user_ids/1`, `board_exclude/2`)
-  **plus** the #939 exclusion list (`Exclusions.exclude_for_viewer/2`, see
+  the one composed `Exclusions.exclude_for_viewer/2` (bidirectional block + the
+  #939 exclusion list minus the poster/staff exemptions, see
   [Exclusion lists](#exclusion-lists-issue-939)). Newest first (`first_published_at`, UUID v7 `id` tiebreaker),
   keyset-paginated (`%{entries:, more?:, cursor:}`; the web layer signs the
   `{first_published_at, id}` cursor with `VutuvWeb.ApiV2`).

@@ -67,6 +67,9 @@ defmodule Vutuv.OrganizationImageStore do
     end)
   end
 
+  @doc "The served version names (drives the proxy's URL whitelist)."
+  def versions, do: @versions
+
   @doc "Absolute on-disk path of a served version, or `nil` when missing."
   def version_path(token, version) when is_binary(token) and version in @versions do
     avif = Path.join(dir(token), "#{version}#{Spec.served_ext()}")

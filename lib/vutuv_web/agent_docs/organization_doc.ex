@@ -33,7 +33,7 @@ defmodule VutuvWeb.AgentDocs.OrganizationDoc do
       Organizations.list_aliases(organization),
       Organizations.organization_people_page(organization, limit: 200).entries,
       Organizations.organization_people_count(organization),
-      Jobs.list_organization_postings(organization, limit: 200).entries
+      Jobs.list_organization_postings(organization, nil, limit: 200).entries
     )
   end
 

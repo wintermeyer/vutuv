@@ -231,7 +231,11 @@ private `originals/` tree and is never served.
 Every image byte goes through the authorizing proxy `GET
 /post_images/:token/:version` (`VutuvWeb.PostImageController`), so a post's
 audience guards its images too — served with `send_file` everywhere (the
-X-Accel-Redirect handoff was disabled after it failed in production).
+X-Accel-Redirect handoff was disabled after it failed in production). The
+serving mechanics (version parser, send_file / X-Accel switch, cache header)
+live once in `VutuvWeb.ImageProxy`, shared with the job-posting and
+organization image proxies; this controller keeps the post policy, the
+on-the-fly `og.jpg` and the download filename.
 
 Legacy `…/feed.webp` URLs in old post bodies keep resolving.
 

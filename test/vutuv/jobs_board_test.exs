@@ -259,8 +259,8 @@ defmodule Vutuv.JobsBoardTest do
       {:ok, posting} =
         Jobs.publish(draft, owner, job_attrs(%{"title" => "At the org"}), organization: org)
 
-      assert Jobs.organization_postings_count(org) == 1
-      assert [%{id: id}] = Jobs.list_organization_postings(org).entries
+      assert Jobs.organization_postings_count(org, nil) == 1
+      assert [%{id: id}] = Jobs.list_organization_postings(org, nil).entries
       assert id == posting.id
     end
 
@@ -269,7 +269,7 @@ defmodule Vutuv.JobsBoardTest do
       posting = publish_job!(poster, %{"title" => "Tagged", "required_tags" => "Rustacean"})
       tag = Tag.find_by_value("Rustacean")
 
-      assert [%{id: id}] = Jobs.list_tag_postings(tag)
+      assert [%{id: id}] = Jobs.list_tag_postings(tag, nil)
       assert id == posting.id
     end
   end

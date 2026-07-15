@@ -12,16 +12,6 @@ defmodule VutuvWeb.RootHandleTest do
   alias Vutuv.Organizations.Organization
   alias Vutuv.Repo
 
-  @valid %{
-    "kind" => "company",
-    "name" => "Lufthansa AG",
-    "website_url" => "https://lufthansa.example",
-    "street_address" => "Flughafen 1",
-    "zip_code" => "60549",
-    "city" => "Frankfurt",
-    "country" => "DE"
-  }
-
   setup do
     Application.put_env(:vutuv, :verify_organization_domains, true)
 
@@ -35,16 +25,15 @@ defmodule VutuvWeb.RootHandleTest do
 
   # An active, publicly visible organization that has claimed the root handle.
   defp organization_with_handle(handle) do
-    owner = insert(:activated_user)
+    {organization, _owner} =
+      Vutuv.OrganizationsHelpers.active_organization(%{
+        "name" => "Lufthansa AG",
+        "website_url" => "https://lufthansa.example",
+        "street_address" => "Flughafen 1",
+        "zip_code" => "60549",
+        "city" => "Frankfurt"
+      })
 
-    {:ok, %{organization: organization, domain: domain}} =
-      Organizations.create_pending_organization(owner, @valid, "dns")
-
-    Application.put_env(:vutuv, :organizations_dns_resolver, fn _host ->
-      [[~c"vutuv-organization-verify=#{domain.verification_token}"]]
-    end)
-
-    {:ok, organization} = Organizations.verify_dns(organization, domain)
     {:ok, organization} = Organizations.claim_handle(organization, %{"username" => handle})
     organization
   end
