@@ -15,6 +15,7 @@ defmodule VutuvWeb.Admin.UserLive do
 
   use VutuvWeb, :live_view
 
+  import VutuvWeb.Admin.MemberBadges, only: [status_badges: 1, badge_class: 1]
   import VutuvWeb.UserHelpers, only: [member_name: 1]
 
   alias Vutuv.Accounts
@@ -168,32 +169,6 @@ defmodule VutuvWeb.Admin.UserLive do
   # Any filter narrowing the default view (drives the empty-state copy + Clear).
   defp filtered?(filters), do: filters.q != nil or filters.reg != "pin" or filters.flag != "all"
 
-  # The status badges a row carries, in order, as {label, tone} tuples.
-  defp status_badges(user) do
-    [
-      user.admin? && {gettext("Admin"), :admin},
-      user.identity_verified? && {gettext("Verified"), :verified},
-      user.frozen_at && {gettext("Frozen"), :warn},
-      user.suspended_until && {gettext("Suspended"), :warn},
-      user.moderation_reason == "spam" && {gettext("Spam"), :danger},
-      user.deactivated_at && {gettext("Deactivated"), :danger},
-      user.unreachable_at && {gettext("Unreachable"), :danger}
-    ]
-    |> Enum.filter(& &1)
-  end
-
-  defp badge_class(:admin),
-    do: "bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-
-  defp badge_class(:verified),
-    do: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
-
-  defp badge_class(:warn),
-    do: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200"
-
-  defp badge_class(:danger),
-    do: "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
-
   @impl true
   def render(assigns) do
     ~H"""
@@ -344,7 +319,7 @@ defmodule VutuvWeb.Admin.UserLive do
             <tbody id="members">
               <tr :for={user <- @users} id={"user-#{user.id}"}>
                 <td>
-                  <.link navigate={~p"/#{user}"} class="flex items-center gap-2">
+                  <.link navigate={~p"/admin/users/#{user.id}"} class="flex items-center gap-2">
                     <.avatar user={user} size="xs" />
                     <span class="breakwrap font-medium">{member_name(user)}</span>
                   </.link>

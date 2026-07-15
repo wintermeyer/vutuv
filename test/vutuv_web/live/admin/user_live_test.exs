@@ -38,6 +38,17 @@ defmodule VutuvWeb.Admin.UserLiveTest do
       refute html =~ "legacyimport"
     end
 
+    test "a row's name links to the member detail page, not the public profile", %{conn: conn} do
+      member = insert(:activated_user, username: "pinnedmember")
+
+      {:ok, lv, _html} = live(conn, ~p"/admin/users")
+
+      assert has_element?(
+               lv,
+               ~s(#user-#{member.id} a[href="/admin/users/#{member.id}"])
+             )
+    end
+
     test "members are listed newest first by default", %{conn: conn} do
       older = insert(:activated_user, username: "olderone")
       insert(:activated_user, username: "newerone")

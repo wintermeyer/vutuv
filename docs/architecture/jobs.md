@@ -268,6 +268,12 @@ and **delete** (`Jobs.delete_job_posting/1`). The context helpers
 `Vutuv.Jobs`. Repeat offenders lose the account through the standard strike ladder
 (`moderation.md`), which the report path already feeds.
 
+The same `member_job_footprint/1` also drives the **member detail page**
+(`/admin/users/:id`, `VutuvWeb.Admin.UserDetailLive`, see `admin.md`), which the
+member browser links to: an admin looking into one member sees their live/total
+postings, open job cases and cold-outreach spend there too, not only in the
+per-posting drawer.
+
 ### Anti-spam recruiting: the cold-outreach cap
 
 `Vutuv.Chat` caps **cold outreach** — new message *requests* one member opens to

@@ -87,6 +87,27 @@ Query, filter and sort live in `Vutuv.Accounts.admin_user_filters/1` +
 
 Admins-only via the `:admin` live_session (`on_mount :require_admin`).
 
+## Member detail (`/admin/users/:id`)
+
+Each browser row's name links to a **member detail** LiveView
+(`VutuvWeb.Admin.UserDetailLive`) instead of straight to the public profile, so
+an admin investigating a member lands on one screen carrying:
+
+- the member's **account status** — the same registration + moderation/
+  deliverability badges the browser row shows (shared with the browser through
+  `VutuvWeb.Admin.MemberBadges`, so the two never drift);
+- their **jobs footprint** (issue #934) — live and total postings, open
+  job-related moderation cases, and the **cold-outreach counter** against the
+  configured limit (amber once the member is at the cap), built by the same
+  `Vutuv.Jobs.member_job_footprint/1` the `/admin/jobs` poster drawer uses;
+- one-click links to the member's **preference overrides**
+  (`/admin/users/:id/preferences`), **their postings** on the jobs board
+  (`/admin/jobs?q=<handle>`) and their **public profile**.
+
+Read-only and admins-only (same `:admin` live_session). A missing or malformed
+`:id` redirects back to the browser rather than 500ing (the id is UUID-cast
+before the DB lookup, like the sibling preferences page).
+
 ## Tags and honor tags (`/admin/tags`)
 
 `/admin/tags` is the classic CRUD over the shared global tag catalog

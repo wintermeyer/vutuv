@@ -568,6 +568,11 @@ defmodule VutuvWeb.Router do
       # Deletion removes everything the account owns and emails the operator.
       live("/users/delete", UserDeleteLive, :index)
 
+      # One member's detail page: account status + jobs footprint (issue #934).
+      # The browser rows link here. Defined after the literal /users/delete so
+      # that segment still wins; a malformed :id redirects back to the browser.
+      live("/users/:id", UserDetailLive, :show)
+
       # The deliverability dashboard: thaw/clear act reload-free over the socket.
       live("/deliverability", DeliverabilityLive, :index)
 
