@@ -30,7 +30,12 @@ defmodule VutuvWeb.UserTagController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, user: user, user_tags: user.user_tags)
+        render(conn, "index.html",
+          as_owner?: false,
+          user: user,
+          user_tags: user.user_tags,
+          page_title: UserHelpers.member_page_title(user, gettext("Tags"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(user, :tags, user.user_tags) end
     )
@@ -58,7 +63,11 @@ defmodule VutuvWeb.UserTagController do
       |> Repo.preload([:tag, endorsements: UserTagEndorsement.visible()])
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", user_tag: user_tag),
+      html:
+        &render(&1, "show.html",
+          user_tag: user_tag,
+          page_title: UserHelpers.member_page_title(conn.assigns[:user], UserTag.name(user_tag))
+        ),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :tags, user_tag) end
     )
   end
@@ -87,7 +96,12 @@ defmodule VutuvWeb.UserTagController do
           dir: dir,
           work_info_by_id: work_info_by_id,
           endorsed_at_by_id: endorsed_at_by_id,
-          following_by_id: UserHelpers.following_map(conn.assigns[:current_user], endorsers)
+          following_by_id: UserHelpers.following_map(conn.assigns[:current_user], endorsers),
+          page_title:
+            UserHelpers.member_page_title(
+              user,
+              "#{UserTag.name(user_tag)} · #{gettext("Endorsements")}"
+            )
         )
       end,
       doc: fn ->

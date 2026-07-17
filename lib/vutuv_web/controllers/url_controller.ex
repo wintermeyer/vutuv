@@ -16,7 +16,12 @@ defmodule VutuvWeb.UrlController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, urls: urls)
+        render(conn, "index.html",
+          as_owner?: false,
+          urls: urls,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(conn.assigns[:user], gettext("Links"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :links, urls) end
     )
@@ -68,9 +73,15 @@ defmodule VutuvWeb.UrlController do
     url = ControllerHelpers.get_owned!(conn, :urls, id)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", url: url),
+      html:
+        &render(&1, "show.html", url: url, page_title: entry_page_title(conn.assigns[:user], url)),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :links, url) end
     )
+  end
+
+  defp entry_page_title(user, url) do
+    label = if url.description in [nil, ""], do: gettext("Links"), else: url.description
+    VutuvWeb.UserHelpers.member_page_title(user, label)
   end
 
   def edit(conn, %{"id" => id}) do

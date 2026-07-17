@@ -21,7 +21,15 @@ defmodule VutuvWeb.EmailController do
         # addresses only. Private addresses show solely on /settings/emails.
         emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
 
-        render(conn, "index.html", emails: emails, as_owner?: false)
+        render(conn, "index.html",
+          emails: emails,
+          as_owner?: false,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(
+              conn.assigns[:user],
+              gettext("Email addresses")
+            )
+        )
       end,
       doc: fn ->
         emails = VutuvWeb.UserHelpers.emails_for_display(conn.assigns[:user], nil)
@@ -175,7 +183,14 @@ defmodule VutuvWeb.EmailController do
       email ->
         conn
         |> maybe_put_alternates(email)
-        |> render("show.html", email: email)
+        |> render("show.html",
+          email: email,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(
+              conn.assigns[:user],
+              gettext("Email addresses")
+            )
+        )
     end
   end
 

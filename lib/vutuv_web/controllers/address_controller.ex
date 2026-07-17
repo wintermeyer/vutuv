@@ -16,7 +16,12 @@ defmodule VutuvWeb.AddressController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, user: user, addresses: user.addresses)
+        render(conn, "index.html",
+          as_owner?: false,
+          user: user,
+          addresses: user.addresses,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Addresses"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(user, :addresses, user.addresses) end
     )
@@ -66,9 +71,20 @@ defmodule VutuvWeb.AddressController do
     address = ControllerHelpers.get_owned!(conn, :addresses, id)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", address: address),
+      html:
+        &render(&1, "show.html",
+          address: address,
+          page_title: entry_page_title(conn.assigns[:user], address)
+        ),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :addresses, address) end
     )
+  end
+
+  defp entry_page_title(user, address) do
+    label =
+      if address.description in [nil, ""], do: gettext("Addresses"), else: address.description
+
+    VutuvWeb.UserHelpers.member_page_title(user, label)
   end
 
   def edit(conn, %{"id" => id}) do

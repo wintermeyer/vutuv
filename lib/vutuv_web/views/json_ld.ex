@@ -25,6 +25,7 @@ defmodule VutuvWeb.JsonLd do
 
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Languages
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationImage
@@ -121,13 +122,26 @@ defmodule VutuvWeb.JsonLd do
     }
   end
 
-  @doc "The profile as ProfilePage/Person, from the show page's assigns."
-  def person(user, job, user_tags, social_accounts) do
+  @doc """
+  The profile as ProfilePage/Person, from the show page's assigns.
+
+  `extras` carries the rest of what the page already loaded (nothing here
+  re-queries): `:followers` / `:posts` become the profile-page interaction
+  statistics, `:educations` / `:languages` / `:qualifications` / `:addresses`
+  enrich the Person entity with the cards the page shows, and the verified
+  entries of `:urls` (the member proved the page is theirs,
+  `Vutuv.Profiles.LinkVerification`) join `sameAs` as identity links.
+  `dateCreated` / `dateModified` + the interaction counters are the fields
+  search engines document for profile-page markup.
+  """
+  def person(user, job, user_tags, social_accounts, extras \\ %{}) do
     url = AgentDocs.abs_url("/" <> user.username)
 
     %{
       "@context" => "https://schema.org",
       "@type" => "ProfilePage",
+      "dateCreated" => iso_utc(user.inserted_at),
+      "dateModified" => iso_utc(user.updated_at),
       "mainEntity" =>
         compact(%{
           "@type" => "Person",
@@ -135,14 +149,88 @@ defmodule VutuvWeb.JsonLd do
           "name" => UserHelpers.full_name(user),
           "givenName" => user.first_name,
           "familyName" => user.last_name,
+          "alternateName" => user.username,
+          "identifier" => user.username,
+          "description" => UserHelpers.headline_text(user.headline),
           "url" => url,
+          "mainEntityOfPage" => url,
           "image" => ProfileDoc.avatar_url(user),
           "jobTitle" => job && UserHelpers.current_title(job),
           "worksFor" => works_for(job),
           "knowsAbout" => Enum.map(user_tags, &UserTag.name/1),
-          "sameAs" => Enum.map(social_accounts, &SocialMediaAccount.url/1)
+          "knowsLanguage" => Enum.map(extras[:languages] || [], &language_entity/1),
+          "alumniOf" => extras[:educations] |> List.wrap() |> Enum.flat_map(&education_entity/1),
+          "hasCredential" => Enum.map(extras[:qualifications] || [], &credential_entity/1),
+          "address" =>
+            extras[:addresses] |> List.wrap() |> Enum.flat_map(&member_postal_address/1),
+          "interactionStatistic" => interaction_counter("FollowAction", extras[:followers]),
+          "agentInteractionStatistic" => interaction_counter("WriteAction", extras[:posts]),
+          "sameAs" =>
+            Enum.map(social_accounts, &SocialMediaAccount.url/1) ++
+              verified_link_urls(extras[:urls])
         })
     }
+  end
+
+  # ISO 8601 with an explicit UTC offset, the form the profile-page markup
+  # expects (the naive timestamps are stored UTC).
+  defp iso_utc(%NaiveDateTime{} = naive),
+    do: naive |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601()
+
+  defp language_entity(language) do
+    compact(%{
+      "@type" => "Language",
+      "name" => Languages.name(language.language_code),
+      "alternateName" => language.language_code
+    })
+  end
+
+  defp education_entity(%{school: school}) when school in [nil, ""], do: []
+  defp education_entity(edu), do: [%{"@type" => "EducationalOrganization", "name" => edu.school}]
+
+  defp credential_entity(qualification) do
+    compact(%{
+      "@type" => "EducationalOccupationalCredential",
+      "name" => qualification.name,
+      "credentialCategory" => qualification.kind,
+      "recognizedBy" =>
+        qualification.issuer && %{"@type" => "Organization", "name" => qualification.issuer}
+    })
+  end
+
+  # A member address as PostalAddress; an entry whose visible parts are all
+  # empty (only a description like "Home") contributes nothing.
+  defp member_postal_address(address) do
+    street =
+      [address.line_1, address.line_2, address.line_3, address.line_4]
+      |> Enum.reject(&(&1 in [nil, ""]))
+      |> Enum.join(", ")
+
+    entity =
+      compact(%{
+        "@type" => "PostalAddress",
+        "streetAddress" => street,
+        "postalCode" => address.zip_code,
+        "addressLocality" => address.city,
+        "addressRegion" => address.state,
+        "addressCountry" => address.country
+      })
+
+    if map_size(entity) > 1, do: [entity], else: []
+  end
+
+  defp interaction_counter(_action, count) when count in [nil, 0], do: nil
+
+  defp interaction_counter(action, count) do
+    %{
+      "@type" => "InteractionCounter",
+      "interactionType" => "https://schema.org/" <> action,
+      "userInteractionCount" => count
+    }
+  end
+
+  defp verified_link_urls(urls) do
+    urls |> List.wrap() |> Enum.filter(& &1.verified_at) |> Enum.map(& &1.value)
   end
 
   @doc "The permalink's post as a BlogPosting."
@@ -267,6 +355,45 @@ defmodule VutuvWeb.JsonLd do
     (Jobs.tags_of(posting, :required) ++ Jobs.tags_of(posting, :nice_to_have))
     |> Enum.map(& &1.name)
   end
+
+  @doc """
+  A visible `<.page_header>` crumbs trail as a schema.org BreadcrumbList:
+  the site root first, then each crumb — linked crumbs (`{label, href}`)
+  carry their absolute URL, a bare label (the current page, unlinked in the
+  visible trail too) only its name, which schema.org allows for the final
+  item.
+  """
+  def breadcrumb_trail(crumbs) do
+    home = %{
+      "@type" => "ListItem",
+      "position" => 1,
+      "item" => %{"@id" => VutuvWeb.Endpoint.url(), "name" => "vutuv"}
+    }
+
+    items =
+      crumbs
+      |> Enum.with_index(2)
+      |> Enum.map(fn
+        {{label, href}, position} ->
+          %{
+            "@type" => "ListItem",
+            "position" => position,
+            "item" => %{"@id" => crumb_url(href), "name" => to_string(label)}
+          }
+
+        {label, position} ->
+          %{"@type" => "ListItem", "position" => position, "name" => to_string(label)}
+      end)
+
+    %{
+      "@context" => "https://schema.org",
+      "@type" => "BreadcrumbList",
+      "itemListElement" => [home | items]
+    }
+  end
+
+  defp crumb_url("http" <> _ = url), do: url
+  defp crumb_url(path), do: AgentDocs.abs_url(path)
 
   def breadcrumbs(user) do
     profile_url = AgentDocs.abs_url("/" <> user.username)

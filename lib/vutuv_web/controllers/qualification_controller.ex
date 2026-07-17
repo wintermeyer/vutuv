@@ -28,7 +28,9 @@ defmodule VutuvWeb.QualificationController do
         render(conn, "index.html",
           as_owner?: false,
           user: user,
-          qualifications: user.qualifications
+          qualifications: user.qualifications,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(user, gettext("Certificates & licenses"))
         )
       end,
       doc: fn -> SectionDocs.build_index(user, :qualifications, user.qualifications) end
@@ -69,11 +71,24 @@ defmodule VutuvWeb.QualificationController do
   def show(conn, _params) do
     # resolve_qualification scoped :qualification to conn.assigns[:user].
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", qualification: conn.assigns[:qualification]),
+      html:
+        &render(&1, "show.html",
+          qualification: conn.assigns[:qualification],
+          page_title: entry_page_title(conn.assigns[:user], conn.assigns[:qualification])
+        ),
       doc: fn ->
         SectionDocs.build_show(conn.assigns[:user], :qualifications, conn.assigns[:qualification])
       end
     )
+  end
+
+  defp entry_page_title(user, qualification) do
+    label =
+      if qualification.name in [nil, ""],
+        do: gettext("Certificates & licenses"),
+        else: qualification.name
+
+    VutuvWeb.UserHelpers.member_page_title(user, label)
   end
 
   def edit(conn, _params) do

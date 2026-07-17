@@ -25,6 +25,7 @@ defmodule VutuvWeb.UI do
   alias Vutuv.Accounts.User
   alias Vutuv.BerlinTime
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.JsonLd
   alias VutuvWeb.Markdown
 
   @doc """
@@ -2272,6 +2273,9 @@ defmodule VutuvWeb.UI do
     <div :if={@crumbs} class="breadcrumbs">
       {VutuvWeb.UserHelpers.gen_breadcrumbs(@crumbs)}
     </div>
+    <%!-- The same visible trail as schema.org BreadcrumbList, so search
+    engines show the page's place under the profile instead of a bare URL. --%>
+    <JsonLd.script :if={@crumbs} data={JsonLd.breadcrumb_trail(@crumbs)} />
     """
   end
 

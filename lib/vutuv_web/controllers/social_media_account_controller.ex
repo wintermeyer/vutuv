@@ -18,7 +18,8 @@ defmodule VutuvWeb.SocialMediaAccountController do
         render(conn, "index.html",
           as_owner?: false,
           user: user,
-          social_media_accounts: user.social_media_accounts
+          social_media_accounts: user.social_media_accounts,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Profiles"))
         )
       end,
       doc: fn ->
@@ -91,7 +92,15 @@ defmodule VutuvWeb.SocialMediaAccountController do
     social_media_account = ControllerHelpers.get_owned!(conn, :social_media_accounts, id)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", social_media_account: social_media_account),
+      html:
+        &render(&1, "show.html",
+          social_media_account: social_media_account,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(
+              conn.assigns[:user],
+              social_media_account.provider
+            )
+        ),
       doc: fn ->
         SectionDocs.build_show(conn.assigns[:user], :social_media_accounts, social_media_account)
       end

@@ -49,9 +49,13 @@ defmodule VutuvWeb.EmploymentStatusTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
+      # Compare positions in the body only: the head now legitimately carries
+      # the tagline too (a member without work info titles with the headline).
+      [_head, body] = String.split(html, "</head>", parts: 2)
+
       # The pill sits on its own line under the name, ahead of the tagline text.
-      badge_at = :binary.match(html, "data-employment-status") |> elem(0)
-      tagline_at = :binary.match(html, "Some tagline here") |> elem(0)
+      badge_at = :binary.match(body, "data-employment-status") |> elem(0)
+      tagline_at = :binary.match(body, "Some tagline here") |> elem(0)
       assert badge_at < tagline_at
     end
 

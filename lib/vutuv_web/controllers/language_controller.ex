@@ -25,7 +25,12 @@ defmodule VutuvWeb.LanguageController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, user: user, languages: user.languages)
+        render(conn, "index.html",
+          as_owner?: false,
+          user: user,
+          languages: user.languages,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Languages"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(user, :languages, user.languages) end
     )
@@ -69,7 +74,15 @@ defmodule VutuvWeb.LanguageController do
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :language to conn.assigns[:user], so no re-check.
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", language: conn.assigns[:language]),
+      html:
+        &render(&1, "show.html",
+          language: conn.assigns[:language],
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(
+              conn.assigns[:user],
+              Vutuv.Languages.name(conn.assigns[:language].language_code)
+            )
+        ),
       doc: fn ->
         SectionDocs.build_show(conn.assigns[:user], :languages, conn.assigns[:language])
       end

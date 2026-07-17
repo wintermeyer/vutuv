@@ -29,7 +29,12 @@ defmodule VutuvWeb.EducationController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, user: user, education: user.educations)
+        render(conn, "index.html",
+          as_owner?: false,
+          user: user,
+          education: user.educations,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Education"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(user, :educations, user.educations) end
     )
@@ -69,11 +74,20 @@ defmodule VutuvWeb.EducationController do
   def show(conn, _params) do
     # ResolveOwnedSlug scopes :education to conn.assigns[:user], so no re-check.
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", education: conn.assigns[:education]),
+      html:
+        &render(&1, "show.html",
+          education: conn.assigns[:education],
+          page_title: entry_page_title(conn.assigns[:user], conn.assigns[:education])
+        ),
       doc: fn ->
         SectionDocs.build_show(conn.assigns[:user], :educations, conn.assigns[:education])
       end
     )
+  end
+
+  defp entry_page_title(user, education) do
+    label = if education.school in [nil, ""], do: gettext("Education"), else: education.school
+    VutuvWeb.UserHelpers.member_page_title(user, label)
   end
 
   def edit(conn, _params) do

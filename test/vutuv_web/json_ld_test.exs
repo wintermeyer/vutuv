@@ -27,7 +27,12 @@ defmodule VutuvWeb.JsonLdTest do
 
   describe "profile page" do
     test "embeds a Person mirroring the profile doc" do
-      user = insert_activated_user(username: "ld_member", first_name: "Lara")
+      user =
+        insert_activated_user(
+          username: "ld_member",
+          first_name: "Lara",
+          headline: "Builds **reliable** systems"
+        )
 
       insert(:work_experience,
         user: user,
@@ -60,6 +65,97 @@ defmodule VutuvWeb.JsonLdTest do
       assert Map.get(person, "image") == doc.avatar_url
       assert person["knowsAbout"] == ["Elixir"]
       assert person["sameAs"] == Enum.map(doc.social_media, & &1.url)
+      # Google's profile-page markup: the handle and a plain-text headline.
+      assert person["alternateName"] == "ld_member"
+      assert person["identifier"] == "ld_member"
+      assert person["description"] == "Builds reliable systems"
+      assert person["mainEntityOfPage"] == doc.url
+    end
+
+    test "carries the profile-page dates and interaction statistics" do
+      user = insert_activated_user(username: "ld_stats", first_name: "Stat")
+      follow!(insert_activated_user(), user)
+      create_post!(user, %{body: "First post"})
+
+      html = build_conn() |> get("/ld_stats") |> html_response(200)
+
+      page = html |> ld_blocks() |> find_type("ProfilePage")
+      assert page
+
+      db_user = Vutuv.Repo.get!(Vutuv.Accounts.User, user.id)
+
+      assert page["dateCreated"] ==
+               db_user.inserted_at
+               |> DateTime.from_naive!("Etc/UTC")
+               |> DateTime.to_iso8601()
+
+      assert page["dateModified"] ==
+               db_user.updated_at
+               |> DateTime.from_naive!("Etc/UTC")
+               |> DateTime.to_iso8601()
+
+      person = page["mainEntity"]
+
+      assert person["interactionStatistic"] == %{
+               "@type" => "InteractionCounter",
+               "interactionType" => "https://schema.org/FollowAction",
+               "userInteractionCount" => 1
+             }
+
+      assert person["agentInteractionStatistic"] == %{
+               "@type" => "InteractionCounter",
+               "interactionType" => "https://schema.org/WriteAction",
+               "userInteractionCount" => 1
+             }
+    end
+
+    test "mirrors the education, language, credential, address and verified-link cards" do
+      user = insert_activated_user(username: "ld_rich", first_name: "Rica")
+
+      insert(:education, user: user, school: "TU Berlin", degree: "MSc")
+      insert(:language, user: user, language_code: "de")
+      insert(:qualification, user: user, name: "AWS Architect", issuer: "Amazon")
+      insert(:address, user: user, city: "Bremen", country: "Germany")
+
+      insert(:url,
+        user: user,
+        value: "https://rica.example",
+        verified_at: NaiveDateTime.utc_now()
+      )
+
+      insert(:url, user: user, value: "https://unverified.example")
+
+      person =
+        build_conn()
+        |> get("/ld_rich")
+        |> html_response(200)
+        |> ld_blocks()
+        |> find_type("ProfilePage")
+        |> Map.fetch!("mainEntity")
+
+      assert person["alumniOf"] == [
+               %{"@type" => "EducationalOrganization", "name" => "TU Berlin"}
+             ]
+
+      assert [%{"@type" => "Language", "alternateName" => "de", "name" => name}] =
+               person["knowsLanguage"]
+
+      assert name == Vutuv.Languages.name("de")
+
+      assert [credential] = person["hasCredential"]
+      assert credential["@type"] == "EducationalOccupationalCredential"
+      assert credential["name"] == "AWS Architect"
+      assert credential["recognizedBy"]["name"] == "Amazon"
+
+      assert [address] = person["address"]
+      assert address["@type"] == "PostalAddress"
+      assert address["addressLocality"] == "Bremen"
+      assert address["addressCountry"] == "Germany"
+
+      # Only the proven-own webpage joins the identity links; the unverified
+      # one stays out.
+      assert "https://rica.example" in person["sameAs"]
+      refute "https://unverified.example" in person["sameAs"]
     end
 
     test "keeps the BreadcrumbList next to the Person" do
@@ -68,6 +164,24 @@ defmodule VutuvWeb.JsonLdTest do
       blocks = build_conn() |> get("/ld_crumbs") |> html_response(200) |> ld_blocks()
 
       assert find_type(blocks, "BreadcrumbList")
+    end
+
+    test "a public section page carries a BreadcrumbList of its visible trail" do
+      insert_activated_user(username: "ld_trail", first_name: "Tara", last_name: "Trail")
+
+      crumbs =
+        build_conn()
+        |> get("/ld_trail/work_experiences")
+        |> html_response(200)
+        |> ld_blocks()
+        |> find_type("BreadcrumbList")
+
+      assert crumbs, "expected a BreadcrumbList JSON-LD block on the section page"
+
+      items = crumbs["itemListElement"]
+      assert Enum.any?(items, &(&1["item"]["@id"] == "http://localhost:4001/ld_trail"))
+      # The trail ends on the section's own (unlinked) crumb.
+      assert %{"name" => _} = List.last(items)
     end
 
     test "a noindexed member gets no Person markup" do

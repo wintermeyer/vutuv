@@ -1169,5 +1169,15 @@ the resulting ~200px rail width. --%>
 member's profile carries no Person entity. --%>
 <JsonLd.script
   :if={not @user.noindex?}
-  data={JsonLd.person(@user, @header_job, @user_tags, @user.social_media_accounts)}
+  data={
+    JsonLd.person(@user, @header_job, @user_tags, @user.social_media_accounts, %{
+      followers: @follower_count,
+      posts: @posts_total,
+      educations: @education,
+      languages: @languages,
+      qualifications: @qualifications,
+      addresses: @user.addresses,
+      urls: @user.urls
+    })
+  }
 />

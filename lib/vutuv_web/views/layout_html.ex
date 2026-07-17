@@ -120,12 +120,30 @@ defmodule VutuvWeb.LayoutHTML do
 
   def page_title(%{conn: conn}) when not is_nil(conn) do
     case conn.assigns[:user] do
-      %Vutuv.Accounts.User{} = user -> full_name(user)
+      %Vutuv.Accounts.User{} = user -> member_title(user, conn.assigns[:header_job])
       _ -> nil
     end
   end
 
   def page_title(_assigns), do: nil
+
+  # The profile page's title: the name plus the current work line (or the
+  # headline when there is none) — the page's strongest search signal, and
+  # what og:title shares as the link-preview heading. Pages that set their
+  # own :page_title (the posts, the section pages) never reach this.
+  defp member_title(user, header_job) do
+    case member_title_detail(user, header_job) do
+      "" -> full_name(user)
+      detail -> "#{full_name(user)} · #{detail}"
+    end
+  end
+
+  defp member_title_detail(user, header_job) do
+    case work_information_string_for_job(header_job, 60) do
+      "" -> headline_text(user.headline, 60)
+      work -> work
+    end
+  end
 
   @doc """
   The robots meta directives for a page about a member (`:user` in the conn

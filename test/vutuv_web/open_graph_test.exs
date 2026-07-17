@@ -21,6 +21,11 @@ defmodule VutuvWeb.OpenGraphTest do
     end
   end
 
+  defp title(html) do
+    [text] = Regex.run(~r|<title[^>]*>\s*(.*?)\s*</title>|s, html, capture: :all_but_first)
+    text
+  end
+
   describe "generic pages" do
     test "the landing page carries a full preview card", %{conn: conn} do
       html = conn |> get(~p"/") |> html_response(200)
@@ -105,13 +110,42 @@ defmodule VutuvWeb.OpenGraphTest do
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
       assert og(html, "og:type") == "profile"
-      assert og(html, "og:title") == "Greta Tester"
+      # The title carries the member's current work line, not just the bare
+      # name — the strongest on-page signal for name + role searches.
+      assert og(html, "og:title") == "Greta Tester · Developer @ Acme Corp"
+      assert title(html) == "Greta Tester · Developer @ Acme Corp - vutuv"
       assert og(html, "og:description") =~ "Acme Corp"
       assert og(html, "og:url") == @base <> "/#{user.username}"
       assert og(html, "og:image") == @base <> "/#{user.username}/avatar.jpg"
       assert og(html, "og:image:width") == "512"
       assert og(html, "og:image:type") == "image/jpeg"
       assert html =~ ~s(<meta name="twitter:card" content="summary")
+      # The og:type=profile structured properties, so scrapers get the parts.
+      assert og(html, "profile:first_name") == "Greta"
+      assert og(html, "profile:last_name") == "Tester"
+      assert og(html, "profile:username") == user.username
+    end
+
+    test "a member without work info titles with their headline instead", %{conn: conn} do
+      user =
+        insert_activated_user(
+          first_name: "Head",
+          last_name: "Liner",
+          headline: "Coaching **great** teams"
+        )
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert og(html, "og:title") == "Head Liner · Coaching great teams"
+    end
+
+    test "a member with neither work nor headline keeps the bare name title", %{conn: conn} do
+      user = insert_activated_user(first_name: "Bare", last_name: "Name")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert og(html, "og:title") == "Bare Name"
+      assert title(html) == "Bare Name - vutuv"
     end
 
     test "a member without an avatar falls back to the brand card", %{conn: conn} do

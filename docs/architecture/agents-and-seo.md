@@ -72,6 +72,43 @@ the homepage — `VutuvWeb.JsonLd`, drift-tested against the doc builders), and
 `/.well-known/` serves agent-skills discovery (Cloudflare draft, digest-verified
 `SKILL.md`) plus `security.txt`
 
+## Profile SEO (`/:slug` and its subpages)
+
+The profile page is the SEO priority; its head is built to rank for the
+member's name (and name + role queries):
+
+- **Title**: `Full Name · <work line>` (or the headline when there is no
+  current job), derived in `VutuvWeb.LayoutHTML.page_title/1` from the same
+  `:header_job` the profile header shows; `og:title` shares it. A member with
+  neither keeps the bare name.
+- **ProfilePage JSON-LD** (`VutuvWeb.JsonLd.person/5`) carries the fields
+  search engines document for profile pages: `dateCreated`/`dateModified`
+  (account timestamps), `alternateName`/`identifier` (the handle),
+  `interactionStatistic` (followers as a FollowAction counter),
+  `agentInteractionStatistic` (posts as a WriteAction counter) — plus the
+  Person entity enriched from what the page already loaded (accuracy rule,
+  no extra queries): `description` (plain-text headline), `alumniOf`
+  (educations), `knowsLanguage`, `hasCredential` (qualifications),
+  `address` (public addresses), and `sameAs` = social accounts + **verified**
+  profile links (`Vutuv.Profiles.LinkVerification`). A `noindex?` member
+  still gets no Person block.
+- **`profile:*` Open Graph tags** (first/last name, username) on every
+  member page that is not a post.
+- **Every public subpage titles itself** `Full Name · <Section>` (entry
+  pages use the entry: job title, school, tag name, …) via
+  `UserHelpers.member_page_title/2` — before this they all fell back to the
+  member's bare name and competed with `/:slug` for the same title
+  (`profile_subpage_titles_test.exs` enforces name + uniqueness). New public
+  member subpages must set such a `:page_title`.
+- **BreadcrumbList JSON-LD** rides `<.page_header>` wherever a visible
+  crumbs trail renders (`JsonLd.breadcrumb_trail/1`), so section pages show
+  their place under the profile in search results.
+
+Deliberately *not* done: profile subpages stay out of the sitemap (they are
+near-duplicates of the profile's own cards; internal links and unique titles
+are the right treatment), and locale stays Accept-Language-negotiated on one
+URL (no hreflang variants).
+
 ## Member directory (`/system/members`)
 
 The crawlable A-Z index of every member whose profile is open to search engines

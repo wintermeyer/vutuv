@@ -33,7 +33,8 @@ defmodule VutuvWeb.ConnectionController do
           owner?: owner?,
           connections: connections,
           total: total,
-          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 45)
+          work_info_by_id: VutuvWeb.UserHelpers.work_information_map(users, 45),
+          page_title: VutuvWeb.UserHelpers.member_page_title(profile, gettext("Connections"))
         )
       end,
       doc: fn ->

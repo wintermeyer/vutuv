@@ -36,7 +36,8 @@ defmodule VutuvWeb.WorkExperienceController do
           work_experience: user.work_experiences,
           # The pinned profile job title (issue #833), so the management list can
           # mark it and offer the chooser. Nil = automatic heuristic.
-          profile_work_experience_id: user.profile_work_experience_id
+          profile_work_experience_id: user.profile_work_experience_id,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Experience"))
         )
       end,
       doc: fn -> SectionDocs.build_index(user, :work_experiences, user.work_experiences) end
@@ -121,9 +122,18 @@ defmodule VutuvWeb.WorkExperienceController do
     job = Repo.preload(conn.assigns[:job], :organization_page)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", work_experience: job),
+      html:
+        &render(&1, "show.html",
+          work_experience: job,
+          page_title: entry_page_title(conn.assigns[:user], job)
+        ),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :work_experiences, job) end
     )
+  end
+
+  defp entry_page_title(user, job) do
+    label = if job.title in [nil, ""], do: gettext("Experience"), else: job.title
+    VutuvWeb.UserHelpers.member_page_title(user, label)
   end
 
   def edit(conn, _params) do

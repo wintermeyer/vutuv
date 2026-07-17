@@ -15,7 +15,12 @@ defmodule VutuvWeb.PhoneNumberController do
 
     AgentDocs.respond(conn,
       html: fn conn ->
-        render(conn, "index.html", as_owner?: false, phone_numbers: phone_numbers)
+        render(conn, "index.html",
+          as_owner?: false,
+          phone_numbers: phone_numbers,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(conn.assigns[:user], gettext("Phone numbers"))
+        )
       end,
       doc: fn -> SectionDocs.build_index(conn.assigns[:user], :phone_numbers, phone_numbers) end
     )
@@ -63,9 +68,24 @@ defmodule VutuvWeb.PhoneNumberController do
     phone_number = ControllerHelpers.get_owned!(conn, :phone_numbers, id)
 
     AgentDocs.respond(conn,
-      html: &render(&1, "show.html", phone_number: phone_number),
+      html:
+        &render(&1, "show.html",
+          phone_number: phone_number,
+          page_title:
+            VutuvWeb.UserHelpers.member_page_title(
+              conn.assigns[:user],
+              phone_number_label(phone_number)
+            )
+        ),
       doc: fn -> SectionDocs.build_show(conn.assigns[:user], :phone_numbers, phone_number) end
     )
+  end
+
+  defp phone_number_label(phone_number) do
+    case phone_number.number_type do
+      type when type in [nil, ""] -> gettext("Phone numbers")
+      type -> "#{gettext("Phone numbers")} · #{type}"
+    end
   end
 
   def edit(conn, %{"id" => id}) do

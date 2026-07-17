@@ -41,8 +41,24 @@ defmodule VutuvWeb.OpenGraph do
       {"og:title", VutuvWeb.LayoutHTML.page_title(assigns) || "vutuv"},
       {"og:description", description(assigns)},
       {"og:locale", og_locale(assigns)}
-    ] ++ url_tags(assigns) ++ article_tags(ca) ++ image_tags(image(ca))
+    ] ++ url_tags(assigns) ++ article_tags(ca) ++ profile_tags(ca) ++ image_tags(image(ca))
   end
+
+  # The og:type=profile structured properties — the member behind the page,
+  # split into the parts scrapers index. Post pages are og:type=article and
+  # describe the post, not the member, so they carry none.
+  defp profile_tags(%{post: %Post{}}), do: []
+
+  defp profile_tags(%{user: %User{} = user}) do
+    [
+      {"profile:first_name", user.first_name},
+      {"profile:last_name", user.last_name},
+      {"profile:username", user.username}
+    ]
+    |> Enum.reject(fn {_property, value} -> value in [nil, ""] end)
+  end
+
+  defp profile_tags(_ca), do: []
 
   @doc """
   The twitter:card kind matching `tags/1`'s image: `summary` beside a

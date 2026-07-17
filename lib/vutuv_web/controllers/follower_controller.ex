@@ -20,6 +20,7 @@ defmodule VutuvWeb.FollowerController do
           user: user,
           followers: followers,
           total_followers: total,
+          page_title: VutuvWeb.UserHelpers.member_page_title(user, gettext("Followers")),
           work_info_by_id: VutuvWeb.UserHelpers.work_information_map(followers, 45),
           # Each row's four most popular tags plus a "+N more" overflow, the same
           # batched summary the most-followed listing renders through card_list.

@@ -226,6 +226,16 @@ defmodule VutuvWeb.UserHelpers do
     end
   end
 
+  @doc """
+  The `<title>` of a public page below a member's profile
+  (`/:slug/<section>`): "Full Name · Label". Every public subpage must carry
+  a title distinct from the profile's bare name — before this, the section
+  pages all fell back to the member's name, so a member's own subpages
+  competed with `/:slug` for the same title in search results
+  (profile_subpage_titles_test.exs).
+  """
+  def member_page_title(user, label), do: "#{full_name(user)} · #{label}"
+
   def work_information_string(user, len \\ 256)
 
   def work_information_string(nil, _), do: ""
