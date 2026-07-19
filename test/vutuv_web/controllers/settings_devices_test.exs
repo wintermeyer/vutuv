@@ -14,7 +14,8 @@ defmodule VutuvWeb.SettingsDevicesTest do
   # helper mints a unique address per registration, so read it back off `user`
   # rather than assuming a fixed literal).
   defp second_device(user) do
-    email = user |> Repo.preload(:emails) |> Map.fetch!(:emails) |> List.first() |> Map.fetch!(:value)
+    email =
+      user |> Repo.preload(:emails) |> Map.fetch!(:emails) |> List.first() |> Map.fetch!(:value)
 
     build_conn()
     |> Plug.Test.init_test_session(%{})
