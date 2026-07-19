@@ -108,6 +108,27 @@ defmodule Vutuv.Uploads.Spec do
     end
   end
 
+  @doc """
+  `open_rotated/1` for image bytes already in memory — same pixel budget and
+  EXIF autorotation, but keyed on the **content**, not a filename.
+
+  This is the cache-safe decode the AI image scan must use. libvips memoizes
+  file loads by their *filename*, and avatar/cover originals live at a fixed
+  path (`originals/<id>/original.<ext>`) that a re-upload overwrites in place —
+  so decoding that path *by name* returns the FIRST image ever loaded there for
+  the whole process lifetime. A member could upload a benign avatar (approved,
+  now cached) then swap in an unsafe one, and the re-scan would judge the stale
+  safe pixels and release the unsafe image. Decoding from the bytes sidesteps
+  the filename cache entirely (`Vutuv.Moderation.Ollama`).
+  """
+  def open_rotated_binary(binary) when is_binary(binary) do
+    with {:ok, image} <- Image.from_binary(binary),
+         :ok <- within_pixel_budget(image),
+         {:ok, {rotated, _flags}} <- Image.autorotate(image) do
+      {:ok, rotated}
+    end
+  end
+
   defp within_pixel_budget(image) do
     if Image.width(image) * Image.height(image) > @max_megapixels * 1_000_000 do
       {:error, :too_large}

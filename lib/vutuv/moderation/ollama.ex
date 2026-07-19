@@ -7,8 +7,11 @@ defmodule Vutuv.Moderation.Ollama do
 
   The image is downscaled to #{896}px longest edge and re-encoded as a
   metadata-stripped JPEG before it is sent — the model needs no more pixels
-  (faster inference, and the decode goes through `Spec.open_rotated/1`, so
-  the pixel-flood budget applies before anything is materialized).
+  (faster inference, and the decode goes through `Spec.open_rotated_binary/1`,
+  so the pixel-flood budget applies before anything is materialized). Decoding
+  from the image *bytes* (never a filename) is deliberate: a stored original
+  lives at a fixed path a re-upload overwrites in place, and libvips caches
+  file loads by name — a path decode would re-scan the previous image.
 
   Verdicts are forced into a JSON schema (Ollama structured outputs) and the
   prompt tells the model to ignore any instructions embedded *in* the image —
@@ -79,8 +82,9 @@ defmodule Vutuv.Moderation.Ollama do
   category}}` or a two-class error (see the moduledoc).
   """
   def moderate_file(path) do
-    with {:ok, jpeg} <- downscaled_jpeg(path) do
-      moderate_jpeg(jpeg)
+    case File.read(path) do
+      {:ok, bytes} -> moderate_binary(bytes)
+      {:error, _} -> {:error, {:image, :undecodable}}
     end
   end
 
@@ -88,27 +92,24 @@ defmodule Vutuv.Moderation.Ollama do
   Judges in-memory image `bytes` (the social-feed avatar fetch holds the
   image as a binary, never as a stored file). Same contract as
   `moderate_file/1`.
+
+  Decoding from the bytes rather than a path is also what keeps `moderate_file/1`
+  cache-safe: the stored original of an avatar/cover lives at a fixed path that a
+  re-upload overwrites in place, and libvips memoizes file loads by filename — so
+  a path-based decode would re-scan the previous (already-approved) image. See
+  `Vutuv.Uploads.Spec.open_rotated_binary/1`.
   """
   def moderate_binary(bytes) when is_binary(bytes) do
-    path =
-      Path.join(
-        System.tmp_dir!(),
-        "vutuv-scan-#{System.unique_integer([:positive])}"
-      )
-
-    try do
-      File.write!(path, bytes)
-      moderate_file(path)
-    after
-      File.rm(path)
+    with {:ok, jpeg} <- downscaled_jpeg(bytes) do
+      moderate_jpeg(jpeg)
     end
   end
 
   # Decode (pixel budget + EXIF autorotate), cap the longest edge, flatten any
   # alpha (JPEG has none) and re-encode stripped. An image our own pipeline
   # cannot decode cannot be judged -> image-class error.
-  defp downscaled_jpeg(path) do
-    with {:ok, rotated} <- Spec.open_rotated(path),
+  defp downscaled_jpeg(bytes) do
+    with {:ok, rotated} <- Spec.open_rotated_binary(bytes),
          {:ok, small} <- Image.thumbnail(rotated, "#{@scan_edge}x#{@scan_edge}", resize: :down),
          {:ok, flat} <- flatten(small),
          {:ok, jpeg} <- Operation.jpegsave_buffer(flat, keep: [], Q: @jpeg_quality) do

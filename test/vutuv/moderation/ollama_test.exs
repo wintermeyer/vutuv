@@ -97,6 +97,44 @@ defmodule Vutuv.Moderation.OllamaTest do
     assert {:error, {:image, :undecodable}} = Ollama.moderate_file(src)
   end
 
+  test "re-scanning a reused path judges the current bytes, not a cached earlier image" do
+    # Regression (moderation bypass): libvips memoizes file loads by *filename*.
+    # Avatar/cover originals live at a fixed path (originals/<id>/original.<ext>)
+    # that a re-upload overwrites in place, so opening it by path returned the
+    # FIRST image's pixels for the whole process lifetime. A member could upload
+    # a benign avatar (approved + cached), then swap in an NSFW one — the scan
+    # re-read the same path, got the cached safe pixels, and released the NSFW
+    # image. The scan must decode what is on disk *now*.
+    path = Path.join(System.tmp_dir!(), "reused_#{System.unique_integer([:positive])}.jpg")
+    on_exit(fn -> File.rm(path) end)
+
+    parent = self()
+
+    stub(fn conn ->
+      {:ok, raw, conn} = Plug.Conn.read_body(conn, length: 50_000_000)
+      [%{"images" => [b64]}] = Jason.decode!(raw)["messages"]
+      {:ok, sent} = b64 |> Base.decode64!() |> Image.from_binary()
+      send(parent, {:sent_dims, {Image.width(sent), Image.height(sent)}})
+      answer(conn, %{safe: true, category: "safe"})
+    end)
+
+    # First upload: a landscape image (downscales to 896x448).
+    {:ok, landscape} = Image.new(2000, 1000, color: [10, 120, 200])
+    {:ok, _} = Image.write(landscape, path)
+    assert {:ok, _} = Ollama.moderate_file(path)
+    assert_received {:sent_dims, first_dims}
+
+    # The member replaces it at the same path with a portrait (downscales to 448x896).
+    {:ok, portrait} = Image.new(1000, 2000, color: [200, 20, 20])
+    {:ok, _} = Image.write(portrait, path)
+    assert {:ok, _} = Ollama.moderate_file(path)
+    assert_received {:sent_dims, second_dims}
+
+    assert first_dims == {896, 448}
+    # Without a cache-safe decode this stays {896, 448} — the stale first image.
+    assert second_dims == {448, 896}
+  end
+
   test "moderate_binary/1 judges in-memory bytes (the social-feed avatar path)" do
     {:ok, img} = Image.new(64, 64, color: [1, 2, 3])
     {:ok, bytes} = Image.write(img, :memory, suffix: ".png")
