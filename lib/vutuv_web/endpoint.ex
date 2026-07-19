@@ -14,11 +14,26 @@ defmodule VutuvWeb.Endpoint do
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session_options]])
 
+  # In dev, serve static assets with `cache-control: no-cache` so the browser
+  # always revalidates against the ETag after a Tailwind rebuild (a 304 when the
+  # file is unchanged, a fresh 200 when it changed) instead of heuristically
+  # reusing a stale `app.css`. The Plug.Static default (`"public"` with an ETag
+  # and Last-Modified but no freshness directive) lets browsers serve a cached
+  # stylesheet for a heuristic window without asking the server, which shipped a
+  # blank (gradient-less) landing-page hero until a hard reload.
+  #
+  # Prod is untouched: `"public"` is exactly the Plug.Static default, and prod's
+  # digested assets are referenced with `?vsn=` and served via
+  # `:cache_control_for_vsn_requests` (the long immutable cache), which this
+  # option does not affect.
+  @static_etag_cache_control if Mix.env() == :dev, do: "no-cache", else: "public"
+
   plug(Plug.Static,
     at: "/",
     from: :vutuv,
     gzip: false,
-    only: ~w(assets css fonts images js favicon.ico)
+    only: ~w(assets css fonts images js favicon.ico),
+    cache_control_for_etags: @static_etag_cache_control
   )
 
   # In production, avatars/covers/screenshots are served directly by nginx from
