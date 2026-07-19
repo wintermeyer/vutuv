@@ -136,10 +136,12 @@ if config_env() == :prod do
     config :vutuv, :fediverse_enabled, false
   end
 
-  # AI image moderation via a local Ollama vision model. Fail-closed while
+  # AI image moderation via an Ollama vision model. Fail-closed while
   # enabled: with Ollama unreachable, new images wait in owner-only limbo and
   # are scanned automatically once it is back. IMAGE_MODERATION_ENABLED=false
-  # releases images immediately (installations without Ollama).
+  # releases images immediately (installations without Ollama). OLLAMA_URL
+  # may be a comma-separated priority list — fast remote GPU box first,
+  # patient local fallback last (see docs/architecture/images.md).
   if System.get_env("IMAGE_MODERATION_ENABLED") == "false" do
     config :vutuv, :moderate_images, false
   end

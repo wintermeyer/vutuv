@@ -104,4 +104,77 @@ defmodule Vutuv.Moderation.OllamaTest do
     stub(fn conn -> answer(conn, %{safe: true, category: "safe"}) end)
     assert {:ok, %{safe?: true}} = Ollama.moderate_binary(bytes)
   end
+
+  describe "multi-instance priority list (fast GPU box first, local fallback)" do
+    setup do
+      prev = Application.get_env(:vutuv, :ollama_url)
+
+      Application.put_env(
+        :vutuv,
+        :ollama_url,
+        "http://fast.test:11434, http://local.test:11434"
+      )
+
+      on_exit(fn ->
+        if prev,
+          do: Application.put_env(:vutuv, :ollama_url, prev),
+          else: Application.delete_env(:vutuv, :ollama_url)
+      end)
+
+      :ok
+    end
+
+    test "a failing fast instance falls through to the local one", %{src: src} do
+      parent = self()
+
+      stub(fn conn ->
+        send(parent, {:hit, conn.host})
+
+        case conn.host do
+          "fast.test" -> Plug.Conn.send_resp(conn, 503, "gpu busy")
+          "local.test" -> answer(conn, %{safe: true, category: "safe"})
+        end
+      end)
+
+      assert {:ok, %{safe?: true}} = Ollama.moderate_file(src)
+      assert_received {:hit, "fast.test"}
+      assert_received {:hit, "local.test"}
+    end
+
+    test "a healthy fast instance answers alone — the fallback is never asked", %{src: src} do
+      parent = self()
+
+      stub(fn conn ->
+        send(parent, {:hit, conn.host})
+        answer(conn, %{safe: false, category: "violence"})
+      end)
+
+      assert {:ok, %{safe?: false, category: "violence"}} = Ollama.moderate_file(src)
+      assert_received {:hit, "fast.test"}
+      refute_received {:hit, "local.test"}
+    end
+
+    test "every instance down is one service error (queue retries, fail-closed)", %{src: src} do
+      stub(fn conn -> Plug.Conn.send_resp(conn, 500, "") end)
+      assert {:error, {:service, {:http, 500}}} = Ollama.moderate_file(src)
+    end
+
+    test "a verdict is final: an image-class error never falls through", %{src: src} do
+      parent = self()
+
+      stub(fn conn ->
+        send(parent, {:hit, conn.host})
+
+        body = %{"message" => %{"role" => "assistant", "content" => "not json"}}
+
+        conn
+        |> Plug.Conn.put_resp_content_type("application/json")
+        |> Plug.Conn.send_resp(200, Jason.encode!(body))
+      end)
+
+      assert {:error, {:image, :bad_verdict}} = Ollama.moderate_file(src)
+      assert_received {:hit, "fast.test"}
+      refute_received {:hit, "local.test"}
+    end
+  end
 end

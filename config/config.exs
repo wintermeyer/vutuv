@@ -73,11 +73,15 @@ config :vutuv, :fetch_gravatar, true
 
 # AI image moderation (Vutuv.Moderation.ImageScans): every image — uploads
 # and machine-generated screenshots alike — is held in owner-only limbo until
-# a local Ollama vision model releases it; unsafe images are deleted and the
+# an Ollama vision model releases it; unsafe images are deleted and the
 # owner notified. Fail-closed: with Ollama unreachable the queue retries
 # forever, nothing is auto-approved. Off = images release immediately (tests,
-# installations without Ollama). Runtime overrides: IMAGE_MODERATION_ENABLED,
-# OLLAMA_URL, OLLAMA_VISION_MODEL (config/runtime.exs).
+# installations without Ollama). :ollama_url may be a comma-separated
+# priority list — every instance but the last is tried with the short
+# :ollama_remote_timeout and skipped on any service failure; the last is the
+# patient fallback of record (:ollama_timeout). Runtime overrides:
+# IMAGE_MODERATION_ENABLED, OLLAMA_URL, OLLAMA_VISION_MODEL
+# (config/runtime.exs).
 config :vutuv, :moderate_images, true
 config :vutuv, :ollama_url, "http://localhost:11434"
 config :vutuv, :ollama_vision_model, "qwen3-vl:8b"

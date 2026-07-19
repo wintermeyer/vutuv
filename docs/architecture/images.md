@@ -115,3 +115,13 @@ Config: `:moderate_images` / `:ollama_url` / `:ollama_vision_model`
 `config/runtime.exs`). Off = images release immediately (tests, installations
 without Ollama). `mix vutuv.moderation.backfill` queues the grandfathered
 catalog through the same pipeline without hiding anything while it waits.
+
+`:ollama_url` may be a comma-separated **priority list** of instances: every
+instance but the last is tried with `:ollama_remote_timeout` (30 s — enough
+for a GPU box to cold-load the model) and skipped on any service failure;
+the last is the fallback of record with the patient `:ollama_timeout`
+(120 s, covers a CPU cold load). Only service-class failures fall through —
+a verdict is final wherever it came from. vutuv.de runs
+`http://bremen3.wintermeyer.de:11434,http://localhost:11434`: the GPU box
+answers in seconds, the local CPU instance keeps moderation alive when it is
+down.

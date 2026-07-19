@@ -23,10 +23,14 @@ defmodule Vutuv.Moderation.Ollama do
       source, persistent schema-violating verdict). Counts toward the retry
       cap; at the cap the image is rejected (fail-closed, never fail-open).
 
-  Endpoint/model come from `:ollama_url` / `:ollama_vision_model` (env-
-  overridable in `config/runtime.exs`); tests inject a `plug:` responder via
-  the `:image_scan_req_options` config key (the Req seam every outbound
-  client here uses).
+  Endpoint(s)/model come from `:ollama_url` / `:ollama_vision_model` (env-
+  overridable in `config/runtime.exs`). `:ollama_url` may be a
+  comma-separated **priority list**: every instance but the last is tried
+  with the short `:ollama_remote_timeout` (default 30 s) and skipped on any
+  service failure; the last one is the fallback of record with the patient
+  `:ollama_timeout`. Tests inject a `plug:` responder via the
+  `:image_scan_req_options` config key (the Req seam every outbound client
+  here uses).
   """
 
   alias Vix.Vips.Operation
@@ -127,18 +131,40 @@ defmodule Vutuv.Moderation.Ollama do
       messages: [%{role: "user", content: @prompt, images: [Base.encode64(jpeg)]}]
     }
 
-    case request(body) do
-      {:ok, %Req.Response{status: 200, body: body}} -> parse(body)
-      {:ok, %Req.Response{status: status}} -> {:error, {:service, {:http, status}}}
-      {:error, reason} -> {:error, {:service, reason}}
+    # `:ollama_url` may name a comma-separated **priority list** of instances
+    # (e.g. a fast remote GPU box first, the patient local CPU one last).
+    # Each endpoint but the last gets `:ollama_remote_timeout` (a fast box
+    # that hasn't answered within it is skipped); the last is the fallback of
+    # record and gets the full `:ollama_timeout`. Only service-class failures
+    # (unreachable, timeout, non-200) fall through to the next endpoint — a
+    # verdict is a verdict wherever it came from.
+    try_endpoints(urls(), body, {:error, {:service, :no_endpoints}})
+  end
+
+  defp try_endpoints([], _body, last_error), do: last_error
+
+  defp try_endpoints([url | rest], body, _last_error) do
+    receive_timeout = if rest == [], do: timeout(), else: remote_timeout()
+
+    case request(url, body, receive_timeout) do
+      {:ok, %Req.Response{status: 200, body: response}} ->
+        parse(response)
+
+      {:ok, %Req.Response{status: status}} ->
+        try_endpoints(rest, body, {:error, {:service, {:http, status}}})
+
+      {:error, reason} ->
+        try_endpoints(rest, body, {:error, {:service, reason}})
     end
   end
 
-  defp request(json) do
+  defp request(url, json, receive_timeout) do
     [
-      url: url() <> "/api/chat",
+      url: url <> "/api/chat",
       json: json,
-      receive_timeout: timeout(),
+      receive_timeout: receive_timeout,
+      # A down box must fail fast, not eat the whole budget on TCP connect.
+      connect_options: [timeout: 5_000],
       retry: false
     ]
     |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
@@ -160,11 +186,24 @@ defmodule Vutuv.Moderation.Ollama do
 
   defp parse(_body), do: {:error, {:image, :bad_verdict}}
 
-  defp url, do: Application.get_env(:vutuv, :ollama_url, "http://localhost:11434")
+  # The configured instance(s), in priority order (comma-separated in
+  # `:ollama_url` / the OLLAMA_URL env var). A single URL behaves exactly as
+  # before: one endpoint, full `:ollama_timeout`.
+  defp urls do
+    Application.get_env(:vutuv, :ollama_url, "http://localhost:11434")
+    |> String.split(",")
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.map(&String.trim_trailing(&1, "/"))
+  end
 
   defp model, do: Application.get_env(:vutuv, :ollama_vision_model, "qwen3-vl:8b")
 
   # Vision inference on CPU can take a while; the queue is async, so patience
   # beats a spurious service error.
   defp timeout, do: Application.get_env(:vutuv, :ollama_timeout, 120_000)
+
+  # How long a non-final (fast/remote) instance may take before the next one
+  # is tried. Generous enough for a GPU box to cold-load the model.
+  defp remote_timeout, do: Application.get_env(:vutuv, :ollama_remote_timeout, 30_000)
 end
