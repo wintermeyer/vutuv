@@ -589,6 +589,33 @@ defmodule VutuvWeb.UserHelpers do
     value |> Phoenix.HTML.html_escape() |> safe_to_string()
   end
 
+  @doc """
+  The localized human name of a moderated image kind — the wording of the
+  "an image was removed" notice (email templates pass their template locale,
+  the notifications page the runtime gettext locale). One source, so the two
+  surfaces can never disagree.
+  """
+  def image_kind_label("avatar", "de"), do: "Ihr Profilbild"
+  def image_kind_label("cover", "de"), do: "Ihr Titelbild"
+  def image_kind_label("post_image", "de"), do: "ein Bild aus einem Ihrer Beiträge"
+
+  def image_kind_label("job_posting_image", "de"),
+    do: "ein Bild aus einer Ihrer Stellenanzeigen"
+
+  def image_kind_label("organization_image", "de"),
+    do: "ein Bild von einer Ihrer Organisationsseiten"
+
+  def image_kind_label(_kind, "de"), do: "ein Bild"
+  def image_kind_label("avatar", _locale), do: "your profile picture"
+  def image_kind_label("cover", _locale), do: "your cover photo"
+  def image_kind_label("post_image", _locale), do: "an image from one of your posts"
+  def image_kind_label("job_posting_image", _locale), do: "an image from one of your job postings"
+
+  def image_kind_label("organization_image", _locale),
+    do: "an image from one of your organization pages"
+
+  def image_kind_label(_kind, _locale), do: "an image"
+
   def email_greeting(%User{locale: "de", last_name: nil}), do: "#{greeting("de")}"
 
   def email_greeting(%User{locale: "de", gender: "male", last_name: last_name}) do

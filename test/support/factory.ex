@@ -290,6 +290,10 @@ defmodule Vutuv.Factory do
       height: 600,
       content_type: "image/jpeg",
       size_bytes: 123_456,
+      # Tests run with :moderate_images off, where a stored image is born
+      # released; the schema/DB default is the fail-closed "pending". The
+      # moderation tests set "pending" through the real upload chokepoints.
+      moderation: "approved",
       user: build(:user)
     }
   end
@@ -303,6 +307,8 @@ defmodule Vutuv.Factory do
       height: 600,
       content_type: "image/jpeg",
       size_bytes: 123_456,
+      # See post_image_factory: released, like every flag-off store.
+      moderation: "approved",
       user: build(:user)
     }
   end

@@ -23,6 +23,7 @@ defmodule Vutuv.Activity do
   require Logger
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationRole
@@ -113,6 +114,10 @@ defmodule Vutuv.Activity do
       Vutuv.Moderation.owner_notified_cases_query(user_id)
       |> select([c], %{ts: max(c.inserted_at)})
 
+    image_rejected_max =
+      ImageScans.rejected_scans_query(user_id)
+      |> select([s], %{ts: max(s.inserted_at)})
+
     severances = Vutuv.Moderation.reporter_severances_query(user_id)
     severance_max = select(severances, [s], %{ts: max(s.inserted_at)})
     severance_restore_max = select(severances, [s], %{ts: max(s.restored_at)})
@@ -132,6 +137,7 @@ defmodule Vutuv.Activity do
       |> union_all(^reply_max)
       |> union_all(^like_max)
       |> union_all(^moderation_max)
+      |> union_all(^image_rejected_max)
       |> union_all(^severance_max)
       |> union_all(^severance_restore_max)
       |> union_all(^organization_role_max)
@@ -367,6 +373,7 @@ defmodule Vutuv.Activity do
         &like_items(user_id, &1, &2),
         &organization_role_items(user_id, &1, &2),
         &moderation_items(user_id, &1, &2),
+        &image_rejected_items(user_id, &1, &2),
         &report_protection_items(user_id, &1, &2)
       ],
       limit,
@@ -409,6 +416,7 @@ defmodule Vutuv.Activity do
             subquery(count_likes(user_id, read_at)) +
             subquery(count_organization_roles(user_id, read_at)) +
             subquery(count_moderation(user_id, read_at)) +
+            subquery(count_image_rejections(user_id, read_at)) +
             subquery(count_severances(user_id, read_at)) +
             subquery(count_severance_restores(user_id, read_at))
       )
@@ -584,6 +592,28 @@ defmodule Vutuv.Activity do
     end)
   end
 
+  # An image the AI safety scan rejected and deleted (avatar, cover, a post /
+  # job-posting / organization image). Derived from the rejected scan rows —
+  # the audit record of the deletion — so the entry survives the live push
+  # and predates nothing: rejection only exists since the feature does.
+  defp image_rejected_items(user_id, limit, cursor) do
+    ImageScans.rejected_scans_query(user_id)
+    |> order_by([s], desc: s.inserted_at, desc: s.id)
+    |> limit(^limit)
+    |> select([s], {s.id, s.inserted_at, s.kind, s.category})
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, kind, category} ->
+      %{
+        id: "image-rejected-#{id}",
+        kind: "image_rejected",
+        at: at,
+        image_kind: kind,
+        category: category
+      }
+    end)
+  end
+
   # The reporter-protection entries: one when a report severed the
   # relationship to the reported member, a second when a rejected case
   # restored it. Both derive from the same severance row (Moderation owns the
@@ -726,6 +756,12 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
+  defp count_image_rejections(user_id, read_at) do
+    ImageScans.rejected_scans_query(user_id)
+    |> select([s], %{count: count()})
+    |> since(read_at)
+  end
+
   defp count_severances(user_id, read_at) do
     Vutuv.Moderation.reporter_severances_query(user_id)
     |> select([s], %{count: count()})
@@ -751,6 +787,9 @@ defmodule Vutuv.Activity do
   # the notifications page renders its colored kind glyph instead of a grey
   # anonymous image.
   defp actor_avatar(%User{avatar: nil}), do: nil
+  # An avatar in AI-moderation limbo renders like none (the kind glyph), not
+  # as the grey placeholder display_url would fall back to.
+  defp actor_avatar(%User{avatar_moderation: "pending"}), do: nil
   defp actor_avatar(%User{} = user), do: Vutuv.Avatar.display_url(user, :thumb)
   defp actor_avatar(_), do: nil
 

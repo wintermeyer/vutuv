@@ -23,6 +23,7 @@ defmodule Vutuv.Screenshot do
   one-shot regeneration has converted them.
   """
 
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Uploads.Originals
   alias Vutuv.Uploads.Spec
 
@@ -36,15 +37,24 @@ defmodule Vutuv.Screenshot do
   def store({%Plug.Upload{} = upload, scope}) do
     if valid_extension?(upload.filename) do
       dir = disk_dir(scope)
-      File.mkdir_p!(dir)
       hash = Vutuv.Uploads.content_hash(upload.path)
       ext = Path.extname(upload.filename)
+      # With AI image moderation on, a fresh capture waits in the quarantine
+      # tree (nginx has no location for it) until the scan releases it — a
+      # screenshot of an NSFW page must not bypass the upload gate.
+      target_dir =
+        if ImageScans.enabled?(),
+          do: Vutuv.Uploads.quarantine_dir(storage_dir(scope)),
+          else: dir
+
+      File.mkdir_p!(target_dir)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
            # Remove any prior versions first so a regeneration leaves exactly
            # one fingerprinted thumb behind instead of accumulating files.
-           :ok <- clear_versions(dir),
-           :ok <- write_thumb(rotated, dir, hash) do
+           :ok <- clear_versions(target_dir),
+           :ok <- write_thumb(rotated, target_dir, hash),
+           :ok <- clear_displaced_versions(target_dir, dir) do
         :ok = Originals.store(storage_dir(scope), upload.path, ext)
         {:ok, "#{hash}#{ext}"}
       else
@@ -55,6 +65,35 @@ defmodule Vutuv.Screenshot do
     end
   end
 
+  # Quarantine-first captures clear the old public thumb only after the new
+  # derive succeeded; the classic in-place store already cleared its target.
+  defp clear_displaced_versions(dir, dir), do: :ok
+  defp clear_displaced_versions(_target_dir, dir), do: clear_versions(dir)
+
+  @doc """
+  Releases an approved screenshot from the quarantine tree into the served
+  dir (idempotent). Called by the moderation verdict
+  (`Vutuv.Moderation.ImageSubjects`); the thumb filename carries only the
+  content hash, so no re-derive is ever needed here.
+  """
+  def promote_from_quarantine(scope) do
+    qdir = Vutuv.Uploads.quarantine_dir(storage_dir(scope))
+
+    case Path.wildcard(Path.join(qdir, "*")) do
+      [] ->
+        :ok
+
+      files ->
+        dir = disk_dir(scope)
+        File.mkdir_p!(dir)
+        clear_versions(dir)
+        for file <- files, do: File.rename!(file, Path.join(dir, Path.basename(file)))
+    end
+
+    File.rm_rf(qdir)
+    :ok
+  end
+
   @doc """
   Re-derives the served thumb from the original per the current
   `Vutuv.Uploads.Spec` — see `Vutuv.Uploads.regenerate_from_original/3`,
@@ -62,16 +101,29 @@ defmodule Vutuv.Screenshot do
   `Vutuv.Uploads.Regenerator`.
   """
   def regenerate(url, opts \\ []) do
-    dir = disk_dir(url)
-    hash = rootname(url.screenshot)
+    if held_in_limbo?(url) do
+      # Never materialize an unreleased screenshot into the served tree; its
+      # thumb waits in quarantine until the moderation verdict.
+      :unchanged
+    else
+      dir = disk_dir(url)
+      hash = rootname(url.screenshot)
 
-    Vutuv.Uploads.regenerate_from_original(storage_dir(url), dir,
-      canonical: [thumb_filename(hash, Spec.served_ext())],
-      stale_glob: "{thumb,original}*",
-      legacy_candidates: [Path.join(dir, "original-*")],
-      derive: &write_thumb(&1, dir, hash),
-      opts: opts
-    )
+      Vutuv.Uploads.regenerate_from_original(storage_dir(url), dir,
+        canonical: [thumb_filename(hash, Spec.served_ext())],
+        stale_glob: "{thumb,original}*",
+        legacy_candidates: [Path.join(dir, "original-*")],
+        derive: &write_thumb(&1, dir, hash),
+        opts: opts
+      )
+    end
+  end
+
+  # The two screenshot scopes carry their moderation state under different
+  # names (urls.screenshot_moderation / post_screenshots.moderation).
+  defp held_in_limbo?(scope) do
+    Map.get(scope, :screenshot_moderation) == "pending" or
+      Map.get(scope, :moderation) == "pending"
   end
 
   @doc """
@@ -85,9 +137,14 @@ defmodule Vutuv.Screenshot do
   def url({_screenshot, _scope}, :original), do: nil
 
   def url({screenshot, scope}, :thumb) do
-    "/"
-    |> Path.join(Path.join(storage_dir(scope), served_filename(scope, screenshot)))
-    |> URI.encode()
+    if held_in_limbo?(scope) do
+      # Moderation limbo: renders exactly like "no screenshot yet".
+      "/images/screenshot.png"
+    else
+      "/"
+      |> Path.join(Path.join(storage_dir(scope), served_filename(scope, screenshot)))
+      |> URI.encode()
+    end
   end
 
   @doc """
@@ -97,6 +154,7 @@ defmodule Vutuv.Screenshot do
   """
   def delete(url) do
     File.rm_rf(disk_dir(url))
+    File.rm_rf(Vutuv.Uploads.quarantine_dir(storage_dir(url)))
     Originals.delete(storage_dir(url))
     :ok
   end

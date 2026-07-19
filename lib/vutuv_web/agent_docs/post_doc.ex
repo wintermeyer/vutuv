@@ -46,7 +46,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       published_on: post.published_on,
       body_markdown: post.body,
       tags: Enum.map(post.tags, & &1.name),
-      images: Enum.map(post.images, &image_entry/1),
+      # Anonymous public view: images still in (or deleted by) AI moderation
+      # never appear here.
+      images: post |> Posts.released_images() |> Enum.map(&image_entry/1),
       in_reply_to: in_reply_to(post),
       # The anonymous doc lists only anonymous-visible replies; count the loaded
       # rows so it matches exactly. (Posts.reply_count/1 now also excludes

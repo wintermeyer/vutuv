@@ -28,6 +28,10 @@ defmodule Vutuv.Organizations.OrganizationImage do
     field(:content_type, :string)
     field(:size_bytes, :integer)
 
+    # AI image moderation state (Vutuv.Moderation.ImageScans). DB default is
+    # "pending", so an image is invisible-to-others until released.
+    field(:moderation, :string, default: "pending")
+
     timestamps()
   end
 

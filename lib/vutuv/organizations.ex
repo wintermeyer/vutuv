@@ -21,6 +21,7 @@ defmodule Vutuv.Organizations do
   alias Vutuv.Accounts.User
   alias Vutuv.Engagement
   alias Vutuv.Handles
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationBookmark
@@ -1455,9 +1456,14 @@ defmodule Vutuv.Organizations do
 
     case Vutuv.OrganizationImageStore.store(path, filename, token) do
       {:ok, meta} ->
-        old_token = organization.logo
+        # A fresh logo starts in AI-moderation limbo. Unlike avatars, the
+        # `organizations.logo` pointer only ever names a *released* image: it
+        # flips to the new token when the scan approves (`release_logo/1`),
+        # so the current logo keeps showing meanwhile and no template ever
+        # renders an unreleased byte or a broken image.
+        moderation = ImageScans.initial_state()
 
-        {:ok, _image} =
+        {:ok, image} =
           Repo.insert(%OrganizationImage{
             organization_id: organization.id,
             user_id: user.id,
@@ -1465,16 +1471,38 @@ defmodule Vutuv.Organizations do
             width: meta.width,
             height: meta.height,
             content_type: meta.content_type,
-            size_bytes: meta.size_bytes
+            size_bytes: meta.size_bytes,
+            moderation: moderation
           })
 
-        {:ok, organization} = organization |> Ecto.Changeset.change(logo: token) |> Repo.update()
-        if old_token, do: purge_image(old_token, organization.id)
-        {:ok, organization}
+        if moderation == "approved" do
+          release_logo(image)
+        else
+          ImageScans.enqueue("organization_image", image.id, user.id)
+          {:ok, organization}
+        end
 
       {:error, _reason} ->
         {:error, :invalid_file}
     end
+  end
+
+  @doc """
+  Points `organizations.logo` at a (released) image and purges the logo it
+  displaces. Called on store when moderation is off, and by the scan verdict
+  (`Vutuv.Moderation.ImageSubjects`) when it is on. Assumes organization
+  images are logos (true today — revisit when the #932-style description
+  gallery lands on organization pages).
+  """
+  def release_logo(%OrganizationImage{} = image) do
+    organization = Repo.get!(Organization, image.organization_id)
+    old_token = organization.logo
+
+    {:ok, organization} =
+      organization |> Ecto.Changeset.change(logo: image.token) |> Repo.update()
+
+    if old_token && old_token != image.token, do: purge_image(old_token, organization.id)
+    {:ok, organization}
   end
 
   @doc "Removes an organization's logo (files + row + column)."
@@ -1504,12 +1532,25 @@ defmodule Vutuv.Organizations do
 
   def image_visible_to?(%OrganizationImage{organization_id: nil}, _viewer), do: false
 
-  def image_visible_to?(%OrganizationImage{organization_id: organization_id}, viewer) do
+  def image_visible_to?(%OrganizationImage{organization_id: organization_id} = image, viewer) do
     case get_organization(organization_id) do
-      nil -> false
-      organization -> organization_visible_to?(organization, viewer)
+      nil ->
+        false
+
+      organization ->
+        # AI-moderation limbo: until released, the bytes are uploader/admin-only.
+        organization_visible_to?(organization, viewer) and
+          (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
     end
   end
+
+  defp privileged_image_viewer?(%OrganizationImage{user_id: uploader_id}, %User{
+         id: uploader_id
+       }),
+       do: true
+
+  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
+  defp privileged_image_viewer?(_image, _viewer), do: false
 
   # --- deletion ---------------------------------------------------------------
 

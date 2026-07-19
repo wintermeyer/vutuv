@@ -1,0 +1,15 @@
+<.email_layout preheader="An image was removed by our automated image review" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    our automated image review (an AI model) removed {image_kind_label(@kind, @locale)}.
+  </.email_p>
+  <.email_p>
+    The reason, in short: vutuv only allows images that are family-friendly and suitable for a work
+    environment. This image did not pass that review.
+  </.email_p>
+  <.email_p>
+    You are welcome to upload a different image any time. If you are convinced the decision was
+    wrong, just reply to this email and a human will take a look.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

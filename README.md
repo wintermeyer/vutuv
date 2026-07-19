@@ -43,6 +43,10 @@ We use the [MIT License](LICENSE).
   applications (print/PDF, Word, OpenDocument, LaTeX, JSON Resume), and
   per-installation legal pages (Impressum, Datenschutzerklärung,
   Nutzungsbedingungen) edited at `/admin/legal`.
+- AI image moderation: every uploaded picture (and every auto-generated link
+  screenshot) is checked by a local Ollama vision model before anyone but the
+  uploader sees it — unsafe images are deleted on the spot and the owner
+  notified. Runs fully offline; installations without Ollama can turn it off.
 - German and English UI; dark mode follows the system.
 
 Technology: Elixir / Phoenix 1.8, PostgreSQL, Bandit, Tailwind CSS v4,

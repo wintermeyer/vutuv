@@ -43,6 +43,7 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Jobs.JobPostingLike
   alias Vutuv.Jobs.JobPostingTag
   alias Vutuv.Moderation.Case
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations
   alias Vutuv.Pages
   alias Vutuv.Repo
@@ -593,14 +594,27 @@ defmodule Vutuv.Jobs do
       token = JobPostingImage.gen_token()
 
       case Vutuv.JobPostingImageStore.store(path, filename, token) do
-        {:ok, meta} ->
-          %JobPostingImage{user_id: user.id, token: token}
-          |> Ecto.Changeset.change(meta)
-          |> Repo.insert()
-
-        {:error, reason} ->
-          {:error, reason}
+        {:ok, meta} -> insert_scanned_image(user, token, meta)
+        {:error, reason} -> {:error, reason}
       end
+    end
+  end
+
+  # Fresh images start in AI-moderation limbo (owner-only, placecard for
+  # everyone else) until the scan releases or deletes them.
+  defp insert_scanned_image(user, token, meta) do
+    insert =
+      %JobPostingImage{
+        user_id: user.id,
+        token: token,
+        moderation: ImageScans.initial_state()
+      }
+      |> Ecto.Changeset.change(meta)
+      |> Repo.insert()
+
+    with {:ok, image} <- insert do
+      ImageScans.enqueue("job_posting_image", image.id, user.id)
+      {:ok, image}
     end
   end
 
@@ -620,12 +634,24 @@ defmodule Vutuv.Jobs do
 
   def get_image_by_token(_), do: nil
 
-  @doc "Pending images are visible to their uploader only; attached follow the posting."
+  @doc """
+  Pending images are visible to their uploader only; attached follow the
+  posting — and an image in AI-moderation limbo stays uploader/admin-only
+  until released (`Vutuv.Moderation.ImageScans`).
+  """
   def image_visible_to?(%JobPostingImage{job_posting_id: nil, user_id: uploader_id}, viewer),
     do: viewer != nil and viewer.id == uploader_id
 
-  def image_visible_to?(%JobPostingImage{job_posting: posting}, viewer),
-    do: visible_to?(posting, viewer)
+  def image_visible_to?(%JobPostingImage{job_posting: posting} = image, viewer) do
+    visible_to?(posting, viewer) and
+      (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
+  end
+
+  defp privileged_image_viewer?(%JobPostingImage{user_id: uploader_id}, %User{id: uploader_id}),
+    do: true
+
+  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
+  defp privileged_image_viewer?(_image, _viewer), do: false
 
   # Attach the chosen pending images to the posting; delete + purge those the
   # editor removed.

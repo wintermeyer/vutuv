@@ -51,6 +51,7 @@ defmodule Vutuv.Application do
         optional_child(:webhook_deliverer, Vutuv.Webhooks.Deliverer) ++
         optional_child(:fediverse_deliverer, Vutuv.Fediverse.Deliverer) ++
         optional_child(:post_screenshot_worker, Vutuv.Posts.ScreenshotWorker) ++
+        optional_child(:image_scan_worker, Vutuv.Moderation.ImageScanWorker) ++
         optional_child(:daily_report_email, Vutuv.Reports.DailyReporter) ++
         optional_child(:bounce_watcher, Vutuv.Deliverability.Watcher) ++
         optional_child(:sweep_unreachable_accounts, Vutuv.Deliverability.Sweeper) ++

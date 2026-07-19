@@ -807,6 +807,19 @@ defmodule Vutuv.Notifications.Emailer do
     end)
   end
 
+  @doc """
+  Owner notice: the AI image scan removed one of their images (deleted on the
+  spot, `Vutuv.Moderation.ImageScans`). Transactional — about their own
+  content — so no opt-out; replies go to the operator (appeal channel: the
+  model can be wrong, and a human should hear about it).
+  """
+  def image_rejected_email(user, email, scan) do
+    build_email(user, email, "image_rejected", %{kind: scan.kind}, fn ->
+      gettext("An image was removed from your vutuv account")
+    end)
+    |> with_appeal_reply_to()
+  end
+
   @doc "Strike 1: the formal warning."
   def moderation_warning_email(user, email) do
     build_email(user, email, "moderation_warning", %{}, fn ->

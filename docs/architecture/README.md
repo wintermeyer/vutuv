@@ -25,7 +25,7 @@ installing and operating vutuv in [Running your own vutuv](../ADMINS.md).
 | [moderation.md](moderation.md) | reports, freezes, the strike ladder, reporter trust, evidence screenshots |
 | [agents-and-seo.md](agents-and-seo.md) | agent formats (`.md`/`.txt`/`.json`/`.xml`/`.vcf`), the member directory, sitemap/RSS/JSON-LD, Open Graph |
 | [email.md](email.md) | the Emailer chokepoint, multipart bodies, opt-outs, bounces & deliverability |
-| [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, URL screenshots |
+| [images.md](images.md) | the AVIF pipeline, kept originals, fingerprinted filenames, URL screenshots, AI image moderation (Ollama) |
 | [admin.md](admin.md) | the admin panel: live dashboard, member browser, account deletion, newsletter & audiences, daily report |
 | [ads.md](ads.md) | the daily text ad: booking, review, serving |
 | [api.md](api.md) | `/api/2.0`: personal access tokens, OAuth 2, webhooks, developer docs |

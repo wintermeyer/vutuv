@@ -17,8 +17,13 @@ defmodule VutuvWeb.Admin.AdminHTML do
   """
   attr(:icon, :string, required: true)
   attr(:title, :string, required: true)
-  attr(:href, :string, required: true)
-  attr(:cta, :string, required: true)
+
+  attr(:href, :string,
+    default: nil,
+    doc: "the page the card opens; nil renders a read-only stat tile (no CTA row)"
+  )
+
+  attr(:cta, :string, default: nil)
   attr(:id, :string, default: nil)
   attr(:count, :integer, default: nil)
 
@@ -29,6 +34,49 @@ defmodule VutuvWeb.Admin.AdminHTML do
 
   attr(:attention, :boolean, default: false)
   slot(:inner_block, required: true)
+
+  # A card without an href is a read-only stat tile: same surface, no hover
+  # lift, no CTA row (the image-review queue tile).
+  def admin_card(%{href: nil} = assigns) do
+    ~H"""
+    <div
+      id={@id}
+      class={[
+        "flex h-full flex-col gap-4 rounded-2xl bg-white p-5 shadow-sm ring-1 dark:bg-slate-900",
+        @attention && "ring-accent/40 dark:ring-accent/40",
+        !@attention && "ring-slate-200 dark:ring-slate-800"
+      ]}
+    >
+      <div class="flex items-start justify-between">
+        <span class={[
+          "flex h-11 w-11 items-center justify-center rounded-xl",
+          @attention && "bg-accent/10 text-accent",
+          !@attention && "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-200"
+        ]}>
+          <.section_icon name={@icon} />
+        </span>
+
+        <span
+          :if={@count && @count > 0}
+          class={[
+            "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold tabular-nums",
+            @attention && "bg-accent text-white",
+            !@attention && "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+          ]}
+        >
+          {if @count_exact, do: delimited_count(@count), else: compact_count(@count)}
+        </span>
+      </div>
+
+      <div class="flex flex-1 flex-col">
+        <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">{@title}</h2>
+        <p class="mt-1 text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+          {render_slot(@inner_block)}
+        </p>
+      </div>
+    </div>
+    """
+  end
 
   def admin_card(assigns) do
     ~H"""

@@ -296,6 +296,44 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, assign(socket, :posts, posts)}
   end
 
+  # An AI image-moderation verdict landed for this profile's owner
+  # (Vutuv.Moderation.ImageScans): re-fetch the user so an approved avatar /
+  # cover swaps in (and the owner's limbo pill drops) with no reload; a
+  # post-image verdict re-fetches the shown posts the same way.
+  def handle_info({:image_moderation, kind, _subject_id, _verdict}, socket)
+      when kind in ["avatar", "cover"] do
+    case Vutuv.Accounts.get_user(socket.assigns.user.id) do
+      nil ->
+        {:noreply, socket}
+
+      user ->
+        {:noreply,
+         assign(
+           socket,
+           :user,
+           Map.merge(
+             socket.assigns.user,
+             Map.take(user, [
+               :avatar,
+               :avatar_fingerprint,
+               :avatar_crop,
+               :avatar_moderation,
+               :cover_photo,
+               :cover_fingerprint,
+               :cover_crop,
+               :cover_moderation,
+               :updated_at
+             ])
+           )
+         )}
+    end
+  end
+
+  def handle_info({:image_moderation, "post_image", _subject_id, _verdict}, socket) do
+    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    {:noreply, assign(socket, :posts, posts)}
+  end
+
   # The social feed cache answered a mount-time request (or a concurrent
   # visitor's fetch this page joined — single-flight): drop the account's
   # loading spinner and, on success, fold the feed into the mixed posts card.

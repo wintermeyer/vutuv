@@ -253,6 +253,10 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_classes("moderation"),
     do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
 
+  # The AI image scan removed an image — amber, like every moderation notice.
+  defp kind_classes("image_rejected"),
+    do: "bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-200"
+
   defp kind_classes(kind) when kind in @brand_kinds, do: @brand_kind_classes
 
   defp kind_classes(_), do: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-300"
@@ -264,6 +268,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   defp kind_glyph("connection"), do: "🤝"
   defp kind_glyph("moderation"), do: "⚑"
+  defp kind_glyph("image_rejected"), do: "🖼"
   defp kind_glyph("report_protection"), do: "🛡"
   defp kind_glyph("organization_role"), do: "🏢"
   defp kind_glyph(_), do: "•"
@@ -276,6 +281,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
+  defp kind_label("image_rejected"), do: gettext("Image review")
   defp kind_label("report_protection"), do: gettext("Report protection")
   defp kind_label("organization_role"), do: gettext("Organization role")
   defp kind_label(_), do: gettext("Activity")
@@ -292,6 +298,12 @@ defmodule VutuvWeb.NotificationLive.Index do
   # An organization-role grant opens the organization page it was granted on.
   defp notification_target(%{kind: "organization_role"} = n, _viewer) do
     if is_binary(n[:organization_slug]), do: ~p"/organizations/#{n.organization_slug}"
+  end
+
+  # A removed avatar/cover leads to the photos form (upload a new one);
+  # other rejected images have no page left to open.
+  defp notification_target(%{kind: "image_rejected"} = n, viewer) do
+    if n[:image_kind] in ["avatar", "cover"] and viewer != nil, do: ~p"/settings/profile"
   end
 
   defp notification_target(n, viewer) do
@@ -349,6 +361,19 @@ defmodule VutuvWeb.NotificationLive.Index do
       "resolved_deleted" -> gettext("You deleted reported content; the case is closed.")
       _ -> gettext("Your content was reported and is hidden while the report is handled.")
     end
+  end
+
+  # The AI image scan removed an image. No actor (it was the machine); the
+  # what-was-removed wording shares its single source with the email
+  # (VutuvWeb.UserHelpers.image_kind_label/2).
+  defp notification_text(%{kind: "image_rejected"} = n) do
+    what =
+      VutuvWeb.UserHelpers.image_kind_label(n[:image_kind], Gettext.get_locale(VutuvWeb.Gettext))
+
+    gettext(
+      "Our automated image review removed %{what}. Only family-friendly images suitable for a work environment are allowed.",
+      what: what
+    )
   end
 
   # Reporter protection: the actor is the *reported* member, rendered as

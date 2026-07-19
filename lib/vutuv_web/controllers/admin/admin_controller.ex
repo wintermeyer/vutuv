@@ -3,6 +3,7 @@ defmodule VutuvWeb.Admin.AdminController do
 
   alias Vutuv.Accounts.User
   alias Vutuv.Geo
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Tags.Tag
 
   def index(conn, _params) do
@@ -20,6 +21,8 @@ defmodule VutuvWeb.Admin.AdminController do
       proxy_hop?: Geo.private_or_loopback?(conn.remote_ip),
       members_count: Repo.aggregate(User, :count),
       moderation_count: Vutuv.Moderation.open_queue_count(),
+      image_moderation_enabled: ImageScans.enabled?(),
+      image_scan_counts: ImageScans.counts(),
       ads_enabled: Vutuv.Ads.enabled?(),
       pending_ads_count: if(Vutuv.Ads.enabled?(), do: Vutuv.Ads.pending_ads_count(), else: 0),
       api_apps_count: Repo.aggregate(Vutuv.ApiAuth.App, :count),

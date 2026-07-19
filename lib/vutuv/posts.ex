@@ -45,6 +45,7 @@ defmodule Vutuv.Posts do
   import Vutuv.SearchText, only: [escape_like: 1, normalize_search: 1, name_ilike: 3]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Pages
   alias Vutuv.PostImageStore
   alias Vutuv.Posts.Post
@@ -1609,20 +1610,45 @@ defmodule Vutuv.Posts do
       token = PostImage.gen_token()
 
       case PostImageStore.store(path, filename, token) do
-        {:ok, meta} ->
-          %PostImage{user_id: user.id, token: token}
-          |> Ecto.Changeset.change(meta)
-          |> Repo.insert()
-
-        {:error, _} = error ->
-          error
+        {:ok, meta} -> insert_scanned_image(user, token, meta)
+        {:error, _} = error -> error
       end
+    end
+  end
+
+  # Fresh images start in AI-moderation limbo (owner-only, placecard for
+  # everyone else) until the scan releases or deletes them.
+  defp insert_scanned_image(user, token, meta) do
+    insert =
+      %PostImage{
+        user_id: user.id,
+        token: token,
+        moderation: ImageScans.initial_state()
+      }
+      |> Ecto.Changeset.change(meta)
+      |> Repo.insert()
+
+    with {:ok, image} <- insert do
+      ImageScans.enqueue("post_image", image.id, user.id)
+      {:ok, image}
     end
   end
 
   def update_image_alt(%PostImage{} = image, alt) do
     image |> PostImage.alt_changeset(%{alt: alt}) |> Repo.update()
   end
+
+  @doc """
+  Only the AI-released images of a post — what every anonymous/public
+  rendering (agent docs, JSON-LD, OpenGraph, the API) may show. The owner's
+  in-limbo view is the post card's business (`VutuvWeb.PostComponents`).
+  """
+  def released_images(%Post{images: images}), do: released_images(images)
+
+  def released_images(images) when is_list(images),
+    do: Enum.filter(images, &ImageScans.released?(&1.moderation))
+
+  def released_images(_not_loaded), do: []
 
   @doc "Deletes a pending (unattached) image: row and files."
   def delete_pending_image(%PostImage{post_id: nil} = image) do
@@ -1674,8 +1700,17 @@ defmodule Vutuv.Posts do
         _ -> Repo.get(Post, image.post_id)
       end
 
-    visible_to?(post, viewer)
+    # AI-moderation limbo: until released, the bytes are owner/admin-only
+    # (everyone else gets the gallery placecard, and this proxy 404s).
+    visible_to?(post, viewer) and
+      (ImageScans.released?(image.moderation) or privileged_image_viewer?(image, viewer))
   end
+
+  defp privileged_image_viewer?(%PostImage{user_id: uploader_id}, %User{id: uploader_id}),
+    do: true
+
+  defp privileged_image_viewer?(_image, %User{admin?: true}), do: true
+  defp privileged_image_viewer?(_image, _viewer), do: false
 
   @doc """
   Removes pending images older than a day (abandoned composer sessions),

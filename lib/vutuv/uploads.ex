@@ -12,6 +12,9 @@ defmodule Vutuv.Uploads do
   modules (avatar, cover, post image, screenshot) that configure it.
   """
 
+  require Logger
+
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Repo
   alias Vutuv.Uploads.Crop
   alias Vutuv.Uploads.Originals
@@ -63,6 +66,18 @@ defmodule Vutuv.Uploads do
   end
 
   @doc """
+  The **quarantine** twin of a served directory: while AI image moderation
+  holds an nginx-served image in limbo, its derived versions live under
+  `quarantine/<storage_dir>` — a tree nginx has no location for, so an
+  unreleased byte is unreachable by URL no matter what a display helper
+  renders. Approval moves the files into the served dir; rejection removes
+  the whole tree.
+  """
+  def quarantine_dir(storage_dir) when is_binary(storage_dir) do
+    disk_dir(Path.join("quarantine", storage_dir))
+  end
+
+  @doc """
   Drops a legacy `"?<timestamp>"` cache-busting suffix from a stored filename.
   """
   def strip_query(value) when is_binary(value), do: String.replace(value, ~r/\?\d+$/, "")
@@ -100,18 +115,24 @@ defmodule Vutuv.Uploads do
       ext = Path.extname(upload.filename)
       storage_dir = storage_dir(scope, config)
       dir = disk_dir(storage_dir)
-      File.mkdir_p!(dir)
       # The crop is folded into the fingerprint so re-cropping the *same*
       # original yields a different filename (and a cache-safe URL); see
       # content_hash/2. The crop only shapes the derived (served) versions —
       # the original is kept verbatim and uncropped, so a future re-derive (or
       # re-crop) starts from the full upload.
       fingerprint = content_hash(upload.path, crop)
+      # Moderated uploaders write into the quarantine tree; the scan verdict
+      # moves the files into the served dir (approve) or removes everything
+      # (reject). The old public image is cleared only after the new derive
+      # succeeded, so a corrupt upload never costs the current image.
+      target_dir = if quarantined?(config), do: quarantine_dir(storage_dir), else: dir
+      File.mkdir_p!(target_dir)
 
       with {:ok, rotated} <- Spec.open_rotated(upload.path),
            {:ok, cropped} <- Crop.apply_to(rotated, Crop.parse(crop)),
-           :ok <- clear_public_versions(dir),
-           :ok <- write_derived_versions(cropped, dir, scope, fingerprint, config),
+           :ok <- clear_public_versions(target_dir),
+           :ok <- write_derived_versions(cropped, target_dir, scope, fingerprint, config),
+           :ok <- clear_displaced_versions(target_dir, dir),
            :ok <- Originals.store(storage_dir, upload.path, ext) do
         {:ok, upload.filename, fingerprint}
       else
@@ -120,6 +141,52 @@ defmodule Vutuv.Uploads do
     else
       {:error, :invalid_file}
     end
+  end
+
+  # Quarantine-first uploads clear the old public image only after the new
+  # derive succeeded (limbo shows the placeholder, per spec); the classic
+  # in-place store already cleared its target above.
+  defp clear_displaced_versions(dir, dir), do: :ok
+  defp clear_displaced_versions(_target_dir, dir), do: clear_public_versions(dir)
+
+  # Whether this uploader's fresh files belong in the quarantine tree: it has
+  # a moderation state column and AI image moderation is on.
+  defp quarantined?(config) do
+    Map.has_key?(config, :moderation_field) and ImageScans.enabled?()
+  end
+
+  @doc """
+  Releases a moderated image: moves the quarantined derived versions into the
+  served dir (clearing whatever was there, so exactly one image set remains)
+  and, as self-healing, re-derives from the private original when the
+  current-handle fingerprinted files still aren't all present afterwards
+  (e.g. a username change while the image waited in limbo). Idempotent — an
+  empty quarantine with converged served files is a no-op.
+  """
+  def promote_from_quarantine(scope, config) do
+    storage_dir = storage_dir(scope, config)
+    qdir = quarantine_dir(storage_dir)
+    dir = disk_dir(storage_dir)
+
+    case Path.wildcard(Path.join(qdir, "*")) do
+      [] ->
+        :ok
+
+      files ->
+        File.mkdir_p!(dir)
+        clear_public_versions(dir)
+        for file <- files, do: File.rename!(file, Path.join(dir, Path.basename(file)))
+    end
+
+    File.rm_rf(qdir)
+
+    # Converged rows return :unchanged here (cheap file-exists checks).
+    case regenerate(scope, [], config) do
+      {:error, reason} -> Logger.warning("promote self-heal failed: #{inspect(reason)}")
+      _ -> :ok
+    end
+
+    :ok
   end
 
   # The first 12 hex of the SHA-256 of the uploaded bytes **plus the crop
@@ -167,6 +234,11 @@ defmodule Vutuv.Uploads do
     cond do
       is_nil(file) -> nil
       version == :original -> nil
+      # Moderation limbo: to the world this image does not exist (the files
+      # are in quarantine anyway — nginx could not serve them). The owner's
+      # own preview goes through the authenticated pending-image route, never
+      # through here.
+      held_in_limbo?(scope, config) -> nil
       true -> served_url(file, scope, version, config)
     end
   end
@@ -194,6 +266,26 @@ defmodule Vutuv.Uploads do
   end
 
   @doc """
+  The on-disk path of a **quarantined** derived version — the owner's limbo
+  preview (`VutuvWeb.PendingImageController`); nobody else ever sees these
+  bytes. `nil` when absent.
+  """
+  def quarantine_version_path(scope, version, config) do
+    case fingerprint(scope, config) do
+      nil ->
+        nil
+
+      fp ->
+        path =
+          storage_dir(scope, config)
+          |> quarantine_dir()
+          |> Path.join(fingerprinted_filename(scope, version, fp, config))
+
+        if File.exists?(path), do: path
+    end
+  end
+
+  @doc """
   Migrates one avatar/cover row to the fingerprinted scheme (or re-derives a row
   already on it), **keeping any legacy files in place** — the expand half of the
   expand/contract migration. Called per row by `Vutuv.Uploads.Regenerator`.
@@ -215,6 +307,11 @@ defmodule Vutuv.Uploads do
     fingerprint = Map.get(user, config.fingerprint_field)
 
     cond do
+      # An image still in moderation limbo must never be materialized into
+      # the served tree — its files live in quarantine until the verdict.
+      held_in_limbo?(user, config) ->
+        :unchanged
+
       opts[:dry_run] ->
         dry_run_fingerprinted(user, storage_dir, dir, fingerprint, config)
 
@@ -344,6 +441,13 @@ defmodule Vutuv.Uploads do
     end
   end
 
+  defp held_in_limbo?(scope, config) do
+    case Map.get(config, :moderation_field) do
+      nil -> false
+      field -> Map.get(scope, field) == "pending"
+    end
+  end
+
   @doc """
   Removes every stored file for `scope` per `config`: both the served tree
   (`<prefix>/<id>`) and the private original (`originals/<prefix>/<id>`). A
@@ -353,6 +457,7 @@ defmodule Vutuv.Uploads do
   def delete(scope, config) do
     storage_dir = storage_dir(scope, config)
     File.rm_rf(disk_dir(storage_dir))
+    File.rm_rf(quarantine_dir(storage_dir))
     Originals.delete(storage_dir)
     :ok
   end

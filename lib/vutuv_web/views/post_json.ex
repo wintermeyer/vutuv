@@ -17,6 +17,10 @@ defmodule VutuvWeb.PostJSON do
 
   @doc "Serializes a preloaded post for `viewer` (a `%User{}` or `nil`)."
   def post(%Post{} = post, viewer) do
+    # AI-moderation limbo: the author (and admins) see their own pending
+    # images through the API too; everyone else only the released ones.
+    images = visible_images(post, viewer)
+
     %{
       id: post.id,
       url: VutuvWeb.Endpoint.url() <> Posts.path(post),
@@ -24,11 +28,11 @@ defmodule VutuvWeb.PostJSON do
       body_markdown: post.body,
       body_html:
         post.body
-        |> VutuvWeb.Markdown.render_post(post.images)
+        |> VutuvWeb.Markdown.render_post(images)
         |> Phoenix.HTML.safe_to_string(),
       published_at: post.inserted_at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601(),
       tags: Enum.map(post.tags, & &1.name),
-      images: Enum.map(post.images, &image/1),
+      images: Enum.map(images, &image/1),
       reply_count: Posts.reply_count(post.id),
       in_reply_to: in_reply_to(post),
       audience: audience(post, viewer)
@@ -55,6 +59,18 @@ defmodule VutuvWeb.PostJSON do
 
       nil ->
         nil
+    end
+  end
+
+  # AI-moderation limbo filter: released for everyone, everything for the
+  # author and admins (the proxy enforces the same rule on the bytes).
+  defp visible_images(%Post{} = post, viewer) do
+    case viewer do
+      %User{id: id, admin?: admin?} when id == post.user_id or admin? == true ->
+        if is_list(post.images), do: post.images, else: []
+
+      _other ->
+        Posts.released_images(post)
     end
   end
 

@@ -71,6 +71,17 @@ config :vutuv, Vutuv.Repo,
 config :vutuv, :generate_screenshots, true
 config :vutuv, :fetch_gravatar, true
 
+# AI image moderation (Vutuv.Moderation.ImageScans): every image — uploads
+# and machine-generated screenshots alike — is held in owner-only limbo until
+# a local Ollama vision model releases it; unsafe images are deleted and the
+# owner notified. Fail-closed: with Ollama unreachable the queue retries
+# forever, nothing is auto-approved. Off = images release immediately (tests,
+# installations without Ollama). Runtime overrides: IMAGE_MODERATION_ENABLED,
+# OLLAMA_URL, OLLAMA_VISION_MODEL (config/runtime.exs).
+config :vutuv, :moderate_images, true
+config :vutuv, :ollama_url, "http://localhost:11434"
+config :vutuv, :ollama_vision_model, "qwen3-vl:8b"
+
 # The global on/off switch for the daily text-ad system (see Vutuv.Ads).
 # Off for now: no banner serves, the public /ads flow and the admin review
 # dashboard 404. "ads" stays a reserved username slug either way, so the

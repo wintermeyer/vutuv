@@ -5,10 +5,16 @@ defmodule Vutuv.Profiles.Url do
 
   import Vutuv.ChangesetHelpers, only: [validate_url: 1]
 
+  alias Vutuv.Moderation.ImageScans
+
   schema "urls" do
     field(:value, :string)
     field(:description, :string)
     field(:screenshot, :string)
+    # AI image moderation state of the screenshot (Vutuv.Moderation.ImageScans):
+    # nil = none/grandfathered, "pending" = limbo, "approved" = released. Set
+    # programmatically with the screenshot, never cast from params.
+    field(:screenshot_moderation, :string)
     field(:broken?, :boolean)
     # The owner's chosen display order. Set programmatically (on create and via
     # the reorder/move actions), never cast from user params. NULLs sort last so
@@ -111,8 +117,15 @@ defmodule Vutuv.Profiles.Url do
 
   defp store_screenshot(changeset, upload) do
     case Vutuv.Screenshot.store({upload, Ecto.Changeset.apply_changes(changeset)}) do
-      {:ok, file_name} -> put_change(changeset, :screenshot, file_name)
-      {:error, _reason} -> add_error(changeset, :screenshot, "is not a valid image")
+      {:ok, file_name} ->
+        changeset
+        |> put_change(:screenshot, file_name)
+        # A fresh capture starts in AI-moderation limbo; the caller
+        # (Vutuv.PageScreenshot) enqueues the scan after the row commits.
+        |> put_change(:screenshot_moderation, ImageScans.initial_state())
+
+      {:error, _reason} ->
+        add_error(changeset, :screenshot, "is not a valid image")
     end
   end
 

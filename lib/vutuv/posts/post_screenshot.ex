@@ -19,6 +19,8 @@ defmodule Vutuv.Posts.PostScreenshot do
 
   use VutuvWeb, :model
 
+  alias Vutuv.Moderation.ImageScans
+
   @statuses ~w(pending capturing ready failed)
 
   schema "post_screenshots" do
@@ -34,14 +36,23 @@ defmodule Vutuv.Posts.PostScreenshot do
     field(:last_error, :string)
     field(:captured_at, :utc_datetime)
 
+    # AI image moderation state (Vutuv.Moderation.ImageScans): a captured
+    # screenshot is held back ("pending") until the scan releases it.
+    field(:moderation, :string)
+
     timestamps()
   end
 
   def statuses, do: @statuses
 
-  @doc "Whether a captured screenshot is ready to render."
-  def ready?(%__MODULE__{status: "ready", screenshot: screenshot}) when is_binary(screenshot),
-    do: true
+  @doc """
+  Whether a captured screenshot is ready to render — captured **and**
+  released by the AI image scan (a captured-but-unreleased screenshot shows
+  to nobody, exactly like an uncaptured one).
+  """
+  def ready?(%__MODULE__{status: "ready", screenshot: screenshot, moderation: moderation})
+      when is_binary(screenshot),
+      do: ImageScans.released?(moderation)
 
   def ready?(%__MODULE__{}), do: false
 

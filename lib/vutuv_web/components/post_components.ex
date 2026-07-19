@@ -25,6 +25,7 @@ defmodule VutuvWeb.PostComponents do
   import VutuvWeb.UserHelpers, only: [full_name: 1]
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
   alias Vutuv.Posts.PostScreenshot
@@ -108,43 +109,57 @@ defmodule VutuvWeb.PostComponents do
     # hyphenation), fed onto the body as CSS custom properties below.
     prefs = User.post_prefs(assigns.viewer)
 
-    # The whole body is always shipped to the DOM. In :preview the `.post-clamp`
-    # CSS line clamp does the visual cut and the in-place expand button reveals
-    # the rest, so "Read more" expands in place instead of navigating to the
-    # permalink — feed and profile alike. A preview never carries the post's
-    # inline images (those show in the gallery below), so it renders with `[]`.
-    images = if assigns.mode == :full, do: assigns.post.images, else: []
-    body_html = VutuvWeb.Markdown.render_post(assigns.post.body, images)
-
     # A logged-in viewer (vs anonymous / a "View as public" preview, both nil),
     # bound once and reused for the acting-viewer id and the reporter test.
     viewer = assigns.viewer
     user? = match?(%User{}, viewer)
 
+    # AI-moderation limbo (Vutuv.Moderation.ImageScans): the author and admins
+    # see a pending image themselves (plus the limbo pill below); every other
+    # viewer gets a neutral placecard tile instead. The post struct is patched
+    # once, so every branch below (gallery, inline refs, square layout) works
+    # on the filtered set.
+    {shown_images, held_count} = split_gallery(assigns.post, viewer)
+    post = %{assigns.post | images: shown_images}
+
+    # The whole body is always shipped to the DOM. In :preview the `.post-clamp`
+    # CSS line clamp does the visual cut and the in-place expand button reveals
+    # the rest, so "Read more" expands in place instead of navigating to the
+    # permalink — feed and profile alike. A preview never carries the post's
+    # inline images (those show in the gallery below), so it renders with `[]`.
+    images = if assigns.mode == :full, do: post.images, else: []
+    body_html = VutuvWeb.Markdown.render_post(post.body, images)
+
     # Every per-card DOM id derives from the timeline entry when there is one:
     # the same post can render twice on a page (original + repost), and the ids
     # must stay unique. Bound once here so the id assigns below don't each repeat
     # the `entry_id || post.id` fallback.
-    entry_key = assigns.entry_id || assigns.post.id
+    entry_key = assigns.entry_id || post.id
 
     assigns =
       assigns
+      |> assign(:post, post)
+      |> assign(:held_count, held_count)
+      |> assign(
+        :limbo_pill?,
+        Enum.any?(shown_images, &(&1.moderation == "pending"))
+      )
       |> assign(:body_html, body_html)
       # The inline CSS custom properties (`--post-clamp-*` / `--post-hyphens-*`)
       # that carry the reader's preference onto the post body; nil for a default
       # / logged-out reader, so their DOM stays clean and the CSS fallbacks apply.
       |> assign(:body_style, post_body_style(prefs))
-      |> assign(:restricted?, Posts.restricted?(assigns.post))
-      |> assign(:permalink, Posts.path(assigns.post))
+      |> assign(:restricted?, Posts.restricted?(post))
+      |> assign(:permalink, Posts.path(post))
       # Every attachment shows in the gallery (full mode) or the thumbnail row
       # (preview) — post bodies never embed images inline.
-      |> assign(:gallery, assigns.post.images)
-      |> assign(:square_layout?, square_layout?(assigns.post, assigns.mode))
+      |> assign(:gallery, post.images)
+      |> assign(:square_layout?, square_layout?(post, assigns.mode))
       # The auto link screenshot (a ready %PostScreenshot{} for an image-less
       # single-URL post, else nil) and whether the preview lays it beside the
       # text (3/4 body, 1/4 screenshot).
-      |> assign(:link_screenshot, link_screenshot(assigns.post))
-      |> assign(:link_screenshot_layout?, link_screenshot_layout?(assigns.post, assigns.mode))
+      |> assign(:link_screenshot, link_screenshot(post))
+      |> assign(:link_screenshot_layout?, link_screenshot_layout?(post, assigns.mode))
       |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
@@ -156,14 +171,14 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:report_menu_id, "post-report-#{entry_key}")
       |> assign(:time_id, "post-time-#{entry_key}")
       |> assign(:body_id, "post-body-#{entry_key}")
-      |> assign(:author?, Posts.author?(assigns.post, viewer))
-      |> assign(:reporter?, user? and not Posts.author?(assigns.post, viewer))
-      |> assign(:frozen?, assigns.post.frozen_at != nil)
-      |> assign(:reply_banner, reply_banner(assigns.post, assigns.show_reply_banner))
+      |> assign(:author?, Posts.author?(post, viewer))
+      |> assign(:reporter?, user? and not Posts.author?(post, viewer))
+      |> assign(:frozen?, post.frozen_at != nil)
+      |> assign(:reply_banner, reply_banner(post, assigns.show_reply_banner))
       |> assign(:reposters, repost_roster(assigns))
       |> assign(
         :edited?,
-        NaiveDateTime.diff(assigns.post.updated_at, assigns.post.inserted_at) > 60
+        NaiveDateTime.diff(post.updated_at, post.inserted_at) > 60
       )
 
     ~H"""
@@ -836,6 +851,46 @@ defmodule VutuvWeb.PostComponents do
               </div>
           <% end %>
 
+          <%!-- AI-moderation limbo. For every viewer but the author/admin a
+          pending image renders as this neutral placecard tile; the author
+          instead sees the image (filtered in above) plus the amber pill. --%>
+          <div
+            :if={@held_count > 0}
+            class={["mt-3 grid gap-2", @held_count > 1 && "grid-cols-2"]}
+            data-image-placecards
+          >
+            <div
+              :for={_placecard <- 1..@held_count//1}
+              class="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 rounded-lg bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                class="h-8 w-8 text-slate-400 dark:text-slate-500"
+                aria-hidden="true"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A1.5 1.5 0 0 0 21.75 19.5V4.5A1.5 1.5 0 0 0 20.25 3H3.75A1.5 1.5 0 0 0 2.25 4.5v15A1.5 1.5 0 0 0 3.75 21Z"
+                />
+              </svg>
+              <span class="px-2 text-center text-xs text-slate-600 dark:text-slate-400">
+                {gettext("Image is being reviewed")}
+              </span>
+            </div>
+          </div>
+
+          <p
+            :if={@limbo_pill?}
+            class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+            data-image-pending-pill
+          >
+            {gettext("Image awaiting review, visible only to you")}
+          </p>
+
           <%!-- Full mode (permalink): the link screenshot below the body — a
           single-URL post has no image gallery — at a modest width. --%>
           <.link_screenshot_image
@@ -1098,6 +1153,20 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp square_layout?(_post, _mode), do: false
+
+  # AI-moderation limbo: the author and admins keep seeing a pending image
+  # (the proxy serves it to them); everyone else gets `held_count` placecard
+  # tiles instead of the image (Vutuv.Moderation.ImageScans).
+  defp split_gallery(post, viewer) do
+    images = if is_list(post.images), do: post.images, else: []
+
+    if Posts.author?(post, viewer) or match?(%User{admin?: true}, viewer) do
+      {images, 0}
+    else
+      {released, held} = Enum.split_with(images, &ImageScans.released?(&1.moderation))
+      {released, length(held)}
+    end
+  end
 
   # A "roughly square" image: aspect ratio inside the @square_ratio_min/max
   # envelope. Guards missing dimensions (nil width/height on very old rows) — an

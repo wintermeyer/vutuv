@@ -121,6 +121,9 @@ Everything else has a default (the vutuv.de production value):
 | `COLD_OUTREACH_WINDOW_HOURS` | `24` | The window, in hours, over which `COLD_OUTREACH_LIMIT` is measured |
 | `SAVED_SEARCHES_MAX_PER_MEMBER` | `10` | Most saved searches (with e-mail alerts) one member may store (anti-abuse). A member at the cap is asked to delete one first |
 | `GEO_COUNTRIES` | `DE,AT,CH` | Comma-separated ISO 3166-1 alpha-2 codes whose bundled GeoNames postal data is loaded for offline zip → coordinate resolution on job postings. To add a country, drop its GeoNames zip export (`download.geonames.org/export/zip/<CC>.zip` → extracted `<CC>.txt`, optionally gzipped to `<CC>.txt.gz`) into `priv/geo/` and add the code here. Fully offline — no outbound calls |
+| `IMAGE_MODERATION_ENABLED` | `true` | `false` turns AI image moderation off (images publish immediately, as before the feature). While enabled, **every** image — avatars, covers, post / job-posting / organization images and the automatic link screenshots — waits invisible to everyone but its owner until a local Ollama vision model approves it; an unsafe image is deleted on the spot and the owner notified. Fail-closed: with Ollama unreachable, new images queue up and are scanned automatically once it is back — nothing is ever auto-approved. Set `false` only on installations without Ollama |
+| `OLLAMA_URL` | `http://localhost:11434` | Base URL of the Ollama instance the image scan talks to |
+| `OLLAMA_VISION_MODEL` | `qwen3-vl:8b` | The vision model used for the safety verdict. Pull it once (`ollama pull qwen3-vl:8b`); any Ollama vision model works (`qwen3-vl:4b` halves the load on CPU-only servers) |
 | `DEFAULT_COUNTRY` | `DE` | ISO 3166-1 alpha-2 code that preselects country inputs (job postings, organization pages) |
 
 The defaults marked **Set this** are vutuv.de's operator identity — a fresh
@@ -269,6 +272,11 @@ vutuv runs fine without internet access:
   `:generate_screenshots` (profile link-preview screenshots **and** the
   auto-screenshot for single-link posts — these fetch the linked page and run
   headless Chromium).
+- AI image moderation works **fully offline** — Ollama is local inference, no
+  cloud involved. Install Ollama on the server, pull the vision model once
+  while you still have internet access (`ollama pull qwen3-vl:8b`), and keep
+  `IMAGE_MODERATION_ENABLED=true`. Only an installation without Ollama should
+  set it to `false` (images then publish unmoderated, as before the feature).
 - The map links on profile addresses (Google/OSM/Apple) are plain link-outs
   rendered in the visitor's browser; they simply won't resolve offline.
 - Job postings need no configuration to work offline: their zip → coordinate

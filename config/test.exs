@@ -30,6 +30,13 @@ config :vutuv, :fediverse_deliverer, false
 # sandbox from outside; tests call Vutuv.Posts.Screenshots.deliver_due/1 directly
 # with a stubbed capture. ScreenshotWorker.nudge/0 casts into the void then.
 config :vutuv, :post_screenshot_worker, false
+# AI image moderation is off in tests: images release immediately, so the
+# whole existing suite sees today's behavior. The moderation tests flip
+# :moderate_images on per-test and drain via ImageScans.deliver_due/1 with a
+# stubbed judge (no Ollama call); the polling worker stays off regardless
+# (sandbox rule). ImageScanWorker.nudge/0 casts into the void then.
+config :vutuv, :moderate_images, false
+config :vutuv, :image_scan_worker, false
 # The overnight daily-report mailer; its DB tally would touch the sandbox from
 # outside. Vutuv.Reports is called directly in reports_test.exs instead.
 config :vutuv, :daily_report_email, false

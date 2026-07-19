@@ -39,13 +39,27 @@ the resulting ~200px rail width. --%>
       otherwise the brand gradient. The owner gets a discoverable upload
       affordance overlaid on the banner; it leads to the edit form where the
       cover photo file input lives (alongside the avatar). --%>
-      <% cover_url = Vutuv.Cover.display_url(@user, :wide) %>
+      <%!-- AI-moderation limbo: the owner previews their pending cover through
+      the authenticated quarantine route (plus the amber pill); everyone else
+      sees the brand gradient until the scan releases it. --%>
+      <% cover_pending? = @as_owner? and @user.cover_moderation == "pending" %>
+      <% cover_url =
+        if cover_pending?,
+          do: ~p"/settings/pending_image/cover/wide",
+          else: Vutuv.Cover.display_url(@user, :wide) %>
       <div class="relative h-28 overflow-hidden rounded-t-2xl">
         <%= if cover_url do %>
           <img src={cover_url} alt={gettext("Cover photo of %{name}", name: full_name(@user))} class="h-full w-full object-cover" />
         <% else %>
           <div class="h-full w-full bg-gradient-to-r from-brand-700 to-brand-500"></div>
         <% end %>
+        <span
+          :if={cover_pending?}
+          class="absolute left-3 top-3 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/70 dark:text-amber-200 dark:ring-amber-800"
+          data-image-pending-pill="cover"
+        >
+          {gettext("Image awaiting review, visible only to you")}
+        </span>
         <.link
           :if={@as_owner?}
           href={~p"/settings/profile" <> "#cover"}
@@ -83,8 +97,21 @@ the resulting ~200px rail width. --%>
         moved down to the name row, so the pill gets the full width beside the
         avatar to breathe, below the cover, rather than riding up into the cover
         banner. (Owner sees Edit profile; a blocker sees Unblock.) --%>
+        <% avatar_pending? = @as_owner? and @user.avatar_moderation == "pending" %>
         <div class="-mt-12 flex items-end gap-4">
-          <.avatar user={@user} size="lg" shape="square" loading="eager" alt={"Avatar of #{full_name(@user)}"} class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900" presence />
+          <%!-- AI-moderation limbo: the owner previews their pending avatar via
+          the quarantine route; everyone else gets the initials tile until the
+          scan releases it. --%>
+          <.avatar
+            user={@user}
+            src={if avatar_pending?, do: ~p"/settings/pending_image/avatar/medium"}
+            size="lg"
+            shape="square"
+            loading="eager"
+            alt={"Avatar of #{full_name(@user)}"}
+            class="relative z-10 shrink-0 ring-4 ring-white dark:ring-slate-900"
+            presence
+          />
           <div
             id="profile-actions"
             class="ml-auto flex items-center justify-end gap-2"
@@ -123,6 +150,14 @@ the resulting ~200px rail width. --%>
             <% end %>
           </div>
         </div>
+
+        <p
+          :if={avatar_pending?}
+          class="mt-2 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+          data-image-pending-pill="avatar"
+        >
+          {gettext("Profile picture awaiting review, visible only to you")}
+        </p>
 
         <%!-- Name row. The ⋯ actions menu (Message / mute / private saves / report
         / block) lives here on the right rather than in the cluster beside the

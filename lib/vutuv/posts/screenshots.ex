@@ -24,6 +24,7 @@ defmodule Vutuv.Posts.Screenshots do
 
   import Ecto.Query
 
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Repo
@@ -329,6 +330,11 @@ defmodule Vutuv.Posts.Screenshots do
   end
 
   defp mark_ready(%PostScreenshot{} = job, file_name, width, height) do
+    # A fresh capture starts in AI-moderation limbo: it is announced (and
+    # rendered) only once the scan releases it — otherwise a screenshot of an
+    # NSFW page would bypass the upload gate (Vutuv.Moderation.ImageScans).
+    moderation = ImageScans.initial_state()
+
     {:ok, ready} =
       job
       |> Ecto.Changeset.change(
@@ -337,12 +343,19 @@ defmodule Vutuv.Posts.Screenshots do
         width: width,
         height: height,
         captured_at: DateTime.utc_now(:second),
-        last_error: nil
+        last_error: nil,
+        moderation: moderation
       )
       |> Repo.update()
 
-    # Open feeds/profiles upgrade the card to show the screenshot with no reload.
-    Vutuv.Posts.broadcast_screenshot_ready(ready.post_id)
+    if moderation == "approved" do
+      # Open feeds/profiles upgrade the card to show the screenshot with no reload.
+      Vutuv.Posts.broadcast_screenshot_ready(ready.post_id)
+    else
+      post = Repo.get!(Post, ready.post_id)
+      ImageScans.enqueue("post_screenshot", ready.id, post.user_id, ready.screenshot)
+    end
+
     ready
   end
 

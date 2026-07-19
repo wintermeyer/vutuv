@@ -17,6 +17,7 @@ defmodule Vutuv.PageScreenshot do
   require Logger
 
   alias Vutuv.BrowserFrame
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Profiles.Url
   alias Vutuv.Repo
   alias Vutuv.SocialFeed.Http
@@ -220,9 +221,19 @@ defmodule Vutuv.PageScreenshot do
       path: framed_path
     }
 
-    url
-    |> Url.changeset(%{screenshot: upload})
-    |> Repo.update()
+    result =
+      url
+      |> Url.changeset(%{screenshot: upload})
+      |> Repo.update()
+
+    # The fresh capture waits in AI-moderation limbo until the scan releases
+    # it (Vutuv.Moderation.ImageScans) — a screenshot of an NSFW page must
+    # not reach the public link card.
+    with {:ok, updated} <- result do
+      ImageScans.enqueue("url_screenshot", updated.id, updated.user_id, updated.screenshot)
+    end
+
+    result
   end
 
   defp set_broken(url, value) do

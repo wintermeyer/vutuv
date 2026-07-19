@@ -44,6 +44,29 @@ defmodule Vutuv.Moderation.Notifier do
     :ok
   end
 
+  @doc """
+  The AI image scan rejected and deleted one of the member's images
+  (`Vutuv.Moderation.ImageScans`): a live in-app push plus the email with the
+  short reasoning (only family-friendly, work-safe images). The notification
+  feed itself derives the entry from the rejected scan row, so it survives
+  the live push.
+  """
+  def image_rejected(%Vutuv.Moderation.ImageScan{} = scan) do
+    case Repo.get(User, scan.owner_user_id) do
+      nil ->
+        :ok
+
+      owner ->
+        Activity.notify(owner.id, %{
+          kind: "image_rejected",
+          image_kind: scan.kind,
+          at: DateTime.utc_now()
+        })
+
+        deliver_to(owner, fn user, email -> Emailer.image_rejected_email(user, email, scan) end)
+    end
+  end
+
   @doc "Strike 1: a formal warning."
   def strike_warning(%User{} = user) do
     deliver_to(user, &Emailer.moderation_warning_email/2)

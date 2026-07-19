@@ -34,7 +34,11 @@ defmodule Vutuv.Cover do
     # See Vutuv.Avatar's @config: the user column holding this image's content
     # fingerprint, baked into `<username>-<version>-<fp>.avif` when set.
     fingerprint_field: :cover_fingerprint,
-    crop_field: :cover_crop
+    crop_field: :cover_crop,
+    # AI moderation state column: "pending" holds fresh uploads in the
+    # quarantine tree and makes every URL helper answer "no image"
+    # (Vutuv.Moderation.ImageScans).
+    moderation_field: :cover_moderation
   }
 
   @doc """
@@ -57,6 +61,21 @@ defmodule Vutuv.Cover do
   """
   def regenerate(user, opts \\ []) do
     Uploads.regenerate(user, opts, @config)
+  end
+
+  @doc """
+  Releases an approved cover from the quarantine tree into the served tree —
+  see `Vutuv.Uploads.promote_from_quarantine/2`. Called by the moderation
+  verdict (`Vutuv.Moderation.ImageSubjects`).
+  """
+  def promote_from_quarantine(user), do: Uploads.promote_from_quarantine(user, @config)
+
+  @doc """
+  The quarantined version's on-disk path while the cover waits in moderation
+  limbo — the owner-only preview (`VutuvWeb.PendingImageController`).
+  """
+  def pending_preview_path(user, version) do
+    Uploads.quarantine_version_path(user, version, @config)
   end
 
   @doc """

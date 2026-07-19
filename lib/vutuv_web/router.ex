@@ -768,6 +768,12 @@ defmodule VutuvWeb.Router do
     put("/profile", UserController, :update)
     patch("/profile", UserController, :update)
 
+    # The owner's preview of their own avatar/cover while it waits in
+    # AI-moderation limbo (the quarantine tree nginx never serves) — see
+    # Vutuv.Moderation.ImageScans. Everyone else sees a placeholder until
+    # the scan releases the image.
+    get("/pending_image/:kind/:version", PendingImageController, :show)
+
     # The account areas: sign-in & security, language & display, your data, and
     # the delete-account danger page. put + patch both, to match whichever
     # method <.form for={changeset} emits for a persisted record.

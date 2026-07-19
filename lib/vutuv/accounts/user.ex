@@ -74,6 +74,12 @@ defmodule Vutuv.Accounts.User do
     # re-apply the crop when it re-derives served versions from the original.
     field(:avatar_crop, :string)
     field(:cover_crop, :string)
+
+    # AI image moderation state (Vutuv.Moderation.ImageScans): nil = no image
+    # or grandfathered, "pending" = limbo (owner-only), "approved" = released.
+    # Set programmatically with the image columns, never cast from params.
+    field(:avatar_moderation, :string)
+    field(:cover_moderation, :string)
     field(:username, :string)
     # The member's original legacy handle (the dotted / over-length import),
     # preserved before Accounts.normalize_legacy_usernames/0 rewrote :username

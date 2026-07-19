@@ -59,3 +59,59 @@ URL screenshots are rendered by local headless Chromium, wrapped in a browser
 window frame (`Vutuv.BrowserFrame`); see `Vutuv.PageScreenshot`. Needs a
 `chromium`/`chrome` binary on the host (set `CHROMIUM_PATH` if it is not on
 `$PATH`)
+
+## AI image moderation (the Ollama scan)
+
+**Every** image that could become visible to anyone but its owner passes
+through one gate before release: member uploads (avatar, cover, post /
+job-posting / organization images) **and** the machine-generated link
+screenshots (a screenshot of an NSFW page must not bypass the upload gate).
+The moderation-evidence screenshots are deliberately exempt — they are
+admin-only records of reported content and never public.
+
+The moving parts (all under `Vutuv.Moderation`):
+
+- `ImageScans` — the durable queue (`image_scans` is the job *and* the audit
+  row, the `post_screenshots` pattern) plus the display gate `released?/1`.
+- `ImageSubjects` — per-kind plumbing: where the bytes live (always the
+  private **original**, uncropped, so a crop cannot hide anything from the
+  model), how a safe verdict releases and an unsafe one deletes.
+- `Ollama` — the vision-model client. The image is downscaled to ≤896 px and
+  re-encoded as a stripped JPEG before it is sent; verdicts are forced into a
+  JSON schema, and the prompt tells the model to ignore instructions embedded
+  in the image. Two error classes: `{:service, _}` (Ollama down — retry
+  forever, fail-closed) vs `{:image, _}` (this file can't be judged — capped,
+  then rejected; an unverifiable image is never released).
+- `ImageScanWorker` — boot-resume + poll + nudge, mirroring
+  `Vutuv.Posts.ScreenshotWorker`; hourly `repair_drift/0` re-enqueues any
+  asset stranded in `pending`.
+
+**Limbo.** A fresh image starts `pending`: the owner sees it (avatar/cover
+through the authenticated `/settings/pending_image/...` quarantine preview,
+gallery images through the authorizing proxies) with an amber "wird geprüft"
+pill; everyone else gets a placeholder (initials tile / gradient / gallery
+placecard). For the nginx-served kinds (avatars, covers, screenshots) the
+derived files wait in `<UPLOADS_DIR_PREFIX>/quarantine/...`, a tree nginx has
+no location for, so an unreleased byte is unreachable by URL no matter what a
+template renders. Approval moves the files into the served tree; rejection
+deletes served + quarantine + original (nothing unsafe stays at rest), clears
+the asset's reference and notifies the owner (in-app + email, both derived
+from the audit row). Organization logos differ deliberately: the
+`organizations.logo` pointer only ever names a released image, so the old
+logo keeps showing while the new one is scanned.
+
+**Fail-closed by construction.** The gallery tables default `moderation` to
+`pending` (an upload path that forgot to enqueue leaves the image invisible,
+never leaked), display chokepoints treat only `nil`/`"approved"` as released
+(`nil` = grandfathered pre-feature rows), re-uploads reset the open scan row
+(partial unique index) and every verdict application is fingerprint-guarded,
+so a stale verdict can never release bytes the model never saw. Remote
+imagery (Mastodon/Bluesky account avatars on the profile social card) runs
+through `Ollama.moderate_binary/1` before entering the feed cache — unsafe or
+unjudgeable means the initials fallback.
+
+Config: `:moderate_images` / `:ollama_url` / `:ollama_vision_model`
+(`IMAGE_MODERATION_ENABLED`, `OLLAMA_URL`, `OLLAMA_VISION_MODEL` in
+`config/runtime.exs`). Off = images release immediately (tests, installations
+without Ollama). `mix vutuv.moderation.backfill` queues the grandfathered
+catalog through the same pipeline without hiding anything while it waits.

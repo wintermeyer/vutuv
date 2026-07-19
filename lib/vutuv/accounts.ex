@@ -22,6 +22,7 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Handles
   alias Vutuv.LoginCodes
   alias Vutuv.Moderation
+  alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Bounces
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Pages
@@ -1448,13 +1449,19 @@ defmodule Vutuv.Accounts do
     # `Vutuv.Uploads.Crop`). A failure of either step (a rare disk/db error after
     # a decode the changeset already proved) keeps the prior image rather than
     # committing columns that point at a file that was never written.
+    #
+    # The moderation state is set in the same UPDATE: a fresh upload starts in
+    # limbo ("pending" — files in quarantine, placeholder for everyone but the
+    # owner) until the AI scan releases or deletes it (Vutuv.Moderation.ImageScans).
     with {:ok, file_name, fingerprint} <- store.({upload, user}, crop),
          attrs = %{
            field => file_name,
            fingerprint_field(field) => fingerprint,
-           crop_field => crop
+           crop_field => crop,
+           moderation_field(field) => ImageScans.initial_state()
          },
          {:ok, saved} <- user |> Ecto.Changeset.change(attrs) |> Repo.update() do
+      ImageScans.enqueue(scan_kind(field), saved.id, saved.id, fingerprint)
       saved
     else
       _ ->
@@ -1465,6 +1472,12 @@ defmodule Vutuv.Accounts do
 
   defp fingerprint_field(:avatar), do: :avatar_fingerprint
   defp fingerprint_field(:cover_photo), do: :cover_fingerprint
+
+  defp moderation_field(:avatar), do: :avatar_moderation
+  defp moderation_field(:cover_photo), do: :cover_moderation
+
+  defp scan_kind(:avatar), do: "avatar"
+  defp scan_kind(:cover_photo), do: "cover"
 
   # The user-chosen crop rectangle for an image, normalised to its canonical
   # `"x,y,w,h"` form (or nil for no/invalid crop). Only the web form sends it

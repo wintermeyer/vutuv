@@ -11,6 +11,9 @@ defmodule Vutuv.SocialFeed.Http do
   intercepts the other network's requests by accident.
   """
 
+  alias Vutuv.Moderation.ImageScans
+  alias Vutuv.Moderation.Ollama
+
   # A response larger than this is discarded unparsed (untrusted server).
   @max_body_bytes 2_000_000
 
@@ -66,13 +69,26 @@ defmodule Vutuv.SocialFeed.Http do
          false <- Vutuv.Ssrf.resolves_to_internal?(host),
          {:ok, %Req.Response{status: 200, body: body} = resp} <- get(url, options_key),
          type when type in @avatar_types <- content_type(resp),
-         true <- is_binary(body) and byte_size(body) <= @max_avatar_bytes do
+         true <- is_binary(body) and byte_size(body) <= @max_avatar_bytes,
+         true <- safe_remote_image?(body) do
       "data:" <> type <> ";base64," <> Base.encode64(body)
     else
       _ -> nil
     end
   rescue
     _error -> nil
+  end
+
+  # Remote member-chosen imagery goes through the same AI safety gate as
+  # uploads (Vutuv.Moderation.ImageScans would otherwise have a bypass: point
+  # your Mastodon/Bluesky avatar at anything and it shows on your profile
+  # card). Fail-closed: an unsafe or unjudgeable image (or Ollama being down)
+  # means "no avatar" — the card falls back to the initials tile. The verdict
+  # rides the feed cache entry (Vutuv.SocialFeed.Cache), so it is re-checked
+  # on every re-fetch, never persisted.
+  defp safe_remote_image?(body) do
+    not ImageScans.enabled?() or
+      match?({:ok, %{safe?: true}}, Ollama.moderate_binary(body))
   end
 
   defp content_type(resp) do

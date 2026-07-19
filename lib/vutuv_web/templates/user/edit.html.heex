@@ -17,16 +17,25 @@ lands here). --%>
         they are replacing. --%>
         <div>
           <%= label f, :avatar, gettext("Avatar"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+          <% avatar_pending? = @user.avatar_moderation == "pending" %>
           <div class="mt-2 flex items-center gap-3">
             <.avatar
               user={@user}
+              src={if avatar_pending?, do: ~p"/settings/pending_image/avatar/medium"}
               size="lg"
               shape="square"
               alt={gettext("Current avatar")}
               class="ring-1 ring-slate-200 dark:ring-slate-800"
             />
-            <span class="text-xs text-slate-600 dark:text-slate-400">
+            <span :if={!avatar_pending?} class="text-xs text-slate-600 dark:text-slate-400">
               {gettext("Current avatar")}
+            </span>
+            <span
+              :if={avatar_pending?}
+              class="inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+              data-image-pending-pill="avatar"
+            >
+              {gettext("Image awaiting review, visible only to you")}
             </span>
           </div>
           <%= file_input f, :avatar,
@@ -60,15 +69,26 @@ lands here). --%>
         covering it after the jump. --%>
         <div id="cover" class="scroll-mt-24">
           <%= label f, :cover_photo, gettext("Cover photo"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
-          <% cover_url = Vutuv.Cover.display_url(@user, :wide) %>
+          <% cover_pending? = @user.cover_moderation == "pending" %>
+          <% cover_url =
+            if cover_pending?,
+              do: ~p"/settings/pending_image/cover/wide",
+              else: Vutuv.Cover.display_url(@user, :wide) %>
           <figure :if={cover_url} class="mt-2">
             <img
               src={cover_url}
               alt={gettext("Current cover photo")}
               class="h-24 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
             />
-            <figcaption class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+            <figcaption :if={!cover_pending?} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
               {gettext("Current cover photo")}
+            </figcaption>
+            <figcaption
+              :if={cover_pending?}
+              class="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 ring-1 ring-amber-200 dark:bg-amber-900/30 dark:text-amber-200 dark:ring-amber-800"
+              data-image-pending-pill="cover"
+            >
+              {gettext("Image awaiting review, visible only to you")}
             </figcaption>
           </figure>
           <%= file_input f, :cover_photo,

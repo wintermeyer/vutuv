@@ -1,0 +1,15 @@
+<.email_layout preheader="Ein Bild wurde von unserer automatischen Bildprüfung entfernt" locale={@locale}>
+  <.email_p>{email_greeting(@user)},</.email_p>
+  <.email_p>
+    unsere automatische Bildprüfung (ein KI-Modell) hat {image_kind_label(@kind, @locale)} entfernt.
+  </.email_p>
+  <.email_p>
+    Der Grund, kurz gesagt: Auf vutuv sind nur Bilder zulässig, die familienfreundlich und für ein
+    Arbeitsumfeld geeignet sind. Dieses Bild hat die Prüfung nicht bestanden.
+  </.email_p>
+  <.email_p>
+    Sie können jederzeit ein anderes Bild hochladen. Wenn Sie überzeugt sind, dass die Entscheidung
+    falsch war, antworten Sie einfach auf diese E-Mail, dann schaut ein Mensch darauf.
+  </.email_p>
+  <.email_signature locale={@locale} />
+</.email_layout>

@@ -253,7 +253,8 @@ defmodule VutuvWeb.JsonLd do
       },
       "articleBody" => post.body,
       "keywords" => Enum.map(post.tags, & &1.name),
-      "image" => Enum.map(post.images, &image_url/1),
+      # Public structured data: only AI-released images.
+      "image" => post |> Posts.released_images() |> Enum.map(&image_url/1),
       "mainEntityOfPage" => permalink
     })
   end

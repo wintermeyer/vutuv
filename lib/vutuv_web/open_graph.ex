@@ -310,8 +310,12 @@ defmodule VutuvWeb.OpenGraph do
 
   defp image(ca), do: member_image(ca) || brand_card()
 
-  defp first_image(%Post{images: images}) when is_list(images) do
-    images |> Enum.sort_by(&{&1.position, &1.id}) |> List.first()
+  defp first_image(%Post{images: images} = post) when is_list(images) do
+    # Only AI-released images may become the public link-preview picture.
+    post
+    |> Vutuv.Posts.released_images()
+    |> Enum.sort_by(&{&1.position, &1.id})
+    |> List.first()
   end
 
   defp first_image(_post), do: nil
