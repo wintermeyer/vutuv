@@ -3,6 +3,7 @@ defmodule Vutuv.Profiles.Education do
 
   use VutuvWeb, :model
   alias Vutuv.ChangesetHelpers
+  alias Vutuv.Mentions
   alias Vutuv.Profiles.CvSection
 
   # The CV categories (issue #849, mirroring WorkExperience's #840 kinds):
@@ -62,6 +63,7 @@ defmodule Vutuv.Profiles.Education do
     |> validate_length(:degree, max: 255)
     |> validate_length(:field_of_study, max: 255)
     |> validate_length(:description, max: 10_000)
+    |> Mentions.validate_mentions_exist(:description)
     |> ChangesetHelpers.validate_period()
     |> create_slug
     # The slug derives from the school name, so a near-cap value can still

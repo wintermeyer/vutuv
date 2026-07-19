@@ -25,6 +25,7 @@ defmodule Vutuv.Imports.LinkedIn do
   alias NimbleCSV.RFC4180, as: CSV
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
+  alias Vutuv.Mentions
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
@@ -715,6 +716,14 @@ defmodule Vutuv.Imports.LinkedIn do
   the blank fields to fill. Returns `{:ok, %{created: map, skipped: map}}`.
   """
   def apply_selection(user, selection) do
+    # Imported prose is arbitrary external text ("Managed the @Acme account"), so
+    # relax the mention-existence check for this whole transaction — otherwise a
+    # stray `@token` would silently drop the row. A rename still rewrites these
+    # bodies later, and only posts are scanned for handle availability.
+    Mentions.without_existence_check(fn -> do_apply_selection(user, selection) end)
+  end
+
+  defp do_apply_selection(user, selection) do
     Repo.transaction(fn ->
       existing = existing_keys(user)
 

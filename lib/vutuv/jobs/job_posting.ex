@@ -26,6 +26,7 @@ defmodule Vutuv.Jobs.JobPosting do
   alias Vutuv.Countries
   alias Vutuv.Geo
   alias Vutuv.MarkdownContent
+  alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
   alias Vutuv.Salary
 
@@ -235,6 +236,7 @@ defmodule Vutuv.Jobs.JobPosting do
     |> validate_inclusion(:salary_period, Salary.periods())
     |> validate_inclusion(:language, Application.get_env(:vutuv, :locales, ~w(en de)))
     |> MarkdownContent.validate_no_images(:description)
+    |> Mentions.validate_mentions_exist(:description)
     |> validate_salary_range()
     |> validate_country_code()
     |> validate_remote_countries()

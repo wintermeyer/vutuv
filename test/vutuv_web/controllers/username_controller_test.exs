@@ -162,5 +162,35 @@ defmodule VutuvWeb.UsernameControllerTest do
     end
   end
 
+  describe "handle-change propagation" do
+    test "the form previews how many posts will be updated", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:post, body: "hi @#{user.username}")
+      insert(:post, user: user, body: "note @#{user.username}")
+
+      html = conn |> get("/settings/usernames/new") |> html_response(200)
+      assert html =~ "will be updated when you rename"
+    end
+
+    test "the success flash reports how many posts were updated", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      insert(:post, body: "hey @#{user.username}")
+
+      conn = post(conn, "/settings/usernames", user: %{"username" => "brandnewname"})
+
+      assert redirected_to(conn) == "/brandnewname"
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) =~ "updated"
+    end
+
+    test "renaming to a handle already used in a post is rejected", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      insert(:post, body: "shout out @coveted")
+
+      conn = post(conn, "/settings/usernames", user: %{"username" => "coveted"})
+
+      assert html_response(conn, 422) =~ "used in a post"
+    end
+  end
+
   defp gettext(msgid), do: Gettext.gettext(VutuvWeb.Gettext, msgid)
 end

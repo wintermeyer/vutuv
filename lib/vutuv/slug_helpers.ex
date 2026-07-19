@@ -3,6 +3,7 @@ defmodule Vutuv.SlugHelpers do
 
   import Ecto.Query
   alias Vutuv.Handles
+  alias Vutuv.Mentions
   alias Vutuv.Repo
 
   @short_sha_length 8
@@ -23,9 +24,13 @@ defmodule Vutuv.SlugHelpers do
   def gen_handle_unique(resource, model, slug_field, reserved \\ []) do
     handle = resource |> to_string() |> handleize()
 
+    # A handle already linked from a post is treated like a collision: an
+    # auto-generated name never lands on one (it gets the short-sha suffix
+    # instead), so a fresh account can't inherit those @handle links.
     taken =
       handle == "" or handle in reserved or
-        Repo.exists?(from(s in model, where: field(s, ^slug_field) == ^handle))
+        Repo.exists?(from(s in model, where: field(s, ^slug_field) == ^handle)) or
+        Mentions.mentioned_in_posts?(handle)
 
     if taken do
       base = handle |> String.slice(0, @handle_base_with_suffix) |> String.trim("_")

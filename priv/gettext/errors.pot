@@ -155,3 +155,9 @@ msgstr ""
 
 msgid "contains an invalid country"
 msgstr ""
+
+msgid "is already used in a post, so it can't be claimed"
+msgstr ""
+
+msgid "mentions a handle that does not exist: %{handles}"
+msgstr ""

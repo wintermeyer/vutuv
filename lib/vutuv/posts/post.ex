@@ -4,6 +4,7 @@ defmodule Vutuv.Posts.Post do
   use VutuvWeb, :model
 
   alias Vutuv.MarkdownContent
+  alias Vutuv.Mentions
 
   @max_body_length 20_000
 
@@ -51,5 +52,8 @@ defmodule Vutuv.Posts.Post do
     # a gallery, not inline in the prose. The renderer also drops any `<img>` at
     # display time (`VutuvWeb.Markdown.render_post/2`); this is the storage guard.
     |> MarkdownContent.validate_no_images()
+    # A body may only mention handles that exist, so nobody can seed `@wanted`
+    # into a post to reserve it (the anti-hijack partner of handle availability).
+    |> Mentions.validate_mentions_exist()
   end
 end

@@ -36,17 +36,15 @@ defmodule VutuvWeb.Markdown do
   @preview_min_block 200
 
   # A fediverse handle `@user@host.tld`, a local `@handle` mention, or a
-  # `#hashtag`. The leading `@`/`#` must not sit mid-token: no email `a@b`, no
-  # numeric entity `&#39;`, no `@@`/`##`, no `/path#frag` — hence the negative
-  # lookbehinds. The fediverse form is tried **first**, so `@a@b.social` links
-  # to the remote account instead of being mistaken for the local member `@a`;
-  # its host is dot-separated alphanumeric labels ending in a TLD (a trailing
-  # sentence dot stays outside). Handles/tags are matched permissively (any
-  # case/length) and validated against the DB by `linkify_entities/1`: a
-  # non-member, or a missing/empty tag, never links; a fediverse handle needs
-  # no lookup. Captures: 1 = fediverse user, 2 = fediverse host, 3 = local
-  # handle, 4 = hashtag (exactly one kind is set per hit).
-  @entity ~r{(?<![\w@/])@([A-Za-z0-9_]+)@([A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+)|(?<![\w@/])@([A-Za-z0-9_]+)|(?<![\w#/&])#([A-Za-z0-9_]+)}
+  # `#hashtag`. The grammar itself lives in `Vutuv.Mentions` (the single source
+  # shared by rendering, mention-existence validation and the rename rewrite),
+  # so it can never drift from what those paths detect. The leading `@`/`#` must
+  # not sit mid-token (no email `a@b`, no `/path#frag`); the fediverse form is
+  # tried **first**, so `@a@b.social` links to the remote account, not the local
+  # member `@a`; handles/tags match permissively and are validated against the
+  # DB by `linkify_entities/1`. Captures: 1 = fediverse user, 2 = fediverse
+  # host, 3 = local handle, 4 = hashtag (exactly one kind is set per hit).
+  @entity Vutuv.Mentions.entity_regex()
 
   # Inside these elements an entity is left as plain text (a handle/hashtag in a
   # code span/block is sample text, and we never nest a link inside a link).

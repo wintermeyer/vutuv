@@ -209,6 +209,24 @@ defmodule VutuvWeb.NotificationLive.Index do
               class="mt-2"
               data-reply-preview="true"
             />
+            <%!-- A handle change lists the recipient's own rewritten posts: the
+            newest few as excerpt previews, plus a count of any remaining ones. --%>
+            <div :if={n.kind == "handle_change"} class="mt-2 space-y-2" data-change-posts="true">
+              <.post_preview
+                :for={cp <- n[:change_posts] || []}
+                post={cp.post}
+                text={cp.text}
+                truncated?={cp.truncated?}
+                clamp="line-clamp-2 whitespace-pre-line"
+                time_id={"notif-change-#{n.id}-#{cp.post.id}"}
+              />
+              <p
+                :if={handle_change_more(n) > 0}
+                class="text-xs text-slate-600 dark:text-slate-400"
+              >
+                {gettext("and %{count} more", count: compact_count(handle_change_more(n)))}
+              </p>
+            </div>
             <span class="text-xs uppercase tracking-wide text-slate-500">
               {kind_label(n.kind)}<span :if={n[:at]}> &middot; <.local_time id={"notif-at-#{n.id}"} at={n.at} format="%Y-%m-%d" /></span>
             </span>
@@ -243,7 +261,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour (follower/reply/connection/
   # the report-protection notice), so the class string lives in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply connection report_protection organization_role)
+  @brand_kinds ~w(follower reply connection report_protection organization_role handle_change)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -271,6 +289,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("image_rejected"), do: "🖼"
   defp kind_glyph("report_protection"), do: "🛡"
   defp kind_glyph("organization_role"), do: "🏢"
+  defp kind_glyph("handle_change"), do: "@"
   defp kind_glyph(_), do: "•"
 
   # The small uppercase tag under the event text. Translated like the text
@@ -284,6 +303,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("image_rejected"), do: gettext("Image review")
   defp kind_label("report_protection"), do: gettext("Report protection")
   defp kind_label("organization_role"), do: gettext("Organization role")
+  defp kind_label("handle_change"), do: gettext("Handle change")
   defp kind_label(_), do: gettext("Activity")
 
   # Where clicking the event text leads. Events about one of the viewer's
@@ -393,6 +413,16 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # A handle change: show the old and new handle so the reader sees exactly what
+  # was rewritten in their posts (before/after). The actor line already links to
+  # the current profile; the affected posts are listed below.
+  defp notification_text(%{kind: "handle_change"} = n) do
+    gettext("changed their handle from @%{old} to @%{new}.",
+      old: n.old_handle,
+      new: n.new_handle
+    )
+  end
+
   defp notification_text(n), do: n[:text]
 
   # Reply and like notifications carry post ids the row can quote: a like the
@@ -407,15 +437,49 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp with_post_previews(entries, viewer) do
     posts =
       entries
-      |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id]])
+      |> Enum.flat_map(&[&1[:post_id], &1[:reply_post_id] | List.wrap(&1[:post_ids])])
       |> then(&Posts.visible_posts_by_ids(viewer, &1))
 
     Enum.map(entries, fn entry ->
       entry
       |> put_preview(:post_preview, entry[:post_id], posts)
       |> put_preview(:reply_preview, entry[:reply_post_id], posts)
+      |> put_change_previews(posts)
     end)
   end
+
+  # A handle-change entry links the recipient's own posts that were rewritten:
+  # the newest few as excerpt previews, with `handle_change_more/1` counting the
+  # rest. `post_ids` are UUID v7, so a descending sort is newest-first.
+  @change_preview_limit 5
+
+  defp put_change_previews(%{kind: "handle_change", post_ids: post_ids} = entry, posts)
+       when is_list(post_ids) do
+    previews =
+      post_ids
+      |> Enum.sort(:desc)
+      |> Enum.take(@change_preview_limit)
+      |> Enum.map(&Map.get(posts, &1))
+      |> Enum.filter(&match?(%Post{}, &1))
+      |> Enum.map(&change_preview/1)
+
+    Map.put(entry, :change_posts, previews)
+  end
+
+  defp put_change_previews(entry, _posts), do: entry
+
+  defp change_preview(post) do
+    case preview_excerpt(post.body) do
+      %{} = excerpt -> Map.put(excerpt, :post, post)
+      _ -> %{post: post, text: "", truncated?: false}
+    end
+  end
+
+  # How many affected posts are not shown in the capped preview list.
+  defp handle_change_more(%{post_ids: post_ids} = n) when is_list(post_ids),
+    do: length(post_ids) - length(n[:change_posts] || [])
+
+  defp handle_change_more(_), do: 0
 
   defp put_preview(entry, key, post_id, posts) do
     with true <- is_binary(post_id),

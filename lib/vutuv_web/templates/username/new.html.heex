@@ -14,7 +14,19 @@
         handle: "@#{@user.username}"
       ) %>
       <%= gettext(
-        "Changing it frees the old name immediately: links to your old address stop working and anyone can claim the name."
+        "Changing it automatically rewrites every mention of your old handle in posts to the new one and notifies those posts' authors. Your old profile address stops working."
+      ) %>
+    </p>
+
+    <%!-- How many posts will be rewritten, so the member knows the blast radius
+          before renaming. --%>
+    <p :if={@mention_count > 0} class="editform__hint">
+      <%= ngettext(
+        "%{formatted} post currently mentions %{handle} and will be updated when you rename.",
+        "%{formatted} posts currently mention %{handle} and will be updated when you rename.",
+        @mention_count,
+        formatted: compact_count(@mention_count),
+        handle: "@#{@user.username}"
       ) %>
     </p>
 

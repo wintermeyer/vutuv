@@ -22,6 +22,7 @@ defmodule Vutuv.Activity do
   import Ecto.Query
   require Logger
 
+  alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.User
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Emailer
@@ -130,6 +131,12 @@ defmodule Vutuv.Activity do
         select: %{ts: max(r.inserted_at)}
       )
 
+    handle_change_max =
+      from(n in HandleChangeNotification,
+        where: n.recipient_id == ^user_id,
+        select: %{ts: max(n.inserted_at)}
+      )
+
     union =
       follower_max
       |> union_all(^endorsement_max)
@@ -141,6 +148,7 @@ defmodule Vutuv.Activity do
       |> union_all(^severance_max)
       |> union_all(^severance_restore_max)
       |> union_all(^organization_role_max)
+      |> union_all(^handle_change_max)
 
     from(t in subquery(union), select: max(t.ts))
     |> Repo.one()
@@ -195,6 +203,27 @@ defmodule Vutuv.Activity do
         organization_name: organization.name,
         organization_slug: organization.slug,
         at: DateTime.utc_now()
+      })
+    )
+  end
+
+  @doc """
+  Live push for one persisted `HandleChangeNotification`: tells the affected
+  post author, in their open session, that `@old_handle` renamed to
+  `@new_handle` and which of their posts were rewritten. The durable row is the
+  feed's source of truth (`handle_change_items/3`); this only lights up the
+  badge and toast at rename time. `actor` is the renamed member (the new
+  handle), so the row links to the current profile.
+  """
+  def notify_handle_change(%HandleChangeNotification{} = notification, %User{} = actor) do
+    notify(
+      notification.recipient_id,
+      Map.merge(actor_fields(actor), %{
+        kind: "handle_change",
+        old_handle: notification.old_handle,
+        new_handle: notification.new_handle,
+        post_ids: notification.post_ids,
+        at: notification.inserted_at
       })
     )
   end
@@ -374,7 +403,8 @@ defmodule Vutuv.Activity do
         &organization_role_items(user_id, &1, &2),
         &moderation_items(user_id, &1, &2),
         &image_rejected_items(user_id, &1, &2),
-        &report_protection_items(user_id, &1, &2)
+        &report_protection_items(user_id, &1, &2),
+        &handle_change_items(user_id, &1, &2)
       ],
       limit,
       cursor
@@ -418,7 +448,8 @@ defmodule Vutuv.Activity do
             subquery(count_moderation(user_id, read_at)) +
             subquery(count_image_rejections(user_id, read_at)) +
             subquery(count_severances(user_id, read_at)) +
-            subquery(count_severance_restores(user_id, read_at))
+            subquery(count_severance_restores(user_id, read_at)) +
+            subquery(count_handle_changes(user_id, read_at))
       )
     )
   end
@@ -648,6 +679,31 @@ defmodule Vutuv.Activity do
     severed ++ restored
   end
 
+  # "@old renamed to @new" entries for a post author whose posts were rewritten
+  # (issue: handle-change propagation). Derived from the durable
+  # `handle_change_notifications` rows — the only feed kind that needs its own
+  # table, because the old handle is a point-in-time fact the current-state
+  # sources can't reconstruct. `post_ids` carries the affected posts so the
+  # LiveView can link them (count + last 5). The actor is the renamed member.
+  defp handle_change_items(user_id, limit, cursor) do
+    from(n in HandleChangeNotification,
+      join: actor in assoc(n, :actor),
+      where: n.recipient_id == ^user_id,
+      order_by: [desc: n.inserted_at, desc: n.id],
+      limit: ^limit,
+      select:
+        {n.id, n.inserted_at, struct(actor, ^User.listing_fields()), n.old_handle, n.new_handle,
+         n.post_ids}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, actor, old_handle, new_handle, post_ids} ->
+      "handle-change-#{id}"
+      |> actor_item("handle_change", at, actor)
+      |> Map.merge(%{old_handle: old_handle, new_handle: new_handle, post_ids: post_ids})
+    end)
+  end
+
   defp protection_item(id, status, at, reported) do
     Map.merge(actor_fields(reported), %{
       id: id,
@@ -775,6 +831,14 @@ defmodule Vutuv.Activity do
       |> select([s], %{count: count()})
 
     if read_at, do: where(query, [s], s.restored_at > ^read_at), else: query
+  end
+
+  defp count_handle_changes(user_id, read_at) do
+    from(n in HandleChangeNotification,
+      where: n.recipient_id == ^user_id,
+      select: %{count: count()}
+    )
+    |> since(read_at)
   end
 
   defp since(query, nil), do: query

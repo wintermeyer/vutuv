@@ -152,3 +152,9 @@ msgstr "muss größer oder gleich dem Mindestwert sein"
 
 msgid "contains an invalid country"
 msgstr "enthält ein ungültiges Land"
+
+msgid "is already used in a post, so it can't be claimed"
+msgstr "wird bereits in einem Beitrag verwendet und kann daher nicht übernommen werden"
+
+msgid "mentions a handle that does not exist: %{handles}"
+msgstr "erwähnt einen Handle, der nicht existiert: %{handles}"

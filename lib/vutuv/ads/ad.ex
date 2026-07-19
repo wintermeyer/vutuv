@@ -11,6 +11,8 @@ defmodule Vutuv.Ads.Ad do
   use VutuvWeb, :model
   use Gettext, backend: VutuvWeb.Gettext
 
+  alias Vutuv.Mentions
+
   @content_max_length 2048
 
   schema "ads" do
@@ -64,6 +66,7 @@ defmodule Vutuv.Ads.Ad do
       :billing_country
     ])
     |> validate_length(:content, max: @content_max_length)
+    |> Mentions.validate_mentions_exist(:content)
     # The billing fields are free-text varchar(255) columns: an oversized value
     # must be a changeset error, never a raised Postgres 22001 on booking.
     |> validate_length(:billing_name, max: 255)

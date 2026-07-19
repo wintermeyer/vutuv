@@ -177,6 +177,8 @@ defmodule Vutuv.Organizations.Organization do
     |> cast(attrs, [:username])
     |> validate_required(:username)
     |> Vutuv.Handles.validate_handle(:username)
+    # A handle already linked from a post can't be claimed here either.
+    |> Vutuv.Mentions.validate_handle_available(:username)
   end
 
   defp shared_validations(changeset) do

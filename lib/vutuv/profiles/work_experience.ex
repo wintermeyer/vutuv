@@ -4,6 +4,7 @@ defmodule Vutuv.Profiles.WorkExperience do
   use VutuvWeb, :model
   import Vutuv.Organizations.Query, only: [organization_public_row: 1]
   alias Vutuv.ChangesetHelpers
+  alias Vutuv.Mentions
   alias Vutuv.Profiles.CvSection
 
   # The CV categories (issue #840): a paid job, self-employment/freelance,
@@ -58,6 +59,7 @@ defmodule Vutuv.Profiles.WorkExperience do
     |> validate_length(:title, max: 255)
     |> validate_length(:organization, max: 255)
     |> validate_length(:description, max: 10_000)
+    |> Mentions.validate_mentions_exist(:description)
     |> ChangesetHelpers.validate_period()
     |> validate_organization_link()
     |> create_slug

@@ -3,6 +3,7 @@ defmodule Vutuv.Accounts.User do
 
   use VutuvWeb, :model
   alias Vutuv.Handles
+  alias Vutuv.Mentions
   alias Vutuv.Prefs
   @derive {Phoenix.Param, key: :username}
 
@@ -396,6 +397,8 @@ defmodule Vutuv.Accounts.User do
     |> validate_length(:honorific_suffix, max: 50)
     |> validate_length(:gender, max: 50)
     |> validate_length(:headline, max: 255)
+    # The tagline may only mention handles that exist (relaxed for the import).
+    |> Mentions.validate_mentions_exist(:headline)
     # locale is user-writable (profile form + PATCH /api/2.0/me) over a
     # varchar(255) column, so cap it or an oversized value raises Postgres 22001.
     |> validate_length(:locale, max: 255)
@@ -477,6 +480,9 @@ defmodule Vutuv.Accounts.User do
     |> validate_required(:username)
     |> Handles.validate_handle(:username)
     |> unique_constraint(:username)
+    # A handle already linked from a post can't be claimed, or the rename would
+    # hijack those existing @handle links (issue: handle-change propagation).
+    |> Mentions.validate_handle_available(:username)
   end
 
   # Registration is the one place where an email address may ride along with

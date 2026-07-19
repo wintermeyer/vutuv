@@ -102,20 +102,29 @@ own add tile.
 
 ## Username (@handle) changes
 
-Members change their username at `/:slug/usernames/new`, linked from the
-edit-profile sidebar.
+Members change their username at `/settings/usernames/new`, linked from the
+sign-in & security page.
 
 Handles follow the Twitter username mechanism: letters, digits and underscores,
-3 to 15 characters, stored lowercase, unique (`users.username` carries the
-unique index; there is no slugs table), never a reserved route word; the form
-checks availability live while typing (`GET /:slug/usernames/availability`).
+`Vutuv.Handles.min_length/0` to `max_length/0` characters, stored lowercase,
+unique (`users.username` carries the unique index; the `handles` registry adds
+the cross-table lock with organizations), never a reserved route word; the form
+checks availability live while typing (`GET /settings/usernames/availability`).
 
-Renaming frees the old handle immediately: no redirect, no reservation, anyone
-can claim it.
+**Renaming propagates.** Because an `@handle` mention is plain text in a body
+(resolved to a link only at render time — see [mentions.md](mentions.md)), the
+rename rewrites every stored `@old` to `@new` across all mention surfaces and
+notifies the author of each rewritten **post** ("@old renamed to @new", with the
+affected posts). Two rules keep that from being abused: a new handle is only
+available if it is **used in no post** (else claiming it would hijack those
+links), and a body may only mention handles that **exist** (else `@wanted` could
+be seeded to reserve it). The whole rewrite runs inside the rename transaction,
+so it is all-or-nothing. The old handle is then freed — and, being rewritten out
+of every post, safely reclaimable.
 
 Changes are limited to 4 per rolling 90 days (counted via the `username_changes`
 ledger) and the form spells the quota out, including the next possible date once
-it is used up.
+it is used up; it also previews how many posts the rename will update.
 
 ## Import from LinkedIn
 

@@ -4,6 +4,7 @@ defmodule Vutuv.Chat.Message do
   use VutuvWeb, :model
 
   alias Vutuv.MarkdownContent
+  alias Vutuv.Mentions
 
   @max_body_length 10_000
 
@@ -34,5 +35,7 @@ defmodule Vutuv.Chat.Message do
     # Messages carry no images: the renderer also drops any `<img>` at display
     # time (`VutuvWeb.Markdown.render/1`); this is the storage-side guard.
     |> MarkdownContent.validate_no_images()
+    # A DM may only mention handles that exist (kept clean like a post body).
+    |> Mentions.validate_mentions_exist()
   end
 end

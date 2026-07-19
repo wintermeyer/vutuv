@@ -11,6 +11,7 @@ defmodule Vutuv.Accounts do
 
   alias Plug.Conn
   alias Vutuv.Accounts.Email
+  alias Vutuv.Accounts.HandleChangeNotification
   alias Vutuv.Accounts.LoginPin
   alias Vutuv.Accounts.MemberCounter
   alias Vutuv.Accounts.ReservedSlugs
@@ -18,9 +19,11 @@ defmodule Vutuv.Accounts do
   alias Vutuv.Accounts.User
   alias Vutuv.Accounts.UsernameChange
   alias Vutuv.Accounts.ViewerExclusion
+  alias Vutuv.Activity
   alias Vutuv.Deliverability
   alias Vutuv.Handles
   alias Vutuv.LoginCodes
+  alias Vutuv.Mentions
   alias Vutuv.Moderation
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Notifications.Bounces
@@ -1565,13 +1568,21 @@ defmodule Vutuv.Accounts do
   @username_change_window_days 90
 
   @doc """
-  Renames the account: validates the new handle (`User.username_changeset/2`),
-  checks the change quota, and records the change in the `username_changes`
-  ledger, all in one transaction. The old handle is simply freed - no
-  redirect, no reservation. Returns the changeset on failure (invalid, taken,
-  reserved, unchanged, or quota exhausted).
+  Renames the account: validates the new handle (`User.username_changeset/2`,
+  which also rejects a handle already used in a post — the anti-hijack rule),
+  checks the change quota, records the change in the `username_changes` ledger,
+  **rewrites every stored `@old` mention to `@new` across all mention surfaces**
+  and files a durable notification for each affected post author, all in one
+  transaction. The old handle is then freed (no redirect) — and, having been
+  rewritten out of every post, is safely reclaimable.
+
+  On success the affected authors are pushed a live notification and `{:ok,
+  user}` is returned. Returns `{:error, changeset}` on failure (invalid, taken,
+  reserved, unchanged, used-in-a-post, or quota exhausted).
   """
   def update_username(%User{} = user, attrs) do
+    old_handle = user.username
+
     changeset =
       user
       |> User.username_changeset(attrs)
@@ -1589,10 +1600,30 @@ defmodule Vutuv.Accounts do
     |> Ecto.Multi.insert(:change, fn %{user: updated} ->
       %UsernameChange{user_id: user.id, value: updated.username}
     end)
+    # Rewrite @old -> @new everywhere it is stored (posts, DMs, headlines,
+    # descriptions, job postings, ads), in the same transaction so the rename is
+    # all-or-nothing. Renames are rate-limited (4 / 90 days), so this stays a
+    # rare, bounded write.
+    |> Ecto.Multi.run(:rewrite, fn repo, %{user: updated} ->
+      {:ok, Mentions.rewrite_everywhere(repo, old_handle, updated.username)}
+    end)
+    # One durable notification per *other* author whose posts were rewritten.
+    |> Ecto.Multi.run(:notifications, fn repo, %{user: updated, rewrite: rewrite} ->
+      {:ok,
+       create_handle_change_notifications(
+         repo,
+         user.id,
+         old_handle,
+         updated.username,
+         rewrite.posts
+       )}
+    end)
     |> Repo.transaction()
     |> case do
-      {:ok, %{user: user}} ->
+      {:ok, %{user: user, notifications: notifications}} ->
         rebuild_images_for_new_username(user)
+        # Push the live badge/toast only after the transaction commits.
+        Enum.each(notifications, &Activity.notify_handle_change(&1, user))
         {:ok, user}
 
       {:error, :user, changeset, _} ->
@@ -1604,6 +1635,24 @@ defmodule Vutuv.Accounts do
          |> Ecto.Changeset.add_error(:username, "has already been taken")
          |> Map.put(:action, :update)}
     end
+  end
+
+  # Group the rewritten posts by author, drop the renamer's own posts (no
+  # self-notification), and file one notification row per remaining author with
+  # the ids of *their* affected posts (the feed shows the count + last 5).
+  defp create_handle_change_notifications(repo, actor_id, old_handle, new_handle, posts) do
+    posts
+    |> Enum.reject(&(&1.user_id == actor_id))
+    |> Enum.group_by(& &1.user_id, & &1.id)
+    |> Enum.map(fn {recipient_id, post_ids} ->
+      %HandleChangeNotification{recipient_id: recipient_id, actor_id: actor_id}
+      |> HandleChangeNotification.changeset(%{
+        old_handle: old_handle,
+        new_handle: new_handle,
+        post_ids: post_ids
+      })
+      |> repo.insert!()
+    end)
   end
 
   # A username change moves the handle baked into fingerprinted image filenames
