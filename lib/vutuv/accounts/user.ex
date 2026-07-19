@@ -49,6 +49,15 @@ defmodule Vutuv.Accounts.User do
     field(:desired_salary_period, :string, default: "year")
     field(:desired_salary_visibility, :string, default: "hidden")
     field(:birthdate, :date)
+    # How much of the birthday the public profile (and its agent-format
+    # siblings + the public CV) reveal: "full" (date + age, the historical
+    # default), "age" (only the age in years), "day_month" (day and month
+    # without the year, so no age can be derived) or "hidden" (stored but never
+    # shown publicly). The granularity applies to every viewer alike — unlike
+    # the three-way audience visibilities above it is not an everyone/members
+    # gate. Resolved for display through birthdate_mode/1. Members set it beside
+    # the birthday field on the Basics form.
+    field(:birthdate_visibility, :string, default: "full")
     field(:locale, :string)
     # An admin checked this person's physical ID against their name: this IS that
     # person. Admin-only (deliberately NOT in @optional_fields); drives the
@@ -268,7 +277,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -291,6 +300,20 @@ defmodule Vutuv.Accounts.User do
   @visibilities ~w(everyone members hidden)
 
   def visibilities, do: @visibilities
+
+  # The birthday visibility granularity: how much of the birthday the public
+  # profile (and every agent format + the public CV) reveals. "full" = the
+  # date and the derived age (the historical default); "age" = only the age in
+  # years; "day_month" = the day and month without the year (so no age can be
+  # back-computed); "hidden" = stored but never shown publicly. The single
+  # source for the changeset's validate_inclusion and, via
+  # birthdate_visibility_options/0, the Basics-form select, so the form can
+  # never offer a value the changeset would reject. Resolve it for a given
+  # member with birthdate_mode/1 (which also folds "hidden" and "no birthday"
+  # together into :none).
+  @birthdate_visibilities ~w(full age day_month hidden)
+
+  def birthdate_visibilities, do: @birthdate_visibilities
 
   # The delay presets the notifications settings page offers (minutes a message
   # may sit unread before the nudge email goes out). The single source of truth
@@ -409,6 +432,7 @@ defmodule Vutuv.Accounts.User do
     |> validate_inclusion(:desired_salary_visibility, @visibilities)
     |> nullify_default_birthdate()
     |> validate_birthdate()
+    |> validate_inclusion(:birthdate_visibility, @birthdate_visibilities)
     |> revoke_verification_on_identity_change()
   end
 
@@ -578,6 +602,44 @@ defmodule Vutuv.Accounts.User do
   def visibility_label("hidden"), do: Gettext.gettext(VutuvWeb.Gettext, "No one")
 
   def visibility_label(_), do: nil
+
+  @doc """
+  The translated label for a birthday visibility choice, shared by the
+  Basics-form select (via `VutuvWeb.UserHelpers.birthdate_visibility_options/0`)
+  so the wording lives in one place.
+  """
+  def birthdate_visibility_label("full"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Full date and age")
+
+  def birthdate_visibility_label("age"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Age only, without the date")
+
+  def birthdate_visibility_label("day_month"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Day and month, without the year")
+
+  def birthdate_visibility_label("hidden"),
+    do: Gettext.gettext(VutuvWeb.Gettext, "Do not show my birthday")
+
+  def birthdate_visibility_label(_), do: nil
+
+  @doc """
+  The effective birthday display mode for `user`, the single seam the profile
+  card, the agent-format `ProfileDoc` and the public CV all read:
+
+    * `:full` — show the full date and the derived age (the default);
+    * `:age` — show only the age in years, not the date;
+    * `:day_month` — show the day and month, but not the year (so no age);
+    * `:none` — show nothing, because the member hid it *or* has no birthday.
+
+  Folding "hidden" and "no birthday set" into one `:none` lets a call site gate
+  the whole birthday display on a single value. A nil/legacy `birthdate_visibility`
+  falls back to `:full`, the historical public behaviour.
+  """
+  def birthdate_mode(%__MODULE__{birthdate: nil}), do: :none
+  def birthdate_mode(%__MODULE__{birthdate_visibility: "hidden"}), do: :none
+  def birthdate_mode(%__MODULE__{birthdate_visibility: "age"}), do: :age
+  def birthdate_mode(%__MODULE__{birthdate_visibility: "day_month"}), do: :day_month
+  def birthdate_mode(%__MODULE__{}), do: :full
 
   # The shared three-way visibility gate (issue #928): "everyone" shows to all
   # (incl. the anonymous public view crawlers/extension URLs get, `viewer`

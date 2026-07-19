@@ -385,9 +385,20 @@ defmodule VutuvWeb.CV do
 
   defp social_handle(%{value: value}), do: value
 
-  # The member's date of birth as the formatted string the profile shows
-  # (locale-aware via UserHelpers.format_birthdate/1), nil when unset.
-  defp birthdate(user), do: presence(UserHelpers.format_birthdate(user))
+  # The member's date of birth line, obeying the same birthday-visibility gate
+  # the public profile does (birthdate_mode/1) — the CV builder is a PUBLIC page
+  # (/:slug/cv), so it must not reveal more than the profile: :full → the
+  # locale-aware full date; :day_month → day and month without the year; :age
+  # and :none → no date-of-birth line at all (a labelled "date of birth" field
+  # is the wrong home for a bare age). nil (any of the latter, or no birthday)
+  # simply drops the DOB toggle from the builder and the line from every export.
+  defp birthdate(user) do
+    case User.birthdate_mode(user) do
+      :full -> presence(UserHelpers.format_birthdate(user))
+      :day_month -> presence(UserHelpers.format_birthdate_day_month(user))
+      _age_or_none -> nil
+    end
+  end
 
   # The gender label, following the profile's rule: shown only for a concrete
   # value, hidden for the unset default ("other"/nil).

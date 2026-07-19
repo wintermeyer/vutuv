@@ -88,6 +88,42 @@ defmodule VutuvWeb.UserControllerTest do
     end
   end
 
+  describe "birthday visibility on the Basics form" do
+    test "the edit form renders the visibility select with every granularity option", %{
+      conn: conn
+    } do
+      {conn, _user} = create_and_login_user(conn)
+
+      html = conn |> get(~p"/settings/profile") |> html_response(200)
+
+      assert html =~ ~s(name="user[birthdate_visibility]")
+
+      for value <- User.birthdate_visibilities() do
+        assert html =~ ~s(value="#{value}"),
+               "expected the form to offer birthdate_visibility=#{value}"
+      end
+    end
+
+    test "submitting the form persists the chosen visibility", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      put(conn, ~p"/settings/profile", user: %{"birthdate_visibility" => "day_month"})
+
+      assert Repo.get!(User, user.id).birthdate_visibility == "day_month"
+    end
+
+    test "an out-of-range visibility is rejected, leaving the stored value untouched", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+
+      conn = put(conn, ~p"/settings/profile", user: %{"birthdate_visibility" => "bogus"})
+
+      assert html_response(conn, 422)
+      assert Repo.get!(User, user.id).birthdate_visibility == "full"
+    end
+  end
+
   test "shows chosen resource", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
     conn = get(conn, ~p"/#{user}")

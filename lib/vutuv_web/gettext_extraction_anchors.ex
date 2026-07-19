@@ -51,6 +51,12 @@ defmodule VutuvWeb.GettextExtractionAnchors do
       gettext("Everyone, including logged-out visitors"),
       gettext("Signed-in members only"),
       gettext("No one"),
+      # The birthday-visibility granularity labels,
+      # Vutuv.Accounts.User.birthdate_visibility_label/1
+      gettext("Full date and age"),
+      gettext("Age only, without the date"),
+      gettext("Day and month, without the year"),
+      gettext("Do not show my birthday"),
       # The salary-expectation period nouns (issue #928),
       # Vutuv.Accounts.User.desired_salary_period_label/1
       gettext("hour"),

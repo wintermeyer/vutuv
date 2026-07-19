@@ -758,15 +758,17 @@ the resulting ~200px rail width. --%>
   a real box again at md+. --%>
   <aside class="contents md:block md:space-y-6">
     <%!-- General info leads the rail: who the person is (gender + birthday).
-    The headline already lives in the header. --%>
-    <.card
-      :if={@user.birthdate || (@user.gender && @user.gender != "other") || @as_owner?}
-      id="profile-about"
-    >
+    The headline already lives in the header. The birthday obeys the member's
+    chosen granularity (birthdate_mode/1): full date + age, age only, day and
+    month without the year, or hidden — the same gate the agent formats and the
+    public CV honour. --%>
+    <% birthday_mode = birthdate_mode(@user) %>
+    <% has_gender = @user.gender && @user.gender != "other" %>
+    <% has_general_info = birthday_mode != :none || has_gender %>
+    <.card :if={has_general_info || @as_owner?} id="profile-about">
       <%!-- General Info edits the profile form (no list). While empty it shows
       the dashed "add personal details" onboarding tile; once gender/birthday are
       set it is a clean showcase with a quiet "Ändern" footer to /edit. --%>
-      <% has_general_info = @user.birthdate || (@user.gender && @user.gender != "other") %>
       <.section_header title={gettext("General Info")} />
       <.empty_add :if={@as_owner? && !has_general_info} href={~p"/settings/profile"}>
         {gettext("Add personal details")}
@@ -781,17 +783,26 @@ the resulting ~200px rail width. --%>
           <dt class="sr-only">{gettext("Gender")}</dt>
           <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
         </div>
-        <div :if={@user.birthdate} class="flex items-center gap-2.5">
+        <div :if={birthday_mode != :none} class="flex items-center gap-2.5">
           <.detail_icon name="cake" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <dt class="sr-only">{gettext("Birthday")}</dt>
           <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">
-            {format_birthdate(@user)}
-            <%= if years = age(@user) do %>
-              <span class="font-normal text-slate-600 dark:text-slate-400">({ngettext(
-                "%{count} year old",
-                "%{count} years old",
-                years
-              )})</span>
+            <%= case birthday_mode do %>
+              <% :full -> %>
+                {format_birthdate(@user)}
+                <%= if years = age(@user) do %>
+                  <span class="font-normal text-slate-600 dark:text-slate-400">({ngettext(
+                    "%{count} year old",
+                    "%{count} years old",
+                    years
+                  )})</span>
+                <% end %>
+              <% :day_month -> %>
+                {format_birthdate_day_month(@user)}
+              <% :age -> %>
+                <%= if years = age(@user) do %>
+                  {ngettext("%{count} year old", "%{count} years old", years)}
+                <% end %>
             <% end %>
           </dd>
         </div>

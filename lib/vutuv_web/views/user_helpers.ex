@@ -54,6 +54,25 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   @doc """
+  The `{label, value}` options for the Basics form's birthday-visibility select:
+  the four granularity choices (full date + age → age only → day and month →
+  hidden) from the schema's single source (`User.birthdate_visibilities/0`
+  through `User.birthdate_visibility_label/1`), so the form can never offer a
+  value the changeset would reject.
+  """
+  def birthdate_visibility_options do
+    Enum.map(User.birthdate_visibilities(), &{User.birthdate_visibility_label(&1), &1})
+  end
+
+  @doc """
+  The effective birthday display mode for a member (`:full` / `:age` /
+  `:day_month` / `:none`). Re-exported here so the profile template can gate the
+  General Info card on one imported call; the logic lives in
+  `Vutuv.Accounts.User.birthdate_mode/1`.
+  """
+  defdelegate birthdate_mode(user), to: User
+
+  @doc """
   The `{label, value}` options for the salary-expectation currency select
   (issue #928): the whitelisted codes shown with their symbol (e.g. `€ EUR`).
   """
@@ -548,6 +567,32 @@ defmodule VutuvWeb.UserHelpers do
   end
 
   defp format_usa(_), do: ""
+
+  @doc """
+  The birthday's day and month **without the year**, in the same locale-shaped
+  numeric style `format_birthdate/1` uses (German `23.04.`, otherwise the USA
+  `04/23`). For the "day_month" birthday visibility, where the year (and thus
+  the age) stays private. `""` for a member without a birthdate.
+  """
+  def format_birthdate_day_month(%User{locale: "de", birthdate: birthdate}) do
+    format_pyramid_day_month(birthdate)
+  end
+
+  def format_birthdate_day_month(%User{birthdate: birthdate}) do
+    format_usa_day_month(birthdate)
+  end
+
+  defp format_pyramid_day_month(%Date{month: month, day: day}) do
+    "#{String.pad_leading(Integer.to_string(day), 2, "0")}.#{String.pad_leading(Integer.to_string(month), 2, "0")}."
+  end
+
+  defp format_pyramid_day_month(_), do: ""
+
+  defp format_usa_day_month(%Date{month: month, day: day}) do
+    "#{String.pad_leading(Integer.to_string(month), 2, "0")}/#{String.pad_leading(Integer.to_string(day), 2, "0")}"
+  end
+
+  defp format_usa_day_month(_), do: ""
 
   @doc """
   The member's age in whole years on the current German calendar day
