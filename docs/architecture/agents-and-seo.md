@@ -44,6 +44,18 @@ agents/LLMs → `ai-train=`/`ai-input=`, robots `noai, noimageai`) — any
 combination is valid; pages that are noindexed page-level (profile sections,
 people lists, restricted posts) send every signal as `no`.
 
+The per-user detail sub-pages (`/:slug/emails`, `/tags`, `/work_experiences`,
+`/followers`, …) are kept out of search by that page-level `X-Robots-Tag:
+noindex` (`VutuvWeb.Plug.NoIndex` on the `:user_pipe` pipeline), **not** by a
+`robots.txt` `Disallow`. This is deliberate: a `Disallow` only stops the fetch,
+so a detail URL linked from elsewhere is still indexed as a bare link and can
+never be crawled to learn it should drop out — which is exactly how these URLs
+piled up under Google's "indexed, though blocked by robots.txt" report. For the
+same reason the legacy `/users/…` URLs (which 301 to the canonical `/:slug`)
+stay crawlable: blocking a redirect strands the old URL instead of letting the
+301 consolidate it. So `robots.txt` blocks only genuinely private, crawl-trap
+paths (`/admin/`, `/login`, `/sessions`, `/api/`, `/search`).
+
 Existing members were migrated as AI-opted-out (they were never asked) and can
 opt in on the edit form.
 

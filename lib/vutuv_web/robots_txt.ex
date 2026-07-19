@@ -38,26 +38,23 @@ defmodule VutuvWeb.RobotsTxt do
   # Search results are an endless hall of mirrors; don't get lost in there.
   Disallow: /search
 
-  # The old /users/... URLs are permanent redirects now; skip the detour.
-  Disallow: /users/
-
-  # Personal profile detail pages (phone numbers, emails, addresses, links,
-  # social media, work history, followers, ...) are off-limits. The profile
-  # page /<slug> itself stays crawlable; only its sub-pages are blocked.
-  Disallow: /*/addresses
-  Disallow: /*/connections
-  Disallow: /*/edit
-  Disallow: /*/educations
-  Disallow: /*/emails
-  Disallow: /*/followers
-  Disallow: /*/following
-  Disallow: /*/languages
-  Disallow: /*/links
-  Disallow: /*/phone_numbers
-  Disallow: /*/qualifications
-  Disallow: /*/social_media_accounts
-  Disallow: /*/tags
-  Disallow: /*/work_experiences
+  # Two things are DELIBERATELY not disallowed here, though both look like
+  # candidates. Blocking either would backfire:
+  #
+  # 1. The old /users/... URLs. They 301 to the canonical /<slug> profile. A
+  #    crawler that cannot fetch them never sees the redirect, so the stale URL
+  #    is stranded in the index ("indexed, though blocked by robots.txt")
+  #    instead of being consolidated. Leaving them crawlable lets the 301 do
+  #    its job.
+  #
+  # 2. The personal profile detail sub-pages (/<slug>/emails, /tags,
+  #    /work_experiences, /followers, ...). They must stay OUT of search, but
+  #    robots.txt is the wrong lever: a Disallow only stops the fetch, so a
+  #    detail URL linked from elsewhere still gets indexed as a bare link and
+  #    can never be crawled to learn it should drop out. They carry a
+  #    page-level `X-Robots-Tag: noindex` instead (VutuvWeb.Plug.NoIndex on the
+  #    :user_pipe pipeline), which reliably de-indexes them once crawled. So we
+  #    keep them crawlable on purpose, precisely so that header is seen.
   """
 
   # The AI crawlers named explicitly (the spec's list): training collects

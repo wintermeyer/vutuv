@@ -49,12 +49,17 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ "Disallow: /api/"
 
       # Personal profile detail pages (phone numbers, emails, addresses, …) are
-      # off-limits, while the profile page /<slug> itself stays crawlable.
-      assert body =~ "Disallow: /*/emails"
-      assert body =~ "Disallow: /*/addresses"
+      # kept out of search by the page-level X-Robots-Tag: noindex header
+      # (VutuvWeb.Plug.NoIndex), NOT a robots block — a Disallow only stops
+      # crawling, so a linked detail URL would still be indexed as a bare link
+      # and could never be crawled to see the noindex. So they stay crawlable.
+      refute body =~ "Disallow: /*/emails"
+      refute body =~ "Disallow: /*/addresses"
 
-      # The legacy /users/... URLs are redirects now; crawlers can skip them.
-      assert body =~ "Disallow: /users/"
+      # The legacy /users/... URLs are 301 redirects and stay crawlable, so the
+      # redirect consolidates them onto the canonical /:slug profile instead of
+      # leaving the old URL stranded in the index.
+      refute body =~ "Disallow: /users/"
     end
 
     test "names the AI crawlers and declares Content-Signals (permissive stance)" do

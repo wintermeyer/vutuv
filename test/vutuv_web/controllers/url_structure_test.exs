@@ -101,15 +101,25 @@ defmodule VutuvWeb.UrlStructureTest do
   end
 
   describe "robots.txt" do
-    test "blocks the user sub-pages but not the profile itself", %{conn: conn} do
+    test "fences off auth/private areas but leaves profiles and their sub-pages crawlable", %{
+      conn: conn
+    } do
       body = conn |> get("/robots.txt") |> response(200)
 
-      assert body =~ "Disallow: /*/emails"
-      assert body =~ "Disallow: /*/phone_numbers"
-      assert body =~ "Disallow: /users/"
+      # Backstage paths stay blocked.
       assert body =~ "Disallow: /login"
       assert body =~ "Disallow: /search"
       assert body =~ "Allow: /"
+
+      # The per-user detail sub-pages are NOT robots-blocked: they carry a
+      # page-level X-Robots-Tag: noindex (VutuvWeb.Plug.NoIndex) instead, so a
+      # blocked-but-linked URL can never strand itself in the index.
+      refute body =~ "Disallow: /*/emails"
+      refute body =~ "Disallow: /*/phone_numbers"
+
+      # The legacy /users/ URLs are 301 redirects and must stay crawlable so
+      # the redirect consolidates them onto the canonical /:slug profile.
+      refute body =~ "Disallow: /users/"
     end
   end
 end

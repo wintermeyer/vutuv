@@ -36,7 +36,7 @@ defmodule VutuvWeb.RobotsTxtTest do
       body = RobotsTxt.render(:permissive)
 
       # Each group carries its own copy of the sensitive-path rules.
-      occurrences = body |> String.split("Disallow: /*/emails") |> length()
+      occurrences = body |> String.split("Disallow: /admin/") |> length()
       assert occurrences == 3, "expected the path rules in both groups"
     end
 
@@ -44,10 +44,28 @@ defmodule VutuvWeb.RobotsTxtTest do
       assert RobotsTxt.render(:permissive) =~ "\nSitemap: http://localhost:4001/sitemap.xml\n"
     end
 
-    test "blocks the public /educations detail page like its section siblings" do
-      # /:slug/educations is a public per-user detail page just like
-      # /:slug/work_experiences, so it must be disallowed too.
-      assert RobotsTxt.render(:permissive) =~ "Disallow: /*/educations"
+    test "leaves the legacy /users/ redirects crawlable so the 301 can consolidate them" do
+      # The pre-2026 /users/:slug URLs 301 to the canonical /:slug profile.
+      # Blocking them would stop Googlebot from ever seeing the redirect, so the
+      # old URL is stranded in the index ("indexiert, obwohl durch robots.txt
+      # blockiert"). Leaving them crawlable lets the 301 consolidate them.
+      refute RobotsTxt.render(:permissive) =~ "Disallow: /users/"
+    end
+
+    test "does not robots-block the per-user detail sub-pages (they carry X-Robots-Tag: noindex)" do
+      # /:slug/emails, /:slug/tags, /:slug/work_experiences, ... are kept out of
+      # search by the page-level noindex header (VutuvWeb.Plug.NoIndex on the
+      # :user_pipe pipeline, see detail_pages_noindex_test.exs), not a robots
+      # block. A Disallow only stops crawling, so a linked detail URL is still
+      # indexed as a bare link and can never be crawled to see the noindex.
+      body = RobotsTxt.render(:permissive)
+
+      for section <- ~w(emails tags work_experiences educations followers following
+                        links social_media_accounts addresses phone_numbers
+                        languages qualifications connections) do
+        refute body =~ "Disallow: /*/#{section}",
+               "#{section} should rely on the noindex header, not a robots block"
+      end
     end
   end
 
