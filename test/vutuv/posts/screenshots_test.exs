@@ -35,6 +35,24 @@ defmodule Vutuv.Posts.ScreenshotsTest do
   defp stub_probe(fun) when is_function(fun),
     do: Application.put_env(:vutuv, :post_screenshot_req_options, plug: fun)
 
+  # A post whose auto-screenshot has already been captured, stored and released
+  # by the AI scan — the state the author sees on the card and wants gone.
+  defp ready_post(author) do
+    post = url_post(author)
+    {:ok, job} = Screenshots.reconcile(post)
+
+    {:ok, ready} =
+      job
+      |> Ecto.Changeset.change(
+        status: "ready",
+        screenshot: "0123456789ab.avif",
+        moderation: "approved"
+      )
+      |> Repo.update()
+
+    {post, ready}
+  end
+
   describe "extract_urls/1 + qualifying_url/1 (detection)" do
     test "one bare http(s) URL, surrounding text allowed" do
       assert Screenshots.extract_urls("see https://example.com now") == ["https://example.com"]
@@ -166,6 +184,63 @@ defmodule Vutuv.Posts.ScreenshotsTest do
       {:ok, _job} = Screenshots.reconcile(post)
 
       {:ok, updated} = Posts.update_post(post, %{body: "no more link"})
+      Screenshots.reconcile(updated)
+
+      refute Repo.get_by(PostScreenshot, post_id: post.id)
+    end
+  end
+
+  describe "dismiss/1 (author removes a bad screenshot)" do
+    test "tombstones the row as dismissed and clears the stored file" do
+      {_post, ready} = ready_post(user())
+      assert PostScreenshot.ready?(ready)
+
+      {:ok, dismissed} = Screenshots.dismiss(ready)
+
+      assert dismissed.status == "dismissed"
+      assert dismissed.screenshot == nil
+      assert dismissed.captured_at == nil
+      refute PostScreenshot.ready?(dismissed)
+    end
+
+    test "the worker never picks a dismissed job back up" do
+      {_post, ready} = ready_post(user())
+      {:ok, _} = Screenshots.dismiss(ready)
+
+      assert Screenshots.list_due() == []
+    end
+
+    test "a plain re-save of the same URL leaves the dismissed tombstone in place" do
+      {post, ready} = ready_post(user())
+      {:ok, _} = Screenshots.dismiss(ready)
+
+      # Editing the body but keeping the single URL reconciles the job; the
+      # dismissed tombstone must survive so the removed screenshot stays gone.
+      {:ok, updated} =
+        Posts.update_post(post, %{body: "New words, same link https://example.com/page"})
+
+      Screenshots.reconcile(updated)
+
+      assert Repo.get_by!(PostScreenshot, post_id: post.id).status == "dismissed"
+    end
+
+    test "changing the post's URL re-captures (a new page is a new screenshot)" do
+      {post, ready} = ready_post(user())
+      {:ok, _} = Screenshots.dismiss(ready)
+
+      {:ok, updated} = Posts.update_post(post, %{body: "https://different.test/other"})
+      Screenshots.reconcile(updated)
+
+      job = Repo.get_by!(PostScreenshot, post_id: post.id)
+      assert job.status == "pending"
+      assert job.url == "https://different.test/other"
+    end
+
+    test "dropping the post's link removes the dismissed row and would-be files" do
+      {post, ready} = ready_post(user())
+      {:ok, _} = Screenshots.dismiss(ready)
+
+      {:ok, updated} = Posts.update_post(post, %{body: "no more link at all"})
       Screenshots.reconcile(updated)
 
       refute Repo.get_by(PostScreenshot, post_id: post.id)

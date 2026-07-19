@@ -296,6 +296,12 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, assign(socket, :posts, posts)}
   end
 
+  # The owner removed a bad link screenshot: re-fetch so the card drops it.
+  def handle_info({:post_screenshot_removed, _payload}, socket) do
+    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    {:noreply, assign(socket, :posts, posts)}
+  end
+
   # An AI image-moderation verdict landed for this profile's owner
   # (Vutuv.Moderation.ImageScans): re-fetch the user so an approved avatar /
   # cover swaps in (and the owner's limbo pill drops) with no reload; a

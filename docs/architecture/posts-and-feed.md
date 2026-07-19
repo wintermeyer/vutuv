@@ -291,3 +291,13 @@ mode), or below the body in full mode. On capture the worker broadcasts
 open feed/profile upgrades the card with no reload. Admins watch the queue and
 browse the gallery (each shot linked to its post, paginated) at
 `/admin/screenshots` (`VutuvWeb.Admin.ScreenshotLive`).
+
+The author can **remove a bad screenshot** (a cookie-banner-covered capture,
+say) from the post edit page (`VutuvWeb.PostLive.Edit`): the "Remove screenshot"
+control shows only while a captured, released screenshot is on the card, and
+`Vutuv.Posts.dismiss_screenshot/1` → `Screenshots.dismiss/1` purges the files and
+tombstones the row as `dismissed`. A `dismissed` row renders nothing, the worker
+skips it, and `reconcile/1` leaves it in place for the same URL, so a plain
+re-save never re-captures it (changing the URL still re-captures; dropping the
+link cancels the row). It broadcasts `{:post_screenshot_removed, …}` so open
+feeds/profiles drop the card live, and is excluded from the admin queue/gallery.

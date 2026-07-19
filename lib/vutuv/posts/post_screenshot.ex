@@ -6,10 +6,13 @@ defmodule Vutuv.Posts.PostScreenshot do
 
   The row is the queue: a `pending`/`capturing`/`failed` row is work the
   `Vutuv.Posts.ScreenshotWorker` drains, so a restart or re-deploy loses
-  nothing; a `ready` row carries the stored screenshot. All fields are set
-  programmatically by the context (never cast from member params), so there is
-  no public form changeset — state transitions go through
-  `Ecto.Changeset.change/2` in `Vutuv.Posts.Screenshots`.
+  nothing; a `ready` row carries the stored screenshot. A `dismissed` row is the
+  author's tombstone — they removed a bad auto-screenshot (a cookie-banner-covered
+  capture, say) from the post edit page (`Vutuv.Posts.Screenshots.dismiss/1`): it
+  renders nothing, the worker skips it, and a plain re-save of the same URL never
+  re-captures it. All fields are set programmatically by the context (never cast
+  from member params), so there is no public form changeset — state transitions go
+  through `Ecto.Changeset.change/2` in `Vutuv.Posts.Screenshots`.
 
   The stored file is served exactly like a profile link's screenshot: this row
   is the `Vutuv.Screenshot` scope (it has `.id` + `.screenshot`), so
@@ -21,7 +24,7 @@ defmodule Vutuv.Posts.PostScreenshot do
 
   alias Vutuv.Moderation.ImageScans
 
-  @statuses ~w(pending capturing ready failed)
+  @statuses ~w(pending capturing ready failed dismissed)
 
   schema "post_screenshots" do
     belongs_to(:post, Vutuv.Posts.Post)

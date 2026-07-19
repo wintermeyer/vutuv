@@ -46,12 +46,16 @@ defmodule VutuvWeb.PostScreenshotRenderTest do
   end
 
   describe "profile page (preview mode)" do
-    test "lays the screenshot beside the post when ready", %{conn: conn} do
+    test "floats the screenshot beside the post so the text wraps around it", %{conn: conn} do
       user = author()
       _post = post_with_screenshot(user, status: "ready", screenshot: "abcdef012345.avif")
 
       html = html_response(get(conn, ~p"/#{user.username}"), 200)
       assert html =~ "data-link-screenshot"
+      # The float-wrap layout: the screenshot floats and the body clamps by height
+      # so the text flows around AND below it (no dead column beside a short shot).
+      assert html =~ "float-right"
+      assert html =~ "post-clamp--wrap"
     end
   end
 end

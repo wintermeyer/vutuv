@@ -55,6 +55,7 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
+  alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Posts.PostTag
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
@@ -1803,6 +1804,28 @@ defmodule Vutuv.Posts do
   end
 
   @doc """
+  Removes a post's auto-captured link screenshot on the author's request (the
+  post edit page: a bad capture, e.g. one dominated by a cookie banner). The
+  screenshot is tombstoned so it stops rendering and is not re-captured on a
+  plain re-save (`Vutuv.Posts.Screenshots.dismiss/1`), and open feeds/profiles
+  drop it live. Returns `{:ok, post}` with `:screenshot` reloaded; a no-op (also
+  `{:ok, post}`) when the post carries no screenshot.
+  """
+  def dismiss_screenshot(%Post{} = post) do
+    post = Repo.preload(post, :screenshot)
+
+    case post.screenshot do
+      %PostScreenshot{} = post_screenshot ->
+        {:ok, _dismissed} = Screenshots.dismiss(post_screenshot)
+        broadcast_screenshot_removed(post.id)
+        {:ok, Repo.preload(post, :screenshot, force: true)}
+
+      _none ->
+        {:ok, post}
+    end
+  end
+
+  @doc """
   Tells open clients a post's link screenshot is now ready to render, so an
   already-loaded feed/profile upgrades the card with no reload. Fans out to the
   same recipients as `{:new_post, …}` — the author's own topic (which their
@@ -1817,6 +1840,22 @@ defmodule Vutuv.Posts do
 
       %Post{user_id: author_id} ->
         event = {:post_screenshot_ready, %{post_id: post_id, author_id: author_id}}
+        broadcast_to_followers(author_id, event)
+    end
+  end
+
+  @doc """
+  The counterpart to `broadcast_screenshot_ready/1`: the author removed a post's
+  auto link screenshot, so open feeds/profiles drop it from the card with no
+  reload. Fans out to the same recipients (author topic + followers' feeds).
+  """
+  def broadcast_screenshot_removed(post_id) when is_binary(post_id) do
+    case Repo.get(Post, post_id) do
+      nil ->
+        :ok
+
+      %Post{user_id: author_id} ->
+        event = {:post_screenshot_removed, %{post_id: post_id, author_id: author_id}}
         broadcast_to_followers(author_id, event)
     end
   end

@@ -175,6 +175,32 @@ defmodule Vutuv.Posts.Screenshots do
     Vutuv.Screenshot.delete(post_screenshot)
   end
 
+  @doc """
+  The author's "this screenshot is bad, remove it" action from the post edit
+  page (a capture spoiled by a cookie banner, say). Purges the stored files and
+  tombstones the row as `dismissed`: the render path shows nothing but a `ready`
+  row, `list_due/1` only picks up `pending` rows, and `enqueue/2` leaves an
+  existing row for the same URL untouched — so a plain re-save never re-captures
+  it. Changing the post's single URL still re-captures (a different page is a
+  new screenshot), and dropping the link cancels the row entirely, both via
+  `reconcile/1`.
+  """
+  def dismiss(%PostScreenshot{} = post_screenshot) do
+    delete(post_screenshot)
+
+    post_screenshot
+    |> Ecto.Changeset.change(
+      status: "dismissed",
+      screenshot: nil,
+      width: nil,
+      height: nil,
+      captured_at: nil,
+      last_error: nil,
+      moderation: nil
+    )
+    |> Repo.update()
+  end
+
   ## Draining the queue
 
   @doc """
@@ -407,9 +433,15 @@ defmodule Vutuv.Posts.Screenshots do
   @doc """
   One page of the admin queue view: the unfinished jobs (`pending` / `capturing`
   / `failed`), newest first, post + author preloaded. Returns `{rows, total}`.
+  Author-`dismissed` tombstones are neither unfinished work nor a gallery item,
+  so they are excluded from both admin views.
   """
   def queue_page(params) do
-    page(from(ps in PostScreenshot, where: ps.status != "ready"), params, desc: :inserted_at)
+    page(
+      from(ps in PostScreenshot, where: ps.status not in ["ready", "dismissed"]),
+      params,
+      desc: :inserted_at
+    )
   end
 
   @doc """
@@ -423,6 +455,7 @@ defmodule Vutuv.Posts.Screenshots do
   @doc "Count of unfinished vs ready jobs, for the admin tab labels."
   def counts do
     from(ps in PostScreenshot,
+      where: ps.status != "dismissed",
       group_by: fragment("? = 'ready'", ps.status),
       select: {fragment("? = 'ready'", ps.status), count(ps.id)}
     )

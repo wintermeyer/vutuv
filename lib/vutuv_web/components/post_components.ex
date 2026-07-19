@@ -734,60 +734,56 @@ defmodule VutuvWeb.PostComponents do
 
           <%= cond do %>
             <% @square_layout? -> %>
-              <%!-- A single roughly-square image (see @square_ratio_*) laid out
-              beside the body — 2/3 text, 1/3 image — so it shows in full instead
-              of being cropped to a middle band by the full-width max-h cap. It
-              stacks (text, then image below) on a phone, where the narrow column
-              would not trigger the crop anyway. The image drops the max-h /
-              object-cover of the full-width variant: at a third of the column a
-              squarish image is never tall enough to need capping, so it renders
-              at its natural aspect, whole. --%>
-              <div class="mt-2 sm:flex sm:items-start sm:gap-4">
-                <div class="min-w-0 sm:w-2/3">
-                  <.preview_body
-                    body_id={@body_id}
-                    body_html={@body_html}
-                    body_style={@body_style}
-                  />
-                  <%!-- Tags ride directly under the text inside the 2/3 column,
-                  filling the space beside the image, rather than dropping to a
-                  full-width row below the whole side-by-side block. --%>
-                  <.post_tags tags={@post.tags} />
-                </div>
-                <.link
-                  href={@permalink}
-                  aria-label={gettext("View post")}
-                  class="mt-3 block shrink-0 sm:mt-0 sm:w-1/3"
-                >
-                  <img
-                    src={PostImage.url(hd(@post.images), "feed")}
-                    alt={hd(@post.images).alt}
-                    width={hd(@post.images).width}
-                    height={hd(@post.images).height}
-                    loading="lazy"
-                    class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
-                  />
-                </.link>
-              </div>
+              <%!-- A single roughly-square image (see @square_ratio_*) FLOATS to
+              the top-right and the body text wraps around it and reclaims the full
+              width below it — no dead column of whitespace beside a short image.
+              At ~1/3 of the column a squarish image renders whole (no crop). See
+              the `.post-clamp--wrap` note in components.css for how the height
+              clamp respects the float. --%>
+              <.preview_body
+                body_id={@body_id}
+                body_html={@body_html}
+                body_style={@body_style}
+                class="mt-2"
+                wrap
+              >
+                <:float>
+                  <.link
+                    href={@permalink}
+                    aria-label={gettext("View post")}
+                    class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
+                  >
+                    <img
+                      src={PostImage.url(hd(@post.images), "feed")}
+                      alt={hd(@post.images).alt}
+                      width={hd(@post.images).width}
+                      height={hd(@post.images).height}
+                      loading="lazy"
+                      class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+                    />
+                  </.link>
+                </:float>
+              </.preview_body>
+              <.post_tags tags={@post.tags} />
             <% @link_screenshot_layout? -> %>
-              <%!-- A single-URL, image-less post: the body beside a small
-              screenshot of the linked page — 3/4 text, 1/4 screenshot — on
-              iPad/desktop (md, so portrait iPads get the columns too), stacking
-              (text, then screenshot below) on phones. --%>
-              <div class="mt-2 md:flex md:items-start md:gap-4">
-                <div class="min-w-0 md:w-3/4">
-                  <.preview_body
-                    body_id={@body_id}
-                    body_html={@body_html}
-                    body_style={@body_style}
+              <%!-- A single-URL, image-less post: the link-page screenshot floats
+              to the top-right and the body wraps around it, same as the square
+              image above. --%>
+              <.preview_body
+                body_id={@body_id}
+                body_html={@body_html}
+                body_style={@body_style}
+                class="mt-2"
+                wrap
+              >
+                <:float>
+                  <.link_screenshot_image
+                    screenshot={@link_screenshot}
+                    class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                   />
-                  <.post_tags tags={@post.tags} />
-                </div>
-                <.link_screenshot_image
-                  screenshot={@link_screenshot}
-                  class="mt-3 block shrink-0 md:mt-0 md:w-1/4"
-                />
-              </div>
+                </:float>
+              </.preview_body>
+              <.post_tags tags={@post.tags} />
             <% @mode == :preview -> %>
               <.preview_body
                 :if={@post.body != ""}
@@ -1000,6 +996,12 @@ defmodule VutuvWeb.PostComponents do
   attr(:body_html, :any, required: true)
   attr(:body_style, :string, default: nil)
   attr(:class, :string, default: nil)
+  # Wrap mode: a small image/screenshot floats beside the body (the `:float`
+  # slot) and the text flows around AND below it. `-webkit-line-clamp` cannot wrap
+  # around a float, so wrap mode clamps by height (`.post-clamp--wrap`) inside a
+  # float-containing block — see components.css.
+  attr(:wrap, :boolean, default: false)
+  slot(:float)
 
   defp preview_body(assigns) do
     ~H"""
@@ -1007,14 +1009,20 @@ defmodule VutuvWeb.PostComponents do
       id={@body_id}
       phx-hook="PostPreviewClamp"
       data-post-preview
-      class={["post-preview", @class]}
+      class={["post-preview", @wrap && "post-preview--wrap", @class]}
     >
       <div class="relative">
         <div
-          class="markdown markdown--post post-clamp text-slate-800 dark:text-slate-200"
+          class={[
+            if(@wrap, do: "post-clamp--wrap", else: "post-clamp"),
+            "markdown markdown--post text-slate-800 dark:text-slate-200"
+          ]}
           data-clamp-body
           {style_attrs(@body_style)}
         >
+          <%!-- The floated media is the clamp block's FIRST child so the body text
+          wraps around it; the block contains + clips it (flow-root + overflow). --%>
+          {render_slot(@float)}
           {@body_html}
         </div>
         <%!-- Fades the clamp cut into the card so it reads as intentional; only
@@ -1143,11 +1151,11 @@ defmodule VutuvWeb.PostComponents do
   # Reply system messages name the account handle, never the clear name.
   defp handle(%User{username: username}), do: "@" <> username
 
-  # Whether to lay a post's body and its single image out side by side (2/3 text,
-  # 1/3 image) rather than stacking a full-width image below the text. True only
-  # in preview mode, with body text to fill the left column, exactly one image,
-  # and that image roughly square (see square_image?/1). Anything else keeps the
-  # existing full-width single / multi-image treatment.
+  # Whether to float a post's single image beside its body (the text wraps around
+  # and below it, `.post-clamp--wrap`) rather than stacking a full-width image
+  # below the text. True only in preview mode, with body text for the float to
+  # wrap, exactly one image, and that image roughly square (see square_image?/1).
+  # Anything else keeps the existing full-width single / multi-image treatment.
   defp square_layout?(post, :preview) do
     post.body != "" and match?([_], post.images) and square_image?(hd(post.images))
   end

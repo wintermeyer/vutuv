@@ -1059,6 +1059,47 @@ ul.thumbs li .text .url a {
   margin-top: 0.5rem;
   margin-left: auto;
 }
+
+/* Float-wrap preview variant (`<.preview_body wrap>`): a small image/screenshot
+   floats to the top-right (the `:float` slot, the clamp block's first child) and
+   the body text flows around AND below it, so a short image leaves no dead column
+   of whitespace beside the text. `-webkit-box` / `-webkit-line-clamp` cannot wrap
+   text around a float, so this variant clamps by HEIGHT (N line-heights via the
+   `lh` unit) inside a float-containing block (`display: flow-root`) instead. The
+   per-reader line budget (the `--post-clamp-*` custom properties) and the expand
+   behaviour are unchanged; only the truncation mechanism differs. If `lh` is
+   unsupported the max-height calc is dropped and the full body simply shows
+   (graceful) — the server-truncation floor still bounds very long bodies. */
+.post-clamp--wrap {
+  display: flow-root;
+  overflow: hidden;
+  max-height: calc(var(--post-clamp-desktop, 6) * 1lh);
+}
+@media (width < 48rem) {
+  .post-clamp--wrap {
+    max-height: calc(var(--post-clamp-mobile, 8) * 1lh);
+  }
+}
+.post-preview.is-expanded .post-clamp--wrap {
+  max-height: none;
+  overflow: visible;
+}
+/* In wrap mode the fade + "Read more" cannot ride the clamped text's last line —
+   the floated image (contained + clipped inside the clamp block) would share it,
+   so an absolute control would land on the image. The fade is dropped and
+   "Read more" becomes a plain in-flow line below the whole clamp block instead. */
+.post-preview--wrap .post-preview__fade { display: none; }
+.post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__more,
+.post-preview--wrap.is-expanded .post-preview__more {
+  position: static;
+  display: block;
+  width: fit-content;
+  margin-top: 0.25rem;
+  margin-left: auto;
+  padding-left: 0;
+  background: none;
+}
+
 /* Enough left padding that the markers (which sit in it, list-style outside)
    clear the paragraph margin and the list reads as an indented block — 1.4em
    left the "1." barely off the margin, so it looked un-indented. */

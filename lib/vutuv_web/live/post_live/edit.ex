@@ -5,11 +5,19 @@ defmodule VutuvWeb.PostLive.Edit do
   unknown id gets (no existence leak). The post card's ⋯ menu carries
   Edit/Delete wherever the post renders; this page keeps its own delete
   button so the destructive action also sits on the edit surface.
+
+  A single-URL, image-less post also gets an auto-captured link screenshot
+  (`Vutuv.Posts.Screenshots`). When that capture is bad (a cookie banner
+  covering the page, say) the author can remove it here — a "Remove screenshot"
+  control shown only while a captured screenshot is on the card. Removing it
+  tombstones the screenshot so it stops rendering and is not re-captured on a
+  plain re-save (`Vutuv.Posts.dismiss_screenshot/1`).
   """
 
   use VutuvWeb, :live_view
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostScreenshot
 
   @impl true
   def mount(%{"id" => id}, _session, socket) do
@@ -20,7 +28,8 @@ defmodule VutuvWeb.PostLive.Edit do
       {:ok,
        socket
        |> assign(:page_title, gettext("Edit post"))
-       |> assign(:post, post)}
+       |> assign(:post, post)
+       |> assign(:screenshot, ready_screenshot(post))}
     else
       {:ok,
        socket
@@ -28,6 +37,26 @@ defmodule VutuvWeb.PostLive.Edit do
        |> redirect(to: ~p"/")}
     end
   end
+
+  @impl true
+  def handle_event("remove-screenshot", _params, socket) do
+    {:ok, post} = Posts.dismiss_screenshot(socket.assigns.post)
+
+    {:noreply,
+     socket
+     |> assign(:post, post)
+     |> assign(:screenshot, ready_screenshot(post))
+     |> put_flash(:info, gettext("Screenshot removed."))}
+  end
+
+  # The captured, released link screenshot to offer for removal, or nil. Mirrors
+  # the card's own gate (`VutuvWeb.PostComponents`): only a `ready` row that the
+  # AI scan has released is shown, so this is exactly what the reader sees.
+  defp ready_screenshot(%{screenshot: %PostScreenshot{} = ps}) do
+    if PostScreenshot.ready?(ps), do: ps
+  end
+
+  defp ready_screenshot(_post), do: nil
 
   @impl true
   def render(assigns) do
@@ -44,6 +73,33 @@ defmodule VutuvWeb.PostLive.Edit do
           current_user={@current_user}
           post={@post}
         />
+
+        <.card :if={@screenshot} id="post-screenshot-editor">
+          <.section_title>{gettext("Link preview screenshot")}</.section_title>
+          <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "This screenshot was captured automatically from the link in your post. If it turned out wrong (for example a cookie banner covering the page), you can remove it."
+            )}
+          </p>
+
+          <div class="mt-3 flex flex-wrap items-start gap-4">
+            <img
+              src={Vutuv.Screenshot.url({@screenshot.screenshot, @screenshot}, :thumb)}
+              width="200"
+              height="132"
+              alt=""
+              class="aspect-[400/264] w-40 shrink-0 rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
+            />
+            <.button
+              id="remove-screenshot"
+              variant="danger"
+              phx-click="remove-screenshot"
+              data-confirm={gettext("Remove this screenshot from your post?")}
+            >
+              {gettext("Remove screenshot")}
+            </.button>
+          </div>
+        </.card>
 
         <div class="flex items-center justify-between">
           <.link

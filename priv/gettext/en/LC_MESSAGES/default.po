@@ -1913,7 +1913,7 @@ msgstr ""
 msgid "We sent a PIN to your new email address. Enter it below to confirm the address."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:606
+#: lib/vutuv_web/live/post_live/feed.ex:611
 #: lib/vutuv_web/templates/user/show.html.heex:1162
 #, elixir-autogen, elixir-format
 msgid "Who to follow"
@@ -2140,7 +2140,7 @@ msgstr ""
 msgid "As soon as anything is hidden, the post is also invisible to logged-out visitors and search engines."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/edit.ex:53
+#: lib/vutuv_web/live/post_live/edit.ex:109
 #: lib/vutuv_web/live/post_live/reply.ex:58
 #, elixir-autogen, elixir-format
 msgid "Back to the post"
@@ -2151,13 +2151,13 @@ msgstr ""
 msgid "Cancel upload"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/edit.ex:63
+#: lib/vutuv_web/live/post_live/edit.ex:119
 #, elixir-autogen, elixir-format
 msgid "Delete post"
 msgstr ""
 
 #: lib/vutuv_web/components/post_components.ex:694
-#: lib/vutuv_web/live/post_live/edit.ex:61
+#: lib/vutuv_web/live/post_live/edit.ex:117
 #, elixir-autogen, elixir-format
 msgid "Delete this post permanently?"
 msgstr ""
@@ -2167,14 +2167,14 @@ msgstr ""
 msgid "Describe this image (alt text)"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/edit.ex:22
-#: lib/vutuv_web/live/post_live/edit.ex:38
+#: lib/vutuv_web/live/post_live/edit.ex:30
+#: lib/vutuv_web/live/post_live/edit.ex:67
 #, elixir-autogen, elixir-format
 msgid "Edit post"
 msgstr ""
 
 #: lib/vutuv_web/live/post_live/feed.ex:79
-#: lib/vutuv_web/live/post_live/feed.ex:512
+#: lib/vutuv_web/live/post_live/feed.ex:517
 #: lib/vutuv_web/live/shell_live.ex:290
 #: lib/vutuv_web/live/shell_live.ex:463
 #: lib/vutuv_web/templates/layout/app.html.heex:116
@@ -2219,7 +2219,7 @@ msgstr ""
 msgid "No more than %{max} images per post."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:577
+#: lib/vutuv_web/live/post_live/feed.ex:582
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet. Follow people to fill your feed, or write your first post."
 msgstr ""
@@ -2306,14 +2306,14 @@ msgstr ""
 msgid "Saving…"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:541
+#: lib/vutuv_web/live/post_live/feed.ex:546
 #, elixir-autogen, elixir-format
 msgid "Show %{formatted} new post"
 msgid_plural "Show %{formatted} new posts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/vutuv_web/live/post_live/edit.ex:27
+#: lib/vutuv_web/live/post_live/edit.ex:36
 #: lib/vutuv_web/live/post_live/reply.ex:30
 #, elixir-autogen, elixir-format
 msgid "Sorry, that page could not be found."
@@ -2788,7 +2788,7 @@ msgstr ""
 msgid "Add work experience"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:907
+#: lib/vutuv_web/live/user_profile_live.ex:913
 #: lib/vutuv_web/templates/user/show.html.heex:395
 #, elixir-autogen, elixir-format
 msgid "Write your first post"
@@ -2806,7 +2806,7 @@ msgstr ""
 msgid "Manage"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:524
+#: lib/vutuv_web/live/post_live/feed.ex:529
 #: lib/vutuv_web/templates/user/show.html.heex:395
 #, elixir-autogen, elixir-format
 msgid "Write a post"
@@ -3690,7 +3690,7 @@ msgstr ""
 msgid "Open the profile"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:384
+#: lib/vutuv_web/live/notification_live/index.ex:385
 #, elixir-autogen, elixir-format
 msgid "Our admins found your report unfounded; the paused connection between you two is restored."
 msgstr ""
@@ -3790,7 +3790,7 @@ msgstr ""
 msgid "Waiting for the owner"
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:389
+#: lib/vutuv_web/live/notification_live/index.ex:390
 #, elixir-autogen, elixir-format
 msgid "Your report paused the connection between you two - no contact in either direction for now. If our admins find the report unfounded, this is undone."
 msgstr ""
@@ -4561,7 +4561,7 @@ msgstr ""
 msgid "You unblocked @%{slug}."
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:582
+#: lib/vutuv_web/live/post_live/feed.ex:587
 #, elixir-autogen, elixir-format
 msgid "Discover people to follow"
 msgstr ""
@@ -4682,7 +4682,7 @@ msgstr ""
 msgid "searches first names only (last: for last names)"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:895
+#: lib/vutuv_web/live/user_profile_live.ex:901
 #: lib/vutuv_web/templates/user/show.html.heex:432
 #, elixir-autogen, elixir-format
 msgid "Add a tag"
@@ -5416,7 +5416,7 @@ msgstr ""
 msgid "A few quick steps so people can find and recognize you."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:897
+#: lib/vutuv_web/live/user_profile_live.ex:903
 #, elixir-autogen, elixir-format
 msgid "Add a profile photo"
 msgstr ""
@@ -5445,7 +5445,7 @@ msgstr ""
 #: lib/vutuv_web/components/post_components.ex:759
 #: lib/vutuv_web/components/post_components.ex:806
 #: lib/vutuv_web/components/post_components.ex:819
-#: lib/vutuv_web/live/post_live/feed.ex:667
+#: lib/vutuv_web/live/post_live/feed.ex:672
 #, elixir-autogen, elixir-format
 msgid "View post"
 msgstr ""
@@ -6085,7 +6085,7 @@ msgstr ""
 msgid "or"
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:901
+#: lib/vutuv_web/live/user_profile_live.ex:907
 #, elixir-autogen, elixir-format
 msgid "Add a tagline"
 msgstr ""
@@ -8302,7 +8302,7 @@ msgstr ""
 msgid "A photo and a short tagline make your profile complete."
 msgstr ""
 
-#: lib/vutuv_web/live/user_profile_live.ex:920
+#: lib/vutuv_web/live/user_profile_live.ex:926
 #, elixir-autogen, elixir-format
 msgid "For example, a thought on %{tag}."
 msgstr ""
@@ -8437,13 +8437,13 @@ msgstr ""
 msgid "Type your username to confirm:"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:634
-#: lib/vutuv_web/live/post_live/feed.ex:635
+#: lib/vutuv_web/live/post_live/feed.ex:639
+#: lib/vutuv_web/live/post_live/feed.ex:640
 #, elixir-autogen, elixir-format
 msgid "Show other posts"
 msgstr ""
 
-#: lib/vutuv_web/live/post_live/feed.ex:629
+#: lib/vutuv_web/live/post_live/feed.ex:634
 #, elixir-autogen, elixir-format
 msgid "Suggested posts"
 msgstr ""
@@ -13466,7 +13466,7 @@ msgstr ""
 msgid "No images waiting for the AI scan. %{formatted} rejected in the last 7 days."
 msgstr ""
 
-#: lib/vutuv_web/live/notification_live/index.ex:372
+#: lib/vutuv_web/live/notification_live/index.ex:373
 #, elixir-autogen, elixir-format
 msgid "Our automated image review removed %{what}. Only family-friendly images suitable for a work environment are allowed."
 msgstr ""
@@ -13474,4 +13474,29 @@ msgstr ""
 #: lib/vutuv_web/templates/user/show.html.heex:159
 #, elixir-autogen, elixir-format
 msgid "Profile picture awaiting review, visible only to you"
+msgstr ""
+
+#: lib/vutuv_web/live/post_live/edit.ex:78
+#, elixir-autogen, elixir-format
+msgid "Link preview screenshot"
+msgstr ""
+
+#: lib/vutuv_web/live/post_live/edit.ex:99
+#, elixir-autogen, elixir-format
+msgid "Remove screenshot"
+msgstr ""
+
+#: lib/vutuv_web/live/post_live/edit.ex:97
+#, elixir-autogen, elixir-format
+msgid "Remove this screenshot from your post?"
+msgstr ""
+
+#: lib/vutuv_web/live/post_live/edit.ex:49
+#, elixir-autogen, elixir-format
+msgid "Screenshot removed."
+msgstr ""
+
+#: lib/vutuv_web/live/post_live/edit.ex:80
+#, elixir-autogen, elixir-format
+msgid "This screenshot was captured automatically from the link in your post. If it turned out wrong (for example a cookie banner covering the page), you can remove it."
 msgstr ""

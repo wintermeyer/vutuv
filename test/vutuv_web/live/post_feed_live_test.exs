@@ -1025,25 +1025,28 @@ defmodule VutuvWeb.PostFeedLiveTest do
       post
     end
 
-    test "a roughly square image sits beside the text (2/3 / 1/3), not a full-width crop", %{
+    test "a roughly square image floats beside the text (wrap layout), not a full-width crop", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
       # 736×678 ≈ 1.09 — the near-square GitHub code card that prompted this. At
       # full column width its natural height overruns the max-h cap and object-cover
-      # crops it to a middle band; beside the text in a third it shows in full.
+      # crops it to a middle band; floated in a third the text wraps around it and
+      # it shows in full.
       post_with_image(user, "A near-square screenshot", 736, 678, "sqtok")
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
-      assert html =~ "sm:w-2/3"
-      assert html =~ "sm:w-1/3"
+      # The float-wrap layout: the image floats and the body clamps by height so
+      # the text flows around AND below it (no dead column).
+      assert html =~ "float-right"
+      assert html =~ "post-clamp--wrap"
       assert html =~ "/post_images/sqtok/feed.avif"
       # It must NOT also render the cropping full-width single-image variant.
       refute html =~ "max-h-96"
     end
 
-    test "tags ride under the text (before the image), not in a full-width row below", %{
+    test "the image floats first (before the text/tags) so the text wraps around it", %{
       conn: conn
     } do
       {conn, user} = create_and_login_user(conn)
@@ -1058,14 +1061,14 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
-      # In the side-by-side layout the tag chip sits under the text inside the
-      # 2/3 column, which is DOM-ordered *before* the image — not in the
-      # full-width row that follows the image in every other layout.
-      {tag_pos, _} = :binary.match(html, "/tags/elixir")
+      # For the text to wrap around it, the floated image is the clamp block's
+      # first child — DOM-ordered *before* the body text and the tag chip (which
+      # follow it), not in a full-width row after the whole block.
       {img_pos, _} = :binary.match(html, "/post_images/sqtag/feed.avif")
+      {tag_pos, _} = :binary.match(html, "/tags/elixir")
 
-      assert tag_pos < img_pos,
-             "expected the tag chip to render before (under the text of) the image"
+      assert img_pos < tag_pos,
+             "expected the floated image to render before (be wrapped by) the text and tag"
     end
 
     test "a clearly landscape image keeps the full-width layout", %{conn: conn} do
@@ -1076,7 +1079,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
-      refute html =~ "sm:w-2/3"
+      refute html =~ "post-clamp--wrap"
       assert html =~ "max-h-96"
       assert html =~ "/post_images/widetok/feed.avif"
     end
@@ -1086,12 +1089,12 @@ defmodule VutuvWeb.PostFeedLiveTest do
     } do
       {conn, user} = create_and_login_user(conn)
       # Photo-only post (blank body is allowed with an attached image): there is
-      # no text to place beside it, so the side-by-side split makes no sense.
+      # no text to wrap around it, so the float layout makes no sense.
       post_with_image(user, "", 700, 680, "notxttok")
 
       {:ok, _live, html} = live(conn, ~p"/feed")
 
-      refute html =~ "sm:w-2/3"
+      refute html =~ "post-clamp--wrap"
       assert html =~ "/post_images/notxttok/feed.avif"
     end
   end

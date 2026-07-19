@@ -352,6 +352,11 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, refresh_shown_post(socket, post_id)}
   end
 
+  # The author removed a bad link screenshot: refresh the card so it drops.
+  def handle_info({:post_screenshot_removed, %{post_id: post_id}}, socket) do
+    {:noreply, refresh_shown_post(socket, post_id)}
+  end
+
   def handle_info(_other, socket), do: {:noreply, socket}
 
   # Swap in the post's now-screenshot-carrying copy and re-stream the entry in

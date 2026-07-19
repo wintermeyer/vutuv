@@ -9,6 +9,8 @@ defmodule VutuvWeb.PostEditLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.Repo
 
   describe "GET /posts/:id/edit" do
     test "prefills the composer for the author", %{conn: conn} do
@@ -209,5 +211,64 @@ defmodule VutuvWeb.PostEditLiveTest do
 
       assert {:error, {:redirect, %{to: "/"}}} = live(conn, ~p"/posts/999999/edit")
     end
+  end
+
+  describe "removing a bad auto link screenshot" do
+    test "the author can remove the captured screenshot from the edit page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = post_with_ready_screenshot(user)
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      assert has_element?(live, "#post-screenshot-editor")
+
+      live
+      |> element("#remove-screenshot")
+      |> render_click()
+
+      # The screenshot section is gone the moment it is dismissed, no reload.
+      refute has_element?(live, "#post-screenshot-editor")
+
+      job = Repo.get_by!(PostScreenshot, post_id: post.id)
+      assert job.status == "dismissed"
+      assert job.screenshot == nil
+    end
+
+    test "no remove control when the post carries no screenshot", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "just words, no link"})
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      refute has_element?(live, "#post-screenshot-editor")
+    end
+
+    test "a still-capturing screenshot shows no remove control yet", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, post} = Posts.create_post(user, %{body: "Check https://example.com/page"})
+
+      Repo.insert!(%PostScreenshot{
+        post_id: post.id,
+        url: "https://example.com/page",
+        status: "pending"
+      })
+
+      {:ok, live, _html} = live(conn, ~p"/posts/#{post.id}/edit")
+      refute has_element?(live, "#post-screenshot-editor")
+    end
+  end
+
+  # A single-URL, image-less post whose auto-screenshot has been captured,
+  # stored and released — the state in which the card renders it.
+  defp post_with_ready_screenshot(author) do
+    {:ok, post} = Posts.create_post(author, %{body: "Check https://example.com/page"})
+
+    Repo.insert!(%PostScreenshot{
+      post_id: post.id,
+      url: "https://example.com/page",
+      status: "ready",
+      screenshot: "0123456789ab.avif",
+      moderation: "approved"
+    })
+
+    post
   end
 end
