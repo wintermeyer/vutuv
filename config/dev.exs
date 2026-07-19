@@ -3,6 +3,13 @@ import Config
 # No nginx locally: serve uploaded avatars/screenshots from the project dir.
 config :vutuv, :serve_uploads_locally, true
 
+# AI image scans in dev: try bremen3's GPU Ollama first through the local
+# WireGuard tunnel (10.28.0.3 — answers in seconds), fall back to the Mac's
+# own Ollama when the tunnel is down. Same priority-list mechanism prod uses;
+# without either instance running, uploads simply wait in limbo (fail-closed),
+# so dev keeps working — the pill just stays until a scan answers.
+config :vutuv, :ollama_url, "http://10.28.0.3:11434,http://localhost:11434"
+
 # Relax the dev Content-Security-Policy to allow `'unsafe-eval'` for scripts so
 # Tidewave's `browser_eval` tool (which runs page JS via eval, e.g. to measure
 # layout and confirm a change isn't clipped) is not blocked. DEV ONLY — the flag
