@@ -320,6 +320,20 @@ lands here). --%>
               {gettext("Remove date of birth")}
             </button>
           </div>
+
+          <%!-- How much of the birthday the public profile (and its agent
+          formats + public CV) reveals. The granularity applies to every viewer
+          alike; "full" keeps the historical behaviour. --%>
+          <div>
+            <%= label f, :birthdate_visibility, gettext("Show my birthday as"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+            <%= select f, :birthdate_visibility, birthdate_visibility_options(), class: input_class() %>
+            <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+              {gettext(
+                "Choose how much of your birthday your profile shows. \"Age only\" hides the exact date, \"Day and month\" hides the year (and your age), and \"Do not show\" keeps it saved but off your profile."
+              )}
+            </p>
+            <%= error_tag f, :birthdate_visibility %>
+          </div>
         </div>
       </div>
     </.card>

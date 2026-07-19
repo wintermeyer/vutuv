@@ -417,6 +417,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       count_facts(doc.counts),
       doc.gender && "#{gettext("Gender")}: #{User.gender_gettext(doc.gender)}",
       doc.birthdate && "#{gettext("Birthday")}: #{doc.birthdate}",
+      doc.birthday_month_day && "#{gettext("Birthday")}: #{doc.birthday_month_day}",
       doc.age && "#{gettext("Age")}: #{doc.age}"
     ]
     |> List.flatten()

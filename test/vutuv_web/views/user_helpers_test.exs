@@ -260,6 +260,34 @@ defmodule VutuvWeb.UserHelpersTest do
     end
   end
 
+  describe "format_birthdate_day_month/1 (day + month, no year)" do
+    test "German locale drops the year, keeps the dd.mm. shape" do
+      assert UserHelpers.format_birthdate_day_month(%User{
+               locale: "de",
+               birthdate: ~D[1990-04-23]
+             }) == "23.04."
+    end
+
+    test "other locales use the mm/dd shape without the year" do
+      assert UserHelpers.format_birthdate_day_month(%User{
+               locale: "en",
+               birthdate: ~D[1990-04-23]
+             }) == "04/23"
+    end
+
+    test "no birthdate yields an empty string" do
+      assert UserHelpers.format_birthdate_day_month(%User{birthdate: nil}) == ""
+    end
+  end
+
+  describe "birthdate_visibility_options/0" do
+    test "offers every schema-valid granularity with a label" do
+      options = UserHelpers.birthdate_visibility_options()
+      assert Enum.map(options, &elem(&1, 1)) == User.birthdate_visibilities()
+      assert Enum.all?(options, fn {label, _value} -> is_binary(label) and label != "" end)
+    end
+  end
+
   describe "following_map/2" do
     test "returns followee_id => follow_id for followed users only" do
       follower = insert(:user)

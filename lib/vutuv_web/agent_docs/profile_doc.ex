@@ -11,6 +11,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   """
 
   alias Vutuv.Accounts
+  alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
@@ -109,8 +110,6 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       work_info: work_info,
       current_position: current_position(job),
       gender: public_gender(user),
-      birthdate: user.birthdate,
-      age: UserHelpers.age(user),
       member_since: NaiveDateTime.to_date(user.inserted_at),
       avatar_url: avatar_url(user),
       counts: %{
@@ -142,7 +141,26 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       code_stats: Enum.map(CodeStats.visible_accounts(user), &code_stats_entry/1),
       posts: Enum.map(posts, &post_entry/1)
     })
+    |> Map.merge(birthday_fields(user))
     |> maybe_include_photo(user, opts)
+  end
+
+  # The birthday facts, gated by the member's birthdate_visibility setting so
+  # the anonymous documents reveal exactly what the profile card (and the public
+  # CV) do: :full → the ISO date + derived age; :age → the age only; :day_month
+  # → the month-day without the year (a stable "MM-DD", so the year and thus the
+  # age can't be back-computed); :none (the member hid it, or has no birthday) →
+  # nothing. Kept in one place so md/txt/json/xml and the vCard (which keys BDAY
+  # on `birthdate`, hence absent unless the full date is public) stay in sync.
+  defp birthday_fields(user) do
+    base = %{birthdate: nil, birthday_month_day: nil, age: nil}
+
+    case User.birthdate_mode(user) do
+      :full -> %{base | birthdate: user.birthdate, age: UserHelpers.age(user)}
+      :age -> %{base | age: UserHelpers.age(user)}
+      :day_month -> %{base | birthday_month_day: Calendar.strftime(user.birthdate, "%m-%d")}
+      :none -> base
+    end
   end
 
   # The same associations the profile page preloads (user_controller.ex),

@@ -148,6 +148,59 @@ defmodule Vutuv.Accounts.UserTest do
     end
   end
 
+  describe "birthdate_visibility" do
+    test "defaults to \"full\" so a new member's birthday stays as public as before" do
+      assert %User{}.birthdate_visibility == "full"
+    end
+
+    test "the changeset accepts every valid granularity" do
+      for value <- User.birthdate_visibilities() do
+        changeset =
+          User.changeset(%User{}, %{"first_name" => "first_name", "birthdate_visibility" => value})
+
+        assert changeset.valid?, "expected #{inspect(value)} to be a valid birthdate_visibility"
+      end
+    end
+
+    test "the changeset rejects an unknown granularity" do
+      changeset =
+        User.changeset(%User{}, %{"first_name" => "first_name", "birthdate_visibility" => "nope"})
+
+      refute changeset.valid?
+      assert %{birthdate_visibility: [_]} = errors_on(changeset)
+    end
+
+    test "every offered value has a label" do
+      for value <- User.birthdate_visibilities() do
+        assert User.birthdate_visibility_label(value)
+      end
+    end
+  end
+
+  describe "birthdate_mode/1" do
+    test ":none whenever there is no birthday, regardless of the setting" do
+      for value <- User.birthdate_visibilities() do
+        assert User.birthdate_mode(%User{birthdate: nil, birthdate_visibility: value}) == :none
+      end
+    end
+
+    test "maps the setting to a display mode when a birthday is set" do
+      born = ~D[1990-05-15]
+      assert User.birthdate_mode(%User{birthdate: born, birthdate_visibility: "full"}) == :full
+      assert User.birthdate_mode(%User{birthdate: born, birthdate_visibility: "age"}) == :age
+
+      assert User.birthdate_mode(%User{birthdate: born, birthdate_visibility: "day_month"}) ==
+               :day_month
+
+      assert User.birthdate_mode(%User{birthdate: born, birthdate_visibility: "hidden"}) == :none
+    end
+
+    test "a nil/legacy setting falls back to :full (the historical public view)" do
+      assert User.birthdate_mode(%User{birthdate: ~D[1990-05-15], birthdate_visibility: nil}) ==
+               :full
+    end
+  end
+
   describe "identity verification revocation" do
     # A member an admin has already verified (their physical ID was checked
     # against this name and birthday).

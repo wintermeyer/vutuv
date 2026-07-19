@@ -19,6 +19,34 @@ inert (the profile ignores it).
 The profile-section pages behave the same way: `/:slug/<section>` IS the public
 view for everyone, and editing happens at `/settings/<section>`.
 
+## Birthday visibility (General Info card)
+
+A member enters their birthday on the Basics form but chooses **how much of it
+is public** with the neighbouring `users.birthdate_visibility` select. Unlike
+the three-way audience gate below, this is a **granularity** knob that applies
+to every viewer alike:
+
+| value       | profile shows            | agent formats                        | public CV        |
+| ----------- | ------------------------ | ------------------------------------ | ---------------- |
+| `full`      | full date + age (default)| `birthdate` (ISO) + `age`            | full date        |
+| `age`       | age only                 | `age` only                           | no DOB line      |
+| `day_month` | day + month, no year     | `birthday_month_day` (`MM-DD`)       | day + month      |
+| `hidden`    | nothing                  | nothing                              | no DOB line      |
+
+`Vutuv.Accounts.User.birthdate_mode/1` is the single seam — it folds `hidden`
+and "no birthday set" into one `:none` so a call site gates the whole display on
+one value (a nil/legacy setting falls back to `:full`, the historical public
+behaviour, so existing members are unchanged). The profile card
+(`show.html.heex`), the anonymous agent docs (`ProfileDoc` merges gated
+`birthdate` / `birthday_month_day` / `age` fields, so md/txt/json/xml and the
+vCard's `BDAY` — which is only emitted for the full date, vCard 3.0 having no
+year-less form — stay in sync) and the **public** CV builder (`VutuvWeb.CV`,
+`/:slug/cv`) all read it, so none of them can reveal more than the profile does.
+The owner's own **GDPR export** and the admin **newsletter age segmentation**
+deliberately keep the raw stored `birthdate` — the setting is about public
+display, not deletion. `birthdate_visibility_test.exs` asserts both sides of
+each of the four modes across every surface.
+
 ## Employment-status badge & visibility (issues #870, #928)
 
 Members can advertise a job-availability signal shown as a small pill in the
