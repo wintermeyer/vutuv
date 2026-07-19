@@ -1,6 +1,5 @@
 defmodule Vutuv.AdsTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   import Vutuv.MailboxHelpers
 
   alias Vutuv.Ads

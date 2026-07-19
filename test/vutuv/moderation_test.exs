@@ -1,6 +1,5 @@
 defmodule Vutuv.ModerationTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.{Chat, Moderation, Posts, Social}
   alias Vutuv.Moderation.{Case, Event, Notifier, Report, Strike}
 

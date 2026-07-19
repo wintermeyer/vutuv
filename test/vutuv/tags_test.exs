@@ -1,6 +1,5 @@
 defmodule Vutuv.TagsTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.UserTag
@@ -21,12 +20,31 @@ defmodule Vutuv.TagsTest do
       assert get_change(changeset, :tag_id) == tag.id
     end
 
-    test "builds a new tag when no name or slug matches" do
+    test "creates the tag up front and links its committed id (deadlock-safe get-or-create)" do
+      # No committed row matches, so create_or_link_tag/2 resolves the value to a
+      # brand-new tag. It must INSERT that tag in its own ON CONFLICT statement and
+      # link the committed id, NOT defer the insert as a nested put_assoc: two
+      # concurrent sign-ups sharing a tag both see find_by_value/1 == nil, and the
+      # old put_assoc path had each INSERT the same tags.slug inside its own
+      # user_tag insert, forming the register_user lock cycle (Postgres 40P01
+      # deadlock — the intermittent async-suite flake).
       changeset = link("Rust")
-      refute get_change(changeset, :tag_id)
-      built = get_change(changeset, :tag)
-      assert get_change(built, :name) == "Rust"
-      assert get_change(built, :slug) =~ "rust"
+
+      tag_id = get_change(changeset, :tag_id)
+      assert tag_id
+      refute get_change(changeset, :tag)
+
+      tag = Repo.get!(Tag, tag_id)
+      assert tag.name == "Rust"
+      assert tag.slug =~ "rust"
+    end
+
+    test "resolving the same new value twice is idempotent (one row, no unique-violation race)" do
+      first = get_change(link("Elixir"), :tag_id)
+      second = get_change(link("elixir"), :tag_id)
+
+      assert first == second
+      assert Repo.aggregate(Tag, :count) == 1
     end
 
     test "a new tag keeps the entered casing as its display name" do
@@ -51,12 +69,15 @@ defmodule Vutuv.TagsTest do
       assert get_change(changeset, :tag_id) == tag.id
     end
 
-    test "a multi-word value with no match builds one spaced tag" do
+    test "a multi-word value with no match creates one spaced tag and links it" do
       changeset = link("Ruby on Rails")
-      refute get_change(changeset, :tag_id)
-      built = get_change(changeset, :tag)
-      assert get_change(built, :name) == "Ruby on Rails"
-      assert get_change(built, :slug) =~ "ruby"
+
+      tag_id = get_change(changeset, :tag_id)
+      assert tag_id
+
+      tag = Repo.get!(Tag, tag_id)
+      assert tag.name == "Ruby on Rails"
+      assert tag.slug =~ "ruby"
     end
   end
 

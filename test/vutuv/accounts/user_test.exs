@@ -1,6 +1,5 @@
 defmodule Vutuv.Accounts.UserTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Accounts.User
 
   @valid_attrs %{"first_name" => "first_name"}

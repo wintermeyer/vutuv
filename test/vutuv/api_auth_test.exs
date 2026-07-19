@@ -1,6 +1,5 @@
 defmodule Vutuv.ApiAuthTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.ApiAuth
   alias Vutuv.ApiAuth.{Scopes, Token}
 

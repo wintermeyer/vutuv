@@ -1,6 +1,5 @@
 defmodule Vutuv.ActivityTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   import Vutuv.QueryCounter
 
   alias Vutuv.Activity

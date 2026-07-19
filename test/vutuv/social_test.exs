@@ -1,6 +1,5 @@
 defmodule Vutuv.SocialTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Social
 
   describe "follow/2" do

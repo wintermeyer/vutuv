@@ -3,8 +3,7 @@ defmodule Vutuv.ConnectionsTest do
   Vernetzt (connected) = a mutual follow, derived from `follows` — there is no
   request/accept/decline flow any more. Plus the per-follow mute flag.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Social
 
   defp users, do: {insert(:user, first_name: "Ann"), insert(:user, first_name: "Bob")}

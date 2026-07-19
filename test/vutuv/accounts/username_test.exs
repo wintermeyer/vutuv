@@ -8,8 +8,7 @@ defmodule Vutuv.Accounts.SlugTest do
   and does not redirect. Changes are rate-limited via the `username_changes`
   ledger: at most 4 changes within a rolling 90-day window.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Accounts
   alias Vutuv.Accounts.ReservedSlugs
   alias Vutuv.Accounts.User

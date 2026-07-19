@@ -1,6 +1,5 @@
 defmodule Vutuv.PostsTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   import Vutuv.PostsHelpers
 
   alias Vutuv.Posts

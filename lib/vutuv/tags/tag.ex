@@ -5,6 +5,7 @@ defmodule Vutuv.Tags.Tag do
   @derive {Phoenix.Param, key: :slug}
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Repo
 
   schema "tags" do
     field(:slug, :string)
@@ -78,12 +79,15 @@ defmodule Vutuv.Tags.Tag do
   end
 
   @doc """
-  Links the changeset to an existing tag whose name (case-insensitive) or slug
-  matches the typed value, or builds a new tag when none exists.
+  Puts a `:tag_id` change on the changeset for the tag matching the typed value,
+  creating that tag first when none exists yet. The new tag is inserted here in
+  its own `ON CONFLICT` statement (see `put_created_tag/2`) so concurrent callers
+  sharing a tag get-or-create it idempotently instead of deadlocking — only an
+  invalid name falls back to a nested `put_assoc` so its errors reach the caller.
 
   The value is one tag name and may contain spaces ("Ruby on Rails"): a
   multi-word value links to the existing spaced tag (case-insensitively) or
-  builds it fresh, exactly like a single-word one. Callers that accept a batch
+  creates it fresh, exactly like a single-word one. Callers that accept a batch
   (sign-up, the tags page, the post composer) tokenize their input first with
   `Vutuv.Tags.parse_tag_names/1`, which honours quotes; the JSON API reaches
   here with a single already-whole name.
@@ -144,7 +148,7 @@ defmodule Vutuv.Tags.Tag do
   def find_by_value(value) when is_binary(value) do
     down = String.downcase(value)
 
-    Vutuv.Repo.one(
+    Repo.one(
       from(t in __MODULE__,
         where: fragment("lower(?)", t.name) == ^down or t.slug == ^down,
         limit: 1
@@ -154,12 +158,44 @@ defmodule Vutuv.Tags.Tag do
 
   defp link_or_build_tag(changeset, value, params) do
     case find_by_value(value) do
-      nil ->
-        tag = __MODULE__.changeset(%__MODULE__{}, params)
-        put_assoc(changeset, :tag, tag)
+      nil -> put_created_tag(changeset, params)
+      tag -> put_change(changeset, :tag_id, tag.id)
+    end
+  end
 
-      tag ->
-        put_change(changeset, :tag_id, tag.id)
+  # No committed tag matches the typed value, so mint one and link its id.
+  #
+  # The tag is INSERTed here in its own `ON CONFLICT DO NOTHING` statement rather
+  # than deferred into the caller's `user_tag` insert as a nested `put_assoc`.
+  # That is the deadlock fix: two concurrent sign-ups sharing a tag both reach
+  # here with `find_by_value/1 == nil` (neither row is committed yet). The old
+  # put_assoc path had each transaction INSERT the same `tags.slug`, and with
+  # several tags per registration those unique-index waits chained into a cycle —
+  # Postgres 40P01, the intermittent async-suite flake from register_user. With
+  # ON CONFLICT the loser no-ops and re-reads the winner's row, and because the
+  # tag insert is its own autocommit statement no transaction ever holds two
+  # contended tag rows at once, so no cycle can form.
+  defp put_created_tag(changeset, params) do
+    tag_changeset = __MODULE__.changeset(%__MODULE__{}, params)
+
+    if tag_changeset.valid? do
+      slug = get_field(tag_changeset, :slug)
+
+      tag =
+        case Repo.insert(tag_changeset, on_conflict: :nothing, conflict_target: :slug) do
+          {:ok, %__MODULE__{id: id} = tag} when not is_nil(id) -> tag
+          # ON CONFLICT no-op'd (a racer committed this slug first): read its row.
+          _ -> Repo.get_by(__MODULE__, slug: slug)
+        end
+
+      case tag do
+        %__MODULE__{} = tag -> put_change(changeset, :tag_id, tag.id)
+        nil -> put_assoc(changeset, :tag, tag_changeset)
+      end
+    else
+      # Invalid name (blank, too long, stray control char): keep the nested-assoc
+      # path so the user_tag changeset carries the tag's validation errors out.
+      put_assoc(changeset, :tag, tag_changeset)
     end
   end
 
@@ -193,7 +229,7 @@ defmodule Vutuv.Tags.Tag do
   defp most_endorsed_in_tag(source, tag) do
     import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
 
-    Vutuv.Repo.all(
+    Repo.all(
       from(u in source,
         left_join: us in assoc(u, :user_tags),
         left_join: e in assoc(us, :endorsements),

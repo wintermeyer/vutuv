@@ -8,8 +8,7 @@ defmodule Vutuv.Accounts.EmailScrubTest do
   Dirty rows are seeded via `Repo.update_all` because the changeset (rightly)
   rejects such values today.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Accounts.{Email, EmailScrub}
 
   defp seed_email(value) do

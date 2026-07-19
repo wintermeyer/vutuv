@@ -5,8 +5,7 @@ defmodule Vutuv.NewsletterGroupsTest do
   group subtraction that makes "test run of 100, then the rest" partition
   cleanly, and the group-targeted broadcast (members ∩ still-eligible).
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.BerlinTime
   alias Vutuv.Newsletters
   alias Vutuv.Newsletters.NewsletterGroup

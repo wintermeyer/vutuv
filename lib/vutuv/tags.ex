@@ -123,10 +123,11 @@ defmodule Vutuv.Tags do
     end
   end
 
-  # Only the *link* branch of `Tag.create_or_link_tag/2` puts a `:tag_id` change
-  # (a freshly built tag is always `honor?: false`), so a member can only
-  # reach an honor tag by linking the existing reserved one. Nothing to
-  # look up unless a `:tag_id` was set.
+  # `Tag.create_or_link_tag/2` always resolves to a `:tag_id` (it either links an
+  # existing tag or mints a fresh one and links that). A member can only reach an
+  # honor tag by linking the pre-existing reserved one — a freshly minted tag is
+  # always `honor?: false` — so this guard only ever refuses the link case.
+  # Nothing to look up unless a `:tag_id` was set.
   defp reserved_tag?(changeset) do
     case Ecto.Changeset.get_change(changeset, :tag_id) do
       nil -> false

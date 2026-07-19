@@ -1,6 +1,5 @@
 defmodule Vutuv.Profiles.SocialMediaAccountTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Profiles.SocialMediaAccount
 
   defp value_for(params) do

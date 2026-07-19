@@ -1,6 +1,5 @@
 defmodule Vutuv.Tags.TagTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Tags.Tag
 
   describe "changeset/2 normalizes the value" do

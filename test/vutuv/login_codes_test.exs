@@ -1,6 +1,5 @@
 defmodule Vutuv.LoginCodesTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.LoginCodes
   alias Vutuv.LoginCodes.UserTotp
 

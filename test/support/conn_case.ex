@@ -28,31 +28,41 @@ defmodule VutuvWeb.ConnCase do
       # test-greppable trio.
       @registration_tags "alpha-tag beta-tag gamma-tag"
 
-      @admin_attrs %{
-        "emails" => %{"0" => %{"value" => "admin@example.com"}},
-        "first_name" => "admin",
-        "tag_list" => @registration_tags
-      }
+      # Per-call unique sign-up attrs. The email, name and the handle generated
+      # from the name are the shared-fixture rows async test modules used to
+      # collide on: two modules registering the identical "email@example.com" /
+      # "first_name" at once contend on the emails/username/handles unique
+      # indexes *inside one register_user transaction*, which is the other half
+      # of the intermittent 40P01 deadlock (the tag half is fixed in
+      # `Vutuv.Tags.Tag`). Minting a fresh integer per call keeps every
+      # registration's rows disjoint, so ConnCase tests are safe to run
+      # `async: true`. Tags stay shared on purpose — they get-or-create
+      # idempotently now (`Tag.put_created_tag/2`), so they no longer deadlock.
+      defp registration_attrs(prefix) do
+        n = System.unique_integer([:positive])
 
-      @default_login_attrs %{
-        "emails" => %{"0" => %{"value" => "email@example.com"}},
-        "first_name" => "first_name",
-        "tag_list" => @registration_tags
-      }
+        %{
+          "emails" => %{"0" => %{"value" => "#{prefix}#{n}@example.com"}},
+          "first_name" => "#{prefix}#{n}",
+          "tag_list" => @registration_tags
+        }
+      end
 
       defp create_and_login_admin(conn) do
-        {:ok, user} = Vutuv.Accounts.register_user(conn, @admin_attrs)
+        attrs = registration_attrs("admin")
+        {:ok, user} = Vutuv.Accounts.register_user(conn, attrs)
 
         user =
           user
           |> Ecto.Changeset.change(%{admin?: true})
           |> Repo.update!()
 
-        conn = login_via_pin(conn, "admin@example.com")
+        conn = login_via_pin(conn, attrs["emails"]["0"]["value"])
         {conn, user}
       end
 
-      defp create_and_login_user(conn, attrs \\ @default_login_attrs) do
+      defp create_and_login_user(conn, attrs \\ nil) do
+        attrs = attrs || registration_attrs("user")
         {:ok, user} = Vutuv.Accounts.register_user(conn, attrs)
         conn = login_via_pin(conn, attrs["emails"]["0"]["value"])
         {conn, user}

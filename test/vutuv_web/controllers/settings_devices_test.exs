@@ -9,14 +9,16 @@ defmodule VutuvWeb.SettingsDevicesTest do
 
   alias Vutuv.Sessions
 
-  @email "email@example.com"
-
   # A second independent browser for the same account: log the just-registered
-  # user in again on a fresh conn.
-  defp second_device(_conn) do
+  # user in again on a fresh conn, using that user's own email (the sign-up
+  # helper mints a unique address per registration, so read it back off `user`
+  # rather than assuming a fixed literal).
+  defp second_device(user) do
+    email = user |> Repo.preload(:emails) |> Map.fetch!(:emails) |> List.first() |> Map.fetch!(:value)
+
     build_conn()
     |> Plug.Test.init_test_session(%{})
-    |> login_via_pin(@email)
+    |> login_via_pin(email)
   end
 
   describe "the signed-in-devices card" do
@@ -36,7 +38,7 @@ defmodule VutuvWeb.SettingsDevicesTest do
   describe "remote logout" do
     test "logging out another device drops it on its next request", %{conn: conn} do
       {conn1, user} = create_and_login_user(conn)
-      conn2 = second_device(conn)
+      conn2 = second_device(user)
 
       conn1 = get(conn1, ~p"/settings/security")
       conn2 = get(conn2, ~p"/settings/security")
@@ -74,7 +76,7 @@ defmodule VutuvWeb.SettingsDevicesTest do
 
     test "'log out all other devices' keeps the current one", %{conn: conn} do
       {conn1, user} = create_and_login_user(conn)
-      conn2 = second_device(conn)
+      conn2 = second_device(user)
 
       conn1 = get(conn1, ~p"/settings/security")
       conn2 = get(conn2, ~p"/settings/security")

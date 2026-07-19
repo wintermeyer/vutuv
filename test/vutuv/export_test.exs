@@ -5,8 +5,7 @@ defmodule Vutuv.ExportTest do
   follow*, and the connection-request email opt-in is gone, so the export must
   reflect that model rather than the dropped `connections` table.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Export
 
   test "connections are derived from mutual follows, one-way follows excluded" do

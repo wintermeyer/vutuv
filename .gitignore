@@ -67,3 +67,7 @@ assets/node_modules
 # from the working tree and the server.
 /invited_emails.local.txt
 *.local.txt
+
+# Transient log written by the deploy skill's `mix precommit` run (redirected
+# to a file so its output never streams into the agent's context). Disposable.
+/precommit.log

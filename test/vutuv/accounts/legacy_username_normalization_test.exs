@@ -6,8 +6,7 @@ defmodule Vutuv.Accounts.LegacyUsernameNormalizationTest do
   `users.legacy_username` so it is never lost and the profile URL keeps
   redirecting.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Accounts
   alias Vutuv.Accounts.User
   alias Vutuv.Handles

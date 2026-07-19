@@ -5,8 +5,7 @@ defmodule Vutuv.Newsletters.BroadcastResumerTest do
   GenServer itself is config-gated off in tests (`:resume_stuck_broadcasts`,
   like every periodic job); the sweep body is tested directly.
   """
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Newsletters
   alias Vutuv.Newsletters.{BroadcastResumer, Newsletter, NewsletterDelivery}
 

@@ -1,6 +1,5 @@
 defmodule Vutuv.ModerationEnforcementTest do
-  use Vutuv.DataCase
-
+  use Vutuv.DataCase, async: true
   alias Vutuv.Accounts.User
   alias Vutuv.Chat
   alias Vutuv.Posts
