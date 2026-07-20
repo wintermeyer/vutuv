@@ -76,6 +76,29 @@ defmodule VutuvWeb.Admin.ReportControllerTest do
       assert html =~ "Kennzahl"
       assert html =~ "Anzahl"
       assert html =~ "Neue bestätigte Registrierungen (per PIN)"
+      # The Fediverse-followers count now has its own row (it was missing).
+      assert html =~ "Neue Fediverse-Follower"
+    end
+
+    test "lists detail entries with names, handles and profile links", %{conn: conn} do
+      {conn, _admin} = create_and_login_admin(conn)
+
+      insert(:activated_user,
+        username: "alice",
+        first_name: "Alice",
+        last_name: "Adams",
+        inserted_at: ~N[2026-01-15 12:00:00],
+        updated_at: ~N[2026-01-15 12:00:00]
+      )
+
+      html =
+        conn
+        |> get(~p"/admin/reports?#{%{date: "2026-01-15"}}")
+        |> html_response(200)
+
+      assert html =~ "Alice Adams"
+      assert html =~ "@alice"
+      assert html =~ ~s(href="/alice")
     end
   end
 end

@@ -284,6 +284,30 @@ defmodule Vutuv.Deliverability do
     }
   end
 
+  @doc """
+  Capped sample rows behind `activity_between/2`, for the daily report's detail
+  lists (up to `limit` rows per kind, oldest first). Bounces name the affected
+  address and its status; deactivations the address; freezes and thaws also
+  resolve the account owner (by `user_id`, a plain ledger value, not an
+  association) so the report can link the member's profile — `user` is `nil`
+  when the account is already gone.
+  """
+  def activity_details_between(%NaiveDateTime{} = start, %NaiveDateTime{} = stop, limit) do
+    %{
+      bounces:
+        from(b in EmailBounce,
+          where: b.inserted_at >= ^start and b.inserted_at < ^stop,
+          order_by: [asc: b.inserted_at, asc: b.id],
+          limit: ^limit,
+          select: %{email: b.email_value, status: b.status}
+        )
+        |> Repo.all(),
+      deactivations: event_sample("address_deactivated", start, stop, limit),
+      freezes: event_sample("account_frozen", start, stop, limit),
+      thaws: event_sample("account_thawed", start, stop, limit)
+    }
+  end
+
   defp count_in(schema, start, stop) do
     Repo.aggregate(
       from(r in schema, where: r.inserted_at >= ^start and r.inserted_at < ^stop),
@@ -298,6 +322,29 @@ defmodule Vutuv.Deliverability do
       ),
       :count
     )
+  end
+
+  # A capped, oldest-first sample of one event kind, each row carrying the
+  # affected address and its (batch-resolved) owner for the daily report.
+  defp event_sample(action, start, stop, limit) do
+    events =
+      Repo.all(
+        from(ev in Event,
+          where: ev.action == ^action and ev.inserted_at >= ^start and ev.inserted_at < ^stop,
+          order_by: [asc: ev.inserted_at, asc: ev.id],
+          limit: ^limit
+        )
+      )
+
+    users = users_by_id(events)
+    Enum.map(events, &%{email: &1.email_value, user: Map.get(users, &1.user_id)})
+  end
+
+  defp users_by_id(events) do
+    case events |> Enum.map(& &1.user_id) |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] -> %{}
+      ids -> from(u in User, where: u.id in ^ids) |> Repo.all() |> Map.new(&{&1.id, &1})
+    end
   end
 
   defp user_for_address(address) do

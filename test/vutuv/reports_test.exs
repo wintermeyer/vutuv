@@ -56,14 +56,35 @@ defmodule Vutuv.ReportsTest do
       like(post, insert(:user), @on_day)
       bookmark(post, insert(:user), @on_day)
 
-      assert Reports.daily(@date) == %DailyReport{
+      report = Reports.daily(@date)
+
+      assert %DailyReport{
                date: @date,
                registrations: 2,
                posts: 2,
                reposts: 1,
                likes: 1,
                bookmarks: 1
-             }
+             } = report
+
+      # Every counted metric also carries a sample of the same rows, so the
+      # report can name who/what, not just how many.
+      assert length(report.details.registrations) == 2
+      assert length(report.details.posts) == 2
+      assert length(report.details.reposts) == 1
+      assert length(report.details.likes) == 1
+      assert length(report.details.bookmarks) == 1
+    end
+
+    test "the detail sample is capped at detail_limit/0, and the count stays exact" do
+      author = insert(:user)
+      over = DailyReport.detail_limit() + 3
+      for _ <- 1..over, do: insert(:post, [user: author] ++ at(@on_day))
+
+      report = Reports.daily(@date)
+
+      assert report.posts == over
+      assert length(report.details.posts) == DailyReport.detail_limit()
     end
 
     test "counts new Fediverse followers gained that Berlin day" do
@@ -118,6 +139,32 @@ defmodule Vutuv.ReportsTest do
         assert email.text_body =~ "Fediverse-Follower"
         assert email.text_body =~ "Zustellbarkeit"
         assert email.text_body =~ "admin/reports?date=2026-01-15"
+      end)
+    end
+
+    test "lists the new members and posts with names, handles and links" do
+      alice =
+        insert(
+          :activated_user,
+          [username: "alice", first_name: "Alice", last_name: "Adams"] ++ at(@on_day)
+        )
+
+      post = insert(:post, [user: alice, body: "Hello world\nsecond line"] ++ at(@on_day))
+
+      assert {:ok, _report} = Reports.deliver_daily_email(@date)
+
+      assert_email_sent(fn email ->
+        # Registration detail: name, @handle and the profile link.
+        assert email.text_body =~ "Alice Adams"
+        assert email.text_body =~ "@alice"
+        assert email.text_body =~ "/alice"
+        assert email.html_body =~ "Alice Adams"
+
+        # Post detail: only the first line, plus the permalink.
+        assert email.text_body =~ "Hello world"
+        refute email.text_body =~ "second line"
+        assert email.text_body =~ "posts/#{post.id}"
+        assert email.html_body =~ post.id
       end)
     end
 
