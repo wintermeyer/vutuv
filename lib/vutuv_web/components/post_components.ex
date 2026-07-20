@@ -737,13 +737,19 @@ defmodule VutuvWeb.PostComponents do
 
           <%!-- Full mode: the whole body, no clamp. The reader's hyphenation
           preference still rides along via @body_style (the clamp vars in it are
-          simply unused here). --%>
+          simply unused here). The tags live INSIDE the body flow so they follow
+          the end of the text — beside a tall floated inline image (a flex row
+          establishes its own formatting context, so the float narrows it
+          instead of overlapping) rather than pushed below the whole picture;
+          the container's clearfix (`.markdown--post::after`) keeps everything
+          after this div below the float. --%>
           <div
             :if={@mode == :full and @post.body != ""}
             class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
             {style_attrs(@body_style)}
           >
             {@body_html}
+            <.post_tags tags={@post.tags} />
           </div>
 
           <%= cond do %>
@@ -911,10 +917,18 @@ defmodule VutuvWeb.PostComponents do
             class="mt-4 block max-w-md"
           />
 
-          <%!-- Every non-square/non-screenshot layout puts the tags in their own
-          full-width row below the body/images; the side-by-side layouts already
-          rendered them inside the text column above. --%>
-          <.post_tags :if={not @square_layout? and not @link_screenshot_layout?} tags={@post.tags} />
+          <%!-- The remaining layouts put the tags in their own full-width row
+          below the body/images: previews (inside the clamp block they could be
+          cut away) and the photo-only full mode (no body to end). The
+          side-by-side layouts rendered them inside the text column above, and
+          full mode with a body carries them at the end of the text. --%>
+          <.post_tags
+            :if={
+              not @square_layout? and not @link_screenshot_layout? and
+                not (@mode == :full and @post.body != "")
+            }
+            tags={@post.tags}
+          />
 
           <%!-- The action bar (like / repost / bookmark + counters). On a
           LiveView host it is an in-process LiveComponent that re-renders in
@@ -1080,8 +1094,11 @@ defmodule VutuvWeb.PostComponents do
 
   defp post_tags(assigns) do
     ~H"""
+    <%!-- no-underline: inside the full-mode body the row sits in `.markdown`,
+    whose `a { text-decoration: underline }` would underline the chips; the
+    utility wins over the components-layer rule and is a no-op elsewhere. --%>
     <div :if={@tags != []} class="mt-3 flex flex-wrap gap-2">
-      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"}>{tag.name}</.chip>
+      <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"} class="no-underline">{tag.name}</.chip>
     </div>
     """
   end

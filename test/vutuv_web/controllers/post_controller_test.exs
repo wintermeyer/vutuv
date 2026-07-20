@@ -58,6 +58,38 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ "/post_images/galtok/feed.avif"
     end
 
+    test "full mode lists the tags at the end of the text, not below the gallery", %{conn: conn} do
+      user = insert_activated_user()
+      ref = insert(:post_image, user: user, post: nil, token: "tagreftok")
+      gal = insert(:post_image, user: user, post: nil, token: "taggaltok")
+
+      post =
+        create_post!(user, %{
+          body: "Text with ![](/post_images/tagreftok/feed.avif#right) a floated picture.",
+          tags: "elixir",
+          image_ids: [ref.id, gal.id]
+        })
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+
+      # The tag chips sit inside the body flow (right after the text, beside a
+      # floated image), so they must come BEFORE the gallery markup — a tall
+      # float used to push them below the whole image instead.
+      tag_pos = :binary.match(html, ~s(href="/tags/elixir")) |> elem(0)
+      gallery_pos = :binary.match(html, "/post_images/taggaltok/feed.avif") |> elem(0)
+      assert tag_pos < gallery_pos
+    end
+
+    test "a photo-only post (empty body) still shows its tags", %{conn: conn} do
+      user = insert_activated_user()
+      image = insert(:post_image, user: user, post: nil, token: "phototok")
+
+      post = create_post!(user, %{body: "", tags: "elixir", image_ids: [image.id]})
+
+      html = html_response(get(conn, Posts.path(post)), 200)
+      assert html =~ ~s(href="/tags/elixir")
+    end
+
     test "a pending inline image is held from strangers but shown to its author", %{conn: conn} do
       {author_conn, author} = create_and_login_user(fresh_conn())
 
