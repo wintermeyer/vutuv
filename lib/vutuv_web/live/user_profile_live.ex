@@ -155,6 +155,26 @@ defmodule VutuvWeb.UserProfileLive do
     {:noreply, assign(socket, :qualifications_tab, tab)}
   end
 
+  # Filter the Beiträge card to one entry kind (issue #945): All / Own posts /
+  # Reposts / Replies. Re-fetches the preview and the active filter's total for
+  # the "View all" footer; an unknown value falls back to "all".
+  def handle_event("posts_filter", %{"type" => type}, socket) do
+    filter = if type in ~w(all posts reposts replies), do: type, else: "all"
+
+    {:noreply,
+     socket
+     |> assign(:post_filter, filter)
+     |> assign(:posts, fetch_profile_posts(socket, filter))
+     |> assign(
+       :post_filter_total,
+       Vutuv.Posts.count_author_posts(
+         socket.assigns.user,
+         socket.assigns.current_user,
+         Vutuv.Posts.normalize_post_filter(filter)
+       )
+     )}
+  end
+
   # Mute / unmute the viewer's own follow (feed-only, silent). Scoped to the
   # header's follow id so a crafted id is ignored; keeps its flash (the effect —
   # the followee's posts leaving your feed — is not visible on the profile).
@@ -270,9 +290,13 @@ defmodule VutuvWeb.UserProfileLive do
       if length(kept) == length(socket.assigns.posts) do
         socket
       else
+        # A shown post sits in both the overall count and the active filter's
+        # count (it passed that filter to be shown), so drop it from each — the
+        # "View all" footer stays honest under a non-"all" filter (issue #945).
         socket
         |> assign(:posts, kept)
         |> assign(:posts_total, max(socket.assigns.posts_total - 1, 0))
+        |> assign(:post_filter_total, max(socket.assigns.post_filter_total - 1, 0))
       end
 
     {:noreply, socket}
@@ -283,7 +307,7 @@ defmodule VutuvWeb.UserProfileLive do
   # A fresh list (new identity) is what makes change tracking re-render the
   # `:for` over @posts; content barely differs, only the relative wording.
   def handle_info(:day_changed, socket) do
-    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
 
     {:noreply, socket |> assign(:posts, posts) |> refresh_social_feed_stamps()}
   end
@@ -292,13 +316,13 @@ defmodule VutuvWeb.UserProfileLive do
   # over the profile owner's activity topic): re-fetch the posts so the card
   # gains its screenshot with no reload. A fresh list re-renders the `:for`.
   def handle_info({:post_screenshot_ready, _payload}, socket) do
-    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
     {:noreply, assign(socket, :posts, posts)}
   end
 
   # The owner removed a bad link screenshot: re-fetch so the card drops it.
   def handle_info({:post_screenshot_removed, _payload}, socket) do
-    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
     {:noreply, assign(socket, :posts, posts)}
   end
 
@@ -336,7 +360,7 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   def handle_info({:image_moderation, "post_image", _subject_id, _verdict}, socket) do
-    posts = Vutuv.Posts.profile_posts(socket.assigns.user, socket.assigns.current_user)
+    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
     {:noreply, assign(socket, :posts, posts)}
   end
 
@@ -495,6 +519,18 @@ defmodule VutuvWeb.UserProfileLive do
     |> Map.fetch!(:user_tags)
   end
 
+  # The Beiträge card's preview, honouring the active type filter (issue #945).
+  # Every re-fetch path (a tab click, the midnight day roll, a screenshot /
+  # image-moderation update) goes through here so a background refresh keeps
+  # the filter the reader chose instead of snapping back to "all".
+  defp fetch_profile_posts(socket, filter) do
+    Vutuv.Posts.profile_posts(
+      socket.assigns.user,
+      socket.assigns.current_user,
+      type: Vutuv.Posts.normalize_post_filter(filter)
+    )
+  end
+
   # ── Initial load (ports UserController.show_html) ──
 
   defp load_profile(socket) do
@@ -536,6 +572,12 @@ defmodule VutuvWeb.UserProfileLive do
     |> assign(:emails, profile_emails(private_emails?, current_user, user))
     |> assign(:posts, Vutuv.Posts.profile_posts(user, current_user))
     |> assign(:posts_total, posts_total)
+    # The Beiträge card's type filter (issue #945). Resets to "all" on a full
+    # profile reload (mount, block/unblock); a tab click re-fetches in place.
+    # :post_filter_total is the active filter's count, driving the "View all"
+    # footer; it equals :posts_total while the filter is "all".
+    |> assign(:post_filter, "all")
+    |> assign(:post_filter_total, posts_total)
     |> assign(:user_tags, user.user_tags)
     # The whole history: the Experience card clusters it and previews up to
     # WorkExperienceHTML.profile_preview_limit/0 roles. Clustering must see every

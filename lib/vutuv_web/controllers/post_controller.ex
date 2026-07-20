@@ -44,8 +44,13 @@ defmodule VutuvWeb.PostController do
 
     case {parse_period(params), AgentDocs.negotiate(conn)} do
       {{:ok, period, period_label}, :html} ->
+        # The type filter (issue #945) applies only on the unscoped archive —
+        # a period-scoped page is date browsing, and it keeps the agent-doc
+        # siblings (which ignore ?type=) canonical to the plain archive.
+        filter = if is_nil(period), do: Posts.normalize_post_filter(params["type"]), else: :all
+
         {posts, total} =
-          Posts.author_posts_page(author, conn.assigns[:current_user], params, period)
+          Posts.author_posts_page(author, conn.assigns[:current_user], params, period, filter)
 
         conn
         |> AgentDocs.put_html_alternates()
@@ -57,12 +62,15 @@ defmodule VutuvWeb.PostController do
           author: author,
           posts: posts,
           total: total,
+          post_filter: Atom.to_string(filter),
           period_label: period_label,
           period_crumbs: period_crumbs(author, params, period_label),
           page_title: "#{VutuvWeb.UserHelpers.full_name(author)} · #{gettext("Posts")}"
         )
 
       {{:ok, period, period_label}, format} ->
+        # Agent-format siblings always render the plain archive (no ?type=), so
+        # the .md/.txt/.json/.xml stay one canonical document (drift test).
         {posts, total} = Posts.author_posts_page(author, nil, params, period)
         doc = PostDoc.build_archive(author, conn.request_path, posts, total, period_label)
         AgentDocs.send_doc(conn, format, doc)
