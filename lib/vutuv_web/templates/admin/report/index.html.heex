@@ -65,5 +65,31 @@
     <p :if={Vutuv.Reports.DailyReport.all_zero?(@report)} class="card__empty">
       {gettext("No activity on this day.")}
     </p>
+
+    <div class="mt-8 space-y-6">
+      <div :for={section <- VutuvWeb.ReportDetails.sections(@report)}>
+        <h2 class="card__label">
+          {VutuvWeb.Admin.ReportHTML.metric_label(section.key)}: {delimited_count(section.count)}
+        </h2>
+        <ul class="mt-2 space-y-1">
+          <li :for={entry <- section.entries} class="text-sm">
+            <.link
+              :if={entry.path}
+              href={entry.path}
+              class="font-semibold text-brand-600 hover:text-brand-700"
+            >
+              {entry.primary}
+            </.link>
+            <span :if={!entry.path} class="text-slate-800 dark:text-slate-200">{entry.primary}</span>
+            <span :if={entry.secondary} class="text-slate-600 dark:text-slate-400">
+              {entry.secondary}
+            </span>
+          </li>
+          <li :if={section.more > 0} class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext("… and %{count} more", count: section.more)}
+          </li>
+        </ul>
+      </div>
+    </div>
   </section>
 </div>

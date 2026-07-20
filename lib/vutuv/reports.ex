@@ -34,6 +34,8 @@ defmodule Vutuv.Reports do
   def daily(%Date{} = date) do
     {day_start, day_end} = BerlinTime.day_bounds_utc(date)
     deliverability = Deliverability.activity_between(day_start, day_end)
+    limit = DailyReport.detail_limit()
+    deliverability_details = Deliverability.activity_details_between(day_start, day_end, limit)
 
     %DailyReport{
       date: date,
@@ -47,8 +49,59 @@ defmodule Vutuv.Reports do
       deactivations: deliverability.deactivations,
       freezes: deliverability.freezes,
       thaws: deliverability.thaws,
-      spam_removals: count_spam_removals(day_start, day_end)
+      spam_removals: count_spam_removals(day_start, day_end),
+      details: %{
+        registrations: registration_sample(day_start, day_end, limit),
+        posts: sample(Post, [:user], day_start, day_end, limit),
+        reposts: sample(PostRepost, [:user, :post], day_start, day_end, limit),
+        likes: sample(PostLike, [:user, :post], day_start, day_end, limit),
+        bookmarks: sample(PostBookmark, [:user, :post], day_start, day_end, limit),
+        fediverse_followers: sample(Follower, [:user], day_start, day_end, limit),
+        bounces: deliverability_details.bounces,
+        deactivations: deliverability_details.deactivations,
+        freezes: deliverability_details.freezes,
+        thaws: deliverability_details.thaws,
+        spam_removals: spam_removal_sample(day_start, day_end, limit)
+      }
     }
+  end
+
+  # A capped, oldest-first sample of `schema`'s rows in the window, with the
+  # given associations preloaded so the report can name who/what. Oldest-first
+  # so the list reads in the order the day happened.
+  defp sample(schema, preloads, day_start, day_end, limit) do
+    from(r in schema,
+      where: r.inserted_at >= ^day_start and r.inserted_at < ^day_end,
+      order_by: [asc: r.inserted_at, asc: r.id],
+      limit: ^limit
+    )
+    |> Repo.all()
+    |> Repo.preload(preloads)
+  end
+
+  defp registration_sample(day_start, day_end, limit) do
+    Repo.all(
+      from(u in User,
+        where: u.email_confirmed? == true,
+        where: u.inserted_at >= ^day_start and u.inserted_at < ^day_end,
+        order_by: [asc: u.inserted_at, asc: u.id],
+        limit: ^limit
+      )
+    )
+  end
+
+  # Mirrors count_spam_removals/2, carrying the removed account (case → owner)
+  # so the report can link the member.
+  defp spam_removal_sample(day_start, day_end, limit) do
+    Repo.all(
+      from(e in Vutuv.Moderation.Event,
+        where: e.action == "owner_removed",
+        where: e.inserted_at >= ^day_start and e.inserted_at < ^day_end,
+        order_by: [asc: e.inserted_at, asc: e.id],
+        limit: ^limit,
+        preload: [case: :owner]
+      )
+    )
   end
 
   # Accounts an admin removed as spam from a moderation case that day. Counts the

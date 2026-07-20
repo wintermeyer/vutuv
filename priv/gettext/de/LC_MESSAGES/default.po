@@ -6715,6 +6715,16 @@ msgstr ""
 msgid "Deactivated addresses"
 msgstr "Deaktivierte Adressen"
 
+#: lib/vutuv_web/views/admin/report_html.ex:37
+#, elixir-autogen, elixir-format
+msgid "New Fediverse followers"
+msgstr "Neue Fediverse-Follower"
+
+#: lib/vutuv_web/templates/admin/report/index.html.heex:87
+#, elixir-autogen, elixir-format
+msgid "… and %{count} more"
+msgstr "… und %{count} weitere"
+
 #: lib/vutuv_web/live/admin/deliverability_live.ex:120
 #, elixir-autogen, elixir-format
 msgid "Dead addresses"

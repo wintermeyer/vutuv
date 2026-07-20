@@ -7,10 +7,23 @@ defmodule Vutuv.Reports.DailyReport do
   accounts an admin removed as spam from a moderation case, on one German
   calendar day (`Vutuv.BerlinTime`).
 
+  Every metric also carries a capped `details` sample (`detail_limit/0` rows,
+  oldest first) so the report can name *who* and *what*, not just how many:
+  the new members, the created posts, the reposters/likers/bookmarkers, the
+  new Fediverse followers, the bounced/deactivated/frozen/thawed addresses and
+  the removed spam accounts. `Vutuv.Reports.daily/1` fills the sample;
+  `VutuvWeb.ReportDetails.sections/1` turns it into linked lines for the email
+  and the admin page.
+
   Built by `Vutuv.Reports.daily/1`, rendered on the admin reports page
   (`VutuvWeb.Admin.ReportController`) and mailed each night by
   `Vutuv.Reports.DailyReporter`.
   """
+
+  # How many sample rows each metric carries in `details`. The email lists up
+  # to this many entries per metric and notes "… und N weitere" beyond it, so
+  # a busy day stays a readable overview rather than a wall of every like.
+  @detail_limit 25
 
   @enforce_keys [:date]
   defstruct [
@@ -25,7 +38,10 @@ defmodule Vutuv.Reports.DailyReport do
     deactivations: 0,
     freezes: 0,
     thaws: 0,
-    spam_removals: 0
+    spam_removals: 0,
+    # Per-metric sample lists keyed by the metric atom (see the moduledoc); the
+    # element shape varies by metric and is normalized in `VutuvWeb.ReportDetails`.
+    details: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -40,8 +56,12 @@ defmodule Vutuv.Reports.DailyReport do
           deactivations: non_neg_integer(),
           freezes: non_neg_integer(),
           thaws: non_neg_integer(),
-          spam_removals: non_neg_integer()
+          spam_removals: non_neg_integer(),
+          details: %{optional(atom()) => list()}
         }
+
+  @doc "How many sample rows each metric's `details` list holds at most."
+  def detail_limit, do: @detail_limit
 
   # Each metric with its German singular/plural label, in subject order. The
   # report email is German-only, so the labels live here rather than in gettext.

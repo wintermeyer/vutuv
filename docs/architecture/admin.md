@@ -383,4 +383,14 @@ The email **subject lists only the non-zero numbers** (e.g. "vutuv Tagesbericht
 20.06.2026: 5 Registrierungen, 12 Beiträge, 1 eingefrorenes Konto"), so the
 day's signal is readable at a glance.
 
+Beyond the counts, every metric carries a capped **detail list**
+(`DailyReport.detail_limit/0` = 25 rows, oldest first) so the report names *who*
+and *what*: the new members (name, `@handle`, profile link), the created posts
+(first line + permalink), the reposters / likers / bookmarkers, the new
+Fediverse followers, the bounced / deactivated / frozen / thawed addresses and
+the removed spam accounts. `VutuvWeb.ReportDetails.sections/1` normalizes the
+sample into linked `%{primary, secondary, path}` lines that the email (HTML +
+text) and the `/admin/reports` page all render, so the three surfaces stay in
+sync; a busier day than the cap ends each section with a "… und N weitere" note.
+
 Behind `config :vutuv, :daily_report_email` (off in tests, on by default).

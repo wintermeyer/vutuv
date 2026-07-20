@@ -287,6 +287,49 @@ defmodule VutuvWeb.EmailComponents do
     """
   end
 
+  @doc """
+  A titled list of linked lines — the daily report's detail sections. Each item
+  is `%{text, href, muted}`: `text` is the line (linked when `href` is set, else
+  plain), with `muted` appended as a dimmed suffix when present. `more` appends a
+  "… und N weitere" note when the day had more rows than are listed. Generic on
+  purpose: the caller resolves each entry's internal path into an absolute
+  `href` before passing it here.
+  """
+  attr(:title, :string, required: true)
+  attr(:more, :integer, default: 0)
+  attr(:items, :list, required: true)
+
+  def email_link_list(assigns) do
+    ~H"""
+    <.email_p><strong>{@title}</strong></.email_p>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="email-panel" style="margin:0 0 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+      <tr>
+        <td style="padding:6px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr :for={item <- @items}>
+              <td class="email-text" style={row_value_style()}>
+                <a
+                  :if={item.href}
+                  href={item.href}
+                  class="email-a"
+                  style="color:#1d4ed8;text-decoration:underline;"
+                >{item.text}</a><span :if={!item.href}>{item.text}</span><span
+                  :if={item.muted}
+                  class="email-muted"
+                  style="color:#64748b;"
+                >{" " <> item.muted}</span>
+              </td>
+            </tr>
+            <tr :if={@more > 0}>
+              <td class="email-muted" style={row_label_style()}>… und {@more} weitere</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+    """
+  end
+
   @doc "A hairline divider."
   def email_divider(assigns) do
     ~H"""

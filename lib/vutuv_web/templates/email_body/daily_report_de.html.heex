@@ -19,6 +19,25 @@
   <.email_panel>
     <.email_row label="Als Spam entfernte Konten">{@report.spam_removals}</.email_row>
   </.email_panel>
+
+  <%= for section <- VutuvWeb.ReportDetails.sections(@report) do %>
+    <.email_divider />
+    <.email_link_list
+      title={"#{section.label}: #{section.count}"}
+      more={section.more}
+      items={
+        Enum.map(section.entries, fn entry ->
+          %{
+            text: entry.primary,
+            muted: entry.secondary,
+            href: entry.path && "#{@url}#{String.trim_leading(entry.path, "/")}"
+          }
+        end)
+      }
+    />
+  <% end %>
+
+  <.email_divider />
   <.email_p>Vollständiger Bericht (mit Zeitreise zu anderen Tagen):</.email_p>
   <.email_button href={"#{@url}admin/reports?date=#{Date.to_iso8601(@report.date)}"}>
     Vollständiger Bericht
