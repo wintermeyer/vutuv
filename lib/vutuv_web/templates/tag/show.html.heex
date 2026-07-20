@@ -2,13 +2,27 @@
 (mx-auto max-w-3xl): on a wide desktop the full max-w-6xl width made each post
 card stretch edge to edge with a huge line length and dead space. --%>
 <div class="mx-auto max-w-3xl">
-  <.page_header
-    title={@tag.name}
-    crumbs={[
-      {gettext("Tags"), ~p"/tags"},
-      gettext("Show")
-    ]}
-  />
+  <%!-- Hand-written header (not <.page_header>) so the tag-follow pill (#872)
+  sits top-right beside the title. `items-start` overrides .profile-header's
+  baseline alignment so the pill lines up with the title, not the count line
+  below it. Exactly one <h1> on the page (no sr-only crumbs h1). --%>
+  <div class="profile-header items-start">
+    <div class="profile-header__info">
+      <h1>{@tag.name || @tag.slug}</h1>
+      <p :if={@tag_follower_count > 0} class="mt-1 text-sm text-slate-600 dark:text-slate-400">
+        {delimited_count(@tag_follower_count)} {ngettext(
+          "follower",
+          "followers",
+          @tag_follower_count
+        )}
+      </p>
+    </div>
+    <.tag_follow_button :if={@current_user} following?={@following_tag?} tag={@tag} />
+  </div>
+  <div class="breadcrumbs">
+    {gen_breadcrumbs([{gettext("Tags"), ~p"/tags"}, gettext("Show")])}
+  </div>
+  <JsonLd.script data={JsonLd.breadcrumb_trail([{gettext("Tags"), ~p"/tags"}, gettext("Show")])} />
 
   <%!-- The tag's front matter (description, most-endorsed members, jobs) rides
   only on page 1; pages 2+ of the post pager are just more posts. --%>

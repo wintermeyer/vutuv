@@ -810,6 +810,67 @@ defmodule Vutuv.PostsTest do
       assert Enum.sort(shown) == Enum.sort([root.id, mid.id, branch.id, leaf_a.id, leaf_b.id])
       assert Enum.uniq(shown) == shown
     end
+
+    test "surfaces a followed tag's posts from authors the viewer doesn't follow (#872)" do
+      viewer = user()
+      stranger = user()
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      Vutuv.Tags.follow_tag(viewer, tag)
+
+      tagged = create_post!(stranger, %{body: "elixir news", tags: "elixir"})
+      create_post!(stranger, %{body: "no tag here"})
+
+      ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id)
+      assert tagged.id in ids
+    end
+
+    test "a followed-tag post from an also-followed author appears once, not twice (#872)" do
+      viewer = user()
+      friend = user()
+      follow!(viewer, friend)
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      Vutuv.Tags.follow_tag(viewer, tag)
+
+      post = create_post!(friend, %{body: "elixir by a friend", tags: "elixir"})
+
+      entries = Posts.feed_page(viewer).entries
+      assert Enum.count(entries, &(&1.post.id == post.id)) == 1
+    end
+
+    test "a muted followee's tagged post stays out, even via a followed tag (#872)" do
+      viewer = user()
+      noisy = user()
+      follow!(viewer, noisy)
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      Vutuv.Tags.follow_tag(viewer, tag)
+
+      fid = Vutuv.Social.follow_id(viewer.id, noisy.id)
+      Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
+
+      post = create_post!(noisy, %{body: "muted elixir", tags: "elixir"})
+      refute post.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
+    end
+
+    test "a blocked author's tagged post never enters the feed via a followed tag (#872)" do
+      viewer = user()
+      blocked = user()
+      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      Vutuv.Tags.follow_tag(viewer, tag)
+      {:ok, _} = Vutuv.Social.block_user(viewer, blocked)
+
+      post = create_post!(blocked, %{body: "blocked elixir", tags: "elixir"})
+      refute post.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
+    end
+
+    test "an unfollowed tag's posts do not appear (#872)" do
+      viewer = user()
+      stranger = user()
+      insert(:tag, name: "Elixir", slug: "elixir")
+
+      tagged = create_post!(stranger, %{body: "elixir news", tags: "elixir"})
+
+      refute tagged.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
+    end
   end
 
   describe "discover_posts/2" do

@@ -32,6 +32,37 @@ followers" (see [posts-and-feed.md](posts-and-feed.md)).
 requests were converted to follows, and the table is dropped in a follow-up
 expand/contract deploy.)
 
+## Following tags
+
+Following a **tag** (issue #872, `Vutuv.Tags.TagFollow`, table `tag_follows`) is
+the topic twin of following a person: a private subscription that pulls the
+tag's posts into your `/feed`. It lives in `Vutuv.Tags`
+(`follow_tag/2`, `unfollow_tag/2`, `tag_followed?/2`, `followed_tags/1`,
+`followed_tag_ids/1`, `tag_follower_count/1`), not `Vutuv.Social` — a tag is a
+`Vutuv.Tags.Tag`, not a person.
+
+Unlike a person-follow it is **silent**: a tag has no owner, so following it
+notifies no one and there is no public follower list — only the aggregate
+`tag_follower_count/1` shown as social proof on the tag page. `follow_tag/2`
+always sets `user_id` from the session user (never request params), is
+idempotent (`ON CONFLICT` + a guard), and broadcasts `{:tag_follows_changed,
+%{}}` on the follower's `Vutuv.Activity` topic so an open `/feed` redraws its
+rails live.
+
+Two things react to a followed tag:
+
+- **The feed** gains a third source — posts carrying a followed tag from authors
+  you do *not* already follow (see [posts-and-feed.md](posts-and-feed.md)).
+- **The "Who to follow" rail** leads with members endorsed for the tags you
+  follow (`Vutuv.Tags.people_for_followed_tags/2`), the people half of the
+  feature.
+
+Surfaces: the **tag page** header pill (`<.tag_follow_button>`, CSRF POST/DELETE
+to `/tag_follows`), the feed's reload-free **"Tags you follow"** rail (a
+`phx-click` ✕ per chip), and the **`/settings/followed_tags`** management list
+(a settings-hub row that appears only once you follow at least one tag, like
+saved searches).
+
 ## Blocking
 
 Reachable wherever you decide to block someone — a quiet "Block" next to the

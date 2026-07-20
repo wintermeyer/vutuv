@@ -1,0 +1,32 @@
+<.settings_shell user={@user} active={:followed_tags} title={gettext("Tags you follow")}>
+  <.card>
+    <.section_title>{gettext("Tags you follow")}</.section_title>
+    <p class="mt-3 text-sm text-slate-600 dark:text-slate-400">
+      {gettext(
+        "Posts tagged with a tag you follow show up in your feed, and people known for it appear in your suggestions. Follow a tag from its page."
+      )}
+    </p>
+
+    <ul id="followed-tags-list" class="mt-5 divide-y divide-slate-100 dark:divide-slate-800">
+      <li
+        :for={tag <- @followed_tags}
+        id={"followed-tag-#{tag.id}"}
+        class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+      >
+        <.link
+          navigate={~p"/tags/#{tag}"}
+          class="inline-flex min-w-0 items-center gap-1 font-semibold text-brand-700 hover:text-brand-800 dark:text-brand-300"
+        >
+          <span aria-hidden="true">#</span><span class="truncate">{tag.name || tag.slug}</span>
+        </.link>
+        <.link
+          href={~p"/tag_follows/#{tag.id}"}
+          method="delete"
+          class="flex-shrink-0 rounded-lg px-3 py-1.5 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/40"
+        >
+          {gettext("Unfollow")}
+        </.link>
+      </li>
+    </ul>
+  </.card>
+</.settings_shell>

@@ -89,10 +89,19 @@ defmodule VutuvWeb.PostLive.Feed do
     # Order/dupes don't matter: the refresh uses stream_insert update_only, which
     # updates existing rows where they sit and ignores ones already gone.
     |> assign(:entries, entries)
+    |> assign_followed_tags()
     |> assign_who_to_follow()
     |> assign_discover_posts()
     |> stream_configure(:posts, dom_id: &"feed-#{&1.id}")
     |> stream(:posts, entries)
+  end
+
+  # The desktop "Tags you follow" rail (issue #872): the member's tag
+  # subscriptions as chips, each with a reload-free ✕ unfollow. Refreshed
+  # whenever the follow set changes (an unfollow here, or a follow/unfollow made
+  # on a tag page while this feed is open — see the :tag_follows_changed handler).
+  defp assign_followed_tags(socket) do
+    assign(socket, :followed_tags, Vutuv.Tags.followed_tags(socket.assigns.current_user))
   end
 
   # The desktop "Who to follow" rail: a randomized handful of the most-followed
@@ -110,8 +119,18 @@ defmodule VutuvWeb.PostLive.Feed do
     # would be refused as :blocked and the suggestion would just reappear.
     blocked = Social.blocked_user_ids(user.id)
 
+    # Lead the rail with members endorsed for the tags the viewer follows (issue
+    # #872, the "recommendations show people with the tag" half), then fill from
+    # the popular pool. The tag people keep their endorsement order at the front;
+    # the popular pool is shuffled behind them so a long-lived session (and the
+    # periodic reshuffle) still varies once the tag people run out — and when the
+    # viewer follows no tags, tag_people is [] and this is the old shuffled pool.
+    tag_people = Vutuv.Tags.people_for_followed_tags(user, @who_to_follow * 2)
+    popular = Enum.shuffle(Social.most_followed_users(@suggestion_pool))
+
     candidates =
-      Social.most_followed_users(@suggestion_pool)
+      (tag_people ++ popular)
+      |> Enum.uniq_by(& &1.id)
       |> Enum.reject(&(&1.id == user.id or MapSet.member?(blocked, &1.id)))
 
     following = UserHelpers.following_map(user, candidates)
@@ -119,7 +138,6 @@ defmodule VutuvWeb.PostLive.Feed do
     users =
       candidates
       |> Enum.reject(&Map.has_key?(following, &1.id))
-      |> Enum.shuffle()
       |> Enum.take(@who_to_follow)
 
     socket
@@ -232,6 +250,15 @@ defmodule VutuvWeb.PostLive.Feed do
     {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
   end
 
+  # The "Tags you follow" rail's ✕: unfollow the tag with no reload, then redraw
+  # the rail (the chip drops) and the "Who to follow" rail (which leads with
+  # people from followed tags). The already-shown posts stay put — like
+  # unfollowing a person, the change only shapes the next feed load.
+  def handle_event("unfollow_tag", %{"id" => tag_id}, socket) do
+    Vutuv.Tags.unfollow_tag(socket.assigns.current_user, tag_id)
+    {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
+  end
+
   # The "Suggested posts" card's reload button: draw 5 fresh random ones.
   def handle_event("reshuffle-discover", _params, socket) do
     {:noreply, assign_discover_posts(socket)}
@@ -335,6 +362,14 @@ defmodule VutuvWeb.PostLive.Feed do
   def handle_info(:refresh_suggestions, socket) do
     Process.send_after(self(), :refresh_suggestions, @suggestions_refresh)
     {:noreply, socket |> assign_who_to_follow() |> assign_discover_posts()}
+  end
+
+  # The viewer followed / unfollowed a tag elsewhere (a tag page in another tab,
+  # issue #872): redraw the "Tags you follow" and "Who to follow" rails so an
+  # open feed reflects it live. Posts already streamed stay; the new tag's posts
+  # arrive on the next load, like a fresh person-follow.
+  def handle_info({:tag_follows_changed, _}, socket) do
+    {:noreply, socket |> assign_followed_tags() |> assign_who_to_follow()}
   end
 
   # The Berlin day rolled over (Vutuv.DayClock at midnight): re-render every
@@ -607,6 +642,36 @@ defmodule VutuvWeb.PostLive.Feed do
         already follow; a live follow, no reload, drops the row and surfaces the
         next) plus the "Other formats" card — the same aside the profile shows. --%>
         <aside class="hidden space-y-6 md:block">
+          <%!-- "Tags you follow" (issue #872): the viewer's tag subscriptions,
+          each a chip linking to the tag page with a reload-free ✕ unfollow. Sits
+          at the top of the rail because it is the viewer's own state and the
+          easiest place to unsubscribe. Shown only once at least one tag is
+          followed. --%>
+          <.card :if={@followed_tags != []} id="followed-tags">
+            <.section_title class="mb-4">{gettext("Tags you follow")}</.section_title>
+            <div class="flex flex-wrap gap-2">
+              <span
+                :for={tag <- @followed_tags}
+                id={"followed-tag-#{tag.id}"}
+                class="inline-flex max-w-full items-center gap-1 rounded-lg bg-brand-50 py-1 pl-3 pr-1.5 text-sm font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+              >
+                <.link navigate={~p"/tags/#{tag}"} class="min-w-0 truncate hover:underline">
+                  <span aria-hidden="true">#</span>{tag.name || tag.slug}
+                </.link>
+                <button
+                  type="button"
+                  phx-click="unfollow_tag"
+                  phx-value-id={tag.id}
+                  title={gettext("Unfollow")}
+                  aria-label={gettext("Unfollow #%{tag}", tag: tag.name || tag.slug)}
+                  class="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full leading-none text-brand-500 transition hover:bg-brand-100 hover:text-brand-800 dark:text-brand-300 dark:hover:bg-brand-800 dark:hover:text-brand-100"
+                >
+                  <span aria-hidden="true">×</span>
+                </button>
+              </span>
+            </div>
+          </.card>
+
           <.card :if={@recommended_users != []} id="who-to-follow">
             <.section_title class="mb-4">{gettext("Who to follow")}</.section_title>
             <ul class="space-y-4">

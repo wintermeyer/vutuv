@@ -1382,6 +1382,51 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
+  The tag page's **follow / unfollow** pill (issue #872) — the topic twin of
+  `<.follow_button variant="text">`. It reuses the same "one control, two states"
+  pill (brand-outline "Follow" while you don't follow; a calm slate "Following"
+  that turns rose and swaps its label to "Unfollow" on hover/focus once you do,
+  the X/GitHub unfollow affordance), so following a tag reads exactly like
+  following a person — with a leading `#` glyph marking it as a *tag* follow, so
+  it never reads as the per-person "Follow" pills in the endorsed-users list
+  below it. It owns the two `~p"/tag_follows…"` route shapes (CSRF POST to follow,
+  DELETE `/tag_follows/:tag_id` to unfollow), branched on `following?`. The tag
+  page is a classic controller page, so this is the CSRF (page-reload) path; the
+  feed rail renders its own reload-free `phx-click` chip. Keep the logged-in
+  guard on a `:if` at the call site.
+  """
+  attr(:following?, :boolean, required: true)
+  attr(:tag, :map, required: true)
+
+  def tag_follow_button(%{following?: true} = assigns) do
+    ~H"""
+    <%= button to: ~p"/tag_follows/#{@tag.id}", method: :delete, class: tag_follow_class(:following) do %>
+      <span aria-hidden="true">#</span>
+      <.following_label />
+    <% end %>
+    """
+  end
+
+  def tag_follow_button(assigns) do
+    ~H"""
+    <%= button to: ~p"/tag_follows?#{[tag_follow: %{tag_id: @tag.id}]}", method: :post, class: tag_follow_class(:follow) do %>
+      <span aria-hidden="true">#</span><span class="whitespace-nowrap">{gettext("Follow")}</span>
+    <% end %>
+    """
+  end
+
+  # The two looks of the tag-follow pill, mirroring `text_follow_class/1` (the
+  # person pill) minus its `ml-auto self-start` list-row positioning, since the
+  # tag pill stands on its own in the tag page header.
+  defp tag_follow_class(:following),
+    do:
+      "group inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-slate-300 text-slate-600 hover:border-rose-300 hover:text-rose-600 dark:border-slate-700 dark:text-slate-400 dark:hover:border-rose-800 dark:hover:text-rose-400"
+
+  defp tag_follow_class(:follow),
+    do:
+      "inline-flex shrink-0 items-center justify-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors border-brand-600 text-brand-700 hover:bg-brand-50 dark:border-brand-500 dark:text-brand-400 dark:hover:bg-brand-900"
+
+  @doc """
   The profile header's **follow relationship** control — one fixed-width
   segmented pill (`w-80`) with two **equal-width halves** (`flex-1`) that is
   **always rendered in full**, so its size never changes between states; the
@@ -2822,6 +2867,7 @@ defmodule VutuvWeb.UI do
          {gettext("Fediverse"), ~p"/settings/fediverse", :fediverse},
          {gettext("Notifications"), ~p"/settings/notifications", :notifications}
        ] ++
+         followed_tags_rows(user) ++
          saved_search_rows(user) ++
          [
            {gettext("Apps"), ~p"/settings/apps", :apps},
@@ -2829,6 +2875,19 @@ defmodule VutuvWeb.UI do
          ]}
     ]
   end
+
+  # "Tags you follow" joins the hub only once the member follows at least one tag
+  # (issue #872), mirroring saved_search_rows/1: a member who never followed a
+  # tag sees nothing extra.
+  defp followed_tags_rows(%Vutuv.Accounts.User{} = user) do
+    if Vutuv.Tags.followed_tag_ids(user) == [] do
+      []
+    else
+      [{gettext("Tags you follow"), ~p"/settings/followed_tags", :followed_tags}]
+    end
+  end
+
+  defp followed_tags_rows(_user), do: []
 
   # The saved-searches row joins the hub only once the member has saved a search
   # (the block is invisible until then, issue #935); a member who never uses the

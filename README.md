@@ -17,8 +17,10 @@ We use the [MIT License](LICENSE).
 - Public member profiles (work experience, education, spoken languages, tags,
   links, contact details) with follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
-  Developer profiles can show cached public stats of their GitHub, GitLab and
-  Codeberg accounts (stars, repositories, languages, activity).
+  Members can also **follow a tag** to pull its posts into their feed and get
+  matching people suggested. Developer profiles can show cached public stats of
+  their GitHub, GitLab and Codeberg accounts (stars, repositories, languages,
+  activity).
 - Verified organization pages at `/organizations` (a company, a Verein, a public
   body, a university, an NGO — not only companies, each tagged with its kind): a
   page can only exist once its claimant proves control of the organization's web

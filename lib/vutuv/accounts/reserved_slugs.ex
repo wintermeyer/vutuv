@@ -32,7 +32,7 @@ defmodule Vutuv.Accounts.ReservedSlugs do
     llms.txt login logout mail maps memberships messages moderation new new_registration news
     notifications nutzungsbedingungen oauth phoenix post_images job_posting_images posts press privacy reports robots.txt
     screenshots search search_queries security.txt sent_emails sessions settings
-    sitemap.xml sitemaps socket status support system tags team terms tidewave unsubscribe
+    sitemap.xml sitemaps socket status support system tag_follows tags team terms tidewave unsubscribe
     user_bookmarks user_likes username users webhooks www
   )
 
