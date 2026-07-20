@@ -72,6 +72,11 @@ defmodule VutuvWeb.ShellLive do
       |> assign(:messages_count, 0)
       |> assign(:notifications_count, 0)
       |> assign(:brand_path, brand_path(user_param, path))
+      # The current path also drives the active-nav highlight (which top/bottom
+      # nav item is the page being viewed). Like brand_path it is the path at
+      # mount; every nav destination is reached by a full-reload `href`, so the
+      # shell remounts with a fresh path on each of those.
+      |> assign(:path, path)
       |> maybe_start_counts(user_id, path)
       |> maybe_start_presence(user_id, session["show_online"] == true)
       |> push_badge()
@@ -135,13 +140,29 @@ defmodule VutuvWeb.ShellLive do
     push_event(socket, "presence:set", %{online: online})
   end
 
-  defp initial_count(path, prefix, user_id, counter) do
+  defp initial_count(path, route, user_id, counter) do
     # Match the route boundary, not a raw prefix: a profile whose slug merely
     # begins with "messages"/"notifications" (e.g. /messagesanna) must not zero
     # the badge as if the member were sitting on that page.
-    on_page? = path == prefix or String.starts_with?(path, prefix <> "/")
-    if on_page?, do: 0, else: counter.(user_id)
+    if on_route?(path, route), do: 0, else: counter.(user_id)
   end
+
+  # True when the current path is `route` or a subpath of it — a route-boundary
+  # match, so /messagesanna is not "on" /messages and /jobsy is not "on" /jobs.
+  # Drives both the unread-badge zeroing at mount and the active-nav highlight.
+  defp on_route?(nil, _route), do: false
+  defp on_route?(path, route), do: path == route or String.starts_with?(path, route <> "/")
+
+  # The active nav item (the page being viewed) reads as the current location,
+  # not a normal clickable link: brand-tinted, medium weight and no hover
+  # affordance. The inactive item keeps the quiet slate link treatment.
+  defp nav_link_class(true),
+    do:
+      "rounded-md px-3 py-2 bg-brand-50 font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+
+  defp nav_link_class(false),
+    do:
+      "rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
 
   # Where the logo goes. Normally "home" ("/", which routes a logged-in member
   # to their feed), but ON the feed itself that would be a no-op round trip, so
@@ -285,7 +306,8 @@ defmodule VutuvWeb.ShellLive do
             <.link
               :if={@user_id}
               href={~p"/feed"}
-              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-current={on_route?(@path, "/feed") && "page"}
+              class={nav_link_class(on_route?(@path, "/feed"))}
             >
               {gettext("Feed")}
             </.link>
@@ -297,19 +319,22 @@ defmodule VutuvWeb.ShellLive do
               :if={@user_id}
               href={~p"/#{@user_param}"}
               data-nav-profile
-              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-current={on_route?(@path, "/#{@user_param}") && "page"}
+              class={nav_link_class(on_route?(@path, "/#{@user_param}"))}
             >
               {gettext("Profile")}
             </.link>
             <.link
               href={~p"/listings/most_followed_users"}
-              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-current={on_route?(@path, "/listings/most_followed_users") && "page"}
+              class={nav_link_class(on_route?(@path, "/listings/most_followed_users"))}
             >
               {gettext("Network")}
             </.link>
             <.link
               href={~p"/jobs"}
-              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+              aria-current={on_route?(@path, "/jobs") && "page"}
+              class={nav_link_class(on_route?(@path, "/jobs"))}
             >
               {gettext("Jobs")}
             </.link>
@@ -472,16 +497,16 @@ defmodule VutuvWeb.ShellLive do
         ]}
       >
         <%= if @user_id do %>
-          <.tab href={~p"/feed"} label={gettext("Feed")}><.icon_feed /></.tab>
+          <.tab href={~p"/feed"} label={gettext("Feed")} active={on_route?(@path, "/feed")}><.icon_feed /></.tab>
         <% end %>
-        <.tab href={~p"/search"} label={gettext("Search")}><.icon_search /></.tab>
+        <.tab href={~p"/search"} label={gettext("Search")} active={on_route?(@path, "/search")}><.icon_search /></.tab>
         <%= if @user_id do %>
-          <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
-          <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
+          <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count} active={on_route?(@path, "/messages")}><.icon_envelope /></.tab>
+          <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count} active={on_route?(@path, "/notifications")}><.icon_bell /></.tab>
           <%!-- The member's own avatar is the Profile tab — the universal mobile
           convention for "you", so the profile is reachable on phones too, not
           just via the desktop nav or the logo's /feed deep-link. --%>
-          <.tab href={~p"/#{@user_param}"} label={gettext("Profile")} data-mobile-profile>
+          <.tab href={~p"/#{@user_param}"} label={gettext("Profile")} data-mobile-profile active={on_route?(@path, "/#{@user_param}")}>
             <%= if @user_avatar do %>
               <img src={@user_avatar} alt="" class="h-6 w-6 rounded-full object-cover" />
             <% else %>
@@ -503,12 +528,24 @@ defmodule VutuvWeb.ShellLive do
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
+  attr(:active, :boolean, default: false)
   attr(:rest, :global)
   slot(:inner_block, required: true)
 
   defp tab(assigns) do
     ~H"""
-    <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-600 dark:text-slate-400" {@rest}>
+    <.link
+      href={@href}
+      aria-current={@active && "page"}
+      class={[
+        "flex flex-col items-center justify-center gap-0.5",
+        if(@active,
+          do: "text-brand-600 dark:text-brand-300",
+          else: "text-slate-600 dark:text-slate-400"
+        )
+      ]}
+      {@rest}
+    >
       <span class="relative">
         {render_slot(@inner_block)}
         <.count_badge
@@ -516,7 +553,7 @@ defmodule VutuvWeb.ShellLive do
           class="absolute -right-0.5 -top-0.5 ring-2 ring-white dark:ring-slate-900"
         />
       </span>
-      <span class="text-[10px]">{@label}</span>
+      <span class={["text-[10px]", @active && "font-semibold"]}>{@label}</span>
     </.link>
     """
   end

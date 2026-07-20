@@ -300,6 +300,109 @@ defmodule VutuvWeb.ShellLiveTest do
     end
   end
 
+  describe "active navigation" do
+    # The member must be able to tell which page they are on: the matching nav
+    # item (desktop top bar and mobile bottom bar alike) is marked as the
+    # current page (aria-current) and styled distinctly instead of behaving
+    # like a normal clickable link.
+    test "the desktop nav marks the current page as active", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/feed"}))
+
+      assert has_element?(view, ~s(nav a[href="/feed"][aria-current="page"]), "Feed")
+      # No other nav item claims to be the current page.
+      refute has_element?(view, ~s(nav a[data-nav-profile][aria-current="page"]))
+      refute has_element?(view, ~s(nav a[href="/jobs"][aria-current="page"]))
+    end
+
+    test "the Profile item is active on the member's own profile (and its subpages)", %{
+      conn: conn
+    } do
+      user = insert(:user)
+
+      for path <- ["/stefan", "/stefan/tags"] do
+        {:ok, view, _html} =
+          live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => path}))
+
+        assert has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
+        assert has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
+        # A different member's profile must not activate my Profile item.
+        refute has_element?(view, ~s(a[href="/feed"][aria-current="page"]))
+      end
+    end
+
+    test "viewing another member's profile does not activate my Profile item", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/anna"}))
+
+      refute has_element?(view, ~s(a[data-nav-profile][aria-current="page"]))
+      refute has_element?(view, ~s(a[data-mobile-profile][aria-current="page"]))
+    end
+
+    test "Jobs stays active across the whole jobs section", %{conn: conn} do
+      user = insert(:user)
+
+      for path <- ["/jobs", "/jobs/some-posting-slug"] do
+        {:ok, view, _html} =
+          live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => path}))
+
+        assert has_element?(view, ~s(nav a[href="/jobs"][aria-current="page"]), "Jobs")
+      end
+    end
+
+    test "the mobile tab bar marks the current tab active", %{conn: conn} do
+      user = insert(:user)
+
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive,
+          session: session_for(user, %{"path" => "/messages"})
+        )
+
+      assert has_element?(view, ~s(nav a[href="/messages"][aria-current="page"]))
+      refute has_element?(view, ~s(nav a[href="/search"][aria-current="page"]))
+    end
+
+    test "a look-alike slug does not activate a nav item (route boundary)", %{conn: conn} do
+      user = insert(:user)
+
+      # /jobsy merely BEGINS with "/jobs"; it is not the jobs section.
+      {:ok, view, _html} =
+        live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user, %{"path" => "/jobsy"}))
+
+      refute has_element?(view, ~s(nav a[aria-current="page"]))
+    end
+
+    test "with no known path nothing is marked active", %{conn: conn} do
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      refute has_element?(view, ~s(nav a[aria-current="page"]))
+    end
+
+    test "the real feed page marks the Feed nav item as current", %{conn: conn} do
+      # End to end through the layout: the page must hand its path to the shell
+      # (session "path") so the matching nav item is highlighted, and a sibling
+      # page must not carry a stale highlight.
+      {conn, _user} = create_and_login_user(conn)
+
+      feed_doc = conn |> get(~p"/feed") |> html_response(200) |> LazyHTML.from_document()
+
+      assert feed_doc
+             |> LazyHTML.query(~s(nav a[href="/feed"][aria-current="page"]))
+             |> Enum.any?()
+
+      search_doc = conn |> get(~p"/search") |> html_response(200) |> LazyHTML.from_document()
+
+      refute search_doc
+             |> LazyHTML.query(~s(nav a[href="/feed"][aria-current="page"]))
+             |> Enum.any?()
+    end
+  end
+
   test "renders the anonymous shell for a stale cookie user_id with no profile data", %{
     conn: conn
   } do
