@@ -1,9 +1,10 @@
 defmodule VutuvWeb.PhoneTypeI18nTest do
   @moduledoc """
-  The phone-number type "Home" must read as the German "Privat", not the bare
-  English "Home". The msgid "Home" was overloaded: it also names the navigation
-  target ("g h" shortcut, breadcrumb), which is "Startseite". One msgid cannot
-  carry both meanings, so the phone type is disambiguated with a gettext context.
+  The phone-number types (issue #948: private/work × landline/mobile) render
+  through gettext so the page speaks the visitor's language. The private
+  landline reuses the "Private" msgid ("Privat"), so it no longer collides with
+  the navigation "Home" ("Startseite") and needs no gettext context. "Fax" is
+  no longer offered but legacy rows must still render their German label.
   """
   use ExUnit.Case, async: true
 
@@ -17,9 +18,11 @@ defmodule VutuvWeb.PhoneTypeI18nTest do
   end
 
   test "the phone type labels are all German" do
-    assert PhoneNumberHTML.phone_type_label("Work") == "Arbeit"
-    assert PhoneNumberHTML.phone_type_label("Cell") == "Mobil-Telefon"
     assert PhoneNumberHTML.phone_type_label("Home") == "Privat"
+    assert PhoneNumberHTML.phone_type_label("Cell") == "Mobil (privat)"
+    assert PhoneNumberHTML.phone_type_label("Work") == "Arbeit"
+    assert PhoneNumberHTML.phone_type_label("Work Cell") == "Mobil (Arbeit)"
+    # Fax is no longer offered, but legacy rows keep their German label.
     assert PhoneNumberHTML.phone_type_label("Fax") == "Fax"
   end
 

@@ -484,17 +484,18 @@ defmodule VutuvWeb.UserHTML do
   @doc """
   Splits the profile's contact channels into the Beruflich/Privat buckets the
   contact card shows. E-mails are work unless explicitly typed "Personal";
-  phone numbers count as private only when typed "Home" (so an unspecified
-  e-mail, defaulting to "Other", lands in work). Returns the non-empty groups
-  in `[work, private]` order, each `{label, emails, phones}` with e-mails before
-  phones (the card's row order). A single bucket renders without a heading.
+  phone numbers count as private when typed "Home" or "Cell" (private landline /
+  mobile, issue #948), so a work or unlabeled number lands in work. Returns the
+  non-empty groups in `[work, private]` order, each `{label, emails, phones}`
+  with e-mails before phones (the card's row order). A single bucket renders
+  without a heading.
   """
   def contact_groups(emails, phone_numbers) do
     {work_emails, private_emails} =
       Enum.split_with(emails, fn email -> email.email_type != "Personal" end)
 
     {private_phones, work_phones} =
-      Enum.split_with(phone_numbers, fn number -> number.number_type == "Home" end)
+      Enum.split_with(phone_numbers, fn number -> number.number_type in ["Home", "Cell"] end)
 
     [{:work, work_emails, work_phones}, {:private, private_emails, private_phones}]
     |> Enum.reject(fn {_label, group_emails, group_phones} ->

@@ -558,8 +558,9 @@ defmodule Vutuv.Imports.LinkedIn do
     case downcase(type) do
       "home" -> "Home"
       "work" -> "Work"
-      "fax" -> "Fax"
-      # mobile / cell / unknown all map to the default.
+      # Fax is no longer a vutuv type (issue #948); a fax line is a work number.
+      "fax" -> "Work"
+      # mobile / cell / unknown all map to the default (private mobile).
       _ -> "Cell"
     end
   end
