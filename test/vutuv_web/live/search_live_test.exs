@@ -292,14 +292,15 @@ defmodule VutuvWeb.SearchLiveTest do
       assert has_element?(view, "#search-tags", "1")
     end
 
-    # Issue #846: with a people operator in the query the parser pins the
+    # Issue #846: with a people-only operator in the query the parser pins the
     # search to people, so the other scope chips did nothing when clicked.
-    # They must read as disabled instead of as working tabs.
-    test "a people operator disables the other scope chips with a hint", %{conn: conn} do
-      tag = insert(:tag, name: "PHP", slug: "php")
-      insert(:user_tag, tag: tag, user: insert(:activated_user))
+    # They must read as disabled instead of as working tabs. (`tag:` no longer
+    # pins since issue #946 — it spans people and posts — so this uses `ort:`.)
+    test "a people-only operator disables the other scope chips with a hint", %{conn: conn} do
+      user = insert(:activated_user)
+      insert(:address, user: user, city: "Koblenz")
 
-      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+      {:ok, view, _html} = live(conn, ~p"/search?q=ort:koblenz")
 
       # People is highlighted as what the search actually did ...
       assert has_element?(view, "#search-scope-people.bg-brand-600")
@@ -315,17 +316,17 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "clearing the operator re-enables the scope chips", %{conn: conn} do
-      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+      {:ok, view, _html} = live(conn, ~p"/search?q=ort:koblenz")
       refute has_element?(view, "a#search-scope-tags")
 
-      view |> form("#search-form") |> render_change(%{q: "php"})
-      assert_patch(view, ~p"/search?q=php")
+      view |> form("#search-form") |> render_change(%{q: "koblenz"})
+      assert_patch(view, ~p"/search?q=koblenz")
 
       assert has_element?(view, "a#search-scope-tags")
       refute has_element?(view, "#search-scope-pinned-hint")
     end
 
-    test "tag: lists the people with that tag instead of the tag itself", %{conn: conn} do
+    test "tag: lists the people with that tag, not the tag itself", %{conn: conn} do
       tag = insert(:tag, name: "PHP", slug: "php")
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: tagged)
@@ -336,6 +337,24 @@ defmodule VutuvWeb.SearchLiveTest do
       assert has_element?(view, "#search-people-exact", "Paula Programmer")
       refute has_element?(view, "#search-people-exact", "Norbert NoTag")
       refute has_element?(view, "#search-tags")
+    end
+
+    test "tag: also lists posts carrying that tag, and keeps the chips enabled (issue #946)",
+         %{conn: conn} do
+      tag = insert(:tag, name: "PHP", slug: "php")
+      tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
+      insert(:user_tag, tag: tag, user: tagged)
+      author = insert(:activated_user)
+      create_post!(author, %{body: "My php write-up today", tags: "php"})
+
+      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+
+      # Both the person and the post carrying the tag show.
+      assert has_element?(view, "#search-people-exact", "Paula Programmer")
+      assert has_element?(view, "#search-posts", "My php write-up")
+      # tag: does not pin the scope now, so the chips stay clickable links.
+      assert has_element?(view, "a#search-scope-posts")
+      refute has_element?(view, "#search-scope-pinned-hint")
     end
 
     test "a name combines with tag and city filters", %{conn: conn} do

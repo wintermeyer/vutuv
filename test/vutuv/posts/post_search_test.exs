@@ -81,4 +81,50 @@ defmodule Vutuv.Posts.PostSearchTest do
     # websearch_to_tsquery treats operators as literal text - must not raise.
     assert is_list(Posts.search_public(~s{"unbalanced & | ! (}))
   end
+
+  describe "tag: filter (issue #946)" do
+    test "a bare tag filter lists posts carrying that tag, newest first" do
+      a = author()
+      older = create_post!(a, %{body: "First elixir note", tags: "elixir"})
+      newer = create_post!(a, %{body: "Second elixir note", tags: "elixir"})
+      _other = create_post!(a, %{body: "A ruby note", tags: "ruby"})
+
+      # Empty body + a tag: filter is a pure tag listing.
+      ids = Posts.search_public("", tag: "elixir") |> Enum.map(& &1.id)
+      assert ids == [newer.id, older.id]
+    end
+
+    test "combines with body words (AND)" do
+      a = author()
+      match = create_post!(a, %{body: "Koblenz elixir meetup", tags: "elixir"})
+      _wrong_body = create_post!(a, %{body: "Berlin elixir meetup", tags: "elixir"})
+      _wrong_tag = create_post!(a, %{body: "Koblenz ruby meetup", tags: "ruby"})
+
+      assert [found] = Posts.search_public("koblenz", tag: "elixir")
+      assert found.id == match.id
+    end
+
+    test "substring matches the tag name, exact does not" do
+      a = author()
+      post = create_post!(a, %{body: "phpstorm tips", tags: "phpstorm"})
+
+      assert [found] = Posts.search_public("", tag: "php")
+      assert found.id == post.id
+      assert Posts.search_public("", tag: "php", exact: true) == []
+      assert [exact] = Posts.search_public("", tag: "phpstorm", exact: true)
+      assert exact.id == post.id
+    end
+
+    test "a tag filter still hides posts a visitor may not read" do
+      a = author()
+
+      create_post!(a, %{
+        body: "elixir for followers",
+        tags: "elixir",
+        denials: [%{"wildcard" => "non_followers"}]
+      })
+
+      assert Posts.search_public("", tag: "elixir") == []
+    end
+  end
 end

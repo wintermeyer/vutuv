@@ -160,6 +160,7 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Most endorsed members"),
         Enum.map(doc.most_endorsed_users, &person_line/1)
       ),
+      section(gettext("Posts with this tag"), Enum.map(doc.posts, &post_lines/1)),
       tag_open_positions(doc),
       footer(doc)
     ]

@@ -29,6 +29,31 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
+  # Issue #946: a tag used only in posts (no endorsed members) used to open an
+  # empty page. The tag page now lists the public posts carrying the tag.
+  describe "posts with this tag (issue #946)" do
+    test "a tag used only in posts still shows those posts", %{conn: conn} do
+      author = insert(:activated_user)
+
+      post =
+        Vutuv.PostsHelpers.create_post!(author, %{body: "Elixir meetup notes", tags: "elixir"})
+
+      html = conn |> get(~p"/tags/elixir") |> html_response(200)
+
+      assert html =~ "tag-posts"
+      assert html =~ "Elixir meetup notes"
+      assert html =~ "/#{author.username}/posts/#{post.id}"
+    end
+
+    test "the posts section is absent when no public post carries the tag", %{conn: conn} do
+      insert(:tag, name: "Empty", slug: "empty")
+
+      html = conn |> get(~p"/tags/empty") |> html_response(200)
+
+      refute html =~ ~s(id="tag-posts")
+    end
+  end
+
   # Issue #877: the "Add this tag" button was removed from the public tag page.
   # "Add this tag" was ambiguous ("create/define this tag" vs "add it to my
   # profile" — it misled the #844 reporter into a 404), redundant with the

@@ -163,6 +163,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Most endorsed members"),
         Enum.map(doc.most_endorsed_users, &person_line/1)
       ),
+      section(gettext("Posts with this tag"), Enum.map(doc.posts, &post_line/1)),
       tag_open_positions(doc)
     ]
     |> join_blocks()

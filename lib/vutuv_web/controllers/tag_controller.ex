@@ -2,6 +2,7 @@ defmodule VutuvWeb.TagController do
   use VutuvWeb, :controller
 
   alias Vutuv.Jobs
+  alias Vutuv.Posts
   alias Vutuv.Tags.Tag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
@@ -25,9 +26,9 @@ defmodule VutuvWeb.TagController do
   end
 
   # Also served as Markdown / text / JSON via VutuvWeb.AgentDocs.ListDocs
-  # (anonymous view: the description plus the most endorsed members, not the
-  # viewer-dependent "people you may know"). Keep show.html and the doc
-  # builder in sync (agent_docs_drift_test.exs).
+  # (anonymous view: the description, the most endorsed members and the public
+  # posts carrying this tag — not the viewer-dependent "people you may know").
+  # Keep show.html and the doc builder in sync (agent_docs_drift_test.exs).
   def show(conn, _params) do
     tag = conn.assigns[:tag]
 
@@ -35,17 +36,30 @@ defmodule VutuvWeb.TagController do
     # carry this tag. The HTML page subtracts what the signed-in viewer may not
     # see (#939 exclusions / blocks); the agent formats stay the anonymous
     # public view, so the two branches load their own list (only one runs).
+    #
+    # "Posts with this tag" (#946): the public posts carrying the tag, the
+    # anonymous view for both branches (`Posts.list_tag_posts/1` is
+    # viewer-independent), so a tag used only in posts no longer opens an
+    # empty page.
     AgentDocs.respond(conn,
       html:
         &render(&1, "show.html",
           tag: tag,
           open_positions: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
+          tag_posts: Posts.list_tag_posts(tag),
           meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
         ),
       doc: fn ->
         recommended = Tag.recommended_users(tag)
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
-        ListDocs.build_tag(tag, recommended, work_info_by_id, Jobs.list_tag_postings(tag, nil))
+
+        ListDocs.build_tag(
+          tag,
+          recommended,
+          work_info_by_id,
+          Jobs.list_tag_postings(tag, nil),
+          Posts.list_tag_posts(tag)
+        )
       end
     )
   end

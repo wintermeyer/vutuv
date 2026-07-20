@@ -891,27 +891,114 @@ defmodule Vutuv.Posts do
   config, no language stemming — bodies are mixed German/English), so plain
   words, "quoted phrases" and `-exclusions` all work and garbage never
   raises. Authors come preloaded.
+
+  Options:
+
+    * `:tag` — also require a tag whose name or slug matches the string
+      (issue #946: the `tag:` search operator finds posts, not just people).
+      Combines with the body query (AND); with an empty body it becomes a
+      pure tag listing (newest first). Substring by default, equality when
+      `:exact` is set.
+    * `:exact` — the `tag:` match is equality (`"php"` doesn't hit `phpstorm`).
+    * `:limit` — result cap (default 25).
   """
   def search_public(value, opts \\ []) when is_binary(value) do
+    do_search_public(value, Keyword.get(opts, :tag), opts)
+  end
+
+  # Nothing to search: an empty query with no tag filter matches no post
+  # (rather than every post). A tag: filter alone is a valid pure listing.
+  defp do_search_public("", nil, _opts), do: []
+
+  defp do_search_public(value, tag, opts) do
     limit = Keyword.get(opts, :limit, 25)
 
     # scope_visible(nil) supplies the three anonymous-visibility conditions
     # (no denials, unfrozen, non-hidden author); only the search-specific
     # filters stay here. Search keeps the stricter `email_confirmed? == true`
     # (not the confirmed-or-legacy-NULL gate) deliberately.
+    from(p in Post, as: :post, join: u in assoc(p, :user), where: u.email_confirmed? == true)
+    |> filter_body_search(value)
+    |> filter_posts_by_tag(tag, Keyword.get(opts, :exact, false))
+    |> order_public_search(value)
+    |> limit(^limit)
+    |> preload([p, u], user: u)
+    |> scope_visible(nil)
+    |> Repo.all()
+  end
+
+  defp filter_body_search(query, ""), do: query
+
+  defp filter_body_search(query, value) do
+    where(query, [p], fragment("? @@ websearch_to_tsquery('simple', ?)", p.search_tsv, ^value))
+  end
+
+  # Best full-text match first; a tag-only listing (no body query) is newest
+  # first, so ranking never collapses every post to the same score.
+  defp order_public_search(query, ""), do: order_by(query, [p], desc: p.id)
+
+  defp order_public_search(query, value) do
+    order_by(query, [p],
+      desc: fragment("ts_rank(?, websearch_to_tsquery('simple', ?))", p.search_tsv, ^value),
+      desc: p.id
+    )
+  end
+
+  # The post side of the `tag:` search operator (issue #946): keep only posts
+  # carrying a tag whose name or slug matches. An EXISTS subquery (not a join)
+  # so a post with several matching tags is not duplicated. Same match shape as
+  # the people-side `Vutuv.Search.filter_tag/3`: substring by default, equality
+  # when the query is `exact?`.
+  defp filter_posts_by_tag(query, nil, _exact?), do: query
+
+  defp filter_posts_by_tag(query, tag, true) do
+    sub =
+      from(pt in PostTag,
+        join: t in assoc(pt, :tag),
+        where:
+          pt.post_id == parent_as(:post).id and
+            (fragment("lower(?)", t.name) == ^tag or t.slug == ^tag)
+      )
+
+    where(query, [], exists(subquery(sub)))
+  end
+
+  defp filter_posts_by_tag(query, tag, false) do
+    infix = "%" <> escape_like(tag) <> "%"
+
+    sub =
+      from(pt in PostTag,
+        join: t in assoc(pt, :tag),
+        where:
+          pt.post_id == parent_as(:post).id and
+            (ilike(t.name, ^infix) or ilike(t.slug, ^infix))
+      )
+
+    where(query, [], exists(subquery(sub)))
+  end
+
+  @doc """
+  The public posts carrying `tag`, newest first, for the tag page's "Posts
+  with this tag" section (issue #946). Anonymous view: only posts every
+  visitor may read surface (`scope_visible(nil)`), same gate as
+  `search_public/2`. Matches the exact tag (its id), not a name substring —
+  this is "posts filed under this tag", not a search. Preloaded like every
+  rendered post.
+  """
+  def list_tag_posts(%Tag{} = tag, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+
     from(p in Post,
       join: u in assoc(p, :user),
-      where: fragment("? @@ websearch_to_tsquery('simple', ?)", p.search_tsv, ^value),
-      where: u.email_confirmed? == true,
-      order_by: [
-        desc: fragment("ts_rank(?, websearch_to_tsquery('simple', ?))", p.search_tsv, ^value),
-        desc: p.id
-      ],
-      limit: ^limit,
-      preload: [user: u]
+      join: pt in PostTag,
+      on: pt.post_id == p.id,
+      where: pt.tag_id == ^tag.id and u.email_confirmed? == true,
+      order_by: [desc: p.id],
+      limit: ^limit
     )
     |> scope_visible(nil)
     |> Repo.all()
+    |> Repo.preload(post_preloads())
   end
 
   @doc """
