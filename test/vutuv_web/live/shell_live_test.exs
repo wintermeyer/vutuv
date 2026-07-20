@@ -268,6 +268,38 @@ defmodule VutuvWeb.ShellLiveTest do
     assert html =~ ~s(href="/notifications")
   end
 
+  describe "profile navigation" do
+    test "the desktop nav carries an explicit Profile link to the member's profile", %{
+      conn: conn
+    } do
+      # The logo already deep-links to the profile on /feed, but that is not
+      # obvious; a named "Profile" nav item makes the member's own profile a
+      # first-class, discoverable destination.
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      assert has_element?(view, ~s(nav a[data-nav-profile][href="/stefan"]), "Profile")
+    end
+
+    test "the mobile tab bar carries a Profile tab to the member's profile", %{conn: conn} do
+      # Desktop is not the only surface: the bottom tab bar gets a Profile tab
+      # too, so phone visitors can reach their profile without hunting for it.
+      user = insert(:user)
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: session_for(user))
+
+      assert has_element?(view, ~s(nav a[data-mobile-profile][href="/stefan"]), "Profile")
+      # Five tabs now (Feed, Search, Messages, Alerts, Profile), so the grid grows.
+      assert has_element?(view, "nav.grid-cols-5")
+    end
+
+    test "logged out there is no Profile nav link or tab", %{conn: conn} do
+      {:ok, view, _html} = live_isolated(conn, VutuvWeb.ShellLive, session: %{})
+
+      refute has_element?(view, "[data-nav-profile]")
+      refute has_element?(view, "[data-mobile-profile]")
+    end
+  end
+
   test "renders the anonymous shell for a stale cookie user_id with no profile data", %{
     conn: conn
   } do
