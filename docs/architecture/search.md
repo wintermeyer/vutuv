@@ -42,6 +42,8 @@ posts out of the results is covered in [posts-and-feed.md](posts-and-feed.md).
 A `tag:` filter narrows the same `search_public/2` to posts carrying that tag
 (an `EXISTS` over `post_tags`, name/slug match), and a bare `tag:php` with no
 body words is a pure tag listing (newest first) — the post twin of the tag
-page's "Posts with this tag" section (`Vutuv.Posts.list_tag_posts/1`, issue
+page's "Posts with this tag" section (`Vutuv.Posts.list_tag_posts/3`, issue
 #946), which lists the public posts filed under a tag so a tag used only in
-posts no longer opens an empty page.
+posts no longer opens an empty page. The tag page offset-paginates those posts
+with the numbered `<.pager>` (`?page`, like the tag index); its front matter
+(description, most-endorsed members, jobs) rides only on page 1.

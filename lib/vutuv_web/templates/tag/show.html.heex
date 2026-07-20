@@ -10,13 +10,16 @@ card stretch edge to edge with a huge line length and dead space. --%>
     ]}
   />
 
-  <div class="card-list">
+  <%!-- The tag's front matter (description, most-endorsed members, jobs) rides
+  only on page 1; pages 2+ of the post pager are just more posts. --%>
+  <div :if={@overview?} class="card-list">
     <%= render "single_card.html", assigns %>
   </div>
 
   <%!-- Posts carrying this tag (#946), rendered as flat divide-y rows inside one
   card via <.post_thread_entry> — the same treatment as the feed, the profile and
-  the author archive (a reply nests the post it answers inline). --%>
+  the author archive (a reply nests the post it answers inline). Offset-paginated
+  with the numbered <.pager>, like the tag index. --%>
   <section :if={@tag_posts != []} id="tag-posts" class="mt-6">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
       {gettext("Posts with this tag")}
@@ -31,9 +34,10 @@ card stretch edge to edge with a huge line length and dead space. --%>
         />
       </div>
     </.post_list>
+    <.pager params={@conn.params} total={@posts_total} per_page={@posts_per_page} />
   </section>
 
-  <section :if={@open_positions != []} class="mt-6">
+  <section :if={@overview? and @open_positions != []} class="mt-6">
     <div class="flex items-center justify-between gap-2">
       <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
         {gettext("Open positions")}

@@ -2,6 +2,7 @@ defmodule VutuvWeb.TagController do
   use VutuvWeb, :controller
 
   alias Vutuv.Jobs
+  alias Vutuv.Pages
   alias Vutuv.Posts
   alias Vutuv.Tags.Tag
   alias VutuvWeb.AgentDocs
@@ -32,33 +33,44 @@ defmodule VutuvWeb.TagController do
   def show(conn, _params) do
     tag = conn.assigns[:tag]
 
-    # The tag page's "Offene Stellen" section (#933): live public postings that
-    # carry this tag. The HTML page subtracts what the signed-in viewer may not
-    # see (#939 exclusions / blocks); the agent formats stay the anonymous
-    # public view, so the two branches load their own list (only one runs).
-    #
-    # "Posts with this tag" (#946): the public posts carrying the tag, the
-    # anonymous view for both branches (`Posts.list_tag_posts/1` is
-    # viewer-independent), so a tag used only in posts no longer opens an
-    # empty page.
+    # "Posts with this tag" (#946) is offset-paginated (`?page`). The overview —
+    # description, most-endorsed members and the "Offene Stellen" jobs (#933) —
+    # is the tag's front matter, so it rides only on page 1; pages 2+ are just
+    # more posts. The post total is computed once and reused by both branches
+    # and the pager.
+    posts_total = Posts.count_tag_posts(tag)
+    first_page? = Pages.effective_page(conn.params, posts_total, Posts.tag_posts_per_page()) == 1
+
+    # The HTML page subtracts what the signed-in viewer may not see from the
+    # jobs (#939 exclusions / blocks); the agent formats stay the anonymous
+    # public view, so each branch loads its own list (only one runs).
     AgentDocs.respond(conn,
       html:
         &render(&1, "show.html",
           tag: tag,
-          open_positions: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
-          tag_posts: Posts.list_tag_posts(tag),
+          overview?: first_page?,
+          open_positions:
+            if(first_page?,
+              do: Jobs.list_tag_postings(tag, conn.assigns[:current_user]),
+              else: []
+            ),
+          tag_posts: Posts.list_tag_posts(tag, conn.params, total: posts_total),
+          posts_total: posts_total,
+          posts_per_page: Posts.tag_posts_per_page(),
           meta_description: gettext("Members on vutuv tagged %{tag}.", tag: tag.name || tag.slug)
         ),
       doc: fn ->
-        recommended = Tag.recommended_users(tag)
+        recommended = if first_page?, do: Tag.recommended_users(tag), else: []
         work_info_by_id = VutuvWeb.UserHelpers.work_information_map(recommended, 45)
+        jobs = if first_page?, do: Jobs.list_tag_postings(tag, nil), else: []
 
         ListDocs.build_tag(
           tag,
           recommended,
           work_info_by_id,
-          Jobs.list_tag_postings(tag, nil),
-          Posts.list_tag_posts(tag)
+          jobs,
+          Posts.list_tag_posts(tag, conn.params, total: posts_total),
+          posts_total
         )
       end
     )

@@ -73,11 +73,20 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
   @doc """
   The tag page: description, the most endorsed members, the open positions
   (#933) and the public posts carrying the tag (#946). `posts` is a plain list
-  of preloaded `%Vutuv.Posts.Post{}` (from `Vutuv.Posts.list_tag_posts/1`),
-  rendered with the shared timeline-entry shape so the md / text formats read
-  a post the same way the feed and archive do.
+  of preloaded `%Vutuv.Posts.Post{}` (one offset page, from
+  `Vutuv.Posts.list_tag_posts/3`), rendered with the shared timeline-entry
+  shape so the md / text formats read a post the same way the feed and archive
+  do; `post_count` is the total across all pages. The overview (members / jobs)
+  rides only on page 1, so the caller passes `[]` for both on later pages.
   """
-  def build_tag(tag, recommended_users, work_info_by_id, open_positions \\ [], posts \\ []) do
+  def build_tag(
+        tag,
+        recommended_users,
+        work_info_by_id,
+        open_positions \\ [],
+        posts \\ [],
+        post_count \\ 0
+      ) do
     AgentDocs.doc_meta("tag", "/tags/#{tag.slug}")
     |> Map.merge(%{
       title: tag.name,
@@ -85,6 +94,7 @@ defmodule VutuvWeb.AgentDocs.ListDocs do
       name: tag.name,
       slug: tag.slug,
       most_endorsed_users: Enum.map(recommended_users, &person_entry(&1, work_info_by_id)),
+      post_count: post_count,
       posts: Enum.map(posts, &PostDoc.timeline_entry(%{post: &1})),
       open_positions: Enum.map(open_positions, &JobPostingDoc.summary/1),
       jobs_url: AgentDocs.abs_url("/jobs?" <> URI.encode_query(%{"tag" => tag.slug}))
