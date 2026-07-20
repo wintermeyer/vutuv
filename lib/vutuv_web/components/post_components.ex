@@ -5,10 +5,11 @@ defmodule VutuvWeb.PostComponents do
 
   Preview mode ships the whole body and clamps it to a few lines via CSS
   (`.post-clamp`); a "Read more" button expands it in place, so a long post
-  reads the same on the feed and the profile. Attachments show as a thumbnail
-  row. Full mode shows every attachment as a gallery below the body. Post
-  bodies never embed images inline — uploaded pictures are always attachments,
-  shown here.
+  reads the same on the feed and the profile. In preview every attachment
+  shows as a thumbnail row (inline references are dropped from the clamped
+  body). Full mode renders inline-referenced attachments in place —
+  `![](…)` with an own-upload URL, optional `#left`/`#right`/`#center`
+  alignment — and the unreferenced rest as a gallery below the body.
 
   Not imported globally — `import VutuvWeb.PostComponents` where needed.
   """
@@ -125,8 +126,10 @@ defmodule VutuvWeb.PostComponents do
     # The whole body is always shipped to the DOM. In :preview the `.post-clamp`
     # CSS line clamp does the visual cut and the in-place expand button reveals
     # the rest, so "Read more" expands in place instead of navigating to the
-    # permalink — feed and profile alike. A preview never carries the post's
-    # inline images (those show in the gallery below), so it renders with `[]`.
+    # permalink — feed and profile alike. A preview never renders the post's
+    # inline images (those show in the thumbnail row below), so it passes `[]`;
+    # full mode inlines the viewer-visible set (shown_images), so an unreleased
+    # picture simply stays absent for strangers while the author sees it.
     images = if assigns.mode == :full, do: post.images, else: []
     body_html = VutuvWeb.Markdown.render_post(post.body, images)
 
@@ -151,9 +154,9 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:body_style, post_body_style(prefs))
       |> assign(:restricted?, Posts.restricted?(post))
       |> assign(:permalink, Posts.path(post))
-      # Every attachment shows in the gallery (full mode) or the thumbnail row
-      # (preview) — post bodies never embed images inline.
-      |> assign(:gallery, post.images)
+      # Full mode: attachments the body references inline render in place; the
+      # rest form the gallery. Preview shows every attachment as a thumbnail row.
+      |> assign(:gallery, gallery(post, assigns.mode))
       |> assign(:square_layout?, square_layout?(post, assigns.mode))
       # The auto link screenshot (a ready %PostScreenshot{} for an image-less
       # single-URL post, else nil) and whether the preview lays it beside the
@@ -1161,6 +1164,14 @@ defmodule VutuvWeb.PostComponents do
   end
 
   defp square_layout?(_post, _mode), do: false
+
+  # Full mode: attachments the body references inline render in place; the
+  # rest form the gallery. Preview mode handles images separately (thumbs).
+  defp gallery(post, :preview), do: post.images
+
+  defp gallery(post, :full) do
+    Enum.reject(post.images, &PostImage.referenced_in?(&1, post.body))
+  end
 
   # AI-moderation limbo: the author and admins keep seeing a pending image
   # (the proxy serves it to them); everyone else gets `held_count` placecard

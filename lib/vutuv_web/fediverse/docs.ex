@@ -17,6 +17,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   """
 
   alias Vutuv.Fediverse.Actor
+  alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
   alias VutuvWeb.UserHelpers
@@ -136,8 +137,10 @@ defmodule VutuvWeb.Fediverse.Docs do
     |> absolutize()
   end
 
+  # Remote servers are anonymous viewers: only AI-released images may render
+  # inline (released_images/1 also handles an un-preloaded association).
   defp images(post) do
-    if Ecto.assoc_loaded?(post.images), do: post.images, else: []
+    Posts.released_images(post)
   end
 
   # Root-relative src/href (post images, in-app links) must be absolute for a

@@ -48,10 +48,12 @@ defmodule Vutuv.Posts.Post do
     |> cast(params, [:body], empty_values: [])
     |> update_change(:body, &String.trim/1)
     |> validate_length(:body, max: @max_body_length)
-    # Post bodies never embed images: uploaded pictures are attachments shown as
-    # a gallery, not inline in the prose. The renderer also drops any `<img>` at
-    # display time (`VutuvWeb.Markdown.render_post/2`); this is the storage guard.
-    |> MarkdownContent.validate_no_images()
+    # A post body may embed only its own uploaded images (`![](…)` with a
+    # `/post_images/<token>/<version>` URL, optional alignment fragment) —
+    # never a remote hotlink, which would leak every reader's IP. The renderer
+    # enforces ownership at display time (`VutuvWeb.Markdown.render_post/2`
+    # only inlines the post's own attachments); this is the storage guard.
+    |> MarkdownContent.validate_own_images_only()
     # A body may only mention handles that exist, so nobody can seed `@wanted`
     # into a post to reserve it (the anti-hijack partner of handle availability).
     |> Mentions.validate_mentions_exist()

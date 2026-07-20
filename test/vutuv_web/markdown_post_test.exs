@@ -1,11 +1,11 @@
 defmodule VutuvWeb.MarkdownPostTest do
   @moduledoc """
-  Post rendering on top of the chat pipeline: post **bodies never embed
-  images** — every `<img>` the pipeline would produce (an own-attachment
-  `![](…)` reference, a hotlinked remote picture, raw `<img>` HTML) is
-  dropped or stays escaped text. Uploaded pictures show as a separate gallery
-  (`VutuvWeb.PostComponents`), not inline in the prose. The preview
-  truncation never cuts inside a fenced code block.
+  Post rendering on top of the chat pipeline: inline images may reference
+  only the post's **own attachments** (hotlinked remote images are a tracking
+  hole — every reader's IP would leak to a third party), missing alt text is
+  filled from the stored value, an alignment fragment (`#left` / `#right` /
+  `#center`) becomes a modifier class instead of staying in the URL, and the
+  preview truncation never cuts inside a fenced code block.
   """
   use ExUnit.Case, async: true
 
@@ -20,29 +20,39 @@ defmodule VutuvWeb.MarkdownPostTest do
     text |> Markdown.render_post(images) |> Phoenix.HTML.safe_to_string()
   end
 
-  describe "render_post/2 — images are never embedded in the body" do
-    test "an own-attachment reference is dropped, not rendered as an <img>" do
+  describe "render_post/2 — inline images" do
+    test "renders an own-attachment reference as an <img> with stored alt" do
       html =
         render_post("Look:\n\n![](/post_images/tok123/large.avif)", [image("tok123", "A sunset")])
 
-      refute html =~ "<img"
-      refute html =~ "large.avif"
-      assert html =~ "Look"
+      assert html =~ ~s(src="/post_images/tok123/large.avif")
+      assert html =~ ~s(alt="A sunset")
+      assert html =~ ~s(loading="lazy")
+      assert html =~ ~s(width="800")
+      assert html =~ ~s(class="post-inline-image")
     end
 
-    test "a legacy .webp reference in an old body is dropped too" do
+    test "a legacy .webp reference in an old body renders with the canonical src" do
       html =
         render_post("Look:\n\n![](/post_images/tok123/large.webp)", [image("tok123", "A sunset")])
 
-      refute html =~ "<img"
+      assert html =~ ~s(src="/post_images/tok123/large.avif")
       refute html =~ "large.webp"
     end
 
-    test "the stored alt text never reaches the output" do
-      html = render_post("![](/post_images/tok123/feed.avif)", [image("tok123", "A sunset")])
+    test "an explicit markdown alt wins over the stored one" do
+      html =
+        render_post("![Inline alt](/post_images/tok123/feed.avif)", [image("tok123", "DB alt")])
 
-      refute html =~ "<img"
-      refute html =~ "A sunset"
+      assert html =~ ~s(alt="Inline alt")
+      refute html =~ "DB alt"
+    end
+
+    test "the same attachment can be referenced twice" do
+      text = "![](/post_images/t/large.avif)\n\n![](/post_images/t/large.avif)"
+      html = render_post(text, [image("t")])
+
+      assert length(String.split(html, "<img")) == 3
     end
 
     test "drops hotlinked remote images entirely" do
@@ -54,6 +64,18 @@ defmodule VutuvWeb.MarkdownPostTest do
       assert html =~ "after"
     end
 
+    test "drops references to images of other posts" do
+      html = render_post("![](/post_images/foreign/large.avif)", [image("mine")])
+
+      refute html =~ "<img"
+    end
+
+    test "never resolves the original through an inline reference" do
+      html = render_post("![](/post_images/t/original.jpg)", [image("t")])
+
+      refute html =~ "<img"
+    end
+
     test "raw <img> HTML typed by the author stays escaped text" do
       html = render_post(~s(<img src="/post_images/t/large.avif">), [image("t")])
 
@@ -61,19 +83,62 @@ defmodule VutuvWeb.MarkdownPostTest do
       assert html =~ "&lt;img"
     end
 
-    test "a hostile stored alt cannot inject markup" do
+    test "escapes hostile stored alt text" do
       hostile = ~s["><script>alert(1)</script>"]
       html = render_post("![](/post_images/t/large.avif)", [image("t", hostile)])
 
       refute html =~ "<script>"
-      refute html =~ "<img"
+      assert html =~ "&lt;script&gt;"
     end
 
-    test "the rest of the markdown still renders around a dropped image" do
+    test "the rest of the markdown still renders" do
       html = render_post("**bold** and ![](/post_images/t/feed.avif)", [image("t")])
 
       assert html =~ "<strong>bold</strong>"
-      refute html =~ "<img"
+      assert html =~ "<img"
+    end
+  end
+
+  describe "render_post/2 — alignment fragments" do
+    test "#left becomes the --left modifier and leaves the served URL clean" do
+      html = render_post("![](/post_images/t/feed.avif#left)", [image("t")])
+
+      assert html =~ ~s(class="post-inline-image post-inline-image--left")
+      assert html =~ ~s(src="/post_images/t/feed.avif")
+      refute html =~ "#left"
+    end
+
+    test "#right and #center map to their modifiers" do
+      html =
+        render_post(
+          "![](/post_images/a/feed.avif#right)\n\n![](/post_images/b/feed.avif#center)",
+          [image("a"), image("b")]
+        )
+
+      assert html =~ "post-inline-image--right"
+      assert html =~ "post-inline-image--center"
+    end
+
+    test "no fragment means full width: the bare base class" do
+      html = render_post("![](/post_images/t/feed.avif)", [image("t")])
+
+      assert html =~ ~s(class="post-inline-image")
+      refute html =~ "post-inline-image--"
+    end
+
+    test "an unknown fragment renders full width instead of breaking the reference" do
+      html = render_post("![](/post_images/t/feed.avif#sparkle)", [image("t")])
+
+      assert html =~ ~s(class="post-inline-image")
+      refute html =~ "post-inline-image--"
+      refute html =~ "#sparkle"
+    end
+
+    test "a legacy .webp reference still honors its fragment" do
+      html = render_post("![](/post_images/t/large.webp#left)", [image("t")])
+
+      assert html =~ "post-inline-image--left"
+      assert html =~ ~s(src="/post_images/t/large.avif")
     end
   end
 

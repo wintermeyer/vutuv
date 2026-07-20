@@ -28,9 +28,11 @@ Messages carry **no images**: `Vutuv.MarkdownContent.validate_no_images/2` in
 path (the web composer and `POST …/messages` alike — a 422 for the API), and
 `VutuvWeb.Markdown.render/1` drops any `<img>` at display time, so a legacy body
 never shows one. The Milkdown editor also strips image nodes client-side, so a
-pasted picture never survives (`assets/js/markdown_editor.js`). Posts share the
-same rule (`Vutuv.Posts.Post` + [posts-and-feed.md](posts-and-feed.md)); their
-uploaded pictures are attachments shown as a gallery, messages have none.
+pasted picture never survives (`assets/js/markdown_editor.js` — the message
+composer does not set the editor's `images` option). **Posts differ**: a post
+body may embed the post's own uploaded attachments inline
+([posts-and-feed.md](posts-and-feed.md)); messages have no uploads, so their
+bodies stay image-free.
 
 Each member controls this on the notifications settings page: whether they are
 emailed about **every** unread message or only the **first** of a burst (the

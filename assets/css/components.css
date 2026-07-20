@@ -1145,12 +1145,47 @@ ul.thumbs li .text .url a {
   vertical-align: top;
 }
 .markdown th { font-weight: 600; }
-/* Inline post images (own attachments referenced via ![](…)). */
+/* Inline post images (own attachments referenced via ![](…)). The alignment
+   modifiers come from the `#left`/`#right`/`#center` src fragment the author
+   chose in the composer (VutuvWeb.Markdown maps fragment → class; no fragment
+   = full text width). Floats get half the measure and the body text wraps
+   around them; on phones the column is too narrow for a float, so both
+   collapse to full width. */
 .markdown img.post-inline-image {
   border-radius: 8px;
   height: auto;
   margin: 0.5em 0;
   max-width: 100%;
+}
+.markdown img.post-inline-image--left {
+  float: left;
+  margin: 0.25em 1em 0.75em 0;
+  max-width: 50%;
+}
+.markdown img.post-inline-image--right {
+  float: right;
+  margin: 0.25em 0 0.75em 1em;
+  max-width: 50%;
+}
+.markdown img.post-inline-image--center {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (width < 40rem) {
+  .markdown img.post-inline-image--left,
+  .markdown img.post-inline-image--right {
+    float: none;
+    margin: 0.5em 0;
+    max-width: 100%;
+  }
+}
+/* Contain the floats: without this a tall floated image would spill past the
+   body into the gallery/tags below the post. */
+.markdown--post::after {
+  clear: both;
+  content: "";
+  display: block;
 }
 
 /* Full-screen mobile chat (the /messages LiveView, marked with
@@ -1250,6 +1285,38 @@ ul.thumbs li .text .url a {
 .mde[data-mde-fullscreen="1"] [data-mde-cmd="fullscreen"] {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+/* Inline post images (post composer only). The alignment button group appears
+   while an image node is selected (the hook stamps data-mde-img on the root);
+   the active alignment is aria-pressed. The prose previews the alignment
+   straight off the src's #fragment, mirroring the read-side
+   `.post-inline-image--*` rules. */
+.mde__group--image { display: none; }
+.mde[data-mde-img="1"] .mde__group--image { display: flex; }
+.mde__btn[aria-pressed="true"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.mde__mount .ProseMirror img {
+  border-radius: 8px;
+  height: auto;
+  max-width: 100%;
+}
+.mde__mount .ProseMirror img[src$="#left"] {
+  float: left;
+  margin: 0.25em 1em 0.75em 0;
+  max-width: 50%;
+}
+.mde__mount .ProseMirror img[src$="#right"] {
+  float: right;
+  margin: 0.25em 0 0.75em 1em;
+  max-width: 50%;
+}
+.mde__mount .ProseMirror img[src$="#center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Mobile: collapse the toolbar to a single row — the inline group + the MD /
@@ -1579,6 +1646,10 @@ body.mde-fullscreen-lock { overflow: hidden; }
   .mde__btn:hover { background: #334155; color: #f1f5f9; }
   .mde[data-mde-mode="source"] [data-mde-cmd="mode"],
   .mde[data-mde-fullscreen="1"] [data-mde-cmd="fullscreen"] {
+    background: #1e3a8a;
+    color: #dbeafe;
+  }
+  .mde__btn[aria-pressed="true"] {
     background: #1e3a8a;
     color: #dbeafe;
   }

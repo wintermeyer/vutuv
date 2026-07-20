@@ -114,7 +114,17 @@ config :vutuv, Vutuv.Repo,
   password: "postgres",
   database: "vutuv1_test#{System.get_env("MIX_TEST_PARTITION")}",
   hostname: System.get_env("DATABASE_HOST", "localhost"),
-  pool: Ecto.Adapters.SQL.Sandbox
+  pool: Ecto.Adapters.SQL.Sandbox,
+  # The suite runs ~20 async cases; the default pool (10) plus the default
+  # 50ms/1s queue budget starves setup checkouts on a loaded dev machine
+  # (observed 2026-07-20: dozens of "connection not available and request was
+  # dropped from queue" failures at test SETUP while the same tree was green
+  # at --max-cases 6, and identical on a clean main — purely environmental).
+  # One connection per concurrent case plus headroom, and a patient queue:
+  # correctness never depends on checkout latency in tests.
+  pool_size: 30,
+  queue_target: 500,
+  queue_interval: 5_000
 
 config :vutuv, Vutuv.Mailer, adapter: Swoosh.Adapters.Test
 

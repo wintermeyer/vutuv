@@ -9,6 +9,7 @@ defmodule VutuvWeb.PostFeedLiveTest do
   import Phoenix.LiveViewTest
 
   alias Vutuv.Posts
+  alias Vutuv.Posts.PostImage
 
   defp other_user(attrs \\ []), do: insert(:user, Keyword.merge([email_confirmed?: true], attrs))
 
@@ -294,11 +295,11 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "/post_images/#{attached.token}/feed.avif"
     end
 
-    test "an uploaded image gets alt + remove controls but no inline-insert action", %{
+    test "an uploaded image gets alt + remove + inline-insert controls", %{
       conn: conn
     } do
       tmp =
-        Path.join(System.tmp_dir!(), "vutuv_feed_noinline_#{System.unique_integer([:positive])}")
+        Path.join(System.tmp_dir!(), "vutuv_feed_inline_#{System.unique_integer([:positive])}")
 
       File.mkdir_p!(tmp)
       prev = Application.get_env(:vutuv, :uploads_dir_prefix)
@@ -329,9 +330,30 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert render(live) =~ "Add images"
       assert has_element?(live, ~s([phx-click="remove-image"]))
 
-      # But there is no way to embed the image inside the Markdown body: the
-      # "Insert into text" action is gone.
-      refute has_element?(live, ~s([phx-click="insert-inline"]))
+      # The completed upload is announced to the editor hook (which decides
+      # whether this file was dropped/pasted into the prose and should be
+      # inserted at the cursor).
+      assert_push_event(live, "mde-image-uploaded", %{
+        editor: "composer-body",
+        name: "photo.png",
+        url: "/post_images/" <> _
+      })
+
+      # Each thumbnail row offers "Insert into text": clicking it tells the
+      # editor hook to place the image at the cursor.
+      assert has_element?(live, ~s([phx-click="insert-inline"]))
+      [image] = Vutuv.Repo.all(PostImage)
+
+      live
+      |> element(~s(button[phx-click="insert-inline"][phx-value-id="#{image.id}"]))
+      |> render_click()
+
+      expected_url = PostImage.url(image, "feed")
+
+      assert_push_event(live, "mde-insert-image", %{
+        editor: "composer-body",
+        url: ^expected_url
+      })
     end
 
     test "a refused file is named in a persistent error and the composer recovers", %{

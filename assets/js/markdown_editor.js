@@ -19,11 +19,19 @@
 // WYSIWYG. Milkdown's gfm() preset bundles task lists, so we compose the gfm
 // pieces we want by hand rather than using the whole preset.
 //
-// Images are excluded too: post bodies never embed pictures inline (uploaded
-// images are shown as a gallery, not in the prose), and VutuvWeb.Markdown drops
-// every `![](…)` at render time. commonmark bundles an image node, so a pasted
-// picture or a typed `![alt](src)` would otherwise create one; the stripImages
-// plugin below removes any image node so the editor stays honest to what renders.
+// Images are policy-gated: only the post composer enables them
+// (data-mde-images), and even there an image node survives only when its src is
+// an own-upload proxy URL (`/post_images/…`) — mirroring the server, where
+// VutuvWeb.Markdown renders exactly those references and drops everything else
+// (a hotlinked remote picture would leak every reader's IP). Message and other
+// bodies keep stripping every image node. Upload flow: a file dropped or pasted
+// into the prose (or picked via the 🖼 toolbar button) is forwarded to the
+// form's LiveView file input; the server processes it eagerly and answers with
+// an `mde-image-uploaded` push event, at which point the hook inserts the image
+// at the remembered cursor position. The thumbnail row's "Insert" button pushes
+// `mde-insert-image` for an explicit at-cursor insert. An image's alignment
+// lives as a `#left`/`#right`/`#center` src fragment (no fragment = full
+// width), edited via the toolbar's img-* buttons while an image is selected.
 import { Editor, rootCtx, defaultValueCtx, editorViewCtx } from "@milkdown/kit/core"
 import {
   commonmark,
@@ -43,7 +51,12 @@ import { listener, listenerCtx } from "@milkdown/kit/plugin/listener"
 import { history } from "@milkdown/kit/plugin/history"
 import { callCommand, getMarkdown, replaceAll } from "@milkdown/kit/utils"
 import { $prose } from "@milkdown/kit/utils"
-import { Plugin, PluginKey } from "@milkdown/kit/prose/state"
+import {
+  Plugin,
+  PluginKey,
+  NodeSelection,
+  TextSelection,
+} from "@milkdown/kit/prose/state"
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view"
 
 // The gfm bits we want, minus task lists (extendListItemSchemaForTask +
@@ -106,28 +119,85 @@ const placeholder = (text) =>
       })
   )
 
-// Keep the editor image-free: strip any image node the schema might create from
-// a pasted picture or a typed `![alt](src)`. Mirrors the server-side drop in
-// VutuvWeb.Markdown.render_post/2, so the WYSIWYG never shows an image that the
-// rendered post would silently omit.
-const stripImages = $prose(
-  () =>
-    new Plugin({
-      key: new PluginKey("MDE_NO_IMAGES"),
-      appendTransaction(transactions, _oldState, newState) {
-        if (!transactions.some((tr) => tr.docChanged)) return null
-        const ranges = []
-        newState.doc.descendants((node, pos) => {
-          if (node.type.name === "image") ranges.push([pos, pos + node.nodeSize])
-        })
-        if (ranges.length === 0) return null
-        const tr = newState.tr
-        // Delete from the end so the earlier positions stay valid.
-        ranges.reverse().forEach(([from, to]) => tr.delete(from, to))
-        return tr
-      },
-    })
-)
+// The image src forms the server renders: an own-upload proxy URL, optionally
+// with an alignment fragment. Everything else is deleted from the prose so the
+// WYSIWYG never shows an image the rendered post would silently omit.
+const OWN_IMAGE_SRC = /^\/post_images\/[A-Za-z0-9_-]+\/(thumb|feed|large)\.(avif|webp)(#(left|right|center))?$/
+
+// Image policy: with images disabled (messages, org/job descriptions) every
+// image node is stripped — commonmark bundles the node type, so a pasted
+// picture or a typed `![alt](src)` would otherwise create one. With images
+// enabled (the post composer) only own-upload srcs survive; a pasted remote
+// image still vanishes, mirroring the server-side drop in
+// VutuvWeb.Markdown.render_post/2.
+const imagePolicy = (allowImages) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("MDE_IMAGE_POLICY"),
+        appendTransaction(transactions, _oldState, newState) {
+          if (!transactions.some((tr) => tr.docChanged)) return null
+          const ranges = []
+          newState.doc.descendants((node, pos) => {
+            if (node.type.name !== "image") return
+            const ok = allowImages && OWN_IMAGE_SRC.test(node.attrs.src || "")
+            if (!ok) ranges.push([pos, pos + node.nodeSize])
+          })
+          if (ranges.length === 0) return null
+          const tr = newState.tr
+          // Delete from the end so the earlier positions stay valid.
+          ranges.reverse().forEach(([from, to]) => tr.delete(from, to))
+          return tr
+        },
+      })
+  )
+
+// Watches the selection so the toolbar can reveal the alignment buttons while
+// an image node is selected (and mark the active alignment on them).
+const imageSelectionWatch = (hook) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("MDE_IMAGE_SELECT"),
+        view: () => ({
+          update: (view) => hook.syncImageSelection(view),
+        }),
+      })
+  )
+
+// Files dropped or pasted into the prose become uploads: remember where they
+// should land, hand them to the form's LiveView file input and swallow the
+// browser/ProseMirror default (which would navigate away or inline a data
+// URI the server could never render).
+const imageFileCapture = (hook) =>
+  $prose(
+    () =>
+      new Plugin({
+        key: new PluginKey("MDE_IMAGE_FILES"),
+        props: {
+          handleDOMEvents: {
+            drop: (view, event) => {
+              const files = imageFiles(event.dataTransfer)
+              if (files.length === 0) return false
+              const coords = view.posAtCoords({ left: event.clientX, top: event.clientY })
+              hook.captureFiles(files, coords ? coords.pos : view.state.selection.head)
+              event.preventDefault()
+              return true
+            },
+            paste: (view, event) => {
+              const files = imageFiles(event.clipboardData)
+              if (files.length === 0) return false
+              hook.captureFiles(files, view.state.selection.head)
+              event.preventDefault()
+              return true
+            },
+          },
+        },
+      })
+  )
+
+const imageFiles = (transfer) =>
+  Array.from(transfer?.files || []).filter((f) => f.type.startsWith("image/"))
 
 // Toolbar button (data-mde-cmd) -> Milkdown command. Each returns the command
 // key + optional payload; `link` is special-cased (it needs a URL).
@@ -164,10 +234,16 @@ export const MarkdownEditor = {
     // keystroke re-renders the composer). applyState() re-stamps it in updated().
     this.mode = "wysiwyg"
     this.fullscreen = false
+    this.imagesEnabled = this.root.dataset.mdeImages === "1"
+    this.imageSelected = false
+    // Files this editor sent to the upload input, waiting for the server's
+    // `mde-image-uploaded` echo: [{name, pos}] — pos is where they were
+    // dropped/pasted (null = current cursor at insert time).
+    this.insertQueue = []
 
     const placeholderText = this.root.dataset.mdePlaceholder || ""
 
-    this.editor = await Editor.make()
+    let editor = Editor.make()
       .config((ctx) => {
         ctx.set(rootCtx, this.mountEl)
         ctx.set(defaultValueCtx, this.source.value)
@@ -181,8 +257,14 @@ export const MarkdownEditor = {
       .use(listener)
       .use(history)
       .use(placeholder(placeholderText))
-      .use(stripImages)
-      .create()
+      .use(imagePolicy(this.imagesEnabled))
+
+    if (this.imagesEnabled) {
+      editor = editor.use(imageSelectionWatch(this)).use(imageFileCapture(this))
+      this.wireImageEvents()
+    }
+
+    this.editor = await editor.create()
 
     this.applyState()
     this.wireToolbar()
@@ -210,6 +292,7 @@ export const MarkdownEditor = {
     this.root.dataset.mdeReady = "1"
     this.root.dataset.mdeMode = this.mode
     this.root.dataset.mdeFullscreen = this.fullscreen ? "1" : "0"
+    this.root.dataset.mdeImg = this.imageSelected ? "1" : "0"
   },
 
   destroyed() {
@@ -305,11 +388,152 @@ export const MarkdownEditor = {
     if (name === "fullscreen") return this.toggleFullscreen()
     if (name === "toggle-toolbar") return this.toggleToolbar()
     if (name === "link") return this.runLink()
+    if (name === "image") return this.pickImage()
+    if (name.startsWith("img-")) return this.setImageAlignment(name.slice(4))
     const spec = COMMANDS[name]
     if (!spec || !this.editor) return
     const [command, payload] = spec
     this.editor.action(callCommand(command.key, payload))
     this.focusEditor()
+  },
+
+  // --- inline images (post composer only) ---
+
+  // Server → hook events. `mde-image-uploaded` fires for every finished upload
+  // (whoever initiated it); only files this editor forwarded — dropped, pasted
+  // or toolbar-picked — sit in the insertQueue and get placed into the prose.
+  // `mde-insert-image` is the thumbnail row's explicit "Insert into text".
+  wireImageEvents() {
+    this.handleEvent("mde-image-uploaded", (payload) => {
+      if (payload.editor !== this.el.id) return
+      const index = this.insertQueue.findIndex((entry) => entry.name === payload.name)
+      if (index === -1) return
+      const [entry] = this.insertQueue.splice(index, 1)
+      this.insertImage(payload.url, payload.alt, entry.pos)
+    })
+
+    this.handleEvent("mde-insert-image", (payload) => {
+      if (payload.editor !== this.el.id) return
+      this.insertImage(payload.url, payload.alt, null)
+    })
+
+    // The 🖼 toolbar button clicks the form's (visually hidden) LiveView file
+    // input. Its change event is how we learn which files were picked; the
+    // listener is delegated to the form so it survives LiveView re-renders.
+    this.source.form?.addEventListener("change", (e) => {
+      if (!this.pendingPickInsert) return
+      if (!(e.target instanceof HTMLInputElement) || e.target.type !== "file") return
+      this.pendingPickInsert = false
+      const pos = this.savedInsertPos
+      for (const file of imageFiles(e.target)) {
+        this.insertQueue.push({ name: file.name, pos })
+      }
+    })
+  },
+
+  fileInput() {
+    return this.source.form?.querySelector('input[type="file"]')
+  },
+
+  pickImage() {
+    const input = this.fileInput()
+    if (!input) return
+    this.pendingPickInsert = true
+    this.savedInsertPos = this.editorSelectionHead()
+    input.click()
+  },
+
+  // Dropped/pasted files: queue their names for insertion at `pos`, then hand
+  // them to the LiveView file input (assigning `files` + firing input/change is
+  // the programmatic path into `allow_upload`; the server answers each with an
+  // `mde-image-uploaded` push event once processed).
+  captureFiles(files, pos) {
+    const input = this.fileInput()
+    if (!input) return
+    for (const file of files) this.insertQueue.push({ name: file.name, pos })
+    const transfer = new DataTransfer()
+    files.forEach((file) => transfer.items.add(file))
+    input.files = transfer.files
+    input.dispatchEvent(new Event("input", { bubbles: true }))
+    input.dispatchEvent(new Event("change", { bubbles: true }))
+  },
+
+  editorSelectionHead() {
+    if (!this.editor) return null
+    let head = null
+    this.editor.action((ctx) => {
+      head = ctx.get(editorViewCtx).state.selection.head
+    })
+    return head
+  },
+
+  // Place an image node into the prose at `pos` (null = current cursor; the
+  // position is clamped — the doc may have changed while the upload ran). In
+  // source mode append the Markdown to the textarea instead.
+  insertImage(url, alt, pos) {
+    if (!this.editor || this.mode === "source") return this.insertImageSource(url, alt)
+
+    this.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const { state } = view
+      const type = state.schema.nodes.image
+      if (!type) return
+      const at = Math.min(pos ?? state.selection.head, state.doc.content.size)
+      // TextSelection.near finds the closest valid text position (an inline
+      // image can't sit between two block nodes).
+      const selection = TextSelection.near(state.doc.resolve(at))
+      const tr = state.tr.setSelection(selection)
+      tr.replaceSelectionWith(type.create({ src: url, alt: alt || "" }), false)
+      view.dispatch(tr)
+      view.focus()
+    })
+  },
+
+  insertImageSource(url, alt) {
+    const md = `![${alt || ""}](${url})`
+    const at = this.source.selectionStart ?? this.source.value.length
+    const value = this.source.value
+    this.source.value = `${value.slice(0, at)}${md}${value.slice(at)}`
+    this.source.dispatchEvent(new Event("input", { bubbles: true }))
+  },
+
+  // Rewrite the selected image's alignment fragment ("full" clears it). The
+  // fragment is the persisted form (part of the Markdown src); CSS previews it
+  // in the editor and VutuvWeb.Markdown turns it into the modifier class.
+  setImageAlignment(alignment) {
+    if (!this.editor) return
+    this.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      const { state } = view
+      const selection = state.selection
+      if (!(selection instanceof NodeSelection) || selection.node.type.name !== "image") return
+      const base = (selection.node.attrs.src || "").split("#")[0]
+      const src = alignment === "full" ? base : `${base}#${alignment}`
+      let tr = state.tr.setNodeMarkup(selection.from, undefined, {
+        ...selection.node.attrs,
+        src,
+      })
+      tr = tr.setSelection(NodeSelection.create(tr.doc, selection.from))
+      view.dispatch(tr)
+      view.focus()
+    })
+  },
+
+  // Reveal the alignment buttons while an image is selected and mark the
+  // active choice (aria-pressed drives the button styling).
+  syncImageSelection(view) {
+    const selection = view.state.selection
+    const node =
+      selection instanceof NodeSelection && selection.node.type.name === "image"
+        ? selection.node
+        : null
+    this.imageSelected = node !== null
+    this.root.dataset.mdeImg = this.imageSelected ? "1" : "0"
+    const active = node ? (node.attrs.src || "").split("#")[1] || "full" : null
+    for (const name of ["full", "left", "center", "right"]) {
+      const btn = this.toolbar?.querySelector(`[data-mde-cmd="img-${name}"]`)
+      if (btn) btn.setAttribute("aria-pressed", String(active === name))
+    }
   },
 
   // Mobile: expand/collapse the extra toolbar groups. The class lives on the

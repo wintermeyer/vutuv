@@ -34,28 +34,56 @@ defmodule VutuvWeb.PostControllerTest do
       assert get_resp_header(conn, "x-robots-tag") == []
     end
 
-    test "an attached image renders as a gallery attachment, never inline in the body", %{
+    test "an inline-referenced attachment renders in place; the rest stays in the gallery", %{
       conn: conn
     } do
       user = insert_activated_user()
+      ref = insert(:post_image, user: user, post: nil, token: "reftok", alt: "A chart")
+      gal = insert(:post_image, user: user, post: nil, token: "galtok", alt: "Extra")
 
-      post = create_post!(user, %{body: "See the chart:"})
-      insert(:post_image, user: user, post: post, token: "galtok", alt: "A chart")
-
-      # A legacy body that still carries an inline `![](…)` reference (predating
-      # the no-images rule, so written straight to the row past the changeset):
-      # the picture must still show — as a gallery attachment below the body —
-      # but must never be embedded inside the Markdown prose.
-      Vutuv.Repo.update_all(
-        from(p in Vutuv.Posts.Post, where: p.id == ^post.id),
-        set: [body: "See the chart:\n\n![](/post_images/galtok/large.avif)"]
-      )
+      post =
+        create_post!(user, %{
+          body: "See the chart:\n\n![](/post_images/reftok/feed.avif#left)",
+          image_ids: [ref.id, gal.id]
+        })
 
       conn = get(conn, Posts.path(post))
       html = html_response(conn, 200)
 
+      # The referenced image renders inline with its alignment modifier…
+      assert html =~ ~s(class="post-inline-image post-inline-image--left")
+      # …exactly once (de-duplicated out of the gallery below the body)…
+      assert length(String.split(html, "/post_images/reftok/feed.avif")) == 2
+      # …while the unreferenced attachment still shows as a gallery tile.
       assert html =~ "/post_images/galtok/feed.avif"
+    end
+
+    test "a pending inline image is held from strangers but shown to its author", %{conn: conn} do
+      {author_conn, author} = create_and_login_user(fresh_conn())
+
+      image =
+        insert(:post_image, user: author, post: nil, token: "pendtok", moderation: "pending")
+
+      post =
+        create_post!(author, %{
+          body: "Fresh:\n\n![](/post_images/pendtok/feed.avif)",
+          image_ids: [image.id]
+        })
+
+      # Anonymous: no <img> points at the unreleased picture — the body shows
+      # no inline image and the gallery shows the neutral placecard. (The raw
+      # Markdown source still carries the reference — JSON-LD articleBody and
+      # the .md sibling serve the source verbatim — but the bytes behind the
+      # unguessable URL stay proxy-gated until the scan releases them.)
+      html = html_response(get(conn, Posts.path(post)), 200)
       refute html =~ "post-inline-image"
+      refute html =~ ~s(src="/post_images/pendtok)
+      assert html =~ "data-image-placecards"
+
+      # The author keeps seeing their own picture inline while it is checked.
+      author_html = html_response(get(author_conn, Posts.path(post)), 200)
+      assert author_html =~ ~s(class="post-inline-image")
+      assert author_html =~ "/post_images/pendtok/feed.avif"
     end
 
     test "redirects non-canonical URLs to the canonical form", %{conn: conn} do

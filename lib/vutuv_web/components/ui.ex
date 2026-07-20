@@ -126,6 +126,16 @@ defmodule VutuvWeb.UI do
   attr(:rows, :integer, default: 6, doc: "rows of the source/fallback textarea")
   attr(:submit_on, :string, default: nil, values: [nil, "cmd-enter"])
   attr(:compact, :boolean, default: false, doc: "tighter min-height (messages)")
+
+  attr(:images, :boolean,
+    default: false,
+    doc:
+      "allow inline post images: enables the 🖼 toolbar button (opens the form's " <>
+        "file input), drop/paste-to-upload, the per-image alignment controls and " <>
+        "own-upload `![](…)` nodes in the prose. Post composer only — message, " <>
+        "organization and job bodies stay image-free"
+  )
+
   attr(:class, :string, default: nil)
   attr(:rest, :global)
 
@@ -137,6 +147,7 @@ defmodule VutuvWeb.UI do
       data-mde-value={@value}
       data-mde-placeholder={@placeholder}
       data-mde-submit={@submit_on}
+      data-mde-images={@images && "1"}
       data-mde-link-prompt={gettext("Link URL")}
       class={["mde", @compact && "mde--compact", @class]}
       {@rest}
@@ -158,6 +169,30 @@ defmodule VutuvWeb.UI do
             </.mde_button>
             <.mde_button cmd="link" title={gettext("Link")}>
               <.mde_icon d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+            </.mde_button>
+            <.mde_button :if={@images} cmd="image" title={gettext("Insert image")}>
+              <.mde_icon d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Z" />
+            </.mde_button>
+          </div>
+
+          <%!-- Image alignment: shown only while an image node is selected in
+          the prose (the hook stamps data-mde-img on the root). The choice is
+          stored as a `#left`/`#right`/`#center` fragment on the image src; no
+          fragment = full text width (VutuvWeb.Markdown maps it to the
+          post-inline-image--* modifier at render time). --%>
+          <div :if={@images} class="mde__group mde__group--image">
+            <span class="mde__sep" aria-hidden="true"></span>
+            <.mde_button cmd="img-full" title={gettext("Full width")}>
+              <.mde_icon d="M3 5h18v10H3zM3 19h18" />
+            </.mde_button>
+            <.mde_button cmd="img-left" title={gettext("Float left")}>
+              <.mde_icon d="M3 5h8v8H3zM14 6h7M14 10h7M3 17h18" />
+            </.mde_button>
+            <.mde_button cmd="img-center" title={gettext("Center")}>
+              <.mde_icon d="M8 5h8v8H8zM3 17h18" />
+            </.mde_button>
+            <.mde_button cmd="img-right" title={gettext("Float right")}>
+              <.mde_icon d="M13 5h8v8h-8zM3 6h7M3 10h7M3 17h18" />
             </.mde_button>
           </div>
 

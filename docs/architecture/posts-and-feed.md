@@ -213,16 +213,29 @@ retained past account deletion.
 Post images are uploaded eagerly in the composer (abandoned uploads are swept
 after a day), up to 10 per post, 6 MB each (`jpg/png/webp`, plus `heic` when the
 libvips build can decode it — capability-detected via `priv/heic_probe.heic`).
-Attachments are shown as a **gallery** below the post; post **bodies never embed
-images inline**. Two guards, one at each end: `Vutuv.MarkdownContent.validate_no_images/2`
-in `Post.changeset` rejects a body with image Markdown (`![](…)`) on every write
-path (the composer and `POST /api/2.0/posts` alike — a 422 for the API), and
-`VutuvWeb.Markdown.render_post/2` drops every `<img>` at display time (so a
-legacy inline reference in an old body, or a hotlinked remote picture, never
-renders). The composer offers no "insert into text" action, and the Milkdown
-editor strips image nodes client-side. The `VutuvWeb.PostComponents` card renders
-`post.images` as the gallery/thumbnail row. Direct messages share the same rule
-(`Vutuv.Chat.Message` + [messages.md](messages.md)).
+
+A post body may embed its uploads **inline**: `![alt](/post_images/<token>/<version>)`,
+optionally with an alignment fragment (`#left` / `#right` float beside the
+wrapping text, `#center`, no fragment = full text width).
+`VutuvWeb.Markdown.render_post/2` renders **only** the post's own attachments
+(marker swap before the pipeline, injection after; the fragment becomes a
+`post-inline-image--*` modifier class and never reaches the served URL) and
+drops every other `<img>` — a hotlinked remote picture would leak each
+reader's IP, so `Vutuv.MarkdownContent.validate_own_images_only/2` in
+`Post.changeset` also rejects any non-own-upload `![](…)` at write time (the
+composer and `POST /api/2.0/posts` alike — a 422 for the API). In the composer,
+files can be dropped/pasted straight into the prose or picked via the 🖼
+toolbar button (both insert at the cursor once uploaded, via the
+`mde-image-uploaded` / `mde-insert-image` push events), each thumbnail row has
+an explicit "Insert into text", and selecting an image in the editor reveals
+the alignment buttons. Attachments the body does **not** reference render as
+the gallery below the post (`VutuvWeb.PostComponents` de-duplicates via
+`PostImage.referenced_in?/2`); previews render no inline images (attachments
+show as the thumbnail row). Anonymous surfaces (RSS, ActivityPub, JSON-LD,
+agent docs) inline only AI-**released** images. Direct messages stay
+image-free (`Vutuv.MarkdownContent.validate_no_images/2` in
+`Vutuv.Chat.Message` + [messages.md](messages.md)), as do organization and
+job-posting descriptions.
 
 All served versions are AVIF (see [images.md](images.md)), EXIF-autorotated and
 **metadata-stripped** (no GPS leaks); the original keeps its metadata in the

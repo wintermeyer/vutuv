@@ -89,7 +89,9 @@ defmodule VutuvWeb.Feeds do
 
   defp rendered_body(post) do
     post.body
-    |> VutuvWeb.Markdown.render_post(post.images)
+    # An RSS reader is an anonymous viewer: only AI-released images may
+    # render inline (the unreleased rest simply stays absent).
+    |> VutuvWeb.Markdown.render_post(Posts.released_images(post))
     |> Phoenix.HTML.safe_to_string()
     |> absolutize_urls()
   end
