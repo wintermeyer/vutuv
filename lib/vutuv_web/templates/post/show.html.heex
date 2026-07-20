@@ -1,5 +1,9 @@
 <div class="py-6">
-  <div class="mx-auto max-w-2xl">
+  <%!-- max-w-3xl (768px): posts can be image-rich articles now (inline images,
+  floats at half width), and the old max-w-2xl left the dedicated reading page
+  narrower than the feed's content column (~760px). ~75 chars/line keeps
+  text-only posts readable; wider would overshoot the comfortable measure. --%>
+  <div class="mx-auto max-w-3xl">
     <%!-- Posts carry no title, so give the permalink page its one <h1> for the
     heading hierarchy (crawlers, screen readers) without a visible title on the
     card — the same sr-only pattern <.page_header> uses for crumbs-only pages. --%>
