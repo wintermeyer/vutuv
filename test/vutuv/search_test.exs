@@ -167,8 +167,10 @@ defmodule Vutuv.SearchTest do
       assert %{first_name: "stefan", last_name: "meier"} =
                Search.parse("first:stefan last:meier")
 
-      assert %{tag: "elixir", scope: :people} = Search.parse("tag:elixir")
-      assert %{tag: "elixir", scope: :people} = Search.parse("skill:elixir")
+      # tag:/skill: now spans people and posts (issue #946), so it no longer
+      # pins the scope to :people — it leaves the scope free (default :all).
+      assert %{tag: "elixir", scope: :all, scope_pinned?: false} = Search.parse("tag:elixir")
+      assert %{tag: "elixir", scope: :all} = Search.parse("skill:elixir")
       assert %{slug: "stefan", scope: :people} = Search.parse("@stefan")
       assert %{city: "koblenz", scope: :people} = Search.parse("ort:koblenz")
       assert %{city: "koblenz"} = Search.parse("stadt:koblenz")
@@ -190,12 +192,15 @@ defmodule Vutuv.SearchTest do
       assert %{scope: :all} = Search.parse("meier", scope: :bogus)
     end
 
-    test "people operators mark the scope as pinned, plain queries do not" do
-      assert %{scope_pinned?: true} = Search.parse("tag:php", scope: :tags)
+    test "people-only operators mark the scope as pinned, plain queries do not" do
       assert %{scope_pinned?: true} = Search.parse("city:hamburg", scope: :posts)
       assert %{scope_pinned?: true} = Search.parse("@stefan")
       assert %{scope_pinned?: false} = Search.parse("meier", scope: :tags)
       assert %{scope_pinned?: false} = Search.parse("meier")
+      # tag: spans people and posts now, so it does not pin (issue #946); it
+      # honors the chip scope like a plain query does.
+      assert %{scope_pinned?: false, scope: :posts} = Search.parse("tag:php", scope: :posts)
+      assert %{scope_pinned?: false, scope: :tags} = Search.parse("tag:php", scope: :tags)
     end
 
     test "an unknown operator stays ordinary text" do
@@ -328,6 +333,37 @@ defmodule Vutuv.SearchTest do
       results = Search.instant("müller tag:php")
 
       assert Enum.map(results.exact_people, & &1.id) == [php_mueller.id]
+    end
+
+    test "tag: also finds posts carrying that tag, matching the tag not the body (issue #946)" do
+      tag = insert(:tag, name: "PHP", slug: "php")
+      with_tag = insert(:activated_user)
+      insert(:user_tag, tag: tag, user: with_tag)
+
+      author = insert(:activated_user)
+      tagged = Vutuv.PostsHelpers.create_post!(author, %{body: "My write-up", tags: "php"})
+      _untagged = Vutuv.PostsHelpers.create_post!(author, %{body: "php but not tagged"})
+
+      results = Search.instant("tag:php")
+
+      # People AND posts both respond to the tag filter now; the untagged post
+      # that merely mentions "php" in its body stays out.
+      assert with_tag.id in Enum.map(results.exact_people, & &1.id)
+      assert Enum.map(results.posts, & &1.id) == [tagged.id]
+    end
+
+    test "the Posts scope with a tag: filter returns only posts" do
+      tag = insert(:tag, name: "PHP", slug: "php")
+      with_tag = insert(:activated_user)
+      insert(:user_tag, tag: tag, user: with_tag)
+
+      tagged =
+        Vutuv.PostsHelpers.create_post!(insert(:activated_user), %{body: "hi", tags: "php"})
+
+      results = Search.instant("tag:php", scope: :posts)
+
+      assert results.exact_people == []
+      assert Enum.map(results.posts, & &1.id) == [tagged.id]
     end
 
     test "a name combines with the city filter" do

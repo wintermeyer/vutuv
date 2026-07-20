@@ -412,7 +412,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "following"
   end
 
-  test "tag page: description, endorsed members and open positions in every format", %{tag: tag} do
+  test "tag page: description, endorsed members, open positions and posts in every format",
+       %{tag: tag, user: user} do
     tag
     |> Ecto.Changeset.change(description: "The art of connecting shores")
     |> Repo.update!()
@@ -424,9 +425,19 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "required_tags" => "Bridgebuilding"
     })
 
+    # "Posts with this tag" (#946): a public post carrying the tag surfaces on
+    # the HTML page and in every agent format.
+    create_post!(user, %{body: "Spanning the great divide today", tags: "Bridgebuilding"})
+
     rendered = formats_for("/tags/bridgebuilding")
 
-    for fact <- ["Bridgebuilding", "connecting shores", "Greta Gradient", "Bridge Architect"],
+    for fact <- [
+          "Bridgebuilding",
+          "connecting shores",
+          "Greta Gradient",
+          "Bridge Architect",
+          "Spanning the great divide"
+        ],
         do: assert_fact_everywhere(rendered, fact)
   end
 

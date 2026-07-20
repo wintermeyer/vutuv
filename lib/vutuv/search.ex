@@ -5,11 +5,11 @@ defmodule Vutuv.Search do
   `instant/2` powers the live search page: one call returns people (split
   into exact prefix matches and phonetically similar ones), tags and public
   posts. Queries support operators, parsed by `parse/2`: `vorname:`/`first:`
-  and `nachname:`/`last:` search one name field, `tag:`/`skill:` only tags,
-  `@handle` the username, and a fully quoted query (or `exact: true`) turns
-  off prefix and phonetic matching. `record_query/2` persists a settled query
-  for the search history. The original `search/2` stays as the low-level
-  name/email matcher.
+  and `nachname:`/`last:` search one name field, `tag:`/`skill:` filters both
+  people and posts carrying that tag (issue #946), `@handle` the username, and
+  a fully quoted query (or `exact: true`) turns off prefix and phonetic
+  matching. `record_query/2` persists a settled query for the search history.
+  The original `search/2` stays as the low-level name/email matcher.
   """
 
   import Ecto.Query
@@ -72,10 +72,11 @@ defmodule Vutuv.Search do
   @doc """
   Parses a raw query into what to search where. Operators: `vorname:x` /
   `first:x` and `nachname:x` / `last:x` search a single name field, `@x` the
-  username, and the people filters `tag:x` / `skill:x` (has that tag) and
-  `ort:x` / `stadt:x` / `city:x` (has an address in that city) - both
-  combinable with a name ("müller tag:php"). `status:open` / `status:looking`
-  (issue #935) filters by job-availability, honored only for a signed-in viewer.
+  username, `tag:x` / `skill:x` (has that tag) filters **both people and
+  posts** (issue #946), and the people-only filter `ort:x` / `stadt:x` /
+  `city:x` (has an address in that city) - both combinable with a name
+  ("müller tag:php"). `status:open` / `status:looking` (issue #935) filters by
+  job-availability, honored only for a signed-in viewer.
   A query wrapped in double quotes sets `exact?` (equality instead of substring
   + phonetics). Options: `:scope` (`:all | :people | :tags | :posts`, the UI
   filter; operators override it, reported back as `scope_pinned?`) and `:exact`
@@ -99,10 +100,12 @@ defmodule Vutuv.Search do
     # word (so "status:foo" degrades to free text rather than matching nothing).
     status = if fields[:status] in @status_values, do: fields[:status]
 
-    # People operators pin the scope: the UI chips cannot override them, so
-    # `scope_pinned?` lets the search page render them as disabled (#846).
+    # The people-only operators pin the scope: the UI chips cannot override
+    # them, so `scope_pinned?` lets the search page render them as disabled
+    # (#846). `tag:` is deliberately NOT here: since issue #946 it finds both
+    # people and posts, so it leaves the scope free for the chips to narrow.
     scope_pinned? =
-      Enum.any?([:tag, :first_name, :last_name, :slug, :city], &fields[&1]) or status != nil
+      Enum.any?([:first_name, :last_name, :slug, :city], &fields[&1]) or status != nil
 
     scope = if scope_pinned?, do: :people, else: valid_scope(opts[:scope])
 
@@ -559,14 +562,17 @@ defmodule Vutuv.Search do
     |> Map.new()
   end
 
-  # Posts are matched by Postgres full-text search, which is word-exact
-  # already; operators and the exact toggle do not apply to them.
+  # Posts are matched by Postgres full-text search over the body, which is
+  # word-exact already; the `tag:` operator (issue #946) additionally filters
+  # by tag, so a bare `tag:php` lists posts carrying that tag even with no body
+  # words. The exact toggle applies only to the tag match (the body query is
+  # always full-text). Nothing to search — no words and no tag — yields nothing.
   defp posts(%{scope: scope}) when scope not in [:all, :posts], do: []
-  defp posts(%{text: text}) when byte_size(text) == 0, do: []
+  defp posts(%{text: "", tag: nil}), do: []
 
   defp posts(parsed) do
     limit = if parsed.scope == :posts, do: @post_scope_limit, else: @post_limit
-    Vutuv.Posts.search_public(parsed.text, limit: limit)
+    Vutuv.Posts.search_public(parsed.text, tag: parsed.tag, exact: parsed.exact?, limit: limit)
   end
 
   @doc """

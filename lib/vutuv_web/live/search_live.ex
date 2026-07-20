@@ -267,7 +267,7 @@ defmodule VutuvWeb.SearchLive do
         id="search-scope-pinned-hint"
         class="mt-2 text-xs text-slate-600 dark:text-slate-400"
       >
-        {gettext("Your search uses a people filter such as tag: or city:, so it only finds people.")}
+        {gettext("Your search uses a people-only filter such as city: or status:, so it only finds people.")}
       </p>
 
       <p
@@ -294,7 +294,7 @@ defmodule VutuvWeb.SearchLive do
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("first:stefan")}</dt>
           <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("searches first names only (last: for last names)")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">tag:php</dt>
-          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with this tag, combinable: miller tag:php")}</dd>
+          <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("people and posts with this tag, combinable: miller tag:php")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">{gettext("city:koblenz")}</dt>
           <dd class="m-0 font-normal text-slate-600 dark:text-slate-400">{gettext("only people with an address in this city")}</dd>
           <dt class="m-0 font-mono text-slate-700 dark:text-slate-200">status:looking</dt>

@@ -10,12 +10,15 @@ similar-sounding name matches clearly separated, `?q=` plus the filters keeps
 the URL shareable and a settled query is recorded once) with scope chips
 (all/people/tags/posts), an exact-only toggle and query operators parsed by
 `Vutuv.Search.parse/2`: `vorname:`/`nachname:` (aka `first:`/`last:`),
-`@handle`, double quotes for exact, plus the combinable people filters
-`tag:`/`skill:` (has the tag), `ort:`/`stadt:`/`city:` (address in that
-city) and `status:looking` / `status:open` (job-availability, #928 — honored
-only for a signed-in viewer, logged-out search ignores it and a `hidden`
-status never matches), e.g. `müller tag:php`, `müller ort:koblenz` or
-`elixir status:open`.
+`@handle`, double quotes for exact, the combinable filter `tag:`/`skill:`
+(has the tag) which finds **both people and posts** carrying it (issue #946),
+plus the combinable people-only filters `ort:`/`stadt:`/`city:` (address in
+that city) and `status:looking` / `status:open` (job-availability, #928 —
+honored only for a signed-in viewer, logged-out search ignores it and a
+`hidden` status never matches), e.g. `müller tag:php`, `müller ort:koblenz` or
+`elixir status:open`. Only the people-only operators pin the scope to people
+(`scope_pinned?`); `tag:` leaves the scope free, so its chips still narrow to
+just people or just posts.
 
 ## Saved searches (issue #935)
 
@@ -36,3 +39,9 @@ status searches) and never leaks a member's private salary expectation.
 The search page also finds words in **fully public** posts via Postgres
 full-text search (`Vutuv.Posts.search_public/2`); how audiences keep restricted
 posts out of the results is covered in [posts-and-feed.md](posts-and-feed.md).
+A `tag:` filter narrows the same `search_public/2` to posts carrying that tag
+(an `EXISTS` over `post_tags`, name/slug match), and a bare `tag:php` with no
+body words is a pure tag listing (newest first) — the post twin of the tag
+page's "Posts with this tag" section (`Vutuv.Posts.list_tag_posts/1`, issue
+#946), which lists the public posts filed under a tag so a tag used only in
+posts no longer opens an empty page.
