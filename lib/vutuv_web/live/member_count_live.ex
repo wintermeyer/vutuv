@@ -1,6 +1,6 @@
 defmodule VutuvWeb.MemberCountLive do
   @moduledoc """
-  The "Number of Members" pill on the logged-out landing page, as a tiny
+  The "Active Members" pill on the logged-out landing page, as a tiny
   embedded LiveView so the exact total ticks up live as people register.
 
   Embedded via `live_render` in `page/index.html.heex` (like `ShellLive` in the
@@ -44,7 +44,7 @@ defmodule VutuvWeb.MemberCountLive do
       id="member-count"
       class="mt-6 inline-flex items-center gap-2 rounded-full bg-white/15 px-4 py-1.5 text-sm font-semibold text-white backdrop-blur"
     >
-      {gettext("Number of Members")}:
+      {gettext("Active Members")}:
       <span class="tabular-nums">{delimited_count(@count)}</span>
     </p>
     """

@@ -9,8 +9,15 @@ defmodule VutuvWeb.MemberCountLiveTest do
   test "renders the member-count pill", %{conn: conn} do
     {:ok, view, html} = live_isolated(conn, VutuvWeb.MemberCountLive)
 
-    assert html =~ "Number of Members"
+    assert html =~ "Active Members"
     assert has_element?(view, "#member-count")
+  end
+
+  test "renders the German label for German visitors", %{conn: conn} do
+    {:ok, _view, html} =
+      live_isolated(conn, VutuvWeb.MemberCountLive, session: %{"locale" => "de"})
+
+    assert html =~ "Aktive Mitglieder"
   end
 
   test "ticks the displayed total up when the counter broadcasts a new value", %{conn: conn} do

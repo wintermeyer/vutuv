@@ -1876,8 +1876,8 @@ msgstr "Mitteilungen"
 
 #: lib/vutuv_web/live/member_count_live.ex:47
 #, elixir-autogen, elixir-format
-msgid "Number of Members"
-msgstr "Mitgliederzahl"
+msgid "Active Members"
+msgstr "Aktive Mitglieder"
 
 #: lib/vutuv_web/live/admin/user_detail_live.ex:99
 #: lib/vutuv_web/live/admin/user_live.ex:345
@@ -2764,20 +2764,10 @@ msgstr "Gründer von vutuv"
 
 #: lib/vutuv_web/templates/page/index.html.heex:1
 #, elixir-autogen, elixir-format
-msgid "“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”"
+msgid "“Tired of LinkedIn, and want your data to stay in Germany? I can help.”"
 msgstr ""
-"„Genervt von LinkedIn, Facebook und X? Ging mir genauso. Herzlich willkommen"
-" bei vutuv!“"
-
-#: lib/vutuv_web/templates/page/index.html.heex:4
-#, elixir-autogen, elixir-format
-msgid "Welcome aboard!”"
-msgstr "Herzlich willkommen bei vutuv!“"
-
-#: lib/vutuv_web/templates/page/index.html.heex:3
-#, elixir-autogen, elixir-format
-msgid "“Tired of LinkedIn, Facebook, or X? Same here."
-msgstr "„Genervt von LinkedIn, Facebook und X? Ging mir genauso."
+"„Genervt von LinkedIn und Ihre Daten sollen in Deutschland bleiben? Da kann"
+" ich helfen.“"
 
 #: lib/vutuv_web/templates/page/index.html.heex:142
 #: lib/vutuv_web/templates/settings/privacy.html.heex:53
