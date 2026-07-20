@@ -356,6 +356,30 @@ defmodule VutuvWeb.PostFeedLiveTest do
       })
     end
 
+    test "an inline-referenced image renders inside the preview body, not below it", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      image = insert(:post_image, user: user, post: nil, token: "feedinline")
+
+      {:ok, _} =
+        Posts.create_post(user, %{
+          body: "Before the picture ![](/post_images/feedinline/feed.avif#left) and after it.",
+          image_ids: [image.id]
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      html = render(live)
+
+      # The picture sits inline in the body (alignment modifier included)…
+      assert html =~ "post-inline-image post-inline-image--left"
+      # …exactly once: the preview's image tile row must not repeat it.
+      assert length(String.split(html, "/post_images/feedinline/feed.avif")) == 2
+      # The body uses the height-based media clamp (line-clamp cannot hold
+      # floats/images), so the image is visible instead of hidden by the cut.
+      assert html =~ "post-clamp--media"
+    end
+
     test "a refused file is named in a persistent error and the composer recovers", %{
       conn: conn
     } do

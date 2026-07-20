@@ -3,13 +3,14 @@ defmodule VutuvWeb.PostComponents do
   The post card, shared by every place a post renders: the permalink page
   (`mode={:full}`), the feed and the profile section (`mode={:preview}`).
 
-  Preview mode ships the whole body and clamps it to a few lines via CSS
-  (`.post-clamp`); a "Read more" button expands it in place, so a long post
-  reads the same on the feed and the profile. In preview every attachment
-  shows as a thumbnail row (inline references are dropped from the clamped
-  body). Full mode renders inline-referenced attachments in place —
-  `![](…)` with an own-upload URL, optional `#left`/`#right`/`#center`
-  alignment — and the unreferenced rest as a gallery below the body.
+  Preview mode ships the whole body and clamps it via CSS (`.post-clamp`,
+  or the height-based `.post-clamp--media` once the body carries inline
+  images); a "Read more" button expands it in place, so a long post reads
+  the same on the feed and the profile. **Both modes render
+  inline-referenced attachments in place** — `![](…)` with an own-upload
+  URL, optional `#left`/`#right`/`#center` alignment — and the
+  unreferenced rest as a gallery (full) / image tile row (preview) below
+  the body.
 
   Not imported globally — `import VutuvWeb.PostComponents` where needed.
   """
@@ -123,15 +124,20 @@ defmodule VutuvWeb.PostComponents do
     {shown_images, held_count} = split_gallery(assigns.post, viewer)
     post = %{assigns.post | images: shown_images}
 
-    # The whole body is always shipped to the DOM. In :preview the `.post-clamp`
-    # CSS line clamp does the visual cut and the in-place expand button reveals
-    # the rest, so "Read more" expands in place instead of navigating to the
-    # permalink — feed and profile alike. A preview never renders the post's
-    # inline images (those show in the thumbnail row below), so it passes `[]`;
-    # full mode inlines the viewer-visible set (shown_images), so an unreleased
-    # picture simply stays absent for strangers while the author sees it.
-    images = if assigns.mode == :full, do: post.images, else: []
-    body_html = VutuvWeb.Markdown.render_post(post.body, images)
+    # The whole body is always shipped to the DOM. In :preview the CSS clamp
+    # does the visual cut and the in-place expand button reveals the rest, so
+    # "Read more" expands in place instead of navigating to the permalink —
+    # feed and profile alike. Inline images render in place in BOTH modes
+    # from the viewer-visible set (shown_images), so an unreleased picture
+    # simply stays absent for strangers while the author sees it; a preview
+    # body carrying inline images switches to the height-based media clamp
+    # (`inline_media?` below — a line clamp cannot hold pictures or floats).
+    body_html = VutuvWeb.Markdown.render_post(post.body, post.images)
+
+    # Attachments the body references inline render in place; the rest form
+    # the gallery (full mode) / the image tile row (preview).
+    inline_media? = Enum.any?(post.images, &PostImage.referenced_in?(&1, post.body))
+    gallery = Enum.reject(post.images, &PostImage.referenced_in?(&1, post.body))
 
     # Every per-card DOM id derives from the timeline entry when there is one:
     # the same post can render twice on a page (original + repost), and the ids
@@ -154,10 +160,15 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:body_style, post_body_style(prefs))
       |> assign(:restricted?, Posts.restricted?(post))
       |> assign(:permalink, Posts.path(post))
-      # Full mode: attachments the body references inline render in place; the
-      # rest form the gallery. Preview shows every attachment as a thumbnail row.
-      |> assign(:gallery, gallery(post, assigns.mode))
-      |> assign(:square_layout?, square_layout?(post, assigns.mode))
+      |> assign(:gallery, gallery)
+      |> assign(:inline_media?, inline_media?)
+      # The authored inline placement owns the media layout: the float-a-square-
+      # image and screenshot-beside-the-text automatics stay off when the body
+      # embeds pictures itself.
+      |> assign(
+        :square_layout?,
+        not inline_media? and square_layout?(post, gallery, assigns.mode)
+      )
       # The auto link screenshot (a ready %PostScreenshot{} for an image-less
       # single-URL post, else nil) and whether the preview lays it beside the
       # text (3/4 body, 1/4 screenshot).
@@ -757,10 +768,10 @@ defmodule VutuvWeb.PostComponents do
                     class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
                   >
                     <img
-                      src={PostImage.url(hd(@post.images), "feed")}
-                      alt={hd(@post.images).alt}
-                      width={hd(@post.images).width}
-                      height={hd(@post.images).height}
+                      src={PostImage.url(hd(@gallery), "feed")}
+                      alt={hd(@gallery).alt}
+                      width={hd(@gallery).width}
+                      height={hd(@gallery).height}
                       loading="lazy"
                       class="w-full rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
                     />
@@ -794,28 +805,30 @@ defmodule VutuvWeb.PostComponents do
                 body_html={@body_html}
                 body_style={@body_style}
                 class="mt-2"
+                media={@inline_media?}
               />
 
-              <%!-- A single image keeps its aspect ratio at column width
-              (height-capped) — square micro-thumbs would crop a panorama down
-              to its middle sliver. Multiple images tile in a 2-up grid. --%>
+              <%!-- Attachments the body does NOT reference inline: a single
+              image keeps its aspect ratio at column width (height-capped) —
+              square micro-thumbs would crop a panorama down to its middle
+              sliver. Multiple images tile in a 2-up grid. --%>
               <.link
-                :if={length(@post.images) == 1}
+                :if={length(@gallery) == 1}
                 href={@permalink}
                 aria-label={gettext("View post")}
                 class="mt-3 block"
               >
                 <img
-                  src={PostImage.url(hd(@post.images), "feed")}
-                  alt={hd(@post.images).alt}
-                  width={hd(@post.images).width}
-                  height={hd(@post.images).height}
+                  src={PostImage.url(hd(@gallery), "feed")}
+                  alt={hd(@gallery).alt}
+                  width={hd(@gallery).width}
+                  height={hd(@gallery).height}
                   loading="lazy"
                   class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
                 />
               </.link>
-              <div :if={length(@post.images) > 1} class="mt-3 grid grid-cols-2 gap-2">
-                <.link :for={image <- @post.images} href={@permalink} aria-label={gettext("View post")} class="block">
+              <div :if={length(@gallery) > 1} class="mt-3 grid grid-cols-2 gap-2">
+                <.link :for={image <- @gallery} href={@permalink} aria-label={gettext("View post")} class="block">
                   <img
                     src={PostImage.url(image, "feed")}
                     alt={image.alt}
@@ -1004,6 +1017,12 @@ defmodule VutuvWeb.PostComponents do
   # around a float, so wrap mode clamps by height (`.post-clamp--wrap`) inside a
   # float-containing block — see components.css.
   attr(:wrap, :boolean, default: false)
+  # Media mode: the body itself carries inline post images (`![](…)` own-upload
+  # references), which a line clamp cannot hold either — same height-clamp
+  # mechanics as wrap mode (shared `post-preview--wrap` control styling), but
+  # with a media allowance on top of the text budget (`.post-clamp--media`) so
+  # the picture the author placed is visible on the feed, not below the fold.
+  attr(:media, :boolean, default: false)
   slot(:float)
 
   defp preview_body(assigns) do
@@ -1012,12 +1031,16 @@ defmodule VutuvWeb.PostComponents do
       id={@body_id}
       phx-hook="PostPreviewClamp"
       data-post-preview
-      class={["post-preview", @wrap && "post-preview--wrap", @class]}
+      class={["post-preview", (@wrap or @media) && "post-preview--wrap", @class]}
     >
       <div class="relative">
         <div
           class={[
-            if(@wrap, do: "post-clamp--wrap", else: "post-clamp"),
+            cond do
+              @media -> "post-clamp--media"
+              @wrap -> "post-clamp--wrap"
+              true -> "post-clamp"
+            end,
             "markdown markdown--post text-slate-800 dark:text-slate-200"
           ]}
           data-clamp-body
@@ -1159,19 +1182,11 @@ defmodule VutuvWeb.PostComponents do
   # below the text. True only in preview mode, with body text for the float to
   # wrap, exactly one image, and that image roughly square (see square_image?/1).
   # Anything else keeps the existing full-width single / multi-image treatment.
-  defp square_layout?(post, :preview) do
-    post.body != "" and match?([_], post.images) and square_image?(hd(post.images))
+  defp square_layout?(post, gallery, :preview) do
+    post.body != "" and match?([_], gallery) and square_image?(hd(gallery))
   end
 
-  defp square_layout?(_post, _mode), do: false
-
-  # Full mode: attachments the body references inline render in place; the
-  # rest form the gallery. Preview mode handles images separately (thumbs).
-  defp gallery(post, :preview), do: post.images
-
-  defp gallery(post, :full) do
-    Enum.reject(post.images, &PostImage.referenced_in?(&1, post.body))
-  end
+  defp square_layout?(_post, _gallery, _mode), do: false
 
   # AI-moderation limbo: the author and admins keep seeing a pending image
   # (the proxy serves it to them); everyone else gets `held_count` placecard

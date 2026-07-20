@@ -83,9 +83,12 @@ fallbacks reproduce the historical default of off on desktop, on for the narrow
 phone column).
 
 The **whole body is always shipped** to the DOM (no server-side cut) — a preview
-renders the same Markdown as `mode={:full}`, just without the post's inline
-images (those show in the gallery), and the `.post-clamp` CSS does the visual
-cut. So "Read more" is a **single in-place toggle `<button data-post-expand>`**,
+renders the same Markdown as `mode={:full}`, **including the post's inline
+images**, and the CSS clamp does the visual cut: `.post-clamp` (line clamp) for
+a plain text body, or the height-based `.post-clamp--media` once the body
+carries inline images (a line clamp can hold neither pictures nor floats; the
+media cap is the reader's text budget plus a 24rem picture allowance, so the
+authored image is visible on the feed instead of sitting below the cut). So "Read more" is a **single in-place toggle `<button data-post-expand>`**,
 identical on the feed and the profile and for a post of any length: clicking it
 drops the clamp and reveals the rest of the text with a short height animation
 (`togglePreviewExpand` in `app.js` measures the clamped and full heights around
@@ -229,10 +232,12 @@ toolbar button (both insert at the cursor once uploaded, via the
 `mde-image-uploaded` / `mde-insert-image` push events), each thumbnail row has
 an explicit "Insert into text", and selecting an image in the editor reveals
 the alignment buttons. Attachments the body does **not** reference render as
-the gallery below the post (`VutuvWeb.PostComponents` de-duplicates via
-`PostImage.referenced_in?/2`); previews render no inline images (attachments
-show as the thumbnail row). Anonymous surfaces (RSS, ActivityPub, JSON-LD,
-agent docs) inline only AI-**released** images. Direct messages stay
+the gallery / image tile row below the post (`VutuvWeb.PostComponents`
+de-duplicates via `PostImage.referenced_in?/2`); **both** full mode and
+previews render inline references in place (previews via the
+`.post-clamp--media` height clamp — see the preview-truncation section).
+Anonymous surfaces (RSS, ActivityPub, JSON-LD, agent docs) inline only
+AI-**released** images. Direct messages stay
 image-free (`Vutuv.MarkdownContent.validate_no_images/2` in
 `Vutuv.Chat.Message` + [messages.md](messages.md)), as do organization and
 job-posting descriptions.

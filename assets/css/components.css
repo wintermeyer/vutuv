@@ -1080,9 +1080,31 @@ ul.thumbs li .text .url a {
     max-height: calc(var(--post-clamp-mobile, 8) * 1lh);
   }
 }
-.post-preview.is-expanded .post-clamp--wrap {
+.post-preview.is-expanded .post-clamp--wrap,
+.post-preview.is-expanded .post-clamp--media {
   max-height: none;
   overflow: visible;
+}
+
+/* Inline-media preview variant (`<.preview_body media>`): the body itself
+   carries the post's own pictures (inline `![](…)` references, incl. left/
+   right floats), which neither `-webkit-line-clamp` nor the tight wrap budget
+   can hold — a picture placed after a few lines of text would sit entirely
+   below the cut. Same height-clamp mechanics as `--wrap` (the wrapper shares
+   `post-preview--wrap`, so the fade is dropped and "Read more" is the in-flow
+   line below), but the cap is the reader's text budget PLUS a 24rem media
+   allowance (~ one column-width landscape picture), so the authored image is
+   actually visible on the feed. A reader's `none` (truncation off) makes the
+   calc invalid and drops the cap, like the other variants. */
+.post-clamp--media {
+  display: flow-root;
+  overflow: hidden;
+  max-height: calc(var(--post-clamp-desktop, 6) * 1lh + 24rem);
+}
+@media (width < 48rem) {
+  .post-clamp--media {
+    max-height: calc(var(--post-clamp-mobile, 8) * 1lh + 24rem);
+  }
 }
 /* In wrap mode the fade + "Read more" cannot ride the clamped text's last line —
    the floated image (contained + clipped inside the clamp block) would share it,
