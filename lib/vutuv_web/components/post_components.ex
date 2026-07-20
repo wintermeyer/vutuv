@@ -765,6 +765,7 @@ defmodule VutuvWeb.PostComponents do
                 body_html={@body_html}
                 body_style={@body_style}
                 class="mt-2"
+                tags={@post.tags}
                 wrap
               >
                 <:float>
@@ -784,7 +785,6 @@ defmodule VutuvWeb.PostComponents do
                   </.link>
                 </:float>
               </.preview_body>
-              <.post_tags tags={@post.tags} />
             <% @link_screenshot_layout? -> %>
               <%!-- A single-URL, image-less post: the link-page screenshot floats
               to the top-right and the body wraps around it, same as the square
@@ -794,6 +794,7 @@ defmodule VutuvWeb.PostComponents do
                 body_html={@body_html}
                 body_style={@body_style}
                 class="mt-2"
+                tags={@post.tags}
                 wrap
               >
                 <:float>
@@ -803,7 +804,6 @@ defmodule VutuvWeb.PostComponents do
                   />
                 </:float>
               </.preview_body>
-              <.post_tags tags={@post.tags} />
             <% @mode == :preview -> %>
               <.preview_body
                 :if={@post.body != ""}
@@ -812,6 +812,7 @@ defmodule VutuvWeb.PostComponents do
                 body_style={@body_style}
                 class="mt-2"
                 media={@inline_media?}
+                tags={@post.tags}
               />
 
               <%!-- Attachments the body does NOT reference inline: a single
@@ -918,14 +919,16 @@ defmodule VutuvWeb.PostComponents do
           />
 
           <%!-- The remaining layouts put the tags in their own full-width row
-          below the body/images: previews (inside the clamp block they could be
-          cut away) and the photo-only full mode (no body to end). The
-          side-by-side layouts rendered them inside the text column above, and
-          full mode with a body carries them at the end of the text. --%>
+          below the body/images: plain (line-clamp) previews — no float there,
+          so this row already sits at the end of the text — and the photo-only
+          renderings (no body to end). Everything float-capable carries the
+          tags at the end of the text instead: full mode inside the body div,
+          the wrap/media previews inside `<.preview_body>`. --%>
           <.post_tags
             :if={
               not @square_layout? and not @link_screenshot_layout? and
-                not (@mode == :full and @post.body != "")
+                not (@mode == :full and @post.body != "") and
+                not (@mode == :preview and @inline_media?)
             }
             tags={@post.tags}
           />
@@ -1037,6 +1040,16 @@ defmodule VutuvWeb.PostComponents do
   # with a media allowance on top of the text budget (`.post-clamp--media`) so
   # the picture the author placed is visible on the feed, not below the fold.
   attr(:media, :boolean, default: false)
+  # The post's tag chips. In the flow-root variants (wrap/media — the ones that
+  # can carry a float) they render INSIDE the clamp block so they follow the end
+  # of the text beside a tall floated image (like full mode since v7.110.3),
+  # plus a CSS-toggled fallback row below the block that stands in while the
+  # body is clamped — inside the clamp the inline row would be cut away with
+  # the text (see the `.post-preview__tags-*` rules in components.css). The
+  # line-clamp variant ignores them (a -webkit-box cannot hold the chips row;
+  # there is no float there, so the caller's plain row below already sits at
+  # the end of the text).
+  attr(:tags, :list, default: [])
   slot(:float)
 
   defp preview_body(assigns) do
@@ -1064,6 +1077,7 @@ defmodule VutuvWeb.PostComponents do
           wraps around it; the block contains + clips it (flow-root + overflow). --%>
           {render_slot(@float)}
           {@body_html}
+          <.post_tags :if={@wrap or @media} tags={@tags} class="post-preview__tags-inline" />
         </div>
         <%!-- Fades the clamp cut into the card so it reads as intentional; only
         visible once the hook sets `is-clamped`, and cleared again while
@@ -1083,21 +1097,26 @@ defmodule VutuvWeb.PostComponents do
           {gettext("Read more")}
         </button>
       </div>
+      <.post_tags :if={@wrap or @media} tags={@tags} class="post-preview__tags-below" />
     </div>
     """
   end
 
   # The post's tag chips row. Renders nothing when there are no tags, so callers
-  # drop it in unconditionally. Shared by the full-width layouts (a row below the
-  # body/images) and the square layout (under the text, inside the 2/3 column).
+  # drop it in unconditionally. `class` replaces the default utility row when the
+  # row's layout must live in components.css instead: the preview rows toggle
+  # their `display` by clamp state, and a `flex` utility here would beat those
+  # layered rules in the cascade.
   attr(:tags, :list, required: true)
+  attr(:class, :string, default: "mt-3 flex flex-wrap gap-2")
 
   defp post_tags(assigns) do
     ~H"""
-    <%!-- no-underline: inside the full-mode body the row sits in `.markdown`,
-    whose `a { text-decoration: underline }` would underline the chips; the
-    utility wins over the components-layer rule and is a no-op elsewhere. --%>
-    <div :if={@tags != []} class="mt-3 flex flex-wrap gap-2">
+    <%!-- no-underline: inside the full-mode/preview body the row sits in
+    `.markdown`, whose `a { text-decoration: underline }` would underline the
+    chips; the utility wins over the components-layer rule and is a no-op
+    elsewhere. --%>
+    <div :if={@tags != []} class={@class}>
       <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"} class="no-underline">{tag.name}</.chip>
     </div>
     """

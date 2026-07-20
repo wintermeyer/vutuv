@@ -380,6 +380,35 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "post-clamp--media"
     end
 
+    test "preview tags follow the end of the text, not the floated image", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      ref = insert(:post_image, user: user, post: nil, token: "tagfeedref")
+      gal = insert(:post_image, user: user, post: nil, token: "tagfeedgal")
+
+      {:ok, _} =
+        Posts.create_post(user, %{
+          body: "Text beside ![](/post_images/tagfeedref/feed.avif#right) a floated picture.",
+          tags: "elixir",
+          image_ids: [ref.id, gal.id]
+        })
+
+      {:ok, _live, html} = live(conn, ~p"/feed")
+
+      # The tag chips sit inside the clamp block right after the text (beside
+      # the float), so they come before the fade/read-more markup that follows
+      # the block and before the unreferenced-attachment tile row — a tall
+      # float used to push them below the whole picture…
+      {tag_pos, _} = :binary.match(html, ~s(href="/tags/elixir"))
+      {fade_pos, _} = :binary.match(html, "post-preview__fade")
+      {gallery_pos, _} = :binary.match(html, "/post_images/tagfeedgal/feed.avif")
+      assert tag_pos < fade_pos
+      assert tag_pos < gallery_pos
+
+      # …and a second, CSS-toggled copy below the block stands in while the
+      # body is clamped (the inline row would be cut away with the text).
+      assert html =~ "post-preview__tags-below"
+    end
+
     test "a refused file is named in a persistent error and the composer recovers", %{
       conn: conn
     } do

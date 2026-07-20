@@ -1122,6 +1122,25 @@ ul.thumbs li .text .url a {
   background: none;
 }
 
+/* Tag chips in the wrap/media previews follow the end of the text: the inline
+   row sits INSIDE the clamp block (a flex row establishes its own formatting
+   context, so a tall float narrows it instead of pushing it below the whole
+   picture — same as full mode). While the body is clamped that row would be
+   cut away with the text, so it hides and the fallback copy below the block
+   shows instead. Styled here, not with display utilities: the state rules
+   must own `display`, and a `flex`/`hidden` utility on the row would beat
+   this layer in the cascade. */
+.post-preview__tags-inline,
+.post-preview__tags-below {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.post-preview__tags-below { display: none; }
+.post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__tags-inline { display: none; }
+.post-preview--wrap.is-clamped:not(.is-expanded) .post-preview__tags-below { display: flex; }
+
 /* Enough left padding that the markers (which sit in it, list-style outside)
    clear the paragraph margin and the list reads as an indented block — 1.4em
    left the "1." barely off the margin, so it looked un-indented. */
