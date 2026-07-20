@@ -4,6 +4,7 @@ defmodule Vutuv.HandleAvailabilityTest do
   alias Vutuv.Accounts.User
   alias Vutuv.Mentions
   alias Vutuv.Organizations.Organization
+  alias Vutuv.Posts.Post
   alias Vutuv.SlugHelpers
 
   # `insert(:post, ...)` bypasses the changeset, so it can seed a post that
@@ -44,6 +45,35 @@ defmodule Vutuv.HandleAvailabilityTest do
     test "grammar errors still win (no scan on an invalid handle)" do
       changeset = User.username_changeset(%User{}, %{"username" => "NO"})
       refute changeset.valid?
+    end
+  end
+
+  describe "validate_mentions_exist error message" do
+    test "names the single unknown handle in the error, with a leading @" do
+      changeset = Post.changeset(%Post{}, %{"body" => "hi @ghostnobody"})
+
+      refute changeset.valid?
+      assert %{body: [message]} = errors_on(changeset)
+      assert message =~ "@ghostnobody"
+      # The interpolated message is a self-contained sentence, not a fragment
+      # that needs the field name in front of it.
+      refute message =~ "%{handles}"
+    end
+
+    test "lists every unknown handle, comma-separated" do
+      changeset = Post.changeset(%Post{}, %{"body" => "hi @ghostone and @ghosttwo"})
+
+      refute changeset.valid?
+      assert %{body: [message]} = errors_on(changeset)
+      assert message =~ "@ghostone"
+      assert message =~ "@ghosttwo"
+    end
+
+    test "an existing member handle is not flagged" do
+      user = insert(:user, username: "realmember")
+      changeset = Post.changeset(%Post{}, %{"body" => "hi @#{user.username}"})
+
+      assert changeset.valid?
     end
   end
 

@@ -456,6 +456,39 @@ defmodule VutuvWeb.PostFeedLiveTest do
 
       assert has_element?(live, "#composer-error")
     end
+
+    test "a mention of a non-existent handle is rejected with a readable error", %{conn: conn} do
+      {conn, _user} = create_and_login_user(conn)
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"body" => "Ein Test. @asfasfwa87823"}})
+        |> render_submit()
+
+      assert has_element?(live, "#composer-error")
+      # The offending handle is named so the author knows what to fix, and the
+      # raw interpolation placeholder and leaking field atom are both gone.
+      assert html =~ "@asfasfwa87823"
+      refute html =~ "%{handles}"
+      refute html =~ "body mentions"
+    end
+
+    test "the mention error is shown in German for a German member", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      user |> Ecto.Changeset.change(%{locale: "de"}) |> Vutuv.Repo.update!()
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+
+      html =
+        live
+        |> form("#composer-form", %{"post" => %{"body" => "Ein Test. @asfasfwa87823"}})
+        |> render_submit()
+
+      assert html =~ "@asfasfwa87823"
+      assert html =~ "gibt es nicht"
+      refute html =~ "%{handles}"
+    end
   end
 
   describe "composer reveal" do

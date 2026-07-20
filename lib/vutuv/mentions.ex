@@ -199,10 +199,16 @@ defmodule Vutuv.Mentions do
             changeset
 
           unknown ->
+            # A self-contained, actionable sentence (not a fragment prefixed by
+            # the field name) that names the offending handle(s) and is plural
+            # aware via the `count:` opt — so the composer's live error and the
+            # classic pages' `error_tag` both read cleanly. The German copy lives
+            # in `priv/gettext/*/errors.po`.
             Changeset.add_error(
               changeset,
               field,
-              "mentions a handle that does not exist: %{handles}",
+              "The handle %{handles} does not exist. Remove the mention or check the spelling.",
+              count: length(unknown),
               handles: Enum.map_join(unknown, ", ", &("@" <> &1))
             )
         end
