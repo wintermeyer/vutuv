@@ -1206,4 +1206,31 @@ defmodule VutuvWeb.PostFeedLiveTest do
       assert html =~ "/post_images/notxttok/feed.avif"
     end
   end
+
+  describe "multi-image gallery" do
+    test "tiles images at their natural aspect ratio (no 4:3 crop), like the permalink", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      one = insert(:post_image, user: user, post: nil, token: "galone")
+      two = insert(:post_image, user: user, post: nil, token: "galtwo")
+
+      {:ok, _post} = Posts.create_post(user, %{body: "two shots", image_ids: [one.id, two.id]})
+
+      {:ok, live, _html} = live(conn, ~p"/feed")
+      feed_html = live |> element("#feed-posts") |> render()
+
+      # Both attachments render at feed size…
+      assert feed_html =~ "/post_images/galone/feed.avif"
+      assert feed_html =~ "/post_images/galtwo/feed.avif"
+      # …uncropped. The preview grid used to force every tile to `aspect-[4/3]`,
+      # chopping a screenshot or panorama down to a middle band — the feed looked
+      # worse than the permalink, which shows the images whole. The feed gallery
+      # now shares the permalink's rendering (natural aspect, no crop).
+      refute feed_html =~ "aspect-[4/3]"
+      # …tiling 1-up on phones, 2-up on sm+ — the permalink's responsive grid,
+      # not the old always-two-column mobile layout that shrank each tile.
+      assert feed_html =~ "sm:grid-cols-2"
+    end
+  end
 end

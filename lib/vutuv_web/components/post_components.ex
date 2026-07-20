@@ -815,10 +815,13 @@ defmodule VutuvWeb.PostComponents do
                 tags={@post.tags}
               />
 
-              <%!-- Attachments the body does NOT reference inline: a single
-              image keeps its aspect ratio at column width (height-capped) —
-              square micro-thumbs would crop a panorama down to its middle
-              sliver. Multiple images tile in a 2-up grid. --%>
+              <%!-- Attachments the body does NOT reference inline. A single
+              image keeps the feed-compact treatment (a squarish one floats
+              above; anything else stacks full-width, height-capped at 24rem so
+              one post can't run away down the timeline). Multiple images tile
+              through the shared `post_gallery` — natural aspect, no crop, the
+              same way the permalink shows them (it used to crop each tile to
+              `aspect-[4/3]`, chopping content to a middle band). --%>
               <.link
                 :if={length(@gallery) == 1}
                 href={@permalink}
@@ -834,40 +837,19 @@ defmodule VutuvWeb.PostComponents do
                   class="max-h-96 w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
                 />
               </.link>
-              <div :if={length(@gallery) > 1} class="mt-3 grid grid-cols-2 gap-2">
-                <.link :for={image <- @gallery} href={@permalink} aria-label={gettext("View post")} class="block">
-                  <img
-                    src={PostImage.url(image, "feed")}
-                    alt={image.alt}
-                    width={image.width}
-                    height={image.height}
-                    loading="lazy"
-                    class="aspect-[4/3] w-full rounded-lg object-cover ring-1 ring-slate-200 dark:ring-slate-800"
-                  />
-                </.link>
-              </div>
+              <.post_gallery
+                :if={length(@gallery) > 1}
+                gallery={@gallery}
+                mode={:preview}
+                permalink={@permalink}
+              />
             <% true -> %>
-              <div
+              <.post_gallery
                 :if={@gallery != []}
-                class={["mt-4 grid gap-2", length(@gallery) > 1 && "sm:grid-cols-2"]}
-              >
-                <a
-                  :for={image <- @gallery}
-                  href={PostImage.url(image, "large")}
-                  target="_blank"
-                  rel="noopener"
-                  class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
-                >
-                  <img
-                    src={PostImage.url(image, "feed")}
-                    alt={image.alt}
-                    width={image.width}
-                    height={image.height}
-                    loading="lazy"
-                    class="w-full object-cover"
-                  />
-                </a>
-              </div>
+                gallery={@gallery}
+                mode={:full}
+                permalink={@permalink}
+              />
           <% end %>
 
           <%!-- AI-moderation limbo. For every viewer but the author/admin a
@@ -1118,6 +1100,52 @@ defmodule VutuvWeb.PostComponents do
     elsewhere. --%>
     <div :if={@tags != []} class={@class}>
       <.chip :for={tag <- @tags} navigate={~p"/tags/#{tag}"} class="no-underline">{tag.name}</.chip>
+    </div>
+    """
+  end
+
+  # The attachment gallery below the body: images the body does NOT reference
+  # inline (`![](…)`), rendered at their **natural aspect ratio** — no crop — so
+  # a screenshot or panorama reads whole. One image fills the column; several
+  # tile 1-up on phones, 2-up on `sm+`. This is the ONE gallery rendering shared
+  # by the preview (feed / profile) and the permalink, so the two look identical:
+  # the preview grid used to force every tile to `aspect-[4/3]`, chopping content
+  # down to a middle band and looking worse than the permalink. The `feed` image
+  # version is already aspect-preserving (`box_down 1200`), so `w-full` alone
+  # shows it uncropped.
+  #
+  # The only mode difference is the click target: a `:preview` tile opens the
+  # post (its permalink), a `:full` tile opens the `large` version in a new tab
+  # (the lightbox). A `false` value on `target`/`rel`/`aria-label` drops the
+  # attribute, so each mode carries only the attributes it needs.
+  attr(:gallery, :list, required: true)
+  attr(:mode, :atom, required: true, values: [:preview, :full])
+  attr(:permalink, :string, required: true)
+
+  defp post_gallery(assigns) do
+    ~H"""
+    <div class={[
+      "grid gap-2",
+      (@mode == :full && "mt-4") || "mt-3",
+      length(@gallery) > 1 && "sm:grid-cols-2"
+    ]}>
+      <.link
+        :for={image <- @gallery}
+        href={(@mode == :full && PostImage.url(image, "large")) || @permalink}
+        target={@mode == :full && "_blank"}
+        rel={@mode == :full && "noopener"}
+        aria-label={@mode == :preview && gettext("View post")}
+        class="block overflow-hidden rounded-lg ring-1 ring-slate-200 dark:ring-slate-800"
+      >
+        <img
+          src={PostImage.url(image, "feed")}
+          alt={image.alt}
+          width={image.width}
+          height={image.height}
+          loading="lazy"
+          class="w-full object-cover"
+        />
+      </.link>
     </div>
     """
   end
