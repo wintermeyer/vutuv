@@ -4,15 +4,18 @@ defmodule VutuvWeb.PhoneNumberHTML do
   import VutuvWeb.UserHelpers
 
   @doc """
-  The stored type values are the English option values from the form
-  ("Work", "Cell", ...); render them through gettext so the page speaks the
-  visitor's language. Unknown legacy values pass through unchanged.
+  The stored type values are the English option values from the form ("Home",
+  "Cell", "Work", "Work Cell" since issue #948); render them through gettext so
+  the page speaks the visitor's language. "Fax" and any other unknown legacy
+  value still render (Fax is no longer offered, only grandfathered).
   """
+  # "Home" reuses the "Private" msgid ("Privat"), so the private landline no
+  # longer collides with the navigation "Home" ("Startseite") and needs no
+  # gettext context. "Cell" is the private mobile, "Work Cell" the work mobile.
+  def phone_type_label("Home"), do: gettext("Private")
+  def phone_type_label("Cell"), do: gettext("Private mobile")
   def phone_type_label("Work"), do: gettext("Work")
-  def phone_type_label("Cell"), do: gettext("Cell")
-  # "Home" is disambiguated from the navigation "Home" (Startseite): as a phone
-  # type it is the private/home number, "Privat" in German.
-  def phone_type_label("Home"), do: pgettext("phone number type", "Home")
+  def phone_type_label("Work Cell"), do: gettext("Work mobile")
   def phone_type_label("Fax"), do: gettext("Fax")
   def phone_type_label(other), do: other
 

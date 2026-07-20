@@ -44,8 +44,8 @@ defmodule VutuvWeb.SectionOrderingTest do
         |> get("/#{owner.username}/phone_numbers")
         |> html_response(200)
 
-      # The reorder row must render "Mobil-Telefon", never the raw stored "Cell".
-      assert html =~ "Mobil-Telefon"
+      # The reorder row must render "Mobil (privat)", never the raw stored "Cell".
+      assert html =~ "Mobil (privat)"
       refute html =~ ~r/reorder__sub[^>]*>\s*Cell/
     end
 
@@ -65,7 +65,7 @@ defmodule VutuvWeb.SectionOrderingTest do
       # A visitor gets the read-only card_list (no reorder tool); it must still
       # localize the type, like the owner's reorder rows do.
       refute html =~ ~s(phx-hook="Reorder")
-      assert html =~ "Mobil-Telefon"
+      assert html =~ "Mobil (privat)"
       refute html =~ ">Cell</a>"
     end
 
