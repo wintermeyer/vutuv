@@ -115,6 +115,18 @@ msgstr "darf keine Leerzeichen enthalten"
 msgid "Please enter at least %{min} different tags."
 msgstr "Bitte geben Sie mindestens %{min} verschiedene Tags ein."
 
+## Custom message from the sign-up tag ceiling
+## (Vutuv.Accounts.User.registration_changeset/2).
+msgid "Please enter at most %{max} different tags."
+msgstr "Bitte geben Sie höchstens %{max} verschiedene Tags ein."
+
+## Custom message from the profile tag ceiling
+## (Vutuv.Tags.tag_limit_changeset/1).
+msgid "You can have at most %{max} tags. Remove one before adding another."
+msgstr ""
+"Sie können höchstens %{max} Tags haben. Entfernen Sie zuerst eines, bevor Sie "
+"ein weiteres hinzufügen."
+
 ## Custom message from the duplicate-tag unique constraint
 ## (Vutuv.Tags.UserTag.changeset/2).
 msgid "You already have this tag."

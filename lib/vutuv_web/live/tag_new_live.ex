@@ -67,6 +67,7 @@ defmodule VutuvWeb.TagNewLive do
             phx-debounce="150"
           />
           {@changeset && error_tag(@changeset, :user_id_tag_id)}
+          {@changeset && error_tag(@changeset, :tag_id)}
         </div>
 
         <div :if={@preview != []} id="tag-preview" class="editform__field">
@@ -94,6 +95,20 @@ defmodule VutuvWeb.TagNewLive do
   def handle_event("save", %{"tag_param" => %{"value" => value}}, socket) do
     user = socket.assigns.current_user
 
+    if Tags.at_user_tag_limit?(user) do
+      # Profile already at the tag ceiling: surface it inline (like a form
+      # error) and attach nothing, for a single tag or a whole batch alike, so
+      # the member sees one clear reason rather than a pile of failures.
+      {:noreply,
+       socket
+       |> assign(:changeset, Tags.tag_limit_changeset(user))
+       |> assign_input(value)}
+    else
+      save_tags(socket, user, value)
+    end
+  end
+
+  defp save_tags(socket, user, value) do
     case value |> Tags.parse_tag_names() |> Enum.uniq_by(&String.downcase/1) do
       # Nothing usable typed: keep the form, show the error banner (the same
       # empty-changeset re-render the controller create used to do).

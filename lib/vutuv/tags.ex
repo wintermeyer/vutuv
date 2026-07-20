@@ -22,6 +22,12 @@ defmodule Vutuv.Tags do
   @endorser_sorts ~w(name username date)
   @endorsers_per_page 25
 
+  # The most tags one profile may carry. A handful of members overdid it, so a
+  # profile is capped here. The cap bites only when tags *change*: a profile
+  # already over it (from before the cap) keeps every tag but can add none, and
+  # the sign-up form validates the same ceiling up front.
+  @max_user_tags 15
+
   # Matches one token: either a `"…"` quoted phrase (capturing its inside, which
   # may hold spaces) or a run of non-space, non-comma characters. Tried
   # left-to-right at each position, so a well-formed `"…"` is always taken whole
@@ -98,30 +104,71 @@ defmodule Vutuv.Tags do
     end
   end
 
+  @doc "The most tags one profile may carry (see `@max_user_tags`)."
+  def max_user_tags, do: @max_user_tags
+
+  @doc """
+  Whether `user` already holds the maximum number of tags, so `add_user_tag/2`
+  would refuse the next one. Counts the live rows, so it reflects removals.
+  """
+  def at_user_tag_limit?(%User{} = user), do: user_tag_count(user.id) >= @max_user_tags
+
   @doc """
   Tags `user` with `name`, creating the global tag or linking the existing
   one. Returns the `Repo.insert` result; a duplicate or invalid name comes
   back as `{:error, changeset}`.
 
-  An **honor** tag is reserved: a member typing its name here is refused
-  with `{:error, changeset}` (the tag can only be granted through
-  `admin_assign_tag/2`). This is the single self-assign chokepoint — the tags
-  page, the JSON API, the LinkedIn import and account setup all reach it — so
-  one guard covers every member entry point.
+  Two guards, both returning `{:error, changeset}`:
+
+    * The profile is **at the tag ceiling** (`max_user_tags/0`) — refused, so a
+      member who overdid it keeps their tags but adds no more until they drop
+      back under the cap.
+    * The tag is an **honor** tag — reserved, granted only through
+      `admin_assign_tag/2`.
+
+  This is the single self-assign chokepoint — the tags page, the JSON API, the
+  LinkedIn import and account setup all reach it — so both guards cover every
+  member entry point.
   """
   def add_user_tag(%User{} = user, name) when is_binary(name) do
-    changeset =
-      user
-      |> Ecto.build_assoc(:user_tags, %{})
-      |> UserTag.changeset()
-      |> Tag.create_or_link_tag(%{"value" => name})
-
-    if reserved_tag?(changeset) do
-      {:error, reserved_tag_error(changeset)}
+    if at_user_tag_limit?(user) do
+      {:error, tag_limit_changeset(user)}
     else
-      Repo.insert(changeset)
+      changeset =
+        user
+        |> Ecto.build_assoc(:user_tags, %{})
+        |> UserTag.changeset()
+        |> Tag.create_or_link_tag(%{"value" => name})
+
+      if reserved_tag?(changeset) do
+        {:error, reserved_tag_error(changeset)}
+      else
+        Repo.insert(changeset)
+      end
     end
   end
+
+  @doc """
+  The `{:error, changeset}` a save is refused with once `user` is at the tag
+  ceiling: an empty `UserTag` changeset carrying a clear, member-facing error
+  and the `:insert` action, so the tags editor shows it inline and the JSON API
+  returns a 422. Shared by `add_user_tag/2` and `VutuvWeb.TagNewLive` (which
+  guards up front, so a full batch shows one clear message, not N failures).
+  """
+  def tag_limit_changeset(%User{} = user) do
+    user
+    |> Ecto.build_assoc(:user_tags, %{})
+    |> UserTag.changeset(%{})
+    |> Ecto.Changeset.add_error(
+      :tag_id,
+      "You can have at most %{max} tags. Remove one before adding another.",
+      max: @max_user_tags
+    )
+    |> Map.put(:action, :insert)
+  end
+
+  defp user_tag_count(user_id),
+    do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user_id), :count)
 
   # `Tag.create_or_link_tag/2` always resolves to a `:tag_id` (it either links an
   # existing tag or mints a fresh one and links that). A member can only reach an
