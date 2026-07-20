@@ -289,6 +289,18 @@ defmodule VutuvWeb.ShellLive do
             >
               {gettext("Feed")}
             </.link>
+            <%!-- An explicit "Profile" item makes the member's own profile a
+                 named, discoverable destination (the logo's deep-link on /feed
+                 is too subtle). Only rendered for a logged-in member — it needs
+                 @user_param, which only a valid session carries. --%>
+            <.link
+              :if={@user_id}
+              href={~p"/#{@user_param}"}
+              data-nav-profile
+              class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            >
+              {gettext("Profile")}
+            </.link>
             <.link
               href={~p"/listings/most_followed_users"}
               class="rounded-md px-3 py-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -456,7 +468,7 @@ defmodule VutuvWeb.ShellLive do
         aria-label={gettext("Main navigation")}
         class={[
           "fixed inset-x-0 bottom-0 z-30 grid h-16 border-t border-slate-200 bg-white/95 backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/95",
-          if(@user_id, do: "grid-cols-4", else: "grid-cols-2")
+          if(@user_id, do: "grid-cols-5", else: "grid-cols-2")
         ]}
       >
         <%= if @user_id do %>
@@ -466,6 +478,18 @@ defmodule VutuvWeb.ShellLive do
         <%= if @user_id do %>
           <.tab href={~p"/messages"} label={gettext("Messages")} count={@messages_count}><.icon_envelope /></.tab>
           <.tab href={~p"/notifications"} label={gettext("Alerts")} count={@notifications_count}><.icon_bell /></.tab>
+          <%!-- The member's own avatar is the Profile tab — the universal mobile
+          convention for "you", so the profile is reachable on phones too, not
+          just via the desktop nav or the logo's /feed deep-link. --%>
+          <.tab href={~p"/#{@user_param}"} label={gettext("Profile")} data-mobile-profile>
+            <%= if @user_avatar do %>
+              <img src={@user_avatar} alt="" class="h-6 w-6 rounded-full object-cover" />
+            <% else %>
+              <span class="flex h-6 w-6 items-center justify-center rounded-full bg-brand-700 text-[10px] font-bold text-white">
+                {@user_initials}
+              </span>
+            <% end %>
+          </.tab>
         <% else %>
           <.tab href={~p"/login"} label={gettext("Log in")}><.icon_login /></.tab>
         <% end %>
@@ -479,11 +503,12 @@ defmodule VutuvWeb.ShellLive do
   attr(:href, :string, required: true)
   attr(:label, :string, required: true)
   attr(:count, :integer, default: 0)
+  attr(:rest, :global)
   slot(:inner_block, required: true)
 
   defp tab(assigns) do
     ~H"""
-    <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-600 dark:text-slate-400">
+    <.link href={@href} class="flex flex-col items-center justify-center gap-0.5 text-slate-600 dark:text-slate-400" {@rest}>
       <span class="relative">
         {render_slot(@inner_block)}
         <.count_badge
