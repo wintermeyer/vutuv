@@ -33,6 +33,7 @@ defmodule VutuvWeb.PostLive.Composer do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias VutuvWeb.ErrorHelpers
 
   @presets ~w(public followers connections only_me custom)
 
@@ -419,9 +420,14 @@ defmodule VutuvWeb.PostLive.Composer do
     end
   end
 
+  # Render the changeset's errors the way the classic form pages do: translate
+  # each through gettext (so the German copy shows) and interpolate its opts (so
+  # `%{handles}` becomes the actual handle) rather than dumping the raw msgid
+  # prefixed with the field atom ("body mentions a handle …: %{handles}"). Each
+  # message is now a self-contained sentence, so the field name is dropped.
   defp changeset_message(changeset) do
-    Enum.map_join(changeset.errors, ", ", fn {field, {message, _opts}} ->
-      "#{field} #{message}"
+    Enum.map_join(changeset.errors, " ", fn {_field, error} ->
+      ErrorHelpers.translate_error(error)
     end)
   end
 
