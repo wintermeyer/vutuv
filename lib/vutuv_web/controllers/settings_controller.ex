@@ -246,6 +246,20 @@ defmodule VutuvWeb.SettingsController do
     )
   end
 
+  # The management list of the member's tag subscriptions (issue #872). Following
+  # happens on the tag page; this page (and the feed rail) is where they
+  # unsubscribe. The row only joins the settings hub once at least one tag is
+  # followed (see VutuvWeb.UI.settings_menu/1), so this list is never empty here.
+  def followed_tags(conn, _params) do
+    user = conn.assigns[:user]
+
+    render(conn, "followed_tags.html",
+      user: user,
+      followed_tags: Vutuv.Tags.followed_tags(user),
+      page_title: gettext("Tags you follow")
+    )
+  end
+
   def update_saved_search(conn, %{"id" => id, "saved_search" => %{"notify" => notify}}) do
     user = conn.assigns[:user]
 

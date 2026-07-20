@@ -35,7 +35,17 @@ timeline (own + followed authors' posts **and reposts**, with a "Reposted by X"
 line) with cursor "Load more", a *"Show N new posts"* pill fed by `{:new_post,
 …}` / `{:new_repost, …}` broadcasts, and a desktop-only **"Who to follow"** rail
 (most-followed members you do not yet follow,
-`Vutuv.Social.most_followed_users/1`, live follow).
+`Vutuv.Social.most_followed_users/1`, live follow — now led by members endorsed
+for tags you follow, see below).
+
+`Posts.feed_page/2` merges **three** sources through `Vutuv.FeedPage` (a shared
+cursor over independent fetchers): own + followed authors' posts, their reposts,
+and — since issue #872 — posts carrying a **tag you follow**
+(`feed_tag_items/3`), from authors you do *not* already follow (so following a
+tag widens the feed with new voices without duplicating the follow path; muted
+and blocked authors stay out exactly as elsewhere). Following a tag lives in
+`Vutuv.Tags` — see [social-graph.md](social-graph.md). The feed also carries the
+reload-free **"Tags you follow"** rail (chips + a `phx-click` ✕ unfollow).
 
 The composer's body field is the shared **Milkdown WYSIWYG Markdown editor**
 (`VutuvWeb.UI.markdown_editor/1` + the `MarkdownEditor` hook, also used by the

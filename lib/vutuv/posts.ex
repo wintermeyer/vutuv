@@ -1054,7 +1054,11 @@ defmodule Vutuv.Posts do
 
     page =
       Vutuv.FeedPage.paginate(
-        [&feed_post_items(viewer, &1, &2), &feed_repost_items(viewer, &1, &2)],
+        [
+          &feed_post_items(viewer, &1, &2),
+          &feed_repost_items(viewer, &1, &2),
+          &feed_tag_items(viewer, &1, &2)
+        ],
         limit,
         cursor
       )
@@ -1112,6 +1116,44 @@ defmodule Vutuv.Posts do
     |> Enum.map(fn {id, at, post, reposter} ->
       %{id: "repost-#{id}", post: post, reposted_by: reposter, at: at}
     end)
+  end
+
+  # Third feed source (issue #872): posts carrying a tag the viewer follows, from
+  # authors they do *not* already follow. Following a tag is a subscription to a
+  # topic, so it widens the feed with new voices — a followed author's tagged
+  # post already arrives via `feed_post_items/3`, so excluding all the viewer's
+  # followees here means no cross-source duplication (and `all_followees_of/1`
+  # counts muted follows too, so a muted followee's tagged post stays out, just
+  # as the mute already keeps it off the direct path). Blocks and the viewer's
+  # visibility scope apply exactly as on the other sources; an empty follow set
+  # skips the DB entirely.
+  defp feed_tag_items(%User{id: viewer_id} = viewer, fetch_n, cursor) do
+    case Vutuv.Tags.followed_tag_ids(viewer_id) do
+      [] ->
+        []
+
+      tag_ids ->
+        tag_match =
+          from(pt in PostTag,
+            where: pt.post_id == parent_as(:post).id and pt.tag_id in ^tag_ids
+          )
+
+        from(p in Post,
+          as: :post,
+          join: u in assoc(p, :user),
+          where: p.user_id != ^viewer_id,
+          where: p.user_id not in subquery(all_followees_of(viewer_id)),
+          where: p.user_id not in subquery(blocked_either_way(viewer_id)),
+          where: account_confirmed_row(u),
+          where: exists(subquery(tag_match)),
+          order_by: [desc: p.inserted_at, desc: p.id],
+          limit: ^fetch_n
+        )
+        |> scope_visible(viewer)
+        |> posts_at_or_before(cursor)
+        |> Repo.all()
+        |> Enum.map(&%{id: "tagpost-#{&1.id}", post: &1, reposted_by: nil, at: &1.inserted_at})
+    end
   end
 
   defp followees_of(viewer_id) do

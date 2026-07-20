@@ -223,6 +223,12 @@ defmodule VutuvWeb.Router do
     # posts out of your feed while the follow (and any vernetzt status) stays.
     put("/follows/:id/mute", FollowController, :toggle_mute)
 
+    # Following a tag (issue #872): a private subscription that pulls the tag's
+    # posts into your /feed. POST to follow (`tag_follow[tag_id]`), DELETE
+    # /tag_follows/:tag_id to unfollow. Logged-in only (RequireLoginOr404 in the
+    # controller), like /follows.
+    resources("/tag_follows", TagFollowController, only: [:create, :delete])
+
     # Liking / bookmarking a *member* (the private, silent save the profile
     # header offers, the people-equivalent of a post like/bookmark). POST to
     # save, DELETE /:id (the target member's id) to remove. Logged-in only
@@ -795,6 +801,11 @@ defmodule VutuvWeb.Router do
     get("/saved_searches", SettingsController, :saved_searches)
     patch("/saved_searches/:id", SettingsController, :update_saved_search)
     delete("/saved_searches/:id", SettingsController, :delete_saved_search)
+
+    # Tags you follow (issue #872): the management list of your tag
+    # subscriptions. Following happens on the tag page; unfollowing here (and in
+    # the feed rail) posts to DELETE /tag_follows/:tag_id.
+    get("/followed_tags", SettingsController, :followed_tags)
     # The member's "Your organizations" hub: the organization pages they own or
     # help run, the explainer of how organizations work, and the add call to
     # action. The public browse directory stays at /organizations.

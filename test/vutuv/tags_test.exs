@@ -2,6 +2,7 @@ defmodule Vutuv.TagsTest do
   use Vutuv.DataCase, async: true
   alias Vutuv.Tags
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
 
@@ -792,6 +793,113 @@ defmodule Vutuv.TagsTest do
 
       assert Repo.get(Tag, keep.id).name == "sap basis"
       refute Repo.get(Tag, twin.id)
+    end
+  end
+
+  describe "tag follows (issue #872)" do
+    test "follow_tag/2 subscribes a member to a tag" do
+      user = insert(:user)
+      tag = insert(:tag)
+
+      assert {:ok, %TagFollow{} = follow} = Tags.follow_tag(user, tag)
+      assert follow.user_id == user.id
+      assert follow.tag_id == tag.id
+      assert Tags.tag_followed?(user, tag)
+    end
+
+    test "follow_tag/2 is idempotent — a double follow keeps one row and still returns ok" do
+      user = insert(:user)
+      tag = insert(:tag)
+
+      assert {:ok, _} = Tags.follow_tag(user, tag)
+      assert {:ok, %TagFollow{}} = Tags.follow_tag(user, tag)
+
+      assert Repo.aggregate(from(tf in TagFollow, where: tf.user_id == ^user.id), :count) == 1
+    end
+
+    test "follow_tag/2 broadcasts :tag_follows_changed on the follower's topic" do
+      user = insert(:user)
+      tag = insert(:tag)
+      Vutuv.Activity.subscribe(user.id)
+
+      assert {:ok, _} = Tags.follow_tag(user, tag)
+      assert_receive {:tag_follows_changed, _}
+    end
+
+    test "unfollow_tag/2 removes the subscription (by %Tag{} and by id), idempotently" do
+      user = insert(:user)
+      tag = insert(:tag)
+      Tags.follow_tag(user, tag)
+
+      assert Tags.unfollow_tag(user, tag) == 1
+      refute Tags.tag_followed?(user, tag)
+      # A second unfollow (already gone) is a no-op, not a raise.
+      assert Tags.unfollow_tag(user, tag.id) == 0
+    end
+
+    test "unfollow_tag/2 ignores a non-UUID id without raising" do
+      user = insert(:user)
+      assert Tags.unfollow_tag(user, "not-a-uuid") == 0
+    end
+
+    test "followed_tags/1 lists the member's tags, most-recently-followed first" do
+      user = insert(:user)
+      first = insert(:tag)
+      second = insert(:tag)
+      Tags.follow_tag(user, first)
+      Tags.follow_tag(user, second)
+
+      assert [t1, t2] = Tags.followed_tags(user)
+      assert t1.id == second.id
+      assert t2.id == first.id
+    end
+
+    test "followed_tag_ids/1 returns the followed tag ids (by user or by id)" do
+      user = insert(:user)
+      tag = insert(:tag)
+      Tags.follow_tag(user, tag)
+
+      assert Tags.followed_tag_ids(user) == [tag.id]
+      assert Tags.followed_tag_ids(user.id) == [tag.id]
+    end
+
+    test "tag_follower_count/1 counts the tag's followers" do
+      tag = insert(:tag)
+      for _ <- 1..3, do: Tags.follow_tag(insert(:user), tag)
+      assert Tags.tag_follower_count(tag) == 3
+    end
+
+    test "people_for_followed_tags/1 ranks visible members endorsed for followed tags, minus self" do
+      viewer = insert(:user, email_confirmed?: true)
+      tag = insert(:tag)
+      Tags.follow_tag(viewer, tag)
+
+      popular = insert(:user, email_confirmed?: true)
+      quiet = insert(:user, email_confirmed?: true)
+      popular_ut = insert(:user_tag, user: popular, tag: tag)
+      insert(:user_tag, user: quiet, tag: tag)
+
+      for _ <- 1..2,
+          do:
+            insert(:user_tag_endorsement,
+              user_tag: popular_ut,
+              user: insert(:user, email_confirmed?: true)
+            )
+
+      # The viewer also carries the tag but must never be suggested to themselves.
+      insert(:user_tag, user: viewer, tag: tag)
+
+      ids = viewer |> Tags.people_for_followed_tags(10) |> Enum.map(& &1.id)
+
+      refute viewer.id in ids
+      assert popular.id in ids
+      assert quiet.id in ids
+      # Most-endorsed leads.
+      assert hd(ids) == popular.id
+    end
+
+    test "people_for_followed_tags/1 is empty when the member follows no tags" do
+      assert Tags.people_for_followed_tags(insert(:user), 10) == []
     end
   end
 end

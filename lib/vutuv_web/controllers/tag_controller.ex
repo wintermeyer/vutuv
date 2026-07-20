@@ -32,6 +32,15 @@ defmodule VutuvWeb.TagController do
   # Keep show.html and the doc builder in sync (agent_docs_drift_test.exs).
   def show(conn, _params) do
     tag = conn.assigns[:tag]
+    current_user = conn.assigns[:current_user]
+
+    # The header follow control (issue #872): whether the viewer already follows
+    # this tag, and the public aggregate follower count. The follow state is
+    # viewer-specific, so it rides only on the HTML branch (the agent formats are
+    # the anonymous public view). The count is a public aggregate shown as social
+    # proof; it is UI chrome, not tag content, so it stays out of the agent docs.
+    following_tag? = not is_nil(current_user) and Vutuv.Tags.tag_followed?(current_user, tag)
+    tag_follower_count = Vutuv.Tags.tag_follower_count(tag)
 
     # "Posts with this tag" (#946) is offset-paginated (`?page`). The overview —
     # description, most-endorsed members and the "Offene Stellen" jobs (#933) —
@@ -48,6 +57,9 @@ defmodule VutuvWeb.TagController do
       html:
         &render(&1, "show.html",
           tag: tag,
+          current_user: current_user,
+          following_tag?: following_tag?,
+          tag_follower_count: tag_follower_count,
           overview?: first_page?,
           open_positions:
             if(first_page?,

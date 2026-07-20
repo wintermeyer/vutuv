@@ -265,6 +265,10 @@ defmodule Vutuv.Factory do
     %Vutuv.Tags.UserTagEndorsement{}
   end
 
+  def tag_follow_factory do
+    %Vutuv.Tags.TagFollow{}
+  end
+
   def post_factory do
     %Vutuv.Posts.Post{
       body: sequence(:post_body, &"Post body #{&1}"),

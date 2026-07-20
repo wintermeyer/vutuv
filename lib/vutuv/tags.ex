@@ -14,6 +14,7 @@ defmodule Vutuv.Tags do
   alias Vutuv.Accounts.User
   alias Vutuv.Repo
   alias Vutuv.Tags.Tag
+  alias Vutuv.Tags.TagFollow
   alias Vutuv.Tags.UserTag
   alias Vutuv.Tags.UserTagEndorsement
 
@@ -350,6 +351,157 @@ defmodule Vutuv.Tags do
         |> Repo.all()
         |> MapSet.new()
     end
+  end
+
+  # --- Tag follows (issue #872) --------------------------------------------
+  #
+  # A member following a tag is a private subscription that pulls the tag's posts
+  # into their `/feed` (`Vutuv.Posts.feed_page/2` reads `followed_tag_ids/1` as a
+  # third source) and leads the feed's "Who to follow" rail with people endorsed
+  # for it. Silent: no notification, no public follower list — only the aggregate
+  # `tag_follower_count/1`. `follow_tag/2` always sets `user_id` from the passed
+  # session user, so a request can't forge someone else's subscription.
+
+  @doc """
+  Follows `tag` (a `%Tag{}` or a raw tag id) as `user` (issue #872). Idempotent:
+  following a tag you already follow is a no-op that still returns `{:ok,
+  tag_follow}` (the DB `ON CONFLICT` keeps a double-submit from raising). A
+  non-UUID or unknown tag id comes back as `{:error, _}`, never a raise, so the
+  controller can pass a request param straight through. Broadcasts
+  `{:tag_follows_changed, %{}}` on the follower's activity topic so an open
+  `/feed` refreshes its rails live.
+  """
+  def follow_tag(%User{} = user, %Tag{id: tag_id}), do: follow_tag(user, tag_id)
+
+  def follow_tag(%User{} = user, tag_id) when is_binary(tag_id) do
+    # After the insert the row is guaranteed to exist (a fresh insert, or an ON
+    # CONFLICT no-op because it already did), so the get_by re-reads the
+    # authoritative row to return; an unknown tag id trips the tag_id
+    # foreign_key_constraint and comes back as {:error, changeset}. Both the
+    # `nil` from a non-UUID id and a vanished row map to {:error, :invalid}.
+    with tag_id when not is_nil(tag_id) <- Vutuv.UUIDv7.cast_or_nil(tag_id),
+         {:ok, _} <- insert_tag_follow(user.id, tag_id),
+         %TagFollow{} = follow <- Repo.get_by(TagFollow, user_id: user.id, tag_id: tag_id) do
+      broadcast_tag_follows_changed(user.id)
+      {:ok, follow}
+    else
+      nil -> {:error, :invalid}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp insert_tag_follow(user_id, tag_id) do
+    %TagFollow{}
+    |> TagFollow.changeset(%{user_id: user_id, tag_id: tag_id})
+    |> Repo.insert(on_conflict: :nothing, conflict_target: [:user_id, :tag_id])
+  end
+
+  @doc """
+  Unfollows a tag as `user`, by `%Tag{}` or a raw tag id. Idempotent: returns the
+  number of rows removed (0 or 1), so unfollowing a tag you don't follow — or a
+  double-submit — is a no-op, not a raise. A non-UUID id is treated as "nothing
+  to remove". Broadcasts `{:tag_follows_changed, %{}}` when a row actually went.
+  """
+  def unfollow_tag(%User{} = user, %Tag{} = tag), do: unfollow_tag(user, tag.id)
+
+  def unfollow_tag(%User{} = user, tag_id) do
+    case Vutuv.UUIDv7.cast_or_nil(tag_id) do
+      nil ->
+        0
+
+      tag_id ->
+        {count, _} =
+          from(tf in TagFollow, where: tf.user_id == ^user.id and tf.tag_id == ^tag_id)
+          |> Repo.delete_all()
+
+        if count > 0, do: broadcast_tag_follows_changed(user.id)
+        count
+    end
+  end
+
+  @doc "Whether `user` currently follows `tag` (a `%Tag{}` or a raw tag id)."
+  def tag_followed?(%User{} = user, %Tag{} = tag), do: tag_followed?(user, tag.id)
+
+  def tag_followed?(%User{} = user, tag_id) do
+    Repo.exists?(from(tf in TagFollow, where: tf.user_id == ^user.id and tf.tag_id == ^tag_id))
+  end
+
+  @doc """
+  The tags `user` follows, most-recently-followed first — the "Tags you follow"
+  feed rail and the `/settings/followed_tags` list.
+  """
+  def followed_tags(%User{} = user) do
+    Repo.all(
+      from(tf in TagFollow,
+        join: t in assoc(tf, :tag),
+        where: tf.user_id == ^user.id,
+        order_by: [desc: tf.inserted_at, desc: tf.id],
+        select: t
+      )
+    )
+  end
+
+  @doc """
+  The ids of the tags `user` follows — the set `Vutuv.Posts.feed_page/2` joins
+  its third (followed-tag) source against. Accepts a `%User{}` or a raw user id.
+  """
+  def followed_tag_ids(%User{id: id}), do: followed_tag_ids(id)
+
+  def followed_tag_ids(user_id) when is_binary(user_id) do
+    Repo.all(from(tf in TagFollow, where: tf.user_id == ^user_id, select: tf.tag_id))
+  end
+
+  @doc "How many members follow `tag` (the public aggregate on the tag page)."
+  def tag_follower_count(%Tag{} = tag) do
+    Repo.aggregate(from(tf in TagFollow, where: tf.tag_id == ^tag.id), :count)
+  end
+
+  @doc """
+  Up to `limit` members endorsed for any tag `user` follows, most-endorsed
+  first — the people half of issue #872, feeding the feed's "Who to follow"
+  rail. Same visibility gate as `Tag.recommended_users/1` (unconfirmed /
+  moderation-hidden accounts never surface) and the same narrow listing-row
+  select; the viewer themselves is excluded here, the already-followed / blocked
+  filtering stays at the rail call site (it already does it for the popular pool).
+  Returns `[]` when the member follows no tags, so the rail falls back to the
+  popular pool unchanged.
+  """
+  def people_for_followed_tags(%User{} = user, limit) do
+    import Vutuv.Moderation.Query, only: [account_hidden: 1, account_confirmed_row: 1]
+
+    case followed_tag_ids(user) do
+      [] ->
+        []
+
+      tag_ids ->
+        Repo.all(
+          from(u in User,
+            join: ut in assoc(u, :user_tags),
+            left_join: e in assoc(ut, :endorsements),
+            # Count only currently-visible endorsers (issue #783), the same gate
+            # `Tag.most_endorsed_in_tag/2` applies: the test rides in the ON
+            # clause, so a hidden/unconfirmed endorser leaves `endorser` NULL and
+            # drops out of `count(endorser.id)`.
+            left_join: endorser in assoc(e, :user),
+            on: account_confirmed_row(endorser) and not account_hidden(endorser.id),
+            where: ut.tag_id in ^tag_ids,
+            where: u.id != ^user.id,
+            where: account_confirmed_row(u) and not account_hidden(u.id),
+            group_by: u.id,
+            order_by: fragment("count(?) DESC", endorser.id),
+            limit: ^limit,
+            select: struct(u, ^User.listing_fields())
+          )
+        )
+    end
+  end
+
+  # Tell `user`'s open feed (and any other subscriber) that their followed-tag
+  # set changed, so the "Tags you follow" and "Who to follow" rails redraw with
+  # no reload. `VutuvWeb.PostLive.Feed` listens for `:tag_follows_changed`;
+  # everything else ignores it via its catch-all handle_info.
+  defp broadcast_tag_follows_changed(user_id) do
+    Vutuv.Activity.broadcast(user_id, {:tag_follows_changed, %{}})
   end
 
   @doc """
