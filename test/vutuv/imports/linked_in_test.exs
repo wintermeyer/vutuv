@@ -165,11 +165,11 @@ defmodule Vutuv.Imports.LinkedInTest do
       assert [%{params: %{"value" => "+49 30 1234567", "number_type" => "Cell"}}] = result.phones
     end
 
-    test "maps a fax line to Work now that Fax is no longer a vutuv type (#948)" do
+    test "maps a fax line to the Fax type (#948)" do
       csv = "Extension,Number,Type\n,+49 30 1234567,Fax\n"
       {:ok, result} = LinkedIn.parse(zip([{"PhoneNumbers.csv", csv}]))
 
-      assert [%{params: %{"value" => "+49 30 1234567", "number_type" => "Work"}}] = result.phones
+      assert [%{params: %{"value" => "+49 30 1234567", "number_type" => "Fax"}}] = result.phones
     end
 
     # Real archives list the same number more than once (and in more than one
