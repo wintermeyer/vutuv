@@ -43,6 +43,9 @@ defmodule VutuvWeb.TagControllerTest do
       assert html =~ "tag-posts"
       assert html =~ "Elixir meetup notes"
       assert html =~ "/#{author.username}/posts/#{post.id}"
+      # The posts render as flat rows in one card (the feed/archive treatment),
+      # not separate full-width cards - keeps the desktop layout tidy.
+      assert html =~ "data-post-list"
     end
 
     test "the posts section is absent when no public post carries the tag", %{conn: conn} do
