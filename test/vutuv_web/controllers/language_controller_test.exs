@@ -14,6 +14,17 @@ defmodule VutuvWeb.LanguageControllerTest do
     assert html =~ "Native"
   end
 
+  test "the opaque CEFR badge carries a plain-language tooltip (issue #888)", %{conn: conn} do
+    {_conn, user} = create_and_login_user(conn)
+    insert(:language, user: user, language_code: "en", proficiency: "b2")
+
+    html = build_conn() |> get(~p"/#{user}/languages") |> html_response(200)
+    # The badge still shows the bare code, now with a `title` gloss so a reader
+    # who does not know the CEFR scale learns what "B2" means on hover.
+    assert html =~ "B2"
+    assert html =~ "title=\"B2 (Upper intermediate)\""
+  end
+
   test "redirect when creating a valid language", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
 

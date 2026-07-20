@@ -357,9 +357,10 @@ defmodule VutuvWeb.UserControllerTest do
   end
 
   describe "contact card splits into Beruflich/Privat" do
-    # E-mails are work unless typed "Personal"; phone numbers are private only
-    # when typed "Home". When both buckets hold something the card grows two
-    # labeled groups (work first); a single bucket stays one bare list.
+    # E-mails are work unless typed "Personal"; phone numbers are private when
+    # typed "Home" or "Cell" (private landline / mobile). When both buckets hold
+    # something the card grows two labeled groups (work first); a single bucket
+    # stays one bare list.
 
     test "shows a work and a private group when both kinds are present", %{conn: conn} do
       user = insert_activated_user()
@@ -391,13 +392,26 @@ defmodule VutuvWeb.UserControllerTest do
     test "stays one ungrouped list when every channel is work", %{conn: conn} do
       user = insert_activated_user()
       insert(:email, user: user, value: "only.work@example.com", email_type: "Work")
-      insert(:phone_number, user: user, value: "+49 30 5551234", number_type: "Cell")
+      insert(:phone_number, user: user, value: "+49 30 5551234", number_type: "Work")
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
       assert html =~ "only.work@example.com"
       refute html =~ ~s(data-contact-group="work")
       refute html =~ ~s(data-contact-group="private")
+    end
+
+    test "a private mobile (Cell) groups as private, not work (issue #948)", %{conn: conn} do
+      user = insert_activated_user()
+      insert(:email, user: user, value: "work.addr@example.com", email_type: "Work")
+      insert(:phone_number, user: user, value: "+49 30 5551234", number_type: "Cell")
+
+      html = conn |> get(~p"/#{user}") |> html_response(200)
+
+      assert html =~ ~s(data-contact-group="private")
+
+      assert source_pos(html, ~s(data-contact-group="private")) <
+               source_pos(html, "+49 30 5551234")
     end
   end
 

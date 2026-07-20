@@ -36,7 +36,10 @@ defmodule VutuvWeb.SectionReorderLive do
   import VutuvWeb.UrlHTML, only: [linkable_url: 1, display_url: 1]
   import VutuvWeb.EmailHTML, only: [email_type_label: 1]
   import VutuvWeb.PhoneNumberHTML, only: [phone_type_label: 1]
-  import VutuvWeb.LanguageHTML, only: [language_name: 1, proficiency_badge: 1]
+
+  import VutuvWeb.LanguageHTML,
+    only: [language_name: 1, proficiency_badge: 1, proficiency_label: 1]
+
   import VutuvWeb.UserHelpers, only: [format_address: 2]
 
   alias Vutuv.Profiles.SocialMediaAccount
@@ -242,7 +245,10 @@ defmodule VutuvWeb.SectionReorderLive do
     <div class="reorder__text">
       <div class="reorder__title">
         {language_name(@entry.language_code)}
-        <span class="ml-1 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+        <span
+          class="ml-1 inline-flex cursor-help items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+          title={proficiency_label(@entry.proficiency)}
+        >
           {proficiency_badge(@entry.proficiency)}
         </span>
       </div>

@@ -25,6 +25,16 @@
       </span>
     </p>
 
+    <%!-- Filter the archive by entry kind (issue #945): All / Own posts /
+    Reposts / Replies. Only on the unscoped archive — a period-scoped page is
+    date browsing. Plain links (a dead page), so each is a full navigation. --%>
+    <.post_filter_tabs
+      :if={is_nil(@period_label)}
+      active={@post_filter}
+      base_path={~p"/#{@author}/posts"}
+      id="archive-post-filter"
+    />
+
     <%!-- One card of flat divide-y rows via the shared <.post_thread_entry>,
     the same treatment as the feed and the profile — a reply nests the post it
     answers inline instead of the flat "Replying to @handle" banner. --%>
@@ -41,7 +51,9 @@
       </div>
     </.post_list>
 
-    <p :if={@posts == []} class="text-slate-600 dark:text-slate-400">{gettext("Nothing here yet.")}</p>
+    <p :if={@posts == []} class="text-slate-600 dark:text-slate-400">
+      {post_filter_empty_text(@post_filter)}
+    </p>
 
     <.pager params={@conn.params} total={@total} />
   </div>

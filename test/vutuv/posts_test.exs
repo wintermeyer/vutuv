@@ -1011,6 +1011,71 @@ defmodule Vutuv.PostsTest do
     end
   end
 
+  describe "timeline type filter (issue #945)" do
+    # An author with one of each entry kind: a top-level own post, an own reply
+    # to a stranger's post, and a repost of a stranger's post.
+    defp timeline_fixture do
+      author = user()
+      stranger = user()
+      parent = create_post!(stranger, %{body: "stranger post"})
+      shared = create_post!(stranger, %{body: "to repost"})
+
+      own = create_post!(author, %{body: "my own post"})
+      {:ok, reply} = Posts.create_reply(author, parent, %{body: "my reply"})
+      :ok = Posts.repost_post(author, shared)
+
+      %{author: author, own: own, reply: reply, shared: shared}
+    end
+
+    defp page_ids(entries), do: entries |> Enum.map(& &1.post.id) |> Enum.sort()
+
+    test "normalize_post_filter/1 maps raw values, defaulting to :all" do
+      assert Posts.normalize_post_filter("posts") == :posts
+      assert Posts.normalize_post_filter("reposts") == :reposts
+      assert Posts.normalize_post_filter("replies") == :replies
+      assert Posts.normalize_post_filter("all") == :all
+      assert Posts.normalize_post_filter("bogus") == :all
+      assert Posts.normalize_post_filter(nil) == :all
+    end
+
+    test "author_posts_page/5 restricts the archive to one entry kind" do
+      %{author: author, own: own, reply: reply, shared: shared} = timeline_fixture()
+
+      {all, total} = Posts.author_posts_page(author, nil, %{}, nil, :all)
+      assert total == 3
+      assert page_ids(all) == Enum.sort([own.id, reply.id, shared.id])
+
+      {posts, 1} = Posts.author_posts_page(author, nil, %{}, nil, :posts)
+      assert page_ids(posts) == [own.id]
+
+      {reposts, 1} = Posts.author_posts_page(author, nil, %{}, nil, :reposts)
+      assert page_ids(reposts) == [shared.id]
+
+      {replies, 1} = Posts.author_posts_page(author, nil, %{}, nil, :replies)
+      assert page_ids(replies) == [reply.id]
+    end
+
+    test "count_author_posts/3 counts one kind" do
+      %{author: author} = timeline_fixture()
+
+      assert Posts.count_author_posts(author, nil) == 3
+      assert Posts.count_author_posts(author, nil, :posts) == 1
+      assert Posts.count_author_posts(author, nil, :reposts) == 1
+      assert Posts.count_author_posts(author, nil, :replies) == 1
+    end
+
+    test "profile_posts/3 previews one kind" do
+      %{author: author, own: own, reply: reply, shared: shared} = timeline_fixture()
+
+      assert author |> Posts.profile_posts(nil) |> page_ids() ==
+               Enum.sort([own.id, reply.id, shared.id])
+
+      assert author |> Posts.profile_posts(nil, type: :posts) |> page_ids() == [own.id]
+      assert author |> Posts.profile_posts(nil, type: :reposts) |> page_ids() == [shared.id]
+      assert author |> Posts.profile_posts(nil, type: :replies) |> page_ids() == [reply.id]
+    end
+  end
+
   describe "liked and bookmarked posts pages" do
     test "lists liked posts newest-liked-first with offset pagination" do
       reader = user()

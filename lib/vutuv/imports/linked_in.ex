@@ -559,7 +559,7 @@ defmodule Vutuv.Imports.LinkedIn do
       "home" -> "Home"
       "work" -> "Work"
       "fax" -> "Fax"
-      # mobile / cell / unknown all map to the default.
+      # mobile / cell / unknown all map to the default (private mobile).
       _ -> "Cell"
     end
   end

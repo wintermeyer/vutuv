@@ -1369,9 +1369,10 @@ defmodule Vutuv.Posts do
   """
   def profile_posts(%User{} = author, viewer, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_profile_limit)
+    filter = Keyword.get(opts, :type, :all)
 
     author
-    |> author_timeline_query(viewer)
+    |> author_timeline_query(viewer, filter)
     |> order_by([t], desc: t.at, desc: t.ref_id)
     |> limit(^limit)
     |> Repo.all()
@@ -1379,10 +1380,25 @@ defmodule Vutuv.Posts do
     |> collapse_threads()
   end
 
-  @doc "How many timeline entries of `author` `viewer` may see (the \"View all\" label)."
-  def count_author_posts(%User{} = author, viewer) do
-    author |> author_timeline_query(viewer) |> Repo.aggregate(:count)
+  @doc """
+  How many timeline entries of `author` `viewer` may see (the "View all"
+  label). `filter` (issue #945) scopes the count to one entry kind — see
+  `author_timeline_query/3`.
+  """
+  def count_author_posts(%User{} = author, viewer, filter \\ :all) do
+    author |> author_timeline_query(viewer, filter) |> Repo.aggregate(:count)
   end
+
+  @doc """
+  Maps a raw filter string (a phx-value or `?type=` query param) to one of the
+  timeline filters `author_posts_page/5` / `profile_posts/3` / `count_author_posts/3`
+  understand, defaulting to `:all` for anything unrecognised (issue #945).
+  """
+  def normalize_post_filter(type)
+  def normalize_post_filter("posts"), do: :posts
+  def normalize_post_filter("reposts"), do: :reposts
+  def normalize_post_filter("replies"), do: :replies
+  def normalize_post_filter(_type), do: :all
 
   @doc """
   The newest anonymous-visible posts for the RSS feeds: `author`'s own
@@ -1493,10 +1509,12 @@ defmodule Vutuv.Posts do
   archive at `/:slug/posts` (browse-style pagination, like followers/tags).
   An optional `period` (`{from, to}` dates, inclusive) scopes it to the
   year/month/day index pages; reposts date by the repost, not the original
-  publication. Returns `{entries, total}` (entry shape as in `feed_page/2`).
+  publication. `filter` (issue #945) narrows it to one entry kind — see
+  `author_timeline_query/3`. Returns `{entries, total}` (entry shape as in
+  `feed_page/2`).
   """
-  def author_posts_page(%User{} = author, viewer, params, period \\ nil) do
-    query = author |> author_timeline_query(viewer) |> scope_period(period)
+  def author_posts_page(%User{} = author, viewer, params, period \\ nil, filter \\ :all) do
+    query = author |> author_timeline_query(viewer, filter) |> scope_period(period)
     total = Repo.aggregate(query, :count)
 
     entries =
@@ -1518,7 +1536,12 @@ defmodule Vutuv.Posts do
   # The author's timeline rows — own posts (dated by publication) and own
   # reposts (dated by the repost), each visibility-scoped to `viewer` — as one
   # subquery the callers count, period-scope and page like a plain table.
-  defp author_timeline_query(%User{id: author_id}, viewer) do
+  # `filter` narrows the timeline to one entry kind (issue #945): `:all` keeps
+  # everything (own posts, own replies and reposts), `:posts` only top-level
+  # own posts, `:replies` only own replies, `:reposts` only reposts. The
+  # reply split keys on whether the post carries a PostReply row (its
+  # `has_one :reply_ref`); `:reposts` skips the originals leg entirely.
+  defp author_timeline_query(%User{id: author_id}, viewer, filter) do
     originals =
       from(p in Post,
         where: p.user_id == ^author_id,
@@ -1531,6 +1554,7 @@ defmodule Vutuv.Posts do
         }
       )
       |> scope_visible(viewer)
+      |> scope_original_kind(filter)
 
     reposts =
       from(p in Post,
@@ -1548,8 +1572,26 @@ defmodule Vutuv.Posts do
       )
       |> scope_visible(viewer)
 
-    from(t in subquery(union_all(originals, ^reposts)))
+    case filter do
+      :posts -> from(t in subquery(originals))
+      :replies -> from(t in subquery(originals))
+      :reposts -> from(t in subquery(reposts))
+      _all -> from(t in subquery(union_all(originals, ^reposts)))
+    end
   end
+
+  # The `:posts` / `:replies` split of the originals leg: `:posts` drops any
+  # post that carries a reply row, `:replies` keeps only those. `:all` and
+  # `:reposts` leave the leg untouched (the caller unions it in or ignores it).
+  defp scope_original_kind(query, :posts) do
+    from(p in query, left_join: pr in PostReply, on: pr.post_id == p.id, where: is_nil(pr.id))
+  end
+
+  defp scope_original_kind(query, :replies) do
+    from(p in query, join: pr in PostReply, on: pr.post_id == p.id)
+  end
+
+  defp scope_original_kind(query, _filter), do: query
 
   defp author_entries(rows, %User{} = author) do
     posts =

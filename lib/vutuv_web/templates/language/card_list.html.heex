@@ -16,7 +16,10 @@ preferred contact language (issue #894). --%>
     >
       {language_name(language.language_code)}
     </.link>
-    <span class="shrink-0 inline-flex items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+    <span
+      class="shrink-0 inline-flex cursor-help items-center rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+      title={proficiency_label(language.proficiency)}
+    >
       {proficiency_badge(language.proficiency)}
     </span>
     <.language_preferred_badge :if={idx == 0 and length(@languages) > 1} />

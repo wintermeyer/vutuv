@@ -21,9 +21,13 @@ defmodule Vutuv.Profiles.PhoneNumber do
   @format_message ~s/Please enter a valid phone number/
   @requred_message ~s/This field is required/
 
-  # The allowed `number_type` labels, in the order the HTML form lists them.
-  # Mirrors Email.email_types: enforced in the schema, not just the <select>.
-  @number_types ~w(Work Cell Home Fax)
+  # The allowed `number_type` labels, in the order the HTML form lists them: a
+  # private/work × landline/mobile matrix (issue #948), plus Fax. "Home"/"Cell"
+  # are the private landline / mobile, "Work"/"Work Cell" the work landline /
+  # mobile. Fax is kept because it is still relevant in some regions (dropping
+  # it was an overcorrection). Mirrors Email.email_types: enforced in the
+  # schema, not just the <select>.
+  @number_types ["Home", "Cell", "Work", "Work Cell", "Fax"]
 
   @doc "The allowed `number_type` values, in the order the forms list them."
   def number_types, do: @number_types

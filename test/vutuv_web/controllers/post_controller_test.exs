@@ -431,6 +431,58 @@ defmodule VutuvWeb.PostControllerTest do
       assert get(conn, "/#{user.username}/posts/2026/13").status == 404
       assert get(conn, "/#{user.username}/posts/2026/02/30").status == 404
     end
+
+    test "?type= filters the archive by entry kind (issue #945)", %{conn: conn} do
+      author = insert_activated_user()
+      stranger = insert_activated_user()
+      {:ok, parent} = Posts.create_post(stranger, %{body: "stranger topic"})
+      {:ok, shared} = Posts.create_post(stranger, %{body: "worth resharing"})
+      {:ok, _own} = Posts.create_post(author, %{body: "my own post"})
+      {:ok, _reply} = Posts.create_reply(author, parent, %{body: "my reply here"})
+      :ok = Posts.repost_post(author, shared)
+
+      own = get(conn, "/#{author.username}/posts?type=posts").resp_body
+      assert own =~ "my own post"
+      refute own =~ "my reply here"
+      refute own =~ "worth resharing"
+
+      reposts = get(conn, "/#{author.username}/posts?type=reposts").resp_body
+      assert reposts =~ "worth resharing"
+      refute reposts =~ "my own post"
+
+      replies = get(conn, "/#{author.username}/posts?type=replies").resp_body
+      assert replies =~ "my reply here"
+      refute replies =~ "my own post"
+
+      # A bogus type falls back to the full archive.
+      all = get(conn, "/#{author.username}/posts?type=bogus").resp_body
+      assert all =~ "my own post"
+      assert all =~ "worth resharing"
+    end
+
+    test "the tab bar shows on the unscoped archive but not on a scoped period", %{conn: conn} do
+      user = insert_activated_user()
+      {:ok, _} = Posts.create_post(user, %{body: "any post"})
+
+      unscoped = get(conn, "/#{user.username}/posts").resp_body
+      assert unscoped =~ ~s(id="archive-post-filter")
+
+      scoped = get(conn, "/#{user.username}/posts/#{Vutuv.BerlinTime.today().year}").resp_body
+      refute scoped =~ ~s(id="archive-post-filter")
+    end
+
+    test "the agent-format siblings ignore ?type= (stay the whole archive)", %{conn: conn} do
+      author = insert_activated_user()
+      {:ok, _own} = Posts.create_post(author, %{body: "alpha original"})
+      {:ok, shared} = Posts.create_post(insert_activated_user(), %{body: "beta shared"})
+      :ok = Posts.repost_post(author, shared)
+
+      # ?type=posts would drop the repost in HTML, but the .json archive is one
+      # canonical document and lists every entry regardless of the query.
+      json = get(conn, "/#{author.username}/posts.json?type=posts").resp_body
+      assert json =~ "alpha original"
+      assert json =~ "beta shared"
+    end
   end
 
   describe "the profile's View all link" do
