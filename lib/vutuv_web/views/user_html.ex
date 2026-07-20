@@ -3,7 +3,15 @@ defmodule VutuvWeb.UserHTML do
   use VutuvWeb, :html
 
   import VutuvWeb.PostComponents,
-    only: [composer_trigger: 1, post_list: 1, post_row_class: 0, post_thread_entry: 1]
+    only: [
+      composer_trigger: 1,
+      post_archive_path: 2,
+      post_filter_empty_text: 1,
+      post_filter_tabs: 1,
+      post_list: 1,
+      post_row_class: 0,
+      post_thread_entry: 1
+    ]
 
   import VutuvWeb.UserHelpers
 

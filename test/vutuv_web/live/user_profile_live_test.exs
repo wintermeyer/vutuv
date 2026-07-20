@@ -588,4 +588,79 @@ defmodule VutuvWeb.UserProfileLiveTest do
              )
     end
   end
+
+  describe "post type filter without a reload (issue #945)" do
+    # An owner with one of each entry kind, viewed anonymously (public posts).
+    setup do
+      owner = insert_activated_user()
+      stranger = insert_activated_user()
+      {:ok, parent} = Posts.create_post(stranger, %{body: "stranger topic"})
+      {:ok, shared} = Posts.create_post(stranger, %{body: "worth resharing"})
+
+      {:ok, _own} = Posts.create_post(owner, %{body: "my own post"})
+      {:ok, _reply} = Posts.create_reply(owner, parent, %{body: "my reply here"})
+      :ok = Posts.repost_post(owner, shared)
+
+      %{owner: owner}
+    end
+
+    defp tab(view, value),
+      do: element(view, ~s(#profile-post-filter button[data-post-filter-tab="#{value}"]))
+
+    test "the tab bar renders and 'All' shows every entry kind", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      assert has_element?(view, "#profile-post-filter")
+
+      body = render(view)
+      assert body =~ "my own post"
+      assert body =~ "my reply here"
+      assert body =~ "worth resharing"
+    end
+
+    test "'Own posts' narrows to top-level posts", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      html = view |> tab("posts") |> render_click()
+
+      assert html =~ "my own post"
+      refute html =~ "my reply here"
+      refute html =~ "worth resharing"
+    end
+
+    test "'Reposts' narrows to reposts", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      html = view |> tab("reposts") |> render_click()
+
+      assert html =~ "worth resharing"
+      refute html =~ "my own post"
+    end
+
+    test "'Replies' narrows to replies", %{conn: conn, owner: owner} do
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      html = view |> tab("replies") |> render_click()
+
+      assert html =~ "my reply here"
+      refute html =~ "my own post"
+    end
+
+    test "an empty filter shows a per-kind empty state, keeping the tab bar", %{conn: conn} do
+      # A member who only reposts: the Replies tab has nothing to show.
+      owner = insert_activated_user()
+      stranger = insert_activated_user()
+      {:ok, shared} = Posts.create_post(stranger, %{body: "shared only"})
+      :ok = Posts.repost_post(owner, shared)
+
+      {:ok, view, _html} = live(conn, ~p"/#{owner}")
+
+      html = view |> tab("replies") |> render_click()
+
+      assert html =~ "No replies yet."
+      refute html =~ "shared only"
+      # The tabs stay reachable so the reader can switch back.
+      assert has_element?(view, "#profile-post-filter")
+    end
+  end
 end

@@ -369,7 +369,7 @@ the resulting ~200px rail width. --%>
 
     <%!-- Posts (latest visible to this viewer; writing happens in the /feed
     composer, which the owner's "Add" link points to) --%>
-    <.card :if={@posts != [] or @as_owner?} id="profile-posts">
+    <.card :if={@posts_total > 0 or @as_owner?} id="profile-posts">
       <%!-- A "profile" context disambiguates the noun (Beitrag/Beiträge) from the
       bare gettext("Post") verb on the composer's submit button ("Posten"), which
       shares the "Post" msgid and must not be repurposed. --%>
@@ -390,10 +390,20 @@ the resulting ~200px rail width. --%>
         href={~p"/feed#compose"}
         surface={:flat}
         id="profile-composer"
-        class={@posts != [] && "mb-4 border-b border-slate-100 pb-4 dark:border-slate-800"}
+        class={@posts_total > 0 && "mb-4 border-b border-slate-100 pb-4 dark:border-slate-800"}
       >
-        {if @posts == [], do: gettext("Write your first post"), else: gettext("Write a post")}
+        {if @posts_total == 0, do: gettext("Write your first post"), else: gettext("Write a post")}
       </.composer_trigger>
+
+      <%!-- Filter the timeline by entry kind (issue #945): All / Own posts /
+      Reposts / Replies, so a visitor can skip past reposts to a member's own
+      writing. Only when there is something to filter; toggles with no reload. --%>
+      <.post_filter_tabs
+        :if={@posts_total > 0}
+        active={@post_filter}
+        event="posts_filter"
+        id="profile-post-filter"
+      />
 
 <%!-- Threaded Posts list — the shared <.post_thread_entry>: a reply nests the
       post it answers as an inline context preview joined by the thread rail, a
@@ -414,9 +424,23 @@ the resulting ~200px rail width. --%>
         </div>
       </.post_list>
 
-      <%!-- Content navigation: only when there is more than the profile shows. --%>
-      <.card_footer_link :if={@posts_total > length(@posts)} href={~p"/#{@user}/posts"}>
-        {gettext("View all %{count} posts", count: compact_count(@posts_total))}
+      <%!-- The active filter has nothing (e.g. a member who only reposts, viewed
+      under "Own posts"). Only while there ARE posts overall — an empty profile
+      shows just the composer. --%>
+      <p
+        :if={@posts == [] and @posts_total > 0}
+        class="py-4 text-sm text-slate-600 dark:text-slate-400"
+      >
+        {post_filter_empty_text(@post_filter)}
+      </p>
+
+      <%!-- Content navigation: only when the active filter has more than the
+      profile shows. Carries the filter into the archive. --%>
+      <.card_footer_link
+        :if={@post_filter_total > length(@posts)}
+        href={post_archive_path(@user, @post_filter)}
+      >
+        {gettext("View all %{count} posts", count: compact_count(@post_filter_total))}
       </.card_footer_link>
     </.card>
 

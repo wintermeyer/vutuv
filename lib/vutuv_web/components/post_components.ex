@@ -251,6 +251,101 @@ defmodule VutuvWeb.PostComponents do
   def post_row_class, do: "py-4 first:pt-0 last:pb-0"
 
   @doc """
+  The value/label pairs for the post-type filter tabs (issue #945): All,
+  Own posts, Reposts, Replies. The four together partition the timeline (an
+  entry is exactly one of them), the reason a segmented tab bar fits. Values
+  match `Vutuv.Posts.normalize_post_filter/1`.
+  """
+  def post_filter_options do
+    [
+      {"all", gettext("All")},
+      {"posts", gettext("Own posts")},
+      {"reposts", gettext("Reposts")},
+      {"replies", gettext("Replies")}
+    ]
+  end
+
+  @doc """
+  The per-tab empty-state line, keyed by the active filter so an empty tab
+  says what is missing ("No reposts yet.") instead of a bare "Nothing here".
+  """
+  def post_filter_empty_text("posts"), do: gettext("No posts yet.")
+  def post_filter_empty_text("reposts"), do: gettext("No reposts yet.")
+  def post_filter_empty_text("replies"), do: gettext("No replies yet.")
+  def post_filter_empty_text(_all), do: gettext("Nothing here yet.")
+
+  @doc """
+  The `/:slug/posts` archive path for `user` scoped to a filter — the plain
+  archive for `"all"`, otherwise a `?type=` variant. Shared by the profile's
+  "View all" footer link and the archive's own tabs.
+  """
+  def post_archive_path(user, "all"), do: ~p"/#{user}/posts"
+  def post_archive_path(user, type), do: ~p"/#{user}/posts?#{[type: type]}"
+
+  @doc """
+  The post-type filter tab bar (issue #945), a segmented control matching the
+  profile's other in-card tabs. Two modes, one look:
+
+    * pass `event` for a LiveView host (the profile) — each tab is a
+      `phx-click` button firing `event` with `phx-value-type`, so it toggles
+      with no reload;
+    * pass `base_path` for a dead page (the `/:slug/posts` archive) — each tab
+      is a plain link to `base_path` (+ `?type=`), a full navigation.
+
+  `active` is the current filter string; the matching tab reads as selected.
+  """
+  attr(:active, :string, required: true)
+  attr(:event, :string, default: nil, doc: "phx-click event name → button mode")
+  attr(:base_path, :string, default: nil, doc: "archive base path → link mode")
+  attr(:rest, :global, doc: "container attrs, e.g. an id for tests")
+
+  def post_filter_tabs(assigns) do
+    ~H"""
+    <div
+      class="mb-4 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 text-sm dark:bg-slate-800"
+      {@rest}
+    >
+      <%= for {value, label} <- post_filter_options() do %>
+        <button
+          :if={@event}
+          type="button"
+          phx-click={@event}
+          phx-value-type={value}
+          data-post-filter-tab={value}
+          aria-pressed={to_string(@active == value)}
+          class={post_filter_tab_class(@active == value)}
+        >
+          {label}
+        </button>
+        <.link
+          :if={!@event}
+          href={post_filter_link(@base_path, value)}
+          data-post-filter-tab={value}
+          aria-current={@active == value && "page"}
+          class={post_filter_tab_class(@active == value)}
+        >
+          {label}
+        </.link>
+      <% end %>
+    </div>
+    """
+  end
+
+  # The active tab reads as a raised white pill, the rest as quiet muted text —
+  # the same treatment as the profile's Certificates & licenses tabs.
+  defp post_filter_tab_class(true),
+    do:
+      "whitespace-nowrap rounded-md bg-white px-3 py-1 font-semibold text-brand-700 shadow-sm dark:bg-slate-900 dark:text-brand-100"
+
+  defp post_filter_tab_class(false),
+    do:
+      "whitespace-nowrap rounded-md px-3 py-1 font-medium text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+
+  # Link-mode href: the plain base path for "all", a `?type=` variant otherwise.
+  defp post_filter_link(base_path, "all"), do: base_path
+  defp post_filter_link(base_path, type), do: base_path <> "?type=" <> type
+
+  @doc """
   The collapsed composer trigger: the viewer's avatar beside an input-shaped
   pill, the composer pattern every network trains. Card-weight on purpose —
   its dashed `<.empty_add>` predecessor was an outline rather than a surface
