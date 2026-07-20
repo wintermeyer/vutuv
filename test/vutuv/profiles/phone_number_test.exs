@@ -40,21 +40,16 @@ defmodule Vutuv.Profiles.PhoneNumberTest do
   end
 
   describe "number_type" do
-    test "offers the private/work landline & mobile matrix (issue #948)" do
-      assert PhoneNumber.number_types() == ["Home", "Cell", "Work", "Work Cell"]
+    test "offers the private/work landline & mobile matrix plus Fax (issue #948)" do
+      # Fax stays offered: it is still used in some regions. Removing it in the
+      # first pass at #948 was an overcorrection, reverted here.
+      assert PhoneNumber.number_types() == ["Home", "Cell", "Work", "Work Cell", "Fax"]
     end
 
-    test "accepts every offered type" do
+    test "accepts every offered type (including Fax)" do
       for type <- PhoneNumber.number_types() do
         assert changeset(%{"number_type" => type}).valid?, "expected #{type} to be accepted"
       end
-    end
-
-    test "no longer accepts Fax (dropped in #948; legacy rows stay display-only)" do
-      cs = changeset(%{"number_type" => "Fax"})
-
-      refute cs.valid?
-      assert %{number_type: [_]} = errors_on(cs)
     end
 
     test "rejects a value outside the allowed set" do

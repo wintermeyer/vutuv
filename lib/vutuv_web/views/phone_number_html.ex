@@ -5,9 +5,9 @@ defmodule VutuvWeb.PhoneNumberHTML do
 
   @doc """
   The stored type values are the English option values from the form ("Home",
-  "Cell", "Work", "Work Cell" since issue #948); render them through gettext so
-  the page speaks the visitor's language. "Fax" and any other unknown legacy
-  value still render (Fax is no longer offered, only grandfathered).
+  "Cell", "Work", "Work Cell", "Fax" since issue #948); render them through
+  gettext so the page speaks the visitor's language. Any unknown legacy value
+  passes through unchanged.
   """
   # "Home" reuses the "Private" msgid ("Privat"), so the private landline no
   # longer collides with the navigation "Home" ("Startseite") and needs no
