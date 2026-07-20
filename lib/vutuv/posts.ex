@@ -70,6 +70,7 @@ defmodule Vutuv.Posts do
   @default_thread_limit 100
   @pending_max_age_hours 24
   @max_tags 5
+  @tag_posts_per_page 20
 
   def max_images_per_post, do: Keyword.fetch!(config(), :max_per_post)
   def max_image_filesize, do: Keyword.fetch!(config(), :max_filesize)
@@ -977,28 +978,52 @@ defmodule Vutuv.Posts do
     where(query, [], exists(subquery(sub)))
   end
 
+  @doc "Posts per page in the tag page's \"Posts with this tag\" section (#946)."
+  def tag_posts_per_page, do: @tag_posts_per_page
+
   @doc """
-  The public posts carrying `tag`, newest first, for the tag page's "Posts
-  with this tag" section (issue #946). Anonymous view: only posts every
-  visitor may read surface (`scope_visible(nil)`), same gate as
+  How many public posts carry `tag` (the total behind the tag page's post
+  pager). Same anonymous-visibility gate as `list_tag_posts/3`.
+  """
+  def count_tag_posts(%Tag{} = tag) do
+    tag |> tag_posts_query() |> Repo.aggregate(:count)
+  end
+
+  @doc """
+  One page of the public posts carrying `tag`, newest first, for the tag
+  page's "Posts with this tag" section (issue #946). Anonymous view: only posts
+  every visitor may read surface (`scope_visible(nil)`), same gate as
   `search_public/2`. Matches the exact tag (its id), not a name substring —
   this is "posts filed under this tag", not a search. Preloaded like every
   rendered post.
-  """
-  def list_tag_posts(%Tag{} = tag, opts \\ []) do
-    limit = Keyword.get(opts, :limit, 20)
 
+  Offset-paginated from the `?page` param via `Vutuv.Pages` (like the tag
+  index and the member directory), `tag_posts_per_page/0` rows per page. Pass
+  `total:` (from `count_tag_posts/1`) to reuse a count the caller already has;
+  `per_page:` overrides the page size (tests). Both must match the `<.pager>`.
+  """
+  def list_tag_posts(%Tag{} = tag, params \\ %{}, opts \\ []) do
+    per_page = Keyword.get(opts, :per_page, @tag_posts_per_page)
+    total = Keyword.get(opts, :total) || count_tag_posts(tag)
+
+    tag
+    |> tag_posts_query()
+    |> order_by([p], desc: p.id)
+    |> Pages.paginate(params, total, per_page)
+    |> Repo.all()
+    |> Repo.preload(post_preloads())
+  end
+
+  # The public posts carrying `tag` (unordered, unpaginated), shared by the
+  # count and the page query so both apply the exact same visibility gate.
+  defp tag_posts_query(%Tag{} = tag) do
     from(p in Post,
       join: u in assoc(p, :user),
       join: pt in PostTag,
       on: pt.post_id == p.id,
-      where: pt.tag_id == ^tag.id and u.email_confirmed? == true,
-      order_by: [desc: p.id],
-      limit: ^limit
+      where: pt.tag_id == ^tag.id and u.email_confirmed? == true
     )
     |> scope_visible(nil)
-    |> Repo.all()
-    |> Repo.preload(post_preloads())
   end
 
   @doc """

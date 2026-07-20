@@ -63,15 +63,38 @@ defmodule Vutuv.Posts.ListTagPostsTest do
     assert found.id == post.id
   end
 
-  test "respects the limit" do
+  test "count_tag_posts counts only the visible posts" do
     a = author()
-    for i <- 1..4, do: create_post!(a, %{body: "post #{i}", tags: "elixir"})
+    for i <- 1..3, do: create_post!(a, %{body: "post #{i}", tags: "elixir"})
 
-    assert length(Posts.list_tag_posts(tag_by_name("elixir"), limit: 2)) == 2
+    create_post!(a, %{
+      body: "hidden from strangers",
+      tags: "elixir",
+      denials: [%{"wildcard" => "everyone"}]
+    })
+
+    assert Posts.count_tag_posts(tag_by_name("elixir")) == 3
   end
 
-  test "an empty tag returns no posts" do
+  test "offset-paginates from the ?page param, newest first" do
+    a = author()
+    # Oldest -> newest; UUID v7 ids sort by creation, so p5 is newest.
+    posts = for i <- 1..5, do: create_post!(a, %{body: "post #{i}", tags: "elixir"})
+    [_p1, p2, p3, p4, p5] = posts
+    tag = tag_by_name("elixir")
+
+    page1 = Posts.list_tag_posts(tag, %{"page" => "1"}, per_page: 2)
+    page2 = Posts.list_tag_posts(tag, %{"page" => "2"}, per_page: 2)
+    page3 = Posts.list_tag_posts(tag, %{"page" => "3"}, per_page: 2)
+
+    assert Enum.map(page1, & &1.id) == [p5.id, p4.id]
+    assert Enum.map(page2, & &1.id) == [p3.id, p2.id]
+    assert length(page3) == 1
+  end
+
+  test "an empty tag returns no posts and a zero count" do
     tag = insert(:tag, name: "lonely", slug: "lonely")
     assert Posts.list_tag_posts(tag) == []
+    assert Posts.count_tag_posts(tag) == 0
   end
 end
