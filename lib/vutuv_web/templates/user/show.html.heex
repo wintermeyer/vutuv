@@ -588,7 +588,10 @@ the resulting ~200px rail width. --%>
           <span class="font-medium text-slate-900 dark:text-white">
             {VutuvWeb.LanguageHTML.language_name(language.language_code)}
           </span>
-          <span class="inline-flex items-center rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100">
+          <span
+            class="inline-flex cursor-help items-center rounded bg-brand-50 px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
+            title={VutuvWeb.LanguageHTML.proficiency_label(language.proficiency)}
+          >
             {VutuvWeb.LanguageHTML.proficiency_badge(language.proficiency)}
           </span>
         </.link>

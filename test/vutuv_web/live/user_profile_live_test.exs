@@ -544,6 +544,11 @@ defmodule VutuvWeb.UserProfileLiveTest do
       assert html =~ "Native"
       assert html =~ "A2"
 
+      # ...and the opaque CEFR badge carries a native tooltip glossing the level
+      # (issue #888): hovering "A2" explains it in plain language.
+      assert has_element?(view, "#profile-languages [title=\"A2 (Elementary)\"]", "A2")
+      assert has_element?(view, "#profile-languages [title=\"Native speaker\"]", "Native")
+
       # ...but the profile card drops the quieter "Preferred" contact-language
       # marker; that detail lives on the dedicated /:slug/languages page.
       refute has_element?(view, "#profile-languages", "Preferred")
