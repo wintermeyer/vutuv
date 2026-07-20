@@ -1,43 +1,52 @@
-<.page_header
-  title={@tag.name}
-  crumbs={[
-    {gettext("Tags"), ~p"/tags"},
-    gettext("Show")
-  ]}
-/>
+<%!-- Constrain to the same readable measure the post archive/permalink use
+(mx-auto max-w-3xl): on a wide desktop the full max-w-6xl width made each post
+card stretch edge to edge with a huge line length and dead space. --%>
+<div class="mx-auto max-w-3xl">
+  <.page_header
+    title={@tag.name}
+    crumbs={[
+      {gettext("Tags"), ~p"/tags"},
+      gettext("Show")
+    ]}
+  />
 
-<div class="card-list">
+  <div class="card-list">
     <%= render "single_card.html", assigns %>
-</div>
-
-<section :if={@tag_posts != []} id="tag-posts" class="mt-6">
-  <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-    {gettext("Posts with this tag")}
-  </h2>
-  <div class="mt-3 space-y-4">
-    <.post_card
-      :for={post <- @tag_posts}
-      post={post}
-      viewer={@current_user}
-      mode={:preview}
-      conn_or_socket={@conn}
-    />
   </div>
-</section>
 
-<section :if={@open_positions != []} class="mt-6">
-  <div class="flex items-center justify-between gap-2">
+  <%!-- Posts carrying this tag (#946), rendered as flat divide-y rows inside one
+  card via <.post_thread_entry> — the same treatment as the feed, the profile and
+  the author archive (a reply nests the post it answers inline). --%>
+  <section :if={@tag_posts != []} id="tag-posts" class="mt-6">
     <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-      {gettext("Open positions")}
+      {gettext("Posts with this tag")}
     </h2>
-    <.link
-      navigate={~p"/jobs?#{[tag: @tag.slug]}"}
-      class="text-sm font-semibold text-brand-600 hover:text-brand-700"
-    >
-      {gettext("All jobs with this tag")} →
-    </.link>
-  </div>
-  <div class="mt-3 grid gap-4 sm:grid-cols-2">
-    <.job_card :for={posting <- @open_positions} posting={posting} />
-  </div>
-</section>
+    <.post_list class="mt-3" data-post-list>
+      <div :for={post <- @tag_posts} class={post_row_class()}>
+        <.post_thread_entry
+          post={post}
+          conn_or_socket={@conn}
+          viewer={@current_user}
+          surface={:flat}
+        />
+      </div>
+    </.post_list>
+  </section>
+
+  <section :if={@open_positions != []} class="mt-6">
+    <div class="flex items-center justify-between gap-2">
+      <h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+        {gettext("Open positions")}
+      </h2>
+      <.link
+        navigate={~p"/jobs?#{[tag: @tag.slug]}"}
+        class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+      >
+        {gettext("All jobs with this tag")} →
+      </.link>
+    </div>
+    <div class="mt-3 grid gap-4 sm:grid-cols-2">
+      <.job_card :for={posting <- @open_positions} posting={posting} />
+    </div>
+  </section>
+</div>

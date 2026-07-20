@@ -3,7 +3,7 @@ defmodule VutuvWeb.TagHTML do
   use VutuvWeb, :html
   import VutuvWeb.UserHelpers
   import VutuvWeb.JobComponents, only: [job_card: 1]
-  import VutuvWeb.PostComponents, only: [post_card: 1]
+  import VutuvWeb.PostComponents, only: [post_list: 1, post_thread_entry: 1, post_row_class: 0]
   alias Vutuv.Tags.Tag
 
   defp update_assigns(assigns) do
