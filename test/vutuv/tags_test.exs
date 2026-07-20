@@ -129,6 +129,69 @@ defmodule Vutuv.TagsTest do
     end
   end
 
+  describe "a profile is capped at max_user_tags/0 tags" do
+    # A few members overdid the tag count, so a profile may hold at most
+    # `max_user_tags/0` tags. The cap bites only when tags *change*: an existing
+    # profile that already exceeds it (from before the cap) keeps every tag, but
+    # can add none until it drops back under the ceiling.
+    defp count_tags(user),
+      do: Repo.aggregate(from(ut in UserTag, where: ut.user_id == ^user.id), :count)
+
+    # Fill a user right up to the cap through the real chokepoint.
+    defp fill_to_limit(user) do
+      for n <- 1..Tags.max_user_tags() do
+        assert {:ok, _} = Tags.add_user_tag(user, "Skill#{n}")
+      end
+
+      user
+    end
+
+    test "adding tags up to the limit is allowed" do
+      user = fill_to_limit(insert(:user))
+      assert count_tags(user) == Tags.max_user_tags()
+    end
+
+    test "the tag one over the limit is refused and not stored" do
+      user = fill_to_limit(insert(:user))
+
+      assert {:error, %Ecto.Changeset{} = changeset} = Tags.add_user_tag(user, "OneTooMany")
+      refute changeset.valid?
+      assert count_tags(user) == Tags.max_user_tags()
+      refute Repo.exists?(from(t in Tag, where: t.name == "OneTooMany"))
+    end
+
+    test "at_user_tag_limit?/1 flips once the profile is full" do
+      user = insert(:user)
+      refute Tags.at_user_tag_limit?(user)
+
+      fill_to_limit(user)
+      assert Tags.at_user_tag_limit?(user)
+    end
+
+    test "a profile already over the limit keeps its tags but can add none (grandfathered)" do
+      # Legacy profiles from before the cap are inserted straight, bypassing the
+      # chokepoint, to reproduce the over-limit state.
+      user = insert(:user)
+      for _ <- 1..(Tags.max_user_tags() + 5), do: insert(:user_tag, user: user, tag: build(:tag))
+
+      assert count_tags(user) == Tags.max_user_tags() + 5
+      assert {:error, _} = Tags.add_user_tag(user, "Nope")
+      assert count_tags(user) == Tags.max_user_tags() + 5
+    end
+
+    test "removing a tag frees a slot again" do
+      user = insert(:user)
+      {:ok, first} = Tags.add_user_tag(user, "First")
+
+      for n <- 2..Tags.max_user_tags(), do: {:ok, _} = Tags.add_user_tag(user, "Skill#{n}")
+      assert {:error, _} = Tags.add_user_tag(user, "Blocked")
+
+      {:ok, _} = Tags.delete_user_tag(first)
+      assert {:ok, _} = Tags.add_user_tag(user, "NowFits")
+      assert count_tags(user) == Tags.max_user_tags()
+    end
+  end
+
   describe "parse_tag_names/1" do
     test "an unquoted comma or space still separates tags" do
       assert Tags.parse_tag_names("Elixir, Phoenix Go") == ["Elixir", "Phoenix", "Go"]

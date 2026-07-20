@@ -145,6 +145,27 @@ defmodule Vutuv.AccountsTest do
       assert {:error, changeset} = Accounts.register_user(conn, attrs)
       assert "Please enter at least 3 different tags." in errors_on(changeset).tag_list
     end
+
+    test "rejects a registration over the tag ceiling" do
+      conn = build_conn()
+      max = Vutuv.Tags.max_user_tags()
+      too_many = Enum.map_join(1..(max + 1), " ", &"Skill#{&1}")
+      attrs = Map.put(@valid_registration, "tag_list", too_many)
+
+      assert {:error, changeset} = Accounts.register_user(conn, attrs)
+      assert "Please enter at most #{max} different tags." in errors_on(changeset).tag_list
+      refute Repo.get_by(User, first_name: "Test")
+    end
+
+    test "accepts a registration exactly at the tag ceiling" do
+      conn = build_conn()
+      max = Vutuv.Tags.max_user_tags()
+      exactly = Enum.map_join(1..max, " ", &"Skill#{&1}")
+      attrs = Map.put(@valid_registration, "tag_list", exactly)
+
+      assert {:ok, user} = Accounts.register_user(conn, attrs)
+      assert length(user.user_tags) == max
+    end
   end
 
   describe "update_user/2" do

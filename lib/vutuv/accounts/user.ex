@@ -494,6 +494,7 @@ defmodule Vutuv.Accounts.User do
     model
     |> changeset(params)
     |> validate_minimum_tags()
+    |> validate_maximum_tags()
     |> cast_assoc(:emails)
   end
 
@@ -502,16 +503,17 @@ defmodule Vutuv.Accounts.User do
 
   # Counts exactly what Accounts.register_user/3 later materializes as tags:
   # the tag_list split on commas/spaces (Vutuv.Tags.parse_tag_names/1), then
-  # case-insensitively de-duplicated — so a padded "Go, go, GO" is one tag,
+  # case-insensitively de-duplicated, so a padded "Go, go, GO" is one tag,
   # not three.
-  defp validate_minimum_tags(changeset) do
-    distinct_tags =
-      changeset
-      |> get_field(:tag_list)
-      |> Vutuv.Tags.parse_tag_names()
-      |> Enum.uniq_by(&String.downcase/1)
+  defp distinct_tag_names(changeset) do
+    changeset
+    |> get_field(:tag_list)
+    |> Vutuv.Tags.parse_tag_names()
+    |> Enum.uniq_by(&String.downcase/1)
+  end
 
-    if length(distinct_tags) >= @min_registration_tags do
+  defp validate_minimum_tags(changeset) do
+    if length(distinct_tag_names(changeset)) >= @min_registration_tags do
       changeset
     else
       add_error(
@@ -520,6 +522,19 @@ defmodule Vutuv.Accounts.User do
         "Please enter at least %{min} different tags.",
         min: @min_registration_tags
       )
+    end
+  end
+
+  # The profile tag ceiling (Vutuv.Tags.max_user_tags/0) applies to new accounts
+  # too: account setup only materializes tags up to the cap, so rejecting the
+  # excess here keeps the form honest instead of silently dropping tags.
+  defp validate_maximum_tags(changeset) do
+    max = Vutuv.Tags.max_user_tags()
+
+    if length(distinct_tag_names(changeset)) <= max do
+      changeset
+    else
+      add_error(changeset, :tag_list, "Please enter at most %{max} different tags.", max: max)
     end
   end
 

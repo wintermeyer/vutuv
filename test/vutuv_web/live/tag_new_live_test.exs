@@ -191,5 +191,23 @@ defmodule VutuvWeb.TagNewLiveTest do
       assert flash["info"] == "Added 1 of 2 tags (the rest were duplicates or invalid)."
       assert tag_count(user) == base + 2
     end
+
+    test "refuses a new tag once the profile is at the tag limit", %{
+      live: live,
+      user: user
+    } do
+      # Fill the profile up to the cap (bypassing the form so we test its guard).
+      for _ <- 1..Vutuv.Tags.max_user_tags(),
+          do: insert(:user_tag, user: user, tag: build(:tag))
+
+      full = tag_count(user)
+
+      html = live |> form("#tag-form", tag_param: %{value: "OneMore"}) |> render_submit()
+
+      # No redirect (the form stays put) and a clear message naming the ceiling.
+      assert html =~ "at most"
+      assert tag_count(user) == full
+      refute Repo.exists?(from(t in Vutuv.Tags.Tag, where: t.name == "OneMore"))
+    end
   end
 end
