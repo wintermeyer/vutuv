@@ -1,16 +1,14 @@
-<.auth_layout title={gettext("“Tired of LinkedIn, Facebook, or X? Same here. Welcome aboard!”")}>
+<.auth_layout title={gettext("“Tired of LinkedIn, and want your data to stay in Germany? I can help.”")}>
   <:headline>
-    <% founder_quote_main = gettext("“Tired of LinkedIn, Facebook, or X? Same here.") %>
-    <% founder_welcome = gettext("Welcome aboard!”") %>
+    <% founder_quote = gettext("“Tired of LinkedIn, and want your data to stay in Germany? I can help.”") %>
     <% founder_name = "Stefan Wintermeyer" %>
     <% founder_role = gettext("Founder of vutuv") %>
-    <%!-- Founder hero: the whole quote in one heading at a single size (setup
-          and "Welcome aboard!" flow together), then a right-aligned signature
-          with the name above the role, set snug. The member-count pill below
-          is shared from the :hero slot. --%>
+    <%!-- Founder hero: the whole quote in one heading at a single size, then a
+          right-aligned signature with the name above the role, set snug. The
+          member-count pill below is shared from the :hero slot. --%>
     <div>
       <h1 class="text-2xl font-bold leading-tight md:text-3xl">
-        {founder_quote_main} {founder_welcome}
+        {founder_quote}
       </h1>
       <div class="mt-6 text-right">
         <p class="font-serif text-2xl leading-none text-white">
