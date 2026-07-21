@@ -55,11 +55,9 @@ defmodule VutuvWeb.UnsubscribeToken do
   end
 
   @doc "The absolute unsubscribe URL for the master unread-messages switch."
-  def url(%User{} = user), do: public_url() <> "unsubscribe/" <> sign(user)
+  def url(%User{} = user), do: VutuvWeb.Endpoint.public_url() <> "unsubscribe/" <> sign(user)
 
   @doc "The absolute unsubscribe URL that switches off the named preference."
   def url(%User{} = user, field) when is_atom(field),
-    do: public_url() <> "unsubscribe/" <> sign(user, field)
-
-  defp public_url, do: Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
+    do: VutuvWeb.Endpoint.public_url() <> "unsubscribe/" <> sign(user, field)
 end

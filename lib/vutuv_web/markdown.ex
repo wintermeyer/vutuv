@@ -307,6 +307,19 @@ defmodule VutuvWeb.Markdown do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
   end
 
+  @doc """
+  Rewrites root-relative `/path` URLs in rendered HTML to absolute `base/path`,
+  for a standalone context (an RSS/JSON feed, a downloaded CV, a federated
+  note). The negative lookahead leaves a protocol-relative `//host` URL alone:
+  it already resolves, and prefixing it would corrupt it into `base//host`.
+  `attrs` picks which URL attributes to rewrite (both `src` and `href` by
+  default; the CV passes just `["href"]`). Shared by VutuvWeb.Feeds,
+  VutuvWeb.Fediverse.Docs and VutuvWeb.CV.Html so the tricky guard lives once.
+  """
+  def absolutize_html(html, base, attrs \\ ["src", "href"]) do
+    String.replace(html, ~r{(#{Enum.join(attrs, "|")})="/(?!/)}, "\\1=\"#{base}/")
+  end
+
   ## @handle / fediverse mentions and #hashtags
 
   # Turns every `@handle` of an existing member into a same-tab link to their

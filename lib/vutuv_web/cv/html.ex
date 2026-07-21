@@ -146,10 +146,9 @@ defmodule VutuvWeb.CV.Html do
     markdown
     |> Markdown.render()
     |> Phoenix.HTML.safe_to_string()
-    # Only root-relative `/path` hrefs are absolutized; the negative lookahead
-    # leaves a protocol-relative `//host` link alone (it already resolves, and
-    # prefixing it would corrupt it into `#{Endpoint.url()}//host`).
-    |> String.replace(~r{href="/(?!/)}, ~s(href="#{Endpoint.url()}/))
+    # Only root-relative `/path` hrefs are absolutized; the shared helper's
+    # negative lookahead leaves a protocol-relative `//host` link alone.
+    |> Markdown.absolutize_html(Endpoint.url(), ["href"])
   end
 
   defp skills([]), do: ""

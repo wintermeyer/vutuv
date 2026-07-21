@@ -109,4 +109,11 @@ defmodule VutuvWeb.Endpoint do
   plug(Plug.Session, @session_options)
 
   plug(VutuvWeb.Router)
+
+  @doc """
+  The operator's public base URL (endpoint config `:public_url`). Used to build
+  the absolute unsubscribe / alert-off links the token modules mint outside a
+  request, where `url/0` is not available.
+  """
+  def public_url, do: config(:public_url)
 end
