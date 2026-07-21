@@ -869,12 +869,7 @@ defmodule Vutuv.Jobs do
     viewer
     |> board_scope()
     |> apply_board_filters(filters, viewer)
-    |> after_board_cursor(Keyword.get(opts, :cursor))
-    |> order_by([p], desc: p.first_published_at, desc: p.id)
-    |> limit(^(limit + 1))
-    |> preload([:organization, :user, job_posting_tags: :tag])
-    |> Repo.all()
-    |> board_result(limit)
+    |> finish_board(limit, Keyword.get(opts, :cursor))
   end
 
   @doc """
@@ -890,7 +885,15 @@ defmodule Vutuv.Jobs do
 
     live_public_query(today)
     |> where([p], p.geo?)
-    |> after_board_cursor(Keyword.get(opts, :cursor))
+    |> finish_board(limit, Keyword.get(opts, :cursor))
+  end
+
+  # Newest-first keyset page tail shared by board_page/3 and agent_board_page/1:
+  # apply the cursor, order, over-fetch one to detect `more?`, preload, and fold
+  # into `board_result/2`'s `%{entries:, more?:, cursor:}`.
+  defp finish_board(query, limit, cursor) do
+    query
+    |> after_board_cursor(cursor)
     |> order_by([p], desc: p.first_published_at, desc: p.id)
     |> limit(^(limit + 1))
     |> preload([:organization, :user, job_posting_tags: :tag])

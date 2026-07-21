@@ -133,7 +133,7 @@ defmodule Vutuv.Directory do
   end
 
   @doc "The directory's member total: the sum of `letter_entries/0`."
-  def total(entries), do: entries |> Enum.map(& &1.count) |> Enum.sum()
+  def total(entries), do: Enum.sum_by(entries, & &1.count)
 
   @doc """
   One page of a letter's members as `%{users: users, total: total}`, sorted

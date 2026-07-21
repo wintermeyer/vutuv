@@ -32,6 +32,7 @@ defmodule Vutuv.Mentions do
   alias Vutuv.Accounts.User
   alias Vutuv.Ads.Ad
   alias Vutuv.Chat.Message
+  alias Vutuv.Handles
   alias Vutuv.Jobs.JobPosting
   alias Vutuv.Organizations.Organization
   alias Vutuv.Posts.Post
@@ -401,9 +402,7 @@ defmodule Vutuv.Mentions do
   defp surface_key(JobPosting), do: :job_postings
   defp surface_key(Ad), do: :ads
 
-  defp normalize(value) when is_binary(value) do
-    value |> String.trim() |> String.trim_leading("@") |> String.downcase()
-  end
+  defp normalize(value) when is_binary(value), do: Handles.normalize(value)
 
   defp normalize(_), do: ""
 end

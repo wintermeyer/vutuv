@@ -45,13 +45,7 @@ defmodule VutuvWeb.NewsfeedController do
     conn
     |> AgentDocs.put_html_alternates()
     |> put_layout(html: false)
-    |> live_render(VutuvWeb.PostLive.Feed,
-      session: %{
-        "user_id" => conn.assigns[:current_user_id],
-        "locale" => conn.assigns[:locale],
-        "request_path" => conn.request_path
-      }
-    )
+    |> live_render(VutuvWeb.PostLive.Feed, session: ControllerHelpers.live_render_session(conn))
   end
 
   defp send_feed_doc(conn, format, params) do
@@ -61,12 +55,8 @@ defmodule VutuvWeb.NewsfeedController do
 
       viewer ->
         # A foreign/expired `?cursor=` falls back to the first page rather than
-        # erroring — the worst case is re-showing the latest posts.
-        cursor =
-          case ApiV2.decode_cursor(params["cursor"]) do
-            {:ok, cursor} -> cursor
-            :error -> nil
-          end
+        # erroring: the worst case is re-showing the latest posts.
+        cursor = ApiV2.cursor_or_nil(params)
 
         page = Posts.feed_page(viewer, limit: @page_size, cursor: cursor)
         AgentDocs.send_doc(conn, format, FeedDoc.build(viewer, page), cache: "private, no-store")

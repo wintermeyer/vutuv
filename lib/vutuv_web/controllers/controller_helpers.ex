@@ -79,6 +79,20 @@ defmodule VutuvWeb.ControllerHelpers do
   end
 
   @doc """
+  The base session map every controller-embedded LiveView needs: the viewer id,
+  resolved locale and request path. A LiveView mounted outside the
+  `live_session` must be handed these explicitly (the profile/CV/board/feed
+  pattern); pages layer their own extra keys on top with `Map.put/3`.
+  """
+  def live_render_session(%Conn{} = conn) do
+    %{
+      "user_id" => conn.assigns[:current_user_id],
+      "locale" => conn.assigns[:locale],
+      "request_path" => conn.request_path
+    }
+  end
+
+  @doc """
   Renders the bare `VutuvWeb.ErrorHTML` 403/404 page and halts: the one shape
   every auth/resolve plug and the controller-side guards use to refuse a
   request.

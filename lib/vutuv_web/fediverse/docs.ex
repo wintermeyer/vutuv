@@ -148,7 +148,7 @@ defmodule VutuvWeb.Fediverse.Docs do
   # own, so the negative lookahead leaves it alone instead of corrupting it
   # into `#{base()}//host` (the same guard as `VutuvWeb.Feeds.absolutize_urls/1`).
   defp absolutize(html) do
-    String.replace(html, ~r{(href|src)="/(?!/)}, "\\1=\"#{base()}/")
+    VutuvWeb.Markdown.absolutize_html(html, base())
   end
 
   # inReplyTo only when the parent's author federates too — otherwise the id

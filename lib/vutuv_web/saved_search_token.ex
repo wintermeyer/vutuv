@@ -33,7 +33,5 @@ defmodule VutuvWeb.SavedSearchToken do
 
   @doc "The absolute URL that switches off alerts for one saved search."
   def url(%SavedSearch{} = saved_search),
-    do: public_url() <> "unsubscribe/search/" <> sign(saved_search)
-
-  defp public_url, do: Application.get_env(:vutuv, VutuvWeb.Endpoint)[:public_url]
+    do: VutuvWeb.Endpoint.public_url() <> "unsubscribe/search/" <> sign(saved_search)
 end

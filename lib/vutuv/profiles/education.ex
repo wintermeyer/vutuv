@@ -65,24 +65,11 @@ defmodule Vutuv.Profiles.Education do
     |> validate_length(:description, max: 10_000)
     |> Mentions.validate_mentions_exist(:description)
     |> ChangesetHelpers.validate_period()
-    |> create_slug
+    |> CvSection.put_slug(__MODULE__, [:school, :degree])
     # The slug derives from the school name, so a near-cap value can still
     # overrun its own varchar(255) column.
     |> validate_length(:slug, max: 255)
     |> unique_constraint(:slug)
-  end
-
-  defp create_slug(changeset) do
-    if get_change(changeset, :school) || get_change(changeset, :degree) do
-      model = %__MODULE__{
-        school: get_field(changeset, :school),
-        degree: get_field(changeset, :degree)
-      }
-
-      put_change(changeset, :slug, Vutuv.SlugHelpers.gen_slug_unique(model, :slug))
-    else
-      changeset
-    end
   end
 
   @doc """

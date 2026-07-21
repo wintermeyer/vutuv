@@ -268,14 +268,7 @@ defmodule Vutuv.Moderation.ImageSubjects do
       from(u in User,
         where: u.id == ^scan.subject_id and field(u, ^config.fingerprint) == ^scan.fingerprint
       )
-      |> Repo.update_all(
-        set: [
-          {config.file, nil},
-          {config.fingerprint, nil},
-          {config.crop, nil},
-          {config.moderation, nil}
-        ]
-      )
+      |> Repo.update_all(set: clear_profile_columns(config))
 
     case cleared do
       {1, _} ->
@@ -369,19 +362,22 @@ defmodule Vutuv.Moderation.ImageSubjects do
           field(u, ^config.fingerprint) == ^scan.fingerprint and
           field(u, ^config.moderation) == "pending"
     )
-    |> Repo.update_all(
-      set: [
-        {config.file, nil},
-        {config.fingerprint, nil},
-        {config.crop, nil},
-        {config.moderation, nil}
-      ]
-    )
+    |> Repo.update_all(set: clear_profile_columns(config))
 
     :ok
   end
 
   def cleanup_canceled(%ImageScan{}), do: :ok
+
+  # The four profile-image columns (file, fingerprint, crop, moderation) reset to
+  # nil when a scan rejects the image or cancels a pending one.
+  defp clear_profile_columns(config),
+    do: [
+      {config.file, nil},
+      {config.fingerprint, nil},
+      {config.crop, nil},
+      {config.moderation, nil}
+    ]
 
   ## Drift repair source
 

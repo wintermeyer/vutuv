@@ -27,7 +27,7 @@ defmodule VutuvWeb.OrganizationController do
     case AgentDocs.negotiate(conn) do
       :html ->
         session =
-          base_session(conn)
+          ControllerHelpers.live_render_session(conn)
           |> Map.put("q", conn.params["q"])
           |> Map.put("page", conn.params["page"])
 
@@ -73,7 +73,12 @@ defmodule VutuvWeb.OrganizationController do
         |> AgentDocs.put_html_alternates()
         |> put_layout(html: false)
         |> live_render(VutuvWeb.OrganizationLive.Show,
-          session: Map.put(base_session(conn), "organization_id", organization.id)
+          session:
+            Map.put(
+              ControllerHelpers.live_render_session(conn),
+              "organization_id",
+              organization.id
+            )
         )
 
       format ->
@@ -95,7 +100,9 @@ defmodule VutuvWeb.OrganizationController do
       %{email_confirmed?: true} ->
         conn
         |> put_layout(html: false)
-        |> live_render(VutuvWeb.OrganizationLive.New, session: base_session(conn))
+        |> live_render(VutuvWeb.OrganizationLive.New,
+          session: ControllerHelpers.live_render_session(conn)
+        )
 
       %{} ->
         conn
@@ -141,7 +148,12 @@ defmodule VutuvWeb.OrganizationController do
         conn
         |> put_layout(html: false)
         |> live_render(live_view,
-          session: Map.put(base_session(conn), "organization_id", organization.id)
+          session:
+            Map.put(
+              ControllerHelpers.live_render_session(conn),
+              "organization_id",
+              organization.id
+            )
         )
 
       true ->
@@ -158,13 +170,5 @@ defmodule VutuvWeb.OrganizationController do
     else
       ControllerHelpers.render_error(conn, 404)
     end
-  end
-
-  defp base_session(conn) do
-    %{
-      "user_id" => conn.assigns[:current_user_id],
-      "locale" => conn.assigns[:locale],
-      "request_path" => conn.request_path
-    }
   end
 end

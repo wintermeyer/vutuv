@@ -99,6 +99,47 @@ defmodule VutuvWeb.SettingsHTML do
   end
 
   @doc """
+  A privacy-settings card wrapping one boolean toggle in its own save form:
+  section title + intro paragraph, a `<.setting_toggle>` checkbox bound to
+  `field` on `changeset`, and a Save button. The three positive-flag privacy
+  switches (online status, social-media posts, code statistics) share it, so
+  they can never drift apart.
+  """
+  attr(:changeset, :any, required: true)
+  attr(:field, :atom, required: true)
+  attr(:form_id, :string, required: true)
+  attr(:title, :string, required: true)
+  attr(:intro, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:hint, :string, required: true)
+
+  def toggle_form_card(assigns) do
+    ~H"""
+    <.card>
+      <.section_title>{@title}</.section_title>
+      <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">{@intro}</p>
+
+      <.form
+        :let={f}
+        for={@changeset}
+        action={~p"/settings/privacy"}
+        id={@form_id}
+        class="mt-5 space-y-5"
+      >
+        <.setting_toggle label={@label}>
+          <:checkbox><%= checkbox f, @field, class: checkbox_class() %></:checkbox>
+          {@hint}
+        </.setting_toggle>
+
+        <div class="pt-1">
+          <.button type="submit">{gettext("Save")}</.button>
+        </div>
+      </.form>
+    </.card>
+    """
+  end
+
+  @doc """
   The desktop frame the hub shares with its subpages: the persistent
   `<.settings_sidebar>` on the left (md+), the "Settings" title + "View profile"
   link on the right, and the page body in the slot. This closes the gap the hub

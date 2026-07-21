@@ -48,9 +48,11 @@ defmodule Vutuv.Social do
   end
 
   defp do_follow(follower, followee_id) do
+    follower_id = follower_id(follower)
+
     result =
       %Follow{}
-      |> Follow.changeset(%{follower_id: follower_id(follower), followee_id: followee_id})
+      |> Follow.changeset(%{follower_id: follower_id, followee_id: followee_id})
       |> Repo.insert()
 
     with {:ok, _follow} <- result do
@@ -60,7 +62,7 @@ defmodule Vutuv.Social do
       # (connected): announce that meaningful milestone to the followee instead
       # of a second plain "started following you". A first/one-way follow stays
       # the ordinary new-follower event.
-      if user_follows_user?(followee_id, follower_id(follower)) do
+      if user_follows_user?(followee_id, follower_id) do
         Vutuv.Activity.notify_connection(followee_id, actor)
       else
         Vutuv.Activity.notify_new_follower(followee_id, actor)
@@ -68,7 +70,7 @@ defmodule Vutuv.Social do
 
       # Bump the live counts on both members' open profiles (follower / following
       # / connection, and the viewer's follow-state pill).
-      broadcast_social_graph_changed([follower_id(follower), followee_id])
+      broadcast_social_graph_changed([follower_id, followee_id])
     end
 
     result

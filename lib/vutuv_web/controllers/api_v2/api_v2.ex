@@ -76,6 +76,18 @@ defmodule VutuvWeb.ApiV2 do
     end
   end
 
+  @doc """
+  Like `with_cursor/3`, but falls back to the first page (`nil`) on a
+  foreign/expired cursor instead of answering 400. For the agent-doc pages,
+  where the worst case is re-showing the latest entries.
+  """
+  def cursor_or_nil(params) do
+    case decode_cursor(params["cursor"]) do
+      {:ok, cursor} -> cursor
+      :error -> nil
+    end
+  end
+
   @doc "The shared tail of every cursor-paginated response."
   def page_fields(page) do
     %{more: page.more?, next_cursor: encode_cursor(page.more? && page.next_cursor)}

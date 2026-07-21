@@ -63,6 +63,17 @@ defmodule Vutuv.Pages do
     %{entries: shown, more?: more?, next_offset: offset + length(shown)}
   end
 
+  @doc """
+  Normalizes a free-text filter param (e.g. `?q`): trims it, collapsing a blank
+  or `nil` to `nil` so the browse LiveViews treat "no filter" uniformly.
+  """
+  def blank_to_nil(value) do
+    case value && String.trim(value) do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
   @doc "Parses the `?page` param (any map with a `\"page\"` key) to an integer >= 1, defaulting to 1."
   def page_param(params) do
     case Integer.parse(to_string(params["page"])) do

@@ -16,6 +16,8 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
 
   use VutuvWeb, :model
 
+  import Vutuv.ChangesetHelpers, only: [trim_fields: 2]
+
   alias Vutuv.Newsletters.NewsletterGroupMember
   alias Vutuv.Tags.Tag
 
@@ -77,8 +79,7 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
     |> validate_length(:country, max: @max_name)
     |> validate_length(:username, max: @max_name)
     |> clean_locales()
-    |> clean_blank_to_nil(:country)
-    |> clean_blank_to_nil(:username)
+    |> trim_fields([:country, :username])
     |> clean_ids(:included_group_ids)
     |> clean_ids(:excluded_group_ids)
     |> clean_ids(:included_user_ids)
@@ -97,20 +98,6 @@ defmodule Vutuv.Newsletters.NewsletterGroup do
       :error -> changeset
     end
   end
-
-  # Trim a free-text field, collapsing a blank to nil (country, @handle).
-  defp clean_blank_to_nil(changeset, field) do
-    case fetch_change(changeset, field) do
-      {:ok, value} when is_binary(value) ->
-        put_change(changeset, field, value |> String.trim() |> blank_to_nil())
-
-      _ ->
-        changeset
-    end
-  end
-
-  defp blank_to_nil(""), do: nil
-  defp blank_to_nil(value), do: value
 
   # Drop the empty hidden-input value and any blanks from an id-array field (the
   # included/excluded audiences and the per-account include/exclude lists).

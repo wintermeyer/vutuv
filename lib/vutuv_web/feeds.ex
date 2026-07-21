@@ -100,7 +100,7 @@ defmodule VutuvWeb.Feeds do
   # a feed — readers resolve nothing. Protocol-relative (`//host`) URLs are
   # left alone.
   defp absolutize_urls(html) do
-    String.replace(html, ~r{(src|href)="/(?!/)}, "\\1=\"#{VutuvWeb.Endpoint.url()}/")
+    VutuvWeb.Markdown.absolutize_html(html, VutuvWeb.Endpoint.url())
   end
 
   # A literal "]]>" in the rendered body would close the CDATA section.

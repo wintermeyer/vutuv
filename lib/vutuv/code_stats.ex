@@ -32,6 +32,7 @@ defmodule Vutuv.CodeStats do
 
   alias Vutuv.Activity
   alias Vutuv.CodeStats.Fetcher
+  alias Vutuv.CodeStats.Snapshot
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.RemoteFetch.Backoff
 
@@ -90,7 +91,7 @@ defmodule Vutuv.CodeStats do
   carry the raw timestamp).
   """
   def dormant_since(last_active_at) when is_binary(last_active_at) do
-    with {:ok, dt, _offset} <- DateTime.from_iso8601(last_active_at),
+    with %DateTime{} = dt <- Snapshot.datetime(last_active_at),
          :lt <-
            DateTime.compare(dt, DateTime.add(DateTime.utc_now(), -@dormant_after_days, :day)) do
       DateTime.to_date(dt)

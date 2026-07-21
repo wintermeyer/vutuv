@@ -62,7 +62,7 @@ defmodule Vutuv.Profiles.WorkExperience do
     |> Mentions.validate_mentions_exist(:description)
     |> ChangesetHelpers.validate_period()
     |> validate_organization_link()
-    |> create_slug
+    |> CvSection.put_slug(__MODULE__, [:title, :organization])
     # The slug derives from title + organization, so two near-cap values can
     # still overrun its own varchar(255) column.
     |> validate_length(:slug, max: 255)
@@ -97,19 +97,6 @@ defmodule Vutuv.Profiles.WorkExperience do
         where: c.id == ^organization_id and organization_public_row(c)
       )
     )
-  end
-
-  defp create_slug(changeset) do
-    if get_change(changeset, :title) || get_change(changeset, :organization) do
-      model = %__MODULE__{
-        title: get_field(changeset, :title),
-        organization: get_field(changeset, :organization)
-      }
-
-      put_change(changeset, :slug, Vutuv.SlugHelpers.gen_slug_unique(model, :slug))
-    else
-      changeset
-    end
   end
 
   @doc """

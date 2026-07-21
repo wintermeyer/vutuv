@@ -115,13 +115,16 @@ defmodule VutuvWeb.SearchLive do
     save_search(socket, :people, query, notify)
   end
 
-  # The stored query string mirrors the /search URL (q + non-default scope +
-  # exact), so the sweeper and the "run now" link replay the same search.
-  defp search_query(q, scope, exact) do
+  # The non-default query params behind both the stored query string and the
+  # canonical /search URL: q, a non-default scope, and exact — blanks dropped.
+  defp search_params(q, scope, exact) do
     [q: q, scope: scope != :all && scope, exact: exact && "1"]
     |> Enum.reject(fn {_k, v} -> v in ["", false, nil] end)
-    |> URI.encode_query()
   end
+
+  # The stored query string mirrors the /search URL (q + non-default scope +
+  # exact), so the sweeper and the "run now" link replay the same search.
+  defp search_query(q, scope, exact), do: search_params(q, scope, exact) |> URI.encode_query()
 
   # The settle timer fired: this query stopped changing, so it counts.
   @impl true
@@ -138,12 +141,7 @@ defmodule VutuvWeb.SearchLive do
   # The canonical /search URL for a query + filter combination; defaults stay
   # out of the query string so plain searches keep plain URLs.
   defp search_path(q, scope, exact) do
-    params =
-      Enum.reject(
-        [q: q, scope: scope != :all && scope, exact: exact && "1"],
-        fn {_k, v} -> v in ["", false, nil] end
-      )
-
+    params = search_params(q, scope, exact)
     if params == [], do: ~p"/search", else: ~p"/search?#{params}"
   end
 

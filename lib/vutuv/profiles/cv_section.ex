@@ -8,6 +8,7 @@ defmodule Vutuv.Profiles.CvSection do
   """
 
   import Ecto.Query
+  import Ecto.Changeset, only: [get_change: 2, get_field: 2, put_change: 3]
 
   @doc """
   Splits an already-ordered `entries` list into `{kind, entries}` pairs in
@@ -32,5 +33,19 @@ defmodule Vutuv.Profiles.CvSection do
       desc: x.start_year,
       desc: x.start_month
     )
+  end
+
+  @doc """
+  Builds the `slug` from `fields` (via each schema's `String.Chars`) when any of
+  them changed, unique per owner. `module` is the CV-section schema and `fields`
+  its slug source columns. Shared by both sections' slug step.
+  """
+  def put_slug(changeset, module, fields) do
+    if Enum.any?(fields, &get_change(changeset, &1)) do
+      model = struct(module, Map.new(fields, &{&1, get_field(changeset, &1)}))
+      put_change(changeset, :slug, Vutuv.SlugHelpers.gen_slug_unique(model, :slug))
+    else
+      changeset
+    end
   end
 end

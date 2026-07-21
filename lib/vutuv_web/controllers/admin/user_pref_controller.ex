@@ -72,11 +72,9 @@ defmodule VutuvWeb.Admin.UserPrefController do
   end
 
   defp with_member(conn, id, fun) do
-    with {:ok, _uuid} <- Ecto.UUID.cast(id),
-         %User{} = member <- Repo.get(User, id) do
-      fun.(member)
-    else
-      _ -> ControllerHelpers.render_error(conn, 404)
+    case ControllerHelpers.get_user(id) do
+      %User{} = member -> fun.(member)
+      nil -> ControllerHelpers.render_error(conn, 404)
     end
   end
 end

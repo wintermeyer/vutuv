@@ -463,6 +463,7 @@ defmodule Vutuv.Newsletters do
   # group's snapshot, replacing any previous membership, and caches the count.
   defp materialize(%NewsletterGroup{} = group) do
     ids = audience_user_ids(criteria_from_group(group), group.max_size, group.random_sample)
+    count = length(ids)
     now = NaiveDateTime.utc_now(:second)
 
     # insert_all does not run the schema's UUID v7 autogenerate, so mint ids here.
@@ -483,11 +484,11 @@ defmodule Vutuv.Newsletters do
         Repo.insert_all(NewsletterGroupMember, rows)
 
         Repo.update_all(from(g in NewsletterGroup, where: g.id == ^group.id),
-          set: [member_count: length(ids), updated_at: now]
+          set: [member_count: count, updated_at: now]
         )
       end)
 
-    %{group | member_count: length(ids)}
+    %{group | member_count: count}
   end
 
   defp criteria_from_group(%NewsletterGroup{} = group) do

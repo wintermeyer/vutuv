@@ -2,6 +2,9 @@ defmodule Vutuv.Accounts.User do
   @moduledoc false
 
   use VutuvWeb, :model
+  # Enables the bare `gettext/1` macro (and extraction), like the sibling schemas.
+  use Gettext, backend: VutuvWeb.Gettext
+
   alias Vutuv.Handles
   alias Vutuv.Mentions
   alias Vutuv.Prefs
@@ -600,10 +603,10 @@ defmodule Vutuv.Accounts.User do
   edit form and the agent documents all read, so the wording lives in one
   place. "open" = employed but listening, "looking" = actively job-hunting.
   """
-  def employment_status_label("open"), do: Gettext.gettext(VutuvWeb.Gettext, "Open to offers")
+  def employment_status_label("open"), do: gettext("Open to offers")
 
   def employment_status_label("looking"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Looking for a job")
+    do: gettext("Looking for a job")
 
   def employment_status_label(_), do: nil
 
@@ -615,12 +618,12 @@ defmodule Vutuv.Accounts.User do
   can create an account too).
   """
   def visibility_label("everyone"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Everyone, including logged-out visitors")
+    do: gettext("Everyone, including logged-out visitors")
 
   def visibility_label("members"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Signed-in members only")
+    do: gettext("Signed-in members only")
 
-  def visibility_label("hidden"), do: Gettext.gettext(VutuvWeb.Gettext, "No one")
+  def visibility_label("hidden"), do: gettext("No one")
 
   def visibility_label(_), do: nil
 
@@ -630,16 +633,16 @@ defmodule Vutuv.Accounts.User do
   so the wording lives in one place.
   """
   def birthdate_visibility_label("full"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Full date and age")
+    do: gettext("Full date and age")
 
   def birthdate_visibility_label("age"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Age only, without the date")
+    do: gettext("Age only, without the date")
 
   def birthdate_visibility_label("day_month"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Day and month, without the year")
+    do: gettext("Day and month, without the year")
 
   def birthdate_visibility_label("hidden"),
-    do: Gettext.gettext(VutuvWeb.Gettext, "Do not show my birthday")
+    do: gettext("Do not show my birthday")
 
   def birthdate_visibility_label(_), do: nil
 
@@ -725,11 +728,11 @@ defmodule Vutuv.Accounts.User do
     )
   end
 
-  def gender_gettext("male"), do: Gettext.gettext(VutuvWeb.Gettext, "Male")
-  def gender_gettext("female"), do: Gettext.gettext(VutuvWeb.Gettext, "Female")
+  def gender_gettext("male"), do: gettext("Male")
+  def gender_gettext("female"), do: gettext("Female")
   # The third gender ("other") displays as "divers" - its own label, decoupled
   # from the email-type "Other"/"Andere" string they used to share.
-  def gender_gettext(_), do: Gettext.gettext(VutuvWeb.Gettext, "Diverse")
+  def gender_gettext(_), do: gettext("Diverse")
 
   defp nullify_default_birthdate(changeset) do
     case get_field(changeset, :birthdate) do
