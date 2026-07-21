@@ -2926,8 +2926,8 @@ msgstr[1] ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:56
 #, elixir-autogen, elixir-format
-msgid "%{count} case is waiting for a ruling."
-msgid_plural "%{count} cases are waiting for a ruling."
+msgid "%{formatted} case is waiting for a ruling."
+msgid_plural "%{formatted} cases are waiting for a ruling."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -4177,8 +4177,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:345
 #, elixir-autogen, elixir-format
-msgid "%{count} ad is waiting for approval."
-msgid_plural "%{count} ads are waiting for approval."
+msgid "%{formatted} ad is waiting for approval."
+msgid_plural "%{formatted} ads are waiting for approval."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -4887,8 +4887,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:325
 #, elixir-autogen, elixir-format
-msgid "%{count} registered third-party application. Suspending one cuts off all of its tokens."
-msgid_plural "%{count} registered third-party applications. Suspending one cuts off all of its tokens."
+msgid "%{formatted} registered third-party application. Suspending one cuts off all of its tokens."
+msgid_plural "%{formatted} registered third-party applications. Suspending one cuts off all of its tokens."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -6336,8 +6336,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:124
 #, elixir-autogen, elixir-format
-msgid "%{count} account is frozen because every email address bounced."
-msgid_plural "%{count} accounts are frozen because every email address bounced."
+msgid "%{formatted} account is frozen because every email address bounced."
+msgid_plural "%{formatted} accounts are frozen because every email address bounced."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -11819,8 +11819,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:236
 #, elixir-autogen, elixir-format
-msgid "%{count} alias matches another verified organization and is flagged for review."
-msgid_plural "%{count} aliases match another verified organization and are flagged for review."
+msgid "%{formatted} alias matches another verified organization and is flagged for review."
+msgid_plural "%{formatted} aliases match another verified organization and are flagged for review."
 msgstr[0] ""
 msgstr[1] ""
 
@@ -12904,8 +12904,8 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:144
 #, elixir-autogen, elixir-format
-msgid "%{count} job posting has an open moderation case."
-msgid_plural "%{count} job postings have an open moderation case."
+msgid "%{formatted} job posting has an open moderation case."
+msgid_plural "%{formatted} job postings have an open moderation case."
 msgstr[0] ""
 msgstr[1] ""
 

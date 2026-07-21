@@ -54,9 +54,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         {gettext("No reported content waiting - the self-service flow is doing its job.")}
       <% else %>
         {ngettext(
-          "%{count} case is waiting for a ruling.",
-          "%{count} cases are waiting for a ruling.",
-          @moderation_count
+          "%{formatted} case is waiting for a ruling.",
+          "%{formatted} cases are waiting for a ruling.",
+          @moderation_count,
+          formatted: compact_count(@moderation_count)
         )}
       <% end %>
     </.admin_card>
@@ -122,9 +123,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         )}
       <% else %>
         {ngettext(
-          "%{count} account is frozen because every email address bounced.",
-          "%{count} accounts are frozen because every email address bounced.",
-          @frozen_accounts_count
+          "%{formatted} account is frozen because every email address bounced.",
+          "%{formatted} accounts are frozen because every email address bounced.",
+          @frozen_accounts_count,
+          formatted: compact_count(@frozen_accounts_count)
         )}
       <% end %>
     </.admin_card>
@@ -142,9 +144,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         {gettext("Every job posting: search, freeze/unfreeze, close or delete, with the poster's report history and cold-outreach counter.")}
       <% else %>
         {ngettext(
-          "%{count} job posting has an open moderation case.",
-          "%{count} job postings have an open moderation case.",
-          @jobs_open_cases_count
+          "%{formatted} job posting has an open moderation case.",
+          "%{formatted} job postings have an open moderation case.",
+          @jobs_open_cases_count,
+          formatted: compact_count(@jobs_open_cases_count)
         )}
       <% end %>
     </.admin_card>
@@ -234,9 +237,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         {gettext("Verified organization pages: domains, team roles, aliases and rename history. Freeze, archive or delete a page.")}
       <% else %>
         {ngettext(
-          "%{count} alias matches another verified organization and is flagged for review.",
-          "%{count} aliases match another verified organization and are flagged for review.",
-          @flagged_aliases_count
+          "%{formatted} alias matches another verified organization and is flagged for review.",
+          "%{formatted} aliases match another verified organization and are flagged for review.",
+          @flagged_aliases_count,
+          formatted: compact_count(@flagged_aliases_count)
         )}
       <% end %>
     </.admin_card>
@@ -323,9 +327,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
       cta={gettext("Manage applications")}
     >
       {ngettext(
-        "%{count} registered third-party application. Suspending one cuts off all of its tokens.",
-        "%{count} registered third-party applications. Suspending one cuts off all of its tokens.",
-        @api_apps_count
+        "%{formatted} registered third-party application. Suspending one cuts off all of its tokens.",
+        "%{formatted} registered third-party applications. Suspending one cuts off all of its tokens.",
+        @api_apps_count,
+        formatted: compact_count(@api_apps_count)
       )}
     </.admin_card>
 
@@ -343,9 +348,10 @@ per-IP rate limiter and the security email only ever see the proxy hop. --%>
         {gettext("No ads waiting for approval.")}
       <% else %>
         {ngettext(
-          "%{count} ad is waiting for approval.",
-          "%{count} ads are waiting for approval.",
-          @pending_ads_count
+          "%{formatted} ad is waiting for approval.",
+          "%{formatted} ads are waiting for approval.",
+          @pending_ads_count,
+          formatted: compact_count(@pending_ads_count)
         )}
       <% end %>
     </.admin_card>

@@ -2988,10 +2988,10 @@ msgstr[1] "%{count} aktive Verwarnungspunkte"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:56
 #, elixir-autogen, elixir-format
-msgid "%{count} case is waiting for a ruling."
-msgid_plural "%{count} cases are waiting for a ruling."
-msgstr[0] "%{count} Fall wartet auf eine Entscheidung."
-msgstr[1] "%{count} Fälle warten auf eine Entscheidung."
+msgid "%{formatted} case is waiting for a ruling."
+msgid_plural "%{formatted} cases are waiting for a ruling."
+msgstr[0] "%{formatted} Fall wartet auf eine Entscheidung."
+msgstr[1] "%{formatted} Fälle warten auf eine Entscheidung."
 
 #: lib/vutuv_web/live/admin/job_live.ex:346
 #: lib/vutuv_web/live/admin/moderation_case_live.ex:266
@@ -4330,10 +4330,10 @@ msgstr ""
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:345
 #, elixir-autogen, elixir-format
-msgid "%{count} ad is waiting for approval."
-msgid_plural "%{count} ads are waiting for approval."
-msgstr[0] "%{count} Anzeige wartet auf Freischaltung."
-msgstr[1] "%{count} Anzeigen warten auf Freischaltung."
+msgid "%{formatted} ad is waiting for approval."
+msgid_plural "%{formatted} ads are waiting for approval."
+msgstr[0] "%{formatted} Anzeige wartet auf Freischaltung."
+msgstr[1] "%{formatted} Anzeigen warten auf Freischaltung."
 
 #: lib/vutuv_web/controllers/admin/ad_controller.ex:20
 #: lib/vutuv_web/templates/admin/ad/index.html.heex:2
@@ -5090,13 +5090,13 @@ msgstr "%{app} möchte auf Ihr vutuv-Konto zugreifen. Es dürfte:"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:325
 #, elixir-autogen, elixir-format
-msgid "%{count} registered third-party application. Suspending one cuts off all of its tokens."
-msgid_plural "%{count} registered third-party applications. Suspending one cuts off all of its tokens."
+msgid "%{formatted} registered third-party application. Suspending one cuts off all of its tokens."
+msgid_plural "%{formatted} registered third-party applications. Suspending one cuts off all of its tokens."
 msgstr[0] ""
-"%{count} registrierte Drittanbieter-Anwendung. Eine Sperrung schaltet alle "
+"%{formatted} registrierte Drittanbieter-Anwendung. Eine Sperrung schaltet alle "
 "ihre Tokens ab."
 msgstr[1] ""
-"%{count} registrierte Drittanbieter-Anwendungen. Eine Sperrung schaltet alle"
+"%{formatted} registrierte Drittanbieter-Anwendungen. Eine Sperrung schaltet alle"
 " ihre Tokens ab."
 
 #: lib/vutuv_web/live/admin/api_app_live.ex:21
@@ -6607,12 +6607,12 @@ msgstr "empfohlen am %{date}"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:124
 #, elixir-autogen, elixir-format
-msgid "%{count} account is frozen because every email address bounced."
-msgid_plural "%{count} accounts are frozen because every email address bounced."
+msgid "%{formatted} account is frozen because every email address bounced."
+msgid_plural "%{formatted} accounts are frozen because every email address bounced."
 msgstr[0] ""
-"%{count} Konto ist eingefroren, weil jede E-Mail-Adresse unzustellbar wurde."
+"%{formatted} Konto ist eingefroren, weil jede E-Mail-Adresse unzustellbar wurde."
 msgstr[1] ""
-"%{count} Konten sind eingefroren, weil jede E-Mail-Adresse unzustellbar "
+"%{formatted} Konten sind eingefroren, weil jede E-Mail-Adresse unzustellbar "
 "wurde."
 
 #: lib/vutuv_web/live/admin/deliverability_live.ex:300
@@ -12513,13 +12513,13 @@ msgstr "ehemalig"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:236
 #, elixir-autogen, elixir-format
-msgid "%{count} alias matches another verified organization and is flagged for review."
-msgid_plural "%{count} aliases match another verified organization and are flagged for review."
+msgid "%{formatted} alias matches another verified organization and is flagged for review."
+msgid_plural "%{formatted} aliases match another verified organization and are flagged for review."
 msgstr[0] ""
-"%{count} Alias stimmt mit einer anderen verifizierten Organisation überein und "
+"%{formatted} Alias stimmt mit einer anderen verifizierten Organisation überein und "
 "wurde zur Prüfung markiert."
 msgstr[1] ""
-"%{count} Aliasse stimmen mit anderen verifizierten Organisationen überein und wurden"
+"%{formatted} Aliasse stimmen mit anderen verifizierten Organisationen überein und wurden"
 " zur Prüfung markiert."
 
 #: lib/vutuv_web/live/admin/organization_live.ex:206
@@ -13633,10 +13633,10 @@ msgstr "Jobs durchsuchen"
 
 #: lib/vutuv_web/templates/admin/admin/index.html.heex:144
 #, elixir-autogen, elixir-format
-msgid "%{count} job posting has an open moderation case."
-msgid_plural "%{count} job postings have an open moderation case."
-msgstr[0] "%{count} Stellenanzeige hat einen offenen Moderationsfall."
-msgstr[1] "%{count} Stellenanzeigen haben einen offenen Moderationsfall."
+msgid "%{formatted} job posting has an open moderation case."
+msgid_plural "%{formatted} job postings have an open moderation case."
+msgstr[0] "%{formatted} Stellenanzeige hat einen offenen Moderationsfall."
+msgstr[1] "%{formatted} Stellenanzeigen haben einen offenen Moderationsfall."
 
 #: lib/vutuv_web/live/admin/job_live.ex:447
 #, elixir-autogen, elixir-format
