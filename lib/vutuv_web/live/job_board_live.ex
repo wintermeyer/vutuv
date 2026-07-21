@@ -314,6 +314,26 @@ defmodule VutuvWeb.JobBoardLive do
         {gettext("Search")}
       </button>
 
+      <details class="group text-sm text-slate-600 dark:text-slate-400 sm:col-span-2 lg:col-span-4">
+        <summary class="inline-flex cursor-pointer list-none items-center gap-1 font-medium text-slate-700 hover:text-brand-700 [&::-webkit-details-marker]:hidden dark:text-slate-300 dark:hover:text-brand-300">
+          <span aria-hidden="true" class="transition-transform group-open:rotate-90">›</span>
+          {gettext("Search tips")}
+        </summary>
+        <div class="mt-2 space-y-2">
+          <p>
+            {gettext(
+              "Looking for a role that goes by several titles? Separate them with a comma and we show postings that match any of them."
+            )}
+          </p>
+          <ul class="space-y-1.5">
+            <li :for={{example, gloss} <- search_tips()} class="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-2">
+              <code class="w-fit rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-slate-800 dark:text-slate-200">{example}</code>
+              <span>{gloss}</span>
+            </li>
+          </ul>
+        </div>
+      </details>
+
       <%!-- Chip-driven filters ride along so a search submit keeps them. --%>
       <input :if={@params["workplace"]} type="hidden" name="workplace" value={@params["workplace"]} />
       <input :if={@params["tag"]} type="hidden" name="tag" value={@params["tag"]} />
@@ -347,6 +367,18 @@ defmodule VutuvWeb.JobBoardLive do
         else:
           "bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
       )
+    ]
+  end
+
+  # Worked examples for the "Search tips" disclosure under the box (issue #952),
+  # each an {example, plain-language gloss} pair. The examples are literal search
+  # syntax (locale-independent); the glosses translate.
+  defp search_tips do
+    [
+      {"Webentwickler, PHP-Entwickler, Full-Stack Developer", gettext("any of these titles")},
+      {"entwickl*", gettext("word start: also finds Entwickler, Entwicklung")},
+      {~s("Full Stack Developer"), gettext("exact wording")},
+      {"Entwickler -Praktikum", gettext("without internships")}
     ]
   end
 

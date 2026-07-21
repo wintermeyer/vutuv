@@ -85,6 +85,32 @@ defmodule Vutuv.JobsBoardTest do
       assert ids(Jobs.board_page(nil, %{q: "Elixir"})) == [elixir.id]
     end
 
+    test "comma is an OR between titles (issue #952)", %{elixir: elixir, java: java} do
+      both = Jobs.board_page(nil, %{q: "Elixir, Java"}) |> ids() |> Enum.sort()
+      assert both == Enum.sort([elixir.id, java.id])
+    end
+
+    test "the word 'or' also ORs titles", %{elixir: elixir, java: java} do
+      both = Jobs.board_page(nil, %{q: "elixir or java"}) |> ids() |> Enum.sort()
+      assert both == Enum.sort([elixir.id, java.id])
+    end
+
+    test "a trailing * prefix-matches word variants", %{elixir: elixir} do
+      # "Engineer" in the Elixir posting's title; "Engine*" must reach it.
+      assert ids(Jobs.board_page(nil, %{q: "Engine*"})) == [elixir.id]
+    end
+
+    test "a leading - excludes a word", %{elixir: elixir, java: java} do
+      # Both are "…eer"/"Developer"; exclude Java to keep only Elixir.
+      assert ids(Jobs.board_page(nil, %{q: "developer or engineer -java"})) == [elixir.id]
+      assert java.id not in ids(Jobs.board_page(nil, %{q: "developer or engineer -java"}))
+    end
+
+    test "operator-only junk is a no-op, not a crash", %{elixir: elixir, java: java} do
+      all = Jobs.board_page(nil, %{q: "*** ,,, |"}) |> ids() |> Enum.sort()
+      assert all == Enum.sort([elixir.id, java.id])
+    end
+
     test "tag filters to postings carrying the slug", %{elixir: elixir} do
       assert ids(Jobs.board_page(nil, %{tag: "phoenix"})) == [elixir.id]
     end
