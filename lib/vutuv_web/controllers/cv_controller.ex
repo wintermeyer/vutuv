@@ -43,12 +43,7 @@ defmodule VutuvWeb.CVController do
     |> ContentPolicy.put_robots_header(user.noindex?, user.noai?)
     |> put_layout(html: false)
     |> live_render(VutuvWeb.CVLive,
-      session: %{
-        "profile_user_id" => user.id,
-        "locale" => conn.assigns[:locale],
-        "request_path" => conn.request_path,
-        "user_id" => conn.assigns[:current_user_id]
-      }
+      session: Map.put(ControllerHelpers.live_render_session(conn), "profile_user_id", user.id)
     )
   end
 

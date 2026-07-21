@@ -16,11 +16,11 @@ defmodule VutuvWeb.TagController do
   )
 
   def index(conn, _params) do
-    tags_count = Repo.one(from(t in Tag, select: count(t.id)))
+    tags_count = Repo.aggregate(Tag, :count)
 
     tags =
       from(t in Tag, order_by: fragment("lower(coalesce(?, ?))", t.name, t.slug))
-      |> Vutuv.Pages.paginate(conn.params, tags_count)
+      |> Pages.paginate(conn.params, tags_count)
       |> Repo.all()
 
     render(conn, "index.html", tags: tags, tags_count: tags_count)

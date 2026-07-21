@@ -34,7 +34,7 @@ defmodule VutuvWeb.JobPostingController do
         |> AgentDocs.put_html_alternates()
         |> put_layout(html: false)
         |> live_render(VutuvWeb.JobBoardLive,
-          session: Map.put(base_session(conn), "params", conn.params)
+          session: Map.put(ControllerHelpers.live_render_session(conn), "params", conn.params)
         )
 
       format ->
@@ -43,11 +43,7 @@ defmodule VutuvWeb.JobPostingController do
   end
 
   defp send_board_doc(conn, format) do
-    cursor =
-      case ApiV2.decode_cursor(conn.params["cursor"]) do
-        {:ok, cursor} -> cursor
-        :error -> nil
-      end
+    cursor = ApiV2.cursor_or_nil(conn.params)
 
     page = Jobs.agent_board_page(cursor: cursor)
     next = if page.more?, do: ApiV2.encode_cursor(page.cursor)
@@ -68,7 +64,7 @@ defmodule VutuvWeb.JobPostingController do
         |> AgentDocs.put_html_alternates()
         |> put_layout(html: false)
         |> live_render(VutuvWeb.JobPostingLive.Show,
-          session: Map.put(base_session(conn), "slug", posting.slug)
+          session: Map.put(ControllerHelpers.live_render_session(conn), "slug", posting.slug)
         )
 
       format ->
@@ -126,12 +122,4 @@ defmodule VutuvWeb.JobPostingController do
   end
 
   defp do_apply(conn, _posting, _viewer), do: ControllerHelpers.render_error(conn, 404)
-
-  defp base_session(conn) do
-    %{
-      "user_id" => conn.assigns[:current_user_id],
-      "locale" => conn.assigns[:locale],
-      "request_path" => conn.request_path
-    }
-  end
 end

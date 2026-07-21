@@ -171,7 +171,7 @@ defmodule VutuvWeb.EmailController do
            conn.assigns[:user],
            conn.assigns[:current_user]
          ) do
-        Vutuv.UUIDv7.with_cast(id, &Repo.get(assoc(conn.assigns[:user], :emails), &1))
+        ControllerHelpers.get_owned(conn.assigns[:user], :emails, id)
       else
         public_email(conn, id)
       end

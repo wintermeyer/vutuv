@@ -27,9 +27,11 @@ defmodule VutuvWeb.UsernameController do
         |> redirect(to: ~p"/#{user}")
 
       {:error, changeset} ->
+        # The rename did not persist, so `user.username` still holds the old
+        # handle and `affected` already counted its mentions: reuse it.
         conn
         |> put_status(:unprocessable_entity)
-        |> render_new(user, changeset)
+        |> render_new(user, changeset, affected)
     end
   end
 
@@ -47,11 +49,14 @@ defmodule VutuvWeb.UsernameController do
       )
   end
 
-  defp render_new(conn, user, changeset) do
+  defp render_new(conn, user, changeset),
+    do: render_new(conn, user, changeset, Mentions.count_post_mentions(user.username))
+
+  defp render_new(conn, user, changeset, mention_count) do
     render(conn, "new.html",
       changeset: changeset,
       quota: Accounts.username_change_quota(user),
-      mention_count: Mentions.count_post_mentions(user.username)
+      mention_count: mention_count
     )
   end
 
