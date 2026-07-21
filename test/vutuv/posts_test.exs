@@ -147,33 +147,37 @@ defmodule Vutuv.PostsTest do
     end
 
     test "creates tags from a comma- or space-separated list, reusing tags case-insensitively" do
-      existing = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      slug = String.downcase(name)
+      existing = insert(:tag, name: name, slug: slug)
 
       # An unquoted comma and space both still split, so "Phoenix Ecto" is two
       # tags; a quoted phrase stays one multi-word tag.
-      post = create_post!(user(), %{body: "tagged", tags: "elixir, Phoenix Ecto"})
+      post = create_post!(user(), %{body: "tagged", tags: "#{slug}, Phoenix Ecto"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
-      assert tag_names == ["Ecto", "Elixir", "Phoenix"]
+      assert tag_names == Enum.sort(["Ecto", name, "Phoenix"])
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
     test "keeps a quoted phrase as one multi-word post tag" do
-      post = create_post!(user(), %{body: "tagged", tags: ~s(Elixir, "Ruby on Rails")})
+      name = unique_tag_name("Elixir")
+      post = create_post!(user(), %{body: "tagged", tags: ~s(#{name}, "Ruby on Rails")})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
-      assert tag_names == ["Elixir", "Ruby on Rails"]
+      assert tag_names == Enum.sort([name, "Ruby on Rails"])
     end
 
     test "strips a leading # from post tags and reuses the bare tag" do
-      existing = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      existing = insert(:tag, name: name, slug: String.downcase(name))
 
       # A member types the hashtag form in the composer; it stores the bare tags
       # and links #Elixir to the existing Elixir tag rather than a # duplicate.
-      post = create_post!(user(), %{body: "tagged", tags: "#Elixir #phoenix"})
+      post = create_post!(user(), %{body: "tagged", tags: "##{name} #phoenix"})
 
       tag_names = post.tags |> Enum.map(& &1.name) |> Enum.sort()
-      assert tag_names == ["Elixir", "phoenix"]
+      assert tag_names == Enum.sort([name, "phoenix"])
       assert Enum.any?(post.tags, &(&1.id == existing.id))
     end
 
@@ -814,10 +818,11 @@ defmodule Vutuv.PostsTest do
     test "surfaces a followed tag's posts from authors the viewer doesn't follow (#872)" do
       viewer = user()
       stranger = user()
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
-      tagged = create_post!(stranger, %{body: "elixir news", tags: "elixir"})
+      tagged = create_post!(stranger, %{body: "elixir news", tags: String.downcase(name)})
       create_post!(stranger, %{body: "no tag here"})
 
       ids = Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id)
@@ -828,10 +833,11 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       friend = user()
       follow!(viewer, friend)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
-      post = create_post!(friend, %{body: "elixir by a friend", tags: "elixir"})
+      post = create_post!(friend, %{body: "elixir by a friend", tags: String.downcase(name)})
 
       entries = Posts.feed_page(viewer).entries
       assert Enum.count(entries, &(&1.post.id == post.id)) == 1
@@ -841,33 +847,36 @@ defmodule Vutuv.PostsTest do
       viewer = user()
       noisy = user()
       follow!(viewer, noisy)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       Vutuv.Tags.follow_tag(viewer, tag)
 
       fid = Vutuv.Social.follow_id(viewer.id, noisy.id)
       Vutuv.Social.toggle_follow_mute!(viewer.id, fid)
 
-      post = create_post!(noisy, %{body: "muted elixir", tags: "elixir"})
+      post = create_post!(noisy, %{body: "muted elixir", tags: String.downcase(name)})
       refute post.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
     end
 
     test "a blocked author's tagged post never enters the feed via a followed tag (#872)" do
       viewer = user()
       blocked = user()
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       Vutuv.Tags.follow_tag(viewer, tag)
       {:ok, _} = Vutuv.Social.block_user(viewer, blocked)
 
-      post = create_post!(blocked, %{body: "blocked elixir", tags: "elixir"})
+      post = create_post!(blocked, %{body: "blocked elixir", tags: String.downcase(name)})
       refute post.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
     end
 
     test "an unfollowed tag's posts do not appear (#872)" do
       viewer = user()
       stranger = user()
-      insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      insert(:tag, name: name, slug: String.downcase(name))
 
-      tagged = create_post!(stranger, %{body: "elixir news", tags: "elixir"})
+      tagged = create_post!(stranger, %{body: "elixir news", tags: String.downcase(name)})
 
       refute tagged.id in (Posts.feed_page(viewer).entries |> Enum.map(& &1.post.id))
     end
@@ -1153,7 +1162,7 @@ defmodule Vutuv.PostsTest do
       post =
         create_post!(author, %{
           body: "v1",
-          tags: "elixir",
+          tags: unique_tag_name("elixir"),
           denials: [%{"wildcard" => "everyone"}]
         })
 
@@ -1207,7 +1216,7 @@ defmodule Vutuv.PostsTest do
       post =
         create_post!(author, %{
           body: "bye",
-          tags: "elixir",
+          tags: unique_tag_name("elixir"),
           image_ids: [image.id],
           denials: [%{"wildcard" => "everyone"}]
         })

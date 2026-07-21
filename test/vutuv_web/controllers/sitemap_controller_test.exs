@@ -50,7 +50,7 @@ defmodule VutuvWeb.SitemapControllerTest do
 
     test "excludes unactivated, noindexed and moderation-hidden members" do
       insert(:user, username: "never_activated")
-      insert_activated_user(username: "opted_out", noindex?: true)
+      opted_out = insert_activated_user(noindex?: true)
 
       insert_activated_user(
         username: "frozen_member",
@@ -63,7 +63,7 @@ defmodule VutuvWeb.SitemapControllerTest do
 
       assert conn.resp_body =~ "/visible_member<"
       refute conn.resp_body =~ "never_activated"
-      refute conn.resp_body =~ "opted_out"
+      refute conn.resp_body =~ opted_out.username
       refute conn.resp_body =~ "frozen_member"
     end
   end

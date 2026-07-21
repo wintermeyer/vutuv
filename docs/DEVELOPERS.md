@@ -90,6 +90,15 @@ stack conventions and the context-module map.
 mix test
 ```
 
+Most of the suite runs `async: true`. One rule keeps that safe: an async
+test module must never insert the same unique-key value (tag name/slug,
+email, username) as another async file. The SQL sandbox holds every
+inserted unique-index key locked until the test's transaction rolls back,
+so shared literals make concurrent tests queue on each other and can
+deadlock (Postgres 40P01). Use the factory sequences (`insert(:tag)`),
+`Vutuv.Factory.unique_tag_name/1`, or the per-module `@registration_tags`
+instead of hardcoded names.
+
 ## How vutuv.de itself is deployed
 
 This section describes the **reference installation** (vutuv.de). For

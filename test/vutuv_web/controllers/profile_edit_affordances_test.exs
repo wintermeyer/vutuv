@@ -152,8 +152,10 @@ defmodule VutuvWeb.ProfileEditAffordancesTest do
 
       html = conn |> get(~p"/#{user}") |> html_response(200)
 
-      # @default_login_attrs registers alpha-tag/beta-tag/gamma-tag.
-      assert completion_text(html) =~ "For example, a thought on #alpha-tag."
+      # The registration fixture's alphabetically first tag (the hint picks
+      # the most-endorsed tag, slug as tiebreaker — so alpha-tag-… wins).
+      [first_tag | _] = String.split(@registration_tags)
+      assert completion_text(html) =~ "For example, a thought on ##{first_tag}."
     end
 
     test "the checklist disappears once every step is done", %{conn: conn} do

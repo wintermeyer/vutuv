@@ -50,6 +50,7 @@ paths:
 
 ## Test guidelines
 
+- **An async test module must never insert a unique-key value (tag name/slug, email, username/handle, org slug) that another async test file also inserts.** The SQL sandbox wraps each test in one never-committing transaction, so an inserted unique-index key stays exclusively locked until the test ends; two async files minting the same literal (`insert(:tag, slug: "elixir")`, a shared `"tag_list"`, `username: "alice"`) convoy on that lock, and two such keys acquired in opposite orders deadlock — the long-standing intermittent `40P01 deadlock_detected` in `register_user` at the pre-push gate (root-caused and fixed 2026-07-21). `ON CONFLICT` get-or-create does **not** help in tests: nothing commits, so every test really inserts. Use the factory sequences (`insert(:tag)` with no name), `Vutuv.Factory.unique_tag_name/1` bound to a variable, or the per-module `@registration_tags`; a hardcoded literal is acceptable only in a sync (`async: false`) module or when provably no other async file mints the same value.
 - **Always use `start_supervised!/1`** to start processes in tests as it guarantees cleanup between tests
 - **Avoid** `Process.sleep/1` and `Process.alive?/1` in tests
   - Instead of sleeping to wait for a process to finish, **always** use `Process.monitor/1` and assert on the DOWN message:

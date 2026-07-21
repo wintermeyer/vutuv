@@ -15,7 +15,8 @@ defmodule VutuvWeb.Admin.TagMemberControllerTest do
   describe "as an admin" do
     setup %{conn: conn} do
       {conn, admin} = create_and_login_admin(conn)
-      tag = insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+      name = unique_tag_name("vutuv_developer")
+      tag = insert(:tag, name: name, slug: name, honor?: true)
       {:ok, conn: conn, admin: admin, tag: tag}
     end
 

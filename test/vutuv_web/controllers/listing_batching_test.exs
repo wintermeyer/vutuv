@@ -61,7 +61,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       # have at least one visible follower).
       insert(:follow, follower: fan, followee: star)
 
-      popular = insert(:tag, name: "Bridgebuilding", slug: "bridgebuilding")
+      popular = insert(:tag)
       popular_ut = insert(:user_tag, user: star, tag: popular)
       # Endorse the popular tag so it ranks first among the member's tags.
       insert(:user_tag_endorsement, user_tag: popular_ut, user: fan)
@@ -74,7 +74,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       body = conn |> get(~p"/listings/most_followed_users") |> html_response(200)
 
       # The most endorsed tag is shown and links to its public tag page.
-      assert body =~ ~r{<a[^>]+href="/tags/bridgebuilding"[^>]*>[^<]*Bridgebuilding}
+      assert body =~ ~r{<a[^>]+href="/tags/#{popular.slug}"[^>]*>[^<]*#{popular.name}}
       # Six tags total, only four shown, so two overflow into the "+N more" count.
       assert body =~ "+2 more tags"
     end
@@ -159,7 +159,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       follower = insert_activated_user(first_name: "Fan")
       insert(:follow, follower: follower, followee: owner)
 
-      popular = insert(:tag, name: "Bridgebuilding", slug: "bridgebuilding")
+      popular = insert(:tag)
       popular_ut = insert(:user_tag, user: follower, tag: popular)
       # Endorse the popular tag so it ranks first among the follower's tags.
       insert(:user_tag_endorsement, user_tag: popular_ut, user: owner)
@@ -175,7 +175,7 @@ defmodule VutuvWeb.ListingBatchingTest do
       body = conn |> get(~p"/#{owner}/followers") |> html_response(200)
 
       # The most endorsed tag is shown and links to its public tag page.
-      assert body =~ ~r{<a[^>]+href="/tags/bridgebuilding"[^>]*>[^<]*Bridgebuilding}
+      assert body =~ ~r{<a[^>]+href="/tags/#{popular.slug}"[^>]*>[^<]*#{popular.name}}
       # Six tags total, only four shown, so two overflow into the "+N more" count.
       assert body =~ "+2 more tags"
     end

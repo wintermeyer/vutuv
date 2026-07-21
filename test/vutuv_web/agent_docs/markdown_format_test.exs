@@ -42,7 +42,7 @@ defmodule VutuvWeb.AgentDocs.MarkdownFormatTest do
     test "a noindexed profile emits the real key, still no bare false" do
       # Only noindex?: setting both flags blocks the agent docs entirely
       # (AgentExportOptOut), so a rendered profile doc never carries both.
-      user = insert_activated_user(username: "opted_out", noindex?: true, noai?: false)
+      user = insert_activated_user(noindex?: true, noai?: false)
       yaml = frontmatter(get(build_conn(), "/#{user.username}.md").resp_body)
 
       assert yaml =~ "noindex: true"
@@ -133,14 +133,18 @@ defmodule VutuvWeb.AgentDocs.MarkdownFormatTest do
 
   describe "list items are blank-line separated (#925)" do
     test "consecutive profile tags are separated by a blank line", %{user: user} do
-      for {name, slug} <- [{"alpha", "alpha"}, {"beta", "beta"}] do
-        insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: slug))
+      # Unique suffixes keep the alphabetical order (alpha-* < beta-*).
+      alpha = unique_tag_name("alpha")
+      beta = unique_tag_name("beta")
+
+      for name <- [alpha, beta] do
+        insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: name))
       end
 
       body = get(build_conn(), "/#{user.username}.md").resp_body
 
       # Two adjacent `- [tag]` items with a blank line between them.
-      assert body =~ ~r/^- \[alpha\].*\n\n- \[beta\]/m
+      assert body =~ ~r/^- \[#{alpha}\].*\n\n- \[#{beta}\]/m
     end
 
     test "a section index page separates its entries with a blank line", %{user: user} do

@@ -16,8 +16,9 @@ defmodule Vutuv.TagsTest do
     end
 
     test "links to an existing tag whose name matches case-insensitively" do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
-      changeset = link("elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
+      changeset = link(String.downcase(name))
       assert get_change(changeset, :tag_id) == tag.id
     end
 
@@ -41,8 +42,9 @@ defmodule Vutuv.TagsTest do
     end
 
     test "resolving the same new value twice is idempotent (one row, no unique-violation race)" do
-      first = get_change(link("Elixir"), :tag_id)
-      second = get_change(link("elixir"), :tag_id)
+      name = unique_tag_name("Elixir")
+      first = get_change(link(name), :tag_id)
+      second = get_change(link(String.downcase(name)), :tag_id)
 
       assert first == second
       assert Repo.aggregate(Tag, :count) == 1
@@ -64,20 +66,23 @@ defmodule Vutuv.TagsTest do
       # Multi-word tags are first-class again: a spaced value attaches the
       # existing spaced tag (matched case-insensitively by name), it does not
       # mint a duplicate.
-      tag = insert(:tag, name: "Ruby on Rails", slug: "ruby-on-rails")
+      name = unique_tag_name("Ruby on Rails")
+      slug = name |> String.downcase() |> String.replace(" ", "-")
+      tag = insert(:tag, name: name, slug: slug)
 
-      changeset = link("ruby on rails")
+      changeset = link(String.downcase(name))
       assert get_change(changeset, :tag_id) == tag.id
     end
 
     test "a multi-word value with no match creates one spaced tag and links it" do
-      changeset = link("Ruby on Rails")
+      name = unique_tag_name("Ruby on Rails")
+      changeset = link(name)
 
       tag_id = get_change(changeset, :tag_id)
       assert tag_id
 
       tag = Repo.get!(Tag, tag_id)
-      assert tag.name == "Ruby on Rails"
+      assert tag.name == name
       assert tag.slug =~ "ruby"
     end
   end
@@ -123,10 +128,12 @@ defmodule Vutuv.TagsTest do
     end
 
     test "the admin edit form can recapitalize a legacy lowercase name" do
-      tag = insert(:tag, name: "elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      legacy = String.downcase(name)
+      tag = insert(:tag, name: legacy, slug: legacy)
 
-      assert {:ok, updated} = tag |> Tag.edit_changeset(%{"name" => "Elixir"}) |> Repo.update()
-      assert updated.name == "Elixir"
+      assert {:ok, updated} = tag |> Tag.edit_changeset(%{"name" => name}) |> Repo.update()
+      assert updated.name == name
     end
   end
 
@@ -250,21 +257,23 @@ defmodule Vutuv.TagsTest do
     end
 
     test "create_or_link_tag links #Elixir to the existing Elixir tag" do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
 
       changeset =
-        %UserTag{} |> change(%{}) |> Tag.create_or_link_tag(%{"value" => "#Elixir"})
+        %UserTag{} |> change(%{}) |> Tag.create_or_link_tag(%{"value" => "#" <> name})
 
       assert get_change(changeset, :tag_id) == tag.id
     end
 
     test "add_user_tag stores #elixir as the tag elixir" do
       user = insert(:user)
+      name = unique_tag_name("elixir")
 
-      assert {:ok, user_tag} = Tags.add_user_tag(user, "#elixir")
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "#" <> name)
       tag = Repo.preload(user_tag, :tag).tag
-      assert tag.name == "elixir"
-      assert tag.slug == "elixir"
+      assert tag.name == name
+      assert tag.slug == name
     end
 
     test "add_user_tag keeps a trailing # (C# stays C#)" do
@@ -311,46 +320,50 @@ defmodule Vutuv.TagsTest do
   describe "add_user_tag/2 stores multi-word tags" do
     test "a multi-word name is stored as one spaced tag" do
       user = insert(:user)
+      name = unique_tag_name("Ruby on Rails")
 
-      assert {:ok, user_tag} = Tags.add_user_tag(user, "Ruby on Rails")
+      assert {:ok, user_tag} = Tags.add_user_tag(user, name)
       tag = Repo.preload(user_tag, :tag).tag
-      assert tag.name == "Ruby on Rails"
+      assert tag.name == name
       assert tag.slug =~ "ruby"
     end
 
     test "a later member linking a spaced tag keeps the first spelling" do
       first = insert(:user)
       later = insert(:user)
+      name = unique_tag_name("Ruby on Rails")
 
-      assert {:ok, ut1} = Tags.add_user_tag(first, "Ruby on Rails")
+      assert {:ok, ut1} = Tags.add_user_tag(first, name)
       tag = Repo.preload(ut1, :tag).tag
 
-      assert {:ok, ut2} = Tags.add_user_tag(later, "ruby on rails")
+      assert {:ok, ut2} = Tags.add_user_tag(later, String.downcase(name))
       assert Repo.preload(ut2, :tag).tag.id == tag.id
       assert Repo.aggregate(Tag, :count) == 1
     end
 
     test "a single-word name is stored" do
       user = insert(:user)
+      name = unique_tag_name("Elixir")
 
-      assert {:ok, user_tag} = Tags.add_user_tag(user, "Elixir")
-      assert Repo.preload(user_tag, :tag).tag.name == "Elixir"
+      assert {:ok, user_tag} = Tags.add_user_tag(user, name)
+      assert Repo.preload(user_tag, :tag).tag.name == name
     end
 
     test "collapses stray whitespace runs into single spaces" do
       user = insert(:user)
+      suffix = System.unique_integer([:positive])
 
-      assert {:ok, user_tag} = Tags.add_user_tag(user, "Ruby\non   Rails")
-      assert Repo.preload(user_tag, :tag).tag.name == "Ruby on Rails"
+      assert {:ok, user_tag} = Tags.add_user_tag(user, "Ruby\non   Rails-#{suffix}")
+      assert Repo.preload(user_tag, :tag).tag.name == "Ruby on Rails-#{suffix}"
     end
   end
 
   describe "user_tags" do
     test "UserTag.name/1 returns the tag's name" do
       user = insert(:user)
-      tag = insert(:tag, name: "Elixir")
+      tag = insert(:tag)
       user_tag = insert(:user_tag, user: user, tag: tag)
-      assert UserTag.name(user_tag) == "Elixir"
+      assert UserTag.name(user_tag) == tag.name
     end
   end
 
@@ -484,9 +497,10 @@ defmodule Vutuv.TagsTest do
 
     test "add_user_tag/2 refuses a reserved (honor) tag" do
       user = insert(:user)
-      insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+      name = unique_tag_name("vutuv_developer")
+      insert(:tag, name: name, slug: name, honor?: true)
 
-      assert {:error, changeset} = Tags.add_user_tag(user, "vutuv_developer")
+      assert {:error, changeset} = Tags.add_user_tag(user, name)
       assert %{tag_id: [_ | _]} = errors_on(changeset)
       # Nothing was inserted for this member.
       refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
@@ -494,17 +508,19 @@ defmodule Vutuv.TagsTest do
 
     test "add_user_tag/2 refuses a reserved tag matched case-insensitively" do
       user = insert(:user)
-      insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+      name = unique_tag_name("vutuv_developer")
+      insert(:tag, name: name, slug: name, honor?: true)
 
-      assert {:error, _changeset} = Tags.add_user_tag(user, "Vutuv_Developer")
+      assert {:error, _changeset} = Tags.add_user_tag(user, String.upcase(name))
       refute Repo.exists?(from(ut in UserTag, where: ut.user_id == ^user.id))
     end
 
     test "add_user_tag/2 still links a normal (not honor) existing tag" do
       user = insert(:user)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
 
-      assert {:ok, user_tag} = Tags.add_user_tag(user, "elixir")
+      assert {:ok, user_tag} = Tags.add_user_tag(user, String.downcase(name))
       assert user_tag.tag_id == tag.id
     end
 
@@ -583,25 +599,28 @@ defmodule Vutuv.TagsTest do
     end
 
     test "declare_honor_tag/1 flips an existing holder-less tag" do
-      existing = insert(:tag, name: "mentor", slug: "mentor")
+      name = unique_tag_name("mentor")
+      existing = insert(:tag, name: name, slug: name)
 
-      assert {:ok, tag} = Tags.declare_honor_tag("Mentor")
+      assert {:ok, tag} = Tags.declare_honor_tag(String.capitalize(name))
       assert tag.id == existing.id
       assert tag.honor?
     end
 
     test "declare_honor_tag/1 is idempotent on an existing honor tag" do
-      existing = insert(:tag, name: "mentor", slug: "mentor", honor?: true)
+      name = unique_tag_name("mentor")
+      existing = insert(:tag, name: name, slug: name, honor?: true)
 
-      assert {:ok, tag} = Tags.declare_honor_tag("mentor")
+      assert {:ok, tag} = Tags.declare_honor_tag(name)
       assert tag.id == existing.id
     end
 
     test "declare_honor_tag/1 refuses to silently flip a tag members already hold" do
-      existing = insert(:tag, name: "elixir", slug: "elixir")
+      name = unique_tag_name("elixir")
+      existing = insert(:tag, name: name, slug: name)
       insert(:user_tag, user: insert(:user), tag: existing)
 
-      assert {:error, :has_holders, tag} = Tags.declare_honor_tag("elixir")
+      assert {:error, :has_holders, tag} = Tags.declare_honor_tag(name)
       assert tag.id == existing.id
       refute Repo.reload(existing).honor?
     end
@@ -629,7 +648,7 @@ defmodule Vutuv.TagsTest do
       owner = insert(:user, email_confirmed?: true)
 
       # A self-assigned tag with several visible endorsements.
-      popular = insert(:user_tag, user: owner, tag: insert(:tag, name: "Elixir", slug: "elixir"))
+      popular = insert(:user_tag, user: owner, tag: insert(:tag))
 
       for _ <- 1..3 do
         insert(:user_tag_endorsement,
@@ -642,7 +661,7 @@ defmodule Vutuv.TagsTest do
       honor =
         insert(:user_tag,
           user: owner,
-          tag: insert(:tag, name: "Vutuv Developer", slug: "vutuv_developer", honor?: true)
+          tag: insert(:tag, honor?: true)
         )
 
       ordered =
@@ -772,10 +791,11 @@ defmodule Vutuv.TagsTest do
     end
 
     test "leaves a clean multi-word name untouched and is idempotent" do
-      tag = insert(:tag, name: "Ruby on Rails", slug: "ruby_on_rails")
+      name = unique_tag_name("Ruby on Rails")
+      tag = insert(:tag, name: name, slug: name |> String.downcase() |> String.replace(" ", "_"))
 
       assert {0, 0} = Tags.normalize_legacy_tag_whitespace()
-      assert Repo.get(Tag, tag.id).name == "Ruby on Rails"
+      assert Repo.get(Tag, tag.id).name == name
 
       # A second pass finds nothing to do.
       assert {0, 0} = Tags.normalize_legacy_tag_whitespace()

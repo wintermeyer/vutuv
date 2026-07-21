@@ -111,10 +111,13 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "slugs containing dots keep working, with and without extension" do
-      insert_activated_user(username: "stefan.wintermeyer", first_name: "Stefan")
+      # The dot in the handle is the point of this test: it must survive the
+      # extension stripping, so the unique handle keeps one.
+      handle = "stefan.w#{System.unique_integer([:positive])}"
+      insert_activated_user(username: handle, first_name: "Stefan")
 
-      assert get(build_conn(), "/stefan.wintermeyer") |> html_response(200) =~ "Stefan"
-      conn = get(build_conn(), "/stefan.wintermeyer.md")
+      assert get(build_conn(), "/#{handle}") |> html_response(200) =~ "Stefan"
+      conn = get(build_conn(), "/#{handle}.md")
       assert conn.status == 200
       assert conn.resp_body =~ "# Stefan Test"
     end
@@ -218,9 +221,9 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "YAML frontmatter keeps interpolation-looking text literal", %{user: _user} do
-      insert(:tag, name: "Sharp", slug: "sharp", description: ~S(Costs #{n} euros))
+      tag = insert(:tag, description: ~S(Costs #{n} euros))
 
-      body = get(build_conn(), "/tags/sharp.md").resp_body
+      body = get(build_conn(), "/tags/#{tag.slug}.md").resp_body
 
       assert body =~ ~S(description: "Costs #{n} euros")
       # inspect/1 would have produced an invalid YAML escape here.
@@ -292,8 +295,8 @@ defmodule VutuvWeb.AgentFormatTest do
     end
 
     test "an extension the page does not support 404s (no .vcf for tags)" do
-      insert(:tag, name: "Elixir", slug: "elixir")
-      assert get(build_conn(), "/tags/elixir.vcf").status == 404
+      tag = insert(:tag)
+      assert get(build_conn(), "/tags/#{tag.slug}.vcf").status == 404
     end
 
     test "robots.txt and llms.txt are not mistaken for agent formats" do

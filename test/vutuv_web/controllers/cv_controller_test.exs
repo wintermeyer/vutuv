@@ -313,7 +313,8 @@ defmodule VutuvWeb.CVControllerTest do
 
       assert [%{"organization" => "SV Musterstadt"}] = resume["volunteer"]
       assert [%{"institution" => "Universität Bremen"}] = resume["education"]
-      assert Enum.any?(resume["skills"], &(&1["name"] == "alpha-tag"))
+      [first_tag | _] = String.split(@registration_tags)
+      assert Enum.any?(resume["skills"], &(&1["name"] == first_tag))
 
       # The address becomes basics.location, the links become basics.profiles.
       assert resume["basics"]["location"]["address"] =~ "Musterstadt"

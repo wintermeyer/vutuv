@@ -52,12 +52,14 @@ defmodule Vutuv.HandlesTest do
 
   describe "registry sync (the chokepoints keep handles in lock-step)" do
     test "register_user writes a matching handle row" do
+      n = System.unique_integer([:positive])
+
       {:ok, user} =
         Accounts.register_user(build_conn(), %{
           "emails" => %{"0" => %{"value" => "reg@example.com"}},
           "first_name" => "Reg",
           "last_name" => "Ister",
-          "tag_list" => "Elixir Cooking Origami"
+          "tag_list" => "Elixir#{n} Cooking#{n} Origami#{n}"
         })
 
       handle = Repo.get_by(Handle, user_id: user.id)

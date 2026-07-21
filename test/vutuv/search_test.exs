@@ -117,14 +117,16 @@ defmodule Vutuv.SearchTest do
     end
 
     test "tags match by name or slug prefix, case-insensitively" do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
-      insert(:tag, name: "Cooking", slug: "cooking")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
+      insert(:tag)
 
       assert Enum.map(Search.instant("eLi").tags, & &1.id) == [tag.id]
     end
 
     test "the tag member count excludes unactivated and moderation-hidden members" do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
 
       visible = searchable_user("Vera", "Visible")
       unactivated = insert(:user, email_confirmed?: false)
@@ -260,7 +262,8 @@ defmodule Vutuv.SearchTest do
     end
 
     test "status combines with a tag filter", ctx do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       insert(:user_tag, tag: tag, user: ctx.looking)
       # A looking member without the tag must not match.
       insert(:activated_user,
@@ -268,7 +271,7 @@ defmodule Vutuv.SearchTest do
         employment_status_visibility: "members"
       )
 
-      results = Search.instant("status:looking tag:elixir", viewer: ctx.viewer)
+      results = Search.instant("status:looking tag:#{tag.slug}", viewer: ctx.viewer)
       assert Enum.map(results.exact_people, & &1.id) == [ctx.looking.id]
     end
   end
@@ -301,7 +304,7 @@ defmodule Vutuv.SearchTest do
     end
 
     test "@handle searches the username" do
-      user = insert(:activated_user, username: "stefan.wintermeyer")
+      user = insert(:activated_user, username: "stefan.w#{System.unique_integer([:positive])}")
       insert(:activated_user, username: "unrelated")
 
       results = Search.instant("@stefan")
@@ -310,14 +313,15 @@ defmodule Vutuv.SearchTest do
     end
 
     test "tag: lists people with that tag, not the tag itself" do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       with_tag = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: with_tag)
       insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
       author = insert(:activated_user)
-      Vutuv.PostsHelpers.create_post!(author, %{body: "All about php"})
+      Vutuv.PostsHelpers.create_post!(author, %{body: "All about #{tag.slug}"})
 
-      results = Search.instant("tag:php")
+      results = Search.instant("tag:#{tag.slug}")
 
       assert Enum.map(results.exact_people, & &1.id) == [with_tag.id]
       assert results.tags == []
@@ -325,26 +329,30 @@ defmodule Vutuv.SearchTest do
     end
 
     test "a name combines with the tag filter" do
-      php_tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      php_tag = insert(:tag, name: name, slug: String.downcase(name))
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: php_tag, user: php_mueller)
       searchable_user("Heike", "Müller")
 
-      results = Search.instant("müller tag:php")
+      results = Search.instant("müller tag:#{php_tag.slug}")
 
       assert Enum.map(results.exact_people, & &1.id) == [php_mueller.id]
     end
 
     test "tag: also finds posts carrying that tag, matching the tag not the body (issue #946)" do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       with_tag = insert(:activated_user)
       insert(:user_tag, tag: tag, user: with_tag)
 
       author = insert(:activated_user)
-      tagged = Vutuv.PostsHelpers.create_post!(author, %{body: "My write-up", tags: "php"})
-      _untagged = Vutuv.PostsHelpers.create_post!(author, %{body: "php but not tagged"})
+      tagged = Vutuv.PostsHelpers.create_post!(author, %{body: "My write-up", tags: tag.slug})
 
-      results = Search.instant("tag:php")
+      _untagged =
+        Vutuv.PostsHelpers.create_post!(author, %{body: "#{tag.slug} but not tagged"})
+
+      results = Search.instant("tag:#{tag.slug}")
 
       # People AND posts both respond to the tag filter now; the untagged post
       # that merely mentions "php" in its body stays out.
@@ -353,14 +361,15 @@ defmodule Vutuv.SearchTest do
     end
 
     test "the Posts scope with a tag: filter returns only posts" do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       with_tag = insert(:activated_user)
       insert(:user_tag, tag: tag, user: with_tag)
 
       tagged =
-        Vutuv.PostsHelpers.create_post!(insert(:activated_user), %{body: "hi", tags: "php"})
+        Vutuv.PostsHelpers.create_post!(insert(:activated_user), %{body: "hi", tags: tag.slug})
 
-      results = Search.instant("tag:php", scope: :posts)
+      results = Search.instant("tag:#{tag.slug}", scope: :posts)
 
       assert results.exact_people == []
       assert Enum.map(results.posts, & &1.id) == [tagged.id]
@@ -398,18 +407,20 @@ defmodule Vutuv.SearchTest do
     end
 
     test "tags carry their member counts" do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
 
-      results = Search.instant("elixir")
+      results = Search.instant(tag.slug)
 
       assert results.tag_member_counts[tag.id] == 2
     end
 
     test "the scope filter limits what is searched" do
       searchable_user("Elia", "Tester")
-      insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      insert(:tag, name: name, slug: String.downcase(name))
       author = insert(:activated_user)
       Vutuv.PostsHelpers.create_post!(author, %{body: "All about elixir and more"})
 

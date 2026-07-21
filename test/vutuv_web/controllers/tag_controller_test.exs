@@ -9,7 +9,7 @@ defmodule VutuvWeb.TagControllerTest do
 
   describe "index (no slug param)" do
     test "renders the tag listing", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      insert(:tag)
       conn = get(conn, ~p"/tags")
       assert conn.status == 200
     end
@@ -17,7 +17,7 @@ defmodule VutuvWeb.TagControllerTest do
 
   describe "show" do
     test "renders an existing tag", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       conn = get(conn, ~p"/tags/#{tag}")
       assert conn.status == 200
     end
@@ -35,10 +35,12 @@ defmodule VutuvWeb.TagControllerTest do
     test "a tag used only in posts still shows those posts", %{conn: conn} do
       author = insert(:activated_user)
 
-      post =
-        Vutuv.PostsHelpers.create_post!(author, %{body: "Elixir meetup notes", tags: "elixir"})
+      tag_name = unique_tag_name("Elixir")
 
-      html = conn |> get(~p"/tags/elixir") |> html_response(200)
+      post =
+        Vutuv.PostsHelpers.create_post!(author, %{body: "Elixir meetup notes", tags: tag_name})
+
+      html = conn |> get(~p"/tags/#{String.downcase(tag_name)}") |> html_response(200)
 
       assert html =~ "tag-posts"
       assert html =~ "Elixir meetup notes"
@@ -102,9 +104,9 @@ defmodule VutuvWeb.TagControllerTest do
   describe "the tag page carries no profile-mutation control (issue #877)" do
     test "a logged-in visitor without the tag sees no \"Add this tag\" button", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
-      html = conn |> get(~p"/tags/elixir") |> html_response(200)
+      html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
 
       refute html =~ "Add this tag"
       refute html =~ ~s(data-to="/settings/tags?tag_param)

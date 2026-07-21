@@ -108,11 +108,12 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "matching tags show as chips linking to the tag page", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      insert(:tag, name: name, slug: String.downcase(name))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=eli")
 
-      assert has_element?(view, ~s(#search-tags a[href="/tags/elixir"]), "Elixir")
+      assert has_element?(view, ~s(#search-tags a[href="/tags/#{String.downcase(name)}"]), name)
     end
 
     test "matching public posts show with author and permalink", %{conn: conn} do
@@ -194,7 +195,8 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "tag and post matches are marked too", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      insert(:tag, name: name, slug: String.downcase(name))
       author = insert(:activated_user)
       create_post!(author, %{body: "Quantum gardening tips for beginners"})
 
@@ -219,7 +221,8 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "the scope chips narrow the search and the URL carries the filter", %{conn: conn} do
       searchable_user("Elia", "Tester")
-      insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      insert(:tag, name: name, slug: String.downcase(name))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=eli")
       assert has_element?(view, "#search-people")
@@ -274,7 +277,7 @@ defmodule VutuvWeb.SearchLiveTest do
       insert(:activated_user,
         first_name: "Stefan",
         last_name: "Wintermeyer",
-        username: "stefan.wintermeyer"
+        username: "stefan.w#{System.unique_integer([:positive])}"
       )
 
       {:ok, view, _html} = live(conn, ~p"/search?q=@stefan")
@@ -283,13 +286,16 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "tag chips carry member counts", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      name = unique_tag_name("Elixir")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       insert(:user_tag, tag: tag, user: insert(:activated_user))
 
       {:ok, view, _html} = live(conn, ~p"/search?q=elixir")
 
-      assert has_element?(view, "#search-tags", "Elixir")
-      assert has_element?(view, "#search-tags", "1")
+      assert has_element?(view, "#search-tags", name)
+      # The member count ("· 1"): the unique name carries digits, so a bare
+      # "1" would match the name itself and prove nothing.
+      assert has_element?(view, "#search-tags", "· 1")
     end
 
     # Issue #846: with a people-only operator in the query the parser pins the
@@ -327,12 +333,13 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "tag: lists the people with that tag, not the tag itself", %{conn: conn} do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: tagged)
       insert(:activated_user, first_name: "Norbert", last_name: "NoTag")
 
-      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+      {:ok, view, _html} = live(conn, ~p"/search?q=tag:#{String.downcase(name)}")
 
       assert has_element?(view, "#search-people-exact", "Paula Programmer")
       refute has_element?(view, "#search-people-exact", "Norbert NoTag")
@@ -341,13 +348,14 @@ defmodule VutuvWeb.SearchLiveTest do
 
     test "tag: also lists posts carrying that tag, and keeps the chips enabled (issue #946)",
          %{conn: conn} do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       tagged = insert(:activated_user, first_name: "Paula", last_name: "Programmer")
       insert(:user_tag, tag: tag, user: tagged)
       author = insert(:activated_user)
-      create_post!(author, %{body: "My php write-up today", tags: "php"})
+      create_post!(author, %{body: "My php write-up today", tags: String.downcase(name)})
 
-      {:ok, view, _html} = live(conn, ~p"/search?q=tag:php")
+      {:ok, view, _html} = live(conn, ~p"/search?q=tag:#{String.downcase(name)}")
 
       # Both the person and the post carrying the tag show.
       assert has_element?(view, "#search-people-exact", "Paula Programmer")
@@ -358,14 +366,15 @@ defmodule VutuvWeb.SearchLiveTest do
     end
 
     test "a name combines with tag and city filters", %{conn: conn} do
-      tag = insert(:tag, name: "PHP", slug: "php")
+      name = unique_tag_name("PHP")
+      tag = insert(:tag, name: name, slug: String.downcase(name))
       php_mueller = searchable_user("Hans", "Müller")
       insert(:user_tag, tag: tag, user: php_mueller)
       koblenz_mueller = searchable_user("Klara", "Müller")
       insert(:address, user: koblenz_mueller, city: "Koblenz")
       searchable_user("Heike", "Müller")
 
-      {:ok, view, _html} = live(conn, ~p"/search?q=müller tag:php")
+      {:ok, view, _html} = live(conn, ~p"/search?q=müller tag:#{String.downcase(name)}")
       assert has_element?(view, "#search-people-exact", "Hans Müller")
       refute has_element?(view, "#search-people-exact", "Heike Müller")
 

@@ -7,13 +7,15 @@ defmodule Vutuv.MentionExistenceTest do
 
   describe "Post.changeset mention-existence validation" do
     test "accepts a mention of an existing member" do
-      insert(:user, username: "alice")
-      assert Post.changeset(%Post{}, %{body: "hi @alice"}).valid?
+      handle = "alice#{System.unique_integer([:positive])}"
+      insert(:user, username: handle)
+      assert Post.changeset(%Post{}, %{body: "hi @#{handle}"}).valid?
     end
 
     test "accepts a mention of an organization handle (shared namespace)" do
-      insert(:organization, username: "acme")
-      assert Post.changeset(%Post{}, %{body: "join @acme"}).valid?
+      handle = "acme#{System.unique_integer([:positive])}"
+      insert(:organization, username: handle)
+      assert Post.changeset(%Post{}, %{body: "join @#{handle}"}).valid?
     end
 
     test "rejects a mention of a handle nobody holds" do
@@ -59,8 +61,9 @@ defmodule Vutuv.MentionExistenceTest do
     end
 
     test "accepts a DM mentioning an existing member" do
-      insert(:user, username: "alice")
-      assert Message.changeset(%Message{}, %{body: "psst @alice"}).valid?
+      handle = "alice#{System.unique_integer([:positive])}"
+      insert(:user, username: handle)
+      assert Message.changeset(%Message{}, %{body: "psst @#{handle}"}).valid?
     end
   end
 

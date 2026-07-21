@@ -14,7 +14,7 @@ defmodule VutuvWeb.Admin.TagControllerTest do
 
   describe "index (no slug param)" do
     test "renders the admin tag listing", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      insert(:tag)
       conn = get(conn, ~p"/admin/tags")
       assert conn.status == 200
     end
@@ -35,12 +35,14 @@ defmodule VutuvWeb.Admin.TagControllerTest do
 
   describe "search" do
     test "filters the listing by name (case-insensitive substring)", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
-      insert(:tag, name: "Ruby", slug: "ruby")
+      elixir_name = unique_tag_name("Elixir")
+      ruby_name = unique_tag_name("Ruby")
+      insert(:tag, name: elixir_name, slug: String.downcase(elixir_name))
+      insert(:tag, name: ruby_name, slug: String.downcase(ruby_name))
 
       html = conn |> get(~p"/admin/tags?q=eli") |> html_response(200)
-      assert html =~ "Elixir"
-      refute html =~ "Ruby"
+      assert html =~ elixir_name
+      refute html =~ ruby_name
     end
 
     test "filters the listing by slug", %{conn: conn} do
@@ -53,37 +55,37 @@ defmodule VutuvWeb.Admin.TagControllerTest do
     end
 
     test "an empty query lists every tag", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
-      insert(:tag, name: "Ruby", slug: "ruby")
+      tag1 = insert(:tag)
+      tag2 = insert(:tag)
 
       html = conn |> get(~p"/admin/tags?q=") |> html_response(200)
-      assert html =~ "Elixir"
-      assert html =~ "Ruby"
+      assert html =~ tag1.name
+      assert html =~ tag2.name
     end
 
     test "shows a no-results notice when nothing matches", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       html = conn |> get(~p"/admin/tags?q=zzznope") |> html_response(200)
-      refute html =~ "Elixir"
+      refute html =~ tag.name
       assert html =~ "No tags match"
     end
 
     test "a LIKE metacharacter in the query is treated literally", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       # An unescaped "%" would match everything; escaped it matches nothing here.
       html = conn |> get(~p"/admin/tags?q=%25") |> html_response(200)
-      refute html =~ "Elixir"
+      refute html =~ tag.name
       assert html =~ "No tags match"
     end
 
     test "a crafted non-string query does not 500", %{conn: conn} do
-      insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       # `?q[x]=1` parses into a map; it must be ignored, not crash to_string/1.
       html = conn |> get("/admin/tags?q[x]=1") |> html_response(200)
-      assert html =~ "Elixir"
+      assert html =~ tag.name
     end
 
     test "pagination keeps the search filter", %{conn: conn} do
@@ -102,7 +104,7 @@ defmodule VutuvWeb.Admin.TagControllerTest do
 
   describe "show" do
     test "renders an existing tag", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       conn = get(conn, ~p"/admin/tags/#{tag}")
       assert conn.status == 200
     end
@@ -122,7 +124,7 @@ defmodule VutuvWeb.Admin.TagControllerTest do
     end
 
     test "the edit form offers the honor checkbox", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       html = conn |> get(~p"/admin/tags/#{tag}/edit") |> html_response(200)
       assert html =~ ~s(name="tag[honor?]")
     end
@@ -130,7 +132,7 @@ defmodule VutuvWeb.Admin.TagControllerTest do
 
   describe "the honor flag" do
     test "the edit form persists it both on and off", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       conn = put(conn, ~p"/admin/tags/#{tag}", tag: %{"honor?" => "true"})
       assert redirected_to(conn) == ~p"/admin/tags/#{tag}"

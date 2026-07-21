@@ -47,7 +47,7 @@ defmodule VutuvWeb.UserProfileJobExclusionTest do
     attrs = %{
       "emails" => %{"0" => %{"value" => "me@acme.example"}},
       "first_name" => "Colleague",
-      "tag_list" => "alpha-tag beta-tag gamma-tag"
+      "tag_list" => @registration_tags
     }
 
     {conn, _viewer} = create_and_login_user(conn, attrs)
@@ -80,7 +80,7 @@ defmodule VutuvWeb.UserProfileJobExclusionTest do
     attrs = %{
       "emails" => %{"0" => %{"value" => "recruiter@eu.mail.acme.example"}},
       "first_name" => "Sub",
-      "tag_list" => "alpha-tag beta-tag gamma-tag"
+      "tag_list" => @registration_tags
     }
 
     {conn, _viewer} = create_and_login_user(conn, attrs)

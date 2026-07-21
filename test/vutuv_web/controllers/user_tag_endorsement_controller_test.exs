@@ -30,7 +30,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
     test "a tag belonging to another user does not resolve under this user", %{conn: conn} do
       user = insert_activated_user()
       other = insert_activated_user()
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       insert(:user_tag, user: other, tag: tag)
 
       conn =
@@ -45,7 +45,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
   describe "require_user_logged_in" do
     test "create on a resolvable tag 404s when logged out (does not redirect)", %{conn: conn} do
       user = insert_activated_user()
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       insert(:user_tag, user: user, tag: tag)
 
       conn =
@@ -66,7 +66,7 @@ defmodule VutuvWeb.UserTagEndorsementControllerTest do
     setup %{conn: conn} do
       {conn, endorser} = create_and_login_user(conn)
       owner = insert_activated_user()
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       user_tag = insert(:user_tag, user: owner, tag: tag)
       %{conn: conn, endorser: endorser, owner: owner, tag: tag, user_tag: user_tag}
     end

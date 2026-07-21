@@ -213,11 +213,12 @@ defmodule VutuvWeb.PageControllerTest do
       assert body =~ ~s(href="https://vutuv.de/wintermeyer")
     end
 
-    test "renders the placeholder page even when a member exists at the example slug",
+    test "renders the placeholder page even when members are registered",
          %{conn: conn} do
-      # The example handle being registered must not change what /username shows:
-      # the route wins over the /:slug catch-all by definition order.
-      insert(:activated_user, username: "wintermeyer")
+      # A registered member must not change what /username shows: the route
+      # wins over the /:slug catch-all by definition order, and the page is a
+      # static template that never consults the database.
+      insert(:activated_user)
 
       body = conn |> get(~p"/username") |> html_response(404)
 
@@ -326,17 +327,11 @@ defmodule VutuvWeb.PageControllerTest do
   end
 
   describe "POST /new_registration" do
-    @valid_attrs %{
-      "emails" => %{"0" => %{"value" => "newcomer@example.com"}},
-      "first_name" => "Newcomer",
-      "tag_list" => "Elixir Cooking Origami"
-    }
-
     # Checking the (inverted) indexing box submits "false", which must land as a
     # search-indexable profile.
     test "checking the indexing box stores an indexable profile", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "indexed@example.com"}},
           "noindex?" => "false"
         })
@@ -350,7 +345,7 @@ defmodule VutuvWeb.PageControllerTest do
     # not-indexable. This proves the box drives `noindex?` the inverted way.
     test "unchecking the indexing box stores a non-indexable profile", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "hidden@example.com"}},
           "noindex?" => "true"
         })
@@ -365,7 +360,7 @@ defmodule VutuvWeb.PageControllerTest do
     # both land exactly as submitted.
     test "the AI box stores the member's choice independently of indexing", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "search_only@example.com"}},
           "noindex?" => "false",
           "noai?" => "true"
@@ -378,7 +373,7 @@ defmodule VutuvWeb.PageControllerTest do
       assert user.noai? == true
 
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "ai_only@example.com"}},
           "noindex?" => "true",
           "noai?" => "false"
@@ -395,7 +390,7 @@ defmodule VutuvWeb.PageControllerTest do
     # private address; ticking it is the explicit opt-in to a public one.
     test "the email address stays private unless the box is ticked", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "private@example.com", "public?" => "false"}}
         })
 
@@ -407,7 +402,7 @@ defmodule VutuvWeb.PageControllerTest do
 
     test "ticking the email box stores a public address", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "open@example.com", "public?" => "true"}}
         })
 
@@ -421,7 +416,7 @@ defmodule VutuvWeb.PageControllerTest do
     # %{"0" => %{"value" => …}} map the form builds) must re-render the form,
     # not 500 on chained Access indexing.
     test "a malformed emails param re-renders the form instead of crashing", %{conn: conn} do
-      attrs = %{"emails" => "x", "first_name" => "Foo", "tag_list" => "Elixir Cooking Origami"}
+      attrs = %{"emails" => "x", "first_name" => "Foo", "tag_list" => registration_tags()}
 
       conn = post(conn, ~p"/new_registration", user: attrs)
 
@@ -431,19 +426,24 @@ defmodule VutuvWeb.PageControllerTest do
     # The sign-up form's "Your tags" field must actually land as user tags;
     # it used to be cast into the virtual `tag_list` and silently dropped.
     test "creates user tags from the comma-separated tag list", %{conn: conn} do
+      elixir = unique_tag_name("Elixir")
+      cooking = unique_tag_name("Cooking")
+      origami = unique_tag_name("Origami")
+
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "tagged@example.com"}},
-          "tag_list" => " Elixir,  Cooking , Origami, "
+          "tag_list" => " #{elixir},  #{cooking} , #{origami}, "
         })
 
       post(conn, ~p"/new_registration", user: attrs)
 
       user = user_by_email("tagged@example.com") |> Vutuv.Repo.preload(user_tags: :tag)
+      expected = Enum.sort(Enum.map([elixir, cooking, origami], &String.downcase/1))
 
       assert user.user_tags
              |> Enum.map(&String.downcase(&1.tag.name))
-             |> Enum.sort() == ["cooking", "elixir", "origami"]
+             |> Enum.sort() == expected
     end
 
     # Tags are a cornerstone of the system, so a sign-up needs at least three
@@ -451,7 +451,7 @@ defmodule VutuvWeb.PageControllerTest do
     # error instead of creating the account.
     test "a blank tag list is rejected", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "untagged@example.com"}},
           "tag_list" => "   "
         })
@@ -469,9 +469,9 @@ defmodule VutuvWeb.PageControllerTest do
     # about a "validation error".
     test "a rejected sign-up marks the tag field itself", %{conn: conn} do
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "marked@example.com"}},
-          "tag_list" => "Elixir"
+          "tag_list" => unique_tag_name("Elixir")
         })
 
       body = conn |> post(~p"/new_registration", user: attrs) |> html_response(422)
@@ -494,10 +494,13 @@ defmodule VutuvWeb.PageControllerTest do
     end
 
     test "fewer than three distinct tags is rejected, counting duplicates once", %{conn: conn} do
+      name = unique_tag_name("Elixir")
+      other = unique_tag_name("Cooking")
+
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "duplicated@example.com"}},
-          "tag_list" => "Elixir, elixir, ELIXIR, Cooking"
+          "tag_list" => "#{name}, #{String.downcase(name)}, #{String.upcase(name)}, #{other}"
         })
 
       conn = post(conn, ~p"/new_registration", user: attrs)
@@ -510,10 +513,14 @@ defmodule VutuvWeb.PageControllerTest do
     # comma-separated segment) becomes its own tag. A quoted phrase is kept
     # whole (see the next test and Vutuv.Tags.parse_tag_names/1).
     test "splits a space-separated tag list into one tag per word", %{conn: conn} do
+      javascript = unique_tag_name("JavaScript")
+      go = unique_tag_name("Go")
+      hunde = unique_tag_name("Hunde")
+
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "spaced@example.com"}},
-          "tag_list" => "JavaScript Go Hunde"
+          "tag_list" => "#{javascript} #{go} #{hunde}"
         })
 
       post(conn, ~p"/new_registration", user: attrs)
@@ -522,14 +529,19 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert user.user_tags
              |> Enum.map(& &1.tag.name)
-             |> Enum.sort() == ["Go", "Hunde", "JavaScript"]
+             |> Enum.sort() == Enum.sort([javascript, go, hunde])
     end
 
     test "keeps a quoted multi-word tag whole at sign-up", %{conn: conn} do
+      n = System.unique_integer([:positive])
+      rails = "Ruby on Rails #{n}"
+      elixir = "Elixir#{n}"
+      go = "Go#{n}"
+
       attrs =
-        Map.merge(@valid_attrs, %{
+        Map.merge(valid_attrs(), %{
           "emails" => %{"0" => %{"value" => "quoted@example.com"}},
-          "tag_list" => ~s("Ruby on Rails", Elixir, Go)
+          "tag_list" => ~s("#{rails}", #{elixir}, #{go})
         })
 
       post(conn, ~p"/new_registration", user: attrs)
@@ -538,14 +550,14 @@ defmodule VutuvWeb.PageControllerTest do
 
       assert user.user_tags
              |> Enum.map(& &1.tag.name)
-             |> Enum.sort() == ["Elixir", "Go", "Ruby on Rails"]
+             |> Enum.sort() == Enum.sort([rails, elixir, go])
     end
 
     # The PIN-entry confirmation page shown right after sign-up used to point at
     # the dead @vutuv Twitter account. The whole "Updates about vutuv" line is
     # gone; the PIN form and its instructions must stay untouched.
     test "the PIN confirmation page no longer links to Twitter", %{conn: conn} do
-      conn = post(conn, ~p"/new_registration", user: @valid_attrs)
+      conn = post(conn, ~p"/new_registration", user: valid_attrs())
       body = html_response(conn, 200)
 
       # The confirmation page is the one we are looking at.
@@ -561,7 +573,7 @@ defmodule VutuvWeb.PageControllerTest do
     # "Welcome back!" that the plain login flow uses. The confirmation page
     # marks its PIN form with a registration context for this.
     test "the first PIN login after sign-up greets the newcomer", %{conn: conn} do
-      conn = post(conn, ~p"/new_registration", user: @valid_attrs)
+      conn = post(conn, ~p"/new_registration", user: valid_attrs())
       body = html_response(conn, 200)
       assert body =~ ~s(name="session[context]")
       pin = sent_pin()
@@ -595,7 +607,7 @@ defmodule VutuvWeb.PageControllerTest do
         Vutuv.Accounts.register_user(conn, %{
           "emails" => %{"0" => %{"value" => "taken@example.com"}},
           "first_name" => "Owner",
-          "tag_list" => "Elixir Cooking Origami"
+          "tag_list" => registration_tags()
         })
 
       %{owner: owner}
@@ -673,6 +685,22 @@ defmodule VutuvWeb.PageControllerTest do
       [tag] -> tag =~ "checked"
       _ -> false
     end
+  end
+
+  # Fresh, per-call-unique tag names: an async test file must never insert a
+  # tag name/slug another async file also mints — the sandboxed unique-index
+  # locks would convoy and deadlock (Postgres 40P01).
+  defp registration_tags do
+    n = System.unique_integer([:positive])
+    "Elixir#{n} Cooking#{n} Origami#{n}"
+  end
+
+  defp valid_attrs do
+    %{
+      "emails" => %{"0" => %{"value" => "newcomer@example.com"}},
+      "first_name" => "Newcomer",
+      "tag_list" => registration_tags()
+    }
   end
 
   defp user_by_email(value) do
