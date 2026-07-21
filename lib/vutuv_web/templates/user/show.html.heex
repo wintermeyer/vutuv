@@ -445,14 +445,14 @@ the resulting ~200px rail width. --%>
     </.card>
 
     <%!-- Tags --%>
-    <.card :if={Enum.count(@user_tags) > 0 or @as_owner?}>
+    <.card :if={@user_tags != [] or @as_owner?}>
       <%!-- The dashed add tile is onboarding scaffolding: it shows only while the
       card is empty. Once there are entries the card is a clean showcase and
       "Verwalten" (manage_footer) leads to the page where tags are added/removed
       (tags have no edit form). --%>
       <.section_header title={gettext("Tags")} />
 
-      <.empty_add :if={@as_owner? and Enum.count(@user_tags) == 0} href={~p"/settings/tags/new"}>
+      <.empty_add :if={@as_owner? and @user_tags == []} href={~p"/settings/tags/new"}>
         {gettext("Add a tag")}
       </.empty_add>
 
@@ -461,7 +461,7 @@ the resulting ~200px rail width. --%>
       app.js drives it over fetch), and hovering raises the named voter roster (which
       includes the viewer the moment they endorse). Endorsements (and their users) are
       preloaded, so tag_vote works in memory (no per-tag query). --%>
-      <div :if={Enum.count(@user_tags) > 0} class="flex flex-wrap gap-2">
+      <div :if={@user_tags != []} class="flex flex-wrap gap-2">
         <.tag_vote
           :for={user_tag <- @user_tags}
           user={@user}
@@ -805,7 +805,7 @@ the resulting ~200px rail width. --%>
       to cancel the legacy global `dl dd { margin: 10px 0 }` in components.css,
       which otherwise pads each row; a tight `gap-1.5` then sets the row rhythm. --%>
       <dl :if={has_general_info} class="flex flex-col gap-1.5 text-sm">
-        <div :if={@user.gender && @user.gender != "other"} class="flex items-center gap-2.5">
+        <div :if={has_gender} class="flex items-center gap-2.5">
           <.detail_icon name="user" class="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
           <dt class="sr-only">{gettext("Gender")}</dt>
           <dd class="my-0 font-medium text-slate-800 dark:text-slate-100">{Vutuv.Accounts.User.gender_gettext(@user.gender)}</dd>
@@ -847,11 +847,11 @@ the resulting ~200px rail width. --%>
     the rail previews, else the owner's "Manage". The whole row drops to nothing
     for a visitor who already sees everything. --%>
     <.card
-      :if={Enum.count(@emails) > 0 or @totals.numbers > 0 or @as_owner?}
+      :if={@emails != [] or @totals.numbers > 0 or @as_owner?}
       id="profile-contact"
     >
       <.section_header title={gettext("Contact")} />
-      <.empty_add :if={@as_owner? and Enum.count(@emails) == 0} href={~p"/settings/emails/new"}>
+      <.empty_add :if={@as_owner? and @emails == []} href={~p"/settings/emails/new"}>
         {gettext("Add an email address")}
       </.empty_add>
       <%!-- Contact channels grouped into Beruflich/Privat: e-mails are work
@@ -928,7 +928,7 @@ the resulting ~200px rail width. --%>
       </.empty_add>
       <%!-- One folded footer for both channels ("Manage emails · Manage phone
       numbers"), each link shown only when the viewer can act on it. --%>
-      <% show_email_manage = @as_owner? and Enum.count(@emails) >= 1 %>
+      <% show_email_manage = @as_owner? and @emails != [] %>
       <% show_phone_link = @totals.numbers > 3 or (@as_owner? and @totals.numbers >= 1) %>
       <div
         :if={show_email_manage or show_phone_link}
@@ -956,12 +956,13 @@ the resulting ~200px rail width. --%>
       </div>
     </.card>
 
+    <% smas_count = Enum.count(@user.social_media_accounts) %>
     <.card
-      :if={Enum.count(@user.social_media_accounts) > 0 or @as_owner?}
+      :if={smas_count > 0 or @as_owner?}
       id="profile-social-media"
     >
       <.section_header title={gettext("Profiles")} />
-      <.empty_add :if={@as_owner? and Enum.count(@user.social_media_accounts) == 0} href={~p"/settings/social_media_accounts/new"}>
+      <.empty_add :if={@as_owner? and smas_count == 0} href={~p"/settings/social_media_accounts/new"}>
         {gettext("Add a profile")}
       </.empty_add>
 
@@ -970,7 +971,7 @@ the resulting ~200px rail width. --%>
       the forges stop reading as "social media". One line per account: brand
       glyph + handle (the icon carries the provider name). --%>
       <.social_media_accounts
-        :if={Enum.count(@user.social_media_accounts) > 0}
+        :if={smas_count > 0}
         accounts={@user.social_media_accounts}
         social_feed_loading={@social_feed_loading}
       />
@@ -978,8 +979,8 @@ the resulting ~200px rail width. --%>
       <.manage_footer
         href={~p"/#{@user}/social_media_accounts"}
         manage_href={~p"/settings/social_media_accounts"}
-        total={Enum.count(@user.social_media_accounts)}
-        preview={Enum.count(@user.social_media_accounts)}
+        total={smas_count}
+        preview={smas_count}
         owner={@as_owner?}
       />
     </.card>
@@ -1193,7 +1194,7 @@ the resulting ~200px rail width. --%>
     links): the member's own card leads, discovery of other people follows.
     `order-1` groups it with Followers / Following at the end on a phone. --%>
     <.card
-      :if={Enum.count(@recommended_users) > 0}
+      :if={@recommended_users != []}
       id="profile-who-to-follow"
       class="order-1 md:order-none"
     >
