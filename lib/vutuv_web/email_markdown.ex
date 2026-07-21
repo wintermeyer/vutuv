@@ -27,6 +27,8 @@ defmodule VutuvWeb.EmailMarkdown do
   and a spam-filter red flag).
   """
 
+  alias VutuvWeb.Markdown
+
   @doc "Render an invitation message's Markdown to safe HTML (`Phoenix.HTML.safe`)."
   def render(text) when is_binary(text) do
     text
@@ -36,21 +38,10 @@ defmodule VutuvWeb.EmailMarkdown do
     |> Earmark.as_html!(breaks: true, pure_links: true)
     |> String.replace("&amp;lt;", "&lt;")
     |> HtmlSanitizeEx.markdown_html()
-    |> strip_img_tags()
-    |> open_links_in_new_tab()
+    |> Markdown.strip_img_tags()
+    |> Markdown.open_links_in_new_tab()
     |> Phoenix.HTML.raw()
   end
 
   def render(_), do: Phoenix.HTML.raw("")
-
-  # An invitation email embeds no picture: a hotlinked remote image is a
-  # tracking pixel that leaks the recipient's IP and trips spam filters. The
-  # `HtmlSanitizeEx.markdown_html/1` scrubber keeps `<img>`, so drop it here.
-  defp strip_img_tags(html), do: String.replace(html, ~r/<img\b[^>]*>/i, "")
-
-  # Run after the sanitizer (which strips `target`/`rel`), so external links
-  # open in a new tab without leaking the referrer.
-  defp open_links_in_new_tab(html) do
-    String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
-  end
 end

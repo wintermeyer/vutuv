@@ -35,7 +35,7 @@ defmodule Vutuv.Screenshot do
   `{:error, :invalid_file}`.
   """
   def store({%Plug.Upload{} = upload, scope}) do
-    if valid_extension?(upload.filename) do
+    if Vutuv.Uploads.valid_extension?(upload.filename, @extension_whitelist) do
       dir = disk_dir(scope)
       hash = Vutuv.Uploads.content_hash(upload.path)
       ext = Path.extname(upload.filename)
@@ -199,9 +199,4 @@ defmodule Vutuv.Screenshot do
 
   defp rootname(value) when is_binary(value),
     do: value |> Vutuv.Uploads.strip_query() |> Path.rootname()
-
-  defp valid_extension?(file_name) do
-    extension = file_name |> Path.extname() |> String.downcase()
-    extension in @extension_whitelist
-  end
 end

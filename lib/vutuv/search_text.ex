@@ -28,6 +28,12 @@ defmodule Vutuv.SearchText do
   def escape_like(term), do: String.replace(term, ~r/[\\%_]/, &("\\" <> &1))
 
   @doc """
+  The LIKE "contains" pattern for `term`: the escaped term wrapped in `%…%`,
+  ready for `ilike`/`like`.
+  """
+  def contains(term), do: "%" <> escape_like(term) <> "%"
+
+  @doc """
   Query macro: case-insensitive name match on `first`, `last`, or the
   "first last" concatenation, against `pattern`. Compose it with `or` and a
   site's own extra columns inside a `where`. The bound columns are passed

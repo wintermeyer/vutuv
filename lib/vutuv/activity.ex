@@ -705,12 +705,9 @@ defmodule Vutuv.Activity do
   end
 
   defp protection_item(id, status, at, reported) do
-    Map.merge(actor_fields(reported), %{
-      id: id,
-      kind: "report_protection",
-      status: status,
-      at: at
-    })
+    id
+    |> actor_item("report_protection", at, reported)
+    |> Map.put(:status, status)
   end
 
   defp restored_at_or_before(query, nil), do: query

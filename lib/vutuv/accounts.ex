@@ -9,6 +9,9 @@ defmodule Vutuv.Accounts do
   import Vutuv.SearchText, only: [escape_like: 1, name_ilike: 3, normalize_search: 1]
   require Logger
 
+  # Enables the bare `gettext/1` macro for the PIN / status strings below.
+  use Gettext, backend: VutuvWeb.Gettext
+
   alias Plug.Conn
   alias Vutuv.Accounts.Email
   alias Vutuv.Accounts.HandleChangeNotification
@@ -880,7 +883,7 @@ defmodule Vutuv.Accounts do
   # unknown email reaches after step 1's identical PIN screen, so it must
   # read exactly like a wrong PIN — never "no such account".
   defp verify_pin(nil, _pin) do
-    {:error, Gettext.gettext(VutuvWeb.Gettext, "Incorrect PIN")}
+    {:error, gettext("Incorrect PIN")}
   end
 
   defp verify_pin(%LoginPin{} = login_pin, pin) do
@@ -892,12 +895,12 @@ defmodule Vutuv.Accounts do
       # (issue #839).
       consumed?(login_pin) ->
         log_pin_rejected(login_pin, "already_used")
-        {:already_used, Gettext.gettext(VutuvWeb.Gettext, "This PIN has already been used.")}
+        {:already_used, gettext("This PIN has already been used.")}
 
       pin_expired?(login_pin) ->
         expire_pin(login_pin)
         log_pin_rejected(login_pin, "expired")
-        {:expired, Gettext.gettext(VutuvWeb.Gettext, "PIN expired")}
+        {:expired, gettext("PIN expired")}
 
       valid_pin?(login_pin, pin) ->
         mark_consumed(login_pin)
@@ -929,7 +932,7 @@ defmodule Vutuv.Accounts do
       |> LoginPin.changeset(%{pin_login_attempts: attempts})
       |> Repo.update!()
 
-      {:error, Gettext.gettext(VutuvWeb.Gettext, "Incorrect PIN")}
+      {:error, gettext("Incorrect PIN")}
     end
   end
 

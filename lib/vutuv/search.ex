@@ -14,7 +14,7 @@ defmodule Vutuv.Search do
 
   import Ecto.Query
   import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
-  import Vutuv.SearchText, only: [escape_like: 1]
+  import Vutuv.SearchText, only: [contains: 1]
 
   alias Vutuv.Accounts
   alias Vutuv.Accounts.SearchTerm
@@ -379,7 +379,7 @@ defmodule Vutuv.Search do
               (fragment("lower(?)", t.name) == ^tag or t.slug == ^tag)
         )
       else
-        infix = "%" <> escape_like(tag) <> "%"
+        infix = contains(tag)
 
         from(ut in Vutuv.Tags.UserTag,
           join: t in assoc(ut, :tag),
@@ -401,7 +401,7 @@ defmodule Vutuv.Search do
           where: a.user_id == parent_as(:user).id and fragment("lower(?)", a.city) == ^city
         )
       else
-        infix = "%" <> escape_like(city) <> "%"
+        infix = contains(city)
 
         from(a in Vutuv.Profiles.Address,
           where: a.user_id == parent_as(:user).id and ilike(a.city, ^infix)
@@ -419,7 +419,7 @@ defmodule Vutuv.Search do
   end
 
   defp by_field(query, field, value, false) do
-    where(query, [user: u], ilike(field(u, ^field), ^("%" <> escape_like(value) <> "%")))
+    where(query, [user: u], ilike(field(u, ^field), ^contains(value)))
   end
 
   defp list_people(query) do
@@ -501,7 +501,7 @@ defmodule Vutuv.Search do
   defp phonetic_term_match(query, value) do
     cologne = phoneticize_search_value(value, :cologne)
     soundex = phoneticize_search_value(value, :soundex)
-    infix = "%" <> escape_like(value) <> "%"
+    infix = contains(value)
 
     from([t, user: u] in query,
       where:
@@ -534,7 +534,7 @@ defmodule Vutuv.Search do
   end
 
   defp visible_tags(needle, false) do
-    infix = "%" <> escape_like(needle) <> "%"
+    infix = contains(needle)
     from(t in Vutuv.Tags.Tag, where: ilike(t.name, ^infix) or ilike(t.slug, ^infix))
   end
 

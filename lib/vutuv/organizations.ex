@@ -1328,16 +1328,15 @@ defmodule Vutuv.Organizations do
 
   @doc "Overview tile counts for /admin/organizations (live / pending / frozen)."
   def admin_overview_counts do
-    %{
-      active:
-        Repo.aggregate(
-          from(c in Organization, where: organization_public_row(c)),
-          :count,
-          :id
-        ),
-      pending: Repo.aggregate(from(c in Organization, where: c.status == "pending"), :count, :id),
-      frozen: Repo.aggregate(from(c in Organization, where: not is_nil(c.frozen_at)), :count, :id)
-    }
+    Repo.one(
+      from(c in Organization,
+        select: %{
+          active: filter(count(c.id), organization_public_row(c)),
+          pending: filter(count(c.id), c.status == "pending"),
+          frozen: filter(count(c.id), not is_nil(c.frozen_at))
+        }
+      )
+    )
   end
 
   @doc """

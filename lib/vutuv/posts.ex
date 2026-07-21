@@ -1175,7 +1175,7 @@ defmodule Vutuv.Posts do
       fragment(
         "CASE WHEN ? = ? THEN ? ELSE ? END",
         b.blocker_id,
-        type(^user_id, Vutuv.UUIDv7),
+        type(^user_id, UUIDv7),
         b.blocked_id,
         b.blocker_id
       )
@@ -2030,14 +2030,7 @@ defmodule Vutuv.Posts do
   vanished before the capture finished.
   """
   def broadcast_screenshot_ready(post_id) when is_binary(post_id) do
-    case Repo.get(Post, post_id) do
-      nil ->
-        :ok
-
-      %Post{user_id: author_id} ->
-        event = {:post_screenshot_ready, %{post_id: post_id, author_id: author_id}}
-        broadcast_to_followers(author_id, event)
-    end
+    broadcast_post_followers_event(post_id, :post_screenshot_ready)
   end
 
   @doc """
@@ -2046,13 +2039,19 @@ defmodule Vutuv.Posts do
   reload. Fans out to the same recipients (author topic + followers' feeds).
   """
   def broadcast_screenshot_removed(post_id) when is_binary(post_id) do
+    broadcast_post_followers_event(post_id, :post_screenshot_removed)
+  end
+
+  # Fan a `{event_name, %{post_id:, author_id:}}` out to the post author's own
+  # topic and every follower's feed. A no-op for a post that vanished before the
+  # broadcast fired.
+  defp broadcast_post_followers_event(post_id, event_name) when is_binary(post_id) do
     case Repo.get(Post, post_id) do
       nil ->
         :ok
 
       %Post{user_id: author_id} ->
-        event = {:post_screenshot_removed, %{post_id: post_id, author_id: author_id}}
-        broadcast_to_followers(author_id, event)
+        broadcast_to_followers(author_id, {event_name, %{post_id: post_id, author_id: author_id}})
     end
   end
 
@@ -2164,5 +2163,5 @@ defmodule Vutuv.Posts do
 
   # Ids are UUID strings; anything that does not cast (stale form payloads,
   # tampering) is dropped rather than raising in the changeset cast.
-  defp parse_id(id), do: Vutuv.UUIDv7.cast_or_nil(id)
+  defp parse_id(id), do: UUIDv7.cast_or_nil(id)
 end

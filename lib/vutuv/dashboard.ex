@@ -73,13 +73,8 @@ defmodule Vutuv.Dashboard do
   dashboard can link to each profile with its avatar and name.
   """
   def newest_members(limit \\ @people_list_limit) do
-    from(u in User,
-      where: u.email_confirmed? == true,
-      order_by: [desc: u.id],
-      limit: ^limit,
-      select: struct(u, ^User.listing_fields())
-    )
-    |> Repo.all()
+    from(u in User, where: u.email_confirmed? == true)
+    |> recent_listing(limit)
   end
 
   @doc """
@@ -94,13 +89,18 @@ defmodule Vutuv.Dashboard do
         []
 
       ids ->
-        from(u in User,
-          where: u.id in ^ids,
-          order_by: [desc: u.id],
-          limit: ^limit,
-          select: struct(u, ^User.listing_fields())
-        )
-        |> Repo.all()
+        from(u in User, where: u.id in ^ids)
+        |> recent_listing(limit)
     end
+  end
+
+  # Newest-first page of listing-field rows over an already-filtered user query.
+  defp recent_listing(query, limit) do
+    from(u in query,
+      order_by: [desc: u.id],
+      limit: ^limit,
+      select: struct(u, ^User.listing_fields())
+    )
+    |> Repo.all()
   end
 end

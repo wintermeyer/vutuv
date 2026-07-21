@@ -341,8 +341,6 @@ defmodule Vutuv.Jobs.JobPosting do
     end)
   end
 
-  # Format only (presence is a publish rule): a stored apply URL is offered as an
-  # outbound link, so the same literal SSRF guard the org website check uses runs here.
   # Format only (presence is a publish rule). A stored apply URL is offered as
   # an outbound link, so the shared http(s) + SSRF guard runs here too.
   defp validate_apply_format(changeset) do

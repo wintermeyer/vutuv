@@ -587,10 +587,16 @@ defmodule Vutuv.Uploads do
     |> Path.extname()
   end
 
-  defp valid_extension?(file_name) do
+  @doc """
+  Whether `file_name`'s extension (case-insensitive) is in `whitelist`. The
+  screenshot uploader reuses this with its own wider whitelist.
+  """
+  def valid_extension?(file_name, whitelist) do
     extension = file_name |> Path.extname() |> String.downcase()
-    extension in @extension_whitelist
+    extension in whitelist
   end
+
+  defp valid_extension?(file_name), do: valid_extension?(file_name, @extension_whitelist)
 
   @doc """
   The one regeneration driver (used by every uploader's `regenerate/2`, which

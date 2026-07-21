@@ -297,8 +297,13 @@ defmodule VutuvWeb.Markdown do
     end
   end
 
-  # Safe to do post-sanitization: every remaining <a> came out of the scrubber.
-  defp open_links_in_new_tab(html) do
+  @doc """
+  Adds `target="_blank" rel="noopener noreferrer"` to every `<a href` so
+  external links open in a new tab without leaking the referrer. Safe to run
+  post-sanitization: every remaining `<a>` came out of the scrubber. Shared with
+  `VutuvWeb.EmailMarkdown`.
+  """
+  def open_links_in_new_tab(html) do
     String.replace(html, "<a href", ~s(<a target="_blank" rel="noopener noreferrer" href))
   end
 
@@ -553,9 +558,12 @@ defmodule VutuvWeb.Markdown do
     ~s(<img src="#{escape(src)}" alt="#{escape(alt)}"#{dimensions} loading="lazy" class="#{class}">)
   end
 
-  # Every <img> the pipeline produced is untrusted (remote hotlinks, foreign
-  # attachments); only the marker-injected ones below may survive.
-  defp strip_img_tags(html) do
+  @doc """
+  Strips every `<img>` from HTML. Every `<img>` the pipeline produced is
+  untrusted (remote hotlinks, foreign attachments); only the marker-injected
+  ones below may survive. Shared with `VutuvWeb.EmailMarkdown`.
+  """
+  def strip_img_tags(html) do
     String.replace(html, ~r/<img\b[^>]*>/i, "")
   end
 
