@@ -155,9 +155,18 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   description, `websearch_to_tsquery`), `tag` (slug), `workplace`, `employment`,
   `salary_min` (+ currency — same-currency only, the posting's yearly-normalised
   `salary_max` must reach the floor), `near` + `radius` + `country` (location),
-  and the signed-in-member chips `my_tags` ("Passend zu meinen Tags") and
-  `salary_min=mine` ("ab meiner Gehaltsvorstellung", resolved server-side from
-  the member's #928 expectation — the stored figure is never rendered).
+  and the signed-in-member chip `my_tags` ("Passend zu meinen Tags").
+- **Salary filter, two ways in (issue #953).** A `salary_min` number field
+  ("Mindestgehalt/Jahr", `#job-salary-min`) is open to **every** viewer —
+  logged out, or a member with no #928 expectation — and files a bare yearly
+  figure compared in `Jobs.default_currency/0` (the installation's first
+  `Vutuv.Salary` currency, EUR on vutuv.de). A signed-in member who has stored
+  a minimum-salary expectation additionally gets the one-tap
+  `salary_min=mine` chip ("ab meiner Gehaltsvorstellung", resolved server-side
+  from the #928 figure — the stored figure is never rendered). The two share
+  the one `salary_min` slot, so they are mutually exclusive: while `mine` is
+  active the number field is disabled and a hidden `mine` token rides along,
+  so the private figure is never seeded into the field or submitted.
 - **Location.** `near` (a city or zip) resolves to a point offline via
   `Vutuv.Geo.resolve_point/2` (zip first, then city); onsite/hybrid postings
   match within `radius` km by a great-circle (haversine) predicate in SQL, or by

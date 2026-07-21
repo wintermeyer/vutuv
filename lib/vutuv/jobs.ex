@@ -1020,7 +1020,11 @@ defmodule Vutuv.Jobs do
 
   defp parse_country(_value), do: nil
 
-  defp default_currency, do: hd(Salary.currencies())
+  @doc """
+  The installation's default salary currency — the one a bare numeric board
+  filter (a typed `salary_min` with no currency, issue #953) is compared in.
+  """
+  def default_currency, do: hd(Salary.currencies())
 
   @doc """
   New live board postings matching `filters` that `viewer` may see and were

@@ -77,6 +77,51 @@ defmodule VutuvWeb.JobBoardLiveTest do
     assert render(view) =~ "Just appeared"
   end
 
+  describe "salary field (#953)" do
+    test "everyone gets a minimum-salary input, even logged out", %{conn: conn} do
+      {:ok, view, _html} = live(conn, ~p"/jobs")
+      assert has_element?(view, "input#job-salary-min[name='salary_min']")
+    end
+
+    test "a typed minimum salary narrows the board and stays shareable", %{conn: conn} do
+      poster = poster_fixture()
+
+      publish_job!(poster, %{
+        "title" => "Pays well",
+        "salary_min" => "70000",
+        "salary_max" => "90000"
+      })
+
+      publish_job!(poster, %{
+        "title" => "Pays little",
+        "salary_min" => "30000",
+        "salary_max" => "45000"
+      })
+
+      {:ok, _view, html} = live(conn, ~p"/jobs?#{[salary_min: "60000"]}")
+
+      assert html =~ "Pays well"
+      refute html =~ "Pays little"
+      # The field echoes the shared figure so the URL is a faithful, shareable state.
+      assert html =~ ~s(value="60000")
+    end
+
+    test "the 'from my expectation' chip never renders the private figure", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      user
+      |> Ecto.Changeset.change(desired_salary_min: 60_000, desired_salary_currency: "EUR")
+      |> Vutuv.Repo.update!()
+
+      {:ok, view, html} = live(conn, ~p"/jobs?#{[salary_min: "mine"]}")
+
+      # The chip resolves against the stored expectation, but the raw figure is
+      # never rendered and the number field is disabled (not seeded with it).
+      refute html =~ "60000"
+      assert has_element?(view, "input#job-salary-min[disabled]")
+    end
+  end
+
   describe "save search (#935)" do
     test "no save control without active filters", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)

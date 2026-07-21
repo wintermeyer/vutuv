@@ -139,6 +139,39 @@ defmodule Vutuv.JobsBoardTest do
       refute year.id in high
       refute monthly.id in high
     end
+
+    test "a typed minimum-salary param filters for any viewer (issue #953)" do
+      poster = poster_fixture()
+
+      high =
+        publish_job!(poster, %{
+          "title" => "Pays well",
+          "salary_min" => "70000",
+          "salary_max" => "90000",
+          "salary_period" => "year",
+          "salary_currency" => "EUR"
+        })
+
+      low =
+        publish_job!(poster, %{
+          "title" => "Pays little",
+          "salary_min" => "30000",
+          "salary_max" => "45000",
+          "salary_period" => "year",
+          "salary_currency" => "EUR"
+        })
+
+      # A logged-out visitor with no stored expectation still filters by a typed
+      # figure: board_filters/2 turns the raw string into the same filter the
+      # "mine" token would, at the installation's default currency.
+      filters = Jobs.board_filters(%{"salary_min" => "60000"}, nil)
+      assert filters.salary_min == 60_000
+      assert filters.salary_currency == Jobs.default_currency()
+
+      matched = Jobs.board_page(nil, filters) |> ids()
+      assert high.id in matched
+      refute low.id in matched
+    end
   end
 
   describe "location filter" do

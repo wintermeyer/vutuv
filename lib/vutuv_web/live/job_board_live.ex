@@ -23,6 +23,7 @@ defmodule VutuvWeb.JobBoardLive do
   alias Vutuv.Geo
   alias Vutuv.Jobs
   alias Vutuv.Jobs.JobPosting
+  alias Vutuv.Salary
   alias VutuvWeb.ApiV2
   alias VutuvWeb.Live.InitAssigns
 
@@ -288,6 +289,24 @@ defmodule VutuvWeb.JobBoardLive do
         </option>
       </select>
 
+      <%!-- Free minimum-salary filter, open to everyone (issue #953). While the
+            "from my expectation" chip drives it, the field is disabled and a
+            hidden `mine` token rides along, so the member's private figure is
+            never seeded into it or submitted (issue #935). --%>
+      <input
+        type="number"
+        name="salary_min"
+        id="job-salary-min"
+        min="1"
+        step="1000"
+        inputmode="numeric"
+        value={salary_field_value(@params)}
+        disabled={@params["salary_min"] == "mine"}
+        placeholder={salary_placeholder()}
+        aria-label={gettext("Minimum yearly salary")}
+        class={[input_class(), "disabled:cursor-not-allowed disabled:opacity-60"]}
+      />
+
       <button
         type="submit"
         class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
@@ -299,9 +318,25 @@ defmodule VutuvWeb.JobBoardLive do
       <input :if={@params["workplace"]} type="hidden" name="workplace" value={@params["workplace"]} />
       <input :if={@params["tag"]} type="hidden" name="tag" value={@params["tag"]} />
       <input :if={@params["my_tags"]} type="hidden" name="my_tags" value={@params["my_tags"]} />
-      <input :if={@params["salary_min"]} type="hidden" name="salary_min" value={@params["salary_min"]} />
+      <%!-- The visible number field owns a typed `salary_min`; only the "mine"
+            token needs a hidden carrier (its field is disabled, so it can't). --%>
+      <input :if={@params["salary_min"] == "mine"} type="hidden" name="salary_min" value="mine" />
     </form>
     """
+  end
+
+  # The number field's value: a typed `salary_min`, but never the `mine` token
+  # (which stands in for the member's private expectation — issue #935) and
+  # empty by default, so the field starts blank for a logged-out visitor or a
+  # member without an expectation (issue #953).
+  defp salary_field_value(%{"salary_min" => "mine"}), do: nil
+  defp salary_field_value(%{"salary_min" => value}), do: value
+  defp salary_field_value(_params), do: nil
+
+  defp salary_placeholder do
+    gettext("Min. salary/year (%{currency})",
+      currency: Salary.currency_symbol(Jobs.default_currency())
+    )
   end
 
   defp chip_class(active?) do
