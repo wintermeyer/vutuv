@@ -2848,6 +2848,7 @@ defmodule VutuvWeb.UI do
          {gettext("Languages"), ~p"/settings/languages", :languages},
          {gettext("Links"), ~p"/settings/links", :links},
          {gettext("Profiles"), ~p"/settings/social_media_accounts", :social},
+         {gettext("Messengers"), ~p"/settings/messengers", :messengers},
          {gettext("Email addresses"), ~p"/settings/emails", :emails},
          {gettext("Phone numbers"), ~p"/settings/phone_numbers", :phones},
          {gettext("Addresses"), ~p"/settings/addresses", :addresses},

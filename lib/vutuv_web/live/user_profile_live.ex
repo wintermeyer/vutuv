@@ -32,6 +32,7 @@ defmodule VutuvWeb.UserProfileLive do
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
+  alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
@@ -864,6 +865,7 @@ defmodule VutuvWeb.UserProfileLive do
     user
     |> Repo.preload(
       social_media_accounts: SocialMediaAccount.ordered(),
+      messengers: Messenger.ordered(),
       user_tags: user_tags_query(),
       # Deliberately unlimited: the header-job pick must see every role (a
       # pinned one can sit outside the newest three; see load_profile). The
@@ -910,6 +912,7 @@ defmodule VutuvWeb.UserProfileLive do
       |> union_all(^section_count(Language, uid, "languages"))
       |> union_all(^section_count(Qualification, uid, "qualifications"))
       |> union_all(^section_count(PhoneNumber, uid, "numbers"))
+      |> union_all(^section_count(Messenger, uid, "messengers"))
       |> union_all(^section_count(Url, uid, "links"))
       |> union_all(^section_count(Address, uid, "addresses"))
       |> Repo.all()
@@ -922,6 +925,7 @@ defmodule VutuvWeb.UserProfileLive do
       languages: Map.get(counts, "languages", 0),
       qualifications: Map.get(counts, "qualifications", 0),
       numbers: Map.get(counts, "numbers", 0),
+      messengers: Map.get(counts, "messengers", 0),
       links: Map.get(counts, "links", 0),
       addresses: Map.get(counts, "addresses", 0)
     }

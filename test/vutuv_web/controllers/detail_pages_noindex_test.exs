@@ -42,6 +42,7 @@ defmodule VutuvWeb.DetailPagesNoIndexTest do
             ~p"/#{user}/links",
             ~p"/#{user}/addresses",
             ~p"/#{user}/social_media_accounts",
+            ~p"/#{user}/messengers",
             ~p"/#{user}/work_experiences"
           ] do
         result = get(conn, path)

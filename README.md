@@ -15,7 +15,8 @@ We use the [MIT License](LICENSE).
 ## What it does
 
 - Public member profiles (work experience, education, spoken languages, tags,
-  links, contact details) with follow relationships, posts, likes/reposts/replies and
+  links, contact details, online messengers with click-to-chat deep links) with
+  follow relationships, posts, likes/reposts/replies and
   1:1 direct messages — all real-time (Phoenix LiveView) where it matters.
   Members can also **follow a tag** to pull its posts into their feed and get
   matching people suggested. Developer profiles can show cached public stats of

@@ -2,9 +2,9 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @moduledoc """
   The profile's public sub-pages as data maps for the agent formats: the
   section indexes (`/:slug/work_experiences`, `/links`,
-  `/social_media_accounts`, `/addresses`, `/phone_numbers`, `/emails`,
-  `/tags`) and their single-entry show pages (same path plus the entry's
-  id or slug).
+  `/social_media_accounts`, `/messengers`, `/addresses`, `/phone_numbers`,
+  `/emails`, `/tags`) and their single-entry show pages (same path plus the
+  entry's id or slug).
 
   Anonymous view only — the email pages carry just the public addresses.
   All these pages run through the `NoIndex` pipeline in HTML, so their
@@ -23,6 +23,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Organizations
   alias Vutuv.Organizations.Organization
   alias Vutuv.Phone
+  alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
@@ -40,6 +41,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
     languages: "language",
     links: "link",
     social_media_accounts: "social_media_account",
+    messengers: "messenger",
     addresses: "address",
     phone_numbers: "phone_number",
     emails: "email",
@@ -94,6 +96,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp index_title(:social_media_accounts, name),
     do: gettext("Profiles of %{name}", name: name)
 
+  defp index_title(:messengers, name), do: gettext("Messengers of %{name}", name: name)
   defp index_title(:addresses, name), do: gettext("Addresses of %{name}", name: name)
   defp index_title(:phone_numbers, name), do: gettext("Phone numbers of %{name}", name: name)
   defp index_title(:emails, name), do: gettext("Email addresses of %{name}", name: name)
@@ -111,6 +114,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
 
   defp entry_title(:links, entry), do: entry.description || entry.url
   defp entry_title(:social_media_accounts, entry), do: entry.provider
+  defp entry_title(:messengers, entry), do: entry.provider
   defp entry_title(:addresses, entry), do: entry.description || entry.city || gettext("Address")
   defp entry_title(:phone_numbers, entry), do: entry.value
   defp entry_title(:emails, entry), do: entry.value
@@ -122,6 +126,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   defp entry(:languages, record), do: language_entry(record)
   defp entry(:links, record), do: link_entry(record)
   defp entry(:social_media_accounts, record), do: social_entry(record)
+  defp entry(:messengers, record), do: messenger_entry(record)
   defp entry(:addresses, record), do: address_entry(record)
   defp entry(:phone_numbers, record), do: phone_entry(record)
   defp entry(:emails, record), do: email_entry(record)
@@ -245,6 +250,19 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   @doc false
   def social_entry(account),
     do: %{id: account.id, provider: account.provider, url: SocialMediaAccount.url(account)}
+
+  @doc false
+  # `contact` is the human-readable address (a spaced phone number or the bare
+  # handle); `url` is the deep link that opens the messenger at that contact, or
+  # "" for a provider without a public web resolver (Session).
+  def messenger_entry(messenger) do
+    %{
+      id: messenger.id,
+      provider: messenger.provider,
+      contact: Messenger.display(messenger),
+      url: Messenger.url(messenger)
+    }
+  end
 
   @doc false
   def address_entry(address) do

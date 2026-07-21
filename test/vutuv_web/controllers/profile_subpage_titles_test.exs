@@ -13,7 +13,7 @@ defmodule VutuvWeb.ProfileSubpageTitlesTest do
   # Public profile section indexes + the three people lists. The posts archive
   # already titles itself ("Name · Posts", PostController).
   @sections ~w(work_experiences educations languages qualifications links
-               social_media_accounts addresses phone_numbers emails tags
+               social_media_accounts messengers addresses phone_numbers emails tags
                followers following connections)
 
   test "every public subpage titles with the member's name and its own label", %{conn: conn} do

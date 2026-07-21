@@ -985,6 +985,39 @@ the resulting ~200px rail width. --%>
       />
     </.card>
 
+    <%!-- Online messengers (issue #949): each row is the provider plus a deep
+    link that opens the messenger straight at this contact. A distinct card from
+    "Profiles" because a messenger is a direct line to reach someone, not a
+    public social profile. --%>
+    <% messengers_count = Enum.count(@user.messengers) %>
+    <.card :if={messengers_count > 0 or @as_owner?} id="profile-messengers">
+      <.section_header title={gettext("Messengers")} />
+      <.empty_add :if={@as_owner? and messengers_count == 0} href={~p"/settings/messengers/new"}>
+        {gettext("Add a messenger")}
+      </.empty_add>
+
+      <ul :if={messengers_count > 0} class="-my-1 text-sm">
+        <li :for={messenger <- @user.messengers}>
+          <div class="flex items-center gap-2.5 py-1.5">
+            <span class="min-w-[5.5rem] shrink-0 text-slate-500 dark:text-slate-400">
+              {messenger.provider}
+            </span>
+            <span class="min-w-0 break-all font-medium text-brand-600 dark:text-brand-400">
+              {Vutuv.Profiles.Messenger.messenger_link(messenger)}
+            </span>
+          </div>
+        </li>
+      </ul>
+
+      <.manage_footer
+        href={~p"/#{@user}/messengers"}
+        manage_href={~p"/settings/messengers"}
+        total={messengers_count}
+        preview={messengers_count}
+        owner={@as_owner?}
+      />
+    </.card>
+
     <%!-- The code-forge statistics (Vutuv.CodeStats): cached public facts
     about the listed GitHub / GitLab / Codeberg accounts — stars,
     repositories, followers, languages, last activity, top repositories.

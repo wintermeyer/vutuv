@@ -1,0 +1,19 @@
+<%!-- The owner's editor for this section — the user-agnostic /settings URL
+(whoever opens it edits their own data). The public twin at /:slug/messengers
+shows the plain showcase view. --%>
+<.settings_shell user={@user} active={:messengers} title={gettext("Messengers")}>
+  <.card_section
+    empty={Enum.empty?(@messengers)}
+    add_href={~p"/settings/messengers/new"}
+    add_label={gettext("Add a messenger")}
+  >
+    <.reorderable_section
+      conn={@conn}
+      section="messengers"
+      slug={@user.username}
+      editable={@messengers != []}
+    >
+      <%= render "card_list.html", assigns %>
+    </.reorderable_section>
+  </.card_section>
+</.settings_shell>

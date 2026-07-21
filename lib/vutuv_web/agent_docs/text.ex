@@ -52,6 +52,10 @@ defmodule VutuvWeb.AgentDocs.Text do
         gettext("Profiles"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
+      section(
+        gettext("Messengers"),
+        Enum.map(doc.messengers, &entry_line("messengers", &1))
+      ),
       section(gettext("Code"), Enum.flat_map(doc.code_stats, &code_stats_lines/1)),
       section(
         gettext("Phone Numbers"),
@@ -451,8 +455,17 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "* #{email.type}: #{email.value}"
   defp entry_line("social_media_accounts", account), do: "* #{account.provider}: #{account.url}"
+  defp entry_line("messengers", messenger), do: messenger_line(messenger)
   defp entry_line("phone_numbers", phone), do: "* #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "* " <> Markdown.address_line(address)
+
+  # A messenger: provider, contact (phone number or handle), and its deep link
+  # in parentheses (absent for Session, which has no web link).
+  defp messenger_line(%{provider: provider, contact: contact, url: ""}),
+    do: "* #{provider}: #{contact}"
+
+  defp messenger_line(%{provider: provider, contact: contact, url: url}),
+    do: "* #{provider}: #{contact} (#{url})"
 
   # One code-forge account of the profile's "Code" section (Vutuv.CodeStats):
   # the account line with its facts (shared wording with the Markdown
