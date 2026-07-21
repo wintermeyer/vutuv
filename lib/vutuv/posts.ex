@@ -1014,16 +1014,29 @@ defmodule Vutuv.Posts do
     |> Repo.preload(post_preloads())
   end
 
-  # The public posts carrying `tag` (unordered, unpaginated), shared by the
-  # count and the page query so both apply the exact same visibility gate.
-  defp tag_posts_query(%Tag{} = tag) do
+  @doc """
+  The public posts carrying at least one tag (anonymous view), the `PostTag`
+  join exposed as the named binding `:post_tag`. The one visibility gate
+  behind both the tag page's posts (`count_tag_posts/1` / `list_tag_posts/3`
+  filter it to one tag) and the tag indexability bar
+  (`Vutuv.Tags.indexable_tags_query/0` groups it by tag id), so the two can
+  never disagree about which posts count.
+  """
+  def visible_tagged_posts_query do
     from(p in Post,
       join: u in assoc(p, :user),
       join: pt in PostTag,
+      as: :post_tag,
       on: pt.post_id == p.id,
-      where: pt.tag_id == ^tag.id and u.email_confirmed? == true
+      where: u.email_confirmed? == true
     )
     |> scope_visible(nil)
+  end
+
+  # The public posts carrying `tag` (unordered, unpaginated), shared by the
+  # count and the page query so both apply the exact same visibility gate.
+  defp tag_posts_query(%Tag{} = tag) do
+    from([post_tag: pt] in visible_tagged_posts_query(), where: pt.tag_id == ^tag.id)
   end
 
   @doc """

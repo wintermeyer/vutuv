@@ -4,7 +4,9 @@ defmodule Vutuv.Sitemap do
   index, in chunks bounded by `chunk_size/0` so no request loads an
   unbounded row set. Only the anonymous view counts — activated, indexable
   (`noindex?: false`, not moderation-hidden) members, their unrestricted
-  posts, and the tag pages.
+  posts, and the tag pages above the search-engine bar
+  (`Vutuv.Tags.indexable_tags_query/0` — enough visible members or a public
+  post; the thin rest is noindexed by `VutuvWeb.TagController`).
 
   Chunks are plain limit/offset windows ordered by the UUID v7 primary key
   (creation order). Should offset depth ever hurt at scale, the upgrade
@@ -16,7 +18,7 @@ defmodule Vutuv.Sitemap do
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Repo
-  alias Vutuv.Tags.Tag
+  alias Vutuv.Tags
 
   @chunk_size 10_000
 
@@ -63,7 +65,7 @@ defmodule Vutuv.Sitemap do
     %{
       users: chunks(Repo.aggregate(indexable_users(), :count)),
       posts: chunks(Repo.aggregate(indexable_posts(), :count)),
-      tags: chunks(Repo.aggregate(Tag, :count)),
+      tags: chunks(Repo.aggregate(Tags.indexable_tags_query(), :count)),
       organizations: chunks(Repo.aggregate(indexable_organizations(), :count)),
       jobs: chunks(Repo.aggregate(indexable_jobs(), :count))
     }
@@ -93,7 +95,7 @@ defmodule Vutuv.Sitemap do
 
   @doc "`{path, lastmod_date}` entries of one tags chunk (1-based)."
   def tag_entries(chunk) do
-    Tag
+    Tags.indexable_tags_query()
     |> order_by([t], t.id)
     |> window(chunk)
     |> select([t], {t.slug, t.updated_at})

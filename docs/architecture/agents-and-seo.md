@@ -72,7 +72,12 @@ five known extensions are stripped, so dotted slugs keep working, and a `.md`
 URL that no controller answers 404s instead of serving HTML).
 
 **Agent readiness** (per specification.website): `/sitemap.xml` (chunked index
-over members/posts/tags, `Vutuv.Sitemap`), RSS 2.0 feeds with full post content
+over members/posts/tags, `Vutuv.Sitemap`; tag pages appear only above the
+search-engine bar — `Vutuv.Tags.indexable_tags_query/0`: at least
+`min_indexable_members/0` visible members or one public post. Every tag page
+below the bar answers with `X-Robots-Tag: noindex` from `TagController`, so
+the ~10K thin one-member/empty tag pages stopped piling up in Search Console
+as "crawled - currently not indexed"), RSS 2.0 feeds with full post content
 (`/:slug/posts/feed.xml` per member, `/posts/feed.xml` site-wide,
 `VutuvWeb.Feeds`), robots.txt names the AI crawlers and declares draft
 `Content-Signal` directives from the one policy source

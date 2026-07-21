@@ -97,13 +97,32 @@ defmodule VutuvWeb.SitemapControllerTest do
   end
 
   describe "GET /sitemaps/tags-N.xml" do
-    test "lists tag pages" do
-      insert(:tag, slug: "elixir-mapped")
+    test "lists tag pages above the indexability bar, skips thin and empty ones" do
+      # Only tag pages with enough substance for a search index are
+      # advertised: at least Tags.min_indexable_members/0 visible members or
+      # one public post. Advertising all ~10K tags put most of them into
+      # Search Console as "crawled - currently not indexed".
+      rich = insert(:tag, slug: "elixir-mapped")
+
+      for _ <- 1..Vutuv.Tags.min_indexable_members() do
+        insert(:user_tag, user: insert_activated_user(), tag: rich)
+      end
+
+      empty = insert(:tag, slug: unique_tag_name("unused"))
+      thin = insert(:tag, slug: unique_tag_name("thin"))
+      insert(:user_tag, user: insert_activated_user(), tag: thin)
+
+      author = insert_activated_user()
+      posted_name = unique_tag_name("Posted")
+      create_post!(author, %{"body" => "sitemap words", "tags" => posted_name})
 
       conn = get(build_conn(), "/sitemaps/tags-1.xml")
 
       assert conn.status == 200
       assert conn.resp_body =~ "<loc>#{@base}/tags/elixir-mapped</loc>"
+      assert conn.resp_body =~ "<loc>#{@base}/tags/#{String.downcase(posted_name)}</loc>"
+      refute conn.resp_body =~ empty.slug
+      refute conn.resp_body =~ thin.slug
     end
   end
 

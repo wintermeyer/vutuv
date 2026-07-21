@@ -29,6 +29,46 @@ defmodule VutuvWeb.TagControllerTest do
     end
   end
 
+  # A tag page below the indexability bar (fewer than
+  # Tags.min_indexable_members/0 visible members and no public post) is a thin
+  # near-duplicate in a search index. It stays served and linkable, but carries
+  # noindex so crawlers drop it deliberately instead of piling up in Search
+  # Console as "crawled - currently not indexed"; the sitemap advertises only
+  # tags above the bar.
+  describe "search-engine indexability" do
+    test "a thin tag page carries the noindex header", %{conn: conn} do
+      tag = insert(:tag)
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      conn = get(conn, ~p"/tags/#{tag}")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    end
+
+    test "a tag page above the bar is indexable", %{conn: conn} do
+      tag = insert(:tag)
+
+      for _ <- 1..Vutuv.Tags.min_indexable_members() do
+        insert(:user_tag, user: insert(:activated_user), tag: tag)
+      end
+
+      conn = get(conn, ~p"/tags/#{tag}")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == []
+    end
+
+    test "the noindex rides the agent formats too", %{conn: conn} do
+      tag = insert(:tag)
+
+      conn = get(conn, ~p"/tags/#{tag}" <> ".md")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+    end
+  end
+
   # Issue #946: a tag used only in posts (no endorsed members) used to open an
   # empty page. The tag page now lists the public posts carrying the tag.
   describe "posts with this tag (issue #946)" do

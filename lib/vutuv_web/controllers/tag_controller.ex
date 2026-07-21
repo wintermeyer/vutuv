@@ -4,9 +4,11 @@ defmodule VutuvWeb.TagController do
   alias Vutuv.Jobs
   alias Vutuv.Pages
   alias Vutuv.Posts
+  alias Vutuv.Tags
   alias Vutuv.Tags.Tag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.AgentDocs.ListDocs
+  alias VutuvWeb.ContentPolicy
 
   plug(VutuvWeb.Plug.ResolveSlug,
     slug: "slug",
@@ -39,8 +41,19 @@ defmodule VutuvWeb.TagController do
     # viewer-specific, so it rides only on the HTML branch (the agent formats are
     # the anonymous public view). The count is a public aggregate shown as social
     # proof; it is UI chrome, not tag content, so it stays out of the agent docs.
-    following_tag? = not is_nil(current_user) and Vutuv.Tags.tag_followed?(current_user, tag)
-    tag_follower_count = Vutuv.Tags.tag_follower_count(tag)
+    following_tag? = not is_nil(current_user) and Tags.tag_followed?(current_user, tag)
+    tag_follower_count = Tags.tag_follower_count(tag)
+
+    # A tag page below the search-engine bar (fewer than
+    # Tags.min_indexable_members/0 visible members and no public post) is a
+    # thin near-duplicate in a search index; thousands of them sat in Search
+    # Console as "crawled - currently not indexed". It stays served and
+    # linkable, but carries noindex (on every format) so crawlers drop it
+    # deliberately; the sitemap advertises only the tags above the bar.
+    conn =
+      if Tags.indexable_tag?(tag),
+        do: conn,
+        else: ContentPolicy.put_robots_header(conn, true, false)
 
     # "Posts with this tag" (#946) is offset-paginated (`?page`). The overview —
     # description, most-endorsed members and the "Offene Stellen" jobs (#933) —

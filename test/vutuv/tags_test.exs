@@ -922,4 +922,72 @@ defmodule Vutuv.TagsTest do
       assert Tags.people_for_followed_tags(insert(:user), 10) == []
     end
   end
+
+  describe "indexable_tags_query/0 and indexable_tag?/1 (the search-engine bar)" do
+    # ~10,600 tag pages existed but most held one member or none; Google
+    # crawled them and refused to index them ("crawled - currently not
+    # indexed"), burying the pages worth ranking. The bar: at least
+    # min_indexable_members/0 publicly visible members, or one public post.
+
+    test "a tag endorsed by enough visible members clears the bar" do
+      tag = insert(:tag)
+
+      for _ <- 1..Tags.min_indexable_members() do
+        insert(:user_tag, user: insert(:activated_user), tag: tag)
+      end
+
+      assert Tags.indexable_tag?(tag)
+      assert tag.id in (Tags.indexable_tags_query() |> Repo.all() |> Enum.map(& &1.id))
+    end
+
+    test "an unused tag and a single-member tag stay below the bar" do
+      empty_tag = insert(:tag)
+      thin_tag = insert(:tag)
+      insert(:user_tag, user: insert(:activated_user), tag: thin_tag)
+
+      refute Tags.indexable_tag?(empty_tag)
+      refute Tags.indexable_tag?(thin_tag)
+
+      ids = Tags.indexable_tags_query() |> Repo.all() |> Enum.map(& &1.id)
+      refute empty_tag.id in ids
+      refute thin_tag.id in ids
+    end
+
+    test "unconfirmed and moderation-hidden members do not count toward the bar" do
+      tag = insert(:tag)
+      insert(:user_tag, user: insert(:user), tag: tag)
+
+      insert(:user_tag,
+        user: insert(:activated_user, frozen_at: NaiveDateTime.utc_now(:second)),
+        tag: tag
+      )
+
+      insert(:user_tag, user: insert(:activated_user), tag: tag)
+
+      refute Tags.indexable_tag?(tag)
+    end
+
+    test "one public post carrying the tag clears the bar" do
+      author = insert(:activated_user)
+      name = unique_tag_name("Posted")
+      Vutuv.PostsHelpers.create_post!(author, %{"body" => "words", "tags" => name})
+
+      tag = Repo.get_by!(Tag, slug: String.downcase(name))
+      assert Tags.indexable_tag?(tag)
+    end
+
+    test "a restricted post does not lift the tag over the bar" do
+      author = insert(:activated_user)
+      name = unique_tag_name("Muted")
+
+      Vutuv.PostsHelpers.create_post!(author, %{
+        "body" => "quiet words",
+        "tags" => name,
+        "denials" => [%{"wildcard" => "everyone"}]
+      })
+
+      tag = Repo.get_by!(Tag, slug: String.downcase(name))
+      refute Tags.indexable_tag?(tag)
+    end
+  end
 end

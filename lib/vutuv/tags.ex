@@ -12,6 +12,7 @@ defmodule Vutuv.Tags do
   import Ecto.Query
 
   alias Vutuv.Accounts.User
+  alias Vutuv.Posts
   alias Vutuv.Repo
   alias Vutuv.Tags.Tag
   alias Vutuv.Tags.TagFollow
@@ -320,6 +321,49 @@ defmodule Vutuv.Tags do
 
   defp tag_has_holders?(%Tag{} = tag) do
     Repo.exists?(from(ut in UserTag, where: ut.tag_id == ^tag.id))
+  end
+
+  # The search-engine bar for a tag page: how many publicly visible members
+  # must carry a tag before its /tags/:slug page is worth a search index.
+  # Below the bar (and with no public post) the page is a thin near-duplicate:
+  # advertising all ~10K tags put most of them into Search Console as
+  # "crawled - currently not indexed" and drowned the pages worth ranking.
+  @min_indexable_members 2
+
+  @doc "The member threshold behind `indexable_tags_query/0`."
+  def min_indexable_members, do: @min_indexable_members
+
+  @doc """
+  The tags whose public page clears the search-engine bar: at least
+  `min_indexable_members/0` publicly visible members (the same
+  confirmed-and-not-hidden gate the tag page lists by), or at least one
+  publicly visible post carrying the tag (`Posts.visible_tagged_posts_query/0`,
+  the tag page's own posts gate). The sitemap advertises exactly this set and
+  `VutuvWeb.TagController` noindexes every page below the bar, so the two can
+  never drift apart.
+  """
+  def indexable_tags_query do
+    import Vutuv.Moderation.Query, only: [account_hidden_row: 1, account_confirmed_row: 1]
+
+    endorsed_enough =
+      from(ut in UserTag,
+        join: u in assoc(ut, :user),
+        where: account_confirmed_row(u) and not account_hidden_row(u),
+        group_by: ut.tag_id,
+        having: count(ut.id) >= @min_indexable_members,
+        select: ut.tag_id
+      )
+
+    posted = from([post_tag: pt] in Posts.visible_tagged_posts_query(), select: pt.tag_id)
+
+    from(t in Tag,
+      where: t.id in subquery(endorsed_enough) or t.id in subquery(posted)
+    )
+  end
+
+  @doc "Whether this one tag's page clears the bar (`indexable_tags_query/0`)."
+  def indexable_tag?(%Tag{id: id}) do
+    indexable_tags_query() |> where([t], t.id == ^id) |> Repo.exists?()
   end
 
   @doc """
