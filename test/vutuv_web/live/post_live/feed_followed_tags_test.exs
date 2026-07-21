@@ -12,7 +12,7 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
   describe "Tags you follow rail" do
     test "renders the followed-tag chips and unfollows one with no reload", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       Tags.follow_tag(user, tag)
 
       {:ok, view, html} = live(conn, ~p"/feed")
@@ -37,7 +37,7 @@ defmodule VutuvWeb.PostLive.FeedFollowedTagsTest do
   describe "Who to follow leads with people from followed tags" do
     test "a member endorsed for a followed tag appears in the who-to-follow rail", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       Tags.follow_tag(user, tag)
 
       candidate = insert(:activated_user, first_name: "Tagged", last_name: "Person")

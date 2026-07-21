@@ -9,11 +9,11 @@ defmodule VutuvWeb.SettingsFollowedTagsTest do
 
   test "lists the member's followed tags with an unfollow control", %{conn: conn} do
     {conn, user} = create_and_login_user(conn)
-    tag = insert(:tag, name: "Elixir", slug: "elixir")
+    tag = insert(:tag)
     Tags.follow_tag(user, tag)
 
     html = conn |> get(~p"/settings/followed_tags") |> html_response(200)
-    assert html =~ "Elixir"
+    assert html =~ tag.name
     assert html =~ ~s(href="/tag_follows/#{tag.id}")
   end
 
@@ -23,7 +23,7 @@ defmodule VutuvWeb.SettingsFollowedTagsTest do
     html = conn |> get(~p"/settings") |> html_response(200)
     refute html =~ "Tags you follow"
 
-    tag = insert(:tag, name: "Elixir", slug: "elixir")
+    tag = insert(:tag)
     Tags.follow_tag(user, tag)
 
     html = conn |> recycle() |> get(~p"/settings") |> html_response(200)

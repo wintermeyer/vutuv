@@ -15,18 +15,22 @@ defmodule VutuvWeb.MarkdownMentionsTest do
 
   defp render_post(text), do: text |> Markdown.render_post([]) |> Phoenix.HTML.safe_to_string()
 
+  # Ada with a per-test-unique handle (dot/dash-free: the mention grammar in
+  # Vutuv.Mentions stops at them). Returns the handle for interpolation.
   defp ada do
-    insert(:user, username: "ada", first_name: "Ada", last_name: "Lovelace")
+    handle = "ada#{System.unique_integer([:positive])}"
+    insert(:user, username: handle, first_name: "Ada", last_name: "Lovelace")
+    handle
   end
 
   test "an @handle of an existing member links to their profile with a name tooltip" do
-    ada()
-    html = render("Thanks @ada for the help!")
+    handle = ada()
+    html = render("Thanks @#{handle} for the help!")
 
-    assert html =~ ~s(href="/ada")
+    assert html =~ ~s(href="/#{handle}")
     assert html =~ ~s(title="Ada Lovelace")
     assert html =~ ~s(class="mention")
-    assert html =~ ">@ada</a>"
+    assert html =~ ">@#{handle}</a>"
   end
 
   test "an @handle that is not a member stays plain text" do
@@ -37,81 +41,82 @@ defmodule VutuvWeb.MarkdownMentionsTest do
   end
 
   test "a bare username without @ is never linked" do
-    ada()
-    html = render("ada is great")
+    handle = ada()
+    html = render("#{handle} is great")
 
     refute html =~ "<a"
-    assert html =~ "ada is great"
+    assert html =~ "#{handle} is great"
   end
 
   test "matching is case-insensitive but the typed text and canonical slug are preserved" do
-    ada()
-    html = render("ping @Ada now")
+    handle = ada()
+    typed = String.capitalize(handle)
+    html = render("ping @#{typed} now")
 
-    assert html =~ ~s(href="/ada")
-    assert html =~ ">@Ada</a>"
+    assert html =~ ~s(href="/#{handle}")
+    assert html =~ ">@#{typed}</a>"
   end
 
   test "an email address is not mistaken for a mention" do
-    ada()
-    html = render("write to me at info@ada.example")
+    handle = ada()
+    html = render("write to me at info@#{handle}.example")
 
-    refute html =~ ~s(href="/ada")
-    assert html =~ "info@ada.example"
+    refute html =~ ~s(href="/#{handle}")
+    assert html =~ "info@#{handle}.example"
   end
 
   test "a mention inside inline code is left untouched" do
-    ada()
-    html = render("type `@ada` to mention them")
+    handle = ada()
+    html = render("type `@#{handle}` to mention them")
 
-    refute html =~ ~s(href="/ada")
-    assert html =~ "@ada"
+    refute html =~ ~s(href="/#{handle}")
+    assert html =~ "@#{handle}"
   end
 
   test "a mention inside a fenced code block is left untouched" do
-    ada()
-    html = render("```\n@ada\n```")
+    handle = ada()
+    html = render("```\n@#{handle}\n```")
 
-    refute html =~ ~s(href="/ada")
-    assert html =~ "@ada"
+    refute html =~ ~s(href="/#{handle}")
+    assert html =~ "@#{handle}"
   end
 
   test "a mention inside bold text still links" do
-    ada()
-    html = render("**hi @ada**")
+    handle = ada()
+    html = render("**hi @#{handle}**")
 
     assert html =~ "<strong>"
-    assert html =~ ~s(href="/ada")
+    assert html =~ ~s(href="/#{handle}")
   end
 
   test "several mentions in one text all resolve" do
-    ada()
+    handle = ada()
     insert(:user, username: "grace", first_name: "Grace", last_name: "Hopper")
 
-    html = render("cc @ada and @grace")
+    html = render("cc @#{handle} and @grace")
 
-    assert html =~ ~s(href="/ada")
+    assert html =~ ~s(href="/#{handle}")
     assert html =~ ~s(href="/grace")
     assert html =~ ~s(title="Grace Hopper")
   end
 
   test "the internal mention link stays in the same tab while external URLs open a new tab" do
-    ada()
-    html = render("see @ada and https://example.com/page")
+    handle = ada()
+    html = render("see @#{handle} and https://example.com/page")
 
     # the mention is an internal link: no target/rel
-    assert html =~ ~r{<a href="/ada"[^>]*class="mention"[^>]*>@ada</a>}
-    refute html =~ ~r{<a href="/ada"[^>]*target="_blank"}
+    assert html =~ ~r{<a href="/#{handle}"[^>]*class="mention"[^>]*>@#{handle}</a>}
+    refute html =~ ~r{<a href="/#{handle}"[^>]*target="_blank"}
     # the external URL still opens in a new tab
     assert html =~ ~s(href="https://example.com/page")
     assert html =~ ~s(target="_blank")
   end
 
   test "mentions also resolve in post bodies" do
-    ada()
-    html = render_post("Welcome @ada!")
+    handle = ada()
+    html = render_post("Welcome @#{handle}!")
 
-    assert html =~ ~s(href="/ada")
+    assert html =~ ~s(href="/#{handle}")
     assert html =~ ~s(title="Ada Lovelace")
   end
 

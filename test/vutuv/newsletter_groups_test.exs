@@ -54,10 +54,11 @@ defmodule Vutuv.NewsletterGroupsTest do
     end
 
     test "filters by username with wildcards and contains-match" do
-      member("a@x.com", username: "stefan.wintermeyer")
+      n = System.unique_integer([:positive])
+      member("a@x.com", username: "s#{n}.wintermeyer")
       member("b@x.com", username: "erika.musterfrau")
 
-      assert Newsletters.audience_count(%{username: "stefan*"}) == 1
+      assert Newsletters.audience_count(%{username: "s#{n}*"}) == 1
       assert Newsletters.audience_count(%{username: "*meyer"}) == 1
       assert Newsletters.audience_count(%{username: "wintermeyer"}) == 1
       assert Newsletters.audience_count(%{username: "*.muster*"}) == 1

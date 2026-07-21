@@ -13,7 +13,7 @@ defmodule VutuvWeb.TagFollowControllerTest do
   describe "create / delete" do
     test "POST follows the tag and DELETE unfollows it", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       conn = post(conn, ~p"/tag_follows", tag_follow: %{tag_id: tag.id})
       assert redirected_to(conn)
@@ -26,7 +26,7 @@ defmodule VutuvWeb.TagFollowControllerTest do
 
     test "a double follow is idempotent, not a 500", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       conn = post(conn, ~p"/tag_follows", tag_follow: %{tag_id: tag.id})
       conn = post(recycle(conn), ~p"/tag_follows", tag_follow: %{tag_id: tag.id})
@@ -44,7 +44,7 @@ defmodule VutuvWeb.TagFollowControllerTest do
   describe "the tag page's follow control (issue #872)" do
     test "renders a pill whose CSRF button targets the real /tag_follows route", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
 
       html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
       assert html =~ ~s(data-to="/tag_follows?tag_follow[tag_id]=#{tag.id}")
@@ -59,7 +59,7 @@ defmodule VutuvWeb.TagFollowControllerTest do
 
     test "shows the aggregate follower count", %{conn: conn} do
       {conn, _user} = create_and_login_user(conn)
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       for _ <- 1..3, do: Tags.follow_tag(insert(:activated_user), tag)
 
       html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
@@ -67,7 +67,7 @@ defmodule VutuvWeb.TagFollowControllerTest do
     end
 
     test "a logged-out visitor sees no follow control but the page still renders", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir")
+      tag = insert(:tag)
       html = conn |> get(~p"/tags/#{tag}") |> html_response(200)
       refute html =~ ~s(data-to="/tag_follows)
     end

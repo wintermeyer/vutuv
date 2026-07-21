@@ -19,8 +19,9 @@ defmodule Vutuv.OrganizationsLinkingTest do
     end
 
     test "an organization with a root handle is canonical at /:handle" do
-      organization = insert(:organization, slug: "acme-gmbh", username: "acme")
-      assert Organizations.canonical_path(organization) == "/acme"
+      handle = "acme#{System.unique_integer([:positive])}"
+      organization = insert(:organization, slug: "acme-gmbh", username: handle)
+      assert Organizations.canonical_path(organization) == "/#{handle}"
     end
   end
 

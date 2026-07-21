@@ -248,6 +248,18 @@ defmodule Vutuv.Factory do
     }
   end
 
+  @doc """
+  A per-call unique tag name with a readable base ("Elixir-123").
+
+  Async test modules must never insert the same tag name as another module:
+  under the SQL sandbox every minted slug keeps its unique-index lock until
+  the test transaction rolls back, so shared names convoy and deadlock
+  (the 40P01 register_user flake). Use this wherever a test types a tag
+  value into a flow (add_user_tag, tag forms, post tags) and the exact
+  spelling is not the point — bind it to a variable and assert on that.
+  """
+  def unique_tag_name(base \\ "tag"), do: "#{base}-#{System.unique_integer([:positive])}"
+
   def user_tag_factory do
     %Vutuv.Tags.UserTag{}
   end

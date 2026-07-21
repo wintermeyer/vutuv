@@ -25,19 +25,32 @@ defmodule VutuvWeb.ConnCase do
 
       # Registration requires at least three distinct tags (the sign-up tag
       # minimum), so every helper-registered account carries this neutral,
-      # test-greppable trio.
-      @registration_tags "alpha-tag beta-tag gamma-tag"
+      # test-greppable trio — suffixed with a stable per-module discriminator.
+      # Async test modules must never insert the same tag name as another
+      # module: the SQL sandbox keeps every test's inserts uncommitted, so a
+      # minted slug holds its unique-index lock until the test transaction
+      # rolls back. Two modules sharing a slug therefore convoy on it, and two
+      # contended slugs acquired in opposite orders deadlock — the long-lived
+      # intermittent `40P01 deadlock_detected` in register_user. The ON
+      # CONFLICT get-or-create in `Tag.put_created_tag/2` does not help here:
+      # its no-lock reasoning assumes the insert autocommits, which is true in
+      # production and false in the sandbox. Within one module tests run
+      # serially, so sharing the trio module-wide is safe — and keeps it
+      # usable in module attributes.
+      registration_tags_mod_id = :erlang.phash2(__MODULE__, 4_294_967_296)
+
+      @registration_tags "alpha-tag-#{registration_tags_mod_id} " <>
+                           "beta-tag-#{registration_tags_mod_id} " <>
+                           "gamma-tag-#{registration_tags_mod_id}"
 
       # Per-call unique sign-up attrs. The email, name and the handle generated
       # from the name are the shared-fixture rows async test modules used to
       # collide on: two modules registering the identical "email@example.com" /
       # "first_name" at once contend on the emails/username/handles unique
-      # indexes *inside one register_user transaction*, which is the other half
-      # of the intermittent 40P01 deadlock (the tag half is fixed in
-      # `Vutuv.Tags.Tag`). Minting a fresh integer per call keeps every
+      # indexes *inside one register_user transaction* — the same 40P01 class
+      # as the tags above. Minting a fresh integer per call keeps every
       # registration's rows disjoint, so ConnCase tests are safe to run
-      # `async: true`. Tags stay shared on purpose — they get-or-create
-      # idempotently now (`Tag.put_created_tag/2`), so they no longer deadlock.
+      # `async: true`.
       defp registration_attrs(prefix) do
         n = System.unique_integer([:positive])
 

@@ -12,7 +12,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "a member cannot remove an honor tag from themselves", %{conn: conn, user: user} do
-      tag = insert(:tag, name: "vutuv_developer", slug: "vutuv_developer", honor?: true)
+      tag = insert(:tag, honor?: true)
       {:ok, _} = Vutuv.Tags.admin_assign_tag(tag, user)
 
       conn = delete(conn, ~p"/settings/tags/#{tag.slug}")
@@ -26,10 +26,11 @@ defmodule VutuvWeb.UserTagControllerTest do
     end
 
     test "a member can still remove a normal tag", %{conn: conn, user: user} do
-      {:ok, user_tag} = Vutuv.Tags.add_user_tag(user, "Elixir")
+      name = unique_tag_name("Elixir")
+      {:ok, user_tag} = Vutuv.Tags.add_user_tag(user, name)
       tag_id = user_tag.tag_id
 
-      conn = delete(conn, ~p"/settings/tags/elixir")
+      conn = delete(conn, ~p"/settings/tags/#{String.downcase(name)}")
 
       assert redirected_to(conn) == ~p"/settings/tags"
 
@@ -79,7 +80,7 @@ defmodule VutuvWeb.UserTagControllerTest do
   describe "endorsers" do
     setup do
       owner = insert_activated_user(username: "tag_owner")
-      tag = insert(:tag, name: "Ruby", slug: "ruby")
+      tag = insert(:tag)
       user_tag = insert(:user_tag, user: owner, tag: tag)
       {:ok, owner: owner, tag: tag, user_tag: user_tag}
     end
@@ -87,20 +88,22 @@ defmodule VutuvWeb.UserTagControllerTest do
     test "lists the visible endorsers (no login required)", %{
       conn: conn,
       owner: owner,
+      tag: tag,
       user_tag: user_tag
     } do
       endorser = insert_activated_user(first_name: "Rick", last_name: "Sanchez")
       insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
 
-      html = conn |> get(~p"/#{owner}/tags/ruby/endorsers") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}/endorsers") |> html_response(200)
 
       assert html =~ "Rick Sanchez"
-      assert html =~ "Ruby"
+      assert html =~ tag.name
     end
 
     test "the per-row follow icon names itself (title + aria-label)", %{
       conn: conn,
       owner: owner,
+      tag: tag,
       user_tag: user_tag
     } do
       # This table keeps the compact icon-only follow control, so it must carry
@@ -110,7 +113,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       endorser = insert_activated_user(first_name: "Rick", last_name: "Sanchez")
       insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
 
-      html = conn |> get(~p"/#{owner}/tags/ruby/endorsers") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}/endorsers") |> html_response(200)
 
       # The viewer does not follow the endorser, so the row offers "Follow".
       assert html =~ ~s(title="Follow")
@@ -120,12 +123,13 @@ defmodule VutuvWeb.UserTagControllerTest do
     test "shows when each endorsement was cast", %{
       conn: conn,
       owner: owner,
+      tag: tag,
       user_tag: user_tag
     } do
       endorser = insert_activated_user(first_name: "Rick", last_name: "Sanchez")
       endorsement = insert(:user_tag_endorsement, user_tag: user_tag, user: endorser)
 
-      html = conn |> get(~p"/#{owner}/tags/ruby/endorsers") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}/endorsers") |> html_response(200)
 
       # The label plus a client-localized <time> (the server text is the no-JS
       # fallback; app.js rewrites it to the viewer's locale).
@@ -137,6 +141,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     test "drops hidden / unconfirmed endorsers from the list (issue #783)", %{
       conn: conn,
       owner: owner,
+      tag: tag,
       user_tag: user_tag
     } do
       visible = insert_activated_user(first_name: "Vee", last_name: "Visible")
@@ -147,7 +152,7 @@ defmodule VutuvWeb.UserTagControllerTest do
       hidden = insert(:user, first_name: "Han", last_name: "Hidden")
       insert(:user_tag_endorsement, user_tag: user_tag, user: hidden)
 
-      html = conn |> get(~p"/#{owner}/tags/ruby/endorsers") |> html_response(200)
+      html = conn |> get(~p"/#{owner}/tags/#{tag.slug}/endorsers") |> html_response(200)
 
       assert html =~ "Vee Visible"
       refute html =~ "Han Hidden"
@@ -160,7 +165,12 @@ defmodule VutuvWeb.UserTagControllerTest do
       assert conn.halted
     end
 
-    test "is sortable by name, username and date", %{conn: conn, owner: owner, user_tag: user_tag} do
+    test "is sortable by name, username and date", %{
+      conn: conn,
+      owner: owner,
+      tag: tag,
+      user_tag: user_tag
+    } do
       zoe = insert_activated_user(first_name: "Zoe", last_name: "Adams", username: "zoe.adams")
       amy = insert_activated_user(first_name: "Amy", last_name: "Baker", username: "amy.baker")
 
@@ -170,7 +180,7 @@ defmodule VutuvWeb.UserTagControllerTest do
 
       # The .json sibling lists people in the same order the HTML table renders.
       names = fn query ->
-        "/#{owner.username}/tags/ruby/endorsers.json?#{URI.encode_query(query)}"
+        "/#{owner.username}/tags/#{tag.slug}/endorsers.json?#{URI.encode_query(query)}"
         |> then(&get(conn, &1).resp_body)
         |> Jason.decode!()
         |> Map.fetch!("people")
@@ -192,6 +202,7 @@ defmodule VutuvWeb.UserTagControllerTest do
     test "paginates the HTML list and keeps the sort across pages", %{
       conn: conn,
       owner: owner,
+      tag: tag,
       user_tag: user_tag
     } do
       for _ <- 1..(Vutuv.Tags.endorsers_per_page() + 1) do
@@ -199,7 +210,9 @@ defmodule VutuvWeb.UserTagControllerTest do
       end
 
       html =
-        conn |> get(~p"/#{owner}/tags/ruby/endorsers?sort=name&dir=asc") |> html_response(200)
+        conn
+        |> get(~p"/#{owner}/tags/#{tag.slug}/endorsers?sort=name&dir=asc")
+        |> html_response(200)
 
       # A second page exists and its link carries the active sort.
       assert html =~ "page=2"

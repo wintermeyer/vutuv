@@ -7,7 +7,7 @@ defmodule VutuvWeb.ControllerHelpersTest do
   describe "safe_return_to/1" do
     test "keeps a same-origin absolute path" do
       assert ControllerHelpers.safe_return_to("/feed") == "/feed"
-      assert ControllerHelpers.safe_return_to("/alice/posts") == "/alice/posts"
+      assert ControllerHelpers.safe_return_to("/ch_alice/posts") == "/ch_alice/posts"
     end
 
     test "keeps the bare root path without raising" do
@@ -37,8 +37,8 @@ defmodule VutuvWeb.ControllerHelpersTest do
 
     test "falls back to the user's profile without a referer" do
       conn = build_conn()
-      user = %User{username: "alice"}
-      assert ControllerHelpers.referrer_or_profile(conn, user) == "/alice"
+      user = %User{username: "ch_alice"}
+      assert ControllerHelpers.referrer_or_profile(conn, user) == "/ch_alice"
     end
 
     test "falls back to the landing page when logged out and refererless" do

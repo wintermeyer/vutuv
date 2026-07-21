@@ -14,7 +14,7 @@ defmodule Vutuv.Tags.UserTagTest do
 
   setup do
     user = insert(:user)
-    tag = insert(:tag, name: "Elixir", slug: "elixir")
+    tag = insert(:tag)
     user_tag = insert(:user_tag, user: user, tag: tag)
     # Reload bare (tag not loaded) to model the unconverted callers.
     unloaded = Repo.get!(UserTag, user_tag.id)
@@ -23,25 +23,29 @@ defmodule Vutuv.Tags.UserTagTest do
 
   describe "name/1" do
     test "reads the tag name from an unloaded struct (preloads as a fallback)", %{
+      tag: tag,
       unloaded: unloaded
     } do
       assert match?(%Ecto.Association.NotLoaded{}, unloaded.tag)
-      assert UserTag.name(unloaded) == "Elixir"
+      assert UserTag.name(unloaded) == tag.name
     end
 
-    test "reads the tag name from a preloaded struct without a query", %{unloaded: unloaded} do
+    test "reads the tag name from a preloaded struct without a query", %{
+      tag: tag,
+      unloaded: unloaded
+    } do
       preloaded = Repo.preload(unloaded, :tag)
 
       {result, count} = count_queries(fn -> UserTag.name(preloaded) end)
-      assert result == "Elixir"
+      assert result == tag.name
       assert count == 0
     end
   end
 
   describe "truncated_name/1" do
-    test "works on a preloaded struct", %{unloaded: unloaded} do
+    test "works on a preloaded struct", %{tag: tag, unloaded: unloaded} do
       preloaded = Repo.preload(unloaded, :tag)
-      assert UserTag.truncated_name(preloaded) == "Elixir"
+      assert UserTag.truncated_name(preloaded) == tag.name
     end
 
     test "truncates long names", %{tag: tag} do
@@ -57,15 +61,18 @@ defmodule Vutuv.Tags.UserTagTest do
   end
 
   describe "Phoenix.Param.to_param/1" do
-    test "returns the tag slug for an unloaded struct", %{unloaded: unloaded} do
-      assert Phoenix.Param.to_param(unloaded) == "elixir"
+    test "returns the tag slug for an unloaded struct", %{tag: tag, unloaded: unloaded} do
+      assert Phoenix.Param.to_param(unloaded) == tag.slug
     end
 
-    test "returns the tag slug for a preloaded struct without a query", %{unloaded: unloaded} do
+    test "returns the tag slug for a preloaded struct without a query", %{
+      tag: tag,
+      unloaded: unloaded
+    } do
       preloaded = Repo.preload(unloaded, :tag)
 
       {result, count} = count_queries(fn -> Phoenix.Param.to_param(preloaded) end)
-      assert result == "elixir"
+      assert result == tag.slug
       assert count == 0
     end
   end

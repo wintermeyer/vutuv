@@ -32,7 +32,7 @@ defmodule VutuvWeb.SeoTest do
     end
 
     test "tag page (with a description and subsections)", %{conn: conn} do
-      tag = insert(:tag, name: "Elixir", slug: "elixir", description: "The BEAM language.")
+      tag = insert(:tag, description: "The BEAM language.")
       body = conn |> get(~p"/tags/#{tag}") |> html_response(200)
       assert h1_count(body) == 1
     end

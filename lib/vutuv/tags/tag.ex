@@ -175,6 +175,15 @@ defmodule Vutuv.Tags.Tag do
   # ON CONFLICT the loser no-ops and re-reads the winner's row, and because the
   # tag insert is its own autocommit statement no transaction ever holds two
   # contended tag rows at once, so no cycle can form.
+  #
+  # That autocommit premise holds only in production. Under the test SQL
+  # sandbox nothing commits: each test is one transaction that keeps the
+  # unique-index lock on every slug it inserts until rollback, so two async
+  # test modules minting the SAME tag name still convoy on it — and deadlock
+  # when two contended slugs are acquired in opposite orders (the historical
+  # 40P01 flake in register_user). The test-side rule is therefore that async
+  # test modules never share literal tag names (see test/support/conn_case.ex
+  # and the test guidelines in .claude/rules/elixir.md).
   defp put_created_tag(changeset, params) do
     tag_changeset = __MODULE__.changeset(%__MODULE__{}, params)
 

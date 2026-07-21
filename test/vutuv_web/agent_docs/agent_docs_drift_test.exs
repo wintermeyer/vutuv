@@ -101,7 +101,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
     insert(:social_media_account, user: user, provider: "GitHub", value: "gretagradient")
 
-    tag = insert(:tag, name: "Bridgebuilding", slug: "bridgebuilding")
+    tag_name = unique_tag_name("Bridgebuilding")
+    tag = insert(:tag, name: tag_name, slug: String.downcase(tag_name))
     insert(:user_tag, user: user, tag: tag)
 
     follower = insert_activated_user(first_name: "Fanny", last_name: "Follower")
@@ -130,7 +131,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
-  test "profile: every public fact appears in HTML, Markdown, text and JSON", %{user: user} do
+  test "profile: every public fact appears in HTML, Markdown, text and JSON",
+       %{user: user, tag: tag} do
     rendered = formats_for("/drift_tester")
 
     facts = [
@@ -155,7 +157,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       "Handwerkskammer Brückenstadt",
       "Gesellenbrief",
       # tags
-      "Bridgebuilding",
+      tag.name,
       # languages (issue #865): the localized name and the proficiency both
       # appear in every format (HTML badge "Native", md/txt "French: Native",
       # JSON/XML the raw "native" proficiency)
@@ -422,17 +424,17 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     # tag must surface in the HTML page and every agent format.
     Vutuv.JobsHelpers.publish_job!(nil, %{
       "title" => "Bridge Architect (m/w/d)",
-      "required_tags" => "Bridgebuilding"
+      "required_tags" => tag.name
     })
 
     # "Posts with this tag" (#946): a public post carrying the tag surfaces on
     # the HTML page and in every agent format.
-    create_post!(user, %{body: "Spanning the great divide today", tags: "Bridgebuilding"})
+    create_post!(user, %{body: "Spanning the great divide today", tags: tag.name})
 
-    rendered = formats_for("/tags/bridgebuilding")
+    rendered = formats_for("/tags/#{tag.slug}")
 
     for fact <- [
-          "Bridgebuilding",
+          tag.name,
           "connecting shores",
           "Greta Gradient",
           "Bridge Architect",
@@ -441,11 +443,11 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         do: assert_fact_everywhere(rendered, fact)
   end
 
-  test "most followed listing in every format" do
+  test "most followed listing in every format", %{tag: tag} do
     rendered = formats_for("/listings/most_followed_users")
     assert_fact_everywhere(rendered, "Greta Gradient")
     # Each listed member's tags ride along in every format, like their name.
-    assert_fact_everywhere(rendered, "Bridgebuilding")
+    assert_fact_everywhere(rendered, tag.name)
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 
@@ -459,16 +461,16 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert Jason.decode!(rendered.json)["type"] == "directory"
   end
 
-  test "member directory letter page in every format" do
+  test "member directory letter page in every format", %{tag: tag} do
     rendered = formats_for("/system/members/g")
 
     assert_fact_everywhere(rendered, "Greta Gradient")
     # Each listed member's tags ride along in every format, like their name.
-    assert_fact_everywhere(rendered, "Bridgebuilding")
+    assert_fact_everywhere(rendered, tag.name)
     assert Jason.decode!(rendered.json)["type"] == "listing"
   end
 
-  test "every profile section page serves its facts in all formats" do
+  test "every profile section page serves its facts in all formats", %{tag: tag} do
     facts = %{
       work_experiences: ["Bridge Engineer", "Span AG", "Building things"],
       educations: [
@@ -484,7 +486,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       addresses: ["Berlin", "10115"],
       phone_numbers: ["+49 30 5550100"],
       emails: ["greta.public@example.com"],
-      tags: ["Bridgebuilding"]
+      tags: [tag.name]
     }
 
     # The loop runs over the SectionDocs registry itself, so a new section
@@ -510,7 +512,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert get_resp_header(conn, "x-robots-tag") == ["noindex, noai, noimageai"]
   end
 
-  test "a single section entry page serves all formats", %{user: user} do
+  test "a single section entry page serves all formats", %{user: user, tag: tag} do
     work =
       Repo.one!(
         from(w in Ecto.assoc(user, :work_experiences), where: w.title == "Bridge Engineer")
@@ -544,8 +546,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     rendered = formats_for("/drift_tester/links/#{url.id}")
     assert_fact_everywhere(rendered, "bridges.example.org")
 
-    rendered = formats_for("/drift_tester/tags/bridgebuilding")
-    assert_fact_everywhere(rendered, "Bridgebuilding")
+    rendered = formats_for("/drift_tester/tags/#{tag.slug}")
+    assert_fact_everywhere(rendered, tag.name)
     assert Jason.decode!(rendered.json)["type"] == "user_tag"
   end
 
@@ -594,7 +596,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert doc["type"] == "tag_endorsers"
     assert doc["total"] == 1
     # The list names the tag it belongs to.
-    assert_fact_everywhere(rendered, "Bridgebuilding")
+    assert_fact_everywhere(rendered, tag.name)
 
     # Each row carries when the endorsement was cast. The date (YYYY-MM-DD)
     # appears in every format: the HTML <time> fallback, the md/txt "(endorsed
@@ -656,18 +658,28 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     user = insert_activated_user(username: "sorted_skills")
     endorser = insert_activated_user()
 
-    for {name, slug} <- [{"Beta", "beta"}, {"Alpha", "alpha"}, {"Gamma", "gamma"}] do
-      insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: slug))
+    # Unique suffixes keep the alphabetical tie order (Alpha-* < Beta-*).
+    beta = unique_tag_name("Beta")
+    alpha = unique_tag_name("Alpha")
+    gamma = unique_tag_name("Gamma")
+
+    for name <- [beta, alpha, gamma] do
+      insert(:user_tag, user: user, tag: insert(:tag, name: name, slug: String.downcase(name)))
     end
 
-    [gamma] =
-      Repo.all(from(u in Vutuv.Tags.UserTag, join: t in assoc(u, :tag), where: t.slug == "gamma"))
+    [gamma_ut] =
+      Repo.all(
+        from(u in Vutuv.Tags.UserTag,
+          join: t in assoc(u, :tag),
+          where: t.slug == ^String.downcase(gamma)
+        )
+      )
 
-    insert(:user_tag_endorsement, user_tag: gamma, user: endorser)
+    insert(:user_tag_endorsement, user_tag: gamma_ut, user: endorser)
 
     doc = Jason.decode!(get(build_conn(), "/sorted_skills.json").resp_body)
 
-    assert Enum.map(doc["tags"], & &1["name"]) == ["Gamma", "Alpha", "Beta"]
+    assert Enum.map(doc["tags"], & &1["name"]) == [gamma, alpha, beta]
   end
 
   test "?lang=de translates the labels, English stays the default" do
@@ -737,22 +749,26 @@ defmodule VutuvWeb.AgentDocsDriftTest do
   end
 
   test "a job posting appears in every format" do
+    # publish_job! creates real tag rows from required_tags, so the names must
+    # be unique across async files (markdown_hashtags_test.exs mints "Elixir").
+    phoenix = unique_tag_name("Phoenix")
+
     posting =
       Vutuv.JobsHelpers.publish_job!(nil, %{
         "title" => "Elixir Engineer (m/w/d)",
-        "required_tags" => "Elixir, Phoenix"
+        "required_tags" => "#{unique_tag_name("Elixir")}, #{phoenix}"
       })
 
     rendered = formats_for("/jobs/#{posting.slug}")
     assert_fact_everywhere(rendered, "Elixir Engineer")
     assert_fact_everywhere(rendered, "Köln")
-    assert_fact_everywhere(rendered, "Phoenix")
+    assert_fact_everywhere(rendered, phoenix)
   end
 
   test "the job board appears in every format" do
     Vutuv.JobsHelpers.publish_job!(nil, %{
       "title" => "Board Tester Role",
-      "required_tags" => "Elixir"
+      "required_tags" => unique_tag_name("Elixir")
     })
 
     rendered = formats_for("/jobs")

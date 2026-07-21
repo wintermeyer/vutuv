@@ -11,6 +11,12 @@ defmodule Vutuv.Posts.PostSearchTest do
 
   alias Vutuv.Posts
 
+  # Per-module unique tag names so async files never share a tags.slug lock
+  # (see the test guidelines in .claude/rules/elixir.md).
+  ps_mod_id = :erlang.phash2(__MODULE__, 4_294_967_296)
+  @elixir_tag "elixir-#{ps_mod_id}"
+  @ruby_tag "ruby-#{ps_mod_id}"
+
   defp author(attrs \\ []), do: insert(:activated_user, attrs)
 
   test "finds public posts by body words, any order, author preloaded" do
@@ -85,22 +91,22 @@ defmodule Vutuv.Posts.PostSearchTest do
   describe "tag: filter (issue #946)" do
     test "a bare tag filter lists posts carrying that tag, newest first" do
       a = author()
-      older = create_post!(a, %{body: "First elixir note", tags: "elixir"})
-      newer = create_post!(a, %{body: "Second elixir note", tags: "elixir"})
-      _other = create_post!(a, %{body: "A ruby note", tags: "ruby"})
+      older = create_post!(a, %{body: "First elixir note", tags: @elixir_tag})
+      newer = create_post!(a, %{body: "Second elixir note", tags: @elixir_tag})
+      _other = create_post!(a, %{body: "A ruby note", tags: @ruby_tag})
 
       # Empty body + a tag: filter is a pure tag listing.
-      ids = Posts.search_public("", tag: "elixir") |> Enum.map(& &1.id)
+      ids = Posts.search_public("", tag: @elixir_tag) |> Enum.map(& &1.id)
       assert ids == [newer.id, older.id]
     end
 
     test "combines with body words (AND)" do
       a = author()
-      match = create_post!(a, %{body: "Koblenz elixir meetup", tags: "elixir"})
-      _wrong_body = create_post!(a, %{body: "Berlin elixir meetup", tags: "elixir"})
-      _wrong_tag = create_post!(a, %{body: "Koblenz ruby meetup", tags: "ruby"})
+      match = create_post!(a, %{body: "Koblenz elixir meetup", tags: @elixir_tag})
+      _wrong_body = create_post!(a, %{body: "Berlin elixir meetup", tags: @elixir_tag})
+      _wrong_tag = create_post!(a, %{body: "Koblenz ruby meetup", tags: @ruby_tag})
 
-      assert [found] = Posts.search_public("koblenz", tag: "elixir")
+      assert [found] = Posts.search_public("koblenz", tag: @elixir_tag)
       assert found.id == match.id
     end
 
@@ -120,11 +126,11 @@ defmodule Vutuv.Posts.PostSearchTest do
 
       create_post!(a, %{
         body: "elixir for followers",
-        tags: "elixir",
+        tags: @elixir_tag,
         denials: [%{"wildcard" => "non_followers"}]
       })
 
-      assert Posts.search_public("", tag: "elixir") == []
+      assert Posts.search_public("", tag: @elixir_tag) == []
     end
   end
 end

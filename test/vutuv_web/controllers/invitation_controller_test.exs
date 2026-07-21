@@ -157,7 +157,7 @@ defmodule VutuvWeb.InvitationControllerTest do
       params = %{
         "emails" => %{"0" => %{"value" => "invitee@example.com"}},
         "first_name" => "Invited",
-        "tag_list" => "alpha-tag beta-tag gamma-tag"
+        "tag_list" => @registration_tags
       }
 
       conn = post(conn, ~p"/new_registration", user: params)

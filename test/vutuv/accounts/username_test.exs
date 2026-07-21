@@ -141,12 +141,13 @@ defmodule Vutuv.Accounts.SlugTest do
       # register_user/2 generates the handle from the name; "Tags" slugifies to
       # the reserved word "tags" and must come out suffixed, not rejected.
       conn = %Plug.Conn{assigns: %{locale: "en"}}
+      n = System.unique_integer([:positive])
 
       {:ok, user} =
         Vutuv.Accounts.register_user(conn, %{
           "first_name" => "Tags",
           "emails" => %{"0" => %{"value" => "tags@example.com"}},
-          "tag_list" => "Elixir Cooking Origami"
+          "tag_list" => "Elixir#{n} Cooking#{n} Origami#{n}"
         })
 
       assert user.username =~ ~r/^tags_[0-9a-f]{8}$/
