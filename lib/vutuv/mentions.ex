@@ -24,6 +24,17 @@ defmodule Vutuv.Mentions do
   handle and a `#hashtag` are never touched by any function here, and a handle
   inside a code span/block is sample text, not a mention (matching what the
   renderer links).
+
+  These functions read the raw Markdown **source**. The Milkdown WYSIWYG editor
+  serializes `@ulrich_wolf` as `@ulrich\\_wolf` (remark escapes the `_`, a
+  Markdown emphasis char). `Earmark` undoes that escape before `VutuvWeb.Markdown`
+  links the mention, so a post *renders* correctly — but on the source the stray
+  backslash would truncate the handle to `@ulrich`, which is what made the
+  mention-existence validation reject a real member (issue: the composer error
+  "the handle @ulrich does not exist"). Detection here therefore sees through the
+  escape (`scan_handles/1`); the editor now also stores the bare handle
+  (`assets/js/markdown_editor.js` `canonicalizeMentions`, backfilled by the
+  `RepairMilkdownEscapedMentions` migration), so the source stays canonical too.
   """
 
   import Ecto.Query
@@ -303,8 +314,21 @@ defmodule Vutuv.Mentions do
 
   defp scan_handles(chunk) do
     @entity
-    |> Regex.scan(chunk, capture: :all_but_first)
+    |> Regex.scan(unescape_handle_chars(chunk), capture: :all_but_first)
     |> Enum.flat_map(&handle_of/1)
+  end
+
+  # Drops a Markdown escape backslash before a handle character so source
+  # detection matches what the renderer links (see the moduledoc). Scoped to a
+  # `\` that escapes a word char — the only escape Milkdown emits *inside* a
+  # handle is `\_` (`_` being both a handle char and a Markdown emphasis char) —
+  # so it can never turn a `\@` / `\#` into a new entity, and an intended-literal
+  # `\_foo` in prose carries no `@`/`#`, so un-escaping it changes no handle. The
+  # substring guard keeps the common (no-backslash) body off the regex.
+  defp unescape_handle_chars(chunk) do
+    if String.contains?(chunk, "\\"),
+      do: Regex.replace(~r/\\([A-Za-z0-9_])/, chunk, "\\1"),
+      else: chunk
   end
 
   # `Regex.scan` truncates trailing unmatched groups, so a hit's length says

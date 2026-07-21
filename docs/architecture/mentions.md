@@ -40,6 +40,15 @@ block everyone, forever.
 
 - Detection skips code spans/blocks, emails and fediverse handles, and matches
   whole handles (so `@old` is not found inside `@older`).
+- Detection **sees through a Markdown escape** inside a handle. The Milkdown
+  WYSIWYG editor serializes `@ulrich_wolf` as `@ulrich\_wolf` (remark escapes the
+  `_`, a Markdown emphasis char). Earmark undoes that before the renderer links
+  the mention, so a post renders fine — but `Vutuv.Mentions` reads the raw
+  **source**, where the stray backslash used to truncate the handle to the
+  non-existent `@ulrich` and reject a real member. `unescape_handle_chars/1`
+  drops the escape before scanning; the editor also stores the bare handle
+  (`assets/js/markdown_editor.js` `canonicalizeMentions`, backfilled by the
+  `RepairMilkdownEscapedMentions` migration), so the source stays canonical too.
 - The check runs only when the field actually **changed**; editing an old body
   with a since-dead mention is not forced to clean up unless you touch it.
 - The bulk **LinkedIn import** carries arbitrary external prose ("Managed the

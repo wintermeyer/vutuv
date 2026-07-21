@@ -36,6 +36,21 @@ defmodule Vutuv.MentionExistenceTest do
     test "a fediverse @user@host handle needs no local account" do
       assert Post.changeset(%Post{}, %{body: "boost @bob@geno.social"}).valid?
     end
+
+    # The Milkdown editor serializes `@ulrich_wolf` as `@ulrich\_wolf`; the
+    # backslash truncated detection to the non-existent `@ulrich`, so a post
+    # mentioning a real member with an underscore in their handle was rejected.
+    test "accepts a Milkdown-escaped mention (@name\\_x) of an existing member" do
+      insert(:user, username: "ulrich_wolf")
+      assert Post.changeset(%Post{}, %{body: "mit @ulrich\\_wolf gesprochen"}).valid?
+    end
+
+    test "still rejects a Milkdown-escaped mention of a handle nobody holds" do
+      changeset = Post.changeset(%Post{}, %{body: "hi @ghost\\_user"})
+      refute changeset.valid?
+      assert %{body: [message]} = errors_on(changeset)
+      assert message =~ "@ghost_user"
+    end
   end
 
   describe "Message.changeset" do

@@ -35,6 +35,29 @@ defmodule Vutuv.MentionsTest do
     test "nil / non-binary is empty" do
       assert Mentions.local_handles(nil) == []
     end
+
+    # The Milkdown WYSIWYG editor serializes `@ulrich_wolf` as `@ulrich\_wolf`
+    # (remark escapes the `_`, a Markdown emphasis char). Earmark undoes that
+    # before the renderer links the mention, but this module reads the raw
+    # Markdown source, where the stray backslash used to truncate the handle to
+    # `@ulrich` — the "@ulrich does not exist" the composer reported.
+    test "sees through a Markdown-escaped underscore in a handle" do
+      assert Mentions.local_handles("mit @ulrich\\_wolf gesprochen") == ["ulrich_wolf"]
+    end
+
+    test "sees through several escaped underscores in one handle" do
+      assert Mentions.local_handles("@a\\_b\\_c") == ["a_b_c"]
+    end
+
+    test "an escaped and a bare form of the same handle de-duplicate" do
+      assert Mentions.local_handles("@ulrich\\_wolf and @ulrich_wolf") == ["ulrich_wolf"]
+    end
+
+    test "a stray backslash does not invent a mention where the @ is escaped away" do
+      # `\@handle` still resolves to the handle (the grammar ignores the escape
+      # of the `@` itself, matching the renderer), but a lone `\_foo` is not one.
+      assert Mentions.local_handles("plain \\_foo\\_ prose") == []
+    end
   end
 
   describe "mentions?/2" do
