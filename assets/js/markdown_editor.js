@@ -336,7 +336,7 @@ export const MarkdownEditor = {
       .map((part, i) =>
         i % 2 === 1
           ? part
-          : this.canonicalizeUrls(part)
+          : this.canonicalizeMentions(this.canonicalizeUrls(part))
               .replace(/<br\s*\/?>/gi, "")
               .replace(/\n{3,}/g, "\n\n")
       )
@@ -370,6 +370,24 @@ export const MarkdownEditor = {
       .replace(/[a-z][a-z0-9+.-]*\\?:\/\/[^\s<>]*/gi, (url) =>
         url.replace(/\\(.)/g, "$1")
       )
+  },
+
+  // vutuv stores **bare** `@handle` / `#hashtag` mentions and links them
+  // server-side (VutuvWeb.Markdown / Vutuv.Mentions read the raw source). But
+  // Milkdown serializes a handle with an underscore escaped — `@ulrich_wolf` as
+  // `@ulrich\_wolf`, `#foo_bar` as `#foo\_bar` — because `_` is a Markdown
+  // emphasis char. On the source that stray backslash truncates the handle (the
+  // mention-existence check reported "@ulrich does not exist"). Drop the escape
+  // backslashes **inside a mention run only** so the stored handle is bare;
+  // scoped to the run, an intended-literal `\_foo\_` in free prose keeps its
+  // escapes and never turns into emphasis. Mirrors Vutuv.Mentions' source-side
+  // un-escape and the RepairMilkdownEscapedMentions backfill.
+  canonicalizeMentions(md) {
+    return md.replace(
+      /(?<![\w@#/&])([@#])((?:[A-Za-z0-9]|\\_)+)/g,
+      (whole, sigil, handle) =>
+        handle.includes("\\_") ? sigil + handle.replace(/\\_/g, "_") : whole
+    )
   },
 
   setEditorMarkdown(markdown) {
