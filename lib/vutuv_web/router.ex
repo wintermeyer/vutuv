@@ -630,7 +630,7 @@ defmodule VutuvWeb.Router do
     # The profile sections, same doc shape as the public .json pages (the
     # email list is viewer-aware). Which section a route means travels in
     # the route assigns.
-    for section <- ~w(work_experiences links social_media_accounts addresses
+    for section <- ~w(work_experiences links social_media_accounts messengers addresses
                       phone_numbers emails tags languages qualifications)a do
       get("/users/:slug/#{section}", SectionController, :index,
         assigns: %{section: section, api_scope: "profile:read"}
@@ -639,7 +639,7 @@ defmodule VutuvWeb.Router do
 
     # Writes on the authorized user's own sections. No email routes (an
     # address is a PIN-verified identity); tags go through TagController.
-    for section <- ~w(work_experiences links social_media_accounts addresses
+    for section <- ~w(work_experiences links social_media_accounts messengers addresses
                       phone_numbers languages qualifications)a do
       post("/me/#{section}", SectionController, :create,
         assigns: %{section: section, api_scope: "profile:write"}
@@ -895,6 +895,13 @@ defmodule VutuvWeb.Router do
       as: :settings_social_media_account
     )
 
+    get("/messengers", MessengerController, :manage)
+
+    resources("/messengers", MessengerController,
+      only: [:new, :create, :edit, :update, :delete],
+      as: :settings_messenger
+    )
+
     # Pin one work experience as the profile job title, or clear back to the
     # automatic heuristic (issue #833).
     put("/work_experiences/:id/pin", WorkExperienceController, :pin)
@@ -1002,6 +1009,7 @@ defmodule VutuvWeb.Router do
       resources("/phone_numbers", PhoneNumberController, only: [:index, :show])
       resources("/links", UrlController, only: [:index, :show])
       resources("/social_media_accounts", SocialMediaAccountController, only: [:index, :show])
+      resources("/messengers", MessengerController, only: [:index, :show])
       resources("/work_experiences", WorkExperienceController, only: [:index, :show])
       resources("/educations", EducationController, only: [:index, :show])
       resources("/languages", LanguageController, only: [:index, :show])

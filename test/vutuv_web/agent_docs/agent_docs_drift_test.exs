@@ -100,6 +100,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     insert(:phone_number, user: user, value: "+49 30 5550100", number_type: "Cell")
     insert(:address, user: user, description: "Office", city: "Berlin", zip_code: "10115")
     insert(:social_media_account, user: user, provider: "GitHub", value: "gretagradient")
+    insert(:messenger, user: user, provider: "Telegram", value: "gretachats")
 
     tag_name = unique_tag_name("Bridgebuilding")
     tag = insert(:tag, name: tag_name, slug: String.downcase(tag_name))
@@ -167,10 +168,13 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       # in every format (the profile card's meta line, md/txt, JSON/XML)
       "Chartered Structural Engineer",
       "IStructE",
-      # links / contact / social / phone / address
+      # links / contact / social / messengers / phone / address
       "bridges.example.org",
       "greta.public@example.com",
       "github.com/gretagradient",
+      # the messenger's handle and its click-to-chat deep link (issue #949)
+      "gretachats",
+      "t.me/gretachats",
       "+49 30 5550100",
       "Berlin",
       # general info
@@ -300,6 +304,8 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert body =~ "EMAIL;TYPE=Work:greta.public@example.com"
     assert body =~ "Berlin"
     assert body =~ "URL:"
+    # The online messenger (issue #949) rides as an IMPP line with its deep link.
+    assert body =~ "IMPP;TYPE=telegram:https://t.me/gretachats"
   end
 
   test "post permalink: body, author, replies and engagement in every format", %{post: post} do
@@ -483,6 +489,7 @@ defmodule VutuvWeb.AgentDocsDriftTest do
       qualifications: ["Chartered Structural Engineer", "IStructE"],
       links: ["bridges.example.org", "Bridge blog"],
       social_media_accounts: ["github.com/gretagradient"],
+      messengers: ["gretachats", "t.me/gretachats"],
       addresses: ["Berlin", "10115"],
       phone_numbers: ["+49 30 5550100"],
       emails: ["greta.public@example.com"],

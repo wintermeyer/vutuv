@@ -232,6 +232,7 @@ defmodule Vutuv.Accounts.User do
     has_many(:work_experiences, Vutuv.Profiles.WorkExperience)
     has_many(:educations, Vutuv.Profiles.Education)
     has_many(:social_media_accounts, Vutuv.Profiles.SocialMediaAccount)
+    has_many(:messengers, Vutuv.Profiles.Messenger)
     has_many(:languages, Vutuv.Profiles.Language)
     has_many(:qualifications, Vutuv.Profiles.Qualification)
 

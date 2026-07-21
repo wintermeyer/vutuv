@@ -1,0 +1,26 @@
+<div class="card__tablewrap">
+<table>
+  <thead>
+    <tr>
+      <th><%= gettext "Messenger" %></th>
+      <th><%= gettext "Contact" %></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    <%= for messenger <- @messengers do %>
+    <tr>
+      <td><%= messenger.provider %></td>
+      <td><%= Vutuv.Profiles.Messenger.messenger_link messenger %></td>
+      <td class="text-right">
+        <.row_actions
+          :if={@as_owner?}
+          edit_to={~p"/settings/messengers/#{messenger}/edit"}
+          delete_to={~p"/settings/messengers/#{messenger}"}
+        />
+      </td>
+    </tr>
+<% end %>
+  </tbody>
+</table>
+</div>

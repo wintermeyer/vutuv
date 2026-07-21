@@ -1,0 +1,23 @@
+<.page_header
+  title={"#{@messenger.provider}: #{Vutuv.Profiles.Messenger.display(@messenger)}"}
+  crumbs={[
+    gettext("Users"),
+    {full_name(@user), ~p"/#{@user}"},
+    {gettext("Messengers"), ~p"/#{@user}/messengers"},
+    @messenger.provider
+  ]}
+/>
+
+<.card_section>
+  <.row_actions
+    :if={same_user?(@user, @current_user)}
+    class="mb-4"
+    edit_to={~p"/settings/messengers/#{@messenger}/edit"}
+    delete_to={~p"/settings/messengers/#{@messenger}"}
+  />
+
+  <h2 class="card__label"><%= gettext("Messenger") %></h2>
+  <p><%= @messenger.provider %></p>
+  <h2 class="card__label"><%= gettext("Contact") %></h2>
+  <p><%= Vutuv.Profiles.Messenger.messenger_link(@messenger) %></p>
+</.card_section>

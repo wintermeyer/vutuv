@@ -13706,3 +13706,58 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "word start: also finds Entwickler, Entwicklung"
 msgstr ""
+
+#: lib/vutuv_web/templates/messenger/form_content.html.heex:16
+#, elixir-autogen, elixir-format
+msgid "Signal and WhatsApp accept a phone number or a username; the other messengers use their own id or handle (e.g. an 8-character Threema ID or a Matrix @you:matrix.org)."
+msgstr ""
+
+#: lib/vutuv_web/templates/messenger/manage.html.heex:11
+#: lib/vutuv_web/templates/user/show.html.heex:996
+#, elixir-autogen, elixir-format
+msgid "Add a messenger"
+msgstr ""
+
+#: lib/vutuv_web/templates/messenger/form_content.html.heex:5
+#: lib/vutuv_web/templates/messenger/show.html.heex:16
+#, elixir-autogen, elixir-format
+msgid "Messenger"
+msgstr ""
+
+#: lib/vutuv_web/controllers/messenger_controller.ex:58
+#, elixir-autogen, elixir-format
+msgid "Messenger created successfully."
+msgstr ""
+
+#: lib/vutuv_web/controllers/messenger_controller.ex:107
+#, elixir-autogen, elixir-format
+msgid "Messenger deleted successfully."
+msgstr ""
+
+#: lib/vutuv_web/controllers/messenger_controller.ex:99
+#, elixir-autogen, elixir-format
+msgid "Messenger updated successfully."
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:2851
+#: lib/vutuv_web/controllers/messenger_controller.ex:22
+#: lib/vutuv_web/templates/messenger/index.html.heex:11
+#: lib/vutuv_web/templates/user/show.html.heex:993
+#, elixir-autogen, elixir-format
+msgid "Messengers"
+msgstr ""
+
+#: lib/vutuv_web/templates/messenger/index.html.heex:6
+#, elixir-autogen, elixir-format
+msgid "Messengers of "
+msgstr ""
+
+#: lib/vutuv_web/agent_docs/section_docs.ex:100
+#, elixir-autogen, elixir-format
+msgid "Messengers of %{name}"
+msgstr ""
+
+#: lib/vutuv_web/templates/messenger/form_content.html.heex:7
+#, elixir-autogen, elixir-format
+msgid "Select a messenger"
+msgstr ""

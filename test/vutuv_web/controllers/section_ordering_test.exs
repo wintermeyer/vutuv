@@ -12,6 +12,7 @@ defmodule VutuvWeb.SectionOrderingTest do
 
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Language
+  alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.SocialMediaAccount
 
@@ -21,11 +22,13 @@ defmodule VutuvWeb.SectionOrderingTest do
       insert(:phone_number, user: owner)
       insert(:address, user: owner)
       insert(:social_media_account, user: owner)
+      insert(:messenger, user: owner)
       insert(:email, user: owner)
       insert(:url, user: owner)
       insert(:language, user: owner)
 
-      for section <- ~w(phone_numbers addresses social_media_accounts emails links languages) do
+      for section <-
+            ~w(phone_numbers addresses social_media_accounts messengers emails links languages) do
         html = conn |> get("/settings/#{section}") |> html_response(200)
 
         assert html =~ ~s(phx-hook="Reorder"),
@@ -125,6 +128,21 @@ defmodule VutuvWeb.SectionOrderingTest do
       )
 
       assert Repo.all(SocialMediaAccount.ordered(Ecto.assoc(user, :social_media_accounts)))
+             |> Enum.map(& &1.position) == [1, 2]
+    end
+
+    test "messengers (issue #949)", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      post(conn, ~p"/settings/messengers",
+        messenger: %{"provider" => "Telegram", "value" => "ada_lovelace"}
+      )
+
+      post(conn, ~p"/settings/messengers",
+        messenger: %{"provider" => "WhatsApp", "value" => "0261-123456"}
+      )
+
+      assert Repo.all(Messenger.ordered(Ecto.assoc(user, :messengers)))
              |> Enum.map(& &1.position) == [1, 2]
     end
 

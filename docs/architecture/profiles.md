@@ -378,19 +378,48 @@ On`/`Finished On`/`License Number`/`Url` to qualification fields, imports
 everything as a certification (LinkedIn carries no licence/cert signal; the
 preview tells the member to review), and dedups by name + issuer on re-import.
 
+## Online messengers profile section
+
+Members list the online messengers they can be reached on (`Vutuv.Profiles.Messenger`,
+issue #949): Signal, WhatsApp, Telegram, Threema, Matrix and Session. This is a
+distinct resource from social media accounts, because a messenger contact is a
+direct line to reach someone, not a public profile to browse, and its address is
+usually **not** a phone number.
+
+Each entry is a `provider` + `value`. The provider knows the shape of its value
+and how to turn it into a **deep link** that opens the app straight at that
+contact (`Messenger.url/1`): `wa.me/<digits>`, `signal.me/#p/<+E164>`,
+`t.me/<name>`, `threema.id/<id>`, `matrix.to/#/<@user:server>`.
+
+**Signal and WhatsApp accept either a phone number or a username** (both services
+offer usernames now). A phone-shaped value (letter-free) is validated and
+canonicalised through the very same `Vutuv.Phone` validator the phone-numbers
+section uses, so a typed number becomes `+country` format and junk is rejected; a
+username (it always contains a letter) is kept as typed, so a valid handle is
+never wrongly rejected as "not a phone number". A phone value gets the
+`wa.me`/`signal.me` deep link; a Signal/WhatsApp username has no public web
+resolver, so it shows the bare handle (copyable), the same as Session. The other
+providers carry a service-specific id/username with its own format check.
+
+Like the other sections it has a Messengers card on the profile, owner CRUD on
+`/settings/messengers` (public showcase at `/:slug/messengers`), an ordered
+`position` (see below), agent-format siblings (`SectionDocs.messenger_entry/1`,
+kept in sync by the agent-docs drift test) carrying the deep link, `IMPP` lines
+on the vCard (RFC 4770), and an `/api/2.0` read+write section.
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts,
-email addresses and languages in the order they want instead of by creation date
-(a nullable `position` column per table, backfilled in creation order — except
-languages, backfilled in their old proficiency order; the shared `Vutuv.Ordering`
-context owns the bookkeeping). For languages the order additionally **means
-preference** (issue #894, the first is the preferred contact language); for the
-others it is purely presentational.
+messengers, email addresses and languages in the order they want instead of by
+creation date (a nullable `position` column per table, backfilled in creation
+order — except languages, backfilled in their old proficiency order; the shared
+`Vutuv.Ordering` context owns the bookkeeping). For languages the order
+additionally **means preference** (issue #894, the first is the preferred contact
+language); for the others it is purely presentational.
 
 Each management page (`/settings/links`, `/phone_numbers`, `/addresses`,
-`/social_media_accounts`, `/emails`, `/languages`) carries an owner-only ordering
-tool, the embedded `VutuvWeb.SectionReorderLive` (rendered with `live_render`,
+`/social_media_accounts`, `/messengers`, `/emails`, `/languages`) carries an
+owner-only ordering tool, the embedded `VutuvWeb.SectionReorderLive` (rendered with `live_render`,
 like the app shell): drag an entry by its handle, or use the per-row up/down
 arrows. Most sections key their per-row edit/delete routes on the row id;
 languages address entries by their ISO code (`Phoenix.Param`), which is why

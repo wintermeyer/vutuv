@@ -22,6 +22,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
   alias Vutuv.Profiles.{
     Address,
     Language,
+    Messenger,
     PhoneNumber,
     Qualification,
     SocialMediaAccount,
@@ -40,6 +41,7 @@ defmodule VutuvWeb.ApiV2.SectionController do
     work_experiences: %{assoc: :work_experiences, schema: WorkExperience},
     links: %{assoc: :urls, schema: Url},
     social_media_accounts: %{assoc: :social_media_accounts, schema: SocialMediaAccount},
+    messengers: %{assoc: :messengers, schema: Messenger},
     addresses: %{assoc: :addresses, schema: Address},
     phone_numbers: %{assoc: :phone_numbers, schema: PhoneNumber},
     languages: %{assoc: :languages, schema: Language},

@@ -12,6 +12,9 @@ defmodule VutuvWeb.AgentDocs.VCard do
   and their social media accounts (`doc.social_media`), which ride in
   `X-SOCIALPROFILE;type=<provider>` lines (the Apple/macOS-Contacts extension
   clients understand), one per account rather than the former Twitter-only line.
+
+  Online messengers (`doc.messengers`, issue #949) ride in `IMPP;TYPE=<provider>`
+  lines (RFC 4770), one per messenger, carrying the deep link that opens a chat.
   """
 
   def render(%{type: "profile"} = doc) do
@@ -43,6 +46,7 @@ defmodule VutuvWeb.AgentDocs.VCard do
         "EMAIL;TYPE=" <> sanitize(email.type) <> ":" <> sanitize(email.value) <> "\n"
       end) <>
       social_profiles(doc) <>
+      messengers(doc) <>
       "REV:#{timestamp(doc)}Z\nEND:VCARD"
   end
 
@@ -136,6 +140,16 @@ defmodule VutuvWeb.AgentDocs.VCard do
   defp social_profiles(doc) do
     Enum.map_join(doc.social_media, "", fn account ->
       "X-SOCIALPROFILE;type=#{String.downcase(account.provider)}:#{uri(account.url)}\n"
+    end)
+  end
+
+  # Every online messenger (issue #949) as an IMPP line (RFC 4770), typed by its
+  # lowercased provider. The value is the deep link where the provider has one,
+  # else the bare contact (Session has no public web resolver).
+  defp messengers(doc) do
+    Enum.map_join(doc.messengers, "", fn messenger ->
+      target = if messenger.url == "", do: messenger.contact, else: messenger.url
+      "IMPP;TYPE=#{String.downcase(messenger.provider)}:#{uri(target)}\n"
     end)
   end
 

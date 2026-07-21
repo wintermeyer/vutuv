@@ -977,6 +977,7 @@ defmodule Vutuv.Accounts do
       {Vutuv.Profiles.Language, "languages"},
       {Vutuv.Profiles.Url, "urls"},
       {Vutuv.Profiles.SocialMediaAccount, "social_media_accounts"},
+      {Vutuv.Profiles.Messenger, "messengers"},
       {Email, "emails"},
       {Vutuv.Profiles.PhoneNumber, "phone_numbers"},
       {Vutuv.Profiles.Address, "addresses"},

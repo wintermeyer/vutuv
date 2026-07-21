@@ -39,6 +39,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       phone = insert(:phone_number, user: user)
       address = insert(:address, user: user)
       social = insert(:social_media_account, user: user)
+      messenger = insert(:messenger, user: user)
       insert(:search_term, user: user)
 
       %{
@@ -50,7 +51,8 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
         url: url,
         phone: phone,
         address: address,
-        social: social
+        social: social,
+        messenger: messenger
       }
     end
 
@@ -67,6 +69,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/#{user}/phone_numbers")
       renders(conn, ~p"/#{user}/links")
       renders(conn, ~p"/#{user}/social_media_accounts")
+      renders(conn, ~p"/#{user}/messengers")
       renders(conn, ~p"/#{user}/work_experiences")
       renders(conn, ~p"/#{user}/addresses")
     end
@@ -77,6 +80,7 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       renders(conn, ~p"/settings/phone_numbers/new")
       renders(conn, ~p"/settings/links/new")
       renders(conn, ~p"/settings/social_media_accounts/new")
+      renders(conn, ~p"/settings/messengers/new")
       renders(conn, ~p"/settings/work_experiences/new")
       renders(conn, ~p"/settings/addresses/new")
     end
@@ -88,13 +92,15 @@ defmodule VutuvWeb.AuthenticatedPagesTest do
       phone: phone,
       url: url,
       address: address,
-      social: social
+      social: social,
+      messenger: messenger
     } do
       renders(conn, ~p"/settings/emails/#{email}/edit")
       renders(conn, ~p"/settings/phone_numbers/#{phone}/edit")
       renders(conn, ~p"/settings/links/#{url}/edit")
       renders(conn, ~p"/settings/addresses/#{address}/edit")
       renders(conn, ~p"/settings/social_media_accounts/#{social}/edit")
+      renders(conn, ~p"/settings/messengers/#{messenger}/edit")
     end
 
     test "public listing and global tag pages render", %{conn: conn, tag: tag} do

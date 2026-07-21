@@ -1,0 +1,9 @@
+<.page_header crumbs={[
+  {gettext("Settings"), ~p"/settings"},
+  {gettext("Messengers"), ~p"/settings/messengers"},
+  gettext("New")
+]} />
+
+<.card_section>
+  <%= render "form_content.html", backlink: ~p"/settings/messengers", changeset: @changeset, action: ~p"/settings/messengers" %>
+</.card_section>

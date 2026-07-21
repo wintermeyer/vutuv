@@ -16,6 +16,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
   alias Vutuv.Profiles.Address
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Language
+  alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.PhoneNumber
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.SocialMediaAccount
@@ -133,6 +134,9 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # disconnected HTML nor these documents include them — the formats stay
       # consistent.
       social_media: Enum.map(user.social_media_accounts, &SectionDocs.social_entry/1),
+      # The online messengers (issue #949), each with its deep link so an agent
+      # can hand a human a one-click "start a chat" target.
+      messengers: Enum.map(user.messengers, &SectionDocs.messenger_entry/1),
       # The "Code" card's cached forge statistics (Vutuv.CodeStats). Unlike
       # the inline social posts these are stored snapshots rendered into the
       # crawler-visible HTML, so the docs carry them too. Empty when the
@@ -179,6 +183,7 @@ defmodule VutuvWeb.AgentDocs.ProfileDoc do
       # The owner's chosen order (see Vutuv.Ordering), so the profile's agent
       # documents list these contact sections the same way the HTML pages do.
       phone_numbers: PhoneNumber.ordered(),
+      messengers: Messenger.ordered(),
       urls: Url.ordered(),
       addresses: Address.ordered()
     )

@@ -155,6 +155,13 @@ defmodule Vutuv.Factory do
     }
   end
 
+  def messenger_factory do
+    %Vutuv.Profiles.Messenger{
+      provider: "Telegram",
+      value: sequence(:messenger_value, &"user#{&1}")
+    }
+  end
+
   def url_factory do
     %Vutuv.Profiles.Url{
       value: "http://example.org/",

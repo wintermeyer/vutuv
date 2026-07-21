@@ -53,6 +53,10 @@ defmodule VutuvWeb.AgentDocs.Markdown do
         gettext("Profiles"),
         Enum.map(doc.social_media, &entry_line("social_media_accounts", &1))
       ),
+      section(
+        gettext("Messengers"),
+        Enum.map(doc.messengers, &entry_line("messengers", &1))
+      ),
       section(gettext("Code"), Enum.map(doc.code_stats, &code_stats_block/1)),
       section(
         gettext("Phone Numbers"),
@@ -448,6 +452,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("links", link), do: link_line(link)
   defp entry_line("emails", email), do: "- #{email.type}: <#{email.value}>"
   defp entry_line("social_media_accounts", account), do: social_line(account)
+  defp entry_line("messengers", messenger), do: messenger_line(messenger)
   defp entry_line("phone_numbers", phone), do: "- #{phone.type}: #{phone.value}"
   defp entry_line("addresses", address), do: "- " <> address_line(address)
 
@@ -658,6 +663,15 @@ defmodule VutuvWeb.AgentDocs.Markdown do
     do: "- [#{provider}](#{md_url(url)})"
 
   defp social_line(%{provider: provider, url: value}), do: "- #{provider}: #{value}"
+
+  # A messenger: the provider, its contact (a phone number or handle), and the
+  # deep link that opens the app at that contact. Session has no web link, so it
+  # shows the bare contact.
+  defp messenger_line(%{provider: provider, contact: contact, url: "http" <> _ = url}),
+    do: "- #{provider}: [#{contact}](#{md_url(url)})"
+
+  defp messenger_line(%{provider: provider, contact: contact}),
+    do: "- #{provider}: #{contact}"
 
   @doc false
   def address_line(address) do

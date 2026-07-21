@@ -6,10 +6,10 @@ defmodule VutuvWeb.SectionReorderLive do
   template gates the `live_render` on `@as_owner?` — so visitors and the "View
   as" preview keep the read-only `card_list`.
 
-  One LiveView serves all six orderable sections (phone numbers, addresses,
-  social media accounts, email addresses, links and languages — where the order
-  additionally means preference, the first language being the member's preferred
-  contact language, issue #894); the `section` (the URL segment) and the owner's
+  One LiveView serves all orderable sections (phone numbers, addresses, social
+  media accounts, messengers, email addresses, links and languages — where the
+  order additionally means preference, the first language being the member's
+  preferred contact language, issue #894); the `section` (the URL segment) and the owner's
   `slug` arrive in the embedded session, the
   authenticated owner in the raw browser session's `user_id` (merged under the
   curated session by `Phoenix.LiveView.Static`, exactly like `ShellLive`). Every
@@ -42,6 +42,7 @@ defmodule VutuvWeb.SectionReorderLive do
 
   import VutuvWeb.UserHelpers, only: [format_address: 2]
 
+  alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.SocialMediaAccount
   alias Vutuv.Repo
 
@@ -50,6 +51,7 @@ defmodule VutuvWeb.SectionReorderLive do
     "phone_numbers" => Vutuv.Profiles.PhoneNumber,
     "addresses" => Vutuv.Profiles.Address,
     "social_media_accounts" => Vutuv.Profiles.SocialMediaAccount,
+    "messengers" => Vutuv.Profiles.Messenger,
     "emails" => Vutuv.Accounts.Email,
     "links" => Vutuv.Profiles.Url,
     "languages" => Vutuv.Profiles.Language
@@ -220,6 +222,15 @@ defmodule VutuvWeb.SectionReorderLive do
     """
   end
 
+  defp entry_body(%{section: "messengers"} = assigns) do
+    ~H"""
+    <div class="reorder__text">
+      <div class="reorder__title">{@entry.provider}</div>
+      <div class="reorder__sub">{Messenger.messenger_link(@entry)}</div>
+    </div>
+    """
+  end
+
   defp entry_body(%{section: "emails"} = assigns) do
     ~H"""
     <div class="reorder__text">
@@ -297,6 +308,7 @@ defmodule VutuvWeb.SectionReorderLive do
   defp edit_path("social_media_accounts", entry),
     do: ~p"/settings/social_media_accounts/#{entry}/edit"
 
+  defp edit_path("messengers", entry), do: ~p"/settings/messengers/#{entry}/edit"
   defp edit_path("emails", entry), do: ~p"/settings/emails/#{entry}/edit"
   defp edit_path("languages", entry), do: ~p"/settings/languages/#{entry}/edit"
 
@@ -307,6 +319,7 @@ defmodule VutuvWeb.SectionReorderLive do
   defp entry_path("social_media_accounts", entry),
     do: ~p"/settings/social_media_accounts/#{entry}"
 
+  defp entry_path("messengers", entry), do: ~p"/settings/messengers/#{entry}"
   defp entry_path("emails", entry), do: ~p"/settings/emails/#{entry}"
   defp entry_path("languages", entry), do: ~p"/settings/languages/#{entry}"
 end
