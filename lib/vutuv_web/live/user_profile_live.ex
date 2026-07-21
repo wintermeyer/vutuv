@@ -307,23 +307,19 @@ defmodule VutuvWeb.UserProfileLive do
   # A fresh list (new identity) is what makes change tracking re-render the
   # `:for` over @posts; content barely differs, only the relative wording.
   def handle_info(:day_changed, socket) do
-    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
-
-    {:noreply, socket |> assign(:posts, posts) |> refresh_social_feed_stamps()}
+    {:noreply, socket |> reload_posts() |> refresh_social_feed_stamps()}
   end
 
   # A shown post's link screenshot finished capturing (fan-out reaches this page
   # over the profile owner's activity topic): re-fetch the posts so the card
   # gains its screenshot with no reload. A fresh list re-renders the `:for`.
   def handle_info({:post_screenshot_ready, _payload}, socket) do
-    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
-    {:noreply, assign(socket, :posts, posts)}
+    {:noreply, reload_posts(socket)}
   end
 
   # The owner removed a bad link screenshot: re-fetch so the card drops it.
   def handle_info({:post_screenshot_removed, _payload}, socket) do
-    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
-    {:noreply, assign(socket, :posts, posts)}
+    {:noreply, reload_posts(socket)}
   end
 
   # An AI image-moderation verdict landed for this profile's owner
@@ -360,8 +356,7 @@ defmodule VutuvWeb.UserProfileLive do
   end
 
   def handle_info({:image_moderation, "post_image", _subject_id, _verdict}, socket) do
-    posts = fetch_profile_posts(socket, socket.assigns.post_filter)
-    {:noreply, assign(socket, :posts, posts)}
+    {:noreply, reload_posts(socket)}
   end
 
   # The social feed cache answered a mount-time request (or a concurrent
@@ -530,6 +525,12 @@ defmodule VutuvWeb.UserProfileLive do
       type: Vutuv.Posts.normalize_post_filter(filter)
     )
   end
+
+  # Re-fetch the shown posts in the reader's current filter and re-assign them:
+  # the fresh list (new identity) re-renders the `:for` with no reload. Shared by
+  # the day-roll, screenshot and image-moderation handlers.
+  defp reload_posts(socket),
+    do: assign(socket, :posts, fetch_profile_posts(socket, socket.assigns.post_filter))
 
   # ── Initial load (ports UserController.show_html) ──
 

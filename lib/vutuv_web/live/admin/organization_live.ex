@@ -28,7 +28,7 @@ defmodule VutuvWeb.Admin.OrganizationLive do
   @impl true
   def handle_params(params, _uri, socket) do
     status = if params["status"] in @statuses, do: params["status"], else: "all"
-    q = blank_to_nil(params["q"])
+    q = Pages.blank_to_nil(params["q"])
     page = Pages.page_param(params)
 
     result =
@@ -156,13 +156,6 @@ defmodule VutuvWeb.Admin.OrganizationLive do
       |> Map.new()
 
     if query == %{}, do: ~p"/admin/organizations", else: ~p"/admin/organizations?#{query}"
-  end
-
-  defp blank_to_nil(value) do
-    case value && String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
   end
 
   defp status_chips, do: @statuses

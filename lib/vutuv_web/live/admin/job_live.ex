@@ -34,7 +34,7 @@ defmodule VutuvWeb.Admin.JobLive do
   def handle_params(params, _uri, socket) do
     status = if params["status"] in @statuses, do: params["status"], else: "all"
     report = if params["report"] == "open", do: "open", else: nil
-    q = blank_to_nil(params["q"])
+    q = Pages.blank_to_nil(params["q"])
     page = Pages.page_param(params)
 
     result =
@@ -150,13 +150,6 @@ defmodule VutuvWeb.Admin.JobLive do
       |> Map.new()
 
     if query == %{}, do: ~p"/admin/jobs", else: ~p"/admin/jobs?#{query}"
-  end
-
-  defp blank_to_nil(value) do
-    case value && String.trim(value) do
-      "" -> nil
-      trimmed -> trimmed
-    end
   end
 
   # ── status / labels ──

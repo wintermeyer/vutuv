@@ -46,6 +46,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
     |> assign(:effective_status, Jobs.effective_status(posting))
     |> assign(:engagement, Jobs.job_posting_engagement(posting, viewer))
     |> assign(:matching_tags, Jobs.matching_tag_slugs(posting, viewer))
+    |> assign(:location_line, location_line(posting))
   end
 
   @impl true
@@ -103,7 +104,7 @@ defmodule VutuvWeb.JobPostingLive.Show do
           <div class="flex flex-wrap gap-2">
             <.chip>{JobPosting.employment_type_label(@posting.employment_type)}</.chip>
             <.chip>{JobPosting.workplace_type_label(@posting.workplace_type)}</.chip>
-            <.chip :if={location_line(@posting)}>{location_line(@posting)}</.chip>
+            <.chip :if={@location_line}>{@location_line}</.chip>
           </div>
 
           <p class="text-lg font-semibold text-slate-900 dark:text-slate-100">
