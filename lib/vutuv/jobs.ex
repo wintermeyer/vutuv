@@ -42,6 +42,7 @@ defmodule Vutuv.Jobs do
   alias Vutuv.Jobs.JobPostingImage
   alias Vutuv.Jobs.JobPostingLike
   alias Vutuv.Jobs.JobPostingTag
+  alias Vutuv.Jobs.SearchQuery
   alias Vutuv.Moderation.Case
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Organizations
@@ -1062,19 +1063,27 @@ defmodule Vutuv.Jobs do
     |> filter_my_tags(filters[:my_tags?], viewer)
   end
 
-  # Postgres full-text over title + description (websearch grammar, like post
-  # search). An empty query is a no-op.
+  # Postgres full-text over title + description, with the board's own search
+  # grammar (issue #952: comma/`or` → OR between titles, `*` prefix wildcard,
+  # `"…"` phrase, `-` exclusion). `SearchQuery` sanitises the box into a safe
+  # `to_tsquery` string; a query with no searchable token is a no-op.
   defp filter_q(query, q) when is_binary(q) and q != "" do
-    where(
-      query,
-      [p],
-      fragment(
-        "to_tsvector('simple', coalesce(?,'') || ' ' || coalesce(?,'')) @@ websearch_to_tsquery('simple', ?)",
-        p.title,
-        p.description,
-        ^q
-      )
-    )
+    case SearchQuery.to_tsquery(q) do
+      nil ->
+        query
+
+      tsquery ->
+        where(
+          query,
+          [p],
+          fragment(
+            "to_tsvector('simple', coalesce(?,'') || ' ' || coalesce(?,'')) @@ to_tsquery('simple', ?)",
+            p.title,
+            p.description,
+            ^tsquery
+          )
+        )
+    end
   end
 
   defp filter_q(query, _q), do: query
