@@ -12842,6 +12842,16 @@ msgstr ""
 msgid "Matches my tags"
 msgstr ""
 
+#: lib/vutuv_web/live/job_board_live.ex:337
+#, elixir-autogen, elixir-format
+msgid "Min. salary/year (%{currency})"
+msgstr ""
+
+#: lib/vutuv_web/live/job_board_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "Minimum yearly salary"
+msgstr ""
+
 #: lib/vutuv_web/live/job_board_live.ex:238
 #: lib/vutuv_web/live/organization_live/show.ex:342
 #, elixir-autogen, elixir-format
