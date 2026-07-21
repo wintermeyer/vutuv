@@ -34,6 +34,33 @@ defmodule VutuvWeb.JobBoardLiveTest do
     refute html =~ "Java Developer"
   end
 
+  test "a comma OR search matches either title (issue #952)", %{conn: conn} do
+    poster = poster_fixture()
+    publish_job!(poster, %{"title" => "Elixir Engineer"})
+    publish_job!(poster, %{"title" => "Java Developer"})
+
+    {:ok, _view, html} = live(conn, ~p"/jobs?#{[q: "Elixir, Java"]}")
+
+    assert html =~ "Elixir Engineer"
+    assert html =~ "Java Developer"
+  end
+
+  test "a prefix wildcard search reaches word variants", %{conn: conn} do
+    poster = poster_fixture()
+    publish_job!(poster, %{"title" => "Elixir Engineer"})
+
+    {:ok, _view, html} = live(conn, ~p"/jobs?#{[q: "Engine*"]}")
+
+    assert html =~ "Elixir Engineer"
+  end
+
+  test "the search-tips help is on the board", %{conn: conn} do
+    {:ok, view, _html} = live(conn, ~p"/jobs")
+
+    assert has_element?(view, "details summary", "Search tips")
+    assert render(view) =~ "Webentwickler, PHP-Entwickler"
+  end
+
   test "shows an empty state with no postings", %{conn: conn} do
     {:ok, _view, html} = live(conn, ~p"/jobs")
     assert html =~ "No job postings yet"

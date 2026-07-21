@@ -152,7 +152,7 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   keyset-paginated (`%{entries:, more?:, cursor:}`; the web layer signs the
   `{first_published_at, id}` cursor with `VutuvWeb.ApiV2`).
 - **Filters** (all URL params): `q` (Postgres full-text over title +
-  description, `websearch_to_tsquery`), `tag` (slug), `workplace`, `employment`,
+  description; see the search grammar below), `tag` (slug), `workplace`, `employment`,
   `salary_min` (+ currency — same-currency only, the posting's yearly-normalised
   `salary_max` must reach the floor), `near` + `radius` + `country` (location),
   and the signed-in-member chip `my_tags` ("Passend zu meinen Tags").
@@ -167,6 +167,21 @@ and the crawl path — the board is a shared-footer + top-bar nav link). PubSub
   the one `salary_min` slot, so they are mutually exclusive: while `mine` is
   active the number field is disabled and a hidden `mine` token rides along,
   so the private figure is never seeded into the field or submitted.
+- **Search grammar (`q`, issue #952).** A role has no single canonical title, so
+  the box lets one search cover several. `Vutuv.Jobs.SearchQuery.to_tsquery/1`
+  turns the human box into a **`to_tsquery('simple', …)`** string (not
+  `websearch_to_tsquery` any more, which only speaks the English `or` keyword):
+  **comma / newline / `|` / a standalone `or`|`oder`** → OR between titles
+  (locale-neutral, so a German visitor's `oder` works); **space** → AND;
+  **trailing `*`** → prefix wildcard (`entwickl*` → Entwickler/Entwicklung,
+  valuable because `simple` does no stemming); **`"quoted words"`** → adjacent
+  phrase; **leading `-`** → global exclusion. Every token is reduced to
+  lexeme-safe characters and the expression assembled from well-formed pieces
+  only, so visitor input can never make `to_tsquery` raise (unit-tested in
+  `search_query_test.exs`); a query with no searchable token is a no-op. The
+  board renders a "Suchtipps" disclosure with worked examples. Because
+  `board_page/3` and the alert sweeper share `apply_board_filters/3`, a saved
+  OR/wildcard search alerts on the same grammar.
 - **Location.** `near` (a city or zip) resolves to a point offline via
   `Vutuv.Geo.resolve_point/2` (zip first, then city); onsite/hybrid postings
   match within `radius` km by a great-circle (haversine) predicate in SQL, or by
