@@ -14801,3 +14801,10 @@ msgid "Endorsed by %{name} and %{formatted} other"
 msgid_plural "Endorsed by %{name} and %{formatted} others"
 msgstr[0] "Empfohlen von %{name} und %{formatted} weiteren"
 msgstr[1] "Empfohlen von %{name} und %{formatted} weiteren"
+
+#: lib/vutuv_web/live/shell_live.ex:306
+#, elixir-autogen, elixir-format
+msgid "%{formatted} new member today"
+msgid_plural "%{formatted} new members today"
+msgstr[0] "%{formatted} neues Mitglied heute"
+msgstr[1] "%{formatted} neue Mitglieder heute"
