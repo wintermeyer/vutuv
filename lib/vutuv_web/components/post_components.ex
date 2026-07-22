@@ -1459,87 +1459,129 @@ defmodule VutuvWeb.PostComponents do
       |> assign(:cover_url, cover_url)
       |> assign(:cover_source_url, cover_source_url(review))
       |> assign(:external_url, review_external_url(review))
+      |> assign(:isbn, review_isbn(review))
+      |> assign(:pages, review_pages_short(review))
+      |> assign(:pages_note, review_pages_note(review))
+      |> assign(:duration, review_duration_label(review))
 
     ~H"""
     <div
       class={[
-        "mt-3 flex gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
+        "mt-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700",
         @aside && "md:mt-0 md:w-2/5 md:shrink-0"
       ]}
       data-review-card
       data-review-kind={@review.kind}
       data-review-aside={@aside && "true"}
     >
-      <%!-- The cover keeps ONE size at every width (the desktop/aside one):
-      the card carries the same facts on a phone as on a wide screen, so it
-      should read the same there too — a breakpoint-dependent cover made the
-      identical card look like two different components. --%>
-      <img
-        :if={@cover_url}
-        src={@cover_url}
-        alt=""
-        loading="lazy"
-        class="w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
-      />
-      <span
-        :if={!@cover_url}
-        aria-hidden="true"
-        class="flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40"
-      >
-        {if @review.kind == "movie", do: "🎬", else: "📖"}
-      </span>
+      <%!-- Row one: the cover beside what names the work — kind, title,
+      author, year · medium, publisher. --%>
+      <div class="flex gap-3">
+        <%!-- The cover column. The cover keeps ONE size at every width (the
+        desktop/aside one): the card carries the same facts on a phone as on a
+        wide screen, so it should read the same there too — a
+        breakpoint-dependent cover made the identical card look like two
+        different components. --%>
+        <div class="w-16 shrink-0" data-review-cover>
+          <img
+            :if={@cover_url}
+            src={@cover_url}
+            alt=""
+            loading="lazy"
+            class="w-16 rounded-lg ring-1 ring-slate-200 dark:ring-slate-700"
+          />
+          <span
+            :if={!@cover_url}
+            aria-hidden="true"
+            class="flex aspect-[2/3] w-16 items-center justify-center rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40"
+          >
+            {if @review.kind == "movie", do: "🎬", else: "📖"}
+          </span>
+          <%!-- How thick the book is belongs to the picture of it: a small,
+          centered figure right under the cover, where it costs the card no
+          line of its own. Just the number — under the print cover it reads for
+          itself — with the print-edition note an audiobook's count needs
+          (`review_pages_label/1`) kept as the hover title. --%>
+          <p
+            :if={@pages}
+            class="mb-0 mt-1 text-center text-xs text-slate-600 dark:text-slate-400"
+            title={@pages_note}
+            data-review-pages
+          >{@pages}</p>
+        </div>
 
-      <div class="min-w-0">
-        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          {review_kind_label(@review.kind)}
-        </p>
-        <p class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{@review.title}</p>
-        <%!-- Creator on its own line, year · medium on the line below it — at
-        every width, not only in the narrow aside. That two-line reading was
-        the aside's, and it is what the card shows everywhere now: one card,
-        one layout, so a phone and a wide screen never disagree about what a
-        review looks like. A long author name therefore never crowds the small
-        facts, whatever the width. --%>
-        <p
-          :if={@review.creator || @review.year || @review.medium}
-          class="text-sm text-slate-600 dark:text-slate-400"
-        >{@review.creator}<span
-            :if={review_year_medium(@review) != ""}
-            class={@review.creator && "block"}
-            data-review-meta
-          >{@review.year}{if @review.year && review_medium_label(@review.medium), do: " · "}<.review_medium review={@review} /></span></p>
-        <%!-- The fetched edition facts the composer never asks for: the
-        publisher on one line, the book's measurements (pages, and an
-        audiobook's running time) on the next, so neither pushes the other
-        into a third. Each part may be missing. --%>
-        <p :if={@review.publisher} class="text-sm text-slate-600 dark:text-slate-400">
-          {@review.publisher}
-        </p>
-        <p
-          :if={review_pages_label(@review) || review_duration_label(@review)}
-          class="text-sm text-slate-600 dark:text-slate-400"
-        >
-          {[review_pages_label(@review), review_duration_label(@review)]
-          |> Enum.reject(&is_nil/1)
-          |> Enum.join(" · ")}
-        </p>
+        <%!-- No "Book review" / "Film review" caption: the cover (or the kind
+        glyph standing in for it), the title and the medium already say what
+        this is, and the post's own prose says it again — the label was a line
+        of the card spent on nothing. The kind still reaches machines through
+        the JSON-LD and the agent-format siblings. --%>
+        <div class="min-w-0" data-review-identity>
+          <%!-- A title runs to two lines at most (`line-clamp-2`): the long
+          subtitled ones a catalogue hands back ("… — Roman. Mit einem Nachwort
+          des Autors") would otherwise push the whole card several lines taller
+          than the cover beside it. The full title stays in the hover title and
+          in every agent-format sibling. --%>
+          <p
+            class="line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
+            title={@review.title}
+            data-review-title
+          >{@review.title}</p>
+          <%!-- Creator on its own line, year · medium on the line below it, the
+          publisher on the line below that — at every width, not only in the
+          narrow aside. That reading was the aside's, and it is what the card
+          shows everywhere now: one card, one layout, so a phone and a wide
+          screen never disagree about what a review looks like. All three are
+          lines of ONE paragraph, so they read as one tight identity block
+          instead of drifting apart on the legacy paragraph margin. The creator
+          is cut at two lines like the title (a catalogue "creator" can be a
+          whole list of authors, editors and translators); `line-clamp-2` sets
+          its own `display`, so it needs no `block` beside it — and must not
+          get one, or the two display utilities would fight. --%>
+          <p
+            :if={@review.creator || @review.year || @review.medium || @review.publisher}
+            class="text-sm text-slate-600 dark:text-slate-400"
+          ><span
+              :if={@review.creator}
+              class="line-clamp-2"
+              title={@review.creator}
+              data-review-creator
+            >{@review.creator}</span><span
+              :if={review_year_medium(@review) != ""}
+              class={@review.creator && "block"}
+              data-review-meta
+            >{@review.year}{if @review.year && review_medium_label(@review.medium), do: " · "}<.review_medium review={@review} /></span><span
+              :if={@review.publisher}
+              class="block"
+              data-review-publisher
+            >{gettext("Publisher:")} {@review.publisher}</span></p>
+        </div>
+      </div>
+
+      <%!-- Row two, one full-width column under the cover: the catalogue facts
+      and where to go next — ISBN, an audiobook's running time, then the
+      outbound links. Full width because these lines are longer than the column
+      beside the cover and each part may be missing, so they would otherwise
+      wrap into a ragged stack. --%>
+      <div
+        :if={@isbn || @duration || @external_url || @cover_url}
+        class="mt-2 text-sm text-slate-600 dark:text-slate-400"
+        data-review-details
+      >
         <%!-- The ISBN in its printed, hyphenated form (Vutuv.Isbn.format/1) —
         the stored value is the bare 13 digits, which reads as a barcode
         number rather than an ISBN. `whitespace-nowrap` keeps it on one line
         in the narrow aside: its hyphens are line-break opportunities, so it
         would otherwise split mid-number. --%>
-        <p
-          :if={@review.kind == "book" and @review.identifier}
-          class="mt-1 text-xs text-slate-600 dark:text-slate-400"
-        >
-          ISBN <span class="whitespace-nowrap">{Isbn.format(@review.identifier)}</span>
+        <p :if={@isbn} class="mb-0">
+          ISBN <span class="whitespace-nowrap">{@isbn}</span>
         </p>
+        <p :if={@duration} class="mb-0">{@duration}</p>
         <%!-- The outbound links on one dot-separated line: the book's own Open
         Library page first, then the store link (Amazon / IMDb). Both are plain
         brand links. The Open Library link shows only when a cover is actually
         rendered, because it also credits the source of that quoted image
         (§ 63 UrhG) — the courtesy link back Open Library asks for. --%>
-        <p :if={@external_url || @cover_url} class="mt-1.5 text-sm text-slate-600 dark:text-slate-400">
+        <p :if={@external_url || @cover_url} class="mb-0 mt-1.5">
           <.link
             :if={@cover_url}
             href={@cover_source_url}
@@ -1604,9 +1646,6 @@ defmodule VutuvWeb.PostComponents do
   defp review_external_url(%PostReview{kind: "book"} = review), do: PostReview.amazon_url(review)
   defp review_external_url(%PostReview{kind: "movie"} = review), do: PostReview.imdb_url(review)
   defp review_external_url(%PostReview{}), do: nil
-
-  defp review_kind_label("movie"), do: gettext("Film review")
-  defp review_kind_label(_kind), do: gettext("Book review")
 
   @doc """
   The post's review sidecar as one compact HTML paragraph (an escaped raw
@@ -1684,19 +1723,38 @@ defmodule VutuvWeb.PostComponents do
   Takes the review struct **or** the agent-doc entry that mirrors it (same
   keys), so card and machine formats cannot word this differently.
   """
-  def review_pages_label(%{pages: pages, medium: medium})
-      when is_integer(pages) and pages > 0 do
-    label =
-      ngettext("%{formatted} page", "%{formatted} pages", pages,
-        formatted: delimited_count(pages)
-      )
+  def review_pages_label(review) do
+    case review_pages_short(review) do
+      nil ->
+        nil
 
-    if medium == "audiobook",
-      do: label <> " " <> gettext("(print edition)"),
-      else: label
+      label ->
+        if Map.get(review, :medium) == "audiobook",
+          do: label <> " " <> gettext("(print edition)"),
+          else: label
+    end
   end
 
-  def review_pages_label(_other), do: nil
+  # The bare page count ("384 pages"), without the audiobook's print-edition
+  # marker — what the card prints under the cover, where the picture of the
+  # printed book already says which edition the number belongs to and the
+  # marker would only cost a second line. `review_pages_label/1` above is the
+  # spelled-out form for everywhere the cover isn't there to say it.
+  defp review_pages_short(%{pages: pages}) when is_integer(pages) and pages > 0 do
+    ngettext("%{formatted} page", "%{formatted} pages", pages, formatted: delimited_count(pages))
+  end
+
+  defp review_pages_short(_other), do: nil
+
+  # The spelled-out page count for the card's hover title, nil when it says
+  # nothing the short line under the cover doesn't already say (every medium
+  # but an audiobook).
+  defp review_pages_note(review) do
+    short = review_pages_short(review)
+    full = review_pages_label(review)
+
+    if short && full != short, do: full
+  end
 
   @doc """
   An audiobook's running time as a reader-facing label ("7 h 20 min",
@@ -1729,6 +1787,13 @@ defmodule VutuvWeb.PostComponents do
   # identical in every locale, so no gettext.
   defp review_link_label("movie"), do: "IMDb"
   defp review_link_label(_kind), do: "Amazon"
+
+  # The ISBN as the card prints it (hyphenated), nil for a film or a book
+  # whose reviewer typed no ISBN.
+  defp review_isbn(%PostReview{kind: "book", identifier: isbn}) when is_binary(isbn),
+    do: Isbn.format(isbn)
+
+  defp review_isbn(%PostReview{}), do: nil
 
   # The year · medium half of the details line (everything but the creator),
   # so the card can drop it onto its own line below the author's.
