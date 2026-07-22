@@ -129,6 +129,27 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
   end
 
   describe "the reader's switch" do
+    test "a brand-new member gets CV updates without touching a setting", %{conn: conn} do
+      # The kind is opt-OUT: on for everyone, from the moment they sign up. The
+      # migration's `NOT NULL DEFAULT true` says the same for every member who
+      # existed before the feature, and only this switch can turn it off.
+      author = insert_activated_user()
+      {conn, follower} = create_and_login_user(conn)
+
+      assert Repo.get!(User, follower.id).cv_update_notifications?
+
+      follow!(follower, author)
+
+      entry =
+        insert(:work_experience,
+          user: author,
+          title: "Head of Bridges",
+          announce_to_followers?: true
+        )
+
+      assert html_response(get(conn, ~p"/notifications"), 200) =~ entry.title
+    end
+
     test "the notification settings page saves it", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
