@@ -21,7 +21,11 @@ We use the [MIT License](LICENSE).
   Members can also **follow a tag** to pull its posts into their feed and get
   matching people suggested. Adding a new CV entry (job, education,
   certificate) can optionally notify your followers — your call per entry,
-  in-app only, and switchable off by whoever receives it. Developer profiles can show cached public stats of
+  in-app only, and switchable off by whoever receives it. A post can be a
+  **book or film review**: attach an ISBN (or IMDb link) plus title, author or
+  director, year and how you consumed it (print / e-book / audiobook, cinema /
+  streaming / disc), and the post shows a review card with the fetched book
+  cover and a shop or IMDb link. Developer profiles can show cached public stats of
   their GitHub, GitLab and Codeberg accounts (stars, repositories, languages,
   activity).
 - Verified organization pages at `/organizations` (a company, a Verein, a public

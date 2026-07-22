@@ -173,3 +173,12 @@ msgid "The handle %{handles} does not exist. Remove the mention or check the spe
 msgid_plural "The handle %{handles} does not exist. Remove the mention or check the spelling."
 msgstr[0] ""
 msgstr[1] ""
+
+msgid "is not a valid ISBN"
+msgstr ""
+
+msgid "is not a valid IMDb link"
+msgstr ""
+
+msgid "the review is missing the title of the work"
+msgstr ""

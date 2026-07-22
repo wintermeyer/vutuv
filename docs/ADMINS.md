@@ -109,6 +109,9 @@ Everything else has a default (the vutuv.de production value):
 | `BOUNCE_WEBHOOK_TOKEN` | – | Bearer token for `POST /webhooks/bounces`; unset = bounce handling off |
 | `MAIL_LOG_PATH` | `/var/log/mail.log` | Postfix log the bounce watcher tails; `""` = watcher off |
 | `FEDIVERSE_ENABLED` | `true` | `false` turns follow-only ActivityPub federation off entirely (endpoints 404, nothing is delivered) — set it on intranet installations |
+| `FETCH_BOOK_METADATA` | `true` | `false` turns the Open Library lookups behind post **book reviews** off (the composer's ISBN → title/author/year prefill and the automatic cover image on the review card). The review feature itself keeps working — members type the fields by hand and the card renders without a cover. Set it on installations that must not call out (intranets) |
+| `AMAZON_DOMAIN` | `www.amazon.de` | The store a book review card's shop link points at (`https://<domain>/dp/<isbn10>`). Set your regional store (`www.amazon.com`, …) — or an **empty** value (`AMAZON_DOMAIN=`) to remove the shop link entirely |
+| `AMAZON_AFFILIATE_TAG` | – | Optional Amazon affiliate tag appended to book review shop links as `?tag=` |
 | `VERIFY_ORGANIZATION_DOMAINS` | `true` | `false` disables the verified-organization-page domain proof (the DNS TXT and well-known-file checks and their periodic re-check) — no new organization page can be verified, existing ones keep working. Set it on installations that must not make outbound DNS/HTTP calls. A newly verified organization sends an operator notice to `OPERATOR_EMAIL` |
 | `VERIFY_USER_LINKS` | `true` | `false` disables verified personal-webpage links (a member proving a profile link is their own page via a rel=me back-link, or the same DNS TXT / well-known-file domain proof, plus their periodic re-check) — no new link can be verified, existing marks keep working. Set it on installations that must not make outbound DNS/HTTP calls |
 | `GITHUB_API_TOKEN` | – | Optional token for the profile code-stats fetches (GitHub allows 60 unauthenticated requests/hour per IP; a token raises that to 5,000). A [fine-grained PAT](https://github.com/settings/personal-access-tokens) with **no** scopes/permissions is enough — the fetches read public data only. Can be added (or rotated) at any time; without it everything still works, the 7-day snapshot cache is sized for the unauthenticated limit |
@@ -272,6 +275,9 @@ vutuv runs fine without internet access:
   `:generate_screenshots` (profile link-preview screenshots **and** the
   auto-screenshot for single-link posts — these fetch the linked page and run
   headless Chromium).
+- Set `FETCH_BOOK_METADATA=false`: the book-review ISBN lookup and cover
+  fetch call Open Library. Book and film reviews keep working — the fields
+  are typed by hand and the card renders without a cover.
 - AI image moderation works **fully offline** — Ollama is local inference, no
   cloud involved. Install Ollama on the server, pull the vision model once
   while you still have internet access (`ollama pull qwen3-vl:8b`), and keep

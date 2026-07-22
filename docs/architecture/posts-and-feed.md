@@ -329,3 +329,41 @@ skips it, and `reconcile/1` leaves it in place for the same URL, so a plain
 re-save never re-captures it (changing the URL still re-captures; dropping the
 link cancels the row). It broadcasts `{:post_screenshot_removed, …}` so open
 feeds/profiles drop the card live, and is excluded from the admin queue/gallery.
+
+## Book and film reviews
+
+A post can carry a structured **review sidecar** (`Vutuv.Posts.PostReview`,
+table `post_reviews`, one per post): `kind` (`book`/`movie` — open for future
+kinds), an `identifier` (a checksum-validated ISBN-13 via `Vutuv.Isbn`, or an
+IMDb `tt…` id extracted from a pasted URL), cached display metadata (`title`,
+`creator`, `year`) and an optional `medium` (book: print/ebook/audiobook,
+movie: cinema/streaming/disc — "I listened to the audiobook"). The body stays
+plain Markdown; *"this post is a book review"* is simply *"the post has a
+review row"*, never body parsing. The composer's 📖/🎬 triggers open the panel;
+the hidden `kind` field always submits, so closing the panel deletes a stored
+review on save, while attrs without a `:review` key (the API's partial PATCH)
+leave it untouched.
+
+Every surface that renders the post adds the **review card** below the prose
+(`VutuvWeb.PostComponents.review_card/1`): cover (or a kind-glyph tile), kind
+label, title, creator · year · medium, and an outbound link — Amazon for books
+(built offline from the ISBN: ISBN-10 `/dp/` link, search fallback for 979
+ISBNs; domain + optional affiliate tag are config, an empty `AMAZON_DOMAIN`
+removes the link), IMDb for films. The permalink's JSON-LD becomes
+`["BlogPosting", "Review"]` with `itemReviewed` (Book/Movie), and the agent
+formats carry a `review` entry / fact line (drift-tested).
+
+**Book covers** are fetched from Open Library by ISBN
+(`Vutuv.Posts.ReviewCovers`), off the request path, gated by
+`:fetch_book_metadata` (also the flag for the composer's ISBN → title/author/
+year prefill, `Vutuv.BookMetadata`). Not a durable queue on purpose: a cover
+is decorative, `cover_status` (`none`/`pending`/`ready`/`failed`) tracks the
+fetch, a changed ISBN resets it to `pending` and re-fetches, and a lost fetch
+is simply retried on the next edit. The fetched cover is an external image
+shown publicly, so it enters the AI-moderation gate like any upload
+(`review_cover` kind in `Vutuv.Moderation.ImageSubjects`) and is served
+through the authorizing proxy `VutuvWeb.ReviewCoverController`
+(`/review_covers/:id/cover-<hash>.avif` — post audience + moderation verdict
+checked per request, content-fingerprinted filename, so an outdated cover URL
+stops resolving). Files live under `review_covers/<review.id>/` with a private
+original (`Vutuv.ReviewCover`); post deletion and account deletion purge them.

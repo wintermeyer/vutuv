@@ -73,6 +73,10 @@ config :vutuv, :refresh_popular_users, false
 config :vutuv, :fetch_mastodon_posts, false
 config :vutuv, :fetch_bluesky_posts, false
 config :vutuv, :fetch_code_stats, false
+# Book review metadata/covers (Open Library): off, so a create_post with a
+# review never fetches; the review tests call the fetchers directly with
+# stubbed HTTP (:book_metadata_req_options / :book_covers_req_options).
+config :vutuv, :fetch_book_metadata, false
 # Organization domain re-check GenServer would touch the sandbox from outside; tests
 # call Vutuv.Organizations.recheck_domain/1 directly. DNS / well-known verification
 # is off too, so the suite never hits real DNS / HTTP; the domain tests flip

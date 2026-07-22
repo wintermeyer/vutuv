@@ -373,6 +373,38 @@ defmodule VutuvWeb.FediverseControllerTest do
       assert body["content"] =~ "Hallo Fediverse"
     end
 
+    test "a book review post's Note carries the review facts in its content", %{conn: conn} do
+      user = federated_user()
+
+      post =
+        create_post!(user, %{
+          body: "Sehr lesenswert.",
+          review: %{
+            "kind" => "book",
+            "identifier" => "978-3-16-148410-0",
+            "title" => "Refactoring",
+            "creator" => "Martin Fowler",
+            "year" => "2018",
+            "medium" => "audiobook"
+          }
+        })
+
+      conn =
+        conn
+        |> put_req_header("accept", "application/activity+json")
+        |> get("/#{user.username}/posts/#{post.id}")
+
+      content = Jason.decode!(conn.resp_body)["content"]
+
+      # Remote software knows nothing of review cards, so the reviewed work's
+      # facts ride inside the Note content itself.
+      assert content =~ "Book review"
+      assert content =~ "Refactoring"
+      assert content =~ "Martin Fowler"
+      assert content =~ "ISBN 9783161484100"
+      assert content =~ "https://www.amazon.de/dp/316148410X"
+    end
+
     test "the profile head advertises the actor for opted-in members", %{conn: conn} do
       user = federated_user()
 

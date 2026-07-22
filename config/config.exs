@@ -147,6 +147,23 @@ config :vutuv, :newsletter_send_timeout_ms, :timer.seconds(60)
 # 5,000/hour; see docs/ADMINS.md.
 config :vutuv, :fetch_code_stats, true
 
+# Book metadata for post reviews (Vutuv.BookMetadata: the composer's ISBN →
+# title/author/year prefill; Vutuv.Posts.ReviewCovers: the cover image on the
+# review card). Both come keyless from Open Library. Off = nothing is ever
+# fetched — the switch for installations that must not call out (intranets);
+# the review card then renders without a cover and the fields are typed by
+# hand. Runtime override: FETCH_BOOK_METADATA=false (config/runtime.exs).
+# Tests keep it off and stub HTTP via :book_metadata_req_options /
+# :book_covers_req_options.
+config :vutuv, :fetch_book_metadata, true
+
+# The shop link on a book review card: https://<domain>/dp/<isbn10> (search
+# fallback for 979 ISBNs), with an optional Amazon affiliate tag appended as
+# ?tag=. An empty AMAZON_DOMAIN removes the link entirely (config/runtime.exs
+# overrides both), so every installation chooses its own store — or none.
+config :vutuv, :amazon_domain, "www.amazon.de"
+config :vutuv, :amazon_affiliate_tag, nil
+
 # Post images: larger than avatars (6 MB), capped per post. Derived versions
 # are WebP; originals stay private on disk (see Vutuv.PostImageStore).
 config :vutuv, :post_images, max_filesize: 6_000_000, max_per_post: 10

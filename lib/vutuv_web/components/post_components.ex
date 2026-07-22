@@ -30,7 +30,9 @@ defmodule VutuvWeb.PostComponents do
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
+  alias Vutuv.ReviewCover
 
   # How many reposter faces the "Reposted by" avatar stack shows before the
   # rest collapse into a `+N` chip. Five keeps the strip to one tidy line even
@@ -174,6 +176,9 @@ defmodule VutuvWeb.PostComponents do
       # text (3/4 body, 1/4 screenshot).
       |> assign(:link_screenshot, link_screenshot(post))
       |> assign(:link_screenshot_layout?, link_screenshot_layout?(post, assigns.mode))
+      # The book/film review sidecar; nil for ordinary posts (and for nested
+      # renderings whose preload chain didn't carry it).
+      |> assign(:review, review_of(post))
       |> assign(:actions_id, "post-actions-#{entry_key}")
       # The action bar's acting viewer id (nil = logged-out / public preview).
       # On a LiveView host the inline component is handed this directly; on a
@@ -995,6 +1000,12 @@ defmodule VutuvWeb.PostComponents do
             class="mt-4 block max-w-md"
           />
 
+          <%!-- The book/film review card (the post's structured sidecar,
+          Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
+          and the shop/IMDb link. Rendered in both modes, outside the clamp,
+          so the reviewed work is always visible under the prose. --%>
+          <.review_card :if={@review} review={@review} author?={@author?} />
+
           <%!-- The remaining layouts put the tags in their own full-width row
           below the body/images: plain (line-clamp) previews — no float there,
           so this row already sits at the end of the text — and the photo-only
@@ -1387,6 +1398,146 @@ defmodule VutuvWeb.PostComponents do
   # shows the screenshot below the body instead.
   defp link_screenshot_layout?(post, :preview), do: link_screenshot(post) != nil
   defp link_screenshot_layout?(_post, _mode), do: false
+
+  # The post's review sidecar, nil when absent — and nil for a nested parent
+  # card whose preload chain didn't carry it (NotLoaded must not crash).
+  defp review_of(%{review: %PostReview{} = review}), do: review
+  defp review_of(_post), do: nil
+
+  # The review card under the prose: cover (or a kind glyph tile), the kind
+  # label, title, creator · year, and the outbound shop/IMDb link. The cover
+  # renders for everyone once released; the author additionally sees their
+  # own cover while it waits in AI-moderation limbo (the proxy enforces the
+  # same rule per request).
+  attr(:review, PostReview, required: true)
+  attr(:author?, :boolean, default: false)
+
+  defp review_card(assigns) do
+    review = assigns.review
+
+    cover_url =
+      if PostReview.cover_ready?(review) or
+           (assigns.author? and review.cover_status == "ready" and is_binary(review.cover)) do
+        ReviewCover.url(review)
+      end
+
+    assigns =
+      assigns
+      |> assign(:cover_url, cover_url)
+      |> assign(:external_url, review_external_url(review))
+
+    ~H"""
+    <div
+      class="mt-3 flex gap-3 rounded-xl bg-slate-50 p-3 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+      data-review-card
+      data-review-kind={@review.kind}
+    >
+      <img
+        :if={@cover_url}
+        src={@cover_url}
+        alt=""
+        loading="lazy"
+        class="w-16 self-start rounded-lg ring-1 ring-slate-200 dark:ring-slate-700 sm:w-20"
+      />
+      <span
+        :if={!@cover_url}
+        aria-hidden="true"
+        class="flex aspect-[2/3] w-16 shrink-0 items-center justify-center self-start rounded-lg bg-brand-50 text-2xl dark:bg-brand-900/40 sm:w-20"
+      >
+        {if @review.kind == "movie", do: "🎬", else: "📖"}
+      </span>
+
+      <div class="min-w-0">
+        <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+          {review_kind_label(@review.kind)}
+        </p>
+        <p class="mt-0.5 font-semibold text-slate-900 dark:text-slate-100">{@review.title}</p>
+        <p
+          :if={@review.creator || @review.year || @review.medium}
+          class="text-sm text-slate-600 dark:text-slate-400"
+        >
+          {[@review.creator, @review.year, review_medium_label(@review.medium)]
+          |> Enum.reject(&is_nil/1)
+          |> Enum.join(" · ")}
+        </p>
+        <p :if={@review.kind == "book" and @review.identifier} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+          ISBN {@review.identifier}
+        </p>
+        <p :if={@external_url} class="mt-1.5">
+          <a
+            href={@external_url}
+            target="_blank"
+            rel="nofollow noopener noreferrer"
+            class="text-sm font-semibold text-brand-600 hover:text-brand-700"
+          >
+            {review_link_label(@review.kind)} ↗
+          </a>
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  defp review_external_url(%PostReview{kind: "book"} = review), do: PostReview.amazon_url(review)
+  defp review_external_url(%PostReview{kind: "movie"} = review), do: PostReview.imdb_url(review)
+  defp review_external_url(%PostReview{}), do: nil
+
+  defp review_kind_label("movie"), do: gettext("Film review")
+  defp review_kind_label(_kind), do: gettext("Book review")
+
+  @doc """
+  The post's review sidecar as one compact HTML paragraph (an escaped raw
+  string, `""` when the post carries none) — appended to the rendered body
+  wherever the post leaves the site as plain HTML: the federated
+  ActivityPub Note (`VutuvWeb.Fediverse.Docs`) and the RSS items
+  (`VutuvWeb.Feeds`). Remote software knows nothing of review cards, so the
+  facts ride inside the content itself.
+  """
+  def review_content_html(%{review: %PostReview{} = review}) do
+    {glyph, label} =
+      case review.kind do
+        "movie" -> {"🎬", gettext("Film review")}
+        _book -> {"📖", gettext("Book review")}
+      end
+
+    isbn = if review.kind == "book" and review.identifier, do: "ISBN #{review.identifier}"
+
+    details =
+      [review.creator, review.year, review_medium_label(review.medium), isbn]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.map_join("", &" · #{esc(&1)}")
+
+    link = PostReview.amazon_url(review) || PostReview.imdb_url(review)
+
+    title =
+      if link,
+        do: ~s(<a href="#{esc(link)}" rel="nofollow noopener">#{esc(review.title)}</a>),
+        else: esc(review.title)
+
+    "<p>#{glyph} #{esc(label)}: #{title}#{details}</p>"
+  end
+
+  def review_content_html(_post), do: ""
+
+  defp esc(value),
+    do: value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()
+
+  @doc """
+  The display label of a review medium (how the reviewer consumed the work),
+  nil for nil — shared by the review card, the composer's select and the
+  agent docs, so the wording cannot drift.
+  """
+  def review_medium_label(nil), do: nil
+  def review_medium_label("print"), do: gettext("Printed book")
+  def review_medium_label("ebook"), do: gettext("E-book")
+  def review_medium_label("audiobook"), do: gettext("Audiobook")
+  def review_medium_label("cinema"), do: gettext("Cinema")
+  def review_medium_label("streaming"), do: gettext("Streaming")
+  def review_medium_label("disc"), do: gettext("DVD/Blu-ray")
+  def review_medium_label(_other), do: nil
+
+  defp review_link_label("movie"), do: gettext("View on IMDb")
+  defp review_link_label(_kind), do: gettext("View on Amazon")
 
   # The link screenshot image, shared by the preview (1/4 column) and full
   # (below-body) layouts. A decorative duplicate of the body's autolinked URL —

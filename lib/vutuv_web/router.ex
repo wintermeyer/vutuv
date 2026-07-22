@@ -288,6 +288,11 @@ defmodule VutuvWeb.Router do
     # The authorizing job-posting-image proxy, like /post_images.
     get("/job_posting_images/:token/:version", JobPostingImageController, :show)
 
+    # The authorizing review-cover proxy (book covers fetched by ISBN for
+    # post reviews), like /post_images: the post's audience and the AI-scan
+    # verdict guard the cover.
+    get("/review_covers/:id/:version", ReviewCoverController, :show)
+
     # Post deletion (the permalink lives in the profile scope below; "posts"
     # is in ReservedSlugs).
     delete("/posts/:id", PostController, :delete)

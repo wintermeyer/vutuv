@@ -30,12 +30,26 @@ defmodule VutuvWeb.PostLive.Composer do
 
   use VutuvWeb, :live_component
 
+  alias Vutuv.BookMetadata
   alias Vutuv.Posts
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostImage
+  alias Vutuv.Posts.PostReview
   alias VutuvWeb.ErrorHelpers
+  alias VutuvWeb.PostComponents
 
   @presets ~w(public followers connections only_me custom)
+
+  # The review panel's form values, kept as a plain string-keyed map (the
+  # panel inputs are plain form fields; the changeset runs on save).
+  @empty_review %{
+    "kind" => "",
+    "identifier" => "",
+    "title" => "",
+    "creator" => "",
+    "year" => "",
+    "medium" => ""
+  }
 
   @impl true
   def update(assigns, socket) do
@@ -66,6 +80,8 @@ defmodule VutuvWeb.PostLive.Composer do
       post != nil and (Posts.has_reposts?(post) or Posts.has_replies?(post))
     )
     |> assign(:body, (post && post.body) || "")
+    |> assign(:review, review_values(post))
+    |> assign(:review_lookup_error, nil)
     |> assign(:tags_value, tags_value(post))
     |> assign(:images, (post && post.images) || [])
     |> assign(:alts, %{})
@@ -86,6 +102,21 @@ defmodule VutuvWeb.PostLive.Composer do
 
   defp tags_value(nil), do: ""
   defp tags_value(post), do: Enum.map_join(post.tags, ", ", & &1.name)
+
+  # Edit mode prefills the panel from the stored review; the panel is open
+  # exactly when a kind is set.
+  defp review_values(%Post{review: %PostReview{} = review}) do
+    %{
+      "kind" => review.kind,
+      "identifier" => review.identifier || "",
+      "title" => review.title || "",
+      "creator" => review.creator || "",
+      "year" => if(review.year, do: Integer.to_string(review.year), else: ""),
+      "medium" => review.medium || ""
+    }
+  end
+
+  defp review_values(_post), do: @empty_review
 
   # Edit mode: recognize the quick presets in the stored denials; anything
   # else (including a lone "non_followees", which no longer has its own preset)
@@ -129,6 +160,7 @@ defmodule VutuvWeb.PostLive.Composer do
       |> assign(:body, params["body"] || socket.assigns.body)
       |> assign(:tags_value, params["tags"] || socket.assigns.tags_value)
       |> assign(:alts, params["alts"] || socket.assigns.alts)
+      |> assign(:review, Map.merge(socket.assigns.review, params["review"] || %{}))
       |> assign(:preset, preset)
       |> assign(:error, nil)
       |> sweep_rejected_uploads()
@@ -171,6 +203,52 @@ defmodule VutuvWeb.PostLive.Composer do
   def handle_event("undeny-user", %{"id" => id}, socket) do
     {:noreply,
      assign(socket, :denied_users, Enum.reject(socket.assigns.denied_users, &(&1.id == id)))}
+  end
+
+  # The 📖/🎬 buttons open the review panel with that kind; the panel's ✕
+  # sets it back to "" (which deletes a stored review on save). The other
+  # field values survive a toggle, so an accidental close loses nothing.
+  def handle_event("review-kind", %{"kind" => kind}, socket) do
+    if kind in ["" | PostReview.kinds()] do
+      # The medium is per-kind (audiobook vs. cinema), so it resets on a
+      # switch; every other field survives an accidental toggle.
+      review = %{socket.assigns.review | "kind" => kind, "medium" => ""}
+
+      {:noreply,
+       socket
+       |> assign(:review, review)
+       |> assign(:review_lookup_error, nil)}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  # The ISBN lookup (book panel only, rendered only with :fetch_book_metadata
+  # on): prefills title/creator/year from Open Library. Everything stays
+  # editable — the lookup is convenience, not truth.
+  def handle_event("review-lookup", _params, socket) do
+    review = socket.assigns.review
+
+    with {:ok, isbn} <- Vutuv.Isbn.normalize(review["identifier"] || ""),
+         {:ok, data} <- BookMetadata.lookup(isbn) do
+      filled =
+        Map.merge(review, %{
+          "identifier" => isbn,
+          "title" => data.title,
+          "creator" => data.creator || review["creator"],
+          "year" => if(data.year, do: Integer.to_string(data.year), else: review["year"])
+        })
+
+      {:noreply, socket |> assign(:review, filled) |> assign(:review_lookup_error, nil)}
+    else
+      :error ->
+        {:noreply,
+         assign(
+           socket,
+           :review_lookup_error,
+           gettext("Nothing found for this ISBN. Please fill in the fields yourself.")
+         )}
+    end
   end
 
   def handle_event("insert-inline", %{"id" => id}, socket) do
@@ -218,6 +296,9 @@ defmodule VutuvWeb.PostLive.Composer do
     attrs = %{
       body: params["body"] || "",
       tags: params["tags"] || "",
+      # The submitted panel fields are the truth; with the panel closed only
+      # the hidden kind ("") arrives, which removes a stored review on save.
+      review: params["review"] || %{"kind" => ""},
       denials: denials_payload(socket.assigns),
       image_ids: Enum.map(socket.assigns.images, & &1.id)
     }
@@ -249,6 +330,8 @@ defmodule VutuvWeb.PostLive.Composer do
          socket
          |> assign(:body, "")
          |> assign(:tags_value, "")
+         |> assign(:review, @empty_review)
+         |> assign(:review_lookup_error, nil)
          |> assign(:images, [])
          |> assign(:alts, %{})
          |> assign(:error, nil)}
@@ -425,11 +508,20 @@ defmodule VutuvWeb.PostLive.Composer do
   # `%{handles}` becomes the actual handle) rather than dumping the raw msgid
   # prefixed with the field atom ("body mentions a handle …: %{handles}"). Each
   # message is now a self-contained sentence, so the field name is dropped.
+  # traverse_errors walks nested changesets too, so a review-field error (an
+  # invalid ISBN, say) surfaces instead of failing silently.
   defp changeset_message(changeset) do
-    Enum.map_join(changeset.errors, " ", fn {_field, error} ->
-      ErrorHelpers.translate_error(error)
-    end)
+    changeset
+    |> Ecto.Changeset.traverse_errors(&ErrorHelpers.translate_error/1)
+    |> flatten_messages()
+    |> Enum.join(" ")
   end
+
+  defp flatten_messages(map) when is_map(map),
+    do: Enum.flat_map(map, fn {_field, value} -> flatten_messages(value) end)
+
+  defp flatten_messages(list) when is_list(list), do: Enum.flat_map(list, &flatten_messages/1)
+  defp flatten_messages(message) when is_binary(message), do: [message]
 
   defp full_name(user), do: VutuvWeb.UserHelpers.full_name(user)
 
@@ -550,6 +642,110 @@ defmodule VutuvWeb.PostLive.Composer do
             class={[input_class(), "mt-3"]}
           />
 
+          <%!-- The review sidecar (book/film review, Vutuv.Posts.PostReview).
+          The hidden kind always submits — closing the panel deletes a stored
+          review on save; the panel fields join it while open. --%>
+          <input type="hidden" name="post[review][kind]" value={@review["kind"]} />
+
+          <div
+            :if={@review["kind"] != ""}
+            id={"#{@id}-review-panel"}
+            class="mt-4 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200 dark:bg-slate-800/50 dark:ring-slate-700"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-500">
+                {if @review["kind"] == "movie",
+                  do: "🎬 " <> gettext("Film review"),
+                  else: "📖 " <> gettext("Book review")}
+              </h3>
+              <button
+                type="button"
+                phx-click="review-kind"
+                phx-value-kind=""
+                phx-target={@myself}
+                class="text-sm font-semibold text-slate-500 hover:text-red-600 dark:text-slate-400"
+              >
+                ✕ {gettext("Remove review")}
+              </button>
+            </div>
+
+            <div class="mt-3 flex gap-2">
+              <input
+                type="text"
+                name="post[review][identifier]"
+                value={@review["identifier"]}
+                placeholder={
+                  if @review["kind"] == "movie",
+                    do: gettext("IMDb link or ID"),
+                    else: gettext("ISBN")
+                }
+                class={[input_class(), "flex-1"]}
+              />
+              <button
+                :if={@review["kind"] == "book" and BookMetadata.enabled?()}
+                type="button"
+                id={"#{@id}-review-lookup"}
+                phx-click="review-lookup"
+                phx-target={@myself}
+                phx-disable-with={gettext("Looking up…")}
+                class="shrink-0 rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+              >
+                {gettext("Look up")}
+              </button>
+            </div>
+            <p :if={@review_lookup_error} class="mt-1 text-sm text-red-600">
+              {@review_lookup_error}
+            </p>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <input
+                type="text"
+                name="post[review][title]"
+                value={@review["title"]}
+                placeholder={gettext("Title")}
+                class={input_class()}
+              />
+              <input
+                type="text"
+                name="post[review][creator]"
+                value={@review["creator"]}
+                placeholder={
+                  if @review["kind"] == "movie", do: gettext("Director"), else: gettext("Author(s)")
+                }
+                class={input_class()}
+              />
+            </div>
+
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <input
+                type="text"
+                name="post[review][year]"
+                value={@review["year"]}
+                inputmode="numeric"
+                placeholder={gettext("Year")}
+                class={input_class()}
+              />
+              <select name="post[review][medium]" class={input_class()}>
+                <option value="">
+                  {if @review["kind"] == "movie",
+                    do: gettext("Watched as… (optional)"),
+                    else: gettext("Read as… (optional)")}
+                </option>
+                <option
+                  :for={medium <- PostReview.media(@review["kind"])}
+                  value={medium}
+                  selected={@review["medium"] == medium}
+                >
+                  {PostComponents.review_medium_label(medium)}
+                </option>
+              </select>
+            </div>
+
+            <p :if={@review["kind"] == "book"} class="mt-2 text-xs text-slate-600 dark:text-slate-400">
+              {gettext("With an ISBN, the post shows the book cover and a shop link automatically.")}
+            </p>
+          </div>
+
           <%!-- Bottom row: the image picker on the left, the (slightly wider)
           submit button on the right. New posts publish public, so there is no
           audience picker here; a post pinned public by reposts/replies still
@@ -563,6 +759,33 @@ defmodule VutuvWeb.PostLive.Composer do
               📷 {gettext("Add images")}
               <.live_file_input upload={@uploads.images} class="sr-only" />
             </label>
+
+            <%!-- Review triggers: open the book/film review panel. Emoji-only
+            on phones (the row is tight there), labeled from sm up. --%>
+            <button
+              :if={@review["kind"] == ""}
+              type="button"
+              phx-click="review-kind"
+              phx-value-kind="book"
+              phx-target={@myself}
+              title={gettext("Review a book")}
+              aria-label={gettext("Review a book")}
+              class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              📖<span class="hidden sm:inline">{gettext("Book")}</span>
+            </button>
+            <button
+              :if={@review["kind"] == ""}
+              type="button"
+              phx-click="review-kind"
+              phx-value-kind="movie"
+              phx-target={@myself}
+              title={gettext("Review a film")}
+              aria-label={gettext("Review a film")}
+              class="inline-flex h-9 items-center gap-1.5 rounded-lg bg-slate-100 px-3 text-sm font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              🎬<span class="hidden sm:inline">{gettext("Film")}</span>
+            </button>
 
             <div class="ml-auto flex items-center gap-3">
               <span

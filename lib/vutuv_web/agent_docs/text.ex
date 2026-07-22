@@ -97,6 +97,7 @@ defmodule VutuvWeb.AgentDocs.Text do
       heading("#{gettext("Post by %{name}", name: doc.author.name)} · #{doc.published_on}"),
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
+      Markdown.review_line(doc.review),
       tags_line(doc.tags),
       Markdown.engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_lines/1)),

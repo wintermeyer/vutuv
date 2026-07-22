@@ -55,8 +55,10 @@ defmodule Vutuv.Posts do
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Posts.PostRepost
+  alias Vutuv.Posts.PostReview
   alias Vutuv.Posts.PostScreenshot
   alias Vutuv.Posts.PostTag
+  alias Vutuv.Posts.ReviewCovers
   alias Vutuv.Posts.Screenshots
   alias Vutuv.Posts.ScreenshotWorker
   alias Vutuv.Repo
@@ -114,6 +116,9 @@ defmodule Vutuv.Posts do
           # A single-URL, image-less post gets a link screenshot, captured off
           # the request path via the durable queue.
           reconcile_screenshot(post)
+          # A book review with an ISBN gets its cover fetched off the request
+          # path (no-op for every other post).
+          ReviewCovers.reconcile(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -154,6 +159,7 @@ defmodule Vutuv.Posts do
           broadcast_reply(parent, post)
           Vutuv.Fediverse.federate_new_post(post)
           reconcile_screenshot(post)
+          ReviewCovers.reconcile(post)
           {:ok, post}
 
         {:error, _} = error ->
@@ -188,7 +194,7 @@ defmodule Vutuv.Posts do
   never changes.
   """
   def update_post(%Post{} = post, attrs) do
-    post = Repo.preload(post, [:denials, :post_tags, :images])
+    post = Repo.preload(post, [:denials, :post_tags, :images, :review])
     image_ids = parse_ids(fetch(attrs, :image_ids) || [])
 
     with {:ok, denials} <- normalize_denials(post.user_id, fetch(attrs, :denials) || []),
@@ -215,6 +221,8 @@ defmodule Vutuv.Posts do
         # An edit can add/remove the qualifying URL or an image: enqueue, refresh
         # or drop the link screenshot to match.
         reconcile_screenshot(updated)
+        # …and change the reviewed ISBN, which re-fetches the cover.
+        ReviewCovers.reconcile(updated)
         {:ok, updated}
 
       {:error, _} = error ->
@@ -244,7 +252,7 @@ defmodule Vutuv.Posts do
   parent's fresh reply count is re-broadcast.
   """
   def delete_post(%Post{} = post) do
-    post = Repo.preload(post, [:images, :screenshot])
+    post = Repo.preload(post, [:images, :screenshot, :review])
     parent_id = reply_parent_id(post.id)
 
     case Repo.delete(post) do
@@ -253,6 +261,8 @@ defmodule Vutuv.Posts do
         # The post_screenshots row cascades with the post; its stored files do
         # not, so purge them explicitly (a no-op when there was no screenshot).
         if post.screenshot, do: Screenshots.delete(post.screenshot)
+        # Same for a book review's fetched cover files.
+        if post.review, do: ReviewCovers.delete_files(post.review)
         broadcast_post_deleted(post.id, post.user_id)
         if parent_id, do: broadcast_reply_count(parent_id)
         # Deleting reported content settles its moderation case.
@@ -266,8 +276,8 @@ defmodule Vutuv.Posts do
     end
   end
 
-  # Body + denials + tags in one changeset; images attach separately (they
-  # are pre-existing rows, not nested params).
+  # Body + denials + tags + review in one changeset; images attach separately
+  # (they are pre-existing rows, not nested params).
   defp build_changeset(post_or_struct, attrs, denials, image_ids) do
     tag_ids = attrs |> fetch(:tags) |> parse_tag_values() |> tag_ids_for()
 
@@ -276,10 +286,37 @@ defmodule Vutuv.Posts do
       |> Post.changeset(%{body: to_string(fetch(attrs, :body) || "")})
       |> Ecto.Changeset.put_assoc(:denials, Enum.map(denials, &struct(PostDenial, &1)))
       |> Ecto.Changeset.put_assoc(:post_tags, Enum.map(tag_ids, &%PostTag{tag_id: &1}))
+      |> put_review(post_or_struct, fetch(attrs, :review))
       |> require_content(image_ids)
 
     if changeset.valid?, do: {:ok, changeset}, else: {:error, changeset}
   end
+
+  # The optional review sidecar (Vutuv.Posts.PostReview). Attrs without a
+  # :review key leave an existing review untouched (the API's partial PATCH);
+  # a blank kind removes it (the composer always submits the kind, so closing
+  # the review panel deletes on save); anything else casts onto the existing
+  # review (update — preloaded by update_post) or a fresh one (create).
+  defp put_review(changeset, _post, nil), do: changeset
+
+  defp put_review(changeset, post, review_attrs) when is_map(review_attrs) do
+    case fetch(review_attrs, :kind) do
+      blank when blank in [nil, ""] ->
+        Ecto.Changeset.put_assoc(changeset, :review, nil)
+
+      _kind ->
+        existing =
+          case post do
+            %Post{review: %PostReview{} = review} -> review
+            _post -> %PostReview{}
+          end
+
+        Ecto.Changeset.put_assoc(changeset, :review, PostReview.changeset(existing, review_attrs))
+    end
+  end
+
+  defp put_review(changeset, _post, _other),
+    do: Ecto.Changeset.add_error(changeset, :review, "is invalid")
 
   defp require_content(changeset, image_ids) do
     body = Ecto.Changeset.get_field(changeset, :body) || ""
@@ -1709,6 +1746,16 @@ defmodule Vutuv.Posts do
   defp order_engaged(query, _recent),
     do: order_by(query, [engagement: e], desc: e.inserted_at, desc: e.id)
 
+  @doc """
+  A review by id with its post (+ author) preloaded, or `nil` — the cover
+  proxy's lookup (`VutuvWeb.ReviewCoverController`).
+  """
+  def get_review(id) do
+    UUIDv7.with_cast(id, fn uuid ->
+      PostReview |> Repo.get(uuid) |> Repo.preload(post: [:user])
+    end)
+  end
+
   @doc "The permalink lookup: `author`'s preloaded post by id, or `nil`."
   def get_post(%User{id: author_id}, id) do
     UUIDv7.with_cast(id, fn id ->
@@ -1783,11 +1830,20 @@ defmodule Vutuv.Posts do
       # The auto link screenshot rendered beside a single-URL post (nil for
       # every other post); the card shows it only once `status: "ready"`.
       :screenshot,
+      # The book/film review sidecar (nil for ordinary posts) — the card
+      # renders it wherever the post renders, so it always travels along.
+      :review,
       denials: [:denied_user],
       tags: from(t in Tag, order_by: t.name),
       reply_ref: [
         :parent_author,
-        parent_post: [:user, :images, :screenshot, tags: from(t in Tag, order_by: t.name)]
+        parent_post: [
+          :user,
+          :images,
+          :screenshot,
+          :review,
+          tags: from(t in Tag, order_by: t.name)
+        ]
       ]
     ]
   end
@@ -2053,6 +2109,16 @@ defmodule Vutuv.Posts do
   """
   def broadcast_screenshot_removed(post_id) when is_binary(post_id) do
     broadcast_post_followers_event(post_id, :post_screenshot_removed)
+  end
+
+  @doc """
+  A book review's cover finished fetching (and cleared moderation) — open
+  feeds/profiles re-render the card. Reuses the screenshot-ready event on
+  purpose: both mean "an auto-fetched attachment of this post became ready,
+  refresh the card", and every LiveView already handles it.
+  """
+  def broadcast_review_cover_ready(post_id) when is_binary(post_id) do
+    broadcast_post_followers_event(post_id, :post_screenshot_ready)
   end
 
   # Fan a `{event_name, %{post_id:, author_id:}}` out to the post author's own

@@ -15,6 +15,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
 
   alias Vutuv.Accounts.User
   alias Vutuv.CodeStats
+  alias VutuvWeb.PostComponents
 
   # The per-user people lists (followers/following/connections) share one
   # clause; the set lives in ListDocs.
@@ -100,6 +101,7 @@ defmodule VutuvWeb.AgentDocs.Markdown do
       "# #{gettext("Post by %{name}", name: author_link)} · #{doc.published_on}",
       doc.in_reply_to && in_reply_to_line(doc.in_reply_to),
       doc.body_markdown,
+      review_line(doc.review),
       tags_line(doc.tags),
       engagement_line(doc),
       section(gettext("Images"), Enum.map(doc.images, &image_line/1)),
@@ -773,6 +775,33 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   def engagement_line(doc) do
     "#{gettext("Likes")}: #{doc.like_count} · #{gettext("Reposts")}: #{doc.repost_count} · " <>
       "#{gettext("Bookmarks")}: #{doc.bookmark_count}"
+  end
+
+  @doc """
+  The post's review sidecar as one fact line (what the HTML review card
+  shows), nil when the post carries none. Shared with the text renderer.
+  """
+  def review_line(nil), do: nil
+
+  def review_line(review) do
+    label =
+      if review.kind == "movie", do: gettext("Film review"), else: gettext("Book review")
+
+    isbn = if review.kind == "book" and review.identifier, do: "ISBN #{review.identifier}"
+
+    details =
+      [
+        review.title,
+        review.creator,
+        review.year,
+        PostComponents.review_medium_label(review.medium),
+        isbn,
+        review.link
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join(" · ")
+
+    "#{label}: #{details}"
   end
 
   # The pager / feed-summary / cursor hints are shared with the plain-text

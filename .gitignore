@@ -31,6 +31,7 @@ erl_crash.dump
 /avatars
 /covers
 /post_images
+/review_covers
 /screenshots
 /originals
 /moderation_evidence
