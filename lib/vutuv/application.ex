@@ -3,8 +3,28 @@ defmodule Vutuv.Application do
 
   use Application
 
+  # The email-deliverability subsystem carries deliberate ops alarms that
+  # production's quiet global Logger level (:error, config/prod.exs) would
+  # swallow entirely: the watcher's policy-bounce warning (it fires when *our*
+  # SPF/DKIM sending is broken for a whole class of recipients), its startup
+  # line (the only liveness signal), the DSN webhook's bounce lines, the
+  # sweeper's counts and the emailer's dropped-mail warnings. Nobody could
+  # have seen any of them until v7.122.5. Raise exactly these modules to
+  # :info at boot; everything else stays at the global level. Off in tests
+  # (config/test.exs), which want the quiet :warning default.
+  @ops_log_modules [
+    Vutuv.Deliverability.Watcher,
+    Vutuv.Deliverability.Sweeper,
+    Vutuv.Notifications.Bounces,
+    Vutuv.Notifications.Emailer
+  ]
+
+  @doc "Per-module log-level override making the deliverability ops alarms visible."
+  def ensure_ops_logs_visible, do: Logger.put_module_level(@ops_log_modules, :info)
+
   @impl true
   def start(_type, _args) do
+    if Application.get_env(:vutuv, :ops_log_visibility, true), do: ensure_ops_logs_visible()
     # The optional children below are gated per config flag (off in tests, see
     # config/test.exs): mostly periodic jobs, plus the Vutuv.Prefs.Cache,
     # whose DB reloads would likewise touch the SQL sandbox from outside.

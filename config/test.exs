@@ -52,6 +52,9 @@ config :vutuv, :saved_search_alerts, false
 # Deliverability context and parser are called directly in their tests.
 config :vutuv, :bounce_watcher, false
 config :vutuv, :sweep_unreachable_accounts, false
+# Keep the per-module :info override off so the suite stays at the quiet
+# :warning level; Vutuv.OpsLogVisibilityTest exercises the override directly.
+config :vutuv, :ops_log_visibility, false
 # The stuck-broadcast sweep would touch the sandbox from outside; tests call
 # Vutuv.Newsletters.BroadcastResumer.sweep/0 directly.
 config :vutuv, :resume_stuck_broadcasts, false

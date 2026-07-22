@@ -102,7 +102,7 @@ fault" (§3.3) so a future DKIM gap can never be misread as dead mailboxes.
 `/var/log/mail.log` is `root:adm`, mode `640`, rotated by logrotate
 (`mail.log`, `mail.log.1`, `mail.log.2.gz`, …). The app user **`vutuv3` is not
 in the `adm` group**, so the app cannot read the log as-is. Two ways to grant
-the detector access — see §3.4.
+the detector access — see §3.5.
 
 ---
 
@@ -157,7 +157,7 @@ Why this is the better fit here:
 - **Reuses the existing webhook + token**, so Layer 1 (§4.1) needs no new app
   endpoint.
 
-The only added cost is attribution (§3.2) and log read access (§3.4), both
+The only added cost is attribution (§3.2) and log read access (§3.5), both
 small.
 
 ---
@@ -217,7 +217,24 @@ quota) or filter-blocked mailboxes were deactivated and then frozen; the
 `RepairMisclassifiedBounceFreezes` migration thawed them and the classifier
 has vetted `5.0.x` by text ever since.
 
-### 3.4 Granting the detector log access (pick one)
+### 3.4 Where the alarms land (journal visibility)
+
+Production runs the global Logger at `:error` (`config/prod.exs`) to keep the
+journal quiet — which would swallow every deliverability log line: the
+watcher's policy-bounce warning, its startup line, the webhook's bounce
+lines, the emailer's dropped-mail warnings. Since v7.122.5,
+`Vutuv.Application` raises exactly these modules to `:info` at boot via
+`Logger.put_module_level/2` (flag `:ops_log_visibility`, on by default), so
+they reach the journal while everything else stays at `:error`:
+
+```
+journalctl -u 'vutuv3@blue' -u 'vutuv3@green' | grep -E 'Deliverability|Email bounce|Dropped|Suppressed'
+```
+
+The startup line `Deliverability.Watcher tailing /var/log/mail.log …` doubles
+as the liveness check that the watcher is running in the current release.
+
+### 3.5 Granting the detector log access (pick one)
 
 - **Add `vutuv3` to the `adm` group** (`usermod -aG adm vutuv3`, then restart the
   release) and let the app tail the log directly. Simplest; reversible.
@@ -295,7 +312,7 @@ a much larger project, unrelated to bounce handling.
    (`/var/www/vutuv3/shared/.env`, mode 600, owner `vutuv3`). Without it
    `/webhooks/bounces` 404s and bounce handling is simply off (fail-closed).
 4. **Log access**: give the detector read access to `/var/log/mail.log`
-   (§3.4) — add the app user to `adm`, or install the root-side shipper.
+   (§3.5) — add the app user to `adm`, or install the root-side shipper.
 5. **Verify** end to end (§7): send to a known-bad address, watch the log line,
    confirm `undeliverable_at` gets set, then clear it with a real PIN login.
 
