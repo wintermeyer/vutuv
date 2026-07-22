@@ -125,8 +125,13 @@ defmodule Vutuv.BookMetadata do
     Enum.at(sorted, div(length(sorted) - 1, 2))
   end
 
+  # The background pass can afford to wait (and to try again): it runs off the
+  # request path, and a lookup lost to one slow answer leaves the card
+  # silently without its facts until somebody edits the post. The composer's
+  # `lookup/1` above keeps its short, no-retry budget — a member is watching
+  # that one.
   defp get_json(url) do
-    [url: url, receive_timeout: 5_000, retry: false]
+    [url: url, receive_timeout: 15_000, retry: :transient, max_retries: 1]
     |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
     |> Req.get()
     |> case do

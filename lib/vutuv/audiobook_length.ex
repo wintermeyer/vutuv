@@ -65,8 +65,11 @@ defmodule Vutuv.AudiobookLength do
         recordSchema: "MARC21-xml",
         maximumRecords: 1
       ],
-      receive_timeout: 8_000,
-      retry: false
+      # Patient and retried once, like the other background lookups: a
+      # catalogue that answers slowly should cost a second, not the fact.
+      receive_timeout: 15_000,
+      retry: :transient,
+      max_retries: 1
     ]
     |> Keyword.merge(Application.get_env(:vutuv, @req_options_key, []))
     |> Req.get()
