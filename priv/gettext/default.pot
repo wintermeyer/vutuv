@@ -14047,7 +14047,11 @@ msgid "With qualification:"
 msgstr ""
 
 #: lib/vutuv_web/agent_docs/markdown.ex:562
-#: lib/vutuv_web/cv/cv.ex:247
 #, elixir-autogen, elixir-format
 msgid "With qualification: %{name}"
+msgstr ""
+
+#: lib/vutuv_web/components/post_components.ex:1518
+#, elixir-autogen, elixir-format
+msgid "Publisher:"
 msgstr ""

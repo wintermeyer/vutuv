@@ -73,7 +73,10 @@ defmodule VutuvWeb.PostControllerTest do
       html = conn |> get(Posts.path(post)) |> html_response(200)
 
       assert html =~ "data-review-card"
-      assert html =~ "Book review"
+      # No "Book review" caption on the card: the cover, the title and the
+      # medium say what it is. Machines still get the kind from the JSON-LD
+      # below and from the agent-format siblings.
+      refute html =~ ">Book review<"
       assert html =~ "Refactoring"
       assert html =~ "Martin Fowler"
       assert html =~ "Audiobook"
@@ -91,14 +94,22 @@ defmodule VutuvWeb.PostControllerTest do
       |> Ecto.Changeset.change(%{pages: 448, publisher: "Addison-Wesley", duration_minutes: 440})
       |> Repo.update!()
 
-      html = conn |> get(Posts.path(post)) |> html_response(200)
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+      html = LazyHTML.to_html(doc)
 
-      assert html =~ "Addison-Wesley"
-      # The review is of the audiobook (medium "audiobook"), so the page
-      # count is named for what it is — the print edition's — instead of
-      # claiming the recording has pages.
-      assert html =~ "448 pages (print edition)"
+      # The publisher is named, not left as a bare word that could be anything.
+      assert html =~ "Publisher: Addison-Wesley"
       assert html =~ "7 h 20 min"
+
+      # The page count reads as the bare figure under the cover. The review is
+      # of the audiobook (medium "audiobook"), whose recording has no pages —
+      # that the number is the print edition's is what the hover title says,
+      # so the card keeps the short line and the fact stays available.
+      pages = LazyHTML.query(doc, "[data-review-card] [data-review-pages]")
+
+      assert LazyHTML.text(pages) =~ "448 pages"
+      refute LazyHTML.text(pages) =~ "print edition"
+      assert LazyHTML.attribute(pages, "title") == ["448 pages (print edition)"]
     end
 
     test "a runtime borrowed from another edition reads as approximate", %{conn: conn} do
@@ -135,6 +146,107 @@ defmodule VutuvWeb.PostControllerTest do
       # belongs in it.
       assert html =~ ~s("@type": "Audiobook")
       assert html =~ ~s("duration": "PT1H15M")
+    end
+
+    test "the publisher rides the identity block, right under year and medium", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      post.review
+      |> Ecto.Changeset.change(%{publisher: "Addison-Wesley"})
+      |> Repo.update!()
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+
+      # It is a line of the same paragraph as the author and the year · medium
+      # line (a `block` span), so it sits directly below them instead of
+      # opening a new spaced-out paragraph.
+      publisher =
+        doc |> LazyHTML.query("[data-review-card] [data-review-meta] + [data-review-publisher]")
+
+      assert LazyHTML.text(publisher) =~ "Publisher: Addison-Wesley"
+      assert LazyHTML.attribute(publisher, "class") == ["block"]
+    end
+
+    test "the edition facts and links form their own full-width row", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+      store_cover!(post.review)
+
+      post.review |> Ecto.Changeset.change(%{pages: 448}) |> Repo.update!()
+
+      post.review |> Ecto.Changeset.change(%{duration_minutes: 440}) |> Repo.update!()
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+
+      # A direct child of the card, below the cover + identity row: one column
+      # running the card's full width, listing the ISBN, an audiobook's running
+      # time and then the two outbound links.
+      details = LazyHTML.query(doc, "[data-review-card] > [data-review-details]")
+      text = LazyHTML.text(details)
+
+      assert text =~ "978-3-16-148410-0"
+      assert text =~ "7 h 20 min"
+      assert text =~ "Open Library"
+      assert text =~ "Amazon"
+      # In that order.
+      assert text =~ ~r/978-3-16-148410-0.*7 h 20 min.*Open Library.*Amazon/s
+
+      # And nothing of it is left behind beside the cover.
+      identity = LazyHTML.text(LazyHTML.query(doc, "[data-review-card] [data-review-identity]"))
+      refute identity =~ "978-3-16-148410-0"
+      refute identity =~ "Open Library"
+    end
+
+    test "a very long title and creator are cut to two lines, in full on hover", %{conn: conn} do
+      user = insert_activated_user()
+      long = "Refactoring — Wie Sie das Design bestehender Software verbessern. Mit einem Vorwort"
+      authors = "Martin Fowler, Kent Beck, John Brant, William Opdyke und Don Roberts"
+
+      post =
+        create_post!(user, %{
+          body: "Sehr lesenswert.",
+          review: %{"kind" => "book", "title" => long, "creator" => authors}
+        })
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+      title = LazyHTML.query(doc, "[data-review-card] [data-review-title]")
+      creator = LazyHTML.query(doc, "[data-review-card] [data-review-creator]")
+
+      # Two lines is the ceiling for both; the whole string stays reachable on
+      # hover (and in the agent formats), so nothing is lost by cutting it.
+      assert LazyHTML.attribute(title, "class") == [
+               "line-clamp-2 font-semibold text-slate-900 dark:text-slate-100"
+             ]
+
+      assert LazyHTML.attribute(title, "title") == [long]
+
+      # `line-clamp-2` brings its own `display`, so the creator carries no
+      # second display utility that could win the cascade over it.
+      assert LazyHTML.attribute(creator, "class") == ["line-clamp-2"]
+      assert LazyHTML.attribute(creator, "title") == [authors]
+    end
+
+    test "the page count sits under the cover, not in the facts row", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+      store_cover!(post.review)
+
+      post.review |> Ecto.Changeset.change(%{pages: 448}) |> Repo.update!()
+
+      doc = conn |> get(Posts.path(post)) |> html_response(200) |> LazyHTML.from_document()
+
+      # It belongs to the cover: how thick the book is, right under the picture
+      # of it, small — not another line competing with the title block or the
+      # catalogue facts.
+      assert LazyHTML.text(LazyHTML.query(doc, "[data-review-cover] [data-review-pages]")) =~
+               "448 pages"
+
+      refute LazyHTML.text(LazyHTML.query(doc, "[data-review-card] [data-review-details]")) =~
+               "448 pages"
+
+      refute LazyHTML.text(LazyHTML.query(doc, "[data-review-card] [data-review-identity]")) =~
+               "448 pages"
     end
 
     test "a printed book's page count carries no edition marker", %{conn: conn} do
@@ -320,14 +432,19 @@ defmodule VutuvWeb.PostControllerTest do
       user = insert_activated_user()
       post = reviewed_post!(user)
 
+      post.review
+      |> Ecto.Changeset.change(%{publisher: "Addison-Wesley", pages: 448})
+      |> Repo.update!()
+
       html =
         conn
         |> put_req_header("accept-language", "de-DE,de")
         |> get(Posts.path(post))
         |> html_response(200)
 
-      assert html =~ "Buchbesprechung"
       assert html =~ "Hörbuch"
+      assert html =~ "Verlag: Addison-Wesley"
+      assert html =~ "448 Seiten"
     end
   end
 
