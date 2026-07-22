@@ -981,11 +981,13 @@ defmodule VutuvWeb.UI do
     """
   end
 
-  # The small honor marker on an honor-tag chip: an icon only (no text in the
-  # flow, so tag_wording_test stays about tags), labelled for assistive tech via
-  # title/aria-label. Marks a vutuv-granted badge as distinct from a self-claimed
-  # tag.
-  defp honor_tag_badge(assigns) do
+  @doc """
+  The small **honor marker** on an honor tag: an icon only (no text in the
+  flow, so `tag_wording_test` stays about tags), labelled for assistive tech via
+  title/aria-label. Marks a vutuv-granted badge as distinct from a self-claimed
+  tag. Rendered by `<.tag_vote>`'s chip and by the tag list page's rows.
+  """
+  def honor_tag_badge(assigns) do
     ~H"""
     <span
       class="inline-flex shrink-0 text-brand-600 dark:text-brand-400"
@@ -1000,6 +1002,130 @@ defmodule VutuvWeb.UI do
         />
       </svg>
     </span>
+    """
+  end
+
+  @doc """
+  The **endorsement line** for one of a member's tags (issue #895): the
+  endorsers' faces (an `<.avatar_stack>`) plus a sentence naming the newest of
+  them, which links to that tag's full endorser list
+  (`/:slug/tags/:tag/endorsers`).
+
+  It is the readable twin of `<.tag_vote>`'s hover roster — a popover a touch
+  device can never open — and carries the tag list page (`/:slug/tags`), where
+  the endorsements are the point of the page rather than a detail behind a
+  chip. Viewer-independent, like every public section page.
+
+  Renders **nothing** when nobody endorses the tag (an unendorsed row stays
+  quiet instead of repeating an empty state down the whole list) and nothing
+  for an honor tag, which is an admin-granted badge, not a peer vouch. Reads
+  the `endorsements` preload (with their `:user`), so it costs no query.
+  """
+  attr(:user, :map, required: true, doc: "the profile owner whose tag this is")
+
+  attr(:user_tag, :map,
+    required: true,
+    doc: "a UserTag with `endorsements` (and their `:user`) preloaded"
+  )
+
+  attr(:class, :any, default: nil)
+
+  # How many endorser faces the line shows before the rest fold into the stack's
+  # `+N` chip. Five spaced 20px faces still leave the sentence most of the row
+  # on a laptop, and fit on their own line on a phone.
+  @endorser_stack_cap 5
+
+  def endorsed_by(assigns) do
+    {shown, total} = roster_for(assigns.user_tag, nil, @endorser_stack_cap)
+
+    assigns =
+      assigns
+      |> assign(:shown, shown)
+      |> assign(:primary, List.first(shown))
+      # Everyone besides the named (newest) endorser: the "and N others" tail.
+      |> assign(:others, max(total - 1, 0))
+
+    ~H"""
+    <div
+      :if={@primary && !UserTag.tag(@user_tag).honor?}
+      class={["flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1", @class]}
+    >
+      <.avatar_stack users={@shown} overlap={false} />
+      <%!-- On a phone the sentence takes a line of its own under the faces
+      (`basis-full`) and wraps; from `sm` up it shares the row with them and
+      truncates instead, so a long name can't push the tag name around. Sharing
+      the narrow line with the faces would squeeze it into three ragged lines,
+      and an ellipsis two words in would cut off the very name it exists to
+      show. --%>
+      <.link
+        navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
+        class="min-w-0 basis-full text-xs text-slate-600 hover:text-brand-700 sm:basis-auto sm:truncate dark:text-slate-400 dark:hover:text-brand-300"
+      >
+        <%= if @others == 0 do %>
+          {gettext("Endorsed by %{name}", name: endorser_name(@primary))}
+        <% else %>
+          {ngettext(
+            "Endorsed by %{name} and %{formatted} other",
+            "Endorsed by %{name} and %{formatted} others",
+            @others,
+            name: endorser_name(@primary),
+            formatted: compact_count(@others)
+          )}
+        <% end %>
+      </.link>
+    </div>
+    """
+  end
+
+  @doc """
+  A **stack of overlapping avatars**, each linking to that member's profile and
+  carrying their name as its tooltip, with the rest collapsing into a trailing
+  `+N` chip once the list runs past `cap`. The compact way to show "these people
+  did this" beside a sentence that names them, so the stack itself is
+  `aria-hidden` decoration. Shared by the post card's "Reposted by" banner and
+  the tag list page's `<.endorsed_by>` line.
+  """
+  attr(:users, :list, required: true)
+  attr(:cap, :integer, default: 5)
+  attr(:size, :string, default: "2xs")
+
+  attr(:overlap, :boolean,
+    default: true,
+    doc:
+      "shingle the faces (the dense default); pass false for a spaced row, which keeps the initials of a picture-less member readable instead of hiding half of them under the next face"
+  )
+
+  attr(:class, :any, default: nil)
+
+  def avatar_stack(assigns) do
+    shown = Enum.take(assigns.users, assigns.cap)
+
+    assigns =
+      assigns
+      |> assign(:shown, Enum.with_index(shown))
+      |> assign(:overflow, length(assigns.users) - length(shown))
+      |> assign(:pull, assigns.overlap && "-ml-1.5")
+
+    ~H"""
+    <div class={["flex shrink-0 items-center", !@overlap && "gap-1", @class]} aria-hidden="true">
+      <.link
+        :for={{user, i} <- @shown}
+        href={~p"/#{user}"}
+        title={VutuvWeb.UserHelpers.full_name(user)}
+        class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && @pull]}
+      >
+        <.avatar user={user} size={@size} />
+      </.link>
+      <span
+        :if={@overflow > 0}
+        class={[
+          "inline-flex h-5 items-center rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900",
+          @pull
+        ]}
+      >
+        +{compact_count(@overflow)}
+      </span>
+    </div>
     """
   end
 

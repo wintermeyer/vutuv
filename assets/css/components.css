@@ -81,7 +81,11 @@ td {
   padding: 10px 0;
   border-bottom: 1px solid #e2e8f0;
 }
-td:last-child {
+/* The trailing cell of a table carries the row's actions, so it hugs the right
+   edge. A table with a single column has no trailing cell in that sense — its
+   one column is the content, and right-aligning it strands the text in the
+   middle of nowhere (issue #895), so exclude it. */
+td:not(:first-child):last-child {
   text-align: right;
 }
 td a + a {

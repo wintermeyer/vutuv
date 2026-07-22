@@ -444,7 +444,9 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   defp entry_line("tags", %{honor: true} = tag),
     do: "- [#{tag.name}](#{tag.url}) (#{gettext("honor tag")})"
 
-  defp entry_line("tags", tag), do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)})"
+  defp entry_line("tags", tag),
+    do: "- [#{tag.name}](#{tag.url}) (#{endorsements_label(tag)}#{endorser_names(tag)})"
+
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
@@ -523,6 +525,14 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   def endorsements_label(tag) do
     gettext("%{count} endorsements", count: tag.endorsements)
   end
+
+  # The endorsers the tag list page names beside each tag (issue #895), as
+  # links after the count. The profile's tag list carries no roster, so it
+  # renders nothing there.
+  defp endorser_names(%{endorsers: [_ | _] = people}),
+    do: ": " <> Enum.map_join(people, ", ", &"[#{md_text(&1.name)}](#{&1.url})")
+
+  defp endorser_names(_tag), do: ""
 
   @doc """
   The trailing " (Preferred contact language)" gloss on the member's first

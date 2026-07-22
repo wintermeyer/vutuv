@@ -22,11 +22,12 @@ defmodule VutuvWeb.UserTagController do
   # Index and show are also served as Markdown / text / JSON via
   # VutuvWeb.AgentDocs.SectionDocs (see agent_docs_drift_test.exs). The
   # shared preload carries the endorsements the docs count and keeps the
-  # order in sync with the profile page.
+  # order in sync with the profile page; the index adds the endorsers
+  # themselves, since its rows name them (issue #895).
   def index(conn, _params) do
     user =
       conn.assigns[:user]
-      |> Repo.preload(user_tags: UserTag.ordered_by_endorsements())
+      |> Repo.preload(user_tags: with_endorsers(UserTag.ordered_by_endorsements()))
 
     AgentDocs.respond(conn,
       html: fn conn ->
@@ -115,6 +116,13 @@ defmodule VutuvWeb.UserTagController do
         )
       end
     )
+  end
+
+  # Each tag with its *visible* endorsers loaded (issue #783: a hidden or
+  # unconfirmed account neither shows nor counts), so the rows and the doc
+  # entries name them without a query per tag.
+  defp with_endorsers(query) do
+    Ecto.Query.preload(query, endorsements: ^UserTagEndorsement.visible_with_endorser())
   end
 
   def delete(conn, %{"id" => _id}) do

@@ -445,7 +445,9 @@ defmodule VutuvWeb.AgentDocs.Text do
   defp entry_line("tags", %{honor: true} = tag),
     do: "* #{tag.name} (#{gettext("honor tag")})"
 
-  defp entry_line("tags", tag), do: "* #{tag.name} (#{Markdown.endorsements_label(tag)})"
+  defp entry_line("tags", tag),
+    do: "* #{tag.name} (#{Markdown.endorsements_label(tag)}#{endorser_names(tag)})"
+
   defp entry_line("work_experiences", work), do: work_line(work)
   defp entry_line("educations", edu), do: education_line(edu)
   defp entry_line("qualifications", qualification), do: qualification_line(qualification)
@@ -545,6 +547,13 @@ defmodule VutuvWeb.AgentDocs.Text do
     work = if person.work_info, do: " — #{person.work_info}", else: ""
     "#{prefix}#{person.name}#{work}#{tags_suffix(Map.get(person, :tags))}\n  #{person.url}"
   end
+
+  # The endorsers the tag list page names beside each tag (issue #895). Plain
+  # names here; the profile's tag list carries no roster and renders nothing.
+  defp endorser_names(%{endorsers: [_ | _] = people}),
+    do: ": " <> Enum.map_join(people, ", ", & &1.name)
+
+  defp endorser_names(_tag), do: ""
 
   # The most-followed listing and the follower / following lists carry a
   # per-person tag summary; the plain names go inline (the structured links live
