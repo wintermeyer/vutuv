@@ -1047,12 +1047,18 @@ defmodule VutuvWeb.UI do
     ~H"""
     <div
       :if={@primary && !UserTag.tag(@user_tag).honor?}
-      class={["flex min-w-0 items-center gap-2", @class]}
+      class={["flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1", @class]}
     >
       <.avatar_stack users={@shown} overlap={false} />
+      <%!-- On a phone the sentence takes a line of its own under the faces
+      (`basis-full`) and wraps; from `sm` up it shares the row with them and
+      truncates instead, so a long name can't push the tag name around. Sharing
+      the narrow line with the faces would squeeze it into three ragged lines,
+      and an ellipsis two words in would cut off the very name it exists to
+      show. --%>
       <.link
         navigate={~p"/#{@user}/tags/#{@user_tag}/endorsers"}
-        class="min-w-0 truncate text-xs text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+        class="min-w-0 basis-full text-xs text-slate-600 hover:text-brand-700 sm:basis-auto sm:truncate dark:text-slate-400 dark:hover:text-brand-300"
       >
         <%= if @others == 0 do %>
           {gettext("Endorsed by %{name}", name: endorser_name(@primary))}
