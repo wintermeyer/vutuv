@@ -842,12 +842,19 @@ defmodule VutuvWeb.PostComponents do
           establishes its own formatting context, so the float narrows it
           instead of overlapping) rather than pushed below the whole picture;
           the container's clearfix (`.markdown--post::after`) keeps everything
-          after this div below the float. --%>
+          after this div below the float. The link screenshot floats here too,
+          ahead of the prose (a float only wraps what follows it) — the same
+          beside-the-text reading as the preview, at the same width. --%>
           <div
             :if={@mode == :full and @post.body != ""}
             class="markdown markdown--post mt-2 text-slate-800 dark:text-slate-200"
             {style_attrs(@body_style)}
           >
+            <.link_screenshot_image
+              :if={@link_screenshot}
+              screenshot={@link_screenshot}
+              class="float-right mb-1 ml-4 w-2/5 sm:w-1/3"
+            />
             {@body_html}
             <.post_tags tags={@post.tags} />
           </div>
@@ -991,14 +998,6 @@ defmodule VutuvWeb.PostComponents do
           >
             {gettext("Image awaiting review, visible only to you")}
           </p>
-
-          <%!-- Full mode (permalink): the link screenshot below the body — a
-          single-URL post has no image gallery — at a modest width. --%>
-          <.link_screenshot_image
-            :if={@mode == :full and @link_screenshot}
-            screenshot={@link_screenshot}
-            class="mt-4 block max-w-md"
-          />
 
           <%!-- The book/film review card (the post's structured sidecar,
           Vutuv.Posts.PostReview): cover or kind glyph, title, creator, year
@@ -1393,9 +1392,10 @@ defmodule VutuvWeb.PostComponents do
 
   defp link_screenshot(_post), do: nil
 
-  # Whether the preview lays the body out beside the link screenshot (3/4 text,
-  # 1/4 screenshot). Only in preview mode with a ready screenshot; full mode
-  # shows the screenshot below the body instead.
+  # Whether the PREVIEW needs the float-wrap body layout for the link screenshot
+  # (a height clamp instead of a line clamp, since `-webkit-line-clamp` cannot
+  # wrap text around a float). Full mode floats the screenshot too, but its body
+  # is unclamped, so it just renders it inside the body div — no flag needed.
   defp link_screenshot_layout?(post, :preview), do: link_screenshot(post) != nil
   defp link_screenshot_layout?(_post, _mode), do: false
 
@@ -1539,10 +1539,11 @@ defmodule VutuvWeb.PostComponents do
   defp review_link_label("movie"), do: gettext("View on IMDb")
   defp review_link_label(_kind), do: gettext("View on Amazon")
 
-  # The link screenshot image, shared by the preview (1/4 column) and full
-  # (below-body) layouts. A decorative duplicate of the body's autolinked URL —
-  # `aria-hidden` + `tabindex=-1` so assistive tech and the tab order keep the
-  # one link in the prose — opening the page in a new tab. `class` positions it.
+  # The link screenshot image, shared by the preview and full layouts — both
+  # float it beside the body. A decorative duplicate of the body's autolinked
+  # URL — `aria-hidden` + `tabindex=-1` so assistive tech and the tab order keep
+  # the one link in the prose — opening the page in a new tab. `class` positions
+  # it and sets the width.
   attr(:screenshot, :any, required: true)
   attr(:class, :string, default: nil)
 

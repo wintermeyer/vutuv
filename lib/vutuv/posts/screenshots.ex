@@ -201,6 +201,35 @@ defmodule Vutuv.Posts.Screenshots do
     |> Repo.update()
   end
 
+  @doc """
+  Puts a job that gave up back in the queue: `pending`/`capturing`/`failed` →
+  `pending` with a clean slate (attempts reset, backoff and last error cleared),
+  so the next drain picks it up. An author-`dismissed` tombstone and a `ready`
+  row are refused with `{:error, :not_requeueable}` — dismissing is the author's
+  decision, and a ready row is not work.
+
+  Nothing else revives a `failed` row: the retry cap is final, so a job that
+  burned its attempts while capture itself was broken (a hanging page that
+  Chromium never bounded, say) would stay dead forever once the environment
+  recovered. This is the admin's hand-back, from `/admin/screenshots`.
+  """
+  def requeue(%PostScreenshot{status: status} = job)
+      when status in ~w(pending capturing failed) do
+    job
+    |> Ecto.Changeset.change(
+      status: "pending",
+      attempts: 0,
+      next_attempt_at: nil,
+      last_error: nil
+    )
+    |> Repo.update()
+  end
+
+  def requeue(%PostScreenshot{}), do: {:error, :not_requeueable}
+
+  @doc "Loads one job by id, raising when it is gone (the admin views' reads)."
+  def get_job!(id), do: Repo.get!(PostScreenshot, id)
+
   ## Draining the queue
 
   @doc """

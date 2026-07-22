@@ -35,6 +35,8 @@ erl_crash.dump
 /screenshots
 /originals
 /moderation_evidence
+# the AI-moderation limbo twin of the served trees (Vutuv.Uploads.quarantine_dir/1)
+/quarantine
 
 # OS X stuff
 #

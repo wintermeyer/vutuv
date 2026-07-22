@@ -41,6 +41,12 @@ defmodule Vutuv.PageScreenshot do
   # slightly looser backstop.
   @capture_seconds 30
   @capture_grace 5
+  # Chromium's own stop, comfortably inside the OS ceiling above. Headless
+  # Chromium takes the shot when the page finishes loading, and a page whose
+  # network never goes quiet never gets there: `--screenshot` then blocks until
+  # the OS kills it and we store nothing at all. `--timeout` stops the load and
+  # shoots what is rendered instead.
+  @page_timeout_seconds 20
 
   @doc """
   Capture `url`'s screenshot off the request path, fire-and-forget: supervised
@@ -254,34 +260,49 @@ defmodule Vutuv.PageScreenshot do
   """
   def capture(url, out_path, opts \\ []) do
     case binary() do
-      nil ->
-        {:error, :chromium_not_found}
-
-      bin ->
-        {width, height} = Keyword.get(opts, :window, window_size())
-
-        # `--headless=new` already runs in a fresh throwaway profile per
-        # invocation, so concurrent captures don't clash and nothing is left
-        # behind in $HOME. `--disable-dev-shm-usage` avoids the small default
-        # /dev/shm crashing Chromium on minimal server setups.
-        args = [
-          "--headless=new",
-          "--disable-gpu",
-          "--hide-scrollbars",
-          "--no-sandbox",
-          "--disable-dev-shm-usage",
-          "--no-first-run",
-          "--disable-extensions",
-          "--force-device-scale-factor=1",
-          "--virtual-time-budget=8000",
-          "--window-size=#{width},#{height}",
-          "--screenshot=#{out_path}",
-          url
-        ]
-
-        run(bin, args, out_path)
+      nil -> {:error, :chromium_not_found}
+      bin -> run(bin, capture_args(url, out_path, opts), out_path)
     end
   end
+
+  @doc """
+  The Chromium command line `capture/3` runs. Split out so the flags are
+  testable without a Chromium binary.
+
+  `--timeout` is the one that decides whether a slow page yields anything:
+  headless Chromium shoots when the page finishes loading, so a page whose
+  network never goes quiet — GitHub's issue search is one — blocks
+  `--screenshot` until the OS force-kill and stores **nothing**.
+  `--virtual-time-budget` does *not* bound that under `--headless=new`, so it is
+  no substitute; with `--timeout` the load is stopped and whatever has rendered
+  is captured, which is what a member sees in their own browser anyway.
+  """
+  def capture_args(url, out_path, opts \\ []) do
+    {width, height} = Keyword.get(opts, :window, window_size())
+
+    # `--headless=new` already runs in a fresh throwaway profile per
+    # invocation, so concurrent captures don't clash and nothing is left
+    # behind in $HOME. `--disable-dev-shm-usage` avoids the small default
+    # /dev/shm crashing Chromium on minimal server setups.
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--hide-scrollbars",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--no-first-run",
+      "--disable-extensions",
+      "--force-device-scale-factor=1",
+      "--virtual-time-budget=8000",
+      "--timeout=#{@page_timeout_seconds * 1000}",
+      "--window-size=#{width},#{height}",
+      "--screenshot=#{out_path}",
+      url
+    ]
+  end
+
+  @doc "The OS-level ceiling for one Chromium run, in seconds."
+  def capture_seconds, do: @capture_seconds
 
   # Chromium can hang on hostile or dead pages. Wrap it in `timeout` so the
   # OS force-kills the process (its children follow) instead of leaving an
@@ -290,18 +311,41 @@ defmodule Vutuv.PageScreenshot do
     {cmd, cmd_args} = wrap_timeout(bin, args)
     task = Task.async(fn -> safe_cmd(cmd, cmd_args) end)
 
-    case Task.yield(task, (@capture_seconds + @capture_grace + 5) * 1000) || Task.shutdown(task) do
-      {:ok, {:ok, {_output, 0}}} ->
-        if File.exists?(out_path), do: :ok, else: {:error, :no_output_file}
+    result =
+      case Task.yield(task, (@capture_seconds + @capture_grace + 5) * 1000) || Task.shutdown(task) do
+        {:ok, {:ok, {_output, 0}}} ->
+          :ok
 
-      {:ok, {:ok, {output, code}}} ->
-        {:error, {:exit_status, code, String.slice(output, 0, 500)}}
+        {:ok, {:ok, {output, code}}} ->
+          {:error, {:exit_status, code, String.slice(output, 0, 500)}}
 
-      {:ok, {:error, reason}} ->
-        {:error, reason}
+        {:ok, {:error, reason}} ->
+          {:error, reason}
 
-      _ ->
-        {:error, :timeout}
+        _ ->
+          {:error, :timeout}
+      end
+
+    capture_outcome(result, out_path)
+  end
+
+  @doc """
+  Turns how the Chromium *process* ended into whether we got a *screenshot* —
+  and the file on disk wins.
+
+  Chromium's `--timeout` stops a page that never finishes loading and writes the
+  shot, but the process can then still hang on shutdown (a renderer stuck in the
+  request that hung the page), so it is killed and reports a failure for a
+  capture that actually succeeded. Discarding that file was the whole bug: the
+  post got no screenshot even though the image already lay in the temp dir. A
+  truncated file is no risk — framing it fails in `Vutuv.BrowserFrame.wrap/3`
+  and the job retries.
+  """
+  def capture_outcome(result, out_path) do
+    cond do
+      File.exists?(out_path) -> :ok
+      result == :ok -> {:error, :no_output_file}
+      true -> result
     end
   end
 

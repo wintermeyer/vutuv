@@ -5,12 +5,14 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
   offset-paginated (`<.pager>`):
 
     * **Queue** — the unfinished jobs (`pending` / `capturing` / `failed`), so an
-      admin can see what is waiting, in flight, or gave up (with the last error);
+      admin can see what is waiting, in flight, or gave up (with the last error),
+      and hand a `failed` one back to the worker ("Retry"), which is the only
+      way a job past the retry cap is ever captured again;
     * **Gallery** — the captured screenshots, each a thumbnail linked to the
       external page beside a link to the post it belongs to.
 
-  Read-only. Lives in the `:admin` live_session (`on_mount :require_admin`); the
-  dead `:admin` pipeline 403s the disconnected render for non-admins.
+  Lives in the `:admin` live_session (`on_mount :require_admin`); the dead
+  `:admin` pipeline 403s the disconnected render for non-admins.
   """
 
   use VutuvWeb, :live_view
@@ -19,6 +21,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
 
   alias Vutuv.Posts
   alias Vutuv.Posts.Screenshots
+  alias Vutuv.Posts.ScreenshotWorker
 
   @impl true
   def mount(_params, _session, socket), do: {:ok, socket}
@@ -43,6 +46,33 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
 
   defp load("gallery", params), do: Screenshots.gallery_page(params)
   defp load(_queue, params), do: Screenshots.queue_page(params)
+
+  @impl true
+  def handle_event("requeue", %{"id" => id}, socket) do
+    socket =
+      case Screenshots.requeue(Screenshots.get_job!(id)) do
+        {:ok, _job} ->
+          # Capture now rather than at the next slow poll — an admin who clicks
+          # retry is watching.
+          ScreenshotWorker.nudge()
+          put_flash(socket, :info, gettext("Screenshot job queued again."))
+
+        {:error, _reason} ->
+          put_flash(socket, :error, gettext("This job cannot be queued again."))
+      end
+
+    {:noreply, reload(socket)}
+  end
+
+  # Re-read the current tab's page, so the row's new status shows at once.
+  defp reload(socket) do
+    {rows, total} = load(socket.assigns.tab, socket.assigns.params)
+
+    socket
+    |> assign(:rows, rows)
+    |> assign(:total, total)
+    |> assign(:counts, Screenshots.counts())
+  end
 
   @impl true
   def render(assigns) do
@@ -122,6 +152,7 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   <th>{gettext("Tries")}</th>
                   <th>{gettext("Last error")}</th>
                   <th>{gettext("Queued")}</th>
+                  <th><span class="sr-only">{gettext("Actions")}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -138,6 +169,17 @@ defmodule VutuvWeb.Admin.ScreenshotLive do
                   <td class="tabular-nums">{ps.attempts}</td>
                   <td class="breakwrap text-slate-600 dark:text-slate-400">{ps.last_error}</td>
                   <td><.local_time at={ps.inserted_at} id={"queued-#{ps.id}"} /></td>
+                  <td>
+                    <.button
+                      :if={ps.status == "failed"}
+                      variant="secondary"
+                      phx-click="requeue"
+                      phx-value-id={ps.id}
+                      phx-disable-with={gettext("Retrying…")}
+                    >
+                      {gettext("Retry")}
+                    </.button>
+                  </td>
                 </tr>
               </tbody>
             </table>

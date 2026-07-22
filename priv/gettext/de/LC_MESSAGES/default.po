@@ -11624,10 +11624,30 @@ msgstr "Eingereiht"
 msgid "Ready"
 msgstr "Fertig"
 
+#: lib/vutuv_web/live/admin/screenshot_live.ex:180
+#, elixir-autogen, elixir-format
+msgid "Retry"
+msgstr "Erneut versuchen"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:178
+#, elixir-autogen, elixir-format
+msgid "Retrying…"
+msgstr "Wird wiederholt…"
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:57
+#, elixir-autogen, elixir-format
+msgid "Screenshot job queued again."
+msgstr "Screenshot-Auftrag erneut eingereiht."
+
 #: lib/vutuv_web/live/admin/screenshot_live.ex:113
 #, elixir-autogen, elixir-format
 msgid "The queue is empty."
 msgstr "Die Warteschlange ist leer."
+
+#: lib/vutuv_web/live/admin/screenshot_live.ex:60
+#, elixir-autogen, elixir-format
+msgid "This job cannot be queued again."
+msgstr "Dieser Auftrag kann nicht erneut eingereiht werden."
 
 #: lib/vutuv_web/live/admin/screenshot_live.ex:122
 #, elixir-autogen, elixir-format
