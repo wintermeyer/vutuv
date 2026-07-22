@@ -136,7 +136,26 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   # An index's whole entry list. Languages need the list (not per-record `entry/2`)
   # to flag the preferred head, so they route through `language_entries/1`.
   defp index_entries(:languages, records), do: language_entries(records)
+
+  # The tags index names who endorses each tag (the HTML rows do), so its
+  # entries carry the same capped, newest-first roster the page shows. The
+  # profile doc's tag list keeps the plain count, hence the index-only merge.
+  defp index_entries(:tags, records),
+    do: Enum.map(records, &Map.put(tag_entry(&1), :endorsers, endorsers(&1)))
+
   defp index_entries(section, records), do: Enum.map(records, &entry(section, &1))
+
+  # As many endorsers as the page's avatar stack shows, newest first (a UUID v7
+  # endorsement id sorts by creation). `[]` when the association was not
+  # preloaded, so a caller that only needs counts stays cheap.
+  defp endorsers(%UserTag{endorsements: endorsements}) when is_list(endorsements) do
+    endorsements
+    |> Enum.sort_by(& &1.id, :desc)
+    |> Enum.take(5)
+    |> Enum.map(&AgentDocs.person_ref(&1.user))
+  end
+
+  defp endorsers(_user_tag), do: []
 
   # The shared entry vocabulary (also used by ProfileDoc).
 

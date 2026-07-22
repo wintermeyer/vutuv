@@ -457,6 +457,35 @@ Like the other sections it has a Messengers card on the profile, owner CRUD on
 kept in sync by the agent-docs drift test) carrying the deep link, `IMPP` lines
 on the vCard (RFC 4770), and an `/api/2.0` read+write section.
 
+## Tags and their endorsements (issue #895)
+
+The profile's **Tags** card is a row of `<.tag_vote>` chips: the tag name, the
+visible-endorsement count as a pill (which is also the endorse toggle for a
+logged-in non-owner) and, on hover, a small roster naming the endorsers. A hover
+is not available on a touch device, so the chip alone leaves the endorsements
+half-hidden.
+
+The section page **`/:slug/tags`** is where they are readable outright. It is a
+row per tag: the name (plus the `<.honor_tag_badge>` for an honor tag) on the
+left, and on the right the `<.endorsed_by>` line — an `<.avatar_stack>` of up to
+five endorser faces beside a sentence naming the newest of them ("Endorsed by
+Alex Demushkane and 19 others"), the sentence linking to that tag's full
+endorser list at `/:slug/tags/:tag/endorsers`. It stays the plain public
+showcase every section page is: viewer-independent, **no** endorse control (that
+lives on the profile), nothing for an honor tag, which is an admin-granted badge
+rather than a peer vouch, and nothing at all for a tag nobody has endorsed yet.
+The controller preloads the endorsements with their endorsers
+(`UserTagEndorsement.visible_with_endorser/0`, so a hidden or unconfirmed
+account neither shows nor counts, issue #783), which is also what feeds the
+`endorsers` list the agent-format siblings carry per entry
+(`SectionDocs.index_entries/2`; the profile doc's tag list keeps the plain
+count).
+
+Because that page shows more than the card does rather than just more of it, the
+profile's Tags card always offers a visitor the "All tags" footer link — not
+only once the card is truncated, which with the 15-tag cap it never is. The
+owner's footer stays the "Manage" bridge into `/settings/tags`.
+
 ## Ordered profile sections
 
 Members arrange their links, phone numbers, addresses, social media accounts,

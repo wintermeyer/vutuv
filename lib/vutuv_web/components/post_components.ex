@@ -1301,13 +1301,11 @@ defmodule VutuvWeb.PostComponents do
 
   defp reposted_banner(assigns) do
     reposters = assigns.reposters
-    shown = Enum.take(reposters, @repost_stack_cap)
 
     assigns =
       assigns
       |> assign(:primary, hd(reposters))
-      |> assign(:shown, Enum.with_index(shown))
-      |> assign(:overflow, length(reposters) - length(shown))
+      |> assign(:cap, @repost_stack_cap)
       # Everyone besides the named (newest) reposter — the "and N others" tail.
       |> assign(:others, length(reposters) - 1)
 
@@ -1319,22 +1317,7 @@ defmodule VutuvWeb.PostComponents do
       <.icon_repost class="h-4 w-4 shrink-0" />
       <%!-- The stack's avatars link to each reposter; the sentence beside it
       names them, so the stack itself is decorative for assistive tech. --%>
-      <div class="flex shrink-0 items-center" aria-hidden="true">
-        <.link
-          :for={{reposter, i} <- @shown}
-          href={~p"/#{reposter}"}
-          title={full_name(reposter)}
-          class={["rounded-full ring-2 ring-white dark:ring-slate-900", i > 0 && "-ml-1.5"]}
-        >
-          <.avatar user={reposter} size="2xs" />
-        </.link>
-        <span
-          :if={@overflow > 0}
-          class="-ml-1.5 inline-flex h-5 items-center rounded-full bg-slate-100 px-1.5 text-[10px] font-bold text-slate-600 ring-2 ring-white dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-900"
-        >
-          +{compact_count(@overflow)}
-        </span>
-      </div>
+      <.avatar_stack users={@reposters} cap={@cap} />
       <span class="min-w-0 truncate">
         <%= if @others == 0 do %>
           <.link href={~p"/#{@primary}"} class="hover:text-brand-700">

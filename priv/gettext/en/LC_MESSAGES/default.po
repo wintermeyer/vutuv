@@ -14049,3 +14049,15 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "With qualification: %{name}"
 msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:1055
+#, elixir-autogen, elixir-format
+msgid "Endorsed by %{name}"
+msgstr ""
+
+#: lib/vutuv_web/components/ui.ex:1057
+#, elixir-autogen, elixir-format
+msgid "Endorsed by %{name} and %{formatted} other"
+msgid_plural "Endorsed by %{name} and %{formatted} others"
+msgstr[0] ""
+msgstr[1] ""

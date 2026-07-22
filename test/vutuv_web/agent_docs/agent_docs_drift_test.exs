@@ -583,6 +583,31 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     end
   end
 
+  test "the tag list names each tag's endorsers in every format (issue #895)", %{
+    user: user,
+    tag: tag,
+    follower: follower
+  } do
+    user_tag =
+      Repo.one!(
+        from(ut in Vutuv.Tags.UserTag, where: ut.user_id == ^user.id and ut.tag_id == ^tag.id)
+      )
+
+    insert(:user_tag_endorsement, user_tag: user_tag, user: follower)
+
+    rendered = formats_for("/drift_tester/tags")
+
+    # The HTML rows name the endorsers, so the docs carry the same roster.
+    assert_fact_everywhere(rendered, "Fanny Follower")
+
+    entry =
+      Jason.decode!(rendered.json)["entries"]
+      |> Enum.find(&(&1["name"] == tag.name))
+
+    assert entry["endorsements"] == 1
+    assert [%{"name" => "Fanny Follower", "username" => _}] = entry["endorsers"]
+  end
+
   test "section docs are noindexed like their HTML pages (the NoIndex pipeline)" do
     conn = get(build_conn(), "/drift_tester/work_experiences.md")
 

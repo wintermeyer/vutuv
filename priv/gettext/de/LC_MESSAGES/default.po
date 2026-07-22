@@ -14789,3 +14789,15 @@ msgstr "Verlag:"
 #, elixir-autogen, elixir-format
 msgid "by:"
 msgstr "von:"
+
+#: lib/vutuv_web/components/ui.ex:1055
+#, elixir-autogen, elixir-format
+msgid "Endorsed by %{name}"
+msgstr "Empfohlen von %{name}"
+
+#: lib/vutuv_web/components/ui.ex:1057
+#, elixir-autogen, elixir-format
+msgid "Endorsed by %{name} and %{formatted} other"
+msgid_plural "Endorsed by %{name} and %{formatted} others"
+msgstr[0] "Empfohlen von %{name} und %{formatted} weiteren"
+msgstr[1] "Empfohlen von %{name} und %{formatted} weiteren"
