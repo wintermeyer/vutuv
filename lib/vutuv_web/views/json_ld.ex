@@ -465,7 +465,10 @@ defmodule VutuvWeb.JsonLd do
       "isbn" => review.identifier,
       "datePublished" => review.year && Integer.to_string(review.year),
       "numberOfPages" => review.pages,
-      "duration" => iso_duration(review.duration_minutes),
+      # Only the edition's OWN stated running time is a structured fact; one
+      # borrowed from a sibling audio edition (duration_isbn set) reads as
+      # approximate on the card and has no place in machine-read data.
+      "duration" => if(is_nil(review.duration_isbn), do: iso_duration(review.duration_minutes)),
       "publisher" => publisher(review.publisher),
       "bookFormat" => book_format(review.medium)
     })

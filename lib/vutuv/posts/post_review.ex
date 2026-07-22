@@ -51,6 +51,10 @@ defmodule Vutuv.Posts.PostReview do
     field(:pages, :integer)
     field(:publisher, :string)
     field(:duration_minutes, :integer)
+    # Which edition the running time belongs to: nil = this review's own
+    # ISBN (exact), an ISBN = borrowed from another audio edition of the
+    # same work, which the card marks as approximate.
+    field(:duration_isbn, :string)
 
     field(:cover, :string)
     field(:cover_status, :string, default: "none")
@@ -163,7 +167,8 @@ defmodule Vutuv.Posts.PostReview do
           cover_moderation: nil,
           pages: nil,
           publisher: nil,
-          duration_minutes: nil
+          duration_minutes: nil,
+          duration_isbn: nil
         )
 
       not isbn? and get_field(changeset, :cover_status) != "none" ->
@@ -173,7 +178,8 @@ defmodule Vutuv.Posts.PostReview do
           cover_moderation: nil,
           pages: nil,
           publisher: nil,
-          duration_minutes: nil
+          duration_minutes: nil,
+          duration_isbn: nil
         )
 
       true ->

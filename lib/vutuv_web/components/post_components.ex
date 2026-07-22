@@ -1702,13 +1702,24 @@ defmodule VutuvWeb.PostComponents do
   An audiobook's running time as a reader-facing label ("7 h 20 min",
   German "7 Std. 20 Min."), nil when no catalogue stated one. Whole minutes
   in, hours and minutes out — the form every audiobook shop prints.
+
+  A time read from **another** audio edition of the same work (the review
+  carries the print ISBN, so `duration_isbn` names where it came from) is
+  prefixed "approx." — the editions the catalogue lists agreed on it, but it
+  is not this pressing's stated length and must not read as one.
   """
-  def review_duration_label(%{duration_minutes: total})
+  def review_duration_label(%{duration_minutes: total} = review)
       when is_integer(total) and total > 0 do
-    case {div(total, 60), rem(total, 60)} do
-      {0, minutes} -> gettext("%{minutes} min", minutes: minutes)
-      {hours, 0} -> gettext("%{hours} h", hours: hours)
-      {hours, minutes} -> gettext("%{hours} h %{minutes} min", hours: hours, minutes: minutes)
+    label =
+      case {div(total, 60), rem(total, 60)} do
+        {0, minutes} -> gettext("%{minutes} min", minutes: minutes)
+        {hours, 0} -> gettext("%{hours} h", hours: hours)
+        {hours, minutes} -> gettext("%{hours} h %{minutes} min", hours: hours, minutes: minutes)
+      end
+
+    case Map.get(review, :duration_isbn) do
+      nil -> label
+      _other_edition -> gettext("approx. %{duration}", duration: label)
     end
   end
 

@@ -155,14 +155,18 @@ defmodule Vutuv.Posts.ReviewCovers do
         :error -> []
       end
 
-    # Only an audiobook review asks for a running time: a print ISBN has
-    # none, so the catalogue request would be spent for nothing.
+    # Only an audiobook review asks for a running time. The lookup answers
+    # from the review's own ISBN when that is the audio edition, else from
+    # the work's other audio editions when they agree — `duration_isbn`
+    # records which, and nil means "nothing we could establish honestly",
+    # which must still overwrite a stale value, so it is kept in the list.
     duration =
-      if review.medium == "audiobook",
-        do: [duration_minutes: AudiobookLength.minutes(isbn)],
-        else: []
+      case review.medium == "audiobook" && AudiobookLength.lookup(review) do
+        {minutes, from_isbn} -> [duration_minutes: minutes, duration_isbn: from_isbn]
+        _none -> []
+      end
 
-    Enum.reject(edition ++ duration, fn {_key, value} -> is_nil(value) end)
+    Enum.reject(edition, fn {_key, value} -> is_nil(value) end) ++ duration
   end
 
   defp get_cover(isbn) do

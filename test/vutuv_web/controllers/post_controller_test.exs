@@ -101,6 +101,42 @@ defmodule VutuvWeb.PostControllerTest do
       assert html =~ "7 h 20 min"
     end
 
+    test "a runtime borrowed from another edition reads as approximate", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      # The review carries the print ISBN; the runtime came from the work's
+      # audio edition (duration_isbn), so it must not read as this
+      # edition's stated length — and it stays out of the structured data,
+      # which has no way to say "approximately".
+      post.review
+      |> Ecto.Changeset.change(%{duration_minutes: 75, duration_isbn: "9783837170825"})
+      |> Repo.update!()
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "approx. 1 h 15 min"
+      refute html =~ "PT1H15M"
+    end
+
+    test "an exact runtime reads plainly and reaches the structured data", %{conn: conn} do
+      user = insert_activated_user()
+      post = reviewed_post!(user)
+
+      post.review
+      |> Ecto.Changeset.change(%{duration_minutes: 75, duration_isbn: nil})
+      |> Repo.update!()
+
+      html = conn |> get(Posts.path(post)) |> html_response(200)
+
+      assert html =~ "1 h 15 min"
+      refute html =~ "approx."
+      # An audiobook is its own schema.org type, and only a stated length
+      # belongs in it.
+      assert html =~ ~s("@type": "Audiobook")
+      assert html =~ ~s("duration": "PT1H15M")
+    end
+
     test "a printed book's page count carries no edition marker", %{conn: conn} do
       user = insert_activated_user()
 
