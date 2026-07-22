@@ -107,9 +107,13 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
     <%!-- Post display: how posts you read are shortened in the feed and on
           profiles. The line counts drive the CSS clamp on the preview body
           (desktop and mobile separately); 0 or an empty field means no
-          shortening at all. The hyphenation switches control whether long words
-          break at syllable points — the default is off on desktop and on for
-          the narrow phone column. VutuvWeb.PostComponents reads these back. --%>
+          shortening at all. The notification count does the same for the post a
+          /notifications row quotes, where an empty field means "inherit the
+          site default" (a quote there is always cut, so it has no 0 mode). The
+          hyphenation switches control whether long words break at syllable
+          points — the default is off on desktop and on for the narrow phone
+          column. VutuvWeb.PostComponents and VutuvWeb.NotificationLive.Index
+          read these back. --%>
     <.card>
       <.section_title>{gettext("Posts")}</.section_title>
       <p class="mt-1 text-sm text-slate-600 dark:text-slate-400">
@@ -153,6 +157,27 @@ shortened and hyphenated. Each form posts its own subset and lands back here. --
                 "aria-invalid": f.errors[:post_lines_mobile] && "true" %>
               <%= error_tag f, :post_lines_mobile %>
             </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="space-y-2">
+          <legend class="text-sm font-medium text-slate-900 dark:text-white">
+            {gettext("Quoted posts in notifications")}
+          </legend>
+          <p class="text-sm text-slate-600 dark:text-slate-400">
+            {gettext(
+              "Your notifications quote the post someone liked or replied to. Leave the field empty to follow the site default."
+            )}
+          </p>
+
+          <div class="sm:max-w-[13rem]">
+            <%= label f, :notification_post_lines, gettext("Lines in notifications"), class: "block text-sm font-medium text-slate-900 dark:text-white" %>
+            <%= number_input f, :notification_post_lines,
+              min: Vutuv.Accounts.User.notification_post_lines_min(),
+              max: Vutuv.Accounts.User.notification_post_lines_max(),
+              class: input_class(f, :notification_post_lines),
+              "aria-invalid": f.errors[:notification_post_lines] && "true" %>
+            <%= error_tag f, :notification_post_lines %>
           </div>
         </fieldset>
 

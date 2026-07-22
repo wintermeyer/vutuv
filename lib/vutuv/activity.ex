@@ -413,6 +413,11 @@ defmodule Vutuv.Activity do
   The cursor (and the merge across the sources) is the shared
   `Vutuv.FeedPage` scheme. Treat it as opaque.
 
+  `page:` (a 1-based page number) switches to numbered **offset** pagination
+  instead — the same merged feed walked by page rather than by cursor, which
+  is what /notifications renders (a page you can link to and jump around in);
+  `next_cursor` is then always nil. Pass one or the other, not both.
+
   `kinds:` (a list of kind strings) restricts the feed to those event kinds -
   only the matching source queries run, so a filtered page paginates exactly
   like the full feed. Backs the filter tabs on /notifications; omitting it
@@ -420,13 +425,15 @@ defmodule Vutuv.Activity do
   """
   def notifications_page(user_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, @default_limit)
-    cursor = Keyword.get(opts, :cursor)
     kinds = Keyword.get(opts, :kinds)
+    page = Keyword.get(opts, :page)
 
     sources =
       for {kind, source} <- kind_sources(user_id), kinds == nil or kind in kinds, do: source
 
-    Vutuv.FeedPage.paginate(sources, limit, cursor)
+    if page,
+      do: Vutuv.FeedPage.paginate_offset(sources, limit, (max(page, 1) - 1) * limit),
+      else: Vutuv.FeedPage.paginate(sources, limit, Keyword.get(opts, :cursor))
   end
 
   # Every feed source keyed by the kind string its items carry, so `kinds:`
@@ -470,12 +477,17 @@ defmodule Vutuv.Activity do
   end
 
   @doc """
-  The size of the whole derived feed, read marker ignored. Backs the
-  "Load N of M more" label under the feed. Zero for a logged-out visitor.
-  """
-  def notifications_count(nil), do: 0
+  The size of the derived feed, read marker ignored. Backs the numbered pager
+  under /notifications. Zero for a logged-out visitor.
 
-  def notifications_count(user_id), do: total_count(user_id, nil)
+  `kinds` (a list of kind strings, `nil` = every source) restricts the count
+  the same way `notifications_page/2`'s `kinds:` restricts the feed, so a
+  filtered tab's page count matches the rows it pages through.
+  """
+  def notifications_count(user_id, kinds \\ nil)
+  def notifications_count(nil, _kinds), do: 0
+
+  def notifications_count(user_id, kinds), do: total_count(user_id, nil, kinds)
 
   @doc """
   How many feed events are newer than the user's read marker (all of them when
@@ -491,26 +503,51 @@ defmodule Vutuv.Activity do
   # The feed sources are counted in a single round trip: each count is a
   # scalar subquery, summed in one SELECT. unread_notification_count/1 still
   # needs one prior read for the marker, so it ends up at 2 queries;
-  # notifications_count/1 needs no marker and so runs in 1 query. The
+  # notifications_count/2 needs no marker and so runs in 1 query. The
   # strict `> read_at` unread filter and the GREATEST-anchored mutuality
   # timestamp are unchanged — only the round trips collapse.
-  defp total_count(user_id, read_at) do
-    Repo.one(
-      from(s in subquery(count_followers(user_id, read_at)),
-        select:
-          s.count + subquery(count_endorsements(user_id, read_at)) +
-            subquery(count_connections(user_id, read_at)) +
-            subquery(count_replies(user_id, read_at)) +
-            subquery(count_likes(user_id, read_at)) +
-            subquery(count_organization_roles(user_id, read_at)) +
-            subquery(count_cv_updates(user_id, read_at)) +
-            subquery(count_moderation(user_id, read_at)) +
-            subquery(count_image_rejections(user_id, read_at)) +
-            subquery(count_severances(user_id, read_at)) +
-            subquery(count_severance_restores(user_id, read_at)) +
-            subquery(count_handle_changes(user_id, read_at))
-      )
-    )
+  #
+  # `kinds` picks the subset to count, mirroring `kind_sources/1`; the sum is
+  # built with dynamics so the filtered case stays one query too.
+  defp total_count(user_id, read_at, kinds \\ nil) do
+    counts =
+      for {kind, count} <- kind_counts(user_id, read_at),
+          kinds == nil or kind in kinds,
+          do: count
+
+    case counts do
+      [] ->
+        0
+
+      [first | rest] ->
+        sum =
+          Enum.reduce(rest, dynamic([s], s.count), fn count, acc ->
+            dynamic(^acc + subquery(count))
+          end)
+
+        Repo.one(from(s in subquery(first), select: ^sum))
+    end
+  end
+
+  # Every count query keyed by the kind string of the source it counts — the
+  # count-side twin of `kind_sources/1`, so a `kinds:` filter narrows the feed
+  # and its total the same way. `report_protection` is two queries (severed and
+  # restored), matching the one source that emits both.
+  defp kind_counts(user_id, read_at) do
+    [
+      {"follower", count_followers(user_id, read_at)},
+      {"endorsement", count_endorsements(user_id, read_at)},
+      {"connection", count_connections(user_id, read_at)},
+      {"reply", count_replies(user_id, read_at)},
+      {"like", count_likes(user_id, read_at)},
+      {"organization_role", count_organization_roles(user_id, read_at)},
+      {"cv_update", count_cv_updates(user_id, read_at)},
+      {"moderation", count_moderation(user_id, read_at)},
+      {"image_rejected", count_image_rejections(user_id, read_at)},
+      {"report_protection", count_severances(user_id, read_at)},
+      {"report_protection", count_severance_restores(user_id, read_at)},
+      {"handle_change", count_handle_changes(user_id, read_at)}
+    ]
   end
 
   defp follower_items(user_id, limit, cursor) do

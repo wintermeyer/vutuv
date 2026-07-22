@@ -194,6 +194,11 @@ defmodule Vutuv.Accounts.User do
     field(:post_lines_mobile, :integer)
     field(:post_hyphenate_desktop, :boolean)
     field(:post_hyphenate_mobile, :boolean)
+    # How many lines of a quoted post the /notifications rows show. A quote
+    # there sits beside a link to the post itself, so unlike the counts above
+    # it has no "0 = never shorten" mode. Read through
+    # notification_post_lines/1, never straight off the struct.
+    field(:notification_post_lines, :integer)
     # The account owner proved control of their email by entering a login PIN
     # (set true on first successful login). The anti-spam visibility gate: while
     # false the account is hidden from search, the feed, follower lists and
@@ -289,7 +294,7 @@ defmodule Vutuv.Accounts.User do
   # :email_confirmed? is NOT here either: it flips only via the login-PIN path
   # (Accounts.activate_user/1, its own narrow cast) — castable, it would let a
   # registration self-activate without ever proving control of an email.
-  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
+  @optional_fields ~w(noindex? noai? notification_emails? dm_email_each_message? dm_email_delay_minutes email_on_endorsement? email_on_follower? newsletter_emails? saved_search_emails? cv_update_notifications? show_online_status? show_mastodon_feed? show_code_stats? fediverse_followers? map_google? map_openstreetmap? map_apple? default_map_service post_lines_desktop post_lines_mobile post_hyphenate_desktop post_hyphenate_mobile notification_post_lines headline employment_status employment_status_visibility desired_salary_min desired_salary_currency desired_salary_period desired_salary_visibility first_name last_name middle_name nickname honorific_prefix honorific_suffix gender birthdate birthdate_visibility locale tag_list)a
 
   # The job-availability values a member can advertise (issue #870), other
   # than the "not specified" default which is stored as nil. The single source
@@ -378,6 +383,27 @@ defmodule Vutuv.Accounts.User do
     }
   end
 
+  # The SHIPPED default for the notification quote, mirrored by the
+  # `--notif-clamp` fallback in `.notif-clamp` (components.css) — the same
+  # deal `post_prefs_defaults/0` has with `.post-clamp`, so the DOM stays
+  # clean for a reader who is on the shipped value.
+  @notification_post_lines_default 5
+
+  def notification_post_lines_default, do: @notification_post_lines_default
+
+  @doc """
+  How many lines of a quoted post the reader's /notifications rows show,
+  resolved through `Vutuv.Prefs`: their own explicit value, else the
+  installation default, else the shipped 5. The single seam
+  `VutuvWeb.NotificationLive.Index` reads; never touch the raw struct field.
+  """
+  def notification_post_lines(user) when is_nil(user) or is_struct(user, __MODULE__),
+    do: Prefs.get(user, :notification_post_lines)
+
+  @doc "The bounds the notification-quote line count is validated against."
+  def notification_post_lines_min, do: Prefs.pref!(:notification_post_lines).min
+  def notification_post_lines_max, do: Prefs.pref!(:notification_post_lines).max
+
   @doc """
   The notification-email preference fields, by the param/column name a
   one-click unsubscribe link may switch off. Shared by `UnsubscribeToken`
@@ -429,6 +455,12 @@ defmodule Vutuv.Accounts.User do
     |> validate_number(:post_lines_mobile,
       greater_than_or_equal_to: 0,
       less_than_or_equal_to: post_lines_max()
+    )
+    # The notification quote has no "no truncation" mode (see the schema note),
+    # so its floor is 1, not 0; a cleared field stays nil = inherit.
+    |> validate_number(:notification_post_lines,
+      greater_than_or_equal_to: notification_post_lines_min(),
+      less_than_or_equal_to: notification_post_lines_max()
     )
     |> validate_inclusion(:dm_email_delay_minutes, @dm_email_delay_values)
     |> validate_inclusion(:employment_status, @employment_statuses)

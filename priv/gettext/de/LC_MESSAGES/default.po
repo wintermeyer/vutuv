@@ -14981,3 +14981,31 @@ msgstr "Hochgeladenen Nachweis ansehen (%{label})"
 #, elixir-autogen, elixir-format
 msgid "proof document"
 msgstr "Nachweis"
+
+#: lib/vutuv/prefs.ex:112
+#: lib/vutuv_web/gettext_extraction_anchors.ex:75
+#: lib/vutuv_web/templates/settings/preferences.html.heex:174
+#, elixir-autogen, elixir-format
+msgid "Lines in notifications"
+msgstr "Zeilen in Benachrichtigungen"
+
+#: lib/vutuv/prefs.ex:127
+#: lib/vutuv_web/gettext_extraction_anchors.ex:77
+#, elixir-autogen, elixir-format
+msgid "How much of a post a notification quotes before it is cut off."
+msgstr "Wie viel von einem Beitrag eine Benachrichtigung zitiert, bevor abgeschnitten wird."
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:166
+#, elixir-autogen, elixir-format
+msgid "Quoted posts in notifications"
+msgstr "Zitierte Beiträge in Benachrichtigungen"
+
+#: lib/vutuv_web/templates/settings/preferences.html.heex:169
+#, elixir-autogen, elixir-format
+msgid ""
+"Your notifications quote the post someone liked or replied to. Leave the "
+"field empty to follow the site default."
+msgstr ""
+"Ihre Benachrichtigungen zitieren den Beitrag, der jemandem gefällt oder auf "
+"den geantwortet wurde. Lassen Sie das Feld leer, um die Voreinstellung der "
+"Website zu übernehmen."

@@ -353,6 +353,56 @@ defmodule Vutuv.ActivityTest do
       assert Enum.map(page2.entries, & &1.kind) == ["like"]
       refute page2.more?
     end
+
+    test "page: walks the same feed by numbered page, newest first" do
+      me = insert(:user)
+
+      follows =
+        for i <- 1..5 do
+          follow = insert(:follow, follower: insert(:user), followee: me)
+          backdate_connection(follow, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
+          follow
+        end
+
+      newest_first = follows |> Enum.reverse() |> Enum.map(&"follower-#{&1.id}")
+
+      page1 = Activity.notifications_page(me.id, limit: 2, page: 1)
+      page2 = Activity.notifications_page(me.id, limit: 2, page: 2)
+      page3 = Activity.notifications_page(me.id, limit: 2, page: 3)
+
+      assert Enum.map(page1.entries ++ page2.entries ++ page3.entries, & &1.id) == newest_first
+      assert page1.more? and page2.more?
+      refute page3.more?
+      # An offset page carries no cursor.
+      assert page1.next_cursor == nil
+    end
+
+    test "page: past the end is simply empty, and page 0/negative reads as page 1" do
+      me = insert(:user)
+      insert(:follow, follower: insert(:user), followee: me)
+
+      assert Activity.notifications_page(me.id, limit: 2, page: 9).entries == []
+      assert [_] = Activity.notifications_page(me.id, limit: 2, page: 0).entries
+    end
+
+    test "page: honours kinds:, so a filtered tab pages through its own events" do
+      me = insert(:user)
+      post = insert(:post, user: me)
+
+      for i <- 1..3 do
+        :ok = Vutuv.Posts.like_post(insert(:user), post)
+        backdate_like(post, NaiveDateTime.add(~N[2024-01-01 12:00:00], i * 60))
+        follow = insert(:follow, follower: insert(:user), followee: me)
+        backdate_connection(follow, NaiveDateTime.add(~N[2024-01-01 12:00:30], i * 60))
+      end
+
+      page1 = Activity.notifications_page(me.id, limit: 2, page: 1, kinds: ["like"])
+      page2 = Activity.notifications_page(me.id, limit: 2, page: 2, kinds: ["like"])
+
+      assert Enum.map(page1.entries, & &1.kind) == ["like", "like"]
+      assert Enum.map(page2.entries, & &1.kind) == ["like"]
+      refute page2.more?
+    end
   end
 
   describe "activity_summary/2" do
@@ -489,7 +539,7 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
-  describe "notifications_count/1" do
+  describe "notifications_count/2" do
     test "counts the whole derived feed regardless of the read marker" do
       me = insert(:user)
       insert(:follow, follower: insert(:user), followee: me)
@@ -513,6 +563,44 @@ defmodule Vutuv.ActivityTest do
       insert(:follow, follower: insert(:user), followee: me)
 
       assert {_, 1} = count_queries(fn -> Activity.notifications_count(me.id) end)
+    end
+
+    test "kinds: counts only those sources, so a filtered pager matches its list" do
+      me = insert(:user)
+      insert(:follow, follower: insert(:user), followee: me)
+      post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      assert Activity.notifications_count(me.id, ["like", "reply"]) == 1
+      assert Activity.notifications_count(me.id, ["follower", "connection"]) == 1
+      assert Activity.notifications_count(me.id, ["moderation"]) == 0
+      assert Activity.notifications_count(me.id, nil) == 2
+    end
+
+    test "a filtered count is a single query too" do
+      me = insert(:user)
+      insert(:follow, follower: insert(:user), followee: me)
+
+      assert {_, 1} = count_queries(fn -> Activity.notifications_count(me.id, ["follower"]) end)
+    end
+
+    test "every feed source is counted: the kinds of the count match the feed's" do
+      # The count-side kind list must not drift from the feed-side one, or a
+      # filter tab's pager would count events its list does not show (or miss
+      # some). Both go through the same public seams here.
+      me = insert(:user)
+
+      insert(:follow, follower: insert(:user), followee: me)
+      post = insert(:post, user: me)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+      tag = insert(:tag)
+      user_tag = insert(:user_tag, user: me, tag: tag)
+      insert(:user_tag_endorsement, user: insert(:user), user_tag: user_tag)
+
+      for kind <- ["follower", "like", "endorsement"] do
+        entries = Activity.notifications_page(me.id, kinds: [kind]).entries
+        assert Activity.notifications_count(me.id, [kind]) == length(entries)
+      end
     end
   end
 

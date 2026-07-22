@@ -1007,6 +1007,20 @@ ul.thumbs li .text .url a {
   }
 }
 
+/* The post a /notifications row quotes (the liked post, the reply). Same idea
+   as `.post-clamp`, one breakpoint-independent budget: the line count is a
+   per-reader preference (Vutuv.Prefs `:notification_post_lines`) fed in through
+   the `--notif-clamp` custom property the quote sets inline, and the fallback
+   here is the shipped default, so a reader on that value carries no inline
+   style. The server also cuts the quote to the same number of source lines, so
+   a hidden post body never reaches the DOM. */
+.notif-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-line-clamp: var(--notif-clamp, 5);
+}
+
 /* Truncated feed/profile post preview: fade the clamp into the card so the cut
    reads as intentional, then a quiet muted "Read more" sits under it (see
    VutuvWeb.PostComponents). The fade shows only when the body is really clamped

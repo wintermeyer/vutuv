@@ -385,9 +385,10 @@ need distribution, which the reference setup disables.
 
 Some behaviour is a **member preference** with an installation-wide default:
 how many lines a post shows in the feed before "Read more" (desktop and
-mobile separately), whether post text hyphenates, which map services appear
-on addresses and which one opens first. Members tune these on their own
-settings pages; you decide what everyone gets **until** they do.
+mobile separately), whether post text hyphenates, how many lines of a post a
+notification on `/notifications` quotes, which map services appear on
+addresses and which one opens first. Members tune these on their own settings
+pages; you decide what everyone gets **until** they do.
 
 - **`/admin` → Preference defaults** (`/admin/preferences`): change the
   default for the whole installation at any time. It applies immediately to

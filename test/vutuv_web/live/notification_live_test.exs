@@ -1,7 +1,20 @@
 defmodule VutuvWeb.NotificationLiveTest do
+  # Sync (the ConnCase default): one test injects installation preference
+  # defaults into Vutuv.Prefs.Cache, a node-global persistent_term the SQL
+  # sandbox does not roll back. Keep it that way.
   use VutuvWeb.ConnCase
 
   import Phoenix.LiveViewTest
+
+  alias Vutuv.Prefs
+  alias Vutuv.Prefs.Cache
+
+  # Install `overrides` as the cached installation defaults for one test (the
+  # Cache GenServer is off in tests, so put_defaults/1 alone would not show).
+  defp with_installation_defaults(overrides) do
+    Cache.store(Map.merge(Prefs.shipped_defaults(), overrides))
+    on_exit(fn -> Cache.clear() end)
+  end
 
   describe "GET /notifications" do
     test "renders the first page in the static HTTP response (issue #919 snappy first paint)", %{
@@ -324,19 +337,57 @@ defmodule VutuvWeb.NotificationLiveTest do
       refute has_element?(live, ~s([data-reply-preview]))
     end
 
-    test "the post preview keeps only the first three lines", %{conn: conn} do
+    test "the post preview keeps only the first five lines by default", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
 
-      body = "Line one\nLine two\nLine three\nLine four is hidden"
+      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
       post = insert(:post, user: user, body: body)
       :ok = Vutuv.Posts.like_post(insert(:user), post)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
       html = render(live)
 
-      assert html =~ "Line one"
-      assert html =~ "Line three"
-      refute html =~ "Line four is hidden"
+      assert html =~ "Line 1"
+      assert html =~ "Line 5"
+      refute html =~ "Line 6"
+      # The shipped default needs no inline override: the .notif-clamp
+      # stylesheet fallback already says 5.
+      assert has_element?(live, ~s([data-post-preview] span.notif-clamp))
+      refute html =~ "--notif-clamp"
+    end
+
+    test "the reader's own line count cuts the quote, server-side and in the CSS clamp", %{
+      conn: conn
+    } do
+      {conn, user} = create_and_login_user(conn)
+      {:ok, _user} = Vutuv.Accounts.update_user(user, %{"notification_post_lines" => "2"})
+
+      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
+      post = insert(:post, user: user, body: body)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "Line 2"
+      refute html =~ "Line 3"
+      assert html =~ "--notif-clamp:2"
+    end
+
+    test "the installation default applies to a member who set no line count", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      with_installation_defaults(%{notification_post_lines: 3})
+
+      body = Enum.map_join(1..7, "\n", &"Line #{&1}")
+      post = insert(:post, user: user, body: body)
+      :ok = Vutuv.Posts.like_post(insert(:user), post)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+      html = render(live)
+
+      assert html =~ "Line 3"
+      refute html =~ "Line 4"
+      assert html =~ "--notif-clamp:3"
     end
 
     test "a like on a bodyless (photo-only) post shows no preview", %{conn: conn} do
@@ -524,63 +575,13 @@ defmodule VutuvWeb.NotificationLiveTest do
       assert Vutuv.Activity.unread_notification_count(user.id) == 0
     end
 
-    test "a long feed offers a numbered Load more, which appends the older events", %{
-      conn: conn
-    } do
-      {conn, user} = create_and_login_user(conn)
-      # Two more than two page sizes, all in the same second - the grouped
-      # follower row swallows them, so count raw actors via the overflow label.
-      for _ <- 1..102, do: insert(:follow, follower: insert(:user), followee: user)
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-
-      # The label says what the next click loads and how much is left in total.
-      assert live |> element("#load-more") |> render() =~ "Load 50 of 52 more"
-      # 50 raw events in one grouped row: 2 named + 48 counted.
-      assert render(live) =~ "and 48 more"
-
-      live |> element("#load-more") |> render_click()
-
-      assert render(live) =~ "and 98 more"
-      assert live |> element("#load-more") |> render() =~ "Load 2 of 2 more"
-
-      live |> element("#load-more") |> render_click()
-
-      assert render(live) =~ "and 100 more"
-      refute has_element?(live, "#load-more")
-    end
-
-    test "the Load more label falls back to plain text when the snapshot runs out", %{conn: conn} do
-      {conn, user} = create_and_login_user(conn)
-
-      for i <- 1..51 do
-        c = insert(:follow, follower: insert(:user), followee: user)
-        backdate_follow(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
-      end
-
-      {:ok, live, _html} = live(conn, ~p"/notifications")
-      assert live |> element("#load-more") |> render() =~ "Load 1 of 1 more"
-
-      for i <- 1..60 do
-        c = insert(:follow, follower: insert(:user), followee: user)
-        backdate_follow(c, NaiveDateTime.add(~N[2024-01-01 12:00:00], -100 - i))
-      end
-
-      live |> element("#load-more") |> render_click()
-
-      assert has_element?(live, "#load-more")
-      label = live |> element("#load-more") |> render()
-      refute label =~ "0 of 0"
-      assert label =~ "Load more"
-    end
-
-    test "a short feed shows no Load more button", %{conn: conn} do
+    test "a short feed is one page and shows no pager", %{conn: conn} do
       {conn, user} = create_and_login_user(conn)
       insert(:follow, follower: insert(:user), followee: user)
 
       {:ok, live, _html} = live(conn, ~p"/notifications")
 
-      refute has_element?(live, "#load-more")
+      refute has_element?(live, ~s(nav[aria-label="Pagination"]))
     end
 
     test "a real follower is rendered with a profile link and avatar", %{conn: conn} do
@@ -595,6 +596,103 @@ defmodule VutuvWeb.NotificationLiveTest do
       html = render(live)
       assert html =~ "Grace Hopper"
       assert html =~ ~s(href="/#{follower.username}")
+    end
+  end
+
+  describe "pagination" do
+    # The page size is 50 raw events; a day's followers group into ONE row, so
+    # the rows are counted through the grouped row's overflow label ("and N
+    # more") rather than by counting <article>s.
+    test "a long feed is split into numbered pages the reader can patch between", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      for _ <- 1..102, do: insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications")
+
+      # 3 pages: 50 + 50 + 2.
+      assert has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=2"]))
+      assert has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=3"]))
+      refute has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=4"]))
+      # 50 raw events in one grouped row: 2 named + 48 counted.
+      assert render(live) =~ "and 48 more"
+
+      live |> element(~s(a[href="/notifications?page=2"])) |> render_click()
+
+      # A page REPLACES the list instead of appending to it: still 50 events.
+      assert render(live) =~ "and 48 more"
+      assert_patched(live, "/notifications?page=2")
+
+      live |> element(~s(a[href="/notifications?page=3"])) |> render_click()
+
+      # The last page holds the leftover 2 events, so its grouped row names
+      # both actors and has no overflow link at all.
+      refute render(live) =~ "and 48 more"
+      assert has_element?(live, ~s(nav[aria-label="Pagination"] span[aria-current="page"]), "3")
+    end
+
+    test "the page is in the URL, so a deep page renders on the static mount too", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+
+      for i <- 1..60 do
+        follow = insert(:follow, follower: insert(:user), followee: user)
+        backdate_follow(follow, NaiveDateTime.add(~N[2024-01-01 12:00:00], -i))
+      end
+
+      body = conn |> get(~p"/notifications?page=2") |> html_response(200)
+
+      # Page 2 holds the 10 oldest events, and marks itself current.
+      assert body =~ "and 8 more"
+      assert body =~ ~s(aria-current="page")
+      assert body =~ ~s(href="/notifications?page=1")
+    end
+
+    test "a page past the end falls back to the first page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      for _ <- 1..60, do: insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?page=99")
+
+      assert render(live) =~ "and 48 more"
+      refute has_element?(live, ~s(nav a[href="/notifications?page=1"]))
+    end
+
+    test "paging inside a filter tab keeps the filter", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      post = insert(:post, user: user)
+      for _ <- 1..60, do: :ok = Vutuv.Posts.like_post(insert(:user), post)
+      # People events the "posts" tab must leave out of both list and count.
+      for _ <- 1..60, do: insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?filter=posts")
+
+      assert has_element?(live, ~s(a[href="/notifications?filter=posts&page=2"]))
+      refute has_element?(live, ~s(nav[aria-label="Pagination"] a[href="/notifications?page=2"]))
+
+      live |> element(~s(a[href="/notifications?filter=posts&page=2"])) |> render_click()
+
+      # 60 likes = 50 + 10, so the second page of THIS tab holds 10 likes and
+      # none of the 60 followers.
+      html = render(live)
+      assert html =~ "and 8 more"
+      refute html =~ "started following you"
+    end
+
+    test "an event arriving live lands on page 1 but never shifts an older page", %{conn: conn} do
+      {conn, user} = create_and_login_user(conn)
+      for _ <- 1..60, do: insert(:follow, follower: insert(:user), followee: user)
+
+      {:ok, live, _html} = live(conn, ~p"/notifications?page=2")
+
+      # A real follow, so the event is both broadcast and in the feed's source
+      # table: the open page 2 must not take it, page 1 must have it.
+      {:ok, _} = Vutuv.Social.follow(insert(:user, first_name: "Grace"), user.id)
+      _ = :sys.get_state(live.pid)
+
+      refute render(live) =~ "Grace"
+
+      live |> element(~s(a[href="/notifications?page=1"])) |> render_click()
+
+      assert render(live) =~ "Grace"
     end
   end
 

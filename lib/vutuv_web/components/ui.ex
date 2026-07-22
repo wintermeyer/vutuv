@@ -2480,21 +2480,27 @@ defmodule VutuvWeb.UI do
   end
 
   @doc """
-  Numbered pagination for offset-paginated browse pages (followers, tags,
-  users). Pass the conn params (for the current `?page`) and the total row
-  count; windowing comes from `Vutuv.Pages`. Renders nothing when one page
-  fits everything. Feed pages use a "Load more" button instead.
+  Numbered pagination for offset-paginated pages (followers, tags, users, the
+  notifications feed). Pass the params (for the current `?page`) and the total
+  row count; windowing comes from `Vutuv.Pages`. Renders nothing when one page
+  fits everything. The endless newsfeed uses `<.load_more>` instead.
 
   `per_page` overrides the page size (default the site-wide
   `Vutuv.Pages.max_page_items/0`); it must match the `per_page` the query was
   paginated with. `query` is extra query params to carry onto every page link
   (e.g. the active sort), so pagination does not drop the current sort/filter
   — `?page=N` alone would.
+
+  `path` makes it the **LiveView** variant: page links become `patch`
+  navigation to that path (`/notifications?page=3`), so paging stays on the
+  socket and the host's `handle_params` loads the page. Without it the links
+  are plain hrefs, the right thing on a classic controller page.
   """
   attr(:params, :map, required: true)
   attr(:total, :integer, required: true)
   attr(:per_page, :integer, default: nil)
   attr(:query, :map, default: %{})
+  attr(:path, :string, default: nil)
 
   def pager(assigns) do
     per_page = assigns.per_page || Vutuv.Pages.max_page_items()
@@ -2524,18 +2530,21 @@ defmodule VutuvWeb.UI do
             {num}
           </span>
         <% else %>
-          <a
-            href={"?" <> URI.encode_query(Map.put(@query, "page", num))}
+          <.link
+            href={if(is_nil(@path), do: page_query(@query, num))}
+            patch={if(@path, do: @path <> page_query(@query, num))}
             class="flex h-9 min-w-9 items-center justify-center rounded-lg px-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
           >
             {num}
-          </a>
+          </.link>
         <% end %>
       <% end %>
       <span :if={List.last(@window) < @total_pages} class="px-1 text-slate-600 dark:text-slate-400">…</span>
     </nav>
     """
   end
+
+  defp page_query(query, num), do: "?" <> URI.encode_query(Map.put(query, "page", num))
 
   @doc """
   Classic-page (components.css-styled) page top shared by the controller pages: the `.profile-header`
