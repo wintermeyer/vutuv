@@ -94,6 +94,20 @@ They sit *inside* the row's own link, so they cannot carry links of their own �
 `VutuvWeb.Markdown.to_plain_text/1` flattens their Markdown to plain text
 instead, so no `**marker**` shows there either.
 
+**Thread participation** is its own kind (`"thread"`): once a member writes in
+a thread (they rooted it or replied in it), every later reply **anywhere** in
+that thread notifies them too — not only direct answers to their own posts,
+which stay the `"reply"` kind (an event is always exactly one of the two).
+Answers from before the member joined the thread don't surface (they were on
+screen when the member replied), own replies and blocked members never do.
+The set "all replies of this thread" comes from `post_replies.root_post_id`,
+the thread root denormalized onto every reply at creation (threading is
+otherwise only a parent-pointer chain); a reply whose root was deleted carries
+NULL there and stays out of thread events. Rows link to the new reply's
+permalink and quote it; same-day events of one thread merge into one grouped
+row. The write side (`Vutuv.Posts.create_reply/3` via `broadcast_reply/2`)
+pushes the same event live to every participant's badge.
+
 The only stored state is the `users.notifications_read_at` read marker behind
 the unread badge.
 
@@ -104,10 +118,12 @@ under Berlin-day sections** (`VutuvWeb.NotificationLive.Groups`, a pure
 function over the item list). What reads as one piece of news merges into one
 row, keyed within a Berlin calendar day: same-day likes of one post, the day's
 new followers ("Anna, Ben and 111 more are now following you.", the overflow
-linking to the member's followers list), the day's new connections, and one
-endorser's endorsements ("endorsed you for Elixir and Phoenix."). Replies and
-the rarer kinds (moderation, CV updates, handle changes, ...) stay one row per
-event. Because grouping is pure, every change — a page, a live push, the
+linking to the member's followers list), the day's new connections, one
+endorser's endorsements ("endorsed you for Elixir and Phoenix."), and same-day
+thread events of one thread ("Anna and Ben replied in a thread you posted
+in."). Direct replies and the rarer kinds (moderation, CV updates, handle
+changes, ...) stay one row per event. Because grouping is pure, every change —
+a page, a live push, the
 DayClock midnight rollover — recomputes the sections wholesale; there is no
 LiveView stream to patch, and a live-pushed like merges into the derived row
 for its post/day.

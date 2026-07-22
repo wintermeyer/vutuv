@@ -74,7 +74,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # `kinds:` option keeps. "all" passes nil (every source).
   @filters %{
     "all" => nil,
-    "posts" => ~w(reply like),
+    "posts" => ~w(reply thread like),
     "people" => ~w(follower connection endorsement),
     "other" =>
       ~w(organization_role moderation image_rejected report_protection handle_change cv_update
@@ -419,9 +419,10 @@ defmodule VutuvWeb.NotificationLive.Index do
         />
 
         <%!-- A reply quotes the reply itself, under a one-line breadcrumb naming
-        the recipient's own post it answers. --%>
+        the recipient's own post it answers. A thread event carries no post of
+        the recipient's, so there only the reply quotes. --%>
         <div
-          :if={@group.kind == "reply" and (@n[:post_preview] || @n[:reply_preview])}
+          :if={@group.kind in ["reply", "thread"] and (@n[:post_preview] || @n[:reply_preview])}
           class="mt-1.5 space-y-1"
         >
           <.link
@@ -766,7 +767,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   # Event kinds that share the brand badge colour, so the class string lives
   # in one place.
   @brand_kind_classes "bg-brand-50 text-brand-700 dark:bg-brand-900/40 dark:text-brand-100"
-  @brand_kinds ~w(follower reply connection report_protection organization_role handle_change cv_update)
+  @brand_kinds ~w(follower reply thread connection report_protection organization_role handle_change cv_update)
 
   defp kind_classes("endorsement"),
     do: "bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300"
@@ -787,6 +788,8 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_glyph("follower"), do: "+"
   defp kind_glyph("endorsement"), do: "★"
   defp kind_glyph("reply"), do: "↩"
+  # A reply elsewhere in a thread the recipient writes in.
+  defp kind_glyph("thread"), do: "⤷"
   defp kind_glyph("like"), do: "♥"
   # "connection" is the vernetzt (mutual-follow) event; the handshake glyph.
   defp kind_glyph("connection"), do: "🤝"
@@ -805,6 +808,7 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp kind_label("follower"), do: gettext("Follower")
   defp kind_label("endorsement"), do: gettext("Endorsement")
   defp kind_label("reply"), do: gettext("Reply")
+  defp kind_label("thread"), do: gettext("Thread reply")
   defp kind_label("like"), do: gettext("Like")
   defp kind_label("connection"), do: gettext("Connection")
   defp kind_label("moderation"), do: gettext("Moderation")
@@ -839,7 +843,20 @@ defmodule VutuvWeb.NotificationLive.Index do
   defp group_text(%{kind: "endorsement", tags: [_ | _] = tags}),
     do: gettext("endorsed you for %{tags}.", tags: join_names(tags))
 
+  defp group_text(%{kind: "thread", actor_count: count}), do: thread_text(count)
+
   defp group_text(%{item: item}), do: notification_text(item)
+
+  # The English tail is number-blind ("A and B replied in..."), but German
+  # conjugates the verb (hat/haben), so the actor count goes through ngettext
+  # even though both English forms read the same.
+  defp thread_text(count) do
+    ngettext(
+      "replied in a thread you posted in.",
+      "replied in a thread you posted in.",
+      count
+    )
+  end
 
   # "Elixir, Phoenix and Rails" - all but the last joined by commas, the last
   # by the localized joining word.
@@ -889,6 +906,16 @@ defmodule VutuvWeb.NotificationLive.Index do
     end
   end
 
+  # A thread event opens the new reply itself (on the replier's profile) —
+  # the thing the recipient has not read yet.
+  defp notification_target(%{kind: "thread"} = n, _viewer) do
+    if is_binary(n[:reply_post_id]) and is_binary(n[:actor_param]) do
+      ~p"/#{n.actor_param}/posts/#{n.reply_post_id}"
+    else
+      actor_target(n)
+    end
+  end
+
   defp notification_target(n, viewer) do
     primary_target(n, viewer) || actor_target(n)
   end
@@ -910,6 +937,9 @@ defmodule VutuvWeb.NotificationLive.Index do
   # stored) so it translates with the viewer's locale. Unknown kinds fall
   # back to the pushed text.
   defp notification_text(%{kind: "reply"}), do: gettext("replied to your post.")
+
+  # Live-pushed thread events land here (no group context yet): one actor.
+  defp notification_text(%{kind: "thread"}), do: thread_text(1)
 
   defp notification_text(%{kind: "organization_role"} = n) do
     case n[:role] do

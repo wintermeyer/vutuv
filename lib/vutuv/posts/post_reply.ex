@@ -11,6 +11,11 @@ defmodule Vutuv.Posts.PostReply do
     # banner-state encoding).
     belongs_to(:parent_post, Vutuv.Posts.Post)
     belongs_to(:parent_author, Vutuv.Accounts.User)
+    # The thread's top post, denormalized at creation (threading is otherwise
+    # only a parent-pointer chain) so "all replies in this thread" is one
+    # indexed lookup — the seam behind the thread-participation notifications.
+    # Nilifies with the root; NULL keeps the reply out of thread events.
+    belongs_to(:root_post, Vutuv.Posts.Post)
 
     timestamps()
   end

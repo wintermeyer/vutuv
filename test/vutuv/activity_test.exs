@@ -242,6 +242,218 @@ defmodule Vutuv.ActivityTest do
     end
   end
 
+  describe "thread events (answers elsewhere in a thread the user writes in)" do
+    test "a nested reply in the user's thread derives a thread event for the root author" do
+      me = insert(:user)
+      other = insert(:user, first_name: "Joe", last_name: "Armstrong")
+      first_replier = insert(:user)
+      root = insert(:post, user: me)
+      first = insert(:post, user: first_replier)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+      nested = insert(:post, user: other)
+
+      ref =
+        insert(:post_reply,
+          post: nested,
+          parent_post: first,
+          parent_author: first_replier,
+          root_post: root
+        )
+
+      notifications = recent_notifications(me.id)
+
+      # The direct answer to `root` is a "reply" event; the nested answer to
+      # the first replier surfaces as the "thread" event.
+      assert Enum.frequencies_by(notifications, & &1.kind) == %{"reply" => 1, "thread" => 1}
+
+      thread = Enum.find(notifications, &(&1.kind == "thread"))
+      assert thread.id == "thread-#{ref.id}"
+      assert thread.actor_name == "Joe Armstrong"
+      assert thread.actor_param == other.username
+      assert thread.reply_post_id == nested.id
+      assert thread.root_post_id == root.id
+    end
+
+    test "an earlier replier gets thread events for later answers to others" do
+      me = insert(:user)
+      root_author = insert(:user)
+      root = insert(:post, user: root_author)
+      mine = insert(:post, user: me)
+
+      insert(:post_reply,
+        post: mine,
+        parent_post: root,
+        parent_author: root_author,
+        root_post: root
+      )
+
+      later = insert(:post, user: insert(:user))
+
+      ref =
+        insert(:post_reply,
+          post: later,
+          parent_post: root,
+          parent_author: root_author,
+          root_post: root
+        )
+
+      assert [n] = recent_notifications(me.id)
+      assert n.kind == "thread"
+      assert n.id == "thread-#{ref.id}"
+    end
+
+    test "an answer to the user directly stays a reply event, never also a thread one" do
+      me = insert(:user)
+      root = insert(:post, user: me)
+      answer = insert(:post, user: insert(:user))
+      insert(:post_reply, post: answer, parent_post: root, parent_author: me, root_post: root)
+
+      assert [%{kind: "reply"}] = recent_notifications(me.id)
+    end
+
+    test "the user's own replies are no thread events" do
+      me = insert(:user)
+      root = insert(:post, user: me)
+      mine = insert(:post, user: me)
+      other = insert(:user)
+      first = insert(:post, user: other)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+      insert(:post_reply, post: mine, parent_post: first, parent_author: other, root_post: root)
+
+      assert [%{kind: "reply"}] = recent_notifications(me.id)
+    end
+
+    test "answers from before the user joined the thread are not news" do
+      me = insert(:user)
+      root_author = insert(:user)
+      root = insert(:post, user: root_author)
+
+      early = insert(:post, user: insert(:user))
+
+      early_ref =
+        insert(:post_reply,
+          post: early,
+          parent_post: root,
+          parent_author: root_author,
+          root_post: root
+        )
+
+      backdate_reply(early_ref, ~N[2020-01-01 12:00:00])
+
+      mine = insert(:post, user: me)
+
+      insert(:post_reply,
+        post: mine,
+        parent_post: root,
+        parent_author: root_author,
+        root_post: root
+      )
+
+      # The early answer was on screen when the user replied; only answers
+      # from after their own post in the thread would surface.
+      assert recent_notifications(me.id) == []
+    end
+
+    test "a blocked replier never surfaces as a thread event" do
+      me = insert(:user)
+      root = insert(:post, user: me)
+      other = insert(:user)
+      first = insert(:post, user: other)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+
+      blocked = insert(:user)
+      {:ok, _} = Vutuv.Social.block_user(me, blocked)
+
+      answer = insert(:post, user: blocked)
+      insert(:post_reply, post: answer, parent_post: first, parent_author: other, root_post: root)
+
+      assert Enum.frequencies_by(recent_notifications(me.id), & &1.kind) == %{"reply" => 1}
+    end
+
+    test "a reply without a root (broken legacy chain) stays out" do
+      me = insert(:user)
+      root = insert(:post, user: me)
+      other = insert(:user)
+      first = insert(:post, user: other)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+
+      orphan = insert(:post, user: insert(:user))
+      insert(:post_reply, post: orphan, parent_post: first, parent_author: other, root_post: nil)
+
+      assert Enum.frequencies_by(recent_notifications(me.id), & &1.kind) == %{"reply" => 1}
+    end
+
+    test "thread events count as unread" do
+      me = insert(:user)
+      first_replier = insert(:user)
+      root = insert(:post, user: me)
+      first = insert(:post, user: first_replier)
+      insert(:post_reply, post: first, parent_post: root, parent_author: me, root_post: root)
+      nested = insert(:post, user: insert(:user))
+
+      insert(:post_reply,
+        post: nested,
+        parent_post: first,
+        parent_author: first_replier,
+        root_post: root
+      )
+
+      # One direct reply + one thread event.
+      assert Activity.unread_notification_count(me.id) == 2
+    end
+
+    test "the read marker anchors to thread events too" do
+      me = insert(:user)
+      root_author = insert(:user)
+      root = insert(:post, user: root_author)
+
+      mine = insert(:post, user: me)
+
+      mine_ref =
+        insert(:post_reply,
+          post: mine,
+          parent_post: root,
+          parent_author: root_author,
+          root_post: root
+        )
+
+      backdate_reply(mine_ref, ~N[2020-01-01 11:00:00])
+
+      old = insert(:post, user: insert(:user))
+
+      old_ref =
+        insert(:post_reply,
+          post: old,
+          parent_post: root,
+          parent_author: root_author,
+          root_post: root
+        )
+
+      backdate_reply(old_ref, ~N[2020-01-01 12:00:00])
+
+      # Like the reply anchoring test above: with only thread events in the
+      # feed the marker must anchor to the newest of them, not the wall
+      # clock, or an answer landing in the marking second would be swallowed.
+      now_second = NaiveDateTime.utc_now(:second)
+      Activity.mark_notifications_read(me.id)
+      assert Activity.unread_notification_count(me.id) == 0
+
+      fresh = insert(:post, user: insert(:user))
+
+      fresh_ref =
+        insert(:post_reply,
+          post: fresh,
+          parent_post: root,
+          parent_author: root_author,
+          root_post: root
+        )
+
+      backdate_reply(fresh_ref, now_second)
+
+      assert Activity.unread_notification_count(me.id) == 1
+    end
+  end
+
   describe "notifications_page/2" do
     test "reports more? and hands out a cursor only when older events exist" do
       me = insert(:user)

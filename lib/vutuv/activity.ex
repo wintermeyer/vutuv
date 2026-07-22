@@ -11,9 +11,10 @@ defmodule Vutuv.Activity do
 
   The feed is **derived at read time** from the event tables that already exist
   (`follows` — a one-way follow is a "follower" event, a mutual follow a
-  "connection"/vernetzt one —, `user_tag_endorsements`, `post_replies`,
-  `post_likes`, and the announced CV rows behind
-  `Vutuv.Profiles.CvUpdates`) instead of being
+  "connection"/vernetzt one —, `user_tag_endorsements`, `post_replies` — a
+  reply answering the user's post is a "reply" event, a reply elsewhere in a
+  thread the user writes in a "thread" one —, `post_likes`, and the announced
+  CV rows behind `Vutuv.Profiles.CvUpdates`) instead of being
   persisted per notification — which makes it automatically retroactive. The only stored
   state is `users.notifications_read_at`, the read marker behind the unread
   badge; `mark_notifications_read/1` bumps it and broadcasts. Older events are
@@ -29,6 +30,7 @@ defmodule Vutuv.Activity do
   alias Vutuv.Notifications.Emailer
   alias Vutuv.Organizations.Organization
   alias Vutuv.Organizations.OrganizationRole
+  alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostLike
   alias Vutuv.Posts.PostReply
   alias Vutuv.Profiles.CvUpdates
@@ -106,6 +108,8 @@ defmodule Vutuv.Activity do
         select: %{ts: max(r.inserted_at)}
       )
 
+    thread_max = select(thread_replies(user_id), [thread_ref: r], %{ts: max(r.inserted_at)})
+
     like_max =
       from(l in PostLike,
         join: p in assoc(l, :post),
@@ -160,6 +164,7 @@ defmodule Vutuv.Activity do
       |> union_all(^endorsement_max)
       |> union_all(^connection_max)
       |> union_all(^reply_max)
+      |> union_all(^thread_max)
       |> union_all(^like_max)
       |> union_all(^moderation_max)
       |> union_all(^image_rejected_max)
@@ -309,6 +314,26 @@ defmodule Vutuv.Activity do
     )
   end
 
+  @doc ~S"""
+  Convenience: a "replied in a thread you posted in" notification for another
+  participant of a thread — the root author or an earlier replier. The
+  directly answered author gets `notify_reply/4` instead, never both.
+  `reply_post_id` is the new reply, so the row can quote and link it;
+  `root_post_id` keys the notification page's per-thread grouping.
+  """
+  def notify_thread_reply(user_id, replier, root_post_id, reply_post_id) do
+    notify(
+      user_id,
+      Map.merge(actor_fields(replier), %{
+        kind: "thread",
+        text: "replied in a thread you posted in.",
+        root_post_id: root_post_id,
+        reply_post_id: reply_post_id,
+        at: DateTime.utc_now()
+      })
+    )
+  end
+
   @doc ~S(Convenience: a "liked your post" notification for the post's author.)
   def notify_like(author_id, liker, post_id) do
     Vutuv.Webhooks.emit(author_id, "post.liked", %{
@@ -414,8 +439,9 @@ defmodule Vutuv.Activity do
   The feed is derived straight from its source tables — followers
   (`follows`), endorsements (`user_tag_endorsements`, with the tag's name),
   connections (accepted `connections` rows, timestamped at acceptance) and
-  replies (`post_replies`, minus self-replies) — so it includes events from
-  before this feature existed.
+  replies (`post_replies`, minus self-replies; answers elsewhere in a thread
+  the user writes in surface as the separate "thread" kind) — so it includes
+  events from before this feature existed.
   Items mirror the live `notify_*` payload shape; ids are
   `"<kind>-<row id>"` strings, which keeps them out of the `"live-"` id
   namespace the LiveView uses for pushed events.
@@ -455,6 +481,7 @@ defmodule Vutuv.Activity do
       {"endorsement", &endorsement_items(user_id, &1, &2)},
       {"connection", &connection_items(user_id, &1, &2)},
       {"reply", &reply_items(user_id, &1, &2)},
+      {"thread", &thread_items(user_id, &1, &2)},
       {"like", &like_items(user_id, &1, &2)},
       {"organization_role", &organization_role_items(user_id, &1, &2)},
       {"moderation", &moderation_items(user_id, &1, &2)},
@@ -550,6 +577,7 @@ defmodule Vutuv.Activity do
       {"endorsement", count_endorsements(user_id, read_at)},
       {"connection", count_connections(user_id, read_at)},
       {"reply", count_replies(user_id, read_at)},
+      {"thread", count_thread_replies(user_id, read_at)},
       {"like", count_likes(user_id, read_at)},
       {"organization_role", count_organization_roles(user_id, read_at)},
       {"cv_update", count_cv_updates(user_id, read_at)},
@@ -663,6 +691,90 @@ defmodule Vutuv.Activity do
       |> Map.put(:post_id, parent_post_id)
       |> Map.put(:reply_post_id, reply_post_id)
     end)
+  end
+
+  # New replies elsewhere in threads the user writes in: every reply in a
+  # thread they rooted or answered in earlier — except their own replies and
+  # replies answering them directly (those are "reply" events, never both).
+  defp thread_items(user_id, limit, cursor) do
+    thread_replies(user_id)
+    |> join(:inner, [reply_post: reply], replier in User,
+      on: replier.id == reply.user_id,
+      as: :replier
+    )
+    |> order_by([thread_ref: r], desc: r.inserted_at, desc: r.id)
+    |> limit(^limit)
+    |> select(
+      [thread_ref: r, replier: replier],
+      {r.id, r.inserted_at, struct(replier, ^User.listing_fields()), r.root_post_id, r.post_id}
+    )
+    |> at_or_before(cursor)
+    |> Repo.all()
+    |> Enum.map(fn {id, at, replier, root_post_id, reply_post_id} ->
+      "thread-#{id}"
+      |> actor_item("thread", at, replier)
+      # The thread (grouping key) and the reply itself (the quote + link).
+      |> Map.put(:root_post_id, root_post_id)
+      |> Map.put(:reply_post_id, reply_post_id)
+    end)
+  end
+
+  # The base scope behind the "thread" kind, shared by items / count / read
+  # marker. A qualifying reply: sits in a thread (root known), is not the
+  # user's own, does not answer the user directly, its author has no block
+  # either way with the user, and the user had already written in the thread
+  # when it landed — they authored the root, or an earlier reply (replies from
+  # before they joined were on screen when they replied; not news).
+  defp thread_replies(user_id) do
+    from(r in PostReply,
+      as: :thread_ref,
+      join: reply in Post,
+      on: reply.id == r.post_id,
+      as: :reply_post,
+      where: not is_nil(r.root_post_id),
+      where: reply.user_id != ^user_id,
+      where: is_nil(r.parent_author_id) or r.parent_author_id != ^user_id,
+      where:
+        exists(
+          from(root in Post,
+            where: root.id == parent_as(:thread_ref).root_post_id and root.user_id == ^user_id,
+            select: 1
+          )
+        ) or
+          exists(
+            from(mine in PostReply,
+              join: mp in Post,
+              on: mp.id == mine.post_id,
+              where:
+                mine.root_post_id == parent_as(:thread_ref).root_post_id and
+                  mp.user_id == ^user_id and
+                  mine.inserted_at <= parent_as(:thread_ref).inserted_at,
+              select: 1
+            )
+          ),
+      where: reply.user_id not in subquery(blocked_either_way(user_id))
+    )
+  end
+
+  # Everyone with a block either way to `user_id`. Thread events are the one
+  # feed source whose actor needs no prior relation to the user (they answered
+  # a *third* participant), so a blocked member could otherwise surface here —
+  # the same exclusion the post feed applies. The "either direction" filter is
+  # owned by Vutuv.Social; this only adds the select returning the other
+  # party's id for the `NOT IN` subquery.
+  defp blocked_either_way(user_id) do
+    user_id
+    |> Vutuv.Social.blocks_involving()
+    |> select(
+      [b],
+      fragment(
+        "CASE WHEN ? = ? THEN ? ELSE ? END",
+        b.blocker_id,
+        type(^user_id, Vutuv.UUIDv7),
+        b.blocked_id,
+        b.blocker_id
+      )
+    )
   end
 
   # Likes on this user's posts, minus self-likes. Carries the liked post's id
@@ -940,6 +1052,12 @@ defmodule Vutuv.Activity do
       where: r.parent_author_id == ^user_id and reply.user_id != ^user_id,
       select: %{count: count()}
     )
+    |> since(read_at)
+  end
+
+  defp count_thread_replies(user_id, read_at) do
+    thread_replies(user_id)
+    |> select([thread_ref: r], %{count: count()})
     |> since(read_at)
   end
 
