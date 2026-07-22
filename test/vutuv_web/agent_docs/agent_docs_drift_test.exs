@@ -220,6 +220,24 @@ defmodule VutuvWeb.AgentDocsDriftTest do
 
     assert rendered.xml =~ "<qualification>"
 
+    # The reverse direction (issue #1005): the credential's list rows show how
+    # many jobs it earned and that it is in current use (the Bridge Engineer
+    # role is ongoing). HTML shows the badges, md/txt the facts, JSON/XML the
+    # structured jobs map.
+    assert rendered.html =~ "Used for 1 job"
+    assert rendered.html =~ "Currently in use"
+    assert rendered.md =~ "used for 1 job"
+    assert rendered.md =~ "currently in use"
+    assert rendered.txt =~ "used for 1 job"
+
+    qualification_json =
+      Jason.decode!(rendered.json)["qualifications"]
+      |> Enum.find(&(&1["name"] == "Chartered Structural Engineer"))
+
+    assert qualification_json["jobs"]["count"] == 1
+    assert qualification_json["jobs"]["in_use"] == true
+    assert rendered.xml =~ "<in_use>true</in_use>"
+
     # The employment status (issue #870): the HTML badge and the md/txt fact
     # line show the human label, JSON/XML carry the raw machine value.
     assert rendered.html =~ "Looking for a job"

@@ -428,6 +428,24 @@ JSON Resume, which has no native job↔credential field — carries it in the wo
 summary. The GDPR export names the cited credential per job. LinkedIn's
 `Positions.csv` has no such link, so imported jobs arrive uncited.
 
+**The reverse direction — usage badges on the credential (issue #1005).** Every
+qualification list row (profile card, `/:slug/qualifications`, the
+`/settings/qualifications` editor, all via the shared
+`QualificationHTML.qualification_row/1`) shows how the member's jobs use the
+credential: a brand-tint "Used for N jobs" pill plus either an emerald
+"Currently in use" (some citing job is ongoing — no end year, the same
+convention `CvSection.order_by_date/1` sorts by) or a slate "Last used: M/YYYY"
+(the newest citing job's end). An uncited credential shows nothing — absence is
+the "not used at all" signal, keeping rows calm. The policy lives in
+`Qualification.job_usage/1`, reading the `work_experiences` preload spliced in
+via `Qualification.citing_jobs_preload/0`; like `cited_qualification/1` it
+falls through to nil on an unloaded association. The entry show page renders
+the same facts as one "Jobs" line (`QualificationHTML.usage_line/1`), and the
+agent formats carry a `jobs: {count, in_use, last_used}` map per entry
+(`SectionDocs.qualification_entry/1`; md/txt append "used for N jobs ·
+currently in use" to the facts line), kept honest by the drift test; `/api/2.0`
+qualification entries include the same map.
+
 ## Online messengers profile section
 
 Members list the online messengers they can be reached on (`Vutuv.Profiles.Messenger`,

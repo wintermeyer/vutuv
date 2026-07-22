@@ -20,9 +20,13 @@ defmodule VutuvWeb.QualificationController do
   # sync, see agent_docs_drift_test.exs). Both show the anonymous public view,
   # which hides expired credentials (issue #859).
   def index(conn, _params) do
+    # citing_jobs_preload: the jobs earned with each credential ride along for
+    # the usage badges (issue #1005).
     user =
       Repo.preload(conn.assigns[:user],
-        qualifications: Qualification.visible_to(false) |> Qualification.ordered()
+        qualifications:
+          {Qualification.visible_to(false) |> Qualification.ordered(),
+           Qualification.citing_jobs_preload()}
       )
 
     AgentDocs.respond(conn,
@@ -42,7 +46,10 @@ defmodule VutuvWeb.QualificationController do
   # The owner's editor (GET /settings/qualifications) — shows everything the
   # member holds, expired entries included, since this is where they manage them.
   def manage(conn, _params) do
-    user = Repo.preload(conn.assigns[:user], qualifications: Qualification.ordered())
+    user =
+      Repo.preload(conn.assigns[:user],
+        qualifications: {Qualification.ordered(), Qualification.citing_jobs_preload()}
+      )
 
     render(conn, "manage.html",
       user: user,
@@ -83,15 +90,19 @@ defmodule VutuvWeb.QualificationController do
   end
 
   def show(conn, _params) do
-    # resolve_qualification scoped :qualification to conn.assigns[:user].
+    # resolve_qualification scoped :qualification to conn.assigns[:user]; the
+    # citing jobs ride along for the usage line (issue #1005).
+    qualification =
+      Repo.preload(conn.assigns[:qualification], Qualification.citing_jobs_preload())
+
     AgentDocs.respond(conn,
       html:
         &render(&1, "show.html",
-          qualification: conn.assigns[:qualification],
-          page_title: entry_page_title(conn.assigns[:user], conn.assigns[:qualification])
+          qualification: qualification,
+          page_title: entry_page_title(conn.assigns[:user], qualification)
         ),
       doc: fn ->
-        SectionDocs.build_show(conn.assigns[:user], :qualifications, conn.assigns[:qualification])
+        SectionDocs.build_show(conn.assigns[:user], :qualifications, qualification)
       end
     )
   end

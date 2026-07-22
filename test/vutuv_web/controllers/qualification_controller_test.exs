@@ -111,6 +111,125 @@ defmodule VutuvWeb.QualificationControllerTest do
     end
   end
 
+  describe "job usage badges (issue #1005)" do
+    setup %{conn: conn} do
+      {conn, owner} = create_and_login_user(conn)
+      %{conn: conn, owner: owner}
+    end
+
+    test "a credential a current job cites shows the count and the in-use badge",
+         %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+      insert(:work_experience, user: owner, qualification: qualification, end_year: nil)
+
+      html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+
+      assert html =~ "data-qualification-usage"
+      assert html =~ "data-usage-jobs"
+      assert html =~ "Used for 1 job"
+      assert html =~ "data-usage-current"
+      assert html =~ "Currently in use"
+      refute html =~ "data-usage-last"
+    end
+
+    test "a credential only past jobs cite shows the newest end date instead",
+         %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        start_year: 2015,
+        end_year: 2017,
+        end_month: 3
+      )
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        start_year: 2018,
+        end_year: 2019,
+        end_month: 9
+      )
+
+      html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+
+      assert html =~ "Used for 2 jobs"
+      assert html =~ "data-usage-last"
+      assert html =~ "Last used: 9/2019"
+      refute html =~ "data-usage-current"
+    end
+
+    test "an uncited credential shows no usage badges", %{owner: owner} do
+      insert(:qualification, user: owner, name: "Unused cert")
+
+      html = build_conn() |> get(~p"/#{owner}/qualifications") |> html_response(200)
+
+      refute html =~ "data-qualification-usage"
+    end
+
+    test "the owner's /settings editor shows the badges too", %{conn: conn, owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+      insert(:work_experience, user: owner, qualification: qualification, end_year: nil)
+
+      html = conn |> get(~p"/settings/qualifications") |> html_response(200)
+
+      assert html =~ "Used for 1 job"
+      assert html =~ "Currently in use"
+    end
+
+    test "the entry page shows the usage line and its doc siblings carry it",
+         %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+      insert(:work_experience, user: owner, qualification: qualification, end_year: nil)
+
+      html =
+        build_conn()
+        |> get(~p"/#{owner}/qualifications/#{qualification}")
+        |> html_response(200)
+
+      assert html =~ "data-qualification-usage"
+      assert html =~ "Used for 1 job"
+      assert html =~ "Currently in use"
+
+      json =
+        build_conn()
+        |> get("/#{owner.username}/qualifications/#{qualification.id}.json")
+        |> Map.get(:resp_body)
+        |> Jason.decode!()
+
+      assert json["entry"]["jobs"]["count"] == 1
+      assert json["entry"]["jobs"]["in_use"] == true
+    end
+
+    test "the index doc siblings carry the usage facts", %{owner: owner} do
+      qualification = insert(:qualification, user: owner, name: "Meisterbrief")
+
+      insert(:work_experience,
+        user: owner,
+        qualification: qualification,
+        start_year: 2018,
+        end_year: 2019,
+        end_month: 9
+      )
+
+      json =
+        build_conn()
+        |> get("/#{owner.username}/qualifications.json")
+        |> Map.get(:resp_body)
+        |> Jason.decode!()
+
+      entry = Enum.find(json["entries"], &(&1["name"] == "Meisterbrief"))
+      assert entry["jobs"]["count"] == 1
+      assert entry["jobs"]["in_use"] == false
+      assert entry["jobs"]["last_used"] == "2019-09"
+
+      md = build_conn() |> get("/#{owner.username}/qualifications.md") |> Map.get(:resp_body)
+      assert md =~ "used for 1 job"
+      assert md =~ "last used 2019-09"
+    end
+  end
+
   describe "public page vs /settings editor" do
     setup %{conn: conn} do
       {conn, owner} = create_and_login_user(conn)

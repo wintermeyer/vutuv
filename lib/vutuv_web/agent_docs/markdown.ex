@@ -645,15 +645,32 @@ defmodule VutuvWeb.AgentDocs.Markdown do
   # awarded and "valid until" dates and the credential id.
   @doc false
   def qualification_facts(qualification) do
-    [
-      qualification_kind_label(qualification.kind),
-      qualification.issuer,
-      qualification.awarded && gettext("awarded %{date}", date: qualification.awarded),
-      qualification.expires && gettext("valid until %{date}", date: qualification.expires),
-      qualification.credential_id && gettext("ID: %{id}", id: qualification.credential_id)
-    ]
+    ([
+       qualification_kind_label(qualification.kind),
+       qualification.issuer,
+       qualification.awarded && gettext("awarded %{date}", date: qualification.awarded),
+       qualification.expires && gettext("valid until %{date}", date: qualification.expires),
+       qualification.credential_id && gettext("ID: %{id}", id: qualification.credential_id)
+     ] ++ qualification_usage_facts(Map.get(qualification, :jobs)))
     |> Enum.filter(& &1)
     |> Enum.join(" · ")
+  end
+
+  # The usage facts (issue #1005) from the entry's `jobs` map, mirroring the
+  # HTML badges: how many jobs the credential earned, and whether it is in
+  # current use or when it was last used.
+  defp qualification_usage_facts(nil), do: []
+
+  defp qualification_usage_facts(jobs) do
+    [
+      ngettext("used for %{count} job", "used for %{count} jobs", jobs.count),
+      jobs.in_use && gettext("currently in use"),
+      # pgettext: the bare "last used %{date}" msgid already belongs to the
+      # access-token list ("zuletzt benutzt am …"), whose grammar doesn't fit
+      # a year-month value — a distinct context keeps the two independent.
+      !jobs.in_use && jobs.last_used &&
+        pgettext("qualification job usage", "last used %{date}", date: jobs.last_used)
+    ]
   end
 
   @doc false

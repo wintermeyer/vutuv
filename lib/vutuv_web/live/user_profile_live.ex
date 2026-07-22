@@ -881,7 +881,11 @@ defmodule VutuvWeb.UserProfileLive do
       # visible_to(owner?) hides expired credentials from visitors in SQL (the
       # same scope the section page, CV and agent docs use), so the card renders
       # what is loaded — no in-memory filter, and limit-after-filter is correct.
-      qualifications: Qualification.visible_to(owner?) |> Qualification.ordered() |> limit(8),
+      # citing_jobs_preload: the jobs earned with each credential ride along
+      # for the usage badges (issue #1005).
+      qualifications:
+        {Qualification.visible_to(owner?) |> Qualification.ordered() |> limit(8),
+         Qualification.citing_jobs_preload()},
       phone_numbers: PhoneNumber.ordered() |> limit(3),
       urls: Url.ordered() |> limit(3),
       addresses: Address.ordered() |> limit(3),

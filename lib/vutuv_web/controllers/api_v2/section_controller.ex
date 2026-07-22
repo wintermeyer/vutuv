@@ -124,6 +124,16 @@ defmodule VutuvWeb.ApiV2.SectionController do
     user |> assoc(:work_experiences) |> Repo.all() |> preload_for_doc(:work_experiences)
   end
 
+  # The citing jobs ride along so the API entries carry the same usage facts
+  # (issue #1005) as the public .json sibling.
+  defp entries(user, :qualifications, _viewer) do
+    user
+    |> assoc(:qualifications)
+    |> Qualification.ordered()
+    |> Repo.all()
+    |> preload_for_doc(:qualifications)
+  end
+
   # The position-ordered sections (links, social, addresses, phone numbers)
   # follow the owner's chosen order, matching the HTML pages.
   defp entries(user, section, _viewer) do
@@ -142,6 +152,9 @@ defmodule VutuvWeb.ApiV2.SectionController do
   # the fact from the API response).
   defp preload_for_doc(record_or_records, :work_experiences),
     do: Repo.preload(record_or_records, WorkExperience.display_preloads())
+
+  defp preload_for_doc(record_or_records, :qualifications),
+    do: Repo.preload(record_or_records, Qualification.citing_jobs_preload())
 
   defp preload_for_doc(record_or_records, _section), do: record_or_records
 end

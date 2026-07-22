@@ -34,6 +34,11 @@
     <p><%= Enum.reject([@qualification.expires_month, @qualification.expires_year], &is_nil/1) |> Enum.join("/") %></p>
   <% end %>
 
+  <%= if usage = usage_line(@qualification) do %>
+    <h2 class="card__label"><%= gettext("Jobs") %></h2>
+    <p data-qualification-usage><%= usage %></p>
+  <% end %>
+
   <%= if @qualification.credential_id do %>
     <h2 class="card__label"><%= gettext("Credential ID") %></h2>
     <p><%= @qualification.credential_id %></p>
