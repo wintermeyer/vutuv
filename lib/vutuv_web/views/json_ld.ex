@@ -457,11 +457,16 @@ defmodule VutuvWeb.JsonLd do
 
   defp item_reviewed(%PostReview{kind: "book"} = review) do
     compact(%{
-      "@type" => "Book",
+      # An audiobook is its own schema.org type (a subtype of Book), and the
+      # one that carries a duration.
+      "@type" => if(review.medium == "audiobook", do: "Audiobook", else: "Book"),
       "name" => review.title,
       "author" => review.creator,
       "isbn" => review.identifier,
       "datePublished" => review.year && Integer.to_string(review.year),
+      "numberOfPages" => review.pages,
+      "duration" => iso_duration(review.duration_minutes),
+      "publisher" => publisher(review.publisher),
       "bookFormat" => book_format(review.medium)
     })
   end
@@ -477,6 +482,22 @@ defmodule VutuvWeb.JsonLd do
   end
 
   defp item_reviewed(%PostReview{}), do: nil
+
+  # schema.org wants the publisher as an Organization, not a bare string.
+  defp publisher(nil), do: nil
+  defp publisher(name), do: %{"@type" => "Organization", "name" => name}
+
+  # A running time in whole minutes as the ISO 8601 duration schema.org reads
+  # ("PT7H20M", "PT45M").
+  defp iso_duration(total) when is_integer(total) and total > 0 do
+    case {div(total, 60), rem(total, 60)} do
+      {0, minutes} -> "PT#{minutes}M"
+      {hours, 0} -> "PT#{hours}H"
+      {hours, minutes} -> "PT#{hours}H#{minutes}M"
+    end
+  end
+
+  defp iso_duration(_other), do: nil
 
   defp book_format("ebook"), do: "https://schema.org/EBook"
   defp book_format("audiobook"), do: "https://schema.org/AudiobookFormat"

@@ -354,10 +354,23 @@ defmodule VutuvWeb.AgentDocsDriftTest do
         }
       })
 
+    # The edition details are fetched from Open Library after the fact, not
+    # typed into the composer — set here the way the fetch sets them.
+    reviewed.review
+    |> Ecto.Changeset.change(%{pages: 448, publisher: "Addison-Wesley", duration_minutes: 440})
+    |> Vutuv.Repo.update!()
+
     rendered = formats_for("/drift_tester/posts/#{reviewed.id}")
 
-    for fact <- ["Refactoring", "Martin Fowler", "Audiobook"],
+    for fact <- ["Refactoring", "Martin Fowler", "Audiobook", "Addison-Wesley"],
         do: assert_fact_everywhere(rendered, fact)
+
+    # Page count and running time read as sentences for humans and as plain
+    # numbers for machines, so they are asserted per audience.
+    for {format, body} <- Map.take(rendered, [:html, :md, :txt]) do
+      assert body =~ "448 pages (print edition)", "the #{format} version lost the page count"
+      assert body =~ "7 h 20 min", "the #{format} version lost the running time"
+    end
 
     # The ISBN is the one fact that renders per audience: readers get it
     # hyphenated the way it is printed on the book (Vutuv.Isbn.format/1),
@@ -373,6 +386,9 @@ defmodule VutuvWeb.AgentDocsDriftTest do
     assert doc["review"]["identifier"] == "9783161484100"
     assert doc["review"]["year"] == 2018
     assert doc["review"]["medium"] == "audiobook"
+    assert doc["review"]["pages"] == 448
+    assert doc["review"]["publisher"] == "Addison-Wesley"
+    assert doc["review"]["duration_minutes"] == 440
     assert doc["review"]["link"] == "https://www.amazon.de/dp/316148410X"
   end
 

@@ -131,6 +131,9 @@ defmodule VutuvWeb.AgentDocs.PostDoc do
       creator: review.creator,
       year: review.year,
       medium: review.medium,
+      pages: review.pages,
+      publisher: review.publisher,
+      duration_minutes: review.duration_minutes,
       link: PostReview.amazon_url(review) || PostReview.imdb_url(review)
     }
   end

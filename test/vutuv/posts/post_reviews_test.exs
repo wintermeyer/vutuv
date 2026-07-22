@@ -180,6 +180,98 @@ defmodule Vutuv.Posts.PostReviewsTest do
       Vutuv.ReviewCover.delete_files(stored)
     end
 
+    # The edition details ride on the same fetch as the cover, so an
+    # installation with the flag off gets neither. `edition` is Open
+    # Library's edition record, `extent` the catalogue's MARC 300 field.
+    defp stub_details(edition, extent \\ nil) do
+      Application.put_env(:vutuv, :fetch_book_metadata, true)
+
+      Application.put_env(:vutuv, :book_metadata_req_options,
+        plug: fn conn ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> Plug.Conn.resp(200, Jason.encode!(edition))
+        end
+      )
+
+      if extent do
+        Application.put_env(:vutuv, :dnb_req_options,
+          plug: fn conn ->
+            xml = """
+            <searchRetrieveResponse><records><record><recordData><record>
+              <datafield tag="300"><subfield code="a">#{extent}</subfield></datafield>
+            </record></recordData></record></records></searchRetrieveResponse>
+            """
+
+            Plug.Conn.resp(conn, 200, xml)
+          end
+        )
+      end
+
+      on_exit(fn ->
+        Application.put_env(:vutuv, :fetch_book_metadata, false)
+        Application.delete_env(:vutuv, :book_metadata_req_options)
+        Application.delete_env(:vutuv, :dnb_req_options)
+      end)
+    end
+
+    test "stores the edition details Open Library knows" do
+      review = insert(:post_review, cover_status: "pending")
+      stub_details(%{"number_of_pages" => 448, "publishers" => ["Addison-Wesley"]})
+
+      assert :ok = fetch_with_status(review, 404)
+
+      stored = Repo.get(PostReview, review.id)
+      assert stored.pages == 448
+      assert stored.publisher == "Addison-Wesley"
+      # A missing cover costs the card its picture, never its facts.
+      assert stored.cover_status == "failed"
+    end
+
+    test "an audiobook review also stores its running time" do
+      review = insert(:post_review, cover_status: "pending", medium: "audiobook")
+      stub_details(%{"number_of_pages" => 190}, "Online-Ressource 75 Min.")
+
+      assert :ok = fetch_with_status(review, 404)
+
+      stored = Repo.get(PostReview, review.id)
+      assert stored.duration_minutes == 75
+      # The page count is the book's, and it shows on the audiobook card too.
+      assert stored.pages == 190
+    end
+
+    test "a print review asks no catalogue for a running time" do
+      review = insert(:post_review, cover_status: "pending", medium: "print")
+      stub_details(%{"number_of_pages" => 190})
+
+      # No :dnb_req_options stub at all: a request would hit the network and
+      # the test would fail on it, which is the assertion.
+      assert :ok = fetch_with_status(review, 404)
+
+      assert Repo.get(PostReview, review.id).duration_minutes == nil
+    end
+
+    test "a changed ISBN drops the details of the previous edition" do
+      review =
+        insert(:post_review,
+          cover_status: "ready",
+          pages: 448,
+          publisher: "Goldmann",
+          duration_minutes: 75
+        )
+
+      assert {:ok, updated} =
+               Posts.update_post(review.post, %{
+                 body: "andere Ausgabe",
+                 review: %{"kind" => "book", "identifier" => "9780306406157", "title" => "Anders"}
+               })
+
+      assert updated.review.pages == nil
+      assert updated.review.publisher == nil
+      assert updated.review.duration_minutes == nil
+      assert updated.review.cover_status == "pending"
+    end
+
     test "keeps no private original of the fetched cover" do
       review = insert(:post_review, cover_status: "pending")
 

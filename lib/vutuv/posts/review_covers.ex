@@ -1,10 +1,12 @@
 defmodule Vutuv.Posts.ReviewCovers do
   @moduledoc """
-  Fetches the **cover of a book review** from Open Library by ISBN, off the
-  request path: `Vutuv.Posts` calls `reconcile/1` after every post
-  create/update, and a review whose `cover_status` is `pending` (a new or
-  changed ISBN — `Vutuv.Posts.PostReview` sets that in its changeset) gets a
-  background fetch under `Vutuv.TaskSupervisor`.
+  Fetches what the catalogues know about a **book review's ISBN** — Open
+  Library's cover image and edition facts (`pages`, `publisher`), plus an
+  audiobook's running time (`duration_minutes`, `Vutuv.AudiobookLength`) —
+  off the request path: `Vutuv.Posts` calls `reconcile/1`
+  after every post create/update, and a review whose `cover_status` is
+  `pending` (a new or changed ISBN — `Vutuv.Posts.PostReview` sets that in
+  its changeset) gets a background fetch under `Vutuv.TaskSupervisor`.
 
   Gated by the `:fetch_book_metadata` flag (air-gapped installs fetch
   nothing and the card renders its placeholder tile; tests keep it off and
@@ -20,6 +22,8 @@ defmodule Vutuv.Posts.ReviewCovers do
 
   import Ecto.Query
 
+  alias Vutuv.AudiobookLength
+  alias Vutuv.BookMetadata
   alias Vutuv.Moderation.ImageScans
   alias Vutuv.Posts.Post
   alias Vutuv.Posts.PostReview
@@ -54,13 +58,15 @@ defmodule Vutuv.Posts.ReviewCovers do
   def reconcile(%Post{}), do: :ok
 
   @doc """
-  The fetch itself (synchronous — `reconcile/1` wraps it in a task): pulls
-  the ISBN's cover from Open Library, stores it and flips the review to
-  `ready` (entering moderation limbo) or `failed` (no cover known, network
-  trouble). Guarded on the review still carrying the fetched ISBN, so a
-  concurrent edit wins over a slow fetch.
+  The fetch itself (synchronous — `reconcile/1` wraps it in a task): stores
+  the ISBN's edition details, then pulls its cover from Open Library and
+  flips the review to `ready` (entering moderation limbo) or `failed` (no
+  cover known, network trouble). Guarded on the review still carrying the
+  fetched ISBN, so a concurrent edit wins over a slow fetch.
   """
   def fetch(%PostReview{kind: "book", identifier: isbn} = review) when is_binary(isbn) do
+    fetch_details(review, isbn)
+
     case get_cover(isbn) do
       {:ok, bytes} -> store(review, bytes)
       :error -> mark(review, cover_status: "failed")
@@ -75,7 +81,9 @@ defmodule Vutuv.Posts.ReviewCovers do
   end
 
   @doc """
-  Re-fetches every stored book cover and purges the private originals that
+  Re-fetches every stored book cover (and, since the fetch is one pass, the
+  edition details with it — this is also the backfill for reviews written
+  before `pages`/`publisher` existed) and purges the private originals that
   fetches before v7.122.4 kept (see `Vutuv.ReviewCover`) — the maintenance
   path that replaces the `Vutuv.Uploads.Regenerator` for covers, since there
   is deliberately nothing left to re-derive from locally. Run it once after
@@ -118,6 +126,43 @@ defmodule Vutuv.Posts.ReviewCovers do
     else
       %{summary | skipped: summary.skipped + 1}
     end
+  end
+
+  # Page count and publisher from Open Library's edition record
+  # (`Vutuv.BookMetadata`), plus the running time for an audiobook review
+  # (`Vutuv.AudiobookLength`, a library catalogue — Open Library records no
+  # durations). Best-effort by design: an edition nobody knows details for
+  # simply keeps the card it has, and a failure here must not cost the review
+  # its cover, so this rescues on its own instead of riding fetch/1's rescue.
+  defp fetch_details(review, isbn) do
+    case known_details(review, isbn) do
+      [] -> :ok
+      details -> mark(review, details)
+    end
+  rescue
+    exception ->
+      Logger.warning(
+        "review details fetch failed for review #{review.id} (#{isbn}): #{Exception.message(exception)}"
+      )
+
+      :ok
+  end
+
+  defp known_details(review, isbn) do
+    edition =
+      case BookMetadata.edition_details(isbn) do
+        {:ok, %{pages: pages, publisher: publisher}} -> [pages: pages, publisher: publisher]
+        :error -> []
+      end
+
+    # Only an audiobook review asks for a running time: a print ISBN has
+    # none, so the catalogue request would be spent for nothing.
+    duration =
+      if review.medium == "audiobook",
+        do: [duration_minutes: AudiobookLength.minutes(isbn)],
+        else: []
+
+    Enum.reject(edition ++ duration, fn {_key, value} -> is_nil(value) end)
   end
 
   defp get_cover(isbn) do

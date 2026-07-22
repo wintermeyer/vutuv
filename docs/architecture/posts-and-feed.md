@@ -354,7 +354,11 @@ A post can carry a structured **review sidecar** (`Vutuv.Posts.PostReview`,
 table `post_reviews`, one per post): `kind` (`book`/`movie` — open for future
 kinds), an `identifier` (a checksum-validated ISBN-13 via `Vutuv.Isbn`, or an
 IMDb `tt…` id extracted from a pasted URL), cached display metadata (`title`,
-`creator`, `year`) and an optional `medium` (book: print/ebook/audiobook,
+`creator`, `year`), the edition details fetched with the cover (`pages`,
+`publisher`, and `duration_minutes` for an audiobook — all set by
+`Vutuv.Posts.ReviewCovers`, never cast from params, and cleared when the ISBN
+changes) and an optional `medium` (book:
+print/ebook/audiobook,
 movie: cinema/streaming/disc — "I listened to the audiobook"). The body stays
 plain Markdown; *"this post is a book review"* is simply *"the post has a
 review row"*, never body parsing. The composer's 📖/🎬 triggers open the panel;
@@ -364,8 +368,9 @@ leave it untouched.
 
 Every surface that renders the post adds the **review card**
 (`VutuvWeb.PostComponents.review_card/1`): cover (or a kind-glyph tile), kind
-label, title, creator · year · medium (in the narrow aside the creator keeps
-the first line and the year · medium drop below it), and a dot-separated line
+label, title, the creator on one line with year · medium on the line below it,
+the publisher, the book's page count and — for an audiobook — its running
+time, and a dot-separated line
 of outbound links — the Open Library book page first (when a cover is shown,
 see below), then the store link labelled with just the store name ("Amazon" /
 "IMDb") — Amazon for books (built offline from the ISBN: ISBN-10 `/dp/` link,
@@ -378,7 +383,12 @@ config, an empty value keeps the word plain). The permalink's JSON-LD becomes
 `["BlogPosting", "Review"]` with `itemReviewed` (Book/Movie), and the agent
 formats carry a `review` entry / fact line (drift-tested).
 
-Where the card sits depends on the width: below the prose on a phone, and from
+Where the card sits depends on the width; **what it shows does not**. Its
+content is deliberately breakpoint-free — one cover size, one set of lines,
+the author always above year · medium — so a phone and a wide screen read the
+identical card; a test asserts that no element inside `[data-review-card]`
+carries a `sm:`/`md:`/`lg:` utility. Only the placement is responsive: below
+the prose on a phone, and from
 `md` up a narrow right-hand **aside** beside it (prose left, card right, both
 in one flex row — feed, profile and permalink alike). `md` (not `lg`) so
 portrait tablets and small laptop windows get the side-by-side reading too, not
@@ -398,10 +408,31 @@ with `mix run scripts/update_isbn_ranges.exs`). An ISBN whose ranges are not in
 the table renders unhyphenated rather than wrongly split. The machine formats
 (JSON/XML doc, JSON-LD `isbn`) keep the bare digits.
 
-**Book covers** are fetched from Open Library by ISBN
-(`Vutuv.Posts.ReviewCovers`), off the request path, gated by
-`:fetch_book_metadata` (also the flag for the composer's ISBN → title/author/
-year prefill, `Vutuv.BookMetadata`). Not a durable queue on purpose: a cover
+**Book covers and edition details** are fetched by ISBN
+(`Vutuv.Posts.ReviewCovers`, one background pass), off the request path,
+gated by `:fetch_book_metadata` — the flag for every book lookup, including
+the composer's ISBN → title/author/year prefill. Three sources feed the card:
+
+- the **cover image** from Open Library's cover API;
+- **pages + publisher** from Open Library's *edition* record
+  (`Vutuv.BookMetadata.edition_details/1`) — deliberately not the books API
+  the composer prefills from, which frequently answers without
+  `number_of_pages`. An edition with no count of its own (an audiobook, a
+  scan) borrows the **median** count of the work's other editions, so an
+  audiobook card can still say how long the book is; the card then marks the
+  number as the print edition's;
+- an audiobook's **running time** from a library catalogue's SRU interface
+  (`Vutuv.AudiobookLength`, MARC field 300: "1 Online-Ressource (2 CDs (ca.
+  136 Min.))"). Open Library records no durations, so this is a second,
+  German-leaning source — the DNB by default, `:dnb_sru_url` per
+  installation, blank to switch it off. Only a review whose `medium` is
+  `audiobook` asks, and only an ISBN the catalogue holds *as* an audiobook
+  edition answers: a print ISBN carries no duration, so such a review shows
+  pages and no running time.
+
+All three are best-effort — an edition nobody knows details for simply keeps
+the card it has, and a failed detail lookup never costs the review its
+cover. Not a durable queue on purpose: a cover
 is decorative, `cover_status` (`none`/`pending`/`ready`/`failed`) tracks the
 fetch, a changed ISBN resets it to `pending` and re-fetches, and a lost fetch
 is simply retried on the next edit. The fetched cover is an external image

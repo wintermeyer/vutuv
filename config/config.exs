@@ -148,14 +148,24 @@ config :vutuv, :newsletter_send_timeout_ms, :timer.seconds(60)
 config :vutuv, :fetch_code_stats, true
 
 # Book metadata for post reviews (Vutuv.BookMetadata: the composer's ISBN →
-# title/author/year prefill; Vutuv.Posts.ReviewCovers: the cover image on the
-# review card). Both come keyless from Open Library. Off = nothing is ever
-# fetched — the switch for installations that must not call out (intranets);
-# the review card then renders without a cover and the fields are typed by
-# hand. Runtime override: FETCH_BOOK_METADATA=false (config/runtime.exs).
-# Tests keep it off and stub HTTP via :book_metadata_req_options /
-# :book_covers_req_options.
+# title/author/year prefill; Vutuv.Posts.ReviewCovers: the cover image plus
+# the page count and publisher on the review card; Vutuv.AudiobookLength: an
+# audiobook's running time). The first two come keyless from Open Library,
+# the third from a library catalogue (:dnb_sru_url below). Off = nothing is
+# ever fetched — the switch for installations that must not call out
+# (intranets); the review card then renders without a cover and the fields
+# are typed by hand. Runtime override: FETCH_BOOK_METADATA=false
+# (config/runtime.exs). Tests keep it off and stub HTTP via
+# :book_metadata_req_options / :book_covers_req_options / :dnb_req_options.
 config :vutuv, :fetch_book_metadata, true
+
+# Where an audiobook's running time is looked up: an SRU endpoint answering
+# MARC21-xml, queried by ISBN (Vutuv.AudiobookLength reads MARC field 300,
+# where a catalogue states "2 CDs (ca. 136 Min.)"). Open Library records no
+# durations, so this is a second, deliberately German source — the Deutsche
+# Nationalbibliothek, keyless. An empty DNB_SRU_URL switches the lookup off;
+# another catalogue's SRU endpoint can take its place (config/runtime.exs).
+config :vutuv, :dnb_sru_url, "https://services.dnb.de/sru/dnb"
 
 # The shop link on a book review card: https://<domain>/dp/<isbn10> (search
 # fallback for 979 ISBNs), with an optional Amazon affiliate tag appended as
