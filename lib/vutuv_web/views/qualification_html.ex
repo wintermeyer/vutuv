@@ -20,6 +20,22 @@ defmodule VutuvWeb.QualificationHTML do
   end
 
   @doc """
+  A member's credentials as `<select>` optgroups per kind (issue #858, the job
+  form's "earned this job with" picker). The issuer disambiguates same-named
+  credentials ("Scrum Master (Scrum.org)").
+  """
+  def grouped_options(qualifications) do
+    for {kind, entries} <- group_by_kind(qualifications) do
+      {kind_label(kind),
+       for(qualification <- entries, do: {option_label(qualification), qualification.id})}
+    end
+  end
+
+  defp option_label(%Qualification{issuer: nil} = qualification), do: qualification.name
+
+  defp option_label(qualification), do: "#{qualification.name} (#{qualification.issuer})"
+
+  @doc """
   The award-year `<select>` options: this year back to 1920, matching the
   changeset's `awarded_year` bound (an award can't be in the future).
   """

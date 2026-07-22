@@ -51,6 +51,7 @@ defmodule VutuvWeb.CV do
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
   alias Vutuv.Tags.UserTag
+  alias VutuvWeb.AgentDocs.Markdown
   alias VutuvWeb.EducationHTML
   alias VutuvWeb.LanguageHTML
   alias VutuvWeb.UserHelpers
@@ -194,7 +195,9 @@ defmodule VutuvWeb.CV do
   defp preload(user) do
     Repo.preload(user,
       user_tags: UserTag.ordered_by_endorsements(),
-      work_experiences: WorkExperience.order_by_date(WorkExperience),
+      # :qualification so a work entry can cite the credential it was earned
+      # with (issue #858).
+      work_experiences: {WorkExperience.order_by_date(WorkExperience), [:qualification]},
       educations: Education.order_by_date(Education),
       # A CV is a public document, so it hides expired credentials too (#859).
       qualifications: Qualification.visible_to(false) |> Qualification.ordered(),
@@ -226,8 +229,21 @@ defmodule VutuvWeb.CV do
       title: work.title,
       organization: work.organization,
       role: role_line(work.title, work.organization),
-      description: presence(work.description)
+      description: description_with_qualification(work)
     }
+  end
+
+  # The cited credential (issue #858) rides as a trailing description
+  # paragraph: every document renderer prints the description, and JSON Resume
+  # has no job-to-credential field (the issue puts it in the work summary), so
+  # this one seam covers all CV formats without touching any renderer. The
+  # note wording is shared with the md/txt agent docs
+  # (`Markdown.work_qualification_note/1` matches the struct directly).
+  defp description_with_qualification(work) do
+    case Enum.filter([presence(work.description), Markdown.work_qualification_note(work)], & &1) do
+      [] -> nil
+      parts -> Enum.join(parts, "\n\n")
+    end
   end
 
   # The "role" line the document renderers print: the entry's title and
@@ -309,7 +325,7 @@ defmodule VutuvWeb.CV do
       id: work.id,
       title: work.title,
       organization: work.organization,
-      description: presence(work.description),
+      description: description_with_qualification(work),
       start: year_month(work.start_year, work.start_month),
       end: year_month(work.end_year, work.end_month)
     }

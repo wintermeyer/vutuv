@@ -23,6 +23,8 @@
   <p>
     <%= format_duration(@work_experience.start_month, @work_experience.start_year, @work_experience.end_month, @work_experience.end_year) %>
   </p>
+  <%!-- The credential this job was earned with (issue #858). --%>
+  <.qualification_line user={@user} job={@work_experience} class="mt-1" />
   <%= if @work_experience.description do %>
     <h2 class="card__label"><%= gettext("Description") %></h2>
     <.markdown_prose text={@work_experience.description} class="mt-1" />

@@ -75,6 +75,18 @@
     <%= error_tag f, :end_month %>
   </.editform_field>
 
+  <%!-- The credential this job was earned with (issue #858). Rendered only when
+        the member holds at least one certificate or license, so the common
+        credential-less member sees the form exactly as before. --%>
+  <.editform_field :if={@qualification_options != []} form={f} field={:qualification_id}>
+    <%= label f, :qualification_id, gettext("Qualification") %>
+    <%= select f, :qualification_id, @qualification_options, prompt: gettext("None") %>
+    <p class="editform__hint">
+      {gettext("Optional: the certificate or license you earned this job with.")}
+    </p>
+    <%= error_tag f, :qualification_id %>
+  </.editform_field>
+
   <%!-- The author's "tell my followers" choice (issue #980). Only the new-entry
         form passes :followers, so an edit never re-announces an old entry. --%>
   <.announce_to_followers_field :if={assigns[:followers]} form={f} followers={@followers} />

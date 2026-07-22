@@ -496,12 +496,14 @@ defmodule VutuvWeb.AgentDocs.Text do
     line = Enum.join([work.title, work.organization] |> Enum.filter(& &1), " @ ")
     description = Map.get(work, :description)
     page = Map.get(work, :organization_page)
+    qualification_note = Markdown.work_qualification_note(work)
 
     "* " <>
       line <>
       if(page, do: " (#{page.name}: #{page.url})", else: "") <>
       if(kind_note, do: " [#{kind_note}]", else: "") <>
       if(period, do: " (#{period})", else: "") <>
+      if(qualification_note, do: " [#{qualification_note}]", else: "") <>
       if description, do: ": #{description}", else: ""
   end
 

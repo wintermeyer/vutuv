@@ -394,6 +394,40 @@ On`/`Finished On`/`License Number`/`Url` to qualification fields, imports
 everything as a certification (LinkedIn carries no licence/cert signal; the
 preview tells the member to review), and dedups by name + issuer on re-import.
 
+## Citing the credential a job was earned with (issue #858)
+
+A work experience may **optionally** cite one of the member's own credentials
+via a nullable `work_experiences.qualification_id` (`ON DELETE SET NULL` —
+deleting the credential quietly unlinks, never cascades). The payoff is the
+career-changer: a reader (or a recruiter's agent) can otherwise not tell which
+credential backs which role, and two jobs may cite the **same** credential (a
+locksmith's two roles, one Gesellenbrief). One primary credential per job; a
+join table can come later if a real multi-credential need shows up.
+
+The `/settings/work_experiences` form gains an optional "Qualification" select
+(the member's own credentials as optgroups per kind, a "None" default) **only
+when the member holds at least one credential** — the common credential-less
+member sees the form unchanged. `WorkExperience.changeset/2` accepts only one
+of the **owner's own** credentials: a foreign id is tampering (the form never
+offers one) and errors, unlike the suggestion-fed organization link above,
+which silently drops.
+
+**Display.** `WorkExperienceHTML.qualification_line/1` is the one rendering of
+the "Mit Qualifikation: …" line (naming and linking the credential), shared by
+the profile Experience card, the section page and the entry show page. The
+display policy lives in `WorkExperience.cited_qualification/1`: a lapsed
+credential keeps showing on the jobs it earned (deliberately not scoped by
+`Qualification.visible_to/2`), and every rendering surface preloads through
+`WorkExperience.display_preloads/0`. The
+agent formats carry it too (`SectionDocs.work_entry/1` adds a
+`qualification: {id, name, kind}` ref; md/txt show a bracketed "With
+qualification: …" note), kept honest by the drift test, and `/api/2.0` work
+entries include the same ref. The CV exports fold the line into the entry's
+description at one seam (`VutuvWeb.CV`), so every document format — including
+JSON Resume, which has no native job↔credential field — carries it in the work
+summary. The GDPR export names the cited credential per job. LinkedIn's
+`Positions.csv` has no such link, so imported jobs arrive uncited.
+
 ## Online messengers profile section
 
 Members list the online messengers they can be reached on (`Vutuv.Profiles.Messenger`,

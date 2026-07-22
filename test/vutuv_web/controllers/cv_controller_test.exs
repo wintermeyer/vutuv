@@ -27,11 +27,22 @@ defmodule VutuvWeb.CVControllerTest do
   # format must escape plus Markdown (issue #905) each format must render
   # per its own vocabulary (issue #920).
   defp seed_profile(user) do
+    qualification =
+      insert(:qualification,
+        user: user,
+        name: "AWS Certified Solutions Architect",
+        issuer: "Amazon Web Services",
+        awarded_year: 2023
+      )
+
+    # Cites the certificate (issue #858), so every CV format carries the
+    # "With qualification" line in this entry's description/summary.
     insert(:work_experience,
       user: user,
       title: "Senior Developer",
       organization: "ACME GmbH",
       kind: "employment",
+      qualification: qualification,
       description:
         "Shipping <fast> & 100% maintainable code_bases\n\n" <>
           "- **Led** the [platform](https://acme.example/docs) team\n- Cut deploy times",
@@ -80,13 +91,6 @@ defmodule VutuvWeb.CVControllerTest do
     )
 
     insert(:language, user: user, language_code: "en", proficiency: "c2")
-
-    insert(:qualification,
-      user: user,
-      name: "AWS Certified Solutions Architect",
-      issuer: "Amazon Web Services",
-      awarded_year: 2023
-    )
 
     insert(:social_media_account, user: user, provider: "GitHub", value: "octocat")
 
@@ -163,6 +167,9 @@ defmodule VutuvWeb.CVControllerTest do
       assert body =~ ~r{<li>.*platform.*</li>}s
       assert body =~ ~s(href="https://acme.example/docs")
       refute body =~ "**Led**"
+
+      # The cited credential (issue #858) closes out the entry's description.
+      assert body =~ "With qualification: AWS Certified Solutions Architect"
     end
 
     test "carries the newer sections and honors hiding them", %{conn: conn} do
@@ -340,6 +347,10 @@ defmodule VutuvWeb.CVControllerTest do
       # source rides along untouched (issue #920).
       senior = Enum.find(resume["work"], &(&1["position"] == "Senior Developer"))
       assert senior["summary"] =~ "- **Led** the [platform](https://acme.example/docs) team"
+
+      # The cited credential (issue #858): JSON Resume has no job-to-credential
+      # field, so the "With qualification" line rides in the work summary.
+      assert senior["summary"] =~ "With qualification: AWS Certified Solutions Architect"
     end
 
     test "an unknown format is a 404", %{conn: conn} do

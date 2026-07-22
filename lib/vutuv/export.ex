@@ -25,7 +25,9 @@ defmodule Vutuv.Export do
   #    connection-request email opt-in was removed.
   # 3: added the member/organization/job saves (bookmarks + likes) and the block
   #    list — per-user data that delete_user/1 removes but the export had missed.
-  @schema_version 3
+  # 4: a work experience carries the name of the credential it was earned with
+  #    (issue #858).
+  @schema_version 4
 
   def build(%User{} = user) do
     user =
@@ -43,6 +45,10 @@ defmodule Vutuv.Export do
         :username_changes,
         user_tags: [:tag]
       ])
+
+    # Resolves a job's cited credential (issue #858) by name from the already-
+    # loaded, unfiltered qualifications list — no extra preload needed.
+    qualification_names = Map.new(user.qualifications, &{&1.id, &1.name})
 
     %{
       schema_version: @schema_version,
@@ -72,16 +78,22 @@ defmodule Vutuv.Export do
       work_experiences:
         Enum.map(
           user.work_experiences,
-          &Map.take(&1, [
-            :organization,
-            :title,
-            :description,
-            :kind,
-            :start_month,
-            :start_year,
-            :end_month,
-            :end_year
-          ])
+          fn work ->
+            work
+            |> Map.take([
+              :organization,
+              :title,
+              :description,
+              :kind,
+              :start_month,
+              :start_year,
+              :end_month,
+              :end_year
+            ])
+            # The credential this job cites (issue #858), by name — the
+            # qualification itself is in the export's own section.
+            |> Map.put(:qualification, qualification_names[work.qualification_id])
+          end
         ),
       educations:
         Enum.map(

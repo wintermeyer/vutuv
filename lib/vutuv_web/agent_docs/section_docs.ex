@@ -25,6 +25,7 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
   alias Vutuv.Phone
   alias Vutuv.Profiles.Messenger
   alias Vutuv.Profiles.SocialMediaAccount
+  alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Tags.UserTag
   alias VutuvWeb.AgentDocs
   alias VutuvWeb.CV
@@ -159,9 +160,22 @@ defmodule VutuvWeb.AgentDocs.SectionDocs do
       # non-frozen organization qualifies, so a frozen/archived page reads as unlinked.
       # Distinct key from the free-text `organization` string above.
       organization_page: organization_ref(work),
+      # The credential this job was earned with (issue #858), or nil. The id
+      # addresses the member's `/:slug/qualifications/<id>` page and the
+      # matching /api/2.0 entry.
+      qualification: qualification_ref(work),
       start: CV.year_month(work.start_year, work.start_month),
       end: CV.year_month(work.end_year, work.end_month)
     }
+  end
+
+  # The display policy (expired credentials keep showing on the jobs they
+  # earned) lives in `WorkExperience.cited_qualification/1`.
+  defp qualification_ref(work) do
+    case WorkExperience.cited_qualification(work) do
+      nil -> nil
+      qualification -> %{id: qualification.id, name: qualification.name, kind: qualification.kind}
+    end
   end
 
   defp organization_ref(%{organization_page: %Organization{} = organization}) do
