@@ -2,7 +2,8 @@
 
 **TL;DR** — vutuv sends all outbound mail through a **shared Postfix relay on the
 production host** (`bremen2`), with the SMTP envelope sender fixed to
-`bounces@vutuv.de`. When a recipient address dies, the goal is to (1) **stop
+`sw@vutuv.de` (the `BOUNCE_ADDRESS` variable; see §1.6). When a recipient
+address dies, the goal is to (1) **stop
 mailing it** and (2) eventually **freeze accounts that have become permanently
 unreachable**. The signal for "this address is dead" comes from Postfix's own
 delivery log (`/var/log/mail.log`), which records every send result. This file
@@ -31,7 +32,7 @@ reachable as `wort.fb12.uni-bremen.de` on the Uni-Bremen network), Debian 13
 
 ```
   Vutuv app (Swoosh, SMTP adapter)
-        │  MAIL FROM:<bounces@vutuv.de>   (the Sender header; see Emailer.deliver/1)
+        │  MAIL FROM:<sw@vutuv.de>        (the Sender header; see Emailer.deliver/1)
         │  submitted to 127.0.0.1:25, no TLS (loopback)
         ▼
   Postfix on bremen2  ──────────────►  recipient's MX (direct, relayhost is empty)
@@ -58,14 +59,20 @@ Key Postfix settings on bremen2 (read with `postconf`):
 bremen2 sends outbound mail for **several unrelated apps**, distinguishable only
 by their envelope sender. Seen in the logs:
 
-- `bounces@vutuv.de` — **vutuv** (us)
+- `sw@vutuv.de` — **vutuv** (us); `bounces@vutuv.de` before 2026-07-22, so
+  older log excerpts in this document still show that address
 - `…@animina.de` — animina
 - `noreply@mehr-schulferien.de` — mehr-schulferien
 
 **Consequence:** a `status=bounced` log line does **not** by itself belong to
 vutuv. Any bounce-detection MUST attribute the message to vutuv first (join the
-queue-id back to a `from=<bounces@vutuv.de>` line — see §3.2). Acting on a raw
-`status=bounced` would deactivate addresses for other apps' bounces.
+queue-id back to a `from=<BOUNCE_ADDRESS>` line — see §3.2). Acting on a raw
+`status=bounced` would deactivate addresses for other apps' bounces. The
+attribution address is read from config, so changing `BOUNCE_ADDRESS` moves it
+in lockstep — but a message already queued under the *old* address bounces
+under that old envelope and is no longer recognized as ours. That window is the
+Postfix queue lifetime (minutes for most mail, up to ~5 days for deferred), and
+it costs only detection, never a wrong deactivation.
 
 ### 1.3 `vutuv.de` inbound mail lives on **Google Workspace**
 
@@ -76,8 +83,8 @@ $ dig +short MX vutuv.de
 ...
 ```
 
-So `info@vutuv.de`, `bounces@vutuv.de`, etc. are **received by Google**, not by
-bremen2. bremen2 only *sends* as `bounces@vutuv.de`; it is not the destination
+So `info@vutuv.de`, `sw@vutuv.de`, etc. are **received by Google**, not by
+bremen2. bremen2 only *sends* as `sw@vutuv.de`; it is not the destination
 for that address. This single fact rules out the "read the bounce mailbox"
 design — see §2.
 
@@ -104,6 +111,27 @@ fault" (§3.3) so a future DKIM gap can never be misread as dead mailboxes.
 in the `adm` group**, so the app cannot read the log as-is. Two ways to grant
 the detector access — see §3.5.
 
+### 1.6 The envelope sender must be a mailbox that really accepts mail
+
+`BOUNCE_ADDRESS` is where every DSN is addressed, so an address that does not
+exist throws the returned bounces away. vutuv.de sent as `bounces@vutuv.de`
+from the start, but that account was **never created** in Google Workspace, and
+Google rejects unknown recipients at RCPT time:
+
+```
+$ printf 'EHLO bremen2.wintermeyer.de\r\nMAIL FROM:<>\r\nRCPT TO:<bounces@vutuv.de>\r\nQUIT\r\n' \
+    | openssl s_client -quiet -starttls smtp -connect aspmx.l.google.com:25
+550-5.1.1 The email account that you tried to reach does not exist.
+```
+
+Automated bounce handling never depended on it (that reads the log, §2), but it
+meant no DSN, and no remote postmaster's reply to it, ever reached a human. On
+**2026-07-22** production switched to `sw@vutuv.de` — a real mailbox, `250 OK`
+on the same probe — set as `BOUNCE_ADDRESS` in `/var/www/vutuv3/shared/.env`.
+Run that probe for whatever address you configure before trusting it; the
+shipped default in `config/config.exs` is unchanged and is *not* a working
+mailbox.
+
 ---
 
 ## 2. Why bounce detection reads the log (and not a bounce mailbox)
@@ -115,18 +143,18 @@ superset.
 
 ### Option A — DSN to a local bounce mailbox → pipe → webhook (NOT used here)
 
-The classic design: outbound mail uses envelope sender `bounces@vutuv.de`; when
-delivery fails, the *remote* server (or Postfix itself, on giving up) returns a
-**DSN** (delivery status notification) addressed to that sender; Postfix
-delivers it into a **local** `bounces@vutuv.de` mailbox piped into
+The classic design: outbound mail uses the envelope sender as a bounce mailbox;
+when delivery fails, the *remote* server (or Postfix itself, on giving up)
+returns a **DSN** (delivery status notification) addressed to that sender;
+Postfix delivers it into a **local** mailbox piped into
 `scripts/postfix/vutuv-bounce`, which POSTs the raw DSN to `/webhooks/bounces`.
 
-**Why it does not work on bremen2 as configured:** `bounces@vutuv.de` resolves
+**Why it does not work on bremen2 as configured:** the bounce address resolves
 via the **vutuv.de MX → Google** (§1.3), and `vutuv.de` is not in
-`mydestination`. So a DSN addressed to `bounces@vutuv.de` is sent **out to
+`mydestination`. So a DSN addressed to it is sent **out to
 Google**, never to a local pipe. Making Option A work would require **either**:
 
-- a Postfix `transport_maps` override that forces *just* `bounces@vutuv.de` to
+- a Postfix `transport_maps` override that forces *just* the bounce address to
   local delivery (keeps Google MX for `info@vutuv.de` etc.), **or**
 - repointing the whole vutuv.de **MX** at bremen2 — which would drag **all**
   inbound `@vutuv.de` mail off Google Workspace. That is a far bigger change than
@@ -185,11 +213,11 @@ The bounce line carries `to=` but **not** the envelope sender. To know a bounce
 is vutuv's, join its `<QUEUEID>` to the `qmgr` line for the same id:
 
 ```
-postfix/qmgr[PID]: <QUEUEID>: from=<bounces@vutuv.de>, size=…, nrcpt=1 (queue active)
+postfix/qmgr[PID]: <QUEUEID>: from=<sw@vutuv.de>, size=…, nrcpt=1 (queue active)
 postfix/smtp[PID]:  <QUEUEID>: to=<user@…>, …, dsn=5.1.2, status=bounced (…)
 ```
 
-Same `<QUEUEID>` + `from=<bounces@vutuv.de>` ⇒ vutuv's mail ⇒ act on it.
+Same `<QUEUEID>` + `from=<sw@vutuv.de>` ⇒ vutuv's mail ⇒ act on it.
 Anything else (animina, mehr-schulferien, system cron mail) is ignored.
 
 > Implementation note: the queue-id sits as `…postfix/xxx[pid]: <QUEUEID>: …`
@@ -294,7 +322,7 @@ Repointing vutuv.de's MX at bremen2 would route **all** inbound `@vutuv.de` mail
 breaking existing mailboxes for the sake of one robot bounce address. The
 bounce-detection design (§2, Option B) needs **no** DNS change at all. If Option
 A were ever wanted, the correct tool is a **local `transport_maps` override for
-just `bounces@vutuv.de`** (no MX change). Only consider an MX change if there is
+just the bounce address** (no MX change). Only consider an MX change if there is
 a separate, deliberate decision to **self-host all of vutuv.de's inbound mail** —
 a much larger project, unrelated to bounce handling.
 
@@ -328,7 +356,7 @@ a much larger project, unrelated to bounce handling.
 #    guaranteed to bounce (e.g. a nonexistent mailbox on a domain you own).
 # 2. Watch Postfix hand it off and the remote reject it:
 ssh root@<host> "tail -f /var/log/mail.log | grep --line-buffered status="
-#    → look for: from=<bounces@vutuv.de> … to=<dead@…> … dsn=5.1.1, status=bounced
+#    → look for: from=<sw@vutuv.de> … to=<dead@…> … dsn=5.1.1, status=bounced
 # 3. Confirm the address was marked (in a remote IEx / release eval):
 #    Vutuv.Notifications.Bounces.suppressed?("dead@example.com")  # => true
 # 4. Clear it the real way: log in with a PIN through a WORKING address and
