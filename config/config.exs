@@ -254,6 +254,11 @@ config :vutuv, :mailer_from, {"vutuv", "no-reply@vutuv.de"}
 # (BOUNCE_ADDRESS)
 config :vutuv, :bounce_address, "bounces@vutuv.de"
 
+# Keep the email-deliverability ops alarms visible even where the global
+# Logger level is quiet (production runs :error): Vutuv.Application raises the
+# watcher/bounce/emailer modules to :info at boot. Off only in tests.
+config :vutuv, :ops_log_visibility, true
+
 # The visible From (no-reply@vutuv.de) is not read, but the strike-3
 # deactivation mail invites the member to appeal by replying. That one mail
 # carries a Reply-To to this monitored contact so an appeal reaches a human
