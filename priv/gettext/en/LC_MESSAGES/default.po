@@ -13813,3 +13813,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "When off, you never see this kind of notification, whoever sends it."
 msgstr ""
+
+#: lib/vutuv_web/live/notification_live/index.ex:470
+#, elixir-autogen, elixir-format
+msgid "added %{count} new entries to their CV:"
+msgstr ""

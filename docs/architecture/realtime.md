@@ -82,9 +82,20 @@ the people who follow them, with one checkbox on the new-entry form (ticked by
 default, hidden while they have no followers). Only those three sections
 announce; the rest of the profile stays quiet.
 
+**One notification per author per three hours, not one per entry.** Somebody
+filling in five roles in one sitting is one piece of news, so the feed folds an
+author's announced entries into fixed three-hour buckets
+(`CvUpdates.bucket_seconds/0`) and renders one row that names them ("added 5 new
+entries to their CV", each entry listed and linked, capped at five plus "and N
+more"). The grouping is a plain `GROUP BY (author, bucket)` on the derived rows,
+so the unread badge counts groups too and a burst can never inflate it. The
+bucket window is baked into the SQL as a literal, not a query parameter: Postgres
+compares a GROUP BY expression with the SELECT list syntactically, and two
+placeholders are not the same expression.
+
 It is derived like every other kind, from the CV rows themselves
 (`Vutuv.Profiles.CvUpdates.feed_query/1` is the single rule behind the items,
-the count and the read marker): so deleting the entry removes the notification,
+the count and the read marker): so deleting the entry removes it from its group,
 renaming the job renames it, and nothing is duplicated into a notifications
 table. Who is told: everyone who followed the author **before** the entry
 appeared (no backfill for a new follower), minus muted follows, minus readers
@@ -102,7 +113,10 @@ Two flags carry it, one per side:
 
 It never sends email. `CvUpdates.announce/2` (called from the three create
 actions and the API create) only adds the live push to the same set of
-followers, so an open session's bell lights up at save time.
+followers, so an open session's bell lights up at save time. The push carries
+the **whole group under its derived id** (the one exception to the "live-"
+id namespace in `NotificationLive`), so a second entry within the window
+updates that row in place instead of stacking another one.
 
 ## Live member counter
 

@@ -100,8 +100,11 @@ defmodule VutuvWeb.NotificationLive.Index do
       |> Map.put_new(:kind, "activity")
       # Pushed events carry no row id, so mint one. The "live-" prefix keeps
       # them out of the derived "<kind>-<row id>" namespace - a pushed event
-      # must prepend, never update a derived row in place.
-      |> Map.put(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
+      # must prepend, never update a derived row in place. The one exception
+      # brings its own id: a CV update (issue #980) is pushed under its derived
+      # group id, so a second entry within the grouping window updates that one
+      # row instead of stacking another.
+      |> Map.put_new(:id, "live-#{System.unique_integer([:positive, :monotonic])}")
       # A pushed reply/like carries the post ids but no bodies; quote them like
       # the derived rows do.
       |> List.wrap()
@@ -115,7 +118,9 @@ defmodule VutuvWeb.NotificationLive.Index do
     {:noreply,
      socket
      |> assign(:empty?, false)
-     |> update(:items, &[item | &1])
+     # A re-pushed row (a CV update whose group grew) replaces the copy it
+     # updates, so the midnight restream doesn't render it twice.
+     |> update(:items, fn items -> [item | Enum.reject(items, &(&1.id == item.id))] end)
      |> stream_insert(:notifications, item, at: 0)}
   end
 
@@ -209,6 +214,29 @@ defmodule VutuvWeb.NotificationLive.Index do
               class="mt-2"
               data-reply-preview="true"
             />
+            <%!-- A CV update that covers several entries (issue #980: one
+            notification per author per three hours) names them below the line,
+            each linking to its own page, plus a count of any beyond the shown
+            few. A single-entry group says it in the line itself. --%>
+            <div
+              :if={n.kind == "cv_update" and n[:entry_count] > 1}
+              class="mt-2"
+              data-cv-entries="true"
+            >
+              <ul class="space-y-1">
+                <li :for={entry <- n[:entries] || []} class="text-sm">
+                  <.link
+                    href={cv_entry_path(n, entry)}
+                    class="text-slate-600 hover:text-brand-700 dark:text-slate-400 dark:hover:text-brand-300"
+                  >
+                    {cv_entry_label(entry)}
+                  </.link>
+                </li>
+              </ul>
+              <p :if={cv_entries_more(n) > 0} class="mt-1 text-xs text-slate-600 dark:text-slate-400">
+                {gettext("and %{count} more", count: compact_count(cv_entries_more(n)))}
+              </p>
+            </div>
             <%!-- A handle change lists the recipient's own rewritten posts: the
             newest few as excerpt previews, plus a count of any remaining ones. --%>
             <div :if={n.kind == "handle_change"} class="mt-2 space-y-2" data-change-posts="true">
@@ -328,20 +356,13 @@ defmodule VutuvWeb.NotificationLive.Index do
     if n[:image_kind] in ["avatar", "cover"] and viewer != nil, do: ~p"/settings/profile"
   end
 
-  # A new CV entry (issue #980) opens that entry's own page on the author's
-  # profile; the actor line beside it links to the profile itself. A payload
-  # missing either half falls through to the profile link.
+  # A CV update (issue #980) opens the entry itself when the group holds
+  # exactly one; a bigger group leads to the author's profile, where all of
+  # them sit (the entries are listed and individually linked under the line).
   defp notification_target(%{kind: "cv_update"} = n, _viewer) do
-    with slug when is_binary(slug) <- n[:actor_param],
-         param when is_binary(param) <- n[:entry_param] do
-      case n[:section] do
-        "work_experiences" -> ~p"/#{slug}/work_experiences/#{param}"
-        "educations" -> ~p"/#{slug}/educations/#{param}"
-        "qualifications" -> ~p"/#{slug}/qualifications/#{param}"
-        _ -> ~p"/#{slug}"
-      end
-    else
-      _ -> nil
+    case n[:entries] do
+      [entry] -> cv_entry_path(n, entry)
+      _ -> actor_target(n)
     end
   end
 
@@ -442,19 +463,28 @@ defmodule VutuvWeb.NotificationLive.Index do
     )
   end
 
-  # A new CV entry the author chose to announce (issue #980). The wording names
-  # the section, so a reader can tell a job from a degree without opening it.
-  defp notification_text(%{kind: "cv_update"} = n) do
-    case n[:section] do
+  # New CV entries the author chose to announce (issue #980). A lone entry gets
+  # the section-specific wording, so a reader can tell a job from a degree
+  # without opening it; a group of them is counted and listed below the line.
+  defp notification_text(%{kind: "cv_update", entries: [entry]}) do
+    case entry.section do
       "educations" ->
-        gettext("added a new education entry to their CV: %{entry}", entry: cv_entry_label(n))
+        gettext("added a new education entry to their CV: %{entry}",
+          entry: cv_entry_label(entry)
+        )
 
       "qualifications" ->
-        gettext("added a new certificate to their CV: %{entry}", entry: cv_entry_label(n))
+        gettext("added a new certificate to their CV: %{entry}", entry: cv_entry_label(entry))
 
       _ ->
-        gettext("added a new position to their CV: %{entry}", entry: cv_entry_label(n))
+        gettext("added a new position to their CV: %{entry}", entry: cv_entry_label(entry))
     end
+  end
+
+  defp notification_text(%{kind: "cv_update"} = n) do
+    gettext("added %{count} new entries to their CV:",
+      count: compact_count(n[:entry_count] || 0)
+    )
   end
 
   defp notification_text(n), do: n[:text]
@@ -462,11 +492,29 @@ defmodule VutuvWeb.NotificationLive.Index do
   # "Head of Bridges · Span AG": what the entry is, then where. Either half can
   # be missing (an education entry with no degree, a certificate with no
   # issuer), so the separator only appears when both are there.
-  defp cv_entry_label(n) do
-    [n[:entry_title], n[:entry_subtitle]]
+  defp cv_entry_label(entry) do
+    [entry.title, entry.subtitle]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" · ")
   end
+
+  # One entry's own page under the author's profile.
+  defp cv_entry_path(n, entry) do
+    with slug when is_binary(slug) <- n[:actor_param],
+         param when is_binary(param) <- entry.param do
+      case entry.section do
+        "work_experiences" -> ~p"/#{slug}/work_experiences/#{param}"
+        "educations" -> ~p"/#{slug}/educations/#{param}"
+        "qualifications" -> ~p"/#{slug}/qualifications/#{param}"
+        _ -> ~p"/#{slug}"
+      end
+    else
+      _ -> nil
+    end
+  end
+
+  # How many of a group's entries are not in the shown list.
+  defp cv_entries_more(n), do: (n[:entry_count] || 0) - length(n[:entries] || [])
 
   # Reply and like notifications carry post ids the row can quote: a like the
   # liked post (`:post_id`), a reply both the recipient's own post that was

@@ -6,12 +6,15 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
   """
   use Vutuv.DataCase, async: true
 
+  import Ecto.Query
+
   alias Vutuv.Activity
   alias Vutuv.Profiles.CvUpdates
   alias Vutuv.Profiles.Education
   alias Vutuv.Profiles.Qualification
   alias Vutuv.Profiles.WorkExperience
   alias Vutuv.Repo
+  alias Vutuv.Social.Follow
 
   defp announce_work_experience(author, attrs \\ []) do
     attrs = Keyword.merge([title: "Head of Bridges", organization: "Span AG"], attrs)
@@ -30,12 +33,14 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
 
       announce_work_experience(author)
 
-      assert [entry] = Activity.notifications_page(follower.id).entries
-      assert entry.kind == "cv_update"
+      assert [item] = Activity.notifications_page(follower.id).entries
+      assert item.kind == "cv_update"
+      assert item.entry_count == 1
+      assert [entry] = item.entries
       assert entry.section == "work_experiences"
-      assert entry.entry_title == "Head of Bridges"
-      assert entry.entry_subtitle == "Span AG"
-      assert entry.actor_param == author.username
+      assert entry.title == "Head of Bridges"
+      assert entry.subtitle == "Span AG"
+      assert item.actor_param == author.username
       assert Activity.unread_notification_count(follower.id) == 1
     end
 
@@ -75,16 +80,20 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
 
       CvUpdates.announce(author, qualification)
 
-      entries = Activity.notifications_page(follower.id).entries
-      assert Enum.map(entries, & &1.section) |> Enum.sort() == ["educations", "qualifications"]
+      # Same author, same three-hour window: one grouped notification naming both.
+      assert [item] = Activity.notifications_page(follower.id).entries
+      assert item.entry_count == 2
 
-      education_entry = Enum.find(entries, &(&1.section == "educations"))
-      assert education_entry.entry_title == "MSc Structures"
-      assert education_entry.entry_subtitle == "Bridge University"
+      assert item.entries |> Enum.map(& &1.section) |> Enum.sort() ==
+               ["educations", "qualifications"]
 
-      qualification_entry = Enum.find(entries, &(&1.section == "qualifications"))
-      assert qualification_entry.entry_title == "Bridge Inspector"
-      assert qualification_entry.entry_param == qualification.id
+      education_entry = Enum.find(item.entries, &(&1.section == "educations"))
+      assert education_entry.title == "MSc Structures"
+      assert education_entry.subtitle == "Bridge University"
+
+      qualification_entry = Enum.find(item.entries, &(&1.section == "qualifications"))
+      assert qualification_entry.title == "Bridge Inspector"
+      assert qualification_entry.param == qualification.id
     end
 
     test "only people who follow the author are told" do
@@ -162,6 +171,92 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
     end
   end
 
+  describe "grouping (one notification per author per three hours)" do
+    test "a burst of entries is one notification, not one each" do
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+
+      for title <- ["Head of Bridges", "Site Manager", "Junior Engineer"] do
+        announce_work_experience(author, title: title)
+      end
+
+      assert [item] = Activity.notifications_page(follower.id).entries
+      assert item.entry_count == 3
+
+      assert Enum.map(item.entries, & &1.title) == [
+               "Junior Engineer",
+               "Site Manager",
+               "Head of Bridges"
+             ]
+
+      # The badge counts what the page renders: one item, not three.
+      assert Activity.unread_notification_count(follower.id) == 1
+      assert Activity.notifications_count(follower.id) == 1
+    end
+
+    test "entries in different windows stay separate notifications" do
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+
+      now = NaiveDateTime.utc_now(:second)
+      long_ago = NaiveDateTime.add(now, -2 * CvUpdates.bucket_seconds(), :second)
+      # The follow predates both entries — a notification is only for entries
+      # added after you followed.
+      Repo.update_all(from(f in Follow, where: f.follower_id == ^follower.id),
+        set: [inserted_at: NaiveDateTime.add(long_ago, -60, :second)]
+      )
+
+      insert(:work_experience,
+        user: author,
+        title: "Yesterday's job",
+        announce_to_followers?: true,
+        inserted_at: long_ago
+      )
+
+      announce_work_experience(author, title: "Today's job")
+
+      items = Activity.notifications_page(follower.id).entries
+      assert length(items) == 2
+      assert Enum.all?(items, &(&1.entry_count == 1))
+      assert Activity.unread_notification_count(follower.id) == 2
+    end
+
+    test "a group beyond the preview cap counts everything but names a few" do
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+
+      for i <- 1..7, do: announce_work_experience(author, title: "Role #{i}")
+
+      assert [item] = Activity.notifications_page(follower.id).entries
+      assert item.entry_count == 7
+      assert length(item.entries) == 5
+    end
+
+    test "reading a group and then adding to it makes it unread again" do
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+
+      announce_work_experience(author, title: "First")
+      Activity.mark_notifications_read(follower.id)
+      assert Activity.unread_notification_count(follower.id) == 0
+
+      # A minute later, still inside the same three-hour window. (The timestamp
+      # is explicit because the read marker has second precision, so two rows
+      # written in the same test second would tie.)
+      announce_work_experience(author,
+        title: "Second",
+        inserted_at: NaiveDateTime.add(NaiveDateTime.utc_now(:second), 60, :second)
+      )
+
+      assert Activity.unread_notification_count(follower.id) == 1
+      assert [%{entry_count: 2}] = Activity.notifications_page(follower.id).entries
+    end
+  end
+
   describe "the live push" do
     test "an eligible follower is pushed the same payload the feed shows" do
       author = insert_activated_user(first_name: "Greta", last_name: "Gradient")
@@ -173,11 +268,33 @@ defmodule Vutuv.Profiles.CvUpdatesTest do
 
       assert_receive {:new_notification, notification}
       assert notification.kind == "cv_update"
-      assert notification.section == "work_experiences"
-      assert notification.entry_title == "Head of Bridges"
-      assert notification.entry_subtitle == "Span AG"
+      assert notification.entry_count == 1
+      assert [entry] = notification.entries
+      assert entry.section == "work_experiences"
+      assert entry.title == "Head of Bridges"
+      assert entry.subtitle == "Span AG"
       assert notification.actor_name == "Greta Gradient"
       assert notification.actor_param == author.username
+
+      # The pushed row carries the DERIVED group id, so the page updates that
+      # row instead of stacking a second one.
+      assert [%{id: id}] = Activity.notifications_page(follower.id).entries
+      assert notification.id == id
+    end
+
+    test "a second entry in the same window re-pushes the whole group" do
+      author = insert_activated_user()
+      follower = insert_activated_user()
+      follow!(follower, author)
+      Activity.subscribe(follower.id)
+
+      announce_work_experience(author, title: "First")
+      assert_receive {:new_notification, %{entry_count: 1, id: first_id}}
+
+      announce_work_experience(author, title: "Second")
+      assert_receive {:new_notification, %{entry_count: 2, id: ^first_id} = grouped}
+
+      assert Enum.map(grouped.entries, & &1.title) == ["Second", "First"]
     end
 
     test "no push without the flag, for a muted follow or an opted-out reader" do

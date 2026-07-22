@@ -14544,3 +14544,8 @@ msgstr "Über neue Lebenslauf-Einträge von Personen informieren, denen ich folg
 #, elixir-autogen, elixir-format
 msgid "When off, you never see this kind of notification, whoever sends it."
 msgstr "Wenn aus, erscheint diese Art von Benachrichtigung nie, von wem auch immer."
+
+#: lib/vutuv_web/live/notification_live/index.ex:470
+#, elixir-autogen, elixir-format
+msgid "added %{count} new entries to their CV:"
+msgstr "hat %{count} neue Einträge im Lebenslauf:"

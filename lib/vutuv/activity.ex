@@ -240,10 +240,12 @@ defmodule Vutuv.Activity do
 
   @doc """
   Live push for a new CV entry one of the recipient's followees just added and
-  chose to announce (issue #980). `payload` is `Vutuv.Profiles.CvUpdates.payload/1`
-  — the section, the entry's route param and the two lines that name it, exactly
-  the columns the derived feed selects, so the pushed row and the reloaded page
-  render the same. In-app only: this kind never mails.
+  chose to announce (issue #980). `payload` is
+  `Vutuv.Profiles.CvUpdates.group_payload/2` — the author's whole current
+  three-hour group, under that group's own id, exactly what the derived feed
+  renders. Because the id is the derived one, a second entry within the window
+  **updates** the row an open page already shows instead of stacking another.
+  In-app only: this kind never mails.
   """
   def notify_cv_update(recipient_id, %User{} = author, %{} = payload) do
     notify(recipient_id, Map.merge(actor_fields(author), Map.put(payload, :kind, "cv_update")))
@@ -728,36 +730,20 @@ defmodule Vutuv.Activity do
   end
 
   # "Added a new position to their CV" entries (issue #980): the announced CV
-  # rows of the people this member follows. Derived straight from the CV
-  # tables through the one rule in `Vutuv.Profiles.CvUpdates.feed_query/1`, so
-  # deleting the entry removes the notification and renaming the job renames
-  # it. The actor is the author, and the entry's own page (under their
-  # profile) is what the row links to.
+  # rows of the people this member follows, **grouped per author per three
+  # hours** — somebody filling in five roles in one sitting is one piece of
+  # news, not five. Derived straight from the CV tables through the one rule in
+  # `Vutuv.Profiles.CvUpdates`, so deleting an entry drops it from its group
+  # and renaming the job renames it. The actor is the author; a single-entry
+  # group links to that entry's page, a bigger one to the profile.
   defp cv_update_items(user_id, limit, cursor) do
     user_id
-    |> CvUpdates.feed_query()
-    |> order_by([e], desc: e.inserted_at, desc: e.id)
-    |> limit(^limit)
-    |> at_or_before(cursor)
-    |> select([e, _follow, author], %{
-      id: e.id,
-      at: e.inserted_at,
-      author: struct(author, ^User.listing_fields()),
-      section: e.section,
-      title: e.title,
-      subtitle: e.subtitle,
-      param: e.param
-    })
-    |> Repo.all()
-    |> Enum.map(fn row ->
-      "cv-update-#{row.id}"
-      |> actor_item("cv_update", row.at, row.author)
-      |> Map.merge(%{
-        section: row.section,
-        entry_param: row.param,
-        entry_title: row.title,
-        entry_subtitle: row.subtitle
-      })
+    |> CvUpdates.page(limit, cursor)
+    |> Enum.map(fn %{author: author} = group ->
+      group
+      |> Map.delete(:author)
+      |> Map.merge(actor_fields(author))
+      |> Map.put(:kind, "cv_update")
     end)
   end
 
@@ -860,11 +846,12 @@ defmodule Vutuv.Activity do
     |> since(read_at)
   end
 
+  # Counts CV update **groups**, not rows: the badge must match what the page
+  # renders, so a five-entry burst inside one three-hour bucket is one unread
+  # item. The read-marker filter lives inside the grouped query (a HAVING on
+  # the group's newest entry), hence no `since/2` here.
   defp count_cv_updates(user_id, read_at) do
-    user_id
-    |> CvUpdates.feed_query()
-    |> select([e], %{count: count()})
-    |> since(read_at)
+    from(group in subquery(CvUpdates.count_query(user_id, read_at)), select: %{count: count()})
   end
 
   defp count_moderation(user_id, read_at) do
