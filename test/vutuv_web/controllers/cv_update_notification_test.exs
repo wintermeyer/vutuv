@@ -81,6 +81,32 @@ defmodule VutuvWeb.CvUpdateNotificationTest do
       assert body =~ ~s(href="/#{author.username}")
     end
 
+    test "a second entry joins the first row instead of adding one", %{conn: conn} do
+      {follower_conn, follower} = login_follower()
+      {conn, author} = create_and_login_user(conn)
+      follow!(follower, author)
+
+      for title <- ["Head of Bridges", "Site Manager"] do
+        post(conn, ~p"/settings/work_experiences", %{
+          "work_experience" => %{
+            "title" => title,
+            "organization" => "Span AG",
+            "kind" => "employment",
+            "announce_to_followers?" => "true"
+          }
+        })
+      end
+
+      body = html_response(get(follower_conn, ~p"/notifications"), 200)
+
+      # One row, counting both, with each entry named and linked.
+      assert body =~ "added 2 new entries to their CV"
+      refute body =~ "added a new position to their CV"
+      assert body =~ "Head of Bridges · Span AG"
+      assert body =~ "Site Manager · Span AG"
+      assert [_] = Regex.scan(~r/CV update/, body)
+    end
+
     test "an unticked box tells nobody", %{conn: conn} do
       {follower_conn, follower} = login_follower()
       {conn, author} = create_and_login_user(conn)
