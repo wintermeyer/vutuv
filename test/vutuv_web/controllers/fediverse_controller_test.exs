@@ -25,15 +25,20 @@ defmodule VutuvWeb.FediverseControllerTest do
 
   defp host, do: VutuvWeb.Endpoint.host()
 
-  defp stub_remote_actor(pub_pem) do
+  defp stub_remote_actor(pub_pem, extra \\ %{}) do
     doc =
-      Jason.encode!(%{
-        "id" => @remote_actor,
-        "type" => "Person",
-        "inbox" => @remote_inbox,
-        "endpoints" => %{"sharedInbox" => @remote_shared},
-        "publicKey" => %{"id" => @remote_key_id, "publicKeyPem" => pub_pem}
-      })
+      Jason.encode!(
+        Map.merge(
+          %{
+            "id" => @remote_actor,
+            "type" => "Person",
+            "inbox" => @remote_inbox,
+            "endpoints" => %{"sharedInbox" => @remote_shared},
+            "publicKey" => %{"id" => @remote_key_id, "publicKeyPem" => pub_pem}
+          },
+          extra
+        )
+      )
 
     Application.put_env(:vutuv, :fediverse_req_options,
       plug: fn conn ->
@@ -78,6 +83,29 @@ defmodule VutuvWeb.FediverseControllerTest do
       "actor" => @remote_actor,
       "object" => Docs.actor_url(user)
     }
+  end
+
+  # An Update / Delete the remote actor broadcasts about itself.
+  defp lifecycle_activity(type, object) do
+    %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => "https://social.example/activities/#{type}",
+      "type" => type,
+      "actor" => @remote_actor,
+      "object" => object
+    }
+  end
+
+  defp existing_follower(user) do
+    {:ok, _} =
+      Fediverse.add_follower(user, %{
+        actor_uri: @remote_actor,
+        inbox_uri: @remote_inbox,
+        handle: "alice",
+        name: "Alice Example"
+      })
+
+    :ok
   end
 
   describe "GET /.well-known/webfinger" do
@@ -259,6 +287,62 @@ defmodule VutuvWeb.FediverseControllerTest do
 
       assert conn.status == 202
       assert Repo.aggregate(Delivery, :count) == 0
+    end
+  end
+
+  describe "POST /:slug/actor/inbox — remote actor lifecycle" do
+    test "Update of the actor re-syncs the stored handle, name and inboxes", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub, %{"preferredUsername" => "alice_renamed", "name" => "Alice Renamed"})
+      user = federated_user()
+      :ok = existing_follower(user)
+
+      activity = lifecycle_activity("Update", %{"id" => @remote_actor, "type" => "Person"})
+      conn = signed_post(conn, user, activity, priv)
+
+      assert conn.status == 202
+      assert [follower] = Fediverse.list_followers(user)
+      assert follower.handle == "alice_renamed"
+      assert follower.name == "Alice Renamed"
+      assert follower.shared_inbox_uri == @remote_shared
+    end
+
+    test "an Update from an actor following nobody here creates no follower", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub, %{"preferredUsername" => "alice"})
+      user = federated_user()
+
+      activity = lifecycle_activity("Update", %{"id" => @remote_actor, "type" => "Person"})
+      conn = signed_post(conn, user, activity, priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "Delete of the actor itself removes the follower", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      :ok = existing_follower(user)
+
+      # Mastodon sends the bare actor URI as the object of an account Delete.
+      conn = signed_post(conn, user, lifecycle_activity("Delete", @remote_actor), priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 0
+    end
+
+    test "Delete of one of the actor's notes leaves the follow intact", %{conn: conn} do
+      {priv, pub} = Keys.generate()
+      stub_remote_actor(pub)
+      user = federated_user()
+      :ok = existing_follower(user)
+
+      tombstone = %{"id" => @remote_actor <> "/statuses/1", "type" => "Tombstone"}
+      conn = signed_post(conn, user, lifecycle_activity("Delete", tombstone), priv)
+
+      assert conn.status == 202
+      assert Fediverse.follower_count(user) == 1
     end
   end
 

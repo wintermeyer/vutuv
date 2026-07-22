@@ -3,8 +3,9 @@
 People on Mastodon and other ActivityPub servers can follow an opted-in
 member and receive their **public** posts. Federation is outbound-only by
 design: no remote posts, likes or replies are stored — the inbox only
-processes `Follow` and `Undo(Follow)`; everything else is acknowledged (202)
-and dropped. Everything lives in `Vutuv.Fediverse`.
+processes `Follow`, `Undo(Follow)` and the remote actor's own lifecycle
+(`Update` / `Delete`); everything else is acknowledged (202) and dropped.
+Everything lives in `Vutuv.Fediverse`.
 
 ## Consent first
 
@@ -40,6 +41,18 @@ every endpoint 404s and nothing is delivered.
   (anti-spoofing). A valid `Follow` stores the follower
   (`Vutuv.Fediverse.Follower`: actor URI + inbox + sharedInbox) and answers
   with a delivered `Accept`; `Undo` removes it. Per-IP rate limited.
+- **Remote actor lifecycle**: an `Update` of the actor itself re-syncs the
+  stored row from the freshly fetched document (a renamed remote must not stay
+  listed under the old handle, a moved inbox must not keep receiving posts) and
+  a `Delete` of the actor itself removes it, so a gone account stops counting
+  as a follower. Both are scoped to the actor: `Update`/`Delete` of a remote
+  *note* still falls through and is dropped, and an `Update` from someone who
+  follows nobody here never mints a row. The `Delete` half is best effort by
+  protocol — a server that already purged the account answers our actor fetch
+  with 410, so the signature cannot be verified and the activity is rejected;
+  it lands during the window where the account is suspended but still served.
+  Deliveries to a gone inbox are dropped by the queue on 404/410 but do not
+  yet prune the follower row (see the v1 limits).
 - **Deliveries** (`Vutuv.Fediverse.Delivery` + `Deliverer`): the same
   DB-backed queue shape as webhooks — rows per activity × distinct inbox
   (sharedInbox dedupes per server), drained every 15s or on nudge, POSTs
@@ -78,4 +91,7 @@ every endpoint 404s and nothing is delivered.
 No inbound content (likes/replies/boosts are dropped), no `Announce` for
 reposts, no `Move`/account migration, and account deletion sends no actor
 `Delete` broadcast (rows cascade; remote copies age out). The followers
-collection is count-only (privacy).
+collection is count-only (privacy). A follower row whose inbox answers 404/410
+is not pruned either: deliveries go to the sharedInbox where the remote
+declares one, so a per-actor gone signal rarely reaches us and pruning on a
+shared inbox would drop every follower on that server.
